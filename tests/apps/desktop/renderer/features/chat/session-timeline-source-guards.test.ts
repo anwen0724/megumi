@@ -117,7 +117,6 @@ describe('session timeline source guards', () => {
     expect(chatSources).toContain('session.branchDraft.cancel');
     expect(chatSources).toContain('session.message.send');
     expect(chatSources).not.toContain('recovery.retry');
-    expect(chatSources).not.toContain('SessionActivePathRepository');
     expect(chatSources).not.toContain('session_active_path');
     expect(chatSources).not.toContain('session_branch_markers');
     expect(chatSources).not.toContain('classifyAutomaticModelStepRetry');

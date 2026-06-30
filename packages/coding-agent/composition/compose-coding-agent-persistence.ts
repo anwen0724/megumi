@@ -1,54 +1,34 @@
 // Composes the Coding Agent product SQLite persistence repositories.
 import path from 'node:path';
-import { createDatabase } from '../persistence/connection';
-import { RunRecordRepository } from '../persistence/repos/run-record.repo';
-import { SessionRecordRepository } from '../persistence/repos/session-record.repo';
-import { SessionContextRepository } from '../persistence/repos/session-context.repo';
-import { SessionCompactionRepository } from '../persistence/repos/session-compaction.repo';
-import { SessionMessageRepository } from '../persistence/repos/session-message.repo';
-import { ModelStepRepository } from '../persistence/repos/model-step.repo';
-import { RunExecutionFactRepository } from '../persistence/repos/run-execution-fact.repo';
-import { RuntimeEventRepository } from '../persistence/repos/runtime-event.repo';
-import { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
-import { RecoveryRepository } from '../persistence/repos/recovery.repo';
-import { PermissionSnapshotRepository } from '../persistence/repos/permission-snapshot.repo';
-import { ToolRepository } from '../persistence/repos/tool.repo';
+import { AgentLoopRepository } from '../persistence/repos/agent-loop.repo';
 import { ArtifactRepository } from '../persistence/repos/artifact.repo';
 import { MemoryRepository } from '../persistence/repos/memory.repo';
-import { TimelineMessageRepository } from '../persistence/repos/timeline-message.repo';
+import { SessionRepository } from '../persistence/repos/session.repo';
+import { ToolCallRepository } from '../persistence/repos/tool-call.repo';
 import { WorkspaceChangeRepository } from '../persistence/repos/workspace-change.repo';
-import { ProjectRepository } from '../persistence/repos/project.repo';
-import { RunContextRepository } from '../persistence/repos/run-context.repo';
-import { migrateDatabase } from '../persistence/schema/migrations';
+import { WorkspaceRepository } from '../persistence/repos/workspace.repo';
+import { migrateCodingAgentDatabase } from '../persistence/schema';
 
 export interface ComposeCodingAgentPersistenceInput {
   sqlitePath: string;
+  migrationsFolder?: string;
 }
 
 export function composeCodingAgentPersistence(input: ComposeCodingAgentPersistenceInput) {
-  const database = createDatabase(path.join(input.sqlitePath, 'megumi.sqlite3'));
-  migrateDatabase(database);
+  const { database } = migrateCodingAgentDatabase({
+    sqliteDirectory: path.resolve(input.sqlitePath),
+    migrationsFolder: input.migrationsFolder,
+  });
 
   return {
     database,
-    runRecordRepository: new RunRecordRepository(database),
-    sessionRecordRepository: new SessionRecordRepository(database),
-    sessionContextRepository: new SessionContextRepository(database),
-    sessionCompactionRepository: new SessionCompactionRepository(database),
-    sessionMessageRepository: new SessionMessageRepository(database),
-    modelStepRepository: new ModelStepRepository(database),
-    runExecutionFactRepository: new RunExecutionFactRepository(database),
-    runtimeEventRepository: new RuntimeEventRepository(database),
-    activePathRepository: new SessionActivePathRepository(database),
-    recoveryRepository: new RecoveryRepository(database),
-    permissionSnapshotRepository: new PermissionSnapshotRepository(database),
-    toolRepository: new ToolRepository(database),
+    workspaceRepository: new WorkspaceRepository(database),
+    sessionRepository: new SessionRepository(database),
+    agentLoopRepository: new AgentLoopRepository(database),
+    toolCallRepository: new ToolCallRepository(database),
+    workspaceChangeRepository: new WorkspaceChangeRepository(database),
     artifactRepository: new ArtifactRepository(database),
     memoryRepository: new MemoryRepository(database),
-    timelineMessageRepository: new TimelineMessageRepository(database),
-    workspaceChangeRepository: new WorkspaceChangeRepository(database),
-    projectRepository: new ProjectRepository(database),
-    runContextRepository: new RunContextRepository(database),
   };
 }
 

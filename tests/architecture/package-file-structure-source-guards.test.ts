@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -210,34 +210,35 @@ describe('package and file structure source guards', () => {
   });
 
   it('keeps runtime event persistence in its owner repository', () => {
-    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/runtime-event.repo.ts');
+    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/agent-loop.repo.ts');
 
     expect(existsSync(ownerPath)).toBe(true);
-    expect(readFileSync(ownerPath, 'utf8')).toContain('INSERT INTO runtime_events');
+    expect(readFileSync(ownerPath, 'utf8')).toContain('INSERT INTO agent_loop_events');
     expect(existsSync(join(repoRoot, 'packages/coding-agent/persistence/repos/session-run.repo.ts'))).toBe(false);
   });
 
   it('keeps run execution facts in their owner repository', () => {
-    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/run-execution-fact.repo.ts');
+    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/agent-loop.repo.ts');
     const ownerSource = readFileSync(ownerPath, 'utf8');
 
     expect(existsSync(ownerPath)).toBe(true);
-    expect(ownerSource).toContain('INSERT INTO run_steps');
-    expect(ownerSource).toContain('INSERT INTO run_actions');
-    expect(ownerSource).toContain('INSERT INTO run_observations');
+    expect(ownerSource).toContain('INSERT INTO agent_loop_events');
+    expect(ownerSource).toContain("kind: 'run_step'");
+    expect(ownerSource).toContain("kind: 'run_action'");
+    expect(ownerSource).toContain("kind: 'run_observation'");
   });
 
   it('keeps model step persistence in its owner repository', () => {
-    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/model-step.repo.ts');
+    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/agent-loop.repo.ts');
     const ownerSource = readFileSync(ownerPath, 'utf8');
 
     expect(existsSync(ownerPath)).toBe(true);
-    expect(ownerSource).toContain('INSERT INTO model_steps');
-    expect(ownerSource).toContain('SELECT * FROM model_steps');
+    expect(ownerSource).toContain('INSERT INTO model_calls');
+    expect(ownerSource).toContain('SELECT * FROM model_calls');
   });
 
   it('keeps session message persistence in its owner repository', () => {
-    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/session-message.repo.ts');
+    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/session.repo.ts');
     const ownerSource = readFileSync(ownerPath, 'utf8');
 
     expect(existsSync(ownerPath)).toBe(true);
@@ -246,7 +247,7 @@ describe('package and file structure source guards', () => {
   });
 
   it('keeps session records in their owner repository', () => {
-    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/session-record.repo.ts');
+    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/session.repo.ts');
     const ownerSource = readFileSync(ownerPath, 'utf8');
 
     expect(existsSync(ownerPath)).toBe(true);
@@ -255,16 +256,16 @@ describe('package and file structure source guards', () => {
   });
 
   it('keeps run records in their owner repository', () => {
-    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/run-record.repo.ts');
+    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/agent-loop.repo.ts');
     const ownerSource = readFileSync(ownerPath, 'utf8');
 
     expect(existsSync(ownerPath)).toBe(true);
-    expect(ownerSource).toContain('INSERT INTO runs');
-    expect(ownerSource).toContain('SELECT * FROM runs');
+    expect(ownerSource).toContain('INSERT INTO agent_loop_runs');
+    expect(ownerSource).toContain('SELECT * FROM agent_loop_runs');
   });
 
   it('keeps session compaction persistence in its owner repository', () => {
-    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/session-compaction.repo.ts');
+    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/session.repo.ts');
     const ownerSource = readFileSync(ownerPath, 'utf8');
 
     expect(existsSync(ownerPath)).toBe(true);
@@ -273,16 +274,17 @@ describe('package and file structure source guards', () => {
   });
 
   it('keeps session context active-path transactions in their owner repository', () => {
-    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/session-context.repo.ts');
+    const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/session.repo.ts');
     const ownerSource = readFileSync(ownerPath, 'utf8');
 
     expect(existsSync(ownerPath)).toBe(true);
-    expect(ownerSource).toContain('new SessionActivePathRepository');
-    expect(ownerSource).toContain('new SessionCompactionRepository');
+    expect(ownerSource).toContain('INSERT INTO session_entries');
+    expect(ownerSource).toContain('UPDATE sessions');
+    expect(ownerSource).toContain('INSERT INTO session_leaf_changes');
     expect(ownerSource).toContain('this.database.transaction');
   });
 
-  it('wires session compaction orchestration through the session context repository port', () => {
+  it('wires session compaction orchestration through the aggregate session repository', () => {
     const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
     const sessionRuntimeSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts'),
@@ -297,12 +299,12 @@ describe('package and file structure source guards', () => {
     expect(InputProcessingServiceSource).toContain('sessionCompactionRepository?: SessionCompactionOrchestratorRepository');
     expect(InputProcessingServiceSource).toContain('repository: options.sessionCompactionRepository');
     expect(normalizedInputProcessingServiceSource).not.toContain('repository: this.repository,\n            modelCallProvider: options.modelCallProvider');
-    expect(sessionRuntimeSource).toContain('sessionContextRepository: SessionContextRepository');
-    expect(sessionRuntimeSource).toContain('sessionCompactionRepository: options.sessionContextRepository');
-    expect(runtimeSource).toContain('sessionContextRepository: persistence.sessionContextRepository');
+    expect(sessionRuntimeSource).toContain('sessionRepository: SessionRepository');
+    expect(sessionRuntimeSource).toContain('sessionCompactionRepository: options.sessionRepository');
+    expect(runtimeSource).toContain('sessionRepository');
   });
 
-  it('wires session context input through split repository ports', () => {
+  it('wires session context input through the aggregate session repository', () => {
     const sessionContextInputSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/session/session-context-input.ts'),
       'utf8',
@@ -320,12 +322,12 @@ describe('package and file structure source guards', () => {
     expect(sessionContextInputSource).toContain('sessionCompactionRepository: SessionContextInputCompactionRepository');
     expect(sessionContextInputSource).not.toContain('repository: SessionContextInputRepository;');
     expect(sessionRuntimeSource).toContain('new SessionContextInputService');
-    expect(sessionRuntimeSource).toContain('messageRepository: options.sessionMessageRepository');
-    expect(sessionRuntimeSource).toContain('sessionCompactionRepository: options.sessionContextRepository');
-    expect(runtimeSource).toContain('sessionMessageRepository: persistence.sessionMessageRepository');
+    expect(sessionRuntimeSource).toContain('messageRepository: options.sessionRepository');
+    expect(sessionRuntimeSource).toContain('sessionCompactionRepository: options.sessionRepository');
+    expect(runtimeSource).toContain('sessionRepository');
   });
 
-  it('wires session service through split repository ports', () => {
+  it('wires session service through aggregate repository adapters', () => {
     const sessionServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/session/session-service.ts'), 'utf8');
     const sessionRuntimeSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts'),
@@ -340,14 +342,10 @@ describe('package and file structure source guards', () => {
     expect(sessionServiceSource).toContain('sessionRepository: SessionServiceSessionRepository');
     expect(sessionServiceSource).toContain('messageRepository: SessionServiceMessageRepository');
     expect(sessionServiceSource).toContain('runRepository: SessionServiceRunRepository');
-    expect(sessionRuntimeSource).toContain('sessionRepository: options.sessionRecordRepository');
-    expect(sessionRuntimeSource).toContain('messageRepository: options.sessionMessageRepository');
-    expect(sessionRuntimeSource).toContain('runRepository: options.runRecordRepository');
-    expect(runtimeSource).toContain('sessionRecordRepository: persistence.sessionRecordRepository');
-    expect(runtimeSource).toContain('runRecordRepository: persistence.runRecordRepository');
+    expect(sessionRuntimeSource).toContain('messageRepository: options.sessionRepository');
   });
 
-  it('wires session branch service through split repository ports', () => {
+  it('wires session branch service through aggregate repository adapters', () => {
     const sessionBranchServiceSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/session/session-branch-service.ts'),
       'utf8',
@@ -364,14 +362,10 @@ describe('package and file structure source guards', () => {
     expect(sessionBranchServiceSource).not.toContain('SessionRunRepository');
     expect(sessionBranchServiceSource).toContain('sessionRepository: SessionBranchSessionRepository');
     expect(sessionBranchServiceSource).toContain('messageRepository: SessionBranchMessageRepository');
-    expect(sessionBranchServiceSource).toContain('runtimeEventRepository: SessionBranchRuntimeEventRepository');
-    expect(sessionRuntimeSource).toContain('sessionRepository: options.sessionRecordRepository');
-    expect(sessionRuntimeSource).toContain('messageRepository: options.sessionMessageRepository');
-    expect(sessionRuntimeSource).toContain('runtimeEventRepository: options.runtimeEventRepository');
-    expect(runtimeSource).toContain('runtimeEventRepository: persistence.runtimeEventRepository');
+    expect(sessionRuntimeSource).toContain('messageRepository: options.sessionRepository');
   });
 
-  it('wires recovery runtime through split repository ports', () => {
+  it('wires recovery runtime through aggregate repositories', () => {
     const recoveryRuntimeSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/composition', `compose-coding-agent-${'recovery'}-runtime.ts`),
       'utf8',
@@ -382,15 +376,13 @@ describe('package and file structure source guards', () => {
     );
 
     expect(recoveryRuntimeSource).not.toContain('SessionRunRepository');
-    expect(recoveryRuntimeSource).toContain('runRepository: RunRecordRepository');
-    expect(recoveryRuntimeSource).toContain('sessionRepository: SessionRecordRepository');
-    expect(recoveryRuntimeSource).toContain('runtimeEventRepository: RuntimeEventRepository');
-    expect(runtimeSource).toContain('runRepository: persistence.runRecordRepository');
-    expect(runtimeSource).toContain('sessionRepository: persistence.sessionRecordRepository');
-    expect(runtimeSource).toContain('runtimeEventRepository: persistence.runtimeEventRepository');
+    expect(recoveryRuntimeSource).toContain('runRepository: AgentLoopRepository');
+    expect(recoveryRuntimeSource).toContain('sessionRepository: SessionRepository');
+    expect(runtimeSource).toContain('runRepository: agentLoopRepository');
+    expect(runtimeSource).toContain('sessionRepository: sessionRepository');
   });
 
-  it('wires tool runtime through the run record port', () => {
+  it('wires tool runtime through the aggregate agent-loop repository', () => {
     const toolRuntimeSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-tool-runtime.ts'),
       'utf8',
@@ -401,14 +393,14 @@ describe('package and file structure source guards', () => {
     );
 
     expect(toolRuntimeSource).not.toContain('SessionRunRepository');
-    expect(toolRuntimeSource).toContain('runRepository: RunRecordRepository');
+    expect(toolRuntimeSource).toContain('runRepository: AgentLoopRepository');
     expect(toolRuntimeSource).toContain('input.runRepository.getRun(runId)');
-    expect(runtimeSource).toContain('runRepository: persistence.runRecordRepository');
+    expect(runtimeSource).toContain('runRepository: agentLoopRepository');
   });
 
   it('keeps run service contracts off the concrete session-run repository type', () => {
-    const persistencePortsSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/persistence/agent-run-repository-ports.ts'),
+    const agentLoopRepositorySource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/persistence/repos/agent-loop.repo.ts'),
       'utf8',
     );
     const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
@@ -424,28 +416,19 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/obsolete-run/run-contract.ts'))).toBe(false);
     expect(InputProcessingServiceSource).not.toContain('SessionRunRepository');
     expect(retryCoordinatorSource).not.toContain('SessionRunRepository');
-    expect(persistencePortsSource).toContain('export interface AgentRunSessionRepositoryPort');
-    expect(persistencePortsSource).toContain('export interface AgentRunRunRecordRepositoryPort');
-    expect(persistencePortsSource).toContain('export interface AgentRunExecutionFactRepositoryPort');
-    expect(persistencePortsSource).toContain('export interface AgentRunModelStepRepositoryPort');
-    expect(persistencePortsSource).toContain('export interface AgentRunRuntimeEventRepositoryPort');
+    expect(agentLoopRepositorySource).toContain('export class AgentLoopRepository');
     expect(retryCoordinatorSource).toContain('export interface RunRetryCoordinatorRepositoryPort');
     expect(productRuntimeIndexSource).toContain("export * from './host-interface'");
     expect(productRuntimeIndexSource).not.toContain("export * from './input/send-input'");
     expect(productRuntimeIndexSource).not.toContain("export * from '../state'");
   });
 
-  it('keeps InputProcessingService options on owner-named repository ports', () => {
+  it('keeps InputProcessingService options on aggregate repository dependencies', () => {
     const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
 
     expect(InputProcessingServiceSource).not.toContain('repository: AgentRunRepositoryPort;');
-    expect(InputProcessingServiceSource).toContain('sessionRepository: AgentRunSessionRepositoryPort;');
-    expect(InputProcessingServiceSource).toContain('messageRepository: AgentRunMessageRepositoryPort;');
-    expect(InputProcessingServiceSource).toContain('runRecordRepository: AgentRunRunRecordRepositoryPort;');
-    expect(InputProcessingServiceSource).toContain('runExecutionFactRepository: AgentRunExecutionFactRepositoryPort;');
-    expect(InputProcessingServiceSource).toContain('modelStepRepository: AgentRunModelStepRepositoryPort;');
-    expect(InputProcessingServiceSource).toContain('sessionContextRepository: AgentRunSessionContextRepositoryPort;');
-    expect(InputProcessingServiceSource).toContain('runtimeEventRepository: AgentRunRuntimeEventRepositoryPort;');
+    expect(InputProcessingServiceSource).toContain('sessionRepository: InputSessionRepositoryPort');
+    expect(InputProcessingServiceSource).toContain('agentLoopRepository: InputAgentLoopRepositoryPort');
     expect(InputProcessingServiceSource).not.toContain('const repository = options.repository');
   });
 
@@ -467,10 +450,10 @@ describe('package and file structure source guards', () => {
     expect(toolCallContractSource).toContain('export interface ToolRuntimeFactory');
   });
 
-  it('keeps InputProcessingService coordinator repository adapters in composition', () => {
+  it('keeps InputProcessingService coordinator dependencies on aggregate repositories', () => {
     const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
-    const repositoryOptionsSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/composition/input-processing-repository-options.ts'),
+    const sessionRuntimeSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts'),
       'utf8',
     );
 
@@ -483,9 +466,10 @@ describe('package and file structure source guards', () => {
     expect(InputProcessingServiceSource).not.toContain('this.runCompletionRepository = {');
     expect(InputProcessingServiceSource).not.toContain('this.runTerminalRepository = {');
     expect(InputProcessingServiceSource).not.toContain('this.runRetryRepository = {');
-    expect(repositoryOptionsSource).toContain('postRunHooksRepository');
-    expect(repositoryOptionsSource).toContain('runTerminalRepository');
-    expect(repositoryOptionsSource).toContain('runRetryRepository');
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/composition/input-processing-repository-options.ts'))).toBe(false);
+    expect(sessionRuntimeSource).toContain('agentLoopRepository: options.agentLoopRepository');
+    expect(sessionRuntimeSource).toContain('sessionRepository: options.sessionRepository');
+    expect(sessionRuntimeSource).toContain('toolCallRepository: options.toolCallRepository');
   });
 
   it('keeps InputProcessingService coordinator construction in composition', () => {
@@ -696,10 +680,6 @@ describe('package and file structure source guards', () => {
 
   it('keeps tool result model input emission ownership in the model-input submodule', () => {
     const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
-    const InputProcessingServiceToolRepositoryAdapterSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/composition/input-processing-tool-repository-adapter.ts'),
-      'utf8',
-    );
     const composeCodingAgentToolRuntimeSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-tool-runtime.ts'),
       'utf8',
@@ -711,7 +691,7 @@ describe('package and file structure source guards', () => {
 
     expect(existsSync(toolResultModelInputEmittedPath)).toBe(true);
     const toolResultModelInputEmittedSource = readFileSync(toolResultModelInputEmittedPath, 'utf8');
-    expect(InputProcessingServiceToolRepositoryAdapterSource).toContain('markToolResultsSubmittedToModelInput');
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/composition/input-processing-tool-repository-adapter.ts'))).toBe(false);
     expect(composeCodingAgentToolRuntimeSource).toContain('markToolResultsSubmittedToModelInput');
     expect(toolResultModelInputEmittedSource).toContain('export function markToolResultsSubmittedToModelInput');
     expect(toolResultModelInputEmittedSource).toContain('createToolResultsSubmittedToModelInputEvent');
@@ -821,9 +801,8 @@ describe('package and file structure source guards', () => {
 
     expect(InputProcessingServiceSource).not.toContain('private readonly repository: AgentRunRepositoryPort');
     expect(InputProcessingServiceSource).not.toContain('this.repository = options.repository');
-    expect(InputProcessingServiceSource).toContain('private readonly sessionRepository: AgentRunSessionRepositoryPort');
-    expect(InputProcessingServiceSource).toContain('private readonly runRecordRepository: AgentRunRunRecordRepositoryPort');
-    expect(InputProcessingServiceSource).toContain('private readonly runtimeEventRepository: AgentRunRuntimeEventRepositoryPort');
+    expect(InputProcessingServiceSource).toContain('private readonly sessionRepository: InputSessionRepositoryPort');
+    expect(InputProcessingServiceSource).toContain('private readonly agentLoopRepository: InputAgentLoopRepositoryPort');
     expect(InputProcessingServiceSource).toContain('private readonly sessionMessageService: SessionMessageService');
     expect(InputProcessingServiceSource).toContain('sessionRepository: this.sessionRepository');
     expect(InputProcessingServiceSource).not.toContain('private resolveSessionForMessage');
@@ -945,7 +924,7 @@ describe('package and file structure source guards', () => {
     expect(existsSync(toolsDefinitionsPath)).toBe(false);
   });
 
-  it('wires the input runtime service through split repository owner ports in session runtime composition', () => {
+  it('wires the input runtime service through aggregate repository owner ports in session runtime composition', () => {
     const sessionRuntimeSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts'),
       'utf8',
@@ -957,11 +936,11 @@ describe('package and file structure source guards', () => {
 
     expect(sessionRuntimeSource).not.toContain('SessionRunRepository');
     expect(sessionRuntimeSource).not.toContain('sessionRunRepository');
-    expect(sessionRuntimeSource).toContain("import { createInputProcessingRepositoryOptions } from './input-processing-repository-options'");
-    expect(sessionRuntimeSource).not.toContain('function createInputProcessingRepositoryOptions');
-    expect(sessionRuntimeSource).not.toContain('repository: agentRunRepository,');
-    expect(sessionRuntimeSource).toContain('...inputProcessingRepositoryOptions');
-    expect(runtimeSource).toContain('modelStepRepository: persistence.modelStepRepository');
+    expect(sessionRuntimeSource).not.toContain('inputProcessingRepositoryOptions');
+    expect(sessionRuntimeSource).toContain('sessionRepository: options.sessionRepository');
+    expect(sessionRuntimeSource).toContain('agentLoopRepository: options.agentLoopRepository');
+    expect(sessionRuntimeSource).toContain('toolCallRepository: options.toolCallRepository');
+    expect(runtimeSource).toContain('agentLoopRepository');
     expect(runtimeSource).not.toContain('sessionRunRepository: persistence.sessionRunRepository');
   });
 

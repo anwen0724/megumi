@@ -6,7 +6,7 @@
 } from '@megumi/shared/workspace';
 
 export interface WorkspaceChangeFooterProjectorWorkspaceChangePort {
-  listChangeSetsByRun(runId: string): WorkspaceChangeSet[];
+  listWorkspaceChangesByRun(runId: string): WorkspaceChangeSet[];
   getChangeSummary(changeSetId: string): WorkspaceChangeSummary | undefined;
   listChangedFilesByChangeSet(changeSetId: string): WorkspaceChangedFile[];
 }
@@ -25,7 +25,7 @@ export function createWorkspaceChangeFooterProjectorService(
   return {
     projectRunFooter(runId) {
       const changeSets = options.workspaceChanges
-        .listChangeSetsByRun(runId)
+        .listWorkspaceChangesByRun(runId)
         .filter((changeSet) => changeSet.status === 'finalized' && changeSet.changedFileCount > 0)
         .map((changeSet) => {
           const summary = options.workspaceChanges.getChangeSummary(changeSet.changeSetId);
@@ -85,7 +85,7 @@ export function isWorkspaceChangeFooterProjectorPort(
 ): value is WorkspaceChangeFooterProjectorWorkspaceChangePort {
   return typeof value === 'object'
     && value !== null
-    && 'listChangeSetsByRun' in value
+    && 'listWorkspaceChangesByRun' in value
     && 'getChangeSummary' in value
     && 'listChangedFilesByChangeSet' in value;
 }

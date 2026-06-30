@@ -1,4 +1,4 @@
-import fs from 'node:fs';
+﻿import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -20,8 +20,8 @@ describe('19.03 tool orchestration contract guards', () => {
   });
 
   it('does not introduce unapproved orchestration persistence models', () => {
-    const migrations = read('packages/coding-agent/persistence/schema/migrations.ts');
-    const repository = read('packages/coding-agent/persistence/repos/tool.repo.ts');
+    const migrations = read('packages/coding-agent/persistence/migrations/0000_database_foundation_redesign.sql');
+    const repository = read('packages/coding-agent/persistence/repos/tool-call.repo.ts');
 
     for (const source of [migrations, repository]) {
       expect(source).not.toContain('tool_call_batches');

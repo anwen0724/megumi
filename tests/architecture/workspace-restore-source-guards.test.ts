@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -30,7 +30,10 @@ const restoreBoundaryAllowlist = new Set([
   'packages/coding-agent/composition/compose-database.ts',
   'packages/coding-agent/persistence/compose-desktop-persistence.ts',
   'packages/coding-agent/persistence/repos/workspace-change.repo.ts',
-  'packages/coding-agent/persistence/schema/migrations.ts',
+  'packages/coding-agent/persistence/schema/drizzle-schema.ts',
+  'packages/coding-agent/persistence/schema/migrate.ts',
+  'packages/coding-agent/persistence/schema/table-list.ts',
+  'packages/coding-agent/persistence/schema/table-ownership.ts',
   'packages/coding-agent/composition/compose-recovery-runtime.ts',
   'packages/coding-agent/composition/compose-session-runtime.ts',
   'packages/coding-agent/composition/compose-tool-runtime.ts',

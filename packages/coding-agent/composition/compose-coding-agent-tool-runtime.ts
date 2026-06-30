@@ -1,12 +1,12 @@
-﻿// Composes Coding Agent tool registry, local tool adapters, and tool orchestration.
+// Composes Coding Agent tool registry, local tool adapters, and tool orchestration.
 import fs from 'fs-extra';
 import { createBuiltInToolRegistry } from '../tools/built-ins';
 import type { ToolRegistry } from '../tools/registry';
 import { createToolCallRunner } from '../agent-loop/tool-call';
 import { ToolService } from '../tools/tool-service';
 import { WorkspaceChangeTrackerService } from '../workspace';
-import type { RunRecordRepository } from '../persistence/repos/run-record.repo';
-import type { ToolRepository } from '../persistence/repos/tool.repo';
+import type { AgentLoopRepository } from '../persistence/repos/agent-loop.repo';
+import type { ToolCallRepository } from '../persistence/repos/tool-call.repo';
 import type { WorkspaceChangeRepository } from '../persistence/repos/workspace-change.repo';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
 import { createBuiltInToolSourceExecutor } from '../tools/execution/built-in-tool-source-executor';
@@ -19,10 +19,10 @@ export function composeCodingAgentToolRegistry(): ToolRegistry {
 }
 
 export function composeCodingAgentToolRuntimeFactory(input: {
-  toolRepository: ToolRepository;
+  toolRepository: ToolCallRepository;
   toolRegistry: ToolRegistry;
   workspaceChangeRepository: WorkspaceChangeRepository;
-  runRepository: RunRecordRepository;
+  runRepository: AgentLoopRepository;
   permissionSettingsProvider: PermissionSettingsProvider;
 }): ToolRuntimeFactory {
   return {
@@ -42,16 +42,16 @@ export function composeCodingAgentToolRuntimeFactory(input: {
       return createToolCallRunner({
         registry: input.toolRegistry,
         repository: {
-          saveToolCall: (toolCall) => input.toolRepository.saveToolCall(toolCall),
+          startToolCall: (toolCall) => input.toolRepository.startToolCall(toolCall),
           getToolCall: (toolCallId) => input.toolRepository.getToolCall(toolCallId),
-          saveToolExecution: (toolExecution) => input.toolRepository.saveToolExecution(toolExecution),
+          recordToolExecution: (toolExecution) => input.toolRepository.recordToolExecution(toolExecution),
           getToolExecution: (toolExecutionId) => input.toolRepository.getToolExecution(toolExecutionId),
           getToolExecutionByToolCallId: (request) => input.toolRepository.getToolExecutionByToolCallId(request),
           listToolExecutionsByAssistantMessage: (request) => input.toolRepository.listToolExecutionsByAssistantMessage(request),
-          savePermissionDecision: (permissionDecision) => input.toolRepository.savePermissionDecision(permissionDecision),
-          saveApprovalRequest: (approvalRequest) => input.toolRepository.saveApprovalRequest(approvalRequest),
+          recordPermissionDecision: (permissionDecision) => input.toolRepository.recordPermissionDecision(permissionDecision),
+          createApprovalRequest: (approvalRequest) => input.toolRepository.createApprovalRequest(approvalRequest),
           getApprovalRequest: (approvalRequestId) => input.toolRepository.getApprovalRequest(approvalRequestId),
-          saveToolResult: (toolResult) => input.toolRepository.saveToolResult(toolResult),
+          completeToolCall: (toolResult) => input.toolRepository.completeToolCall(toolResult),
           getToolRegistrySnapshotByRun: (runId) => input.toolRepository.getToolRegistrySnapshotByRun(runId),
           markToolResultsSubmittedToModelInput: (request) =>
             input.toolRepository.markToolResultsSubmittedToModelInput(request),
@@ -83,7 +83,7 @@ export function composeCodingAgentToolRuntimeFactory(input: {
 
 export function composeCodingAgentToolService(input: {
   toolRegistry: ToolRegistry;
-  toolRepository: ToolRepository;
+  toolRepository: ToolCallRepository;
   resumeApproval: ToolService['resumeApproval'];
 }): ToolService {
   return new ToolService({

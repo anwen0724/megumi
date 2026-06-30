@@ -75,7 +75,23 @@ export interface MemoryRuntimeCaptureRepository {
   }): MemoryRecord[];
   getMemory(memoryId: string): MemoryRecord | undefined;
   saveMemory(memory: MemoryRecord): MemoryRecord;
-  saveAuditLog(auditLog: MemoryAuditLog): MemoryAuditLog;
+  recordCaptureAttempt(attempt: MemoryRuntimeCaptureAttempt): MemoryRuntimeCaptureAttempt;
+}
+
+export interface MemoryRuntimeCaptureAttempt {
+  captureAttemptId: string;
+  runId?: string | null;
+  workspaceId?: string | null;
+  sessionId?: string | null;
+  status: string;
+  triggerKind: string;
+  extractedCount?: number;
+  createdMemoryIds?: string[];
+  rawOutput?: unknown;
+  error?: unknown;
+  createdAt: string;
+  completedAt?: string | null;
+  metadata?: JsonObject;
 }
 
 export interface MemoryRuntimeCaptureOptions {
@@ -456,7 +472,7 @@ export class MemoryRuntimeCaptureService {
     metadata?: Record<string, unknown>;
   }): { ok: true } | { ok: false; message: string } {
     try {
-      this.options.repository.saveAuditLog({
+      const audit: MemoryAuditLog = {
         auditId: this.options.ids.auditId(),
         operation: input.operation,
         targetKind: input.targetKind,
@@ -470,6 +486,18 @@ export class MemoryRuntimeCaptureService {
         afterState: null,
         createdAt: this.options.clock.now(),
         metadata: sanitizeAuditMetadata(input.metadata ?? {}),
+      };
+      this.options.repository.recordCaptureAttempt({
+        captureAttemptId: audit.auditId,
+        runId: audit.runId ?? null,
+        workspaceId: audit.projectId ?? null,
+        sessionId: audit.sessionId ?? null,
+        status: 'recorded',
+        triggerKind: 'audit_log',
+        extractedCount: 0,
+        createdAt: audit.createdAt,
+        completedAt: audit.createdAt,
+        metadata: { auditLog: audit as unknown as JsonObject },
       });
       return { ok: true };
     } catch (error) {

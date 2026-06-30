@@ -1,18 +1,29 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+
 import { createDatabase } from '@megumi/coding-agent/persistence/connection';
-import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
+import { AgentLoopRepository } from '@megumi/coding-agent/persistence/repos/agent-loop.repo';
 import { ArtifactRepository } from '@megumi/coding-agent/persistence/repos/artifact.repo';
-import { RunRecordRepository } from '@megumi/coding-agent/persistence/repos/run-record.repo';
-import { SessionRecordRepository } from '@megumi/coding-agent/persistence/repos/session-record.repo';
+import { SessionRepository } from '@megumi/coding-agent/persistence/repos/session.repo';
+import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
 import type { Artifact, ArtifactVersion } from '@megumi/shared/artifact';
 
 function createTestDatabase() {
   const database = createDatabase(':memory:');
-  migrateDatabase(database);
-  const sessionRepository = new SessionRecordRepository(database);
-  const runRepository = new RunRecordRepository(database);
+  applyCodingAgentDatabaseMigrations(database);
+  database.prepare(`
+    INSERT INTO workspaces (
+      workspace_id, name, root_path, root_path_key, status,
+      created_at, updated_at, last_opened_at, metadata_json
+    ) VALUES (
+      'workspace:default', 'Default', 'C:/workspaces/default', 'c:/workspaces/default', 'available',
+      '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z', NULL
+    )
+  `).run();
+  const sessionRepository = new SessionRepository(database);
+  const runRepository = new AgentLoopRepository(database);
   sessionRepository.saveSession({
     sessionId: 'session:1',
+    workspaceId: 'workspace:default',
     title: 'Session',
     status: 'active',
     createdAt: '2026-05-16T00:00:00.000Z',
@@ -64,8 +75,9 @@ const version: ArtifactVersion = {
 };
 
 describe('ArtifactRepository', () => {
-  it('saves artifacts versions source refs and relations', () => {
-    const repo = new ArtifactRepository(createTestDatabase());
+  it('writes artifacts, versions, and source refs to the redesigned artifact tables', () => {
+    const database = createTestDatabase();
+    const repo = new ArtifactRepository(database);
 
     repo.saveArtifact(artifact);
     repo.saveVersion(version);
@@ -77,29 +89,27 @@ describe('ArtifactRepository', () => {
       refId: 'run:1',
       createdAt: '2026-05-16T00:00:00.000Z',
     });
-    repo.saveRelation({
-      relationId: 'artifact-relation:1',
-      fromArtifactId: 'artifact:1',
-      toArtifactId: 'artifact:1',
-      kind: 'references',
-      createdAt: '2026-05-16T00:00:00.000Z',
+    repo.saveSourceRef({
+      sourceRefId: 'artifact-source:artifact-ref',
+      artifactId: 'artifact:1',
+      artifactVersionId: 'artifact-version:1',
+      kind: 'artifact',
+      refId: 'artifact:other',
+      createdAt: '2026-05-16T00:00:01.000Z',
     });
 
-    expect(repo.getArtifact('artifact:1')?.title).toBe('Report');
-    expect(repo.getVersion('artifact-version:1')?.contentRef.storage).toBe('inline');
-    expect(repo.listSourceRefsByArtifact('artifact:1')).toHaveLength(1);
-    expect(repo.listRelationsByArtifact('artifact:1')).toHaveLength(1);
-  });
-
-  it('lists artifacts by run and session metadata', () => {
-    const repo = new ArtifactRepository(createTestDatabase());
-    repo.saveArtifact(artifact);
-
+    expect(repo.getArtifact('artifact:1')).toEqual(artifact);
+    expect(repo.getVersion('artifact-version:1')).toEqual(version);
+    expect(repo.listSourceRefsByArtifact('artifact:1').map((ref) => ref.kind)).toEqual(['run', 'artifact']);
     expect(repo.listArtifactsByRun('run:1').map((item) => item.artifactId)).toEqual(['artifact:1']);
     expect(repo.listArtifactsBySession('session:1').map((item) => item.artifactId)).toEqual(['artifact:1']);
+
+    expect((database.prepare('SELECT COUNT(*) AS count FROM artifacts').get() as { count: number }).count).toBe(1);
+    expect((database.prepare('SELECT COUNT(*) AS count FROM artifact_versions').get() as { count: number }).count).toBe(1);
+    expect((database.prepare('SELECT COUNT(*) AS count FROM artifact_source_refs').get() as { count: number }).count).toBe(2);
   });
 
-  it('updates status without changing plan-specific statuses', () => {
+  it('updates status without preserving implementation-plan-only status values', () => {
     const repo = new ArtifactRepository(createTestDatabase());
     repo.saveArtifact(artifact);
 
@@ -112,5 +122,26 @@ describe('ArtifactRepository', () => {
     expect(updated?.status).toBe('active');
     expect(JSON.stringify(updated)).not.toContain('"accepted"');
   });
-});
 
+  it('does not expose artifact relation persistence compatibility methods', () => {
+    const publicNames = Object.getOwnPropertyNames(ArtifactRepository.prototype);
+
+    expect(publicNames).toEqual(expect.arrayContaining([
+      'saveArtifact',
+      'getArtifact',
+      'listArtifactsByRun',
+      'listArtifactsBySession',
+      'updateArtifactStatus',
+      'saveVersion',
+      'getVersion',
+      'listVersionsByArtifact',
+      'nextVersionNumber',
+      'saveSourceRef',
+      'listSourceRefsByArtifact',
+    ]));
+    expect(publicNames).not.toEqual(expect.arrayContaining([
+      'saveRelation',
+      'listRelationsByArtifact',
+    ]));
+  });
+});

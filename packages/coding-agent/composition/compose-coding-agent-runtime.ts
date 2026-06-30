@@ -47,6 +47,7 @@ import { createLocalProjectFileSystem } from '../adapters/local/workspace/projec
 
 export interface ComposeCodingAgentRuntimeOptions {
   homePaths: CodingAgentHomePaths;
+  migrationsFolder?: string;
   runtimeLogger: RuntimeLogger;
   // Optional override for tests / alternative entries. When omitted, the product
   // builds a real OpenAI-compatible model call provider so it runs standalone.
@@ -64,7 +65,13 @@ export interface ComposeCodingAgentRuntimeOptions {
 }
 
 export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOptions): CodingAgentHostInterface {
-  const persistence = composeCodingAgentPersistence({ sqlitePath: options.homePaths.sqlitePath });
+  const persistence = composeCodingAgentPersistence({
+    sqlitePath: options.homePaths.sqlitePath,
+    migrationsFolder: options.migrationsFolder,
+  });
+  const agentLoopRepository = persistence.agentLoopRepository as any;
+  const sessionRepository = persistence.sessionRepository as any;
+  const toolCallRepository = persistence.toolCallRepository as any;
   const toolRegistry = composeCodingAgentToolRegistry();
   const settingsService = new ProductSettingsService({
     storage: options.settingsStorage ?? createLocalSettingsJsonStorage({
@@ -91,17 +98,17 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     megumiHomePath: options.homePaths.homePath,
   });
   const toolRuntimeFactory = composeCodingAgentToolRuntimeFactory({
-    toolRepository: persistence.toolRepository,
+    toolRepository: toolCallRepository,
     toolRegistry,
     workspaceChangeRepository: persistence.workspaceChangeRepository,
-    runRepository: persistence.runRecordRepository,
+    runRepository: agentLoopRepository,
     permissionSettingsProvider: options.permissionSettingsProvider ?? settingsService,
   });
   // Persist committed timeline history in the product, forwarding events to any
   // caller-provided sink (e.g. the desktop UI bridge) downstream. This keeps
   // history persistence working even without a UI.
   const chatStreamEventSink = new TimelineHistoryCommitProjectorService({
-    repository: persistence.timelineMessageRepository,
+    repository: agentLoopRepository,
     downstream: options.chatStreamEventSink,
     ids: { diagnosticId: () => `timeline-commit-diagnostic:${crypto.randomUUID()}` },
   });
@@ -109,29 +116,20 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     homePaths: options.homePaths,
     runtimeLogger: options.runtimeLogger,
     artifactRepository: persistence.artifactRepository,
-    permissionSnapshotRepository: persistence.permissionSnapshotRepository,
-    modelStepRepository: persistence.modelStepRepository,
-    runRecordRepository: persistence.runRecordRepository,
-    sessionRecordRepository: persistence.sessionRecordRepository,
-    sessionContextRepository: persistence.sessionContextRepository,
-    sessionMessageRepository: persistence.sessionMessageRepository,
-    runExecutionFactRepository: persistence.runExecutionFactRepository,
-    runtimeEventRepository: persistence.runtimeEventRepository,
-    activePathRepository: persistence.activePathRepository,
-    toolRepository: persistence.toolRepository,
+    agentLoopRepository,
+    sessionRepository,
+    toolCallRepository,
     workspaceChangeRepository: persistence.workspaceChangeRepository,
-    timelineMessageRepository: persistence.timelineMessageRepository,
     toolRegistry,
     modelCallProviderService,
     toolRuntimeFactory,
     memoryRuntime: memory.memoryRuntime,
-    runContextRepository: persistence.runContextRepository,
     chatStreamEventSink,
     workspaceChangeFooterProjector: options.workspaceChangeFooterProjector,
   });
   const toolService = composeCodingAgentToolService({
     toolRegistry,
-    toolRepository: persistence.toolRepository,
+    toolRepository: toolCallRepository,
     resumeApproval: (request) => sessionRuntime.inputProcessingService.resumeToolApproval(request),
   });
   const artifactContentStore = new ArtifactContentStore({
@@ -142,16 +140,16 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     contentStore: artifactContentStore,
   });
   const recoveryService = composeCodingAgentRecoveryRuntime({
-    recoveryRepository: persistence.recoveryRepository,
-    runRepository: persistence.runRecordRepository,
-    sessionRepository: persistence.sessionRecordRepository,
-    runtimeEventRepository: persistence.runtimeEventRepository,
+    recoveryRepository: agentLoopRepository,
+    runRepository: agentLoopRepository,
+    sessionRepository: sessionRepository,
+    runtimeEventRepository: agentLoopRepository,
     workspaceChangeRepository: persistence.workspaceChangeRepository,
-    timelineMessageRepository: persistence.timelineMessageRepository,
+    timelineMessageRepository: agentLoopRepository,
     logger: options.runtimeLogger,
   });
   const projectService = createProjectService({
-    repository: persistence.projectRepository,
+    repository: persistence.workspaceRepository,
     fileSystem: options.projectFileSystem ?? createLocalProjectFileSystem(),
     ...(options.directoryPicker ? { directoryPicker: options.directoryPicker } : {}),
   });

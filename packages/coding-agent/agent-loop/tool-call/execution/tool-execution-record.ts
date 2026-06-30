@@ -41,7 +41,7 @@ export async function runToolExecutionRecord(
     return record;
   }
 
-  const running = options.repository.saveToolExecution({
+  const running = options.repository.recordToolExecution({
     ...record,
     status: 'running',
     startedAt: options.now(),
@@ -59,7 +59,7 @@ export async function runToolExecutionRecord(
       ids: options.ids,
       now: options.now,
     });
-    return options.repository.saveToolExecution({
+    return options.repository.recordToolExecution({
       ...running,
       status: rawResult.isError ? 'failed' : 'succeeded',
       completedAt: observation.createdAt,
@@ -92,7 +92,7 @@ export async function runToolExecutionRecord(
       ids: options.ids,
       now: options.now,
     });
-    return options.repository.saveToolExecution({
+    return options.repository.recordToolExecution({
       ...running,
       status: 'failed',
       completedAt: observation.createdAt,

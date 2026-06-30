@@ -4,7 +4,7 @@ import type {
   ImplementationPlanArtifactRecord,
   PermissionModeState,
 } from '@megumi/shared/permission';
-import type { PermissionSnapshotRepository } from '../persistence/repos/permission-snapshot.repo';
+import type { AgentLoopRepository } from '../persistence/repos/agent-loop.repo';
 
 export interface PlanArtifactCompatibility {
   syncImplementationPlanArtifact(plan: ImplementationPlanArtifactRecord): void;
@@ -27,7 +27,7 @@ export interface PlanArtifactServicePort {
 
 export interface PlanArtifactServiceOptions {
   repository: Pick<
-    PermissionSnapshotRepository,
+    AgentLoopRepository,
     'saveImplementationPlan' | 'getImplementationPlanByProducingRun' | 'updateImplementationPlanStatus'
   >;
   planArtifactCompatibility?: PlanArtifactCompatibility;

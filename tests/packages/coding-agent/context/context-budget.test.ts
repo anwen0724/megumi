@@ -506,7 +506,7 @@ describe('Context budget executor', () => {
 
   it('keeps tool result model input parts together as required context', () => {
     const result = applyContextBudget({
-      buildReason: 'tool_results_model_input',
+      buildReason: 'tool_call_outputs_model_input',
       policy: {
         modelContextWindow: 35,
         reservedOutputTokens: 5,

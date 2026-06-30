@@ -2,6 +2,8 @@ import type { ForgeConfig } from '@electron-forge/shared-types';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
+import fs from 'fs-extra';
+import path from 'node:path';
 
 const nativeRuntimeModuleRoots = [
   '/node_modules/better-sqlite3',
@@ -30,6 +32,18 @@ const config: ForgeConfig = {
     asar: {
       unpack: '**/{.**,**}/**/*.node',
     },
+    afterCopy: [
+      async (buildPath, _electronVersion, _platform, _arch, done) => {
+        try {
+          const source = path.resolve(process.cwd(), 'packages/coding-agent/persistence/migrations');
+          const target = path.resolve(buildPath, '..', 'persistence', 'migrations');
+          await fs.copy(source, target);
+          done();
+        } catch (error) {
+          done(error as Error);
+        }
+      },
+    ],
     ignore: shouldIgnorePackagedFile,
     name: 'Megumi',
     executableName: 'megumi',

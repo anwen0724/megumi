@@ -85,9 +85,9 @@ export interface ToolCallRunnerService extends ToolCallRunner, ToolApprovalResum
 }
 
 export interface ToolCallRepositoryPort {
-  saveToolCall(toolCall: ToolCall): ToolCall;
+  startToolCall(toolCall: ToolCall): ToolCall;
   getToolCall(toolCallId: string): ToolCall | undefined;
-  saveToolExecution(toolExecution: ToolExecutionRecord): ToolExecutionRecord;
+  recordToolExecution(toolExecution: ToolExecutionRecord): ToolExecutionRecord;
   getToolExecution(toolExecutionId: string): ToolExecutionRecord | undefined;
   getToolExecutionByToolCallId(input: {
     runId: string;
@@ -98,10 +98,10 @@ export interface ToolCallRepositoryPort {
     runId: string;
     assistantMessageId: string;
   }): ToolExecutionRecord[];
-  savePermissionDecision(permissionDecision: PermissionDecision): PermissionDecision;
-  saveApprovalRequest(approvalRequest: ApprovalRequest): ApprovalRequest;
+  recordPermissionDecision(permissionDecision: PermissionDecision): PermissionDecision;
+  createApprovalRequest(approvalRequest: ApprovalRequest): ApprovalRequest;
   getApprovalRequest(approvalRequestId: string): ApprovalRequest | undefined;
-  saveToolResult(toolResult: ToolResult): ToolResult;
+  completeToolCall(toolResult: ToolResult): ToolResult;
   getToolRegistrySnapshotByRun(runId: string): ToolRegistrySnapshot | undefined;
   getRunSessionId(runId: string): string | undefined;
   markToolResultsSubmittedToModelInput?(input: {
@@ -252,7 +252,7 @@ async function prepareRecords(
     const resolvedToolCall = resolution?.ok
       ? { ...toolCall, ...resolution.sourceIdentity, toolName: resolution.definition.name }
       : toolCall;
-    options.repository.saveToolCall({
+    options.repository.startToolCall({
       ...resolvedToolCall,
       status: resolution?.ok || hasInlineIdentity ? 'validated' : 'failed',
       ...(resolution?.ok || hasInlineIdentity ? {} : { completedAt: options.now() }),
@@ -266,7 +266,7 @@ async function prepareRecords(
           reason: validation.errorMessage,
           reasonCode: 'INVALID_ARGUMENTS',
         });
-        options.repository.saveToolExecution(failed);
+        options.repository.recordToolExecution(failed);
         continue;
       }
     }
@@ -279,7 +279,7 @@ async function prepareRecords(
         reason: resolution?.message ?? `Unknown tool: ${toolCall.toolName}`,
         reasonCode: 'TOOL_NOT_FOUND',
       });
-    options.repository.saveToolExecution(record);
+    options.repository.recordToolExecution(record);
   }
 
   return options.repository.listToolExecutionsByAssistantMessage({

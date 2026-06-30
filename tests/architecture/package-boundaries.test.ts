@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fs, { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path, { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -110,7 +110,6 @@ describe('package dependency boundaries', () => {
     expect(source).not.toMatch(/\bToolRegistrySnapshot\b/);
     expect(source).not.toMatch(/\bSnapshotToolEntry\b/);
     expect(source).not.toMatch(/\bToolExecutionRouter\b/);
-    expect(source).not.toMatch(/\bToolRepository\b/);
     expect(source).not.toMatch(/\bcanonicalToolId\b/);
     expect(source).not.toMatch(/\bmodelVisibleName\b/);
   });
@@ -155,10 +154,10 @@ describe('package dependency boundaries', () => {
 
   it('keeps product persistence under coding-agent instead of desktop', () => {
     expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/schema/migrations.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/schema/migrate.ts'))).toBe(true);
     expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/repos/session-run.repo.ts'))).toBe(false);
-    expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/repos/run-record.repo.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/repos/session-record.repo.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/repos/agent-loop.repo.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/repos/session.repo.ts'))).toBe(true);
     expect(fs.existsSync(path.join(root, 'packages/coding-agent/composition/compose-coding-agent-persistence.ts'))).toBe(true);
     expect(fs.existsSync(path.join(root, 'apps/desktop/src/main/persistence'))).toBe(false);
   });

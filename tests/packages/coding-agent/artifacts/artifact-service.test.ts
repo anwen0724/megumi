@@ -19,7 +19,6 @@ function createRepo(): ArtifactRepositoryPort {
     },
     getVersion: (artifactVersionId) => versions.get(artifactVersionId),
     listSourceRefsByArtifact: (artifactId) => sourceRefs.filter((item) => item.artifactId === artifactId),
-    listRelationsByArtifact: () => [],
     nextVersionNumber: () => versions.size + 1,
     updateArtifactStatus: (input) => {
       const current = artifacts.get(input.artifactId);
@@ -55,7 +54,6 @@ describe('ArtifactService', () => {
         artifactId: () => 'artifact:1',
         artifactVersionId: () => 'artifact-version:1',
         sourceRefId: () => 'artifact-source:1',
-        relationId: () => 'artifact-relation:1',
       },
     });
 

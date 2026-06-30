@@ -7,7 +7,7 @@ import type {
 
 export interface WorkspaceChangeReadPort {
   listChangedFilesByRun(runId: string): WorkspaceChangedFile[];
-  listChangeSetsByRun?(runId: string): WorkspaceChangeSet[];
+  listWorkspaceChangesByRun?(runId: string): WorkspaceChangeSet[];
   getChangeSummary?(changeSetId: string): WorkspaceChangeSummary | undefined;
   listChangedFilesByChangeSet?(changeSetId: string): WorkspaceChangedFile[];
 }

@@ -1,11 +1,10 @@
-﻿import { createHash } from 'node:crypto';
+// Persists workspace file-change tracking through the redesigned workspace tables.
+import { createHash } from 'node:crypto';
 
-import type { RuntimeError } from '@megumi/shared/runtime';
 import {
   WorkspaceChangedFileSchema,
   WorkspaceChangeSetSchema,
   WorkspaceChangeSummarySchema,
-  WorkspaceCheckpointSchema,
   WorkspaceRestoreFileResultSchema,
   WorkspaceRestoreRequestSchema,
   WorkspaceRestoreResultSchema,
@@ -13,7 +12,6 @@ import {
   type WorkspaceChangedFile,
   type WorkspaceChangeSet,
   type WorkspaceChangeSummary,
-  type WorkspaceCheckpoint,
   type WorkspaceRestoreFileResult,
   type WorkspaceRestoreRequest,
   type WorkspaceRestoreResult,
@@ -22,27 +20,24 @@ import {
 
 import type { MegumiDatabase } from '../connection';
 
-interface WorkspaceSnapshotContentRow {
-  content_ref_id: string;
+interface SnapshotRow {
+  snapshot_id: string;
   session_id: string;
   run_id: string;
-  project_path: string;
+  path: string;
   storage: WorkspaceSnapshotContent['storage'];
   encoding: WorkspaceSnapshotContent['encoding'];
   sha256: string;
   byte_length: number;
-  content_text: string;
+  content_text: string | null;
   created_at: string;
   metadata_json: string | null;
 }
 
-interface WorkspaceChangeSetRow {
-  change_set_id: string;
+interface ChangeRow {
+  change_id: string;
   session_id: string;
   run_id: string;
-  step_id: string | null;
-  source_entry_id: string | null;
-  response_message_id: string | null;
   status: WorkspaceChangeSet['status'];
   changed_file_count: number;
   created_at: string;
@@ -50,81 +45,42 @@ interface WorkspaceChangeSetRow {
   metadata_json: string | null;
 }
 
-interface WorkspaceCheckpointRow {
-  workspace_checkpoint_id: string;
-  session_id: string;
-  run_id: string;
-  step_id: string | null;
-  tool_call_id: string | null;
-  tool_execution_id: string | null;
-  source_entry_id: string | null;
-  response_message_id: string | null;
-  change_set_id: string | null;
-  project_path: string;
-  before_exists: 0 | 1;
-  before_content_ref_id: string | null;
-  before_hash: string | null;
-  before_byte_length: number | null;
-  created_at: string;
-  metadata_json: string | null;
-}
-
-interface WorkspaceChangedFileRow {
+interface ChangedFileRow {
   changed_file_id: string;
-  change_set_id: string;
-  workspace_checkpoint_id: string;
+  change_id: string;
   session_id: string;
   run_id: string;
-  step_id: string | null;
-  tool_call_id: string | null;
-  tool_execution_id: string | null;
-  source_entry_id: string | null;
-  response_message_id: string | null;
-  project_path: string;
+  path: string;
   change_kind: WorkspaceChangedFile['changeKind'];
   restore_state: WorkspaceChangedFile['restoreState'];
   before_exists: 0 | 1;
-  before_content_ref_id: string | null;
+  before_snapshot_id: string | null;
   before_hash: string | null;
-  before_byte_length: number | null;
   after_exists: 0 | 1;
-  after_content_ref_id: string | null;
+  after_snapshot_id: string | null;
   after_hash: string | null;
-  after_byte_length: number | null;
   created_at: string;
   updated_at: string;
   metadata_json: string | null;
 }
 
-interface WorkspaceRestoreRequestRow {
-  restore_request_id: string;
-  change_set_id: string;
-  session_id: string;
-  run_id: string;
+interface RestoreOperationRow {
+  restore_id: string;
+  change_id: string;
   requested_by: WorkspaceRestoreRequest['requestedBy'];
   status: WorkspaceRestoreRequest['status'];
   requested_at: string;
   completed_at: string | null;
-  metadata_json: string | null;
-}
-
-interface WorkspaceRestoreResultRow {
-  restore_result_id: string;
-  restore_request_id: string;
-  change_set_id: string;
-  session_id: string;
-  run_id: string;
-  status: WorkspaceRestoreResult['status'];
-  restored_at: string;
+  result_json: string | null;
   error_json: string | null;
   metadata_json: string | null;
 }
 
-interface WorkspaceRestoreFileResultRow {
-  restore_file_result_id: string;
-  restore_result_id: string;
+interface RestoreFileResultRow {
+  file_result_id: string;
+  restore_id: string;
   changed_file_id: string;
-  project_path: string;
+  path: string;
   status: WorkspaceRestoreFileResult['status'];
   conflict_reason: WorkspaceRestoreFileResult['conflictReason'] | null;
   error_json: string | null;
@@ -132,7 +88,7 @@ interface WorkspaceRestoreFileResultRow {
   metadata_json: string | null;
 }
 
-interface ChangeSummaryCountRow {
+interface SummaryRow {
   changed_file_count: number;
   restorable_count: number;
   restored_count: number;
@@ -141,141 +97,148 @@ interface ChangeSummaryCountRow {
   updated_at: string | null;
 }
 
+interface RunContextRow {
+  session_id: string;
+  workspace_id: string;
+}
+
+interface ChangeMetadata {
+  userMetadata?: WorkspaceChangeSet['metadata'];
+  stepId?: string;
+  sourceEntryId?: string;
+  responseMessageId?: string;
+}
+
+interface ChangedFileMetadata {
+  userMetadata?: WorkspaceChangedFile['metadata'];
+  workspaceCheckpointId: string;
+  stepId?: string;
+  toolCallId?: string;
+  toolExecutionId?: string;
+  sourceEntryId?: string;
+  responseMessageId?: string;
+  beforeByteLength?: number;
+  afterByteLength?: number;
+}
+
+interface SnapshotMetadata {
+  userMetadata?: WorkspaceSnapshotContent['metadata'];
+}
+
+interface RestoreOperationMetadata {
+  userMetadata?: WorkspaceRestoreRequest['metadata'];
+  resultMetadata?: WorkspaceRestoreResult['metadata'];
+}
+
+interface RestoreFileResultMetadata {
+  userMetadata?: WorkspaceRestoreFileResult['metadata'];
+  restoreResultId: string;
+}
+
 export class WorkspaceChangeRepository {
   constructor(private readonly database: MegumiDatabase) {}
 
-  saveSnapshotContent(content: WorkspaceSnapshotContent): WorkspaceSnapshotContent {
+  saveFileSnapshot(content: WorkspaceSnapshotContent): WorkspaceSnapshotContent {
     const parsed = WorkspaceSnapshotContentSchema.parse(content);
     assertSnapshotContentMatchesDeclaredIntegrity(parsed);
-    assertRunBelongsToSession(this.database, 'Snapshot content', parsed.runId, parsed.sessionId);
+    const context = getRunContext(this.database, 'Snapshot content', parsed.sessionId, parsed.runId);
     const existing = this.getSnapshotContent(parsed.contentRefId);
     if (existing) {
       assertSnapshotDurableFieldsMatch(existing, parsed);
-      this.database.prepare(`
-        UPDATE workspace_snapshot_contents
-        SET metadata_json = ?
-        WHERE content_ref_id = ?
-      `).run(stringifyOptionalJson(parsed.metadata), parsed.contentRefId);
+      this.database.prepare('UPDATE workspace_file_snapshots SET metadata_json = ? WHERE snapshot_id = ?')
+        .run(stringifyJson({ userMetadata: parsed.metadata } satisfies SnapshotMetadata), parsed.contentRefId);
       return parsed;
     }
 
     this.database.prepare(`
-      INSERT INTO workspace_snapshot_contents (
-        content_ref_id,
-        session_id,
-        run_id,
-        project_path,
-        storage,
-        encoding,
-        sha256,
-        byte_length,
-        content_text,
-        created_at,
-        metadata_json
+      INSERT INTO workspace_file_snapshots (
+        snapshot_id, workspace_id, run_id, path, storage, encoding, sha256,
+        byte_length, content_text, content_ref, created_at, metadata_json
       ) VALUES (
-        @content_ref_id,
-        @session_id,
-        @run_id,
-        @project_path,
-        @storage,
-        @encoding,
-        @sha256,
-        @byte_length,
-        @content_text,
-        @created_at,
-        @metadata_json
+        @snapshot_id, @workspace_id, @run_id, @path, @storage, @encoding, @sha256,
+        @byte_length, @content_text, NULL, @created_at, @metadata_json
       )
     `).run({
-      content_ref_id: parsed.contentRefId,
-      session_id: parsed.sessionId,
+      snapshot_id: parsed.contentRefId,
+      workspace_id: context.workspace_id,
       run_id: parsed.runId,
-      project_path: parsed.projectPath,
+      path: parsed.projectPath,
       storage: parsed.storage,
       encoding: parsed.encoding,
       sha256: parsed.sha256,
       byte_length: parsed.byteLength,
       content_text: parsed.contentText,
       created_at: parsed.createdAt,
-      metadata_json: stringifyOptionalJson(parsed.metadata),
+      metadata_json: stringifyJson({ userMetadata: parsed.metadata } satisfies SnapshotMetadata),
     });
     return parsed;
   }
 
   getSnapshotContent(contentRefId: string): WorkspaceSnapshotContent | undefined {
     const row = this.database.prepare(`
-      SELECT *
-      FROM workspace_snapshot_contents
-      WHERE content_ref_id = ?
-    `).get(contentRefId) as WorkspaceSnapshotContentRow | undefined;
-    return row ? snapshotContentFromRow(row) : undefined;
+      SELECT s.*, r.session_id
+      FROM workspace_file_snapshots s
+      LEFT JOIN agent_loop_runs r ON r.run_id = s.run_id
+      WHERE s.snapshot_id = ?
+    `).get(contentRefId) as SnapshotRow | undefined;
+    if (row && (!row.session_id || !row.run_id)) {
+      return undefined;
+    }
+    return row ? snapshotFromRow(row) : undefined;
   }
 
-  saveChangeSet(changeSet: WorkspaceChangeSet): WorkspaceChangeSet {
+  recordWorkspaceChange(changeSet: WorkspaceChangeSet): WorkspaceChangeSet {
     const parsed = WorkspaceChangeSetSchema.parse(changeSet);
-    const existing = this.getChangeSet(parsed.changeSetId);
+    const existing = this.getWorkspaceChange(parsed.changeSetId);
     if (existing) {
       assertDurableRecordMatches('Workspace change set', parsed.changeSetId, existing, parsed);
       return parsed;
     }
     if (parsed.status !== 'open' || parsed.finalizedAt !== undefined) {
-      throw new Error(`Workspace change set ${parsed.changeSetId} cannot be finalized through saveChangeSet`);
+      throw new Error(`Workspace change ${parsed.changeSetId} cannot be finalized through recordWorkspaceChange`);
     }
     if (parsed.changedFileCount !== 0) {
-      throw new Error(`Workspace change set ${parsed.changeSetId} changedFileCount cannot be set through saveChangeSet`);
+      throw new Error(`Workspace change ${parsed.changeSetId} changedFileCount cannot be set through recordWorkspaceChange`);
     }
-    assertRunBelongsToSession(this.database, 'Workspace change set', parsed.runId, parsed.sessionId);
-    validateOptionalLifecycleRefs(this.database, 'Workspace change set', parsed);
+    const context = getRunContext(this.database, 'Workspace change set', parsed.sessionId, parsed.runId);
 
     this.database.prepare(`
-      INSERT INTO workspace_change_sets (
-        change_set_id,
-        session_id,
-        run_id,
-        step_id,
-        source_entry_id,
-        response_message_id,
-        status,
-        changed_file_count,
-        created_at,
-        finalized_at,
-        metadata_json
+      INSERT INTO workspace_changes (
+        change_id, workspace_id, session_id, run_id, status, changed_file_count,
+        created_at, finalized_at, metadata_json
       ) VALUES (
-        @change_set_id,
-        @session_id,
-        @run_id,
-        @step_id,
-        @source_entry_id,
-        @response_message_id,
-        @status,
-        @changed_file_count,
-        @created_at,
-        @finalized_at,
-        @metadata_json
+        @change_id, @workspace_id, @session_id, @run_id, @status, @changed_file_count,
+        @created_at, NULL, @metadata_json
       )
-    `).run(changeSetParams(parsed));
+    `).run({
+      change_id: parsed.changeSetId,
+      workspace_id: context.workspace_id,
+      session_id: parsed.sessionId,
+      run_id: parsed.runId,
+      status: parsed.status,
+      changed_file_count: parsed.changedFileCount,
+      created_at: parsed.createdAt,
+      metadata_json: stringifyJson(changeMetadataFromChangeSet(parsed)),
+    });
     return parsed;
   }
 
-  getChangeSet(changeSetId: string): WorkspaceChangeSet | undefined {
-    const row = this.database.prepare(`
-      SELECT *
-      FROM workspace_change_sets
-      WHERE change_set_id = ?
-    `).get(changeSetId) as WorkspaceChangeSetRow | undefined;
+  getWorkspaceChange(changeSetId: string): WorkspaceChangeSet | undefined {
+    const row = this.database.prepare('SELECT * FROM workspace_changes WHERE change_id = ?')
+      .get(changeSetId) as ChangeRow | undefined;
     return row ? changeSetFromRow(row) : undefined;
   }
 
-  listChangeSetsByRun(runId: string): WorkspaceChangeSet[] {
+  listWorkspaceChangesByRun(runId: string): WorkspaceChangeSet[] {
     return (this.database.prepare(`
-      SELECT *
-      FROM workspace_change_sets
+      SELECT * FROM workspace_changes
       WHERE run_id = ?
-      ORDER BY created_at ASC, change_set_id ASC
-    `).all(runId) as WorkspaceChangeSetRow[]).map(changeSetFromRow);
+      ORDER BY created_at ASC, change_id ASC
+    `).all(runId) as ChangeRow[]).map(changeSetFromRow);
   }
 
-  finalizeChangeSet(changeSetId: string, finalizedAt: string): WorkspaceChangeSet | undefined {
-    const existing = this.getChangeSet(changeSetId);
+  finalizeWorkspaceChange(changeSetId: string, finalizedAt: string): WorkspaceChangeSet | undefined {
+    const existing = this.getWorkspaceChange(changeSetId);
     if (!existing) {
       return undefined;
     }
@@ -286,128 +249,16 @@ export class WorkspaceChangeRepository {
       }
       throw new Error(`Workspace change set ${changeSetId} is already finalized and cannot be finalized again with different state`);
     }
+
     this.database.prepare(`
-      UPDATE workspace_change_sets
-      SET status = 'finalized',
-        changed_file_count = ?,
-        finalized_at = ?
-      WHERE change_set_id = ?
+      UPDATE workspace_changes
+      SET status = 'finalized', changed_file_count = ?, finalized_at = ?
+      WHERE change_id = ?
     `).run(changedFileCount, finalizedAt, changeSetId);
-    return this.getChangeSet(changeSetId);
+    return this.getWorkspaceChange(changeSetId);
   }
 
-  saveWorkspaceCheckpoint(checkpoint: WorkspaceCheckpoint): WorkspaceCheckpoint {
-    const parsed = WorkspaceCheckpointSchema.parse(checkpoint);
-    const existing = this.getWorkspaceCheckpoint(parsed.workspaceCheckpointId);
-    if (existing) {
-      assertDurableRecordMatches(
-        'Workspace checkpoint',
-        parsed.workspaceCheckpointId,
-        existing,
-        parsed,
-      );
-      return parsed;
-    }
-
-    if (parsed.changeSetId) {
-      const changeSet = this.getChangeSet(parsed.changeSetId);
-      if (changeSet) {
-        assertSameSessionRun({
-          subject: 'Workspace checkpoint',
-          subjectSessionId: parsed.sessionId,
-          subjectRunId: parsed.runId,
-          referenceName: 'change set',
-          referenceSessionId: changeSet.sessionId,
-          referenceRunId: changeSet.runId,
-        });
-        if (changeSet.status === 'finalized') {
-          throw new Error(`Cannot save workspace checkpoint ${parsed.workspaceCheckpointId} into finalized change set ${parsed.changeSetId}`);
-        }
-      }
-    }
-    assertRunBelongsToSession(this.database, 'Workspace checkpoint', parsed.runId, parsed.sessionId);
-    validateOptionalLifecycleRefs(this.database, 'Workspace checkpoint', parsed);
-    if (parsed.toolCallId) {
-      assertToolCallBelongsToRun(this.database, 'Workspace checkpoint', parsed.toolCallId, parsed.runId);
-    }
-    if (parsed.toolExecutionId) {
-      assertToolExecutionBelongsToRun(this.database, 'Workspace checkpoint', parsed.toolExecutionId, parsed.runId);
-    }
-    if (parsed.beforeContentRefId) {
-      assertSnapshotContentRefBelongsToOwner(
-        this.database,
-        'Workspace checkpoint',
-        'beforeContentRefId',
-        parsed.beforeContentRefId,
-        parsed.sessionId,
-        parsed.runId,
-        parsed.projectPath,
-        'beforeHash',
-        parsed.beforeHash,
-        'beforeByteLength',
-        parsed.beforeByteLength,
-      );
-    }
-
-    this.database.prepare(`
-      INSERT INTO workspace_checkpoints (
-        workspace_checkpoint_id,
-        change_set_id,
-        session_id,
-        run_id,
-        step_id,
-        tool_call_id,
-        tool_execution_id,
-        source_entry_id,
-        response_message_id,
-        project_path,
-        before_exists,
-        before_content_ref_id,
-        before_hash,
-        before_byte_length,
-        created_at,
-        metadata_json
-      ) VALUES (
-        @workspace_checkpoint_id,
-        @change_set_id,
-        @session_id,
-        @run_id,
-        @step_id,
-        @tool_call_id,
-        @tool_execution_id,
-        @source_entry_id,
-        @response_message_id,
-        @project_path,
-        @before_exists,
-        @before_content_ref_id,
-        @before_hash,
-        @before_byte_length,
-        @created_at,
-        @metadata_json
-      )
-    `).run(checkpointParams(parsed));
-    return parsed;
-  }
-
-  getWorkspaceCheckpoint(workspaceCheckpointId: string): WorkspaceCheckpoint | undefined {
-    const row = this.database.prepare(`
-      SELECT *
-      FROM workspace_checkpoints
-      WHERE workspace_checkpoint_id = ?
-    `).get(workspaceCheckpointId) as WorkspaceCheckpointRow | undefined;
-    return row ? checkpointFromRow(row) : undefined;
-  }
-
-  listCheckpointsByChangeSet(changeSetId: string): WorkspaceCheckpoint[] {
-    return (this.database.prepare(`
-      SELECT *
-      FROM workspace_checkpoints
-      WHERE change_set_id = ?
-      ORDER BY created_at ASC, workspace_checkpoint_id ASC
-    `).all(changeSetId) as WorkspaceCheckpointRow[]).map(checkpointFromRow);
-  }
-
-  saveChangedFile(changedFile: WorkspaceChangedFile): WorkspaceChangedFile {
+  recordChangedFile(changedFile: WorkspaceChangedFile): WorkspaceChangedFile {
     const parsed = WorkspaceChangedFileSchema.parse(changedFile);
     const existing = this.getChangedFile(parsed.changedFileId);
     if (existing) {
@@ -415,7 +266,7 @@ export class WorkspaceChangeRepository {
       return parsed;
     }
 
-    const changeSet = this.getChangeSet(parsed.changeSetId);
+    const changeSet = this.getWorkspaceChange(parsed.changeSetId);
     if (!changeSet) {
       throw new Error(`Cannot save changed file without change set: ${parsed.changeSetId}`);
     }
@@ -430,150 +281,69 @@ export class WorkspaceChangeRepository {
       referenceSessionId: changeSet.sessionId,
       referenceRunId: changeSet.runId,
     });
-    assertRunBelongsToSession(this.database, 'Changed file', parsed.runId, parsed.sessionId);
-    validateOptionalLifecycleRefs(this.database, 'Changed file', parsed);
-    if (parsed.toolCallId) {
-      assertToolCallBelongsToRun(this.database, 'Changed file', parsed.toolCallId, parsed.runId);
-    }
-    if (parsed.toolExecutionId) {
-      assertToolExecutionBelongsToRun(this.database, 'Changed file', parsed.toolExecutionId, parsed.runId);
-    }
-
-    const checkpoint = this.getWorkspaceCheckpoint(parsed.workspaceCheckpointId);
-    if (!checkpoint) {
-      throw new Error(`Cannot save changed file without workspace checkpoint: ${parsed.workspaceCheckpointId}`);
-    }
-    assertSameSessionRun({
-      subject: `Changed file workspaceCheckpointId ${parsed.workspaceCheckpointId}`,
-      subjectSessionId: checkpoint.sessionId,
-      subjectRunId: checkpoint.runId,
-      referenceName: 'changed file',
-      referenceSessionId: parsed.sessionId,
-      referenceRunId: parsed.runId,
-      inverseMessage: true,
-    });
-    if (checkpoint.changeSetId && checkpoint.changeSetId !== parsed.changeSetId) {
-      throw new Error(
-        `Changed file workspaceCheckpointId ${parsed.workspaceCheckpointId} belongs to changeSetId ${checkpoint.changeSetId}, not ${parsed.changeSetId}`,
-      );
-    }
-    if (parsed.projectPath !== checkpoint.projectPath) {
-      throw new Error(
-        `Changed file projectPath ${parsed.projectPath} does not match checkpoint projectPath ${checkpoint.projectPath}`,
-      );
-    }
-    if (parsed.beforeContentRefId) {
-      assertSnapshotContentRefBelongsToOwner(
-        this.database,
-        'Changed file',
-        'beforeContentRefId',
-        parsed.beforeContentRefId,
-        parsed.sessionId,
-        parsed.runId,
-        parsed.projectPath,
-        'beforeHash',
-        parsed.beforeHash,
-        'beforeByteLength',
-        parsed.beforeByteLength,
-      );
-    }
-    if (parsed.afterContentRefId) {
-      assertSnapshotContentRefBelongsToOwner(
-        this.database,
-        'Changed file',
-        'afterContentRefId',
-        parsed.afterContentRefId,
-        parsed.sessionId,
-        parsed.runId,
-        parsed.projectPath,
-        'afterHash',
-        parsed.afterHash,
-        'afterByteLength',
-        parsed.afterByteLength,
-      );
-    }
+    getRunContext(this.database, 'Changed file', parsed.sessionId, parsed.runId);
+    validateToolCallRef(this.database, 'Changed file', parsed.toolCallId, parsed.runId);
+    validateSnapshotOwner(this.database, 'Changed file', 'beforeContentRefId', parsed.beforeContentRefId, parsed);
+    validateSnapshotOwner(this.database, 'Changed file', 'afterContentRefId', parsed.afterContentRefId, parsed);
 
     this.database.prepare(`
       INSERT INTO workspace_changed_files (
-        changed_file_id,
-        change_set_id,
-        workspace_checkpoint_id,
-        session_id,
-        run_id,
-        step_id,
-        tool_call_id,
-        tool_execution_id,
-        source_entry_id,
-        response_message_id,
-        project_path,
-        change_kind,
-        restore_state,
-        before_exists,
-        before_content_ref_id,
-        before_hash,
-        before_byte_length,
-        after_exists,
-        after_content_ref_id,
-        after_hash,
-        after_byte_length,
-        created_at,
-        updated_at,
-        metadata_json
+        changed_file_id, change_id, path, change_kind, restore_state,
+        before_exists, before_snapshot_id, before_hash, after_exists, after_snapshot_id,
+        after_hash, created_at, updated_at, metadata_json
       ) VALUES (
-        @changed_file_id,
-        @change_set_id,
-        @workspace_checkpoint_id,
-        @session_id,
-        @run_id,
-        @step_id,
-        @tool_call_id,
-        @tool_execution_id,
-        @source_entry_id,
-        @response_message_id,
-        @project_path,
-        @change_kind,
-        @restore_state,
-        @before_exists,
-        @before_content_ref_id,
-        @before_hash,
-        @before_byte_length,
-        @after_exists,
-        @after_content_ref_id,
-        @after_hash,
-        @after_byte_length,
-        @created_at,
-        @updated_at,
-        @metadata_json
+        @changed_file_id, @change_id, @path, @change_kind, @restore_state,
+        @before_exists, @before_snapshot_id, @before_hash, @after_exists, @after_snapshot_id,
+        @after_hash, @created_at, @updated_at, @metadata_json
       )
-    `).run(changedFileParams(parsed));
+    `).run({
+      changed_file_id: parsed.changedFileId,
+      change_id: parsed.changeSetId,
+      path: parsed.projectPath,
+      change_kind: parsed.changeKind,
+      restore_state: parsed.restoreState,
+      before_exists: parsed.beforeExists ? 1 : 0,
+      before_snapshot_id: parsed.beforeContentRefId ?? null,
+      before_hash: parsed.beforeHash ?? null,
+      after_exists: parsed.afterExists ? 1 : 0,
+      after_snapshot_id: parsed.afterContentRefId ?? null,
+      after_hash: parsed.afterHash ?? null,
+      created_at: parsed.createdAt,
+      updated_at: parsed.updatedAt,
+      metadata_json: stringifyJson(changedFileMetadataFrom(parsed)),
+    });
+    updateChangeFileCount(this.database, parsed.changeSetId);
     return parsed;
   }
 
   getChangedFile(changedFileId: string): WorkspaceChangedFile | undefined {
     const row = this.database.prepare(`
-      SELECT *
-      FROM workspace_changed_files
-      WHERE changed_file_id = ?
-    `).get(changedFileId) as WorkspaceChangedFileRow | undefined;
+      SELECT f.*, c.session_id, c.run_id
+      FROM workspace_changed_files f
+      INNER JOIN workspace_changes c ON c.change_id = f.change_id
+      WHERE f.changed_file_id = ?
+    `).get(changedFileId) as ChangedFileRow | undefined;
     return row ? changedFileFromRow(row) : undefined;
   }
 
   listChangedFilesByChangeSet(changeSetId: string): WorkspaceChangedFile[] {
     return (this.database.prepare(`
-      SELECT *
-      FROM workspace_changed_files
-      WHERE change_set_id = ?
-      ORDER BY created_at ASC, changed_file_id ASC
-    `).all(changeSetId) as WorkspaceChangedFileRow[]).map(changedFileFromRow);
+      SELECT f.*, c.session_id, c.run_id
+      FROM workspace_changed_files f
+      INNER JOIN workspace_changes c ON c.change_id = f.change_id
+      WHERE f.change_id = ?
+      ORDER BY f.created_at ASC, f.changed_file_id ASC
+    `).all(changeSetId) as ChangedFileRow[]).map(changedFileFromRow);
   }
 
   listChangedFilesByRun(runId: string): WorkspaceChangedFile[] {
     return (this.database.prepare(`
-      SELECT *
-      FROM workspace_changed_files
-      WHERE run_id = ?
-      ORDER BY created_at ASC, changed_file_id ASC
-    `).all(runId) as WorkspaceChangedFileRow[]).map(changedFileFromRow);
+      SELECT f.*, c.session_id, c.run_id
+      FROM workspace_changed_files f
+      INNER JOIN workspace_changes c ON c.change_id = f.change_id
+      WHERE c.run_id = ?
+      ORDER BY f.created_at ASC, f.changed_file_id ASC
+    `).all(runId) as ChangedFileRow[]).map(changedFileFromRow);
   }
 
   updateChangedFileRestoreState(input: {
@@ -594,21 +364,19 @@ export class WorkspaceChangeRepository {
     });
     this.database.prepare(`
       UPDATE workspace_changed_files
-      SET restore_state = @restore_state,
-        updated_at = @updated_at,
-        metadata_json = @metadata_json
-      WHERE changed_file_id = @changed_file_id
-    `).run({
-      changed_file_id: parsed.changedFileId,
-      restore_state: parsed.restoreState,
-      updated_at: parsed.updatedAt,
-      metadata_json: stringifyOptionalJson(parsed.metadata),
-    });
+      SET restore_state = ?, updated_at = ?, metadata_json = ?
+      WHERE changed_file_id = ?
+    `).run(
+      parsed.restoreState,
+      parsed.updatedAt,
+      stringifyJson(changedFileMetadataFrom(parsed)),
+      parsed.changedFileId,
+    );
     return this.getChangedFile(parsed.changedFileId);
   }
 
   getChangeSummary(changeSetId: string): WorkspaceChangeSummary | undefined {
-    const changeSet = this.getChangeSet(changeSetId);
+    const changeSet = this.getWorkspaceChange(changeSetId);
     if (!changeSet) {
       return undefined;
     }
@@ -621,8 +389,8 @@ export class WorkspaceChangeRepository {
         COALESCE(SUM(CASE WHEN restore_state = 'restore_failed' THEN 1 ELSE 0 END), 0) AS failed_count,
         MAX(updated_at) AS updated_at
       FROM workspace_changed_files
-      WHERE change_set_id = ?
-    `).get(changeSetId) as ChangeSummaryCountRow;
+      WHERE change_id = ?
+    `).get(changeSetId) as SummaryRow;
 
     return WorkspaceChangeSummarySchema.parse({
       changeSetId: changeSet.changeSetId,
@@ -639,23 +407,19 @@ export class WorkspaceChangeRepository {
   }
 
   listChangeSummariesByRun(runId: string): WorkspaceChangeSummary[] {
-    return this.listChangeSetsByRun(runId)
+    return this.listWorkspaceChangesByRun(runId)
       .map((changeSet) => this.getChangeSummary(changeSet.changeSetId))
       .filter((summary): summary is WorkspaceChangeSummary => Boolean(summary));
   }
 
-  saveRestoreRequest(request: WorkspaceRestoreRequest): WorkspaceRestoreRequest {
+  createRestoreOperation(request: WorkspaceRestoreRequest): WorkspaceRestoreRequest {
     const parsed = WorkspaceRestoreRequestSchema.parse(request);
-    const existing = this.getRestoreRequest(parsed.restoreRequestId);
+    const existing = this.getRestoreOperation(parsed.restoreRequestId);
     if (existing) {
       assertDurableRecordMatches('Restore request', parsed.restoreRequestId, existing, parsed);
       return parsed;
     }
-
-    const changeSet = this.getChangeSet(parsed.changeSetId);
-    if (!changeSet) {
-      throw new Error(`Cannot save restore request without change set: ${parsed.changeSetId}`);
-    }
+    const changeSet = requireChangeSet(this, parsed.changeSetId, 'restore request');
     assertSameSessionRun({
       subject: 'Restore request',
       subjectSessionId: parsed.sessionId,
@@ -664,53 +428,48 @@ export class WorkspaceChangeRepository {
       referenceSessionId: changeSet.sessionId,
       referenceRunId: changeSet.runId,
     });
-    assertRunBelongsToSession(this.database, 'Restore request', parsed.runId, parsed.sessionId);
 
     this.database.prepare(`
-      INSERT INTO workspace_restore_requests (
-        restore_request_id,
-        change_set_id,
-        session_id,
-        run_id,
-        requested_by,
-        status,
-        requested_at,
-        completed_at,
-        metadata_json
+      INSERT INTO workspace_restore_operations (
+        restore_id, change_id, requested_by, status, requested_at,
+        completed_at, result_json, error_json, metadata_json
       ) VALUES (
-        @restore_request_id,
-        @change_set_id,
-        @session_id,
-        @run_id,
-        @requested_by,
-        @status,
-        @requested_at,
-        @completed_at,
-        @metadata_json
+        @restore_id, @change_id, @requested_by, @status, @requested_at,
+        @completed_at, NULL, NULL, @metadata_json
       )
-    `).run(restoreRequestParams(parsed));
+    `).run({
+      restore_id: parsed.restoreRequestId,
+      change_id: parsed.changeSetId,
+      requested_by: parsed.requestedBy,
+      status: parsed.status,
+      requested_at: parsed.requestedAt,
+      completed_at: parsed.completedAt ?? null,
+      metadata_json: stringifyJson({ userMetadata: parsed.metadata } satisfies RestoreOperationMetadata),
+    });
     return parsed;
   }
 
-  getRestoreRequest(restoreRequestId: string): WorkspaceRestoreRequest | undefined {
-    const row = this.database.prepare(`
-      SELECT *
-      FROM workspace_restore_requests
-      WHERE restore_request_id = ?
-    `).get(restoreRequestId) as WorkspaceRestoreRequestRow | undefined;
-    return row ? restoreRequestFromRow(row) : undefined;
+  private getRestoreOperation(restoreRequestId: string): WorkspaceRestoreRequest | undefined {
+    const row = this.database.prepare('SELECT * FROM workspace_restore_operations WHERE restore_id = ?')
+      .get(restoreRequestId) as RestoreOperationRow | undefined;
+    return row ? restoreOperationFromRow(this.database, row) : undefined;
   }
 
-  updateRestoreRequestStatus(input: {
+  updateRestoreOperation(input: {
     restoreRequestId: string;
     status: WorkspaceRestoreRequest['status'];
     completedAt?: string;
     metadata?: WorkspaceRestoreRequest['metadata'];
   }): WorkspaceRestoreRequest | undefined {
-    const existing = this.getRestoreRequest(input.restoreRequestId);
+    const existing = this.getRestoreOperation(input.restoreRequestId);
     if (!existing) {
       return undefined;
     }
+    const metadata = parseJson<RestoreOperationMetadata>(
+      this.database.prepare('SELECT metadata_json FROM workspace_restore_operations WHERE restore_id = ?')
+        .get(input.restoreRequestId) as { metadata_json: string | null } | undefined,
+    ) ?? {};
+    metadata.userMetadata = input.metadata;
     const parsed = WorkspaceRestoreRequestSchema.parse({
       ...existing,
       status: input.status,
@@ -718,36 +477,23 @@ export class WorkspaceChangeRepository {
       metadata: input.metadata,
     });
     this.database.prepare(`
-      UPDATE workspace_restore_requests
-      SET status = @status,
-        completed_at = @completed_at,
-        metadata_json = @metadata_json
-      WHERE restore_request_id = @restore_request_id
-    `).run({
-      restore_request_id: parsed.restoreRequestId,
-      status: parsed.status,
-      completed_at: parsed.completedAt ?? null,
-      metadata_json: stringifyOptionalJson(parsed.metadata),
-    });
-    return this.getRestoreRequest(parsed.restoreRequestId);
+      UPDATE workspace_restore_operations
+      SET status = ?, completed_at = ?, metadata_json = ?
+      WHERE restore_id = ?
+    `).run(parsed.status, parsed.completedAt ?? null, stringifyJson(metadata), parsed.restoreRequestId);
+    return this.getRestoreOperation(parsed.restoreRequestId);
   }
 
-  saveRestoreResult(result: WorkspaceRestoreResult): WorkspaceRestoreResult {
+  completeRestoreOperation(result: WorkspaceRestoreResult): WorkspaceRestoreResult {
     const parsed = WorkspaceRestoreResultSchema.parse(result);
-    const existing = this.getRestoreResult(parsed.restoreResultId);
-    if (existing) {
-      assertDurableRecordMatches('Restore result', parsed.restoreResultId, existing, parsed);
-      return parsed;
-    }
-
-    const request = this.getRestoreRequest(parsed.restoreRequestId);
+    const request = this.getRestoreOperation(parsed.restoreRequestId);
     if (!request) {
       throw new Error(`Cannot save restore result without restore request: ${parsed.restoreRequestId}`);
     }
-    if (parsed.changeSetId !== request.changeSetId) {
-      throw new Error(
-        `Restore result changeSetId ${parsed.changeSetId} does not match request changeSetId ${request.changeSetId}`,
-      );
+    const existing = this.getCompletedRestoreOperation(parsed.restoreResultId);
+    if (existing) {
+      assertDurableRecordMatches('Restore result', parsed.restoreResultId, existing, parsed);
+      return parsed;
     }
     assertSameSessionRun({
       subject: 'Restore result',
@@ -757,11 +503,7 @@ export class WorkspaceChangeRepository {
       referenceSessionId: request.sessionId,
       referenceRunId: request.runId,
     });
-
-    const changeSet = this.getChangeSet(parsed.changeSetId);
-    if (!changeSet) {
-      throw new Error(`Cannot save restore result without change set: ${parsed.changeSetId}`);
-    }
+    const changeSet = requireChangeSet(this, parsed.changeSetId, 'restore result');
     assertSameSessionRun({
       subject: 'Restore result',
       subjectSessionId: parsed.sessionId,
@@ -770,628 +512,366 @@ export class WorkspaceChangeRepository {
       referenceSessionId: changeSet.sessionId,
       referenceRunId: changeSet.runId,
     });
-    assertRunBelongsToSession(this.database, 'Restore result', parsed.runId, parsed.sessionId);
 
+    const metadata = operationMetadata(this.database, parsed.restoreRequestId);
+    metadata.resultMetadata = parsed.metadata;
+    const restoreId = this.restoreOperationIdForCompletion(parsed.restoreRequestId, parsed.restoreResultId);
+    if (restoreId !== parsed.restoreRequestId) {
+      this.database.prepare(`
+        INSERT INTO workspace_restore_operations (
+          restore_id, change_id, requested_by, status, requested_at,
+          completed_at, result_json, error_json, metadata_json
+        )
+        SELECT
+          @restore_id, change_id, requested_by, status, requested_at,
+          completed_at, NULL, NULL, metadata_json
+        FROM workspace_restore_operations
+        WHERE restore_id = @request_id
+      `).run({
+        restore_id: restoreId,
+        request_id: parsed.restoreRequestId,
+      });
+    }
     this.database.prepare(`
-      INSERT INTO workspace_restore_results (
-        restore_result_id,
-        restore_request_id,
-        change_set_id,
-        session_id,
-        run_id,
-        status,
-        restored_at,
-        error_json,
-        metadata_json
-      ) VALUES (
-        @restore_result_id,
-        @restore_request_id,
-        @change_set_id,
-        @session_id,
-        @run_id,
-        @status,
-        @restored_at,
-        @error_json,
-        @metadata_json
-      )
-    `).run(restoreResultParams(parsed));
+      UPDATE workspace_restore_operations
+      SET result_json = ?, error_json = ?, metadata_json = ?
+      WHERE restore_id = ?
+    `).run(
+      stringifyJson(parsed),
+      parsed.error ? stringifyJson(parsed.error) : null,
+      stringifyJson(metadata),
+      restoreId,
+    );
     return parsed;
   }
 
-  getRestoreResult(restoreResultId: string): WorkspaceRestoreResult | undefined {
-    const row = this.database.prepare(`
-      SELECT *
-      FROM workspace_restore_results
-      WHERE restore_result_id = ?
-    `).get(restoreResultId) as WorkspaceRestoreResultRow | undefined;
-    return row ? restoreResultFromRow(row) : undefined;
-  }
-
-  listRestoreResultsByChangeSet(changeSetId: string): WorkspaceRestoreResult[] {
-    return (this.database.prepare(`
-      SELECT *
-      FROM workspace_restore_results
-      WHERE change_set_id = ?
-      ORDER BY restored_at ASC, restore_result_id ASC
-    `).all(changeSetId) as WorkspaceRestoreResultRow[]).map(restoreResultFromRow);
-  }
-
-  saveRestoreFileResult(fileResult: WorkspaceRestoreFileResult): WorkspaceRestoreFileResult {
+  recordRestoreFileResult(fileResult: WorkspaceRestoreFileResult): WorkspaceRestoreFileResult {
     const parsed = WorkspaceRestoreFileResultSchema.parse(fileResult);
     const existing = this.getRestoreFileResult(parsed.restoreFileResultId);
     if (existing) {
-      assertDurableRecordMatches(
-        'Restore file result',
-        parsed.restoreFileResultId,
-        existing,
-        parsed,
-      );
+      assertDurableRecordMatches('Restore file result', parsed.restoreFileResultId, existing, parsed);
       return parsed;
     }
-
-    const result = this.getRestoreResult(parsed.restoreResultId);
-    if (!result) {
+    const restoreId = this.restoreIdForCompletedOperation(parsed.restoreResultId);
+    if (!restoreId) {
       throw new Error(`Cannot save restore file result without restore result: ${parsed.restoreResultId}`);
     }
+    const restoreResult = this.getCompletedRestoreOperation(parsed.restoreResultId);
     const changedFile = this.getChangedFile(parsed.changedFileId);
     if (!changedFile) {
       throw new Error(`Cannot save restore file result without changed file: ${parsed.changedFileId}`);
     }
-    if (changedFile.changeSetId !== result.changeSetId) {
-      throw new Error(
-        `Restore file result changedFileId ${parsed.changedFileId} belongs to changeSetId ${changedFile.changeSetId}, not ${result.changeSetId}`,
-      );
-    }
-    if (changedFile.sessionId !== result.sessionId) {
-      throw new Error(
-        `Restore file result changedFileId ${parsed.changedFileId} belongs to sessionId ${changedFile.sessionId}, not ${result.sessionId}`,
-      );
-    }
-    if (changedFile.runId !== result.runId) {
-      throw new Error(
-        `Restore file result changedFileId ${parsed.changedFileId} belongs to runId ${changedFile.runId}, not ${result.runId}`,
-      );
+    if (restoreResult && changedFile.changeSetId !== restoreResult.changeSetId) {
+      throw new Error(`Restore file result changedFileId ${parsed.changedFileId} belongs to changeSetId ${changedFile.changeSetId}, not ${restoreResult.changeSetId}`);
     }
     if (parsed.projectPath !== changedFile.projectPath) {
-      throw new Error(
-        `Restore file result projectPath ${parsed.projectPath} does not match changed file projectPath ${changedFile.projectPath}`,
-      );
+      throw new Error(`Restore file result projectPath ${parsed.projectPath} does not match changed file projectPath ${changedFile.projectPath}`);
     }
-
     this.database.prepare(`
       INSERT INTO workspace_restore_file_results (
-        restore_file_result_id,
-        restore_result_id,
-        changed_file_id,
-        project_path,
-        status,
-        conflict_reason,
-        error_json,
-        restored_at,
-        metadata_json
+        file_result_id, restore_id, changed_file_id, path, status,
+        conflict_reason, error_json, restored_at, metadata_json
       ) VALUES (
-        @restore_file_result_id,
-        @restore_result_id,
-        @changed_file_id,
-        @project_path,
-        @status,
-        @conflict_reason,
-        @error_json,
-        @restored_at,
-        @metadata_json
+        @file_result_id, @restore_id, @changed_file_id, @path, @status,
+        @conflict_reason, @error_json, @restored_at, @metadata_json
       )
-    `).run(restoreFileResultParams(parsed));
+    `).run({
+      file_result_id: parsed.restoreFileResultId,
+      restore_id: restoreId,
+      changed_file_id: parsed.changedFileId,
+      path: parsed.projectPath,
+      status: parsed.status,
+      conflict_reason: parsed.conflictReason ?? null,
+      error_json: parsed.error ? stringifyJson(parsed.error) : null,
+      restored_at: parsed.restoredAt ?? null,
+      metadata_json: stringifyJson({
+        restoreResultId: parsed.restoreResultId,
+        userMetadata: parsed.metadata,
+      } satisfies RestoreFileResultMetadata),
+    });
     return parsed;
   }
 
-  private getRestoreFileResult(restoreFileResultId: string): WorkspaceRestoreFileResult | undefined {
-    const row = this.database.prepare(`
-      SELECT *
-      FROM workspace_restore_file_results
-      WHERE restore_file_result_id = ?
-    `).get(restoreFileResultId) as WorkspaceRestoreFileResultRow | undefined;
-    return row ? restoreFileResultFromRow(row) : undefined;
-  }
-
-  listRestoreFileResultsByResult(restoreResultId: string): WorkspaceRestoreFileResult[] {
+  listRestoreFileResults(restoreResultId: string): WorkspaceRestoreFileResult[] {
+    const restoreId = this.restoreIdForCompletedOperation(restoreResultId);
+    if (!restoreId) {
+      return [];
+    }
     return (this.database.prepare(`
       SELECT *
       FROM workspace_restore_file_results
-      WHERE restore_result_id = ?
-      ORDER BY restored_at ASC, restore_file_result_id ASC
-    `).all(restoreResultId) as WorkspaceRestoreFileResultRow[]).map(restoreFileResultFromRow);
+      WHERE restore_id = ?
+      ORDER BY COALESCE(restored_at, '') ASC, file_result_id ASC
+    `).all(restoreId) as RestoreFileResultRow[])
+      .map(restoreFileResultFromRow);
+  }
+
+  private getRestoreFileResult(restoreFileResultId: string): WorkspaceRestoreFileResult | undefined {
+    const row = this.database.prepare('SELECT * FROM workspace_restore_file_results WHERE file_result_id = ?')
+      .get(restoreFileResultId) as RestoreFileResultRow | undefined;
+    return row ? restoreFileResultFromRow(row) : undefined;
+  }
+
+  private getCompletedRestoreOperation(restoreResultId: string): WorkspaceRestoreResult | undefined {
+    return this.allCompletedRestoreOperations()
+      .find((result) => result.restoreResultId === restoreResultId);
+  }
+
+  private allCompletedRestoreOperations(): WorkspaceRestoreResult[] {
+    return (this.database.prepare(`
+      SELECT result_json
+      FROM workspace_restore_operations
+      WHERE result_json IS NOT NULL
+    `).all() as Array<{ result_json: string | null }>)
+      .map((row) => parseJson<WorkspaceRestoreResult>(row.result_json))
+      .filter((result): result is WorkspaceRestoreResult => Boolean(result))
+      .map((result) => WorkspaceRestoreResultSchema.parse(result));
+  }
+
+  private restoreIdForCompletedOperation(restoreResultId: string): string | undefined {
+    const rows = this.database.prepare(`
+      SELECT restore_id, result_json
+      FROM workspace_restore_operations
+      WHERE result_json IS NOT NULL
+    `).all() as Array<{ restore_id: string; result_json: string | null }>;
+    return rows.find((row) => parseJson<WorkspaceRestoreResult>(row.result_json)?.restoreResultId === restoreResultId)?.restore_id;
+  }
+
+  private restoreOperationIdForCompletion(restoreRequestId: string, restoreResultId: string): string {
+    const row = this.database.prepare('SELECT result_json FROM workspace_restore_operations WHERE restore_id = ?')
+      .get(restoreRequestId) as { result_json: string | null } | undefined;
+    if (!row?.result_json) {
+      return restoreRequestId;
+    }
+    return `${restoreRequestId}:result:${restoreResultId}`;
   }
 }
 
-function snapshotContentFromRow(row: WorkspaceSnapshotContentRow): WorkspaceSnapshotContent {
+function snapshotFromRow(row: SnapshotRow): WorkspaceSnapshotContent {
+  if (!row.session_id || !row.run_id) {
+    throw new Error(`Snapshot content ${row.snapshot_id} no longer has an owning run`);
+  }
+  const metadata = parseJson<SnapshotMetadata>(row.metadata_json);
   return WorkspaceSnapshotContentSchema.parse({
-    contentRefId: row.content_ref_id,
+    contentRefId: row.snapshot_id,
     sessionId: row.session_id,
     runId: row.run_id,
-    projectPath: row.project_path,
+    projectPath: row.path,
     storage: row.storage,
     encoding: row.encoding,
     sha256: row.sha256,
     byteLength: row.byte_length,
-    contentText: row.content_text,
+    contentText: row.content_text ?? '',
     createdAt: row.created_at,
-    metadata: parseOptionalJson(row.metadata_json),
+    metadata: metadata?.userMetadata,
   });
 }
 
-function changeSetFromRow(row: WorkspaceChangeSetRow): WorkspaceChangeSet {
+function changeSetFromRow(row: ChangeRow): WorkspaceChangeSet {
+  const metadata = parseJson<ChangeMetadata>(row.metadata_json);
   return WorkspaceChangeSetSchema.parse({
-    changeSetId: row.change_set_id,
+    changeSetId: row.change_id,
     sessionId: row.session_id,
     runId: row.run_id,
-    stepId: optionalString(row.step_id),
-    sourceEntryId: optionalString(row.source_entry_id),
-    responseMessageId: optionalString(row.response_message_id),
+    stepId: metadata?.stepId,
+    sourceEntryId: metadata?.sourceEntryId,
+    responseMessageId: metadata?.responseMessageId,
     status: row.status,
     changedFileCount: row.changed_file_count,
     createdAt: row.created_at,
-    finalizedAt: optionalString(row.finalized_at),
-    metadata: parseOptionalJson(row.metadata_json),
+    finalizedAt: row.finalized_at ?? undefined,
+    metadata: metadata?.userMetadata,
   });
 }
 
-function checkpointFromRow(row: WorkspaceCheckpointRow): WorkspaceCheckpoint {
-  return WorkspaceCheckpointSchema.parse({
-    workspaceCheckpointId: row.workspace_checkpoint_id,
-    sessionId: row.session_id,
-    runId: row.run_id,
-    stepId: optionalString(row.step_id),
-    toolCallId: optionalString(row.tool_call_id),
-    toolExecutionId: optionalString(row.tool_execution_id),
-    sourceEntryId: optionalString(row.source_entry_id),
-    responseMessageId: optionalString(row.response_message_id),
-    changeSetId: optionalString(row.change_set_id),
-    projectPath: row.project_path,
-    beforeExists: Boolean(row.before_exists),
-    beforeContentRefId: optionalString(row.before_content_ref_id),
-    beforeHash: optionalString(row.before_hash),
-    beforeByteLength: optionalNumber(row.before_byte_length),
-    createdAt: row.created_at,
-    metadata: parseOptionalJson(row.metadata_json),
-  });
-}
-
-function changedFileFromRow(row: WorkspaceChangedFileRow): WorkspaceChangedFile {
+function changedFileFromRow(row: ChangedFileRow): WorkspaceChangedFile {
+  const metadata = parseJson<ChangedFileMetadata>(row.metadata_json);
   return WorkspaceChangedFileSchema.parse({
     changedFileId: row.changed_file_id,
-    changeSetId: row.change_set_id,
-    workspaceCheckpointId: row.workspace_checkpoint_id,
+    changeSetId: row.change_id,
+    workspaceCheckpointId: metadata?.workspaceCheckpointId,
     sessionId: row.session_id,
     runId: row.run_id,
-    stepId: optionalString(row.step_id),
-    toolCallId: optionalString(row.tool_call_id),
-    toolExecutionId: optionalString(row.tool_execution_id),
-    sourceEntryId: optionalString(row.source_entry_id),
-    responseMessageId: optionalString(row.response_message_id),
-    projectPath: row.project_path,
+    stepId: metadata?.stepId,
+    toolCallId: metadata?.toolCallId,
+    toolExecutionId: metadata?.toolExecutionId,
+    sourceEntryId: metadata?.sourceEntryId,
+    responseMessageId: metadata?.responseMessageId,
+    projectPath: row.path,
     changeKind: row.change_kind,
     restoreState: row.restore_state,
-    beforeExists: Boolean(row.before_exists),
-    beforeContentRefId: optionalString(row.before_content_ref_id),
-    beforeHash: optionalString(row.before_hash),
-    beforeByteLength: optionalNumber(row.before_byte_length),
-    afterExists: Boolean(row.after_exists),
-    afterContentRefId: optionalString(row.after_content_ref_id),
-    afterHash: optionalString(row.after_hash),
-    afterByteLength: optionalNumber(row.after_byte_length),
+    beforeExists: row.before_exists === 1,
+    beforeContentRefId: row.before_snapshot_id ?? undefined,
+    beforeHash: row.before_hash ?? undefined,
+    beforeByteLength: metadata?.beforeByteLength,
+    afterExists: row.after_exists === 1,
+    afterContentRefId: row.after_snapshot_id ?? undefined,
+    afterHash: row.after_hash ?? undefined,
+    afterByteLength: metadata?.afterByteLength,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    metadata: parseOptionalJson(row.metadata_json),
+    metadata: metadata?.userMetadata,
   });
 }
 
-function restoreRequestFromRow(row: WorkspaceRestoreRequestRow): WorkspaceRestoreRequest {
+function restoreOperationFromRow(database: MegumiDatabase, row: RestoreOperationRow): WorkspaceRestoreRequest {
+  const metadata = parseJson<RestoreOperationMetadata>(row.metadata_json);
+  const owner = restoreOperationSessionRun(database, row);
   return WorkspaceRestoreRequestSchema.parse({
-    restoreRequestId: row.restore_request_id,
-    changeSetId: row.change_set_id,
-    sessionId: row.session_id,
-    runId: row.run_id,
+    restoreRequestId: row.restore_id,
+    changeSetId: row.change_id,
+    sessionId: owner.sessionId,
+    runId: owner.runId,
     requestedBy: row.requested_by,
     status: row.status,
     requestedAt: row.requested_at,
-    completedAt: optionalString(row.completed_at),
-    metadata: parseOptionalJson(row.metadata_json),
+    completedAt: row.completed_at ?? undefined,
+    metadata: metadata?.userMetadata,
   });
 }
 
-function restoreResultFromRow(row: WorkspaceRestoreResultRow): WorkspaceRestoreResult {
-  return WorkspaceRestoreResultSchema.parse({
-    restoreResultId: row.restore_result_id,
-    restoreRequestId: row.restore_request_id,
-    changeSetId: row.change_set_id,
-    sessionId: row.session_id,
-    runId: row.run_id,
-    status: row.status,
-    restoredAt: row.restored_at,
-    error: parseOptionalJson(row.error_json) as RuntimeError | undefined,
-    metadata: parseOptionalJson(row.metadata_json),
-  });
+function restoreOperationSessionRun(database: MegumiDatabase, row: RestoreOperationRow): { sessionId: string; runId: string } {
+  const result = parseJson<WorkspaceRestoreResult>(row.result_json);
+  if (result) {
+    return { sessionId: result.sessionId, runId: result.runId };
+  }
+  const change = database.prepare('SELECT session_id, run_id FROM workspace_changes WHERE change_id = ?')
+    .get(row.change_id) as { session_id: string; run_id: string } | undefined;
+  if (!change) {
+    throw new Error(`Restore operation changeId ${row.change_id} does not exist.`);
+  }
+  return { sessionId: change.session_id, runId: change.run_id };
 }
 
-function restoreFileResultFromRow(row: WorkspaceRestoreFileResultRow): WorkspaceRestoreFileResult {
+function restoreFileResultFromRow(row: RestoreFileResultRow): WorkspaceRestoreFileResult {
+  const metadata = parseJson<RestoreFileResultMetadata>(row.metadata_json);
   return WorkspaceRestoreFileResultSchema.parse({
-    restoreFileResultId: row.restore_file_result_id,
-    restoreResultId: row.restore_result_id,
+    restoreFileResultId: row.file_result_id,
+    restoreResultId: metadata?.restoreResultId,
     changedFileId: row.changed_file_id,
-    projectPath: row.project_path,
+    projectPath: row.path,
     status: row.status,
-    conflictReason: optionalString(row.conflict_reason),
-    error: parseOptionalJson(row.error_json) as RuntimeError | undefined,
-    restoredAt: optionalString(row.restored_at),
-    metadata: parseOptionalJson(row.metadata_json),
+    conflictReason: row.conflict_reason ?? undefined,
+    error: parseJson(row.error_json),
+    restoredAt: row.restored_at ?? undefined,
+    metadata: metadata?.userMetadata,
   });
 }
 
-function changeSetParams(changeSet: WorkspaceChangeSet): Record<string, unknown> {
+function changeMetadataFromChangeSet(changeSet: WorkspaceChangeSet): ChangeMetadata {
   return {
-    change_set_id: changeSet.changeSetId,
-    session_id: changeSet.sessionId,
-    run_id: changeSet.runId,
-    step_id: changeSet.stepId ?? null,
-    source_entry_id: changeSet.sourceEntryId ?? null,
-    response_message_id: changeSet.responseMessageId ?? null,
-    status: changeSet.status,
-    changed_file_count: changeSet.changedFileCount,
-    created_at: changeSet.createdAt,
-    finalized_at: changeSet.finalizedAt ?? null,
-    metadata_json: stringifyOptionalJson(changeSet.metadata),
+    userMetadata: changeSet.metadata,
+    stepId: changeSet.stepId,
+    sourceEntryId: changeSet.sourceEntryId,
+    responseMessageId: changeSet.responseMessageId,
   };
 }
 
-function checkpointParams(checkpoint: WorkspaceCheckpoint): Record<string, unknown> {
+function changedFileMetadataFrom(changedFile: WorkspaceChangedFile): ChangedFileMetadata {
   return {
-    workspace_checkpoint_id: checkpoint.workspaceCheckpointId,
-    change_set_id: checkpoint.changeSetId ?? null,
-    session_id: checkpoint.sessionId,
-    run_id: checkpoint.runId,
-    step_id: checkpoint.stepId ?? null,
-    tool_call_id: checkpoint.toolCallId ?? null,
-    tool_execution_id: checkpoint.toolExecutionId ?? null,
-    source_entry_id: checkpoint.sourceEntryId ?? null,
-    response_message_id: checkpoint.responseMessageId ?? null,
-    project_path: checkpoint.projectPath,
-    before_exists: checkpoint.beforeExists ? 1 : 0,
-    before_content_ref_id: checkpoint.beforeContentRefId ?? null,
-    before_hash: checkpoint.beforeHash ?? null,
-    before_byte_length: checkpoint.beforeByteLength ?? null,
-    created_at: checkpoint.createdAt,
-    metadata_json: stringifyOptionalJson(checkpoint.metadata),
+    userMetadata: changedFile.metadata,
+    workspaceCheckpointId: changedFile.workspaceCheckpointId,
+    stepId: changedFile.stepId,
+    toolCallId: changedFile.toolCallId,
+    toolExecutionId: changedFile.toolExecutionId,
+    sourceEntryId: changedFile.sourceEntryId,
+    responseMessageId: changedFile.responseMessageId,
+    beforeByteLength: changedFile.beforeByteLength,
+    afterByteLength: changedFile.afterByteLength,
   };
 }
 
-function changedFileParams(changedFile: WorkspaceChangedFile): Record<string, unknown> {
-  return {
-    changed_file_id: changedFile.changedFileId,
-    change_set_id: changedFile.changeSetId,
-    workspace_checkpoint_id: changedFile.workspaceCheckpointId,
-    session_id: changedFile.sessionId,
-    run_id: changedFile.runId,
-    step_id: changedFile.stepId ?? null,
-    tool_call_id: changedFile.toolCallId ?? null,
-    tool_execution_id: changedFile.toolExecutionId ?? null,
-    source_entry_id: changedFile.sourceEntryId ?? null,
-    response_message_id: changedFile.responseMessageId ?? null,
-    project_path: changedFile.projectPath,
-    change_kind: changedFile.changeKind,
-    restore_state: changedFile.restoreState,
-    before_exists: changedFile.beforeExists ? 1 : 0,
-    before_content_ref_id: changedFile.beforeContentRefId ?? null,
-    before_hash: changedFile.beforeHash ?? null,
-    before_byte_length: changedFile.beforeByteLength ?? null,
-    after_exists: changedFile.afterExists ? 1 : 0,
-    after_content_ref_id: changedFile.afterContentRefId ?? null,
-    after_hash: changedFile.afterHash ?? null,
-    after_byte_length: changedFile.afterByteLength ?? null,
-    created_at: changedFile.createdAt,
-    updated_at: changedFile.updatedAt,
-    metadata_json: stringifyOptionalJson(changedFile.metadata),
-  };
+function metadataForChangeSet(database: MegumiDatabase, changeSetId: string): ChangeMetadata {
+  const row = database.prepare('SELECT metadata_json FROM workspace_changes WHERE change_id = ?')
+    .get(changeSetId) as { metadata_json: string | null } | undefined;
+  return parseJson<ChangeMetadata>(row?.metadata_json) ?? {};
 }
 
-function restoreRequestParams(request: WorkspaceRestoreRequest): Record<string, unknown> {
-  return {
-    restore_request_id: request.restoreRequestId,
-    change_set_id: request.changeSetId,
-    session_id: request.sessionId,
-    run_id: request.runId,
-    requested_by: request.requestedBy,
-    status: request.status,
-    requested_at: request.requestedAt,
-    completed_at: request.completedAt ?? null,
-    metadata_json: stringifyOptionalJson(request.metadata),
-  };
+function writeChangeMetadata(database: MegumiDatabase, changeSetId: string, metadata: ChangeMetadata): void {
+  database.prepare('UPDATE workspace_changes SET metadata_json = ? WHERE change_id = ?')
+    .run(stringifyJson(metadata), changeSetId);
 }
 
-function restoreResultParams(result: WorkspaceRestoreResult): Record<string, unknown> {
-  return {
-    restore_result_id: result.restoreResultId,
-    restore_request_id: result.restoreRequestId,
-    change_set_id: result.changeSetId,
-    session_id: result.sessionId,
-    run_id: result.runId,
-    status: result.status,
-    restored_at: result.restoredAt,
-    error_json: stringifyOptionalJson(result.error),
-    metadata_json: stringifyOptionalJson(result.metadata),
-  };
+function operationMetadata(database: MegumiDatabase, restoreId: string): RestoreOperationMetadata {
+  const row = database.prepare('SELECT metadata_json FROM workspace_restore_operations WHERE restore_id = ?')
+    .get(restoreId) as { metadata_json: string | null } | undefined;
+  return parseJson<RestoreOperationMetadata>(row?.metadata_json) ?? {};
 }
 
-function restoreFileResultParams(fileResult: WorkspaceRestoreFileResult): Record<string, unknown> {
-  return {
-    restore_file_result_id: fileResult.restoreFileResultId,
-    restore_result_id: fileResult.restoreResultId,
-    changed_file_id: fileResult.changedFileId,
-    project_path: fileResult.projectPath,
-    status: fileResult.status,
-    conflict_reason: fileResult.conflictReason ?? null,
-    error_json: stringifyOptionalJson(fileResult.error),
-    restored_at: fileResult.restoredAt ?? null,
-    metadata_json: stringifyOptionalJson(fileResult.metadata),
-  };
+function requireChangeSet(repo: WorkspaceChangeRepository, changeSetId: string, subject: string): WorkspaceChangeSet {
+  const changeSet = repo.getWorkspaceChange(changeSetId);
+  if (!changeSet) {
+    throw new Error(`Cannot save ${subject} without change set: ${changeSetId}`);
+  }
+  return changeSet;
 }
 
 function countChangedFiles(database: MegumiDatabase, changeSetId: string): number {
-  return (database.prepare(`
-    SELECT COUNT(*) AS count
-    FROM workspace_changed_files
-    WHERE change_set_id = ?
-  `).get(changeSetId) as { count: number }).count;
+  const row = database.prepare('SELECT COUNT(*) AS count FROM workspace_changed_files WHERE change_id = ?')
+    .get(changeSetId) as { count: number };
+  return row.count;
 }
 
-function assertSnapshotDurableFieldsMatch(
-  existing: WorkspaceSnapshotContent,
-  next: WorkspaceSnapshotContent,
-): void {
-  const durableFields: Array<keyof WorkspaceSnapshotContent> = [
-    'sessionId',
-    'runId',
-    'projectPath',
-    'storage',
-    'encoding',
-    'sha256',
-    'byteLength',
-    'contentText',
-    'createdAt',
-  ];
-  const hasDifference = durableFields.some((field) => existing[field] !== next[field]);
-  if (hasDifference) {
-    throw new Error(`Snapshot content ${next.contentRefId} already exists with different durable fields`);
-  }
+function updateChangeFileCount(database: MegumiDatabase, changeSetId: string): void {
+  database.prepare('UPDATE workspace_changes SET changed_file_count = ? WHERE change_id = ?')
+    .run(countChangedFiles(database, changeSetId), changeSetId);
 }
 
-function assertSnapshotContentMatchesDeclaredIntegrity(content: WorkspaceSnapshotContent): void {
-  const actualSha256 = createHash('sha256').update(content.contentText, 'utf8').digest('hex');
-  if (actualSha256 !== content.sha256) {
-    throw new Error(`Snapshot content ${content.contentRefId} sha256 does not match contentText`);
-  }
-
-  const actualByteLength = Buffer.byteLength(content.contentText, 'utf8');
-  if (actualByteLength !== content.byteLength) {
-    throw new Error(
-      `Snapshot content ${content.contentRefId} byteLength does not match contentText UTF-8 byte length`,
-    );
-  }
-}
-
-function assertDurableRecordMatches<T>(
-  subject: string,
-  id: string,
-  existing: T,
-  next: T,
-): void {
-  if (!isDeepEqual(existing, next)) {
-    throw new Error(`${subject} ${id} already exists with different durable fields`);
-  }
-}
-
-function assertSnapshotContentRefBelongsToOwner(
+function getRunContext(
   database: MegumiDatabase,
   subject: string,
-  fieldName: string,
-  contentRefId: string,
   sessionId: string,
   runId: string,
-  projectPath: string,
-  hashFieldName: string,
-  expectedHash: string | undefined,
-  byteLengthFieldName: string,
-  expectedByteLength: number | undefined,
-): void {
-  const row = database.prepare(`
-    SELECT session_id, run_id, project_path, sha256, byte_length
-    FROM workspace_snapshot_contents
-    WHERE content_ref_id = ?
-  `).get(contentRefId) as {
-    session_id: string;
-    run_id: string;
-    project_path: string;
-    sha256: string;
-    byte_length: number;
-  } | undefined;
-  if (!row) {
-    throw new Error(`${subject} ${fieldName} ${contentRefId} does not exist`);
-  }
-  if (row.session_id !== sessionId || row.run_id !== runId || row.project_path !== projectPath) {
-    throw new Error(
-      `${subject} ${fieldName} ${contentRefId} belongs to sessionId ${row.session_id}/runId ${row.run_id}/projectPath ${row.project_path}, not sessionId ${sessionId}/runId ${runId}/projectPath ${projectPath}`,
-    );
-  }
-  if (expectedHash !== undefined && row.sha256 !== expectedHash) {
-    throw new Error(`${subject} ${fieldName} ${contentRefId} sha256 ${row.sha256} does not match ${hashFieldName} ${expectedHash}`);
-  }
-  if (expectedByteLength !== undefined && row.byte_length !== expectedByteLength) {
-    throw new Error(`${subject} ${fieldName} ${contentRefId} byteLength ${row.byte_length} does not match ${byteLengthFieldName} ${expectedByteLength}`);
-  }
-}
-
-function isDeepEqual(left: unknown, right: unknown): boolean {
-  if (left === right) {
-    return true;
-  }
-  if (typeof left !== 'object' || typeof right !== 'object' || left === null || right === null) {
-    return false;
-  }
-  if (Array.isArray(left) || Array.isArray(right)) {
-    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
-      return false;
-    }
-    return left.every((value, index) => isDeepEqual(value, right[index]));
-  }
-
-  const leftRecord = left as Record<string, unknown>;
-  const rightRecord = right as Record<string, unknown>;
-  const leftKeys = Object.keys(leftRecord).filter((key) => leftRecord[key] !== undefined);
-  const rightKeys = Object.keys(rightRecord).filter((key) => rightRecord[key] !== undefined);
-  leftKeys.sort();
-  rightKeys.sort();
-  if (leftKeys.length !== rightKeys.length) {
-    return false;
-  }
-  return leftKeys.every((key, index) => (
-    key === rightKeys[index]
-    && Object.prototype.hasOwnProperty.call(rightRecord, key)
-    && isDeepEqual(leftRecord[key], rightRecord[key])
-  ));
-}
-
-function validateOptionalLifecycleRefs(
-  database: MegumiDatabase,
-  subject: string,
-  input: {
-    sessionId: string;
-    runId: string;
-    stepId?: string;
-    sourceEntryId?: string;
-    responseMessageId?: string;
-  },
-): void {
-  if (input.stepId) {
-    assertStepBelongsToRun(database, subject, input.stepId, input.runId);
-  }
-  if (input.sourceEntryId) {
-    assertSourceEntryBelongsToSession(database, subject, input.sourceEntryId, input.sessionId);
-  }
-  if (input.responseMessageId) {
-    assertMessageBelongsToSession(database, subject, input.responseMessageId, input.sessionId);
-  }
-}
-
-function assertRunBelongsToSession(
-  database: MegumiDatabase,
-  subject: string,
-  runId: string,
-  sessionId: string,
-): void {
-  const row = database.prepare(`
-    SELECT session_id
-    FROM runs
-    WHERE run_id = ?
-  `).get(runId) as { session_id: string } | undefined;
+): RunContextRow {
+  const row = database.prepare('SELECT session_id, workspace_id FROM agent_loop_runs WHERE run_id = ?')
+    .get(runId) as RunContextRow | undefined;
   if (!row) {
     throw new Error(`${subject} runId ${runId} does not exist`);
   }
   if (row.session_id !== sessionId) {
     throw new Error(`${subject} runId ${runId} does not belong to sessionId ${sessionId}`);
   }
+  return row;
 }
 
-function assertStepBelongsToRun(
-  database: MegumiDatabase,
-  subject: string,
-  stepId: string,
-  runId: string,
-): void {
-  const row = database.prepare(`
-    SELECT run_id
-    FROM run_steps
-    WHERE step_id = ?
-  `).get(stepId) as { run_id: string } | undefined;
-  if (!row) {
-    throw new Error(`${subject} stepId ${stepId} does not exist`);
+function validateToolCallRef(database: MegumiDatabase, subject: string, toolCallId: string | undefined, runId: string): void {
+  if (!toolCallId) {
+    return;
   }
-  if (row.run_id !== runId) {
-    throw new Error(`${subject} stepId ${stepId} does not belong to runId ${runId}`);
-  }
-}
-
-function assertSourceEntryBelongsToSession(
-  database: MegumiDatabase,
-  subject: string,
-  sourceEntryId: string,
-  sessionId: string,
-): void {
-  const row = database.prepare(`
-    SELECT session_id
-    FROM session_source_entries
-    WHERE source_entry_id = ?
-  `).get(sourceEntryId) as { session_id: string } | undefined;
-  if (!row) {
-    throw new Error(`${subject} sourceEntryId ${sourceEntryId} does not exist`);
-  }
-  if (row.session_id !== sessionId) {
-    throw new Error(`${subject} sourceEntryId ${sourceEntryId} does not belong to sessionId ${sessionId}`);
-  }
-}
-
-function assertMessageBelongsToSession(
-  database: MegumiDatabase,
-  subject: string,
-  messageId: string,
-  sessionId: string,
-): void {
-  const row = database.prepare(`
-    SELECT session_id
-    FROM session_messages
-    WHERE message_id = ?
-  `).get(messageId) as { session_id: string } | undefined;
-  if (!row) {
-    throw new Error(`${subject} responseMessageId ${messageId} does not exist`);
-  }
-  if (row.session_id !== sessionId) {
-    throw new Error(`${subject} responseMessageId ${messageId} does not belong to sessionId ${sessionId}`);
-  }
-}
-
-function assertToolCallBelongsToRun(
-  database: MegumiDatabase,
-  subject: string,
-  toolCallId: string,
-  runId: string,
-): void {
-  const row = database.prepare(`
-    SELECT run_id
-    FROM tool_calls
-    WHERE tool_call_id = ?
-  `).get(toolCallId) as { run_id: string } | undefined;
-  if (!row) {
-    throw new Error(`${subject} toolCallId ${toolCallId} does not exist`);
-  }
-  if (row.run_id !== runId) {
+  const row = database.prepare('SELECT run_id FROM tool_calls WHERE tool_call_id = ?')
+    .get(toolCallId) as { run_id: string } | undefined;
+  if (row && row.run_id !== runId) {
     throw new Error(`${subject} toolCallId ${toolCallId} does not belong to runId ${runId}`);
   }
 }
 
-function assertToolExecutionBelongsToRun(
+function validateSnapshotOwner(
   database: MegumiDatabase,
   subject: string,
-  toolExecutionId: string,
-  runId: string,
+  fieldName: string,
+  snapshotId: string | undefined,
+  owner: Pick<
+    WorkspaceChangedFile,
+    'sessionId' | 'runId' | 'projectPath' | 'beforeHash' | 'beforeByteLength' | 'afterHash' | 'afterByteLength'
+  >,
 ): void {
-  const row = database.prepare(`
-    SELECT run_id
-    FROM tool_executions
-    WHERE tool_execution_id = ?
-  `).get(toolExecutionId) as { run_id: string } | undefined;
-  if (!row) {
-    throw new Error(`${subject} toolExecutionId ${toolExecutionId} does not exist`);
+  if (!snapshotId) {
+    return;
   }
-  if (row.run_id !== runId) {
-    throw new Error(`${subject} toolExecutionId ${toolExecutionId} does not belong to runId ${runId}`);
+  const snapshot = new WorkspaceChangeRepository(database).getSnapshotContent(snapshotId);
+  if (!snapshot) {
+    throw new Error(`${subject} ${fieldName} ${snapshotId} does not exist`);
+  }
+  if (snapshot.sessionId !== owner.sessionId || snapshot.runId !== owner.runId || snapshot.projectPath !== owner.projectPath) {
+    throw new Error(`${subject} ${fieldName} ${snapshotId} belongs to sessionId ${snapshot.sessionId}/runId ${snapshot.runId}/projectPath ${snapshot.projectPath}, not sessionId ${owner.sessionId}/runId ${owner.runId}/projectPath ${owner.projectPath}`);
+  }
+  const expectedHash = fieldName === 'beforeContentRefId' ? owner.beforeHash : owner.afterHash;
+  if (expectedHash && expectedHash !== snapshot.sha256) {
+    throw new Error(`${subject} ${fieldName} ${snapshotId} sha256 ${snapshot.sha256} does not match ${fieldName === 'beforeContentRefId' ? 'beforeHash' : 'afterHash'} ${expectedHash}`);
+  }
+  const expectedByteLength = fieldName === 'beforeContentRefId' ? owner.beforeByteLength : owner.afterByteLength;
+  if (expectedByteLength !== undefined && expectedByteLength !== snapshot.byteLength) {
+    throw new Error(`${subject} ${fieldName} ${snapshotId} byteLength ${snapshot.byteLength} does not match ${fieldName === 'beforeContentRefId' ? 'beforeByteLength' : 'afterByteLength'} ${expectedByteLength}`);
   }
 }
 
@@ -1404,43 +884,73 @@ function assertSameSessionRun(input: {
   referenceRunId: string;
   inverseMessage?: boolean;
 }): void {
-  if (!input.inverseMessage) {
-    if (input.subjectSessionId !== input.referenceSessionId) {
-      throw new Error(
-        `${input.subject} sessionId ${input.subjectSessionId} does not match ${input.referenceName} sessionId ${input.referenceSessionId}`,
-      );
-    }
-    if (input.subjectRunId !== input.referenceRunId) {
-      throw new Error(
-        `${input.subject} runId ${input.subjectRunId} does not match ${input.referenceName} runId ${input.referenceRunId}`,
-      );
-    }
-    return;
-  }
-
   if (input.subjectSessionId !== input.referenceSessionId) {
-    throw new Error(
-      `${input.subject} belongs to sessionId ${input.subjectSessionId}, not ${input.referenceSessionId}`,
-    );
+    throw new Error(input.inverseMessage
+      ? `${input.subject} belongs to sessionId ${input.subjectSessionId}, not ${input.referenceSessionId}`
+      : `${input.subject} sessionId ${input.subjectSessionId} does not match ${input.referenceName} sessionId ${input.referenceSessionId}`);
   }
   if (input.subjectRunId !== input.referenceRunId) {
-    throw new Error(`${input.subject} belongs to runId ${input.subjectRunId}, not ${input.referenceRunId}`);
+    throw new Error(input.inverseMessage
+      ? `${input.subject} belongs to runId ${input.subjectRunId}, not ${input.referenceRunId}`
+      : `${input.subject} runId ${input.subjectRunId} does not match ${input.referenceName} runId ${input.referenceRunId}`);
   }
 }
 
-function optionalString(value: string | null | undefined): string | undefined {
-  return value ?? undefined;
+function assertDurableRecordMatches<T>(subject: string, id: string, existing: T, next: T): void {
+  if (!isDeepEqual(existing, next)) {
+    throw new Error(`${subject} ${id} already exists with different durable fields`);
+  }
 }
 
-function optionalNumber(value: number | null): number | undefined {
-  return value ?? undefined;
+function assertSnapshotDurableFieldsMatch(
+  existing: WorkspaceSnapshotContent,
+  next: WorkspaceSnapshotContent,
+): void {
+  const existingDurable = { ...existing, metadata: undefined };
+  const nextDurable = { ...next, metadata: undefined };
+  if (!isDeepEqual(existingDurable, nextDurable)) {
+    throw new Error(`Snapshot content ${next.contentRefId} already exists with different durable fields`);
+  }
 }
 
-function parseOptionalJson(value: string | null): unknown | undefined {
-  return value ? JSON.parse(value) : undefined;
+function assertSnapshotContentMatchesDeclaredIntegrity(content: WorkspaceSnapshotContent): void {
+  const actualSha256 = createHash('sha256').update(content.contentText, 'utf8').digest('hex');
+  if (actualSha256 !== content.sha256) {
+    throw new Error(`Snapshot content ${content.contentRefId} sha256 does not match contentText`);
+  }
+  const actualByteLength = Buffer.byteLength(content.contentText, 'utf8');
+  if (actualByteLength !== content.byteLength) {
+    throw new Error(`Snapshot content ${content.contentRefId} byteLength does not match contentText UTF-8 byte length`);
+  }
 }
 
-function stringifyOptionalJson(value: unknown | undefined): string | null {
-  return value === undefined ? null : JSON.stringify(value);
+function isDeepEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function stringifyJson(value: unknown): string {
+  return JSON.stringify(dropUndefined(value));
+}
+
+function parseJson<T = unknown>(value: string | null | undefined | { metadata_json: string | null } | { result_json: string | null }): T | undefined {
+  const json = typeof value === 'object' && value !== null
+    ? 'metadata_json' in value
+      ? value.metadata_json
+      : value.result_json
+    : value;
+  return json ? JSON.parse(json) as T : undefined;
+}
+
+function dropUndefined(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(dropUndefined);
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, entry]) => entry !== undefined)
+        .map(([key, entry]) => [key, dropUndefined(entry)]),
+    );
+  }
+  return value;
+}

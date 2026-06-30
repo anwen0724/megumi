@@ -8,7 +8,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { composeCodingAgentRuntime } from '@megumi/coding-agent/composition';
-import { ProjectRepository, createDatabase, migrateDatabase } from '@megumi/coding-agent/persistence';
+import { WorkspaceRepository, createDatabase } from '@megumi/coding-agent/persistence';
+import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
 import {
   mergeRawAppSettings,
   resolveAppSettings,
@@ -26,8 +27,8 @@ import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interfa
 function seedProject(homePath: string): { projectId: string; repoPath: string } {
   const database = createDatabase(path.join(homePath, 'megumi.sqlite3'));
   try {
-    migrateDatabase(database);
-    const project = new ProjectRepository(database).upsertFromRepoPath({
+    applyCodingAgentDatabaseMigrations(database);
+    const project = new WorkspaceRepository(database).upsertFromRepoPath({
       repoPath: homePath,
       now: '2026-06-24T00:00:00.000Z',
     });

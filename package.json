@@ -30,6 +30,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/uuid": "^10.0.0",
+    "drizzle-kit": "^0.31.10",
     "electron": "^33.0.0",
     "jsdom": "^29.1.1",
     "postcss": "^8.5.14",
@@ -41,6 +42,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.94.0",
     "better-sqlite3": "^12.0.0",
+    "drizzle-orm": "^0.45.2",
     "fs-extra": "^11.0.0",
     "lucide-react": "^1.14.0",
     "openai": "^4.70.0",

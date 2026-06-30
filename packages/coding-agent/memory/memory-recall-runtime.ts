@@ -34,10 +34,37 @@ export interface MemoryRecallRuntimeRepository {
     limit?: number;
   }): MemoryRecord[];
   saveMemory(memory: MemoryRecord): MemoryRecord;
-  saveRecallRequest(request: MemoryRecallRequest): MemoryRecallRequest;
-  saveRecallResult(result: MemoryRecallResult): MemoryRecallResult;
-  saveAccessLog(accessLog: MemoryAccessLog): MemoryAccessLog;
-  saveAuditLog(auditLog: MemoryAuditLog): MemoryAuditLog;
+  recordRecallTrace(trace: MemoryRecallRuntimeTrace): MemoryRecallRuntimeTrace;
+  recordCaptureAttempt(attempt: MemoryRecallRuntimeCaptureAttempt): MemoryRecallRuntimeCaptureAttempt;
+}
+
+export interface MemoryRecallRuntimeTrace {
+  recallTraceId: string;
+  runId: string;
+  sessionId?: string | null;
+  projectId?: string | null;
+  queryText: string;
+  request: MemoryRecallRequest;
+  results: MemoryRecallResult[];
+  selectedCount?: number;
+  createdAt: string;
+  metadata?: JsonObject;
+}
+
+export interface MemoryRecallRuntimeCaptureAttempt {
+  captureAttemptId: string;
+  runId?: string | null;
+  workspaceId?: string | null;
+  sessionId?: string | null;
+  status: string;
+  triggerKind: string;
+  extractedCount?: number;
+  createdMemoryIds?: string[];
+  rawOutput?: unknown;
+  error?: unknown;
+  createdAt: string;
+  completedAt?: string | null;
+  metadata?: JsonObject;
 }
 
 export type MemoryRecallRuntimeSyncService = MemoryMarkdownSyncBeforeRecallPort;
@@ -121,7 +148,7 @@ export class MemoryRecallRuntimeService {
     try {
       await this.syncBeforeRecall(input, createdAt);
 
-      const request = this.options.repository.saveRecallRequest({
+      const request: MemoryRecallRequest = {
         recallRequestId,
         runId: input.runId,
         sessionId: input.sessionId,
@@ -138,7 +165,7 @@ export class MemoryRecallRuntimeService {
           maxTokens: input.maxTokens ?? DEFAULT_MAX_TOKENS,
           toolSummaryMetadata: input.toolSummaryMetadata,
         }),
-      });
+      };
       this.saveAuditSafe({
         operation: 'recall_requested',
         targetKind: 'recall',
@@ -165,10 +192,6 @@ export class MemoryRecallRuntimeService {
         budget: input.maxTokens ?? DEFAULT_MAX_TOKENS,
         now: createdAt,
       });
-      for (const result of results) {
-        this.options.repository.saveRecallResult(result);
-      }
-
       const snapshot = buildMemoryRecallSnapshot({
         snapshotId: this.options.ids.snapshotId(),
         recallRequestId,
@@ -182,6 +205,22 @@ export class MemoryRecallRuntimeService {
         now: createdAt,
       });
       this.persistSelectedAccess(input, snapshot, records, createdAt);
+      this.options.repository.recordRecallTrace({
+        recallTraceId: recallRequestId,
+        runId: input.runId,
+        sessionId: input.sessionId,
+        projectId: input.projectId ?? null,
+        queryText,
+        request,
+        results,
+        createdAt,
+        metadata: cleanJsonObject({
+          providerId: input.providerId ?? undefined,
+          modelId: input.modelId ?? undefined,
+          modelStepId: input.modelStepId ?? undefined,
+          effectiveCwd: input.effectiveCwd ?? undefined,
+        }),
+      });
       if (snapshot.selected.length > 0) {
         this.saveAuditSafe({
           operation: 'recall_selected',
@@ -297,8 +336,9 @@ export class MemoryRecallRuntimeService {
   ): void {
     const recordById = new Map(records.map((record) => [record.memoryId, record]));
     for (const selected of snapshot.selected) {
-      this.options.repository.saveAccessLog({
-        accessLogId: this.options.ids.accessLogId(),
+      const accessLogId = this.options.ids.accessLogId();
+      const accessLog: MemoryAccessLog = {
+        accessLogId,
         memoryId: selected.memoryId,
         sessionId: input.sessionId,
         runId: input.runId,
@@ -312,6 +352,17 @@ export class MemoryRecallRuntimeService {
           score: selected.score,
           tokenEstimate: selected.tokenEstimate ?? 0,
         },
+      };
+      this.options.repository.recordCaptureAttempt({
+        captureAttemptId: accessLogId,
+        runId: input.runId,
+        sessionId: input.sessionId,
+        status: 'recorded',
+        triggerKind: 'access_log',
+        extractedCount: 0,
+        createdAt,
+        completedAt: createdAt,
+        metadata: { accessLog: accessLog as unknown as JsonObject },
       });
       const record = recordById.get(selected.memoryId);
       if (record) {
@@ -336,7 +387,7 @@ export class MemoryRecallRuntimeService {
     metadata?: Record<string, unknown>;
   }): void {
     try {
-      this.options.repository.saveAuditLog({
+      const audit: MemoryAuditLog = {
         auditId: this.options.ids.auditId(),
         operation: input.operation,
         targetKind: input.targetKind,
@@ -350,6 +401,18 @@ export class MemoryRecallRuntimeService {
         afterState: null,
         createdAt: input.createdAt,
         metadata: cleanJsonObject(input.metadata ?? {}),
+      };
+      this.options.repository.recordCaptureAttempt({
+        captureAttemptId: audit.auditId,
+        runId: audit.runId ?? null,
+        workspaceId: audit.projectId ?? null,
+        sessionId: audit.sessionId ?? null,
+        status: 'recorded',
+        triggerKind: 'audit_log',
+        extractedCount: 0,
+        createdAt: audit.createdAt,
+        completedAt: audit.createdAt,
+        metadata: { auditLog: audit as unknown as JsonObject },
       });
     } catch {
       // Audit failures must not block a normal agent run.

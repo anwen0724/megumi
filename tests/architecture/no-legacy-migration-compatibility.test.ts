@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -67,6 +67,32 @@ describe('migration compatibility removal', () => {
           if (pattern.test(source)) {
             violations.push(`${relativePath(file)} matches forbidden migration pattern`);
           }
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
+  });
+
+  it('keeps Coding Agent database schema and migrations in the product core', () => {
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/schema/drizzle-schema.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/schema/migrate.ts'))).toBe(true);
+
+    const oldMigrationPath = path.join(root, 'packages/coding-agent/persistence/schema/migrations.ts');
+    if (fs.existsSync(oldMigrationPath)) {
+      expect(fs.readFileSync(oldMigrationPath, 'utf8')).not.toContain('export function migrateDatabase');
+    }
+  });
+
+  it('does not let the desktop shell own database schema, migrations, or repositories', () => {
+    const violations: string[] = [];
+    const forbiddenImports = ['drizzle-orm', 'drizzle-kit', 'persistence/schema', 'persistence/repos'];
+
+    for (const file of walkFiles(path.join(root, 'apps/desktop'))) {
+      const source = fs.readFileSync(file, 'utf8');
+      for (const forbiddenImport of forbiddenImports) {
+        if (source.includes(forbiddenImport)) {
+          violations.push(`${relativePath(file)} imports ${forbiddenImport}`);
         }
       }
     }

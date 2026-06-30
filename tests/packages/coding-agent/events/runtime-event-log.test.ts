@@ -1,11 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 
 import { RuntimeEventLog } from '@megumi/coding-agent/events';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 
 describe('RuntimeEventLog', () => {
   it('normalizes request metadata, advances run sequence, appends, and fans out events', () => {
-    const repository = new InMemoryRuntimeEventRepository([
+    const repository = new InMemoryRuntimeEventStore([
       runtimeEvent({ eventId: 'event-1', sequence: 3 }),
     ]);
     const log = new RuntimeEventLog(repository);
@@ -47,7 +47,7 @@ describe('RuntimeEventLog', () => {
   });
 
   it('creates sequence cursors from the latest persisted run event', () => {
-    const log = new RuntimeEventLog(new InMemoryRuntimeEventRepository([
+    const log = new RuntimeEventLog(new InMemoryRuntimeEventStore([
       runtimeEvent({ eventId: 'event-1', sequence: 2 }),
       runtimeEvent({ eventId: 'event-2', sequence: 7 }),
     ]));
@@ -59,7 +59,7 @@ describe('RuntimeEventLog', () => {
   });
 });
 
-class InMemoryRuntimeEventRepository {
+class InMemoryRuntimeEventStore {
   constructor(private readonly events: RuntimeEvent[] = []) {}
 
   appendRuntimeEvent(event: RuntimeEvent): RuntimeEvent {

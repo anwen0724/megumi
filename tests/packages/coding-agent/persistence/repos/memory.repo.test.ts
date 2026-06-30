@@ -1,11 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { createDatabase, type MegumiDatabase } from '@megumi/coding-agent/persistence/connection';
-import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
 import { MemoryRepository } from '@megumi/coding-agent/persistence/repos/memory.repo';
+import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
 import type {
-  MemoryAccessLog,
-  MemoryAuditLog,
-  MemoryCandidate,
   MemoryMarkdownMirror,
   MemoryRecallRequest,
   MemoryRecallResult,
@@ -23,61 +21,13 @@ afterEach(() => {
 
 function createRepository(): MemoryRepository {
   database = createDatabase(':memory:');
-  migrateDatabase(database);
+  applyCodingAgentDatabaseMigrations(database);
+  seedLifecycle(database);
   return new MemoryRepository(database);
 }
 
-function sourceRef(ownerId: string, ownerKind: 'candidate' | 'memory'): MemorySourceRef {
-  return {
-    sourceRefId: `memory-source:${ownerId}`,
-    ownerId,
-    ownerKind,
-    kind: 'message',
-    refId: 'message:1',
-    label: 'safe source',
-    excerptPreview: 'safe preview',
-    createdAt: now,
-  };
-}
-
-function memoryRecord(overrides: Partial<MemoryRecord> = {}): MemoryRecord {
-  return {
-    memoryId: 'memory:1',
-    scope: 'project',
-    projectId: 'project:1',
-    kind: 'decision',
-    status: 'active',
-    content: 'Use Vitest for unit tests.',
-    summary: 'Testing framework decision',
-    normalizedText: 'use vitest for unit tests',
-    dedupeKey: 'project:project:1:decision:use-vitest',
-    source: 'capture',
-    sourceRunId: 'run:1',
-    sourceSessionId: 'session:1',
-    sourceMessageId: 'message:1',
-    sourceToolCallId: 'tool-call:1',
-    evidence: [
-      {
-        kind: 'message',
-        runId: 'run:1',
-        sessionId: 'session:1',
-        messageId: 'message:1',
-        metadata: {},
-      },
-    ],
-    supersededById: null,
-    createdAt: now,
-    updatedAt: now,
-    lastUsedAt: now,
-    useCount: 2,
-    deletedAt: null,
-    metadata: { source: 'test' },
-    ...overrides,
-  };
-}
-
 describe('MemoryRepository', () => {
-  it('round-trips 18.02 memory records and filters active project memory', () => {
+  it('writes accepted memory into memory_records with source and evidence JSON', () => {
     const repo = createRepository();
     const memory = memoryRecord();
 
@@ -85,42 +35,86 @@ describe('MemoryRepository', () => {
     expect(repo.getMemory(memory.memoryId)).toEqual(memory);
     expect(repo.listMemories({
       scope: 'project',
-      projectId: 'project:1',
+      projectId: 'workspace:1',
       status: 'active',
       kind: 'decision',
     })).toEqual([memory]);
     expect(repo.findActiveMemoryByDedupeKey({
       scope: 'project',
-      projectId: 'project:1',
+      projectId: 'workspace:1',
       kind: 'decision',
       dedupeKey: memory.dedupeKey,
     })).toEqual(memory);
+
+    const row = currentDb().prepare('SELECT source_json, evidence_json FROM memory_records WHERE memory_id = ?')
+      .get(memory.memoryId) as { source_json: string; evidence_json: string };
+    expect(JSON.parse(row.source_json)).toEqual({ source: 'capture' });
+    expect(JSON.parse(row.evidence_json)).toEqual(memory.evidence);
   });
 
-  it('validates long-term memory scope and project ownership before saving', () => {
+  it('records recall request and results as one memory_recall_traces row', () => {
     const repo = createRepository();
+    const trace = {
+      recallTraceId: 'memory-recall:1',
+      runId: 'run:1',
+      sessionId: 'session:1',
+      projectId: 'workspace:1',
+      queryText: 'How should tests be written?',
+      request: recallRequest(),
+      results: [recallResult()],
+      createdAt: now,
+      metadata: { source: 'test' },
+    };
 
-    expect(() => repo.saveMemory(memoryRecord({
-      scope: 'user',
-      projectId: 'project:1',
-    }))).toThrow();
-    expect(() => repo.saveMemory({
-      ...memoryRecord(),
-      scope: 'session',
-      projectId: null,
-    } as unknown as MemoryRecord)).toThrow();
-    expect(() => repo.saveMemory({
-      ...memoryRecord(),
-      scope: 'workspace',
-    } as unknown as MemoryRecord)).toThrow();
+    expect(repo.recordRecallTrace(trace)).toEqual({
+      ...trace,
+      selectedCount: 1,
+    });
+    expect(repo.getRecallTrace('memory-recall:1')).toEqual({
+      ...trace,
+      selectedCount: 1,
+    });
+
+    const row = currentDb().prepare('SELECT selected_count, request_json, results_json FROM memory_recall_traces WHERE recall_trace_id = ?')
+      .get('memory-recall:1') as { selected_count: number; request_json: string; results_json: string };
+    expect(row.selected_count).toBe(1);
+    expect(JSON.parse(row.request_json)).toEqual(recallRequest());
+    expect(JSON.parse(row.results_json)).toEqual([recallResult()]);
   });
 
-  it('round-trips markdown mirror state', () => {
+  it('records automatic capture attempts in memory_capture_attempts', () => {
+    const repo = createRepository();
+    const attempt = {
+      captureAttemptId: 'memory-capture:1',
+      runId: 'run:1',
+      workspaceId: 'workspace:1',
+      sessionId: 'session:1',
+      status: 'captured',
+      triggerKind: 'run_completed',
+      extractedCount: 1,
+      createdMemoryIds: ['memory:1'],
+      rawOutput: { candidates: 1 },
+      createdAt: now,
+      completedAt: now,
+      metadata: { signal: 'confirmed_decision' },
+    };
+
+    expect(repo.recordCaptureAttempt(attempt)).toEqual(attempt);
+    expect(repo.getCaptureAttempt('memory-capture:1')).toEqual(attempt);
+    expect(repo.listCaptureAttempts({ triggerKind: 'run_completed', status: 'captured' })).toEqual([attempt]);
+
+    const row = currentDb().prepare('SELECT created_memory_ids_json, raw_output_json FROM memory_capture_attempts WHERE capture_attempt_id = ?')
+      .get('memory-capture:1') as { created_memory_ids_json: string; raw_output_json: string };
+    expect(JSON.parse(row.created_memory_ids_json)).toEqual(['memory:1']);
+    expect(JSON.parse(row.raw_output_json)).toEqual({ candidates: 1 });
+  });
+
+  it('round-trips markdown mirror state through memory_markdown_mirrors', () => {
     const repo = createRepository();
     const mirror: MemoryMarkdownMirror = {
       mirrorId: 'mirror:1',
       scope: 'project',
-      projectId: 'project:1',
+      projectId: 'workspace:1',
       filePath: 'C:/repo/.megumi/memory/projects/project-1/memory.md',
       status: 'dirty',
       lastImportedAt: now,
@@ -133,84 +127,172 @@ describe('MemoryRepository', () => {
     repo.saveMarkdownMirror(mirror);
 
     expect(repo.getMarkdownMirror(mirror.mirrorId)).toEqual(mirror);
-    expect(repo.listMarkdownMirrors({ scope: 'project', projectId: 'project:1', status: 'dirty' })).toEqual([mirror]);
+    expect(repo.listMarkdownMirrors({ scope: 'project', projectId: 'workspace:1', status: 'dirty' })).toEqual([mirror]);
   });
 
-  it('round-trips recall request and result traces with new contracts', () => {
+  it('keeps source refs on memory metadata and does not expose candidate/access/audit persistence APIs', () => {
     const repo = createRepository();
-    const request: MemoryRecallRequest = {
-      recallRequestId: 'memory-recall:1',
-      runId: 'run:1',
-      sessionId: 'session:1',
-      projectId: 'project:1',
-      queryText: 'How should tests be written?',
-      requestedScopes: ['user', 'project'],
-      requestedKinds: ['decision'],
-      maxResults: 8,
+    const memory = repo.saveMemory(memoryRecord());
+    const ref: MemorySourceRef = {
+      sourceRefId: 'memory-source:1',
+      ownerId: memory.memoryId,
+      ownerKind: 'memory',
+      kind: 'message',
+      refId: 'message:1',
+      label: 'safe source',
+      excerptPreview: 'safe preview',
       createdAt: now,
-      metadata: { source: 'test' },
-    };
-    const result: MemoryRecallResult = {
-      recallResultId: 'memory-recall-result:1',
-      recallRequestId: request.recallRequestId,
-      memoryId: 'memory:1',
-      score: 0.82,
-      rank: 1,
-      selectedForContext: true,
-      reason: 'query_match',
-      createdAt: now,
-      metadata: {},
     };
 
-    expect(repo.saveRecallRequest(request)).toEqual(request);
-    expect(repo.saveRecallResult(result)).toEqual(result);
-    expect(repo.listRecallResultsByRequest(request.recallRequestId)).toEqual([result]);
-  });
+    expect(repo.saveSourceRef(ref)).toEqual(ref);
+    expect(repo.listSourceRefsByOwner(memory.memoryId, 'memory')).toEqual([ref]);
 
-  it('keeps candidate, access, and audit compatibility without session scoped records', () => {
-    const repo = createRepository();
-    const candidate: MemoryCandidate = {
-      candidateId: 'memory-candidate:1',
-      projectId: 'project:1',
-      sessionId: 'session:1',
-      scope: 'project',
-      kind: 'decision',
-      content: 'Use spec before implementation.',
-      summary: 'Spec-first decision.',
-      sourceRefs: [sourceRef('memory-candidate:1', 'candidate')],
-      confidence: 0.9,
-      riskLevel: 'low',
-      status: 'proposed',
-      proposedBy: 'agent',
-      createdAt: now,
-    };
-    const access: MemoryAccessLog = {
-      accessLogId: 'memory-access:1',
-      memoryId: 'memory:1',
-      sessionId: 'session:1',
-      recallRequestId: 'memory-recall:1',
-      accessKind: 'selected_for_context',
-      accessedAt: now,
-      selectedForContext: true,
-    };
-    const audit: MemoryAuditLog = {
-      auditId: 'memory-audit:1',
-      targetKind: 'memory',
-      targetId: 'memory:1',
-      operation: 'memory_created',
-      actorKind: 'user',
-      reason: 'accepted candidate',
-      beforeState: null,
-      afterState: { scope: 'project', kind: 'decision', status: 'active' },
-      createdAt: now,
-      metadata: {},
-    };
-
-    expect(repo.saveCandidate(candidate).scope).toBe('project');
-    expect(repo.listCandidates({ sessionId: 'session:1', status: 'proposed' })).toEqual([candidate]);
-    expect(repo.saveAccessLog(access)).toEqual(access);
-    expect(repo.listAccessLogs({ memoryId: 'memory:1' })).toEqual([access]);
-    expect(repo.saveAuditLog(audit)).toEqual(audit);
-    expect(repo.listAuditLogs({ targetKind: 'memory', targetId: 'memory:1' })).toEqual([audit]);
+    const publicNames = Object.getOwnPropertyNames(MemoryRepository.prototype);
+    expect(publicNames).not.toEqual(expect.arrayContaining([
+      'saveCandidate',
+      'getCandidate',
+      'listCandidates',
+      'saveAccessLog',
+      'listAccessLogs',
+      'saveAuditLog',
+      'listAuditLogs',
+      'saveRecallRequest',
+      'saveRecallResult',
+      'listRecallResultsByRequest',
+    ]));
   });
 });
+
+function currentDb(): MegumiDatabase {
+  if (!database) {
+    throw new Error('Test database is not initialized.');
+  }
+  return database;
+}
+
+function memoryRecord(overrides: Partial<MemoryRecord> = {}): MemoryRecord {
+  return {
+    memoryId: 'memory:1',
+    scope: 'project',
+    projectId: 'workspace:1',
+    kind: 'decision',
+    status: 'active',
+    content: 'Use Vitest for unit tests.',
+    summary: 'Testing framework decision',
+    normalizedText: 'use vitest for unit tests',
+    dedupeKey: 'project:workspace:1:decision:use-vitest',
+    source: 'capture',
+    sourceRunId: 'run:1',
+    sourceSessionId: 'session:1',
+    sourceMessageId: 'message:1',
+    sourceToolCallId: 'tool-call:1',
+    evidence: [{
+      kind: 'message',
+      runId: 'run:1',
+      sessionId: 'session:1',
+      messageId: 'message:1',
+      metadata: {},
+    }],
+    supersededById: null,
+    createdAt: now,
+    updatedAt: now,
+    lastUsedAt: now,
+    useCount: 2,
+    deletedAt: null,
+    metadata: { source: 'test' },
+    ...overrides,
+  };
+}
+
+function recallRequest(overrides: Partial<MemoryRecallRequest> = {}): MemoryRecallRequest {
+  return {
+    recallRequestId: 'memory-recall:1',
+    runId: 'run:1',
+    sessionId: 'session:1',
+    projectId: 'workspace:1',
+    queryText: 'How should tests be written?',
+    requestedScopes: ['user', 'project'],
+    requestedKinds: ['decision'],
+    maxResults: 8,
+    createdAt: now,
+    metadata: { source: 'test' },
+    ...overrides,
+  };
+}
+
+function recallResult(overrides: Partial<MemoryRecallResult> = {}): MemoryRecallResult {
+  return {
+    recallResultId: 'memory-recall-result:1',
+    recallRequestId: 'memory-recall:1',
+    memoryId: 'memory:1',
+    score: 0.82,
+    rank: 1,
+    selectedForContext: true,
+    reason: 'query_match',
+    createdAt: now,
+    metadata: {},
+    ...overrides,
+  };
+}
+
+function seedLifecycle(db: MegumiDatabase): void {
+  db.exec(`
+    INSERT INTO workspaces (
+      workspace_id, name, root_path, root_path_key, status,
+      created_at, updated_at, last_opened_at, metadata_json
+    ) VALUES (
+      'workspace:1', 'Workspace 1', '/workspace-1', '/workspace-1', 'available',
+      '${now}', '${now}', '${now}', NULL
+    );
+
+    INSERT INTO sessions (
+      session_id, workspace_id, title, status, active_entry_id,
+      created_at, updated_at, archived_at, metadata_json
+    ) VALUES (
+      'session:1', 'workspace:1', 'Memory session', 'active', NULL,
+      '${now}', '${now}', NULL, NULL
+    );
+
+    INSERT INTO agent_loop_runs (
+      run_id, workspace_id, session_id, run_kind, user_message_id,
+      assistant_message_id, base_run_id, base_message_id, base_entry_id,
+      attempt_number, status, permission_mode, permission_snapshot_json,
+      memory_recall_trace_id, started_at, completed_at, cancelled_at,
+      error_json, created_at, metadata_json
+    ) VALUES (
+      'run:1', 'workspace:1', 'session:1', 'input', NULL, NULL,
+      NULL, NULL, NULL, 1, 'running', 'chat', NULL, NULL,
+      '${now}', NULL, NULL, NULL, '${now}', NULL
+    );
+
+    INSERT INTO session_messages (
+      message_id, session_id, run_id, role, status, content_text,
+      blocks_json, created_at, completed_at, metadata_json
+    ) VALUES (
+      'message:1', 'session:1', 'run:1', 'user', 'completed',
+      'Remember the test decision.', NULL, '${now}', '${now}', NULL
+    );
+
+    INSERT INTO model_calls (
+      model_call_id, run_id, call_order, provider_id, model_id, status,
+      input_summary_json, context_snapshot_json, request_json, response_json,
+      output_summary_json, token_usage_json, started_at, completed_at,
+      error_json, metadata_json
+    ) VALUES (
+      'model-call:1', 'run:1', 1, 'openai-compatible', 'gpt-5', 'completed',
+      NULL, NULL, NULL, NULL, NULL, NULL, '${now}', '${now}', NULL, NULL
+    );
+
+    INSERT INTO tool_calls (
+      tool_call_id, run_id, model_call_id, call_order, provider_tool_call_id,
+      tool_source_id, tool_name, model_visible_name, input_json, input_preview,
+      status, permission_decision_json, approval_request_id, result_json,
+      result_preview, observation_json, submitted_to_model_at, started_at,
+      completed_at, error_json, metadata_json
+    ) VALUES (
+      'tool-call:1', 'run:1', 'model-call:1', 1, 'provider-tool-call:1',
+      NULL, 'read_file', 'read_file', '{}', NULL, 'completed',
+      NULL, NULL, NULL, NULL, NULL, NULL, '${now}', '${now}', NULL, NULL
+    );
+  `);
+}

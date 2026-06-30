@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { extname, join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -47,11 +47,11 @@ describe('desktop shell and coding-agent host interface recovery', () => {
     expect(existsSync(join(root, 'packages/coding-agent/composition/compose-coding-agent-runtime.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/composition/compose-coding-agent-persistence.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/persistence/schema/migrations.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/persistence/schema/migrate.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/persistence/repos/session-run.repo.ts'))).toBe(false);
-    expect(existsSync(join(root, 'packages/coding-agent/persistence/repos/run-record.repo.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/persistence/repos/session-record.repo.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/persistence/repos/tool.repo.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/persistence/repos/agent-loop.repo.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/persistence/repos/session.repo.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/persistence/repos/tool-call.repo.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/tools/execution/tool-execution-router.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/tools/execution/tool-executors/run-command.executor.ts'))).toBe(true);
   });
@@ -84,7 +84,7 @@ describe('desktop shell and coding-agent host interface recovery', () => {
     expect(desktopServices).not.toContain('class InputProcessingService');
     expect(desktopServices).not.toContain('createToolOrchestratorService');
     expect(desktopServices).not.toContain('new SessionRunRepository');
-    expect(desktopServices).not.toContain('migrateDatabase');
+    expect(desktopServices).not.toContain('applyCodingAgentDatabaseMigrations');
     expect(desktopServices).not.toContain('createDatabase(');
     expect(desktopServices).not.toContain('createBuiltInToolSourceExecutor');
     expect(desktopServices).not.toContain('createToolExecutionRouter');
@@ -115,7 +115,7 @@ describe('desktop shell and coding-agent host interface recovery', () => {
     expect(existsSync(join(root, 'tests/packages/coding-agent/host-interface/host-interface.test.ts'))).toBe(true);
     expect(existsSync(join(root, 'tests/packages/coding-agent/input/input-processing-service.test.ts'))).toBe(true);
     expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/session-run.repo.test.ts'))).toBe(false);
-    expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/run-record.repo.test.ts'))).toBe(true);
-    expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/session-record.repo.test.ts'))).toBe(true);
+    expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/agent-loop.repo.test.ts'))).toBe(true);
+    expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/session.repo.test.ts'))).toBe(true);
   });
 });

@@ -16,18 +16,18 @@ import type {
 import { assertOrdinaryProjectPath } from './path-policy';
 
 export interface WorkspaceRestoreRepositoryPort {
-  getChangeSet(changeSetId: string): WorkspaceChangeSet | undefined;
+  getWorkspaceChange(changeSetId: string): WorkspaceChangeSet | undefined;
   listChangedFilesByChangeSet(changeSetId: string): WorkspaceChangedFile[];
   getSnapshotContent(contentRefId: string): WorkspaceSnapshotContent | undefined;
-  saveRestoreRequest(request: WorkspaceRestoreRequest): WorkspaceRestoreRequest;
-  updateRestoreRequestStatus(input: {
+  createRestoreOperation(request: WorkspaceRestoreRequest): WorkspaceRestoreRequest;
+  updateRestoreOperation(input: {
     restoreRequestId: string;
     status: WorkspaceRestoreRequest['status'];
     completedAt?: string;
     metadata?: WorkspaceRestoreRequest['metadata'];
   }): WorkspaceRestoreRequest | undefined;
-  saveRestoreResult(result: WorkspaceRestoreResult): WorkspaceRestoreResult;
-  saveRestoreFileResult(fileResult: WorkspaceRestoreFileResult): WorkspaceRestoreFileResult;
+  completeRestoreOperation(result: WorkspaceRestoreResult): WorkspaceRestoreResult;
+  recordRestoreFileResult(fileResult: WorkspaceRestoreFileResult): WorkspaceRestoreFileResult;
   updateChangedFileRestoreState(input: {
     changedFileId: string;
     restoreState: WorkspaceChangedFile['restoreState'];
@@ -122,13 +122,13 @@ export class WorkspaceRestoreService {
   }
 
   async restoreChangeSet(input: WorkspaceRestoreChangeSetInput): Promise<WorkspaceRestoreChangeSetResult> {
-    const changeSet = this.repository.getChangeSet(input.changeSetId);
+    const changeSet = this.repository.getWorkspaceChange(input.changeSetId);
     if (!changeSet) {
       throw new Error(`Workspace change set not found: ${input.changeSetId}`);
     }
 
     const requestedAt = this.clock.now();
-    let request = this.repository.saveRestoreRequest({
+    let request = this.repository.createRestoreOperation({
       restoreRequestId: this.ids.restoreRequestId(),
       changeSetId: changeSet.changeSetId,
       sessionId: changeSet.sessionId,
@@ -140,7 +140,7 @@ export class WorkspaceRestoreService {
     });
 
     try {
-      request = this.repository.updateRestoreRequestStatus({
+      request = this.repository.updateRestoreOperation({
         restoreRequestId: request.restoreRequestId,
         status: 'running',
         metadata: request.metadata,
@@ -154,7 +154,7 @@ export class WorkspaceRestoreService {
 
       const completedAt = this.clock.now();
       const resultStatus = aggregateRestoreStatus(outcomes);
-      const result = this.repository.saveRestoreResult({
+      const result = this.repository.completeRestoreOperation({
         restoreResultId,
         restoreRequestId: request.restoreRequestId,
         changeSetId: changeSet.changeSetId,
@@ -167,7 +167,7 @@ export class WorkspaceRestoreService {
       });
 
       const fileResults = outcomes.map((outcome) => {
-        const fileResult = this.repository.saveRestoreFileResult(createFileResult({
+        const fileResult = this.repository.recordRestoreFileResult(createFileResult({
           outcome,
           restoreResultId: result.restoreResultId,
           restoreFileResultId: this.ids.restoreFileResultId(),
@@ -186,7 +186,7 @@ export class WorkspaceRestoreService {
         return fileResult;
       });
 
-      request = this.repository.updateRestoreRequestStatus({
+      request = this.repository.updateRestoreOperation({
         restoreRequestId: request.restoreRequestId,
         status: resultStatus === 'failed' ? 'failed' : 'completed',
         completedAt,
@@ -413,7 +413,7 @@ export class WorkspaceRestoreService {
 
   private markRequestFailedAfterException(request: WorkspaceRestoreRequest): void {
     try {
-      this.repository.updateRestoreRequestStatus({
+      this.repository.updateRestoreOperation({
         restoreRequestId: request.restoreRequestId,
         status: 'failed',
         completedAt: this.clock.now(),

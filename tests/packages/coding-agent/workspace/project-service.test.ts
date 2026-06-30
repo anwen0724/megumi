@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 // Verifies the product workspace project service (moved out of the desktop shell):
 // it is port-driven (directory picker + file system), exposes
 // ProjectPathValidationError, and drives project lifecycle over a real SQLite
@@ -6,8 +6,8 @@
 // behavior.
 import { describe, expect, it, vi } from 'vitest';
 import { createDatabase } from '@megumi/coding-agent/persistence/connection';
-import { ProjectRepository } from '@megumi/coding-agent/persistence/repos/project.repo';
-import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
+import { WorkspaceRepository } from '@megumi/coding-agent/persistence/repos/workspace.repo';
+import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
 import {
   ProjectPathValidationError,
   createProjectService,
@@ -15,8 +15,8 @@ import {
 
 function createRepo() {
   const database = createDatabase(':memory:');
-  migrateDatabase(database);
-  return new ProjectRepository(database);
+  applyCodingAgentDatabaseMigrations(database);
+  return new WorkspaceRepository(database);
 }
 
 function createDirectoryStat() {

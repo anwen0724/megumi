@@ -119,7 +119,7 @@ describe('ModelInputContextBuilder', () => {
       sessionId: 'session:1',
       runId: 'run:1',
       stepId: 'step:2',
-      buildReason: 'tool_results_model_input',
+      buildReason: 'tool_call_outputs_model_input',
       builtAt,
       parts: [
         sessionPart(),

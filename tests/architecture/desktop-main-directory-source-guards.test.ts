@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { readFileSync, readdirSync, type Dirent } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -141,7 +141,7 @@ describe('Desktop Main directory boundaries', () => {
     const source = sourceUnder('packages/coding-agent/persistence');
 
     expect(source).toContain('better-sqlite3');
-    expect(source).toContain('migrateDatabase');
+    expect(source).toContain('applyCodingAgentDatabaseMigrations');
     expect(source).not.toContain('SessionRunRepository');
     expect(source).toContain('WorkspaceChangeRepository');
     expect(source).not.toContain("from 'electron'");
@@ -182,8 +182,8 @@ describe('Desktop Main directory boundaries', () => {
     const source = sourceUnder('apps/desktop/src/main/services');
 
     expect(source).not.toContain("from '@megumi/coding-agent/persistence/connection'");
-    expect(source).not.toContain("from '@megumi/coding-agent/persistence/schema/migrations'");
+    expect(source).not.toContain("from '@megumi/coding-agent/persistence/schema/migrate'");
     expect(source).not.toContain('createDatabase(');
-    expect(source).not.toContain('migrateDatabase(');
+    expect(source).not.toContain('applyCodingAgentDatabaseMigrations(');
   });
 });

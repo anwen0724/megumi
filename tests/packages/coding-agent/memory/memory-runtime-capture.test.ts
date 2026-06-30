@@ -3,6 +3,7 @@ import type { MemoryDiagnosticWriterPort } from '@megumi/coding-agent/memory';
 import {
   MemoryRuntimeCaptureService,
   type MemoryExtractionModelClient,
+  type MemoryRuntimeCaptureAttempt,
 } from '@megumi/coding-agent/memory';
 import type {
   MemoryAuditLog,
@@ -52,6 +53,17 @@ class FakeMemoryRuntimeCaptureRepository {
     }
     this.memories.set(memory.memoryId, memory);
     return memory;
+  }
+
+  recordCaptureAttempt(attempt: MemoryRuntimeCaptureAttempt): MemoryRuntimeCaptureAttempt {
+    if (this.failSaveAudit && attempt.triggerKind === 'audit_log') {
+      throw new Error('audit database locked');
+    }
+    const auditLog = attempt.metadata?.auditLog as MemoryAuditLog | undefined;
+    if (auditLog) {
+      this.audits.push(auditLog);
+    }
+    return attempt;
   }
 
   saveAuditLog(auditLog: MemoryAuditLog): MemoryAuditLog {

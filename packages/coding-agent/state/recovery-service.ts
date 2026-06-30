@@ -1,5 +1,4 @@
-import type { RecoveryRepository } from '@megumi/coding-agent/persistence';
-import type { RunNeedingTimelineBackfill } from '@megumi/coding-agent/persistence';
+﻿import type { RunNeedingTimelineBackfill } from '@megumi/coding-agent/persistence';
 import type {
   CancelRequest,
   RecoverableRunSummary,
@@ -21,6 +20,7 @@ import {
   createWorkspaceRestoreRequestedEvent,
 } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { SessionInterruptedRunMarker } from '@megumi/shared/session';
 import type { WorkspaceChangeSummary } from '@megumi/shared/workspace';
 import { ChatStreamEventSchema, type ChatStreamEvent } from '@megumi/shared/chat-stream';
 import { reduceChatStreamEvent, type TimelineMessage } from '@megumi/shared/timeline';
@@ -60,8 +60,20 @@ export interface RecoveryLogger {
   warn(message: string, metadata?: Record<string, unknown>): void;
 }
 
+export interface RecoveryStateStorePort {
+  markInterruptedRuns(input: {
+    markedAt: string;
+    reason: string;
+    createMarkerId: (runId: string) => string;
+  }): SessionInterruptedRunMarker[];
+  listRecoverableRuns(): RecoverableRunSummary[];
+  saveResumeRequest(request: ResumeRequest): ResumeRequest;
+  saveCancelRequest(request: CancelRequest): CancelRequest;
+  saveRetryRequest(request: RetryRequest): RetryRequest;
+}
+
 export interface CreateRecoveryServiceOptions {
-  repository: RecoveryRepository;
+  repository: RecoveryStateStorePort;
   clock: () => Date;
   ids: RecoveryIds;
   appendRuntimeEvent?: (event: RuntimeEvent) => void;

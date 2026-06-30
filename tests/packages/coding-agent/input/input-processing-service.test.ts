@@ -1,27 +1,22 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
-import { ModelStepRepository } from '@megumi/coding-agent/persistence/repos/model-step.repo';
-import { RunExecutionFactRepository } from '@megumi/coding-agent/persistence/repos/run-execution-fact.repo';
-import { RunRecordRepository } from '@megumi/coding-agent/persistence/repos/run-record.repo';
-import { RuntimeEventRepository } from '@megumi/coding-agent/persistence/repos/runtime-event.repo';
-import { SessionActivePathRepository } from '@megumi/coding-agent/persistence/repos/session-active-path.repo';
-import { SessionCompactionRepository } from '@megumi/coding-agent/persistence/repos/session-compaction.repo';
-import { SessionMessageRepository } from '@megumi/coding-agent/persistence/repos/session-message.repo';
-import { SessionRecordRepository } from '@megumi/coding-agent/persistence/repos/session-record.repo';
-import { PermissionSnapshotRepository } from '@megumi/coding-agent/persistence/repos/permission-snapshot.repo';
-import { ToolRepository } from '@megumi/coding-agent/persistence/repos/tool.repo';
+import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
+import { AgentLoopRepository } from '@megumi/coding-agent/persistence/repos/agent-loop.repo';
+import { SessionRepository } from '@megumi/coding-agent/persistence/repos/session.repo';
+import { ToolCallRepository } from '@megumi/coding-agent/persistence/repos/tool-call.repo';
 import { createExternalTestToolSourceExecutor } from '@megumi/coding-agent/tools/execution/external-test-tool-source-executor';
 import { ToolRegistrySnapshotService } from '@megumi/coding-agent/tools/tool-registry-snapshot';
 import { createToolCallRunner } from '@megumi/coding-agent/agent-loop/tool-call';
 import { createToolExecutionRouter } from '@megumi/coding-agent/tools/execution/tool-execution-router';
 import type { ToolSourceExecutor } from '@megumi/coding-agent/tools/execution/tool-execution-router';
-import { TimelineMessageRepository } from '@megumi/coding-agent/persistence/repos/timeline-message.repo';
 import {
   InputProcessingService,
+  type InputAgentLoopRepositoryPort,
+  type InputSessionRepositoryPort,
+  type InputToolCallRepositoryPort,
 } from '@megumi/coding-agent/input/input-service';
 import {
   ModelInputSourceOverrideService,
@@ -32,16 +27,6 @@ import {
 } from '@megumi/coding-agent/context';
 import type { MemoryCapturePort } from '@megumi/coding-agent/memory';
 import type { WorkspaceChangeReadPort } from '@megumi/coding-agent/workspace';
-import type {
-  AgentRunExecutionFactRepositoryPort,
-  AgentRunMessageRepositoryPort,
-  AgentRunModelStepRepositoryPort,
-  AgentRunRunRecordRepositoryPort,
-  AgentRunRuntimeEventRepositoryPort,
-  AgentRunSessionContextRepositoryPort,
-  AgentRunSessionRepositoryPort,
-  AgentRunToolRepositoryPort,
-} from '@megumi/coding-agent/persistence';
 import {
   SessionBranchService,
   SessionService,
@@ -67,7 +52,7 @@ import {
   type RunRetryCoordinatorRepositoryPort,
   RunTerminalCoordinator,
   type RunTerminalRepositoryPort,
-  type RunTerminalToolRepositoryPort,
+  type RunTerminalToolStorePort,
 } from '@megumi/coding-agent/state';
 import {
   createWorkspaceChangeFooterProjectorService,
@@ -96,25 +81,15 @@ type InputProcessingServiceTestFacade = InputProcessingService & SessionServiceP
 type InputProcessingServiceRepositoryOptions = Pick<
   InputProcessingServiceOptions,
   | 'sessionRepository'
-  | 'messageRepository'
-  | 'runRecordRepository'
-  | 'runExecutionFactRepository'
-  | 'modelStepRepository'
-  | 'sessionContextRepository'
-  | 'runtimeEventRepository'
+  | 'agentLoopRepository'
 > & {
   postRunHooksRepository: PostRunHooksRepositoryPort;
   runTerminalRepository: RunTerminalRepositoryPort;
   runRetryRepository: RunRetryCoordinatorRepositoryPort;
 };
 type InputProcessingServiceTestRepository =
-  & AgentRunSessionRepositoryPort
-  & AgentRunMessageRepositoryPort
-  & AgentRunRunRecordRepositoryPort
-  & AgentRunExecutionFactRepositoryPort
-  & AgentRunModelStepRepositoryPort
-  & AgentRunSessionContextRepositoryPort
-  & AgentRunRuntimeEventRepositoryPort
+  & InputSessionRepositoryPort
+  & InputAgentLoopRepositoryPort
   & SessionServiceSessionRepository
   & SessionServiceMessageRepository
   & SessionServiceRunRepository
@@ -135,7 +110,7 @@ type InputProcessingServiceTestOptions =
       & Pick<InputProcessingServiceOptions, 'postRunHooks' | 'runTerminalCoordinator' | 'runRetryCoordinator'>
   >
   & {
-    terminalToolRepository?: RunTerminalToolRepositoryPort;
+    terminalToolStore?: RunTerminalToolStorePort;
     memoryCaptureService?: MemoryCapturePort;
     globalInstructionDirectoryProvider?: ModelInputGlobalInstructionDirectoryProvider;
     sessionInstructionSourceProvider?: ModelInputSessionInstructionSourceProvider;
@@ -146,12 +121,7 @@ type InputProcessingServiceTestOptions =
 function InputProcessingServiceRepositoryOptions(repository: InputProcessingServiceTestRepository): InputProcessingServiceRepositoryOptions {
   return {
     sessionRepository: repository,
-    messageRepository: repository,
-    runRecordRepository: repository,
-    runExecutionFactRepository: repository,
-    modelStepRepository: repository,
-    sessionContextRepository: repository,
-    runtimeEventRepository: repository,
+    agentLoopRepository: repository,
     postRunHooksRepository: repository,
     runTerminalRepository: repository,
     runRetryRepository: repository,
@@ -159,44 +129,96 @@ function InputProcessingServiceRepositoryOptions(repository: InputProcessingServ
 }
 
 function createInputProcessingServiceTestRepository(database: Database.Database): InputProcessingServiceTestRepository {
-  const modelStepRepository = new ModelStepRepository(database);
-  const runExecutionFactRepository = new RunExecutionFactRepository(database);
-  const runRecordRepository = new RunRecordRepository(database);
-  const runtimeEventRepository = new RuntimeEventRepository(database);
-  const sessionCompactionRepository = new SessionCompactionRepository(database);
-  const sessionMessageRepository = new SessionMessageRepository(database);
-  const sessionRecordRepository = new SessionRecordRepository(database);
+  const agentLoopRepository = new AgentLoopRepository(database);
+  const sessionRepository = new SessionRepository(database);
 
   return {
-    appendRuntimeEvent: (event) => runtimeEventRepository.appendRuntimeEvent(event),
-    getMessage: (messageId) => sessionMessageRepository.getMessage(messageId),
-    getModelStep: (modelStepId) => modelStepRepository.getModelStep(modelStepId),
-    getRun: (runId) => runRecordRepository.getRun(runId),
-    getSession: (sessionId) => sessionRecordRepository.getSession(sessionId),
-    getSessionCompaction: (compactionId) => sessionCompactionRepository.getSessionCompaction(compactionId),
-    listMessagesBySession: (sessionId) => sessionMessageRepository.listMessagesBySession(sessionId),
-    listRunsBySession: (sessionId) => runRecordRepository.listRunsBySession(sessionId),
-    listRunsByStatuses: (statuses) => runRecordRepository.listRunsByStatuses(statuses),
-    listRuntimeEventsByRun: (runId) => runtimeEventRepository.listRuntimeEventsByRun(runId),
-    listSessions: () => sessionRecordRepository.listSessions(),
-    listStepsByRun: (runId) => runExecutionFactRepository.listStepsByRun(runId),
-    saveAction: (action) => runExecutionFactRepository.saveAction(action),
-    saveMessage: (message) => sessionMessageRepository.saveMessage(message),
-    saveModelStep: (modelStep) => modelStepRepository.saveModelStep(modelStep),
-    saveObservation: (observation) => runExecutionFactRepository.saveObservation(observation),
-    saveRun: (run) => runRecordRepository.saveRun(run),
-    saveSession: (session) => sessionRecordRepository.saveSession(session),
-    saveSessionCompaction: (entry) => sessionCompactionRepository.saveSessionCompaction(entry),
-    saveStep: (step) => runExecutionFactRepository.saveStep(step),
+    appendRuntimeEvent: (event) => agentLoopRepository.appendRuntimeEvent(event),
+    getMessage: (messageId) => sessionRepository.getMessage(messageId),
+    getModelStep: (modelStepId) => agentLoopRepository.getModelStep(modelStepId),
+    getRun: (runId) => agentLoopRepository.getRun(runId),
+    getSession: (sessionId) => sessionRepository.getSession(sessionId),
+    getSessionCompaction: (compactionId) => sessionRepository.getSessionCompaction(compactionId),
+    listMessagesBySession: (sessionId) => sessionRepository.listMessagesBySession(sessionId),
+    listRunsBySession: (sessionId) => agentLoopRepository.listRunsBySession(sessionId),
+    listRunsByStatuses: (statuses) => agentLoopRepository.listRunsByStatuses(statuses),
+    listRuntimeEventsByRun: (runId) => agentLoopRepository.listRuntimeEventsByRun(runId),
+    listSessions: () => sessionRepository.listSessions(),
+    listStepsByRun: (runId) => agentLoopRepository.listStepsByRun(runId),
+    saveAction: (action) => agentLoopRepository.saveAction(action),
+    saveMessage: (message) => sessionRepository.saveMessage(message),
+    saveModelStep: (modelStep) => agentLoopRepository.saveModelStep(modelStep),
+    saveObservation: (observation) => agentLoopRepository.saveObservation(observation),
+    saveRun: (run) => agentLoopRepository.saveRun(run),
+    saveSession: (session) => {
+      ensureTestWorkspace(database, {
+        workspaceId: session.workspaceId,
+        workspacePath: session.workspacePath,
+        now: session.createdAt,
+      });
+      return sessionRepository.saveSession(session);
+    },
+    saveSessionCompaction: (entry) => sessionRepository.saveSessionCompaction(entry),
+    saveStep: (step) => agentLoopRepository.saveStep(step),
   };
 }
 
-function createInputProcessingServiceToolRepositoryForTest(
-  toolRepository: ToolRepository,
-): AgentRunToolRepositoryPort {
+function ensureTestWorkspace(
+  database: Database.Database,
+  input: { workspaceId?: string; workspacePath?: string; now: string },
+): void {
+  const workspaceId = input.workspaceId ?? 'workspace:default';
+  const rootPath = input.workspacePath ?? `C:/test/${workspaceId}`;
+  database.prepare(`
+    INSERT OR IGNORE INTO workspaces (
+      workspace_id,
+      name,
+      root_path,
+      root_path_key,
+      status,
+      created_at,
+      updated_at,
+      last_opened_at
+    ) VALUES (
+      @workspace_id,
+      @name,
+      @root_path,
+      @root_path_key,
+      'available',
+      @created_at,
+      @updated_at,
+      @last_opened_at
+    )
+  `).run({
+    workspace_id: workspaceId,
+    name: workspaceId,
+    root_path: rootPath,
+    root_path_key: workspaceId,
+    created_at: input.now,
+    updated_at: input.now,
+    last_opened_at: input.now,
+  });
+}
+
+function createInputProcessingServiceToolCallStoreForTest(
+  toolCallStore: ToolCallRepository,
+): InputToolCallRepositoryPort {
   return {
-    markToolResultsSubmittedToModelInput: (input) => toolRepository.markToolResultsSubmittedToModelInput(input),
+    markToolResultsSubmittedToModelInput: (input) => toolCallStore.markToolResultsSubmittedToModelInput(input),
   };
+}
+
+function createToolRegistrySnapshotServiceForTest(
+  toolCallStore: ToolCallRepository,
+  agentLoopRepository: AgentLoopRepository,
+): ToolRegistrySnapshotService {
+  return new ToolRegistrySnapshotService({
+    getToolSource: (sourceId) => toolCallStore.getToolSource(sourceId),
+    listToolSources: () => toolCallStore.listToolSources(),
+    seedDefaultToolSources: (createdAt) => toolCallStore.seedDefaultToolSources(createdAt),
+    getToolRegistrySnapshotByRun: (runId) => agentLoopRepository.getToolRegistrySnapshotByRun(runId),
+    saveToolRegistrySnapshot: (snapshot) => agentLoopRepository.saveToolRegistrySnapshot(snapshot),
+  });
 }
 
 function createInputProcessingServiceTestService(options: InputProcessingServiceTestOptions): InputProcessingServiceTestFacade {
@@ -244,7 +266,7 @@ function createInputProcessingServiceTestService(options: InputProcessingService
   });
   const runTerminalCoordinator = options.runTerminalCoordinator ?? new RunTerminalCoordinator({
     repository: repositoryOptions.runTerminalRepository,
-    ...(options.terminalToolRepository ? { toolRepository: options.terminalToolRepository } : {}),
+    ...(options.terminalToolStore ? { toolRepository: options.terminalToolStore } : {}),
     ids,
   });
   const runRetryCoordinator = options.runRetryCoordinator ?? new RunRetryCoordinator({
@@ -257,7 +279,7 @@ function createInputProcessingServiceTestService(options: InputProcessingService
     ?? testModelInputSourceOverrideProvider(options);
   const {
     repository: _testRepository,
-    terminalToolRepository: _terminalToolRepository,
+    terminalToolStore: _terminalToolStore,
     memoryCaptureService: _memoryCaptureService,
     postRunHooks: _postRunHooks,
     runTerminalCoordinator: _runTerminalCoordinator,
@@ -354,7 +376,7 @@ function workspaceChangedFile(overrides: Partial<WorkspaceChangedFile> = {}): Wo
 
 function createService() {
   db = new Database(':memory:');
-  migrateDatabase(db);
+  applyCodingAgentDatabaseMigrations(db);
   const repository = createInputProcessingServiceTestRepository(db);
   return createInputProcessingServiceTestService({
     repository,
@@ -373,7 +395,7 @@ function createService() {
 
 function createServiceWithContextRecorder(records: unknown[]) {
   db = new Database(':memory:');
-  migrateDatabase(db);
+  applyCodingAgentDatabaseMigrations(db);
   const repository = createInputProcessingServiceTestRepository(db);
   return createInputProcessingServiceTestService({
     repository,
@@ -434,7 +456,7 @@ function createServiceWithContextRecorder(records: unknown[]) {
 
 function createServiceWithPermissionSnapshotRecorder(records: unknown[]) {
   db = new Database(':memory:');
-  migrateDatabase(db);
+  applyCodingAgentDatabaseMigrations(db);
   const repository = createInputProcessingServiceTestRepository(db);
   return createInputProcessingServiceTestService({
     repository,
@@ -482,7 +504,7 @@ function createServiceWithPermissionSnapshotRecorder(records: unknown[]) {
 
 function createServiceWithFailingHostBoundary(records: unknown[]) {
   db = new Database(':memory:');
-  migrateDatabase(db);
+  applyCodingAgentDatabaseMigrations(db);
   const repository = createInputProcessingServiceTestRepository(db);
   return createInputProcessingServiceTestService({
     repository,
@@ -556,17 +578,17 @@ function createServiceWithModelStepStream(
   globalInstructionDirectoryProvider?: ModelInputGlobalInstructionDirectoryProvider;
   sessionInstructionSourceProvider?: ModelInputSessionInstructionSourceProvider;
   runEffectiveCwdProvider?: ModelInputEffectiveCwdProvider;
-  activePathRepository?: SessionActivePathRepository;
+  activePathRepository?: SessionRepository;
   workspaceChanges?: InputProcessingServiceOptions['workspaceChanges'];
-  createToolRepository?: (database: Database.Database) => ToolRepository;
+  createToolCallRepository?: (database: Database.Database) => ToolCallRepository;
   runId?: () => string;
   stepId?: () => string;
   onRequest?: (request: ModelStepRuntimeRequest) => void;
 }) {
   db = new Database(':memory:');
-  migrateDatabase(db);
+  applyCodingAgentDatabaseMigrations(db);
   const repository = createInputProcessingServiceTestRepository(db);
-  const toolRepository = options?.createToolRepository?.(db);
+  const toolCallStore = options?.createToolCallRepository?.(db);
   let callIndex = 0;
   const serviceOptions: InputProcessingServiceTestOptions = {
     repository,
@@ -599,9 +621,9 @@ function createServiceWithModelStepStream(
     ...(options?.runEffectiveCwdProvider ? { runEffectiveCwdProvider: options.runEffectiveCwdProvider } : {}),
     ...(options?.activePathRepository ? { activePathRepository: options.activePathRepository } : {}),
     ...(options?.workspaceChanges ? { workspaceChanges: options.workspaceChanges } : {}),
-    ...(toolRepository ? {
-      toolRepository: createInputProcessingServiceToolRepositoryForTest(toolRepository),
-      terminalToolRepository: toolRepository,
+    ...(toolCallStore ? {
+    toolCallRepository: createInputProcessingServiceToolCallStoreForTest(toolCallStore),
+      terminalToolStore: toolCallStore,
     } : {}),
     modelCallProvider: {
       streamModelCall: async function* (request) {
@@ -653,7 +675,8 @@ function createServiceWithRealToolResolution(input: {
   settings?: MergedPermissionSettings;
 }) {
   const requests: ModelStepRuntimeRequest[] = [];
-  let toolRepository: ToolRepository | undefined;
+  let toolCallStore: ToolCallRepository | undefined;
+  let agentLoopRepository: AgentLoopRepository | undefined;
   const registry = createBuiltInToolRegistry();
   const executeToolExecution = vi.fn(async (toolExecution: ToolExecution): Promise<RawToolResult> => ({
     rawToolResultId: `raw-tool-result:${toolExecution.toolExecutionId}`,
@@ -673,37 +696,44 @@ function createServiceWithRealToolResolution(input: {
 
     return [assistantOutputCompletedEvent(1)];
   }, {
-    createToolRepository(database) {
+    createToolCallRepository(database) {
       seedProject(database);
-      toolRepository = new ToolRepository(database);
+      toolCallStore = new ToolCallRepository(database);
+      agentLoopRepository = new AgentLoopRepository(database);
       if (input.enableExternalTestSource) {
-        toolRepository.seedDefaultToolSources('2026-05-17T00:00:00.000Z');
-        const externalTest = toolRepository.getToolSource('external_test');
+        toolCallStore.seedDefaultToolSources('2026-05-17T00:00:00.000Z');
+        const externalTest = toolCallStore.getToolSource('external_test');
         if (!externalTest) {
           throw new Error('Expected external_test source.');
         }
-        toolRepository.saveToolSource({
+        toolCallStore.saveToolSource({
           ...externalTest,
           enabled: true,
           updatedAt: '2026-05-17T00:00:01.000Z',
         });
       }
-      return toolRepository;
+      return toolCallStore;
     },
     toolRegistrySnapshotService: {
       createRunSnapshot(snapshotInput) {
-        if (!toolRepository) {
+        if (!toolCallStore) {
           throw new Error('Tool repository was not initialized.');
         }
-        return new ToolRegistrySnapshotService(toolRepository).createRunSnapshot(snapshotInput);
+        if (!agentLoopRepository) {
+          throw new Error('Agent loop repository was not initialized.');
+        }
+        return createToolRegistrySnapshotServiceForTest(
+          toolCallStore,
+          agentLoopRepository,
+        ).createRunSnapshot(snapshotInput);
       },
     },
     toolRuntimeFactory: {
       async create({ projectRoot, permissionMode }) {
-        if (!toolRepository) {
+        if (!toolCallStore) {
           throw new Error('Tool repository was not initialized.');
         }
-        const repository = toolRepository;
+        const repository = toolCallStore;
         const builtInExecutor: ToolSourceExecutor = {
           sourceId: 'built_in',
           sourceKind: 'built_in',
@@ -713,16 +743,16 @@ function createServiceWithRealToolResolution(input: {
         return createToolCallRunner({
           registry,
           repository: {
-            saveToolCall: (toolCall) => repository.saveToolCall(toolCall),
+            startToolCall: (toolCall) => repository.startToolCall(toolCall),
             getToolCall: (toolCallId) => repository.getToolCall(toolCallId),
-            saveToolExecution: (toolExecution) => repository.saveToolExecution(toolExecution),
+            recordToolExecution: (toolExecution) => repository.recordToolExecution(toolExecution),
             getToolExecution: (toolExecutionId) => repository.getToolExecution(toolExecutionId),
             getToolExecutionByToolCallId: (lookup) => repository.getToolExecutionByToolCallId(lookup),
             listToolExecutionsByAssistantMessage: (lookup) => repository.listToolExecutionsByAssistantMessage(lookup),
-            savePermissionDecision: (decision) => repository.savePermissionDecision(decision),
-            saveApprovalRequest: (approvalRequest) => repository.saveApprovalRequest(approvalRequest),
+            recordPermissionDecision: (decision) => repository.recordPermissionDecision(decision),
+            createApprovalRequest: (approvalRequest) => repository.createApprovalRequest(approvalRequest),
             getApprovalRequest: (approvalRequestId) => repository.getApprovalRequest(approvalRequestId),
-            saveToolResult: (toolResult) => repository.saveToolResult(toolResult),
+            completeToolCall: (toolResult) => repository.completeToolCall(toolResult),
             getToolRegistrySnapshotByRun: (runId) => repository.getToolRegistrySnapshotByRun(runId),
             getRunSessionId: () => 'session-1',
           },
@@ -802,9 +832,9 @@ function expectToolResultModelInputKind(
 
 function createServiceWithActivePathModelStepStream(events: RuntimeEvent[]) {
   db = new Database(':memory:');
-  migrateDatabase(db);
+  applyCodingAgentDatabaseMigrations(db);
   const repository = createInputProcessingServiceTestRepository(db);
-  const activePathRepo = new SessionActivePathRepository(db);
+  const activePathRepo = new SessionRepository(db);
   let messageIndex = 0;
   let sourceEntryIndex = 0;
   let branchMarkerIndex = 0;
@@ -978,9 +1008,9 @@ function createServiceWithProviderStream(
   },
 ) {
   db = new Database(':memory:');
-  migrateDatabase(db);
+  applyCodingAgentDatabaseMigrations(db);
   const repository = createInputProcessingServiceTestRepository(db);
-  const activePathRepo = new SessionActivePathRepository(db);
+  const activePathRepo = new SessionRepository(db);
   let callIndex = 0;
   let messageIndex = 0;
   let sourceEntryIndex = 0;
@@ -1034,11 +1064,11 @@ function createBranchServiceFixture(options: {
   useTimelineProjector?: boolean;
 } = {}) {
   db = new Database(':memory:');
-  migrateDatabase(db);
+  applyCodingAgentDatabaseMigrations(db);
   const repository = createInputProcessingServiceTestRepository(db);
-  const activePathRepo = new SessionActivePathRepository(db);
+  const activePathRepo = new SessionRepository(db);
   const timelineRepository = options.useTimelineProjector
-    ? new TimelineMessageRepository(db)
+    ? new AgentLoopRepository(db)
     : undefined;
   const timelineProjector = timelineRepository
     ? new TimelineHistoryCommitProjectorService({
@@ -1088,9 +1118,9 @@ function createBranchServiceFixture(options: {
 
 function createManualRetryFixture() {
   db = new Database(':memory:');
-  migrateDatabase(db);
+  applyCodingAgentDatabaseMigrations(db);
   const repository = createInputProcessingServiceTestRepository(db);
-  const activePathRepo = new SessionActivePathRepository(db);
+  const activePathRepo = new SessionRepository(db);
   let sourceEntryIndex = 0;
   let branchMarkerIndex = 0;
   let retryAttemptIndex = 0;
@@ -1194,7 +1224,7 @@ function createManualRetryFixture() {
 
 function seedBranchHistory(
   repository: InputProcessingServiceTestRepository,
-  activePathRepo: SessionActivePathRepository,
+  activePathRepo: SessionRepository,
 ) {
   repository.saveSession({
     sessionId: 'session-1',
@@ -1281,7 +1311,7 @@ function seedBranchHistory(
 }
 
 function appendSeedSource(
-  activePathRepo: SessionActivePathRepository,
+  activePathRepo: SessionRepository,
   sourceEntryId: string,
   sourceKind: ModelInputContextSourceKind,
   sourceId: string,
@@ -1325,7 +1355,7 @@ function createServiceWithChatStreamSink(
   },
 ) {
   db = new Database(':memory:');
-  migrateDatabase(db);
+  applyCodingAgentDatabaseMigrations(db);
   const repository = createInputProcessingServiceTestRepository(db);
   let callIndex = 0;
   return createInputProcessingServiceTestService({
@@ -1715,7 +1745,7 @@ function createToolResult(overrides: Partial<ToolResult> = {}): ToolResult {
   };
 }
 
-function createDurablePendingApprovalRows(toolRepository: ToolRepository, input: {
+function createDurablePendingApprovalRows(toolCallStore: ToolCallRepository, input: {
   runId?: string;
   stepId?: string;
   modelStepId?: string;
@@ -1779,9 +1809,9 @@ function createDurablePendingApprovalRows(toolRepository: ToolRepository, input:
     createdAt: '2026-05-17T00:00:02.300Z',
   };
 
-  toolRepository.saveToolCall(toolCall);
-  toolRepository.saveToolExecution(toolExecution);
-  toolRepository.saveApprovalRequest(approvalRequest);
+  toolCallStore.startToolCall(toolCall);
+  toolCallStore.recordToolExecution(toolExecution);
+  toolCallStore.createApprovalRequest(approvalRequest);
 }
 
 afterEach(() => {
@@ -2061,23 +2091,23 @@ describe('InputProcessingService', () => {
       createdAt: '2026-06-01T10:00:00.000Z',
     });
 
-    expect(service.listTimelineMessagesBySession({
+    const timeline = service.listTimelineMessagesBySession({
       projectId: 'session-1',
       sessionId: 'session-1',
-    })).toMatchObject({
-      diagnostics: [],
-      messages: [
-        {
-          role: 'separator',
-          blocks: [{
-            kind: 'branch_separator',
-            branchMarkerId: result.branchDraft.branchMarkerId,
-            sourceMessageId: 'message-3',
-            label: result.branchDraft.label,
-          }],
-        },
-      ],
     });
+
+    expect(timeline.diagnostics).toEqual([]);
+    expect(timeline.messages.some((message) => message.role === 'user')).toBe(true);
+    expect(timeline.messages.some((message) => message.role === 'assistant')).toBe(true);
+    expect(timeline.messages).toContainEqual(expect.objectContaining({
+      role: 'separator',
+      blocks: [expect.objectContaining({
+        kind: 'branch_separator',
+        branchMarkerId: result.branchDraft.branchMarkerId,
+        sourceMessageId: 'message-3',
+        label: result.branchDraft.label,
+      })],
+    }));
   });
 
   it('removes hydrated branch draft separators when cancelling before send', () => {
@@ -2099,13 +2129,15 @@ describe('InputProcessingService', () => {
     });
 
     expect(cancelResult.cancelled).toBe(true);
-    expect(service.listTimelineMessagesBySession({
+    const timeline = service.listTimelineMessagesBySession({
       projectId: 'session-1',
       sessionId: 'session-1',
-    })).toMatchObject({
-      diagnostics: [],
-      messages: [],
     });
+
+    expect(timeline.diagnostics).toEqual([]);
+    expect(timeline.messages.some((message) => message.role === 'user')).toBe(true);
+    expect(timeline.messages.some((message) => message.role === 'assistant')).toBe(true);
+    expect(timeline.messages.some((message) => message.role === 'separator')).toBe(false);
   });
 
   it('rejects branching from an assistant message', () => {
@@ -3764,9 +3796,9 @@ describe('InputProcessingService', () => {
   it('uses the latest completed compaction when building the normal model step after maintenance compaction', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
     db = new Database(':memory:');
-    migrateDatabase(db);
+    applyCodingAgentDatabaseMigrations(db);
     const repository = createInputProcessingServiceTestRepository(db);
-    const activePathRepo = new SessionActivePathRepository(db);
+    const activePathRepo = new SessionRepository(db);
     const service = createInputProcessingServiceTestService({
       repository,
       activePathRepository: activePathRepo,
@@ -3922,9 +3954,9 @@ describe('InputProcessingService', () => {
   it('excludes a compaction summary saved on the old path when the active leaf moved during maintenance compaction', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
     db = new Database(':memory:');
-    migrateDatabase(db);
+    applyCodingAgentDatabaseMigrations(db);
     const repository = createInputProcessingServiceTestRepository(db);
-    const activePathRepo = new SessionActivePathRepository(db);
+    const activePathRepo = new SessionRepository(db);
     const service = createInputProcessingServiceTestService({
       repository,
       activePathRepository: activePathRepo,
@@ -4487,19 +4519,24 @@ describe('InputProcessingService', () => {
 
   it('creates a run tool registry snapshot and passes model-visible definitions to the provider request', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
-    let toolRepository: ToolRepository | undefined;
+    let toolCallStore: ToolCallRepository | undefined;
+    let agentLoopRepository: AgentLoopRepository | undefined;
     const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
-      createToolRepository(database) {
+      createToolCallRepository(database) {
         seedProject(database);
-        toolRepository = new ToolRepository(database);
-        return toolRepository;
+        toolCallStore = new ToolCallRepository(database);
+        agentLoopRepository = new AgentLoopRepository(database);
+        return toolCallStore;
       },
       toolRegistrySnapshotService: {
         createRunSnapshot(input) {
-          if (!toolRepository) {
+          if (!toolCallStore) {
             throw new Error('Tool repository was not initialized.');
           }
-          return new ToolRegistrySnapshotService(toolRepository).createRunSnapshot(input);
+          if (!agentLoopRepository) {
+            throw new Error('Agent loop repository was not initialized.');
+          }
+          return createToolRegistrySnapshotServiceForTest(toolCallStore, agentLoopRepository).createRunSnapshot(input);
         },
       },
       onRequest: (request) => requests.push(request),
@@ -4531,7 +4568,7 @@ describe('InputProcessingService', () => {
       streamed.push(event);
     }
 
-    expect(toolRepository?.getToolRegistrySnapshotByRun('run-1')).toBeDefined();
+    expect(agentLoopRepository?.getToolRegistrySnapshotByRun('run-1')).toBeDefined();
     expect(requests[0]?.toolDefinitions?.map((definition) => definition.name)).toEqual([
       'read_file',
       'list_directory',
@@ -4551,19 +4588,24 @@ describe('InputProcessingService', () => {
 
   it('does not expose model tools but still persists snapshot diagnostics when model tool calls are unsupported', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
-    let toolRepository: ToolRepository | undefined;
+    let toolCallStore: ToolCallRepository | undefined;
+    let agentLoopRepository: AgentLoopRepository | undefined;
     const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
-      createToolRepository(database) {
+      createToolCallRepository(database) {
         seedProject(database);
-        toolRepository = new ToolRepository(database);
-        return toolRepository;
+        toolCallStore = new ToolCallRepository(database);
+        agentLoopRepository = new AgentLoopRepository(database);
+        return toolCallStore;
       },
       toolRegistrySnapshotService: {
         createRunSnapshot(input) {
-          if (!toolRepository) {
+          if (!toolCallStore) {
             throw new Error('Tool repository was not initialized.');
           }
-          return new ToolRegistrySnapshotService(toolRepository).createRunSnapshot(input);
+          if (!agentLoopRepository) {
+            throw new Error('Agent loop repository was not initialized.');
+          }
+          return createToolRegistrySnapshotServiceForTest(toolCallStore, agentLoopRepository).createRunSnapshot(input);
         },
       },
       providerCapabilitySummaryProvider: {
@@ -4599,7 +4641,7 @@ describe('InputProcessingService', () => {
     }
 
     expect(requests[0]?.toolDefinitions).toBeUndefined();
-    expect(toolRepository?.getToolRegistrySnapshotByRun('run-1')?.entries).toEqual(
+    expect(agentLoopRepository?.getToolRegistrySnapshotByRun('run-1')?.entries).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           disabledReason: 'model_tools_unsupported',
@@ -4615,17 +4657,18 @@ describe('InputProcessingService', () => {
 
   it('does not recreate run snapshot after source state changes during the same run', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
-    let toolRepository: ToolRepository | undefined;
+    let toolCallStore: ToolCallRepository | undefined;
+    let agentLoopRepository: AgentLoopRepository | undefined;
     let runIndex = 0;
     let stepIndex = 0;
     const service = createServiceWithModelStepStream((request, callIndex) => {
       requests.push(request);
-      if (callIndex === 1 && toolRepository) {
-        const externalTest = toolRepository.getToolSource('external_test');
+      if (callIndex === 1 && toolCallStore) {
+        const externalTest = toolCallStore.getToolSource('external_test');
         if (!externalTest) {
           throw new Error('Expected external_test source.');
         }
-        toolRepository.saveToolSource({
+        toolCallStore.saveToolSource({
           ...externalTest,
           enabled: true,
           updatedAt: '2026-06-14T00:00:01.000Z',
@@ -4633,17 +4676,21 @@ describe('InputProcessingService', () => {
       }
       return [assistantOutputCompletedEvent(callIndex)];
     }, {
-      createToolRepository(database) {
+      createToolCallRepository(database) {
         seedProject(database);
-        toolRepository = new ToolRepository(database);
-        return toolRepository;
+        toolCallStore = new ToolCallRepository(database);
+        agentLoopRepository = new AgentLoopRepository(database);
+        return toolCallStore;
       },
       toolRegistrySnapshotService: {
         createRunSnapshot(input) {
-          if (!toolRepository) {
+          if (!toolCallStore) {
             throw new Error('Tool repository was not initialized.');
           }
-          return new ToolRegistrySnapshotService(toolRepository).createRunSnapshot(input);
+          if (!agentLoopRepository) {
+            throw new Error('Agent loop repository was not initialized.');
+          }
+          return createToolRegistrySnapshotServiceForTest(toolCallStore, agentLoopRepository).createRunSnapshot(input);
         },
       },
       runId: () => {
@@ -4699,10 +4746,10 @@ describe('InputProcessingService', () => {
       // Drain second run.
     }
 
-    expect(toolRepository?.getToolRegistrySnapshotByRun('run-1')?.entries.find((entry) => entry.modelVisibleName === 'demo_echo')).toMatchObject({
+    expect(agentLoopRepository?.getToolRegistrySnapshotByRun('run-1')?.entries.find((entry) => entry.modelVisibleName === 'demo_echo')).toMatchObject({
       exposedToModel: false,
     });
-    expect(toolRepository?.getToolRegistrySnapshotByRun('run-2')?.entries.find((entry) => entry.modelVisibleName === 'demo_echo')).toMatchObject({
+    expect(agentLoopRepository?.getToolRegistrySnapshotByRun('run-2')?.entries.find((entry) => entry.modelVisibleName === 'demo_echo')).toMatchObject({
       exposedToModel: true,
     });
     expect(requests[0]?.toolDefinitions?.map((definition) => definition.name)).not.toContain('demo_echo');
@@ -4712,9 +4759,9 @@ describe('InputProcessingService', () => {
   it('builds session message model input from persisted SessionContextInput', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
     db = new Database(':memory:');
-    migrateDatabase(db);
+    applyCodingAgentDatabaseMigrations(db);
     const repository = createInputProcessingServiceTestRepository(db);
-    const activePathRepo = new SessionActivePathRepository(db);
+    const activePathRepo = new SessionRepository(db);
     const service = createInputProcessingServiceTestService({
       repository,
       activePathRepository: activePathRepo,
@@ -4852,7 +4899,7 @@ describe('InputProcessingService', () => {
     const toolResult = createToolResult();
     db = new Database(':memory:');
     db.pragma('foreign_keys = ON');
-    migrateDatabase(db);
+    applyCodingAgentDatabaseMigrations(db);
     const repository = createInputProcessingServiceTestRepository(db);
     const service = createInputProcessingServiceTestService({
       repository,
@@ -5108,9 +5155,9 @@ describe('InputProcessingService', () => {
     const requests: ModelStepRuntimeRequest[] = [];
     db = new Database(':memory:');
     db.pragma('foreign_keys = ON');
-    migrateDatabase(db);
+    applyCodingAgentDatabaseMigrations(db);
     const repository = createInputProcessingServiceTestRepository(db);
-    const toolRepository = new ToolRepository(db);
+    const toolCallStore = new ToolCallRepository(db);
     const service = createInputProcessingServiceTestService({
       repository,
       modelCallProvider: {
@@ -5140,7 +5187,7 @@ describe('InputProcessingService', () => {
                 toolCallId: 'tool-call-1',
                 modelStepId: 'model-step-1',
               });
-              toolRepository.saveToolCall(toolUse);
+              toolCallStore.startToolCall(toolUse);
               return {
                 toolResults: [createToolResult({ toolCallId: toolUse.toolCallId })],
               };
@@ -5206,7 +5253,7 @@ describe('InputProcessingService', () => {
       streamed.push(event);
     }
 
-    expect(toolRepository.listToolCallsByRun('run-1')).toEqual([
+    expect(toolCallStore.listToolCallsByRun('run-1')).toEqual([
       expect.objectContaining({
         toolCallId: 'tool-call-1',
         modelStepId: 'model-step-1',
@@ -5287,7 +5334,7 @@ describe('InputProcessingService', () => {
     });
     db = new Database(':memory:');
     db.pragma('foreign_keys = ON');
-    migrateDatabase(db);
+    applyCodingAgentDatabaseMigrations(db);
     const repository = createInputProcessingServiceTestRepository(db);
     const service = createInputProcessingServiceTestService({
       repository,
@@ -5579,7 +5626,7 @@ describe('InputProcessingService', () => {
     ], chatEvents, {
       workspaceChanges: {
         listChangedFilesByRun: vi.fn(() => []),
-        listChangeSetsByRun: vi.fn(() => [changeSet]),
+        listWorkspaceChangesByRun: vi.fn(() => [changeSet]),
         getChangeSummary: vi.fn(() => summary),
         listChangedFilesByChangeSet: vi.fn(() => [
           workspaceChangedFile({
@@ -5696,7 +5743,7 @@ describe('InputProcessingService', () => {
     }, chatEvents, {
       workspaceChanges: {
         listChangedFilesByRun: vi.fn(() => []),
-        listChangeSetsByRun: vi.fn(() => [changeSet]),
+        listWorkspaceChangesByRun: vi.fn(() => [changeSet]),
         getChangeSummary: vi.fn(() => summary),
         listChangedFilesByChangeSet: vi.fn(() => [
           workspaceChangedFile({
@@ -6083,7 +6130,7 @@ describe('InputProcessingService', () => {
     const markToolResultsSubmittedToModelInput = vi.fn();
     const toolResult = createToolResult({ toolExecutionId: 'tool-execution-1' });
     db = new Database(':memory:');
-    migrateDatabase(db);
+    applyCodingAgentDatabaseMigrations(db);
     const repository = createInputProcessingServiceTestRepository(db);
     const service = createInputProcessingServiceTestService({
       repository,
@@ -6175,7 +6222,7 @@ describe('InputProcessingService', () => {
           };
         },
       },
-      toolRepository: {
+      toolCallRepository: {
         markToolResultsSubmittedToModelInput,
       },
       clock: { now: () => '2026-05-17T00:00:04.000Z' },
@@ -6445,7 +6492,7 @@ describe('InputProcessingService', () => {
   });
 
   it('cancels a waiting approval run without resuming approval model input', async () => {
-    let toolRepository: ToolRepository | undefined;
+    let toolCallStore: ToolCallRepository | undefined;
     const resumeToolApproval = vi.fn(async () => ({
       toolResult: createToolResult(),
     }));
@@ -6458,9 +6505,9 @@ describe('InputProcessingService', () => {
       }
       return [assistantOutputCompletedEvent(1)];
     }, {
-      createToolRepository(database) {
-        toolRepository = new ToolRepository(database);
-        return toolRepository;
+      createToolCallRepository(database) {
+        toolCallStore = new ToolCallRepository(database);
+        return toolCallStore;
       },
       toolRuntimeFactory: {
         async create() {
@@ -6539,20 +6586,20 @@ describe('InputProcessingService', () => {
     for await (const _event of result.events) {
       // Drain until waiting for approval.
     }
-    if (!toolRepository) {
+    if (!toolCallStore) {
       throw new Error('Expected test tool repository.');
     }
-    createDurablePendingApprovalRows(toolRepository);
-    expect(toolRepository.listPendingApprovalRequestsByRun('run-1')).toHaveLength(1);
-    expect(toolRepository.listPendingToolExecutionsByRun('run-1')).toHaveLength(1);
+    createDurablePendingApprovalRows(toolCallStore);
+    expect(toolCallStore.listPendingApprovalRequestsByRun('run-1')).toHaveLength(1);
+    expect(toolCallStore.listPendingToolExecutionsByRun('run-1')).toHaveLength(1);
 
     expect(service.cancel({ targetRequestId: 'ipc-session-message-send-1' })).toBe(true);
 
-    expect(toolRepository.getApprovalRequest('approval-request-1')).toMatchObject({
+    expect(toolCallStore.getApprovalRequest('approval-request-1')).toMatchObject({
       status: 'cancelled',
       resolvedAt: '2026-05-17T00:00:00.000Z',
     });
-    expect(toolRepository.getToolExecution('tool-execution-1')).toMatchObject({
+    expect(toolCallStore.getToolExecution('tool-execution-1')).toMatchObject({
       status: 'cancelled',
       completedAt: '2026-05-17T00:00:00.000Z',
     });
@@ -6567,9 +6614,9 @@ describe('InputProcessingService', () => {
 
   it('cleans up active runs left from a previous runtime on startup', () => {
     db = new Database(':memory:');
-    migrateDatabase(db);
+    applyCodingAgentDatabaseMigrations(db);
     const repository = createInputProcessingServiceTestRepository(db);
-    const toolRepository = new ToolRepository(db);
+    const toolCallStore = new ToolCallRepository(db);
     repository.saveSession({
       sessionId: 'session-1',
       title: 'Startup cleanup',
@@ -6600,7 +6647,7 @@ describe('InputProcessingService', () => {
       status: 'waiting_for_approval',
       startedAt: '2026-06-14T00:00:00.000Z',
     });
-    createDurablePendingApprovalRows(toolRepository, {
+    createDurablePendingApprovalRows(toolCallStore, {
       runId: 'run-waiting',
       stepId: 'step-waiting',
       modelStepId: 'model-step-waiting',
@@ -6608,7 +6655,7 @@ describe('InputProcessingService', () => {
       toolExecutionId: 'tool-execution-waiting',
       approvalRequestId: 'approval-waiting',
     });
-    toolRepository.saveToolCall({
+    toolCallStore.startToolCall({
       toolCallId: 'tool-call-running',
       runId: 'run-waiting',
       modelStepId: 'model-step-waiting',
@@ -6623,7 +6670,7 @@ describe('InputProcessingService', () => {
       status: 'created',
       createdAt: '2026-06-14T00:00:10.000Z',
     });
-    toolRepository.saveToolExecution({
+    toolCallStore.recordToolExecution({
       toolExecutionId: 'tool-execution-running',
       toolCallId: 'tool-call-running',
       runId: 'run-waiting',
@@ -6644,8 +6691,8 @@ describe('InputProcessingService', () => {
     });
     const service = createInputProcessingServiceTestService({
       repository,
-      toolRepository: createInputProcessingServiceToolRepositoryForTest(toolRepository),
-      terminalToolRepository: toolRepository,
+      toolCallRepository: createInputProcessingServiceToolCallStoreForTest(toolCallStore),
+      terminalToolStore: toolCallStore,
       clock: { now: () => '2026-06-14T00:01:00.000Z' },
       ids: {
         eventId: (() => {
@@ -6671,15 +6718,15 @@ describe('InputProcessingService', () => {
         },
       },
     });
-    expect(toolRepository.getApprovalRequest('approval-waiting')).toMatchObject({
+    expect(toolCallStore.getApprovalRequest('approval-waiting')).toMatchObject({
       status: 'cancelled',
       resolvedAt: '2026-06-14T00:01:00.000Z',
     });
-    expect(toolRepository.getToolExecution('tool-execution-waiting')).toMatchObject({
+    expect(toolCallStore.getToolExecution('tool-execution-waiting')).toMatchObject({
       status: 'cancelled',
       completedAt: '2026-06-14T00:01:00.000Z',
     });
-    expect(toolRepository.getToolExecution('tool-execution-running')).toMatchObject({
+    expect(toolCallStore.getToolExecution('tool-execution-running')).toMatchObject({
       status: 'failed',
       completedAt: '2026-06-14T00:01:00.000Z',
       observation: expect.objectContaining({
@@ -6720,7 +6767,7 @@ describe('InputProcessingService', () => {
       })],
     ]);
     db = new Database(':memory:');
-    migrateDatabase(db);
+    applyCodingAgentDatabaseMigrations(db);
     const repository = createInputProcessingServiceTestRepository(db);
     const service = createInputProcessingServiceTestService({
       repository,
@@ -7848,10 +7895,10 @@ describe('InputProcessingService', () => {
   });
   it('saves session message permission snapshots with the real permission snapshot repository', async () => {
     db = new Database(':memory:');
-    migrateDatabase(db);
+    applyCodingAgentDatabaseMigrations(db);
     const requests: ModelStepRuntimeRequest[] = [];
     const sessionRepository = createInputProcessingServiceTestRepository(db);
-    const permissionSnapshotRepository = new PermissionSnapshotRepository(db);
+    const permissionSnapshotRepository = new AgentLoopRepository(db);
     const service = createInputProcessingServiceTestService({
       repository: sessionRepository,
       permissionSnapshotService: new PermissionSnapshotService({
@@ -7925,9 +7972,9 @@ describe('InputProcessingService', () => {
 
   it('persists input preprocessing metadata on session message permission snapshots with the real repository', async () => {
     db = new Database(':memory:');
-    migrateDatabase(db);
+    applyCodingAgentDatabaseMigrations(db);
     const sessionRepository = createInputProcessingServiceTestRepository(db);
-    const permissionSnapshotRepository = new PermissionSnapshotRepository(db);
+    const permissionSnapshotRepository = new AgentLoopRepository(db);
     const service = createInputProcessingServiceTestService({
       repository: sessionRepository,
       permissionSnapshotService: new PermissionSnapshotService({
@@ -8229,9 +8276,12 @@ describe('InputProcessingService', () => {
 
 function seedProject(database: Database.Database): void {
   database.prepare(`
-    INSERT OR IGNORE INTO projects (project_id, name, repo_path, repo_path_key, status, created_at, last_opened_at)
-    VALUES ('project-1', 'Project 1', 'C:\\workspace\\project-1', 'c:\\workspace\\project-1', 'active', '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z')
+    INSERT OR IGNORE INTO workspaces (
+      workspace_id, name, root_path, root_path_key, status, created_at, updated_at, last_opened_at, metadata_json
+    )
+    VALUES (
+      'project-1', 'Project 1', 'C:\\workspace\\project-1', 'c:\\workspace\\project-1', 'active',
+      '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z', NULL
+    )
   `).run();
 }
-
-

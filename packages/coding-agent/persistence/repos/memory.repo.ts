@@ -1,20 +1,12 @@
-// Maps long-term memory shared contracts to SQLite rows. The repository keeps
-// SQLite authoritative and does not perform capture, recall scoring, or Markdown IO.
-import type { MegumiDatabase } from '../connection';
+// Persists memory records, recall traces, capture attempts, and markdown mirrors in the redesigned memory tables.
+import type { JsonObject } from '@megumi/shared/primitives';
 import {
-  MemoryAuditLogSchema,
-  MemoryCandidateSchema,
   MemoryMarkdownMirrorSchema,
   MemoryRecallRequestSchema,
   MemoryRecallResultSchema,
   MemoryRecordSchema,
 } from '@megumi/shared/memory';
 import type {
-  MemoryAccessLog,
-  MemoryAuditLog,
-  MemoryAuditTargetKind,
-  MemoryCandidate,
-  MemoryCandidateStatus,
   MemoryMarkdownMirror,
   MemoryOwnerKind,
   MemoryRecallRequest,
@@ -25,114 +17,180 @@ import type {
   MemorySourceRef,
 } from '@megumi/shared/memory';
 
-interface JsonRow<TColumn extends string> { [key: string]: string }
+import type { MegumiDatabase } from '../connection';
+
+interface MemoryRecordRow {
+  memory_id: string;
+  workspace_id: string | null;
+  session_id: string | null;
+  scope: MemoryScope;
+  kind: MemoryRecord['kind'];
+  status: MemoryRecord['status'];
+  content: string;
+  normalized_text: string;
+  summary: string | null;
+  confidence: number | null;
+  source_json: string | null;
+  evidence_json: string | null;
+  dedupe_key: string | null;
+  superseded_by_id: string | null;
+  created_at: string;
+  updated_at: string;
+  last_used_at: string | null;
+  use_count: number;
+  metadata_json: string | null;
+}
+
+interface CaptureAttemptRow {
+  capture_attempt_id: string;
+  run_id: string | null;
+  workspace_id: string | null;
+  session_id: string | null;
+  status: string;
+  trigger_kind: string;
+  extracted_count: number;
+  created_memory_ids_json: string | null;
+  raw_output_json: string | null;
+  error_json: string | null;
+  created_at: string;
+  completed_at: string | null;
+  metadata_json: string | null;
+}
+
+interface MarkdownMirrorRow {
+  mirror_id: string;
+  memory_id: string;
+  workspace_id: string | null;
+  target_path: string;
+  status: MemoryMarkdownMirror['status'];
+  last_exported_at: string | null;
+  content_hash: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+  metadata_json: string | null;
+}
+
+interface RecallTraceRow {
+  recall_trace_id: string;
+  run_id: string;
+  workspace_id: string | null;
+  session_id: string | null;
+  query_text: string;
+  selected_count: number;
+  request_json: string;
+  results_json: string;
+  created_at: string;
+  metadata_json: string | null;
+}
+
+interface MemoryRecordMetadata {
+  memory?: MemoryRecord;
+  sourceRefs?: MemorySourceRef[];
+  projectId?: string | null;
+}
+
+interface MarkdownMirrorMetadata {
+  mirror?: MemoryMarkdownMirror;
+}
+
+export interface MemoryCaptureAttempt {
+  captureAttemptId: string;
+  runId?: string | null;
+  workspaceId?: string | null;
+  sessionId?: string | null;
+  status: string;
+  triggerKind: string;
+  extractedCount?: number;
+  createdMemoryIds?: string[];
+  rawOutput?: unknown;
+  error?: unknown;
+  createdAt: string;
+  completedAt?: string | null;
+  metadata?: JsonObject;
+}
+
+export interface MemoryRecallTrace {
+  recallTraceId: string;
+  runId: string;
+  sessionId?: string | null;
+  projectId?: string | null;
+  queryText: string;
+  request: MemoryRecallRequest;
+  results: MemoryRecallResult[];
+  selectedCount?: number;
+  createdAt: string;
+  metadata?: JsonObject;
+}
 
 export class MemoryRepository {
   constructor(private readonly database: MegumiDatabase) {}
 
-  saveCandidate(candidate: MemoryCandidate): MemoryCandidate {
-    const parsed = MemoryCandidateSchema.parse(candidate);
-    this.database.prepare(`
-      INSERT INTO memory_candidates (
-        candidate_id, workspace_id, project_id, session_id, scope, kind, status,
-        risk_level, confidence, content, summary, proposed_by, created_at, updated_at,
-        reviewed_at, reviewed_by, rejection_reason, metadata_json, candidate_json
-      ) VALUES (
-        @candidate_id, @workspace_id, @project_id, @session_id, @scope, @kind, @status,
-        @risk_level, @confidence, @content, @summary, @proposed_by, @created_at, @updated_at,
-        @reviewed_at, @reviewed_by, @rejection_reason, @metadata_json, @candidate_json
-      )
-      ON CONFLICT(candidate_id) DO UPDATE SET
-        status = excluded.status,
-        content = excluded.content,
-        summary = excluded.summary,
-        updated_at = excluded.updated_at,
-        reviewed_at = excluded.reviewed_at,
-        reviewed_by = excluded.reviewed_by,
-        rejection_reason = excluded.rejection_reason,
-        metadata_json = excluded.metadata_json,
-        candidate_json = excluded.candidate_json
-    `).run(toCandidateRow(parsed));
-    parsed.sourceRefs.forEach((ref) => this.saveSourceRef(ref));
-    return parsed;
-  }
-
-  getCandidate(candidateId: string): MemoryCandidate | undefined {
-    return parseJsonRow<MemoryCandidate>(this.database.prepare(
-      'SELECT candidate_json FROM memory_candidates WHERE candidate_id = ?',
-    ).get(candidateId), 'candidate_json');
-  }
-
-  listCandidates(filter: { workspaceId?: string; sessionId?: string; status?: MemoryCandidateStatus }): MemoryCandidate[] {
-    const rows = this.database.prepare(`
-      SELECT candidate_json FROM memory_candidates
-      WHERE (@workspace_id IS NULL OR workspace_id = @workspace_id)
-        AND (@session_id IS NULL OR session_id = @session_id)
-        AND (@status IS NULL OR status = @status)
-      ORDER BY created_at DESC
-    `).all({
-      workspace_id: filter.workspaceId ?? null,
-      session_id: filter.sessionId ?? null,
-      status: filter.status ?? null,
-    }) as Array<{ candidate_json: string }>;
-    return rows.map((row) => MemoryCandidateSchema.parse(JSON.parse(row.candidate_json)));
-  }
-
   saveMemory(memory: MemoryRecord): MemoryRecord {
     const parsed = MemoryRecordSchema.parse(memory);
+    const workspaceId = workspaceIdForMemory(this.database, parsed.projectId ?? null);
     this.database.prepare(`
       INSERT INTO memory_records (
-        memory_id, workspace_id, project_id, session_id, scope, kind, status,
-        confidence, content, summary, normalized_text, dedupe_key, source,
-        source_run_id, source_session_id, source_message_id, source_tool_call_id,
-        evidence_json, superseded_by_id, created_from_candidate_id, created_at,
-        updated_at, last_accessed_at, access_count, last_used_at, use_count,
-        deleted_at, disabled_at, metadata_json, memory_json
+        memory_id, workspace_id, session_id, scope, kind, status, content,
+        normalized_text, summary, confidence, source_json, evidence_json,
+        dedupe_key, superseded_by_id, created_at, updated_at, last_used_at,
+        use_count, metadata_json
       ) VALUES (
-        @memory_id, @workspace_id, @project_id, @session_id, @scope, @kind, @status,
-        @confidence, @content, @summary, @normalized_text, @dedupe_key, @source,
-        @source_run_id, @source_session_id, @source_message_id, @source_tool_call_id,
-        @evidence_json, @superseded_by_id, @created_from_candidate_id, @created_at,
-        @updated_at, @last_accessed_at, @access_count, @last_used_at, @use_count,
-        @deleted_at, @disabled_at, @metadata_json, @memory_json
+        @memory_id, @workspace_id, @session_id, @scope, @kind, @status, @content,
+        @normalized_text, @summary, @confidence, @source_json, @evidence_json,
+        @dedupe_key, @superseded_by_id, @created_at, @updated_at, @last_used_at,
+        @use_count, @metadata_json
       )
       ON CONFLICT(memory_id) DO UPDATE SET
-        project_id = excluded.project_id,
+        workspace_id = excluded.workspace_id,
         session_id = excluded.session_id,
         scope = excluded.scope,
         kind = excluded.kind,
         status = excluded.status,
-        confidence = excluded.confidence,
         content = excluded.content,
-        summary = excluded.summary,
         normalized_text = excluded.normalized_text,
-        dedupe_key = excluded.dedupe_key,
-        source = excluded.source,
-        source_run_id = excluded.source_run_id,
-        source_session_id = excluded.source_session_id,
-        source_message_id = excluded.source_message_id,
-        source_tool_call_id = excluded.source_tool_call_id,
+        summary = excluded.summary,
+        confidence = excluded.confidence,
+        source_json = excluded.source_json,
         evidence_json = excluded.evidence_json,
+        dedupe_key = excluded.dedupe_key,
         superseded_by_id = excluded.superseded_by_id,
         updated_at = excluded.updated_at,
-        last_accessed_at = excluded.last_accessed_at,
-        access_count = excluded.access_count,
         last_used_at = excluded.last_used_at,
         use_count = excluded.use_count,
-        deleted_at = excluded.deleted_at,
-        disabled_at = excluded.disabled_at,
-        metadata_json = excluded.metadata_json,
-        memory_json = excluded.memory_json
-    `).run(toMemoryRow(parsed));
-    parsed.sourceRefs?.forEach((ref) => this.saveSourceRef(ref));
+        metadata_json = excluded.metadata_json
+    `).run({
+      memory_id: parsed.memoryId,
+      workspace_id: workspaceId,
+      session_id: existingSessionId(this.database, parsed.sourceSessionId),
+      scope: parsed.scope,
+      kind: parsed.kind,
+      status: parsed.status,
+      content: parsed.content,
+      normalized_text: parsed.normalizedText,
+      summary: parsed.summary ?? null,
+      confidence: parsed.confidence ?? null,
+      source_json: stringifyJson({ source: parsed.source }),
+      evidence_json: stringifyJson(parsed.evidence),
+      dedupe_key: parsed.dedupeKey,
+      superseded_by_id: parsed.supersededById ?? null,
+      created_at: parsed.createdAt,
+      updated_at: parsed.updatedAt,
+      last_used_at: parsed.lastUsedAt ?? null,
+      use_count: parsed.useCount,
+      metadata_json: stringifyJson({
+        memory: parsed,
+        projectId: parsed.projectId ?? null,
+        sourceRefs: parsed.sourceRefs ?? [],
+      } satisfies MemoryRecordMetadata),
+    });
     return parsed;
   }
 
   getMemory(memoryId: string): MemoryRecord | undefined {
-    const row = this.database.prepare(
-      'SELECT * FROM memory_records WHERE memory_id = ?',
-    ).get(memoryId) as Record<string, unknown> | undefined;
-    return row ? fromMemoryRow(row) : undefined;
+    const row = this.database.prepare('SELECT * FROM memory_records WHERE memory_id = ?')
+      .get(memoryId) as MemoryRecordRow | undefined;
+    return row ? fromMemoryRecordRow(row) : undefined;
   }
 
   listMemories(filter: {
@@ -145,29 +203,27 @@ export class MemoryRepository {
   } = {}): MemoryRecord[] {
     const query = filter.query ? `%${filter.query.toLowerCase()}%` : null;
     const projectFilterEnabled = Object.hasOwn(filter, 'projectId') ? 1 : 0;
-    const rows = this.database.prepare(`
+    return (this.database.prepare(`
       SELECT * FROM memory_records
       WHERE (@scope IS NULL OR scope = @scope)
         AND (
           @project_filter_enabled = 0
-          OR (@project_id IS NULL AND project_id IS NULL)
-          OR project_id = @project_id
+          OR ifnull(workspace_id, '') = ifnull(@workspace_id, '')
         )
         AND (@status IS NULL OR status = @status)
         AND (@kind IS NULL OR kind = @kind)
-        AND (@query IS NULL OR lower(content) LIKE @query OR lower(summary) LIKE @query OR lower(normalized_text) LIKE @query)
+        AND (@query IS NULL OR lower(content) LIKE @query OR lower(ifnull(summary, '')) LIKE @query OR lower(normalized_text) LIKE @query)
       ORDER BY updated_at DESC
       LIMIT @limit_count
     `).all({
       scope: filter.scope ?? null,
       project_filter_enabled: projectFilterEnabled,
-      project_id: filter.projectId ?? null,
+      workspace_id: filter.projectId ?? null,
       status: filter.status ?? null,
       kind: filter.kind ?? null,
       query,
       limit_count: filter.limit ?? 1000,
-    }) as Array<Record<string, unknown>>;
-    return rows.map(fromMemoryRow);
+    }) as MemoryRecordRow[]).map(fromMemoryRecordRow);
   }
 
   findActiveMemoryByDedupeKey(input: {
@@ -179,7 +235,7 @@ export class MemoryRepository {
     const row = this.database.prepare(`
       SELECT * FROM memory_records
       WHERE scope = @scope
-        AND ifnull(project_id, '') = ifnull(@project_id, '')
+        AND ifnull(workspace_id, '') = ifnull(@workspace_id, '')
         AND kind = @kind
         AND dedupe_key = @dedupe_key
         AND status = 'active'
@@ -187,41 +243,193 @@ export class MemoryRepository {
       LIMIT 1
     `).get({
       scope: input.scope,
-      project_id: input.projectId ?? null,
+      workspace_id: input.projectId ?? null,
       kind: input.kind,
       dedupe_key: input.dedupeKey,
-    }) as Record<string, unknown> | undefined;
-    return row ? fromMemoryRow(row) : null;
+    }) as MemoryRecordRow | undefined;
+    return row ? fromMemoryRecordRow(row) : null;
+  }
+
+  recordRecallTrace(trace: MemoryRecallTrace): MemoryRecallTrace {
+    const request = MemoryRecallRequestSchema.parse(trace.request);
+    const results = trace.results.map((result) => MemoryRecallResultSchema.parse(result));
+    if (request.recallRequestId !== trace.recallTraceId) {
+      throw new Error(`Memory recall trace ${trace.recallTraceId} must use the request id as trace id`);
+    }
+    if (request.runId !== trace.runId) {
+      throw new Error(`Memory recall trace ${trace.recallTraceId} runId does not match request runId`);
+    }
+    const workspaceId = workspaceIdForMemory(this.database, trace.projectId ?? request.projectId ?? null);
+    const sessionId = existingSessionId(this.database, trace.sessionId ?? request.sessionId);
+    const runId = requireExistingRun(this.database, trace.runId);
+    this.database.prepare(`
+      INSERT INTO memory_recall_traces (
+        recall_trace_id, run_id, model_call_id, workspace_id, session_id, query_text,
+        selected_count, request_json, results_json, created_at, metadata_json
+      ) VALUES (
+        @recall_trace_id, @run_id, NULL, @workspace_id, @session_id, @query_text,
+        @selected_count, @request_json, @results_json, @created_at, @metadata_json
+      )
+      ON CONFLICT(recall_trace_id) DO UPDATE SET
+        workspace_id = excluded.workspace_id,
+        session_id = excluded.session_id,
+        query_text = excluded.query_text,
+        selected_count = excluded.selected_count,
+        request_json = excluded.request_json,
+        results_json = excluded.results_json,
+        metadata_json = excluded.metadata_json
+    `).run({
+      recall_trace_id: trace.recallTraceId,
+      run_id: runId,
+      workspace_id: workspaceId,
+      session_id: sessionId,
+      query_text: trace.queryText,
+      selected_count: trace.selectedCount ?? results.filter((item) => item.selectedForContext).length,
+      request_json: stringifyJson(request),
+      results_json: stringifyJson(results),
+      created_at: trace.createdAt,
+      metadata_json: stringifyJson(trace.metadata ?? {}),
+    });
+    return {
+      ...trace,
+      request,
+      results,
+      selectedCount: trace.selectedCount ?? results.filter((item) => item.selectedForContext).length,
+    };
+  }
+
+  getRecallTrace(recallTraceId: string): MemoryRecallTrace | undefined {
+    const row = this.database.prepare('SELECT * FROM memory_recall_traces WHERE recall_trace_id = ?')
+      .get(recallTraceId) as RecallTraceRow | undefined;
+    return row ? fromRecallTraceRow(row) : undefined;
+  }
+
+  recordCaptureAttempt(attempt: MemoryCaptureAttempt): MemoryCaptureAttempt {
+    const workspaceId = workspaceIdForMemory(this.database, attempt.workspaceId ?? null);
+    const sessionId = existingSessionId(this.database, attempt.sessionId);
+    const runId = existingRunId(this.database, attempt.runId);
+    this.database.prepare(`
+      INSERT INTO memory_capture_attempts (
+        capture_attempt_id, run_id, workspace_id, session_id, status, trigger_kind,
+        extracted_count, created_memory_ids_json, raw_output_json, error_json,
+        created_at, completed_at, metadata_json
+      ) VALUES (
+        @capture_attempt_id, @run_id, @workspace_id, @session_id, @status, @trigger_kind,
+        @extracted_count, @created_memory_ids_json, @raw_output_json, @error_json,
+        @created_at, @completed_at, @metadata_json
+      )
+      ON CONFLICT(capture_attempt_id) DO UPDATE SET
+        run_id = excluded.run_id,
+        workspace_id = excluded.workspace_id,
+        session_id = excluded.session_id,
+        status = excluded.status,
+        trigger_kind = excluded.trigger_kind,
+        extracted_count = excluded.extracted_count,
+        created_memory_ids_json = excluded.created_memory_ids_json,
+        raw_output_json = excluded.raw_output_json,
+        error_json = excluded.error_json,
+        completed_at = excluded.completed_at,
+        metadata_json = excluded.metadata_json
+    `).run({
+      capture_attempt_id: attempt.captureAttemptId,
+      run_id: runId,
+      workspace_id: workspaceId,
+      session_id: sessionId,
+      status: attempt.status,
+      trigger_kind: attempt.triggerKind,
+      extracted_count: attempt.extractedCount ?? 0,
+      created_memory_ids_json: stringifyJson(attempt.createdMemoryIds ?? []),
+      raw_output_json: attempt.rawOutput === undefined ? null : stringifyJson(attempt.rawOutput),
+      error_json: attempt.error === undefined ? null : stringifyJson(attempt.error),
+      created_at: attempt.createdAt,
+      completed_at: attempt.completedAt ?? null,
+      metadata_json: stringifyJson(attempt.metadata ?? {}),
+    });
+    return {
+      ...attempt,
+      runId,
+      workspaceId,
+      sessionId,
+      extractedCount: attempt.extractedCount ?? 0,
+      createdMemoryIds: attempt.createdMemoryIds ?? [],
+      completedAt: attempt.completedAt ?? null,
+      metadata: attempt.metadata ?? {},
+    };
+  }
+
+  getCaptureAttempt(captureAttemptId: string): MemoryCaptureAttempt | undefined {
+    const row = this.database.prepare('SELECT * FROM memory_capture_attempts WHERE capture_attempt_id = ?')
+      .get(captureAttemptId) as CaptureAttemptRow | undefined;
+    return row ? fromCaptureAttemptRow(row) : undefined;
+  }
+
+  listCaptureAttempts(filter: {
+    workspaceId?: string | null;
+    sessionId?: string | null;
+    runId?: string | null;
+    status?: string;
+    triggerKind?: string;
+    limit?: number;
+  } = {}): MemoryCaptureAttempt[] {
+    return (this.database.prepare(`
+      SELECT * FROM memory_capture_attempts
+      WHERE (@workspace_id IS NULL OR workspace_id = @workspace_id)
+        AND (@session_id IS NULL OR session_id = @session_id)
+        AND (@run_id IS NULL OR run_id = @run_id)
+        AND (@status IS NULL OR status = @status)
+        AND (@trigger_kind IS NULL OR trigger_kind = @trigger_kind)
+      ORDER BY created_at DESC, capture_attempt_id DESC
+      LIMIT @limit_count
+    `).all({
+      workspace_id: filter.workspaceId ?? null,
+      session_id: filter.sessionId ?? null,
+      run_id: filter.runId ?? null,
+      status: filter.status ?? null,
+      trigger_kind: filter.triggerKind ?? null,
+      limit_count: filter.limit ?? 1000,
+    }) as CaptureAttemptRow[]).map(fromCaptureAttemptRow);
   }
 
   saveMarkdownMirror(mirror: MemoryMarkdownMirror): void {
     const parsed = MemoryMarkdownMirrorSchema.parse(mirror);
+    const now = parsed.lastExportedAt ?? parsed.lastImportedAt ?? new Date(0).toISOString();
+    const memoryId = `memory:markdown-mirror:${parsed.mirrorId}`;
+    this.ensureMirrorAnchorMemory(memoryId, parsed, now);
     this.database.prepare(`
       INSERT INTO memory_markdown_mirrors (
-        mirror_id, scope, project_id, file_path, status, last_imported_at,
-        last_exported_at, content_hash, last_error, metadata_json, created_at, updated_at
+        mirror_id, memory_id, workspace_id, target_path, status, last_exported_at,
+        content_hash, last_error, created_at, updated_at, metadata_json
       ) VALUES (
-        @mirror_id, @scope, @project_id, @file_path, @status, @last_imported_at,
-        @last_exported_at, @content_hash, @last_error, @metadata_json, @created_at, @updated_at
+        @mirror_id, @memory_id, @workspace_id, @target_path, @status, @last_exported_at,
+        @content_hash, @last_error, @created_at, @updated_at, @metadata_json
       )
       ON CONFLICT(mirror_id) DO UPDATE SET
-        scope = excluded.scope,
-        project_id = excluded.project_id,
-        file_path = excluded.file_path,
+        workspace_id = excluded.workspace_id,
+        target_path = excluded.target_path,
         status = excluded.status,
-        last_imported_at = excluded.last_imported_at,
         last_exported_at = excluded.last_exported_at,
         content_hash = excluded.content_hash,
         last_error = excluded.last_error,
-        metadata_json = excluded.metadata_json,
-        updated_at = excluded.updated_at
-    `).run(toMarkdownMirrorRow(parsed));
+        updated_at = excluded.updated_at,
+        metadata_json = excluded.metadata_json
+    `).run({
+      mirror_id: parsed.mirrorId,
+      memory_id: memoryId,
+      workspace_id: workspaceIdForMemory(this.database, parsed.projectId ?? null),
+      target_path: parsed.filePath,
+      status: parsed.status,
+      last_exported_at: parsed.lastExportedAt ?? null,
+      content_hash: parsed.contentHash ?? null,
+      last_error: parsed.lastError ?? null,
+      created_at: now,
+      updated_at: now,
+      metadata_json: stringifyJson({ mirror: parsed } satisfies MarkdownMirrorMetadata),
+    });
   }
 
   getMarkdownMirror(mirrorId: string): MemoryMarkdownMirror | null {
-    const row = this.database.prepare(
-      'SELECT * FROM memory_markdown_mirrors WHERE mirror_id = ?',
-    ).get(mirrorId) as Record<string, unknown> | undefined;
+    const row = this.database.prepare('SELECT * FROM memory_markdown_mirrors WHERE mirror_id = ?')
+      .get(mirrorId) as MarkdownMirrorRow | undefined;
     return row ? fromMarkdownMirrorRow(row) : null;
   }
 
@@ -230,426 +438,206 @@ export class MemoryRepository {
     projectId?: string | null;
     status?: MemoryMarkdownMirror['status'];
   } = {}): MemoryMarkdownMirror[] {
-    const projectFilterEnabled = Object.hasOwn(filter, 'projectId') ? 1 : 0;
-    const rows = this.database.prepare(`
+    return (this.database.prepare(`
       SELECT * FROM memory_markdown_mirrors
-      WHERE (@scope IS NULL OR scope = @scope)
-        AND (
-          @project_filter_enabled = 0
-          OR (@project_id IS NULL AND project_id IS NULL)
-          OR project_id = @project_id
-        )
+      WHERE (@workspace_id IS NULL OR workspace_id = @workspace_id)
         AND (@status IS NULL OR status = @status)
       ORDER BY updated_at DESC
     `).all({
-      scope: filter.scope ?? null,
-      project_filter_enabled: projectFilterEnabled,
-      project_id: filter.projectId ?? null,
+      workspace_id: filter.projectId ?? null,
       status: filter.status ?? null,
-    }) as Array<Record<string, unknown>>;
-    return rows.map(fromMarkdownMirrorRow);
+    }) as MarkdownMirrorRow[])
+      .map(fromMarkdownMirrorRow)
+      .filter((mirror) => !filter.scope || mirror.scope === filter.scope);
   }
 
   saveSourceRef(sourceRef: MemorySourceRef): MemorySourceRef {
-    this.database.prepare(`
-      INSERT OR REPLACE INTO memory_source_refs (
-        source_ref_id, owner_id, owner_kind, kind, ref_id, label,
-        excerpt_preview, created_at, metadata_json, source_ref_json
-      ) VALUES (
-        @source_ref_id, @owner_id, @owner_kind, @kind, @ref_id, @label,
-        @excerpt_preview, @created_at, @metadata_json, @source_ref_json
-      )
-    `).run(toSourceRefRow(sourceRef));
+    if (sourceRef.ownerKind === 'memory') {
+      const row = this.database.prepare('SELECT metadata_json FROM memory_records WHERE memory_id = ?')
+        .get(sourceRef.ownerId) as { metadata_json: string | null } | undefined;
+      const metadata = parseJson<MemoryRecordMetadata>(row?.metadata_json ?? null) ?? {};
+      metadata.sourceRefs = mergeById(metadata.sourceRefs ?? [], sourceRef, 'sourceRefId');
+      this.database.prepare('UPDATE memory_records SET metadata_json = ? WHERE memory_id = ?')
+        .run(stringifyJson(metadata), sourceRef.ownerId);
+    } else {
+      const attempt = this.getCaptureAttempt(sourceRef.ownerId);
+      const metadata = attempt?.metadata ?? {};
+      const sourceRefs = mergeById(
+        (metadata.sourceRefs as MemorySourceRef[] | undefined) ?? [],
+        sourceRef,
+        'sourceRefId',
+      );
+      this.database.prepare('UPDATE memory_capture_attempts SET metadata_json = ? WHERE capture_attempt_id = ?')
+        .run(stringifyJson({ ...metadata, sourceRefs }), sourceRef.ownerId);
+    }
     return sourceRef;
   }
 
   listSourceRefsByOwner(ownerId: string, ownerKind: MemoryOwnerKind): MemorySourceRef[] {
-    const rows = this.database.prepare(`
-      SELECT source_ref_json FROM memory_source_refs
-      WHERE owner_id = ? AND owner_kind = ?
-      ORDER BY created_at ASC
-    `).all(ownerId, ownerKind) as Array<{ source_ref_json: string }>;
-    return rows.map((row) => JSON.parse(row.source_ref_json) as MemorySourceRef);
+    if (ownerKind === 'memory') {
+      const row = this.database.prepare('SELECT metadata_json FROM memory_records WHERE memory_id = ?')
+        .get(ownerId) as { metadata_json: string | null } | undefined;
+      return parseJson<MemoryRecordMetadata>(row?.metadata_json ?? null)?.sourceRefs ?? [];
+    }
+    const metadata = this.getCaptureAttempt(ownerId)?.metadata;
+    return (metadata?.sourceRefs as MemorySourceRef[] | undefined) ?? [];
   }
 
-  saveRecallRequest(request: MemoryRecallRequest): MemoryRecallRequest {
-    const parsed = MemoryRecallRequestSchema.parse(request);
+  private ensureMirrorAnchorMemory(memoryId: string, mirror: MemoryMarkdownMirror, now: string): void {
+    const workspaceId = workspaceIdForMemory(this.database, mirror.projectId ?? null);
     this.database.prepare(`
-      INSERT OR REPLACE INTO memory_recall_requests (
-        recall_request_id, session_id, run_id, workspace_id, project_id, query,
-        scopes_json, kinds_json, limit_count, budget, created_at, metadata_json, request_json
+      INSERT INTO memory_records (
+        memory_id, workspace_id, session_id, scope, kind, status, content,
+        normalized_text, summary, confidence, source_json, evidence_json,
+        dedupe_key, superseded_by_id, created_at, updated_at, last_used_at,
+        use_count, metadata_json
       ) VALUES (
-        @recall_request_id, @session_id, @run_id, @workspace_id, @project_id, @query,
-        @scopes_json, @kinds_json, @limit_count, @budget, @created_at, @metadata_json, @request_json
+        @memory_id, @workspace_id, NULL, @scope, 'fact', 'deleted', @content,
+        @normalized_text, @summary, NULL, NULL, '[]',
+        @dedupe_key, NULL, @created_at, @updated_at, NULL,
+        0, @metadata_json
       )
-    `).run(toRecallRequestRow(parsed));
-    return parsed;
+      ON CONFLICT(memory_id) DO UPDATE SET updated_at = excluded.updated_at
+    `).run({
+      memory_id: memoryId,
+      workspace_id: workspaceId,
+      scope: mirror.scope,
+      content: `Markdown mirror ${mirror.filePath}`,
+      normalized_text: mirror.filePath.toLowerCase(),
+      summary: mirror.filePath,
+      dedupe_key: memoryId,
+      created_at: now,
+      updated_at: now,
+      metadata_json: stringifyJson({ mirror } satisfies MarkdownMirrorMetadata),
+    });
   }
+}
 
-  saveRecallResult(result: MemoryRecallResult): MemoryRecallResult {
-    const parsed = MemoryRecallResultSchema.parse(result);
-    this.database.prepare(`
-      INSERT OR REPLACE INTO memory_recall_results (
-        recall_result_id, recall_request_id, memory_id, scope, kind, relevance_score,
-        confidence, selected_for_context, created_at, result_json
-      ) VALUES (
-        @recall_result_id, @recall_request_id, @memory_id, @scope, @kind, @relevance_score,
-        @confidence, @selected_for_context, @created_at, @result_json
-      )
-    `).run(toRecallResultRow(parsed));
-    return parsed;
-  }
+function fromMemoryRecordRow(row: MemoryRecordRow): MemoryRecord {
+  const metadata = parseJson<MemoryRecordMetadata>(row.metadata_json);
+  return metadata?.memory ?? MemoryRecordSchema.parse({
+    memoryId: row.memory_id,
+    scope: row.scope,
+    projectId: metadata?.projectId ?? row.workspace_id,
+    kind: row.kind,
+    status: row.status,
+    content: row.content,
+    summary: row.summary ?? undefined,
+    normalizedText: row.normalized_text,
+    dedupeKey: row.dedupe_key ?? row.memory_id,
+    source: parseJson<{ source?: string }>(row.source_json)?.source ?? 'manual_system',
+    sourceSessionId: row.session_id ?? undefined,
+    evidence: parseJson(row.evidence_json) ?? [],
+    supersededById: row.superseded_by_id ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lastUsedAt: row.last_used_at ?? undefined,
+    useCount: row.use_count,
+    metadata: {},
+    sourceRefs: metadata?.sourceRefs,
+    confidence: row.confidence ?? undefined,
+  });
+}
 
-  listRecallResultsByRequest(recallRequestId: string): MemoryRecallResult[] {
-    return (this.database.prepare(`
-      SELECT result_json FROM memory_recall_results
-      WHERE recall_request_id = ?
-      ORDER BY relevance_score DESC
-    `).all(recallRequestId) as Array<{ result_json: string }>).map((row) =>
-      MemoryRecallResultSchema.parse(JSON.parse(row.result_json)),
-    );
-  }
+function fromRecallTraceRow(row: RecallTraceRow): MemoryRecallTrace {
+  const request = MemoryRecallRequestSchema.parse(parseJson(row.request_json));
+  const results = (parseJson<MemoryRecallResult[]>(row.results_json) ?? [])
+    .map((result) => MemoryRecallResultSchema.parse(result));
+  return {
+    recallTraceId: row.recall_trace_id,
+    runId: row.run_id,
+    sessionId: row.session_id,
+    projectId: row.workspace_id,
+    queryText: row.query_text,
+    request,
+    results,
+    selectedCount: row.selected_count,
+    createdAt: row.created_at,
+    metadata: parseJson<JsonObject>(row.metadata_json) ?? {},
+  };
+}
 
-  saveAccessLog(accessLog: MemoryAccessLog): MemoryAccessLog {
-    this.database.prepare(`
-      INSERT OR REPLACE INTO memory_access_logs (
-        access_log_id, memory_id, session_id, run_id, recall_request_id,
-        access_kind, accessed_at, selected_for_context, metadata_json, access_log_json
-      ) VALUES (
-        @access_log_id, @memory_id, @session_id, @run_id, @recall_request_id,
-        @access_kind, @accessed_at, @selected_for_context, @metadata_json, @access_log_json
-      )
-    `).run(toAccessLogRow(accessLog));
-    return accessLog;
-  }
+function fromCaptureAttemptRow(row: CaptureAttemptRow): MemoryCaptureAttempt {
+  return {
+    captureAttemptId: row.capture_attempt_id,
+    runId: row.run_id,
+    workspaceId: row.workspace_id,
+    sessionId: row.session_id,
+    status: row.status,
+    triggerKind: row.trigger_kind,
+    extractedCount: row.extracted_count,
+    createdMemoryIds: parseJson<string[]>(row.created_memory_ids_json) ?? [],
+    rawOutput: parseJson(row.raw_output_json),
+    error: parseJson(row.error_json),
+    createdAt: row.created_at,
+    completedAt: row.completed_at,
+    metadata: parseJson<JsonObject>(row.metadata_json) ?? {},
+  };
+}
 
-  listAccessLogs(filter: { memoryId?: string; sessionId?: string; runId?: string; limit?: number }): MemoryAccessLog[] {
-    const rows = this.database.prepare(`
-      SELECT access_log_json FROM memory_access_logs
-      WHERE (@memory_id IS NULL OR memory_id = @memory_id)
-        AND (@session_id IS NULL OR session_id = @session_id)
-        AND (@run_id IS NULL OR run_id = @run_id)
-      ORDER BY accessed_at DESC
-      LIMIT @limit_count
-    `).all({
-      memory_id: filter.memoryId ?? null,
-      session_id: filter.sessionId ?? null,
-      run_id: filter.runId ?? null,
-      limit_count: filter.limit ?? 100,
-    }) as Array<{ access_log_json: string }>;
-    return rows.map((row) => JSON.parse(row.access_log_json) as MemoryAccessLog);
-  }
+function fromMarkdownMirrorRow(row: MarkdownMirrorRow): MemoryMarkdownMirror {
+  const metadata = parseJson<MarkdownMirrorMetadata>(row.metadata_json);
+  return metadata?.mirror ?? MemoryMarkdownMirrorSchema.parse({
+    mirrorId: row.mirror_id,
+    scope: 'project',
+    projectId: row.workspace_id,
+    filePath: row.target_path,
+    status: row.status,
+    lastExportedAt: row.last_exported_at ?? undefined,
+    contentHash: row.content_hash ?? undefined,
+    lastError: row.last_error ?? undefined,
+    metadata: {},
+  });
+}
 
-  saveAuditLog(auditLog: MemoryAuditLog): MemoryAuditLog {
-    const parsed = MemoryAuditLogSchema.parse(auditLog);
-    this.database.prepare(`
-      INSERT OR REPLACE INTO memory_audit_logs (
-        audit_log_id, target_kind, target_id, operation, actor,
-        created_at, summary, metadata_json, audit_log_json
-      ) VALUES (
-        @audit_log_id, @target_kind, @target_id, @operation, @actor,
-        @created_at, @summary, @metadata_json, @audit_log_json
-      )
-    `).run(toAuditLogRow(parsed));
-    return parsed;
+function existingSessionId(database: MegumiDatabase, sessionId: string | null | undefined): string | null {
+  if (!sessionId) {
+    return null;
   }
+  const row = database.prepare('SELECT session_id FROM sessions WHERE session_id = ?')
+    .get(sessionId) as { session_id: string } | undefined;
+  return row?.session_id ?? null;
+}
 
-  listAuditLogs(filter: { targetKind: MemoryAuditTargetKind; targetId: string }): MemoryAuditLog[] {
-    const rows = this.database.prepare(`
-      SELECT audit_log_json FROM memory_audit_logs
-      WHERE target_kind = ? AND target_id = ?
-      ORDER BY created_at DESC
-    `).all(filter.targetKind, filter.targetId) as Array<{ audit_log_json: string }>;
-    return rows.map((row) => MemoryAuditLogSchema.parse(JSON.parse(row.audit_log_json)));
+function existingRunId(database: MegumiDatabase, runId: string | null | undefined): string | null {
+  if (!runId) {
+    return null;
   }
+  const row = database.prepare('SELECT run_id FROM agent_loop_runs WHERE run_id = ?')
+    .get(runId) as { run_id: string } | undefined;
+  return row?.run_id ?? null;
+}
+
+function requireExistingRun(database: MegumiDatabase, runId: string): string {
+  const existing = existingRunId(database, runId);
+  if (!existing) {
+    throw new Error(`Memory recall trace requires an existing agent loop run: ${runId}`);
+  }
+  return existing;
+}
+
+function workspaceIdForMemory(database: MegumiDatabase, workspaceId: string | null | undefined): string | null {
+  if (!workspaceId) {
+    return null;
+  }
+  const row = database.prepare('SELECT workspace_id FROM workspaces WHERE workspace_id = ?')
+    .get(workspaceId) as { workspace_id: string } | undefined;
+  if (!row) {
+    throw new Error(`Memory persistence requires an existing workspace: ${workspaceId}`);
+  }
+  return row.workspace_id;
+}
+
+function mergeById<T extends Record<K, string>, K extends keyof T>(items: T[], next: T, key: K): T[] {
+  return [...items.filter((item) => item[key] !== next[key]), next];
 }
 
 function stringifyJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function parseJsonRow<T>(row: unknown, column: string): T | undefined {
-  if (!row || typeof row !== 'object') {
-    return undefined;
-  }
-  const value = (row as JsonRow<typeof column>)[column];
-  return typeof value === 'string' ? JSON.parse(value) as T : undefined;
-}
-
-function parseOptionalJson(value: unknown): unknown {
-  return typeof value === 'string' && value.length > 0 ? JSON.parse(value) : undefined;
-}
-
-function parseJsonArray(value: unknown): unknown[] {
-  const parsed = parseOptionalJson(value);
-  return Array.isArray(parsed) ? parsed : [];
-}
-
-function parseJsonObject(value: unknown): Record<string, unknown> {
-  const parsed = parseOptionalJson(value);
-  return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-    ? parsed as Record<string, unknown>
-    : {};
-}
-
-function asString(value: unknown): string {
-  return typeof value === 'string' ? value : '';
-}
-
-function nullableString(value: unknown): string | null {
-  return typeof value === 'string' && value.length > 0 ? value : null;
-}
-
-function asNumber(value: unknown): number | undefined {
-  return typeof value === 'number' ? value : undefined;
-}
-
-function toCandidateRow(candidate: MemoryCandidate) {
-  return {
-    candidate_id: candidate.candidateId,
-    workspace_id: candidate.workspaceId ?? null,
-    project_id: candidate.projectId ?? null,
-    session_id: candidate.sessionId ?? null,
-    scope: candidate.scope,
-    kind: candidate.kind,
-    status: candidate.status,
-    risk_level: candidate.riskLevel,
-    confidence: candidate.confidence,
-    content: candidate.content,
-    summary: candidate.summary,
-    proposed_by: candidate.proposedBy,
-    created_at: candidate.createdAt,
-    updated_at: candidate.updatedAt ?? null,
-    reviewed_at: candidate.reviewedAt ?? null,
-    reviewed_by: candidate.reviewedBy ?? null,
-    rejection_reason: candidate.rejectionReason ?? null,
-    metadata_json: candidate.metadata ? stringifyJson(candidate.metadata) : null,
-    candidate_json: stringifyJson(candidate),
-  };
-}
-
-function toMemoryRow(memory: MemoryRecord) {
-  return {
-    memory_id: memory.memoryId,
-    workspace_id: null,
-    project_id: memory.projectId ?? null,
-    session_id: memory.sourceSessionId ?? null,
-    scope: memory.scope,
-    kind: memory.kind,
-    status: memory.status,
-    confidence: memory.confidence ?? 1,
-    content: memory.content,
-    summary: memory.summary ?? memory.content,
-    normalized_text: memory.normalizedText,
-    dedupe_key: memory.dedupeKey,
-    source: memory.source,
-    source_run_id: memory.sourceRunId ?? null,
-    source_session_id: memory.sourceSessionId ?? null,
-    source_message_id: memory.sourceMessageId ?? null,
-    source_tool_call_id: memory.sourceToolCallId ?? null,
-    evidence_json: stringifyJson(memory.evidence),
-    superseded_by_id: memory.supersededById ?? null,
-    created_from_candidate_id: memory.createdFromCandidateId ?? null,
-    created_at: memory.createdAt,
-    updated_at: memory.updatedAt,
-    last_accessed_at: memory.lastUsedAt ?? null,
-    access_count: memory.useCount,
-    last_used_at: memory.lastUsedAt ?? null,
-    use_count: memory.useCount,
-    deleted_at: memory.deletedAt ?? null,
-    disabled_at: null,
-    metadata_json: stringifyJson(memory.metadata),
-    memory_json: stringifyJson(memory),
-  };
-}
-
-function fromMemoryRow(row: Record<string, unknown>): MemoryRecord {
-  const memoryJson = parseOptionalJson(row.memory_json);
-  const parsed = MemoryRecordSchema.safeParse(memoryJson);
-  if (parsed.success) {
-    return parsed.data;
-  }
-
-  const legacyScope = asString(row.scope);
-  const legacyKind = asString(row.kind);
-  const legacyStatus = asString(row.status);
-  const content = asString(row.content);
-  const scope = legacyScope === 'user' ? 'user' : 'project';
-  const projectId = scope === 'project'
-    ? nullableString(row.project_id) ?? nullableString(row.workspace_id) ?? 'legacy-project'
-    : null;
-
-  return MemoryRecordSchema.parse({
-    memoryId: asString(row.memory_id),
-    scope,
-    projectId,
-    kind: mapLegacyKind(legacyKind),
-    status: mapLegacyStatus(legacyStatus),
-    content,
-    summary: nullableString(row.summary),
-    normalizedText: asString(row.normalized_text) || normalizeMemoryText(content),
-    dedupeKey: asString(row.dedupe_key) || buildFallbackDedupeKey(row),
-    source: asString(row.source) || 'manual_system',
-    sourceRunId: nullableString(row.source_run_id),
-    sourceSessionId: nullableString(row.source_session_id) ?? nullableString(row.session_id),
-    sourceMessageId: nullableString(row.source_message_id),
-    sourceToolCallId: nullableString(row.source_tool_call_id),
-    evidence: parseJsonArray(row.evidence_json),
-    supersededById: nullableString(row.superseded_by_id),
-    createdAt: asString(row.created_at),
-    updatedAt: asString(row.updated_at),
-    lastUsedAt: nullableString(row.last_used_at) ?? nullableString(row.last_accessed_at),
-    useCount: asNumber(row.use_count) ?? asNumber(row.access_count) ?? 0,
-    deletedAt: nullableString(row.deleted_at),
-    metadata: parseJsonObject(row.metadata_json),
-  });
-}
-
-function toMarkdownMirrorRow(mirror: MemoryMarkdownMirror) {
-  const timestamp = mirror.lastExportedAt ?? mirror.lastImportedAt ?? '1970-01-01T00:00:00.000Z';
-  return {
-    mirror_id: mirror.mirrorId,
-    scope: mirror.scope,
-    project_id: mirror.projectId ?? null,
-    file_path: mirror.filePath,
-    status: mirror.status,
-    last_imported_at: mirror.lastImportedAt ?? null,
-    last_exported_at: mirror.lastExportedAt ?? null,
-    content_hash: mirror.contentHash ?? null,
-    last_error: mirror.lastError ?? null,
-    metadata_json: stringifyJson(mirror.metadata),
-    created_at: timestamp,
-    updated_at: timestamp,
-  };
-}
-
-function fromMarkdownMirrorRow(row: Record<string, unknown>): MemoryMarkdownMirror {
-  return MemoryMarkdownMirrorSchema.parse({
-    mirrorId: asString(row.mirror_id),
-    scope: asString(row.scope),
-    projectId: nullableString(row.project_id),
-    filePath: asString(row.file_path),
-    status: asString(row.status),
-    lastImportedAt: nullableString(row.last_imported_at),
-    lastExportedAt: nullableString(row.last_exported_at),
-    contentHash: nullableString(row.content_hash),
-    lastError: nullableString(row.last_error),
-    metadata: parseJsonObject(row.metadata_json),
-  });
-}
-
-function toSourceRefRow(sourceRef: MemorySourceRef) {
-  return {
-    source_ref_id: sourceRef.sourceRefId,
-    owner_id: sourceRef.ownerId,
-    owner_kind: sourceRef.ownerKind,
-    kind: sourceRef.kind,
-    ref_id: sourceRef.refId,
-    label: sourceRef.label ?? null,
-    excerpt_preview: sourceRef.excerptPreview ?? null,
-    created_at: sourceRef.createdAt,
-    metadata_json: sourceRef.metadata ? stringifyJson(sourceRef.metadata) : null,
-    source_ref_json: stringifyJson(sourceRef),
-  };
-}
-
-function toRecallRequestRow(request: MemoryRecallRequest) {
-  return {
-    recall_request_id: request.recallRequestId,
-    session_id: request.sessionId,
-    run_id: request.runId,
-    workspace_id: null,
-    project_id: request.projectId ?? null,
-    query: request.queryText,
-    scopes_json: stringifyJson(request.requestedScopes),
-    kinds_json: request.requestedKinds ? stringifyJson(request.requestedKinds) : null,
-    limit_count: request.maxResults,
-    budget: null,
-    created_at: request.createdAt,
-    metadata_json: stringifyJson(request.metadata),
-    request_json: stringifyJson(request),
-  };
-}
-
-function toRecallResultRow(result: MemoryRecallResult) {
-  return {
-    recall_result_id: result.recallResultId,
-    recall_request_id: result.recallRequestId,
-    memory_id: result.memoryId,
-    // Compatibility columns remain populated because the 18.02 result_json is authoritative.
-    scope: 'project',
-    kind: 'fact',
-    relevance_score: result.score,
-    confidence: result.score,
-    selected_for_context: result.selectedForContext ? 1 : 0,
-    created_at: result.createdAt,
-    result_json: stringifyJson(result),
-  };
-}
-
-function toAccessLogRow(accessLog: MemoryAccessLog) {
-  return {
-    access_log_id: accessLog.accessLogId,
-    memory_id: accessLog.memoryId,
-    session_id: accessLog.sessionId ?? null,
-    run_id: accessLog.runId ?? null,
-    recall_request_id: accessLog.recallRequestId ?? null,
-    access_kind: accessLog.accessKind,
-    accessed_at: accessLog.accessedAt,
-    selected_for_context: accessLog.selectedForContext ? 1 : 0,
-    metadata_json: accessLog.metadata ? stringifyJson(accessLog.metadata) : null,
-    access_log_json: stringifyJson(accessLog),
-  };
-}
-
-function toAuditLogRow(auditLog: MemoryAuditLog) {
-  return {
-    audit_log_id: auditLog.auditId,
-    target_kind: auditLog.targetKind,
-    target_id: auditLog.targetId ?? null,
-    operation: auditLog.operation,
-    actor: auditLog.actorKind,
-    created_at: auditLog.createdAt,
-    summary: auditLog.reason ?? auditLog.operation,
-    metadata_json: stringifyJson(auditLog.metadata),
-    audit_log_json: stringifyJson(auditLog),
-  };
-}
-
-function mapLegacyKind(kind: string): MemoryRecord['kind'] {
-  if (kind === 'project_fact') {
-    return 'fact';
-  }
-  if (kind === 'workflow') {
-    return 'decision';
-  }
-  if (kind === 'preference' || kind === 'constraint' || kind === 'fact' || kind === 'decision') {
-    return kind;
-  }
-  return 'fact';
-}
-
-function mapLegacyStatus(status: string): MemoryRecordStatus {
-  if (status === 'archived') {
-    return 'superseded';
-  }
-  if (status === 'disabled') {
-    return 'deleted';
-  }
-  if (status === 'active' || status === 'superseded' || status === 'deleted') {
-    return status;
-  }
-  return 'active';
-}
-
-function normalizeMemoryText(value: string): string {
-  return value.toLowerCase().replace(/[^\p{L}\p{N}_-]+/gu, ' ').trim() || 'memory';
-}
-
-function buildFallbackDedupeKey(row: Record<string, unknown>): string {
-  const scope = asString(row.scope) || 'project';
-  const projectId = nullableString(row.project_id) ?? nullableString(row.workspace_id) ?? '';
-  const kind = mapLegacyKind(asString(row.kind));
-  const normalizedText = normalizeMemoryText(asString(row.content));
-  return `${scope}:${projectId}:${kind}:${normalizedText}`;
+function parseJson<T>(value: string): T;
+function parseJson<T>(value: string | null): T | undefined;
+function parseJson<T>(value: string | null): T | undefined {
+  return value ? JSON.parse(value) as T : undefined;
 }

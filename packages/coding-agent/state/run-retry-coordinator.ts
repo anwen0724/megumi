@@ -8,13 +8,13 @@ import {
 } from '@megumi/shared/runtime';
 import type {
   Run,
+  SessionActiveLeaf,
   SessionBranchMarker,
   SessionMessage,
   SessionRetryAttempt,
   SessionSourceEntry,
 } from '@megumi/shared/session';
 
-import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
 import type { SessionBranchServicePort } from '../session';
 import { RuntimeEventLog } from '../events';
 
@@ -31,16 +31,23 @@ export interface RunRetryCoordinatorRepositoryPort {
   appendRuntimeEvent(event: RuntimeEvent): RuntimeEvent;
 }
 
+export interface RunRetryActivePathRepositoryPort {
+  getActiveLeaf(sessionId: string): SessionActiveLeaf | undefined;
+  getSourceEntryBySourceRef(
+    sessionId: string,
+    sourceRef: ModelInputContextSourceRef,
+  ): SessionSourceEntry | undefined;
+  appendSourceEntryAndSetActiveLeaf(
+    entry: SessionSourceEntry,
+    activeLeaf: SessionActiveLeaf,
+  ): SessionSourceEntry;
+  listRetryAttemptsByRun(runId: string): SessionRetryAttempt[];
+  saveRetryAttempt(attempt: SessionRetryAttempt): SessionRetryAttempt;
+}
+
 export interface RunRetryCoordinatorOptions {
   repository: RunRetryCoordinatorRepositoryPort;
-  activePathRepository?: Pick<
-    SessionActivePathRepository,
-    | 'getActiveLeaf'
-    | 'getSourceEntryBySourceRef'
-    | 'appendSourceEntryAndSetActiveLeaf'
-    | 'listRetryAttemptsByRun'
-    | 'saveRetryAttempt'
-  >;
+  activePathRepository?: RunRetryActivePathRepositoryPort;
   sessionBranchService?: SessionBranchServicePort;
   ids: RunRetryCoordinatorIds;
 }

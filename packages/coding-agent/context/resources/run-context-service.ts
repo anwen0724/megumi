@@ -1,4 +1,4 @@
-// Builds Coding Agent run context resources without depending on desktop filesystem or SQLite.
+﻿// Builds Coding Agent run context resources without depending on desktop filesystem or SQLite.
 import path from 'node:path';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type { ModelCapabilitySummary, RunContext, RunContextSource } from '@megumi/shared/run';
@@ -9,7 +9,7 @@ export interface RunContextServiceClock {
   now(): string;
 }
 
-export interface RunContextRepositoryPort {
+export interface RunContextSourceStorePort {
   saveBaseline(context: RunContext): RunContext;
   getBaseline(contextId: string): RunContext | undefined;
   saveSourceRef(source: RunContextSource & { runId: string }): RunContextSource;
@@ -25,7 +25,7 @@ export interface WorkspaceSourceProviderPort {
 }
 
 export interface RunContextServiceOptions {
-  contextRepository: RunContextRepositoryPort;
+  contextRepository: RunContextSourceStorePort;
   workspaceSourceProvider?: WorkspaceSourceProviderPort;
   clock?: RunContextServiceClock;
 }
@@ -95,7 +95,7 @@ export interface RunContextServicePort {
 }
 
 export class RunContextService implements RunContextServicePort {
-  private readonly contextRepository: RunContextRepositoryPort;
+  private readonly contextRepository: RunContextSourceStorePort;
   private readonly workspaceSourceProvider?: WorkspaceSourceProviderPort;
   private readonly clock: RunContextServiceClock;
 

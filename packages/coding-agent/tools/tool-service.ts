@@ -9,7 +9,7 @@ import type {
   ApprovalResolvePayload,
   ToolDefinitionsListPayload,
 } from '@megumi/shared/ipc';
-import type { ToolRepository } from '../persistence/repos/tool.repo';
+import type { ToolCallRepository } from '../persistence/repos/tool-call.repo';
 import type { ToolRegistry } from './registry';
 
 export interface ToolServiceApprovalResumeInput {
@@ -26,7 +26,7 @@ export interface ApprovalResolveServiceResult {
 
 export interface ToolServiceOptions {
   registry: ToolRegistry;
-  repository: ToolRepository;
+  repository: ToolCallRepository;
   resumeApproval?: (input: ToolServiceApprovalResumeInput) => AsyncIterable<RuntimeEvent> | undefined;
   now?: () => string;
   idFactory?: {
@@ -88,8 +88,8 @@ export class ToolService {
       decidedAt: payload.decidedAt ?? this.now(),
     };
 
-    const approval = this.options.repository.saveApprovalRecord(record);
-    this.options.repository.saveApprovalRequest({
+    const approval = this.options.repository.resolveApprovalRequest(record);
+    this.options.repository.createApprovalRequest({
       ...request,
       status: payload.decision,
       resolvedAt: record.decidedAt,

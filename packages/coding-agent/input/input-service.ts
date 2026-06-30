@@ -1,4 +1,4 @@
-// Handles user input entering a Coding Agent session, including message persistence and agent-loop invocation.
+﻿// Handles user input entering a Coding Agent session, including message persistence and agent-loop invocation.
 import type { InputPreprocessingResult } from '@megumi/shared/input';
 import type {
   SessionMessageSendData,
@@ -6,8 +6,17 @@ import type {
 } from '@megumi/shared/ipc';
 import type { PermissionMode, PermissionModeState, PermissionSnapshotRecord } from '@megumi/shared/permission';
 import type { ProviderId } from '@megumi/shared/provider';
-import type { RuntimeContext, RuntimeEvent } from '@megumi/shared/runtime';
-import type { Run, RunStep, Session, SessionMessage } from '@megumi/shared/session';
+import type { RuntimeContext, RuntimeError, RuntimeEvent } from '@megumi/shared/runtime';
+import type {
+  Run,
+  RunAction,
+  RunObservation,
+  RunStep,
+  Session,
+  SessionCompactionEntry,
+  SessionMessage,
+} from '@megumi/shared/session';
+import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { ParsedInput } from './parsed-input';
 import {
   parseSessionMessageRawInput,
@@ -25,14 +34,18 @@ import {
   attachRunPermissionSnapshot,
   startAgentLoopRun,
   ActiveSessionMessageRunTracker,
+  type RunRetryActivePathRepositoryPort,
   type RunRetryCoordinatorPort,
 } from '../state';
 import { runTurn, type RunHostBoundaryPort, type RunIdFactory } from '../state/lifecycle';
 import {
   SessionContextInputService,
   SessionMessageService,
+  type SessionBranchActivePathRepository,
   type SessionBranchServicePort,
+  type SessionContextInputActivePathRepository,
   type SessionContextInputBuildPort,
+  type SessionServiceActivePathRepository,
   type SessionServicePort,
 } from '../session';
 import {
@@ -71,6 +84,7 @@ import {
   type ModelCallInputBuildPort,
   type ModelInputMemoryRecallSource,
   type RunBaselineContextPort,
+  type SessionCompactionActivePathRepository,
   type SessionCompactionOrchestratorRepository,
   type SessionCompactionOrchestrationResult,
 } from '../context';
@@ -78,18 +92,7 @@ import {
   RuntimeEventLog,
   RuntimeEventPublisher,
 } from '../events';
-import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
-import { persistLegacyModelStepRecordFromEvent } from '../persistence';
-import type {
-  AgentRunExecutionFactRepositoryPort,
-  AgentRunMessageRepositoryPort,
-  AgentRunModelStepRepositoryPort,
-  AgentRunRunRecordRepositoryPort,
-  AgentRunRuntimeEventRepositoryPort,
-  AgentRunSessionContextRepositoryPort,
-  AgentRunSessionRepositoryPort,
-  AgentRunToolRepositoryPort,
-} from '../persistence';
+import type { ModelStepRecord } from '../persistence/repos/agent-loop.repo';
 import type {
   SessionActivePath,
   SessionBranchMarker,
@@ -597,14 +600,45 @@ export interface InputProcessingIds extends RunIdFactory {
   chatThinkingId(): string;
 }
 
+export interface InputSessionRepositoryPort {
+  saveSession(session: Session): Session;
+  getSession(sessionId: string): Session | undefined;
+  saveMessage(message: SessionMessage): SessionMessage;
+  getMessage(messageId: string): SessionMessage | undefined;
+  getSessionCompaction(compactionId: string): SessionCompactionEntry | null;
+}
+
+export interface InputAgentLoopRepositoryPort {
+  saveRun(run: Run): Run;
+  getRun(runId: string): Run | undefined;
+  listRunsByStatuses(statuses: Run['status'][]): Run[];
+  saveStep(step: RunStep): RunStep;
+  listStepsByRun(runId: string): RunStep[];
+  saveAction(action: RunAction): RunAction;
+  saveObservation(observation: RunObservation): RunObservation;
+  saveModelStep(modelStep: ModelStepRecord): ModelStepRecord;
+  getModelStep(modelStepId: string): ModelStepRecord | undefined;
+  appendRuntimeEvent(event: RuntimeEvent): RuntimeEvent;
+  listRuntimeEventsByRun(runId: string): RuntimeEvent[];
+}
+
+export interface InputToolCallRepositoryPort {
+  markToolResultsSubmittedToModelInput(input: {
+    toolExecutionIds: string[];
+    emittedAt: string;
+  }): void;
+}
+
+export type InputActivePathRepositoryPort =
+  & SessionContextInputActivePathRepository
+  & SessionBranchActivePathRepository
+  & SessionServiceActivePathRepository
+  & SessionCompactionActivePathRepository
+  & RunRetryActivePathRepositoryPort;
+
 export interface InputProcessingServiceOptions {
-  sessionRepository: AgentRunSessionRepositoryPort;
-  messageRepository: AgentRunMessageRepositoryPort;
-  runRecordRepository: AgentRunRunRecordRepositoryPort;
-  runExecutionFactRepository: AgentRunExecutionFactRepositoryPort;
-  modelStepRepository: AgentRunModelStepRepositoryPort;
-  sessionContextRepository: AgentRunSessionContextRepositoryPort;
-  runtimeEventRepository: AgentRunRuntimeEventRepositoryPort;
+  sessionRepository: InputSessionRepositoryPort;
+  agentLoopRepository: InputAgentLoopRepositoryPort;
   postRunHooks: PostRunHooksPort;
   runTerminalCoordinator: RunTerminalCoordinatorPort;
   runRetryCoordinator: RunRetryCoordinatorPort;
@@ -616,7 +650,7 @@ export interface InputProcessingServiceOptions {
   toolDefinitionProvider?: ToolSetRegistryProvider;
   toolRegistrySnapshotService?: ToolRegistrySnapshotServicePort;
   providerCapabilitySummaryProvider?: ToolSetCapabilityProvider;
-  toolRepository?: AgentRunToolRepositoryPort;
+  toolCallRepository?: InputToolCallRepositoryPort;
   agentInstructionSourceService?: AgentInstructionSourcePort;
   modelCallInputBuildService?: ModelCallInputBuildPort;
   memoryRecallService?: MemoryRecallPort;
@@ -629,7 +663,7 @@ export interface InputProcessingServiceOptions {
     compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
   };
   sessionCompactionRepository?: SessionCompactionOrchestratorRepository;
-  activePathRepository?: SessionActivePathRepository;
+  activePathRepository?: InputActivePathRepositoryPort;
   sessionBranchService?: SessionBranchServicePort;
   workspaceChanges?: WorkspaceChangeReadPort;
   hostBoundary?: RunHostBoundaryPort;
@@ -649,6 +683,64 @@ type InputApprovalResumeGroup = ApprovalResumeGroup<ChatStreamEventAdapter>;
 const defaultClock: InputProcessingClock = {
   now: () => new Date().toISOString(),
 };
+
+interface PersistModelCallRecordFromEventInput {
+  repository: InputAgentLoopRepositoryPort;
+  request: ModelStepRuntimeRequest;
+  event: RuntimeEvent;
+  fallbackStepId: string;
+  overrides?: {
+    status?: RunStep['status'];
+    completedAt?: string;
+    error?: RuntimeError;
+  };
+}
+
+function persistModelCallRecordFromEvent(
+  input: PersistModelCallRecordFromEventInput,
+): ModelStepRecord | undefined {
+  if (!isModelCallPersistenceEvent(input.event)) {
+    return undefined;
+  }
+
+  const modelStepId = getModelCallId(input.event.payload) ?? input.request.modelStepId;
+  if (!modelStepId) {
+    return undefined;
+  }
+
+  const existing = input.repository.getModelStep(modelStepId);
+  return input.repository.saveModelStep({
+    modelStepId,
+    runId: input.request.runId,
+    stepId: input.event.stepId ?? input.request.stepId ?? existing?.stepId ?? input.fallbackStepId,
+    providerId: input.request.providerId,
+    modelId: input.request.modelId,
+    status: input.overrides?.status ?? existing?.status ?? 'running',
+    startedAt: existing?.startedAt ?? input.event.createdAt,
+    ...(input.overrides?.completedAt ?? existing?.completedAt ? {
+      completedAt: input.overrides?.completedAt ?? existing?.completedAt,
+    } : {}),
+    ...(input.overrides?.error ?? existing?.error ? { error: input.overrides?.error ?? existing?.error } : {}),
+    metadata: {
+      ...(existing?.metadata ?? {}),
+      sourceEventType: input.event.eventType,
+    },
+  });
+}
+
+function isModelCallPersistenceEvent(event: RuntimeEvent): boolean {
+  return event.eventType === 'model.step.started'
+    || event.eventType === 'model.step.completed'
+    || event.eventType === 'tool.call.created';
+}
+
+function getModelCallId(payload: RuntimeEvent['payload']): string | undefined {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return undefined;
+  }
+  const record = payload as Record<string, unknown>;
+  return typeof record.modelStepId === 'string' ? record.modelStepId : undefined;
+}
 
 function createDefaultInputProcessingIds(
   overrides: Partial<InputProcessingIds> = {},
@@ -677,7 +769,7 @@ function createDefaultInputProcessingIds(
     ...overrides,
   };
 }
-class EmptySessionActivePathRepository {
+class EmptySessionEntryPathStore {
   getActivePath(sessionId: string): SessionActivePath {
     return {
       sessionId,
@@ -687,16 +779,11 @@ class EmptySessionActivePathRepository {
 }
 
 export class InputProcessingService {
-  private readonly sessionRepository: AgentRunSessionRepositoryPort;
-  private readonly messageRepository: AgentRunMessageRepositoryPort;
-  private readonly runRecordRepository: AgentRunRunRecordRepositoryPort;
-  private readonly runExecutionFactRepository: AgentRunExecutionFactRepositoryPort;
-  private readonly modelStepRepository: AgentRunModelStepRepositoryPort;
-  private readonly sessionContextRepository: AgentRunSessionContextRepositoryPort;
-  private readonly runtimeEventRepository: AgentRunRuntimeEventRepositoryPort;
+  private readonly sessionRepository: InputSessionRepositoryPort;
+  private readonly agentLoopRepository: InputAgentLoopRepositoryPort;
   private readonly runtimeEventLog: RuntimeEventLog;
   private readonly runtimeEventPublisher: RuntimeEventPublisher<ChatStreamEventAdapter>;
-  private readonly activePathRepository?: SessionActivePathRepository;
+  private readonly activePathRepository?: InputActivePathRepositoryPort;
   private readonly contextService?: RunBaselineContextPort;
   private readonly permissionSnapshotService?: RunPermissionSnapshotServicePort;
   private readonly planArtifactService?: PlanArtifactServicePort;
@@ -705,7 +792,7 @@ export class InputProcessingService {
   private readonly toolDefinitionProvider?: ToolSetRegistryProvider;
   private readonly toolRegistrySnapshotService?: ToolRegistrySnapshotServicePort;
   private readonly providerCapabilitySummaryProvider?: ToolSetCapabilityProvider;
-  private readonly toolRepository?: AgentRunToolRepositoryPort;
+  private readonly toolCallRepository?: InputToolCallRepositoryPort;
   private readonly modelCallInputBuildService: ModelCallInputBuildPort;
   private readonly memoryRecallService?: MemoryRecallPort;
   private readonly memorySettingsProvider?: MemorySettingsPort;
@@ -730,13 +817,8 @@ export class InputProcessingService {
 
   constructor(options: InputProcessingServiceOptions) {
     this.sessionRepository = options.sessionRepository;
-    this.messageRepository = options.messageRepository;
-    this.runRecordRepository = options.runRecordRepository;
-    this.runExecutionFactRepository = options.runExecutionFactRepository;
-    this.modelStepRepository = options.modelStepRepository;
-    this.sessionContextRepository = options.sessionContextRepository;
-    this.runtimeEventRepository = options.runtimeEventRepository;
-    this.runtimeEventLog = new RuntimeEventLog(options.runtimeEventRepository);
+    this.agentLoopRepository = options.agentLoopRepository;
+    this.runtimeEventLog = new RuntimeEventLog(options.agentLoopRepository);
     this.postRunHooks = options.postRunHooks;
     this.runtimeEventPublisher = new RuntimeEventPublisher<ChatStreamEventAdapter>({
       eventLog: this.runtimeEventLog,
@@ -751,7 +833,7 @@ export class InputProcessingService {
     this.toolDefinitionProvider = options.toolDefinitionProvider;
     this.toolRegistrySnapshotService = options.toolRegistrySnapshotService;
     this.providerCapabilitySummaryProvider = options.providerCapabilitySummaryProvider;
-    this.toolRepository = options.toolRepository;
+    this.toolCallRepository = options.toolCallRepository;
     this.memoryRecallService = options.memoryRecallService;
     this.memorySettingsProvider = options.memorySettingsProvider;
     this.memoryMarkdownSyncService = options.memoryMarkdownSyncService;
@@ -762,16 +844,16 @@ export class InputProcessingService {
     this.sessionContextInputService = options.sessionContextInputService
       ?? new SessionContextInputService({
         sessionRepository: this.sessionRepository,
-        messageRepository: this.messageRepository,
-        runRepository: this.runRecordRepository,
-        runExecutionFactRepository: this.runExecutionFactRepository,
-        runtimeEventRepository: this.runtimeEventRepository,
-        sessionCompactionRepository: this.sessionContextRepository,
-        activePathRepository: this.activePathRepository ?? new EmptySessionActivePathRepository(),
+        messageRepository: this.sessionRepository,
+        runRepository: this.agentLoopRepository,
+        runExecutionFactRepository: this.agentLoopRepository,
+        runtimeEventRepository: this.agentLoopRepository,
+        sessionCompactionRepository: this.sessionRepository,
+        activePathRepository: this.activePathRepository ?? new EmptySessionEntryPathStore(),
       });
     this.sessionMessageService = new SessionMessageService({
       sessionRepository: this.sessionRepository,
-      messageRepository: this.messageRepository,
+      messageRepository: this.sessionRepository,
       ids: this.ids,
       ...(this.activePathRepository ? { activePathRepository: this.activePathRepository } : {}),
     });
@@ -790,8 +872,8 @@ export class InputProcessingService {
       ids: this.ids,
       sessionMessages: this.sessionMessageService,
       activeRuns: this.activeSessionMessageRuns,
-      runRepository: this.runRecordRepository,
-      stepRepository: this.runExecutionFactRepository,
+      runRepository: this.agentLoopRepository,
+      stepRepository: this.agentLoopRepository,
       permissionSnapshotService: this.permissionSnapshotService,
       sessionBranchService: options.sessionBranchService,
       runRetryCoordinator: options.runRetryCoordinator,
@@ -854,7 +936,7 @@ export class InputProcessingService {
         },
       },
       statePort: {
-        getRunStatus: (runId: string) => svc.runRecordRepository.getRun(runId)?.status,
+        getRunStatus: (runId: string) => svc.agentLoopRepository.getRun(runId)?.status,
       },
       failurePort: {
         async *failBeforeModelCall(failureInput) {
@@ -874,10 +956,10 @@ export class InputProcessingService {
             ids: svc.ids,
             lifecycle: {
               saveRun: (run) => {
-                svc.runRecordRepository.saveRun(run);
+                svc.agentLoopRepository.saveRun(run);
               },
               saveStep: (step) => {
-                svc.runExecutionFactRepository.saveStep(step);
+                svc.agentLoopRepository.saveStep(step);
               },
             },
           });
@@ -901,8 +983,8 @@ export class InputProcessingService {
           create: async (factoryInput) => ensureToolCallRunnerService(
             await this.toolRuntimeFactory!.create(factoryInput),
             {
-              modelInputEmissionRepository: this.toolRepository
-                ? { markToolResultsSubmittedToModelInput: (request) => this.toolRepository?.markToolResultsSubmittedToModelInput(request) }
+              modelInputEmissionRepository: this.toolCallRepository
+                ? { markToolResultsSubmittedToModelInput: (request) => this.toolCallRepository?.markToolResultsSubmittedToModelInput(request) }
                 : undefined,
               ids: this.ids,
             },
@@ -952,16 +1034,16 @@ export class InputProcessingService {
       ...(initialContext ? { initialContext } : {}),
       lifecycle: {
         saveRun: (run) => {
-          this.runRecordRepository.saveRun(run);
+          this.agentLoopRepository.saveRun(run);
         },
         saveStep: (step) => {
-          this.runExecutionFactRepository.saveStep(step);
+          this.agentLoopRepository.saveStep(step);
         },
         saveAction: (action) => {
-          this.runExecutionFactRepository.saveAction(action);
+          this.agentLoopRepository.saveAction(action);
         },
         saveObservation: (observation) => {
-          this.runExecutionFactRepository.saveObservation(observation);
+          this.agentLoopRepository.saveObservation(observation);
         },
         appendEvent: (event) => {
           this.runtimeEventPublisher.append(event);
@@ -1029,7 +1111,7 @@ export class InputProcessingService {
     if (!approvalResume) {
       return undefined;
     }
-    const persistedRun = this.runRecordRepository.getRun(approvalResume.request.runId) ?? approvalResume.run;
+    const persistedRun = this.agentLoopRepository.getRun(approvalResume.request.runId) ?? approvalResume.run;
     if (!canResumeApprovalFromRunStatus(persistedRun.status)) {
       this.cancelPendingApprovalGroupsByRun(approvalResume.request.runId);
       return undefined;
@@ -1043,7 +1125,7 @@ export class InputProcessingService {
   }
 
   listRuntimeEventsByRun(runId: string): RuntimeEvent[] {
-    return this.runtimeEventRepository.listRuntimeEventsByRun(runId);
+    return this.agentLoopRepository.listRuntimeEventsByRun(runId);
   }
 
   private createModelCallEventRecorder(chatStreamAdapter?: ChatStreamEventAdapter) {
@@ -1066,12 +1148,12 @@ export class InputProcessingService {
           return event;
         },
       },
-      runRepository: this.runRecordRepository,
-      stepRepository: this.runExecutionFactRepository,
+      runRepository: this.agentLoopRepository,
+      stepRepository: this.agentLoopRepository,
       legacyModelSteps: {
         persistFromEvent: (input) => {
-          persistLegacyModelStepRecordFromEvent({
-            repository: this.modelStepRepository,
+          persistModelCallRecordFromEvent({
+            repository: this.agentLoopRepository,
             ...input,
           });
         },
@@ -1143,8 +1225,8 @@ export class InputProcessingService {
       registry: this.pendingApprovalRegistry,
       lastSequenceForRun: (runId) => this.runtimeEventLog.lastSequenceForRun(runId),
       appendEvent: (event, projection) => this.appendRuntimeEvent(event, projection),
-      runRepository: this.runRecordRepository,
-      stepRepository: this.runExecutionFactRepository,
+      runRepository: this.agentLoopRepository,
+      stepRepository: this.agentLoopRepository,
       modelCallPort: {
         streamModelCall: ({ request }) => this.requireModelCallProvider().streamModelCall(request),
       },
@@ -1155,7 +1237,7 @@ export class InputProcessingService {
         eventId: this.ids.eventId,
         stepId: this.ids.stepId,
         nextStepId: ({ runId }) => {
-          const step = this.runExecutionFactRepository.saveStep({
+          const step = this.agentLoopRepository.saveStep({
             stepId: this.ids.stepId(),
             runId,
             kind: 'model',

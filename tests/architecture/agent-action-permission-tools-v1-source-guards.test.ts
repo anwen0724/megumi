@@ -39,20 +39,22 @@ describe('agent action permission tools v1 source guards', () => {
   });
 
   it('keeps permission decision persistence markers in schema and repository code', () => {
-    const migrations = readProjectFile('packages/coding-agent/persistence/schema/migrations.ts');
-    const repository = readProjectFile('packages/coding-agent/persistence/repos/tool.repo.ts');
-    const persistenceSources = `${migrations}\n${repository}`;
+    const migrationSql = readProjectFile('packages/coding-agent/persistence/migrations/0000_database_foundation_redesign.sql');
+    const schema = readProjectFile('packages/coding-agent/persistence/schema/drizzle-schema.ts');
+    const repository = readProjectFile('packages/coding-agent/persistence/repos/tool-call.repo.ts');
+    const persistenceSources = `${migrationSql}\n${schema}\n${repository}`;
 
-    expect(migrations).toContain('CREATE TABLE IF NOT EXISTS permission_decisions');
-    expect(migrations).toContain('classifier_label TEXT');
-    expect(migrations).toContain('side_effect TEXT NOT NULL');
+    expect(migrationSql).toContain('CREATE TABLE `tool_calls`');
+    expect(migrationSql).toContain('`permission_decision_json` text');
+    expect(schema).toContain('permissionDecisionJson: jsonText');
     expect(repository).toContain('savePermissionDecision');
     expect(repository).toContain('listPermissionDecisionsByToolCall');
+    expect(migrationSql).not.toContain('CREATE TABLE `permission_decisions`');
 
     for (const marker of [
-      'CREATE TABLE IF NOT EXISTS permission_decisions',
-      'classifier_label TEXT',
-      'side_effect TEXT NOT NULL',
+      'CREATE TABLE `tool_calls`',
+      '`permission_decision_json` text',
+      'permissionDecisionJson: jsonText',
       'savePermissionDecision',
       'listPermissionDecisionsByToolCall',
     ]) {

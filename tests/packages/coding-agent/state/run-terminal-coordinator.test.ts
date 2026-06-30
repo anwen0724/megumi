@@ -1,13 +1,10 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
-import { ModelStepRepository, type ModelStepRecord } from '@megumi/coding-agent/persistence/repos/model-step.repo';
-import { RunExecutionFactRepository } from '@megumi/coding-agent/persistence/repos/run-execution-fact.repo';
-import { RunRecordRepository } from '@megumi/coding-agent/persistence/repos/run-record.repo';
-import { RuntimeEventRepository } from '@megumi/coding-agent/persistence/repos/runtime-event.repo';
-import { SessionRecordRepository } from '@megumi/coding-agent/persistence/repos/session-record.repo';
-import { ToolRepository } from '@megumi/coding-agent/persistence/repos/tool.repo';
+import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
+import { AgentLoopRepository, type ModelStepRecord } from '@megumi/coding-agent/persistence/repos/agent-loop.repo';
+import { SessionRepository } from '@megumi/coding-agent/persistence/repos/session.repo';
+import { ToolCallRepository } from '@megumi/coding-agent/persistence/repos/tool-call.repo';
 import { RunTerminalCoordinator, type RunTerminalRepositoryPort } from '@megumi/coding-agent/state';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { Run, RunStep, Session } from '@megumi/shared/session';
@@ -27,12 +24,21 @@ afterEach(() => {
 
 function createRepositories() {
   db = new Database(':memory:');
-  migrateDatabase(db);
-  const modelStepRepository = new ModelStepRepository(db);
-  const runExecutionFactRepository = new RunExecutionFactRepository(db);
-  const runRecordRepository = new RunRecordRepository(db);
-  const runtimeEventRepository = new RuntimeEventRepository(db);
-  const sessionRecordRepository = new SessionRecordRepository(db);
+  applyCodingAgentDatabaseMigrations(db);
+  db.prepare(`
+    INSERT INTO workspaces (
+      workspace_id, name, root_path, root_path_key, status,
+      created_at, updated_at, last_opened_at, metadata_json
+    ) VALUES (
+      'workspace:default', 'Default', 'C:/workspaces/default', 'c:/workspaces/default', 'available',
+      '2026-06-14T00:00:00.000Z', '2026-06-14T00:00:00.000Z', '2026-06-14T00:00:00.000Z', NULL
+    )
+  `).run();
+  const modelStepRepository = new AgentLoopRepository(db);
+  const runExecutionFactRepository = new AgentLoopRepository(db);
+  const runRecordRepository = new AgentLoopRepository(db);
+  const runtimeEventRepository = new AgentLoopRepository(db);
+  const sessionRepository = new SessionRepository(db);
 
   return {
     repository: {
@@ -43,16 +49,16 @@ function createRepositories() {
       listStepsByRun: (runId: string) => runExecutionFactRepository.listStepsByRun(runId),
       saveModelStep: (modelStep: ModelStepRecord) => modelStepRepository.saveModelStep(modelStep),
       saveRun: (run: Run) => runRecordRepository.saveRun(run),
-      saveSession: (session: Session) => sessionRecordRepository.saveSession(session),
+      saveSession: (session: Session) => sessionRepository.saveSession(session),
       saveStep: (step: RunStep) => runExecutionFactRepository.saveStep(step),
     } satisfies RunTerminalTestRepository,
-    toolRepository: new ToolRepository(db),
+    toolRepository: new ToolCallRepository(db),
   };
 }
 
 function createCoordinator(input: {
   repository: RunTerminalTestRepository;
-  toolRepository?: ToolRepository;
+  toolRepository?: ToolCallRepository;
 }) {
   let eventIndex = 0;
   return new RunTerminalCoordinator({

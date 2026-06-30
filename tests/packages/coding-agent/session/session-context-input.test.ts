@@ -1,14 +1,9 @@
 ﻿// @vitest-environment node
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
-import { SessionActivePathRepository } from '@megumi/coding-agent/persistence/repos/session-active-path.repo';
-import { RunExecutionFactRepository } from '@megumi/coding-agent/persistence/repos/run-execution-fact.repo';
-import { RunRecordRepository } from '@megumi/coding-agent/persistence/repos/run-record.repo';
-import { RuntimeEventRepository } from '@megumi/coding-agent/persistence/repos/runtime-event.repo';
-import { SessionCompactionRepository } from '@megumi/coding-agent/persistence/repos/session-compaction.repo';
-import { SessionMessageRepository } from '@megumi/coding-agent/persistence/repos/session-message.repo';
-import { SessionRecordRepository } from '@megumi/coding-agent/persistence/repos/session-record.repo';
+import { AgentLoopRepository } from '@megumi/coding-agent/persistence/repos/agent-loop.repo';
+import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
+import { SessionRepository } from '@megumi/coding-agent/persistence/repos/session.repo';
 import { SessionContextInputService } from '@megumi/coding-agent/session';
 import type { ModelInputContextSourceKind, ModelInputContextSourceRef } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
@@ -33,39 +28,46 @@ interface SessionContextInputTestRepository {
 
 function createRepositories(): {
   repository: SessionContextInputTestRepository;
-  activePathRepository: SessionActivePathRepository;
+  activePathRepository: SessionRepository;
 } {
   db = new Database(':memory:');
-  migrateDatabase(db);
-  const runExecutionFactRepository = new RunExecutionFactRepository(db);
-  const runRecordRepository = new RunRecordRepository(db);
-  const runtimeEventRepository = new RuntimeEventRepository(db);
-  const sessionCompactionRepository = new SessionCompactionRepository(db);
-  const sessionMessageRepository = new SessionMessageRepository(db);
-  const sessionRecordRepository = new SessionRecordRepository(db);
+  applyCodingAgentDatabaseMigrations(db);
+  db.prepare(`
+    INSERT INTO workspaces (
+      workspace_id, name, root_path, root_path_key, status,
+      created_at, updated_at, last_opened_at, metadata_json
+    ) VALUES (
+      'workspace:default', 'Default', 'C:/workspaces/default', 'c:/workspaces/default', 'available',
+      '2026-05-28T00:00:00.000Z', '2026-05-28T00:00:00.000Z', '2026-05-28T00:00:00.000Z', NULL
+    )
+  `).run();
+  const runExecutionFactRepository = new AgentLoopRepository(db);
+  const runRecordRepository = new AgentLoopRepository(db);
+  const runtimeEventRepository = new AgentLoopRepository(db);
+  const sessionRepository = new SessionRepository(db);
 
   return {
     repository: {
       appendRuntimeEvent: (event) => runtimeEventRepository.appendRuntimeEvent(event),
-      getMessage: (messageId) => sessionMessageRepository.getMessage(messageId),
+      getMessage: (messageId) => sessionRepository.getMessage(messageId),
       getRun: (runId) => runRecordRepository.getRun(runId),
-      getSession: (sessionId) => sessionRecordRepository.getSession(sessionId),
-      getSessionCompaction: (compactionId) => sessionCompactionRepository.getSessionCompaction(compactionId),
+      getSession: (sessionId) => sessionRepository.getSession(sessionId),
+      getSessionCompaction: (compactionId) => sessionRepository.getSessionCompaction(compactionId),
       listRuntimeEventsByRun: (runId) => runtimeEventRepository.listRuntimeEventsByRun(runId),
       listStepsByRun: (runId) => runExecutionFactRepository.listStepsByRun(runId),
-      saveMessage: (message) => sessionMessageRepository.saveMessage(message),
+      saveMessage: (message) => sessionRepository.saveMessage(message),
       saveRun: (run) => runRecordRepository.saveRun(run),
-      saveSession: (session) => sessionRecordRepository.saveSession(session),
-      saveSessionCompaction: (entry) => sessionCompactionRepository.saveSessionCompaction(entry),
+      saveSession: (session) => sessionRepository.saveSession(session),
+      saveSessionCompaction: (entry) => sessionRepository.saveSessionCompaction(entry),
       saveStep: (step) => runExecutionFactRepository.saveStep(step),
     },
-    activePathRepository: new SessionActivePathRepository(db),
+    activePathRepository: sessionRepository,
   };
 }
 
 function createSessionContextInputService(input: {
   repository: SessionContextInputTestRepository;
-  activePathRepository: SessionActivePathRepository;
+  activePathRepository: SessionRepository;
 }): SessionContextInputService {
   return new SessionContextInputService({
     sessionRepository: input.repository,
@@ -106,7 +108,7 @@ function sourceRef(sourceKind: ModelInputContextSourceKind, sourceId: string): M
 }
 
 function appendActivePath(
-  activePathRepository: SessionActivePathRepository,
+  activePathRepository: SessionRepository,
   sessionId: string,
   entries: Array<{
     sourceEntryId: string;
@@ -676,5 +678,3 @@ describe('SessionContextInputService', () => {
     expect(JSON.stringify(input)).not.toContain('Off-path fallback message');
   });
 });
-
-

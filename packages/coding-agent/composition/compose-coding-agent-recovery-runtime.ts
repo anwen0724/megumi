@@ -1,22 +1,21 @@
 // Composes the Coding Agent product recovery runtime without desktop UI projections.
 import fs from 'fs-extra';
+import type { JsonValue } from '@megumi/shared/primitives';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import { RecoveryRepository } from '../persistence/repos/recovery.repo';
-import { RunRecordRepository } from '../persistence/repos/run-record.repo';
-import { RuntimeEventRepository } from '../persistence/repos/runtime-event.repo';
-import { SessionRecordRepository } from '../persistence/repos/session-record.repo';
+import type { TimelineMessage } from '@megumi/shared/timeline';
+import type { AgentLoopRepository } from '../persistence/repos/agent-loop.repo';
+import type { SessionRepository } from '../persistence/repos/session.repo';
 import { WorkspaceChangeRepository } from '../persistence/repos/workspace-change.repo';
-import { TimelineMessageRepository } from '../persistence/repos/timeline-message.repo';
 import { createRecoveryService, type RecoveryLogger } from '../state';
 import { WorkspaceRestoreService } from '../workspace';
 
 export interface ComposeCodingAgentRecoveryRuntimeOptions {
-  recoveryRepository: RecoveryRepository;
-  runRepository: RunRecordRepository;
-  sessionRepository: SessionRecordRepository;
-  runtimeEventRepository: RuntimeEventRepository;
+  recoveryRepository: AgentLoopRepository;
+  runRepository: AgentLoopRepository;
+  sessionRepository: SessionRepository;
+  runtimeEventRepository: AgentLoopRepository;
   workspaceChangeRepository: WorkspaceChangeRepository;
-  timelineMessageRepository: TimelineMessageRepository;
+  timelineMessageRepository: AgentLoopRepository;
   logger?: RecoveryLogger;
 }
 
@@ -35,7 +34,26 @@ export function composeCodingAgentRecoveryRuntime(options: ComposeCodingAgentRec
     timelineBackfill: {
       listRunsNeedingTimelineBackfill: () => options.recoveryRepository.listRunsNeedingTimelineBackfill(),
       hasCommittedTimeline: (runId) => Boolean(options.timelineMessageRepository.getRunCommit(runId)),
-      commitRunTimeline: (input) => options.timelineMessageRepository.commitRunTimeline(input),
+      commitRunTimeline: (input) => {
+        const committed = options.timelineMessageRepository.commitRunTimeline(input);
+        for (const message of input.messages) {
+          if (message.role !== 'assistant') {
+            continue;
+          }
+          options.sessionRepository.saveMessage({
+            messageId: String(message.messageId),
+            sessionId: input.sessionId,
+            runId: input.runId,
+            role: 'assistant',
+            content: timelineMessageText(message),
+            status: 'completed',
+            createdAt: message.createdAt,
+            completedAt: message.updatedAt,
+            metadata: { timelineMessage: message as unknown as JsonValue },
+          });
+        }
+        return committed;
+      },
     },
     ...(options.logger ? { logger: options.logger } : {}),
     workspaceRestore: {
@@ -61,13 +79,28 @@ export function composeCodingAgentRecoveryRuntime(options: ComposeCodingAgentRec
   });
 }
 
+function timelineMessageText(message: TimelineMessage): string {
+  return message.blocks
+    .map((block) => {
+      if ('text' in block && typeof block.text === 'string') {
+        return block.text;
+      }
+      if ('status' in block && typeof block.status === 'string') {
+        return block.status;
+      }
+      return block.kind;
+    })
+    .filter(Boolean)
+    .join('\n') || message.role;
+}
+
 function createWorkspaceRestoreForChangeSet(input: {
   changeSetId: string;
-  runRepository: Pick<RunRecordRepository, 'getRun'>;
-  sessionRepository: Pick<SessionRecordRepository, 'getSession'>;
+  runRepository: Pick<AgentLoopRepository, 'getRun'>;
+  sessionRepository: Pick<SessionRepository, 'getSession'>;
   workspaceChangeRepository: WorkspaceChangeRepository;
 }): WorkspaceRestoreService {
-  const changeSet = input.workspaceChangeRepository.getChangeSet(input.changeSetId);
+  const changeSet = input.workspaceChangeRepository.getWorkspaceChange(input.changeSetId);
   if (!changeSet) {
     throw new Error(`Workspace change set not found: ${input.changeSetId}`);
   }

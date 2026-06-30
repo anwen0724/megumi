@@ -22,7 +22,7 @@ describe('tool-result model input', () => {
     }
     const results = buildToolResultsForNextModelInput({
       repository: {
-        saveToolResult: (toolResult: ToolResult) => {
+        completeToolCall: (toolResult: ToolResult) => {
           saved.push(toolResult);
           return toolResult;
         },

@@ -1,4 +1,4 @@
-﻿import type { PermissionSnapshotRepository } from '@megumi/coding-agent/persistence/repos/permission-snapshot.repo';
+import type { AgentLoopRepository } from '@megumi/coding-agent/persistence/repos/agent-loop.repo';
 import {
   PermissionModeStateSchema,
   type PermissionModeState,
@@ -12,7 +12,7 @@ export interface PermissionSnapshotServiceIds {
 
 export interface PermissionSnapshotServiceOptions {
   repository: Pick<
-    PermissionSnapshotRepository,
+    AgentLoopRepository,
     | 'savePermissionSnapshot'
     | 'getImplementationPlan'
     | 'saveSourcePlanRelation'

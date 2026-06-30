@@ -71,7 +71,7 @@ export async function advanceExecutionWindows(
 
     for (const record of records) {
       if (isActiveStatus(record.status)) {
-        options.repository.saveToolExecution({
+        options.repository.recordToolExecution({
           ...record,
           status: 'cancelled',
           completedAt: options.now(),

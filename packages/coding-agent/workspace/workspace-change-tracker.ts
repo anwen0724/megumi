@@ -5,7 +5,6 @@ import type {
   WorkspaceChangedFile,
   WorkspaceChangeKind,
   WorkspaceChangeSet,
-  WorkspaceCheckpoint,
   WorkspaceSnapshotContent,
 } from '@megumi/shared/workspace';
 
@@ -29,12 +28,11 @@ export interface WorkspaceChangeExecutionScope {
 }
 
 export interface WorkspaceChangeTrackerRepositoryPort {
-  getChangeSet(changeSetId: string): WorkspaceChangeSet | undefined;
-  saveChangeSet(changeSet: WorkspaceChangeSet): WorkspaceChangeSet;
-  finalizeChangeSet(changeSetId: string, finalizedAt: string): WorkspaceChangeSet | undefined;
-  saveSnapshotContent(snapshot: WorkspaceSnapshotContent): WorkspaceSnapshotContent;
-  saveWorkspaceCheckpoint(checkpoint: WorkspaceCheckpoint): WorkspaceCheckpoint;
-  saveChangedFile(changedFile: WorkspaceChangedFile): WorkspaceChangedFile;
+  getWorkspaceChange(changeSetId: string): WorkspaceChangeSet | undefined;
+  recordWorkspaceChange(changeSet: WorkspaceChangeSet): WorkspaceChangeSet;
+  finalizeWorkspaceChange(changeSetId: string, finalizedAt: string): WorkspaceChangeSet | undefined;
+  saveFileSnapshot(snapshot: WorkspaceSnapshotContent): WorkspaceSnapshotContent;
+  recordChangedFile(changedFile: WorkspaceChangedFile): WorkspaceChangedFile;
 }
 
 export interface WorkspaceChangeTrackerOptions {
@@ -127,7 +125,7 @@ export class WorkspaceChangeTrackerService {
     }
 
     this.activeChangeSets.delete(scopeKey);
-    return this.options.repository.finalizeChangeSet(active.changeSetId, this.options.now());
+    return this.options.repository.finalizeWorkspaceChange(active.changeSetId, this.options.now());
   }
 
   private async trackManagedMutation<T>(
@@ -138,21 +136,6 @@ export class WorkspaceChangeTrackerService {
     const before = await this.captureFileContent(input.scope, target.projectPath, target.absolutePath);
     this.assertProjectedAfterSnapshotWithinLimit(input.toolExecution, target.projectPath, before);
 
-    const checkpoint = this.options.repository.saveWorkspaceCheckpoint({
-      workspaceCheckpointId: this.options.ids.workspaceCheckpointId(),
-      changeSetId: changeSet.changeSetId,
-      sessionId: input.scope.sessionId,
-      runId: input.scope.runId,
-      stepId: input.scope.stepId,
-      toolCallId: input.toolExecution.toolCallId,
-      toolExecutionId: input.toolExecution.toolExecutionId,
-      sourceEntryId: input.scope.sourceEntryId,
-      responseMessageId: input.scope.responseMessageId,
-      projectPath: target.projectPath,
-      ...beforeStateFields(before),
-      createdAt: this.options.now(),
-    });
-
     const result = await input.execute();
     const after = await this.captureFileContent(input.scope, target.projectPath, target.absolutePath);
     const changeKind = determineChangeKind(before, after);
@@ -161,10 +144,10 @@ export class WorkspaceChangeTrackerService {
     }
 
     const createdAt = this.options.now();
-    this.options.repository.saveChangedFile({
+    this.options.repository.recordChangedFile({
       changedFileId: this.options.ids.changedFileId(),
       changeSetId: changeSet.changeSetId,
-      workspaceCheckpointId: checkpoint.workspaceCheckpointId,
+      workspaceCheckpointId: this.options.ids.workspaceCheckpointId(),
       sessionId: input.scope.sessionId,
       runId: input.scope.runId,
       stepId: input.scope.stepId,
@@ -188,7 +171,7 @@ export class WorkspaceChangeTrackerService {
     const scopeKey = scopeKeyFor(scope);
     const active = this.activeChangeSets.get(scopeKey);
     if (active) {
-      const persisted = this.options.repository.getChangeSet(active.changeSetId);
+      const persisted = this.options.repository.getWorkspaceChange(active.changeSetId);
       if (persisted?.status === 'finalized') {
         throw new Error(`Workspace change set ${active.changeSetId} is already finalized.`);
       }
@@ -206,7 +189,7 @@ export class WorkspaceChangeTrackerService {
       changedFileCount: 0,
       createdAt: this.options.now(),
     };
-    const saved = this.options.repository.saveChangeSet(changeSet);
+    const saved = this.options.repository.recordWorkspaceChange(changeSet);
     const state = { changeSetId: saved.changeSetId, scope };
     this.activeChangeSets.set(scopeKey, state);
     return state;
@@ -248,7 +231,7 @@ export class WorkspaceChangeTrackerService {
 
     const sha256 = sha256Hex(contentText);
     const contentRefId = this.options.ids.snapshotContentRefId();
-    this.options.repository.saveSnapshotContent({
+    this.options.repository.saveFileSnapshot({
       contentRefId,
       sessionId: scope.sessionId,
       runId: scope.runId,
@@ -359,7 +342,7 @@ function sha256Hex(content: string): string {
 }
 
 function beforeStateFields(state: CapturedFileState): Pick<
-  WorkspaceCheckpoint,
+  WorkspaceChangedFile,
   'beforeExists' | 'beforeContentRefId' | 'beforeHash' | 'beforeByteLength'
 > {
   return {

@@ -459,7 +459,7 @@ describe('buildModelCallInputContextFromSources', () => {
       sessionId: 'session:1',
       runId: 'run:1',
       stepId: 'step:2',
-      buildReason: 'tool_results_model_input',
+      buildReason: 'tool_call_outputs_model_input',
       builtAt,
       currentMessage: message({
         messageId: 'message:current',
@@ -717,7 +717,7 @@ describe('buildModelCallInputContextFromSources', () => {
       sessionId: 'session:1',
       runId: 'run:1',
       stepId: 'step:2',
-      buildReason: 'tool_results_model_input',
+      buildReason: 'tool_call_outputs_model_input',
       builtAt,
       toolCalls: [toolCall()],
       toolResults: [toolResult()],
@@ -805,7 +805,7 @@ describe('buildModelCallInputContextFromSources', () => {
       sessionId: 'session:1',
       runId: 'run:1',
       stepId: 'step:2',
-      buildReason: 'tool_results_model_input',
+      buildReason: 'tool_call_outputs_model_input',
       builtAt,
       sessionContext: sessionContextInput(),
       toolCalls: [toolCall()],
@@ -841,7 +841,7 @@ describe('buildModelCallInputContextFromSources', () => {
       sessionId: 'session:1',
       runId: 'run:1',
       stepId: 'step:2',
-      buildReason: 'tool_results_model_input',
+      buildReason: 'tool_call_outputs_model_input',
       builtAt,
       budgetPolicy: {
         modelContextWindow: 30,
@@ -1264,7 +1264,7 @@ describe('buildModelCallInputContextFromSources', () => {
       sessionId: 'session:1',
       runId: 'run:1',
       stepId: 'step:2',
-      buildReason: 'tool_results_model_input',
+      buildReason: 'tool_call_outputs_model_input',
       builtAt,
       inputPreprocessing: {
         originalText: '/write-doc README.md',
@@ -1519,7 +1519,7 @@ describe('buildModelCallInputContextFromSources', () => {
       sessionId: 'session:1',
       runId: 'run:1',
       stepId: 'step:2',
-      buildReason: 'tool_results_model_input',
+      buildReason: 'tool_call_outputs_model_input',
       builtAt,
       instructionSources: [{
         sourceId: 'project-instruction:AGENTS.md',
@@ -1600,7 +1600,7 @@ describe('buildModelCallInputContextFromSources', () => {
       sessionId: 'session:1',
       runId: 'run:1',
       stepId: 'step:2',
-      buildReason: 'tool_results_model_input',
+      buildReason: 'tool_call_outputs_model_input',
       builtAt,
       instructionSources: [
         instructionSource({

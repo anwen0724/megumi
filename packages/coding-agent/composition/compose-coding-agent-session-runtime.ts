@@ -12,32 +12,21 @@ import {
 import type { ModelCallProvider } from '../agent-loop/model-call';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
 import { createInputProcessingCompositionIds } from './input-processing-ids';
-import type { RunContextRepository } from '../persistence/repos/run-context.repo';
+import type { AgentLoopRepository } from '../persistence/repos/agent-loop.repo';
 import type { ArtifactRepository } from '../persistence/repos/artifact.repo';
-import type { ModelStepRepository } from '../persistence/repos/model-step.repo';
-import type { PermissionSnapshotRepository } from '../persistence/repos/permission-snapshot.repo';
-import type { RunExecutionFactRepository } from '../persistence/repos/run-execution-fact.repo';
-import type { RunRecordRepository } from '../persistence/repos/run-record.repo';
-import type { RuntimeEventRepository } from '../persistence/repos/runtime-event.repo';
-import type { SessionActivePathRepository } from '../persistence/repos/session-active-path.repo';
-import type { SessionContextRepository } from '../persistence/repos/session-context.repo';
-import type { SessionMessageRepository } from '../persistence/repos/session-message.repo';
-import type { SessionRecordRepository } from '../persistence/repos/session-record.repo';
-import type { TimelineMessageRepository } from '../persistence/repos/timeline-message.repo';
-import type { ToolRepository } from '../persistence/repos/tool.repo';
+import type { SessionRepository } from '../persistence/repos/session.repo';
+import type { ToolCallRepository } from '../persistence/repos/tool-call.repo';
 import type { WorkspaceChangeRepository } from '../persistence/repos/workspace-change.repo';
 import type { ToolRegistry } from '../tools/registry';
 import { ToolRegistrySnapshotService } from '../tools/tool-registry-snapshot';
 import { PlanArtifactCompatibilityService, PlanArtifactService } from '../artifacts';
 import type { MemoryRuntimeComposition } from './compose-coding-agent-memory';
-import { createInputProcessingRepositoryOptions } from './input-processing-repository-options';
 import { PostRunHooksCoordinator } from '../hooks';
 import { RunRetryCoordinator, RunTerminalCoordinator } from '../state';
 import {
   createWorkspaceChangeFooterProjectorService,
   isWorkspaceChangeFooterProjectorPort,
 } from '../workspace';
-import { createInputProcessingToolRepositoryAdapter } from './input-processing-tool-repository-adapter';
 
 export interface CodingAgentHomePaths {
   homePath: string;
@@ -49,51 +38,41 @@ export interface ComposeCodingAgentSessionRuntimeOptions {
   homePaths: CodingAgentHomePaths;
   runtimeLogger: RuntimeLogger;
   artifactRepository: ArtifactRepository;
-  permissionSnapshotRepository: PermissionSnapshotRepository;
-  modelStepRepository: ModelStepRepository;
-  runRecordRepository: RunRecordRepository;
-  sessionRecordRepository: SessionRecordRepository;
-  sessionContextRepository: SessionContextRepository;
-  sessionMessageRepository: SessionMessageRepository;
-  runExecutionFactRepository: RunExecutionFactRepository;
-  runtimeEventRepository: RuntimeEventRepository;
-  activePathRepository: SessionActivePathRepository;
-  toolRepository: ToolRepository;
+  agentLoopRepository: AgentLoopRepository;
+  sessionRepository: SessionRepository;
+  toolCallRepository: ToolCallRepository;
   workspaceChangeRepository: WorkspaceChangeRepository;
-  timelineMessageRepository: TimelineMessageRepository;
   toolRegistry: ToolRegistry;
   modelCallProviderService: ModelCallProvider;
   toolRuntimeFactory: ToolRuntimeFactory;
   memoryRuntime: MemoryRuntimeComposition['memoryRuntime'];
-  runContextRepository: RunContextRepository;
   chatStreamEventSink?: ConstructorParameters<typeof InputProcessingService>[0]['chatStreamEventSink'];
   workspaceChangeFooterProjector?: ConstructorParameters<typeof InputProcessingService>[0]['workspaceChanges'];
 }
 
 export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSessionRuntimeOptions) {
-  const inputProcessingRepositoryOptions = createInputProcessingRepositoryOptions(options);
   const inputProcessingIds = createInputProcessingCompositionIds();
   const runContextService = new RunContextService({
-    contextRepository: options.runContextRepository,
+    contextRepository: options.agentLoopRepository,
     workspaceSourceProvider: createLocalWorkspaceSourceProvider(),
   });
   const planArtifactCompatibility = new PlanArtifactCompatibilityService({
     repository: options.artifactRepository,
   });
   const permissionSnapshotService = new PermissionSnapshotService({
-    repository: options.permissionSnapshotRepository,
+    repository: options.agentLoopRepository,
   });
   const planArtifactService = new PlanArtifactService({
-    repository: options.permissionSnapshotRepository,
+    repository: options.agentLoopRepository,
     planArtifactCompatibility,
   });
   const sessionService = new SessionService({
-    sessionRepository: options.sessionRecordRepository,
-    messageRepository: options.sessionMessageRepository,
-    runRepository: options.runRecordRepository,
+    sessionRepository: options.sessionRepository,
+    messageRepository: options.sessionRepository,
+    runRepository: options.agentLoopRepository,
     ids: { sessionId: () => `session:${crypto.randomUUID()}` },
-    activePathRepository: options.activePathRepository,
-    timelineMessageRepository: options.timelineMessageRepository,
+    activePathRepository: options.sessionRepository,
+    timelineMessageRepository: options.agentLoopRepository,
     memorySettingsProvider: options.memoryRuntime.memorySettingsProvider,
     memoryMarkdownSyncService: options.memoryRuntime.markdownSyncService,
     megumiHomePath: options.homePaths.homePath,
@@ -105,61 +84,84 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     chatStreamEventId: () => `chat-stream-event:${crypto.randomUUID()}`,
   };
   const sessionBranchService = new SessionBranchService({
-    sessionRepository: options.sessionRecordRepository,
-    messageRepository: options.sessionMessageRepository,
-    runtimeEventRepository: options.runtimeEventRepository,
-    activePathRepository: options.activePathRepository,
+    sessionRepository: options.sessionRepository,
+    messageRepository: options.sessionRepository,
+    runtimeEventRepository: options.agentLoopRepository,
+    activePathRepository: options.sessionRepository,
     ids: branchIds,
     chatStreamEventSink: options.chatStreamEventSink,
   });
   const sessionContextInputService = new SessionContextInputService({
-    sessionRepository: options.sessionRecordRepository,
-    messageRepository: options.sessionMessageRepository,
-    runRepository: options.runRecordRepository,
-    runExecutionFactRepository: options.runExecutionFactRepository,
-    runtimeEventRepository: options.runtimeEventRepository,
-    sessionCompactionRepository: options.sessionContextRepository,
-    activePathRepository: options.activePathRepository,
+    sessionRepository: options.sessionRepository,
+    messageRepository: options.sessionRepository,
+    runRepository: options.agentLoopRepository,
+    runExecutionFactRepository: options.agentLoopRepository,
+    runtimeEventRepository: options.agentLoopRepository,
+    sessionCompactionRepository: options.sessionRepository,
+    activePathRepository: options.sessionRepository,
   });
   const workspaceChanges = options.workspaceChangeFooterProjector ?? options.workspaceChangeRepository;
   const workspaceChangeFooterProjector = isWorkspaceChangeFooterProjectorPort(workspaceChanges)
     ? createWorkspaceChangeFooterProjectorService({ workspaceChanges })
     : undefined;
   const postRunHooks = new PostRunHooksCoordinator({
-    repository: inputProcessingRepositoryOptions.postRunHooksRepository,
+    repository: {
+      listRuntimeEventsByRun: (runId) => options.agentLoopRepository.listRuntimeEventsByRun(runId),
+    },
     memoryCaptureService: options.memoryRuntime.captureService,
     megumiHomePath: options.homePaths.homePath,
     workspaceChanges,
     ...(workspaceChangeFooterProjector ? { workspaceChangeFooterProjector } : {}),
   });
   const runTerminalCoordinator = new RunTerminalCoordinator({
-    repository: inputProcessingRepositoryOptions.runTerminalRepository,
-    toolRepository: options.toolRepository,
+    repository: {
+      getRun: (runId) => options.agentLoopRepository.getRun(runId),
+      saveRun: (run) => options.agentLoopRepository.saveRun(run),
+      saveStep: (step) => options.agentLoopRepository.saveStep(step),
+      listStepsByRun: (runId) => options.agentLoopRepository.listStepsByRun(runId),
+      listRunsByStatuses: (statuses) => options.agentLoopRepository.listRunsByStatuses(statuses),
+      listRuntimeEventsByRun: (runId) => options.agentLoopRepository.listRuntimeEventsByRun(runId),
+      appendRuntimeEvent: (event) => options.agentLoopRepository.appendRuntimeEvent(event),
+    },
+    toolRepository: options.toolCallRepository,
     ids: inputProcessingIds,
   });
   const runRetryCoordinator = new RunRetryCoordinator({
-    repository: inputProcessingRepositoryOptions.runRetryRepository,
-    activePathRepository: options.activePathRepository,
+    repository: {
+      getRun: (runId) => options.agentLoopRepository.getRun(runId),
+      getMessage: (messageId) => options.sessionRepository.getMessage(messageId),
+      listRuntimeEventsByRun: (runId) => options.agentLoopRepository.listRuntimeEventsByRun(runId),
+      appendRuntimeEvent: (event) => options.agentLoopRepository.appendRuntimeEvent(event),
+    },
+    activePathRepository: options.sessionRepository,
     sessionBranchService,
     ids: inputProcessingIds,
   });
   const inputProcessingService = new InputProcessingService({
-    ...inputProcessingRepositoryOptions,
+    sessionRepository: options.sessionRepository,
+    agentLoopRepository: options.agentLoopRepository,
     postRunHooks,
     runTerminalCoordinator,
     runRetryCoordinator,
-    sessionCompactionRepository: options.sessionContextRepository,
-    activePathRepository: options.activePathRepository,
+    sessionCompactionRepository: options.sessionRepository,
+    activePathRepository: options.sessionRepository,
     sessionContextInputService,
     sessionBranchService,
     permissionSnapshotService,
     planArtifactService,
-    toolRegistrySnapshotService: new ToolRegistrySnapshotService(options.toolRepository),
+    toolRegistrySnapshotService: new ToolRegistrySnapshotService({
+      getToolSource: (sourceId) => options.toolCallRepository.getToolSource(sourceId),
+      listToolSources: () => options.toolCallRepository.listToolSources(),
+      seedDefaultToolSources: (createdAt) => options.toolCallRepository.seedDefaultToolSources(createdAt),
+      getToolRegistrySnapshotByRun: (runId) => options.toolCallRepository.getToolRegistrySnapshotByRun(runId),
+      saveToolRegistrySnapshot: (snapshot) =>
+        options.agentLoopRepository.saveToolRegistrySnapshot(snapshot),
+    }),
     contextService: runContextService,
     modelCallProvider: options.modelCallProviderService,
     toolRuntimeFactory: options.toolRuntimeFactory,
     toolDefinitionProvider: options.toolRegistry,
-    toolRepository: createInputProcessingToolRepositoryAdapter(options.toolRepository),
+    toolCallRepository: options.toolCallRepository,
     workspaceChanges,
     chatStreamEventSink: options.chatStreamEventSink,
     memoryRecallService: options.memoryRuntime.recallService,

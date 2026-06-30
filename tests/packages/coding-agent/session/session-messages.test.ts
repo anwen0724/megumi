@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 
 import { SessionMessageService } from '@megumi/coding-agent/session';
 import type {
@@ -10,7 +10,7 @@ import type {
 
 describe('SessionMessageService', () => {
   it('prepares user messages and commits assistant replies through session-owned records', () => {
-    const repository = new InMemorySessionMessageRepository();
+    const repository = new InMemorySessionMessageStore();
     const service = new SessionMessageService({
       sessionRepository: repository,
       messageRepository: repository,
@@ -68,7 +68,7 @@ describe('SessionMessageService', () => {
   });
 });
 
-class InMemorySessionMessageRepository {
+class InMemorySessionMessageStore {
   readonly sessions = new Map<string, Session>();
   readonly messages = new Map<string, SessionMessage>();
   readonly sourceEntries: SessionSourceEntry[] = [];

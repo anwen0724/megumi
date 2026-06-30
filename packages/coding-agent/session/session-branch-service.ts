@@ -1,4 +1,4 @@
-// Owns Coding Agent session branch tree operations and branch draft stream projection.
+﻿// Owns Coding Agent session branch tree operations and branch draft stream projection.
 import { createChatStreamEvent } from '@megumi/shared/chat-stream';
 import type { ModelInputContextSourceRef } from '@megumi/shared/model';
 import type { JsonObject } from '@megumi/shared/primitives';
@@ -46,7 +46,7 @@ export interface SessionBranchMessageRepository {
   getMessage(messageId: string): SessionMessage | undefined;
 }
 
-export interface SessionBranchRuntimeEventRepository {
+export interface SessionBranchEventStorePort {
   appendRuntimeEvent(event: RuntimeEvent): RuntimeEvent;
 }
 
@@ -111,7 +111,7 @@ export interface SessionBranchServicePort {
 export interface SessionBranchServiceOptions {
   sessionRepository: SessionBranchSessionRepository;
   messageRepository: SessionBranchMessageRepository;
-  runtimeEventRepository: SessionBranchRuntimeEventRepository;
+  runtimeEventRepository: SessionBranchEventStorePort;
   activePathRepository: SessionBranchActivePathRepository;
   ids: SessionBranchServiceIds;
   chatStreamEventSink?: SessionBranchChatStreamEventSink;
@@ -120,7 +120,7 @@ export interface SessionBranchServiceOptions {
 export class SessionBranchService implements SessionBranchServicePort {
   private readonly sessionRepository: SessionBranchSessionRepository;
   private readonly messageRepository: SessionBranchMessageRepository;
-  private readonly runtimeEventRepository: SessionBranchRuntimeEventRepository;
+  private readonly runtimeEventRepository: SessionBranchEventStorePort;
   private readonly activePathRepository: SessionBranchActivePathRepository;
   private readonly ids: SessionBranchServiceIds;
   private readonly chatStreamEventSink?: SessionBranchChatStreamEventSink;

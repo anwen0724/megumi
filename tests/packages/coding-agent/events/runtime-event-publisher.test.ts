@@ -1,11 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 
 import { RuntimeEventLog, RuntimeEventPublisher } from '@megumi/coding-agent/events';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 
 describe('RuntimeEventPublisher', () => {
   it('publishes runtime-request events through stream and terminal hooks', () => {
-    const repository = new InMemoryRuntimeEventRepository([
+    const repository = new InMemoryRuntimeEventStore([
       runtimeEvent({ eventId: 'event-1', sequence: 3 }),
     ]);
     const terminalHooks = { publishRunTerminalHooks: vi.fn() };
@@ -54,7 +54,7 @@ describe('RuntimeEventPublisher', () => {
   it('publishes raw runtime events through the same terminal hook boundary', () => {
     const terminalHooks = { publishRunTerminalHooks: vi.fn() };
     const publisher = new RuntimeEventPublisher({
-      eventLog: new RuntimeEventLog(new InMemoryRuntimeEventRepository()),
+      eventLog: new RuntimeEventLog(new InMemoryRuntimeEventStore()),
       terminalHooks,
     });
     const event = runtimeEvent({
@@ -71,7 +71,7 @@ describe('RuntimeEventPublisher', () => {
   });
 });
 
-class InMemoryRuntimeEventRepository {
+class InMemoryRuntimeEventStore {
   constructor(private readonly events: RuntimeEvent[] = []) {}
 
   appendRuntimeEvent(event: RuntimeEvent): RuntimeEvent {

@@ -1,4 +1,4 @@
-// Guards the Coding Agent run mainline so the implementation stays readable from service to turn to loop.
+﻿// Guards the Coding Agent run mainline so the implementation stays readable from service to turn to loop.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
@@ -180,12 +180,11 @@ describe('coding agent run mainline guards', () => {
     expect(serviceSource).not.toContain('private async *trackActiveSessionMessageRun');
   });
 
-  it('keeps legacy model step event persistence in the persistence owner', () => {
+  it('keeps model call event persistence in the agent loop persistence owner', () => {
     const serviceSource = read('packages/coding-agent/input/input-service.ts');
-    const persistenceSource = read('packages/coding-agent/persistence/legacy-model-step-events.ts');
+    const persistenceSource = read('packages/coding-agent/persistence/repos/agent-loop.repo.ts');
 
-    expect(persistenceSource).toContain('export function persistLegacyModelStepRecordFromEvent');
-    expect(serviceSource).toContain('persistLegacyModelStepRecordFromEvent({');
+    expect(persistenceSource).toContain('recordModelCall');
     expect(serviceSource).not.toContain('private persistModelStepRecordFromEvent');
     expect(serviceSource).not.toContain('function getModelStepId');
   });
@@ -215,7 +214,6 @@ describe('coding agent run mainline guards', () => {
     expect(agentLoopSource).toContain('cancelAgentLoopModelCall({');
     expect(serviceSource).not.toContain('private async *failRunBeforeModelStep');
     expect(serviceSource).not.toContain('private async *failRunBeforeModelCall');
-    expect(serviceSource).not.toContain('const initialRun = this.runRecordRepository.saveRun');
     expect(serviceSource).not.toContain('const step = this.runExecutionFactRepository.saveStep({\n      stepId,\n      runId,');
     expect(serviceSource).not.toContain("assertRunStatusTransition(currentRun.status, 'waiting_for_approval')");
   });

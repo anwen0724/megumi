@@ -1,65 +1,130 @@
-﻿import type { MegumiDatabase } from '../connection';
+// Owns artifact metadata, versions and provenance refs on the new artifact tables.
+import type { MegumiDatabase } from '../connection';
 import type {
   Artifact,
-  ArtifactRelation,
   ArtifactSourceRef,
   ArtifactStatus,
   ArtifactVersion,
 } from '@megumi/shared/artifact';
 import type { JsonObject } from '@megumi/shared/primitives';
 
-interface ArtifactRow { artifact_json: string; metadata_json: string | null }
-interface VersionRow { version_json: string }
-interface SourceRefRow { source_ref_json: string }
-interface RelationRow { relation_json: string }
+interface ArtifactRow {
+  artifact_id: string;
+  workspace_id: string | null;
+  session_id: string | null;
+  run_id: string | null;
+  kind: Artifact['kind'];
+  title: string;
+  status: Artifact['status'];
+  current_version_id: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  metadata_json: string | null;
+}
+
+interface VersionRow {
+  artifact_version_id: string;
+  artifact_id: string;
+  version_number: number;
+  storage: ArtifactVersion['contentRef']['storage'];
+  content_type: ArtifactVersion['contentType'];
+  content_format: string;
+  inline_text: string | null;
+  content_key: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
+  sha256: string | null;
+  text_preview: string | null;
+  created_by_run_id: string | null;
+  created_at: string;
+  metadata_json: string | null;
+}
+
+interface SourceRefRow {
+  metadata_json: string | null;
+}
+
+interface ArtifactMetadata {
+  artifact?: Artifact;
+  producingStepId?: string;
+  pinnedVersionIds?: string[];
+}
+
+interface VersionMetadata {
+  version?: ArtifactVersion;
+}
+
+interface SourceRefMetadata {
+  sourceRef?: ArtifactSourceRef;
+  label?: string;
+}
 
 export class ArtifactRepository {
   constructor(private readonly database: MegumiDatabase) {}
 
   saveArtifact(artifact: Artifact): Artifact {
+    const sessionId = metadataSessionId(artifact.metadata);
+    const workspaceId = artifact.producingRunId ? workspaceIdForRun(this.database, artifact.producingRunId) : null;
     this.database.prepare(`
       INSERT INTO artifacts (
-        artifact_id, session_id, kind, title, status, producing_run_id,
-        producing_step_id, current_version_id, pinned_version_ids_json,
-        created_at, updated_at, deleted_at, metadata_json, artifact_json
+        artifact_id, workspace_id, session_id, run_id, kind, title, status,
+        current_version_id, created_at, updated_at, deleted_at, metadata_json
       ) VALUES (
-        @artifact_id, @session_id, @kind, @title, @status, @producing_run_id,
-        @producing_step_id, @current_version_id, @pinned_version_ids_json,
-        @created_at, @updated_at, @deleted_at, @metadata_json, @artifact_json
+        @artifact_id, @workspace_id, @session_id, @run_id, @kind, @title, @status,
+        @current_version_id, @created_at, @updated_at, @deleted_at, @metadata_json
       )
       ON CONFLICT(artifact_id) DO UPDATE SET
+        workspace_id = excluded.workspace_id,
+        session_id = excluded.session_id,
+        run_id = excluded.run_id,
         title = excluded.title,
         status = excluded.status,
         current_version_id = excluded.current_version_id,
-        pinned_version_ids_json = excluded.pinned_version_ids_json,
         updated_at = excluded.updated_at,
         deleted_at = excluded.deleted_at,
-        metadata_json = excluded.metadata_json,
-        artifact_json = excluded.artifact_json
-    `).run(toArtifactRow(artifact));
+        metadata_json = excluded.metadata_json
+    `).run({
+      artifact_id: artifact.artifactId,
+      workspace_id: workspaceId,
+      session_id: sessionId,
+      run_id: artifact.producingRunId,
+      kind: artifact.kind,
+      title: artifact.title,
+      status: artifact.status,
+      current_version_id: artifact.currentVersionId ?? null,
+      created_at: artifact.createdAt,
+      updated_at: artifact.updatedAt,
+      deleted_at: artifact.deletedAt ?? null,
+      metadata_json: stringifyJson({
+        artifact,
+        ...(artifact.producingStepId ? { producingStepId: artifact.producingStepId } : {}),
+        ...(artifact.pinnedVersionIds ? { pinnedVersionIds: artifact.pinnedVersionIds } : {}),
+      } satisfies ArtifactMetadata),
+    });
     return artifact;
   }
 
   getArtifact(artifactId: string): Artifact | undefined {
-    const row = this.database.prepare('SELECT artifact_json, metadata_json FROM artifacts WHERE artifact_id = ?')
+    const row = this.database.prepare('SELECT * FROM artifacts WHERE artifact_id = ?')
       .get(artifactId) as ArtifactRow | undefined;
-    return row ? JSON.parse(row.artifact_json) as Artifact : undefined;
+    return row ? fromArtifactRow(row) : undefined;
   }
 
   listArtifactsByRun(runId: string): Artifact[] {
     return (this.database.prepare(`
-      SELECT artifact_json FROM artifacts
-      WHERE producing_run_id = ?
+      SELECT * FROM artifacts
+      WHERE run_id = ?
       ORDER BY created_at ASC
-    `).all(runId) as ArtifactRow[]).map((row) => JSON.parse(row.artifact_json) as Artifact);
+    `).all(runId) as ArtifactRow[]).map(fromArtifactRow);
   }
 
   listArtifactsBySession(sessionId: string): Artifact[] {
     return (this.database.prepare(`
-      SELECT artifact_json FROM artifacts
-      WHERE session_id = ? OR json_extract(metadata_json, '$.sessionId') = ?
+      SELECT * FROM artifacts
+      WHERE session_id = ?
       ORDER BY created_at ASC
-    `).all(sessionId, sessionId) as ArtifactRow[]).map((row) => JSON.parse(row.artifact_json) as Artifact);
+    `).all(sessionId) as ArtifactRow[]).map(fromArtifactRow);
   }
 
   updateArtifactStatus(input: {
@@ -83,32 +148,56 @@ export class ArtifactRepository {
   saveVersion(version: ArtifactVersion): ArtifactVersion {
     this.database.prepare(`
       INSERT INTO artifact_versions (
-        artifact_version_id, artifact_id, version_number, content_type, content_format,
-        storage, content_key, inline_text, mime_type, size_bytes, sha256,
-        text_preview, redaction_state, change_summary, created_by_run_id,
-        created_by_step_id, created_at, metadata_json, version_json
+        artifact_version_id, artifact_id, version_number, storage, content_type,
+        content_format, inline_text, content_key, mime_type, size_bytes, sha256,
+        text_preview, created_by_run_id, created_at, metadata_json
       ) VALUES (
-        @artifact_version_id, @artifact_id, @version_number, @content_type, @content_format,
-        @storage, @content_key, @inline_text, @mime_type, @size_bytes, @sha256,
-        @text_preview, @redaction_state, @change_summary, @created_by_run_id,
-        @created_by_step_id, @created_at, @metadata_json, @version_json
+        @artifact_version_id, @artifact_id, @version_number, @storage, @content_type,
+        @content_format, @inline_text, @content_key, @mime_type, @size_bytes, @sha256,
+        @text_preview, @created_by_run_id, @created_at, @metadata_json
       )
-    `).run(toVersionRow(version));
+      ON CONFLICT(artifact_version_id) DO UPDATE SET
+        content_type = excluded.content_type,
+        content_format = excluded.content_format,
+        inline_text = excluded.inline_text,
+        content_key = excluded.content_key,
+        mime_type = excluded.mime_type,
+        size_bytes = excluded.size_bytes,
+        sha256 = excluded.sha256,
+        text_preview = excluded.text_preview,
+        metadata_json = excluded.metadata_json
+    `).run({
+      artifact_version_id: version.artifactVersionId,
+      artifact_id: version.artifactId,
+      version_number: version.versionNumber,
+      storage: version.contentRef.storage,
+      content_type: version.contentType,
+      content_format: version.contentFormat,
+      inline_text: version.contentRef.inlineText ?? null,
+      content_key: version.contentRef.contentKey ?? null,
+      mime_type: version.contentRef.mimeType ?? null,
+      size_bytes: version.contentRef.sizeBytes ?? null,
+      sha256: version.contentRef.sha256 ?? null,
+      text_preview: version.textPreview ?? version.contentRef.textPreview ?? null,
+      created_by_run_id: version.createdByRunId,
+      created_at: version.createdAt,
+      metadata_json: stringifyJson({ version } satisfies VersionMetadata),
+    });
     return version;
   }
 
   getVersion(artifactVersionId: string): ArtifactVersion | undefined {
-    const row = this.database.prepare('SELECT version_json FROM artifact_versions WHERE artifact_version_id = ?')
+    const row = this.database.prepare('SELECT * FROM artifact_versions WHERE artifact_version_id = ?')
       .get(artifactVersionId) as VersionRow | undefined;
-    return row ? JSON.parse(row.version_json) as ArtifactVersion : undefined;
+    return row ? fromVersionRow(row) : undefined;
   }
 
   listVersionsByArtifact(artifactId: string): ArtifactVersion[] {
     return (this.database.prepare(`
-      SELECT version_json FROM artifact_versions
+      SELECT * FROM artifact_versions
       WHERE artifact_id = ?
       ORDER BY version_number ASC
-    `).all(artifactId) as VersionRow[]).map((row) => JSON.parse(row.version_json) as ArtifactVersion);
+    `).all(artifactId) as VersionRow[]).map(fromVersionRow);
   }
 
   nextVersionNumber(artifactId: string): number {
@@ -123,48 +212,86 @@ export class ArtifactRepository {
   saveSourceRef(sourceRef: ArtifactSourceRef): ArtifactSourceRef {
     this.database.prepare(`
       INSERT INTO artifact_source_refs (
-        source_ref_id, artifact_id, artifact_version_id, kind, ref_id,
-        label, metadata_json, created_at, source_ref_json
+        source_ref_id, artifact_id, artifact_version_id, source_kind, source_id,
+        excerpt_preview, created_at, metadata_json
       ) VALUES (
-        @source_ref_id, @artifact_id, @artifact_version_id, @kind, @ref_id,
-        @label, @metadata_json, @created_at, @source_ref_json
+        @source_ref_id, @artifact_id, @artifact_version_id, @source_kind, @source_id,
+        @excerpt_preview, @created_at, @metadata_json
       )
-    `).run(toSourceRefRow(sourceRef));
+      ON CONFLICT(source_ref_id) DO UPDATE SET
+        artifact_version_id = excluded.artifact_version_id,
+        source_kind = excluded.source_kind,
+        source_id = excluded.source_id,
+        excerpt_preview = excluded.excerpt_preview,
+        metadata_json = excluded.metadata_json
+    `).run({
+      source_ref_id: sourceRef.sourceRefId,
+      artifact_id: sourceRef.artifactId,
+      artifact_version_id: sourceRef.artifactVersionId ?? null,
+      source_kind: sourceRef.kind,
+      source_id: sourceRef.refId,
+      excerpt_preview: sourceRef.label ?? null,
+      created_at: sourceRef.createdAt,
+      metadata_json: stringifyJson({
+        sourceRef,
+        ...(sourceRef.label ? { label: sourceRef.label } : {}),
+      } satisfies SourceRefMetadata),
+    });
     return sourceRef;
   }
 
   listSourceRefsByArtifact(artifactId: string): ArtifactSourceRef[] {
     return (this.database.prepare(`
-      SELECT source_ref_json FROM artifact_source_refs
+      SELECT metadata_json FROM artifact_source_refs
       WHERE artifact_id = ?
       ORDER BY created_at ASC
-    `).all(artifactId) as SourceRefRow[]).map((row) => JSON.parse(row.source_ref_json) as ArtifactSourceRef);
-  }
-
-  saveRelation(relation: ArtifactRelation): ArtifactRelation {
-    this.database.prepare(`
-      INSERT INTO artifact_relations (
-        relation_id, from_artifact_id, from_version_id, to_artifact_id,
-        to_version_id, kind, created_by_run_id, created_at, metadata_json, relation_json
-      ) VALUES (
-        @relation_id, @from_artifact_id, @from_version_id, @to_artifact_id,
-        @to_version_id, @kind, @created_by_run_id, @created_at, @metadata_json, @relation_json
-      )
-    `).run(toRelationRow(relation));
-    return relation;
-  }
-
-  listRelationsByArtifact(artifactId: string): ArtifactRelation[] {
-    return (this.database.prepare(`
-      SELECT relation_json FROM artifact_relations
-      WHERE from_artifact_id = ? OR to_artifact_id = ?
-      ORDER BY created_at ASC
-    `).all(artifactId, artifactId) as RelationRow[]).map((row) => JSON.parse(row.relation_json) as ArtifactRelation);
+    `).all(artifactId) as SourceRefRow[])
+      .map((row) => parseJson<SourceRefMetadata>(row.metadata_json)?.sourceRef)
+      .filter((sourceRef): sourceRef is ArtifactSourceRef => Boolean(sourceRef));
   }
 }
 
-function stringifyJson(value: unknown): string {
-  return JSON.stringify(value);
+function fromArtifactRow(row: ArtifactRow): Artifact {
+  const metadata = parseJson<ArtifactMetadata>(row.metadata_json);
+  return metadata?.artifact ?? {
+    artifactId: row.artifact_id,
+    kind: row.kind,
+    title: row.title,
+    status: row.status,
+    producingRunId: row.run_id ?? '',
+    ...(metadata?.producingStepId ? { producingStepId: metadata.producingStepId } : {}),
+    ...(row.current_version_id ? { currentVersionId: row.current_version_id } : {}),
+    ...(metadata?.pinnedVersionIds ? { pinnedVersionIds: metadata.pinnedVersionIds } : {}),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    ...(row.deleted_at ? { deletedAt: row.deleted_at } : {}),
+    ...(row.session_id ? { metadata: { sessionId: row.session_id } } : {}),
+  };
+}
+
+function fromVersionRow(row: VersionRow): ArtifactVersion {
+  const metadata = parseJson<VersionMetadata>(row.metadata_json);
+  return metadata?.version ?? {
+    artifactVersionId: row.artifact_version_id,
+    artifactId: row.artifact_id,
+    versionNumber: row.version_number,
+    contentType: row.content_type,
+    contentFormat: row.content_format,
+    contentRef: {
+      storage: row.storage,
+      ...(row.inline_text ? { inlineText: row.inline_text } : {}),
+      ...(row.content_key ? { contentKey: row.content_key } : {}),
+      mimeType: row.mime_type ?? row.content_format,
+      sizeBytes: row.size_bytes ?? 0,
+      sha256: row.sha256 ?? '',
+      textPreview: row.text_preview ?? '',
+      redactionState: 'safe',
+      createdAt: row.created_at,
+    },
+    textPreview: row.text_preview ?? '',
+    createdByRunId: row.created_by_run_id ?? '',
+    createdAt: row.created_at,
+  };
 }
 
 function metadataSessionId(metadata: JsonObject | undefined): string | null {
@@ -172,75 +299,19 @@ function metadataSessionId(metadata: JsonObject | undefined): string | null {
   return typeof value === 'string' ? value : null;
 }
 
-function toArtifactRow(artifact: Artifact) {
-  return {
-    artifact_id: artifact.artifactId,
-    session_id: metadataSessionId(artifact.metadata),
-    kind: artifact.kind,
-    title: artifact.title,
-    status: artifact.status,
-    producing_run_id: artifact.producingRunId,
-    producing_step_id: artifact.producingStepId ?? null,
-    current_version_id: artifact.currentVersionId ?? null,
-    pinned_version_ids_json: artifact.pinnedVersionIds ? stringifyJson(artifact.pinnedVersionIds) : null,
-    created_at: artifact.createdAt,
-    updated_at: artifact.updatedAt,
-    deleted_at: artifact.deletedAt ?? null,
-    metadata_json: artifact.metadata ? stringifyJson(artifact.metadata) : null,
-    artifact_json: stringifyJson(artifact),
-  };
+function workspaceIdForRun(database: MegumiDatabase, runId: string): string | null {
+  const row = database
+    .prepare('SELECT workspace_id FROM agent_loop_runs WHERE run_id = ?')
+    .get(runId) as { workspace_id: string } | undefined;
+  return row?.workspace_id ?? null;
 }
 
-function toVersionRow(version: ArtifactVersion) {
-  return {
-    artifact_version_id: version.artifactVersionId,
-    artifact_id: version.artifactId,
-    version_number: version.versionNumber,
-    content_type: version.contentType,
-    content_format: version.contentFormat,
-    storage: version.contentRef.storage,
-    content_key: version.contentRef.contentKey ?? null,
-    inline_text: version.contentRef.inlineText ?? null,
-    mime_type: version.contentRef.mimeType,
-    size_bytes: version.contentRef.sizeBytes,
-    sha256: version.contentRef.sha256,
-    text_preview: version.textPreview,
-    redaction_state: version.contentRef.redactionState,
-    change_summary: version.changeSummary ?? null,
-    created_by_run_id: version.createdByRunId,
-    created_by_step_id: version.createdByStepId ?? null,
-    created_at: version.createdAt,
-    metadata_json: version.metadata ? stringifyJson(version.metadata) : null,
-    version_json: stringifyJson(version),
-  };
+function stringifyJson(value: unknown): string {
+  return JSON.stringify(value);
 }
 
-function toSourceRefRow(sourceRef: ArtifactSourceRef) {
-  return {
-    source_ref_id: sourceRef.sourceRefId,
-    artifact_id: sourceRef.artifactId,
-    artifact_version_id: sourceRef.artifactVersionId ?? null,
-    kind: sourceRef.kind,
-    ref_id: sourceRef.refId,
-    label: sourceRef.label ?? null,
-    metadata_json: sourceRef.metadata ? stringifyJson(sourceRef.metadata) : null,
-    created_at: sourceRef.createdAt,
-    source_ref_json: stringifyJson(sourceRef),
-  };
+function parseJson<T>(value: string): T;
+function parseJson<T>(value: string | null): T | undefined;
+function parseJson<T>(value: string | null): T | undefined {
+  return value ? JSON.parse(value) as T : undefined;
 }
-
-function toRelationRow(relation: ArtifactRelation) {
-  return {
-    relation_id: relation.relationId,
-    from_artifact_id: relation.fromArtifactId,
-    from_version_id: relation.fromVersionId ?? null,
-    to_artifact_id: relation.toArtifactId,
-    to_version_id: relation.toVersionId ?? null,
-    kind: relation.kind,
-    created_by_run_id: relation.createdByRunId ?? null,
-    created_at: relation.createdAt,
-    metadata_json: relation.metadata ? stringifyJson(relation.metadata) : null,
-    relation_json: stringifyJson(relation),
-  };
-}
-

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   createMemoryService,
+  type MemoryManagementCaptureAttempt,
   type MemoryManagementRepositoryPort,
+  type MemoryManagementRecallTrace,
 } from '@megumi/coding-agent/memory';
 import type {
   MemoryAccessLog,
@@ -16,6 +18,7 @@ import type {
   MemorySourceRef,
 } from '@megumi/shared/memory';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { JsonValue } from '@megumi/shared/primitives';
 
 const now = '2026-05-16T00:00:00.000Z';
 
@@ -28,16 +31,6 @@ function createInMemoryRepository(): MemoryManagementRepositoryPort {
   const recallResults: MemoryRecallResult[] = [];
 
   return {
-    saveCandidate(candidate) { candidates.set(candidate.candidateId, candidate); return candidate; },
-    getCandidate(candidateId) { return candidates.get(candidateId); },
-    listCandidates(filter) {
-      return [...candidates.values()].filter((c) => {
-        if (filter.workspaceId !== undefined && c.workspaceId !== filter.workspaceId) return false;
-        if (filter.sessionId !== undefined && c.sessionId !== filter.sessionId) return false;
-        if (filter.status !== undefined && c.status !== filter.status) return false;
-        return true;
-      });
-    },
     saveMemory(memory) { memories.set(memory.memoryId, memory); return memory; },
     getMemory(memoryId) { return memories.get(memoryId); },
     listMemories(filter) {
@@ -52,10 +45,72 @@ function createInMemoryRepository(): MemoryManagementRepositoryPort {
     listSourceRefsByOwner(ownerId, _ownerKind) {
       return sourceRefsByOwner.get(ownerId) ?? [];
     },
-    listAccessLogs(_filter) { return accessLogs; },
-    saveRecallRequest(request) { recallRequests.push(request); return request; },
-    saveRecallResult(result) { recallResults.push(result); return result; },
-    saveAccessLog(accessLog) { accessLogs.push(accessLog); return accessLog; },
+    recordCaptureAttempt(attempt) {
+      if (attempt.triggerKind === 'candidate') {
+        const candidate = attempt.metadata?.candidate as MemoryCandidate | undefined;
+        if (candidate) {
+          candidates.set(candidate.candidateId, candidate);
+        }
+      }
+      if (attempt.triggerKind === 'access_log') {
+        const accessLog = attempt.metadata?.accessLog as MemoryAccessLog | undefined;
+        if (accessLog) {
+          accessLogs.push(accessLog);
+        }
+      }
+      return attempt;
+    },
+    getCaptureAttempt(captureAttemptId) {
+      const candidate = candidates.get(captureAttemptId);
+      return candidate
+        ? {
+            captureAttemptId,
+            workspaceId: candidate.projectId ?? candidate.workspaceId ?? null,
+            sessionId: candidate.sessionId ?? null,
+            status: candidate.status,
+            triggerKind: 'candidate',
+            createdAt: candidate.createdAt,
+            metadata: { candidate: candidate as unknown as JsonValue },
+          }
+        : undefined;
+    },
+    listCaptureAttempts(filter = {}) {
+      if (filter.triggerKind === 'candidate') {
+        return [...candidates.values()]
+          .filter((candidate) => {
+            if (filter.workspaceId !== undefined && filter.workspaceId !== null && candidate.workspaceId !== filter.workspaceId && candidate.projectId !== filter.workspaceId) return false;
+            if (filter.sessionId !== undefined && filter.sessionId !== null && candidate.sessionId !== filter.sessionId) return false;
+            if (filter.status !== undefined && candidate.status !== filter.status) return false;
+            return true;
+          })
+          .map((candidate) => ({
+            captureAttemptId: candidate.candidateId,
+            workspaceId: candidate.projectId ?? candidate.workspaceId ?? null,
+            sessionId: candidate.sessionId ?? null,
+            status: candidate.status,
+            triggerKind: 'candidate',
+            createdAt: candidate.createdAt,
+            metadata: { candidate: candidate as unknown as JsonValue },
+          }));
+      }
+      if (filter.triggerKind === 'access_log') {
+        return accessLogs.map((accessLog) => ({
+          captureAttemptId: accessLog.accessLogId,
+          runId: accessLog.runId ?? null,
+          sessionId: accessLog.sessionId ?? null,
+          status: 'recorded',
+          triggerKind: 'access_log',
+          createdAt: accessLog.accessedAt,
+          metadata: { accessLog: accessLog as unknown as JsonValue },
+        }));
+      }
+      return [];
+    },
+    recordRecallTrace(trace: MemoryManagementRecallTrace): MemoryManagementRecallTrace {
+      recallRequests.push(trace.request);
+      recallResults.push(...trace.results);
+      return trace;
+    },
   };
 }
 

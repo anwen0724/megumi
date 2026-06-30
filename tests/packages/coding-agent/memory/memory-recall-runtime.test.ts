@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   MemoryRecallRuntimeService,
   toModelInputMemoryRecallSources,
+  type MemoryRecallRuntimeCaptureAttempt,
   type MemoryRecallRuntimeRepository,
+  type MemoryRecallRuntimeTrace,
 } from '@megumi/coding-agent/memory';
 import type { MemoryDiagnosticWriterPort, MemoryMarkdownSyncResult } from '@megumi/coding-agent/memory';
 import type {
@@ -455,6 +457,28 @@ class FakeMemoryRecallRuntimeRepository implements MemoryRecallRuntimeRepository
   saveMemory(memory: MemoryRecord): MemoryRecord {
     this.savedMemories.push(memory);
     return memory;
+  }
+
+  recordRecallTrace(trace: MemoryRecallRuntimeTrace): MemoryRecallRuntimeTrace {
+    this.recallRequests.push(trace.request);
+    this.recallResults.push(...trace.results);
+    return trace;
+  }
+
+  recordCaptureAttempt(attempt: MemoryRecallRuntimeCaptureAttempt): MemoryRecallRuntimeCaptureAttempt {
+    if (attempt.triggerKind === 'access_log') {
+      const accessLog = attempt.metadata?.accessLog as MemoryAccessLog | undefined;
+      if (accessLog) {
+        this.accessLogs.push(accessLog);
+      }
+    }
+    if (attempt.triggerKind === 'audit_log') {
+      const auditLog = attempt.metadata?.auditLog as MemoryAuditLog | undefined;
+      if (auditLog) {
+        this.auditLogs.push(auditLog);
+      }
+    }
+    return attempt;
   }
 
   saveRecallRequest(request: MemoryRecallRequest): MemoryRecallRequest {

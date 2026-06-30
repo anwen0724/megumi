@@ -2,7 +2,6 @@
   Artifact,
   ArtifactContentRef,
   ArtifactKind,
-  ArtifactRelation,
   ArtifactSourceRef,
   ArtifactStatus,
   ArtifactVersion,
@@ -20,7 +19,6 @@ export interface ArtifactRepositoryPort {
   saveVersion(version: ArtifactVersion): ArtifactVersion;
   getVersion(artifactVersionId: string): ArtifactVersion | undefined;
   listSourceRefsByArtifact(artifactId: string): ArtifactSourceRef[];
-  listRelationsByArtifact(artifactId: string): ArtifactRelation[];
   nextVersionNumber(artifactId: string): number;
   updateArtifactStatus(input: { artifactId: string; status: ArtifactStatus; updatedAt: string }): Artifact | undefined;
   saveSourceRef(sourceRef: ArtifactSourceRef): ArtifactSourceRef;
@@ -39,7 +37,6 @@ export interface ArtifactServiceIds {
   artifactId(): string;
   artifactVersionId(): string;
   sourceRefId(): string;
-  relationId(): string;
 }
 
 export interface ArtifactServiceOptions {
@@ -52,7 +49,6 @@ const defaultIds: ArtifactServiceIds = {
   artifactId: () => `artifact:${crypto.randomUUID()}`,
   artifactVersionId: () => `artifact-version:${crypto.randomUUID()}`,
   sourceRefId: () => `artifact-source:${crypto.randomUUID()}`,
-  relationId: () => `artifact-relation:${crypto.randomUUID()}`,
 };
 
 // Product-facing artifact surface consumed by UI shells. Shells code against this
@@ -62,7 +58,6 @@ export interface ArtifactServicePort {
     artifact: Artifact | undefined;
     currentVersion: ArtifactVersion | undefined;
     sourceRefs: ArtifactSourceRef[];
-    relations: ArtifactRelation[];
   };
   getVersion(artifactVersionId: string): ArtifactVersion | undefined;
   listByRun(runId: string): Artifact[];
@@ -114,7 +109,6 @@ export class ArtifactService implements ArtifactServicePort {
       artifact,
       currentVersion,
       sourceRefs: artifact ? this.options.repository.listSourceRefsByArtifact(artifact.artifactId) : [],
-      relations: artifact ? this.options.repository.listRelationsByArtifact(artifact.artifactId) : [],
     };
   }
 

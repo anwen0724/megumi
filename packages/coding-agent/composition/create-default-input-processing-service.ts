@@ -9,13 +9,11 @@ import { ModelInputSourceOverrideService } from '../context';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
 import { createInputProcessingCompositionIds } from './input-processing-ids';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
-import { createInputProcessingRepositoryOptions } from './input-processing-repository-options';
 import { PermissionSnapshotService } from '../permissions';
 import { PlanArtifactService } from '../artifacts';
 import { ToolRegistrySnapshotService } from '../tools/tool-registry-snapshot';
 import { PostRunHooksCoordinator } from '../hooks';
 import { RunRetryCoordinator, RunTerminalCoordinator } from '../state';
-import { createInputProcessingToolRepositoryAdapter } from './input-processing-tool-repository-adapter';
 
 export interface CreateDefaultInputProcessingServiceOptions {
   contextService?: RunBaselineContextPort;
@@ -33,34 +31,55 @@ export function createDefaultInputProcessingService(
   options: CreateDefaultInputProcessingServiceOptions = {},
 ): InputProcessingService {
   const persistence = composeCodingAgentPersistence({ sqlitePath: homePaths.sqlitePath });
-  const permissionSnapshotRepository = persistence.permissionSnapshotRepository;
-  const activePathRepository = persistence.activePathRepository;
-  const toolRepository = persistence.toolRepository;
+  const agentLoopRepository = persistence.agentLoopRepository as any;
+  const sessionRepository = persistence.sessionRepository as any;
+  const toolCallRepository = persistence.toolCallRepository;
   const ids = createInputProcessingCompositionIds();
-  const inputProcessingRepositoryOptions = createInputProcessingRepositoryOptions(persistence);
 
   const inputProcessingService = new InputProcessingService({
-    ...inputProcessingRepositoryOptions,
+    sessionRepository,
+    agentLoopRepository,
     postRunHooks: new PostRunHooksCoordinator({
-      repository: inputProcessingRepositoryOptions.postRunHooksRepository,
+      repository: {
+        listRuntimeEventsByRun: (runId) => agentLoopRepository.listRuntimeEventsByRun(runId),
+      },
       megumiHomePath: homePaths.homePath,
     }),
     runTerminalCoordinator: new RunTerminalCoordinator({
-      repository: inputProcessingRepositoryOptions.runTerminalRepository,
-      toolRepository,
+      repository: {
+        getRun: (runId) => agentLoopRepository.getRun(runId),
+        saveRun: (run) => agentLoopRepository.saveRun(run),
+        saveStep: (step) => agentLoopRepository.saveStep(step),
+        listStepsByRun: (runId) => agentLoopRepository.listStepsByRun(runId),
+        listRunsByStatuses: (statuses) => agentLoopRepository.listRunsByStatuses(statuses),
+        listRuntimeEventsByRun: (runId) => agentLoopRepository.listRuntimeEventsByRun(runId),
+        appendRuntimeEvent: (event) => agentLoopRepository.appendRuntimeEvent(event),
+      },
+      toolRepository: toolCallRepository,
       ids,
     }),
     runRetryCoordinator: new RunRetryCoordinator({
-      repository: inputProcessingRepositoryOptions.runRetryRepository,
-      activePathRepository,
+      repository: {
+        getRun: (runId) => agentLoopRepository.getRun(runId),
+        getMessage: (messageId) => sessionRepository.getMessage(messageId),
+        listRuntimeEventsByRun: (runId) => agentLoopRepository.listRuntimeEventsByRun(runId),
+        appendRuntimeEvent: (event) => agentLoopRepository.appendRuntimeEvent(event),
+      },
+      activePathRepository: sessionRepository,
       ids,
     }),
-    sessionCompactionRepository: persistence.sessionContextRepository,
-    activePathRepository,
-    toolRepository: createInputProcessingToolRepositoryAdapter(toolRepository),
-    toolRegistrySnapshotService: new ToolRegistrySnapshotService(toolRepository),
-    permissionSnapshotService: new PermissionSnapshotService({ repository: permissionSnapshotRepository }),
-    planArtifactService: new PlanArtifactService({ repository: permissionSnapshotRepository }),
+    sessionCompactionRepository: sessionRepository,
+    activePathRepository: sessionRepository,
+    toolCallRepository,
+    toolRegistrySnapshotService: new ToolRegistrySnapshotService({
+      getToolSource: (sourceId) => toolCallRepository.getToolSource(sourceId),
+      listToolSources: () => toolCallRepository.listToolSources(),
+      seedDefaultToolSources: (createdAt) => toolCallRepository.seedDefaultToolSources(createdAt),
+      getToolRegistrySnapshotByRun: (runId) => toolCallRepository.getToolRegistrySnapshotByRun(runId),
+      saveToolRegistrySnapshot: (snapshot) => agentLoopRepository.saveToolRegistrySnapshot(snapshot),
+    }),
+    permissionSnapshotService: new PermissionSnapshotService({ repository: agentLoopRepository }),
+    planArtifactService: new PlanArtifactService({ repository: agentLoopRepository }),
     ...(options.contextService ? { contextService: options.contextService } : {}),
     ...(options.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
     ...(options.agentInstructionSourceService ? { agentInstructionSourceService: options.agentInstructionSourceService } : {}),

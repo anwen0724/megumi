@@ -1,15 +1,14 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { createHash } from 'node:crypto';
 
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { WorkspaceChangeRepository } from '@megumi/coding-agent/persistence/repos/workspace-change.repo';
-import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
+import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
 import type {
   WorkspaceChangedFile,
   WorkspaceChangeSet,
-  WorkspaceCheckpoint,
   WorkspaceRestoreFileResult,
   WorkspaceRestoreRequest,
   WorkspaceRestoreResult,
@@ -21,7 +20,7 @@ let db: Database.Database | null = null;
 function createRepo(): WorkspaceChangeRepository {
   db = new Database(':memory:');
   db.pragma('foreign_keys = ON');
-  migrateDatabase(db);
+  applyCodingAgentDatabaseMigrations(db);
   seedLifecycle(db);
   return new WorkspaceChangeRepository(db);
 }
@@ -32,7 +31,7 @@ afterEach(() => {
 });
 
 describe('WorkspaceChangeRepository', () => {
-  it('saves and reads UTF-8 snapshot content', () => {
+  it('stores file snapshots in workspace_file_snapshots and reads raw content only through snapshots', () => {
     const repo = createRepo();
     const contentText = 'const greeting = "你好, Megumi";\n';
     const snapshot = snapshotContent({
@@ -43,247 +42,113 @@ describe('WorkspaceChangeRepository', () => {
       metadata: { source: 'before_snapshot' },
     });
 
-    expect(repo.saveSnapshotContent(snapshot)).toEqual(snapshot);
+    expect(repo.saveFileSnapshot(snapshot)).toEqual(snapshot);
     expect(repo.getSnapshotContent('snapshot-unicode')).toEqual(snapshot);
+
+    const row = currentDb().prepare('SELECT * FROM workspace_file_snapshots WHERE snapshot_id = ?')
+      .get('snapshot-unicode') as { snapshot_id: string; content_text: string; metadata_json: string };
+    expect(row.snapshot_id).toBe('snapshot-unicode');
+    expect(row.content_text).toBe(contentText);
+    expect(JSON.parse(row.metadata_json)).toEqual({ userMetadata: { source: 'before_snapshot' } });
   });
 
-  it('rejects snapshot content when declared hash or byte length does not match UTF-8 content', () => {
-    const repo = createRepo();
-
-    expect(() => repo.saveSnapshotContent(snapshotContent({
-      contentRefId: 'snapshot-hash-mismatch',
-      sha256: hash('c'),
-    }))).toThrow(
-      'Snapshot content snapshot-hash-mismatch sha256 does not match contentText',
-    );
-    expect(repo.getSnapshotContent('snapshot-hash-mismatch')).toBeUndefined();
-
-    expect(() => repo.saveSnapshotContent(snapshotContent({
-      contentRefId: 'snapshot-byte-length-mismatch',
-      byteLength: 7,
-    }))).toThrow(
-      'Snapshot content snapshot-byte-length-mismatch byteLength does not match contentText UTF-8 byte length',
-    );
-    expect(repo.getSnapshotContent('snapshot-byte-length-mismatch')).toBeUndefined();
-  });
-
-  it('saves an open change set, checkpoint, changed file, then finalizes with computed count', () => {
+  it('records workspace changes and changed files without checkpoint entity persistence', () => {
     const repo = createRepo();
     seedSnapshots(repo);
-    const changeSet = workspaceChangeSet();
-    const checkpoint = workspaceCheckpoint();
-    const changedFile = workspaceChangedFile();
 
-    repo.saveChangeSet(changeSet);
-    repo.saveWorkspaceCheckpoint(checkpoint);
-    repo.saveChangedFile(changedFile);
+    expect(repo.recordWorkspaceChange(workspaceChangeSet())).toEqual(workspaceChangeSet());
+    expect(repo.recordChangedFile(workspaceChangedFile())).toEqual(workspaceChangedFile());
 
-    const finalized = repo.finalizeChangeSet('change-set-1', '2026-06-05T10:05:00.000Z');
-
-    expect(repo.getChangeSet('change-set-1')).toEqual({
-      ...changeSet,
+    const finalized = repo.finalizeWorkspaceChange('change-set-1', '2026-06-05T10:05:00.000Z');
+    expect(finalized).toEqual({
+      ...workspaceChangeSet(),
       status: 'finalized',
       changedFileCount: 1,
       finalizedAt: '2026-06-05T10:05:00.000Z',
     });
-    expect(finalized?.changedFileCount).toBe(1);
-    expect(repo.getWorkspaceCheckpoint('workspace-checkpoint-1')).toEqual(checkpoint);
-    expect(repo.getChangedFile('changed-file-1')).toEqual(changedFile);
+
+    expect(repo.getWorkspaceChange('change-set-1')).toEqual(finalized);
+    expect(repo.listWorkspaceChangesByRun('run-1').map((change) => change.changeSetId)).toEqual(['change-set-1']);
+    expect(repo.getChangedFile('changed-file-1')).toEqual(workspaceChangedFile());
+    expect(repo.listChangedFilesByChangeSet('change-set-1').map((file) => file.changedFileId)).toEqual(['changed-file-1']);
+    expect(repo.listChangedFilesByRun('run-1').map((file) => file.changedFileId)).toEqual(['changed-file-1']);
+
+    const changeRow = currentDb().prepare('SELECT metadata_json FROM workspace_changes WHERE change_id = ?')
+      .get('change-set-1') as { metadata_json: string };
+    const changedFileRow = currentDb().prepare('SELECT metadata_json FROM workspace_changed_files WHERE changed_file_id = ?')
+      .get('changed-file-1') as { metadata_json: string };
+    expect(JSON.parse(changeRow.metadata_json)).toEqual({
+      userMetadata: { responseScope: 'assistant_message' },
+      stepId: 'step-1',
+      sourceEntryId: 'source-entry-1',
+      responseMessageId: 'message-1',
+    });
+    expect(changeRow.metadata_json).not.toContain('workspaceCheckpointMap');
+    expect(changedFileRow.metadata_json).toContain('workspaceCheckpointId');
   });
 
-  it('keeps finalization immutable and rejects new checkpoints after finalization', () => {
+  it('summarizes changed file restore states from workspace_changed_files', () => {
     const repo = createRepo();
     seedSnapshots(repo);
-    const checkpoint = workspaceCheckpoint();
+    repo.recordWorkspaceChange(workspaceChangeSet());
 
-    repo.saveChangeSet(workspaceChangeSet());
-    repo.saveWorkspaceCheckpoint(checkpoint);
-    repo.saveChangedFile(workspaceChangedFile());
-
-    const finalized = repo.finalizeChangeSet('change-set-1', '2026-06-05T10:05:00.000Z');
-
-    expect(repo.finalizeChangeSet('change-set-1', '2026-06-05T10:05:00.000Z')).toEqual(finalized);
-    expect(() => repo.finalizeChangeSet('change-set-1', '2026-06-05T10:05:01.000Z'))
-      .toThrow('Workspace change set change-set-1 is already finalized and cannot be finalized again with different state');
-    expect(repo.saveWorkspaceCheckpoint(checkpoint)).toEqual(checkpoint);
-    expect(() => repo.saveWorkspaceCheckpoint(workspaceCheckpoint({
-      workspaceCheckpointId: 'workspace-checkpoint-after-finalize',
-      createdAt: '2026-06-05T10:02:01.000Z',
-    }))).toThrow('Cannot save workspace checkpoint workspace-checkpoint-after-finalize into finalized change set change-set-1');
-    expect(repo.getChangeSet('change-set-1')).toEqual(finalized);
-    expect(repo.listCheckpointsByChangeSet('change-set-1').map((item) => item.workspaceCheckpointId)).toEqual([
-      'workspace-checkpoint-1',
-    ]);
-  });
-
-  it('rejects new changed files after finalizing a change set without changing computed count', () => {
-    const repo = createRepo();
-    seedSnapshots(repo);
-    const changedFile = workspaceChangedFile();
-
-    repo.saveChangeSet(workspaceChangeSet());
-    repo.saveWorkspaceCheckpoint(workspaceCheckpoint());
-    repo.saveChangedFile(changedFile);
-    repo.finalizeChangeSet('change-set-1', '2026-06-05T10:05:00.000Z');
-
-    expect(repo.saveChangedFile(changedFile)).toEqual(changedFile);
-    expect(() => repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-after-finalize',
-      createdAt: '2026-06-05T10:04:00.000Z',
-      updatedAt: '2026-06-05T10:04:00.000Z',
-    }))).toThrow('Cannot save changed file changed-file-after-finalize into finalized change set change-set-1');
-    expect(repo.getChangeSet('change-set-1')?.changedFileCount).toBe(1);
-    expect(repo.listChangedFilesByChangeSet('change-set-1').map((file) => file.changedFileId)).toEqual([
-      'changed-file-1',
-    ]);
-  });
-
-  it('rejects conflicting duplicate snapshot content while allowing identical saves', () => {
-    const repo = createRepo();
-    const snapshot = snapshotContent({ contentRefId: 'snapshot-immutable' });
-
-    expect(repo.saveSnapshotContent(snapshot)).toEqual(snapshot);
-    expect(repo.saveSnapshotContent(snapshot)).toEqual(snapshot);
-
-    expect(() => repo.saveSnapshotContent({
-      ...snapshot,
-      contentText: 'changed',
-      sha256: hash('changed'),
-      byteLength: byteLength('changed'),
-    })).toThrow('Snapshot content snapshot-immutable already exists with different durable fields');
-    expect(repo.getSnapshotContent('snapshot-immutable')).toEqual(snapshot);
-  });
-
-  it('rejects unsafe change set rewrites', () => {
-    const repo = createRepo();
-    const changeSet = workspaceChangeSet();
-
-    expect(repo.saveChangeSet(changeSet)).toEqual(changeSet);
-    expect(repo.saveChangeSet(changeSet)).toEqual(changeSet);
-    expect(() => repo.saveChangeSet(workspaceChangeSet({ sessionId: 'session-2', runId: 'run-2' })))
-      .toThrow('Workspace change set change-set-1 already exists with different durable fields');
-    expect(() => repo.saveChangeSet(workspaceChangeSet({ responseMessageId: 'message-2' })))
-      .toThrow('Workspace change set change-set-1 already exists with different durable fields');
-    expect(() => repo.saveChangeSet(workspaceChangeSet({ createdAt: '2026-06-05T10:01:01.000Z' })))
-      .toThrow('Workspace change set change-set-1 already exists with different durable fields');
-    expect(() => repo.saveChangeSet(workspaceChangeSet({ changedFileCount: 1 })))
-      .toThrow('Workspace change set change-set-1 already exists with different durable fields');
-    expect(() => repo.saveChangeSet(workspaceChangeSet({
-      status: 'finalized',
-      finalizedAt: '2026-06-05T10:05:00.000Z',
-    }))).toThrow('Workspace change set change-set-1 already exists with different durable fields');
-
-    repo.finalizeChangeSet('change-set-1', '2026-06-05T10:05:00.000Z');
-    expect(() => repo.saveChangeSet(workspaceChangeSet()))
-      .toThrow('Workspace change set change-set-1 already exists with different durable fields');
-  });
-
-  it('summarizes changed file restore states', () => {
-    const repo = createRepo();
-    seedSnapshots(repo);
-    repo.saveChangeSet(workspaceChangeSet());
-    repo.saveWorkspaceCheckpoint(workspaceCheckpoint());
-    repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-restorable',
-      restoreState: 'restorable',
-      createdAt: '2026-06-05T10:04:00.000Z',
-      updatedAt: '2026-06-05T10:04:00.000Z',
-    }));
-    repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-restored',
-      restoreState: 'restored',
-      createdAt: '2026-06-05T10:04:01.000Z',
-      updatedAt: '2026-06-05T10:04:01.000Z',
-    }));
-    repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-conflict',
-      restoreState: 'conflict',
-      createdAt: '2026-06-05T10:04:02.000Z',
-      updatedAt: '2026-06-05T10:04:02.000Z',
-    }));
-    repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-failed',
-      restoreState: 'restore_failed',
-      createdAt: '2026-06-05T10:04:03.000Z',
-      updatedAt: '2026-06-05T10:04:03.000Z',
-    }));
-    repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-not-restorable',
-      restoreState: 'not_restorable',
-      createdAt: '2026-06-05T10:04:04.000Z',
-      updatedAt: '2026-06-05T10:04:04.000Z',
-    }));
+    for (const changedFile of [
+      workspaceChangedFile({ changedFileId: 'changed-file-restorable', restoreState: 'restorable' }),
+      workspaceChangedFile({ changedFileId: 'changed-file-restored', restoreState: 'restored', updatedAt: '2026-06-05T10:03:01.000Z' }),
+      workspaceChangedFile({ changedFileId: 'changed-file-conflict', restoreState: 'conflict', updatedAt: '2026-06-05T10:03:02.000Z' }),
+      workspaceChangedFile({ changedFileId: 'changed-file-failed', restoreState: 'restore_failed', updatedAt: '2026-06-05T10:03:03.000Z' }),
+    ]) {
+      repo.recordChangedFile(changedFile);
+    }
 
     expect(repo.getChangeSummary('change-set-1')).toEqual({
       changeSetId: 'change-set-1',
       sessionId: 'session-1',
       runId: 'run-1',
-      changedFileCount: 5,
+      changedFileCount: 4,
       restorableCount: 1,
       restoredCount: 1,
       conflictCount: 1,
       failedCount: 1,
       hasRestorableChanges: true,
-      updatedAt: '2026-06-05T10:04:04.000Z',
+      updatedAt: '2026-06-05T10:03:03.000Z',
+    });
+    expect(repo.listChangeSummariesByRun('run-1').map((summary) => summary.changeSetId)).toEqual(['change-set-1']);
+  });
+
+  it('stores restore request and result as one workspace_restore_operations lifecycle row', () => {
+    const repo = createRepo();
+    seedChange(repo);
+
+    expect(repo.createRestoreOperation(restoreRequest())).toEqual(restoreRequest());
+    expect(repo.updateRestoreOperation({
+      restoreRequestId: 'restore-request-1',
+      status: 'running',
+      metadata: { source: 'ui', started: true },
+    })).toEqual(expect.objectContaining({
+      restoreRequestId: 'restore-request-1',
+      status: 'running',
+      metadata: { source: 'ui', started: true },
+    }));
+    expect(repo.completeRestoreOperation(restoreResult())).toEqual(restoreResult());
+
+    const rows = currentDb().prepare('SELECT * FROM workspace_restore_operations ORDER BY restore_id ASC')
+      .all() as Array<{ restore_id: string; status: string; result_json: string; metadata_json: string }>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].restore_id).toBe('restore-request-1');
+    expect(JSON.parse(rows[0].result_json)).toEqual(restoreResult());
+    expect(JSON.parse(rows[0].metadata_json)).toEqual({
+      userMetadata: { source: 'ui', started: true },
+      resultMetadata: { fileCount: 1 },
     });
   });
 
-  it('lists change sets and changed files in stable order', () => {
-    const repo = createRepo();
-    seedSnapshots(repo);
-    for (const changeSet of [
-      workspaceChangeSet({ changeSetId: 'change-set-b', createdAt: '2026-06-05T10:01:00.000Z' }),
-      workspaceChangeSet({ changeSetId: 'change-set-a', createdAt: '2026-06-05T10:01:00.000Z' }),
-      workspaceChangeSet({ changeSetId: 'change-set-c', createdAt: '2026-06-05T10:02:00.000Z' }),
-    ]) {
-      repo.saveChangeSet(changeSet);
-    }
-    repo.saveWorkspaceCheckpoint(workspaceCheckpoint({ changeSetId: 'change-set-a' }));
-    for (const changedFile of [
-      workspaceChangedFile({
-        changedFileId: 'changed-file-b',
-        changeSetId: 'change-set-a',
-        createdAt: '2026-06-05T10:03:00.000Z',
-        updatedAt: '2026-06-05T10:03:00.000Z',
-      }),
-      workspaceChangedFile({
-        changedFileId: 'changed-file-a',
-        changeSetId: 'change-set-a',
-        createdAt: '2026-06-05T10:03:00.000Z',
-        updatedAt: '2026-06-05T10:03:00.000Z',
-      }),
-      workspaceChangedFile({
-        changedFileId: 'changed-file-c',
-        changeSetId: 'change-set-a',
-        createdAt: '2026-06-05T10:04:00.000Z',
-        updatedAt: '2026-06-05T10:04:00.000Z',
-      }),
-    ]) {
-      repo.saveChangedFile(changedFile);
-    }
-
-    expect(repo.listChangeSetsByRun('run-1').map((item) => item.changeSetId)).toEqual([
-      'change-set-a',
-      'change-set-b',
-      'change-set-c',
-    ]);
-    expect(repo.listChangedFilesByChangeSet('change-set-a').map((item) => item.changedFileId)).toEqual([
-      'changed-file-a',
-      'changed-file-b',
-      'changed-file-c',
-    ]);
-    expect(repo.listChangedFilesByRun('run-1').map((item) => item.changedFileId)).toEqual([
-      'changed-file-a',
-      'changed-file-b',
-      'changed-file-c',
-    ]);
-  });
-
-  it('persists restore request, result, and file results', () => {
+  it('stores restore file outcomes in workspace_restore_file_results', () => {
     const repo = createRepo();
     seedChange(repo);
-    const request = restoreRequest();
-    const result = restoreResult();
+    repo.createRestoreOperation(restoreRequest());
+    repo.completeRestoreOperation(restoreResult());
+
     const restoredFile = restoreFileResult();
     const conflictFile = restoreFileResult({
       restoreFileResultId: 'restore-file-result-conflict',
@@ -291,537 +156,51 @@ describe('WorkspaceChangeRepository', () => {
       conflictReason: 'current_hash_mismatch',
       restoredAt: '2026-06-05T10:06:03.000Z',
     });
+    expect(repo.recordRestoreFileResult(restoredFile)).toEqual(restoredFile);
+    expect(repo.recordRestoreFileResult(conflictFile)).toEqual(conflictFile);
 
-    repo.saveRestoreRequest(request);
-    repo.saveRestoreResult(result);
-    repo.saveRestoreFileResult(restoredFile);
-    repo.saveRestoreFileResult(conflictFile);
-
-    expect(repo.getRestoreRequest('restore-request-1')).toEqual(request);
-    expect(repo.getRestoreResult('restore-result-1')).toEqual(result);
-    expect(repo.listRestoreResultsByChangeSet('change-set-1')).toEqual([result]);
-    expect(repo.listRestoreFileResultsByResult('restore-result-1')).toEqual([
-      restoredFile,
-      conflictFile,
-    ]);
-  });
-
-  it('updates restore request lifecycle without rewriting durable ownership fields', () => {
-    const repo = createRepo();
-    seedChange(repo);
-
-    repo.saveRestoreRequest(restoreRequest({
-      status: 'requested',
-      completedAt: undefined,
-      metadata: { source: 'ui' },
-    }));
-
-    expect(repo.updateRestoreRequestStatus({
-      restoreRequestId: 'restore-request-1',
-      status: 'running',
-      metadata: { source: 'ui', started: true },
-    })).toEqual(expect.objectContaining({
-      restoreRequestId: 'restore-request-1',
-      status: 'running',
-      completedAt: undefined,
-      metadata: { source: 'ui', started: true },
-    }));
-
-    expect(repo.updateRestoreRequestStatus({
-      restoreRequestId: 'restore-request-1',
-      status: 'completed',
-      completedAt: '2026-06-05T10:06:04.000Z',
-      metadata: { source: 'ui', started: true, completed: true },
-    })).toEqual(expect.objectContaining({
-      status: 'completed',
-      completedAt: '2026-06-05T10:06:04.000Z',
-      metadata: { source: 'ui', started: true, completed: true },
-    }));
-
-    expect(repo.updateRestoreRequestStatus({
-      restoreRequestId: 'missing-restore-request',
-      status: 'completed',
-      completedAt: '2026-06-05T10:06:04.000Z',
-    })).toBeUndefined();
-  });
-
-  it('updates changed file restore state and keeps summaries current', () => {
-    const repo = createRepo();
-    seedSnapshots(repo);
-    repo.saveChangeSet(workspaceChangeSet());
-    repo.saveWorkspaceCheckpoint(workspaceCheckpoint());
-    repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-restorable',
-      restoreState: 'restorable',
-      updatedAt: '2026-06-05T10:05:00.000Z',
-    }));
-    repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-conflict',
-      restoreState: 'restorable',
-      updatedAt: '2026-06-05T10:05:00.000Z',
-    }));
-
-    expect(repo.updateChangedFileRestoreState({
-      changedFileId: 'changed-file-restorable',
-      restoreState: 'restored',
-      updatedAt: '2026-06-05T10:06:00.000Z',
-      metadata: { restoreResultId: 'restore-result-1' },
-    })).toEqual(expect.objectContaining({
-      changedFileId: 'changed-file-restorable',
-      restoreState: 'restored',
-      updatedAt: '2026-06-05T10:06:00.000Z',
-      metadata: { restoreResultId: 'restore-result-1' },
-    }));
-
-    repo.updateChangedFileRestoreState({
-      changedFileId: 'changed-file-conflict',
-      restoreState: 'conflict',
-      updatedAt: '2026-06-05T10:06:01.000Z',
-      metadata: { conflictReason: 'current_hash_mismatch' },
-    });
-
-    expect(repo.getChangeSummary('change-set-1')).toEqual(expect.objectContaining({
-      changedFileCount: 2,
-      restorableCount: 0,
-      restoredCount: 1,
-      conflictCount: 1,
-      failedCount: 0,
-      hasRestorableChanges: false,
-      updatedAt: '2026-06-05T10:06:01.000Z',
-    }));
-  });
-
-  it('lists change summaries by run in change-set creation order', () => {
-    const repo = createRepo();
-    seedChange(repo);
-    repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-a',
-      changeSetId: 'change-set-1',
-    }));
-    repo.saveChangeSet(workspaceChangeSet({
-      changeSetId: 'change-set-2',
-      createdAt: '2026-06-05T10:04:00.000Z',
-    }));
-    repo.saveWorkspaceCheckpoint(workspaceCheckpoint({
-      workspaceCheckpointId: 'workspace-checkpoint-2',
-      changeSetId: 'change-set-2',
-    }));
-    repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-b',
-      changeSetId: 'change-set-2',
-      workspaceCheckpointId: 'workspace-checkpoint-2',
-    }));
-
-    expect(repo.listChangeSummariesByRun('run-1').map((summary) => summary.changeSetId)).toEqual([
-      'change-set-1',
-      'change-set-2',
-    ]);
-  });
-
-  it('orders restore results and file results by restored timestamp, then primary key', () => {
-    const repo = createRepo();
-    seedChange(repo);
-    repo.saveRestoreRequest(restoreRequest());
-    for (const result of [
-      restoreResult({
-        restoreResultId: 'restore-result-b',
-        restoredAt: '2026-06-05T10:07:00.000Z',
+    expect(repo.listRestoreFileResults('restore-result-1')).toEqual([restoredFile, conflictFile]);
+    const rows = currentDb().prepare('SELECT * FROM workspace_restore_file_results ORDER BY file_result_id ASC')
+      .all() as Array<{ file_result_id: string; restore_id: string; changed_file_id: string }>;
+    expect(rows).toEqual([
+      expect.objectContaining({
+        file_result_id: 'restore-file-result-1',
+        restore_id: 'restore-request-1',
+        changed_file_id: 'changed-file-1',
       }),
-      restoreResult({
-        restoreResultId: 'restore-result-a',
-        restoredAt: '2026-06-05T10:07:00.000Z',
+      expect.objectContaining({
+        file_result_id: 'restore-file-result-conflict',
+        restore_id: 'restore-request-1',
+        changed_file_id: 'changed-file-1',
       }),
-      restoreResult({
-        restoreResultId: 'restore-result-z',
-        restoredAt: '2026-06-05T10:06:00.000Z',
-      }),
-    ]) {
-      repo.saveRestoreResult(result);
-    }
-
-    repo.saveRestoreFileResult(restoreFileResult({
-      restoreFileResultId: 'restore-file-result-b',
-      restoreResultId: 'restore-result-a',
-      restoredAt: '2026-06-05T10:09:00.000Z',
-    }));
-    repo.saveRestoreFileResult(restoreFileResult({
-      restoreFileResultId: 'restore-file-result-a',
-      restoreResultId: 'restore-result-a',
-      restoredAt: '2026-06-05T10:09:00.000Z',
-    }));
-    repo.saveRestoreFileResult(restoreFileResult({
-      restoreFileResultId: 'restore-file-result-z',
-      restoreResultId: 'restore-result-a',
-      restoredAt: '2026-06-05T10:08:00.000Z',
-    }));
-
-    expect(repo.listRestoreResultsByChangeSet('change-set-1').map((item) => item.restoreResultId)).toEqual([
-      'restore-result-z',
-      'restore-result-a',
-      'restore-result-b',
-    ]);
-    expect(repo.listRestoreFileResultsByResult('restore-result-a').map((item) => item.restoreFileResultId)).toEqual([
-      'restore-file-result-z',
-      'restore-file-result-a',
-      'restore-file-result-b',
     ]);
   });
 
-  it('rejects mismatched session and run across change set, checkpoint, and changed file', () => {
-    const repo = createRepo();
-    seedSnapshots(repo);
-    repo.saveChangeSet(workspaceChangeSet());
+  it('does not expose old checkpoint/request/result persistence methods', () => {
+    const publicNames = Object.getOwnPropertyNames(WorkspaceChangeRepository.prototype);
 
-    expect(() => repo.saveWorkspaceCheckpoint(workspaceCheckpoint({
-      workspaceCheckpointId: 'workspace-checkpoint-session-mismatch',
-      sessionId: 'session-2',
-    }))).toThrow('Workspace checkpoint sessionId session-2 does not match change set sessionId session-1');
-    expect(() => repo.saveWorkspaceCheckpoint(workspaceCheckpoint({
-      workspaceCheckpointId: 'workspace-checkpoint-run-mismatch',
-      runId: 'run-2',
-    }))).toThrow('Workspace checkpoint runId run-2 does not match change set runId run-1');
-
-    repo.saveWorkspaceCheckpoint(workspaceCheckpoint());
-
-    expect(() => repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-change-set-session-mismatch',
-      sessionId: 'session-2',
-    }))).toThrow('Changed file sessionId session-2 does not match change set sessionId session-1');
-    expect(() => repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-checkpoint-run-mismatch',
-      runId: 'run-2',
-    }))).toThrow('Changed file runId run-2 does not match change set runId run-1');
-
-    repo.saveChangeSet(workspaceChangeSet({
-      changeSetId: 'change-set-2',
-      sessionId: 'session-2',
-      runId: 'run-2',
-      stepId: 'step-2',
-      sourceEntryId: 'source-2',
-      responseMessageId: 'message-2',
-    }));
-    repo.saveWorkspaceCheckpoint(workspaceCheckpoint({
-      workspaceCheckpointId: 'workspace-checkpoint-2',
-      changeSetId: 'change-set-2',
-      sessionId: 'session-2',
-      runId: 'run-2',
-      stepId: 'step-2',
-      toolCallId: 'tool-call-2',
-      toolExecutionId: 'tool-execution-2',
-      sourceEntryId: 'source-2',
-      responseMessageId: 'message-2',
-      beforeContentRefId: 'snapshot-before-2',
-      beforeHash: hash('before2'),
-      beforeByteLength: 7,
-    }));
-    expect(() => repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-checkpoint-session-mismatch',
-      workspaceCheckpointId: 'workspace-checkpoint-2',
-    }))).toThrow('Changed file workspaceCheckpointId workspace-checkpoint-2 belongs to sessionId session-2, not session-1');
-  });
-
-  it('rejects lifecycle ref ownership mismatches', () => {
-    const repo = createRepo();
-    seedSnapshots(repo);
-
-    expect(() => repo.saveChangeSet(workspaceChangeSet({ runId: 'run-2' })))
-      .toThrow('Workspace change set runId run-2 does not belong to sessionId session-1');
-    expect(() => repo.saveChangeSet(workspaceChangeSet({
-      changeSetId: 'change-set-step-mismatch',
-      stepId: 'step-2',
-    }))).toThrow('Workspace change set stepId step-2 does not belong to runId run-1');
-    expect(() => repo.saveChangeSet(workspaceChangeSet({
-      changeSetId: 'change-set-source-mismatch',
-      sourceEntryId: 'source-2',
-    }))).toThrow('Workspace change set sourceEntryId source-2 does not belong to sessionId session-1');
-    expect(() => repo.saveChangeSet(workspaceChangeSet({
-      changeSetId: 'change-set-message-mismatch',
-      responseMessageId: 'message-2',
-    }))).toThrow('Workspace change set responseMessageId message-2 does not belong to sessionId session-1');
-
-    repo.saveChangeSet(workspaceChangeSet());
-    expect(() => repo.saveWorkspaceCheckpoint(workspaceCheckpoint({
-      workspaceCheckpointId: 'checkpoint-run-session-mismatch',
-      changeSetId: undefined,
-      runId: 'run-2',
-    }))).toThrow('Workspace checkpoint runId run-2 does not belong to sessionId session-1');
-    expect(() => repo.saveWorkspaceCheckpoint(workspaceCheckpoint({
-      workspaceCheckpointId: 'checkpoint-step-mismatch',
-      stepId: 'step-2',
-    }))).toThrow('Workspace checkpoint stepId step-2 does not belong to runId run-1');
-    expect(() => repo.saveWorkspaceCheckpoint(workspaceCheckpoint({
-      workspaceCheckpointId: 'checkpoint-source-mismatch',
-      sourceEntryId: 'source-2',
-    }))).toThrow('Workspace checkpoint sourceEntryId source-2 does not belong to sessionId session-1');
-    expect(() => repo.saveWorkspaceCheckpoint(workspaceCheckpoint({
-      workspaceCheckpointId: 'checkpoint-message-mismatch',
-      responseMessageId: 'message-2',
-    }))).toThrow('Workspace checkpoint responseMessageId message-2 does not belong to sessionId session-1');
-    expect(() => repo.saveWorkspaceCheckpoint(workspaceCheckpoint({
-      workspaceCheckpointId: 'checkpoint-tool-call-mismatch',
-      toolCallId: 'tool-call-2',
-    }))).toThrow('Workspace checkpoint toolCallId tool-call-2 does not belong to runId run-1');
-    expect(() => repo.saveWorkspaceCheckpoint(workspaceCheckpoint({
-      workspaceCheckpointId: 'checkpoint-tool-execution-mismatch',
-      toolExecutionId: 'tool-execution-2',
-    }))).toThrow('Workspace checkpoint toolExecutionId tool-execution-2 does not belong to runId run-1');
-
-    repo.saveWorkspaceCheckpoint(workspaceCheckpoint());
-    expect(() => repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-step-mismatch',
-      stepId: 'step-2',
-    }))).toThrow('Changed file stepId step-2 does not belong to runId run-1');
-    expect(() => repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-source-mismatch',
-      sourceEntryId: 'source-2',
-    }))).toThrow('Changed file sourceEntryId source-2 does not belong to sessionId session-1');
-    expect(() => repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-message-mismatch',
-      responseMessageId: 'message-2',
-    }))).toThrow('Changed file responseMessageId message-2 does not belong to sessionId session-1');
-    expect(() => repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-tool-call-mismatch',
-      toolCallId: 'tool-call-2',
-    }))).toThrow('Changed file toolCallId tool-call-2 does not belong to runId run-1');
-    expect(() => repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-tool-execution-mismatch',
-      toolExecutionId: 'tool-execution-2',
-    }))).toThrow('Changed file toolExecutionId tool-execution-2 does not belong to runId run-1');
-  });
-
-  it('rejects changed file with a different project path from its checkpoint', () => {
-    const repo = createRepo();
-    seedSnapshots(repo);
-    repo.saveChangeSet(workspaceChangeSet());
-    repo.saveWorkspaceCheckpoint(workspaceCheckpoint());
-
-    expect(() => repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-path-mismatch',
-      projectPath: 'src/other.ts',
-    }))).toThrow('Changed file projectPath src/other.ts does not match checkpoint projectPath src/app.ts');
-  });
-
-  it('rejects snapshot content refs from a different run or project path', () => {
-    const repo = createRepo();
-    seedSnapshots(repo);
-    repo.saveSnapshotContent(snapshotContent({
-      contentRefId: 'snapshot-run-2',
-      sessionId: 'session-2',
-      runId: 'run-2',
-    }));
-    repo.saveSnapshotContent(snapshotContent({
-      contentRefId: 'snapshot-other-path',
-      projectPath: 'src/other.ts',
-    }));
-    repo.saveChangeSet(workspaceChangeSet());
-
-    expect(() => repo.saveWorkspaceCheckpoint(workspaceCheckpoint({
-      workspaceCheckpointId: 'checkpoint-cross-run-snapshot',
-      beforeContentRefId: 'snapshot-run-2',
-    }))).toThrow('Workspace checkpoint beforeContentRefId snapshot-run-2 belongs to sessionId session-2/runId run-2/projectPath src/app.ts, not sessionId session-1/runId run-1/projectPath src/app.ts');
-    expect(() => repo.saveWorkspaceCheckpoint(workspaceCheckpoint({
-      workspaceCheckpointId: 'checkpoint-cross-path-snapshot',
-      beforeContentRefId: 'snapshot-other-path',
-    }))).toThrow('Workspace checkpoint beforeContentRefId snapshot-other-path belongs to sessionId session-1/runId run-1/projectPath src/other.ts, not sessionId session-1/runId run-1/projectPath src/app.ts');
-
-    repo.saveWorkspaceCheckpoint(workspaceCheckpoint());
-    expect(() => repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-before-cross-run-snapshot',
-      beforeContentRefId: 'snapshot-run-2',
-    }))).toThrow('Changed file beforeContentRefId snapshot-run-2 belongs to sessionId session-2/runId run-2/projectPath src/app.ts, not sessionId session-1/runId run-1/projectPath src/app.ts');
-    expect(() => repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-after-cross-path-snapshot',
-      afterContentRefId: 'snapshot-other-path',
-    }))).toThrow('Changed file afterContentRefId snapshot-other-path belongs to sessionId session-1/runId run-1/projectPath src/other.ts, not sessionId session-1/runId run-1/projectPath src/app.ts');
-  });
-
-  it('rejects snapshot content refs with mismatched hash or byte length', () => {
-    const repo = createRepo();
-    seedSnapshots(repo);
-    repo.saveChangeSet(workspaceChangeSet());
-
-    expect(() => repo.saveWorkspaceCheckpoint(workspaceCheckpoint({
-      workspaceCheckpointId: 'checkpoint-before-hash-mismatch',
-      beforeHash: hash('c'),
-    }))).toThrow(`Workspace checkpoint beforeContentRefId snapshot-before sha256 ${hash('before')} does not match beforeHash ${hash('c')}`);
-    expect(() => repo.saveWorkspaceCheckpoint(workspaceCheckpoint({
-      workspaceCheckpointId: 'checkpoint-before-length-mismatch',
-      beforeByteLength: 7,
-    }))).toThrow('Workspace checkpoint beforeContentRefId snapshot-before byteLength 6 does not match beforeByteLength 7');
-
-    repo.saveWorkspaceCheckpoint(workspaceCheckpoint());
-    expect(() => repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-before-hash-mismatch',
-      beforeHash: hash('c'),
-    }))).toThrow(`Changed file beforeContentRefId snapshot-before sha256 ${hash('before')} does not match beforeHash ${hash('c')}`);
-    expect(() => repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-before-length-mismatch',
-      beforeByteLength: 7,
-    }))).toThrow('Changed file beforeContentRefId snapshot-before byteLength 6 does not match beforeByteLength 7');
-    expect(() => repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-after-hash-mismatch',
-      afterHash: hash('c'),
-    }))).toThrow(`Changed file afterContentRefId snapshot-after sha256 ${hash('after')} does not match afterHash ${hash('c')}`);
-    expect(() => repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-after-length-mismatch',
-      afterByteLength: 6,
-    }))).toThrow('Changed file afterContentRefId snapshot-after byteLength 5 does not match afterByteLength 6');
-  });
-
-  it('rejects conflicting duplicate durable audit rows while allowing identical saves', () => {
-    const repo = createRepo();
-    seedChange(repo);
-
-    const checkpoint = workspaceCheckpoint({ workspaceCheckpointId: 'workspace-checkpoint-immutable' });
-    repo.saveWorkspaceCheckpoint(checkpoint);
-    expect(repo.saveWorkspaceCheckpoint(checkpoint)).toEqual(checkpoint);
-    expect(() => repo.saveWorkspaceCheckpoint({
-      ...checkpoint,
-      createdAt: '2026-06-05T10:02:01.000Z',
-    })).toThrow('Workspace checkpoint workspace-checkpoint-immutable already exists with different durable fields');
-
-    const changedFile = workspaceChangedFile({
-      changedFileId: 'changed-file-immutable',
-      workspaceCheckpointId: 'workspace-checkpoint-immutable',
-    });
-    repo.saveChangedFile(changedFile);
-    expect(repo.saveChangedFile(changedFile)).toEqual(changedFile);
-    expect(() => repo.saveChangedFile({
-      ...changedFile,
-      updatedAt: '2026-06-05T10:03:01.000Z',
-    })).toThrow('Changed file changed-file-immutable already exists with different durable fields');
-
-    const request = restoreRequest({ restoreRequestId: 'restore-request-immutable' });
-    repo.saveRestoreRequest(request);
-    expect(repo.saveRestoreRequest(request)).toEqual(request);
-    expect(() => repo.saveRestoreRequest({
-      ...request,
-      status: 'running',
-    })).toThrow('Restore request restore-request-immutable already exists with different durable fields');
-
-    const result = restoreResult({
-      restoreResultId: 'restore-result-immutable',
-      restoreRequestId: 'restore-request-immutable',
-    });
-    repo.saveRestoreResult(result);
-    expect(repo.saveRestoreResult(result)).toEqual(result);
-    expect(() => repo.saveRestoreResult({
-      ...result,
-      restoredAt: '2026-06-05T10:06:04.000Z',
-    })).toThrow('Restore result restore-result-immutable already exists with different durable fields');
-
-    const fileResult = restoreFileResult({
-      restoreFileResultId: 'restore-file-result-immutable',
-      restoreResultId: 'restore-result-immutable',
-    });
-    repo.saveRestoreFileResult(fileResult);
-    expect(repo.saveRestoreFileResult(fileResult)).toEqual(fileResult);
-    expect(() => repo.saveRestoreFileResult({
-      ...fileResult,
-      status: 'conflict',
-      conflictReason: 'current_hash_mismatch',
-    })).toThrow('Restore file result restore-file-result-immutable already exists with different durable fields');
-  });
-
-  it('rejects restore result and file result ownership mismatches', () => {
-    const repo = createRepo();
-    seedChange(repo);
-    repo.saveRestoreRequest(restoreRequest());
-
-    expect(() => repo.saveRestoreRequest(restoreRequest({
-      restoreRequestId: 'restore-request-run-mismatch',
-      runId: 'run-2',
-    }))).toThrow('Restore request runId run-2 does not match change set runId run-1');
-    expect(() => repo.saveRestoreResult(restoreResult({
-      restoreResultId: 'restore-result-request-run-mismatch',
-      runId: 'run-2',
-    }))).toThrow('Restore result runId run-2 does not match request runId run-1');
-
-    repo.saveRestoreResult(restoreResult());
-    repo.saveChangeSet(workspaceChangeSet({
-      changeSetId: 'change-set-2',
-      sessionId: 'session-2',
-      runId: 'run-2',
-      stepId: 'step-2',
-      sourceEntryId: 'source-2',
-      responseMessageId: 'message-2',
-    }));
-    repo.saveWorkspaceCheckpoint(workspaceCheckpoint({
-      workspaceCheckpointId: 'workspace-checkpoint-2',
-      changeSetId: 'change-set-2',
-      sessionId: 'session-2',
-      runId: 'run-2',
-      stepId: 'step-2',
-      toolCallId: 'tool-call-2',
-      toolExecutionId: 'tool-execution-2',
-      sourceEntryId: 'source-2',
-      responseMessageId: 'message-2',
-      beforeContentRefId: 'snapshot-before-2',
-      beforeHash: hash('before2'),
-      beforeByteLength: 7,
-    }));
-    repo.saveChangedFile(workspaceChangedFile({
-      changedFileId: 'changed-file-2',
-      changeSetId: 'change-set-2',
-      workspaceCheckpointId: 'workspace-checkpoint-2',
-      sessionId: 'session-2',
-      runId: 'run-2',
-      stepId: 'step-2',
-      toolCallId: 'tool-call-2',
-      toolExecutionId: 'tool-execution-2',
-      sourceEntryId: 'source-2',
-      responseMessageId: 'message-2',
-      beforeContentRefId: 'snapshot-before-2',
-      afterContentRefId: 'snapshot-after-2',
-      beforeHash: hash('before2'),
-      beforeByteLength: 7,
-      afterHash: hash('after2'),
-      afterByteLength: 6,
-    }));
-
-    expect(() => repo.saveRestoreFileResult(restoreFileResult({
-      restoreFileResultId: 'restore-file-result-mismatch',
-      changedFileId: 'changed-file-2',
-    }))).toThrow('Restore file result changedFileId changed-file-2 belongs to changeSetId change-set-2, not change-set-1');
-    expect(() => repo.saveRestoreFileResult(restoreFileResult({
-      restoreFileResultId: 'restore-file-result-path-mismatch',
-      projectPath: 'src/other.ts',
-    }))).toThrow('Restore file result projectPath src/other.ts does not match changed file projectPath src/app.ts');
-  });
-
-  it('cascades reads to empty when deleting a session', () => {
-    const repo = createRepo();
-    seedChange(repo);
-    repo.saveRestoreRequest(restoreRequest());
-    repo.saveRestoreResult(restoreResult());
-    repo.saveRestoreFileResult(restoreFileResult());
-
-    currentDb().prepare("DELETE FROM sessions WHERE session_id = 'session-1'").run();
-
-    expect(repo.getSnapshotContent('snapshot-before')).toBeUndefined();
-    expect(repo.getChangeSet('change-set-1')).toBeUndefined();
-    expect(repo.listChangeSetsByRun('run-1')).toEqual([]);
-    expect(repo.getWorkspaceCheckpoint('workspace-checkpoint-1')).toBeUndefined();
-    expect(repo.listCheckpointsByChangeSet('change-set-1')).toEqual([]);
-    expect(repo.getChangedFile('changed-file-1')).toBeUndefined();
-    expect(repo.listChangedFilesByChangeSet('change-set-1')).toEqual([]);
-    expect(repo.listChangedFilesByRun('run-1')).toEqual([]);
-    expect(repo.getChangeSummary('change-set-1')).toBeUndefined();
-    expect(repo.getRestoreRequest('restore-request-1')).toBeUndefined();
-    expect(repo.getRestoreResult('restore-result-1')).toBeUndefined();
-    expect(repo.listRestoreResultsByChangeSet('change-set-1')).toEqual([]);
-    expect(repo.listRestoreFileResultsByResult('restore-result-1')).toEqual([]);
-  });
-
-  it('returns raw content only through snapshot content reads', () => {
-    const repo = createRepo();
-    seedChange(repo);
-
-    expect(repo.getSnapshotContent('snapshot-before')).toHaveProperty('contentText', 'before');
-    expect(repo.getWorkspaceCheckpoint('workspace-checkpoint-1')).not.toHaveProperty('contentText');
-    expect(repo.getChangedFile('changed-file-1')).not.toHaveProperty('contentText');
-    expect(JSON.stringify(repo.getWorkspaceCheckpoint('workspace-checkpoint-1'))).not.toContain('"contentText"');
-    expect(JSON.stringify(repo.getChangedFile('changed-file-1'))).not.toContain('"contentText"');
+    expect(publicNames).toEqual(expect.arrayContaining([
+      'saveFileSnapshot',
+      'recordWorkspaceChange',
+      'recordChangedFile',
+      'finalizeWorkspaceChange',
+      'getWorkspaceChange',
+      'listWorkspaceChangesByRun',
+      'createRestoreOperation',
+      'completeRestoreOperation',
+      'recordRestoreFileResult',
+      'listRestoreFileResults',
+    ]));
+    expect(publicNames).not.toEqual(expect.arrayContaining([
+      'saveWorkspaceCheckpoint',
+      'getWorkspaceCheckpoint',
+      'listCheckpointsByChangeSet',
+      'saveRestoreRequest',
+      'getRestoreRequest',
+      'saveRestoreResult',
+      'getRestoreResult',
+      'listRestoreResultsByChangeSet',
+    ]));
   });
 });
 
@@ -834,43 +213,24 @@ function currentDb(): Database.Database {
 
 function seedChange(repo: WorkspaceChangeRepository): void {
   seedSnapshots(repo);
-  repo.saveChangeSet(workspaceChangeSet());
-  repo.saveWorkspaceCheckpoint(workspaceCheckpoint());
-  repo.saveChangedFile(workspaceChangedFile());
+  repo.recordWorkspaceChange(workspaceChangeSet());
+  repo.recordChangedFile(workspaceChangedFile());
 }
 
 function seedSnapshots(repo: WorkspaceChangeRepository): void {
-  repo.saveSnapshotContent(snapshotContent({
+  repo.saveFileSnapshot(snapshotContent({
     contentRefId: 'snapshot-before',
     contentText: 'before',
     sha256: hash('before'),
     byteLength: byteLength('before'),
     createdAt: '2026-06-05T10:00:00.000Z',
   }));
-  repo.saveSnapshotContent(snapshotContent({
+  repo.saveFileSnapshot(snapshotContent({
     contentRefId: 'snapshot-after',
     contentText: 'after',
     sha256: hash('after'),
     byteLength: byteLength('after'),
     createdAt: '2026-06-05T10:00:01.000Z',
-  }));
-  repo.saveSnapshotContent(snapshotContent({
-    contentRefId: 'snapshot-before-2',
-    sessionId: 'session-2',
-    runId: 'run-2',
-    contentText: 'before2',
-    sha256: hash('before2'),
-    byteLength: byteLength('before2'),
-    createdAt: '2026-06-05T10:00:02.000Z',
-  }));
-  repo.saveSnapshotContent(snapshotContent({
-    contentRefId: 'snapshot-after-2',
-    sessionId: 'session-2',
-    runId: 'run-2',
-    contentText: 'after2',
-    sha256: hash('after2'),
-    byteLength: byteLength('after2'),
-    createdAt: '2026-06-05T10:00:03.000Z',
   }));
 }
 
@@ -896,7 +256,7 @@ function workspaceChangeSet(overrides: Partial<WorkspaceChangeSet> = {}): Worksp
     sessionId: 'session-1',
     runId: 'run-1',
     stepId: 'step-1',
-    sourceEntryId: 'source-1',
+    sourceEntryId: 'source-entry-1',
     responseMessageId: 'message-1',
     status: 'open',
     changedFileCount: 0,
@@ -906,39 +266,17 @@ function workspaceChangeSet(overrides: Partial<WorkspaceChangeSet> = {}): Worksp
   };
 }
 
-function workspaceCheckpoint(overrides: Partial<WorkspaceCheckpoint> = {}): WorkspaceCheckpoint {
-  return {
-    workspaceCheckpointId: 'workspace-checkpoint-1',
-    sessionId: 'session-1',
-    runId: 'run-1',
-    stepId: 'step-1',
-    toolCallId: 'tool-call-1',
-    toolExecutionId: 'tool-execution-1',
-    sourceEntryId: 'source-1',
-    responseMessageId: 'message-1',
-    changeSetId: 'change-set-1',
-    projectPath: 'src/app.ts',
-    beforeExists: true,
-    beforeContentRefId: 'snapshot-before',
-    beforeHash: hash('before'),
-    beforeByteLength: 6,
-    createdAt: '2026-06-05T10:02:00.000Z',
-    metadata: { toolName: 'write_file' },
-    ...overrides,
-  };
-}
-
 function workspaceChangedFile(overrides: Partial<WorkspaceChangedFile> = {}): WorkspaceChangedFile {
   return {
     changedFileId: 'changed-file-1',
     changeSetId: 'change-set-1',
-    workspaceCheckpointId: 'workspace-checkpoint-1',
+    workspaceCheckpointId: 'changed-file-before-state-1',
     sessionId: 'session-1',
     runId: 'run-1',
     stepId: 'step-1',
     toolCallId: 'tool-call-1',
     toolExecutionId: 'tool-execution-1',
-    sourceEntryId: 'source-1',
+    sourceEntryId: 'source-entry-1',
     responseMessageId: 'message-1',
     projectPath: 'src/app.ts',
     changeKind: 'modified',
@@ -1001,164 +339,70 @@ function restoreFileResult(overrides: Partial<WorkspaceRestoreFileResult> = {}):
 
 function seedLifecycle(database: Database.Database): void {
   database.exec(`
-    INSERT INTO sessions (session_id, title, status, created_at, updated_at)
-    VALUES
-      ('session-1', 'Workspace change session', 'active', '2026-06-05T09:00:00.000Z', '2026-06-05T09:00:00.000Z'),
-      ('session-2', 'Other workspace change session', 'active', '2026-06-05T09:00:00.000Z', '2026-06-05T09:00:00.000Z');
+    INSERT INTO workspaces (
+      workspace_id, name, root_path, root_path_key, status,
+      created_at, updated_at, last_opened_at, metadata_json
+    ) VALUES (
+      'workspace-1', 'Workspace 1', '/workspace-1', '/workspace-1', 'available',
+      '2026-06-05T09:00:00.000Z', '2026-06-05T09:00:00.000Z',
+      '2026-06-05T09:00:00.000Z', NULL
+    );
 
-    INSERT INTO runs (run_id, session_id, permission_mode, goal, status, created_at)
-    VALUES
-      ('run-1', 'session-1', 'chat', 'Change a file', 'running', '2026-06-05T09:01:00.000Z'),
-      ('run-2', 'session-2', 'chat', 'Change another file', 'running', '2026-06-05T09:01:00.000Z');
+    INSERT INTO sessions (
+      session_id, workspace_id, title, status, active_entry_id,
+      created_at, updated_at, archived_at, metadata_json
+    ) VALUES (
+      'session-1', 'workspace-1', 'Workspace change session', 'active', NULL,
+      '2026-06-05T09:00:00.000Z', '2026-06-05T09:00:00.000Z', NULL, NULL
+    );
 
-    INSERT INTO run_steps (step_id, run_id, kind, status)
-    VALUES
-      ('step-1', 'run-1', 'tool', 'running'),
-      ('step-2', 'run-2', 'tool', 'running');
+    INSERT INTO agent_loop_runs (
+      run_id, workspace_id, session_id, run_kind, user_message_id,
+      assistant_message_id, base_run_id, base_message_id, base_entry_id,
+      attempt_number, status, permission_mode, permission_snapshot_json,
+      memory_recall_trace_id, started_at, completed_at, cancelled_at,
+      error_json, created_at, metadata_json
+    ) VALUES (
+      'run-1', 'workspace-1', 'session-1', 'input', NULL,
+      'message-1', NULL, NULL, NULL, 1, 'running', 'chat', NULL,
+      NULL, '2026-06-05T09:01:00.000Z', NULL, NULL,
+      NULL, '2026-06-05T09:01:00.000Z', NULL
+    );
 
-    INSERT INTO session_messages (message_id, session_id, run_id, role, content, status, created_at)
-    VALUES
-      ('message-1', 'session-1', 'run-1', 'assistant', 'Changed src/app.ts', 'completed', '2026-06-05T09:02:00.000Z'),
-      ('message-2', 'session-2', 'run-2', 'assistant', 'Changed src/app.ts', 'completed', '2026-06-05T09:02:00.000Z');
+    INSERT INTO session_messages (
+      message_id, session_id, run_id, role, status, content_text,
+      blocks_json, created_at, completed_at, metadata_json
+    ) VALUES (
+      'message-1', 'session-1', 'run-1', 'assistant', 'completed',
+      'Changed src/app.ts', NULL, '2026-06-05T09:02:00.000Z',
+      '2026-06-05T09:02:00.000Z', NULL
+    );
 
-    INSERT INTO session_source_entries (
-      source_entry_id,
-      session_id,
-      source_kind,
-      source_id,
-      source_ref_json,
-      created_at
-    ) VALUES
-      (
-        'source-1',
-        'session-1',
-        'session_message',
-        'message-1',
-        '{"sourceKind":"session_message","sourceId":"message-1"}',
-        '2026-06-05T09:02:00.000Z'
-      ),
-      (
-        'source-2',
-        'session-2',
-        'session_message',
-        'message-2',
-        '{"sourceKind":"session_message","sourceId":"message-2"}',
-        '2026-06-05T09:02:00.000Z'
-      );
-
-    INSERT INTO model_steps (
-      model_step_id,
-      run_id,
-      step_id,
-      provider_id,
-      model_id,
-      status,
-      started_at,
-      model_step_json
-    ) VALUES
-      (
-        'model-step-1',
-        'run-1',
-        'step-1',
-        'openai-compatible',
-        'gpt-5',
-        'completed',
-        '2026-06-05T09:02:30.000Z',
-        '{}'
-      ),
-      (
-        'model-step-2',
-        'run-2',
-        'step-2',
-        'openai-compatible',
-        'gpt-5',
-        'completed',
-        '2026-06-05T09:02:30.000Z',
-        '{}'
-      );
+    INSERT INTO model_calls (
+      model_call_id, run_id, call_order, provider_id, model_id, status,
+      input_summary_json, context_snapshot_json, request_json, response_json,
+      output_summary_json, token_usage_json, started_at, completed_at,
+      error_json, metadata_json
+    ) VALUES (
+      'model-call-1', 'run-1', 1, 'openai-compatible', 'gpt-5', 'completed',
+      NULL, NULL, NULL, NULL, NULL, NULL,
+      '2026-06-05T09:02:30.000Z', '2026-06-05T09:02:40.000Z',
+      NULL, NULL
+    );
 
     INSERT INTO tool_calls (
-      tool_call_id,
-      run_id,
-      model_step_id,
-      provider_tool_call_id,
-      tool_name,
-      input_json,
-      input_preview_json,
-      status,
-      created_at,
-      tool_call_json
-    ) VALUES
-      (
-        'tool-call-1',
-        'run-1',
-        'model-step-1',
-        'provider-tool-call-1',
-        'write_file',
-        '{}',
-        '{}',
-        'completed',
-        '2026-06-05T09:03:00.000Z',
-        '{}'
-      ),
-      (
-        'tool-call-2',
-        'run-2',
-        'model-step-2',
-        'provider-tool-call-2',
-        'write_file',
-        '{}',
-        '{}',
-        'completed',
-        '2026-06-05T09:03:00.000Z',
-        '{}'
-      );
-
-    INSERT INTO tool_executions (
-      tool_execution_id,
-      tool_call_id,
-      run_id,
-      step_id,
-      tool_name,
-      input_json,
-      input_preview_json,
-      capabilities_json,
-      risk_level,
-      side_effect,
-      status,
-      requested_at,
-      tool_execution_json
-    ) VALUES
-      (
-        'tool-execution-1',
-        'tool-call-1',
-        'run-1',
-        'step-1',
-        'write_file',
-        '{}',
-        '{}',
-        '["project_write"]',
-        'medium',
-        'write_file',
-        'succeeded',
-        '2026-06-05T09:03:01.000Z',
-        '{}'
-      ),
-      (
-        'tool-execution-2',
-        'tool-call-2',
-        'run-2',
-        'step-2',
-        'write_file',
-        '{}',
-        '{}',
-        '["project_write"]',
-        'medium',
-        'write_file',
-        'succeeded',
-        '2026-06-05T09:03:01.000Z',
-        '{}'
-      );
+      tool_call_id, run_id, model_call_id, call_order, provider_tool_call_id,
+      tool_source_id, tool_name, model_visible_name, input_json, input_preview,
+      status, permission_decision_json, approval_request_id, result_json,
+      result_preview, observation_json, submitted_to_model_at, started_at,
+      completed_at, error_json, metadata_json
+    ) VALUES (
+      'tool-call-1', 'run-1', 'model-call-1', 1, 'provider-tool-call-1',
+      NULL, 'write_file', 'write_file', '{}', NULL, 'completed',
+      NULL, NULL, NULL, NULL, NULL, NULL,
+      '2026-06-05T09:03:00.000Z', '2026-06-05T09:03:01.000Z',
+      NULL, '{"toolExecutionId":"tool-execution-1"}'
+    );
   `);
 }
 
@@ -1169,4 +413,3 @@ function hash(value: string): string {
 function byteLength(value: string): number {
   return Buffer.byteLength(value, 'utf8');
 }
-

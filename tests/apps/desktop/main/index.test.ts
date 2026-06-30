@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -79,12 +79,6 @@ const mocks = vi.hoisted(() => {
       isDestroyed: vi.fn(() => false),
       webContents: { send: vi.fn() },
     })),
-    PermissionSnapshotRepository: vi.fn(function PermissionSnapshotRepository(
-      this: { database?: unknown },
-      database: unknown,
-    ) {
-      this.database = database;
-    }),
     PermissionSnapshotService: vi.fn(function PermissionSnapshotService(
       this: { options?: unknown },
       options: unknown,
@@ -162,19 +156,28 @@ const mocks = vi.hoisted(() => {
       const db = { databaseId: 'desktop-persistence-database' };
       return {
         database: db,
-        activePathRepository: new mocks.SessionActivePathRepository(db),
-        recoveryRepository: new mocks.RecoveryRepository(db),
-        permissionSnapshotRepository: new mocks.PermissionSnapshotRepository(db),
-        toolRepository: new mocks.ToolRepository(db),
+        workspaceRepository: new mocks.WorkspaceRepository(db),
+        sessionRepository: new mocks.SessionRepository(db),
+        agentLoopRepository: new mocks.AgentLoopRepository(db),
+        toolCallRepository: new mocks.ToolCallRepository(db),
         artifactRepository: new mocks.ArtifactRepository(db),
         memoryRepository: new mocks.MemoryRepository(db),
-        timelineMessageRepository: new mocks.TimelineMessageRepository(db),
         workspaceChangeRepository: new mocks.WorkspaceChangeRepository(db),
-        projectRepository: new mocks.ProjectRepository(db),
-        runContextRepository: { repositoryName: 'run-context-repository' },
       };
     }),
-    RecoveryRepository: vi.fn(function RecoveryRepository(
+    WorkspaceRepository: vi.fn(function WorkspaceRepository(
+      this: { database?: unknown },
+      database: unknown,
+    ) {
+      this.database = database;
+    }),
+    SessionRepository: vi.fn(function SessionRepository(
+      this: { database?: unknown },
+      database: unknown,
+    ) {
+      this.database = database;
+    }),
+    AgentLoopRepository: vi.fn(function AgentLoopRepository(
       this: { database?: unknown },
       database: unknown,
     ) {
@@ -183,13 +186,13 @@ const mocks = vi.hoisted(() => {
     WorkspaceChangeRepository: vi.fn(function WorkspaceChangeRepository(
       this: {
         database?: unknown;
-        getChangeSet?: unknown;
+        getWorkspaceChange?: unknown;
         listChangeSummariesByRun?: unknown;
       },
       database: unknown,
     ) {
       this.database = database;
-      this.getChangeSet = vi.fn(() => ({
+      this.getWorkspaceChange = vi.fn(() => ({
         changeSetId: 'workspace-change-set-1',
         sessionId: 'session_123',
         runId: 'run_123',
@@ -235,38 +238,20 @@ const mocks = vi.hoisted(() => {
         fileResults: [],
       }));
     }),
-    SessionActivePathRepository: vi.fn(function SessionActivePathRepository(
-      this: { database?: unknown },
-      database: unknown,
-    ) {
-      this.database = database;
-    }),
     ArtifactRepository: vi.fn(function ArtifactRepository(
       this: { database?: unknown },
       database: unknown,
     ) {
       this.database = database;
     }),
-    ToolRepository: vi.fn(function ToolRepository(
+    ToolCallRepository: vi.fn(function ToolCallRepository(
       this: { database?: unknown; getToolExecution?: unknown },
       database: unknown,
     ) {
       this.database = database;
       this.getToolExecution = vi.fn();
     }),
-    TimelineMessageRepository: vi.fn(function TimelineMessageRepository(
-      this: { database?: unknown },
-      database: unknown,
-    ) {
-      this.database = database;
-    }),
     MemoryRepository: vi.fn(function MemoryRepository(
-      this: { database?: unknown },
-      database: unknown,
-    ) {
-      this.database = database;
-    }),
-    ProjectRepository: vi.fn(function ProjectRepository(
       this: { database?: unknown },
       database: unknown,
     ) {
@@ -469,7 +454,6 @@ describe('main runtime logger composition', () => {
     mocks.registerRuntimeProcessErrorHandlers.mockClear();
     mocks.registerAppLifecycle.mockClear();
     mocks.createMainWindow.mockClear();
-    mocks.PermissionSnapshotRepository.mockClear();
     mocks.PermissionSnapshotService.mockClear();
     mocks.SessionRunService.mockClear();
     mocks.createModelCallRunner.mockClear();
@@ -479,11 +463,13 @@ describe('main runtime logger composition', () => {
     mocks.createDefaultToolService.mockClear();
     mocks.composeCodingAgentHostInterface.mockClear();
     mocks.composeCodingAgentPersistence.mockClear();
-    mocks.RecoveryRepository.mockClear();
+    mocks.WorkspaceRepository.mockClear();
+    mocks.SessionRepository.mockClear();
+    mocks.AgentLoopRepository.mockClear();
     mocks.WorkspaceChangeRepository.mockClear();
     mocks.WorkspaceRestoreService.mockClear();
-    mocks.SessionActivePathRepository.mockClear();
     mocks.ArtifactRepository.mockClear();
+    mocks.ToolCallRepository.mockClear();
     mocks.MemoryRepository.mockClear();
     mocks.ArtifactContentStore.mockClear();
     mocks.ArtifactService.mockClear();
@@ -491,7 +477,6 @@ describe('main runtime logger composition', () => {
     mocks.PlanArtifactCompatibilityService.mockClear();
     mocks.createRecoveryService.mockClear();
     mocks.createWorkspaceFilesService.mockClear();
-    mocks.ProjectRepository.mockClear();
     mocks.showOpenDialog.mockClear();
     mocks.getAllWindows.mockClear();
     mocks.quit.mockClear();
@@ -502,7 +487,7 @@ describe('main runtime logger composition', () => {
     rmSync(mocks.homePath, { recursive: true, force: true });
   });
 
-  it('uses permission snapshot naming for service composition', () => {
+  it('uses aggregate persistence naming for service composition', () => {
     const source = [
       'packages/coding-agent/composition/compose-coding-agent-persistence.ts',
       'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts',
@@ -510,11 +495,10 @@ describe('main runtime logger composition', () => {
       .map((filePath) => readFileSync(join(process.cwd(), filePath), 'utf8'))
       .join('\n');
 
-    expect(source).toContain('PermissionSnapshotRepository');
-    expect(source).toContain('PermissionSnapshotService');
-    expect(source).not.toContain('RunModeRepository');
-    expect(source).not.toContain('RunModeService');
-    expect(source).not.toContain('run-mode.service');
+    expect(source).toContain('WorkspaceRepository');
+    expect(source).toContain('SessionRepository');
+    expect(source).toContain('AgentLoopRepository');
+    expect(source).toContain('ToolCallRepository');
   });
 
   it('does not keep main run-mode compatibility shim files', () => {

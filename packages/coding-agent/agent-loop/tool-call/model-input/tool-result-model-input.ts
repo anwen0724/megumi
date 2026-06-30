@@ -47,7 +47,7 @@ export function buildToolResultsForNextModelInput(
       if (!record.observation) {
         throw new Error(`Missing ToolObservation for ${record.toolExecutionId}.`);
       }
-      return options.repository.saveToolResult({
+      return options.repository.completeToolCall({
         toolResultId: options.ids.toolResultId(),
         toolCallId: record.toolCallId,
         toolExecutionId: record.toolExecutionId,

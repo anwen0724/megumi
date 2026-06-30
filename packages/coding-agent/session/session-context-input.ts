@@ -1,4 +1,4 @@
-// Selects active-path session history, summaries, and runtime facts for model input.
+﻿// Selects active-path session history, summaries, and runtime facts for model input.
 import type {
   ModelInputContextSourceKind,
   ModelInputContextSourceRef,
@@ -35,11 +35,11 @@ export interface SessionContextInputRunRepository {
   getRun(runId: string): Run | undefined;
 }
 
-export interface SessionContextInputRunExecutionFactRepository {
+export interface SessionContextInputRunFactStorePort {
   listStepsByRun(runId: string): RunStep[];
 }
 
-export interface SessionContextInputRuntimeEventRepository {
+export interface SessionContextInputEventStorePort {
   listRuntimeEventsByRun(runId: string): RuntimeEvent[];
 }
 
@@ -68,8 +68,8 @@ export interface SessionContextInputServiceOptions {
   sessionRepository: SessionContextInputSessionRepository;
   messageRepository: SessionContextInputMessageRepository;
   runRepository: SessionContextInputRunRepository;
-  runExecutionFactRepository: SessionContextInputRunExecutionFactRepository;
-  runtimeEventRepository: SessionContextInputRuntimeEventRepository;
+  runExecutionFactRepository: SessionContextInputRunFactStorePort;
+  runtimeEventRepository: SessionContextInputEventStorePort;
   sessionCompactionRepository: SessionContextInputCompactionRepository;
   activePathRepository: SessionContextInputActivePathRepository;
 }
@@ -294,8 +294,8 @@ function sourceRefsMatch(left: ModelInputContextSourceRef, right: ModelInputCont
 }
 
 function runtimeFactsForRun(input: {
-  runExecutionFactRepository: SessionContextInputRunExecutionFactRepository;
-  runtimeEventRepository: SessionContextInputRuntimeEventRepository;
+  runExecutionFactRepository: SessionContextInputRunFactStorePort;
+  runtimeEventRepository: SessionContextInputEventStorePort;
   run: Run;
   builtAt: string;
 }): SessionRuntimeFact[] {

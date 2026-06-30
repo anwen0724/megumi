@@ -9,13 +9,12 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { composeCodingAgentRuntime } from '@megumi/coding-agent/composition';
 import {
+  AgentLoopRepository,
   createDatabase,
-  migrateDatabase,
-  ProjectRepository,
-  RunRecordRepository,
-  SessionMessageRepository,
-  SessionRecordRepository,
+  WorkspaceRepository,
+  SessionRepository,
 } from '@megumi/coding-agent/persistence';
+import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
 import {
   mergeRawAppSettings,
   resolveAppSettings,
@@ -34,22 +33,21 @@ function appSettingsProvider() {
   };
 }
 
-// Seed an orphan terminal run (no timeline_messages) directly into the SQLite file,
+// Seed an orphan terminal run without committed session message projection directly into the SQLite file,
 // closing the connection before the runtime opens it.
 function seedOrphanRun(home: string, runId: string, status: 'failed' | 'cancelled', errorJson?: string) {
   const db = createDatabase(path.join(home, 'megumi.sqlite3'));
   try {
-    migrateDatabase(db);
-    const project = new ProjectRepository(db).upsertFromRepoPath({ repoPath: home, now: '2026-06-24T00:00:00.000Z' });
-    const sessionRepository = new SessionRecordRepository(db);
-    const messageRepository = new SessionMessageRepository(db);
-    const runRepository = new RunRecordRepository(db);
+    applyCodingAgentDatabaseMigrations(db);
+    const project = new WorkspaceRepository(db).upsertFromRepoPath({ repoPath: home, now: '2026-06-24T00:00:00.000Z' });
+    const sessionRepository = new SessionRepository(db);
+    const runRepository = new AgentLoopRepository(db);
     const session = sessionRepository.saveSession({
       sessionId: `session-${runId}`, title: 'Old session', workspaceId: project.projectId, workspacePath: home,
       status: 'active', createdAt: '2026-06-23T00:00:00.000Z', updatedAt: '2026-06-23T00:00:00.000Z',
     });
     const triggerMessageId = `message-user-${runId}`;
-    messageRepository.saveMessage({
+    sessionRepository.saveMessage({
       messageId: triggerMessageId, sessionId: String(session.sessionId), runId, role: 'user',
       content: '我爱你', status: 'completed',
       createdAt: '2026-06-23T00:57:50.000Z', completedAt: '2026-06-23T00:57:50.000Z',

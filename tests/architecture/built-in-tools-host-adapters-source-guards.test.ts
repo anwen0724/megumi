@@ -79,7 +79,7 @@ describe('built-in tools and host adapters source guards', () => {
     const approvedQueueIndex = resumeToolApproval.indexOf("status: 'queued'");
     const rejectHelperIndex = resumeToolApproval.indexOf('rejectApprovedRecord');
     const advanceIndex = resumeToolApproval.indexOf('advanceExecutionWindows');
-    const saveApprovalIndex = resumeToolApproval.indexOf('repository.saveApprovalRequest');
+    const saveApprovalIndex = resumeToolApproval.indexOf('repository.createApprovalRequest');
     const rejectApprovedRecord = approvalResume.slice(approvalResume.indexOf('function rejectApprovedRecord'));
 
     expect(getApprovalIndex).toBeGreaterThan(-1);

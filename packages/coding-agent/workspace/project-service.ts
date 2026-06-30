@@ -1,9 +1,9 @@
-// Manages Coding Agent project lifecycle (list, open, use-existing, remove) over
+﻿// Manages Coding Agent project lifecycle (list, open, use-existing, remove) over
 // the product project repository. The directory picker and file system are ports
 // so the product runs standalone (no-op picker) while a UI shell can inject an
 // interactive picker. The default node:fs-backed file system is supplied by the
 // composition layer, keeping this service free of concrete Host privileges.
-import type { ProjectRepository } from '../persistence/repos/project.repo';
+import type { WorkspaceRepository } from '../persistence/repos/workspace.repo';
 import type {
   ProjectListData,
   ProjectOpenData,
@@ -30,8 +30,19 @@ export interface ProjectFileSystem {
   remove?(path: string): Promise<void> | void;
 }
 
+export interface WorkspaceProjectStorePort
+  extends Pick<
+    WorkspaceRepository,
+    | 'listProjects'
+    | 'upsertFromRepoPath'
+    | 'getProject'
+    | 'touchProject'
+    | 'updateStatus'
+    | 'removeProject'
+  > {}
+
 export interface CreateProjectServiceOptions {
-  repository: ProjectRepository;
+  repository: WorkspaceProjectStorePort;
   fileSystem: ProjectFileSystem;
   directoryPicker?: DirectoryPickerPort;
   now?: () => string;

@@ -4,7 +4,6 @@ import type { ToolExecution } from '@megumi/shared/tool';
 import type {
   WorkspaceChangedFile,
   WorkspaceChangeSet,
-  WorkspaceCheckpoint,
   WorkspaceSnapshotContent,
 } from '@megumi/shared/workspace';
 import {
@@ -29,29 +28,23 @@ describe('WorkspaceChangeTrackerService', () => {
     const finalized = tracker.finalizeChangeSet(scope());
 
     expect(result).toBe('ok');
-    expect(repository.saveChangeSet).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordWorkspaceChange).toHaveBeenCalledWith(expect.objectContaining({
       sessionId: 'session-1',
       runId: 'run-1',
       stepId: 'step-1',
       status: 'open',
       changedFileCount: 0,
     }));
-    expect(repository.saveWorkspaceCheckpoint).toHaveBeenCalledWith(expect.objectContaining({
-      projectPath: 'src/new.ts',
-      beforeExists: false,
-      beforeContentRefId: undefined,
-    }));
-    expect(repository.saveChangedFile).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordChangedFile).toHaveBeenCalledWith(expect.objectContaining({
       projectPath: 'src/new.ts',
       changeKind: 'created',
       restoreState: 'restorable',
       beforeExists: false,
+      beforeContentRefId: undefined,
       afterExists: true,
       afterHash: expect.stringMatching(/^[a-f0-9]{64}$/),
       afterByteLength: 9,
     }));
-    expect(repository.saveWorkspaceCheckpoint.mock.invocationCallOrder[0])
-      .toBeLessThan(repository.saveChangedFile.mock.invocationCallOrder[0]);
     expect(finalized).toMatchObject({
       status: 'finalized',
       changedFileCount: 1,
@@ -78,25 +71,19 @@ describe('WorkspaceChangeTrackerService', () => {
       },
     });
 
-    expect(repository.saveSnapshotContent).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.saveFileSnapshot).toHaveBeenCalledWith(expect.objectContaining({
       contentRefId: 'snapshot-1',
       projectPath: 'src/app.ts',
       contentText: 'before',
       byteLength: 6,
     }));
-    expect(repository.saveSnapshotContent).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.saveFileSnapshot).toHaveBeenCalledWith(expect.objectContaining({
       contentRefId: 'snapshot-2',
       projectPath: 'src/app.ts',
       contentText: 'after',
       byteLength: 5,
     }));
-    expect(repository.saveWorkspaceCheckpoint).toHaveBeenCalledWith(expect.objectContaining({
-      projectPath: 'src/app.ts',
-      beforeExists: true,
-      beforeContentRefId: 'snapshot-1',
-      beforeByteLength: 6,
-    }));
-    expect(repository.saveChangedFile).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordChangedFile).toHaveBeenCalledWith(expect.objectContaining({
       projectPath: 'src/app.ts',
       changeKind: 'modified',
       beforeExists: true,
@@ -113,7 +100,7 @@ describe('WorkspaceChangeTrackerService', () => {
       ['C:\\project\\src\\app.ts', 'before'],
     ]);
     const repository = fakeRepository({
-      saveSnapshotContent: vi.fn(() => {
+      saveFileSnapshot: vi.fn(() => {
         throw new Error('snapshot failed');
       }),
     });
@@ -135,8 +122,7 @@ describe('WorkspaceChangeTrackerService', () => {
 
     expect(execute).not.toHaveBeenCalled();
     expect(files.get('C:\\project\\src\\app.ts')).toBe('before');
-    expect(repository.saveWorkspaceCheckpoint).not.toHaveBeenCalled();
-    expect(repository.saveChangedFile).not.toHaveBeenCalled();
+    expect(repository.recordChangedFile).not.toHaveBeenCalled();
   });
 
   it('fails closed before writing unsupported snapshot text', async () => {
@@ -161,12 +147,11 @@ describe('WorkspaceChangeTrackerService', () => {
 
     expect(execute).not.toHaveBeenCalled();
     expect(files.get('C:\\project\\src\\binary.dat')).toBe('before\u0000content');
-    expect(repository.saveSnapshotContent).not.toHaveBeenCalled();
-    expect(repository.saveWorkspaceCheckpoint).not.toHaveBeenCalled();
-    expect(repository.saveChangedFile).not.toHaveBeenCalled();
+    expect(repository.saveFileSnapshot).not.toHaveBeenCalled();
+    expect(repository.recordChangedFile).not.toHaveBeenCalled();
   });
 
-  it('fails closed before checkpointing projected unsupported after text', async () => {
+  it('fails closed before recording projected unsupported after text', async () => {
     const files = new Map<string, string>([
       ['C:\\project\\src\\app.ts', 'before'],
     ]);
@@ -188,11 +173,10 @@ describe('WorkspaceChangeTrackerService', () => {
 
     expect(execute).not.toHaveBeenCalled();
     expect(files.get('C:\\project\\src\\app.ts')).toBe('before');
-    expect(repository.saveWorkspaceCheckpoint).not.toHaveBeenCalled();
-    expect(repository.saveChangedFile).not.toHaveBeenCalled();
+    expect(repository.recordChangedFile).not.toHaveBeenCalled();
   });
 
-  it('does not create a changed file when execution fails after checkpointing', async () => {
+  it('does not create a changed file when execution fails after taking the before snapshot', async () => {
     const files = new Map<string, string>([
       ['C:\\project\\src\\app.ts', 'before'],
     ]);
@@ -214,11 +198,7 @@ describe('WorkspaceChangeTrackerService', () => {
 
     expect(execute).toHaveBeenCalledTimes(1);
     expect(files.get('C:\\project\\src\\app.ts')).toBe('before');
-    expect(repository.saveWorkspaceCheckpoint).toHaveBeenCalledWith(expect.objectContaining({
-      projectPath: 'src/app.ts',
-      beforeExists: true,
-    }));
-    expect(repository.saveChangedFile).not.toHaveBeenCalled();
+    expect(repository.recordChangedFile).not.toHaveBeenCalled();
   });
 
   it('does not record a changed file for a no-op overwrite', async () => {
@@ -239,11 +219,7 @@ describe('WorkspaceChangeTrackerService', () => {
     const finalized = tracker.finalizeChangeSet(scope());
 
     expect(result).toBe('ok');
-    expect(repository.saveWorkspaceCheckpoint).toHaveBeenCalledWith(expect.objectContaining({
-      projectPath: 'src/app.ts',
-      beforeExists: true,
-    }));
-    expect(repository.saveChangedFile).not.toHaveBeenCalled();
+    expect(repository.recordChangedFile).not.toHaveBeenCalled();
     expect(finalized).toMatchObject({
       status: 'finalized',
       changedFileCount: 0,
@@ -262,9 +238,8 @@ describe('WorkspaceChangeTrackerService', () => {
     })).resolves.toBe('ran');
 
     expect(execute).toHaveBeenCalledTimes(1);
-    expect(repository.saveChangeSet).not.toHaveBeenCalled();
-    expect(repository.saveWorkspaceCheckpoint).not.toHaveBeenCalled();
-    expect(repository.saveChangedFile).not.toHaveBeenCalled();
+    expect(repository.recordWorkspaceChange).not.toHaveBeenCalled();
+    expect(repository.recordChangedFile).not.toHaveBeenCalled();
     expect(tracker.finalizeChangeSet(scope())).toBeUndefined();
   });
 
@@ -280,9 +255,8 @@ describe('WorkspaceChangeTrackerService', () => {
     })).resolves.toBe('read');
 
     expect(execute).toHaveBeenCalledTimes(1);
-    expect(repository.saveChangeSet).not.toHaveBeenCalled();
-    expect(repository.saveWorkspaceCheckpoint).not.toHaveBeenCalled();
-    expect(repository.saveChangedFile).not.toHaveBeenCalled();
+    expect(repository.recordWorkspaceChange).not.toHaveBeenCalled();
+    expect(repository.recordChangedFile).not.toHaveBeenCalled();
     expect(tracker.finalizeChangeSet(scope())).toBeUndefined();
   });
 
@@ -313,7 +287,7 @@ describe('WorkspaceChangeTrackerService', () => {
     firstRelease.resolve();
     await Promise.all([first, second]);
 
-    const savedSnapshots = repository.saveSnapshotContent.mock.calls
+    const savedSnapshots = repository.saveFileSnapshot.mock.calls
       .map(([snapshot]) => snapshot.contentText);
     expect(savedSnapshots).toEqual(['one', 'two', 'two', 'three']);
   });
@@ -381,12 +355,12 @@ function fakeRepository(overrides: Partial<WorkspaceChangeTrackerRepositoryPort>
   const changeSets = new Map<string, WorkspaceChangeSet>();
   const changedFilesByChangeSet = new Map<string, WorkspaceChangedFile[]>();
   const repository: WorkspaceChangeTrackerRepositoryPort = {
-    getChangeSet: vi.fn((changeSetId: string) => changeSets.get(changeSetId)),
-    saveChangeSet: vi.fn((changeSet: WorkspaceChangeSet) => {
+    getWorkspaceChange: vi.fn((changeSetId: string) => changeSets.get(changeSetId)),
+    recordWorkspaceChange: vi.fn((changeSet: WorkspaceChangeSet) => {
       changeSets.set(changeSet.changeSetId, changeSet);
       return changeSet;
     }),
-    finalizeChangeSet: vi.fn((changeSetId: string, finalizedAt: string) => {
+    finalizeWorkspaceChange: vi.fn((changeSetId: string, finalizedAt: string) => {
       const existing = changeSets.get(changeSetId);
       if (!existing) return undefined;
       const changedFiles = changedFilesByChangeSet.get(changeSetId) ?? [];
@@ -399,9 +373,8 @@ function fakeRepository(overrides: Partial<WorkspaceChangeTrackerRepositoryPort>
       changeSets.set(changeSetId, finalized);
       return finalized;
     }),
-    saveSnapshotContent: vi.fn((snapshot: WorkspaceSnapshotContent) => snapshot),
-    saveWorkspaceCheckpoint: vi.fn((checkpoint: WorkspaceCheckpoint) => checkpoint),
-    saveChangedFile: vi.fn((changedFile: WorkspaceChangedFile) => {
+    saveFileSnapshot: vi.fn((snapshot: WorkspaceSnapshotContent) => snapshot),
+    recordChangedFile: vi.fn((changedFile: WorkspaceChangedFile) => {
       const current = changedFilesByChangeSet.get(changedFile.changeSetId) ?? [];
       current.push(changedFile);
       changedFilesByChangeSet.set(changedFile.changeSetId, current);
@@ -410,12 +383,11 @@ function fakeRepository(overrides: Partial<WorkspaceChangeTrackerRepositoryPort>
     ...overrides,
   };
   return repository as WorkspaceChangeTrackerRepositoryPort & {
-    getChangeSet: ReturnType<typeof vi.fn>;
-    saveChangeSet: ReturnType<typeof vi.fn>;
-    finalizeChangeSet: ReturnType<typeof vi.fn>;
-    saveSnapshotContent: ReturnType<typeof vi.fn>;
-    saveWorkspaceCheckpoint: ReturnType<typeof vi.fn>;
-    saveChangedFile: ReturnType<typeof vi.fn>;
+    getWorkspaceChange: ReturnType<typeof vi.fn>;
+    recordWorkspaceChange: ReturnType<typeof vi.fn>;
+    finalizeWorkspaceChange: ReturnType<typeof vi.fn>;
+    saveFileSnapshot: ReturnType<typeof vi.fn>;
+    recordChangedFile: ReturnType<typeof vi.fn>;
   };
 }
 
@@ -462,5 +434,3 @@ function createDeferred<T>() {
   });
   return { promise, resolve };
 }
-
-

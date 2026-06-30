@@ -51,12 +51,15 @@ describe('runtime lifecycle cleanup final source guards', () => {
     expect(source).not.toContain('model.tool_use.detected');
   });
 
-  it('keeps canonical tool schema names on tool_calls and tool_executions', () => {
-    const migrations = read('packages/coding-agent/persistence/schema/migrations.ts');
-    const repository = read('packages/coding-agent/persistence/repos/tool.repo.ts');
+  it('keeps canonical tool lifecycle persistence on aggregate tool_calls', () => {
+    const migrationSql = read('packages/coding-agent/persistence/migrations/0000_database_foundation_redesign.sql');
+    const repository = read('packages/coding-agent/persistence/repos/tool-call.repo.ts');
 
-    expect(migrations).toContain('CREATE TABLE IF NOT EXISTS tool_calls');
-    expect(migrations).toContain('CREATE TABLE IF NOT EXISTS tool_executions');
+    expect(migrationSql).toContain('CREATE TABLE `tool_calls`');
+    expect(migrationSql).toContain('`permission_decision_json` text');
+    expect(migrationSql).toContain('`result_json` text');
+    expect(migrationSql).toContain('`observation_json` text');
+    expect(migrationSql).not.toContain('CREATE TABLE `tool_executions`');
     expect(repository).toContain('saveToolCall');
     expect(repository).toContain('saveToolExecution');
     expect(repository).not.toContain('saveToolUse');

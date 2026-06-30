@@ -55,7 +55,7 @@ describe('WorkspaceRestoreService', () => {
       noopCount: 0,
     });
     expect(files.get('C:\\project\\src\\app.ts')).toBe('before');
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       status: 'restored',
       projectPath: 'src/app.ts',
       restoredAt: '2026-06-05T10:00:01.000Z',
@@ -68,11 +68,11 @@ describe('WorkspaceRestoreService', () => {
         restoreResultId: 'restore-result-1',
       }),
     }));
-    expect(repository.updateRestoreRequestStatus).toHaveBeenNthCalledWith(1, expect.objectContaining({
+    expect(repository.updateRestoreOperation).toHaveBeenNthCalledWith(1, expect.objectContaining({
       restoreRequestId: 'restore-request-1',
       status: 'running',
     }));
-    expect(repository.updateRestoreRequestStatus).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(repository.updateRestoreOperation).toHaveBeenLastCalledWith(expect.objectContaining({
       restoreRequestId: 'restore-request-1',
       status: 'completed',
       completedAt: '2026-06-05T10:00:01.000Z',
@@ -109,7 +109,7 @@ describe('WorkspaceRestoreService', () => {
 
     expect(outcome.result.status).toBe('conflict');
     expect(files.get('C:\\project\\src\\app.ts')).toBe('external edit');
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       status: 'conflict',
       conflictReason: 'current_hash_mismatch',
     }));
@@ -171,7 +171,7 @@ describe('WorkspaceRestoreService', () => {
     });
 
     expect(outcome.result.status).toBe('noop');
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       status: 'noop',
       metadata: { alreadyAbsent: true },
     }));
@@ -204,7 +204,7 @@ describe('WorkspaceRestoreService', () => {
 
     expect(outcome.result.status).toBe('restored');
     expect(files.get('C:\\project\\src\\deleted.ts')).toBe('old file');
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       status: 'restored',
       projectPath: 'src/deleted.ts',
     }));
@@ -268,11 +268,11 @@ describe('WorkspaceRestoreService', () => {
     });
     expect(files.get('C:\\project\\src\\safe.ts')).toBe('before safe');
     expect(files.get('C:\\project\\src\\unsafe.ts')).toBe('external edit');
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       changedFileId: 'changed-file-safe',
       status: 'restored',
     }));
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       changedFileId: 'changed-file-unsafe',
       status: 'conflict',
       conflictReason: 'current_hash_mismatch',
@@ -328,12 +328,12 @@ describe('WorkspaceRestoreService', () => {
 
     expect(outcome.result.status).toBe('conflict');
     expect(files.get('C:\\project\\src\\safe.ts')).toBe('after safe');
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       changedFileId: 'changed-file-safe',
       status: 'conflict',
       conflictReason: 'path_outside_project',
     }));
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       changedFileId: 'changed-file-escape',
       status: 'conflict',
       conflictReason: 'path_outside_project',
@@ -381,10 +381,10 @@ describe('WorkspaceRestoreService', () => {
     });
 
     const persistedCalls = [
-      repository.saveRestoreRequest.mock.calls,
-      repository.updateRestoreRequestStatus.mock.calls,
-      repository.saveRestoreResult.mock.calls,
-      repository.saveRestoreFileResult.mock.calls,
+      repository.createRestoreOperation.mock.calls,
+      repository.updateRestoreOperation.mock.calls,
+      repository.completeRestoreOperation.mock.calls,
+      repository.recordRestoreFileResult.mock.calls,
       repository.updateChangedFileRestoreState.mock.calls,
     ];
     const serialized = JSON.stringify(persistedCalls);
@@ -445,7 +445,7 @@ describe('WorkspaceRestoreService', () => {
     expect(outcome.result.status).toBe('partial');
     expect(files.get('C:\\project\\src\\fail.ts')).toBe('after fail');
     expect(files.get('C:\\project\\src\\safe.ts')).toBe('before safe');
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       changedFileId: 'changed-file-fail',
       status: 'failed',
       error: expect.objectContaining({
@@ -521,7 +521,7 @@ describe('WorkspaceRestoreService', () => {
     });
     expect(files.get('C:\\project\\src\\fail.ts')).toBe('after fail');
     expect(files.get('C:\\project\\src\\safe.ts')).toBe('before safe');
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       changedFileId: 'changed-file-fail',
       status: 'failed',
       error: expect.objectContaining({
@@ -625,7 +625,7 @@ describe('WorkspaceRestoreService', () => {
         snapshot('after-secret-ref', 'after secret', { projectPath: 'src/secret.ts' }),
       ],
     });
-    repository.saveRestoreResult.mockImplementation(() => {
+    repository.completeRestoreOperation.mockImplementation(() => {
       throw new Error('persist result failed');
     });
     const service = createService({ files, repository });
@@ -635,17 +635,17 @@ describe('WorkspaceRestoreService', () => {
       requestedBy: 'user',
     })).rejects.toThrow('persist result failed');
 
-    expect(repository.updateRestoreRequestStatus).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.updateRestoreOperation).toHaveBeenCalledWith(expect.objectContaining({
       restoreRequestId: 'restore-request-1',
       status: 'running',
     }));
-    expect(repository.updateRestoreRequestStatus).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.updateRestoreOperation).toHaveBeenCalledWith(expect.objectContaining({
       restoreRequestId: 'restore-request-1',
       status: 'failed',
       completedAt: expect.any(String),
     }));
-    expect(JSON.stringify(repository.updateRestoreRequestStatus.mock.calls)).not.toContain('before secret');
-    expect(JSON.stringify(repository.updateRestoreRequestStatus.mock.calls)).not.toContain('after secret');
+    expect(JSON.stringify(repository.updateRestoreOperation.mock.calls)).not.toContain('before secret');
+    expect(JSON.stringify(repository.updateRestoreOperation.mock.calls)).not.toContain('after secret');
     expect(repository.updateChangedFileRestoreState).not.toHaveBeenCalledWith(expect.objectContaining({
       metadata: expect.objectContaining({ restoreResultId: 'restore-result-1' }),
     }));
@@ -673,7 +673,7 @@ describe('WorkspaceRestoreService', () => {
         snapshot('after-secret-ref', 'after secret', { projectPath: 'src/secret.ts' }),
       ],
     });
-    repository.saveRestoreFileResult.mockImplementation(() => {
+    repository.recordRestoreFileResult.mockImplementation(() => {
       throw new Error('persist file result failed');
     });
     const service = createService({ files, repository });
@@ -683,11 +683,11 @@ describe('WorkspaceRestoreService', () => {
       requestedBy: 'user',
     })).rejects.toThrow('persist file result failed');
 
-    expect(repository.saveRestoreResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.completeRestoreOperation).toHaveBeenCalledWith(expect.objectContaining({
       restoreResultId: 'restore-result-1',
       status: 'restored',
     }));
-    expect(repository.updateRestoreRequestStatus).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.updateRestoreOperation).toHaveBeenCalledWith(expect.objectContaining({
       restoreRequestId: 'restore-request-1',
       status: 'failed',
       completedAt: expect.any(String),
@@ -695,8 +695,8 @@ describe('WorkspaceRestoreService', () => {
     expect(repository.updateChangedFileRestoreState).not.toHaveBeenCalledWith(expect.objectContaining({
       metadata: expect.objectContaining({ restoreResultId: 'restore-result-1' }),
     }));
-    expect(JSON.stringify(repository.updateRestoreRequestStatus.mock.calls)).not.toContain('before secret');
-    expect(JSON.stringify(repository.updateRestoreRequestStatus.mock.calls)).not.toContain('after secret');
+    expect(JSON.stringify(repository.updateRestoreOperation.mock.calls)).not.toContain('before secret');
+    expect(JSON.stringify(repository.updateRestoreOperation.mock.calls)).not.toContain('after secret');
   });
 
   it('treats an already restored modified file as noop without recording a conflict', async () => {
@@ -730,11 +730,11 @@ describe('WorkspaceRestoreService', () => {
 
     expect(outcome.result.status).toBe('noop');
     expect(files.get('C:\\project\\src\\app.ts')).toBe('before');
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       status: 'noop',
       metadata: { alreadyRestored: true },
     }));
-    expect(repository.saveRestoreFileResult).not.toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).not.toHaveBeenCalledWith(expect.objectContaining({
       status: 'conflict',
     }));
     expect(repository.updateChangedFileRestoreState).toHaveBeenCalledWith(expect.objectContaining({
@@ -774,11 +774,11 @@ describe('WorkspaceRestoreService', () => {
 
     expect(outcome.result.status).toBe('noop');
     expect(files.get('C:\\project\\src\\app.ts')).toBe('before');
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       status: 'noop',
       metadata: { alreadyRestored: true },
     }));
-    expect(repository.saveRestoreFileResult).not.toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).not.toHaveBeenCalledWith(expect.objectContaining({
       status: 'conflict',
     }));
     expect(repository.updateChangedFileRestoreState).toHaveBeenCalledWith(expect.objectContaining({
@@ -813,7 +813,7 @@ describe('WorkspaceRestoreService', () => {
 
     expect(outcome.result.status).toBe('conflict');
     expect(files.get('C:\\project\\src\\deleted.ts')).toBe('old file');
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       status: 'conflict',
       conflictReason: 'current_file_exists',
     }));
@@ -854,7 +854,7 @@ describe('WorkspaceRestoreService', () => {
 
     expect(outcome.result.status).toBe('noop');
     expect(files.get('C:\\project\\src\\app.ts')).toBe('after');
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       status: 'noop',
       metadata: { notRestorable: true },
     }));
@@ -916,15 +916,15 @@ describe('WorkspaceRestoreService', () => {
 
     expect(outcome.result.status).toBe('restored');
     expect(files.get('C:\\project\\src\\app.ts')).toBe('A');
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       changedFileId: 'changed-file-b-to-c',
       status: 'restored',
     }));
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       changedFileId: 'changed-file-a-to-b',
       status: 'restored',
     }));
-    expect(repository.saveRestoreFileResult).not.toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).not.toHaveBeenCalledWith(expect.objectContaining({
       status: 'conflict',
     }));
   });
@@ -979,17 +979,17 @@ describe('WorkspaceRestoreService', () => {
 
     expect(outcome.result.status).toBe('noop');
     expect(files.get('C:\\project\\src\\app.ts')).toBe('A');
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       changedFileId: 'changed-file-a-to-b',
       status: 'noop',
       metadata: { alreadyRestored: true },
     }));
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       changedFileId: 'changed-file-b-to-c',
       status: 'noop',
       metadata: { alreadyRestored: true },
     }));
-    expect(repository.saveRestoreFileResult).not.toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).not.toHaveBeenCalledWith(expect.objectContaining({
       status: 'conflict',
     }));
   });
@@ -1038,17 +1038,17 @@ describe('WorkspaceRestoreService', () => {
 
     expect(outcome.result.status).toBe('noop');
     expect(files.has('C:\\project\\src\\new.ts')).toBe(false);
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       changedFileId: 'changed-file-created',
       status: 'noop',
       metadata: { alreadyRestored: true },
     }));
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       changedFileId: 'changed-file-a-to-b',
       status: 'noop',
       metadata: { alreadyRestored: true },
     }));
-    expect(repository.saveRestoreFileResult).not.toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).not.toHaveBeenCalledWith(expect.objectContaining({
       status: 'conflict',
     }));
   });
@@ -1099,17 +1099,17 @@ describe('WorkspaceRestoreService', () => {
 
     expect(outcome.result.status).toBe('noop');
     expect(files.get('C:\\project\\src\\app.ts')).toBe('A');
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       changedFileId: 'changed-file-a-to-b',
       status: 'noop',
       metadata: { alreadyRestored: true },
     }));
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       changedFileId: 'changed-file-b-to-deleted',
       status: 'noop',
       metadata: { alreadyRestored: true },
     }));
-    expect(repository.saveRestoreFileResult).not.toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).not.toHaveBeenCalledWith(expect.objectContaining({
       status: 'conflict',
     }));
   });
@@ -1148,7 +1148,7 @@ describe('WorkspaceRestoreService', () => {
 
     expect(outcome.result.status).toBe('conflict');
     expect(files.get('C:\\project\\src\\app.ts')).toBe('after');
-    expect(repository.saveRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.recordRestoreFileResult).toHaveBeenCalledWith(expect.objectContaining({
       status: 'conflict',
       conflictReason: 'snapshot_missing',
     }));
@@ -1267,18 +1267,18 @@ function fakeRepository(input: {
     updatedAt: '2026-06-05T09:59:02.000Z',
   };
   const repository = {
-    getChangeSet: vi.fn((changeSetId: string) => (
+    getWorkspaceChange: vi.fn((changeSetId: string) => (
       changeSetId === changeSetRecord.changeSetId ? changeSetRecord : undefined
     )),
     listChangedFilesByChangeSet: vi.fn((changeSetId: string) => (
       changeSetId === changeSetRecord.changeSetId ? [...(input.changedFiles ?? [])] : []
     )),
     getSnapshotContent: vi.fn((contentRefId: string) => snapshots.get(contentRefId)),
-    saveRestoreRequest: vi.fn((request: WorkspaceRestoreRequest) => {
+    createRestoreOperation: vi.fn((request: WorkspaceRestoreRequest) => {
       restoreRequests.set(request.restoreRequestId, request);
       return request;
     }),
-    updateRestoreRequestStatus: vi.fn((update: {
+    updateRestoreOperation: vi.fn((update: {
       restoreRequestId: string;
       status: WorkspaceRestoreRequest['status'];
       completedAt?: string;
@@ -1290,8 +1290,8 @@ function fakeRepository(input: {
       restoreRequests.set(update.restoreRequestId, next);
       return next;
     }),
-    saveRestoreResult: vi.fn((result: WorkspaceRestoreResult) => result),
-    saveRestoreFileResult: vi.fn((fileResult: WorkspaceRestoreFileResult) => fileResult),
+    completeRestoreOperation: vi.fn((result: WorkspaceRestoreResult) => result),
+    recordRestoreFileResult: vi.fn((fileResult: WorkspaceRestoreFileResult) => fileResult),
     updateChangedFileRestoreState: vi.fn((update: {
       changedFileId: string;
       restoreState: WorkspaceChangedFile['restoreState'];
@@ -1382,5 +1382,3 @@ function fakeClock(values: string[]) {
     },
   };
 }
-
-

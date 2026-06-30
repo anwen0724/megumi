@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -44,10 +44,11 @@ describe('Desktop Main shell composition', () => {
     expect(productComposition).toContain('composeCodingAgentToolRuntimeFactory');
     expect(productComposition).toContain('composeCodingAgentSessionRuntime');
     expect(productComposition).toContain('new ProviderSettingsService');
-    expect(persistenceComposition).toContain('migrateDatabase(database)');
-    expect(persistenceComposition).toContain('new SessionRecordRepository(database)');
-    expect(persistenceComposition).toContain('new RunRecordRepository(database)');
-    expect(persistenceComposition).toContain('new RuntimeEventRepository(database)');
+    expect(persistenceComposition).toContain('migrateCodingAgentDatabase');
+    expect(persistenceComposition).toContain('workspaceRepository: new WorkspaceRepository(database)');
+    expect(persistenceComposition).toContain('sessionRepository: new SessionRepository(database)');
+    expect(persistenceComposition).toContain('agentLoopRepository: new AgentLoopRepository(database)');
+    expect(persistenceComposition).toContain('toolCallRepository: new ToolCallRepository(database)');
     expect(persistenceComposition).not.toContain('new SessionRunRepository(database)');
     expect(sessionComposition).toContain('new InputProcessingService');
     expect(sessionComposition).toContain('createInputService');

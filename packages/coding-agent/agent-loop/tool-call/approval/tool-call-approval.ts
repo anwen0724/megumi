@@ -52,7 +52,7 @@ function applyDecision(
   options: ResolvedToolCallRunnerOptions,
   record: ToolExecutionRecord,
 ): ToolExecutionRecord {
-  const permissionDecision = options.repository.savePermissionDecision(
+  const permissionDecision = options.repository.recordPermissionDecision(
     permissionDecisionForRecord(options, record),
   );
   const decision = options.decisionEvaluator.evaluate({
@@ -71,7 +71,7 @@ function applyDecision(
       ids: options.ids,
       now: options.now,
     });
-    return options.repository.saveToolExecution({
+    return options.repository.recordToolExecution({
       ...record,
       decision,
       policyDecision: permissionDecision,
@@ -84,8 +84,8 @@ function applyDecision(
   }
 
   if (decision.outcome === 'requireApproval') {
-    const approvalRequest = options.repository.saveApprovalRequest(createApprovalRequest(options, record, decision));
-    return options.repository.saveToolExecution({
+    const approvalRequest = options.repository.createApprovalRequest(createApprovalRequest(options, record, decision));
+    return options.repository.recordToolExecution({
       ...record,
       decision,
       policyDecision: permissionDecision,
@@ -95,7 +95,7 @@ function applyDecision(
     });
   }
 
-  return options.repository.saveToolExecution({
+  return options.repository.recordToolExecution({
     ...record,
     decision,
     policyDecision: permissionDecision,

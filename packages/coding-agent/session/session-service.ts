@@ -1,4 +1,4 @@
-// Owns Coding Agent session lifecycle and session-scoped read models outside the run loop.
+﻿// Owns Coding Agent session lifecycle and session-scoped read models outside the run loop.
 import type {
   SessionCreatePayload,
   SessionTimelineListData,
@@ -19,7 +19,7 @@ export interface SessionServiceIds {
   sessionId(): string;
 }
 
-export interface SessionTimelineMessageRepository {
+export interface SessionMessageProjectionStorePort {
   listCommittedMessagesBySession(input: {
     projectId: string;
     sessionId: string;
@@ -62,7 +62,7 @@ export interface SessionServiceOptions {
   runRepository: SessionServiceRunRepository;
   ids: SessionServiceIds;
   activePathRepository?: SessionServiceActivePathRepository;
-  timelineMessageRepository?: SessionTimelineMessageRepository;
+  timelineMessageRepository?: SessionMessageProjectionStorePort;
   memorySettingsProvider?: MemorySettingsPort;
   memoryMarkdownSyncService?: MemoryProjectMirrorSyncPort;
   megumiHomePath?: string;
@@ -74,7 +74,7 @@ export class SessionService implements SessionServicePort {
   private readonly runRepository: SessionServiceRunRepository;
   private readonly ids: SessionServiceIds;
   private readonly activePathRepository?: SessionServiceActivePathRepository;
-  private readonly timelineMessageRepository?: SessionTimelineMessageRepository;
+  private readonly timelineMessageRepository?: SessionMessageProjectionStorePort;
   private readonly memorySettingsProvider?: MemorySettingsPort;
   private readonly memoryMarkdownSyncService?: MemoryProjectMirrorSyncPort;
   private readonly megumiHomePath?: string;

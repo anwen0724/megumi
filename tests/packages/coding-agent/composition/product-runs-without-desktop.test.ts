@@ -8,8 +8,10 @@ import { mkdtemp, rm, readFile, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { composeCodingAgentPersistence } from '@megumi/coding-agent/composition/compose-coding-agent-persistence';
 import { composeCodingAgentRuntime } from '@megumi/coding-agent/composition';
-import { ProjectRepository, createDatabase, migrateDatabase } from '@megumi/coding-agent/persistence';
+import { WorkspaceRepository, createDatabase } from '@megumi/coding-agent/persistence';
+import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
 import type { AppSettingsRaw } from '@megumi/shared/settings';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
@@ -94,8 +96,8 @@ function toolCallingModelStepProvider(targetFileName: string) {
 function seedProject(home: string, repoPath: string): string {
   const database = createDatabase(path.join(home, 'megumi.sqlite3'));
   try {
-    migrateDatabase(database);
-    return new ProjectRepository(database).upsertFromRepoPath({
+    applyCodingAgentDatabaseMigrations(database);
+    return new WorkspaceRepository(database).upsertFromRepoPath({
       repoPath,
       now: '2026-06-24T00:00:00.000Z',
     }).projectId;
@@ -117,6 +119,35 @@ describe('coding-agent product runs without desktop', () => {
     }
     home = undefined;
     workspace = undefined;
+  });
+
+  it('composes only the aggregate persistence repositories', async () => {
+    home = await mkdtemp(path.join(os.tmpdir(), 'megumi-persistence-shape-'));
+
+    const persistence = composeCodingAgentPersistence({ sqlitePath: home });
+    try {
+      expect(Object.keys(persistence).sort()).toEqual([
+        'agentLoopRepository',
+        'artifactRepository',
+        'database',
+        'memoryRepository',
+        'sessionRepository',
+        'toolCallRepository',
+        'workspaceChangeRepository',
+        'workspaceRepository',
+      ].sort());
+
+      expect(persistence).not.toHaveProperty('runRecordRepository');
+      expect(persistence).not.toHaveProperty('modelStepRepository');
+      expect(persistence).not.toHaveProperty('runtimeEventRepository');
+      expect(persistence).not.toHaveProperty('activePathRepository');
+      expect(persistence).not.toHaveProperty('timelineMessageRepository');
+      expect(persistence).not.toHaveProperty('permissionSnapshotRepository');
+      expect(persistence).not.toHaveProperty('projectRepository');
+      expect(persistence).not.toHaveProperty('toolRepository');
+    } finally {
+      persistence.database.close();
+    }
   });
 
   it('creates a session, advances a run, executes a real tool, persists history, and survives restart', async () => {

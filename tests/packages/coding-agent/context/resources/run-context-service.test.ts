@@ -1,14 +1,14 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
   createBaselineContextForSession,
   RunContextService,
-  type RunContextRepositoryPort,
+  type RunContextSourceStorePort,
   type WorkspaceSourceProviderPort,
 } from '@megumi/coding-agent/context/resources';
 import type { RunContext, RunContextSource } from '@megumi/shared/run';
 
-function createInMemoryRepository(): RunContextRepositoryPort {
+function createInMemoryRepository(): RunContextSourceStorePort {
   const baselines = new Map<string, RunContext>();
   const sourceRefs: Array<RunContextSource & { runId: string }> = [];
 

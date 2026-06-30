@@ -1,7 +1,6 @@
-﻿import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { createRecoveryService } from '@megumi/coding-agent/state';
-import type { RecoveryRepository } from '@megumi/coding-agent/persistence/repos/recovery.repo';
+import { createRecoveryService, type RecoveryStateStorePort } from '@megumi/coding-agent/state';
 import type {
   CancelRequest,
   Checkpoint,
@@ -18,7 +17,7 @@ import type { WorkspaceChangeSummary } from '@megumi/shared/workspace';
 function createRepository(input: {
   recoverableRuns?: RecoverableRunSummary[];
   interruptedMarkers?: SessionInterruptedRunMarker[];
-} = {}): RecoveryRepository {
+} = {}): RecoveryStateStorePort {
   const checkpoints: Checkpoint[] = [];
   const resumeRequests: ResumeRequest[] = [];
   const cancelRequests: CancelRequest[] = [];
@@ -58,7 +57,7 @@ function createRepository(input: {
     listRestoreRecordsByRun: () => restoreRecords,
     listRecoverableRuns: () => recoverableRuns,
     markInterruptedRuns: () => interruptedMarkers,
-  } as unknown as RecoveryRepository;
+  } as unknown as RecoveryStateStorePort;
 }
 
 function createIds() {

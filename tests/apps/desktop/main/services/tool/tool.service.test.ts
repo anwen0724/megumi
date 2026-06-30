@@ -57,8 +57,8 @@ describe('ToolService', () => {
     const repository = {
       getToolExecution: vi.fn(),
       getApprovalRequest: vi.fn(() => approvalRequest),
-      saveApprovalRecord: vi.fn((value) => value),
-      saveApprovalRequest: vi.fn((value) => value),
+      resolveApprovalRequest: vi.fn((value) => value),
+      createApprovalRequest: vi.fn((value) => value),
     };
     const resumedEvent = createRuntimeEvent({
       eventId: 'event-approval-resolved',
@@ -109,12 +109,12 @@ describe('ToolService', () => {
       scope: 'once',
       reason: 'Looks fine',
     });
-    expect(repository.saveApprovalRecord).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.resolveApprovalRequest).toHaveBeenCalledWith(expect.objectContaining({
       approvalRecordId: 'approval-record-1',
       toolCallId: 'tool-call-1',
       toolExecutionId: 'tool-execution-1',
     }));
-    expect(repository.saveApprovalRequest).toHaveBeenCalledWith(expect.objectContaining({
+    expect(repository.createApprovalRequest).toHaveBeenCalledWith(expect.objectContaining({
       approvalRequestId: 'approval-request-1',
       toolCallId: 'tool-call-1',
       toolExecutionId: 'tool-execution-1',
@@ -144,8 +144,8 @@ describe('ToolService', () => {
     const repository = {
       getToolExecution: vi.fn(),
       getApprovalRequest: vi.fn((approvalRequestId: string) => approvalRequests.get(approvalRequestId)),
-      saveApprovalRecord: vi.fn((value) => value),
-      saveApprovalRequest: vi.fn((value: ReturnType<typeof createApprovalRequest>) => {
+      resolveApprovalRequest: vi.fn((value) => value),
+      createApprovalRequest: vi.fn((value: ReturnType<typeof createApprovalRequest>) => {
         approvalRequests.set(value.approvalRequestId, value);
         return value;
       }),
@@ -188,7 +188,7 @@ describe('ToolService', () => {
       status: 'approved',
       resolvedAt: '2026-05-20T00:00:03.000Z',
     });
-    expect(repository.saveApprovalRecord).toHaveBeenCalledTimes(1);
+    expect(repository.resolveApprovalRequest).toHaveBeenCalledTimes(1);
     expect(resumeApproval).toHaveBeenCalledTimes(1);
   });
 });

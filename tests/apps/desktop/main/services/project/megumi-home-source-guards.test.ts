@@ -22,12 +22,15 @@ describe('Megumi Home source guards', () => {
     const source = [
       readProjectFile('apps/desktop/src/main/shell-composition/desktop-main-composition.ts'),
       readProjectFile('packages/coding-agent/composition/compose-coding-agent-persistence.ts'),
+      readProjectFile('packages/coding-agent/persistence/schema/migrate.ts'),
     ].join('\n');
     const singleQuotedUserData = term("app.getPath('", 'userData', "')");
     const doubleQuotedUserData = term('app.getPath("', 'userData', '")');
 
     expect(source).toContain('initializeElectronMegumiHomeSync');
-    expect(source).toContain("path.join(input.sqlitePath, 'megumi.sqlite3')");
+    expect(source).toContain('sqlitePath: megumiHomePaths.sqlitePath');
+    expect(source).toContain('sqliteDirectory: path.resolve(input.sqlitePath)');
+    expect(source).toContain("input.databaseFileName ?? 'megumi.sqlite3'");
     expect(source).not.toContain(`createDatabase(path.join(${singleQuotedUserData}, 'megumi.sqlite3'))`);
     expect(source).not.toContain(`createDatabase(path.join(${doubleQuotedUserData}, "megumi.sqlite3"))`);
   });

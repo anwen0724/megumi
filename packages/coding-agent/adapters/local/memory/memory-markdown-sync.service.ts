@@ -37,7 +37,23 @@ export interface MemoryMarkdownSyncRepository {
   saveMemory(memory: MemoryRecord): MemoryRecord;
   saveMarkdownMirror(mirror: MemoryMarkdownMirror): void;
   getMarkdownMirror(mirrorId: string): MemoryMarkdownMirror | null;
-  saveAuditLog(auditLog: MemoryAuditLog): MemoryAuditLog;
+  recordCaptureAttempt(attempt: MemoryMarkdownSyncCaptureAttempt): MemoryMarkdownSyncCaptureAttempt;
+}
+
+export interface MemoryMarkdownSyncCaptureAttempt {
+  captureAttemptId: string;
+  runId?: string | null;
+  workspaceId?: string | null;
+  sessionId?: string | null;
+  status: string;
+  triggerKind: string;
+  extractedCount?: number;
+  createdMemoryIds?: string[];
+  rawOutput?: unknown;
+  error?: unknown;
+  createdAt: string;
+  completedAt?: string | null;
+  metadata?: JsonObject;
 }
 
 export interface MemoryMarkdownSyncOptions {
@@ -654,7 +670,7 @@ export class MemoryMarkdownSyncService {
     metadata?: Record<string, unknown>;
   }): { ok: true } | { ok: false; message: string } {
     try {
-      this.options.repository.saveAuditLog({
+      const audit: MemoryAuditLog = {
         auditId: this.options.ids.auditId(),
         operation: input.operation,
         targetKind: input.targetKind,
@@ -666,6 +682,16 @@ export class MemoryMarkdownSyncService {
         afterState: null,
         createdAt: this.options.clock.now(),
         metadata: sanitizeAuditMetadata(input.metadata ?? {}),
+      };
+      this.options.repository.recordCaptureAttempt({
+        captureAttemptId: audit.auditId,
+        workspaceId: audit.projectId ?? null,
+        status: 'recorded',
+        triggerKind: 'audit_log',
+        extractedCount: 0,
+        createdAt: audit.createdAt,
+        completedAt: audit.createdAt,
+        metadata: { auditLog: audit as unknown as JsonObject },
       });
       return { ok: true };
     } catch (error) {

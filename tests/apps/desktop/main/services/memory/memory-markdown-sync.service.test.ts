@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import path from 'node:path';
 import { MemoryDiagnosticWriter } from '@megumi/coding-agent/adapters/local/memory/memory-diagnostic-writer.service';
 import { MemoryMarkdownSyncService } from '@megumi/coding-agent/adapters/local/memory/memory-markdown-sync.service';
+import type { MemoryMarkdownSyncCaptureAttempt } from '@megumi/coding-agent/adapters/local/memory/memory-markdown-sync.service';
 import type { MemoryRuntimeFileSystem } from '@megumi/coding-agent/adapters/local/memory/memory-runtime-file-system';
 import { resolveProjectMemoryMirrorTarget } from '@megumi/coding-agent/adapters/local/memory/memory-runtime-paths';
 import type {
@@ -108,6 +109,17 @@ class FakeMemoryMarkdownSyncRepository {
       throw new Error('get mirror failed');
     }
     return this.mirrors.get(mirrorId) ?? null;
+  }
+
+  recordCaptureAttempt(attempt: MemoryMarkdownSyncCaptureAttempt): MemoryMarkdownSyncCaptureAttempt {
+    if (this.failSaveAudit && attempt.triggerKind === 'audit_log') {
+      throw new Error('save audit failed');
+    }
+    const auditLog = attempt.metadata?.auditLog as MemoryAuditLog | undefined;
+    if (auditLog) {
+      this.audits.push(auditLog);
+    }
+    return attempt;
   }
 
   saveAuditLog(auditLog: MemoryAuditLog): MemoryAuditLog {

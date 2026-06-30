@@ -30,7 +30,7 @@ export async function resumeToolApproval(
       .map((record) => String(record.toolExecutionId)),
   );
 
-  options.repository.saveApprovalRequest({
+  options.repository.createApprovalRequest({
     ...approval,
     status: input.decision,
     resolvedAt: input.decidedAt,
@@ -39,7 +39,7 @@ export async function resumeToolApproval(
   if (input.decision === 'denied') {
     rejectApprovedRecord(options, approvedRecord, input);
   } else {
-    options.repository.saveToolExecution({
+    options.repository.recordToolExecution({
       ...approvedRecord,
       status: 'queued',
       startedAt: undefined,
@@ -102,7 +102,7 @@ function rejectApprovedRecord(
     ids: options.ids,
     now: () => input.decidedAt,
   });
-  options.repository.saveToolExecution({
+  options.repository.recordToolExecution({
     ...approvedRecord,
     decision: {
       ...decision,

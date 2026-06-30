@@ -1,20 +1,28 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import { migrateDatabase } from '@megumi/coding-agent/persistence/schema/migrations';
-import { ToolRepository } from '@megumi/coding-agent/persistence/repos/tool.repo';
+import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
+import { ToolCallRepository } from '@megumi/coding-agent/persistence/repos/tool-call.repo';
+import { AgentLoopRepository } from '@megumi/coding-agent/persistence/repos/agent-loop.repo';
 import { ToolRegistrySnapshotService } from '@megumi/coding-agent/tools/tool-registry-snapshot';
 
 let db: Database.Database | null = null;
 
 function createHarness() {
   db = new Database(':memory:');
-  migrateDatabase(db);
+  applyCodingAgentDatabaseMigrations(db);
   seedLifecycle(db);
-  const repository = new ToolRepository(db);
+  const repository = new ToolCallRepository(db);
+  const agentLoopRepository = new AgentLoopRepository(db);
   return {
     repository,
-    service: new ToolRegistrySnapshotService(repository),
+    service: new ToolRegistrySnapshotService({
+      getToolSource: (sourceId) => repository.getToolSource(sourceId),
+      listToolSources: () => repository.listToolSources(),
+      seedDefaultToolSources: (createdAt) => repository.seedDefaultToolSources(createdAt),
+      saveToolRegistrySnapshot: (snapshot) => agentLoopRepository.saveToolRegistrySnapshot(snapshot),
+      getToolRegistrySnapshotByRun: (runId) => repository.getToolRegistrySnapshotByRun(runId),
+    }),
   };
 }
 
@@ -100,20 +108,38 @@ function createInput(overrides: Partial<Parameters<ToolRegistrySnapshotService['
 }
 
 function seedLifecycle(database: Database.Database): void {
-  database.prepare(`
-    INSERT INTO projects (project_id, name, repo_path, repo_path_key, status, created_at, last_opened_at)
-    VALUES ('project-1', 'Project 1', 'C:\\workspace\\project-1', 'c:\\workspace\\project-1', 'active', '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z')
-  `).run();
-  database.prepare(`
-    INSERT INTO sessions (session_id, title, status, created_at, updated_at)
-    VALUES ('session-1', 'Tool session', 'active', '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z')
-  `).run();
+  database.exec(`
+    INSERT INTO workspaces (
+      workspace_id, name, root_path, root_path_key, status, created_at, updated_at, last_opened_at, metadata_json
+    ) VALUES (
+      'project-1', 'Project 1', 'C:\\workspace\\project-1', 'c:\\workspace\\project-1',
+      'available', '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z',
+      '2026-05-16T00:00:00.000Z', NULL
+    );
+
+    INSERT INTO sessions (
+      session_id, workspace_id, title, status, active_entry_id,
+      created_at, updated_at, archived_at, metadata_json
+    ) VALUES (
+      'session-1', 'project-1', 'Tool session', 'active', NULL,
+      '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z', NULL, NULL
+    );
+  `);
   seedRun(database, 'run-1');
 }
 
 function seedRun(database: Database.Database, runId: string): void {
   database.prepare(`
-    INSERT INTO runs (run_id, session_id, permission_mode, goal, status, created_at)
-    VALUES (?, 'session-1', 'default', 'Use tool', 'running', '2026-05-20T00:00:00.000Z')
+    INSERT INTO agent_loop_runs (
+      run_id, workspace_id, session_id, run_kind, user_message_id, assistant_message_id,
+      base_run_id, base_message_id, base_entry_id, attempt_number, status, permission_mode,
+      permission_snapshot_json, memory_recall_trace_id, started_at, completed_at, cancelled_at,
+      error_json, created_at, metadata_json
+    ) VALUES (
+      ?, 'project-1', 'session-1', 'normal', NULL, NULL,
+      NULL, NULL, NULL, 1, 'running', 'default',
+      NULL, NULL, '2026-05-20T00:00:00.000Z', NULL, NULL,
+      NULL, '2026-05-20T00:00:00.000Z', '{"goal":"Use tool"}'
+    )
   `).run(runId);
 }

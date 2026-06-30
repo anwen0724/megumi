@@ -1,4 +1,4 @@
-import { vi } from 'vitest';
+﻿import { vi } from 'vitest';
 import { createToolCallRunner } from '@megumi/coding-agent/agent-loop/tool-call';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type {
@@ -19,7 +19,7 @@ export function createToolCallRunnerHarness(input: {
   snapshot?: ToolRegistrySnapshot;
   failedToolCallIds?: readonly string[];
 } = {}) {
-  const repository = createInMemoryToolRepository(input.existingRecords ?? [], input.snapshot);
+  const repository = createInMemoryToolCallStore(input.existingRecords ?? [], input.snapshot);
   const executor = createRecordingRawExecutor(new Set(input.failedToolCallIds ?? []));
   const decisions = [...(input.decisions ?? [])];
   const toolCallHandler = createToolCallRunner({
@@ -189,7 +189,7 @@ function observationFor(
   };
 }
 
-function createInMemoryToolRepository(
+function createInMemoryToolCallStore(
   initialRecords: readonly ToolExecutionRecord[],
   snapshot?: ToolRegistrySnapshot,
 ) {
@@ -208,12 +208,12 @@ function createInMemoryToolRepository(
   return {
     records: () => [...records.values()],
     toolResults: () => [...toolResults],
-    saveToolCall: vi.fn((value: ToolCall) => {
+    startToolCall: vi.fn((value: ToolCall) => {
       toolCalls.set(String(value.toolCallId), value);
       return value;
     }),
     getToolCall: vi.fn((id: string) => toolCalls.get(id)),
-    saveToolExecution: vi.fn((record: ToolExecutionRecord) => {
+    recordToolExecution: vi.fn((record: ToolExecutionRecord) => {
       records.set(String(record.toolExecutionId), record);
       return record;
     }),
@@ -222,13 +222,13 @@ function createInMemoryToolRepository(
       [...records.values()].find((record) => record.toolCallId === input.toolCallId)),
     listToolExecutionsByAssistantMessage: vi.fn(() =>
       [...records.values()].sort((a, b) => (a.callOrder ?? 0) - (b.callOrder ?? 0))),
-    savePermissionDecision: vi.fn((decision: PermissionDecision) => decision),
-    saveApprovalRequest: vi.fn((approval: ApprovalRequest) => {
+    recordPermissionDecision: vi.fn((decision: PermissionDecision) => decision),
+    createApprovalRequest: vi.fn((approval: ApprovalRequest) => {
       approvals.set(String(approval.approvalRequestId), approval);
       return approval;
     }),
     getApprovalRequest: vi.fn((id: string) => approvals.get(id)),
-    saveToolResult: vi.fn((result: ToolResult) => {
+    completeToolCall: vi.fn((result: ToolResult) => {
       toolResults.push(result);
       return result;
     }),

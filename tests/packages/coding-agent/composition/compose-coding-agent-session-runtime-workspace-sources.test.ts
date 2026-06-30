@@ -34,22 +34,20 @@ describe('composed session runtime workspace sources', () => {
 
     const persistence = composeCodingAgentPersistence({ sqlitePath: home });
     try {
+      const agentLoopRepository = persistence.agentLoopRepository as any;
+      const sessionRepository = persistence.sessionRepository as any;
+      const workspace = persistence.workspaceRepository.upsertFromRepoPath({
+        repoPath: home,
+        now: '2026-06-24T00:00:00.000Z',
+      });
       const runtime = composeCodingAgentSessionRuntime({
         homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
         runtimeLogger: { warn: () => undefined },
         artifactRepository: persistence.artifactRepository,
-        permissionSnapshotRepository: persistence.permissionSnapshotRepository,
-        modelStepRepository: persistence.modelStepRepository,
-        runRecordRepository: persistence.runRecordRepository,
-        sessionRecordRepository: persistence.sessionRecordRepository,
-        sessionContextRepository: persistence.sessionContextRepository,
-        sessionMessageRepository: persistence.sessionMessageRepository,
-        runExecutionFactRepository: persistence.runExecutionFactRepository,
-        runtimeEventRepository: persistence.runtimeEventRepository,
-        activePathRepository: persistence.activePathRepository,
-        toolRepository: persistence.toolRepository,
+        agentLoopRepository,
+        sessionRepository,
+        toolCallRepository: persistence.toolCallRepository,
         workspaceChangeRepository: persistence.workspaceChangeRepository,
-        timelineMessageRepository: persistence.timelineMessageRepository,
         toolRegistry: composeCodingAgentToolRegistry(),
         modelCallProviderService: {
           streamModelCall: async function* () {},
@@ -58,19 +56,18 @@ describe('composed session runtime workspace sources', () => {
         } as never,
         toolRuntimeFactory: (() => undefined) as never,
         memoryRuntime: noopMemoryRuntime(),
-        runContextRepository: persistence.runContextRepository,
       });
 
-      const session = persistence.sessionRecordRepository.saveSession({
+      const session = sessionRepository.saveSession({
         sessionId: 'session-1',
         title: 'Session',
-        workspaceId: 'workspace-1',
+        workspaceId: workspace.projectId,
         workspacePath: home,
         status: 'active',
         createdAt: '2026-06-24T00:00:00.000Z',
         updatedAt: '2026-06-24T00:00:00.000Z',
       });
-      persistence.runRecordRepository.saveRun({
+      agentLoopRepository.saveRun({
         runId: 'run-1',
         sessionId: String(session.sessionId),
         mode: 'default',
@@ -82,7 +79,7 @@ describe('composed session runtime workspace sources', () => {
 
       const sources = runtime.runContextService.listWorkspaceSources({
         runId: 'run-1',
-        workspaceId: 'workspace-1',
+        workspaceId: workspace.projectId,
         workspacePath: home,
       });
 

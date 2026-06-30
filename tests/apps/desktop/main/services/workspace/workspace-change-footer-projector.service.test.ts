@@ -43,7 +43,7 @@ describe('WorkspaceChangeFooterProjectorService', () => {
     ];
     const service = createWorkspaceChangeFooterProjectorService({
       workspaceChanges: {
-        listChangeSetsByRun: vi.fn(() => [changeSet]),
+        listWorkspaceChangesByRun: vi.fn(() => [changeSet]),
         getChangeSummary: vi.fn(() => summary),
         listChangedFilesByChangeSet: vi.fn(() => files),
       },
@@ -87,7 +87,7 @@ describe('WorkspaceChangeFooterProjectorService', () => {
   it('omits runs without finalized changed files', () => {
     const service = createWorkspaceChangeFooterProjectorService({
       workspaceChanges: {
-        listChangeSetsByRun: vi.fn(() => [
+        listWorkspaceChangesByRun: vi.fn(() => [
           workspaceChangeSet({
             changeSetId: 'workspace-change-set-draft',
             status: 'open',

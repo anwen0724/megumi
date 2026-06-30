@@ -1,4 +1,4 @@
-// Owns terminal run lifecycle orchestration for cancellation and startup cleanup.
+﻿// Owns terminal run lifecycle orchestration for cancellation and startup cleanup.
 // It coordinates product persistence and runtime events without depending on
 // Desktop, IPC, UI shell, or chat-stream projection concerns.
 import {
@@ -32,7 +32,7 @@ export interface RunTerminalRepositoryPort {
   appendRuntimeEvent(event: RuntimeEvent): RuntimeEvent;
 }
 
-export interface RunTerminalToolRepositoryPort {
+export interface RunTerminalToolStorePort {
   cancelPendingApprovalRequestsByRun(input: { runId: string; resolvedAt: string }): unknown[];
   cancelPendingToolExecutionsByRun(input: {
     runId: string;
@@ -48,7 +48,7 @@ export interface RunTerminalToolRepositoryPort {
 
 export interface RunTerminalCoordinatorOptions {
   repository: RunTerminalRepositoryPort;
-  toolRepository?: RunTerminalToolRepositoryPort;
+  toolRepository?: RunTerminalToolStorePort;
   ids: RunTerminalCoordinatorIds;
 }
 
@@ -84,7 +84,7 @@ export interface RunTerminalCoordinatorPort {
 export class RunTerminalCoordinator {
   private readonly repository: RunTerminalRepositoryPort;
   private readonly eventLog: RuntimeEventLog;
-  private readonly toolRepository?: RunTerminalToolRepositoryPort;
+  private readonly toolRepository?: RunTerminalToolStorePort;
   private readonly ids: RunTerminalCoordinatorIds;
 
   constructor(options: RunTerminalCoordinatorOptions) {

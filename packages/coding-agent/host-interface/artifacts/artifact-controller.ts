@@ -29,7 +29,10 @@ export function createArtifactController(
   return {
     listByRun: (runId) => ({ artifacts: artifactService.listByRun(runId) }),
     listBySession: (sessionId) => ({ artifacts: artifactService.listBySession(sessionId) }),
-    get: (artifactId) => artifactService.get(artifactId),
+    get: (artifactId) => ({
+      ...artifactService.get(artifactId),
+      relations: [],
+    }),
     getVersion: (artifactVersionId) => ({ version: artifactService.getVersion(artifactVersionId) }),
     createVersion: async (payload) => ({
       version: await artifactService.createVersion({
