@@ -66,6 +66,9 @@ export class ArtifactRepository {
   saveArtifact(artifact: Artifact): Artifact {
     const sessionId = metadataSessionId(artifact.metadata);
     const workspaceId = artifact.producingRunId ? workspaceIdForRun(this.database, artifact.producingRunId) : null;
+    const currentVersionId = artifact.currentVersionId && artifactVersionExists(this.database, artifact.currentVersionId)
+      ? artifact.currentVersionId
+      : null;
     this.database.prepare(`
       INSERT INTO artifacts (
         artifact_id, workspace_id, session_id, run_id, kind, title, status,
@@ -92,7 +95,7 @@ export class ArtifactRepository {
       kind: artifact.kind,
       title: artifact.title,
       status: artifact.status,
-      current_version_id: artifact.currentVersionId ?? null,
+      current_version_id: currentVersionId,
       created_at: artifact.createdAt,
       updated_at: artifact.updatedAt,
       deleted_at: artifact.deletedAt ?? null,
@@ -146,43 +149,55 @@ export class ArtifactRepository {
   }
 
   saveVersion(version: ArtifactVersion): ArtifactVersion {
-    this.database.prepare(`
-      INSERT INTO artifact_versions (
-        artifact_version_id, artifact_id, version_number, storage, content_type,
-        content_format, inline_text, content_key, mime_type, size_bytes, sha256,
-        text_preview, created_by_run_id, created_at, metadata_json
-      ) VALUES (
-        @artifact_version_id, @artifact_id, @version_number, @storage, @content_type,
-        @content_format, @inline_text, @content_key, @mime_type, @size_bytes, @sha256,
-        @text_preview, @created_by_run_id, @created_at, @metadata_json
-      )
-      ON CONFLICT(artifact_version_id) DO UPDATE SET
-        content_type = excluded.content_type,
-        content_format = excluded.content_format,
-        inline_text = excluded.inline_text,
-        content_key = excluded.content_key,
-        mime_type = excluded.mime_type,
-        size_bytes = excluded.size_bytes,
-        sha256 = excluded.sha256,
-        text_preview = excluded.text_preview,
-        metadata_json = excluded.metadata_json
-    `).run({
-      artifact_version_id: version.artifactVersionId,
-      artifact_id: version.artifactId,
-      version_number: version.versionNumber,
-      storage: version.contentRef.storage,
-      content_type: version.contentType,
-      content_format: version.contentFormat,
-      inline_text: version.contentRef.inlineText ?? null,
-      content_key: version.contentRef.contentKey ?? null,
-      mime_type: version.contentRef.mimeType ?? null,
-      size_bytes: version.contentRef.sizeBytes ?? null,
-      sha256: version.contentRef.sha256 ?? null,
-      text_preview: version.textPreview ?? version.contentRef.textPreview ?? null,
-      created_by_run_id: version.createdByRunId,
-      created_at: version.createdAt,
-      metadata_json: stringifyJson({ version } satisfies VersionMetadata),
-    });
+    this.database.transaction((nextVersion: ArtifactVersion) => {
+      this.database.prepare(`
+        INSERT INTO artifact_versions (
+          artifact_version_id, artifact_id, version_number, storage, content_type,
+          content_format, inline_text, content_key, mime_type, size_bytes, sha256,
+          text_preview, created_by_run_id, created_at, metadata_json
+        ) VALUES (
+          @artifact_version_id, @artifact_id, @version_number, @storage, @content_type,
+          @content_format, @inline_text, @content_key, @mime_type, @size_bytes, @sha256,
+          @text_preview, @created_by_run_id, @created_at, @metadata_json
+        )
+        ON CONFLICT(artifact_version_id) DO UPDATE SET
+          content_type = excluded.content_type,
+          content_format = excluded.content_format,
+          inline_text = excluded.inline_text,
+          content_key = excluded.content_key,
+          mime_type = excluded.mime_type,
+          size_bytes = excluded.size_bytes,
+          sha256 = excluded.sha256,
+          text_preview = excluded.text_preview,
+          metadata_json = excluded.metadata_json
+      `).run({
+        artifact_version_id: nextVersion.artifactVersionId,
+        artifact_id: nextVersion.artifactId,
+        version_number: nextVersion.versionNumber,
+        storage: nextVersion.contentRef.storage,
+        content_type: nextVersion.contentType,
+        content_format: nextVersion.contentFormat,
+        inline_text: nextVersion.contentRef.inlineText ?? null,
+        content_key: nextVersion.contentRef.contentKey ?? null,
+        mime_type: nextVersion.contentRef.mimeType ?? null,
+        size_bytes: nextVersion.contentRef.sizeBytes ?? null,
+        sha256: nextVersion.contentRef.sha256 ?? null,
+        text_preview: nextVersion.textPreview ?? nextVersion.contentRef.textPreview ?? null,
+        created_by_run_id: nextVersion.createdByRunId,
+        created_at: nextVersion.createdAt,
+        metadata_json: stringifyJson({ version: nextVersion } satisfies VersionMetadata),
+      });
+
+      this.database.prepare(`
+        UPDATE artifacts
+        SET current_version_id = @artifact_version_id
+        WHERE artifact_id = @artifact_id
+          AND json_extract(metadata_json, '$.artifact.currentVersionId') = @artifact_version_id
+      `).run({
+        artifact_id: nextVersion.artifactId,
+        artifact_version_id: nextVersion.artifactVersionId,
+      });
+    })(version);
     return version;
   }
 
@@ -304,6 +319,12 @@ function workspaceIdForRun(database: MegumiDatabase, runId: string): string | nu
     .prepare('SELECT workspace_id FROM agent_loop_runs WHERE run_id = ?')
     .get(runId) as { workspace_id: string } | undefined;
   return row?.workspace_id ?? null;
+}
+
+function artifactVersionExists(database: MegumiDatabase, artifactVersionId: string): boolean {
+  return Boolean(database
+    .prepare('SELECT 1 FROM artifact_versions WHERE artifact_version_id = ?')
+    .get(artifactVersionId));
 }
 
 function stringifyJson(value: unknown): string {

@@ -35,7 +35,12 @@ CREATE TABLE `agent_loop_runs` (
 	`created_at` text NOT NULL,
 	`metadata_json` text,
 	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`workspace_id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`session_id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`session_id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`user_message_id`) REFERENCES `session_messages`(`message_id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`assistant_message_id`) REFERENCES `session_messages`(`message_id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`base_run_id`) REFERENCES `agent_loop_runs`(`run_id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`base_message_id`) REFERENCES `session_messages`(`message_id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`base_entry_id`) REFERENCES `session_entries`(`entry_id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
 CREATE INDEX `idx_agent_loop_runs_session_created` ON `agent_loop_runs` (`session_id`,`created_at`);--> statement-breakpoint
@@ -115,7 +120,8 @@ CREATE TABLE `artifacts` (
 	`metadata_json` text,
 	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`workspace_id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`session_id`) ON UPDATE no action ON DELETE set null,
-	FOREIGN KEY (`run_id`) REFERENCES `agent_loop_runs`(`run_id`) ON UPDATE no action ON DELETE set null
+	FOREIGN KEY (`run_id`) REFERENCES `agent_loop_runs`(`run_id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`current_version_id`) REFERENCES `artifact_versions`(`artifact_version_id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
 CREATE INDEX `idx_artifacts_session_updated` ON `artifacts` (`session_id`,`updated_at`);--> statement-breakpoint
@@ -196,12 +202,13 @@ CREATE TABLE `memory_records` (
 	`use_count` integer NOT NULL,
 	`metadata_json` text,
 	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`workspace_id`) ON UPDATE no action ON DELETE set null,
-	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`session_id`) ON UPDATE no action ON DELETE set null
+	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`session_id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`superseded_by_id`) REFERENCES `memory_records`(`memory_id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
 CREATE INDEX `idx_memory_records_scope_workspace_kind_status` ON `memory_records` (`scope`,`workspace_id`,`kind`,`status`);--> statement-breakpoint
 CREATE INDEX `idx_memory_records_last_used_at` ON `memory_records` (`last_used_at`);--> statement-breakpoint
-CREATE UNIQUE INDEX `idx_memory_records_dedupe` ON `memory_records` (`scope`,`workspace_id`,`kind`,`dedupe_key`);--> statement-breakpoint
+CREATE UNIQUE INDEX `idx_memory_records_dedupe` ON `memory_records` (`scope`,`workspace_id`,`kind`,`dedupe_key`) WHERE status = 'active';--> statement-breakpoint
 CREATE TABLE `model_calls` (
 	`model_call_id` text PRIMARY KEY NOT NULL,
 	`run_id` text NOT NULL,
@@ -251,7 +258,10 @@ CREATE TABLE `session_entries` (
 	`target_entry_id` text,
 	`created_at` text NOT NULL,
 	`metadata_json` text,
-	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`session_id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`session_id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`parent_entry_id`) REFERENCES `session_entries`(`entry_id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`compaction_id`) REFERENCES `session_compactions`(`compaction_id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`target_entry_id`) REFERENCES `session_entries`(`entry_id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
 CREATE INDEX `idx_session_entries_session_created` ON `session_entries` (`session_id`,`created_at`);--> statement-breakpoint
@@ -267,7 +277,9 @@ CREATE TABLE `session_leaf_changes` (
 	`reason` text NOT NULL,
 	`created_at` text NOT NULL,
 	`metadata_json` text,
-	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`session_id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`session_id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`previous_entry_id`) REFERENCES `session_entries`(`entry_id`) ON UPDATE no action ON DELETE set null,
+	FOREIGN KEY (`next_entry_id`) REFERENCES `session_entries`(`entry_id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
 CREATE INDEX `idx_session_leaf_changes_session_created` ON `session_leaf_changes` (`session_id`,`created_at`);--> statement-breakpoint
@@ -297,7 +309,8 @@ CREATE TABLE `sessions` (
 	`updated_at` text NOT NULL,
 	`archived_at` text,
 	`metadata_json` text,
-	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`workspace_id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`workspace_id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`active_entry_id`) REFERENCES `session_entries`(`entry_id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
 CREATE INDEX `idx_sessions_workspace_updated` ON `sessions` (`workspace_id`,`updated_at`);--> statement-breakpoint

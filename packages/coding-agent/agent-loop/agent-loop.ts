@@ -745,7 +745,7 @@ export interface AgentLoopEventRecorderOptions<TProjection = unknown> {
     listStepsByRun(runId: string): RunStep[];
     saveStep(step: RunStep): RunStep;
   };
-  legacyModelSteps: {
+  modelCalls: {
     persistFromEvent(input: {
       request: ModelStepRuntimeRequest;
       event: RuntimeEvent;
@@ -873,7 +873,7 @@ async function* recordAgentLoopModelCallEvents<TProjection>(
           currentModelStep = persistedStep;
         }
       }
-      options.legacyModelSteps.persistFromEvent({
+      options.modelCalls.persistFromEvent({
         request: input.request,
         event: eventWithRequest,
         fallbackStepId: currentModelStep.stepId,
@@ -890,7 +890,7 @@ async function* recordAgentLoopModelCallEvents<TProjection>(
         }
       }
       if (eventWithRequest.eventType === 'model.step.completed') {
-        options.legacyModelSteps.persistFromEvent({
+        options.modelCalls.persistFromEvent({
           request: input.request,
           event: eventWithRequest,
           fallbackStepId: currentModelStep.stepId,

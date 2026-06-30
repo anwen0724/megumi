@@ -217,24 +217,35 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/persistence/repos/session-run.repo.ts'))).toBe(false);
   });
 
-  it('keeps run execution facts in their owner repository', () => {
+  it('keeps agent-loop lifecycle facts as current agent-loop events, not compat run facts', () => {
     const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/agent-loop.repo.ts');
     const ownerSource = readFileSync(ownerPath, 'utf8');
 
     expect(existsSync(ownerPath)).toBe(true);
     expect(ownerSource).toContain('INSERT INTO agent_loop_events');
-    expect(ownerSource).toContain("kind: 'run_step'");
-    expect(ownerSource).toContain("kind: 'run_action'");
-    expect(ownerSource).toContain("kind: 'run_observation'");
+    expect(ownerSource).toContain("kind: 'step'");
+    expect(ownerSource).toContain("kind: 'action'");
+    expect(ownerSource).toContain("kind: 'observation'");
+    expect(ownerSource).not.toContain("kind: 'run_step'");
+    expect(ownerSource).not.toContain("kind: 'run_action'");
+    expect(ownerSource).not.toContain("kind: 'run_observation'");
+    expect(ownerSource).not.toContain('compat:run_step');
+    expect(ownerSource).not.toContain('compat:run_action');
+    expect(ownerSource).not.toContain('compat:run_observation');
   });
 
-  it('keeps model step persistence in its owner repository', () => {
+  it('keeps model call persistence in its owner repository', () => {
     const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/agent-loop.repo.ts');
     const ownerSource = readFileSync(ownerPath, 'utf8');
 
     expect(existsSync(ownerPath)).toBe(true);
     expect(ownerSource).toContain('INSERT INTO model_calls');
     expect(ownerSource).toContain('SELECT * FROM model_calls');
+    expect(ownerSource).toContain('saveModelCall');
+    expect(ownerSource).toContain('getModelCall');
+    expect(ownerSource).not.toContain('saveModelStep');
+    expect(ownerSource).not.toContain('getModelStep');
+    expect(ownerSource).not.toContain('ModelStepRecord');
   });
 
   it('keeps session message persistence in its owner repository', () => {

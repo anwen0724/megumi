@@ -2,7 +2,7 @@
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
-import { AgentLoopRepository, type ModelStepRecord } from '@megumi/coding-agent/persistence/repos/agent-loop.repo';
+import { AgentLoopRepository, type ModelCallRecord } from '@megumi/coding-agent/persistence/repos/agent-loop.repo';
 import { SessionRepository } from '@megumi/coding-agent/persistence/repos/session.repo';
 import { ToolCallRepository } from '@megumi/coding-agent/persistence/repos/tool-call.repo';
 import { RunTerminalCoordinator, type RunTerminalRepositoryPort } from '@megumi/coding-agent/state';
@@ -13,7 +13,7 @@ import type { ApprovalRequest, ToolCall, ToolExecution } from '@megumi/shared/to
 let db: Database.Database | undefined;
 
 interface RunTerminalTestRepository extends RunTerminalRepositoryPort {
-  saveModelStep(modelStep: ModelStepRecord): ModelStepRecord;
+  saveModelCall(modelCall: ModelCallRecord): ModelCallRecord;
   saveSession(session: Session): Session;
 }
 
@@ -34,7 +34,7 @@ function createRepositories() {
       '2026-06-14T00:00:00.000Z', '2026-06-14T00:00:00.000Z', '2026-06-14T00:00:00.000Z', NULL
     )
   `).run();
-  const modelStepRepository = new AgentLoopRepository(db);
+  const modelCallRepository = new AgentLoopRepository(db);
   const runExecutionFactRepository = new AgentLoopRepository(db);
   const runRecordRepository = new AgentLoopRepository(db);
   const runtimeEventRepository = new AgentLoopRepository(db);
@@ -47,7 +47,7 @@ function createRepositories() {
       listRuntimeEventsByRun: (runId: string) => runtimeEventRepository.listRuntimeEventsByRun(runId),
       listRunsByStatuses: (statuses: Run['status'][]) => runRecordRepository.listRunsByStatuses(statuses),
       listStepsByRun: (runId: string) => runExecutionFactRepository.listStepsByRun(runId),
-      saveModelStep: (modelStep: ModelStepRecord) => modelStepRepository.saveModelStep(modelStep),
+      saveModelCall: (modelCall: ModelCallRecord) => modelCallRepository.saveModelCall(modelCall),
       saveRun: (run: Run) => runRecordRepository.saveRun(run),
       saveSession: (session: Session) => sessionRepository.saveSession(session),
       saveStep: (step: RunStep) => runExecutionFactRepository.saveStep(step),
@@ -102,8 +102,8 @@ function saveRunningRun(
     status: status === 'waiting_for_approval' ? 'waiting_for_approval' : 'running',
     startedAt: '2026-06-14T00:00:01.000Z',
   });
-  repository.saveModelStep({
-    modelStepId: 'model-step-1',
+  repository.saveModelCall({
+    modelCallId: 'model-step-1',
     runId: 'run-1',
     stepId: 'step-1',
     providerId: 'deepseek',

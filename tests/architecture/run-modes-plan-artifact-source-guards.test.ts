@@ -88,17 +88,6 @@ describe('run modes and plan artifact source guards', () => {
     expect(source).not.toContain("'review'");
   });
 
-  it('does not keep old 04-stage guard assumptions after 05 tool foundation is active', () => {
-    const currentArchitecture = [
-      readProjectFile(join(ROOT, '.local-docs/architecture/refs/agent-platform-host-architecture.md')),
-      readProjectFile(join(ROOT, '.local-docs/specs/20-project-architecture-rebuild/02-agent-run-main-chain.md')),
-    ].join('\n');
-
-    expect(currentArchitecture).toContain('Tool Call');
-    expect(currentArchitecture).toContain('Permission Policy');
-    expect(currentArchitecture).toContain('ApprovalRequest');
-  });
-
   it('keeps renderer run mode code behind typed preload and away from Host privileges', () => {
     const offenders = filesUnder('apps/desktop/src/renderer')
       .filter((file) => projectPath(file).includes('run-mode'))

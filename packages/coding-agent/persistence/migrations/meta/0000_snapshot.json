@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "680fc0ce-ef83-49a6-8d0b-aa09325218c8",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "9776557b-2b03-425b-bdef-0c7e1b24aeb0",
+  "prevId": "680fc0ce-ef83-49a6-8d0b-aa09325218c8",
   "tables": {
     "agent_loop_events": {
       "name": "agent_loop_events",
@@ -335,6 +335,71 @@
             "session_id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "agent_loop_runs_user_message_id_session_messages_message_id_fk": {
+          "name": "agent_loop_runs_user_message_id_session_messages_message_id_fk",
+          "tableFrom": "agent_loop_runs",
+          "tableTo": "session_messages",
+          "columnsFrom": [
+            "user_message_id"
+          ],
+          "columnsTo": [
+            "message_id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "agent_loop_runs_assistant_message_id_session_messages_message_id_fk": {
+          "name": "agent_loop_runs_assistant_message_id_session_messages_message_id_fk",
+          "tableFrom": "agent_loop_runs",
+          "tableTo": "session_messages",
+          "columnsFrom": [
+            "assistant_message_id"
+          ],
+          "columnsTo": [
+            "message_id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "agent_loop_runs_base_run_id_agent_loop_runs_run_id_fk": {
+          "name": "agent_loop_runs_base_run_id_agent_loop_runs_run_id_fk",
+          "tableFrom": "agent_loop_runs",
+          "tableTo": "agent_loop_runs",
+          "columnsFrom": [
+            "base_run_id"
+          ],
+          "columnsTo": [
+            "run_id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "agent_loop_runs_base_message_id_session_messages_message_id_fk": {
+          "name": "agent_loop_runs_base_message_id_session_messages_message_id_fk",
+          "tableFrom": "agent_loop_runs",
+          "tableTo": "session_messages",
+          "columnsFrom": [
+            "base_message_id"
+          ],
+          "columnsTo": [
+            "message_id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "agent_loop_runs_base_entry_id_session_entries_entry_id_fk": {
+          "name": "agent_loop_runs_base_entry_id_session_entries_entry_id_fk",
+          "tableFrom": "agent_loop_runs",
+          "tableTo": "session_entries",
+          "columnsFrom": [
+            "base_entry_id"
+          ],
+          "columnsTo": [
+            "entry_id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -1463,7 +1528,8 @@
             "kind",
             "dedupe_key"
           ],
-          "isUnique": true
+          "isUnique": true,
+          "where": "\"memory_records\".\"status\" = 'active'"
         }
       },
       "foreignKeys": {
@@ -1489,6 +1555,19 @@
           ],
           "columnsTo": [
             "session_id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "memory_records_superseded_by_id_memory_records_memory_id_fk": {
+          "name": "memory_records_superseded_by_id_memory_records_memory_id_fk",
+          "tableFrom": "memory_records",
+          "tableTo": "memory_records",
+          "columnsFrom": [
+            "superseded_by_id"
+          ],
+          "columnsTo": [
+            "memory_id"
           ],
           "onDelete": "set null",
           "onUpdate": "no action"
@@ -1971,6 +2050,32 @@
             "session_id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "session_leaf_changes_previous_entry_id_session_entries_entry_id_fk": {
+          "name": "session_leaf_changes_previous_entry_id_session_entries_entry_id_fk",
+          "tableFrom": "session_leaf_changes",
+          "tableTo": "session_entries",
+          "columnsFrom": [
+            "previous_entry_id"
+          ],
+          "columnsTo": [
+            "entry_id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "session_leaf_changes_next_entry_id_session_entries_entry_id_fk": {
+          "name": "session_leaf_changes_next_entry_id_session_entries_entry_id_fk",
+          "tableFrom": "session_leaf_changes",
+          "tableTo": "session_entries",
+          "columnsFrom": [
+            "next_entry_id"
+          ],
+          "columnsTo": [
+            "entry_id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },

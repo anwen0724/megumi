@@ -63,7 +63,7 @@ describe('agent loop event recorder', () => {
           return saved;
         },
       },
-      legacyModelSteps: {
+      modelCalls: {
         persistFromEvent(input) {
           legacyEvents.push(input.event.eventType);
         },

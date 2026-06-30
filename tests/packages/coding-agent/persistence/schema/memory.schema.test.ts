@@ -76,6 +76,7 @@ describe('memory schema migrations', () => {
       'idx_memory_capture_attempts_run',
       'idx_memory_markdown_mirrors_memory',
     ]));
+    expect(indexSql('idx_memory_records_dedupe')).toContain("WHERE status = 'active'");
   });
 });
 
@@ -95,4 +96,11 @@ function indexNames(): string[] {
   return (database
     ?.prepare("SELECT name FROM sqlite_master WHERE type = 'index' ORDER BY name")
     .all() as Array<{ name: string }>).map((row) => row.name);
+}
+
+function indexSql(indexName: string): string {
+  const row = database
+    ?.prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?")
+    .get(indexName) as { sql: string | null } | undefined;
+  return row?.sql ?? '';
 }

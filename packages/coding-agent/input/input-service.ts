@@ -92,7 +92,7 @@ import {
   RuntimeEventLog,
   RuntimeEventPublisher,
 } from '../events';
-import type { ModelStepRecord } from '../persistence/repos/agent-loop.repo';
+import type { ModelCallRecord } from '../persistence/repos/agent-loop.repo';
 import type {
   SessionActivePath,
   SessionBranchMarker,
@@ -616,8 +616,8 @@ export interface InputAgentLoopRepositoryPort {
   listStepsByRun(runId: string): RunStep[];
   saveAction(action: RunAction): RunAction;
   saveObservation(observation: RunObservation): RunObservation;
-  saveModelStep(modelStep: ModelStepRecord): ModelStepRecord;
-  getModelStep(modelStepId: string): ModelStepRecord | undefined;
+  saveModelCall(modelCall: ModelCallRecord): ModelCallRecord;
+  getModelCall(modelCallId: string): ModelCallRecord | undefined;
   appendRuntimeEvent(event: RuntimeEvent): RuntimeEvent;
   listRuntimeEventsByRun(runId: string): RuntimeEvent[];
 }
@@ -698,19 +698,19 @@ interface PersistModelCallRecordFromEventInput {
 
 function persistModelCallRecordFromEvent(
   input: PersistModelCallRecordFromEventInput,
-): ModelStepRecord | undefined {
+): ModelCallRecord | undefined {
   if (!isModelCallPersistenceEvent(input.event)) {
     return undefined;
   }
 
-  const modelStepId = getModelCallId(input.event.payload) ?? input.request.modelStepId;
-  if (!modelStepId) {
+  const modelCallId = getModelCallId(input.event.payload) ?? input.request.modelStepId;
+  if (!modelCallId) {
     return undefined;
   }
 
-  const existing = input.repository.getModelStep(modelStepId);
-  return input.repository.saveModelStep({
-    modelStepId,
+  const existing = input.repository.getModelCall(modelCallId);
+  return input.repository.saveModelCall({
+    modelCallId,
     runId: input.request.runId,
     stepId: input.event.stepId ?? input.request.stepId ?? existing?.stepId ?? input.fallbackStepId,
     providerId: input.request.providerId,
@@ -1150,7 +1150,7 @@ export class InputProcessingService {
       },
       runRepository: this.agentLoopRepository,
       stepRepository: this.agentLoopRepository,
-      legacyModelSteps: {
+      modelCalls: {
         persistFromEvent: (input) => {
           persistModelCallRecordFromEvent({
             repository: this.agentLoopRepository,

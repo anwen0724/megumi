@@ -135,7 +135,7 @@ function createInputProcessingServiceTestRepository(database: Database.Database)
   return {
     appendRuntimeEvent: (event) => agentLoopRepository.appendRuntimeEvent(event),
     getMessage: (messageId) => sessionRepository.getMessage(messageId),
-    getModelStep: (modelStepId) => agentLoopRepository.getModelStep(modelStepId),
+    getModelCall: (modelCallId) => agentLoopRepository.getModelCall(modelCallId),
     getRun: (runId) => agentLoopRepository.getRun(runId),
     getSession: (sessionId) => sessionRepository.getSession(sessionId),
     getSessionCompaction: (compactionId) => sessionRepository.getSessionCompaction(compactionId),
@@ -147,7 +147,7 @@ function createInputProcessingServiceTestRepository(database: Database.Database)
     listStepsByRun: (runId) => agentLoopRepository.listStepsByRun(runId),
     saveAction: (action) => agentLoopRepository.saveAction(action),
     saveMessage: (message) => sessionRepository.saveMessage(message),
-    saveModelStep: (modelStep) => agentLoopRepository.saveModelStep(modelStep),
+    saveModelCall: (modelCall) => agentLoopRepository.saveModelCall(modelCall),
     saveObservation: (observation) => agentLoopRepository.saveObservation(observation),
     saveRun: (run) => agentLoopRepository.saveRun(run),
     saveSession: (session) => {
@@ -6638,8 +6638,8 @@ describe('InputProcessingService', () => {
       kind: 'model',
       status: 'waiting_for_approval',
     });
-    repository.saveModelStep({
-      modelStepId: 'model-step-waiting',
+    repository.saveModelCall({
+      modelCallId: 'model-step-waiting',
       runId: 'run-waiting',
       stepId: 'step-waiting',
       providerId: 'deepseek',

@@ -364,7 +364,7 @@ function seedLifecycle(database: Database.Database): void {
       error_json, created_at, metadata_json
     ) VALUES (
       'run-1', 'workspace-1', 'session-1', 'input', NULL,
-      'message-1', NULL, NULL, NULL, 1, 'running', 'chat', NULL,
+      NULL, NULL, NULL, NULL, 1, 'running', 'chat', NULL,
       NULL, '2026-06-05T09:01:00.000Z', NULL, NULL,
       NULL, '2026-06-05T09:01:00.000Z', NULL
     );

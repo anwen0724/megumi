@@ -1,11 +1,16 @@
 // Drizzle schema source-of-truth for Coding Agent product persistence.
-import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
+import { type AnySQLiteColumn, index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 type JsonObject = Record<string, unknown>;
 type JsonArray = unknown[];
 type JsonValue = JsonObject | JsonArray | string | number | boolean | null;
 
 const jsonText = (name: string) => text(name, { mode: 'json' }).$type<JsonValue>();
+
+// Cyclic SQLite foreign keys are declared in the initial SQL migration.
+// Keeping those cycles out of inline Drizzle references avoids TypeScript
+// self-initializer inference failures while preserving runtime constraints.
 
 export const workspaces = sqliteTable('workspaces', {
   workspaceId: text('workspace_id').primaryKey(),
@@ -57,8 +62,8 @@ export const sessionEntries = sqliteTable('session_entries', {
 export const sessionLeafChanges = sqliteTable('session_leaf_changes', {
   leafChangeId: text('leaf_change_id').primaryKey(),
   sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
-  previousEntryId: text('previous_entry_id'),
-  nextEntryId: text('next_entry_id'),
+  previousEntryId: text('previous_entry_id').references(() => sessionEntries.entryId, { onDelete: 'set null' }),
+  nextEntryId: text('next_entry_id').references(() => sessionEntries.entryId, { onDelete: 'set null' }),
   reason: text('reason').notNull(),
   createdAt: text('created_at').notNull(),
   metadataJson: jsonText('metadata_json'),
@@ -105,11 +110,11 @@ export const agentLoopRuns = sqliteTable('agent_loop_runs', {
   workspaceId: text('workspace_id').notNull().references(() => workspaces.workspaceId, { onDelete: 'cascade' }),
   sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
   runKind: text('run_kind').notNull(),
-  userMessageId: text('user_message_id'),
-  assistantMessageId: text('assistant_message_id'),
-  baseRunId: text('base_run_id'),
-  baseMessageId: text('base_message_id'),
-  baseEntryId: text('base_entry_id'),
+  userMessageId: text('user_message_id').references(() => sessionMessages.messageId, { onDelete: 'set null' }),
+  assistantMessageId: text('assistant_message_id').references(() => sessionMessages.messageId, { onDelete: 'set null' }),
+  baseRunId: text('base_run_id').references((): AnySQLiteColumn => agentLoopRuns.runId, { onDelete: 'set null' }),
+  baseMessageId: text('base_message_id').references(() => sessionMessages.messageId, { onDelete: 'set null' }),
+  baseEntryId: text('base_entry_id').references(() => sessionEntries.entryId, { onDelete: 'set null' }),
   attemptNumber: integer('attempt_number').notNull(),
   status: text('status').notNull(),
   permissionMode: text('permission_mode').notNull(),
@@ -320,7 +325,9 @@ export const memoryRecords = sqliteTable('memory_records', {
   sourceJson: jsonText('source_json'),
   evidenceJson: jsonText('evidence_json'),
   dedupeKey: text('dedupe_key'),
-  supersededById: text('superseded_by_id'),
+  supersededById: text('superseded_by_id').references((): AnySQLiteColumn => memoryRecords.memoryId, {
+    onDelete: 'set null',
+  }),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
   lastUsedAt: text('last_used_at'),
@@ -329,7 +336,9 @@ export const memoryRecords = sqliteTable('memory_records', {
 }, (table) => [
   index('idx_memory_records_scope_workspace_kind_status').on(table.scope, table.workspaceId, table.kind, table.status),
   index('idx_memory_records_last_used_at').on(table.lastUsedAt),
-  uniqueIndex('idx_memory_records_dedupe').on(table.scope, table.workspaceId, table.kind, table.dedupeKey),
+  uniqueIndex('idx_memory_records_dedupe')
+    .on(table.scope, table.workspaceId, table.kind, table.dedupeKey)
+    .where(sql`${table.status} = 'active'`),
 ]);
 
 export const memoryMarkdownMirrors = sqliteTable('memory_markdown_mirrors', {

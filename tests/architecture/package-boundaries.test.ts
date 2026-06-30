@@ -127,7 +127,7 @@ describe('package dependency boundaries', () => {
       ...sourceFilesUnder('apps'),
       ...sourceFilesUnder('packages'),
       ...sourceFilesUnder('tests'),
-    ].filter((file) => !file.includes('.local-docs'));
+    ];
 
     const offenders = scannedFiles
       .filter((file) => existsSync(join(repoRoot, file)))

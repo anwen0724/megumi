@@ -340,8 +340,8 @@ interface ModelCallRow {
   metadata_json: Nullable<string>;
 }
 
-export interface ModelStepRecord {
-  modelStepId: string;
+export interface ModelCallRecord {
+  modelCallId: string;
   runId: string;
   stepId?: string;
   providerId: string;
@@ -356,9 +356,9 @@ export interface ModelStepRecord {
 export class AgentLoopModelCallMethods {
   constructor(private readonly database: MegumiDatabase) {}
 
-  saveModelStep(modelStep: ModelStepRecord): ModelStepRecord {
-    const existing = this.getModelStep(modelStep.modelStepId);
-    const callOrder = existing ? this.callOrderFor(modelStep.modelStepId) : this.nextCallOrder(modelStep.runId);
+  saveModelCall(modelCall: ModelCallRecord): ModelCallRecord {
+    const existing = this.getModelCall(modelCall.modelCallId);
+    const callOrder = existing ? this.callOrderFor(modelCall.modelCallId) : this.nextCallOrder(modelCall.runId);
     this.database.prepare(`
       INSERT INTO model_calls (
         model_call_id, run_id, call_order, provider_id, model_id, status,
@@ -376,15 +376,15 @@ export class AgentLoopModelCallMethods {
         completed_at = excluded.completed_at,
         error_json = excluded.error_json,
         metadata_json = excluded.metadata_json
-    `).run(toModelCallRow(modelStep, callOrder));
+    `).run(toModelCallRow(modelCall, callOrder));
 
-    return this.getModelStep(modelStep.modelStepId) ?? modelStep;
+    return this.getModelCall(modelCall.modelCallId) ?? modelCall;
   }
 
-  getModelStep(modelStepId: string): ModelStepRecord | undefined {
+  getModelCall(modelCallId: string): ModelCallRecord | undefined {
     const row = this.database
       .prepare('SELECT * FROM model_calls WHERE model_call_id = ?')
-      .get(modelStepId) as ModelCallRow | undefined;
+      .get(modelCallId) as ModelCallRow | undefined;
     return row ? fromModelCallRow(row) : undefined;
   }
 
@@ -395,10 +395,10 @@ export class AgentLoopModelCallMethods {
     return row.next_order;
   }
 
-  private callOrderFor(modelStepId: string): number {
+  private callOrderFor(modelCallId: string): number {
     const row = this.database
       .prepare('SELECT call_order FROM model_calls WHERE model_call_id = ?')
-      .get(modelStepId) as { call_order: number } | undefined;
+      .get(modelCallId) as { call_order: number } | undefined;
     return row?.call_order ?? 1;
   }
 }
@@ -413,30 +413,30 @@ function parseJson<T>(value: string | null): T | undefined {
   return value ? JSON.parse(value) as T : undefined;
 }
 
-function toModelCallRow(modelStep: ModelStepRecord, callOrder: number): ModelCallRow {
+function toModelCallRow(modelCall: ModelCallRecord, callOrder: number): ModelCallRow {
   const metadata = {
-    ...(modelStep.metadata ?? {}),
-    ...(modelStep.stepId ? { stepId: modelStep.stepId } : {}),
+    ...(modelCall.metadata ?? {}),
+    ...(modelCall.stepId ? { stepId: modelCall.stepId } : {}),
   };
   return {
-    model_call_id: modelStep.modelStepId,
-    run_id: modelStep.runId,
+    model_call_id: modelCall.modelCallId,
+    run_id: modelCall.runId,
     call_order: callOrder,
-    provider_id: modelStep.providerId,
-    model_id: modelStep.modelId,
-    status: modelStep.status,
-    started_at: modelStep.startedAt,
-    completed_at: modelStep.completedAt ?? null,
-    error_json: modelStep.error ? stringifyJson(modelStep.error) : null,
+    provider_id: modelCall.providerId,
+    model_id: modelCall.modelId,
+    status: modelCall.status,
+    started_at: modelCall.startedAt,
+    completed_at: modelCall.completedAt ?? null,
+    error_json: modelCall.error ? stringifyJson(modelCall.error) : null,
     metadata_json: stringifyJson(metadata),
   };
 }
 
-function fromModelCallRow(row: ModelCallRow): ModelStepRecord {
+function fromModelCallRow(row: ModelCallRow): ModelCallRecord {
   const metadata = parseJson<JsonObject>(row.metadata_json) ?? {};
   const publicMetadata = publicModelCallMetadata(metadata);
   return {
-    modelStepId: row.model_call_id,
+    modelCallId: row.model_call_id,
     runId: row.run_id,
     ...(typeof metadata.stepId === 'string' ? { stepId: metadata.stepId } : {}),
     providerId: row.provider_id,
@@ -517,6 +517,7 @@ export class AgentLoopRuntimeEventMethods {
           AND event_type NOT LIKE 'context.%'
           AND event_type NOT LIKE 'recovery.%'
           AND event_type NOT LIKE 'timeline.%'
+          AND event_type NOT LIKE 'agent_loop.%'
         ORDER BY sequence ASC
       `)
       .all(runId) as RuntimeEventRow[]).map((row) => JSON.parse(row.event_json) as RuntimeEvent);
@@ -555,11 +556,11 @@ function stringifyJson(value: unknown): string {
 }
 
 namespace AgentLoopRepositoryParts {
-// Stores legacy run execution facts as agent loop events instead of dedicated step/action tables.
+// Stores agent loop lifecycle facts as ordered agent loop events.
 
-type CompatFactKind = 'run_step' | 'run_action' | 'run_observation';
+type AgentLoopFactKind = 'step' | 'action' | 'observation';
 
-interface CompatFactEventRow {
+interface AgentLoopFactEventRow {
   payload_json: string;
 }
 
@@ -567,10 +568,10 @@ export class AgentLoopExecutionFactMethods {
   constructor(private readonly database: MegumiDatabase) {}
 
   saveStep(step: RunStep): RunStep {
-    this.saveCompatFact({
-      eventId: `compat:run_step:${step.stepId}`,
+    this.saveAgentLoopFact({
+      eventId: `agent-loop:step:${step.stepId}`,
       runId: step.runId,
-      kind: 'run_step',
+      kind: 'step',
       createdAt: step.startedAt ?? step.completedAt ?? new Date(0).toISOString(),
       record: step,
     });
@@ -578,15 +579,15 @@ export class AgentLoopExecutionFactMethods {
   }
 
   listStepsByRun(runId: string): RunStep[] {
-    return this.listCompatFacts<RunStep>(runId, 'run_step')
+    return this.listAgentLoopFacts<RunStep>(runId, 'step')
       .sort((left, right) => (left.startedAt ?? '').localeCompare(right.startedAt ?? '') || left.stepId.localeCompare(right.stepId));
   }
 
   saveAction(action: RunAction): RunAction {
-    this.saveCompatFact({
-      eventId: `compat:run_action:${action.actionId}`,
+    this.saveAgentLoopFact({
+      eventId: `agent-loop:action:${action.actionId}`,
       runId: action.runId,
-      kind: 'run_action',
+      kind: 'action',
       createdAt: action.requestedAt,
       record: action,
     });
@@ -594,15 +595,15 @@ export class AgentLoopExecutionFactMethods {
   }
 
   listActionsByRun(runId: string): RunAction[] {
-    return this.listCompatFacts<RunAction>(runId, 'run_action')
+    return this.listAgentLoopFacts<RunAction>(runId, 'action')
       .sort((left, right) => left.requestedAt.localeCompare(right.requestedAt));
   }
 
   saveObservation(observation: RunObservation): RunObservation {
-    this.saveCompatFact({
-      eventId: `compat:run_observation:${observation.observationId}`,
+    this.saveAgentLoopFact({
+      eventId: `agent-loop:observation:${observation.observationId}`,
       runId: observation.runId,
-      kind: 'run_observation',
+      kind: 'observation',
       createdAt: observation.receivedAt,
       record: observation,
     });
@@ -610,14 +611,14 @@ export class AgentLoopExecutionFactMethods {
   }
 
   listObservationsByRun(runId: string): RunObservation[] {
-    return this.listCompatFacts<RunObservation>(runId, 'run_observation')
+    return this.listAgentLoopFacts<RunObservation>(runId, 'observation')
       .sort((left, right) => left.receivedAt.localeCompare(right.receivedAt));
   }
 
-  private saveCompatFact(input: {
+  private saveAgentLoopFact(input: {
     eventId: string;
     runId: string;
-    kind: CompatFactKind;
+    kind: AgentLoopFactKind;
     createdAt: string;
     record: unknown;
   }): void {
@@ -632,7 +633,7 @@ export class AgentLoopExecutionFactMethods {
       .prepare('SELECT sequence FROM agent_loop_events WHERE event_id = ?')
       .get(input.eventId) as { sequence: number } | undefined;
     const sequence = existing?.sequence ?? this.nextSequence(input.runId);
-    const payload = JSON.stringify({ compatFactKind: input.kind, record: input.record });
+    const payload = JSON.stringify({ agentLoopFactKind: input.kind, record: input.record });
 
     this.database.prepare(`
       INSERT INTO agent_loop_events (
@@ -649,14 +650,14 @@ export class AgentLoopExecutionFactMethods {
       run_id: input.runId,
       session_id: run.session_id,
       sequence,
-      event_type: `compat.${input.kind}`,
+      event_type: `agent_loop.${input.kind}`,
       created_at: input.createdAt,
       payload_json: payload,
       event_json: payload,
     });
   }
 
-  private listCompatFacts<T>(runId: string, kind: CompatFactKind): T[] {
+  private listAgentLoopFacts<T>(runId: string, kind: AgentLoopFactKind): T[] {
     return (this.database
       .prepare(`
         SELECT payload_json
@@ -664,7 +665,7 @@ export class AgentLoopExecutionFactMethods {
         WHERE run_id = ? AND event_type = ?
         ORDER BY sequence ASC
       `)
-      .all(runId, `compat.${kind}`) as CompatFactEventRow[])
+      .all(runId, `agent_loop.${kind}`) as AgentLoopFactEventRow[])
       .map((row) => JSON.parse(row.payload_json) as { record: T })
       .map((payload) => payload.record);
   }
@@ -1866,7 +1867,7 @@ function parseJson<T>(value: string | null | undefined): T | undefined {
 
 
 
-export import ModelStepRecord = AgentLoopRepositoryParts.ModelStepRecord;
+export import ModelCallRecord = AgentLoopRepositoryParts.ModelCallRecord;
 
 export import RunNeedingTimelineBackfill = AgentLoopRepositoryParts.RunNeedingTimelineBackfill;
 
