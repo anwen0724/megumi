@@ -688,6 +688,86 @@ describe('chat stream store', () => {
     ]);
   });
 
+  it('reconciles a live user message with committed history by run id when history has no client message id', () => {
+    const store = useChatStreamStore.getState();
+
+    store.addPendingUserMessage('project-1', 'session-1', {
+      clientMessageId: 'client-message-1',
+      text: 'Write the document',
+      createdAt: '2026-05-24T00:00:00.000Z',
+    });
+    store.dispatch(event({
+      eventType: 'turn.started',
+      seq: 1,
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      streamId: 'stream-1',
+      userMessageId: 'message-user-1',
+      clientMessageId: 'client-message-1',
+    }));
+    store.dispatch(event({
+      eventType: 'user.message.committed',
+      seq: 2,
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      streamId: 'stream-1',
+      messageId: 'message-user-1',
+      clientMessageId: 'client-message-1',
+      text: 'Write the document',
+    }));
+    store.flushStream('project-1', 'session-1', 'stream-1');
+
+    store.hydrateCommittedMessages('project-1', 'session-1', [{
+      messageId: 'message-user-1',
+      role: 'user',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      createdAt: '2026-05-24T00:00:00.000Z',
+      updatedAt: '2026-05-24T00:00:00.000Z',
+      blocks: [{
+        blockId: 'message-user-1:text',
+        kind: 'user_text',
+        text: 'Write the document',
+        format: 'plain',
+      }],
+    }]);
+
+    const messages = useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', 'session-1')].messages;
+    expect(messages.filter((message) => message.role === 'user')).toEqual([
+      expect.objectContaining({
+        messageId: 'message-user-1',
+        runId: 'run-1',
+        role: 'user',
+        blocks: [expect.objectContaining({
+          kind: 'user_text',
+          text: 'Write the document',
+        })],
+      }),
+    ]);
+  });
+
+  it('uses committed hydration as the session baseline and drops stale non-live cached messages', () => {
+    const store = useChatStreamStore.getState();
+
+    store.addPendingUserMessage('project-1', 'session-1', {
+      clientMessageId: 'stale-client-message',
+      text: 'Stale message from another visible state',
+      createdAt: '2026-05-24T00:00:00.000Z',
+    });
+
+    store.hydrateCommittedMessages('project-1', 'session-1', [
+      committedUser('message-user-1', 'client-message-1', 'Actual persisted message'),
+      committedAssistant('assistant:run-1', 'run-1', 'Actual persisted answer'),
+    ]);
+
+    const messages = useChatStreamStore.getState().sessions[chatStreamSessionKey('project-1', 'session-1')].messages;
+    expect(JSON.stringify(messages)).not.toContain('Stale message from another visible state');
+    expect(messages.map((message) => message.messageId)).toEqual(['message-user-1', 'assistant:run-1']);
+  });
+
   it('reset clears pending buffered work so timers do not re-add messages', () => {
     useChatStreamStore.getState().dispatch(event({
       eventType: 'turn.started',

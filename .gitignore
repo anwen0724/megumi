@@ -16,4 +16,4 @@ worktrees/
 .claude/settings.local.json
 .claude/*.local.json
 .idea/
-.local-docs/
+docs/

@@ -351,6 +351,7 @@ export function useSessionTimeline() {
       clientMessageId,
       text: payload.message,
       createdAt,
+      runId: result.data.runId,
     });
 
     if (isSameBranchDraft(branchDraftRef.current, branchDraftForSend)) {

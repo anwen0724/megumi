@@ -37,7 +37,7 @@ export interface ChatStreamStoreState {
   addPendingUserMessage(
     projectId: string,
     sessionId: string,
-    input: { clientMessageId: string; text: string; createdAt: string },
+    input: { clientMessageId: string; text: string; createdAt: string; runId?: string },
   ): void;
   hydrateCommittedMessages(projectId: string, sessionId: string, messages: TimelineMessage[]): void;
   reset(): void;
@@ -89,6 +89,10 @@ function messageIdentity(message: TimelineMessage): string {
     return `separator:${message.messageId}`;
   }
 
+  if (message.runId) {
+    return `user-run:${message.sessionId}:${message.runId}`;
+  }
+
   return `user:${message.clientMessageId ?? message.messageId}`;
 }
 
@@ -128,12 +132,17 @@ function upsertPendingUserMessage(
     clientMessageId: string;
     text: string;
     createdAt: string;
+    runId?: string;
   },
 ): TimelineMessage[] {
   const existing = current.find(
     (message): message is TimelineUserMessage =>
       message.role === 'user' &&
-      (message.messageId === input.clientMessageId || message.clientMessageId === input.clientMessageId),
+      (
+        message.messageId === input.clientMessageId ||
+        message.clientMessageId === input.clientMessageId ||
+        (Boolean(input.runId) && message.runId === input.runId)
+      ),
   );
   const block = {
     blockId: `user-text:${input.clientMessageId}`,
@@ -160,6 +169,7 @@ function upsertPendingUserMessage(
         projectId: input.projectId,
         sessionId: input.sessionId,
         clientMessageId: input.clientMessageId,
+        ...(input.runId ? { runId: input.runId } : {}),
         updatedAt: input.createdAt,
         blocks,
       };
@@ -173,12 +183,26 @@ function upsertPendingUserMessage(
     sessionId: input.sessionId,
     turnOrder: 0,
     clientMessageId: input.clientMessageId,
+    ...(input.runId ? { runId: input.runId } : {}),
     createdAt: input.createdAt,
     updatedAt: input.createdAt,
     blocks: [block],
   };
 
   return [...current, message].sort(compareTimelineMessages);
+}
+
+function isActiveRunMessage(
+  message: TimelineMessage,
+  streamsById: Record<string, ChatStreamState>,
+): boolean {
+  if (message.role !== 'assistant' && message.role !== 'user') {
+    return false;
+  }
+
+  return Object.values(streamsById).some((stream) =>
+    stream.runId === message.runId && (stream.status === 'running' || stream.status === 'needs_replay')
+  );
 }
 
 function mergeCommittedMessages(
@@ -194,12 +218,7 @@ function mergeCommittedMessages(
 
   for (const message of current) {
     const identity = messageIdentity(message);
-    if (isLiveStreamingMessage(message, streamsById)) {
-      byIdentity.set(identity, message);
-      continue;
-    }
-
-    if (!byIdentity.has(identity)) {
+    if (isLiveStreamingMessage(message, streamsById) || isActiveRunMessage(message, streamsById)) {
       byIdentity.set(identity, message);
     }
   }

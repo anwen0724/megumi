@@ -354,7 +354,12 @@ function upsertUserMessage(
   const existing = messages.find(
     (message): message is TimelineUserMessage =>
       message.role === 'user' &&
-      (message.messageId === event.messageId || message.messageId === event.clientMessageId),
+      (
+        message.messageId === event.messageId ||
+        message.messageId === event.clientMessageId ||
+        message.clientMessageId === event.clientMessageId ||
+        (Boolean(message.runId) && message.runId === event.runId)
+      ),
   );
   const block = {
     blockId: `user-text:${event.messageId}`,
