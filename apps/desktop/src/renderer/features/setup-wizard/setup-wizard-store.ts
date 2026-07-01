@@ -69,9 +69,6 @@ export const useSetupWizardStore = create<SetupWizardState>((set) => ({
       createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.update, {
         language: input.language,
         theme: input.theme,
-        chat: {
-          defaultProvider: input.providerId,
-        },
         ...providerSettings,
         setup: {
           completed: true,

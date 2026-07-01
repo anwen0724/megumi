@@ -167,9 +167,6 @@ describe('Coding Agent host interface runtime', () => {
         completed: true,
         completedAt: '2026-06-29T15:00:00.000Z',
       },
-      chat: {
-        defaultProvider: 'deepseek',
-      },
     });
 
     expect(JSON.parse(await readFile(settingsPath, 'utf8'))).toEqual({
@@ -178,9 +175,6 @@ describe('Coding Agent host interface runtime', () => {
       setup: {
         completed: true,
         completedAt: '2026-06-29T15:00:00.000Z',
-      },
-      chat: {
-        defaultProvider: 'deepseek',
       },
     });
 

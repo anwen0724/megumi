@@ -43,7 +43,6 @@ describe('setup wizard store', () => {
           setup: { completed: false },
           memory: { enabled: false },
           compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
-          chat: { defaultProvider: 'deepseek' },
           providers: {},
           permissions: {},
         },
@@ -66,7 +65,6 @@ describe('setup wizard store', () => {
           setup: { completed: true, completedAt: '2026-06-29T12:00:00.000Z' },
           memory: { enabled: false },
           compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
-          chat: { defaultProvider: 'openai' },
           providers: {},
           permissions: {},
         },
@@ -88,7 +86,6 @@ describe('setup wizard store', () => {
       payload: {
         language: 'en-US',
         theme: 'graphite-dark',
-        chat: { defaultProvider: 'openai' },
         providers: {
           openai: {
             enabled: true,
@@ -118,7 +115,6 @@ describe('setup wizard store', () => {
           setup: { completed: true, completedAt: '2026-06-29T12:00:00.000Z' },
           memory: { enabled: false },
           compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
-          chat: { defaultProvider: 'deepseek' },
           providers: {},
           permissions: {},
         },
@@ -140,7 +136,6 @@ describe('setup wizard store', () => {
       payload: {
         language: 'zh-CN',
         theme: 'sage-mist',
-        chat: { defaultProvider: 'deepseek' },
         setup: {
           completed: true,
           completedAt: '2026-06-29T12:00:00.000Z',
@@ -161,7 +156,6 @@ describe('setup wizard store', () => {
           setup: { completed: false },
           memory: { enabled: false },
           compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
-          chat: { defaultProvider: 'deepseek' },
           providers: {},
           permissions: {},
         },

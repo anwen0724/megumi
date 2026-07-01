@@ -69,11 +69,8 @@ describe('app settings contracts', () => {
     });
   });
 
-  it('resolves provider, chat, and permission overrides from sparse settings', () => {
+  it('resolves provider and permission overrides from sparse settings', () => {
     expect(resolveAppSettings({
-      chat: {
-        defaultProvider: 'openai',
-      },
       providers: {
         deepseek: {
           apiKey: 'sk-deepseek',
@@ -87,9 +84,6 @@ describe('app settings contracts', () => {
         ask: ['run_command(*)'],
       },
     })).toMatchObject({
-      chat: {
-        defaultProvider: 'openai',
-      },
       providers: {
         deepseek: {
           enabled: true,

@@ -173,13 +173,6 @@ export function createMegumiSettingsSchema(): Record<string, unknown> {
           keepRecentTokens: { type: 'integer', minimum: 1 },
         },
       },
-      chat: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          defaultProvider: { enum: ['deepseek', 'openai', 'anthropic', 'custom'] },
-        },
-      },
       providers: {
         type: 'object',
         additionalProperties: false,

@@ -44,12 +44,6 @@ export const AppCompactionSettingsRawSchema = z
   })
   .strict();
 
-export const AppChatSettingsRawSchema = z
-  .object({
-    defaultProvider: ProviderIdSchema.optional(),
-  })
-  .strict();
-
 export const AppProviderSettingsRawSchema = z
   .object({
     enabled: z.boolean().optional(),
@@ -75,7 +69,6 @@ export const AppSettingsRawSchema = z
     setup: AppSetupSettingsRawSchema.optional(),
     memory: AppMemorySettingsRawSchema.optional(),
     compaction: AppCompactionSettingsRawSchema.optional(),
-    chat: AppChatSettingsRawSchema.optional(),
     providers: AppProvidersSettingsRawSchema.optional(),
     permissions: PermissionRulesSchema.optional(),
   })
@@ -100,12 +93,6 @@ export const AppCompactionSettingsResolvedSchema = z
     enabled: z.boolean(),
     reserveTokens: z.number().int().positive(),
     keepRecentTokens: z.number().int().positive(),
-  })
-  .strict();
-
-export const AppChatSettingsResolvedSchema = z
-  .object({
-    defaultProvider: ProviderIdSchema,
   })
   .strict();
 
@@ -134,7 +121,6 @@ export const AppSettingsResolvedSchema = z
     setup: AppSetupSettingsResolvedSchema,
     memory: AppMemorySettingsResolvedSchema,
     compaction: AppCompactionSettingsResolvedSchema,
-    chat: AppChatSettingsResolvedSchema,
     providers: AppProvidersSettingsResolvedSchema,
     permissions: PermissionRulesSchema,
   })
@@ -154,9 +140,6 @@ export const DEFAULT_APP_SETTINGS = AppSettingsResolvedSchema.parse({
     enabled: true,
     reserveTokens: 16384,
     keepRecentTokens: 20000,
-  },
-  chat: {
-    defaultProvider: 'deepseek',
   },
   providers: {
     deepseek: providerDefault('deepseek'),

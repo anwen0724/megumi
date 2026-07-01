@@ -39,12 +39,6 @@ export function resolveAppSettings(raw: unknown): AppSettingsResolved {
             ...definedObject(parsed.compaction),
           }
         : undefined,
-      chat: parsed.chat
-        ? {
-            ...DEFAULT_APP_SETTINGS.chat,
-            ...definedObject(parsed.chat),
-          }
-        : undefined,
       providers: parsed.providers
         ? resolveProviderSettings(parsed.providers)
         : undefined,
@@ -79,12 +73,6 @@ export function mergeRawAppSettings(current: AppSettingsRaw, patch: AppSettingsR
         ? {
             ...(currentParsed.compaction ?? {}),
             ...definedObject(patchParsed.compaction),
-          }
-        : undefined,
-      chat: patchParsed.chat
-        ? {
-            ...(currentParsed.chat ?? {}),
-            ...definedObject(patchParsed.chat),
           }
         : undefined,
       providers: patchParsed.providers

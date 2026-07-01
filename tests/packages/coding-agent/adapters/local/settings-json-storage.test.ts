@@ -69,7 +69,6 @@ describe('Local settings.json storage', () => {
     service.updateSettings({
       language: 'zh-CN',
       theme: 'sage-mist',
-      chat: { defaultProvider: 'deepseek' },
       setup: {
         completed: true,
         completedAt: '2026-06-29T12:00:00.000Z',
@@ -79,7 +78,6 @@ describe('Local settings.json storage', () => {
     expect(JSON.parse(await readFile(settingsPath, 'utf8'))).toEqual({
       language: 'zh-CN',
       theme: 'sage-mist',
-      chat: { defaultProvider: 'deepseek' },
       setup: {
         completed: true,
         completedAt: '2026-06-29T12:00:00.000Z',
