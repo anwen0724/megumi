@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { z } from 'zod';
 import { describe, expect, it } from 'vitest';
 import {
@@ -743,31 +743,31 @@ describe('provider and chat ipc schemas', () => {
 
   it('accepts input preprocessing metadata on session message runtime context', () => {
     const parsed = SessionMessageSendRequestSchema.parse({
-      requestId: 'request:input-preprocessing-summary',
+      requestId: 'request:input-preprocessing-example-template',
       payload: {
         sessionId: 'session:1',
         providerId: 'deepseek',
         modelId: 'deepseek-v4-flash',
         message: {
-          id: 'client-message:summary',
-          content: '/summary',
+          id: 'client-message:example-template',
+          content: '/explain src/index.ts',
           createdAt: '2026-06-11T00:00:00.000Z',
         },
         context: {
           permissionMode: 'default',
           preprocessing: {
-            originalText: '/summary',
-            effectiveUserText: '总结当前会话',
+            originalText: '/explain src/index.ts',
+            effectiveUserText: 'src/index.ts',
             entries: [
               {
                 kind: 'prompt_template',
-                sourceId: 'input:prompt-template:summary',
-                sourceName: '/summary',
+                sourceId: 'input:prompt-template:example-template',
+                sourceName: '/explain',
                 visibility: 'model_visible',
-                instructionText: '请总结当前会话。',
-                templateId: 'summary',
-                commandName: 'summary',
-                templateSource: 'builtin',
+                instructionText: 'Explain the selected target.',
+                templateId: 'example-template',
+                commandName: 'explain',
+                templateSource: 'project',
               },
             ],
             diagnostics: [],
@@ -783,12 +783,12 @@ describe('provider and chat ipc schemas', () => {
     });
 
     expect(parsed.payload.context?.preprocessing).toMatchObject({
-      originalText: '/summary',
-      effectiveUserText: '总结当前会话',
+      originalText: '/explain src/index.ts',
+      effectiveUserText: 'src/index.ts',
       entries: [
         expect.objectContaining({
           kind: 'prompt_template',
-          templateId: 'summary',
+          templateId: 'example-template',
         }),
       ],
     });
@@ -1631,3 +1631,4 @@ describe('shared barrel exports', () => {
     expect(typeof runtimeRequestSchema.parse).toBe('function');
   });
 });
+

@@ -1136,28 +1136,28 @@ describe('buildModelCallInputContextFromSources', () => {
         truncated: false,
       }],
       inputPreprocessing: {
-        originalText: '/summary',
-        effectiveUserText: '总结当前会话',
+        originalText: '/explain src/index.ts',
+        effectiveUserText: 'src/index.ts',
         entries: [
           {
             kind: 'prompt_template',
-            sourceId: 'input:prompt-template:summary',
-            sourceName: '/summary',
+            sourceId: 'input:prompt-template:example-template',
+            sourceName: '/explain',
             visibility: 'model_visible',
-            instructionText: '请总结当前会话。',
-            templateId: 'summary',
-            commandName: 'summary',
-            templateSource: 'builtin',
+            instructionText: 'Explain the selected target.',
+            templateId: 'example-template',
+            commandName: 'explain',
+            templateSource: 'project',
           },
           {
             kind: 'skill',
-            sourceId: 'input:skill:write-doc',
-            sourceName: '/write-doc',
+            sourceId: 'input:skill:example-skill',
+            sourceName: '/debug-flow',
             visibility: 'model_visible',
-            instructionText: '你正在执行文档写作任务。',
-            skillId: 'write-doc',
-            commandName: 'write-doc',
-            skillSource: 'builtin',
+            instructionText: 'Use the example skill workflow.',
+            skillId: 'example-skill',
+            commandName: 'debug-flow',
+            skillSource: 'project',
           },
           {
             kind: 'input_hook',
@@ -1171,7 +1171,7 @@ describe('buildModelCallInputContextFromSources', () => {
         diagnostics: [],
       },
       runtimeConstraints: [projectBoundaryConstraint()],
-      currentMessage: message({ messageId: 'message:current', content: '/summary' }),
+      currentMessage: message({ messageId: 'message:current', content: '/explain src/index.ts' }),
     });
 
     expect(context.parts.map((part) => part.kind)).toEqual([
@@ -1184,45 +1184,45 @@ describe('buildModelCallInputContextFromSources', () => {
     expect(context.parts[1]).toMatchObject({
       kind: 'instruction',
       instructionKind: 'prompt_template',
-      text: '请总结当前会话。',
+      text: 'Explain the selected target.',
       sourceRefs: [{
-        sourceId: 'input:prompt-template:summary',
+        sourceId: 'input:prompt-template:example-template',
         sourceKind: 'input_prompt_template',
-        sourceUri: 'input://prompt_template/summary',
+        sourceUri: 'input://prompt_template/example-template',
         loadedAt: builtAt,
         metadata: {
-          sourceName: '/summary',
-          commandName: 'summary',
-          templateId: 'summary',
-          templateSource: 'builtin',
+          sourceName: '/explain',
+          commandName: 'explain',
+          templateId: 'example-template',
+          templateSource: 'project',
         },
       }],
     });
     expect(context.parts[2]).toMatchObject({
       kind: 'instruction',
       instructionKind: 'skill',
-      text: '你正在执行文档写作任务。',
+      text: 'Use the example skill workflow.',
       sourceRefs: [{
-        sourceId: 'input:skill:write-doc',
+        sourceId: 'input:skill:example-skill',
         sourceKind: 'input_skill',
-        sourceUri: 'input://skill/write-doc',
+        sourceUri: 'input://skill/example-skill',
         loadedAt: builtAt,
         metadata: {
-          sourceName: '/write-doc',
-          commandName: 'write-doc',
-          skillId: 'write-doc',
-          skillSource: 'builtin',
+          sourceName: '/debug-flow',
+          commandName: 'debug-flow',
+          skillId: 'example-skill',
+          skillSource: 'project',
         },
       }],
     });
     expect(context.parts[4]).toMatchObject({
       kind: 'current_turn',
-      text: '总结当前会话',
+      text: 'src/index.ts',
       sourceRefs: [
         expect.objectContaining({
           sourceKind: 'current_user_message',
           metadata: expect.objectContaining({
-            originalText: '/summary',
+            originalText: '/explain src/index.ts',
           }),
         }),
       ],
@@ -1239,23 +1239,23 @@ describe('buildModelCallInputContextFromSources', () => {
       buildReason: 'initial_model_step',
       builtAt,
       inputPreprocessing: {
-        originalText: '/summary',
-        effectiveUserText: '总结当前会话',
+        originalText: '/explain src/index.ts',
+        effectiveUserText: 'src/index.ts',
         entries: [
           {
             kind: 'prompt_template',
-            sourceId: 'input:prompt-template:summary',
-            sourceName: '/summary',
+            sourceId: 'input:prompt-template:example-template',
+            sourceName: '/explain',
             visibility: 'model_visible',
-            instructionText: '旧 summary instruction',
-            templateId: 'summary',
-            commandName: 'summary',
-            templateSource: 'builtin',
+            instructionText: 'Old prompt instruction.',
+            templateId: 'example-template',
+            commandName: 'explain',
+            templateSource: 'project',
           },
         ],
         diagnostics: [],
       },
-      currentMessage: message({ messageId: 'message:current', content: '/summary' }),
+      currentMessage: message({ messageId: 'message:current', content: '/explain src/index.ts' }),
     });
 
     const rebuilt = buildModelCallInputContextFromSources({
@@ -1267,18 +1267,18 @@ describe('buildModelCallInputContextFromSources', () => {
       buildReason: 'tool_call_outputs_model_input',
       builtAt,
       inputPreprocessing: {
-        originalText: '/write-doc README.md',
-        effectiveUserText: 'README.md',
+        originalText: '/debug-flow failing test',
+        effectiveUserText: 'failing test',
         entries: [
           {
             kind: 'skill',
-            sourceId: 'input:skill:write-doc',
-            sourceName: '/write-doc',
+            sourceId: 'input:skill:example-skill',
+            sourceName: '/debug-flow',
             visibility: 'model_visible',
-            instructionText: '新 write-doc instruction',
-            skillId: 'write-doc',
-            commandName: 'write-doc',
-            skillSource: 'builtin',
+            instructionText: 'New example skill instruction.',
+            skillId: 'example-skill',
+            commandName: 'debug-flow',
+            skillSource: 'project',
           },
         ],
         diagnostics: [],
@@ -1286,7 +1286,7 @@ describe('buildModelCallInputContextFromSources', () => {
     });
 
     expect(rebuilt.parts.filter((part) => part.kind === 'instruction').map((part) => part.text)).toEqual([
-      '新 write-doc instruction',
+      'New example skill instruction.',
     ]);
   });
   it('marks truncated project instruction parts with truncation metadata', () => {
@@ -1577,17 +1577,17 @@ describe('buildModelCallInputContextFromSources', () => {
         loadedAt: builtAt,
       }],
       inputPreprocessing: {
-        originalText: '/summary',
+        originalText: '/explain src/index.ts',
         effectiveUserText: 'Summarize.',
         entries: [{
           kind: 'prompt_template',
-          sourceId: 'input:prompt-template:summary',
-          sourceName: '/summary',
+          sourceId: 'input:prompt-template:example-template',
+          sourceName: '/explain',
           visibility: 'model_visible',
           instructionText: 'Old prompt instruction.',
-          templateId: 'summary',
-          commandName: 'summary',
-          templateSource: 'builtin',
+          templateId: 'example-template',
+          commandName: 'explain',
+          templateSource: 'project',
         }],
         diagnostics: [],
       },
@@ -1625,17 +1625,17 @@ describe('buildModelCallInputContextFromSources', () => {
         loadedAt: builtAt,
       }],
       inputPreprocessing: {
-        originalText: '/write-doc',
-        effectiveUserText: 'Write docs.',
+        originalText: '/debug-flow failing test',
+        effectiveUserText: 'failing test',
         entries: [{
           kind: 'skill',
-          sourceId: 'input:skill:write-doc',
-          sourceName: '/write-doc',
+          sourceId: 'input:skill:example-skill',
+          sourceName: '/debug-flow',
           visibility: 'model_visible',
           instructionText: 'New skill instruction.',
-          skillId: 'write-doc',
-          commandName: 'write-doc',
-          skillSource: 'builtin',
+          skillId: 'example-skill',
+          commandName: 'debug-flow',
+          skillSource: 'project',
         }],
         diagnostics: [],
       },
@@ -1668,3 +1668,4 @@ function instructionSource(
     truncated: false,
   };
 }
+

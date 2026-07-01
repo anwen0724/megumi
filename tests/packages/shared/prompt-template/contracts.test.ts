@@ -12,17 +12,17 @@ describe('prompt template shared contracts', () => {
     expect(PromptTemplateSourceSchema.parse('project')).toBe('project');
   });
 
-  it('parses summary prompt template invocation metadata', () => {
+  it('parses generic prompt template invocation metadata', () => {
     expect(PromptTemplateInvocationMetadataSchema.parse({
-      templateId: 'summary',
-      templateSource: 'builtin',
-      commandName: 'summary',
-      argsText: '',
+      templateId: 'example-template',
+      templateSource: 'project',
+      commandName: 'explain',
+      argsText: 'src/index.ts',
     })).toEqual({
-      templateId: 'summary',
-      templateSource: 'builtin',
-      commandName: 'summary',
-      argsText: '',
+      templateId: 'example-template',
+      templateSource: 'project',
+      commandName: 'explain',
+      argsText: 'src/index.ts',
     });
   });
 });

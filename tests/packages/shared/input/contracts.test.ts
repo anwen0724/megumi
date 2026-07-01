@@ -1,4 +1,4 @@
-// Verifies the public shared Input System contracts used across renderer and runtime boundaries.
+﻿// Verifies the public shared Input System contracts used across renderer and runtime boundaries.
 import { describe, expect, it } from 'vitest';
 import {
   InputCommandDefinitionSchema,
@@ -31,17 +31,17 @@ describe('input shared contracts', () => {
         description: 'Show calendar events',
       }).kind,
       InputCommandDefinitionSchema.parse({
-        name: 'summary',
+        name: 'explain',
         kind: 'prompt_template',
         source: 'core',
-        description: 'Summarize the current session',
-        argumentHint: '[focus]',
+        description: 'Explain a selected target',
+        argumentHint: '[target]',
       }).kind,
       InputCommandDefinitionSchema.parse({
-        name: 'write-doc',
+        name: 'debug-flow',
         kind: 'skill',
         source: 'core',
-        description: 'Write or update project documentation',
+        description: 'Use an example skill workflow',
         argumentHint: '[target]',
       }).kind,
     ]).toEqual(['local', 'intent', 'extension', 'prompt_template', 'skill']);
@@ -49,17 +49,17 @@ describe('input shared contracts', () => {
 
   it('parses command suggestions with stable display metadata', () => {
     expect(InputCommandSuggestionSchema.parse({
-      name: 'summary',
+      name: 'explain',
       kind: 'prompt_template',
       source: 'core',
-      description: 'Summarize the current session',
-      argumentHint: '[focus]',
+      description: 'Explain a selected target',
+      argumentHint: '[target]',
     })).toEqual({
-      name: 'summary',
+      name: 'explain',
       kind: 'prompt_template',
       source: 'core',
-      description: 'Summarize the current session',
-      argumentHint: '[focus]',
+      description: 'Explain a selected target',
+      argumentHint: '[target]',
     });
   });
 
@@ -112,8 +112,8 @@ describe('input shared contracts', () => {
 
   it('parses a structured preprocessing result containing all input-derived entry kinds', () => {
     const parsed = InputPreprocessingResultSchema.parse({
-      originalText: '/summary',
-      effectiveUserText: '总结当前会话',
+      originalText: '/explain src/index.ts',
+      effectiveUserText: 'src/index.ts',
       entries: [
         {
           kind: 'intent',
@@ -128,23 +128,23 @@ describe('input shared contracts', () => {
         },
         {
           kind: 'prompt_template',
-          sourceId: 'input:template:summary',
-          sourceName: '/summary',
+          sourceId: 'input:template:example-template',
+          sourceName: '/explain',
           visibility: 'model_visible',
-          instructionText: 'Summarize the current session.',
-          templateId: 'summary',
-          commandName: 'summary',
-          templateSource: 'builtin',
+          instructionText: 'Explain the selected target.',
+          templateId: 'example-template',
+          commandName: 'explain',
+          templateSource: 'project',
         },
         {
           kind: 'skill',
-          sourceId: 'input:skill:write-doc',
-          sourceName: '/write-doc',
+          sourceId: 'input:skill:example-skill',
+          sourceName: '/debug-flow',
           visibility: 'model_visible',
-          instructionText: 'Use the documentation writing method.',
-          skillId: 'write-doc',
-          commandName: 'write-doc',
-          skillSource: 'builtin',
+          instructionText: 'Use the example skill workflow.',
+          skillId: 'example-skill',
+          commandName: 'debug-flow',
+          skillSource: 'project',
         },
         {
           kind: 'input_hook',
@@ -172,13 +172,13 @@ describe('input shared contracts', () => {
     ]);
     expect(parsed.entries[1]).toMatchObject({
       kind: 'prompt_template',
-      templateId: 'summary',
-      templateSource: 'builtin',
+      templateId: 'example-template',
+      templateSource: 'project',
     });
     expect(parsed.entries[2]).toMatchObject({
       kind: 'skill',
-      skillId: 'write-doc',
-      skillSource: 'builtin',
+      skillId: 'example-skill',
+      skillSource: 'project',
     });
     expect(parsed.entries[3]).toMatchObject({
       kind: 'input_hook',
@@ -189,20 +189,21 @@ describe('input shared contracts', () => {
 
   it('rejects model-visible preprocessing entries without instruction text', () => {
     expect(() => InputPreprocessingResultSchema.parse({
-      originalText: '/summary',
-      effectiveUserText: '总结当前会话',
+      originalText: '/explain src/index.ts',
+      effectiveUserText: 'src/index.ts',
       entries: [
         {
           kind: 'prompt_template',
-          sourceId: 'input:template:summary',
-          sourceName: '/summary',
+          sourceId: 'input:template:example-template',
+          sourceName: '/explain',
           visibility: 'model_visible',
-          templateId: 'summary',
-          commandName: 'summary',
-          templateSource: 'builtin',
+          templateId: 'example-template',
+          commandName: 'explain',
+          templateSource: 'project',
         },
       ],
       diagnostics: [],
     })).toThrow();
   });
 });
+

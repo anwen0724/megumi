@@ -152,6 +152,18 @@ describe('provider tool call model loop source guards', () => {
     expect(source).not.toContain('WorkflowCommand');
   });
 
+  it('does not hardcode removed temporary summary and write-doc input abilities in production code', () => {
+    const productionSource = [
+      sourceUnder('apps/desktop/src/renderer'),
+      read('packages/coding-agent/input/command/built-ins.ts'),
+    ].join('\n');
+
+    expect(productionSource).not.toContain('/summary');
+    expect(productionSource).not.toContain('/write-doc');
+    expect(productionSource).not.toContain('SUMMARY_TEMPLATE_INSTRUCTION');
+    expect(productionSource).not.toContain('WRITE_DOC_SKILL_INSTRUCTION');
+  });
+
   it('keeps the agent tool loop free of active path persistence concerns', () => {
     const source = read('packages/coding-agent/agent-loop/agent-loop.ts');
 
