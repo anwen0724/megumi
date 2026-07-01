@@ -184,187 +184,31 @@ describe('Composer', () => {
     expect(screen.queryByRole('option', { name: 'GPT-5.5' })).not.toBeInTheDocument();
   });
 
-  it('shows command autocomplete with name and description for slash prefixes', async () => {
+  it('keeps slash prefixes as ordinary drafts until a trusted command catalog is wired in', async () => {
     render(<Composer onSubmit={() => undefined} />);
     const input = screen.getByLabelText('Message Megumi');
 
     await userEvent.type(input, '/');
 
-    expect(screen.getByRole('listbox', { name: 'Command suggestions' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: '/review Review code in the current project' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: '/summary Summarize the current session' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: '/write-doc Write or update project documentation' })).toBeInTheDocument();
-
-    await userEvent.clear(input);
-    await userEvent.type(input, '/su');
-
-    expect(screen.getByRole('option', { name: '/summary Summarize the current session' })).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: '/review Review code in the current project' })).not.toBeInTheDocument();
-  });
-
-  it('uses case-sensitive command autocomplete filtering', async () => {
-    render(<Composer onSubmit={() => undefined} />);
-
-    await userEvent.type(screen.getByLabelText('Message Megumi'), '/Review');
-
     expect(screen.queryByRole('listbox', { name: 'Command suggestions' })).not.toBeInTheDocument();
   });
 
-  it('completes command autocomplete with Enter or Tab without submitting', async () => {
-    const onSubmit = vi.fn();
-    render(<Composer onSubmit={onSubmit} />);
-    const input = screen.getByLabelText('Message Megumi');
-
-    await userEvent.type(input, '/re');
-    await userEvent.keyboard('{Enter}');
-
-    expect(onSubmit).not.toHaveBeenCalled();
-    expect(input).toHaveValue('/review ');
-    expect(screen.queryByRole('listbox', { name: 'Command suggestions' })).not.toBeInTheDocument();
-
-    await userEvent.clear(input);
-    await userEvent.type(input, '/re');
-    await userEvent.keyboard('{Tab}');
-
-    expect(onSubmit).not.toHaveBeenCalled();
-    expect(input).toHaveValue('/review ');
-    expect(screen.queryByRole('listbox', { name: 'Command suggestions' })).not.toBeInTheDocument();
-  });
-
-  it('submits command arguments after autocomplete completes the command name', async () => {
-    const onSubmit = vi.fn();
-    render(<Composer onSubmit={onSubmit} />);
-    const input = screen.getByLabelText('Message Megumi');
-
-    await userEvent.type(input, '/re');
-    await userEvent.keyboard('{Enter}');
-    await userEvent.type(input, '当前改动');
-    await userEvent.keyboard('{Enter}');
-
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-      message: '/review 当前改动',
-      permissionMode: 'plan',
-      permissionSource: 'intent_default',
-      preprocessing: expect.objectContaining({
-        originalText: '/review 当前改动',
-        effectiveUserText: '当前改动',
-        entries: [
-          expect.objectContaining({
-            kind: 'intent',
-            intentId: 'review',
-            commandName: 'review',
-            defaultPermissionMode: 'plan',
-            defaultPermissionSource: 'intent_default',
-          }),
-        ],
-      }),
-    }));
-    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('intent');
-    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('workflow');
-  });
-
-  it('closes command autocomplete with Escape and keeps normal Enter submit behavior closed', async () => {
-    const onSubmit = vi.fn();
-    render(<Composer onSubmit={onSubmit} />);
-    const input = screen.getByLabelText('Message Megumi');
-
-    await userEvent.type(input, '/re');
-    await userEvent.keyboard('{Escape}');
-
-    expect(screen.queryByRole('listbox', { name: 'Command suggestions' })).not.toBeInTheDocument();
-
-    await userEvent.keyboard('{Enter}');
-
-    expect(onSubmit).toHaveBeenCalledWith({
-      message: '/re',
-      permissionMode: 'default',
-      model: 'deepseek-v4-flash',
-    });
-  });
-
-  it('submits /review as an intent command with plan intent default permission', async () => {
+  it('submits slash-prefixed text without renderer-owned preprocessing', async () => {
     const onSubmit = vi.fn();
     render(<Composer onSubmit={onSubmit} />);
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), '/review 当前改动');
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
 
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+    expect(onSubmit).toHaveBeenCalledWith({
       message: '/review 当前改动',
-      permissionMode: 'plan',
-      permissionSource: 'intent_default',
-      preprocessing: expect.objectContaining({
-        originalText: '/review 当前改动',
-        effectiveUserText: '当前改动',
-        entries: [
-          expect.objectContaining({
-            kind: 'intent',
-            intentId: 'review',
-            commandName: 'review',
-            defaultPermissionMode: 'plan',
-            defaultPermissionSource: 'intent_default',
-          }),
-        ],
-      }),
-    }));
+      permissionMode: 'default',
+      model: 'deepseek-v4-flash',
+    });
     expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('intent');
     expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('workflow');
-  });
-
-  it('submits /summary as prompt-template preprocessing without changing the selected permission mode', async () => {
-    const onSubmit = vi.fn();
-    render(<Composer onSubmit={onSubmit} />);
-
-    await userEvent.selectOptions(screen.getByLabelText('Permission mode'), 'accept_edits');
-    await userEvent.type(screen.getByLabelText('Message Megumi'), '/summary');
-    await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
-
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-      message: '/summary',
-      permissionMode: 'accept_edits',
-      preprocessing: expect.objectContaining({
-        originalText: '/summary',
-        effectiveUserText: '总结当前会话',
-        entries: [
-          expect.objectContaining({
-            kind: 'prompt_template',
-            templateId: 'summary',
-            commandName: 'summary',
-            templateSource: 'builtin',
-          }),
-        ],
-      }),
-    }));
-    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('intent');
     expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('permissionSource');
-  });
-
-  it('submits /write-doc as skill preprocessing without changing the selected permission mode', async () => {
-    const onSubmit = vi.fn();
-    render(<Composer onSubmit={onSubmit} />);
-
-    await userEvent.selectOptions(screen.getByLabelText('Permission mode'), 'plan');
-    await userEvent.type(screen.getByLabelText('Message Megumi'), '/write-doc docs/architecture.md');
-    await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
-
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-      message: '/write-doc docs/architecture.md',
-      permissionMode: 'plan',
-      preprocessing: expect.objectContaining({
-        originalText: '/write-doc docs/architecture.md',
-        effectiveUserText: 'docs/architecture.md',
-        entries: [
-          expect.objectContaining({
-            kind: 'skill',
-            skillId: 'write-doc',
-            commandName: 'write-doc',
-            skillSource: 'builtin',
-          }),
-        ],
-      }),
-    }));
-    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('intent');
-    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('permissionSource');
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('preprocessing');
   });
 
   it('keeps unknown slash commands as ordinary messages', async () => {

@@ -133,8 +133,6 @@ function createSessionMessageSendPayload(
       sessionTitle: target.sessionTitle,
       permissionMode: payload.permissionMode,
       ...(payload.permissionSource ? { permissionSource: payload.permissionSource } : {}),
-      // Preprocessing is renderer-provided context metadata; Desktop Main is responsible for validating it before constructing model input.
-      ...(payload.preprocessing ? { preprocessing: payload.preprocessing } : {}),
     },
     createdAt: messageCreatedAt,
   };

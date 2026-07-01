@@ -1,5 +1,4 @@
-// Owns Composer interaction state and builds renderer-side submit payloads.
-// Runtime validation remains in Desktop Main; this hook only prepares UI input.
+// Owns Composer interaction state and builds the host-neutral submit payload.
 import { type FormEvent, type KeyboardEvent, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   DEFAULT_COMPOSER_MODEL,
@@ -10,11 +9,6 @@ import {
 } from '../components/composer-options';
 import type { ComposerProps, ComposerSubmitPayload } from '../components/composer-types';
 import type { ComposerSurfaceProps } from '../components/ComposerSurface';
-import {
-  createInputPreprocessingSubmitPayload,
-  listInputCommandSuggestions,
-  type CommandDefinition,
-} from '../../input';
 
 const COMPOSER_TEXTAREA_COMPACT_HEIGHT = 56;
 const COMPOSER_TEXTAREA_MAX_HEIGHT = 160;
@@ -24,18 +18,6 @@ function createComposerSubmitPayload(input: {
   permissionMode: ComposerPermissionMode;
   model: ComposerModel;
 }): ComposerSubmitPayload {
-  const inputCommandPayload = createInputPreprocessingSubmitPayload(input.message);
-
-  if (inputCommandPayload) {
-    // Command-derived payloads can suggest a permission posture, but only
-    // Desktop Main can turn that suggestion into a trusted permission snapshot.
-    return {
-      ...inputCommandPayload,
-      permissionMode: inputCommandPayload.permissionMode ?? input.permissionMode,
-      model: input.model,
-    };
-  }
-
   return {
     message: input.message,
     permissionMode: input.permissionMode,
@@ -64,22 +46,12 @@ export function useComposerController({
     () => getComposerModelOptionsForProviders(enabledProviderIds),
     [enabledProviderIds],
   );
-  const [commandSelectionIndex, setCommandSelectionIndex] = useState(0);
-  const [commandAutocompleteDismissedFor, setCommandAutocompleteDismissedFor] = useState<string | null>(null);
   const trimmedValue = value.trim();
   const inputLocked = false;
   const sendLocked = status === 'sending' || status === 'running' || status === 'waiting-approval';
   const canSend = trimmedValue.length > 0 && !sendLocked && modelOptions.length > 0;
   const showStop = status === 'sending' || status === 'running' || status === 'waiting-approval';
   const canStop = showStop && Boolean(onStop);
-  const commandSuggestions = listInputCommandSuggestions(value);
-  const showCommandAutocomplete =
-    commandSuggestions.length > 0 &&
-    commandAutocompleteDismissedFor !== value &&
-    !inputLocked;
-  const selectedCommand = showCommandAutocomplete
-    ? commandSuggestions[Math.min(commandSelectionIndex, commandSuggestions.length - 1)]
-    : undefined;
 
   useEffect(() => {
     if (seedTextKey && seedText !== null && seedText !== undefined) {
@@ -115,19 +87,6 @@ export function useComposerController({
     textarea.style.overflowY = scrollHeight > COMPOSER_TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
   }, [value]);
 
-  useEffect(() => {
-    setCommandSelectionIndex(0);
-    setCommandAutocompleteDismissedFor(null);
-  }, [value]);
-
-  function completeCommand(command: CommandDefinition) {
-    setValue(`/${command.name} `);
-    setCommandAutocompleteDismissedFor(`/${command.name} `);
-    window.requestAnimationFrame(() => {
-      textareaRef.current?.focus();
-    });
-  }
-
   function submitDraft() {
     if (!canSend) return;
 
@@ -151,32 +110,6 @@ export function useComposerController({
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (showCommandAutocomplete) {
-      if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        setCommandSelectionIndex((current) => Math.min(current + 1, commandSuggestions.length - 1));
-        return;
-      }
-
-      if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        setCommandSelectionIndex((current) => Math.max(current - 1, 0));
-        return;
-      }
-
-      if ((event.key === 'Enter' || event.key === 'Tab') && selectedCommand) {
-        event.preventDefault();
-        completeCommand(selectedCommand);
-        return;
-      }
-
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        setCommandAutocompleteDismissedFor(value);
-        return;
-      }
-    }
-
     if (event.key !== 'Enter') {
       return;
     }
@@ -220,13 +153,6 @@ export function useComposerController({
   };
 
   return {
-    commandSuggestionPanelProps: showCommandAutocomplete
-      ? {
-        suggestions: commandSuggestions,
-        selectedIndex: commandSelectionIndex,
-        onChoose: completeCommand,
-      }
-      : null,
     composerSurfaceProps,
   };
 }

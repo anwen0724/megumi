@@ -1,5 +1,5 @@
 ﻿// @vitest-environment node
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -7,6 +7,27 @@ const repoRoot = resolve(__dirname, '../../../../../..');
 
 function readSource(path: string): string {
   return readFileSync(resolve(repoRoot, path), 'utf8');
+}
+
+function sourceFilesUnder(path: string): string[] {
+  const absolutePath = resolve(repoRoot, path);
+  const stats = statSync(absolutePath);
+
+  if (stats.isFile()) {
+    return [path];
+  }
+
+  return readdirSync(absolutePath)
+    .flatMap((entry) => {
+      const childPath = `${path}/${entry}`;
+      const childStats = statSync(resolve(repoRoot, childPath));
+
+      if (childStats.isDirectory()) {
+        return sourceFilesUnder(childPath);
+      }
+
+      return /\.(?:ts|tsx)$/.test(entry) ? [childPath] : [];
+    });
 }
 
 function readJsxTextAndStringProps(source: string): string {
@@ -22,6 +43,19 @@ function readTabLabels(source: string): string[] {
 }
 
 describe('composer source guard', () => {
+  it('keeps renderer composer from constructing model-visible input preprocessing', () => {
+    const offenders = sourceFilesUnder('apps/desktop/src/renderer')
+      .filter((file) => {
+        const source = readSource(file);
+        return source.includes('InputPreprocessingResult')
+          || source.includes('createInputPreprocessingSubmitPayload')
+          || source.includes("kind: 'prompt_template'")
+          || source.includes("kind: 'skill'");
+      });
+
+    expect(offenders).toEqual([]);
+  });
+
   it('keeps shortcut hints and running draft explanations out of persistent composer copy', () => {
     const composer = readSource('apps/desktop/src/renderer/features/chat/components/Composer.tsx');
     const composerSurface = readSource('apps/desktop/src/renderer/features/chat/components/ComposerSurface.tsx');
@@ -86,7 +120,6 @@ describe('composer source guard', () => {
     expect(composerDock).toContain('max-w-[var(--chat-composer-width)]');
     expect(composerDock).not.toContain('px-6');
     expect(composerDock).toContain('<ComposerOverlayLayer');
-    expect(composerDock).toContain('<CommandSuggestionPanel');
     expect(composerDock).toContain('<ComposerSurface');
     expect(composerDock.indexOf('<ComposerOverlayLayer')).toBeLessThan(composerDock.indexOf('<ComposerSurface'));
     expect(composerOverlayLayer).toContain('data-testid="composer-overlay-layer"');
@@ -94,5 +127,15 @@ describe('composer source guard', () => {
     expect(composerOverlayLayer).toContain('bottom-[calc(100%+0.5rem)]');
     expect(chatPage).not.toContain('chat-composer-dock');
     expect(chatPage).not.toContain('chat-message-scroll-area');
+  });
+
+  it('keeps command suggestion UI presentation-only until a trusted catalog is wired in', () => {
+    const commandPanel = readSource('apps/desktop/src/renderer/features/chat/components/CommandSuggestionPanel.tsx');
+
+    expect(commandPanel).not.toContain('BUILT_IN_INPUT_COMMAND_REGISTRY');
+    expect(commandPanel).not.toContain('listInputCommandSuggestions');
+    expect(commandPanel).not.toContain('InputPreprocessingResult');
+    expect(commandPanel).not.toContain("kind: 'prompt_template'");
+    expect(commandPanel).not.toContain("kind: 'skill'");
   });
 });
