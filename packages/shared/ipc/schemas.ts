@@ -32,7 +32,6 @@ import {
   PermissionModeSchema,
   PermissionModeSelectionSourceSchema,
 } from '../permission/mode-contracts';
-import { InputPreprocessingResultSchema } from '../input/preprocessing-contracts';
 import {
   CancelRequestSchema,
   RecoverableRunSummarySchema,
@@ -289,6 +288,15 @@ export const SessionBranchDraftCancelDataSchema = z
   })
   .strict();
 
+const SessionMessageInputPreprocessingTransportSchema = z
+  .object({
+    originalText: z.string(),
+    effectiveUserText: z.string(),
+    entries: z.array(JsonObjectSchema),
+    diagnostics: z.array(JsonObjectSchema),
+  })
+  .strict();
+
 export const SessionMessageRuntimeContextSchema = z
   .object({
     workspaceId: z.string().min(1).optional(),
@@ -297,7 +305,7 @@ export const SessionMessageRuntimeContextSchema = z
     sessionTitle: z.string().min(1).optional(),
     permissionMode: PermissionModeSchema.optional(),
     permissionSource: PermissionModeSelectionSourceSchema.optional(),
-    preprocessing: InputPreprocessingResultSchema.optional(),
+    preprocessing: SessionMessageInputPreprocessingTransportSchema.optional(),
   })
   .strict();
 

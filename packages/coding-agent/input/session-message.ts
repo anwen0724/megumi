@@ -2,7 +2,7 @@
 import type { SessionMessageSendPayload } from '@megumi/shared/ipc';
 import type { JsonObject } from '@megumi/shared/primitives';
 import type { PermissionMode, PermissionModeSelectionSource } from '@megumi/shared/permission';
-import type { InputPreprocessingResult } from '@megumi/shared/input';
+import type { InputPreprocessingResult } from '@megumi/coding-agent/input';
 import type { CommandAgentRunInput } from '../commands';
 import { parseRawInput } from './normalizer';
 import type { ParsedInput } from './parsed-input';

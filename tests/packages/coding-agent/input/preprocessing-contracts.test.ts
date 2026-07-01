@@ -1,10 +1,10 @@
-﻿// Verifies the public shared Input System contracts used across renderer and runtime boundaries.
+﻿// Verifies the Coding Agent input preprocessing contracts used across runtime boundaries.
 import { describe, expect, it } from 'vitest';
 import {
   InputPreprocessingResultSchema,
-} from '@megumi/shared/input';
+} from '@megumi/coding-agent/input';
 
-describe('input shared contracts', () => {
+describe('input preprocessing contracts', () => {
   it('parses a structured preprocessing result containing all input-derived entry kinds', () => {
     const parsed = InputPreprocessingResultSchema.parse({
       originalText: '/explain src/index.ts',
@@ -101,4 +101,5 @@ describe('input shared contracts', () => {
     })).toThrow();
   });
 });
+
 

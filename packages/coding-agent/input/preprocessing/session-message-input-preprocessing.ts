@@ -2,9 +2,9 @@
 import {
   InputPreprocessingResultSchema,
   type InputPreprocessingEntry,
+  type InputHookEntry,
   type InputPreprocessingResult,
-} from '@megumi/shared/input';
-import type { InputHookEntry } from '@megumi/shared/input';
+} from '../contracts/preprocessing-contracts';
 import type { JsonObject } from '@megumi/shared/primitives';
 import type { PermissionMode, PermissionModeSelectionSource } from '@megumi/shared/permission';
 

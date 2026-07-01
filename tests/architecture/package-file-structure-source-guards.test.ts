@@ -53,10 +53,10 @@ describe('package and file structure source guards', () => {
   it('keeps shared contracts in semantic domain directories', () => {
     expect(existsSync(join(repoRoot, 'packages/shared/runtime/events.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/shared/tool/contracts.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/shared/input/contracts.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/shared/input/command-contracts.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/shared/input/preprocessing-contracts.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/shared/hook/contracts.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/shared/input'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'packages/shared/hook'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/input/contracts/preprocessing-contracts.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/hooks/contracts/input-hook-contracts.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/shared/skill/contracts.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/shared/prompt-template/contracts.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/shared/session/agent-profile-contracts.ts'))).toBe(true);
@@ -493,7 +493,10 @@ describe('package and file structure source guards', () => {
       join(repoRoot, 'packages/coding-agent/composition/create-default-input-processing-service.ts'),
       'utf8',
     );
-    const postRunHooksSource = readFileSync(join(repoRoot, 'packages/coding-agent/hooks/post-run-hooks.ts'), 'utf8');
+    const postRunHooksSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/hooks/contracts/post-run-hooks-contracts.ts'),
+      'utf8',
+    );
     const runTerminalCoordinatorSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/state/run-terminal-coordinator.ts'),
       'utf8',

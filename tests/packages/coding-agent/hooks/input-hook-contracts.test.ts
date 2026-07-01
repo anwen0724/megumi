@@ -1,11 +1,11 @@
-﻿// Verifies the minimal shared Hook System contracts without requiring a hook runtime.
+﻿// Verifies the minimal Coding Agent hook contracts without requiring a hook runtime.
 import { describe, expect, it } from 'vitest';
 import {
   InputHookInvocationSchema,
   InputHookResultSchema,
-} from '@megumi/shared/hook';
+} from '@megumi/coding-agent/hooks';
 
-describe('hook shared contracts', () => {
+describe('hook contracts', () => {
   it('parses input hook invocations without owning hook runtime implementation', () => {
     expect(InputHookInvocationSchema.parse({
       hookId: 'default',
@@ -38,4 +38,5 @@ describe('hook shared contracts', () => {
     });
   });
 });
+
 

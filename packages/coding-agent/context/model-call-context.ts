@@ -10,7 +10,7 @@ import type {
 } from '@megumi/shared/model';
 import type { JsonObject } from '@megumi/shared/primitives';
 import type { PermissionModeSnapshot } from '@megumi/shared/permission';
-import type { InputPreprocessingResult } from '@megumi/shared/input';
+import type { InputPreprocessingResult } from '@megumi/coding-agent/input';
 import type { SessionContextInput, SessionMessage } from '@megumi/shared/session';
 import type { ToolCall, ToolResult } from '@megumi/shared/tool';
 

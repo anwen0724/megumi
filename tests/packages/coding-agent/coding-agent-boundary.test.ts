@@ -48,7 +48,7 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/agent-loop/agent-loop-operation-port.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/context/run-input-facts.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/turn/run-turn.ts'))).toBe(false);
-    expect(existsSync(join(root, 'packages/coding-agent/hooks/post-run-hooks.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/hooks/services/post-run-hooks.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/completion/run-completion-hooks.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/state/run-terminal-coordinator.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/lifecycle/run-terminal-coordinator.ts'))).toBe(false);

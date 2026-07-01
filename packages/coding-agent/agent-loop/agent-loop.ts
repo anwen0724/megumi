@@ -1,6 +1,6 @@
 // Owns the Coding Agent model/tool execution loop for one user input.
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
-import type { InputPreprocessingResult } from '@megumi/shared/input';
+import type { InputPreprocessingResult } from '@megumi/coding-agent/input';
 import type {
   ModelInputContext,
   ModelInputContextBuildRequest,

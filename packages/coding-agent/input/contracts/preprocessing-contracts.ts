@@ -1,10 +1,12 @@
-// Defines normalized input preprocessing results before runtime turns them into model context parts.
+/*
+ * Defines normalized input preprocessing results before runtime turns them into model context parts.
+ */
 import { z } from 'zod';
-import { InputHookActionSchema } from '../hook/contracts';
-import { JsonObjectSchema } from '../primitives/json';
-import { PermissionModeSchema } from '../permission/mode-contracts';
-import { PromptTemplateSourceSchema } from '../prompt-template/contracts';
-import { SkillSourceSchema } from '../skill/contracts';
+import { InputHookActionSchema } from '../../hooks/contracts/input-hook-contracts';
+import { JsonObjectSchema } from '@megumi/shared/primitives/json';
+import { PermissionModeSchema } from '@megumi/shared/permission/mode-contracts';
+import { PromptTemplateSourceSchema } from '@megumi/shared/prompt-template/contracts';
+import { SkillSourceSchema } from '@megumi/shared/skill/contracts';
 
 export const INPUT_PREPROCESSING_ENTRY_KINDS = ['intent', 'prompt_template', 'skill', 'input_hook'] as const;
 export const INPUT_PREPROCESSING_VISIBILITIES = ['model_visible', 'host_only'] as const;

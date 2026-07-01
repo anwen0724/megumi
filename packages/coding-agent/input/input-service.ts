@@ -1,5 +1,5 @@
 ﻿// Handles user input entering a Coding Agent session, including message persistence and agent-loop invocation.
-import type { InputPreprocessingResult } from '@megumi/shared/input';
+import type { InputPreprocessingResult } from '@megumi/coding-agent/input';
 import type {
   SessionMessageSendData,
   SessionMessageSendPayload,

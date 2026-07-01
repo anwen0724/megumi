@@ -15,4 +15,5 @@ export type {
 } from './input-service';
 export * from './session-message';
 export * from './facts';
+export * from './contracts/preprocessing-contracts';
 export * from './preprocessing';

@@ -6,7 +6,7 @@ import {
   type ModelInputMemoryRecallSource,
 } from './model-call-context';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
-import type { InputPreprocessingResult } from '@megumi/shared/input';
+import type { InputPreprocessingResult } from '@megumi/coding-agent/input';
 import type {
   AgentInstructionSourceSnapshot,
   ModelInputContext,

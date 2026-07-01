@@ -1,6 +1,8 @@
-// Defines minimal Hook System contracts that can cross renderer/runtime boundaries.
+/*
+ * Defines hook contracts owned by the Coding Agent hook module.
+ */
 import { z } from 'zod';
-import { JsonObjectSchema } from '../primitives/json';
+import { JsonObjectSchema } from '@megumi/shared/primitives/json';
 
 export const INPUT_HOOK_ACTIONS = ['continue', 'transform', 'handled'] as const;
 export const InputHookActionSchema = z.enum(INPUT_HOOK_ACTIONS);
