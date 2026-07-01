@@ -55,8 +55,12 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/shared/tool/contracts.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/shared/input'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/shared/hook'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'packages/shared/settings'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/input/contracts/preprocessing-contracts.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/hooks/contracts/input-hook-contracts.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/settings/contracts/settings-contracts.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/settings/core/settings-resolution.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/settings/services/product-settings.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/shared/skill/contracts.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/shared/prompt-template/contracts.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/shared/session/agent-profile-contracts.ts'))).toBe(true);
@@ -109,6 +113,23 @@ describe('package and file structure source guards', () => {
       /@megumi\/shared\/tool-contracts/,
       /@megumi\/shared\/workspace-change-contracts/,
       /@megumi\/shared\/workspace-file-contracts/,
+    ])).toEqual([]);
+  });
+
+  it('keeps selected module owned contracts out of shared and hides core internals from external production imports', () => {
+    const externalProductionFiles = productionFiles().filter((path) => (
+      !path.startsWith('packages/coding-agent/commands/')
+      && !path.startsWith('packages/coding-agent/hooks/')
+      && !path.startsWith('packages/coding-agent/settings/')
+    ));
+
+    expect(offenders(productionFiles(), [
+      /@megumi\/shared\/input\b/,
+      /@megumi\/shared\/hook\b/,
+      /@megumi\/shared\/settings\b/,
+    ])).toEqual([]);
+    expect(offenders(externalProductionFiles, [
+      /@megumi\/coding-agent\/(?:commands|hooks|settings)\/core\b/,
     ])).toEqual([]);
   });
 
