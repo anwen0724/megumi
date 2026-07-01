@@ -9,7 +9,6 @@ const scannedRoots = [
   'AGENTS.md',
   'apps',
   'config',
-  'docs',
   'packages',
   'scripts',
   'tests',
