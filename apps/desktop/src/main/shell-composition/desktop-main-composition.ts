@@ -51,6 +51,7 @@ export function composeDesktopMain() {
     chatStreamBroadcaster,
     providerService: codingAgentHost.settings.provider,
     settingsService: codingAgentHost.settings,
+    commandService: codingAgentHost.commands,
     sessionHandlers: { host: codingAgentHost },
     planService: codingAgentHost.artifacts.plan,
     permissionsService: codingAgentHost.permissions,

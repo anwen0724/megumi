@@ -171,10 +171,11 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     megumiHomePath: options.homePaths.homePath,
     ids: inputProcessingIds,
   });
+  const commandService = createCommandService();
   const inputService = createInputService({
     session: sessionService,
     userInput: inputProcessingService,
-    commandService: createCommandService(),
+    commandService,
   });
 
   return {
@@ -183,6 +184,7 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     sessionBranchService,
     inputService,
     inputProcessingService,
+    commandService,
     planArtifactService,
   };
 }

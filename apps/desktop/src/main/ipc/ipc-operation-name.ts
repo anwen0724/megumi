@@ -16,6 +16,8 @@ export function ipcOperationNameFromChannel(channel: BusinessIpcChannel): string
       return 'settings.get';
     case IPC_CHANNELS.settings.update:
       return 'settings.update';
+    case IPC_CHANNELS.command.suggestions:
+      return 'command.suggestions';
     case IPC_CHANNELS.session.create:
       return 'session.create';
     case IPC_CHANNELS.session.list:

@@ -1,5 +1,6 @@
 // Defines the external host-facing interface for UI, CLI, web, and other shells.
 import type { InputService } from '../input';
+import type { CommandService } from '../commands';
 import type { ArtifactController } from './artifacts/artifact-controller';
 import type { PlanController } from './artifacts/plan-controller';
 import type { ApprovalController } from './permissions/approval-controller';
@@ -10,6 +11,7 @@ import type { SessionController } from './session/session-controller';
 import type { WorkspaceController } from './workspace/workspace-controller';
 
 export type InputController = InputService;
+export type HostCommandController = Pick<CommandService, 'listCommands' | 'getCommandSuggestions'>;
 export type HostWorkspaceController = WorkspaceController;
 export type HostSessionController = SessionController & SessionBranchController;
 export type HostSettingsController = SettingsController & { provider: ProviderController };
@@ -18,6 +20,7 @@ export type HostArtifactController = ArtifactController & { plan: PlanController
 
 export interface CodingAgentHostInterface {
   input: InputController;
+  commands: HostCommandController;
   workspace: HostWorkspaceController;
   session: HostSessionController;
   settings: HostSettingsController;
@@ -28,6 +31,7 @@ export interface CodingAgentHostInterface {
 
 export interface CreateCodingAgentHostInterfaceOptions {
   input: InputController;
+  commands: HostCommandController;
   workspace: HostWorkspaceController;
   session: HostSessionController;
   settings: HostSettingsController;
@@ -41,6 +45,7 @@ export function createCodingAgentHostInterface(
 ): CodingAgentHostInterface {
   return {
     input: options.input,
+    commands: options.commands,
     workspace: options.workspace,
     session: options.session,
     settings: options.settings,

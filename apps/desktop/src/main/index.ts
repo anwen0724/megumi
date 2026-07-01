@@ -23,6 +23,7 @@ if (shouldQuitForSquirrelStartup()) {
     registerAllHandlers: () => registerAllHandlers({
       logger: desktopMain.runtimeLogger,
       providerService: desktopMain.providerService,
+      commandService: desktopMain.commandService,
       sessionHandlers: desktopMain.sessionHandlers,
       planService: desktopMain.planService,
       permissionsService: desktopMain.permissionsService,

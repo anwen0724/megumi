@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const registerWindowHandlers = vi.fn();
 const registerProviderHandlers = vi.fn();
 const registerSettingsHandlers = vi.fn();
+const registerCommandHandlers = vi.fn();
 const registerSessionHandlers = vi.fn();
 const registerPlanHandlers = vi.fn();
 const registerToolHandlers = vi.fn();
@@ -14,6 +15,7 @@ const registerWorkspaceFilesHandlers = vi.fn();
 vi.mock('@megumi/desktop/main/ipc/handlers/window.handler', () => ({ registerWindowHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/provider.handler', () => ({ registerProviderHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/settings.handler', () => ({ registerSettingsHandlers }));
+vi.mock('@megumi/desktop/main/ipc/handlers/command.handler', () => ({ registerCommandHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/session.handler', () => ({ registerSessionHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/plan.handler', () => ({ registerPlanHandlers }));
 vi.mock('@megumi/desktop/main/ipc/handlers/tool.handler', () => ({ registerToolHandlers }));
@@ -29,6 +31,7 @@ describe('registerAllHandlers', () => {
     registerWindowHandlers.mockReset();
     registerProviderHandlers.mockReset();
     registerSettingsHandlers.mockReset();
+    registerCommandHandlers.mockReset();
     registerSessionHandlers.mockReset();
     registerPlanHandlers.mockReset();
     registerToolHandlers.mockReset();
@@ -45,6 +48,7 @@ describe('registerAllHandlers', () => {
     expect(registerWindowHandlers).toHaveBeenCalledTimes(1);
     expect(registerProviderHandlers).not.toHaveBeenCalled();
     expect(registerSettingsHandlers).not.toHaveBeenCalled();
+    expect(registerCommandHandlers).not.toHaveBeenCalled();
     expect(registerSessionHandlers).not.toHaveBeenCalled();
     expect(registerPlanHandlers).not.toHaveBeenCalled();
     expect(registerToolHandlers).not.toHaveBeenCalled();
@@ -118,6 +122,20 @@ describe('registerAllHandlers', () => {
       ipcMain: expect.any(Object),
       settingsService,
       logger: undefined,
+    });
+  });
+
+  it('registers command handlers when a command service is provided', async () => {
+    const { registerAllHandlers } = await import('@megumi/desktop/main/ipc/register-ipc-handlers');
+    const commandService = {
+      getCommandSuggestions: vi.fn(),
+    };
+
+    registerAllHandlers({ commandService });
+
+    expect(registerCommandHandlers).toHaveBeenCalledWith(commandService, {
+      logger: undefined,
+      ipcMain: expect.objectContaining({ handle: expect.any(Function) }),
     });
   });
 

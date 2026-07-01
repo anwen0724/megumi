@@ -157,6 +157,66 @@ export const SettingsDataSchema = z.object({
   settings: AppSettingsResolvedSchema,
 }).strict();
 
+export const CommandSourceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('built_in') }).strict(),
+  z.object({ kind: z.literal('skill'), skill_id: z.string().min(1) }).strict(),
+]);
+
+export const CommandSuggestionItemSchema = z
+  .object({
+    name: z.string().min(1),
+    aliases: z.array(z.string().min(1)).optional(),
+    description: z.string().min(1),
+    argument_hint: z.string().min(1).optional(),
+    source: CommandSourceSchema,
+    source_badge: z.string().min(1).optional(),
+    match: z
+      .object({
+        field: z.enum(['name', 'alias']),
+        value: z.string(),
+        prefix: z.string(),
+      })
+      .strict(),
+    completion: z
+      .object({
+        replacement_input: z.string(),
+      })
+      .strict(),
+  })
+  .strict();
+
+export const CommandSuggestionGroupSchema = z
+  .object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    items: z.array(CommandSuggestionItemSchema),
+  })
+  .strict();
+
+export const CommandSuggestionResultSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('inactive') }).strict(),
+  z
+    .object({
+      type: z.literal('suggestions'),
+      draft_input: z.string(),
+      command_prefix: z.string(),
+      groups: z.array(CommandSuggestionGroupSchema),
+    })
+    .strict(),
+]);
+
+export const CommandSuggestionsPayloadSchema = z
+  .object({
+    draft_input: z.string(),
+  })
+  .strict();
+
+export const CommandSuggestionsDataSchema = z
+  .object({
+    suggestions: CommandSuggestionResultSchema,
+  })
+  .strict();
+
 export const SessionMessageIpcRoleSchema = z.enum(['system', 'user', 'assistant', 'tool']);
 
 export const SessionMessageIpcSchema = z
@@ -780,6 +840,11 @@ export const SettingsUpdateRequestSchema = createRuntimeIpcRequestSchema(
   SettingsUpdatePayloadSchema,
 );
 
+export const CommandSuggestionsRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.command.suggestions,
+  CommandSuggestionsPayloadSchema,
+);
+
 export const SessionMessageSendRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.session.message.send,
   SessionMessageSendPayloadSchema,
@@ -1323,6 +1388,8 @@ export type ProviderEmptyData = z.infer<typeof ProviderEmptyDataSchema>;
 export type SettingsGetPayload = z.infer<typeof SettingsGetPayloadSchema>;
 export type SettingsUpdatePayload = z.infer<typeof SettingsUpdatePayloadSchema>;
 export type SettingsData = z.infer<typeof SettingsDataSchema>;
+export type CommandSuggestionsPayload = z.infer<typeof CommandSuggestionsPayloadSchema>;
+export type CommandSuggestionsData = z.infer<typeof CommandSuggestionsDataSchema>;
 export type SessionMessageSendPayload = z.infer<typeof SessionMessageSendPayloadSchema>;
 export type SessionMessageSendData = z.infer<typeof SessionMessageSendDataSchema>;
 export type SessionMessageCancelPayload = z.infer<typeof SessionMessageCancelPayloadSchema>;

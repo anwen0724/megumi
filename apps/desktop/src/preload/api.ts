@@ -35,6 +35,8 @@ import type {
   ArtifactVersionGetPayload,
   ApprovalResolveData,
   ApprovalResolvePayload,
+  CommandSuggestionsData,
+  CommandSuggestionsPayload,
   MemoryAccessLogsListData,
   MemoryAccessLogsListPayload,
   MemoryCandidateAcceptData,
@@ -191,6 +193,12 @@ export const api = {
       request: BusinessRequest<SettingsUpdatePayload, typeof IPC_CHANNELS.settings.update>,
     ): Promise<RuntimeIpcResult<SettingsData, typeof IPC_CHANNELS.settings.update>> =>
       invokeRuntimeIpc(IPC_CHANNELS.settings.update, request),
+  },
+  command: {
+    suggestions: (
+      request: BusinessRequest<CommandSuggestionsPayload, typeof IPC_CHANNELS.command.suggestions>,
+    ): Promise<RuntimeIpcResult<CommandSuggestionsData, typeof IPC_CHANNELS.command.suggestions>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.command.suggestions, request),
   },
   session: {
     create: (

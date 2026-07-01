@@ -11,6 +11,8 @@ export function rendererRuntimeOperationNameFromChannel(channel: BusinessIpcChan
       return 'provider.set-api-key';
     case IPC_CHANNELS.provider.deleteApiKey:
       return 'provider.delete-api-key';
+    case IPC_CHANNELS.command.suggestions:
+      return 'command.suggestions';
     case IPC_CHANNELS.session.create:
       return 'session.create';
     case IPC_CHANNELS.session.list:

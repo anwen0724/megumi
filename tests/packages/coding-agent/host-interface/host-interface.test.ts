@@ -6,6 +6,7 @@ describe('CodingAgentHostInterface', () => {
   it('exposes only user-facing product capability groups to external hosts', () => {
     const host = createCodingAgentHostInterface({
       input: { send: async () => undefined as never, cancel: () => false },
+      commands: {} as never,
       workspace: {} as never,
       session: {} as never,
       settings: {} as never,
@@ -15,6 +16,7 @@ describe('CodingAgentHostInterface', () => {
     });
 
     expect(host.input).toBeDefined();
+    expect(host.commands).toBeDefined();
     expect(host.workspace).toBeDefined();
     expect(host.session).toBeDefined();
     expect(host.settings).toBeDefined();
@@ -23,6 +25,7 @@ describe('CodingAgentHostInterface', () => {
     expect(typeof host.dispose).toBe('function');
     expect(Object.keys(host).sort()).toEqual([
       'artifacts',
+      'commands',
       'dispose',
       'input',
       'permissions',
@@ -35,6 +38,7 @@ describe('CodingAgentHostInterface', () => {
   it('does not expose internal execution, tool, context, memory, state, or event modules', () => {
     const host = createCodingAgentHostInterface({
       input: { send: async () => undefined as never, cancel: () => false },
+      commands: {} as never,
       workspace: {} as never,
       session: {} as never,
       settings: {} as never,

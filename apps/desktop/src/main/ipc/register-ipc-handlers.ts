@@ -5,6 +5,10 @@ import {
   registerSettingsHandlers,
   type SettingsHandlersService,
 } from './handlers/settings.handler';
+import {
+  registerCommandHandlers,
+  type CommandHandlersService,
+} from './handlers/command.handler';
 import { registerSessionHandlers, type SessionHandlersServices } from './handlers/session.handler';
 import {
   registerPlanHandlers,
@@ -34,6 +38,7 @@ export interface RegisterAllHandlersOptions {
   ipcMain?: DesktopIpcMain;
   providerService?: ProviderHandlersService;
   settingsService?: SettingsHandlersService;
+  commandService?: CommandHandlersService;
   sessionHandlers?: SessionHandlersServices;
   planService?: PlanHandlersService;
   permissionsService?: PermissionHandlersService;
@@ -57,6 +62,10 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
       settingsService: options.settingsService,
       logger: options.logger,
     });
+  }
+
+  if (options.commandService) {
+    registerCommandHandlers(options.commandService, { logger: options.logger, ipcMain });
   }
 
   if (options.sessionHandlers) {

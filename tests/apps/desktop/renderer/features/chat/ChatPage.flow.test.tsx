@@ -260,6 +260,45 @@ function createSessionMessageSendSuccess(request: {
   };
 }
 
+function createCommandSuggestionsSuccess() {
+  return {
+    ok: true,
+    data: {
+      suggestions: {
+        type: 'suggestions' as const,
+        draft_input: '/',
+        command_prefix: '',
+        groups: [{
+          id: 'commands',
+          label: 'Commands',
+          items: [{
+            name: 'review',
+            description: 'Evaluate review feedback before implementing changes',
+            source: { kind: 'built_in' as const },
+            match: { field: 'name' as const, value: 'review', prefix: '' },
+            completion: { replacement_input: '/review ' },
+          }],
+        }, {
+          id: 'skills',
+          label: 'Skills',
+          items: [],
+        }],
+      },
+    },
+    meta: recoveryMeta('command:suggestions'),
+  };
+}
+
+function installCommandSuggestionsMock() {
+  const command = {
+    suggestions: vi.fn().mockResolvedValue(createCommandSuggestionsSuccess()),
+  };
+
+  Object.assign(window.megumi as unknown as { command?: typeof command }, { command });
+
+  return command;
+}
+
 function installMegumiMock() {
   const session = {
     message: {
@@ -390,6 +429,46 @@ describe('ChatPage flow', () => {
     expect(screen.getByLabelText('Message Megumi')).toBeInTheDocument();
     expect(screen.getByLabelText('Permission mode')).toHaveValue('default');
     expect(screen.getByLabelText('Model')).toHaveValue('deepseek-v4-flash');
+  });
+
+  it('shows command suggestions in the welcome composer through the desktop command IPC bridge', async () => {
+    installMegumiMock();
+    const command = installCommandSuggestionsMock();
+    selectMegumiProject();
+
+    render(<ChatPage />);
+
+    await userEvent.type(screen.getByLabelText('Message Megumi'), '/');
+
+    expect(await screen.findByRole('listbox', { name: 'Command suggestions' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /review/i })).toBeInTheDocument();
+    expect(command.suggestions).toHaveBeenCalledWith(expect.objectContaining({
+      payload: { draft_input: '/' },
+      meta: expect.objectContaining({
+        channel: 'command:suggestions',
+        source: 'renderer',
+      }),
+    }));
+  });
+
+  it('shows command suggestions in the dock composer through the desktop command IPC bridge', async () => {
+    installMegumiMock();
+    const command = installCommandSuggestionsMock();
+    activateCanonicalSession([committedUser('message-1', 'Existing prompt')]);
+
+    render(<ChatPage />);
+
+    await userEvent.type(screen.getByLabelText('Message Megumi'), '/');
+
+    expect(await screen.findByRole('listbox', { name: 'Command suggestions' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /review/i })).toBeInTheDocument();
+    expect(command.suggestions).toHaveBeenCalledWith(expect.objectContaining({
+      payload: { draft_input: '/' },
+      meta: expect.objectContaining({
+        channel: 'command:suggestions',
+        source: 'renderer',
+      }),
+    }));
   });
 
   it('keeps the scrollbar on the full-width message area while aligning message and composer columns', () => {

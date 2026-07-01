@@ -159,6 +159,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
 
   return createCodingAgentHostInterface({
     input: sessionRuntime.inputService,
+    commands: sessionRuntime.commandService,
     workspace: createWorkspaceController({
       projectService,
       recoveryService,

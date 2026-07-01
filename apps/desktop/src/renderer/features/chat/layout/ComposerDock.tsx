@@ -28,7 +28,7 @@ interface ComposerDockProps {
   onSubmit: (payload: ComposerSubmitPayload) => void;
   onStop: () => void;
   onHeightChange?: (height: number) => void;
-  getCommandSuggestions?: (request: { draft_input: string }) => CommandSuggestionResult;
+  getCommandSuggestions?: (request: { draft_input: string }) => CommandSuggestionResult | Promise<CommandSuggestionResult>;
 }
 
 export function ComposerDock({

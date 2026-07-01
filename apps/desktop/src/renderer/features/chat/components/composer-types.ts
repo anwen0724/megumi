@@ -23,5 +23,5 @@ export interface ComposerProps {
   onStop?: () => void;
   onChooseContext?: () => void;
   onAttachFiles?: () => void;
-  getCommandSuggestions?: (request: { draft_input: string }) => CommandSuggestionResult;
+  getCommandSuggestions?: (request: { draft_input: string }) => CommandSuggestionResult | Promise<CommandSuggestionResult>;
 }

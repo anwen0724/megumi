@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import type { CommandSuggestionResult } from '@megumi/coding-agent/commands';
+import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { useProviderStore } from '../../../entities/provider/store';
 import { useProjectStore } from '../../../entities/project/store';
+import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
 import { useTimelineAutoScroll } from '../hooks/use-timeline-auto-scroll';
 import { useChatPageController } from '../hooks/use-chat-page-controller';
 import { ChatViewport } from '../layout/ChatViewport';
@@ -24,6 +27,19 @@ export function ChatPage() {
       : undefined,
     [providers],
   );
+  const getCommandSuggestions = useCallback(async (
+    request: { draft_input: string },
+  ): Promise<CommandSuggestionResult> => {
+    try {
+      const result = await window.megumi.command.suggestions(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.command.suggestions, request),
+      );
+
+      return result.ok ? result.data.suggestions : { type: 'inactive' };
+    } catch {
+      return { type: 'inactive' };
+    }
+  }, []);
   const timelineScroll = useTimelineAutoScroll({
     sessionKey: controller.activeChatStreamSessionKey,
     updateKey: `${controller.timelineUpdateKey}:${bottomSpacerHeight}`,
@@ -137,6 +153,7 @@ export function ChatPage() {
             onSubmit={controller.handleSubmit}
             onStop={controller.handleStop}
             onHeightChange={setComposerHeight}
+            getCommandSuggestions={getCommandSuggestions}
           />
         </>
       ) : (
@@ -186,6 +203,7 @@ export function ChatPage() {
                 onStop={controller.handleStop}
                 onAttachFiles={() => undefined}
                 onChooseContext={() => undefined}
+                getCommandSuggestions={getCommandSuggestions}
               />
             </div>
           </div>

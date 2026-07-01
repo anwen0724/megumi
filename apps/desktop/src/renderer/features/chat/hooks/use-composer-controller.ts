@@ -55,9 +55,7 @@ export function useComposerController({
   const canSend = trimmedValue.length > 0 && !sendLocked && modelOptions.length > 0;
   const showStop = status === 'sending' || status === 'running' || status === 'waiting-approval';
   const canStop = showStop && Boolean(onStop);
-  const commandSuggestions: CommandSuggestionResult = getCommandSuggestions?.({
-    draft_input: value,
-  }) ?? { type: 'inactive' };
+  const [commandSuggestions, setCommandSuggestions] = useState<CommandSuggestionResult>({ type: 'inactive' });
   const visibleCommandSuggestionItems = commandSuggestions.type === 'suggestions'
     ? commandSuggestions.groups.flatMap((group) => group.items)
     : [];
@@ -97,6 +95,35 @@ export function useComposerController({
     textarea.style.height = `${nextHeight}px`;
     textarea.style.overflowY = scrollHeight > COMPOSER_TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
   }, [value]);
+
+  useEffect(() => {
+    if (!getCommandSuggestions || !value.trimStart().startsWith('/')) {
+      setCommandSuggestions({ type: 'inactive' });
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    try {
+      void Promise.resolve(getCommandSuggestions({ draft_input: value }))
+        .then((suggestions) => {
+          if (!cancelled) {
+            setCommandSuggestions(suggestions);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setCommandSuggestions({ type: 'inactive' });
+          }
+        });
+    } catch {
+      setCommandSuggestions({ type: 'inactive' });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [getCommandSuggestions, value]);
 
   useEffect(() => {
     if (visibleCommandSuggestionItems.length === 0) {
