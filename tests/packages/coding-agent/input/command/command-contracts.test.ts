@@ -36,25 +36,25 @@ describe('command package contracts', () => {
         },
       }],
       promptTemplateCommands: [{
-        name: 'summary',
+        name: 'explain',
         kind: 'prompt_template',
-        source: 'core',
-        description: 'Summarize',
-        argumentHint: '[focus]',
+        source: 'project',
+        description: 'Explain a target',
+        argumentHint: '[target]',
         dispatch: {
           kind: 'prompt_template',
-          templateId: 'summary',
-          variables: ['focus'],
+          templateId: 'example-template',
+          variables: ['target'],
         },
       }],
       skillCommands: [{
-        name: 'write-doc',
+        name: 'debug-flow',
         kind: 'skill_trigger',
-        source: 'core',
-        description: 'Write docs',
+        source: 'project',
+        description: 'Use a test-only debugging workflow',
         dispatch: {
           kind: 'skill_trigger',
-          skillName: 'write-doc',
+          skillName: 'example-skill',
           inputMode: 'append_args',
         },
       }],
@@ -80,23 +80,23 @@ describe('command package contracts', () => {
       },
     });
 
-    expect(dispatchCommandText('/summary current turn', registry)).toMatchObject({
+    expect(dispatchCommandText('/explain current turn', registry)).toMatchObject({
       kind: 'prompt_template',
-      commandName: 'summary',
+      commandName: 'explain',
       argsText: 'current turn',
       target: {
         kind: 'prompt_template',
-        templateId: 'summary',
+        templateId: 'example-template',
       },
     });
 
-    expect(dispatchCommandText('/write-doc architecture', registry)).toMatchObject({
+    expect(dispatchCommandText('/debug-flow failing test', registry)).toMatchObject({
       kind: 'skill_trigger',
-      commandName: 'write-doc',
-      argsText: 'architecture',
+      commandName: 'debug-flow',
+      argsText: 'failing test',
       target: {
         kind: 'skill_trigger',
-        skillName: 'write-doc',
+        skillName: 'example-skill',
       },
     });
 
@@ -141,17 +141,17 @@ describe('command package contracts', () => {
         dispatch: { kind: 'agent_command', commandName: 'review' },
       }],
       promptTemplateCommands: [{
-        name: 'summary',
+        name: 'explain',
         kind: 'prompt_template',
-        source: 'core',
-        description: 'Summarize',
-        dispatch: { kind: 'prompt_template', templateId: 'summary' },
+        source: 'project',
+        description: 'Explain a target',
+        dispatch: { kind: 'prompt_template', templateId: 'example-template' },
       }],
     });
 
     expect(listCommandSuggestions('/r', registry).map((command) => command.name)).toEqual(['review']);
-    expect(listCommandSuggestions('/summary now', registry)).toEqual([]);
-    expect(listCommandSuggestions('summary', registry)).toEqual([]);
+    expect(listCommandSuggestions('/explain now', registry)).toEqual([]);
+    expect(listCommandSuggestions('explain', registry)).toEqual([]);
   });
 
   it('creates command audit facts from dispatch results', () => {
@@ -171,6 +171,15 @@ describe('command package contracts', () => {
       createdAt: '2026-06-21T00:00:00.000Z',
       metadata: { source: 'test' },
     });
+  });
+
+  it('exposes only trusted core agent commands in the built-in registry', () => {
+    expect(listCommandSuggestions('/', BUILT_IN_INPUT_COMMAND_REGISTRY).map((command) => [
+      command.name,
+      command.kind,
+    ])).toEqual([
+      ['review', 'agent_command'],
+    ]);
   });
 
   it('validates command definitions strictly', () => {

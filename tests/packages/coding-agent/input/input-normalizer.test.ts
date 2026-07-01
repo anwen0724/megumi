@@ -65,7 +65,7 @@ describe('input package normalization', () => {
         source: {
           kind: 'composer',
         },
-        text: '/summary current work',
+        text: '/review current work',
         createdAt: '2026-06-21T00:00:00.000Z',
       },
       commandRegistry: BUILT_IN_INPUT_COMMAND_REGISTRY,
@@ -75,23 +75,24 @@ describe('input package normalization', () => {
     expect(parsed.rawKind).toBe('slash_command');
     expect(parsed.kind).toBe('command_input');
     expect(parsed.facts).toEqual([{
-      kind: 'prompt_template',
-      commandName: 'summary',
+      kind: 'command',
+      commandName: 'review',
       argsText: 'current work',
-      templateId: 'summary',
+      rawText: '/review current work',
+      target: 'agent_command',
     }]);
   });
 
   it('records skill and app operation command facts', () => {
     const registry = createCommandRegistry({
       skillCommands: [{
-        name: 'write-doc',
+        name: 'debug-flow',
         kind: 'skill_trigger',
-        source: 'core',
-        description: 'Write docs',
+        source: 'project',
+        description: 'Use a test-only debugging workflow',
         dispatch: {
           kind: 'skill_trigger',
-          skillName: 'write-doc',
+          skillName: 'example-skill',
           inputMode: 'append_args',
         },
       }],
@@ -110,12 +111,12 @@ describe('input package normalization', () => {
     expect(parseRawInput({
       id: 'raw-skill:1',
       source: { kind: 'quick_action' },
-      text: '/write-doc architecture',
+      text: '/debug-flow failing test',
       createdAt: '2026-06-21T00:00:00.000Z',
     }, { commandRegistry: registry }).facts).toEqual([{
       kind: 'skill',
-      skillName: 'write-doc',
-      argsText: 'architecture',
+      skillName: 'example-skill',
+      argsText: 'failing test',
       source: 'command',
     }]);
 

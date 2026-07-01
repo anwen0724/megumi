@@ -50,20 +50,20 @@ describe('coding-agent input facts', () => {
       source: { kind: 'composer' },
       rawKind: 'slash_command',
       kind: 'command_input',
-      text: '/summary current work',
+      text: '/explain src/index.ts',
       attachments: [],
       references: [],
       facts: [
         {
           kind: 'prompt_template',
-          commandName: 'summary',
-          argsText: 'current work',
-          templateId: 'summary',
+          commandName: 'explain',
+          argsText: 'src/index.ts',
+          templateId: 'example-template',
         },
         {
           kind: 'skill',
-          skillName: 'write-doc',
-          argsText: 'architecture',
+          skillName: 'example-skill',
+          argsText: 'failing test',
           source: 'command',
         },
         {
@@ -90,20 +90,20 @@ describe('coding-agent input facts', () => {
       {
         factId: 'run-input:parsed-input:2:fact:1',
         factKind: 'prompt_template',
-        text: 'Prompt template command summary was selected with args: current work.',
+        text: 'Prompt template command explain was selected with args: src/index.ts.',
         required: true,
         metadata: {
-          commandName: 'summary',
-          templateId: 'summary',
+          commandName: 'explain',
+          templateId: 'example-template',
         },
       },
       {
         factId: 'run-input:parsed-input:2:fact:2',
         factKind: 'skill_trigger',
-        text: 'Skill write-doc was triggered with args: architecture.',
+        text: 'Skill example-skill was triggered with args: failing test.',
         required: true,
         metadata: {
-          skillName: 'write-doc',
+          skillName: 'example-skill',
         },
       },
       {

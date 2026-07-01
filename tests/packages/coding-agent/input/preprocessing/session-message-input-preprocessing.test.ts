@@ -52,25 +52,25 @@ describe('session message input preprocessing', () => {
     });
   });
 
-  it('keeps summary preprocessing on the selected permission mode', () => {
+  it('keeps prompt-template preprocessing on the selected permission mode', () => {
     const result = normalizeSessionMessageInputPreprocessing({
-      rawText: '/summary',
+      rawText: '/explain src/index.ts',
       requestedPermissionMode: 'accept_edits',
       requestedPermissionSource: 'user',
       createdAt,
       preprocessing: {
-        originalText: '/summary',
-        effectiveUserText: '总结当前会话',
+        originalText: '/explain src/index.ts',
+        effectiveUserText: 'src/index.ts',
         entries: [
           {
             kind: 'prompt_template',
-            sourceId: 'input:prompt-template:summary',
-            sourceName: '/summary',
+            sourceId: 'input:prompt-template:example-template',
+            sourceName: '/explain',
             visibility: 'model_visible',
-            instructionText: '请总结当前会话。',
-            templateId: 'summary',
-            commandName: 'summary',
-            templateSource: 'builtin',
+            instructionText: 'Explain the selected target.',
+            templateId: 'example-template',
+            commandName: 'explain',
+            templateSource: 'project',
           },
         ],
         diagnostics: [],
