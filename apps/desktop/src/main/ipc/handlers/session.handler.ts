@@ -21,6 +21,7 @@ import type {
 } from '@megumi/shared/ipc';
 import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
 import type { InputSendRequest } from '@megumi/coding-agent/input';
+import { InputPreprocessingResultSchema } from '@megumi/coding-agent/input';
 import {
   SessionBranchDraftCancelRequestSchema,
   SessionBranchDraftCreateRequestSchema,
@@ -243,7 +244,9 @@ function toHostInputSendRequest(
     sessionTitle: payload.context?.sessionTitle,
     permissionMode: payload.context?.permissionMode,
     permissionSource: payload.context?.permissionSource,
-    preprocessing: payload.context?.preprocessing,
+    preprocessing: payload.context?.preprocessing
+      ? InputPreprocessingResultSchema.parse(payload.context.preprocessing)
+      : undefined,
     branchDraft: payload.branchDraft,
     runtimeContext,
   };

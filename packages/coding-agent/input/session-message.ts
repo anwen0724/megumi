@@ -2,7 +2,10 @@
 import type { SessionMessageSendPayload } from '@megumi/shared/ipc';
 import type { JsonObject } from '@megumi/shared/primitives';
 import type { PermissionMode, PermissionModeSelectionSource } from '@megumi/shared/permission';
-import type { InputPreprocessingResult } from '@megumi/coding-agent/input';
+import {
+  InputPreprocessingResultSchema,
+  type InputPreprocessingResult,
+} from './contracts/preprocessing-contracts';
 import type { CommandAgentRunInput } from '../commands';
 import { parseRawInput } from './normalizer';
 import type { ParsedInput } from './parsed-input';
@@ -43,7 +46,9 @@ export function prepareSessionMessageInput(
     rawText: currentUserMessage.content,
     requestedPermissionMode: input.payload.context?.permissionMode,
     requestedPermissionSource: input.payload.context?.permissionSource,
-    preprocessing: input.payload.context?.preprocessing,
+    preprocessing: input.payload.context?.preprocessing
+      ? InputPreprocessingResultSchema.parse(input.payload.context.preprocessing)
+      : undefined,
     createdAt: input.payload.createdAt,
   });
 
