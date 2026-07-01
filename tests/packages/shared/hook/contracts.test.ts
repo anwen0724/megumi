@@ -1,4 +1,4 @@
-// Verifies the minimal shared Hook System contracts without requiring a hook runtime.
+﻿// Verifies the minimal shared Hook System contracts without requiring a hook runtime.
 import { describe, expect, it } from 'vitest';
 import {
   InputHookInvocationSchema,
@@ -9,11 +9,11 @@ describe('hook shared contracts', () => {
   it('parses input hook invocations without owning hook runtime implementation', () => {
     expect(InputHookInvocationSchema.parse({
       hookId: 'default',
-      text: '/summary',
+      text: '/explain src/index.ts',
       metadata: { surface: 'composer' },
     })).toEqual({
       hookId: 'default',
-      text: '/summary',
+      text: '/explain src/index.ts',
       metadata: { surface: 'composer' },
     });
   });
@@ -22,11 +22,11 @@ describe('hook shared contracts', () => {
     expect(InputHookResultSchema.parse({ action: 'continue' })).toEqual({ action: 'continue' });
     expect(InputHookResultSchema.parse({
       action: 'transform',
-      text: 'Summarize the current session',
+      text: 'Explain the selected target',
       metadata: { source: 'default-hook' },
     })).toEqual({
       action: 'transform',
-      text: 'Summarize the current session',
+      text: 'Explain the selected target',
       metadata: { source: 'default-hook' },
     });
     expect(InputHookResultSchema.parse({
@@ -38,3 +38,4 @@ describe('hook shared contracts', () => {
     });
   });
 });
+

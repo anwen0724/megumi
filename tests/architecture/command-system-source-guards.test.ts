@@ -52,13 +52,16 @@ function offenders(paths: string[], forbidden: RegExp[]): string[] {
 }
 
 describe('Command system source guards', () => {
-  it('keeps generic command primitives in renderer shared and input definitions in the input feature', () => {
-    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/shared/commands/command-parser.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/shared/commands/command-dispatcher.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/shared/commands/command-types.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/features/input/index.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/features/input/commands/built-in-input-commands.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/features/input/preprocessing/input-preprocessing-submit.ts'))).toBe(true);
+  it('keeps generic command primitives in coding-agent and out of renderer-owned command features', () => {
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/input/command/definition.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/input/command/registry.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/input/command/dispatcher.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/shared/commands/command-parser.ts'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/shared/commands/command-dispatcher.ts'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/shared/commands/command-types.ts'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/features/input/index.ts'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/features/input/commands/built-in-input-commands.ts'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/features/input/preprocessing/input-preprocessing-submit.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/features/input-commands'))).toBe(false);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/features/workflow-commands'))).toBe(false);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/features/commands'))).toBe(false);
@@ -75,10 +78,11 @@ describe('Command system source guards', () => {
     ])).toEqual([]);
   });
 
-  it('allows chat to consume input commands only through their public API', () => {
+  it('keeps chat off renderer-owned command data sources', () => {
     expect(offenders([
       'apps/desktop/src/renderer/features/chat/components/Composer.tsx',
       'apps/desktop/src/renderer/features/chat/components/CommandSuggestionPanel.tsx',
+      'apps/desktop/src/renderer/features/chat/layout/ComposerDock.tsx',
       'apps/desktop/src/renderer/features/chat/hooks/use-composer-controller.ts',
       'apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts',
     ], [
@@ -90,6 +94,8 @@ describe('Command system source guards', () => {
       /\.\.\/input\/(?!index)/,
       /\.\.\/input-commands/,
       /\.\.\/workflow-commands/,
+      /listInputCommandSuggestions/,
+      /createInputPreprocessingSubmitPayload/,
     ])).toEqual([]);
   });
 
@@ -130,10 +136,12 @@ describe('Command system source guards', () => {
       .toContain('runtime normalization is the trust boundary');
     expect(source('packages/shared/ipc/schemas.ts'))
       .toContain('runtime services own trusted normalization');
-    expect(source('apps/desktop/src/renderer/features/input/preprocessing/input-preprocessing-submit.ts'))
-      .toContain('instead of expanding provider-visible text in the renderer');
     expect(source('apps/desktop/src/renderer/features/chat/hooks/use-session-timeline.ts'))
-      .toContain('Desktop Main is responsible for validating it');
+      .toContain('forwards typed context hints only');
+    expect(source('apps/desktop/src/renderer/features/chat/hooks/use-composer-controller.ts'))
+      .toContain('host-neutral submit payload');
+    expect(source('apps/desktop/src/renderer/features/chat/components/CommandSuggestionPanel.tsx'))
+      .toContain('does not own command discovery');
   });
 
   it('keeps provider adapters free of slash command parsing and input command business semantics', () => {

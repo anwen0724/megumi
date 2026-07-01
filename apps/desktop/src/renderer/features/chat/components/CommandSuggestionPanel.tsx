@@ -1,11 +1,13 @@
-// Renders input command suggestions supplied by the renderer input feature.
-// It stays presentational and does not parse or dispatch command semantics.
-import type { CommandDefinition } from '../../input';
+// Renders command suggestions supplied by a trusted catalog; this component does not own command discovery.
+interface CommandSuggestion {
+  name: string;
+  description: string;
+}
 
 interface CommandSuggestionPanelProps {
-  suggestions: CommandDefinition[];
+  suggestions: CommandSuggestion[];
   selectedIndex: number;
-  onChoose: (command: CommandDefinition) => void;
+  onChoose: (command: CommandSuggestion) => void;
 }
 
 export function CommandSuggestionPanel({

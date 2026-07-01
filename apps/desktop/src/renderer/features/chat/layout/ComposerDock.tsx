@@ -5,7 +5,6 @@ import type { RecoverableRunSummary } from '@megumi/shared/recovery';
 import type { ApprovalCardResolvePayload } from '../../../entities/approval';
 import { ApprovalStack } from '../components/ApprovalStack';
 import { BranchDraftStack, type ComposerBranchDraftView } from '../components/BranchDraftStack';
-import { CommandSuggestionPanel } from '../components/CommandSuggestionPanel';
 import { ComposerSurface } from '../components/ComposerSurface';
 import type { ComposerStatus, ComposerSubmitPayload } from '../components/composer-types';
 import { RecoverableActionStack } from '../components/RecoverableActionStack';
@@ -46,10 +45,7 @@ export function ComposerDock({
   onHeightChange,
 }: ComposerDockProps) {
   const composerSurfaceRef = useRef<HTMLFormElement | null>(null);
-  const {
-    commandSuggestionPanelProps,
-    composerSurfaceProps,
-  } = useComposerController({
+  const { composerSurfaceProps } = useComposerController({
     status,
     enabledProviderIds,
     seedTextKey: branchDraft?.key ?? null,
@@ -62,8 +58,7 @@ export function ComposerDock({
   const hasOverlayContent =
     pendingApprovals.length > 0 ||
     recoverableRuns.length > 0 ||
-    Boolean(branchDraft) ||
-    Boolean(commandSuggestionPanelProps);
+    Boolean(branchDraft);
 
   useLayoutEffect(() => {
     const element = composerSurfaceRef.current;
@@ -105,9 +100,6 @@ export function ComposerDock({
               onMarkCancelled={onMarkCancelled}
             />
             <BranchDraftStack branchDraft={branchDraft} />
-            {commandSuggestionPanelProps ? (
-              <CommandSuggestionPanel {...commandSuggestionPanelProps} />
-            ) : null}
           </ComposerOverlayLayer>
         ) : null}
         <ComposerSurface ref={composerSurfaceRef} {...composerSurfaceProps} />

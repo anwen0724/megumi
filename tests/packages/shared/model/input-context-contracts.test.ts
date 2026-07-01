@@ -545,21 +545,21 @@ describe('ModelInputContext contracts', () => {
       stepId: 'step:1',
       parts: [
         {
-          partId: 'part:input-template:summary',
+          partId: 'part:input-template:example-template',
           kind: 'instruction',
           instructionKind: 'prompt_template',
-          text: 'Summarize the current session.',
-          sourceRefs: [sourceRef('input-template:summary', 'input_prompt_template')],
+          text: 'Explain the selected target.',
+          sourceRefs: [sourceRef('input-template:example-template', 'input_prompt_template')],
           priority: 92,
           tokenEstimate: 6,
           budgetStatus: 'included_full',
         },
         {
-          partId: 'part:input-skill:write-doc',
+          partId: 'part:input-skill:example-skill',
           kind: 'instruction',
           instructionKind: 'skill',
           text: 'Use the documentation writing method.',
-          sourceRefs: [sourceRef('input-skill:write-doc', 'input_skill')],
+          sourceRefs: [sourceRef('input-skill:example-skill', 'input_skill')],
           priority: 92,
           tokenEstimate: 6,
           budgetStatus: 'included_full',
@@ -582,16 +582,16 @@ describe('ModelInputContext contracts', () => {
         keepRecentTokens: 4096,
         inputTokenEstimate: 18,
         partBudgets: [
-          { partId: 'part:input-template:summary', tokenEstimate: 6, budgetStatus: 'included_full' },
-          { partId: 'part:input-skill:write-doc', tokenEstimate: 6, budgetStatus: 'included_full' },
+          { partId: 'part:input-template:example-template', tokenEstimate: 6, budgetStatus: 'included_full' },
+          { partId: 'part:input-skill:example-skill', tokenEstimate: 6, budgetStatus: 'included_full' },
           { partId: 'part:input-hook:default', tokenEstimate: 6, budgetStatus: 'included_full' },
         ],
       },
       trace: {
         buildReason: 'initial_model_step',
         selectedSources: [
-          { sourceId: 'input-template:summary', reason: 'input_prompt_template' },
-          { sourceId: 'input-skill:write-doc', reason: 'input_skill' },
+          { sourceId: 'input-template:example-template', reason: 'input_prompt_template' },
+          { sourceId: 'input-skill:example-skill', reason: 'input_skill' },
           { sourceId: 'input-hook:default', reason: 'input_hook' },
         ],
         excludedSources: [],
@@ -1086,4 +1086,5 @@ describe('AgentInstructionSourceSnapshot contracts', () => {
     })).toThrow();
   });
 });
+
 

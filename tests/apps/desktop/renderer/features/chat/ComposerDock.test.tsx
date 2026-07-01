@@ -123,7 +123,7 @@ describe('ComposerDock', () => {
     }
   });
 
-  it('renders command suggestions in the dock overlay layer above the composer surface', async () => {
+  it('does not render command suggestions from local renderer command data', async () => {
     render(
       <ComposerDock
         status="idle"
@@ -143,20 +143,12 @@ describe('ComposerDock', () => {
     await userEvent.type(screen.getByLabelText('Message Megumi'), '/re');
 
     const dockColumn = screen.getByTestId('composer-dock-column');
-    const overlayLayer = screen.getByTestId('composer-overlay-layer');
-    const commandPanel = screen.getByTestId('command-suggestion-panel');
     const composerSurface = screen.getByTestId('composer-surface');
     const inputPanel = screen.getByTestId('composer-input-panel');
 
-    expect(overlayLayer.parentElement).toBe(dockColumn);
-    expect(commandPanel.parentElement).toBe(overlayLayer);
     expect(composerSurface.parentElement).toBe(dockColumn);
-    expect(Array.from(dockColumn.children).indexOf(overlayLayer)).toBeLessThan(
-      Array.from(dockColumn.children).indexOf(composerSurface),
-    );
-    expect(overlayLayer).toHaveClass('absolute');
-    expect(overlayLayer).toHaveClass('bottom-[calc(100%+0.5rem)]');
-    expect(inputPanel).not.toContainElement(commandPanel);
-    expect(screen.getByRole('option', { name: '/review Review code in the current project' })).toBeInTheDocument();
+    expect(screen.queryByTestId('composer-overlay-layer')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('command-suggestion-panel')).not.toBeInTheDocument();
+    expect(inputPanel).not.toHaveTextContent('/review');
   });
 });

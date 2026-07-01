@@ -12,17 +12,17 @@ describe('skill shared contracts', () => {
     expect(SkillSourceSchema.parse('project')).toBe('project');
   });
 
-  it('parses write-doc skill invocation metadata', () => {
+  it('parses generic skill invocation metadata', () => {
     expect(SkillInvocationMetadataSchema.parse({
-      skillId: 'write-doc',
-      skillSource: 'builtin',
-      commandName: 'write-doc',
-      argsText: 'docs/architecture.md',
+      skillId: 'example-skill',
+      skillSource: 'project',
+      commandName: 'debug-flow',
+      argsText: 'failing test',
     })).toEqual({
-      skillId: 'write-doc',
-      skillSource: 'builtin',
-      commandName: 'write-doc',
-      argsText: 'docs/architecture.md',
+      skillId: 'example-skill',
+      skillSource: 'project',
+      commandName: 'debug-flow',
+      argsText: 'failing test',
     });
   });
 });

@@ -7840,25 +7840,25 @@ describe('InputProcessingService', () => {
         messages: [{
           id: 'message-local-user',
           role: 'user',
-          content: '/summary',
+          content: '/explain src/index.ts',
           createdAt: '2026-05-17T00:00:00.000Z',
         }],
         context: {
           permissionMode: 'accept_edits',
           permissionSource: 'user',
           preprocessing: {
-            originalText: '/summary',
-            effectiveUserText: '总结当前会话',
+            originalText: '/explain src/index.ts',
+            effectiveUserText: 'src/index.ts',
             entries: [
               {
                 kind: 'prompt_template',
-                sourceId: 'input:prompt-template:summary',
-                sourceName: '/summary',
+                sourceId: 'input:prompt-template:example-template',
+                sourceName: '/explain',
                 visibility: 'model_visible',
-                instructionText: '请总结当前会话。',
-                templateId: 'summary',
-                commandName: 'summary',
-                templateSource: 'builtin',
+                instructionText: 'Explain the selected target.',
+                templateId: 'example-template',
+                commandName: 'explain',
+                templateSource: 'project',
               },
             ],
             diagnostics: [],
@@ -7885,11 +7885,11 @@ describe('InputProcessingService', () => {
       expect.objectContaining({
         kind: 'instruction',
         instructionKind: 'prompt_template',
-        text: '请总结当前会话。',
+        text: 'Explain the selected target.',
       }),
       expect.objectContaining({
         kind: 'current_turn',
-        text: '总结当前会话',
+        text: 'src/index.ts',
       }),
     ]));
   });
@@ -8285,3 +8285,4 @@ function seedProject(database: Database.Database): void {
     )
   `).run();
 }
+
