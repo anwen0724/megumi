@@ -4,7 +4,7 @@
  * skill validation.
  */
 
-import type { CommandDefinition, CommandHandler } from './command-definition';
+import type { CommandDefinition, CommandHandler } from '../contracts/command-contracts';
 
 export type SkillCommandDescriptor = {
   skill_id: string;

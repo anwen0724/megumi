@@ -6,16 +6,16 @@
 import {
   createCommandCatalog,
   type CommandCatalog,
-} from './command-catalog';
+} from '../core/command-catalog';
 import type {
   CommandDefinition,
   CommandExecutionResult,
   CommandInvocation,
   CommandListItem,
   CommandSuggestionResult,
-} from './command-definition';
-import { parseSlashCommandInput } from './slash-command-parser';
-import type { SkillCommandDescriptor } from './skill-commands';
+} from '../contracts/command-contracts';
+import { parseSlashCommandInput } from '../core/slash-command-parser';
+import type { SkillCommandDescriptor } from '../core/skill-commands';
 
 export type CommandService = {
   listCommands(): CommandListItem[];

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { createSkillCommands } from '@megumi/coding-agent/commands/core/skill-commands';
 import {
-  createSkillCommands,
   type CommandHandler,
 } from '@megumi/coding-agent/commands';
 

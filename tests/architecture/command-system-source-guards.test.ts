@@ -82,9 +82,9 @@ describe('Command system source guards', () => {
   });
 
   it('keeps generic command primitives in coding-agent and out of renderer-owned command features', () => {
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/commands/command-definition.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/commands/command-catalog.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/commands/command-service.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/commands/contracts/command-contracts.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/commands/core/command-catalog.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/commands/services/command-service.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/shared/commands/command-parser.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/shared/commands/command-dispatcher.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/shared/commands/command-types.ts'))).toBe(false);

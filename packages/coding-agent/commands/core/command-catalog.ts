@@ -9,7 +9,7 @@ import type {
   CommandListItem,
   CommandSuggestionGroup,
   CommandSuggestionResult,
-} from './command-definition';
+} from '../contracts/command-contracts';
 import { createSkillCommands, type SkillCommandDescriptor } from './skill-commands';
 
 export type CommandCatalog = {

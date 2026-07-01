@@ -3,7 +3,7 @@
  * product core and must not depend on Desktop, Electron, or UI shell modules.
  */
 
-import type { CommandDefinition } from './command-definition';
+import type { CommandDefinition } from '../contracts/command-contracts';
 
 export const built_in_commands: CommandDefinition[] = [
   {

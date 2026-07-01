@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSlashCommandInput } from '@megumi/coding-agent/commands';
+import { parseSlashCommandInput } from '@megumi/coding-agent/commands/core/slash-command-parser';
 
 describe('parseSlashCommandInput', () => {
   it('treats ordinary text as not command', () => {

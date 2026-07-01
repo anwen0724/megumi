@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { built_in_commands } from '@megumi/coding-agent/commands';
+import { built_in_commands } from '@megumi/coding-agent/commands/core/built-in-commands';
 
 describe('built_in_commands', () => {
   it('defines review as the current built-in agent-run command', async () => {

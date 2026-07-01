@@ -3,7 +3,7 @@
  * and does not execute command handlers.
  */
 
-import type { CommandInvocation } from './command-definition';
+import type { CommandInvocation } from '../contracts/command-contracts';
 
 export type SlashCommandParseResult =
   | { type: 'not_command'; raw_input: string }

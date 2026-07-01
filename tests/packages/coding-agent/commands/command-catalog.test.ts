@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { createCommandCatalog } from '@megumi/coding-agent/commands/core/command-catalog';
 import {
-  createCommandCatalog,
   type CommandDefinition,
 } from '@megumi/coding-agent/commands';
 
