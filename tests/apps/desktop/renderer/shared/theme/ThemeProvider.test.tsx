@@ -1,9 +1,9 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import { DEFAULT_APP_SETTINGS } from '@megumi/shared/settings';
+import { DEFAULT_APP_SETTINGS } from '@megumi/coding-agent/settings';
 import { ThemeProvider, useThemeStore } from '@megumi/desktop/renderer/shared/theme';
 
 describe('ThemeProvider', () => {
@@ -86,3 +86,4 @@ describe('ThemeProvider', () => {
     expect(screen.getByTestId('megumi-theme-root')).toHaveAttribute('data-theme', 'neutral-light');
   });
 });
+

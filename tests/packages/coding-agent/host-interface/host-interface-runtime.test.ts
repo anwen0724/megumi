@@ -9,7 +9,7 @@ import {
   mergeRawAppSettings,
   resolveAppSettings,
   type AppSettingsRaw,
-} from '@megumi/shared/settings';
+} from '@megumi/coding-agent/settings';
 import type { ModelCallCompletionResult } from '@megumi/coding-agent/agent-loop/model-call';
 import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
 
@@ -260,3 +260,4 @@ describe('Coding Agent host interface runtime', () => {
     });
   });
 });
+

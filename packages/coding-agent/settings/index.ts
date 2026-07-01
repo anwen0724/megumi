@@ -1,4 +1,9 @@
-// Public exports for Coding Agent settings and provider runtime policy.
-export * from './product-settings';
-export * from './provider-settings';
-export * from './provider-runtime';
+/*
+ * Public exports for Coding Agent settings contracts and services.
+ */
+export * from './contracts/settings-contracts';
+export * from './contracts/settings-json-schema';
+export * from './core/settings-resolution';
+export * from './services/product-settings';
+export * from './services/provider-settings';
+export * from './services/provider-runtime';

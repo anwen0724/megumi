@@ -19,7 +19,7 @@ import {
   mergeRawAppSettings,
   resolveAppSettings,
   type AppSettingsRaw,
-} from '@megumi/shared/settings';
+} from '@megumi/coding-agent/settings';
 import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
 
 function appSettingsProvider() {
@@ -124,3 +124,4 @@ describe('recovery startup backfills timeline for orphan terminal runs', () => {
     expect(after.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
   }, 30000);
 });
+

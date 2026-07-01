@@ -1,7 +1,7 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { ProductSettingsService, resolveMemoryEnabled } from '@megumi/coding-agent/settings';
-import type { AppSettingsRaw } from '@megumi/shared/settings';
+import type { AppSettingsRaw } from '@megumi/coding-agent/settings';
 
 class MemorySettingsStorage {
   raw: AppSettingsRaw = {};
@@ -86,3 +86,4 @@ describe('ProductSettingsService', () => {
     });
   });
 });
+

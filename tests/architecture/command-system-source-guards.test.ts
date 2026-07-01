@@ -188,7 +188,7 @@ describe('Command system source guards', () => {
     expect(offenders([
       'packages/coding-agent/input/input-service.ts',
       'packages/coding-agent/agent-loop/model-call/model-call-runner.ts',
-      'packages/coding-agent/settings/provider-runtime.ts',
+      'packages/coding-agent/settings/services/provider-runtime.ts',
     ], [
       /parseSlashCommand/,
       /dispatchCommandText/,

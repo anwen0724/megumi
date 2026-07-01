@@ -14,7 +14,7 @@ import {
   mergeRawAppSettings,
   resolveAppSettings,
   type AppSettingsRaw,
-} from '@megumi/shared/settings';
+} from '@megumi/coding-agent/settings';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ModelCallCompletionResult } from '@megumi/coding-agent/agent-loop/model-call';
@@ -157,3 +157,4 @@ describe('Coding Agent host interface timeline history commit', () => {
     expect(committed.messages.length).toBeGreaterThan(0);
   }, 30000);
 });
+

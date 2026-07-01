@@ -7,6 +7,11 @@ import type {
   RuntimeIpcRequest,
   RuntimeIpcResult,
 } from '@megumi/shared/ipc';
+import type {
+  SettingsData,
+  SettingsGetPayload,
+  SettingsUpdatePayload,
+} from '@megumi/coding-agent/host-interface';
 import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import { createRuntimeDebugId } from '@megumi/shared/runtime';
 import type {
@@ -67,9 +72,6 @@ import type {
   ProviderListData,
   ProviderListPayload,
   ProviderUpdatePayload,
-  SettingsData,
-  SettingsGetPayload,
-  SettingsUpdatePayload,
   RecoverableRunListData,
   RecoverableRunListPayload,
   RunCancelData,

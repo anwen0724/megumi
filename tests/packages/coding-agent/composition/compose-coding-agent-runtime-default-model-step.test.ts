@@ -10,7 +10,7 @@ import {
   mergeRawAppSettings,
   resolveAppSettings,
   type AppSettingsRaw,
-} from '@megumi/shared/settings';
+} from '@megumi/coding-agent/settings';
 import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
 
 describe('Coding Agent host interface default model step provider', () => {
@@ -59,3 +59,4 @@ describe('Coding Agent host interface default model step provider', () => {
     expect(typeof runtime.input.send).toBe('function');
   });
 });
+

@@ -1,11 +1,11 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import {
   AppSettingsRawSchema,
   createAppSettingsJsonSchema,
   DEFAULT_APP_SETTINGS,
   mergeRawAppSettings,
   resolveAppSettings,
-} from '@megumi/shared/settings';
+} from '@megumi/coding-agent/settings';
 
 describe('app settings contracts', () => {
   it('resolves missing user settings from defaults without requiring a full settings file', () => {
@@ -213,3 +213,4 @@ describe('app settings contracts', () => {
     });
   });
 });
+

@@ -1,6 +1,8 @@
-// Generates editor-facing JSON Schema from the canonical Zod settings contract.
+/*
+ * Generates editor-facing JSON Schema from the canonical Zod settings contract.
+ */
 import { z } from 'zod';
-import { AppSettingsRawSchema } from './contracts';
+import { AppSettingsRawSchema } from './settings-contracts';
 
 export type SettingsJsonSchemaObject = Record<string, unknown> & {
   title?: string;

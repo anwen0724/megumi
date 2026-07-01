@@ -1,7 +1,7 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import { DEFAULT_APP_SETTINGS } from '@megumi/shared/settings';
+import { DEFAULT_APP_SETTINGS } from '@megumi/coding-agent/settings';
 import { registerSettingsHandlers } from '@megumi/desktop/main/ipc/handlers/settings.handler';
 import { ipcOperationNameFromChannel } from '@megumi/desktop/main/ipc/ipc-operation-name';
 
@@ -88,3 +88,4 @@ describe('registerSettingsHandlers', () => {
     expect(ipcOperationNameFromChannel(IPC_CHANNELS.settings.update)).toBe('settings.update');
   });
 });
+

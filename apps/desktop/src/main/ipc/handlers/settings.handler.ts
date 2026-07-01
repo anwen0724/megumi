@@ -2,11 +2,11 @@
 // This handler never reads or writes renderer-local storage.
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeIpcError } from '@megumi/shared/ipc';
+import type { HostSettingsController } from '@megumi/coding-agent/host-interface';
 import {
   SettingsGetRequestSchema,
   SettingsUpdateRequestSchema,
-} from '@megumi/shared/ipc';
-import type { HostSettingsController } from '@megumi/coding-agent/host-interface';
+} from '@megumi/coding-agent/host-interface';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import type { DesktopIpcMain } from '../../shell/electron-ipc-main-host';

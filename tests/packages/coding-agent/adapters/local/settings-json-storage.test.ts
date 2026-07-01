@@ -1,11 +1,11 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createLocalSettingsJsonStorage, LocalSettingsJsonParseError } from '@megumi/coding-agent/adapters/local';
 import { ProductSettingsService } from '@megumi/coding-agent/settings';
-import { DEFAULT_APP_SETTINGS } from '@megumi/shared/settings';
+import { DEFAULT_APP_SETTINGS } from '@megumi/coding-agent/settings';
 
 describe('Local settings.json storage', () => {
   let temporaryHome: string | undefined;
@@ -135,3 +135,4 @@ describe('Local settings.json storage', () => {
     }
   });
 });
+

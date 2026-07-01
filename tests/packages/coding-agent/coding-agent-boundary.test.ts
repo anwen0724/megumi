@@ -76,8 +76,8 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/artifacts/plan-artifact-compatibility.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/workspace/workspace-change-tracker.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/workspace/workspace-restore.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/settings/provider-settings.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/settings/provider-runtime.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/settings/services/provider-settings.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/settings/services/provider-runtime.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/context/instructions/agent-instruction-source.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/context/resources/run-context-service.ts'))).toBe(true);
   });

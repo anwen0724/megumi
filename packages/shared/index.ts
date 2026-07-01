@@ -18,7 +18,6 @@ export * from './permission/settings-contracts';
 export * from './recovery';
 export * from './artifact';
 export * from './memory';
-export * from './settings';
 export * from './tool';
 export * from './run/contracts';
 export * from './ipc/channels';

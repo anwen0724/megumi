@@ -230,7 +230,7 @@ describe('coding agent run mainline guards', () => {
   it('keeps memory enabled resolution in the settings owner', () => {
     const runServiceSource = read('packages/coding-agent/input/input-service.ts');
     const sessionServiceSource = read('packages/coding-agent/session/session-service.ts');
-    const settingsSource = read('packages/coding-agent/settings/product-settings.ts');
+    const settingsSource = read('packages/coding-agent/settings/services/product-settings.ts');
 
     expect(settingsSource).toContain('export function resolveMemoryEnabled');
     expect(runServiceSource).toContain('resolveMemoryEnabled(this.memorySettingsProvider)');

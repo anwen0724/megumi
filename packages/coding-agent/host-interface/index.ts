@@ -8,4 +8,5 @@ export * from './session/branch-controller';
 export * from './session/session-controller';
 export * from './settings/provider-controller';
 export * from './settings/settings-controller';
+export * from './settings/settings-ipc-contracts';
 export * from './workspace/workspace-controller';

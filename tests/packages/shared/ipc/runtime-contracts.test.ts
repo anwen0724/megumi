@@ -9,7 +9,7 @@ import {
 } from '@megumi/shared';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { JsonObjectSchema, JsonValueSchema } from '@megumi/shared/primitives';
-import { DEFAULT_APP_SETTINGS } from '@megumi/shared/settings';
+import { DEFAULT_APP_SETTINGS } from '@megumi/coding-agent/settings';
 import {
   RUNTIME_IPC_ERROR_CODES,
   RuntimeIpcErrorSchema,
@@ -43,10 +43,6 @@ import {
   MemoryRecallPreviewDataSchema,
   MemoryRecallPreviewPayloadSchema,
   MemoryRecallPreviewRequestSchema,
-  SettingsGetRequestSchema,
-  SettingsGetResultSchema,
-  SettingsUpdateRequestSchema,
-  SettingsUpdateResultSchema,
   PlanByRunGetRequestSchema,
   ProviderApiKeyRequestSchema,
   ProviderListDataSchema,
@@ -84,6 +80,12 @@ import {
   type SessionBranchDraftCancelPayload,
   type SessionBranchDraftCreatePayload,
 } from '@megumi/shared/ipc';
+import {
+  SettingsGetRequestSchema,
+  SettingsGetResultSchema,
+  SettingsUpdateRequestSchema,
+  SettingsUpdateResultSchema,
+} from '@megumi/coding-agent/host-interface';
 
 describe('json value schemas', () => {
   it('accepts structured clone safe JSON values', () => {
@@ -1631,4 +1633,5 @@ describe('shared barrel exports', () => {
     expect(typeof runtimeRequestSchema.parse).toBe('function');
   });
 });
+
 

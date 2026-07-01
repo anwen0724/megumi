@@ -6,10 +6,12 @@ import {
 import {
   mergeRawAppSettings,
   resolveAppSettings,
-  type AppSettingsRaw,
-  type AppSettingsResolved,
-} from '@megumi/shared/settings';
-import type { PermissionSettingsProvider } from '../permissions/permission-settings-provider';
+} from '../core/settings-resolution';
+import type {
+  AppSettingsRaw,
+  AppSettingsResolved,
+} from '../contracts/settings-contracts';
+import type { PermissionSettingsProvider } from '../../permissions/permission-settings-provider';
 
 export interface ProductSettingsStoragePort {
   readRawSettings(): AppSettingsRaw;

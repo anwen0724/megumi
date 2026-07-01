@@ -1,6 +1,6 @@
 // Controller for product settings operations exposed to UI shells.
-import type { AppSettingsRaw, AppSettingsResolved } from '@megumi/shared/settings';
-import type { SettingsData } from '@megumi/shared/ipc';
+import type { AppSettingsRaw, AppSettingsResolved } from '../../settings';
+import type { SettingsData } from './settings-ipc-contracts';
 
 export interface SettingsControllerProductSettingsPort {
   getResolvedSettings(): AppSettingsResolved;

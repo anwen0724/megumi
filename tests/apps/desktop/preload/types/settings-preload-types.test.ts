@@ -5,7 +5,7 @@ import type {
   SettingsData,
   SettingsGetPayload,
   SettingsUpdatePayload,
-} from '@megumi/shared/ipc';
+} from '@megumi/coding-agent/host-interface';
 import type { MegumiAPI } from '@megumi/desktop/preload/types';
 
 describe('settings preload types', () => {

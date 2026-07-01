@@ -8,7 +8,7 @@ import {
   type ProviderPublicStatus,
   type ProviderSettings,
 } from '@megumi/shared/provider';
-import type { AppSettingsRaw, AppSettingsResolved } from '@megumi/shared/settings';
+import type { AppSettingsRaw, AppSettingsResolved } from '../contracts/settings-contracts';
 
 export interface ProviderSettingsProductSettingsPort {
   getResolvedSettings(): AppSettingsResolved;

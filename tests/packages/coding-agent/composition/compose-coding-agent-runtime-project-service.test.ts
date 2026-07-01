@@ -11,7 +11,7 @@ import {
   mergeRawAppSettings,
   resolveAppSettings,
   type AppSettingsRaw,
-} from '@megumi/shared/settings';
+} from '@megumi/coding-agent/settings';
 import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
 
 function appSettingsProvider() {
@@ -79,3 +79,4 @@ describe('composed runtime project service', () => {
     expect(listed.length).toBe(1);
   });
 });
+

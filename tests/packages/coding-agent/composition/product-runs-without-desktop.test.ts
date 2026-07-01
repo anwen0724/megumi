@@ -12,7 +12,7 @@ import { composeCodingAgentPersistence } from '@megumi/coding-agent/composition/
 import { composeCodingAgentRuntime } from '@megumi/coding-agent/composition';
 import { WorkspaceRepository, createDatabase } from '@megumi/coding-agent/persistence';
 import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
-import type { AppSettingsRaw } from '@megumi/shared/settings';
+import type { AppSettingsRaw } from '@megumi/coding-agent/settings';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
 import type { ModelCallCompletionResult } from '@megumi/coding-agent/agent-loop/model-call';
@@ -234,3 +234,4 @@ describe('coding-agent product runs without desktop', () => {
     expect(restartedSessions.some((s) => String(s.sessionId) === String(session.sessionId))).toBe(true);
   }, 30000);
 });
+

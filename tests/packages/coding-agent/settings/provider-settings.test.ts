@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ProductSettingsService, ProviderSettingsService } from '@megumi/coding-agent/settings';
 import {
@@ -6,7 +6,7 @@ import {
   type AppSettingsResolved,
   mergeRawAppSettings,
   resolveAppSettings,
-} from '@megumi/shared/settings';
+} from '@megumi/coding-agent/settings';
 
 class MemoryAppSettings {
   raw: AppSettingsRaw = {};
@@ -262,3 +262,4 @@ describe('ProviderSettingsService', () => {
     });
   });
 });
+

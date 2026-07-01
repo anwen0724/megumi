@@ -1,7 +1,7 @@
-// Provides local settings.json persistence for the shell-agnostic Coding Agent product.
+﻿// Provides local settings.json persistence for the shell-agnostic Coding Agent product.
 import fs from 'node:fs';
 import path from 'node:path';
-import { AppSettingsRawSchema, type AppSettingsRaw } from '@megumi/shared/settings';
+import { AppSettingsRawSchema, type AppSettingsRaw } from '@megumi/coding-agent/settings';
 import type { ProductSettingsStoragePort } from '../../../settings';
 
 export interface LocalSettingsJsonStorageOptions {
@@ -81,3 +81,4 @@ function writeFileAtomicSync(filePath: string, content: string): void {
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && 'code' in error;
 }
+

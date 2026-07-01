@@ -548,7 +548,10 @@ describe('package and file structure source guards', () => {
       join(repoRoot, 'packages/coding-agent/memory/memory-runtime-ports.ts'),
       'utf8',
     );
-    const productSettingsSource = readFileSync(join(repoRoot, 'packages/coding-agent/settings/product-settings.ts'), 'utf8');
+    const productSettingsSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/settings/services/product-settings.ts'),
+      'utf8',
+    );
     const sessionServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/session/session-service.ts'), 'utf8');
 
     expect(existsSync(join(repoRoot, 'packages/coding-agent/obsolete-run/run-contract.ts'))).toBe(false);
