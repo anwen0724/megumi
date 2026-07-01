@@ -504,7 +504,7 @@ describe('useSessionTimeline', () => {
     expect(useChatUiStore.getState().agentStatus).toBe('idle');
   });
 
-  it('sends input preprocessing and permission source for /review commands', async () => {
+  it('sends permission source without renderer-owned preprocessing metadata', async () => {
     const { session } = installMegumiMock();
     const { result } = renderHook(() => useSessionTimeline());
 
@@ -514,24 +514,6 @@ describe('useSessionTimeline', () => {
         permissionMode: 'plan',
         permissionSource: 'intent_default',
         model: 'deepseek-v4-flash',
-        preprocessing: {
-          originalText: '/review 当前改动',
-          effectiveUserText: '当前改动',
-          entries: [
-            {
-              kind: 'intent',
-              sourceId: 'input:intent:review',
-              sourceName: '/review',
-              visibility: 'model_visible',
-              instructionText: 'Current input comes from the review intent.',
-              intentId: 'review',
-              commandName: 'review',
-              defaultPermissionMode: 'plan',
-              defaultPermissionSource: 'intent_default',
-            },
-          ],
-          diagnostics: [],
-        },
       });
     });
 
@@ -539,21 +521,14 @@ describe('useSessionTimeline', () => {
       payload: expect.objectContaining({
         message: expect.objectContaining({ content: '/review 当前改动' }),
         context: expect.objectContaining({
-          preprocessing: expect.objectContaining({
-            originalText: '/review 当前改动',
-            effectiveUserText: '当前改动',
-            entries: [
-              expect.objectContaining({
-                kind: 'intent',
-                intentId: 'review',
-              }),
-            ],
-          }),
+          permissionMode: 'plan',
+          permissionSource: 'intent_default',
         }),
       }),
     }));
     expect(session.message.send.mock.calls[0][0].payload.context).not.toHaveProperty('intent');
     expect(session.message.send.mock.calls[0][0].payload.context).not.toHaveProperty('workflow');
+    expect(session.message.send.mock.calls[0][0].payload.context).not.toHaveProperty('preprocessing');
   });
 
   it('does not synthesize artifact state from completed runtime chat output', async () => {
