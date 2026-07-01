@@ -3,6 +3,7 @@ import { PermissionSnapshotService } from '../permissions/permission-snapshot-se
 import { RunContextService } from '../context/resources';
 import { createLocalWorkspaceSourceProvider } from '../adapters/local/run-context/workspace-source-provider';
 import { createInputService, InputProcessingService } from '../input/input-service';
+import { createCommandService } from '../commands';
 import type { RuntimeLogger } from '../host-interface/runtime-logger';
 import {
   SessionBranchService,
@@ -173,6 +174,7 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
   const inputService = createInputService({
     session: sessionService,
     userInput: inputProcessingService,
+    commandService: createCommandService(),
   });
 
   return {

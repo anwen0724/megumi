@@ -1,30 +1,15 @@
-// Converts ParsedInput facts into Coding Agent run facts without parsing input or executing commands.
+// Converts ParsedInput command facts into Coding Agent run facts without parsing input or executing commands.
 import type { ModelInputContextBuildRequest } from '@megumi/shared/model';
+import type { CommandSource } from '../../commands';
 import type { ParsedInput, ParsedInputFact } from '../parsed-input';
 
-export type CodingAgentRunInputFact =
-  | {
-      kind: 'agent_command';
-      commandName: string;
-      argsText: string;
-      rawText: string;
-    }
-  | {
-      kind: 'prompt_template';
-      commandName: string;
-      argsText: string;
-      templateId?: string;
-    }
-  | {
-      kind: 'skill_trigger';
-      skillName: string;
-      argsText: string;
-    }
-  | {
-      kind: 'app_operation';
-      operation: string;
-      argsText: string;
-    };
+export type CodingAgentRunInputFact = {
+  kind: 'command';
+  name: string;
+  source: CommandSource;
+  arguments_input: string;
+  raw_input: string;
+};
 
 export interface CodingAgentRunInputFacts {
   parsedInputId: string;
@@ -84,34 +69,13 @@ export function createRuntimeFactsForRunInput(
 }
 
 function mapParsedInputFact(fact: ParsedInputFact): CodingAgentRunInputFact {
-  switch (fact.kind) {
-    case 'command':
-      return {
-        kind: 'agent_command',
-        commandName: fact.commandName,
-        argsText: fact.argsText,
-        rawText: fact.rawText,
-      };
-    case 'prompt_template':
-      return {
-        kind: 'prompt_template',
-        commandName: fact.commandName,
-        argsText: fact.argsText,
-        ...(fact.templateId ? { templateId: fact.templateId } : {}),
-      };
-    case 'skill':
-      return {
-        kind: 'skill_trigger',
-        skillName: fact.skillName,
-        argsText: fact.argsText,
-      };
-    case 'app_operation':
-      return {
-        kind: 'app_operation',
-        operation: fact.operation,
-        argsText: fact.argsText,
-      };
-  }
+  return {
+    kind: 'command',
+    name: fact.name,
+    source: fact.source,
+    arguments_input: fact.arguments_input,
+    raw_input: fact.raw_input,
+  };
 }
 
 function factToRuntimeFact(
@@ -124,53 +88,20 @@ function factToRuntimeFact(
   const truncatedId = parsedInputId.slice(0, Math.max(1, availableLength));
   const factId = `run-input:${truncatedId}${suffix}`;
 
-  switch (fact.kind) {
-    case 'agent_command':
-      return {
-        factId,
-        factKind: 'agent_command',
-        text: `Agent command ${fact.commandName} was selected with args: ${displayArgs(fact.argsText)}.`,
-        required: true,
-        metadata: {
-          commandName: fact.commandName,
-          rawText: fact.rawText,
-        },
-      };
-    case 'prompt_template':
-      return {
-        factId,
-        factKind: 'prompt_template',
-        text: `Prompt template command ${fact.commandName} was selected with args: ${displayArgs(fact.argsText)}.`,
-        required: true,
-        metadata: {
-          commandName: fact.commandName,
-          ...(fact.templateId ? { templateId: fact.templateId } : {}),
-        },
-      };
-    case 'skill_trigger':
-      return {
-        factId,
-        factKind: 'skill_trigger',
-        text: `Skill ${fact.skillName} was triggered with args: ${displayArgs(fact.argsText)}.`,
-        required: true,
-        metadata: {
-          skillName: fact.skillName,
-        },
-      };
-    case 'app_operation':
-      return {
-        factId,
-        factKind: 'app_operation',
-        text: `App operation ${fact.operation} was detected with args: ${displayArgs(fact.argsText)}.`,
-        required: false,
-        metadata: {
-          operation: fact.operation,
-        },
-      };
-  }
+  return {
+    factId,
+    factKind: 'agent_command',
+    text: `Command ${fact.name} was selected with args: ${displayArgs(fact.arguments_input)}.`,
+    required: true,
+    metadata: {
+      name: fact.name,
+      source: fact.source,
+      raw_input: fact.raw_input,
+    },
+  };
 }
 
-function displayArgs(argsText: string): string {
-  const trimmed = argsText.trim();
+function displayArgs(arguments_input: string): string {
+  const trimmed = arguments_input.trim();
   return trimmed.length > 0 ? trimmed : '<none>';
 }

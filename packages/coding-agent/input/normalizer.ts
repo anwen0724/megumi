@@ -1,15 +1,11 @@
-﻿// Parses raw input into stable ParsedInput facts without creating runs or context.
-import {
-  dispatchCommandText,
-  type CommandDispatchResult,
-  type CommandRegistry,
-} from '@megumi/coding-agent/input/command';
+// Parses raw input into stable ParsedInput facts without creating runs or context.
+import type { CommandAgentRunInput } from '../commands';
 import type { ParsedInput, ParsedInputFact, ParsedInputKind } from './parsed-input';
 import type { RawInputKind } from './raw-input';
 import { RawInputSchema, type RawInput } from './raw-input';
 
 export interface ParseRawInputOptions {
-  commandRegistry?: CommandRegistry;
+  command?: CommandAgentRunInput['command'];
   now?: () => string;
   createId?: (prefix: string, value: string) => string;
 }
@@ -30,8 +26,7 @@ export function parseRawInput(
   const now = options.now ?? (() => new Date().toISOString());
   const text = parsedRawInput.text ?? '';
   const rawKind = parsedRawInput.kind ?? inferInputKind(text, parsedRawInput);
-  const commandDispatch = options.commandRegistry ? dispatchCommandText(text, options.commandRegistry) : undefined;
-  const facts = createFacts(commandDispatch);
+  const facts = createFacts({ command: options.command, raw_input: text });
 
   return {
     id: createId('parsed-input', String(parsedRawInput.id)),
@@ -79,67 +74,23 @@ function inferInputKind(text: string, rawInput: RawInput): RawInputKind {
   return rawInput.source.kind === 'system' ? 'system' : 'text';
 }
 
-function createFacts(dispatch: CommandDispatchResult | undefined): ParsedInputFact[] {
-  if (!dispatch || dispatch.kind === 'fallback') {
+function createFacts(input: {
+  command?: CommandAgentRunInput['command'];
+  raw_input: string;
+}): ParsedInputFact[] {
+  if (!input.command) {
     return [];
-  }
-
-  if (dispatch.target.kind === 'agent_command') {
-    return [{
-      kind: 'command',
-      commandName: dispatch.commandName,
-      argsText: dispatch.argsText,
-      rawText: dispatch.rawText,
-      target: 'agent_command',
-    }];
-  }
-
-  if (dispatch.target.kind === 'prompt_template') {
-    return [{
-      kind: 'prompt_template',
-      commandName: dispatch.commandName,
-      argsText: dispatch.argsText,
-      templateId: dispatch.target.templateId,
-    }];
-  }
-
-  if (dispatch.target.kind === 'skill_trigger') {
-    return [{
-      kind: 'skill',
-      skillName: dispatch.target.skillName,
-      argsText: dispatch.argsText,
-      source: 'command',
-    }];
-  }
-
-  if (dispatch.target.kind === 'app_operation') {
-    return [{
-      kind: 'app_operation',
-      operation: dispatch.target.operation,
-      argsText: dispatch.argsText,
-      source: 'command',
-    }];
   }
 
   return [{
     kind: 'command',
-    commandName: dispatch.commandName,
-    argsText: dispatch.argsText,
-    rawText: dispatch.rawText,
-    target: 'agent_command',
+    name: input.command.name,
+    source: input.command.source,
+    arguments_input: input.command.arguments_input,
+    raw_input: input.raw_input,
   }];
 }
 
-function selectParsedKind(facts: ParsedInputFact[]): ParsedInputKind {
-  if (facts.some((fact) => fact.kind === 'app_operation')) {
-    return 'app_operation';
-  }
-  if (facts.some((fact) => fact.kind === 'skill')) {
-    return 'skill_input';
-  }
-  if (facts.length > 0) {
-    return 'command_input';
-  }
-
+function selectParsedKind(_facts: ParsedInputFact[]): ParsedInputKind {
   return 'user_input';
 }

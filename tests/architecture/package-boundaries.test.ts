@@ -181,7 +181,7 @@ describe('package dependency boundaries', () => {
     expect(fs.existsSync(path.join(root, 'packages/input'))).toBe(false);
     expect(fs.existsSync(path.join(root, 'packages/command'))).toBe(false);
     expect(fs.existsSync(path.join(root, 'packages/coding-agent/input/index.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(root, 'packages/coding-agent/input/command/index.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/commands/index.ts'))).toBe(true);
   });
 
   it('keeps coding-agent input free of agent runtime, desktop, tools, db, and Electron concerns', () => {
@@ -199,9 +199,9 @@ describe('package dependency boundaries', () => {
     ).toEqual([]);
   });
 
-  it('keeps coding-agent command input free of runtime, desktop, tools, db, shell execution, and Electron concerns', () => {
+  it('keeps coding-agent commands free of runtime, desktop, tools, db, shell execution, and Electron concerns', () => {
     expect(
-      findForbiddenReferences('packages/coding-agent/input/command', [
+      findForbiddenReferences('packages/coding-agent/commands', [
         /@megumi\/agent(\/|['"]|$)/,
         /@megumi\/tools(\/|['"]|$)/,
         /@megumi\/db(\/|['"]|$)/,

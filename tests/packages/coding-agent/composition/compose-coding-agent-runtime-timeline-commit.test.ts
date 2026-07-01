@@ -87,6 +87,9 @@ async function sendOneMessage(runtime: CodingAgentHostInterface, projectId: stri
     permissionMode: 'default',
     createdAt: '2026-06-24T00:00:00.000Z',
   });
+  if (result.type !== 'agent_run') {
+    throw new Error(`Expected agent_run result, got ${result.type}`);
+  }
   for await (const _event of result.events) {
     // Drain to terminal so the projector commits.
   }

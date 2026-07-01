@@ -155,7 +155,7 @@ describe('provider tool call model loop source guards', () => {
   it('does not hardcode removed temporary summary and write-doc input abilities in production code', () => {
     const productionSource = [
       sourceUnder('apps/desktop/src/renderer'),
-      read('packages/coding-agent/input/command/built-ins.ts'),
+      read('packages/coding-agent/commands/built-in-commands.ts'),
     ].join('\n');
 
     expect(productionSource).not.toContain('/summary');

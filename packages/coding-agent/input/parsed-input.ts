@@ -1,5 +1,6 @@
 // Defines parsed input facts consumed by later command, context, and runtime boundaries.
 import { z } from 'zod';
+import type { CommandSource } from '../commands';
 import { JsonObjectSchema, type IsoDateTime, type JsonObject } from '@megumi/shared/primitives';
 import type { ParsedInputId, RawInputId } from './ids';
 import {
@@ -15,43 +16,18 @@ import {
   type RawInputKind,
 } from './raw-input';
 
-export const ParsedInputKindSchema = z.enum(['user_input', 'command_input', 'skill_input', 'app_operation']);
+export const ParsedInputKindSchema = z.enum(['user_input']);
 export type ParsedInputKind = z.infer<typeof ParsedInputKindSchema>;
 
 export type CommandInputFact = {
   kind: 'command';
-  commandName: string;
-  argsText: string;
-  rawText: string;
-  target: 'agent_command';
+  name: string;
+  source: CommandSource;
+  arguments_input: string;
+  raw_input: string;
 };
 
-export type PromptTemplateInputFact = {
-  kind: 'prompt_template';
-  commandName: string;
-  argsText: string;
-  templateId?: string;
-};
-
-export type SkillInputFact = {
-  kind: 'skill';
-  skillName: string;
-  argsText: string;
-  source: 'command' | 'explicit_entry';
-};
-
-export type AppOperationInputFact = {
-  kind: 'app_operation';
-  operation: string;
-  argsText: string;
-  source: 'command' | 'shortcut';
-};
-
-export type ParsedInputFact =
-  | CommandInputFact
-  | PromptTemplateInputFact
-  | SkillInputFact
-  | AppOperationInputFact;
+export type ParsedInputFact = CommandInputFact;
 
 export interface ParsedInput {
   id: ParsedInputId | string;
@@ -71,45 +47,18 @@ export interface ParsedInput {
 export const CommandInputFactSchema = z
   .object({
     kind: z.literal('command'),
-    commandName: z.string().min(1),
-    argsText: z.string(),
-    rawText: z.string().min(1),
-    target: z.literal('agent_command'),
-  })
-  .strict();
-
-export const PromptTemplateInputFactSchema = z
-  .object({
-    kind: z.literal('prompt_template'),
-    commandName: z.string().min(1),
-    argsText: z.string(),
-    templateId: z.string().min(1).optional(),
-  })
-  .strict();
-
-export const SkillInputFactSchema = z
-  .object({
-    kind: z.literal('skill'),
-    skillName: z.string().min(1),
-    argsText: z.string(),
-    source: z.enum(['command', 'explicit_entry']),
-  })
-  .strict();
-
-export const AppOperationInputFactSchema = z
-  .object({
-    kind: z.literal('app_operation'),
-    operation: z.string().min(1),
-    argsText: z.string(),
-    source: z.enum(['command', 'shortcut']),
+    name: z.string().min(1),
+    source: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('built_in') }).strict(),
+      z.object({ kind: z.literal('skill'), skill_id: z.string().min(1) }).strict(),
+    ]),
+    arguments_input: z.string(),
+    raw_input: z.string().min(1),
   })
   .strict();
 
 export const ParsedInputFactSchema = z.discriminatedUnion('kind', [
   CommandInputFactSchema,
-  PromptTemplateInputFactSchema,
-  SkillInputFactSchema,
-  AppOperationInputFactSchema,
 ]);
 
 export const ParsedInputSchema = z

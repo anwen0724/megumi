@@ -151,4 +151,43 @@ describe('ComposerDock', () => {
     expect(screen.queryByTestId('command-suggestion-panel')).not.toBeInTheDocument();
     expect(inputPanel).not.toHaveTextContent('/review');
   });
+
+  it('renders command suggestions from the shared composer controller provider', async () => {
+    render(
+      <ComposerDock
+        status="idle"
+        branchDraft={null}
+        pendingApprovals={[]}
+        recoverableRuns={[]}
+        pendingRecoverableRunIds={emptySet}
+        onApprovalResolve={vi.fn()}
+        onRetry={vi.fn()}
+        onRerun={vi.fn()}
+        onMarkCancelled={vi.fn()}
+        onSubmit={vi.fn()}
+        onStop={vi.fn()}
+        getCommandSuggestions={() => ({
+          type: 'suggestions',
+          draft_input: '/re',
+          command_prefix: 're',
+          groups: [{
+            id: 'commands',
+            label: 'Commands',
+            items: [{
+              name: 'review',
+              description: 'Evaluate review feedback before implementing changes',
+              source: { kind: 'built_in' },
+              match: { field: 'name', value: 'review', prefix: 're' },
+              completion: { replacement_input: '/review ' },
+            }],
+          }],
+        })}
+      />,
+    );
+
+    await userEvent.type(screen.getByLabelText('Message Megumi'), '/re');
+
+    expect(screen.getByRole('listbox', { name: 'Command suggestions' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /review/i })).toBeInTheDocument();
+  });
 });

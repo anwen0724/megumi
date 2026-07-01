@@ -52,10 +52,39 @@ function offenders(paths: string[], forbidden: RegExp[]): string[] {
 }
 
 describe('Command system source guards', () => {
+  it('keeps the command system in coding-agent commands and removes the old input command design', () => {
+    const commandBoundaryText = [
+      ...filesUnder('packages/coding-agent/commands'),
+      'packages/coding-agent/input/normalizer.ts',
+      'packages/coding-agent/input/session-message.ts',
+      'packages/coding-agent/input/parsed-input.ts',
+      'packages/coding-agent/input/facts/input-facts.ts',
+    ]
+      .map((relativePath) => source(relativePath))
+      .join('\n');
+
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/input/command'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/commands'))).toBe(true);
+    expect(commandBoundaryText).not.toContain('CommandDispatchTarget');
+    expect(commandBoundaryText).not.toContain('prompt_template');
+    expect(commandBoundaryText).not.toContain('app_operation');
+    expect(offenders(filesUnder('packages/coding-agent/commands'), [
+      /apps\/desktop/,
+    ])).toEqual([]);
+  });
+
+  it('keeps input from importing the deleted input command module', () => {
+    expect(offenders(filesUnder('packages/coding-agent/input'), [
+      /['"]\.\/command['"]/,
+      /['"]@megumi\/coding-agent\/input\/command['"]/,
+      /input\/command/,
+    ])).toEqual([]);
+  });
+
   it('keeps generic command primitives in coding-agent and out of renderer-owned command features', () => {
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/input/command/definition.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/input/command/registry.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/input/command/dispatcher.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/commands/command-definition.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/commands/command-catalog.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/commands/command-service.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/shared/commands/command-parser.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/shared/commands/command-dispatcher.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/renderer/shared/commands/command-types.ts'))).toBe(false);
@@ -168,7 +197,7 @@ describe('Command system source guards', () => {
     ])).toEqual([]);
     const sessionMessageInput = readFileSync(join(repoRoot, 'packages/coding-agent/input/session-message.ts'), 'utf8');
     const InputProcessingService = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
-    expect(sessionMessageInput).toContain('BUILT_IN_INPUT_COMMAND_REGISTRY');
+    expect(sessionMessageInput).not.toContain('BUILT_IN_INPUT_COMMAND_REGISTRY');
     expect(InputProcessingService).not.toContain('BUILT_IN_INPUT_COMMAND_REGISTRY');
     expect(InputProcessingService).not.toContain('parseSlashCommand');
     expect(InputProcessingService).not.toContain('dispatchCommandText');

@@ -8,12 +8,14 @@ import {
   Square,
 } from 'lucide-react';
 import { Button, IconButton } from '../../../shared/ui';
+import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/coding-agent/commands';
 import {
   COMPOSER_PERMISSION_MODE_OPTIONS,
   type ComposerModel,
   type ComposerModelOption,
   type ComposerPermissionMode,
 } from './composer-options';
+import { CommandSuggestionPanel } from './CommandSuggestionPanel';
 
 export interface ComposerSurfaceProps {
   value: string;
@@ -27,7 +29,10 @@ export interface ComposerSurfaceProps {
   permissionModeId: string;
   modelId: string;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
+  commandSuggestions: CommandSuggestionResult;
+  selectedCommandSuggestionIndex: number;
   onValueChange: (value: string) => void;
+  onCommandSuggestionChoose: (item: CommandSuggestionItem) => void;
   onPermissionModeChange: (permissionMode: ComposerPermissionMode) => void;
   onModelChange: (model: ComposerModel) => void;
   onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
@@ -49,7 +54,10 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
   permissionModeId,
   modelId,
   textareaRef,
+  commandSuggestions,
+  selectedCommandSuggestionIndex,
   onValueChange,
+  onCommandSuggestionChoose,
   onPermissionModeChange,
   onModelChange,
   onKeyDown,
@@ -66,6 +74,11 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
       onSubmit={onSubmit}
       className="pointer-events-auto mx-auto w-full transition-[width,transform,opacity] duration-200 ease-out"
     >
+      <CommandSuggestionPanel
+        suggestions={commandSuggestions}
+        selectedIndex={selectedCommandSuggestionIndex}
+        onChoose={onCommandSuggestionChoose}
+      />
       <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-soft)] transition-shadow duration-150">
         <div data-testid="composer-input-panel" className="px-4 py-3">
           <label htmlFor="megumi-composer" className="sr-only">

@@ -502,13 +502,14 @@ describe('ModelCallInputBuildService', () => {
         parsedInputId: 'parsed-input:1',
         rawInputId: 'raw-input:1',
         rawKind: 'slash_command',
-        inputKind: 'command_input',
+        inputKind: 'user_input',
         effectiveUserText: '/review src',
         facts: [{
-          kind: 'agent_command',
-          commandName: 'review',
-          argsText: 'src',
-          rawText: '/review src',
+          kind: 'command',
+          name: 'review',
+          source: { kind: 'built_in' },
+          arguments_input: 'src',
+          raw_input: '/review src',
         }],
       },
       builtAt: '2026-06-21T00:00:00.000Z',
@@ -517,17 +518,17 @@ describe('ModelCallInputBuildService', () => {
     expect(result.buildRequest.runtimeFacts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         factKind: 'parsed_input',
-        text: 'Input kind: command_input. Raw kind: slash_command.',
+        text: 'Input kind: user_input. Raw kind: slash_command.',
       }),
       expect.objectContaining({
         factKind: 'agent_command',
-        text: 'Agent command review was selected with args: src.',
+        text: 'Command review was selected with args: src.',
       }),
     ]));
     expect(result.inputContext.parts).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'runtime_constraint',
-        text: expect.stringContaining('Agent command review was selected'),
+        text: expect.stringContaining('Command review was selected'),
       }),
     ]));
   });

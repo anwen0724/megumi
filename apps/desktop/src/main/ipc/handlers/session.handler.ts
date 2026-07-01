@@ -123,6 +123,9 @@ export function registerSessionHandlers(
           request.payload,
           context,
         ));
+        if (result.type !== 'agent_run') {
+          throw new Error(`Session message send does not support command result: ${result.type}`);
+        }
         void forwardRuntimeEvents(event.sender, result.events, { logger: options.logger });
         return {
           requestId: result.requestId,

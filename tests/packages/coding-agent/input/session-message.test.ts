@@ -74,7 +74,7 @@ describe('session message input', () => {
     })).toThrow('Session message send requires a user message.');
   });
 
-  it('parses session message raw input through the input owner command registry', () => {
+  it('parses session message raw input with an explicit command fact from Command Service', () => {
     const parsed = parseSessionMessageRawInput({
       requestId: 'request-1',
       runId: 'run-1',
@@ -85,6 +85,11 @@ describe('session message input', () => {
         createdAt: '2026-06-29T01:00:00.000Z',
       },
       createdAt: '2026-06-29T01:00:00.000Z',
+      command: {
+        name: 'review',
+        source: { kind: 'built_in' },
+        arguments_input: 'packages/coding-agent',
+      },
     });
 
     expect(parsed.rawInputId).toBe('raw-input:run-1:client-message-1');
@@ -93,11 +98,13 @@ describe('session message input', () => {
       sessionId: 'session-1',
     });
     expect(parsed.metadata).toEqual({ requestId: 'request-1' });
-    expect(parsed.facts).toContainEqual(expect.objectContaining({
+    expect(parsed.facts).toEqual([{
       kind: 'command',
-      commandName: 'review',
-      target: 'agent_command',
-    }));
+      name: 'review',
+      source: { kind: 'built_in' },
+      arguments_input: 'packages/coding-agent',
+      raw_input: '/review packages/coding-agent',
+    }]);
   });
 });
 

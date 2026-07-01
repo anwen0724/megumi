@@ -8183,6 +8183,11 @@ describe('InputProcessingService', () => {
           createdAt: '2026-06-21T00:00:00.000Z',
         },
       },
+      command: {
+        name: 'review',
+        source: { kind: 'built_in' },
+        arguments_input: 'src/session.ts',
+      },
     });
     // Drain all events
     const streamed = [];
@@ -8192,16 +8197,16 @@ describe('InputProcessingService', () => {
 
     expect(buildInputs.map((input) => input.contextKind)).toEqual(['compaction-probe', 'initial']);
     expect(buildInputs[0]?.runInputFacts).toMatchObject({
-      inputKind: 'command_input',
+      inputKind: 'user_input',
       rawKind: 'slash_command',
       facts: [{
-        kind: 'agent_command',
-        commandName: 'review',
-        argsText: 'src/session.ts',
+        kind: 'command',
+        name: 'review',
+        arguments_input: 'src/session.ts',
       }],
     });
     expect(buildInputs[1]?.runInputFacts).toMatchObject({
-      inputKind: 'command_input',
+      inputKind: 'user_input',
       rawKind: 'slash_command',
     });
   });

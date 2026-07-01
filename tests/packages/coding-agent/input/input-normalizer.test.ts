@@ -1,10 +1,6 @@
 ﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
-  BUILT_IN_INPUT_COMMAND_REGISTRY,
-  createCommandRegistry,
-} from '@megumi/coding-agent/input/command';
-import {
   ParsedInputSchema,
   RawInputSchema,
   createParsedInputId,
@@ -58,7 +54,7 @@ describe('input package normalization', () => {
     expect(ParsedInputSchema.parse(parsed)).toEqual(parsed);
   });
 
-  it('records slash command dispatch as ParsedInput facts without running the command', () => {
+  it('does not dispatch slash commands during raw input normalization', () => {
     const parsed = normalizeRawInput({
       rawInput: {
         id: 'raw-command:1',
@@ -68,69 +64,12 @@ describe('input package normalization', () => {
         text: '/review current work',
         createdAt: '2026-06-21T00:00:00.000Z',
       },
-      commandRegistry: BUILT_IN_INPUT_COMMAND_REGISTRY,
       createId: (prefix, value) => `${prefix}:${value}`,
     });
 
     expect(parsed.rawKind).toBe('slash_command');
-    expect(parsed.kind).toBe('command_input');
-    expect(parsed.facts).toEqual([{
-      kind: 'command',
-      commandName: 'review',
-      argsText: 'current work',
-      rawText: '/review current work',
-      target: 'agent_command',
-    }]);
-  });
-
-  it('records skill and app operation command facts', () => {
-    const registry = createCommandRegistry({
-      skillCommands: [{
-        name: 'debug-flow',
-        kind: 'skill_trigger',
-        source: 'project',
-        description: 'Use a test-only debugging workflow',
-        dispatch: {
-          kind: 'skill_trigger',
-          skillName: 'example-skill',
-          inputMode: 'append_args',
-        },
-      }],
-      appOperationCommands: [{
-        name: 'new-session',
-        kind: 'app_operation',
-        source: 'system',
-        description: 'Create session',
-        dispatch: {
-          kind: 'app_operation',
-          operation: 'session.create',
-        },
-      }],
-    });
-
-    expect(parseRawInput({
-      id: 'raw-skill:1',
-      source: { kind: 'quick_action' },
-      text: '/debug-flow failing test',
-      createdAt: '2026-06-21T00:00:00.000Z',
-    }, { commandRegistry: registry }).facts).toEqual([{
-      kind: 'skill',
-      skillName: 'example-skill',
-      argsText: 'failing test',
-      source: 'command',
-    }]);
-
-    expect(parseRawInput({
-      id: 'raw-app:1',
-      source: { kind: 'app' },
-      text: '/new-session',
-      createdAt: '2026-06-21T00:00:00.000Z',
-    }, { commandRegistry: registry }).facts).toEqual([{
-      kind: 'app_operation',
-      operation: 'session.create',
-      argsText: '',
-      source: 'command',
-    }]);
+    expect(parsed.kind).toBe('user_input');
+    expect(parsed.facts).toEqual([]);
   });
 
   it('keeps attachments, references, and target as input facts', () => {

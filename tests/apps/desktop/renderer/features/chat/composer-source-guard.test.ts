@@ -138,4 +138,19 @@ describe('composer source guard', () => {
     expect(commandPanel).not.toContain("kind: 'prompt_template'");
     expect(commandPanel).not.toContain("kind: 'skill'");
   });
+
+  it('keeps renderer command suggestions off core command implementation details', () => {
+    const rendererSources = [
+      readSource('apps/desktop/src/renderer/features/chat/components/Composer.tsx'),
+      readSource('apps/desktop/src/renderer/features/chat/components/ComposerSurface.tsx'),
+      readSource('apps/desktop/src/renderer/features/chat/components/CommandSuggestionPanel.tsx'),
+      readSource('apps/desktop/src/renderer/features/chat/hooks/use-composer-controller.ts'),
+      readSource('apps/desktop/src/renderer/features/chat/layout/ComposerDock.tsx'),
+    ].join('\n');
+
+    expect(rendererSources).not.toContain('createCommandCatalog');
+    expect(rendererSources).not.toContain('built_in_commands');
+    expect(rendererSources).not.toContain('parseSlashCommandInput');
+    expect(rendererSources).not.toContain('handleCommandInput');
+  });
 });

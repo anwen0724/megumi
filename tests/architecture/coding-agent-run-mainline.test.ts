@@ -91,7 +91,7 @@ describe('coding agent run mainline guards', () => {
 
     expect(inputSource).toContain('export function prepareSessionMessageInput');
     expect(inputSource).toContain('export function parseSessionMessageRawInput');
-    expect(inputSource).toContain('BUILT_IN_INPUT_COMMAND_REGISTRY');
+    expect(inputSource).not.toContain('BUILT_IN_INPUT_COMMAND_REGISTRY');
     expect(serviceSource).not.toContain('BUILT_IN_INPUT_COMMAND_REGISTRY');
     expect(serviceSource).not.toContain('parseRawInput');
     expect(serviceSource).not.toContain('function currentUserChatMessage');

@@ -85,6 +85,9 @@ describe('InputService', () => {
       permissionMode: 'default',
       createdAt: '2026-06-29T13:00:00.000Z',
     });
+    if (result.type !== 'agent_run') {
+      throw new Error(`Expected agent_run result, got ${result.type}`);
+    }
     const events = [];
     for await (const event of result.events) {
       events.push(event.eventType);
@@ -116,6 +119,153 @@ describe('InputService', () => {
         createdAt: '2026-06-29T13:00:00.000Z',
       },
     }]);
+  });
+
+  it('continues ordinary flow when Command Service returns not_command', async () => {
+    const sentPayloads: unknown[] = [];
+    const service = createInputService({
+      session: inputSessionPort({
+        session: sessionRecord(),
+        messages: [userMessageRecord({ content: '/missing arg' })],
+      }),
+      userInput: {
+        async handle(input) {
+          sentPayloads.push(input);
+          return inputHandleResult(input.requestId);
+        },
+        cancel: () => false,
+      },
+      commandService: {
+        handleCommandInput: async () => ({
+          type: 'not_command',
+          raw_input: '/missing arg',
+        }),
+      },
+      ids: fixedInputIds(),
+    });
+
+    const result = await service.send(inputSendRequest({ text: '/missing arg' }));
+
+    expect(result.type).toBe('agent_run');
+    expect(sentPayloads).toEqual([expect.objectContaining({
+      requestId: 'input-request-1',
+      payload: expect.objectContaining({
+        message: expect.objectContaining({
+          content: '/missing arg',
+        }),
+      }),
+    })]);
+  });
+
+  it('sends agent_run command results through normal user input with a command fact', async () => {
+    const sentPayloads: unknown[] = [];
+    const service = createInputService({
+      session: inputSessionPort({
+        session: sessionRecord(),
+        messages: [userMessageRecord({ content: '/review current diff' })],
+      }),
+      userInput: {
+        async handle(input) {
+          sentPayloads.push(input);
+          return inputHandleResult(input.requestId);
+        },
+        cancel: () => false,
+      },
+      commandService: {
+        handleCommandInput: async () => ({
+          type: 'agent_run',
+          input: {
+            raw_input: '/review current diff',
+            command: {
+              name: 'review',
+              source: { kind: 'built_in' },
+              arguments_input: 'current diff',
+            },
+          },
+        }),
+      },
+      ids: fixedInputIds(),
+    });
+
+    const result = await service.send(inputSendRequest({ text: '/review current diff' }));
+
+    expect(result.type).toBe('agent_run');
+    expect(sentPayloads).toEqual([expect.objectContaining({
+      command: {
+        name: 'review',
+        source: { kind: 'built_in' },
+        arguments_input: 'current diff',
+      },
+      payload: expect.objectContaining({
+        message: expect.objectContaining({
+          content: '/review current diff',
+        }),
+      }),
+    })]);
+  });
+
+  it('returns host interaction command results without calling user input', async () => {
+    const handleCalls: unknown[] = [];
+    const service = createInputService({
+      session: inputSessionPort({
+        createSession: () => {
+          throw new Error('session should not be created');
+        },
+      }),
+      userInput: {
+        async handle(input) {
+          handleCalls.push(input);
+          throw new Error('not used');
+        },
+        cancel: () => false,
+      },
+      commandService: {
+        handleCommandInput: async () => ({
+          type: 'host_interaction_request',
+          request: { kind: 'open_settings' },
+        }),
+      },
+      ids: fixedInputIds(),
+    });
+
+    const result = await service.send(inputSendRequest({ text: '/settings' }));
+
+    expect(result).toEqual({
+      type: 'host_interaction_request',
+      requestId: 'input-request-1',
+      request: { kind: 'open_settings' },
+    });
+    expect(handleCalls).toEqual([]);
+  });
+
+  it('returns completed and error command results without calling user input', async () => {
+    const completedService = createInputService({
+      session: inputSessionPort(),
+      userInput: unusedUserInput(),
+      commandService: {
+        handleCommandInput: async () => ({ type: 'completed', message: 'Done' }),
+      },
+      ids: fixedInputIds(),
+    });
+    const errorService = createInputService({
+      session: inputSessionPort(),
+      userInput: unusedUserInput(),
+      commandService: {
+        handleCommandInput: async () => ({ type: 'error', message: 'Failed' }),
+      },
+      ids: fixedInputIds(),
+    });
+
+    await expect(completedService.send(inputSendRequest({ text: '/done' }))).resolves.toEqual({
+      type: 'completed',
+      requestId: 'input-request-1',
+      message: 'Done',
+    });
+    await expect(errorService.send(inputSendRequest({ text: '/broken' }))).resolves.toEqual({
+      type: 'error',
+      requestId: 'input-request-1',
+      message: 'Failed',
+    });
   });
 
   it('cancels only the active input request through the agent-loop owner port', () => {
@@ -213,6 +363,7 @@ describe('InputService', () => {
         expect(input.step.stepId).toBe('step-1');
         expect(input.userMessage.content).toBe('Explain G2');
         expect(input.permissionMode).toBe('default');
+        expect(input.parsedInput?.facts).toEqual([]);
         return collectable([runtimeEvent('run.started')]);
       },
       cancelActiveInput: () => false,
@@ -268,6 +419,79 @@ describe('InputService', () => {
       }),
     ]);
     expect(activeRuns.get('request-1')).toBeUndefined();
+  });
+
+  it('attaches command facts when the input handler receives a command agent-run input', async () => {
+    const repository = new InMemoryUserInputRepository();
+    const runs = new Map<string, Run>();
+    const steps = new Map<string, RunStep>();
+    const activeRuns = new ActiveSessionMessageRunTracker<ChatStreamEventAdapter>();
+    const sessionMessages = new SessionMessageService({
+      sessionRepository: repository,
+      messageRepository: repository,
+      activePathRepository: repository,
+      ids: sequenceIds(),
+    });
+    const handler = createUserInputHandler({
+      clock: { now: () => '2026-06-29T11:00:00.000Z' },
+      ids: {
+        runId: () => 'run-1',
+        stepId: () => 'step-1',
+        chatStreamEventId: nextId('chat-event'),
+        chatStreamId: () => 'chat-stream-1',
+        chatTextId: nextId('chat-text'),
+        chatThinkingId: nextId('chat-thinking'),
+      },
+      sessionMessages,
+      activeRuns,
+      runRepository: {
+        getRun: (runId) => runs.get(runId),
+        saveRun(run) {
+          runs.set(run.runId, run);
+          return run;
+        },
+      },
+      stepRepository: {
+        saveStep(step) {
+          steps.set(step.stepId, step);
+          return step;
+        },
+      },
+      runRetryCoordinator: {
+        recordManualRerunAttemptForBranchDraft: () => runtimeEvent('run.retry.requested'),
+      },
+      appendEvent: () => undefined,
+      runAgentLoop(input) {
+        expect(input.parsedInput?.facts).toEqual([{
+          kind: 'command',
+          name: 'review',
+          source: { kind: 'built_in' },
+          arguments_input: 'current diff',
+          raw_input: '/review current diff',
+        }]);
+        return collectable([runtimeEvent('run.started')]);
+      },
+      cancelActiveInput: () => false,
+    });
+
+    await handler.handle({
+      requestId: 'request-1',
+      payload: {
+        providerId: 'openai',
+        modelId: 'gpt-test',
+        message: {
+          id: 'client-message-1',
+          content: '/review current diff',
+          createdAt: '2026-06-29T11:00:00.000Z',
+        },
+        createdAt: '2026-06-29T11:00:00.000Z',
+      },
+      command: {
+        name: 'review',
+        source: { kind: 'built_in' },
+        arguments_input: 'current diff',
+      },
+    });
   });
 });
 
@@ -333,6 +557,81 @@ async function* collectable<T>(items: readonly T[]): AsyncIterable<T> {
   for (const item of items) {
     yield item;
   }
+}
+
+function fixedInputIds() {
+  return {
+    requestId: () => 'input-request-1',
+    clientMessageId: () => 'client-message-1',
+  };
+}
+
+function inputSendRequest(overrides: Partial<Parameters<ReturnType<typeof createInputService>['send']>[0]> = {}) {
+  return {
+    providerId: 'openai' as const,
+    modelId: 'gpt-test',
+    text: 'Explain G2',
+    createdAt: '2026-06-29T13:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function sessionRecord(overrides: Partial<Session> = {}): Session {
+  return {
+    sessionId: 'session-1',
+    title: 'Session',
+    status: 'active',
+    createdAt: '2026-06-29T13:00:00.000Z',
+    updatedAt: '2026-06-29T13:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function userMessageRecord(overrides: Partial<SessionMessage> = {}): SessionMessage {
+  return {
+    messageId: 'message-1',
+    sessionId: 'session-1',
+    runId: 'run-1',
+    role: 'user',
+    content: 'Explain G2',
+    status: 'completed',
+    createdAt: '2026-06-29T13:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function inputSessionPort(input: {
+  session?: Session;
+  messages?: SessionMessage[];
+  createSession?: () => Session;
+} = {}) {
+  return {
+    listSessions: () => [],
+    createSession: input.createSession ?? (() => input.session ?? sessionRecord()),
+    listMessagesBySession: () => input.messages ?? [],
+  };
+}
+
+function inputHandleResult(requestId: string) {
+  const session = sessionRecord();
+  return {
+    data: {
+      requestId,
+      session,
+      userMessageId: 'message-1',
+      runId: 'run-1',
+    },
+    events: collectable([runtimeEvent('run.completed')]),
+  };
+}
+
+function unusedUserInput() {
+  return {
+    handle: async () => {
+      throw new Error('not used');
+    },
+    cancel: () => false,
+  };
 }
 
 function runtimeEvent(eventType: RuntimeEvent['eventType']): RuntimeEvent {

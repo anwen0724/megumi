@@ -179,16 +179,16 @@ describe('AgentLoopInitialModelInputPreparationService', () => {
         rawInputId: 'raw-input:1',
         source: { kind: 'composer' },
         rawKind: 'slash_command',
-        kind: 'command_input',
+        kind: 'user_input',
         text: '/review src',
         attachments: [],
         references: [],
         facts: [{
           kind: 'command',
-          commandName: 'review',
-          argsText: 'src',
-          rawText: '/review src',
-          target: 'agent_command',
+          name: 'review',
+          source: { kind: 'built_in' },
+          arguments_input: 'src',
+          raw_input: '/review src',
         }],
         createdAt,
       },
@@ -217,7 +217,7 @@ describe('AgentLoopInitialModelInputPreparationService', () => {
         keepRecentTokens: Number.MAX_SAFE_INTEGER,
       },
       runInputFacts: expect.objectContaining({
-        inputKind: 'command_input',
+        inputKind: 'user_input',
         effectiveUserText: '/review src',
       }),
     });
@@ -274,7 +274,7 @@ describe('AgentLoopInitialModelInputPreparationService', () => {
         keepRecentTokens: 3584,
       },
       runInputFacts: expect.objectContaining({
-        inputKind: 'command_input',
+        inputKind: 'user_input',
       }),
     });
   });

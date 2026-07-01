@@ -114,6 +114,12 @@ import type { WorkspaceChangeReadPort } from '../workspace';
 import type { ToolRegistrySnapshotServicePort } from '../tools/tool-registry-snapshot';
 import { SessionRunControlService } from '../state/session-run-control-service';
 import { toModelPermissionSnapshot } from '../permissions';
+import type {
+  CommandAgentRunInput,
+  CommandExecutionResult,
+  CommandService,
+  HostInteractionRequest,
+} from '../commands';
 
 export interface InputSendRequest {
   requestId?: string;
@@ -134,13 +140,33 @@ export interface InputSendRequest {
   runtimeContext?: RuntimeContext;
 }
 
-export interface InputSendResult {
-  session: Session;
-  requestId: string;
-  userMessageId: string;
-  runId: string;
-  events: AsyncIterable<RuntimeEvent>;
-}
+export type InputSendResult =
+  | {
+      type: 'agent_run';
+      session: Session;
+      requestId: string;
+      userMessageId: string;
+      runId: string;
+      events: AsyncIterable<RuntimeEvent>;
+    }
+  | {
+      type: 'host_interaction_request';
+      session?: Session;
+      requestId: string;
+      request: HostInteractionRequest;
+    }
+  | {
+      type: 'completed';
+      session?: Session;
+      requestId: string;
+      message?: string;
+    }
+  | {
+      type: 'error';
+      session?: Session;
+      requestId: string;
+      message: string;
+    };
 
 export interface InputCancelRequest {
   targetRequestId: string;
@@ -161,6 +187,7 @@ export interface UserInputHandlerPort {
     requestId: string;
     payload: SessionMessageSendPayload;
     runtimeContext?: RuntimeContext;
+    command?: CommandAgentRunInput['command'];
   }): Promise<{ data: SessionMessageSendData; events: AsyncIterable<RuntimeEvent> }>;
   cancel(input: InputCancelRequest): boolean;
 }
@@ -168,6 +195,7 @@ export interface UserInputHandlerPort {
 export interface CreateInputServiceOptions {
   session: Pick<SessionServicePort, 'createSession' | 'listMessagesBySession' | 'listSessions'>;
   userInput: UserInputHandlerPort;
+  commandService?: Pick<CommandService, 'handleCommandInput'>;
   ids?: Partial<InputServiceIds>;
 }
 
@@ -253,21 +281,97 @@ async function handleUserInput(
 ): Promise<InputSendResult> {
   const createdAt = input.createdAt ?? new Date().toISOString();
   const requestId = input.requestId ?? ids.requestId();
-  const session = resolveOrCreateInputSession(options.session, input, createdAt);
-  const payload = createSessionMessageSendPayload(input, {
-    sessionId: String(session.sessionId),
-    clientMessageId: input.clientMessageId ?? ids.clientMessageId(),
+
+  const commandResult = await options.commandService?.handleCommandInput({
+    raw_input: input.text,
+  });
+
+  if (commandResult && commandResult.type !== 'not_command') {
+    return handleCommandExecutionResult({
+      commandResult,
+      input,
+      options,
+      ids,
+      requestId,
+      createdAt,
+    });
+  }
+
+  return submitInputAsAgentRun({
+    input,
+    options,
+    ids,
+    requestId,
     createdAt,
   });
-  const result = await options.userInput.handle({
-    requestId,
+}
+
+async function handleCommandExecutionResult(input: {
+  commandResult: Exclude<CommandExecutionResult, { type: 'not_command' }>;
+  input: InputSendRequest;
+  options: CreateInputServiceOptions;
+  ids: InputServiceIds;
+  requestId: string;
+  createdAt: string;
+}): Promise<InputSendResult> {
+  switch (input.commandResult.type) {
+    case 'agent_run':
+      return submitInputAsAgentRun({
+        input: {
+          ...input.input,
+          text: input.commandResult.input.raw_input,
+        },
+        options: input.options,
+        ids: input.ids,
+        requestId: input.requestId,
+        createdAt: input.createdAt,
+        command: input.commandResult.input.command,
+      });
+    case 'host_interaction_request':
+      return {
+        type: 'host_interaction_request',
+        requestId: input.requestId,
+        request: input.commandResult.request,
+      };
+    case 'completed':
+      return {
+        type: 'completed',
+        requestId: input.requestId,
+        ...(input.commandResult.message ? { message: input.commandResult.message } : {}),
+      };
+    case 'error':
+      return {
+        type: 'error',
+        requestId: input.requestId,
+        message: input.commandResult.message,
+      };
+  }
+}
+
+async function submitInputAsAgentRun(input: {
+  input: InputSendRequest;
+  options: CreateInputServiceOptions;
+  ids: InputServiceIds;
+  requestId: string;
+  createdAt: string;
+  command?: CommandAgentRunInput['command'];
+}): Promise<InputSendResult> {
+  const session = resolveOrCreateInputSession(input.options.session, input.input, input.createdAt);
+  const payload = createSessionMessageSendPayload(input.input, {
+    sessionId: String(session.sessionId),
+    clientMessageId: input.input.clientMessageId ?? input.ids.clientMessageId(),
+    createdAt: input.createdAt,
+  });
+  const result = await input.options.userInput.handle({
+    requestId: input.requestId,
     payload,
-    ...(input.runtimeContext ? { runtimeContext: input.runtimeContext } : {}),
+    ...(input.input.runtimeContext ? { runtimeContext: input.input.runtimeContext } : {}),
+    ...(input.command ? { command: input.command } : {}),
   });
   const persistedUserMessage = findPersistedUserMessage(
-    options.session.listMessagesBySession(String(session.sessionId)),
-    input.text,
-    createdAt,
+    input.options.session.listMessagesBySession(String(session.sessionId)),
+    input.input.text,
+    input.createdAt,
   );
 
   if (!persistedUserMessage?.runId) {
@@ -275,6 +379,7 @@ async function handleUserInput(
   }
 
   return {
+    type: 'agent_run',
     session,
     requestId: result.data.requestId,
     userMessageId: String(persistedUserMessage.messageId),
@@ -369,6 +474,7 @@ async function submitUserInputToAgentLoop(
     requestId: string;
     payload: SessionMessageSendPayload;
     runtimeContext?: RuntimeContext;
+    command?: CommandAgentRunInput['command'];
   },
   options: CreateUserInputHandlerOptions,
 ): Promise<{ data: SessionMessageSendData; events: AsyncIterable<RuntimeEvent> }> {
@@ -400,6 +506,7 @@ async function submitUserInputToAgentLoop(
       id: String(userMessage.messageId),
     },
     createdAt,
+    ...(input.command ? { command: input.command } : {}),
   });
 
   // The input handler starts the run record, while state owns the legal lifecycle transition details.
@@ -1068,6 +1175,7 @@ export class InputProcessingService {
     requestId: string;
     payload: SessionMessageSendPayload;
     runtimeContext?: RuntimeContext;
+    command?: CommandAgentRunInput['command'];
   }): Promise<{ data: SessionMessageSendData; events: AsyncIterable<RuntimeEvent> }> {
     return this.userInputHandler.handle(input);
   }

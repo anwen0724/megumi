@@ -193,6 +193,151 @@ describe('Composer', () => {
     expect(screen.queryByRole('listbox', { name: 'Command suggestions' })).not.toBeInTheDocument();
   });
 
+  it('renders command suggestions from the provider for slash drafts', async () => {
+    render(<Composer
+      onSubmit={() => undefined}
+      getCommandSuggestions={() => ({
+        type: 'suggestions',
+        draft_input: '/',
+        command_prefix: '',
+        groups: [{
+          id: 'commands',
+          label: 'Commands',
+          items: [{
+            name: 'review',
+            description: 'Evaluate review feedback before implementing changes',
+            source: { kind: 'built_in' },
+            match: { field: 'name', value: 'review', prefix: '' },
+            completion: { replacement_input: '/review ' },
+          }],
+        }, {
+          id: 'skills',
+          label: 'Skills',
+          items: [],
+        }],
+      })}
+    />);
+
+    await userEvent.type(screen.getByLabelText('Message Megumi'), '/');
+
+    expect(screen.getByRole('listbox', { name: 'Command suggestions' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /review/i })).toBeInTheDocument();
+  });
+
+  it('uses Enter to complete the selected command suggestion without submitting', async () => {
+    const onSubmit = vi.fn();
+    render(<Composer
+      onSubmit={onSubmit}
+      getCommandSuggestions={() => ({
+        type: 'suggestions',
+        draft_input: '/re',
+        command_prefix: 're',
+        groups: [{
+          id: 'commands',
+          label: 'Commands',
+          items: [{
+            name: 'review',
+            description: 'Evaluate review feedback before implementing changes',
+            source: { kind: 'built_in' },
+            match: { field: 'name', value: 'review', prefix: 're' },
+            completion: { replacement_input: '/review ' },
+          }],
+        }],
+      })}
+    />);
+
+    const input = screen.getByLabelText('Message Megumi');
+    await userEvent.type(input, '/re');
+    await userEvent.keyboard('{Enter}');
+
+    expect(input).toHaveValue('/review ');
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('uses Tab to complete the selected command suggestion without submitting', async () => {
+    const onSubmit = vi.fn();
+    render(<Composer
+      onSubmit={onSubmit}
+      getCommandSuggestions={() => ({
+        type: 'suggestions',
+        draft_input: '/re',
+        command_prefix: 're',
+        groups: [{
+          id: 'commands',
+          label: 'Commands',
+          items: [{
+            name: 'review',
+            description: 'Evaluate review feedback before implementing changes',
+            source: { kind: 'built_in' },
+            match: { field: 'name', value: 'review', prefix: 're' },
+            completion: { replacement_input: '/review ' },
+          }],
+        }],
+      })}
+    />);
+
+    const input = screen.getByLabelText('Message Megumi');
+    await userEvent.type(input, '/re');
+    await userEvent.keyboard('{Tab}');
+
+    expect(input).toHaveValue('/review ');
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('keeps Enter submit behavior when suggestions are inactive', async () => {
+    const onSubmit = vi.fn();
+    render(<Composer
+      onSubmit={onSubmit}
+      getCommandSuggestions={() => ({ type: 'inactive' })}
+    />);
+
+    await userEvent.type(screen.getByLabelText('Message Megumi'), 'hello');
+    await userEvent.keyboard('{Enter}');
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'hello',
+    }));
+  });
+
+  it('moves selected command suggestion with ArrowDown and ArrowUp', async () => {
+    render(<Composer
+      onSubmit={() => undefined}
+      getCommandSuggestions={() => ({
+        type: 'suggestions',
+        draft_input: '/',
+        command_prefix: '',
+        groups: [{
+          id: 'commands',
+          label: 'Commands',
+          items: [
+            {
+              name: 'review',
+              description: 'Evaluate review feedback before implementing changes',
+              source: { kind: 'built_in' },
+              match: { field: 'name', value: 'review', prefix: '' },
+              completion: { replacement_input: '/review ' },
+            },
+            {
+              name: 'status',
+              description: 'Show conversation status',
+              source: { kind: 'built_in' },
+              match: { field: 'name', value: 'status', prefix: '' },
+              completion: { replacement_input: '/status ' },
+            },
+          ],
+        }],
+      })}
+    />);
+
+    await userEvent.type(screen.getByLabelText('Message Megumi'), '/');
+    await userEvent.keyboard('{ArrowDown}');
+
+    expect(screen.getByRole('option', { name: /status/i })).toHaveAttribute('aria-selected', 'true');
+
+    await userEvent.keyboard('{ArrowUp}');
+    expect(screen.getByRole('option', { name: /review/i })).toHaveAttribute('aria-selected', 'true');
+  });
+
   it('submits slash-prefixed text without renderer-owned preprocessing', async () => {
     const onSubmit = vi.fn();
     render(<Composer onSubmit={onSubmit} />);

@@ -183,6 +183,9 @@ describe('coding-agent product runs without desktop', () => {
       permissionMode: 'default',
       createdAt: '2026-06-24T00:00:00.000Z',
     });
+    if (result.type !== 'agent_run') {
+      throw new Error(`Expected agent_run result, got ${result.type}`);
+    }
     const session = result.session;
 
     const runtimeEventTypes: string[] = [];

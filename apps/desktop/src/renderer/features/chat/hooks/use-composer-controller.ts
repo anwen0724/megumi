@@ -1,5 +1,6 @@
 // Owns Composer interaction state and builds the host-neutral submit payload.
 import { type FormEvent, type KeyboardEvent, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/coding-agent/commands';
 import {
   DEFAULT_COMPOSER_MODEL,
   DEFAULT_COMPOSER_PERMISSION_MODE,
@@ -35,11 +36,13 @@ export function useComposerController({
   onStop,
   onChooseContext,
   onAttachFiles,
+  getCommandSuggestions,
 }: ComposerProps) {
   const permissionModeId = useId();
   const modelId = useId();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [value, setValue] = useState(initialValue);
+  const [selectedCommandSuggestionIndex, setSelectedCommandSuggestionIndex] = useState(0);
   const [permissionMode, setPermissionMode] = useState<ComposerPermissionMode>(DEFAULT_COMPOSER_PERMISSION_MODE);
   const [model, setModel] = useState<ComposerModel>(DEFAULT_COMPOSER_MODEL);
   const modelOptions = useMemo(
@@ -52,6 +55,14 @@ export function useComposerController({
   const canSend = trimmedValue.length > 0 && !sendLocked && modelOptions.length > 0;
   const showStop = status === 'sending' || status === 'running' || status === 'waiting-approval';
   const canStop = showStop && Boolean(onStop);
+  const commandSuggestions: CommandSuggestionResult = getCommandSuggestions?.({
+    draft_input: value,
+  }) ?? { type: 'inactive' };
+  const visibleCommandSuggestionItems = commandSuggestions.type === 'suggestions'
+    ? commandSuggestions.groups.flatMap((group) => group.items)
+    : [];
+  const hasCommandSuggestionSelection = visibleCommandSuggestionItems.length > 0
+    && selectedCommandSuggestionIndex >= 0;
 
   useEffect(() => {
     if (seedTextKey && seedText !== null && seedText !== undefined) {
@@ -87,6 +98,17 @@ export function useComposerController({
     textarea.style.overflowY = scrollHeight > COMPOSER_TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
   }, [value]);
 
+  useEffect(() => {
+    if (visibleCommandSuggestionItems.length === 0) {
+      setSelectedCommandSuggestionIndex(0);
+      return;
+    }
+
+    setSelectedCommandSuggestionIndex((index) => (
+      index >= visibleCommandSuggestionItems.length ? 0 : Math.max(0, index)
+    ));
+  }, [visibleCommandSuggestionItems.length]);
+
   function submitDraft() {
     if (!canSend) return;
 
@@ -110,11 +132,37 @@ export function useComposerController({
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key !== 'Enter') {
+    const isComposing = event.nativeEvent.isComposing || (event as unknown as { isComposing?: boolean }).isComposing;
+
+    if (event.key === 'ArrowDown' && visibleCommandSuggestionItems.length > 0) {
+      event.preventDefault();
+      setSelectedCommandSuggestionIndex((index) => (
+        index + 1 >= visibleCommandSuggestionItems.length ? 0 : index + 1
+      ));
       return;
     }
 
-    const isComposing = event.nativeEvent.isComposing || (event as unknown as { isComposing?: boolean }).isComposing;
+    if (event.key === 'ArrowUp' && visibleCommandSuggestionItems.length > 0) {
+      event.preventDefault();
+      setSelectedCommandSuggestionIndex((index) => (
+        index <= 0 ? visibleCommandSuggestionItems.length - 1 : index - 1
+      ));
+      return;
+    }
+
+    if (!isComposing && (event.key === 'Enter' || event.key === 'Tab') && hasCommandSuggestionSelection) {
+      event.preventDefault();
+      const item = visibleCommandSuggestionItems[selectedCommandSuggestionIndex];
+      if (item) {
+        setValue(item.completion.replacement_input);
+        setSelectedCommandSuggestionIndex(0);
+      }
+      return;
+    }
+
+    if (event.key !== 'Enter') {
+      return;
+    }
 
     if (isComposing || event.shiftKey) {
       return;
@@ -130,6 +178,12 @@ export function useComposerController({
     submitDraft();
   }
 
+  function chooseCommandSuggestion(item: CommandSuggestionItem) {
+    setValue(item.completion.replacement_input);
+    setSelectedCommandSuggestionIndex(0);
+    textareaRef.current?.focus();
+  }
+
   const composerSurfaceProps: ComposerSurfaceProps = {
     value,
     permissionMode,
@@ -142,7 +196,10 @@ export function useComposerController({
     permissionModeId,
     modelId,
     textareaRef,
+    commandSuggestions,
+    selectedCommandSuggestionIndex,
     onValueChange: setValue,
+    onCommandSuggestionChoose: chooseCommandSuggestion,
     onPermissionModeChange: setPermissionMode,
     onModelChange: setModel,
     onKeyDown: handleComposerKeyDown,

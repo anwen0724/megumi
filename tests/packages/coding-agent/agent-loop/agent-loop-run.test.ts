@@ -92,16 +92,16 @@ describe('AgentLoop', () => {
         rawInputId: 'raw-input:1',
         source: { kind: 'composer' },
         rawKind: 'slash_command',
-        kind: 'command_input',
+        kind: 'user_input',
         text: '/review src',
         attachments: [],
         references: [],
         facts: [{
           kind: 'command',
-          commandName: 'review',
-          argsText: 'src',
-          rawText: '/review src',
-          target: 'agent_command',
+          name: 'review',
+          source: { kind: 'built_in' },
+          arguments_input: 'src',
+          raw_input: '/review src',
         }],
         createdAt: '2026-06-21T00:00:00.000Z',
       },
@@ -112,10 +112,11 @@ describe('AgentLoop', () => {
     for (const input of buildInputs) {
       expect(input.runInputFacts?.effectiveUserText).toBe('/review src');
       expect(input.runInputFacts?.facts).toEqual([{
-        kind: 'agent_command',
-        commandName: 'review',
-        argsText: 'src',
-        rawText: '/review src',
+        kind: 'command',
+        name: 'review',
+        source: { kind: 'built_in' },
+        arguments_input: 'src',
+        raw_input: '/review src',
       }]);
     }
   });

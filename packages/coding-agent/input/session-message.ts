@@ -3,7 +3,7 @@ import type { SessionMessageSendPayload } from '@megumi/shared/ipc';
 import type { JsonObject } from '@megumi/shared/primitives';
 import type { PermissionMode, PermissionModeSelectionSource } from '@megumi/shared/permission';
 import type { InputPreprocessingResult } from '@megumi/shared/input';
-import { BUILT_IN_INPUT_COMMAND_REGISTRY } from './command';
+import type { CommandAgentRunInput } from '../commands';
 import { parseRawInput } from './normalizer';
 import type { ParsedInput } from './parsed-input';
 import { normalizeSessionMessageInputPreprocessing } from './preprocessing';
@@ -28,6 +28,7 @@ export interface ParseSessionMessageRawInputInput {
   sessionId: string;
   message: SessionMessageInputMessage;
   createdAt: string;
+  command?: CommandAgentRunInput['command'];
 }
 
 export function prepareSessionMessageInput(
@@ -73,9 +74,7 @@ export function parseSessionMessageRawInput(
       requestId: input.requestId,
     },
     createdAt: input.createdAt,
-  }, {
-    commandRegistry: BUILT_IN_INPUT_COMMAND_REGISTRY,
-  });
+  }, input.command ? { command: input.command } : {});
 }
 
 type SessionMessageSendHistoryMessage = NonNullable<SessionMessageSendPayload['messages']>[number];

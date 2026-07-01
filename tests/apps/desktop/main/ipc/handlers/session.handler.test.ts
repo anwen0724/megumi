@@ -201,6 +201,7 @@ describe('registerSessionHandlers', () => {
     } satisfies RuntimeEvent;
     const service = createSessionServiceMock({
       sendInput: vi.fn(async () => ({
+        type: 'agent_run',
         requestId: 'ipc-session-message-send-1',
         session: {
           sessionId: 'session-1',

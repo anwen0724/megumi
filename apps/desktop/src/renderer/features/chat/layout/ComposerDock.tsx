@@ -1,6 +1,7 @@
 ﻿import { useLayoutEffect, useRef } from 'react';
 import type { ApprovalRequest } from '@megumi/shared/tool';
 import type { ProviderId } from '@megumi/shared/provider';
+import type { CommandSuggestionResult } from '@megumi/coding-agent/commands';
 import type { RecoverableRunSummary } from '@megumi/shared/recovery';
 import type { ApprovalCardResolvePayload } from '../../../entities/approval';
 import { ApprovalStack } from '../components/ApprovalStack';
@@ -27,6 +28,7 @@ interface ComposerDockProps {
   onSubmit: (payload: ComposerSubmitPayload) => void;
   onStop: () => void;
   onHeightChange?: (height: number) => void;
+  getCommandSuggestions?: (request: { draft_input: string }) => CommandSuggestionResult;
 }
 
 export function ComposerDock({
@@ -43,6 +45,7 @@ export function ComposerDock({
   onSubmit,
   onStop,
   onHeightChange,
+  getCommandSuggestions,
 }: ComposerDockProps) {
   const composerSurfaceRef = useRef<HTMLFormElement | null>(null);
   const { composerSurfaceProps } = useComposerController({
@@ -54,6 +57,7 @@ export function ComposerDock({
     onStop,
     onAttachFiles: () => undefined,
     onChooseContext: () => undefined,
+    getCommandSuggestions,
   });
   const hasOverlayContent =
     pendingApprovals.length > 0 ||
