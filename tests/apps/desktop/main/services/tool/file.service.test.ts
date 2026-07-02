@@ -5,6 +5,7 @@ import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
 import { createBuiltInToolAdapter } from '@megumi/coding-agent/tools/adapters/built-in-tools';
+import { createLocalWorkspaceFileAccess } from '@megumi/coding-agent/composition/compose-coding-agent-tool-runtime';
 
 describe('built-in tool adapter file and command execution', () => {
   let tmpDir: string;
@@ -18,7 +19,9 @@ describe('built-in tool adapter file and command execution', () => {
   });
 
   it('rejects paths outside the project root', async () => {
-    const adapter = createBuiltInToolAdapter({ projectRoot: tmpDir });
+    const adapter = createBuiltInToolAdapter({
+      workspaceFileAccess: createLocalWorkspaceFileAccess({ projectRoot: tmpDir }),
+    });
 
     await expect(adapter.execute({
       toolName: 'read_file',
@@ -27,7 +30,9 @@ describe('built-in tool adapter file and command execution', () => {
   });
 
   it('reads, writes, and edits files inside the project root', async () => {
-    const adapter = createBuiltInToolAdapter({ projectRoot: tmpDir });
+    const adapter = createBuiltInToolAdapter({
+      workspaceFileAccess: createLocalWorkspaceFileAccess({ projectRoot: tmpDir }),
+    });
 
     await adapter.execute({
       toolName: 'write_file',
@@ -69,7 +74,10 @@ describe('built-in tool adapter file and command execution', () => {
       }, 0);
       return child;
     });
-    const adapter = createBuiltInToolAdapter({ projectRoot: tmpDir, spawn: spawn as never });
+    const adapter = createBuiltInToolAdapter({
+      workspaceFileAccess: createLocalWorkspaceFileAccess({ projectRoot: tmpDir }),
+      spawn: spawn as never,
+    });
 
     const result = await adapter.execute({
       toolName: 'run_command',

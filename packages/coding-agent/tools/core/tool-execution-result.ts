@@ -1,5 +1,6 @@
 // Normalizes raw tool adapter output into ToolExecutionResult values.
 import type {
+  JsonObject,
   NormalizedToolResult,
   RawToolResult,
   ToolExecutionErrorCode,
@@ -7,7 +8,12 @@ import type {
 } from '../contracts/tool-contracts';
 
 const MAX_NORMALIZED_CONTENT_BYTES = 12_000;
-const REDACTION_PATTERN = /secret[-_ ]?token/gi;
+const SECRET_VALUE_PATTERNS: readonly RegExp[] = [
+  /\b(Authorization\s*:\s*Bearer)\s+[A-Za-z0-9._~+/=-]+/gi,
+  /\b(Bearer)\s+[A-Za-z0-9._~+/=-]+/gi,
+  /\b(api[-_ ]?key|apikey|token|password|secret)\s*[:=]\s*("[^"]+"|'[^']+'|[^\s,;]+)/gi,
+  /secret[-_ ]?token/gi,
+];
 
 export function normalizeRawToolResult(input: {
   toolName: string;
@@ -45,7 +51,7 @@ export function createFailedToolResult(input: {
   toolName?: string;
   code: ToolExecutionErrorCode;
   message: string;
-  details?: Record<string, unknown>;
+  details?: JsonObject;
 }): ToolExecutionResult {
   const normalizedResult = normalizeTextContent(input.message, true);
   return {
@@ -114,7 +120,11 @@ function stringifyContent(content: unknown): string {
 }
 
 function redact(content: string): { content: string; redacted: boolean } {
-  const redacted = content.replace(REDACTION_PATTERN, '[REDACTED]');
+  let redacted = content;
+  redacted = redacted.replace(SECRET_VALUE_PATTERNS[0], '$1 [REDACTED]');
+  redacted = redacted.replace(SECRET_VALUE_PATTERNS[1], '$1 [REDACTED]');
+  redacted = redacted.replace(SECRET_VALUE_PATTERNS[2], '$1=[REDACTED]');
+  redacted = redacted.replace(SECRET_VALUE_PATTERNS[3], '[REDACTED]');
   return {
     content: redacted,
     redacted: redacted !== content,

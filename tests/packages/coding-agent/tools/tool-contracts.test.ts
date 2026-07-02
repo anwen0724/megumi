@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 import type {
   ExecuteToolRequest,
   GetRegisteredToolRequest,
@@ -85,5 +87,17 @@ describe('tool contracts', () => {
     };
 
     expect(result.normalizedResult.content).toContain('Tool not found');
+  });
+
+  it('uses JSON-specific schema and metadata contract types', () => {
+    const source = fs.readFileSync(
+      path.join(process.cwd(), 'packages/coding-agent/tools/contracts/tool-contracts.ts'),
+      'utf8',
+    );
+
+    expect(source).toContain('JsonSchemaObject');
+    expect(source).toContain('JsonObject');
+    expect(source).not.toContain('inputSchema: Record<string, unknown>');
+    expect(source).not.toContain('metadata?: Record<string, unknown>');
   });
 });

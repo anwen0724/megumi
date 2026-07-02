@@ -78,4 +78,28 @@ describe('tool execution result normalization', () => {
       redactionState: 'redacted',
     });
   });
+
+  it('redacts common token, key, password, and secret values from normalized content', () => {
+    const result = normalizeRawToolResult({
+      toolName: 'run_command',
+      rawResult: {
+        outputKind: 'text',
+        content: [
+          'Authorization: Bearer abcdef1234567890',
+          'apiKey=sk-test-1234567890abcdef',
+          'password: raw-password-value',
+          'secret: raw-secret-value',
+        ].join('\n'),
+      },
+    });
+
+    expect(result.type).toBe('succeeded');
+    expect(result.normalizedResult.content).not.toContain('abcdef1234567890');
+    expect(result.normalizedResult.content).not.toContain('sk-test-1234567890abcdef');
+    expect(result.normalizedResult.content).not.toContain('raw-password-value');
+    expect(result.normalizedResult.content).not.toContain('raw-secret-value');
+    expect(result.normalizedResult.metadata).toMatchObject({
+      redactionState: 'redacted',
+    });
+  });
 });

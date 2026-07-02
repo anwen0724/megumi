@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   ToolExecutionService,
   ToolRegistryService,
+  type RegisteredTool,
 } from '@megumi/coding-agent/tools';
-import { createBuiltInToolAdapter } from '@megumi/coding-agent/tools/adapters/built-in-tools';
+import { createBuiltInToolAdapter, type WorkspaceFileAccess } from '@megumi/coding-agent/tools/adapters/built-in-tools';
 
 describe('ToolExecutionService', () => {
   it('executes registered built-in tools and normalizes their output', async () => {
@@ -55,53 +56,138 @@ describe('ToolExecutionService', () => {
       },
     });
   });
+
+  it('validates array item schemas before adapter execution', async () => {
+    const adapter = {
+      execute: vi.fn(async () => ({
+        outputKind: 'text' as const,
+        content: 'should not execute',
+      })),
+    };
+    const service = new ToolExecutionService({
+      registryService: {
+        getRegisteredTool: () => ({
+          type: 'found',
+          tool: registeredToolWithSchema({
+            type: 'object',
+            properties: {
+              paths: {
+                type: 'array',
+                items: { type: 'string', minLength: 1 },
+              },
+            },
+            required: ['paths'],
+            additionalProperties: false,
+          }),
+        }),
+      },
+      builtInTools: adapter,
+    });
+
+    const result = await service.executeTool({
+      toolName: 'read_file',
+      input: { paths: ['README.md', 42] },
+    });
+
+    expect(result).toMatchObject({
+      type: 'failed',
+      error: { code: 'invalid_tool_input' },
+      normalizedResult: {
+        content: 'Invalid tool input at $.paths[1]: expected string.',
+      },
+    });
+    expect(adapter.execute).not.toHaveBeenCalled();
+  });
 });
 
 function createService(files: Map<string, string>): ToolExecutionService {
   return new ToolExecutionService({
     registryService: new ToolRegistryService(),
     builtInTools: createBuiltInToolAdapter({
-      projectRoot: 'C:/project',
-      fileSystem: fakeFileSystem(files),
+      workspaceFileAccess: fakeWorkspaceFileAccess(files),
     }),
   });
 }
 
-function fakeFileSystem(files: Map<string, string>) {
+function fakeWorkspaceFileAccess(files: Map<string, string>): WorkspaceFileAccess {
   return {
-    async readFile(filePath: string) {
+    async readFile(input) {
+      const filePath = `C:\\project\\${input.path}`;
+      const value = files.get(filePath);
+      if (value === undefined) throw new Error(`Missing file: ${filePath}`);
+      const buffer = Buffer.from(value, 'utf8');
+      return {
+        path: input.path,
+        content: buffer.byteLength > input.maxBytes ? buffer.subarray(0, input.maxBytes).toString('utf8') : value,
+        truncated: buffer.byteLength > input.maxBytes,
+        sizeBytes: buffer.byteLength,
+      };
+    },
+    async readTextFile(input) {
+      const filePath = `C:\\project\\${input.path}`;
       const value = files.get(filePath);
       if (value === undefined) throw new Error(`Missing file: ${filePath}`);
       return value;
     },
-    async writeFile(filePath: string, content: string) {
-      files.set(filePath, content);
+    async listDirectory(input) {
+      return {
+        path: input.path,
+        entries: [],
+        truncated: false,
+      };
     },
-    async mkdir() {},
-    async stat(filePath: string) {
-      if (files.has(filePath)) {
-        return { isFile: () => true, isDirectory: () => false, size: files.get(filePath)?.length ?? 0 };
-      }
-      const prefix = filePath.endsWith('\\') ? filePath : `${filePath}\\`;
-      if ([...files.keys()].some((file) => file.startsWith(prefix))) {
-        return { isFile: () => false, isDirectory: () => true, size: 0 };
-      }
-      throw new Error(`Missing path: ${filePath}`);
+    async walkFiles() {
+      return [];
     },
-    async readdir(filePath: string) {
-      const prefix = filePath.endsWith('\\') ? filePath : `${filePath}\\`;
-      const names = new Set<string>();
-      for (const file of files.keys()) {
-        if (!file.startsWith(prefix)) continue;
-        const rest = file.slice(prefix.length);
-        const name = rest.split('\\')[0];
-        if (name) names.add(name);
+    async replaceText() {
+      throw new Error('Not implemented in this test');
+    },
+    async writeFile(input) {
+      const filePath = `C:\\project\\${input.path}`;
+      const exists = files.has(filePath);
+      if (exists && !input.overwrite) {
+        throw new Error(`File already exists: ${input.path}`);
       }
-      return [...names].map((name) => {
-        const full = `${prefix}${name}`;
-        const isFile = files.has(full);
-        return { name, isFile: () => isFile, isDirectory: () => !isFile };
-      });
+      files.set(filePath, input.content);
+      return {
+        path: input.path,
+        bytesWritten: Buffer.byteLength(input.content, 'utf8'),
+        created: !exists,
+        overwritten: exists,
+      };
+    },
+    async resolveCommandCwd() {
+      return 'C:\\project';
+    },
+  };
+}
+
+function registeredToolWithSchema(inputSchema: RegisteredTool['definition']['inputSchema']): RegisteredTool {
+  return {
+    identity: {
+      sourceId: 'built_in',
+      namespace: 'megumi',
+      sourceToolName: 'read_file',
+    },
+    registeredToolName: 'read_file',
+    status: 'available',
+    source: {
+      sourceId: 'built_in',
+      sourceKind: 'built_in',
+      namespace: 'megumi',
+      displayName: 'Built-in tools',
+      configured: true,
+      enabled: true,
+      availabilityStatus: 'available',
+    },
+    definition: {
+      name: 'read_file',
+      description: 'Read a file.',
+      inputSchema,
+      capabilities: ['project_read'],
+      riskLevel: 'low',
+      sideEffect: 'none',
+      availability: { status: 'available' },
     },
   };
 }

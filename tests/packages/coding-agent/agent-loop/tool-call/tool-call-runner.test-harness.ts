@@ -59,6 +59,11 @@ export function modelRequest(): ModelStepRuntimeRequest {
     providerId: 'openai',
     modelId: 'test-model',
     inputContext: { parts: [] } as unknown as ModelStepRuntimeRequest['inputContext'],
+    toolDefinitions: new ToolRegistryService().listAvailableTools().tools.map((tool) => ({
+      ...tool.definition,
+      name: tool.registeredToolName,
+      description: tool.definition.modelFacingDescription ?? tool.definition.description,
+    })),
     createdAt: '2026-06-15T00:00:00.000Z',
   };
 }

@@ -1,4 +1,7 @@
 // Defines the public contracts exposed by the Coding Agent tools module.
+import type { JsonObject, JsonValue } from '@megumi/shared/primitives';
+
+export type JsonSchemaObject = JsonObject;
 
 export type ToolCapability =
   | 'project_read'
@@ -34,9 +37,9 @@ export type ToolDefinition = {
   name: string;
   title?: string;
   description: string;
-  inputSchema: Record<string, unknown>;
-  inputExamples?: Record<string, unknown>[];
-  outputSchema?: Record<string, unknown>;
+  inputSchema: JsonSchemaObject;
+  inputExamples?: JsonObject[];
+  outputSchema?: JsonSchemaObject;
   annotations?: {
     readOnlyHint?: boolean;
     destructiveHint?: boolean;
@@ -48,9 +51,9 @@ export type ToolDefinition = {
   sideEffect: ToolSideEffect;
   availability: ToolAvailability;
   executionMode?: 'parallel' | 'serial';
-  permissionMetadata?: Record<string, unknown>;
+  permissionMetadata?: JsonObject;
   modelFacingDescription?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: JsonObject;
 };
 
 export type ToolSource = {
@@ -112,7 +115,7 @@ export type RawToolResult = {
   outputKind: 'text' | 'json' | 'command' | 'file' | 'diff' | 'error';
   content: unknown;
   isError?: boolean;
-  metadata?: Record<string, unknown>;
+  metadata?: JsonObject;
 };
 
 export type NormalizedToolResult = {
@@ -121,12 +124,12 @@ export type NormalizedToolResult = {
   isError: boolean;
   truncated: boolean;
   truncationReason?: 'line_limit' | 'byte_limit' | 'token_budget' | 'policy';
-  metadata?: Record<string, unknown>;
+  metadata?: JsonObject;
 };
 
 export type ToolExecutionObservation = {
   summary: string;
-  details?: Record<string, unknown>;
+  details?: JsonObject;
 };
 
 export type ToolExecutionErrorCode =
@@ -138,7 +141,7 @@ export type ToolExecutionErrorCode =
 export type ToolExecutionError = {
   code: ToolExecutionErrorCode;
   message: string;
-  details?: Record<string, unknown>;
+  details?: JsonObject;
 };
 
 export type ToolExecutionResult =
@@ -148,7 +151,7 @@ export type ToolExecutionResult =
       rawResult: RawToolResult;
       normalizedResult: NormalizedToolResult;
       toolExecutionObservation?: ToolExecutionObservation;
-      metadata?: Record<string, unknown>;
+      metadata?: JsonObject;
     }
   | {
       type: 'failed';
@@ -156,5 +159,7 @@ export type ToolExecutionResult =
       error: ToolExecutionError;
       normalizedResult: NormalizedToolResult;
       toolExecutionObservation?: ToolExecutionObservation;
-      metadata?: Record<string, unknown>;
+      metadata?: JsonObject;
     };
+
+export type { JsonObject, JsonValue };

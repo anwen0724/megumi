@@ -269,4 +269,42 @@ describe('ToolCallRunner source-order barrier', () => {
     expect(harness.recordsByCallOrder()[0]?.status).toBe('failed');
     expect(outcome.toolResults[0]?.textContent).toContain('failed call:0');
   });
+
+  it('rejects tool calls that were not present in the current model-call Tool Set', async () => {
+    const harness = createToolCallRunnerHarness({
+      decisions: [allowSerial('write_file')],
+    });
+    const handleInput = createHandleInput([toolCall('call:0', 'write_file')]);
+
+    await harness.toolCallHandler.handleToolCalls({
+      ...handleInput,
+      request: {
+        ...handleInput.request,
+        toolDefinitions: [{
+          name: 'read_file',
+          description: 'Read a file from the workspace.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              path: { type: 'string' },
+            },
+            required: ['path'],
+          },
+          capabilities: ['project_read'],
+          riskLevel: 'low',
+          sideEffect: 'none',
+          availability: { status: 'available' },
+        }],
+      },
+    });
+
+    expect(harness.executor.startedToolCallIds()).toEqual([]);
+    expect(harness.recordsByCallOrder()[0]).toMatchObject({
+      status: 'rejected',
+      decision: {
+        reasonCode: 'TOOL_NOT_FOUND',
+        reason: 'Tool not available in current model-call Tool Set: write_file',
+      },
+    });
+  });
 });

@@ -236,7 +236,10 @@ async function prepareRecords(
       continue;
     }
 
-    const resolution = options.toolRegistryService.getRegisteredTool({ toolName: toolCall.toolName });
+    const allowedByCurrentToolSet = isToolAllowedByCurrentModelCallToolSet(input.request, toolCall.toolName);
+    const resolution = allowedByCurrentToolSet
+      ? options.toolRegistryService.getRegisteredTool({ toolName: toolCall.toolName })
+      : { type: 'not_found' as const, toolName: toolCall.toolName };
     const registeredTool = resolution.type === 'found' ? resolution.tool : undefined;
     const resolvedToolCall = registeredTool
       ? { ...toolCall, toolName: registeredTool.registeredToolName }
@@ -250,7 +253,9 @@ async function prepareRecords(
     const record = registeredTool
       ? recordFromRegisteredTool(options, input.request, resolvedToolCall, index, registeredTool)
       : createRejectedRecord(options, input.request, toolCall, index, {
-        reason: `Unknown tool: ${toolCall.toolName}`,
+        reason: allowedByCurrentToolSet
+          ? `Unknown tool: ${toolCall.toolName}`
+          : `Tool not available in current model-call Tool Set: ${toolCall.toolName}`,
         reasonCode: 'TOOL_NOT_FOUND',
       });
     options.repository.recordToolExecution(record);
@@ -260,6 +265,13 @@ async function prepareRecords(
     runId: String(input.request.runId),
     assistantMessageId,
   });
+}
+
+function isToolAllowedByCurrentModelCallToolSet(
+  request: ModelStepRuntimeRequest,
+  toolName: string,
+): boolean {
+  return Boolean(request.toolDefinitions?.some((definition) => definition.name === toolName));
 }
 
 function recordFromRegisteredTool(

@@ -56,6 +56,14 @@ describe('built-in tools and host adapters source guards', () => {
     expect(source).not.toContain('spawn(');
   });
 
+  it('keeps workspace path policy outside the built-in tools adapter', () => {
+    const builtInTools = read('packages/coding-agent/tools/adapters/built-in-tools.ts');
+
+    expect(builtInTools).not.toContain("from '../../workspace'");
+    expect(builtInTools).not.toContain('classifyProjectPath');
+    expect(builtInTools).not.toContain('projectRoot');
+  });
+
   it('keeps Host execution behind PermissionPolicy', () => {
     const approval = read('packages/coding-agent/agent-loop/tool-call/approval/tool-call-approval.ts');
     const executionRecord = read('packages/coding-agent/agent-loop/tool-call/execution/tool-execution-record.ts');

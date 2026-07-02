@@ -1,20 +1,57 @@
 // Executes Megumi built-in tools through injected local workspace dependencies.
-import path from 'node:path';
 import { spawn as nodeSpawn } from 'node:child_process';
-import fs from 'fs-extra';
-import { classifyProjectPath } from '../../workspace';
 import type { RawToolResult } from '../contracts/tool-contracts';
 
-export interface BuiltInToolFileSystem {
-  readFile(path: string, encoding: 'utf8'): Promise<string>;
-  writeFile(path: string, content: string, encoding: 'utf8'): Promise<void>;
-  mkdir(path: string, options: { recursive: true }): Promise<unknown>;
-  stat(path: string): Promise<{ isFile(): boolean; isDirectory(): boolean; size: number }>;
-  readdir(path: string, options: { withFileTypes: true }): Promise<Array<{
-    name: string;
-    isFile(): boolean;
-    isDirectory(): boolean;
-  }>>;
+export interface WorkspaceFileAccess {
+  readFile(input: {
+    path: string;
+    maxBytes: number;
+  }): Promise<{
+    path: string;
+    content: string;
+    truncated: boolean;
+    sizeBytes: number;
+  }>;
+  listDirectory(input: {
+    path: string;
+  }): Promise<{
+    path: string;
+    entries: Array<{
+      name: string;
+      kind: 'file' | 'directory';
+      path: string;
+    }>;
+    truncated: boolean;
+  }>;
+  walkFiles(input: {
+    path: string;
+  }): Promise<string[]>;
+  readTextFile(input: {
+    path: string;
+  }): Promise<string>;
+  replaceText(input: {
+    path: string;
+    oldText: string;
+    newText: string;
+    replaceAll: boolean;
+  }): Promise<{
+    path: string;
+    replacements: number;
+    changed: boolean;
+  }>;
+  writeFile(input: {
+    path: string;
+    content: string;
+    overwrite: boolean;
+  }): Promise<{
+    path: string;
+    bytesWritten: number;
+    created: boolean;
+    overwritten: boolean;
+  }>;
+  resolveCommandCwd(input: {
+    path: string;
+  }): Promise<string>;
 }
 
 export type BuiltInToolSpawn = typeof nodeSpawn;
@@ -30,13 +67,11 @@ export interface BuiltInToolAdapter {
 }
 
 export function createBuiltInToolAdapter(input: {
-  projectRoot: string;
-  fileSystem?: BuiltInToolFileSystem;
+  workspaceFileAccess: WorkspaceFileAccess;
   spawn?: BuiltInToolSpawn;
 }): BuiltInToolAdapter {
   const context = {
-    projectRoot: input.projectRoot,
-    fileSystem: input.fileSystem ?? fs,
+    workspaceFileAccess: input.workspaceFileAccess,
     spawn: input.spawn ?? nodeSpawn,
   };
 
@@ -71,17 +106,18 @@ async function readFile(
   const record = inputRecord(input);
   const targetPath = requireString(record, 'path');
   const maxBytes = optionalPositiveInteger(record, 'maxBytes', 256 * 1024);
-  const resolved = resolveReadablePath(context, targetPath);
-  const rawContent = await context.fileSystem.readFile(resolved.absolutePath, 'utf8');
-  const truncated = truncateUtf8(rawContent, maxBytes);
+  const result = await context.workspaceFileAccess.readFile({
+    path: targetPath,
+    maxBytes,
+  });
 
   return {
     outputKind: 'file',
-    content: truncated.content,
+    content: result.content,
     metadata: {
-      path: resolved.relativePath,
-      truncated: truncated.truncated,
-      sizeBytes: Buffer.byteLength(rawContent, 'utf8'),
+      path: result.path,
+      truncated: result.truncated,
+      sizeBytes: result.sizeBytes,
     },
   };
 }
@@ -92,28 +128,14 @@ async function listDirectory(
 ): Promise<RawToolResult> {
   const record = inputRecord(input);
   const requestedPath = optionalString(record, 'path', '.');
-  const resolved = resolveReadablePath(context, requestedPath);
-  const entries = await context.fileSystem.readdir(resolved.absolutePath, { withFileTypes: true });
-  const visibleEntries = entries
-    .filter((entry) => entry.isFile() || entry.isDirectory())
-    .map((entry) => {
-      const relativePath = normalizeSlash(resolved.relativePath === '.'
-        ? entry.name
-        : `${resolved.relativePath}/${entry.name}`);
-      return {
-        name: entry.name,
-        kind: entry.isDirectory() ? 'directory' : 'file',
-        path: relativePath,
-      };
-    })
-    .sort((left, right) => left.path.localeCompare(right.path));
+  const result = await context.workspaceFileAccess.listDirectory({ path: requestedPath });
 
   return {
     outputKind: 'json',
     content: {
-      path: resolved.relativePath,
-      entries: visibleEntries,
-      truncated: false,
+      path: result.path,
+      entries: result.entries,
+      truncated: result.truncated,
     },
   };
 }
@@ -126,7 +148,7 @@ async function glob(
   const pattern = requireString(record, 'pattern');
   const cwd = optionalString(record, 'cwd', globStaticBase(pattern));
   const limit = optionalPositiveInteger(record, 'limit', 500);
-  const files = await walkFiles(context, cwd);
+  const files = await context.workspaceFileAccess.walkFiles({ path: cwd });
   const matcher = globToRegExp(pattern);
   const matches = files
     .filter((file) => matcher.test(normalizeSlash(file)))
@@ -150,13 +172,12 @@ async function searchText(
   const rootPath = optionalString(record, 'path', '.');
   const caseSensitive = Boolean(record.caseSensitive);
   const limit = optionalPositiveInteger(record, 'limit', 100);
-  const files = await walkFiles(context, rootPath);
+  const files = await context.workspaceFileAccess.walkFiles({ path: rootPath });
   const needle = caseSensitive ? query : query.toLowerCase();
   const matches: Array<{ path: string; line: number; preview: string }> = [];
 
   for (const file of files) {
-    const resolved = resolveReadablePath(context, file);
-    const content = await context.fileSystem.readFile(resolved.absolutePath, 'utf8');
+    const content = await context.workspaceFileAccess.readTextFile({ path: file });
     const lines = content.split(/\r?\n/);
     for (const [index, line] of lines.entries()) {
       const haystack = caseSensitive ? line : line.toLowerCase();
@@ -187,27 +208,19 @@ async function editFile(
   const oldText = requireString(record, 'oldText');
   const newText = requireString(record, 'newText');
   const replaceAll = Boolean(record.replaceAll);
-  const resolved = resolveWritablePath(context, targetPath);
-  const content = await context.fileSystem.readFile(resolved.absolutePath, 'utf8');
-  const occurrences = content.split(oldText).length - 1;
-  if (occurrences === 0) {
-    throw new Error(`Text not found in file: ${resolved.relativePath}`);
-  }
-  if (!replaceAll && occurrences > 1) {
-    throw new Error(`Text occurs multiple times in file: ${resolved.relativePath}`);
-  }
-  const updated = replaceAll
-    ? content.split(oldText).join(newText)
-    : content.replace(oldText, newText);
-
-  await context.fileSystem.writeFile(resolved.absolutePath, updated, 'utf8');
+  const result = await context.workspaceFileAccess.replaceText({
+    path: targetPath,
+    oldText,
+    newText,
+    replaceAll,
+  });
 
   return {
     outputKind: 'json',
     content: {
-      path: resolved.relativePath,
-      replacements: replaceAll ? occurrences : 1,
-      changed: updated !== content,
+      path: result.path,
+      replacements: result.replacements,
+      changed: result.changed,
     },
   };
 }
@@ -220,22 +233,19 @@ async function writeFile(
   const targetPath = requireString(record, 'path');
   const content = requireString(record, 'content');
   const overwrite = Boolean(record.overwrite);
-  const resolved = resolveWritablePath(context, targetPath);
-  const exists = await existsAsFile(context.fileSystem, resolved.absolutePath);
-  if (exists && !overwrite) {
-    throw new Error(`File already exists: ${resolved.relativePath}`);
-  }
-
-  await context.fileSystem.mkdir(path.dirname(resolved.absolutePath), { recursive: true });
-  await context.fileSystem.writeFile(resolved.absolutePath, content, 'utf8');
+  const result = await context.workspaceFileAccess.writeFile({
+    path: targetPath,
+    content,
+    overwrite,
+  });
 
   return {
     outputKind: 'json',
     content: {
-      path: resolved.relativePath,
-      bytesWritten: Buffer.byteLength(content, 'utf8'),
-      created: !exists,
-      overwritten: exists,
+      path: result.path,
+      bytesWritten: result.bytesWritten,
+      created: result.created,
+      overwritten: result.overwritten,
     },
   };
 }
@@ -247,7 +257,9 @@ async function runCommand(
 ): Promise<RawToolResult> {
   const record = inputRecord(input);
   const command = requireString(record, 'command');
-  const cwd = resolveReadablePath(context, optionalString(record, 'cwd', '.')).absolutePath;
+  const cwd = await context.workspaceFileAccess.resolveCommandCwd({
+    path: optionalString(record, 'cwd', '.'),
+  });
   const timeoutMs = optionalPositiveInteger(record, 'timeoutMs', 60_000);
   const startedAt = Date.now();
   const result = await runShellCommand({
@@ -272,72 +284,9 @@ async function runCommand(
 }
 
 type BuiltInToolContext = {
-  projectRoot: string;
-  fileSystem: BuiltInToolFileSystem;
+  workspaceFileAccess: WorkspaceFileAccess;
   spawn: BuiltInToolSpawn;
 };
-
-function resolveReadablePath(context: BuiltInToolContext, targetPath: string): {
-  absolutePath: string;
-  relativePath: string;
-} {
-  const classification = classifyProjectPath({
-    projectRoot: context.projectRoot,
-    targetPath,
-  });
-  if (!classification.insideProject) {
-    throw new Error(`Project path is outside the project: ${targetPath}`);
-  }
-  if (classification.protected || classification.sensitive) {
-    throw new Error(`Project path cannot be accessed: ${classification.relativePath}`);
-  }
-  return {
-    absolutePath: classification.absolutePath,
-    relativePath: classification.relativePath || '.',
-  };
-}
-
-function resolveWritablePath(context: BuiltInToolContext, targetPath: string): {
-  absolutePath: string;
-  relativePath: string;
-} {
-  return resolveReadablePath(context, targetPath);
-}
-
-async function walkFiles(context: BuiltInToolContext, rootRelativePath: string): Promise<string[]> {
-  const root = resolveReadablePath(context, rootRelativePath);
-  const stats = await context.fileSystem.stat(root.absolutePath);
-  if (stats.isFile()) {
-    return [root.relativePath];
-  }
-  if (!stats.isDirectory()) {
-    return [];
-  }
-
-  const output: string[] = [];
-  await walkDirectory(context, root.absolutePath, root.relativePath === '.' ? '' : root.relativePath, output);
-  return output.sort();
-}
-
-async function walkDirectory(
-  context: BuiltInToolContext,
-  absoluteDirectory: string,
-  relativeDirectory: string,
-  output: string[],
-): Promise<void> {
-  const entries = await context.fileSystem.readdir(absoluteDirectory, { withFileTypes: true });
-  for (const entry of entries) {
-    const relativePath = normalizeSlash(relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name);
-    const absolutePath = path.join(absoluteDirectory, entry.name);
-    if (entry.isFile()) {
-      output.push(relativePath);
-      continue;
-    }
-    if (entry.isDirectory()) {
-      await walkDirectory(context, absolutePath, relativePath, output);
-    }
-  }
-}
 
 function inputRecord(input: unknown): Record<string, unknown> {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
@@ -385,15 +334,6 @@ function truncateUtf8(content: string, maxBytes: number): { content: string; tru
     content: buffer.subarray(0, maxBytes).toString('utf8'),
     truncated: true,
   };
-}
-
-async function existsAsFile(fileSystem: BuiltInToolFileSystem, filePath: string): Promise<boolean> {
-  try {
-    const stats = await fileSystem.stat(filePath);
-    return stats.isFile();
-  } catch {
-    return false;
-  }
 }
 
 function normalizeSlash(value: string): string {

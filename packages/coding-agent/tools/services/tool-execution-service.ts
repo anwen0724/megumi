@@ -1,6 +1,7 @@
 // Provides the Tool Execution Service public entrypoint for already-allowed tool requests.
 import type {
   ExecuteToolRequest,
+  JsonSchemaObject,
   ToolDefinition,
   ToolExecutionResult,
 } from '../contracts/tool-contracts';
@@ -70,7 +71,7 @@ function validateToolInput(definition: ToolDefinition, input: unknown): ToolInpu
   return { ok: true, value: input };
 }
 
-function withDefaultRootObjectType(schema: Record<string, unknown>): Record<string, unknown> {
+function withDefaultRootObjectType(schema: JsonSchemaObject): JsonSchemaObject {
   if (typeof schema.type === 'string') {
     return schema;
   }
@@ -113,6 +114,35 @@ function validateAgainstSchema(value: unknown, schema: Record<string, unknown>, 
           return failure;
         }
       }
+    }
+  }
+
+  if (expectedType === 'array' && Array.isArray(value)) {
+    if (isRecord(schema.items)) {
+      for (const [index, item] of value.entries()) {
+        const failure = validateAgainstSchema(item, schema.items, `${path}[${index}]`);
+        if (failure) {
+          return failure;
+        }
+      }
+    }
+  }
+
+  if (expectedType === 'string' && typeof value === 'string') {
+    if (typeof schema.minLength === 'number' && value.length < schema.minLength) {
+      return formatError(path, `expected string length >= ${schema.minLength}.`);
+    }
+    if (typeof schema.maxLength === 'number' && value.length > schema.maxLength) {
+      return formatError(path, `expected string length <= ${schema.maxLength}.`);
+    }
+  }
+
+  if ((expectedType === 'number' || expectedType === 'integer') && typeof value === 'number') {
+    if (typeof schema.minimum === 'number' && value < schema.minimum) {
+      return formatError(path, `expected value >= ${schema.minimum}.`);
+    }
+    if (typeof schema.maximum === 'number' && value > schema.maximum) {
+      return formatError(path, `expected value <= ${schema.maximum}.`);
     }
   }
 
