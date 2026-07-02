@@ -1,23 +1,15 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { ToolService } from '@megumi/coding-agent/tools';
-import { createBuiltInToolRegistry } from '@megumi/coding-agent/tools/built-ins';
+import { ToolRegistryService } from '@megumi/coding-agent/tools';
+import { ApprovalResolutionService } from '@megumi/coding-agent/host-interface/permissions/approval-resolution-service';
 import { createRuntimeEvent } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 
-describe('ToolService', () => {
-  it('lists built-in tool definitions without executing them', () => {
-    const repository = {
-      getToolExecution: vi.fn(),
-      getApprovalRequest: vi.fn(),
-      saveApprovalRecord: vi.fn(),
-    };
-    const service = new ToolService({
-      registry: createBuiltInToolRegistry(),
-      repository: repository as never,
-    });
+describe('ToolRegistryService desktop integration surface', () => {
+  it('lists built-in registered tool definitions without executing them', () => {
+    const service = new ToolRegistryService();
 
-    expect(service.listDefinitions({ runId: 'run-1' }).map((tool) => tool.name)).toEqual([
+    expect(service.listAvailableTools().tools.map((tool) => tool.registeredToolName)).toEqual([
       'read_file',
       'list_directory',
       'glob',
@@ -26,36 +18,29 @@ describe('ToolService', () => {
       'write_file',
       'run_command',
     ]);
-    expect(repository.getToolExecution).not.toHaveBeenCalled();
-    expect(repository.getApprovalRequest).not.toHaveBeenCalled();
-    expect(repository.saveApprovalRecord).not.toHaveBeenCalled();
   });
 
-  it('returns canonical tool executions from the repository', () => {
-    const repository = {
-      getToolExecution: vi.fn(() => createToolExecution()),
-      getApprovalRequest: vi.fn(),
-      saveApprovalRecord: vi.fn(),
-    };
-    const service = new ToolService({
-      registry: createBuiltInToolRegistry(),
-      repository: repository as never,
+  it('returns registered tool metadata by model tool call name', () => {
+    const service = new ToolRegistryService();
+
+    expect(service.getRegisteredTool({ toolName: 'read_file' })).toMatchObject({
+      type: 'found',
+      tool: {
+        registeredToolName: 'read_file',
+        identity: {
+          sourceId: 'built_in',
+          namespace: 'megumi',
+          sourceToolName: 'read_file',
+        },
+      },
     });
-
-    const toolExecution = service.getToolExecution('tool-execution-1');
-
-    expect(repository.getToolExecution).toHaveBeenCalledWith('tool-execution-1');
-    expect(toolExecution).toEqual(expect.objectContaining({
-      toolExecutionId: 'tool-execution-1',
-      toolCallId: 'tool-call-1',
-      stepId: 'step-1',
-    }));
   });
+});
 
+describe('ApprovalResolutionService desktop integration surface', () => {
   it('resolves approvals, updates request status, and exposes resumed runtime events', async () => {
     const approvalRequest = createApprovalRequest();
     const repository = {
-      getToolExecution: vi.fn(),
       getApprovalRequest: vi.fn(() => approvalRequest),
       resolveApprovalRequest: vi.fn((value) => value),
       createApprovalRequest: vi.fn((value) => value),
@@ -79,16 +64,15 @@ describe('ToolService', () => {
       },
     });
     const resumeApproval = vi.fn(() => asyncEvents([resumedEvent]));
-    const service = new ToolService({
-      registry: createBuiltInToolRegistry(),
-      repository: repository as never,
+    const service = new ApprovalResolutionService({
+      repository,
       resumeApproval,
       idFactory: {
         approvalRecordId: () => 'approval-record-1',
       },
     });
 
-    const response = service.resolveApproval({
+    const response = service.resolve({
       approvalRequestId: 'approval-request-1',
       decision: 'approved',
       scope: 'once',
@@ -100,7 +84,7 @@ describe('ToolService', () => {
       events.push(event);
     }
 
-    expect(response.approval).toMatchObject({
+    expect(response.data.approval).toMatchObject({
       approvalRecordId: 'approval-record-1',
       approvalRequestId: 'approval-request-1',
       toolCallId: 'tool-call-1',
@@ -142,7 +126,6 @@ describe('ToolService', () => {
       [approvalRequest.approvalRequestId, approvalRequest],
     ]);
     const repository = {
-      getToolExecution: vi.fn(),
       getApprovalRequest: vi.fn((approvalRequestId: string) => approvalRequests.get(approvalRequestId)),
       resolveApprovalRequest: vi.fn((value) => value),
       createApprovalRequest: vi.fn((value: ReturnType<typeof createApprovalRequest>) => {
@@ -151,9 +134,8 @@ describe('ToolService', () => {
       }),
     };
     const resumeApproval = vi.fn(() => asyncEvents([]));
-    const service = new ToolService({
-      registry: createBuiltInToolRegistry(),
-      repository: repository as never,
+    const service = new ApprovalResolutionService({
+      repository,
       resumeApproval,
       idFactory: {
         approvalRecordId: (() => {
@@ -166,18 +148,18 @@ describe('ToolService', () => {
       },
     });
 
-    const first = service.resolveApproval({
+    const first = service.resolve({
       approvalRequestId: 'approval-request-1',
       decision: 'approved',
       scope: 'once',
       decidedAt: '2026-05-20T00:00:03.000Z',
     });
 
-    expect(first.approval).toMatchObject({
+    expect(first.data.approval).toMatchObject({
       approvalRecordId: 'approval-record-1',
       decision: 'approved',
     });
-    expect(() => service.resolveApproval({
+    expect(() => service.resolve({
       approvalRequestId: 'approval-request-1',
       decision: 'denied',
       scope: 'once',
@@ -195,27 +177,6 @@ describe('ToolService', () => {
 
 async function* asyncEvents(events: RuntimeEvent[]): AsyncIterable<RuntimeEvent> {
   yield* events;
-}
-
-function createToolExecution() {
-  return {
-    toolExecutionId: 'tool-execution-1',
-    toolCallId: 'tool-call-1',
-    runId: 'run-1',
-    stepId: 'step-1',
-    toolName: 'read_file',
-    input: { path: 'README.md' },
-    inputPreview: {
-      summary: 'read_file README.md',
-      targets: [{ kind: 'file', label: 'README.md' }],
-      redactionState: 'none',
-    },
-    capabilities: ['project_read'],
-    riskLevel: 'low',
-    sideEffect: 'none',
-    status: 'pending_approval',
-    requestedAt: '2026-05-20T00:00:01.000Z',
-  };
 }
 
 function createApprovalRequest() {
@@ -239,4 +200,3 @@ function createApprovalRequest() {
     createdAt: '2026-05-20T00:00:02.000Z',
   } as const;
 }
-

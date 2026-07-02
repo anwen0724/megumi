@@ -54,6 +54,8 @@ describe('Desktop Main shell composition', () => {
     expect(sessionComposition).toContain('createInputService');
     expect(sessionComposition).toContain('new PermissionSnapshotService');
     expect(toolComposition).toContain('createToolCallRunner');
-    expect(toolComposition).toContain('createToolExecutionRouter');
+    expect(toolComposition).toContain('new ToolExecutionService');
+    expect(toolComposition).toContain('createBuiltInToolAdapter');
+    expect(toolComposition).not.toContain('createToolExecutionRouter');
   });
 });

@@ -131,22 +131,6 @@ const mocks = vi.hoisted(() => {
     ) {
       this.options = options;
     }),
-    ToolService: vi.fn(function ToolService(
-      this: { options?: unknown },
-      options: unknown,
-    ) {
-      this.options = options;
-      return {
-        listDefinitions: vi.fn(),
-        getToolCall: vi.fn(),
-        resolveApproval: vi.fn(),
-      };
-    }),
-    createDefaultToolService: vi.fn(() => ({
-      listDefinitions: vi.fn(),
-      getToolCall: vi.fn(),
-      resolveApproval: vi.fn(),
-    })),
     createDatabase: vi.fn(() => ({ databaseId: 'recovery-database' })),
     migrateDatabase: vi.fn(),
     codingAgentRuntime: codingAgentHost,
@@ -385,11 +369,6 @@ vi.mock('@megumi/coding-agent/settings', () => ({
   ProviderRuntimeService: mocks.ProviderRuntimeService,
 }));
 
-vi.mock('@megumi/coding-agent/tools/tool-service', () => ({
-  ToolService: mocks.ToolService,
-  createDefaultToolService: mocks.createDefaultToolService,
-}));
-
 vi.mock('@megumi/desktop/main/services/runtime/recovery.service', () => ({
   createRecoveryService: mocks.createRecoveryService,
 }));
@@ -459,8 +438,6 @@ describe('main runtime logger composition', () => {
     mocks.createModelCallRunner.mockClear();
     mocks.ProviderSettingsService.mockClear();
     mocks.ProviderRuntimeService.mockClear();
-    mocks.ToolService.mockClear();
-    mocks.createDefaultToolService.mockClear();
     mocks.composeCodingAgentHostInterface.mockClear();
     mocks.composeCodingAgentPersistence.mockClear();
     mocks.WorkspaceRepository.mockClear();

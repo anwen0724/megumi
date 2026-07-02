@@ -5,13 +5,14 @@ import { createCodingAgentHostInterface, type CodingAgentHostInterface } from '.
 import { createArtifactController } from '../host-interface/artifacts/artifact-controller';
 import { createPlanController } from '../host-interface/artifacts/plan-controller';
 import { createApprovalController } from '../host-interface/permissions/approval-controller';
+import { ApprovalResolutionService } from '../host-interface/permissions/approval-resolution-service';
 import { createProviderController } from '../host-interface/settings/provider-controller';
 import { createSettingsController } from '../host-interface/settings/settings-controller';
 import { createSessionBranchController } from '../host-interface/session/branch-controller';
 import { createSessionController } from '../host-interface/session/session-controller';
 import { createWorkspaceController } from '../host-interface/workspace/workspace-controller';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
-import { composeCodingAgentToolRegistry, composeCodingAgentToolRuntimeFactory, composeCodingAgentToolService } from './compose-coding-agent-tool-runtime';
+import { composeCodingAgentToolRegistryService, composeCodingAgentToolRuntimeFactory } from './compose-coding-agent-tool-runtime';
 import { composeCodingAgentSessionRuntime, type CodingAgentHomePaths } from './compose-coding-agent-session-runtime';
 import { composeCodingAgentMemory } from './compose-coding-agent-memory';
 import { composeCodingAgentRecoveryRuntime } from './compose-coding-agent-recovery-runtime';
@@ -72,7 +73,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   const agentLoopRepository = persistence.agentLoopRepository as any;
   const sessionRepository = persistence.sessionRepository as any;
   const toolCallRepository = persistence.toolCallRepository as any;
-  const toolRegistry = composeCodingAgentToolRegistry();
+  const toolRegistry = composeCodingAgentToolRegistryService();
   const settingsService = new ProductSettingsService({
     storage: options.settingsStorage ?? createLocalSettingsJsonStorage({
       settingsPath: options.homePaths.settingsPath,
@@ -127,9 +128,8 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     chatStreamEventSink,
     workspaceChangeFooterProjector: options.workspaceChangeFooterProjector,
   });
-  const toolService = composeCodingAgentToolService({
-    toolRegistry,
-    toolRepository: toolCallRepository,
+  const approvalResolutionService = new ApprovalResolutionService({
+    repository: toolCallRepository,
     resumeApproval: (request) => sessionRuntime.inputProcessingService.resumeToolApproval(request),
   });
   const artifactContentStore = new ArtifactContentStore({
@@ -172,7 +172,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
       ...settings,
       provider: createProviderController(providerSettingsService),
     },
-    permissions: createApprovalController(toolService),
+    permissions: createApprovalController(approvalResolutionService),
     artifacts: {
       ...artifacts,
       plan: createPlanController(sessionRuntime.planArtifactService),
