@@ -27,6 +27,21 @@ function filesUnder(path: string): string[] {
   });
 }
 
+function listTopLevel(path: string): string[] {
+  const absolute = join(repoRoot, path);
+  if (!existsSync(absolute)) {
+    return [];
+  }
+
+  return readdirSync(absolute).sort();
+}
+
+function sourceUnder(path: string): string {
+  return filesUnder(path)
+    .map((file) => read(file))
+    .join('\n');
+}
+
 function productionFiles(): string[] {
   return [
     ...filesUnder('packages'),
@@ -203,31 +218,27 @@ describe('package and file structure source guards', () => {
     expect(flatServiceFiles).toEqual([]);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/model-call/model-call-runner.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/tools/execution/tool-executors/read-file.executor.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/tools/adapters/built-in-tools.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/adapters/local/settings/settings-json-storage.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/settings/app-settings.service.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'apps/desktop/src/main/services/security/secret-store.service.ts'))).toBe(false);
   });
 
-  it('keeps tool observation shaping in the observations owner module', () => {
-    const ownerPath = join(repoRoot, 'packages/coding-agent/tools/observations/observation-shaper.ts');
-    const compatibilityPath = join(repoRoot, 'packages/coding-agent/tools/observation-shaper.ts');
-
-    expect(existsSync(ownerPath)).toBe(true);
-    expect(readFileSync(compatibilityPath, 'utf8')).toContain("export * from './observations/observation-shaper'");
-  });
-
-  it('keeps tool input validation in the schemas owner module', () => {
-    const ownerPath = join(repoRoot, 'packages/coding-agent/tools/schemas/tool-input-validation.ts');
-    const compatibilityPath = join(repoRoot, 'packages/coding-agent/tools/validation.ts');
-
-    expect(existsSync(ownerPath)).toBe(true);
-    expect(readFileSync(compatibilityPath, 'utf8')).toContain("export * from './schemas/tool-input-validation'");
-  });
-
-  it('keeps tool registry resolution in the registry owner module', () => {
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/tools/registry/index.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/tools/registry.ts'))).toBe(false);
+  it('keeps the tools module on the target service-oriented structure', () => {
+    expect(listTopLevel('packages/coding-agent/tools')).toEqual([
+      'adapters',
+      'contracts',
+      'core',
+      'index.ts',
+      'services',
+    ]);
+    expect(sourceUnder('packages/coding-agent/tools')).toContain('class ToolRegistryService');
+    expect(sourceUnder('packages/coding-agent/tools')).toContain('class ToolExecutionService');
+    expect(sourceUnder('packages/coding-agent/tools')).toContain('registeredToolName');
+    expect(read('packages/coding-agent/tools/index.ts')).not.toContain('ToolRegistrySnapshotService');
+    expect(read('packages/coding-agent/tools/index.ts')).not.toContain('createToolExecutionRouter');
+    expect(read('packages/coding-agent/tools/index.ts')).not.toContain('ToolService');
+    expect(sourceUnder('packages/coding-agent/tools')).not.toContain('createExternalTestToolSourceExecutor');
   });
 
   it('keeps runtime event persistence in its owner repository', () => {

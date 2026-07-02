@@ -58,14 +58,14 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/host-interface/host-interface.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/composition/compose-coding-agent-runtime.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/persistence/connection.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/tools/execution/tool-execution-router.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/tools/services/tool-execution-service.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/host-interface/runtime-logger.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/agent-loop/tool-call/tool-call-runner.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/tool-calls/tool-call-runner.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/tools/tool-orchestrator.ts'))).toBe(false);
-    expect(existsSync(join(root, 'packages/coding-agent/tools/tool-registry-snapshot.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/tools/registry/index.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/tools/built-ins/index.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/tools/services/tool-registry-service.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/tools/core/tool-registry.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/tools/adapters/built-in-tools.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/permissions/tool-policy.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/permissions/tool-execution-decision.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/permissions/project-boundary-policy.ts'))).toBe(false);
@@ -173,8 +173,12 @@ describe('coding-agent package boundary', () => {
 
     expect(toolCalls).toContain('createToolCallRunner');
     expect(tools).not.toContain('createToolCallRunner');
-    expect(tools).toContain('class ToolRegistrySnapshotService');
-    expect(tools).toContain('createToolRegistrySnapshot');
+    expect(tools).toContain('class ToolRegistryService');
+    expect(tools).toContain('class ToolExecutionService');
+    expect(tools).toContain('registeredToolName');
+    expect(sourceUnder('packages/coding-agent/tools/index.ts')).not.toContain('ToolRegistrySnapshotService');
+    expect(sourceUnder('packages/coding-agent/tools/index.ts')).not.toContain('createToolExecutionRouter');
+    expect(sourceUnder('packages/coding-agent/tools/index.ts')).not.toContain('ToolService');
     expect(permissions).toContain('evaluatePermissionPolicy');
     expect(permissions).toContain('evaluateToolExecutionDecision');
     expect(desktopToolServices).not.toContain('function applyDecision');

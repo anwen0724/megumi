@@ -268,7 +268,7 @@ describe('package dependency boundaries', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps ToolCallRunner behind the source-aware execution router', () => {
+  it('keeps ToolCallRunner behind the tool execution service', () => {
     const runnerSource = fs.readFileSync(
       path.join(root, 'packages/coding-agent/agent-loop/tool-call/tool-call-runner.ts'),
       'utf8',
@@ -281,6 +281,7 @@ describe('package dependency boundaries', () => {
     expect(runnerSource).toContain('ToolCallRunner');
     expect(runnerSource).toContain('ToolApprovalResumePort');
     expect(runnerSource).toContain('evaluateToolExecutionDecision');
+    expect(runnerSource).toContain('toolExecutionService');
     expect(approvalSource).toContain('evaluatePermissionPolicy');
     expect(approvalSource).toContain('decisionEvaluator.evaluate');
     expect(`${runnerSource}\n${approvalSource}`).not.toContain('createBuiltInToolSourceExecutor');
@@ -330,13 +331,14 @@ describe('package dependency boundaries', () => {
     expect(source).not.toContain(legacyModulePath);
   });
 
-  it('does not add non-goal source executors to the desktop tool services', () => {
-    const source = walkSourceFiles(path.join(root, 'packages/coding-agent/tools/execution'))
+  it('does not add non-goal tool source execution to the tools module', () => {
+    const source = walkSourceFiles(path.join(root, 'packages/coding-agent/tools'))
       .map((file) => fs.readFileSync(file, 'utf8'))
       .join('\n');
 
-    expect(source).toContain('createBuiltInToolSourceExecutor');
-    expect(source).toContain('createExternalTestToolSourceExecutor');
+    expect(source).toContain('class ToolExecutionService');
+    expect(source).toContain('createBuiltInToolAdapter');
+    expect(source).not.toContain('createExternalTestToolSourceExecutor');
     expect(source).not.toMatch(/McpToolSourceExecutor/);
     expect(source).not.toMatch(/PluginToolSourceExecutor/);
     expect(source).not.toMatch(/ProjectLocalToolSourceExecutor/);
@@ -354,8 +356,8 @@ describe('package dependency boundaries', () => {
       path.join(root, 'packages/coding-agent/agent-loop/tool-call/execution/tool-execution-window.ts'),
       'utf8',
     );
-    const router = fs.readFileSync(
-      path.join(root, 'packages/coding-agent/tools/execution/tool-execution-router.ts'),
+    const executionService = fs.readFileSync(
+      path.join(root, 'packages/coding-agent/tools/services/tool-execution-service.ts'),
       'utf8',
     );
 
@@ -364,13 +366,11 @@ describe('package dependency boundaries', () => {
     expect(runner).toContain('advanceExecutionWindows');
     expect(`${runner}\n${executionWindow}`).not.toMatch(/\bToolBatch\b/);
     expect(`${runner}\n${executionWindow}`).not.toMatch(/\bBatchToolCall\b/);
-    expect(router).not.toMatch(/\bToolBatch\b/);
+    expect(executionService).not.toMatch(/\bToolBatch\b/);
   });
 
   it('keeps structured output out of 19.02 tool registry runtime', () => {
     const source = [
-      ...walkSourceFiles(path.join(root, 'packages/coding-agent/tools/execution')),
-
       ...walkSourceFiles(path.join(root, 'packages/coding-agent/tools')),
     ]
       .map((file) => fs.readFileSync(file, 'utf8'))
