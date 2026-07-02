@@ -239,6 +239,10 @@ describe('package and file structure source guards', () => {
     expect(read('packages/coding-agent/tools/index.ts')).not.toContain('createToolExecutionRouter');
     expect(read('packages/coding-agent/tools/index.ts')).not.toContain('ToolService');
     expect(sourceUnder('packages/coding-agent/tools')).not.toContain('createExternalTestToolSourceExecutor');
+    expect(sourceUnder('packages/coding-agent/tools/services')).not.toContain('resolveApproval');
+    expect(sourceUnder('packages/coding-agent/tools/services')).not.toContain('permissionDecision');
+    expect(sourceUnder('packages/coding-agent/tools')).not.toContain('external_test');
+    expect(sourceUnder('packages/coding-agent/tools')).not.toContain('ToolRegistrySnapshot');
   });
 
   it('keeps runtime event persistence in its owner repository', () => {
@@ -543,10 +547,6 @@ describe('package and file structure source guards', () => {
     );
     const workspaceIndexSource = readFileSync(join(repoRoot, 'packages/coding-agent/workspace/index.ts'), 'utf8');
     const agentLoopSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/agent-loop.ts'), 'utf8');
-    const toolRegistrySnapshotSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/tools/tool-registry-snapshot.ts'),
-      'utf8',
-    );
     const runContextServiceSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/context/resources/run-context-service.ts'),
       'utf8',
@@ -614,7 +614,8 @@ describe('package and file structure source guards', () => {
     expect(InputProcessingServiceSource).toContain('workspaceChanges?: WorkspaceChangeReadPort;');
     expect(InputProcessingServiceSource).toContain('toolDefinitionProvider?: ToolSetRegistryProvider;');
     expect(InputProcessingServiceSource).toContain('providerCapabilitySummaryProvider?: ToolSetCapabilityProvider;');
-    expect(InputProcessingServiceSource).toContain('toolRegistrySnapshotService?: ToolRegistrySnapshotServicePort;');
+    expect(InputProcessingServiceSource).not.toContain('toolRegistrySnapshotService');
+    expect(InputProcessingServiceSource).not.toContain('ToolRegistrySnapshotServicePort');
     expect(InputProcessingServiceSource).toContain('contextService?: RunBaselineContextPort;');
     expect(InputProcessingServiceSource).toContain('agentInstructionSourceService?: AgentInstructionSourcePort;');
     expect(InputProcessingServiceSource).toContain('modelCallInputBuildService?: ModelCallInputBuildPort;');
@@ -631,7 +632,6 @@ describe('package and file structure source guards', () => {
     expect(workspaceIndexSource).toContain("export * from './workspace-change-read';");
     expect(agentLoopSource).toContain('export interface ToolSetRegistryProvider');
     expect(agentLoopSource).toContain('export interface ToolSetCapabilityProvider');
-    expect(toolRegistrySnapshotSource).toContain('export interface ToolRegistrySnapshotServicePort');
     expect(runContextServiceSource).toContain('export interface RunBaselineContextPort');
     expect(agentInstructionSourceSource).toContain('export interface AgentInstructionSourcePort');
     expect(modelCallInputBuilderSource).toContain('export interface ModelCallInputBuildPort');
@@ -963,13 +963,14 @@ describe('package and file structure source guards', () => {
     expect(InputProcessingServiceSource).not.toContain('createToolRegistrySnapshotForCodingAgentRun');
     expect(InputProcessingServiceSource).not.toContain('createToolRegistrySnapshotCreatedEvent');
     expect(agentLoopSource).toContain('export class ToolSetService');
-    expect(agentLoopSource).toContain('export function createToolSetSnapshotProvider');
     expect(agentLoopSource).toContain('export class AgentLoop');
     expect(agentLoopSource).toContain('prepareToolSet');
     expect(agentLoopSource).toContain('export async function prepareToolRunner');
     expect(agentLoopSource).toContain('getProviderCapabilitySummary');
-    expect(agentLoopSource).toContain('createRunSnapshot');
-    expect(agentLoopSource).toContain('listDefinitions');
+    expect(agentLoopSource).toContain('listAvailableTools');
+    expect(agentLoopSource).toContain('toolDefinitionFromRegisteredTool');
+    expect(agentLoopSource).not.toContain('createRunSnapshot');
+    expect(agentLoopSource).not.toContain('listDefinitions');
     expect(existsSync(toolsDefinitionsPath)).toBe(false);
   });
 

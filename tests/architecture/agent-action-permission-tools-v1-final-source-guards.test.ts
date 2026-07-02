@@ -134,7 +134,7 @@ describe('agent action permission tools v1 final source guards', () => {
       .filter((file) => {
         const relativePath = projectPath(file);
         return !relativePath.startsWith('packages/coding-agent/adapters/local/')
-          && !relativePath.startsWith('packages/coding-agent/tools/execution/')
+          && !relativePath.startsWith('packages/coding-agent/tools/adapters/')
           && !relativePath.startsWith('packages/coding-agent/persistence/')
           && !relativePath.startsWith('packages/coding-agent/composition/')
           && relativePath !== 'packages/coding-agent/artifacts/artifact-content-store.ts';

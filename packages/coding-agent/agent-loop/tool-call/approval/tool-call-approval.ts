@@ -1,6 +1,5 @@
 ﻿// Applies run permission policy to tool executions created by model tool calls.
 import { evaluatePermissionPolicy } from '../../../permissions/tool-policy';
-import { createRejectionObservation } from '../../../tools/observations';
 import type {
   PermissionDecision,
   ToolDefinition,
@@ -9,6 +8,7 @@ import type {
 import type { ToolExecutionDecisionInput } from '../../../permissions/tool-execution-decision';
 import type { ResolvedToolCallRunnerOptions } from '../tool-call-runner';
 import { createApprovalRequest } from './approval-events';
+import { createRejectionObservation } from './rejection-observation';
 
 export async function applyDecisionsToCreated(
   options: ResolvedToolCallRunnerOptions,

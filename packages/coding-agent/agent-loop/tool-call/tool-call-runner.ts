@@ -1,8 +1,5 @@
 ﻿// Owns run-time tool call orchestration for a Coding Agent turn.
 // It delegates approval, execution, and next-model-input shaping to focused internal modules.
-import {
-  createRejectionObservation,
-} from '../../tools/observations';
 import type { RegisteredTool, ToolExecutionService, ToolRegistryService } from '../../tools';
 import type {
   PendingToolApproval,
@@ -42,6 +39,7 @@ import {
 } from './approval/pending-approval-registry';
 import { prepareApprovalResumeModelInput } from './approval/approval-resume-model-input';
 import { applyDecisionsToCreated, inferredDefinitionFields } from './approval/tool-call-approval';
+import { createRejectionObservation } from './approval/rejection-observation';
 import { advanceExecutionWindows } from './execution/tool-execution-window';
 import { markToolResultsSubmittedToModelInput } from './model-input/tool-result-model-input-emitted';
 import { outcomeFromRecords } from './model-input/tool-result-model-input';

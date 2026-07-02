@@ -176,9 +176,10 @@ describe('coding-agent package boundary', () => {
     expect(tools).toContain('class ToolRegistryService');
     expect(tools).toContain('class ToolExecutionService');
     expect(tools).toContain('registeredToolName');
-    expect(sourceUnder('packages/coding-agent/tools/index.ts')).not.toContain('ToolRegistrySnapshotService');
-    expect(sourceUnder('packages/coding-agent/tools/index.ts')).not.toContain('createToolExecutionRouter');
-    expect(sourceUnder('packages/coding-agent/tools/index.ts')).not.toContain('ToolService');
+    const toolsIndex = readFileSync(join(root, 'packages/coding-agent/tools/index.ts'), 'utf8');
+    expect(toolsIndex).not.toContain('ToolRegistrySnapshotService');
+    expect(toolsIndex).not.toContain('createToolExecutionRouter');
+    expect(toolsIndex).not.toContain('ToolService');
     expect(permissions).toContain('evaluatePermissionPolicy');
     expect(permissions).toContain('evaluateToolExecutionDecision');
     expect(desktopToolServices).not.toContain('function applyDecision');

@@ -33,7 +33,7 @@ function functionSection(source: string, functionName: string, nextFunctionName:
 
 describe('built-in tools and host adapters source guards', () => {
   it('keeps provider-facing tool names platform neutral', () => {
-    const definitions = read('packages/coding-agent/tools/built-ins/index.ts');
+    const definitions = read('packages/coding-agent/tools/core/tool-definitions.ts');
 
     expect(definitions).toContain("'run_command'");
     expect(definitions).not.toContain("'powershell'");
@@ -46,7 +46,7 @@ describe('built-in tools and host adapters source guards', () => {
     const source = [
       ...listSourceFiles('packages/coding-agent/tools'),
     ]
-      .filter((file) => !file.startsWith('packages/coding-agent/tools/execution/'))
+      .filter((file) => file !== 'packages/coding-agent/tools/adapters/built-in-tools.ts')
       .map(read)
       .join('\n');
 
@@ -60,13 +60,13 @@ describe('built-in tools and host adapters source guards', () => {
     const approval = read('packages/coding-agent/agent-loop/tool-call/approval/tool-call-approval.ts');
     const executionRecord = read('packages/coding-agent/agent-loop/tool-call/execution/tool-execution-record.ts');
     const applyDecision = functionSection(approval, 'applyDecision', 'permissionDecisionForRecord');
-    const runRecord = functionSection(executionRecord, 'runToolExecutionRecord', 'budgetProfileForRecord');
+    const runRecord = functionSection(executionRecord, 'runToolExecutionRecord', 'observationFromExecutionResult');
 
     expect(applyDecision).toContain('permissionDecisionForRecord');
     expect(applyDecision).toContain('decisionEvaluator.evaluate');
     expect(applyDecision).toContain("decision.outcome === 'requireApproval'");
     expect(applyDecision).toContain("decision.outcome === 'reject'");
-    expect(runRecord).toContain('toolExecutionRouter.executeToolExecution');
+    expect(runRecord).toContain('toolExecutionService.executeTool');
   });
 
   it('keeps approval resume behind a persisted approved ApprovalRequest', () => {
@@ -95,11 +95,10 @@ describe('built-in tools and host adapters source guards', () => {
 
   it('does not introduce MCP, bypass permissions, or TaskIntent into built-in execution', () => {
     const combined = [
-      ...listSourceFiles('packages/coding-agent/tools/built-ins'),
       'packages/coding-agent/agent-loop/tool-call/tool-call-runner.ts',
-      'packages/coding-agent/tools/execution/built-in-tool-source-executor.ts',
-      'packages/coding-agent/tools/execution/tool-execution-router.ts',
-      ...listSourceFiles('packages/coding-agent/tools/execution/tool-executors'),
+      'packages/coding-agent/tools/core/tool-definitions.ts',
+      'packages/coding-agent/tools/adapters/built-in-tools.ts',
+      'packages/coding-agent/tools/services/tool-execution-service.ts',
     ].map(read).join('\n');
 
     expect(combined).not.toContain('bypassPermissions');

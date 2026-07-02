@@ -2,11 +2,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import { createToolRegistrySnapshot } from '@megumi/coding-agent/tools/registry';
-import {
-  createBuiltInToolRegistrations,
-  createExternalTestToolRegistrations,
-} from '@megumi/coding-agent/tools/sources';
 import { forwardRuntimeEvents } from '@megumi/desktop/main/ipc/runtime-event-forwarder';
 
 const runtimeContext = {
@@ -65,45 +60,18 @@ describe('forwardRuntimeEvents', () => {
   it('forwards approval events that carry registry snapshot identity', async () => {
     const sender = { send: vi.fn() };
     const logger = createLogger();
-    const snapshot = createToolRegistrySnapshot({
+    const snapshot = {
+      snapshotId: 'tool-registry-snapshot-run-1',
       runId: 'run:550e8400-e29b-41d4-a716-446655440000:project-C-Users-anwen-Desktop-test',
-      projectId: 'project-1',
-      permissionMode: 'default',
-      modelId: 'deepseek-v4-flash',
-      createdAt: '2026-05-12T00:00:00.000Z',
-      sources: [{
-        sourceId: 'built_in',
-        sourceKind: 'built_in',
-        namespace: 'megumi',
-        displayName: 'Built-in tools',
-        configured: true,
-        enabled: true,
-        availabilityStatus: 'available',
-        config: {},
-        createdAt: '2026-05-12T00:00:00.000Z',
-        updatedAt: '2026-05-12T00:00:00.000Z',
-      }, {
-        sourceId: 'external_test',
-        sourceKind: 'external_test',
-        namespace: 'demo',
-        displayName: 'Demo tools',
-        configured: true,
-        enabled: false,
-        availabilityStatus: 'available',
-        config: {},
-        createdAt: '2026-05-12T00:00:00.000Z',
-        updatedAt: '2026-05-12T00:00:00.000Z',
-      }],
-      registrations: [
-        ...createBuiltInToolRegistrations(),
-        ...createExternalTestToolRegistrations(),
-      ],
-      providerCapabilitySummary: { supportsToolCall: true },
-    });
-    const writeFileEntry = snapshot.entries.find((entry) => entry.sourceToolName === 'write_file');
-    if (!writeFileEntry) {
-      throw new Error('Expected write_file snapshot entry.');
-    }
+    };
+    const writeFileEntry = {
+      snapshotEntryId: 'tool-registry-snapshot-entry-run-1-tool-registration-built_in-write_file',
+      modelVisibleName: 'write_file',
+      canonicalToolId: 'built_in:megumi:write_file',
+      sourceId: 'built_in',
+      namespace: 'megumi',
+      sourceToolName: 'write_file',
+    };
     const event: RuntimeEvent = {
       eventId: 'event-approval-1',
       schemaVersion: 1,

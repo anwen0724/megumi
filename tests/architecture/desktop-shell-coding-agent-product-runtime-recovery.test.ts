@@ -52,8 +52,8 @@ describe('desktop shell and coding-agent host interface recovery', () => {
     expect(existsSync(join(root, 'packages/coding-agent/persistence/repos/agent-loop.repo.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/persistence/repos/session.repo.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/persistence/repos/tool-call.repo.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/tools/execution/tool-execution-router.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/tools/execution/tool-executors/run-command.executor.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/tools/services/tool-execution-service.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/tools/adapters/built-in-tools.ts'))).toBe(true);
   });
 
   it('removes desktop-owned product persistence and local coding tool execution', () => {
