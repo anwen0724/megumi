@@ -10,7 +10,7 @@ import type {
 export interface ToolExecutionDecisionInput {
   toolName: string;
   parsedArguments: unknown;
-  snapshotEntry: ToolExecutionDecisionSnapshotEntry | undefined;
+  toolFacts: ToolExecutionDecisionToolFacts | undefined;
   permissionPosture: string;
   permissionDecision: ToolExecutionPolicyDecision;
   runtimeCapabilityPolicy: {
@@ -24,8 +24,8 @@ export interface ToolExecutionPolicyDecision {
   reason: string;
 }
 
-export interface ToolExecutionDecisionSnapshotEntry {
-  modelVisibleName: string;
+export interface ToolExecutionDecisionToolFacts {
+  registeredToolName: string;
   sourceId: string;
   namespace: string;
   sourceToolName: string;
@@ -40,18 +40,18 @@ export function evaluateToolExecutionDecision(input: ToolExecutionDecisionInput)
   void input.parsedArguments;
   void input.permissionPosture;
 
-  if (!input.snapshotEntry) {
-    return reject('TOOL_NOT_FOUND', 'Tool is not present in the run-bound tool registry snapshot.', 'unknown');
+  if (!input.toolFacts) {
+    return reject('TOOL_NOT_FOUND', 'Tool is not present in available registered tools.', 'unknown');
   }
 
-  const executionClass = classifyExecution(input.snapshotEntry);
+  const executionClass = classifyExecution(input.toolFacts);
   const executionMode: ToolExecutionMode = executionClass === 'readOnly' ? 'parallel' : 'serial';
 
   if (executionClass === 'processExecution' && !input.runtimeCapabilityPolicy.processExecutionEnabled) {
     return reject('CAPABILITY_DISABLED', 'Process execution is disabled by runtime capability policy.', executionClass);
   }
 
-  if (input.snapshotEntry.sourceId !== 'built_in' && !input.runtimeCapabilityPolicy.customToolsEnabled) {
+  if (input.toolFacts.sourceId !== 'built_in' && !input.runtimeCapabilityPolicy.customToolsEnabled) {
     return reject('CUSTOM_TOOL_REJECTED', 'Custom tools are disabled by runtime capability policy.', 'unknown');
   }
 
@@ -78,7 +78,7 @@ export function evaluateToolExecutionDecision(input: ToolExecutionDecisionInput)
   };
 }
 
-function classifyExecution(entry: ToolExecutionDecisionSnapshotEntry): ToolExecutionDecision['executionClass'] {
+function classifyExecution(entry: ToolExecutionDecisionToolFacts): ToolExecutionDecision['executionClass'] {
   const capabilities = new Set(entry.capabilities ?? []);
   if (capabilities.has('command_run')) {
     return 'processExecution';

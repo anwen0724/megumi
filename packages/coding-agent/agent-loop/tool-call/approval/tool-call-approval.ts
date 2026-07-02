@@ -1,7 +1,6 @@
 ﻿// Applies run permission policy to tool executions created by model tool calls.
 import { evaluatePermissionPolicy } from '../../../permissions/tool-policy';
 import { createRejectionObservation } from '../../../tools/observations';
-import { modelVisibleDefinitionForSnapshotEntry } from '../../../tools/registry';
 import type {
   PermissionDecision,
   ToolDefinition,
@@ -58,7 +57,7 @@ function applyDecision(
   const decision = options.decisionEvaluator.evaluate({
     toolName: record.toolName,
     parsedArguments: record.input,
-    snapshotEntry: snapshotEntryFromRecord(record),
+    toolFacts: toolFactsFromRecord(record),
     permissionPosture: options.permissionMode,
     permissionDecision,
     runtimeCapabilityPolicy: options.runtimeCapabilityPolicy,
@@ -108,7 +107,7 @@ function permissionDecisionForRecord(
   options: ResolvedToolCallRunnerOptions,
   record: ToolExecutionRecord,
 ): PermissionDecision {
-  const definition = definitionForRecord(options, record);
+  const definition = definitionForRecord(record);
   return {
     ...evaluatePermissionPolicy({
       definition,
@@ -123,14 +122,8 @@ function permissionDecisionForRecord(
 }
 
 function definitionForRecord(
-  options: ResolvedToolCallRunnerOptions,
   record: ToolExecutionRecord,
 ): ToolDefinition {
-  const snapshot = options.repository.getToolRegistrySnapshotByRun(String(record.runId));
-  const entry = snapshot?.entries.find((candidate) => candidate.snapshotEntryId === record.snapshotEntryId);
-  if (entry) {
-    return modelVisibleDefinitionForSnapshotEntry(entry);
-  }
   const inferred = inferredDefinitionFields(record.toolName);
   return {
     name: record.toolName,
@@ -144,12 +137,12 @@ function definitionForRecord(
   };
 }
 
-function snapshotEntryFromRecord(record: ToolExecutionRecord): ToolExecutionDecisionInput['snapshotEntry'] {
+function toolFactsFromRecord(record: ToolExecutionRecord): ToolExecutionDecisionInput['toolFacts'] {
   if (!record.sourceId || !record.namespace || !record.sourceToolName || !record.modelVisibleName) {
     return undefined;
   }
   return {
-    modelVisibleName: record.modelVisibleName,
+    registeredToolName: record.modelVisibleName,
     sourceId: record.sourceId,
     namespace: record.namespace,
     sourceToolName: record.sourceToolName,

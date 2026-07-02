@@ -1,12 +1,8 @@
 // Owns persisted tool execution record transitions and projections.
-import {
-  createRawToolResultFromContent,
-  normalizeToolError,
-} from '../../../tools/normalization';
-import { createObservationFromRawToolResult } from '../../../tools/observations';
 import type { RuntimeError } from '@megumi/shared/runtime';
-import type { RawToolResult, ToolExecutionRecord, ToolObservationBudgetProfile } from '@megumi/shared/tool';
-import type { CodingAgentToolExecutionRunOptions } from '../../../tools/tool-execution-host-port';
+import type { ToolExecutionRecord, ToolObservation } from '@megumi/shared/tool';
+import type { ToolExecutionResult } from '../../../tools';
+import type { ToolExecutionRunOptions } from './tool-execution-window';
 import type { ResolvedToolCallRunnerOptions } from '../tool-call-runner';
 import { isTerminalForNextModelInput } from './tool-execution-window';
 
@@ -35,7 +31,7 @@ export function recordEventPayload(record: ToolExecutionRecord) {
 export async function runToolExecutionRecord(
   options: ResolvedToolCallRunnerOptions,
   record: ToolExecutionRecord,
-  executionOptions?: CodingAgentToolExecutionRunOptions,
+  executionOptions?: ToolExecutionRunOptions,
 ): Promise<ToolExecutionRecord> {
   if (isTerminalForNextModelInput(record.status) || record.status === 'cancelled') {
     return record;
@@ -48,74 +44,118 @@ export async function runToolExecutionRecord(
   });
 
   try {
-    const rawResult = await options.toolExecutionRouter.executeToolExecution(
-      running,
-      executionOptions,
-    );
-    const observation = createObservationFromRawToolResult({
-      rawResult,
-      profile: budgetProfileForRecord(running, rawResult),
-      record: running,
-      ids: options.ids,
-      now: options.now,
+    const executionResult = await options.toolExecutionService.executeTool({
+      toolName: running.toolName,
+      input: running.input,
+      ...(executionOptions?.signal ? { options: { signal: executionOptions.signal } } : {}),
     });
+    const observation = observationFromExecutionResult(running, executionResult, options);
     return options.repository.recordToolExecution({
       ...running,
-      status: rawResult.isError ? 'failed' : 'succeeded',
+      status: executionResult.type === 'succeeded' ? 'succeeded' : 'failed',
       completedAt: observation.createdAt,
-      rawResultRef: rawResult.rawToolResultId,
       observation,
-      resultPreview: observation.content.slice(0, 500),
-      ...(rawResult.isError ? { error: normalizeToolError(rawResult.content, {
-        debugId: `tool-error:${running.toolExecutionId}`,
-        fallbackMessage: 'Tool execution failed.',
-      }) } : {}),
+      resultPreview: executionResult.toolExecutionObservation ?? observation.content.slice(0, 500),
+      ...(executionResult.type === 'failed' ? { error: runtimeErrorFromToolExecutionResult(executionResult, running) } : {}),
     });
   } catch (error) {
-    const normalizedError = normalizeToolError(error, {
-      debugId: `tool-error:${running.toolExecutionId}`,
-      fallbackMessage: 'Tool execution failed.',
-    });
-    const rawResult = createRawToolResultFromContent({
-      rawToolResultId: options.ids.rawToolResultId(),
-      toolExecutionId: String(running.toolExecutionId),
-      toolCallId: String(running.toolCallId),
-      isError: true,
-      outputKind: 'error',
-      content: normalizedError,
-      createdAt: options.now(),
-    });
-    const observation = createObservationFromRawToolResult({
-      rawResult,
-      profile: 'error',
-      record: running,
+    const message = error instanceof Error ? error.message : 'Tool execution failed.';
+    const observation = observationFromText(running, {
       ids: options.ids,
       now: options.now,
+      content: message,
+      isError: true,
+      truncated: false,
     });
     return options.repository.recordToolExecution({
       ...running,
       status: 'failed',
       completedAt: observation.createdAt,
-      rawResultRef: rawResult.rawToolResultId,
       observation,
-      error: normalizedError,
+      error: {
+        code: 'tool_execution_failed',
+        message,
+        severity: 'error',
+        retryable: false,
+        source: 'tool',
+        debugId: `tool-error:${running.toolExecutionId}`,
+      },
       resultPreview: observation.content.slice(0, 500),
     });
   }
 }
 
-function budgetProfileForRecord(
+function observationFromExecutionResult(
   record: ToolExecutionRecord,
-  rawResult: RawToolResult,
-): ToolObservationBudgetProfile {
-  if (rawResult.isError || rawResult.outputKind === 'error') {
-    return 'error';
+  result: ToolExecutionResult,
+  options: Pick<ResolvedToolCallRunnerOptions, 'ids' | 'now'>,
+): ToolObservation {
+  return observationFromText(record, {
+    ids: options.ids,
+    now: options.now,
+    content: result.normalizedResult.content,
+    isError: result.normalizedResult.isError,
+    truncated: result.normalizedResult.truncated,
+    truncationReason: result.normalizedResult.truncationReason,
+    metadata: {
+      ...(result.toolExecutionObservation ? { toolExecutionObservation: result.toolExecutionObservation } : {}),
+      ...(result.metadata ? { toolExecutionMetadata: result.metadata } : {}),
+    },
+  });
+}
+
+function observationFromText(record: ToolExecutionRecord, input: {
+  ids: Pick<ResolvedToolCallRunnerOptions['ids'], 'observationId'>;
+  now: () => string;
+  content: string;
+  isError: boolean;
+  truncated: boolean;
+  truncationReason?: ToolExecutionResult['normalizedResult']['truncationReason'];
+  metadata?: Record<string, unknown>;
+}): ToolObservation {
+  return {
+    observationId: input.ids.observationId(),
+    toolExecutionId: record.toolExecutionId,
+    toolCallId: record.toolCallId,
+    runId: record.runId,
+    stepId: record.stepId,
+    kind: 'text',
+    isError: input.isError,
+    content: input.content,
+    truncated: input.truncated,
+    ...(input.truncationReason ? { truncationReason: toSharedTruncationReason(input.truncationReason) } : {}),
+    byteLength: Buffer.byteLength(input.content, 'utf8'),
+    tokenEstimate: Math.ceil(input.content.length / 4),
+    createdAt: input.now(),
+    ...(input.metadata ? { metadata: input.metadata } : {}),
+  };
+}
+
+function runtimeErrorFromToolExecutionResult(
+  result: Extract<ToolExecutionResult, { type: 'failed' }>,
+  record: ToolExecutionRecord,
+): RuntimeError {
+  return {
+    code: result.error.code,
+    message: result.error.message,
+    severity: 'error',
+    retryable: false,
+    source: 'tool',
+    debugId: `tool-error:${record.toolExecutionId}`,
+  };
+}
+
+function toSharedTruncationReason(
+  reason: NonNullable<ToolExecutionResult['normalizedResult']['truncationReason']>,
+): ToolObservation['truncationReason'] {
+  switch (reason) {
+    case 'line_limit':
+      return 'lineLimit';
+    case 'byte_limit':
+      return 'byteLimit';
+    case 'token_budget':
+      return 'tokenBudget';
+    case 'policy':
+      return 'policy';
   }
-  if (rawResult.outputKind === 'command' || record.toolName === 'run_command') {
-    return 'commandOutput';
-  }
-  if (rawResult.outputKind === 'file' || record.toolName === 'read_file') {
-    return 'fileRead';
-  }
-  return 'largeText';
 }

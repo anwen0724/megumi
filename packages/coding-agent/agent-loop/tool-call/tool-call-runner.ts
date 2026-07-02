@@ -3,8 +3,7 @@
 import {
   createRejectionObservation,
 } from '../../tools/observations';
-import { resolveToolCallFromSnapshot } from '../../tools/registry';
-import { validateToolInput } from '../../tools/schemas';
+import type { RegisteredTool, ToolExecutionService, ToolRegistryService } from '../../tools';
 import type {
   PendingToolApproval,
   HandleToolCallsInput,
@@ -21,12 +20,10 @@ import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type {
   ApprovalRequest,
   PermissionDecision,
-  SnapshotToolEntry,
   ToolCall,
   ToolDefinition,
   ToolExecutionDecision,
   ToolExecutionRecord,
-  ToolRegistrySnapshot,
   ToolResult,
 } from '@megumi/shared/tool';
 import {
@@ -48,10 +45,6 @@ import { applyDecisionsToCreated, inferredDefinitionFields } from './approval/to
 import { advanceExecutionWindows } from './execution/tool-execution-window';
 import { markToolResultsSubmittedToModelInput } from './model-input/tool-result-model-input-emitted';
 import { outcomeFromRecords } from './model-input/tool-result-model-input';
-import type {
-  CodingAgentToolExecutionHostPort,
-  CodingAgentToolExecutionRunOptions,
-} from '../../tools/tool-execution-host-port';
 
 export { PendingApprovalRegistry };
 
@@ -102,7 +95,6 @@ export interface ToolCallRepositoryPort {
   createApprovalRequest(approvalRequest: ApprovalRequest): ApprovalRequest;
   getApprovalRequest(approvalRequestId: string): ApprovalRequest | undefined;
   completeToolCall(toolResult: ToolResult): ToolResult;
-  getToolRegistrySnapshotByRun(runId: string): ToolRegistrySnapshot | undefined;
   getRunSessionId(runId: string): string | undefined;
   markToolResultsSubmittedToModelInput?(input: {
     toolExecutionIds: string[];
@@ -111,12 +103,12 @@ export interface ToolCallRepositoryPort {
 }
 
 export interface ToolCallRunnerOptions {
-  registry?: unknown;
   repository: ToolCallRepositoryPort;
+  toolRegistryService: Pick<ToolRegistryService, 'getRegisteredTool'>;
+  toolExecutionService: Pick<ToolExecutionService, 'executeTool'>;
   permissionMode: PermissionMode;
   projectRoot: string;
   settings: MergedPermissionSettings;
-  toolExecutionRouter: CodingAgentToolExecutionHostPort;
   now?: () => string;
   ids?: {
     toolExecutionId(): string;
@@ -235,7 +227,6 @@ async function prepareRecords(
   input: HandleToolCallsInput,
 ): Promise<ToolExecutionRecord[]> {
   const assistantMessageId = String(input.request.modelStepId);
-  const snapshot = options.repository.getToolRegistrySnapshotByRun(String(input.request.runId));
 
   for (const [index, toolCall] of input.toolCalls.entries()) {
     const existing = options.repository.getToolExecutionByToolCallId({
@@ -247,36 +238,21 @@ async function prepareRecords(
       continue;
     }
 
-    const resolution = snapshot ? resolveToolCallFromSnapshot(snapshot, toolCall.toolName) : undefined;
-    const hasInlineIdentity = Boolean(toolCall.sourceId && toolCall.namespace && toolCall.sourceToolName);
-    const resolvedToolCall = resolution?.ok
-      ? { ...toolCall, ...resolution.sourceIdentity, toolName: resolution.definition.name }
+    const resolution = options.toolRegistryService.getRegisteredTool({ toolName: toolCall.toolName });
+    const registeredTool = resolution.type === 'found' ? resolution.tool : undefined;
+    const resolvedToolCall = registeredTool
+      ? { ...toolCall, toolName: registeredTool.registeredToolName }
       : toolCall;
     options.repository.startToolCall({
       ...resolvedToolCall,
-      status: resolution?.ok || hasInlineIdentity ? 'validated' : 'failed',
-      ...(resolution?.ok || hasInlineIdentity ? {} : { completedAt: options.now() }),
+      status: registeredTool ? 'validated' : 'failed',
+      ...(registeredTool ? {} : { completedAt: options.now() }),
     });
 
-    const definition = resolution?.ok ? resolution.definition : undefined;
-    if (definition) {
-      const validation = validateToolInput(definition, toolCall.input);
-      if (!validation.ok) {
-        const failed = createRejectedRecord(options, input.request, toolCall, index, {
-          reason: validation.errorMessage,
-          reasonCode: 'INVALID_ARGUMENTS',
-        });
-        options.repository.recordToolExecution(failed);
-        continue;
-      }
-    }
-
-    const record = resolution?.ok
-      ? recordFromResolvedCall(options, input.request, resolvedToolCall, index, resolution.entry, resolution.definition)
-      : hasInlineIdentity
-        ? recordFromInlineToolCall(options, input.request, toolCall, index)
-        : createRejectedRecord(options, input.request, toolCall, index, {
-        reason: resolution?.message ?? `Unknown tool: ${toolCall.toolName}`,
+    const record = registeredTool
+      ? recordFromRegisteredTool(options, input.request, resolvedToolCall, index, registeredTool)
+      : createRejectedRecord(options, input.request, toolCall, index, {
+        reason: `Unknown tool: ${toolCall.toolName}`,
         reasonCode: 'TOOL_NOT_FOUND',
       });
     options.repository.recordToolExecution(record);
@@ -288,13 +264,13 @@ async function prepareRecords(
   });
 }
 
-function recordFromInlineToolCall(
+function recordFromRegisteredTool(
   options: ResolvedToolCallRunnerOptions,
   request: ModelStepRuntimeRequest,
   toolCall: ToolCall,
   callOrder: number,
+  registeredTool: RegisteredTool,
 ): ToolExecutionRecord {
-  const inferred = inferredDefinitionFields(toolCall.toolName);
   return {
     toolExecutionId: options.ids.toolExecutionId(),
     toolCallId: toolCall.toolCallId,
@@ -302,19 +278,21 @@ function recordFromInlineToolCall(
     stepId: request.stepId,
     assistantMessageId: String(request.modelStepId),
     callOrder: toolCall.callOrder ?? callOrder,
-    toolName: toolCall.toolName,
-    registrySnapshotId: toolCall.registrySnapshotId,
-    snapshotEntryId: toolCall.snapshotEntryId,
-    modelVisibleName: toolCall.modelVisibleName,
-    canonicalToolId: toolCall.canonicalToolId,
-    sourceId: toolCall.sourceId,
-    namespace: toolCall.namespace,
-    sourceToolName: toolCall.sourceToolName,
+    toolName: registeredTool.registeredToolName,
+    modelVisibleName: registeredTool.registeredToolName,
+    canonicalToolId: [
+      registeredTool.identity.sourceId,
+      registeredTool.identity.namespace,
+      registeredTool.identity.sourceToolName,
+    ].join(':'),
+    sourceId: registeredTool.identity.sourceId,
+    namespace: registeredTool.identity.namespace,
+    sourceToolName: registeredTool.identity.sourceToolName,
     input: toolCall.input,
     inputPreview: toolCall.inputPreview,
-    capabilities: inferred.capabilities,
-    riskLevel: inferred.riskLevel,
-    sideEffect: inferred.sideEffect,
+    capabilities: [...registeredTool.definition.capabilities],
+    riskLevel: registeredTool.definition.riskLevel,
+    sideEffect: registeredTool.definition.sideEffect,
     status: 'created',
     requestedAt: options.now(),
     continuationEmitted: false,
@@ -325,54 +303,10 @@ function recordFromInlineToolCall(
 }
 
 function executionOptionsFromRequest(
-  request: ModelStepRuntimeRequest,
+  _request: ModelStepRuntimeRequest,
   signal?: AbortSignal,
-): CodingAgentToolExecutionRunOptions {
-  return {
-    scope: {
-      sessionId: String(request.sessionId),
-      runId: String(request.runId),
-      stepId: String(request.stepId),
-    },
-    ...(signal ? { signal } : {}),
-  };
-}
-
-function recordFromResolvedCall(
-  options: ResolvedToolCallRunnerOptions,
-  request: ModelStepRuntimeRequest,
-  toolCall: ToolCall,
-  callOrder: number,
-  snapshotEntry: SnapshotToolEntry,
-  definition: ToolDefinition,
-): ToolExecutionRecord {
-  return {
-    toolExecutionId: options.ids.toolExecutionId(),
-    toolCallId: toolCall.toolCallId,
-    runId: request.runId,
-    stepId: request.stepId,
-    assistantMessageId: String(request.modelStepId),
-    callOrder: toolCall.callOrder ?? callOrder,
-    toolName: definition.name,
-    registrySnapshotId: snapshotEntry.snapshotId,
-    snapshotEntryId: snapshotEntry.snapshotEntryId,
-    modelVisibleName: snapshotEntry.modelVisibleName,
-    canonicalToolId: snapshotEntry.canonicalToolId,
-    sourceId: snapshotEntry.sourceId,
-    namespace: snapshotEntry.namespace,
-    sourceToolName: snapshotEntry.sourceToolName,
-    input: toolCall.input,
-    inputPreview: toolCall.inputPreview,
-    capabilities: definition.capabilities,
-    riskLevel: definition.riskLevel,
-    sideEffect: definition.sideEffect,
-    status: 'created',
-    requestedAt: options.now(),
-    continuationEmitted: false,
-    metadata: {
-      providerToolCallId: toolCall.providerToolCallId,
-    },
-  };
+): { signal?: AbortSignal } {
+  return signal ? { signal } : {};
 }
 
 function createRejectedRecord(

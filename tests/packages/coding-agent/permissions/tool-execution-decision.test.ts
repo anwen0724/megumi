@@ -6,8 +6,8 @@ describe('evaluateToolExecutionDecision', () => {
     const decision = evaluateToolExecutionDecision({
       toolName: 'read_file',
       parsedArguments: { path: 'README.md' },
-      snapshotEntry: {
-        modelVisibleName: 'read_file',
+      toolFacts: {
+        registeredToolName: 'read_file',
         sourceId: 'built_in',
         namespace: 'megumi',
         sourceToolName: 'read_file',
@@ -33,8 +33,8 @@ describe('evaluateToolExecutionDecision', () => {
     const decision = evaluateToolExecutionDecision({
       toolName: 'edit_file',
       parsedArguments: { path: 'src/app.ts', edits: [] },
-      snapshotEntry: {
-        modelVisibleName: 'edit_file',
+      toolFacts: {
+        registeredToolName: 'edit_file',
         sourceId: 'built_in',
         namespace: 'megumi',
         sourceToolName: 'edit_file',
@@ -60,7 +60,7 @@ describe('evaluateToolExecutionDecision', () => {
     const decision = evaluateToolExecutionDecision({
       toolName: 'missing_tool',
       parsedArguments: {},
-      snapshotEntry: undefined,
+      toolFacts: undefined,
       permissionPosture: 'default',
       permissionDecision: { decision: 'deny', reason: 'Tool was not found.' },
       runtimeCapabilityPolicy: { customToolsEnabled: false, processExecutionEnabled: true },
@@ -93,8 +93,8 @@ function firstInputForRunCommandApproval() {
   return {
     toolName: 'run_command',
     parsedArguments: { command: 'npm test' },
-    snapshotEntry: {
-      modelVisibleName: 'run_command',
+    toolFacts: {
+      registeredToolName: 'run_command',
       sourceId: 'built_in',
       namespace: 'megumi',
       sourceToolName: 'run_command',

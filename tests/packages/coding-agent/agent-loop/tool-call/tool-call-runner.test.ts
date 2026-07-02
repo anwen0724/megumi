@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { RuntimeEventSchema } from '@megumi/shared/runtime';
-import { createToolRegistrySnapshot } from '@megumi/coding-agent/tools/registry';
-import { createBuiltInToolRegistrations } from '@megumi/coding-agent/tools/sources';
-import type { ToolSource } from '@megumi/shared/tool';
 import {
   allowParallel,
   allowSerial,
@@ -72,7 +69,7 @@ describe('ToolCallRunner source-order barrier', () => {
     ]);
   });
 
-  it('passes workspace scope separately from abort signal to routed executors', async () => {
+  it('passes abort signal to tool execution service', async () => {
     const abortController = new AbortController();
     const harness = createToolCallRunnerHarness({
       decisions: [allowSerial('edit_file')],
@@ -83,54 +80,12 @@ describe('ToolCallRunner source-order barrier', () => {
       signal: abortController.signal,
     });
 
-    expect(harness.executor.router.executeToolExecution).toHaveBeenCalledWith(
-      expect.objectContaining({ toolCallId: 'call:0' }),
-      {
-        scope: {
-          sessionId: 'session:1',
-          runId: 'run:1',
-          stepId: 'step:1',
-        },
-        signal: abortController.signal,
-      },
+    expect(harness.executor.service.executeTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({ __toolCallId: 'call:0' }),
+        options: { signal: abortController.signal },
+      }),
     );
-  });
-
-  it('finalizes the workspace change scope after managed execution windows', async () => {
-    const harness = createToolCallRunnerHarness({
-      decisions: [allowSerial('write_file')],
-    });
-
-    await harness.toolCallHandler.handleToolCalls(createHandleInput([
-      toolCall('call:0', 'write_file'),
-    ]));
-
-    expect(harness.executor.router.finalizeWorkspaceChangeSet).toHaveBeenCalledWith({
-      sessionId: 'session:1',
-      runId: 'run:1',
-      stepId: 'step:1',
-    });
-  });
-
-  it('finalizes the workspace change scope after approval resume execution windows', async () => {
-    const harness = createToolCallRunnerHarness({
-      existingRecords: [
-        terminalSucceededRecord('call:0', 0),
-        awaitingApprovalRecord('call:1', 1),
-      ],
-    });
-
-    await harness.toolCallHandler.resumeToolApproval({
-      approvalRequestId: 'approval:1',
-      decision: 'approved',
-      decidedAt: '2026-06-15T00:00:10.000Z',
-    });
-
-    expect(harness.executor.router.finalizeWorkspaceChangeSet).toHaveBeenCalledWith({
-      sessionId: 'session:1',
-      runId: 'run:1',
-      stepId: 'step:1',
-    });
   });
 
   it('does not re-execute terminal records during resume', async () => {
@@ -270,7 +225,7 @@ describe('ToolCallRunner source-order barrier', () => {
     expect(outcome.runtimeEvents.find((event) => event.eventType === 'tool.execution.failed')?.payload).toMatchObject({
       toolExecutionId: 'exec:new:0',
       error: {
-        code: 'tool_failed',
+        code: 'tool_execution_failed',
         message: 'failed call:0',
         severity: 'error',
         retryable: false,
@@ -302,39 +257,16 @@ describe('ToolCallRunner source-order barrier', () => {
     });
   });
 
-  it('rejects invalid arguments with INVALID_ARGUMENTS reason code', async () => {
-    const snapshot = createToolRegistrySnapshot({
-      runId: 'run:1',
-      projectId: 'project:1',
-      permissionMode: 'default',
-      modelId: 'test-model',
-      createdAt: '2026-06-15T00:00:00.000Z',
-      sources: [builtInToolSource()],
-      registrations: createBuiltInToolRegistrations(),
-      providerCapabilitySummary: { supportsToolCall: true },
+  it('uses tool execution service results for invalid arguments', async () => {
+    const harness = createToolCallRunnerHarness({
+      decisions: [allowParallel('read_file')],
+      failedToolCallIds: ['call:0'],
     });
-    const harness = createToolCallRunnerHarness({ snapshot });
-
     const outcome = await harness.toolCallHandler.handleToolCalls(createHandleInput([
       toolCall('call:0', 'read_file'),
     ]));
 
-    expect(harness.recordsByCallOrder()[0]?.decision?.reasonCode).toBe('INVALID_ARGUMENTS');
-    expect(outcome.toolResults[0]?.textContent).toContain('INVALID_ARGUMENTS');
+    expect(harness.recordsByCallOrder()[0]?.status).toBe('failed');
+    expect(outcome.toolResults[0]?.textContent).toContain('failed call:0');
   });
 });
-
-function builtInToolSource(): ToolSource {
-  return {
-    sourceId: 'built_in',
-    sourceKind: 'built_in',
-    namespace: 'megumi',
-    displayName: 'Built-in tools',
-    configured: true,
-    enabled: true,
-    availabilityStatus: 'available',
-    config: {},
-    createdAt: '2026-06-15T00:00:00.000Z',
-    updatedAt: '2026-06-15T00:00:00.000Z',
-  };
-}

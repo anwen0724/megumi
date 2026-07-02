@@ -1,8 +1,11 @@
 // Selects and executes tool execution windows without violating serial or approval barriers.
 import type { ToolExecutionRecord } from '@megumi/shared/tool';
-import type { CodingAgentToolExecutionRunOptions } from '../../../tools/tool-execution-host-port';
 import type { ResolvedToolCallRunnerOptions } from '../tool-call-runner';
 import { runToolExecutionRecord } from './tool-execution-record';
+
+export interface ToolExecutionRunOptions {
+  signal?: AbortSignal;
+}
 
 export function nextExecutableWindow(records: readonly ToolExecutionRecord[]): ToolExecutionRecord[] {
   const window: ToolExecutionRecord[] = [];
@@ -48,49 +51,34 @@ export async function advanceExecutionWindows(
   input: {
     runId: string;
     assistantMessageId: string;
-    executionOptions?: CodingAgentToolExecutionRunOptions;
+    executionOptions?: ToolExecutionRunOptions;
   },
 ): Promise<ToolExecutionRecord[]> {
-  try {
-    let records = options.repository.listToolExecutionsByAssistantMessage(input);
+  let records = options.repository.listToolExecutionsByAssistantMessage(input);
 
-    while (!input.executionOptions?.signal?.aborted) {
-      const window = nextExecutableWindow(records);
-      if (window.length === 0) {
-        return records;
-      }
-
-      if (window.length === 1) {
-        await runToolExecutionRecord(options, window[0], input.executionOptions);
-      } else {
-        await Promise.all(window.map((record) => runToolExecutionRecord(options, record, input.executionOptions)));
-      }
-
-      records = options.repository.listToolExecutionsByAssistantMessage(input);
+  while (!input.executionOptions?.signal?.aborted) {
+    const window = nextExecutableWindow(records);
+    if (window.length === 0) {
+      return records;
     }
 
-    for (const record of records) {
-      if (isActiveStatus(record.status)) {
-        options.repository.recordToolExecution({
-          ...record,
-          status: 'cancelled',
-          completedAt: options.now(),
-        });
-      }
+    if (window.length === 1) {
+      await runToolExecutionRecord(options, window[0], input.executionOptions);
+    } else {
+      await Promise.all(window.map((record) => runToolExecutionRecord(options, record, input.executionOptions)));
     }
-    return options.repository.listToolExecutionsByAssistantMessage(input);
-  } finally {
-    finalizeWorkspaceChangeSet(options, input.executionOptions);
-  }
-}
 
-function finalizeWorkspaceChangeSet(
-  options: ResolvedToolCallRunnerOptions,
-  executionOptions?: CodingAgentToolExecutionRunOptions,
-): void {
-  if (!executionOptions?.scope) {
-    return;
+    records = options.repository.listToolExecutionsByAssistantMessage(input);
   }
 
-  options.toolExecutionRouter.finalizeWorkspaceChangeSet?.(executionOptions.scope);
+  for (const record of records) {
+    if (isActiveStatus(record.status)) {
+      options.repository.recordToolExecution({
+        ...record,
+        status: 'cancelled',
+        completedAt: options.now(),
+      });
+    }
+  }
+  return options.repository.listToolExecutionsByAssistantMessage(input);
 }

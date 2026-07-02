@@ -1,33 +1,32 @@
 ﻿import { vi } from 'vitest';
 import { createToolCallRunner } from '@megumi/coding-agent/agent-loop/tool-call';
+import { ToolRegistryService, type ToolExecutionResult } from '@megumi/coding-agent/tools';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type {
   ApprovalRequest,
   PermissionDecision,
-  RawToolResult,
   ToolCall,
   ToolExecutionDecision,
   ToolExecutionRecord,
   ToolObservation,
-  ToolRegistrySnapshot,
   ToolResult,
 } from '@megumi/shared/tool';
 
 export function createToolCallRunnerHarness(input: {
   decisions?: readonly ToolExecutionDecision[];
   existingRecords?: readonly ToolExecutionRecord[];
-  snapshot?: ToolRegistrySnapshot;
   failedToolCallIds?: readonly string[];
 } = {}) {
-  const repository = createInMemoryToolCallStore(input.existingRecords ?? [], input.snapshot);
-  const executor = createRecordingRawExecutor(new Set(input.failedToolCallIds ?? []));
+  const repository = createInMemoryToolCallStore(input.existingRecords ?? []);
+  const executor = createRecordingToolExecutionService(new Set(input.failedToolCallIds ?? []));
   const decisions = [...(input.decisions ?? [])];
   const toolCallHandler = createToolCallRunner({
     repository,
+    toolRegistryService: new ToolRegistryService(),
+    toolExecutionService: executor.service,
     permissionMode: 'default',
     projectRoot: 'C:/project',
     settings: { allow: [], ask: [], deny: [] },
-    toolExecutionRouter: executor.router,
     decisionEvaluator: {
       evaluate: () => decisions.shift() ?? allowParallel('read_file'),
     },
@@ -76,7 +75,7 @@ export function toolCall(toolCallId: string, toolName: string): ToolCall {
     sourceId: 'built_in',
     namespace: 'megumi',
     sourceToolName: toolName,
-    input: {},
+    input: { __toolCallId: toolCallId },
     inputPreview: inputPreview(toolName),
     status: 'created',
     createdAt: '2026-06-15T00:00:00.000Z',
@@ -158,7 +157,7 @@ function baseRecord(
     sourceId: 'built_in',
     namespace: 'megumi',
     sourceToolName: 'read_file',
-    input: {},
+    input: { __toolCallId: toolCallId },
     inputPreview: inputPreview('read_file'),
     capabilities: ['project_read'],
     riskLevel: 'low',
@@ -191,7 +190,6 @@ function observationFor(
 
 function createInMemoryToolCallStore(
   initialRecords: readonly ToolExecutionRecord[],
-  snapshot?: ToolRegistrySnapshot,
 ) {
   const records = new Map(initialRecords.map((record) => [String(record.toolExecutionId), record]));
   const toolCalls = new Map<string, ToolCall>();
@@ -232,47 +230,56 @@ function createInMemoryToolCallStore(
       toolResults.push(result);
       return result;
     }),
-    getToolRegistrySnapshotByRun: vi.fn(() => snapshot),
     getRunSessionId: vi.fn(() => 'session:1'),
   };
 }
 
-function createRecordingRawExecutor(failedToolCallIds: ReadonlySet<string>) {
+function createRecordingToolExecutionService(failedToolCallIds: ReadonlySet<string>) {
   const started: string[] = [];
   const windows: string[][] = [];
   return {
-    router: {
-      executeToolExecution: vi.fn(async (record: ToolExecutionRecord): Promise<RawToolResult> => {
-        started.push(String(record.toolCallId));
-        windows.push([String(record.toolCallId)]);
-        if (failedToolCallIds.has(String(record.toolCallId))) {
+    service: {
+      executeTool: vi.fn(async (request): Promise<ToolExecutionResult> => {
+        const callId = String((request.input as { __toolCallId?: unknown }).__toolCallId ?? request.toolName);
+        started.push(callId);
+        windows.push([callId]);
+        if (failedToolCallIds.has(callId)) {
           return {
-            rawToolResultId: `raw:${record.callOrder}`,
-            toolExecutionId: record.toolExecutionId,
-            toolCallId: record.toolCallId,
-            isError: true,
-            outputKind: 'error',
-            content: {
-              code: 'tool_failed',
-              message: `failed ${record.toolCallId}`,
-              severity: 'error',
-              retryable: false,
-              source: 'tool',
+            type: 'failed',
+            toolName: request.toolName,
+            error: {
+              code: 'tool_execution_failed',
+              message: `failed ${callId}`,
             },
-            createdAt: '2026-06-15T00:00:00.000Z',
+            normalizedResult: {
+              kind: 'error',
+              content: `failed ${callId}`,
+              isError: true,
+              truncated: false,
+            },
+            toolExecutionObservation: {
+              summary: `failed ${callId}`,
+            },
           };
         }
         return {
-          rawToolResultId: `raw:${record.callOrder}`,
-          toolExecutionId: record.toolExecutionId,
-          toolCallId: record.toolCallId,
-          isError: false,
-          outputKind: 'text',
-          content: `result for ${record.toolCallId}`,
-          createdAt: '2026-06-15T00:00:00.000Z',
+          type: 'succeeded',
+          toolName: request.toolName,
+          rawResult: {
+            outputKind: 'text',
+            content: `result for ${callId}`,
+          },
+          normalizedResult: {
+            kind: 'text',
+            content: `result for ${callId}`,
+            isError: false,
+            truncated: false,
+          },
+          toolExecutionObservation: {
+            summary: `${request.toolName} completed`,
+          },
         };
       }),
-      finalizeWorkspaceChangeSet: vi.fn(),
     },
     startedToolCallIds: () => started,
     executionWindows: () => windows,
