@@ -114,6 +114,24 @@ describe('package dependency boundaries', () => {
     expect(source).not.toMatch(/\bmodelVisibleName\b/);
   });
 
+  it('does not expose Coding Agent tool registry contracts from packages/shared', () => {
+    const source = fs.readFileSync(path.join(root, 'packages/shared/tool/contracts.ts'), 'utf8');
+
+    expect(source).not.toMatch(/\bToolDefinitionSchema\b/);
+    expect(source).not.toMatch(/\bToolDefinition\b/);
+    expect(source).not.toMatch(/\bToolSourceSchema\b/);
+    expect(source).not.toMatch(/\bToolSource\b/);
+    expect(source).not.toMatch(/\bToolRegistrationSchema\b/);
+    expect(source).not.toMatch(/\bToolRegistration\b/);
+    expect(source).not.toMatch(/\bToolRegistrySnapshotSchema\b/);
+    expect(source).not.toMatch(/\bToolRegistrySnapshot\b/);
+    expect(source).not.toMatch(/\bSnapshotToolEntrySchema\b/);
+    expect(source).not.toMatch(/\bSnapshotToolEntry\b/);
+    expect(source).not.toMatch(/\bToolSourceIdentitySchema\b/);
+    expect(source).not.toMatch(/\bToolSourceIdentity\b/);
+    expect(source).not.toContain('external_test');
+  });
+
   it('does not keep a top-level packages/agent package or removed agent alias', () => {
     expect(existsSync(join(repoRoot, 'packages/agent'))).toBe(false);
     const removedAgentAlias = '@megumi/' + 'agent';

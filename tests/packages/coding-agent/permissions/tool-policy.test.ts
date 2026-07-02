@@ -11,7 +11,8 @@ import type {
   PermissionClassifier,
   PermissionClassifierResult,
 } from '@megumi/coding-agent/permissions/permission-classifier';
-import type { ToolExecution, ToolDefinition } from '@megumi/shared/tool';
+import type { ToolDefinition } from '@megumi/coding-agent/tools';
+import type { ToolExecution } from '@megumi/shared/tool';
 
 const projectRoot = 'C:/all/work/study/megumi';
 const evaluatedAt = '2026-05-20T00:00:00.000Z';

@@ -7,12 +7,12 @@ import type {
   PermissionMatchedRule,
   PermissionClassifierLabel,
   SandboxRequirement,
-  ToolDefinition,
   ToolExecution,
   ToolPolicyDecision,
   ToolPolicyDecisionValue,
   ToolRiskLevel,
 } from '@megumi/shared/tool';
+import type { ToolDefinition } from '../tools';
 import { classifyCommand, type CommandClassifierLabel } from './command-classifier';
 import {
   createRuleBasedPermissionClassifier,

@@ -7,10 +7,64 @@ import type {
   ToolCall,
   ToolExecution,
   ToolObservation,
-  ToolRegistrySnapshot,
   ToolResult,
-  ToolSource,
 } from '@megumi/shared/tool';
+import type { JsonObject } from '@megumi/shared/primitives';
+
+export interface PersistedToolSource {
+  sourceId: string;
+  sourceKind: string;
+  namespace: string;
+  displayName: string;
+  configured: boolean;
+  enabled: boolean;
+  availabilityStatus: 'available' | 'unavailable' | 'unknown';
+  availabilityReason?: string;
+  healthCheckedAt?: string;
+  config: JsonObject;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PersistedToolRegistrySnapshot {
+  snapshotId: string;
+  runId: string;
+  projectId: string;
+  permissionMode: string;
+  modelId: string;
+  createdAt: string;
+  registryVersion: number;
+  sourceVersionHash: string;
+  sourceEntries: Array<{
+    sourceId: string;
+    sourceKind: string;
+    namespace: string;
+    displayName: string;
+    configured: boolean;
+    enabled: boolean;
+    availabilityStatus: 'available' | 'unavailable' | 'unknown';
+    availabilityReason?: string;
+    healthCheckedAt?: string;
+  }>;
+  entries: Array<{
+    snapshotEntryId: string;
+    snapshotId: string;
+    registrationId: string;
+    canonicalToolId: string;
+    modelVisibleName: string;
+    sourceId: string;
+    namespace: string;
+    sourceToolName: string;
+    definition: unknown;
+    effectiveStatus: 'available' | 'disabled' | 'unavailable' | 'conflicted';
+    disabledReason?: string;
+    unavailableReason?: string;
+    conflictReason?: string;
+    exposedToModel: boolean;
+    executionMode: 'parallel' | 'serial';
+    createdAt: string;
+  }>;
+}
 
 interface ToolSourceRow {
   metadata_json: string | null;
@@ -66,7 +120,7 @@ const ACTIVE_TOOL_EXECUTION_STATUSES = ['created', 'awaitingApproval', 'queued',
 export class ToolCallRepository {
   constructor(private readonly database: MegumiDatabase) {}
 
-  saveToolSource(source: ToolSource): ToolSource {
+  saveToolSource(source: PersistedToolSource): PersistedToolSource {
     this.database.prepare(`
       INSERT INTO tool_sources (
         tool_source_id, workspace_id, source_type, name, status, enabled,
@@ -97,21 +151,21 @@ export class ToolCallRepository {
     return source;
   }
 
-  getToolSource(sourceId: string): ToolSource | undefined {
+  getToolSource(sourceId: string): PersistedToolSource | undefined {
     const row = this.database
       .prepare('SELECT metadata_json FROM tool_sources WHERE tool_source_id = ?')
       .get(sourceId) as ToolSourceRow | undefined;
-    return row ? parseJson<{ source: ToolSource }>(row.metadata_json)?.source : undefined;
+    return row ? parseJson<{ source: PersistedToolSource }>(row.metadata_json)?.source : undefined;
   }
 
-  listToolSources(): ToolSource[] {
+  listToolSources(): PersistedToolSource[] {
     return (this.database.prepare('SELECT metadata_json FROM tool_sources ORDER BY tool_source_id ASC').all() as ToolSourceRow[])
-      .map((row) => parseJson<{ source: ToolSource }>(row.metadata_json)?.source)
-      .filter((source): source is ToolSource => Boolean(source));
+      .map((row) => parseJson<{ source: PersistedToolSource }>(row.metadata_json)?.source)
+      .filter((source): source is PersistedToolSource => Boolean(source));
   }
 
-  seedDefaultToolSources(now: string): ToolSource[] {
-    const defaultSources: ToolSource[] = [
+  seedDefaultToolSources(now: string): PersistedToolSource[] {
+    const defaultSources: PersistedToolSource[] = [
       {
         sourceId: 'built_in',
         sourceKind: 'built_in',
@@ -146,25 +200,25 @@ export class ToolCallRepository {
     return this.listToolSources();
   }
 
-  saveToolRegistrySnapshot(snapshot: ToolRegistrySnapshot): ToolRegistrySnapshot {
+  saveToolRegistrySnapshot(snapshot: PersistedToolRegistrySnapshot): PersistedToolRegistrySnapshot {
     throw new Error('Tool registry snapshot persistence is owned by AgentLoopRepository.');
   }
 
-  getToolRegistrySnapshot(snapshotId: string): ToolRegistrySnapshot | undefined {
+  getToolRegistrySnapshot(snapshotId: string): PersistedToolRegistrySnapshot | undefined {
     const row = this.database
       .prepare('SELECT snapshot_json FROM tool_registry_snapshots WHERE snapshot_id = ?')
       .get(snapshotId) as ToolRegistrySnapshotRow | undefined;
-    return row ? parseJson<ToolRegistrySnapshot>(row.snapshot_json) : undefined;
+    return row ? parseJson<PersistedToolRegistrySnapshot>(row.snapshot_json) : undefined;
   }
 
-  getToolRegistrySnapshotByRun(runId: string): ToolRegistrySnapshot | undefined {
+  getToolRegistrySnapshotByRun(runId: string): PersistedToolRegistrySnapshot | undefined {
     const row = this.database
       .prepare('SELECT snapshot_json FROM tool_registry_snapshots WHERE run_id = ?')
       .get(runId) as ToolRegistrySnapshotRow | undefined;
-    return row ? parseJson<ToolRegistrySnapshot>(row.snapshot_json) : undefined;
+    return row ? parseJson<PersistedToolRegistrySnapshot>(row.snapshot_json) : undefined;
   }
 
-  listToolRegistrySnapshotEntries(snapshotId: string): ToolRegistrySnapshot['entries'] {
+  listToolRegistrySnapshotEntries(snapshotId: string): PersistedToolRegistrySnapshot['entries'] {
     return this.getToolRegistrySnapshot(snapshotId)?.entries ?? [];
   }
 

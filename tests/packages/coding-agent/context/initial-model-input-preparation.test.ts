@@ -10,7 +10,7 @@ import {
 } from '@megumi/coding-agent/context';
 import type { ModelInputContext } from '@megumi/shared/model';
 import type { SessionContextInput } from '@megumi/shared/session';
-import type { ToolDefinition } from '@megumi/shared/tool';
+import type { ToolDefinition } from '@megumi/coding-agent/tools';
 
 describe('createAgentLoopInitialModelInputMemoryRecallService', () => {
   it('adapts memory recall runtime inputs for initial model input preparation', async () => {

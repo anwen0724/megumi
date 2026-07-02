@@ -7,7 +7,7 @@ import type { ProviderId } from '@megumi/shared/provider';
 import type { ModelCapabilitySummary } from '@megumi/shared/run';
 import type { RuntimeContext } from '@megumi/shared/runtime';
 import type { Run, RunStep, Session, SessionContextInput, SessionMessage } from '@megumi/shared/session';
-import type { ToolDefinition } from '@megumi/shared/tool';
+import type { ToolDefinition } from '../tools';
 
 import type { ParsedInput } from '../input/parsed-input';
 import type { MemoryRecallPort } from '../memory';

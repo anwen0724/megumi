@@ -2,7 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import { evaluatePermissionPolicy } from '@megumi/coding-agent/permissions/tool-policy';
 import { ToolRegistryService } from '@megumi/coding-agent/tools';
-import type { ToolDefinition, ToolExecution } from '@megumi/shared/tool';
+import type { ToolDefinition } from '@megumi/coding-agent/tools';
+import type { ToolExecution } from '@megumi/shared/tool';
 
 const registry = new ToolRegistryService();
 const projectRoot = 'C:/all/work/study/megumi';

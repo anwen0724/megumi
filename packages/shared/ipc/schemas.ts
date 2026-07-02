@@ -25,7 +25,6 @@ import {
 import {
   ApprovalScopeSchema,
   ApprovalRecordSchema,
-  ToolDefinitionSchema,
   ToolExecutionSchema,
 } from '../tool/contracts';
 import {
@@ -469,9 +468,37 @@ export const ToolDefinitionsListPayloadSchema = z
   })
   .strict();
 
+const ToolDefinitionListItemSchema = z
+  .object({
+    name: z.string().min(1),
+    title: z.string().min(1).optional(),
+    description: z.string().min(1),
+    inputSchema: JsonObjectSchema,
+    inputExamples: z.array(JsonObjectSchema).optional(),
+    outputSchema: JsonObjectSchema.optional(),
+    annotations: z.object({
+      readOnlyHint: z.boolean().optional(),
+      destructiveHint: z.boolean().optional(),
+      idempotentHint: z.boolean().optional(),
+      openWorldHint: z.boolean().optional(),
+    }).strict().optional(),
+    capabilities: z.array(z.string().min(1)),
+    riskLevel: z.string().min(1),
+    sideEffect: z.string().min(1),
+    availability: z.object({
+      status: z.enum(['available', 'disabled', 'unavailable']),
+      reason: z.string().min(1).optional(),
+    }).strict(),
+    executionMode: z.enum(['parallel', 'serial']).optional(),
+    permissionMetadata: JsonObjectSchema.optional(),
+    modelFacingDescription: z.string().min(1).optional(),
+    metadata: JsonObjectSchema.optional(),
+  })
+  .strict();
+
 export const ToolDefinitionsListDataSchema = z
   .object({
-    tools: z.array(ToolDefinitionSchema),
+    tools: z.array(ToolDefinitionListItemSchema),
   })
   .strict();
 

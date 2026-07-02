@@ -4,7 +4,6 @@ import type { JsonObject } from '../primitives/json';
 import type { ModelInputContext } from '../model/input-context-contracts';
 import type { ProviderId } from '../provider/contracts';
 import type { RuntimeContext } from '../runtime/context';
-import type { ToolDefinition } from '../tool/contracts';
 
 export type ProviderStateBlock =
   | {
@@ -34,6 +33,55 @@ export interface ModelStructuredOutputTarget {
   strict?: boolean;
 }
 
+export type ModelToolCapability =
+  | 'project_read'
+  | 'project_write'
+  | 'command_run'
+  | 'network_access'
+  | 'browser_access'
+  | 'mcp_tool'
+  | 'secret_read'
+  | 'system_integration'
+  | 'external_app';
+
+export type ModelToolRiskLevel = 'low' | 'medium' | 'high' | 'critical';
+
+export type ModelToolSideEffect =
+  | 'none'
+  | 'read_external'
+  | 'project_file_operation'
+  | 'execute_command'
+  | 'access_network'
+  | 'access_secret'
+  | 'modify_external'
+  | 'system_change';
+
+export interface ModelToolDefinition {
+  name: string;
+  title?: string;
+  description: string;
+  inputSchema: JsonObject;
+  inputExamples?: JsonObject[];
+  outputSchema?: JsonObject;
+  annotations?: {
+    readOnlyHint?: boolean;
+    destructiveHint?: boolean;
+    idempotentHint?: boolean;
+    openWorldHint?: boolean;
+  };
+  capabilities: ModelToolCapability[];
+  riskLevel: ModelToolRiskLevel;
+  sideEffect: ModelToolSideEffect;
+  availability: {
+    status: 'available' | 'disabled' | 'unavailable';
+    reason?: string;
+  };
+  executionMode?: 'parallel' | 'serial';
+  permissionMetadata?: JsonObject;
+  modelFacingDescription?: string;
+  metadata?: JsonObject;
+}
+
 export interface ModelStepRuntimeRequest {
   requestId: string;
   sessionId: string;
@@ -43,7 +91,7 @@ export interface ModelStepRuntimeRequest {
   providerId: ProviderId;
   modelId: ModelId | string;
   inputContext: ModelInputContext;
-  toolDefinitions?: ToolDefinition[];
+  toolDefinitions?: ModelToolDefinition[];
   structuredOutput?: ModelStructuredOutputTarget;
   runtimeContext?: RuntimeContext;
   createdAt: string;

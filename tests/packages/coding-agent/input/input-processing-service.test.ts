@@ -12,6 +12,7 @@ import {
   ToolRegistryService,
   type ExecuteToolRequest,
   type RegisteredTool,
+  type ToolDefinition,
   type ToolExecutionResult,
 } from '@megumi/coding-agent/tools';
 import {
@@ -67,7 +68,7 @@ import type { MergedPermissionSettings } from '@megumi/shared/permission';
 import type { RunContext } from '@megumi/shared/run';
 import type { RunAction, SessionCompactionEntry } from '@megumi/shared/session';
 import type { SessionSourceEntry } from '@megumi/shared/session';
-import type { ApprovalRequest, ToolCall, ToolDefinition, ToolExecution, ToolResult } from '@megumi/shared/tool';
+import type { ApprovalRequest, ToolCall, ToolExecution, ToolResult } from '@megumi/shared/tool';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { RuntimeError } from '@megumi/shared/runtime';
 import type {

@@ -40,13 +40,10 @@ import {
 import {
   APPROVAL_SCOPES,
   ApprovalRequestSchema,
-  TOOL_SOURCE_KINDS,
-  TOOL_REGISTRY_SNAPSHOT_ENTRY_STATUSES,
   PermissionDecisionSchema,
   ToolExecutionSchema,
   ToolNameSchema,
   ToolPolicyDecisionSchema,
-  ToolSourceIdentitySchema,
   type ApprovalScope,
 } from '../tool/contracts';
 import {
@@ -89,6 +86,21 @@ const RUNTIME_EVENT_SOURCE_VALUES = [...RUNTIME_EVENT_SOURCES] as [
   RuntimeEventSource,
   ...RuntimeEventSource[],
 ];
+
+const RUNTIME_TOOL_SOURCE_KINDS = ['built_in', 'mcp', 'plugin', 'project_local', 'skill'] as const;
+const RUNTIME_TOOL_REGISTRY_ENTRY_STATUSES = ['available', 'disabled', 'unavailable', 'conflicted'] as const;
+
+const RuntimeToolSourceIdentitySchema = z
+  .object({
+    registrySnapshotId: z.string().min(1),
+    snapshotEntryId: z.string().min(1),
+    modelVisibleName: ToolNameSchema,
+    canonicalToolId: z.string().min(1),
+    sourceId: z.string().min(1),
+    namespace: z.string().min(1),
+    sourceToolName: ToolNameSchema,
+  })
+  .strict();
 const RUNTIME_EVENT_VISIBILITY_VALUES = [...RUNTIME_EVENT_VISIBILITIES] as [
   RuntimeEventVisibility,
   ...RuntimeEventVisibility[],
@@ -438,7 +450,7 @@ const ToolCallCreatedPayloadSchema = z
   })
   .strict();
 
-const ToolCallResolvedPayloadSchema = ToolSourceIdentitySchema.extend({
+const ToolCallResolvedPayloadSchema = RuntimeToolSourceIdentitySchema.extend({
   toolCallId: z.string().min(1),
   providerToolCallId: z.string().min(1),
   requestedToolName: z.string().min(1),
@@ -457,7 +469,7 @@ const ToolCallResolutionFailedPayloadSchema = z
       'tool_not_exposed',
     ]),
     message: z.string().min(1),
-    sourceIdentity: ToolSourceIdentitySchema.optional(),
+    sourceIdentity: RuntimeToolSourceIdentitySchema.optional(),
   })
   .strict();
 
@@ -469,7 +481,7 @@ const ToolInputValidationFailedPayloadSchema = z
     snapshotEntryId: z.string().min(1),
     reason: z.literal('invalid_tool_input'),
     message: z.string().min(1),
-    sourceIdentity: ToolSourceIdentitySchema,
+    sourceIdentity: RuntimeToolSourceIdentitySchema,
   })
   .strict();
 
@@ -488,7 +500,7 @@ const ToolResultCreatedPayloadSchema = z
       'invalid_tool_input',
     ]),
     summary: z.string().min(1),
-    sourceIdentity: ToolSourceIdentitySchema.optional(),
+    sourceIdentity: RuntimeToolSourceIdentitySchema.optional(),
   })
   .strict();
 
@@ -523,7 +535,7 @@ const ToolRegistryEntryResolvedPayloadSchema = z
     sourceId: z.string().min(1),
     namespace: z.string().min(1),
     sourceToolName: ToolNameSchema,
-    effectiveStatus: z.enum(TOOL_REGISTRY_SNAPSHOT_ENTRY_STATUSES),
+    effectiveStatus: z.enum(RUNTIME_TOOL_REGISTRY_ENTRY_STATUSES),
     exposedToModel: z.boolean(),
     disabledReason: z.string().min(1).optional(),
     unavailableReason: z.string().min(1).optional(),
@@ -748,10 +760,10 @@ const ToolExecutionStartedPayloadSchema = z
   })
   .strict();
 
-const ToolExecutionRoutedPayloadSchema = ToolSourceIdentitySchema.extend({
+const ToolExecutionRoutedPayloadSchema = RuntimeToolSourceIdentitySchema.extend({
   toolExecutionId: z.string().min(1),
   toolName: ToolNameSchema,
-  executorKind: z.enum(TOOL_SOURCE_KINDS),
+  executorKind: z.enum(RUNTIME_TOOL_SOURCE_KINDS),
 }).strict();
 
 const ToolExecutionCompletedPayloadSchema = z

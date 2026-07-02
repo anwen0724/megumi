@@ -2,9 +2,9 @@
 import { evaluatePermissionPolicy } from '../../../permissions/tool-policy';
 import type {
   PermissionDecision,
-  ToolDefinition,
   ToolExecutionRecord,
 } from '@megumi/shared/tool';
+import type { ToolDefinition } from '../../../tools';
 import type { ToolExecutionDecisionInput } from '../../../permissions/tool-execution-decision';
 import type { ResolvedToolCallRunnerOptions } from '../tool-call-runner';
 import { createApprovalRequest } from './approval-events';

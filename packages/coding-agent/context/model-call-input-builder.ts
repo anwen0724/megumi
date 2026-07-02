@@ -16,7 +16,8 @@ import type {
 } from '@megumi/shared/model';
 import type { PermissionMode, PermissionModeSnapshot } from '@megumi/shared/permission';
 import type { SessionContextInput, SessionMessage } from '@megumi/shared/session';
-import type { ToolCall, ToolDefinition, ToolResult } from '@megumi/shared/tool';
+import type { ToolCall, ToolResult } from '@megumi/shared/tool';
+import type { ToolDefinition } from '../tools';
 import { resolveModelCallEffectiveCwd, type ModelCallEffectiveCwd } from './effective-cwd';
 import {
   createRuntimeFactsForRunInput,

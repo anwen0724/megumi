@@ -54,7 +54,19 @@ import type {
 } from '@megumi/shared/permission';
 
 import { TimelineMessageSchema, type TimelineMessage } from '@megumi/shared/timeline';
-import type { ToolRegistrySnapshot } from '@megumi/shared/tool';
+
+export interface AgentLoopPersistedToolRegistrySnapshot {
+  snapshotId: string;
+  runId: string;
+  projectId: string;
+  permissionMode: string;
+  modelId: string;
+  createdAt: string;
+  registryVersion: number;
+  sourceVersionHash: string;
+  sourceEntries: unknown[];
+  entries: unknown[];
+}
 
 
 
@@ -1937,7 +1949,7 @@ export interface MarkRunCompletedInput {
   completedAt: string;
 }
 
-export interface RecordToolRegistrySnapshotInput extends ToolRegistrySnapshot {}
+export interface RecordToolRegistrySnapshotInput extends AgentLoopPersistedToolRegistrySnapshot {}
 
 export class AgentLoopRepository {
   constructor(private readonly database: MegumiDatabase) {}
@@ -2064,7 +2076,7 @@ export class AgentLoopRepository {
     });
   }
 
-  saveToolRegistrySnapshot(snapshot: RecordToolRegistrySnapshotInput): ToolRegistrySnapshot {
+  saveToolRegistrySnapshot(snapshot: RecordToolRegistrySnapshotInput): AgentLoopPersistedToolRegistrySnapshot {
     const workspaceId = this.workspaceIdForRun(snapshot.runId);
     this.database.prepare(`
       INSERT INTO tool_registry_snapshots (
@@ -2099,13 +2111,13 @@ export class AgentLoopRepository {
     return snapshot;
   }
 
-  getToolRegistrySnapshotByRun(runId: string): ToolRegistrySnapshot | undefined {
+  getToolRegistrySnapshotByRun(runId: string): AgentLoopPersistedToolRegistrySnapshot | undefined {
     const row = this.database.prepare(`
       SELECT snapshot_json
       FROM tool_registry_snapshots
       WHERE run_id = ?
     `).get(runId) as { snapshot_json: string } | undefined;
-    return row ? JSON.parse(row.snapshot_json) as ToolRegistrySnapshot : undefined;
+    return row ? JSON.parse(row.snapshot_json) as AgentLoopPersistedToolRegistrySnapshot : undefined;
   }
 
   private nextCallOrder(runId: string): number {

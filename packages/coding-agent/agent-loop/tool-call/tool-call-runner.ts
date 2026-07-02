@@ -1,6 +1,6 @@
 ﻿// Owns run-time tool call orchestration for a Coding Agent turn.
 // It delegates approval, execution, and next-model-input shaping to focused internal modules.
-import type { RegisteredTool, ToolExecutionService, ToolRegistryService } from '../../tools';
+import type { RegisteredTool, ToolDefinition, ToolExecutionService, ToolRegistryService } from '../../tools';
 import type {
   PendingToolApproval,
   HandleToolCallsInput,
@@ -18,7 +18,6 @@ import type {
   ApprovalRequest,
   PermissionDecision,
   ToolCall,
-  ToolDefinition,
   ToolExecutionDecision,
   ToolExecutionRecord,
   ToolResult,

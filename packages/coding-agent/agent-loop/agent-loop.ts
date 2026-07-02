@@ -17,8 +17,9 @@ import {
   createToolResultCreatedEvent,
 } from '@megumi/shared/runtime';
 import type { Run, RunStep, Session, SessionContextInput, SessionMessage } from '@megumi/shared/session';
-import type { ToolCall, ToolDefinition, ToolResult } from '@megumi/shared/tool';
+import type { ToolCall, ToolResult } from '@megumi/shared/tool';
 import type { ListAvailableToolsResult, RegisteredTool } from '../tools';
+import type { ToolDefinition } from '../tools';
 import type { ParsedInput } from '../input';
 import {
   AgentLoopInitialModelInputPreparationService,

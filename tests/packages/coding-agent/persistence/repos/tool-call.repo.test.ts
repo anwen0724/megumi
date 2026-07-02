@@ -2,7 +2,11 @@
 // @vitest-environment node
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ToolCallRepository } from '@megumi/coding-agent/persistence/repos/tool-call.repo';
+import {
+  ToolCallRepository,
+  type PersistedToolRegistrySnapshot,
+  type PersistedToolSource,
+} from '@megumi/coding-agent/persistence/repos/tool-call.repo';
 import { AgentLoopRepository } from '@megumi/coding-agent/persistence/repos/agent-loop.repo';
 import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
 import type {
@@ -12,9 +16,7 @@ import type {
   ToolCall,
   ToolExecution,
   ToolObservation,
-  ToolRegistrySnapshot,
   ToolResult,
-  ToolSource,
 } from '@megumi/shared/tool';
 
 let db: Database.Database | null = null;
@@ -394,7 +396,7 @@ function tableNames(): string[] {
     .map((row) => (row as { name: string }).name);
 }
 
-function createToolSource(overrides: Partial<ToolSource> = {}): ToolSource {
+function createToolSource(overrides: Partial<PersistedToolSource> = {}): PersistedToolSource {
   return {
     sourceId: 'built_in',
     sourceKind: 'built_in',
@@ -410,9 +412,9 @@ function createToolSource(overrides: Partial<ToolSource> = {}): ToolSource {
   };
 }
 
-function createToolRegistrySnapshot(overrides: Partial<ToolRegistrySnapshot> = {}): ToolRegistrySnapshot {
+function createToolRegistrySnapshot(overrides: Partial<PersistedToolRegistrySnapshot> = {}): PersistedToolRegistrySnapshot {
   const source = createToolSource();
-  const snapshot: ToolRegistrySnapshot = {
+  const snapshot: PersistedToolRegistrySnapshot = {
     snapshotId: 'tool-registry-snapshot-1',
     runId: 'run-1',
     projectId: 'project-1',

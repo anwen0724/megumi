@@ -1,9 +1,9 @@
 // Maps current ModelStepRuntimeRequest into pure AI model, context, and ToolSet inputs.
 import type {
   ModelInputContextPart,
+  ModelToolDefinition,
   ModelStepRuntimeRequest,
 } from '@megumi/shared/model';
-import type { ToolDefinition } from '@megumi/shared/tool';
 import type { AiModel, AiStructuredOutputTarget, ConversationMessage, ModelContext, ToolSet } from '@megumi/ai';
 import type { ProviderRuntimeConfig } from './model-call-contract';
 
@@ -194,7 +194,7 @@ function providerToolCallId(part: ToolResultModelInputPart): string {
   return String(part.providerToolCallId ?? part.toolCallId);
 }
 
-function mapToolDefinitions(toolDefinitions: ToolDefinition[]): ToolSet {
+function mapToolDefinitions(toolDefinitions: ModelToolDefinition[]): ToolSet {
   return toolDefinitions.map((tool) => ({
     name: tool.name,
     description: tool.description,

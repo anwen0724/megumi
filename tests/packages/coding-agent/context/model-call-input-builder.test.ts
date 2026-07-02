@@ -8,7 +8,7 @@ import type {
 } from '@megumi/shared/model';
 import type { PermissionModeSnapshot } from '@megumi/shared/permission';
 import type { SessionContextInput, SessionMessage } from '@megumi/shared/session';
-import type { ToolDefinition } from '@megumi/shared/tool';
+import type { ToolDefinition } from '@megumi/coding-agent/tools';
 
 const builtAt = '2026-06-12T00:00:00.000Z';
 

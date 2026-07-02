@@ -56,17 +56,8 @@ export type ToolSideEffect = (typeof TOOL_SIDE_EFFECTS)[number];
 export const TOOL_AVAILABILITY_STATUSES = ['available', 'disabled', 'unavailable'] as const;
 export type ToolAvailabilityStatus = (typeof TOOL_AVAILABILITY_STATUSES)[number];
 
-export const TOOL_SOURCE_KINDS = ['built_in', 'external_test', 'mcp', 'plugin', 'project_local'] as const;
-export type ToolSourceKind = (typeof TOOL_SOURCE_KINDS)[number];
-
-export const TOOL_SOURCE_AVAILABILITY_STATUSES = ['available', 'unavailable', 'unknown'] as const;
-export type ToolSourceAvailabilityStatus = (typeof TOOL_SOURCE_AVAILABILITY_STATUSES)[number];
-
 export const TOOL_EXECUTION_MODES = ['parallel', 'serial'] as const;
 export type ToolExecutionMode = (typeof TOOL_EXECUTION_MODES)[number];
-
-export const TOOL_REGISTRY_SNAPSHOT_ENTRY_STATUSES = ['available', 'disabled', 'unavailable', 'conflicted'] as const;
-export type ToolRegistrySnapshotEntryStatus = (typeof TOOL_REGISTRY_SNAPSHOT_ENTRY_STATUSES)[number];
 
 export const TOOL_CALL_STATUSES = [
   'created',
@@ -254,182 +245,15 @@ export type ToolTargetSensitivity = (typeof TOOL_TARGET_SENSITIVITIES)[number];
 export const TOOL_REDACTION_STATES = ['none', 'redacted', 'blocked'] as const;
 export type ToolRedactionState = (typeof TOOL_REDACTION_STATES)[number];
 
-export const JsonSchemaObjectSchema = JsonObjectSchema.refine(
-  (value) => typeof value.type === 'string' || value.properties !== undefined || value.$schema !== undefined,
-  'JSON Schema object must include type, properties, or $schema.',
-);
-export type JsonSchemaObject = JsonObject;
-
-export const ToolAnnotationsSchema = z
-  .object({
-    readOnlyHint: z.boolean().optional(),
-    destructiveHint: z.boolean().optional(),
-    idempotentHint: z.boolean().optional(),
-    openWorldHint: z.boolean().optional(),
-  })
-  .strict();
-export type ToolAnnotations = z.infer<typeof ToolAnnotationsSchema>;
-
-export const ToolAvailabilitySchema = z
-  .object({
-    status: z.enum(TOOL_AVAILABILITY_STATUSES),
-    reason: z.string().min(1).optional(),
-  })
-  .strict();
-export type ToolAvailability = z.infer<typeof ToolAvailabilitySchema>;
-
-export const ToolSourceIdSchema = z
-  .string()
-  .min(1)
-  .max(128)
-  .regex(/^[a-z][a-z0-9_]{0,127}$/, 'Tool source id must be lowercase snake_case.');
-export type ToolSourceId = z.infer<typeof ToolSourceIdSchema>;
-
-export const ToolNamespaceSchema = ToolNameSchema;
-export type ToolNamespace = z.infer<typeof ToolNamespaceSchema>;
-
-export const CanonicalToolIdSchema = z
-  .string()
-  .min(1)
-  .max(256)
-  .regex(/^[a-z][a-z0-9_]*:[a-z][a-z0-9_]*:[a-z][a-z0-9_]*$/, 'Canonical tool id must be source:namespace:tool.');
-export type CanonicalToolId = z.infer<typeof CanonicalToolIdSchema>;
-
-export const ToolSourceIdentitySchema = z
-  .object({
-    registrySnapshotId: IdSchema,
-    snapshotEntryId: IdSchema,
-    modelVisibleName: ToolNameSchema,
-    canonicalToolId: CanonicalToolIdSchema,
-    sourceId: ToolSourceIdSchema,
-    namespace: ToolNamespaceSchema,
-    sourceToolName: ToolNameSchema,
-  })
-  .strict();
-export type ToolSourceIdentity = z.infer<typeof ToolSourceIdentitySchema>;
-
-const optionalToolSourceIdentitySchema = {
+const optionalRegisteredToolReferenceSchema = {
   registrySnapshotId: IdSchema.optional(),
   snapshotEntryId: IdSchema.optional(),
   modelVisibleName: ToolNameSchema.optional(),
-  canonicalToolId: CanonicalToolIdSchema.optional(),
-  sourceId: ToolSourceIdSchema.optional(),
-  namespace: ToolNamespaceSchema.optional(),
+  canonicalToolId: z.string().min(1).max(256).optional(),
+  sourceId: z.string().min(1).max(128).optional(),
+  namespace: z.string().min(1).max(64).optional(),
   sourceToolName: ToolNameSchema.optional(),
 };
-
-export const ToolDefinitionSchema = z
-  .object({
-    name: ToolNameSchema,
-    title: z.string().min(1).optional(),
-    description: z.string().min(1),
-    inputSchema: JsonSchemaObjectSchema,
-    inputExamples: z.array(JsonObjectSchema).optional(),
-    outputSchema: JsonSchemaObjectSchema.optional(),
-    annotations: ToolAnnotationsSchema.optional(),
-    capabilities: z.array(z.enum(TOOL_CAPABILITIES)).min(1),
-    riskLevel: z.enum(TOOL_RISK_LEVELS),
-    sideEffect: z.enum(TOOL_SIDE_EFFECTS),
-    availability: ToolAvailabilitySchema,
-    executionMode: z.enum(TOOL_EXECUTION_MODES).optional(),
-    permissionMetadata: JsonObjectSchema.optional(),
-    modelFacingDescription: z.string().min(1).optional(),
-    metadata: JsonObjectSchema.optional(),
-  })
-  .strict();
-export type ToolDefinition = z.infer<typeof ToolDefinitionSchema>;
-
-export const ToolSourceSchema = z
-  .object({
-    sourceId: ToolSourceIdSchema,
-    sourceKind: z.enum(TOOL_SOURCE_KINDS),
-    namespace: ToolNamespaceSchema,
-    displayName: z.string().min(1),
-    configured: z.boolean(),
-    enabled: z.boolean(),
-    availabilityStatus: z.enum(TOOL_SOURCE_AVAILABILITY_STATUSES),
-    availabilityReason: z.string().min(1).optional(),
-    healthCheckedAt: IsoDateTimeSchema.optional(),
-    config: JsonObjectSchema,
-    createdAt: IsoDateTimeSchema,
-    updatedAt: IsoDateTimeSchema,
-  })
-  .strict();
-export type ToolSource = z.infer<typeof ToolSourceSchema>;
-
-export const ToolExecutorBindingSchema = z
-  .object({
-    kind: z.enum(TOOL_SOURCE_KINDS),
-    bindingKey: z.string().min(1).optional(),
-  })
-  .strict();
-export type ToolExecutorBinding = z.infer<typeof ToolExecutorBindingSchema>;
-
-export const ToolRegistrationSchema = z
-  .object({
-    registrationId: IdSchema,
-    sourceId: ToolSourceIdSchema,
-    namespace: ToolNamespaceSchema,
-    sourceToolName: ToolNameSchema,
-    definition: ToolDefinitionSchema,
-    enabled: z.boolean(),
-    availability: ToolAvailabilitySchema,
-    executorBinding: ToolExecutorBindingSchema,
-    registrationMetadata: JsonObjectSchema.optional(),
-  })
-  .strict();
-export type ToolRegistration = z.infer<typeof ToolRegistrationSchema>;
-
-export const ToolRegistrySnapshotSourceEntrySchema = ToolSourceSchema.pick({
-  sourceId: true,
-  sourceKind: true,
-  namespace: true,
-  displayName: true,
-  configured: true,
-  enabled: true,
-  availabilityStatus: true,
-  availabilityReason: true,
-  healthCheckedAt: true,
-});
-export type ToolRegistrySnapshotSourceEntry = z.infer<typeof ToolRegistrySnapshotSourceEntrySchema>;
-
-export const SnapshotToolEntrySchema = z
-  .object({
-    snapshotEntryId: IdSchema,
-    snapshotId: IdSchema,
-    registrationId: IdSchema,
-    canonicalToolId: CanonicalToolIdSchema,
-    modelVisibleName: ToolNameSchema,
-    sourceId: ToolSourceIdSchema,
-    namespace: ToolNamespaceSchema,
-    sourceToolName: ToolNameSchema,
-    definition: ToolDefinitionSchema,
-    effectiveStatus: z.enum(TOOL_REGISTRY_SNAPSHOT_ENTRY_STATUSES),
-    disabledReason: z.string().min(1).optional(),
-    unavailableReason: z.string().min(1).optional(),
-    conflictReason: z.string().min(1).optional(),
-    exposedToModel: z.boolean(),
-    executionMode: z.enum(TOOL_EXECUTION_MODES),
-    createdAt: IsoDateTimeSchema,
-  })
-  .strict();
-export type SnapshotToolEntry = z.infer<typeof SnapshotToolEntrySchema>;
-
-export const ToolRegistrySnapshotSchema = z
-  .object({
-    snapshotId: IdSchema,
-    runId: IdSchema,
-    projectId: IdSchema,
-    permissionMode: z.string().min(1),
-    modelId: z.string().min(1),
-    createdAt: IsoDateTimeSchema,
-    registryVersion: z.number().int().min(1),
-    sourceVersionHash: z.string().min(1),
-    sourceEntries: z.array(ToolRegistrySnapshotSourceEntrySchema),
-    entries: z.array(SnapshotToolEntrySchema),
-  })
-  .strict();
-export type ToolRegistrySnapshot = z.infer<typeof ToolRegistrySnapshotSchema>;
 
 export const ToolTargetPreviewSchema = z
   .object({
@@ -463,7 +287,7 @@ export interface ToolCall {
   modelVisibleName?: ToolName;
   canonicalToolId?: string;
   sourceId?: string;
-  namespace?: ToolNamespace;
+  namespace?: string;
   sourceToolName?: ToolName;
   input: JsonValue;
   inputPreview: ToolInputPreview;
@@ -482,7 +306,7 @@ export const ToolCallSchema = z
     providerToolCallId: IdSchema,
     toolName: ToolNameSchema,
     callOrder: z.number().int().nonnegative().optional(),
-    ...optionalToolSourceIdentitySchema,
+    ...optionalRegisteredToolReferenceSchema,
     input: JsonValueSchema,
     inputPreview: ToolInputPreviewSchema,
     status: z.enum(TOOL_CALL_STATUSES),
@@ -538,7 +362,7 @@ export interface PermissionDecision {
   modelVisibleName?: ToolName;
   canonicalToolId?: string;
   sourceId?: string;
-  namespace?: ToolNamespace;
+  namespace?: string;
   sourceToolName?: ToolName;
   decision: ToolPolicyDecisionValue;
   source: PermissionDecisionSource;
@@ -562,7 +386,7 @@ export const PermissionDecisionSchema = z
     toolCallId: IdSchema,
     toolExecutionId: IdSchema.optional(),
     runId: IdSchema,
-    ...optionalToolSourceIdentitySchema,
+    ...optionalRegisteredToolReferenceSchema,
     decision: z.enum(TOOL_POLICY_DECISIONS),
     source: z.enum(PERMISSION_DECISION_SOURCES),
     reason: z.string().min(1),
@@ -597,7 +421,7 @@ export interface ToolExecution {
   modelVisibleName?: ToolName;
   canonicalToolId?: string;
   sourceId?: string;
-  namespace?: ToolNamespace;
+  namespace?: string;
   sourceToolName?: ToolName;
   input: JsonValue;
   inputPreview: JsonValue;
@@ -633,7 +457,7 @@ export const ToolExecutionSchema = z
     callOrder: z.number().int().nonnegative(),
     actionId: IdSchema.optional(),
     toolName: ToolNameSchema,
-    ...optionalToolSourceIdentitySchema,
+    ...optionalRegisteredToolReferenceSchema,
     input: JsonValueSchema,
     inputPreview: JsonValueSchema,
     capabilities: z.array(z.enum(TOOL_CAPABILITIES)).optional(),
@@ -681,7 +505,7 @@ export const ApprovalRequestSchema = z
     runId: IdSchema,
     stepId: IdSchema,
     toolName: ToolNameSchema,
-    ...optionalToolSourceIdentitySchema,
+    ...optionalRegisteredToolReferenceSchema,
     capabilities: z.array(z.enum(TOOL_CAPABILITIES)).min(1),
     riskLevel: z.enum(TOOL_RISK_LEVELS),
     title: z.string().min(1),

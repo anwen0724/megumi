@@ -33,9 +33,6 @@ import type {
   ToolExecution,
   ToolName,
   ToolPolicyDecision,
-  ToolRegistrySnapshotEntryStatus,
-  ToolSourceIdentity,
-  ToolSourceKind,
 } from '../tool/contracts';
 import type {
   CancelReason,
@@ -415,6 +412,20 @@ export interface ModelStepCompletedPayload {
   finishReason?: string;
 }
 
+export type RuntimeToolSourceKind = 'built_in' | 'mcp' | 'plugin' | 'project_local' | 'skill';
+
+export type RuntimeToolRegistryEntryStatus = 'available' | 'disabled' | 'unavailable' | 'conflicted';
+
+export interface RuntimeToolSourceIdentity {
+  registrySnapshotId: string;
+  snapshotEntryId: string;
+  modelVisibleName: ToolName;
+  canonicalToolId: string;
+  sourceId: string;
+  namespace: string;
+  sourceToolName: ToolName;
+}
+
 export interface ToolCallCreatedPayload {
   toolCallId: string;
   modelStepId: string;
@@ -423,7 +434,7 @@ export interface ToolCallCreatedPayload {
   input: JsonValue;
 }
 
-export interface ToolCallResolvedPayload extends ToolSourceIdentity {
+export interface ToolCallResolvedPayload extends RuntimeToolSourceIdentity {
   toolCallId: string;
   providerToolCallId: string;
   requestedToolName: string;
@@ -440,7 +451,7 @@ export interface ToolCallResolutionFailedPayload {
     | 'tool_conflicted'
     | 'tool_not_exposed';
   message: string;
-  sourceIdentity?: ToolSourceIdentity;
+  sourceIdentity?: RuntimeToolSourceIdentity;
 }
 
 export interface ToolInputValidationFailedPayload {
@@ -450,7 +461,7 @@ export interface ToolInputValidationFailedPayload {
   snapshotEntryId: string;
   reason: 'invalid_tool_input';
   message: string;
-  sourceIdentity: ToolSourceIdentity;
+  sourceIdentity: RuntimeToolSourceIdentity;
 }
 
 export interface ToolResultCreatedPayload {
@@ -466,7 +477,7 @@ export interface ToolResultCreatedPayload {
     | 'invalid_tool_call'
     | 'invalid_tool_input';
   summary: string;
-  sourceIdentity?: ToolSourceIdentity;
+  sourceIdentity?: RuntimeToolSourceIdentity;
 }
 
 export interface ToolRegistrySourcesEnsuredPayload {
@@ -495,7 +506,7 @@ export interface ToolRegistryEntryResolvedPayload {
   sourceId: string;
   namespace: string;
   sourceToolName: ToolName;
-  effectiveStatus: ToolRegistrySnapshotEntryStatus;
+  effectiveStatus: RuntimeToolRegistryEntryStatus;
   exposedToModel: boolean;
   disabledReason?: string;
   unavailableReason?: string;
@@ -654,10 +665,10 @@ export interface ToolExecutionStartedPayload {
   startedAt?: string;
 }
 
-export interface ToolExecutionRoutedPayload extends ToolSourceIdentity {
+export interface ToolExecutionRoutedPayload extends RuntimeToolSourceIdentity {
   toolExecutionId: string;
   toolName: ToolName;
-  executorKind: ToolSourceKind;
+  executorKind: RuntimeToolSourceKind;
 }
 
 export interface ToolExecutionCompletedPayload {

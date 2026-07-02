@@ -13,24 +13,16 @@ import {
   TOOL_EXECUTION_STATUSES,
   TOOL_OBSERVATION_BUDGET_PROFILES,
   TOOL_POLICY_DECISIONS,
-  TOOL_REGISTRY_SNAPSHOT_ENTRY_STATUSES,
   TOOL_RESULT_KINDS,
   TOOL_SIDE_EFFECTS,
-  TOOL_SOURCE_AVAILABILITY_STATUSES,
-  TOOL_SOURCE_KINDS,
   ApprovalRequestSchema,
   PermissionDecisionSchema,
   SandboxRequirementSchema,
-  SnapshotToolEntrySchema,
   ToolCallSchema,
-  ToolDefinitionSchema,
   ToolExecutionSchema,
+  ToolNameSchema,
   ToolObservationSchema,
-  ToolRegistrationSchema,
-  ToolRegistrySnapshotSchema,
   ToolResultSchema,
-  ToolSourceIdentitySchema,
-  ToolSourceSchema,
   type RawToolResult,
   type ToolExecutionDecision,
   type ToolExecutionRecord,
@@ -41,49 +33,6 @@ const inputPreview = {
   targets: [{ kind: 'file' as const, label: 'src/index.ts', sensitivity: 'normal' as const }],
   redactionState: 'none' as const,
 };
-
-const toolDefinition = {
-  name: 'read_file',
-  title: 'Read file',
-  description: 'Read a normal project file when it is useful for the current task.',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      path: { type: 'string' },
-    },
-    required: ['path'],
-  },
-  outputSchema: {
-    type: 'object',
-    properties: {
-      content: { type: 'string' },
-    },
-  },
-  annotations: {
-    readOnlyHint: true,
-    destructiveHint: false,
-    idempotentHint: true,
-    openWorldHint: false,
-  },
-  capabilities: ['project_read'],
-  riskLevel: 'low',
-  sideEffect: 'none',
-  availability: { status: 'available' },
-} as const;
-
-const builtInSource = {
-  sourceId: 'built_in',
-  sourceKind: 'built_in',
-  namespace: 'megumi',
-  displayName: 'Built-in tools',
-  configured: true,
-  enabled: true,
-  availabilityStatus: 'available',
-  healthCheckedAt: '2026-06-14T00:00:00.000Z',
-  config: {},
-  createdAt: '2026-06-14T00:00:00.000Z',
-  updatedAt: '2026-06-14T00:00:00.000Z',
-} as const;
 
 const toolSourceIdentity = {
   registrySnapshotId: 'tool-registry-snapshot-1',
@@ -187,110 +136,7 @@ describe('tool-contracts', () => {
     expect(TOOL_POLICY_DECISIONS).toEqual(['allow', 'ask', 'deny']);
   });
 
-  it('accepts Claude-compatible snake_case tool definitions with JSON Schema', () => {
-    const definition = ToolDefinitionSchema.parse(toolDefinition);
-
-    expect(definition.name).toBe('read_file');
-  });
-
-  it('separates tool definition from source identity', () => {
-    const definition = ToolDefinitionSchema.parse({
-      ...toolDefinition,
-      executionMode: 'serial',
-      permissionMetadata: { defaultDecision: 'allow' },
-      modelFacingDescription: 'Read project files for context.',
-    });
-
-    expect(definition.executionMode).toBe('serial');
-    expect(definition.permissionMetadata).toEqual({ defaultDecision: 'allow' });
-    expect(definition.modelFacingDescription).toBe('Read project files for context.');
-    expect(TOOL_EXECUTION_MODES).toEqual(['parallel', 'serial']);
-    expect(() => ToolDefinitionSchema.parse({ ...toolDefinition, sourceId: 'built_in' })).toThrow();
-    expect(() => ToolDefinitionSchema.parse({
-      ...toolDefinition,
-      canonicalToolId: 'built_in:megumi:read_file',
-    })).toThrow();
-  });
-
-  it('parses tool sources with enablement and availability state', () => {
-    expect(TOOL_SOURCE_KINDS).toEqual(['built_in', 'external_test', 'mcp', 'plugin', 'project_local']);
-    expect(TOOL_SOURCE_AVAILABILITY_STATUSES).toEqual(['available', 'unavailable', 'unknown']);
-
-    expect(ToolSourceSchema.parse(builtInSource)).toEqual(builtInSource);
-  });
-
-  it('parses tool registrations without changing the tool definition identity', () => {
-    const registration = ToolRegistrationSchema.parse({
-      registrationId: 'registration-built-in-read-file',
-      sourceId: 'built_in',
-      namespace: 'megumi',
-      sourceToolName: 'read_file',
-      definition: toolDefinition,
-      enabled: true,
-      availability: { status: 'available' },
-      executorBinding: { kind: 'built_in' },
-      registrationMetadata: {},
-    });
-
-    expect(registration.sourceId).toBe('built_in');
-    expect(registration.definition.name).toBe('read_file');
-    expect(registration.definition).not.toHaveProperty('sourceId');
-    expect(registration.definition).not.toHaveProperty('canonicalToolId');
-  });
-
-  it('parses run-level tool registry snapshots and snapshot entries', () => {
-    const entry = SnapshotToolEntrySchema.parse({
-      snapshotEntryId: 'snapshot-entry-read-file',
-      snapshotId: 'tool-registry-snapshot-1',
-      registrationId: 'registration-built-in-read-file',
-      canonicalToolId: 'built_in:megumi:read_file',
-      modelVisibleName: 'read_file',
-      sourceId: 'built_in',
-      namespace: 'megumi',
-      sourceToolName: 'read_file',
-      definition: toolDefinition,
-      effectiveStatus: 'available',
-      exposedToModel: true,
-      executionMode: 'parallel',
-      createdAt: '2026-06-14T00:00:00.000Z',
-    });
-    const snapshot = ToolRegistrySnapshotSchema.parse({
-      snapshotId: 'tool-registry-snapshot-1',
-      runId: 'run-1',
-      projectId: 'project-1',
-      permissionMode: 'default',
-      modelId: 'gpt-5',
-      createdAt: '2026-06-14T00:00:00.000Z',
-      registryVersion: 1,
-      sourceVersionHash: 'source-version-hash-1',
-      sourceEntries: [{
-        sourceId: builtInSource.sourceId,
-        sourceKind: builtInSource.sourceKind,
-        namespace: builtInSource.namespace,
-        displayName: builtInSource.displayName,
-        configured: builtInSource.configured,
-        enabled: builtInSource.enabled,
-        availabilityStatus: builtInSource.availabilityStatus,
-        healthCheckedAt: builtInSource.healthCheckedAt,
-      }],
-      entries: [entry],
-    });
-
-    expect(TOOL_REGISTRY_SNAPSHOT_ENTRY_STATUSES).toEqual(['available', 'disabled', 'unavailable', 'conflicted']);
-    expect(snapshot.entries[0]).toMatchObject({
-      canonicalToolId: 'built_in:megumi:read_file',
-      modelVisibleName: 'read_file',
-      sourceId: 'built_in',
-      namespace: 'megumi',
-      sourceToolName: 'read_file',
-      effectiveStatus: 'available',
-      exposedToModel: true,
-      executionMode: 'parallel',
-    });
-  });
-
   it('parses source identity fields on tool lifecycle records', () => {
-    expect(ToolSourceIdentitySchema.parse(toolSourceIdentity)).toEqual(toolSourceIdentity);
     expect(ToolCallSchema.parse({
       toolCallId: 'tool-call-identity',
       runId: 'run-1',
@@ -359,18 +205,9 @@ describe('tool-contracts', () => {
   });
 
   it('rejects dotted, uppercase, and hyphenated tool names', () => {
-    const base = {
-      description: 'Invalid name.',
-      inputSchema: { type: 'object' },
-      capabilities: ['project_read'],
-      riskLevel: 'low',
-      sideEffect: 'none',
-      availability: { status: 'available' },
-    } as const;
-
-    expect(() => ToolDefinitionSchema.parse({ ...base, name: 'workspace.file.read' })).toThrow(/lowercase snake_case/);
-    expect(() => ToolDefinitionSchema.parse({ ...base, name: 'ReadFile' })).toThrow(/lowercase snake_case/);
-    expect(() => ToolDefinitionSchema.parse({ ...base, name: 'read-file' })).toThrow(/lowercase snake_case/);
+    expect(() => ToolNameSchema.parse('workspace.file.read')).toThrow(/lowercase snake_case/);
+    expect(() => ToolNameSchema.parse('ReadFile')).toThrow(/lowercase snake_case/);
+    expect(() => ToolNameSchema.parse('read-file')).toThrow(/lowercase snake_case/);
   });
 
   it('parses ToolCall as the model-originated request', () => {

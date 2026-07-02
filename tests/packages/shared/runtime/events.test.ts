@@ -715,7 +715,7 @@ describe('tool and approval runtime events', () => {
       payload: {
         toolExecutionId: 'tool-execution-1',
         toolName: 'demo_echo',
-        executorKind: 'external_test',
+        executorKind: 'plugin',
         registrySnapshotId: 'tool-registry-snapshot-run-1',
         snapshotEntryId: 'tool-registry-snapshot-entry-run-1-tool-registration-external_test-echo-external_test-demo-echo',
         modelVisibleName: 'demo_echo',
