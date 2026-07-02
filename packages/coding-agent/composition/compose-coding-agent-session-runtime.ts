@@ -18,8 +18,7 @@ import type { ArtifactRepository } from '../persistence/repos/artifact.repo';
 import type { SessionRepository } from '../persistence/repos/session.repo';
 import type { ToolCallRepository } from '../persistence/repos/tool-call.repo';
 import type { WorkspaceChangeRepository } from '../persistence/repos/workspace-change.repo';
-import type { ToolRegistry } from '../tools/registry';
-import { ToolRegistrySnapshotService } from '../tools/tool-registry-snapshot';
+import type { ToolRegistryService } from '../tools';
 import { PlanArtifactCompatibilityService, PlanArtifactService } from '../artifacts';
 import type { MemoryRuntimeComposition } from './compose-coding-agent-memory';
 import { PostRunHooksCoordinator } from '../hooks';
@@ -43,7 +42,7 @@ export interface ComposeCodingAgentSessionRuntimeOptions {
   sessionRepository: SessionRepository;
   toolCallRepository: ToolCallRepository;
   workspaceChangeRepository: WorkspaceChangeRepository;
-  toolRegistry: ToolRegistry;
+  toolRegistry: ToolRegistryService;
   modelCallProviderService: ModelCallProvider;
   toolRuntimeFactory: ToolRuntimeFactory;
   memoryRuntime: MemoryRuntimeComposition['memoryRuntime'];
@@ -150,14 +149,6 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     sessionBranchService,
     permissionSnapshotService,
     planArtifactService,
-    toolRegistrySnapshotService: new ToolRegistrySnapshotService({
-      getToolSource: (sourceId) => options.toolCallRepository.getToolSource(sourceId),
-      listToolSources: () => options.toolCallRepository.listToolSources(),
-      seedDefaultToolSources: (createdAt) => options.toolCallRepository.seedDefaultToolSources(createdAt),
-      getToolRegistrySnapshotByRun: (runId) => options.toolCallRepository.getToolRegistrySnapshotByRun(runId),
-      saveToolRegistrySnapshot: (snapshot) =>
-        options.agentLoopRepository.saveToolRegistrySnapshot(snapshot),
-    }),
     contextService: runContextService,
     modelCallProvider: options.modelCallProviderService,
     toolRuntimeFactory: options.toolRuntimeFactory,

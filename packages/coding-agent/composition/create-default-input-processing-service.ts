@@ -11,7 +11,7 @@ import { createInputProcessingCompositionIds } from './input-processing-ids';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
 import { PermissionSnapshotService } from '../permissions';
 import { PlanArtifactService } from '../artifacts';
-import { ToolRegistrySnapshotService } from '../tools/tool-registry-snapshot';
+import { ToolRegistryService } from '../tools';
 import { PostRunHooksCoordinator } from '../hooks';
 import { RunRetryCoordinator, RunTerminalCoordinator } from '../state';
 
@@ -71,13 +71,7 @@ export function createDefaultInputProcessingService(
     sessionCompactionRepository: sessionRepository,
     activePathRepository: sessionRepository,
     toolCallRepository,
-    toolRegistrySnapshotService: new ToolRegistrySnapshotService({
-      getToolSource: (sourceId) => toolCallRepository.getToolSource(sourceId),
-      listToolSources: () => toolCallRepository.listToolSources(),
-      seedDefaultToolSources: (createdAt) => toolCallRepository.seedDefaultToolSources(createdAt),
-      getToolRegistrySnapshotByRun: (runId) => toolCallRepository.getToolRegistrySnapshotByRun(runId),
-      saveToolRegistrySnapshot: (snapshot) => agentLoopRepository.saveToolRegistrySnapshot(snapshot),
-    }),
+    toolDefinitionProvider: new ToolRegistryService(),
     permissionSnapshotService: new PermissionSnapshotService({ repository: agentLoopRepository }),
     planArtifactService: new PlanArtifactService({ repository: agentLoopRepository }),
     ...(options.contextService ? { contextService: options.contextService } : {}),

@@ -7,11 +7,13 @@ import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persist
 import { AgentLoopRepository } from '@megumi/coding-agent/persistence/repos/agent-loop.repo';
 import { SessionRepository } from '@megumi/coding-agent/persistence/repos/session.repo';
 import { ToolCallRepository } from '@megumi/coding-agent/persistence/repos/tool-call.repo';
-import { createExternalTestToolSourceExecutor } from '@megumi/coding-agent/tools/execution/external-test-tool-source-executor';
-import { ToolRegistrySnapshotService } from '@megumi/coding-agent/tools/tool-registry-snapshot';
 import { createToolCallRunner } from '@megumi/coding-agent/agent-loop/tool-call';
-import { createToolExecutionRouter } from '@megumi/coding-agent/tools/execution/tool-execution-router';
-import type { ToolSourceExecutor } from '@megumi/coding-agent/tools/execution/tool-execution-router';
+import {
+  ToolRegistryService,
+  type ExecuteToolRequest,
+  type RegisteredTool,
+  type ToolExecutionResult,
+} from '@megumi/coding-agent/tools';
 import {
   InputProcessingService,
   type InputAgentLoopRepositoryPort,
@@ -65,10 +67,9 @@ import type { MergedPermissionSettings } from '@megumi/shared/permission';
 import type { RunContext } from '@megumi/shared/run';
 import type { RunAction, SessionCompactionEntry } from '@megumi/shared/session';
 import type { SessionSourceEntry } from '@megumi/shared/session';
-import type { ApprovalRequest, RawToolResult, ToolCall, ToolDefinition, ToolExecution, ToolResult } from '@megumi/shared/tool';
+import type { ApprovalRequest, ToolCall, ToolDefinition, ToolExecution, ToolResult } from '@megumi/shared/tool';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { RuntimeError } from '@megumi/shared/runtime';
-import { createBuiltInToolRegistry } from '@megumi/coding-agent/tools/built-ins';
 import type {
   WorkspaceChangedFile,
   WorkspaceChangeSet,
@@ -208,17 +209,30 @@ function createInputProcessingServiceToolCallStoreForTest(
   };
 }
 
-function createToolRegistrySnapshotServiceForTest(
-  toolCallStore: ToolCallRepository,
-  agentLoopRepository: AgentLoopRepository,
-): ToolRegistrySnapshotService {
-  return new ToolRegistrySnapshotService({
-    getToolSource: (sourceId) => toolCallStore.getToolSource(sourceId),
-    listToolSources: () => toolCallStore.listToolSources(),
-    seedDefaultToolSources: (createdAt) => toolCallStore.seedDefaultToolSources(createdAt),
-    getToolRegistrySnapshotByRun: (runId) => agentLoopRepository.getToolRegistrySnapshotByRun(runId),
-    saveToolRegistrySnapshot: (snapshot) => agentLoopRepository.saveToolRegistrySnapshot(snapshot),
-  });
+function toolDefinitionProviderFrom(definitions: ToolDefinition[]): InputProcessingServiceOptions['toolDefinitionProvider'] {
+  return {
+    listAvailableTools: () => ({
+      tools: definitions.map((definition): RegisteredTool => ({
+        identity: {
+          sourceId: 'built_in',
+          namespace: 'megumi',
+          sourceToolName: definition.name,
+        },
+        registeredToolName: definition.name,
+        source: {
+          sourceId: 'built_in',
+          sourceKind: 'built_in',
+          namespace: 'megumi',
+          displayName: 'Built-in tools',
+          configured: true,
+          enabled: true,
+          availabilityStatus: 'available',
+        },
+        status: 'available',
+        definition: definition as unknown as RegisteredTool['definition'],
+      })),
+    }),
+  };
 }
 
 function createInputProcessingServiceTestService(options: InputProcessingServiceTestOptions): InputProcessingServiceTestFacade {
@@ -563,7 +577,6 @@ function createServiceWithModelStepStream(
   permissionSnapshotService?: InputProcessingServiceOptions['permissionSnapshotService'];
   toolRuntimeFactory?: InputProcessingServiceOptions['toolRuntimeFactory'];
   toolDefinitionProvider?: InputProcessingServiceOptions['toolDefinitionProvider'];
-  toolRegistrySnapshotService?: InputProcessingServiceOptions['toolRegistrySnapshotService'];
   providerCapabilitySummaryProvider?: InputProcessingServiceOptions['providerCapabilitySummaryProvider'];
   timelineMessageRepository?: InputProcessingServiceOptions['timelineMessageRepository'];
   agentInstructionSourceService?: InputProcessingServiceOptions['agentInstructionSourceService'];
@@ -596,7 +609,6 @@ function createServiceWithModelStepStream(
     ...(options?.permissionSnapshotService ? { permissionSnapshotService: options.permissionSnapshotService } : {}),
     ...(options?.toolRuntimeFactory ? { toolRuntimeFactory: options.toolRuntimeFactory } : {}),
     ...(options?.toolDefinitionProvider ? { toolDefinitionProvider: options.toolDefinitionProvider } : {}),
-    ...(options?.toolRegistrySnapshotService ? { toolRegistrySnapshotService: options.toolRegistrySnapshotService } : {}),
     ...(options?.providerCapabilitySummaryProvider ? {
       providerCapabilitySummaryProvider: options.providerCapabilitySummaryProvider,
     } : {}),
@@ -671,21 +683,55 @@ function createServiceWithModelStepStream(
 function createServiceWithRealToolResolution(input: {
   toolCall: RuntimeEvent;
   permissionMode?: 'default' | 'plan';
-  enableExternalTestSource?: boolean;
   settings?: MergedPermissionSettings;
 }) {
   const requests: ModelStepRuntimeRequest[] = [];
   let toolCallStore: ToolCallRepository | undefined;
-  let agentLoopRepository: AgentLoopRepository | undefined;
-  const registry = createBuiltInToolRegistry();
-  const executeToolExecution = vi.fn(async (toolExecution: ToolExecution): Promise<RawToolResult> => ({
-    rawToolResultId: `raw-tool-result:${toolExecution.toolExecutionId}`,
-    toolCallId: toolExecution.toolCallId,
-    toolExecutionId: toolExecution.toolExecutionId,
-    isError: false,
-    outputKind: 'text',
-    content: 'executed',
-    createdAt: '2026-05-17T00:00:02.500Z',
+  const toolRegistryService = new ToolRegistryService();
+  const executeToolExecution = vi.fn(async (request: ExecuteToolRequest): Promise<ToolExecutionResult> => ({
+    ...(request.toolName === 'read_file'
+      && request.input
+      && typeof request.input === 'object'
+      && 'path' in request.input
+      && typeof (request.input as { path?: unknown }).path !== 'string'
+      ? {
+          type: 'failed' as const,
+          toolName: request.toolName,
+          error: {
+            code: 'invalid_tool_input' as const,
+            message: 'Invalid tool input at $.path: expected string.',
+          },
+          normalizedResult: {
+            kind: 'error' as const,
+            content: 'Invalid tool input at $.path: expected string.',
+            isError: true,
+            truncated: false,
+          },
+          toolExecutionObservation: {
+            summary: 'Invalid tool input at $.path: expected string.',
+          },
+        }
+      : {
+          type: 'succeeded' as const,
+          toolName: request.toolName,
+          rawResult: {
+            outputKind: 'text' as const,
+            content: request.input && typeof request.input === 'object' && 'message' in request.input
+              ? String((request.input as { message?: unknown }).message)
+              : 'executed',
+          },
+          normalizedResult: {
+            kind: 'text' as const,
+            content: request.input && typeof request.input === 'object' && 'message' in request.input
+              ? String((request.input as { message?: unknown }).message)
+              : 'executed',
+            isError: false,
+            truncated: false,
+          },
+          toolExecutionObservation: {
+            summary: `${request.toolName} completed`,
+          },
+        }),
   }));
 
   const service = createServiceWithModelStepStream((request, callIndex) => {
@@ -699,49 +745,18 @@ function createServiceWithRealToolResolution(input: {
     createToolCallRepository(database) {
       seedProject(database);
       toolCallStore = new ToolCallRepository(database);
-      agentLoopRepository = new AgentLoopRepository(database);
-      if (input.enableExternalTestSource) {
-        toolCallStore.seedDefaultToolSources('2026-05-17T00:00:00.000Z');
-        const externalTest = toolCallStore.getToolSource('external_test');
-        if (!externalTest) {
-          throw new Error('Expected external_test source.');
-        }
-        toolCallStore.saveToolSource({
-          ...externalTest,
-          enabled: true,
-          updatedAt: '2026-05-17T00:00:01.000Z',
-        });
-      }
       return toolCallStore;
     },
-    toolRegistrySnapshotService: {
-      createRunSnapshot(snapshotInput) {
-        if (!toolCallStore) {
-          throw new Error('Tool repository was not initialized.');
-        }
-        if (!agentLoopRepository) {
-          throw new Error('Agent loop repository was not initialized.');
-        }
-        return createToolRegistrySnapshotServiceForTest(
-          toolCallStore,
-          agentLoopRepository,
-        ).createRunSnapshot(snapshotInput);
-      },
-    },
+    toolDefinitionProvider: toolRegistryService,
     toolRuntimeFactory: {
       async create({ projectRoot, permissionMode }) {
         if (!toolCallStore) {
           throw new Error('Tool repository was not initialized.');
         }
         const repository = toolCallStore;
-        const builtInExecutor: ToolSourceExecutor = {
-          sourceId: 'built_in',
-          sourceKind: 'built_in',
-          executeToolExecution,
-          finalizeWorkspaceChangeSet: vi.fn(),
-        };
         return createToolCallRunner({
-          registry,
+          toolRegistryService,
+          toolExecutionService: { executeTool: executeToolExecution },
           repository: {
             startToolCall: (toolCall) => repository.startToolCall(toolCall),
             getToolCall: (toolCallId) => repository.getToolCall(toolCallId),
@@ -753,21 +768,11 @@ function createServiceWithRealToolResolution(input: {
             createApprovalRequest: (approvalRequest) => repository.createApprovalRequest(approvalRequest),
             getApprovalRequest: (approvalRequestId) => repository.getApprovalRequest(approvalRequestId),
             completeToolCall: (toolResult) => repository.completeToolCall(toolResult),
-            getToolRegistrySnapshotByRun: (runId) => repository.getToolRegistrySnapshotByRun(runId),
             getRunSessionId: () => 'session-1',
           },
           permissionMode,
           projectRoot,
           settings: input.settings ?? { allow: [], ask: [], deny: [] },
-          toolExecutionRouter: createToolExecutionRouter({
-            sourceExecutors: [
-              builtInExecutor,
-              createExternalTestToolSourceExecutor({
-                now: () => '2026-05-17T00:00:02.500Z',
-                ids: { toolResultId: () => 'tool-result:external-test' },
-              }),
-            ],
-          }),
           now: () => '2026-05-17T00:00:02.500Z',
         });
       },
@@ -786,7 +791,6 @@ function createServiceWithRealToolResolution(input: {
 async function runRealToolResolutionNextModelInput(input: {
   toolCall: RuntimeEvent;
   permissionMode?: 'default' | 'plan';
-  enableExternalTestSource?: boolean;
   settings?: MergedPermissionSettings;
   userContent?: string;
 }) {
@@ -3185,8 +3189,7 @@ describe('InputProcessingService', () => {
           };
         },
       },
-      toolDefinitionProvider: {
-        listDefinitions: () => [{
+      toolDefinitionProvider: toolDefinitionProviderFrom([{
           name: 'read_file',
           title: 'Read file',
           description: 'Read a file.',
@@ -3198,8 +3201,7 @@ describe('InputProcessingService', () => {
           riskLevel: 'low',
           sideEffect: 'none',
           availability: { status: 'available' },
-        }],
-      },
+        }]),
     });
     service.createSession({
       title: 'Project session',
@@ -3304,8 +3306,7 @@ describe('InputProcessingService', () => {
           };
         },
       },
-      toolDefinitionProvider: {
-        listDefinitions: () => [{
+      toolDefinitionProvider: toolDefinitionProviderFrom([{
           name: 'read_file',
           title: 'Read file',
           description: 'Read a file.',
@@ -3317,8 +3318,7 @@ describe('InputProcessingService', () => {
           riskLevel: 'low',
           sideEffect: 'none',
           availability: { status: 'available' },
-        }],
-      },
+        }]),
     });
     service.createSession({
       title: 'Project session',
@@ -4411,16 +4411,7 @@ describe('InputProcessingService', () => {
           };
         },
       },
-      toolDefinitionProvider: {
-        listDefinitions(input) {
-          expect(input).toEqual({
-            runId: 'run-1',
-            permissionMode: 'default',
-            providerCapabilitySummary: { supportsToolCall: true },
-          });
-          return toolDefinitions;
-        },
-      },
+      toolDefinitionProvider: toolDefinitionProviderFrom(toolDefinitions),
       onRequest: (request) => requests.push(request),
     });
     service.createSession({
@@ -4476,12 +4467,12 @@ describe('InputProcessingService', () => {
 
   it('does not expose tool definitions when provider capability says tool calls are unsupported', async () => {
     const requests: ModelStepRuntimeRequest[] = [];
-    const listDefinitions = vi.fn((): ToolDefinition[] => []);
+    const listAvailableTools = vi.fn(() => ({ tools: [] }));
     const service = createServiceWithModelStepStream((request) => {
       requests.push(request);
       return [assistantOutputCompletedEvent(1)];
     }, {
-      toolDefinitionProvider: { listDefinitions },
+      toolDefinitionProvider: { listAvailableTools },
       providerCapabilitySummaryProvider: {
         getProviderCapabilitySummary: () => ({ supportsToolCall: false }),
       },
@@ -4511,249 +4502,8 @@ describe('InputProcessingService', () => {
       // Drain.
     }
 
-    expect(listDefinitions).toHaveBeenCalledWith(expect.objectContaining({
-      providerCapabilitySummary: { supportsToolCall: false },
-    }));
+    expect(listAvailableTools).not.toHaveBeenCalled();
     expect(requests[0]?.toolDefinitions ?? []).toEqual([]);
-  });
-
-  it('creates a run tool registry snapshot and passes model-visible definitions to the provider request', async () => {
-    const requests: ModelStepRuntimeRequest[] = [];
-    let toolCallStore: ToolCallRepository | undefined;
-    let agentLoopRepository: AgentLoopRepository | undefined;
-    const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
-      createToolCallRepository(database) {
-        seedProject(database);
-        toolCallStore = new ToolCallRepository(database);
-        agentLoopRepository = new AgentLoopRepository(database);
-        return toolCallStore;
-      },
-      toolRegistrySnapshotService: {
-        createRunSnapshot(input) {
-          if (!toolCallStore) {
-            throw new Error('Tool repository was not initialized.');
-          }
-          if (!agentLoopRepository) {
-            throw new Error('Agent loop repository was not initialized.');
-          }
-          return createToolRegistrySnapshotServiceForTest(toolCallStore, agentLoopRepository).createRunSnapshot(input);
-        },
-      },
-      onRequest: (request) => requests.push(request),
-    });
-    service.createSession({
-      title: 'Session',
-      workspaceId: 'project-1',
-      workspacePath: 'C:/all/work/study/megumi',
-      createdAt: '2026-05-17T00:00:00.000Z',
-    });
-
-    const result = await service.handle({
-      requestId: 'request-registry-snapshot',
-      payload: {
-        sessionId: 'session-1',
-        providerId: 'deepseek',
-        modelId: 'deepseek-v4-flash',
-        messages: [{
-          id: 'message-local-user',
-          role: 'user',
-          content: 'List docs files',
-          createdAt: '2026-05-17T00:00:00.000Z',
-        }],
-        createdAt: '2026-05-17T00:00:00.000Z',
-      },
-    });
-    const streamed: RuntimeEvent[] = [];
-    for await (const event of result.events) {
-      streamed.push(event);
-    }
-
-    expect(agentLoopRepository?.getToolRegistrySnapshotByRun('run-1')).toBeDefined();
-    expect(requests[0]?.toolDefinitions?.map((definition) => definition.name)).toEqual([
-      'read_file',
-      'list_directory',
-      'glob',
-      'search_text',
-      'edit_file',
-      'write_file',
-      'run_command',
-    ]);
-    expect(streamed.map((event) => event.eventType)).toEqual(expect.arrayContaining([
-      'tool.registry.sources.ensured',
-      'tool.registry.snapshot.created',
-      'tool.registry.entry.resolved',
-      'tool.registry.model_visible_tools.derived',
-    ]));
-  });
-
-  it('does not expose model tools but still persists snapshot diagnostics when model tool calls are unsupported', async () => {
-    const requests: ModelStepRuntimeRequest[] = [];
-    let toolCallStore: ToolCallRepository | undefined;
-    let agentLoopRepository: AgentLoopRepository | undefined;
-    const service = createServiceWithModelStepStream([assistantOutputCompletedEvent(1)], {
-      createToolCallRepository(database) {
-        seedProject(database);
-        toolCallStore = new ToolCallRepository(database);
-        agentLoopRepository = new AgentLoopRepository(database);
-        return toolCallStore;
-      },
-      toolRegistrySnapshotService: {
-        createRunSnapshot(input) {
-          if (!toolCallStore) {
-            throw new Error('Tool repository was not initialized.');
-          }
-          if (!agentLoopRepository) {
-            throw new Error('Agent loop repository was not initialized.');
-          }
-          return createToolRegistrySnapshotServiceForTest(toolCallStore, agentLoopRepository).createRunSnapshot(input);
-        },
-      },
-      providerCapabilitySummaryProvider: {
-        getProviderCapabilitySummary: () => ({ supportsToolCall: false }),
-      },
-      onRequest: (request) => requests.push(request),
-    });
-    service.createSession({
-      title: 'Provider without tool calling',
-      workspaceId: 'project-1',
-      workspacePath: 'C:/all/work/study/megumi',
-      createdAt: '2026-06-14T00:00:00.000Z',
-    });
-
-    const result = await service.handle({
-      requestId: 'request-registry-no-tools',
-      payload: {
-        sessionId: 'session-1',
-        providerId: 'deepseek',
-        modelId: 'chat-only',
-        messages: [{
-          id: 'message-local-user',
-          role: 'user',
-          content: 'Read package.json',
-          createdAt: '2026-06-14T00:00:00.000Z',
-        }],
-        createdAt: '2026-06-14T00:00:00.000Z',
-      },
-    });
-    const streamed: RuntimeEvent[] = [];
-    for await (const event of result.events) {
-      streamed.push(event);
-    }
-
-    expect(requests[0]?.toolDefinitions).toBeUndefined();
-    expect(agentLoopRepository?.getToolRegistrySnapshotByRun('run-1')?.entries).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          disabledReason: 'model_tools_unsupported',
-          exposedToModel: false,
-        }),
-      ]),
-    );
-    expect(streamed.find((event) => event.eventType === 'tool.registry.model_visible_tools.derived')?.payload).toMatchObject({
-      modelSupportsToolCall: false,
-      toolNames: [],
-    });
-  });
-
-  it('does not recreate run snapshot after source state changes during the same run', async () => {
-    const requests: ModelStepRuntimeRequest[] = [];
-    let toolCallStore: ToolCallRepository | undefined;
-    let agentLoopRepository: AgentLoopRepository | undefined;
-    let runIndex = 0;
-    let stepIndex = 0;
-    const service = createServiceWithModelStepStream((request, callIndex) => {
-      requests.push(request);
-      if (callIndex === 1 && toolCallStore) {
-        const externalTest = toolCallStore.getToolSource('external_test');
-        if (!externalTest) {
-          throw new Error('Expected external_test source.');
-        }
-        toolCallStore.saveToolSource({
-          ...externalTest,
-          enabled: true,
-          updatedAt: '2026-06-14T00:00:01.000Z',
-        });
-      }
-      return [assistantOutputCompletedEvent(callIndex)];
-    }, {
-      createToolCallRepository(database) {
-        seedProject(database);
-        toolCallStore = new ToolCallRepository(database);
-        agentLoopRepository = new AgentLoopRepository(database);
-        return toolCallStore;
-      },
-      toolRegistrySnapshotService: {
-        createRunSnapshot(input) {
-          if (!toolCallStore) {
-            throw new Error('Tool repository was not initialized.');
-          }
-          if (!agentLoopRepository) {
-            throw new Error('Agent loop repository was not initialized.');
-          }
-          return createToolRegistrySnapshotServiceForTest(toolCallStore, agentLoopRepository).createRunSnapshot(input);
-        },
-      },
-      runId: () => {
-        runIndex += 1;
-        return `run-${runIndex}`;
-      },
-      stepId: () => {
-        stepIndex += 1;
-        return `step-${stepIndex}`;
-      },
-    });
-    service.createSession({
-      title: 'Session',
-      workspaceId: 'project-1',
-      workspacePath: 'C:/all/work/study/megumi',
-      createdAt: '2026-06-14T00:00:00.000Z',
-    });
-
-    const first = await service.handle({
-      requestId: 'request-registry-run-1',
-      payload: {
-        sessionId: 'session-1',
-        providerId: 'deepseek',
-        modelId: 'deepseek-v4-flash',
-        messages: [{
-          id: 'message-local-user-1',
-          role: 'user',
-          content: 'First run',
-          createdAt: '2026-06-14T00:00:00.000Z',
-        }],
-        createdAt: '2026-06-14T00:00:00.000Z',
-      },
-    });
-    for await (const _event of first.events) {
-      // Drain first run.
-    }
-    const second = await service.handle({
-      requestId: 'request-registry-run-2',
-      payload: {
-        sessionId: 'session-1',
-        providerId: 'deepseek',
-        modelId: 'deepseek-v4-flash',
-        messages: [{
-          id: 'message-local-user-2',
-          role: 'user',
-          content: 'Second run',
-          createdAt: '2026-06-14T00:00:02.000Z',
-        }],
-        createdAt: '2026-06-14T00:00:02.000Z',
-      },
-    });
-    for await (const _event of second.events) {
-      // Drain second run.
-    }
-
-    expect(agentLoopRepository?.getToolRegistrySnapshotByRun('run-1')?.entries.find((entry) => entry.modelVisibleName === 'demo_echo')).toMatchObject({
-      exposedToModel: false,
-    });
-    expect(agentLoopRepository?.getToolRegistrySnapshotByRun('run-2')?.entries.find((entry) => entry.modelVisibleName === 'demo_echo')).toMatchObject({
-      exposedToModel: true,
-    });
-    expect(requests[0]?.toolDefinitions?.map((definition) => definition.name)).not.toContain('demo_echo');
-    expect(requests[1]?.toolDefinitions?.map((definition) => definition.name)).toContain('demo_echo');
   });
 
   it('builds session message model input from persisted SessionContextInput', async () => {
@@ -5082,7 +4832,10 @@ describe('InputProcessingService', () => {
     expectToolResultModelInputKind(requests[1], 'invalid_tool_input');
     expect(streamed.map((event) => event.eventType)).toContain('run.completed');
     expect(streamed.map((event) => event.eventType)).toContain('tool.result.created');
-    expect(executeToolExecution).not.toHaveBeenCalled();
+    expect(executeToolExecution).toHaveBeenCalledWith(expect.objectContaining({
+      toolName: 'read_file',
+      input: { path: 123 },
+    }));
   });
 
   it('continues the agent loop after policy denied tool results', async () => {
@@ -5102,52 +4855,6 @@ describe('InputProcessingService', () => {
     expectToolResultModelInputKind(requests[1], 'policy_denied');
     expect(streamed.map((event) => event.eventType)).toContain('run.completed');
     expect(streamed.map((event) => event.eventType)).toContain('tool.result.created');
-    expect(executeToolExecution).not.toHaveBeenCalled();
-  });
-
-  it('continues the agent loop after external_test demo_echo tool results', async () => {
-    const { requests, streamed, executeToolExecution } = await runRealToolResolutionNextModelInput({
-      enableExternalTestSource: true,
-      settings: {
-        allow: [{ scope: 'project', pattern: 'demo_echo(*)' }],
-        ask: [],
-        deny: [],
-      },
-      toolCall: toolUseCreatedEventFor({
-        sequence: 1,
-        toolCallId: 'tool-call-demo-echo',
-        providerToolCallId: 'provider-tool-call-demo-echo',
-        toolName: 'demo_echo',
-        input: { message: 'hello external test' },
-      }),
-      userContent: 'Echo a demo message',
-    });
-
-    expect(requests).toHaveLength(2);
-    expectToolResultModelInputKind(requests[1], 'success');
-    expect(JSON.stringify(requests[1]?.inputContext.parts)).toContain('hello external test');
-    expect(streamed.map((event) => event.eventType)).toContain('tool.result.created');
-    expect(streamed.map((event) => event.eventType)).toContain('run.completed');
-    expect(executeToolExecution).not.toHaveBeenCalled();
-  });
-
-  it('continues the agent loop when external_test demo_echo is disabled', async () => {
-    const { requests, streamed, executeToolExecution } = await runRealToolResolutionNextModelInput({
-      toolCall: toolUseCreatedEventFor({
-        sequence: 1,
-        toolCallId: 'tool-call-demo-echo-disabled',
-        providerToolCallId: 'provider-tool-call-demo-echo-disabled',
-        toolName: 'demo_echo',
-        input: { message: 'hello external test' },
-      }),
-      userContent: 'Echo while demo source is disabled',
-    });
-
-    expect(requests).toHaveLength(2);
-    expectToolResultModelInputKind(requests[1], 'invalid_tool_call');
-    expect(streamed.map((event) => event.eventType)).toContain('tool.result.created');
-    expect(streamed.map((event) => event.eventType)).toContain('run.completed');
-    expect(streamed.map((event) => event.eventType)).not.toContain('tool.execution.routed');
     expect(executeToolExecution).not.toHaveBeenCalled();
   });
 
@@ -5843,8 +5550,7 @@ describe('InputProcessingService', () => {
           };
         },
       },
-      toolDefinitionProvider: {
-        listDefinitions: () => [{
+      toolDefinitionProvider: toolDefinitionProviderFrom([{
           name: 'write_file',
           description: 'Write project file.',
           inputSchema: {
@@ -5857,8 +5563,7 @@ describe('InputProcessingService', () => {
           riskLevel: 'medium',
           sideEffect: 'project_file_operation',
           availability: { status: 'available' },
-        }],
-      },
+        }]),
     });
     service.createSession({
       title: 'Session',
@@ -6058,8 +5763,7 @@ describe('InputProcessingService', () => {
           };
         },
       },
-      toolDefinitionProvider: {
-        listDefinitions: () => [{
+      toolDefinitionProvider: toolDefinitionProviderFrom([{
           name: 'write_file',
           description: 'Write project file.',
           inputSchema: {
@@ -6072,8 +5776,7 @@ describe('InputProcessingService', () => {
           riskLevel: 'medium',
           sideEffect: 'project_file_operation',
           availability: { status: 'available' },
-        }],
-      },
+        }]),
     });
     service.createSession({
       title: 'Session',
@@ -7195,8 +6898,7 @@ describe('InputProcessingService', () => {
           };
         },
       },
-      toolDefinitionProvider: {
-        listDefinitions: () => [{
+      toolDefinitionProvider: toolDefinitionProviderFrom([{
           name: 'read_file',
           title: 'Read file',
           description: 'Read a file.',
@@ -7208,8 +6910,7 @@ describe('InputProcessingService', () => {
           riskLevel: 'low',
           sideEffect: 'none',
           availability: { status: 'available' },
-        }],
-      },
+        }]),
       globalInstructionDirectoryProvider: {
         listGlobalInstructionDirs: () => ['C:/megumi/global-instructions'],
       },
@@ -7413,8 +7114,7 @@ describe('InputProcessingService', () => {
           };
         },
       },
-      toolDefinitionProvider: {
-        listDefinitions: () => [{
+      toolDefinitionProvider: toolDefinitionProviderFrom([{
           name: 'read_file',
           title: 'Read file',
           description: 'Read a file.',
@@ -7426,8 +7126,7 @@ describe('InputProcessingService', () => {
           riskLevel: 'low',
           sideEffect: 'none',
           availability: { status: 'available' },
-        }],
-      },
+        }]),
       sessionInstructionSourceProvider: {
         listSessionInstructionSources: () => sessionInstructionSources,
       },

@@ -14,14 +14,11 @@ import type { RuntimeContext, RuntimeError, RuntimeEvent, TypedRuntimeEvent } fr
 import { RuntimeEventSchema } from '@megumi/shared/runtime';
 import {
   createRunFailedEvent as createModelLoopRunFailedEvent,
-  createToolRegistryEntryResolvedEvent,
-  createToolRegistryModelVisibleToolsDerivedEvent,
-  createToolRegistrySnapshotCreatedEvent,
-  createToolRegistrySourcesEnsuredEvent,
   createToolResultCreatedEvent,
 } from '@megumi/shared/runtime';
 import type { Run, RunStep, Session, SessionContextInput, SessionMessage } from '@megumi/shared/session';
 import type { ToolCall, ToolDefinition, ToolResult } from '@megumi/shared/tool';
+import type { ListAvailableToolsResult, RegisteredTool } from '../tools';
 import type { ParsedInput } from '../input';
 import {
   AgentLoopInitialModelInputPreparationService,
@@ -43,10 +40,6 @@ import {
   modelCallInputBuildFailureToRuntimeError,
 } from '../events';
 import type { BuildSessionContextInputFromRepositoryInput } from '../session';
-import type {
-  RunToolRegistrySnapshotBuildInput,
-  ToolRegistrySnapshotServicePort,
-} from '../tools/tool-registry-snapshot';
 import { runModelCall, type ModelCallPort } from './model-call';
 import {
   cancelAgentLoopModelCall,
@@ -98,127 +91,8 @@ export interface RunModelToolLoopInput {
   ) => ModelInputContext | Promise<ModelInputContext>;
 }
 
-export interface ToolSetSnapshotProvider {
-  createRunSnapshot(input: {
-    runId: string;
-    sessionId: string;
-    projectId: string;
-    permissionMode: PermissionMode;
-    modelId: string;
-    createdAt: string;
-    providerCapabilitySummary?: { supportsToolCall?: boolean };
-  }): {
-    modelVisibleToolDefinitions: ToolDefinition[];
-    events: RuntimeEvent[];
-  };
-}
-
-export function createToolSetSnapshotProvider(input: {
-  snapshotService: ToolRegistrySnapshotServicePort;
-  eventId: () => string;
-}): ToolSetSnapshotProvider {
-  return {
-    createRunSnapshot: (snapshotInput) => createToolSetSnapshot({
-      ...snapshotInput,
-      snapshotService: input.snapshotService,
-      eventId: input.eventId,
-    }),
-  };
-}
-
-function createToolSetSnapshot(input: RunToolRegistrySnapshotBuildInput & {
-  sessionId: string;
-  snapshotService: ToolRegistrySnapshotServicePort;
-  eventId: () => string;
-}): ReturnType<ToolSetSnapshotProvider['createRunSnapshot']> {
-  const registrySnapshotResult = input.snapshotService.createRunSnapshot({
-    runId: input.runId,
-    projectId: input.projectId,
-    permissionMode: input.permissionMode,
-    modelId: input.modelId,
-    createdAt: input.createdAt,
-    ...(input.providerCapabilitySummary ? { providerCapabilitySummary: input.providerCapabilitySummary } : {}),
-  });
-  const events = [
-    createToolRegistrySourcesEnsuredEvent({
-      eventId: input.eventId(),
-      runId: input.runId,
-      sessionId: input.sessionId,
-      sequence: 1,
-      createdAt: input.createdAt,
-      payload: {
-        sourceIds: registrySnapshotResult.diagnostics.sourceIds,
-        createdSourceIds: registrySnapshotResult.diagnostics.createdSourceIds,
-      },
-    }),
-    createToolRegistrySnapshotCreatedEvent({
-      eventId: input.eventId(),
-      runId: input.runId,
-      sessionId: input.sessionId,
-      sequence: 2,
-      createdAt: input.createdAt,
-      payload: {
-        snapshotId: registrySnapshotResult.snapshot.snapshotId,
-        projectId: registrySnapshotResult.snapshot.projectId,
-        permissionMode: registrySnapshotResult.snapshot.permissionMode,
-        modelId: registrySnapshotResult.snapshot.modelId,
-        registryVersion: registrySnapshotResult.snapshot.registryVersion,
-        sourceVersionHash: registrySnapshotResult.snapshot.sourceVersionHash,
-        sourceCount: registrySnapshotResult.snapshot.sourceEntries.length,
-        entryCount: registrySnapshotResult.snapshot.entries.length,
-        exposedCount: registrySnapshotResult.snapshot.entries.filter((entry) => entry.exposedToModel).length,
-      },
-    }),
-    ...registrySnapshotResult.snapshot.entries.map((entry, index) => createToolRegistryEntryResolvedEvent({
-      eventId: input.eventId(),
-      runId: input.runId,
-      sessionId: input.sessionId,
-      sequence: index + 3,
-      createdAt: input.createdAt,
-      payload: {
-        snapshotId: entry.snapshotId,
-        snapshotEntryId: entry.snapshotEntryId,
-        registrationId: entry.registrationId,
-        canonicalToolId: entry.canonicalToolId,
-        modelVisibleName: entry.modelVisibleName,
-        sourceId: entry.sourceId,
-        namespace: entry.namespace,
-        sourceToolName: entry.sourceToolName,
-        effectiveStatus: entry.effectiveStatus,
-        exposedToModel: entry.exposedToModel,
-        ...(entry.disabledReason ? { disabledReason: entry.disabledReason } : {}),
-        ...(entry.unavailableReason ? { unavailableReason: entry.unavailableReason } : {}),
-        ...(entry.conflictReason ? { conflictReason: entry.conflictReason } : {}),
-      },
-    })),
-    createToolRegistryModelVisibleToolsDerivedEvent({
-      eventId: input.eventId(),
-      runId: input.runId,
-      sessionId: input.sessionId,
-      sequence: registrySnapshotResult.snapshot.entries.length + 3,
-      createdAt: input.createdAt,
-      payload: {
-        snapshotId: registrySnapshotResult.snapshot.snapshotId,
-        modelId: registrySnapshotResult.snapshot.modelId,
-        modelSupportsToolCall: registrySnapshotResult.diagnostics.modelSupportsToolCall,
-        toolNames: registrySnapshotResult.diagnostics.modelVisibleToolNames,
-        hiddenCount: registrySnapshotResult.diagnostics.hiddenCount,
-      },
-    }),
-  ];
-
-  return {
-    modelVisibleToolDefinitions: registrySnapshotResult.modelVisibleToolDefinitions,
-    events,
-  };
-}
-
 export interface ToolSetRegistryProvider {
-  listDefinitions(input: {
-    runId: string;
-    permissionMode: PermissionMode;
-    providerCapabilitySummary?: { supportsToolCall?: boolean };
-  }): ToolDefinition[];
+  listAvailableTools(): ListAvailableToolsResult;
 }
 
 export interface ToolSetCapabilityProvider {
@@ -247,7 +121,6 @@ export interface PrepareToolSetResult {
 }
 
 export interface ToolSetServiceOptions {
-  snapshotProvider?: ToolSetSnapshotProvider;
   registryProvider?: ToolSetRegistryProvider;
   capabilityProvider?: ToolSetCapabilityProvider;
 }
@@ -265,35 +138,25 @@ export class ToolSetService {
       })
       ?? { supportsToolCall: true };
 
-    if (input.projectRoot && input.projectId && this.options.snapshotProvider) {
-      const snapshot = this.options.snapshotProvider.createRunSnapshot({
-        runId: input.runId,
-        sessionId: input.sessionId,
-        projectId: input.projectId,
-        permissionMode: input.permissionMode,
-        modelId: input.modelId,
-        createdAt: input.createdAt,
-        providerCapabilitySummary,
-      });
-      return {
-        toolDefinitions: snapshot.modelVisibleToolDefinitions,
-        events: normalizeToolSetEventSequence(snapshot.events, input.startSequence),
-      };
-    }
-
     if (input.projectRoot && this.options.registryProvider) {
       return {
-        toolDefinitions: this.options.registryProvider.listDefinitions({
-          runId: input.runId,
-          permissionMode: input.permissionMode,
-          providerCapabilitySummary,
-        }),
+        toolDefinitions: providerCapabilitySummary.supportsToolCall === false
+          ? []
+          : this.options.registryProvider.listAvailableTools().tools.map(toolDefinitionFromRegisteredTool),
         events: [],
       };
     }
 
     return { events: [] };
   }
+}
+
+function toolDefinitionFromRegisteredTool(tool: RegisteredTool): ToolDefinition {
+  return {
+    ...tool.definition,
+    name: tool.registeredToolName,
+    description: tool.definition.modelFacingDescription ?? tool.definition.description,
+  };
 }
 
 export interface ToolRunnerFactory {
@@ -1433,13 +1296,6 @@ export async function* resumeToolApprovalAgentLoop<TProjection>(
     ...(approvalResume.memoryRecallSources ? { memoryRecallSources: approvalResume.memoryRecallSources } : {}),
     ...(approvalResume.memoryRecallSeed ? { memoryRecallSeed: approvalResume.memoryRecallSeed } : {}),
   });
-}
-
-function normalizeToolSetEventSequence(events: RuntimeEvent[], startSequence: number): RuntimeEvent[] {
-  return events.map((event, index) => ({
-    ...event,
-    sequence: event.sequence > startSequence ? event.sequence : startSequence + index + 1,
-  }));
 }
 
 export async function* runModelToolLoop(input: RunModelToolLoopInput): AsyncIterable<RuntimeEvent> {

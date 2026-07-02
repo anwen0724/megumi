@@ -62,7 +62,6 @@ import {
 import {
   AgentLoop,
   createAgentLoopEventRecorder,
-  createToolSetSnapshotProvider,
   resumeToolApprovalAgentLoop,
   type AgentLoopOptions,
   ToolSetService,
@@ -111,7 +110,6 @@ import type {
 } from '../memory';
 import { resolveMemoryEnabled, type MemorySettingsPort } from '../settings';
 import type { WorkspaceChangeReadPort } from '../workspace';
-import type { ToolRegistrySnapshotServicePort } from '../tools/tool-registry-snapshot';
 import { SessionRunControlService } from '../state/session-run-control-service';
 import { toModelPermissionSnapshot } from '../permissions';
 import type {
@@ -755,7 +753,6 @@ export interface InputProcessingServiceOptions {
   modelCallProvider?: ModelCallProvider;
   toolRuntimeFactory?: ToolRuntimeFactory;
   toolDefinitionProvider?: ToolSetRegistryProvider;
-  toolRegistrySnapshotService?: ToolRegistrySnapshotServicePort;
   providerCapabilitySummaryProvider?: ToolSetCapabilityProvider;
   toolCallRepository?: InputToolCallRepositoryPort;
   agentInstructionSourceService?: AgentInstructionSourcePort;
@@ -897,7 +894,6 @@ export class InputProcessingService {
   private readonly modelCallProvider?: ModelCallProvider;
   private readonly toolRuntimeFactory?: ToolRuntimeFactory;
   private readonly toolDefinitionProvider?: ToolSetRegistryProvider;
-  private readonly toolRegistrySnapshotService?: ToolRegistrySnapshotServicePort;
   private readonly providerCapabilitySummaryProvider?: ToolSetCapabilityProvider;
   private readonly toolCallRepository?: InputToolCallRepositoryPort;
   private readonly modelCallInputBuildService: ModelCallInputBuildPort;
@@ -938,7 +934,6 @@ export class InputProcessingService {
     this.modelCallProvider = options.modelCallProvider;
     this.toolRuntimeFactory = options.toolRuntimeFactory;
     this.toolDefinitionProvider = options.toolDefinitionProvider;
-    this.toolRegistrySnapshotService = options.toolRegistrySnapshotService;
     this.providerCapabilitySummaryProvider = options.providerCapabilitySummaryProvider;
     this.toolCallRepository = options.toolCallRepository;
     this.memoryRecallService = options.memoryRecallService;
@@ -1016,12 +1011,6 @@ export class InputProcessingService {
   ): AgentLoopOptions {
     const svc = this;
     const toolSetService = new ToolSetService({
-      ...(this.toolRegistrySnapshotService ? {
-        snapshotProvider: createToolSetSnapshotProvider({
-          snapshotService: this.toolRegistrySnapshotService,
-          eventId: this.ids.eventId,
-        }),
-      } : {}),
       ...(this.toolDefinitionProvider ? { registryProvider: this.toolDefinitionProvider } : {}),
       ...(this.providerCapabilitySummaryProvider ? { capabilityProvider: this.providerCapabilitySummaryProvider } : {}),
     });
