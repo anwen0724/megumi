@@ -4,6 +4,7 @@ import { ToolRegistryService } from '@megumi/coding-agent/tools';
 import { ApprovalResolutionService } from '@megumi/coding-agent/host-interface/permissions/approval-resolution-service';
 import { createRuntimeEvent } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { ApprovalRequest } from '@megumi/shared/tool';
 
 describe('ToolRegistryService desktop integration surface', () => {
   it('lists built-in registered tool definitions without executing them', () => {
@@ -179,7 +180,7 @@ async function* asyncEvents(events: RuntimeEvent[]): AsyncIterable<RuntimeEvent>
   yield* events;
 }
 
-function createApprovalRequest() {
+function createApprovalRequest(): ApprovalRequest {
   return {
     approvalRequestId: 'approval-request-1',
     toolCallId: 'tool-call-1',
@@ -198,5 +199,5 @@ function createApprovalRequest() {
     requestedScope: 'once',
     status: 'pending',
     createdAt: '2026-05-20T00:00:02.000Z',
-  } as const;
+  };
 }

@@ -15,22 +15,28 @@ export function normalizeRawToolResult(input: {
 }): ToolExecutionResult {
   const normalizedResult = normalizeRawContent(input.rawResult);
 
+  if (input.rawResult.isError) {
+    return {
+      type: 'failed',
+      toolName: input.toolName,
+      error: {
+        code: 'tool_execution_failed',
+        message: normalizedResult.content || 'Tool execution failed',
+      },
+      normalizedResult,
+      toolExecutionObservation: {
+        summary: `${input.toolName} failed`,
+      },
+    };
+  }
+
   return {
-    type: input.rawResult.isError ? 'failed' : 'succeeded',
+    type: 'succeeded',
     toolName: input.toolName,
-    ...(input.rawResult.isError
-      ? {
-          error: {
-            code: 'tool_execution_failed' as const,
-            message: normalizedResult.content || 'Tool execution failed',
-          },
-        }
-      : { rawResult: input.rawResult }),
+    rawResult: input.rawResult,
     normalizedResult,
     toolExecutionObservation: {
-      summary: input.rawResult.isError
-        ? `${input.toolName} failed`
-        : `${input.toolName} completed`,
+      summary: `${input.toolName} completed`,
     },
   };
 }

@@ -156,7 +156,7 @@ function toolDefinitionFromRegisteredTool(tool: RegisteredTool): ToolDefinition 
     ...tool.definition,
     name: tool.registeredToolName,
     description: tool.definition.modelFacingDescription ?? tool.definition.description,
-  };
+  } as unknown as ToolDefinition;
 }
 
 export interface ToolRunnerFactory {

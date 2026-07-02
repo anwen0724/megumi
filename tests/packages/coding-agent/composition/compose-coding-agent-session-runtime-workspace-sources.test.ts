@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { composeCodingAgentPersistence, composeCodingAgentSessionRuntime } from '@megumi/coding-agent/composition';
-import { composeCodingAgentToolRegistry } from '@megumi/coding-agent/composition';
+import { composeCodingAgentToolRegistryService } from '@megumi/coding-agent/composition';
 
 function noopMemoryRuntime() {
   return {
@@ -48,7 +48,7 @@ describe('composed session runtime workspace sources', () => {
         sessionRepository,
         toolCallRepository: persistence.toolCallRepository,
         workspaceChangeRepository: persistence.workspaceChangeRepository,
-        toolRegistry: composeCodingAgentToolRegistry(),
+        toolRegistry: composeCodingAgentToolRegistryService(),
         modelCallProviderService: {
           streamModelCall: async function* () {},
           completeModelCall: async () => ({ ok: true, text: '' }),

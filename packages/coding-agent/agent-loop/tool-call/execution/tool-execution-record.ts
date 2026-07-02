@@ -55,7 +55,7 @@ export async function runToolExecutionRecord(
       status: executionResult.type === 'succeeded' ? 'succeeded' : 'failed',
       completedAt: observation.createdAt,
       observation,
-      resultPreview: executionResult.toolExecutionObservation ?? observation.content.slice(0, 500),
+      resultPreview: executionResult.toolExecutionObservation?.summary ?? observation.content.slice(0, 500),
       ...(executionResult.type === 'failed' ? { error: runtimeErrorFromToolExecutionResult(executionResult, running) } : {}),
     });
   } catch (error) {
@@ -100,7 +100,7 @@ function observationFromExecutionResult(
     metadata: {
       ...(result.toolExecutionObservation ? { toolExecutionObservation: result.toolExecutionObservation } : {}),
       ...(result.metadata ? { toolExecutionMetadata: result.metadata } : {}),
-    },
+    } as ToolObservation['metadata'],
   });
 }
 
@@ -111,7 +111,7 @@ function observationFromText(record: ToolExecutionRecord, input: {
   isError: boolean;
   truncated: boolean;
   truncationReason?: ToolExecutionResult['normalizedResult']['truncationReason'];
-  metadata?: Record<string, unknown>;
+  metadata?: ToolObservation['metadata'];
 }): ToolObservation {
   return {
     observationId: input.ids.observationId(),
@@ -136,13 +136,26 @@ function runtimeErrorFromToolExecutionResult(
   record: ToolExecutionRecord,
 ): RuntimeError {
   return {
-    code: result.error.code,
+    code: runtimeErrorCodeFromToolExecutionError(result.error.code),
     message: result.error.message,
     severity: 'error',
     retryable: false,
     source: 'tool',
     debugId: `tool-error:${record.toolExecutionId}`,
   };
+}
+
+function runtimeErrorCodeFromToolExecutionError(
+  code: Extract<ToolExecutionResult, { type: 'failed' }>['error']['code'],
+): RuntimeError['code'] {
+  switch (code) {
+    case 'invalid_tool_input':
+      return 'tool_input_invalid';
+    case 'unknown_tool':
+    case 'tool_cancelled':
+    case 'tool_execution_failed':
+      return 'tool_execution_failed';
+  }
 }
 
 function toSharedTruncationReason(

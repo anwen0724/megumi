@@ -1,5 +1,4 @@
 // Resumes a paused tool call after the user resolves an approval request.
-import { createRejectionObservation } from '../../../tools/observations';
 import type { ToolExecutionDecision } from '@megumi/shared/tool';
 import type { ResumeToolApprovalInput } from '../tool-call-contract';
 import type { ResolvedToolCallRunnerOptions, ToolApprovalResumeRunnerOutcome } from '../tool-call-runner';
@@ -7,6 +6,7 @@ import { isTerminalForNextModelInput } from '../execution/tool-execution-window'
 import { advanceExecutionWindows } from '../execution/tool-execution-window';
 import { outcomeFromRecords } from '../model-input/tool-result-model-input';
 import { applyDecisionsToCreated } from './tool-call-approval';
+import { createRejectionObservation } from './rejection-observation';
 
 export async function resumeToolApproval(
   options: ResolvedToolCallRunnerOptions,
@@ -55,14 +55,6 @@ export async function resumeToolApproval(
   const records = await advanceExecutionWindows(options, {
     runId: String(approvedRecord.runId),
     assistantMessageId,
-    executionOptions: {
-      scope: {
-        sessionId: options.repository.getRunSessionId(String(approvedRecord.runId))
-          ?? String(approvedRecord.metadata?.sessionId ?? ''),
-        runId: String(approvedRecord.runId),
-        stepId: String(approvedRecord.stepId),
-      },
-    },
   });
   const changedToolExecutionIds = new Set(
     records

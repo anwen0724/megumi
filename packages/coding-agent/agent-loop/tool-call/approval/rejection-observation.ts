@@ -39,3 +39,33 @@ export function createRejectionObservation(input: {
     },
   };
 }
+
+export function createInterruptedExecutionObservation(input: {
+  record: ToolExecutionRecord;
+  ids: RejectionObservationIds;
+  now: () => string;
+}): ToolObservation {
+  const content = [
+    'Tool execution was interrupted before completion.',
+    'Reason code: RUNTIME_INTERRUPTED',
+    'Reason: The application restarted or the runtime stopped while the tool was running.',
+  ].join('\n');
+
+  return {
+    observationId: input.ids.observationId(),
+    toolExecutionId: input.record.toolExecutionId,
+    toolCallId: input.record.toolCallId,
+    runId: input.record.runId,
+    stepId: input.record.stepId,
+    kind: 'text',
+    isError: true,
+    content,
+    truncated: false,
+    byteLength: Buffer.byteLength(content, 'utf8'),
+    tokenEstimate: Math.ceil(content.length / 4),
+    createdAt: input.now(),
+    metadata: {
+      recoveryReason: 'runtime_interrupted',
+    },
+  };
+}

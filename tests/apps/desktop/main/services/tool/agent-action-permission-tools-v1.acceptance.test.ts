@@ -1,10 +1,10 @@
 ﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { evaluatePermissionPolicy } from '@megumi/coding-agent/permissions/tool-policy';
-import { createBuiltInToolRegistry } from '@megumi/coding-agent/tools/built-ins';
-import type { ToolExecution } from '@megumi/shared/tool';
+import { ToolRegistryService } from '@megumi/coding-agent/tools';
+import type { ToolDefinition, ToolExecution } from '@megumi/shared/tool';
 
-const registry = createBuiltInToolRegistry();
+const registry = new ToolRegistryService();
 const projectRoot = 'C:/all/work/study/megumi';
 
 function toolExecution(input: Partial<ToolExecution> & Pick<ToolExecution, 'toolName' | 'input'>): ToolExecution {
@@ -28,15 +28,10 @@ function toolExecution(input: Partial<ToolExecution> & Pick<ToolExecution, 'tool
   };
 }
 
-function definition(name: string) {
-  const item = registry.getDefinition(name, {
-    runId: 'run-1',
-    projectId: 'project-1',
-    permissionMode: 'default',
-    providerCapabilitySummary: { supportsToolCall: true },
-  });
-  if (!item) throw new Error(`Missing tool definition: ${name}`);
-  return item;
+function definition(name: string): ToolDefinition {
+  const result = registry.getRegisteredTool({ toolName: name });
+  if (result.type !== 'found') throw new Error(`Missing tool definition: ${name}`);
+  return result.tool.definition as unknown as ToolDefinition;
 }
 
 describe('agent action permission tools v1 acceptance', () => {
