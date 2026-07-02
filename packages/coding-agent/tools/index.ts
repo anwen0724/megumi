@@ -1,2 +1,3 @@
 // Public exports for the Coding Agent tools module contracts and services.
 export * from './contracts/tool-contracts';
+export * from './services/tool-registry-service';
