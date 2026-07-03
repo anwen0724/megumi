@@ -203,6 +203,14 @@ describe('Command system source guards', () => {
     expect(AgentRunProcessingService).not.toContain('dispatchCommandText');
   });
 
+  it('keeps agent-run command execution wired through a required Command Service', () => {
+    const AgentRunProcessingService = source('packages/coding-agent/agent-loop/services/agent-run-service.ts');
+
+    expect(AgentRunProcessingService).toContain("commandService: Pick<CommandService, 'handleCommandInput'>;");
+    expect(AgentRunProcessingService).not.toContain("commandService?: Pick<CommandService, 'handleCommandInput'>;");
+    expect(AgentRunProcessingService).not.toContain('options.commandService?.handleCommandInput');
+  });
+
   it('keeps context management free of raw slash command parsing', () => {
     expect(offenders(filesUnder('packages/coding-agent/context'), [
       /parseSlashCommand/,

@@ -118,7 +118,7 @@ import type {
   HostInteractionRequest,
 } from '../../commands';
 import type { ContextService, ContextUsageMonitor } from '../../context';
-import type { InputService as UserInputService } from '../../input';
+import type { InputService as UserInputService, RawUserInputAttachment } from '../../input';
 
 export interface AgentRunSendRequest {
   requestId?: string;
@@ -130,6 +130,7 @@ export interface AgentRunSendRequest {
   providerId: ProviderId;
   modelId: string;
   text: string;
+  attachments?: RawUserInputAttachment[];
   clientMessageId?: string;
   createdAt?: string;
   permissionMode?: PermissionMode;
@@ -195,7 +196,7 @@ export interface CreateAgentRunServiceOptions {
   inputService: Pick<UserInputService, 'processUserInput'>;
   session: Pick<SessionServicePort, 'createSession' | 'listMessagesBySession' | 'listSessions'>;
   userInput: UserInputHandlerPort;
-  commandService?: Pick<CommandService, 'handleCommandInput'>;
+  commandService: Pick<CommandService, 'handleCommandInput'>;
   commandExecutionContextProvider?: (input: {
     request: AgentRunSendRequest;
     requestId: string;
@@ -290,7 +291,7 @@ async function handleAgentRunInput(
   const processed = await options.inputService.processUserInput({
     user_input: {
       text: input.text,
-      attachments: [],
+      attachments: input.attachments ?? [],
     },
   });
 
@@ -308,14 +309,14 @@ async function handleAgentRunInput(
   };
 
   if (processed.parsed_user_input.type === 'command') {
-    const commandResult = await options.commandService?.handleCommandInput({
+    const commandResult = await options.commandService.handleCommandInput({
       raw_input: processed.parsed_user_input.text,
       ...(options.commandExecutionContextProvider ? {
         execution_context: options.commandExecutionContextProvider({ request: normalizedInput, requestId, createdAt }),
       } : {}),
     });
 
-    if (commandResult && commandResult.type !== 'not_command') {
+    if (commandResult.type !== 'not_command') {
       return handleCommandExecutionResult({
         commandResult,
         input: normalizedInput,

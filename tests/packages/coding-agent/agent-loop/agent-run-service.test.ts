@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createAgentRunService } from '@megumi/coding-agent/agent-loop';
+import type { AgentRunSendRequest } from '@megumi/coding-agent/agent-loop';
+import type { RawUserInputAttachment } from '@megumi/coding-agent/input';
 import type { Session, SessionMessage } from '@megumi/shared/session';
 
 describe('AgentRunService input and command orchestration', () => {
@@ -84,6 +86,49 @@ describe('AgentRunService input and command orchestration', () => {
       raw_input: '/compact',
     }));
     expect(harness.userInput.handle).not.toHaveBeenCalled();
+  });
+
+  it('forwards submitted attachment references to Input Service', async () => {
+    const harness = createAgentRunHarness();
+    const attachment: RawUserInputAttachment = {
+      attachment_id: 'upload:image:1',
+      type: 'image',
+      mime_type: 'image/png',
+      source: { type: 'local_file', path: 'C:/tmp/error.png' },
+    };
+    const inputService = {
+      processUserInput: vi.fn(async () => ({
+        status: 'ok' as const,
+        parsed_user_input: {
+          type: 'message' as const,
+          text: '看一下这张图',
+          attachments: [attachment],
+        },
+      })),
+    };
+    const service = createAgentRunService({
+      inputService,
+      session: harness.session,
+      userInput: harness.userInput,
+      commandService: { handleCommandInput: vi.fn() },
+    });
+    const request: AgentRunSendRequest = {
+      requestId: 'request-1',
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      text: '看一下这张图',
+      attachments: [attachment],
+      createdAt: '2026-07-03T00:00:00.000Z',
+    };
+
+    await service.send(request);
+
+    expect(inputService.processUserInput).toHaveBeenCalledWith({
+      user_input: {
+        text: '看一下这张图',
+        attachments: [attachment],
+      },
+    });
   });
 });
 
