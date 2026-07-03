@@ -24,4 +24,22 @@ describe('built_in_commands', () => {
       },
     });
   });
+
+  it('defines compact as requiring host session context before compaction can run', async () => {
+    const compact = built_in_commands.find((command) => command.name === 'compact');
+
+    expect(compact).toBeDefined();
+    await expect(compact!.execute({
+      invocation: {
+        name: 'compact',
+        arguments_input: '',
+        raw_input: '/compact',
+      },
+    })).resolves.toEqual({
+      type: 'host_interaction_request',
+      request: {
+        kind: 'context_compaction',
+      },
+    });
+  });
 });

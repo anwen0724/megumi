@@ -7,6 +7,19 @@ import type { CommandDefinition } from '../contracts/command-contracts';
 
 export const built_in_commands: CommandDefinition[] = [
   {
+    name: 'compact',
+    description: 'Compact the current session context',
+    source: { kind: 'built_in' },
+    async execute() {
+      return {
+        type: 'host_interaction_request',
+        request: {
+          kind: 'context_compaction',
+        },
+      };
+    },
+  },
+  {
     name: 'review',
     description: 'Evaluate review feedback before implementing changes',
     source: { kind: 'built_in' },
