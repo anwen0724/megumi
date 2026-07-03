@@ -4,7 +4,7 @@ import {
   buildMemoryRecallSnapshot,
   selectMemoryRecallResults,
 } from './recall-scoring';
-import type { ModelInputMemoryRecallSource } from '@megumi/coding-agent/context';
+import type { ModelInputMemoryRecallSource } from '@megumi/coding-agent/context/model-call-context';
 import type { ModelInputContextBuildRequest } from '@megumi/shared/model';
 import type { JsonObject, JsonValue } from '@megumi/shared/primitives';
 import type {

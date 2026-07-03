@@ -5,8 +5,10 @@ import type { ToolResult } from '@megumi/shared/tool';
 import type {
   BuildModelCallInputInput,
   BuildModelCallInputResult,
+} from '../../../context/model-call-input-builder';
+import type {
   ModelInputMemoryRecallSource,
-} from '../../../context';
+} from '../../../context/model-call-context';
 import type { PendingToolApprovalResume } from '../tool-call-contract';
 
 export interface ApprovalResumeModelInputRepositoryPort {

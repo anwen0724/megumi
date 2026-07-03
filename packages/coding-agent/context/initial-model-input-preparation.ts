@@ -1,7 +1,7 @@
 // Owns initial model input preparation for one agent loop without executing the loop itself.
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type { InputPreprocessingResult } from '@megumi/coding-agent/input';
-import type { ModelInputContextBuildRequest } from '@megumi/shared/model';
+import type { ModelInputContext, ModelInputContextBuildRequest } from '@megumi/shared/model';
 import type { PermissionMode, PermissionModeSnapshot } from '@megumi/shared/permission';
 import type { ProviderId } from '@megumi/shared/provider';
 import type { ModelCapabilitySummary } from '@megumi/shared/run';
@@ -10,6 +10,7 @@ import type { Run, RunStep, Session, SessionContextInput, SessionMessage } from 
 import type { ToolDefinition } from '../tools';
 
 import type { ParsedInput } from '../input/parsed-input';
+import type { BuildPromptResult, GetSessionContextResult, Prompt, SessionContext } from './contracts/context-contracts';
 import type { MemoryRecallPort } from '../memory';
 import { createCodingAgentRunInputFacts } from '../input/facts';
 import type {
@@ -21,8 +22,10 @@ import type {
   SessionCompactionOrchestrationResult,
 } from './compaction';
 import {
+  buildModelInputContext,
   DEFAULT_CONTEXT_BUDGET_POLICY,
 } from './model-input-context-builder';
+import type { ModelInputContextPartDraft } from './context-budget';
 import {
   resolveMemoryRecallEffectiveCwd,
 } from './effective-cwd';
@@ -89,8 +92,22 @@ export interface AgentLoopInitialModelInputCompactionOrchestrator {
   compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
 }
 
+export interface AgentLoopInitialPromptContextService {
+  getSessionContext(input: {
+    session_id: string;
+    workspace_id?: string;
+    purpose?: 'agent_response' | 'context_compaction';
+  }): Promise<GetSessionContextResult>;
+  buildPrompt(input: {
+    session_context: SessionContext;
+    purpose: 'agent_response';
+    current_user_message_id?: string;
+  }): BuildPromptResult;
+}
+
 export interface AgentLoopInitialModelInputPreparationOptions {
   contextService?: AgentLoopInitialModelInputContextService;
+  promptContextService?: AgentLoopInitialPromptContextService;
   sessionContextInputService: AgentLoopInitialModelInputSessionContextService;
   sourceOverrideProvider: AgentLoopInitialModelInputSourceOverrideProvider;
   memoryRecallService?: AgentLoopInitialModelInputMemoryRecallService;
@@ -232,15 +249,13 @@ export class AgentLoopInitialModelInputPreparationService {
           startSequence: 1,
         });
       },
-      buildInitialModelInput: async () => this.options.modelCallInputBuildService.buildModelCallInput({
-        ...this.commonModelInput(input, modelInputSourceOverrides, budgetPolicy),
-        contextKind: 'initial',
-        sessionContext: this.buildSessionContext(input),
-        ...memoryRecall,
-        ...(runInputFacts ? { runInputFacts } : {}),
-        ...(input.toolDefinitions ? { toolDefinitions: input.toolDefinitions } : {}),
+      buildInitialModelInput: async () => this.buildInitialModelInput(
+        input,
+        modelInputSourceOverrides,
         budgetPolicy,
-      }),
+        memoryRecall,
+        runInputFacts,
+      ),
     };
   }
 
@@ -309,4 +324,148 @@ export class AgentLoopInitialModelInputPreparationService {
       createdAt: input.createdAt,
     });
   }
+
+  private async buildInitialModelInput(
+    input: PrepareAgentLoopInitialModelInputInput,
+    modelInputSourceOverrides: Partial<Pick<
+      BuildModelCallInputInput,
+      'globalInstructionDirs' | 'sessionInstructionSources' | 'requestedCwd'
+    >>,
+    budgetPolicy: ContextBudgetPolicy,
+    memoryRecall: AgentLoopInitialModelInputMemoryRecall,
+    runInputFacts: ReturnType<typeof createCodingAgentRunInputFacts> | undefined,
+  ): Promise<BuildModelCallInputResult> {
+    if (!this.options.promptContextService) {
+      return this.options.modelCallInputBuildService.buildModelCallInput({
+        ...this.commonModelInput(input, modelInputSourceOverrides, budgetPolicy),
+        contextKind: 'initial',
+        sessionContext: this.buildSessionContext(input),
+        ...memoryRecall,
+        ...(runInputFacts ? { runInputFacts } : {}),
+        ...(input.toolDefinitions ? { toolDefinitions: input.toolDefinitions } : {}),
+        budgetPolicy,
+      });
+    }
+
+    const sessionContextResult = await this.options.promptContextService.getSessionContext({
+      session_id: String(input.session.sessionId),
+      ...(input.session.workspaceId ? { workspace_id: String(input.session.workspaceId) } : {}),
+      purpose: 'agent_response',
+    });
+    if (sessionContextResult.status !== 'ok') {
+      throw new Error(sessionContextResult.failure.message);
+    }
+    const promptResult = this.options.promptContextService.buildPrompt({
+      session_context: sessionContextResult.session_context,
+      purpose: 'agent_response',
+      current_user_message_id: String(input.userMessage.messageId),
+    });
+    if (promptResult.status !== 'ok') {
+      throw new Error(promptResult.failure.message);
+    }
+    const inputContext = createLegacyModelInputContextFromPrompt({
+      prompt: promptResult.prompt,
+      sessionId: String(input.session.sessionId),
+      runId: String(input.run.runId),
+      stepId: String(input.step.stepId),
+      builtAt: input.createdAt,
+      budgetPolicy,
+    });
+    const buildRequest: ModelInputContextBuildRequest = {
+      requestId: `model-input-build:${input.run.runId}:${input.step.stepId}:initial`,
+      contextId: inputContext.contextId,
+      sessionId: String(input.session.sessionId),
+      runId: String(input.run.runId),
+      modelStepId: String(input.step.stepId),
+      ...(input.session.workspaceId ? { projectId: String(input.session.workspaceId) } : {}),
+      ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
+      permissionMode: input.permissionMode,
+      currentTurn: {
+        messageId: String(input.userMessage.messageId),
+        effectiveUserText: input.inputPreprocessing.effectiveUserText,
+      },
+      modelTarget: {
+        providerId: String(input.providerId),
+        modelId: input.modelId,
+      },
+      availableCapabilitySummary: availableCapabilitySummaryFor(input.toolDefinitions ?? []),
+      runtimeFacts: [],
+      traceId: `trace:model-input:${input.run.runId}:${input.step.stepId}:initial`,
+      builtAt: input.createdAt,
+      metadata: { requestId: input.requestId, contextKind: 'initial', compatibility: 'context_prompt' },
+    };
+
+    return {
+      buildRequest,
+      inputContext,
+      toolDefinitions: input.toolDefinitions ?? [],
+      instructionSources: [],
+      availableCapabilitySummary: availableCapabilitySummaryFor(input.toolDefinitions ?? []),
+    };
+  }
+}
+
+function availableCapabilitySummaryFor(toolDefinitions: ToolDefinition[]): string {
+  if (toolDefinitions.length === 0) {
+    return 'Available tools: none.';
+  }
+
+  return `Available tools: ${toolDefinitions.map((definition) => definition.name).join(', ')}.`;
+}
+
+export function createLegacyModelInputContextFromPrompt(input: {
+  prompt: Prompt;
+  sessionId: string;
+  runId: string;
+  stepId: string;
+  builtAt: string;
+  budgetPolicy?: ContextBudgetPolicy;
+}): ModelInputContext {
+  const parts: ModelInputContextPartDraft[] = input.prompt.messages.map((message, index) => {
+    if (message.role === 'user') {
+      return {
+        partId: `legacy-prompt:${input.prompt.prompt_id}:user:${index}`,
+        kind: 'current_turn',
+        role: 'user',
+        text: message.content,
+        sourceRefs: [{
+          sourceId: `legacy-prompt:${input.prompt.prompt_id}:user:${index}`,
+          sourceKind: 'current_user_message',
+          metadata: { promptId: input.prompt.prompt_id },
+        }],
+        priority: 100,
+        required: true,
+      };
+    }
+
+    return {
+      partId: `legacy-prompt:${input.prompt.prompt_id}:system:${index}`,
+      kind: 'instruction',
+      instructionKind: 'system',
+      text: message.content,
+      sourceRefs: [{
+        sourceId: `legacy-prompt:${input.prompt.prompt_id}:system:${index}`,
+        sourceKind: 'system_instruction',
+        metadata: { promptId: input.prompt.prompt_id },
+      }],
+      priority: 100,
+      required: true,
+    };
+  });
+
+  return buildModelInputContext({
+    contextId: `legacy-context:${input.prompt.prompt_id}`,
+    sessionId: input.sessionId,
+    runId: input.runId,
+    stepId: input.stepId,
+    buildReason: 'context_prompt_compatibility',
+    builtAt: input.builtAt,
+    budgetPolicy: input.budgetPolicy,
+    parts,
+    traceMetadata: {
+      promptId: input.prompt.prompt_id,
+      promptPurpose: input.prompt.purpose,
+      compatibility: 'context_prompt',
+    },
+  });
 }

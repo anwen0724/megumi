@@ -7,7 +7,7 @@ function createRepository(overrides: Partial<ContextSessionFactRepository> = {})
       {
         messageId: 'message:1',
         sessionId: 'session:1',
-        role: 'user',
+        role: 'user' as const,
         content: 'hello',
         status: 'completed',
         createdAt: '2026-07-03T00:00:00.000Z',
@@ -26,7 +26,7 @@ describe('context service', () => {
       listSessionCompactionsBySession: vi.fn(() => [{
         compactionId: 'compaction:1',
         summary: 'summary',
-        status: 'completed',
+        status: 'completed' as const,
         createdAt: '2026-07-03T00:01:00.000Z',
       }]),
     });

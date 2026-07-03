@@ -4,7 +4,8 @@ import {
   AgentLoop,
   type AgentLoopOptions,
 } from '@megumi/coding-agent/agent-loop';
-import type { BuildModelCallInputInput, BuildModelCallInputResult, SessionCompactionOrchestrationResult } from '@megumi/coding-agent/context';
+import type { BuildModelCallInputInput, BuildModelCallInputResult } from '@megumi/coding-agent/context/model-call-input-builder';
+import type { SessionCompactionOrchestrationResult } from '@megumi/coding-agent/context/compaction/session-compaction-orchestrator';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { ModelInputContext, ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';

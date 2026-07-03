@@ -24,14 +24,20 @@ import type { ParsedInput } from '../input';
 import {
   AgentLoopInitialModelInputPreparationService,
   type AgentLoopInitialModelInputPreparation,
-  type BuildModelCallInputInput,
-  type BuildModelCallInputResult,
-  type CompactIfNeededInput,
+  type PrepareAgentLoopInitialModelInputInput,
+} from '../context/initial-model-input-preparation';
+import type {
+  BuildModelCallInputInput,
+  BuildModelCallInputResult,
+} from '../context/model-call-input-builder';
+import {
   createModelCallInputContextId,
   type ModelInputMemoryRecallSource,
-  type PrepareAgentLoopInitialModelInputInput,
-  type SessionCompactionOrchestrationResult,
-} from '../context';
+} from '../context/model-call-context';
+import type {
+  CompactIfNeededInput,
+  SessionCompactionOrchestrationResult,
+} from '../context/compaction/session-compaction-orchestrator';
 import {
   coalesceTextDeltaRuntimeEvents,
   createRunFailedEvent as createRuntimeRunFailedEvent,

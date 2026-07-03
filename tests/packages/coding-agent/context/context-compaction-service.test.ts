@@ -69,7 +69,7 @@ describe('context compaction service', () => {
       completePrompt: vi.fn(async ({ prompt }) => {
         calls.push('model');
         expect(prompt.purpose).toBe('context_compaction');
-        expect(prompt.messages.map((message) => message.role)).toEqual(['system', 'user']);
+        expect(prompt.messages.map((message: { role: string }) => message.role)).toEqual(['system', 'user']);
         return { status: 'ok' as const, text: 'summary' };
       }),
     };
@@ -131,8 +131,8 @@ function createService(input: {
         session_context: input.session_context,
       })),
     },
-    repository: input.repository ?? { saveContextCompaction: vi.fn() },
-    modelCall: input.modelCall ?? { completePrompt: vi.fn(async () => ({ status: 'ok' as const, text: 'summary' })) },
+    repository: input.repository as any ?? { saveContextCompaction: vi.fn() },
+    modelCall: input.modelCall as any ?? { completePrompt: vi.fn(async () => ({ status: 'ok' as const, text: 'summary' })) },
     clock: { now: () => '2026-07-03T00:00:00.000Z' },
     ids: {
       compactionId: () => 'compaction:1',
@@ -150,7 +150,7 @@ function createService(input: {
     promptResources: {
       context_compaction_prompt: 'Create a structured summary',
     },
-    promptLog: input.promptLog,
+    promptLog: input.promptLog as any,
   });
 }
 

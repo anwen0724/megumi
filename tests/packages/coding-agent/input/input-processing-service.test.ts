@@ -26,8 +26,10 @@ import {
   type ModelInputEffectiveCwdProvider,
   type ModelInputGlobalInstructionDirectoryProvider,
   type ModelInputSessionInstructionSourceProvider,
-  type RunBaselineContextPort,
-} from '@megumi/coding-agent/context';
+} from '@megumi/coding-agent/context/model-input-source-overrides';
+import type {
+  RunBaselineContextPort,
+} from '@megumi/coding-agent/context/resources/run-context-service';
 import type { MemoryCapturePort } from '@megumi/coding-agent/memory';
 import type { WorkspaceChangeReadPort } from '@megumi/coding-agent/workspace';
 import {
@@ -43,8 +45,10 @@ import { TimelineHistoryCommitProjectorService } from '@megumi/coding-agent/proj
 import type {
   BuildModelCallInputInput,
   BuildModelCallInputResult,
+} from '@megumi/coding-agent/context/model-call-input-builder';
+import type {
   SessionCompactionOrchestrationResult,
-} from '@megumi/coding-agent/context';
+} from '@megumi/coding-agent/context/compaction/session-compaction-orchestrator';
 import { PermissionSnapshotService } from '@megumi/coding-agent/permissions';
 import {
   PostRunHooksCoordinator,

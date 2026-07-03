@@ -14,7 +14,7 @@ import {
   createContextUpdateInputPreview,
   toContextPatchAppliedPayload,
   toContextPatchRejectedPayload,
-} from '../../context';
+} from '../../context/context-observation-mapper';
 import { toArtifactReferencedPayload } from '../../artifacts/artifact-observation-mapper';
 import {
   createActionRequestedEvent,

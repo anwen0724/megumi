@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   resolveMemoryRecallEffectiveCwd,
   resolveModelCallEffectiveCwd,
-} from '@megumi/coding-agent/context';
+} from '@megumi/coding-agent/context/effective-cwd';
 
 describe('resolveModelCallEffectiveCwd', () => {
   it('defaults to the project root when no requested cwd is provided', () => {

@@ -72,21 +72,26 @@ import type { ModelCallProvider } from '../agent-loop/model-call';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
 import {
   DEFAULT_CONTEXT_BUDGET_POLICY,
-  createBaselineContextForSession,
+} from '../context/model-input-context-builder';
+import { createBaselineContextForSession, type RunBaselineContextPort } from '../context/resources/run-context-service';
+import {
   createAgentLoopInitialModelInputMemoryRecallService,
-  ModelCallInputBuildService,
-  ModelInputSourceOverrideService,
-  SessionCompactionOrchestrator,
-  type AgentInstructionSourcePort,
   type AgentLoopInitialModelInputSourceOverrideProvider,
-  type CompactIfNeededInput,
+} from '../context/initial-model-input-preparation';
+import {
+  ModelCallInputBuildService,
   type ModelCallInputBuildPort,
-  type ModelInputMemoryRecallSource,
-  type RunBaselineContextPort,
+} from '../context/model-call-input-builder';
+import { ModelInputSourceOverrideService } from '../context/model-input-source-overrides';
+import {
+  SessionCompactionOrchestrator,
+  type CompactIfNeededInput,
   type SessionCompactionActivePathRepository,
   type SessionCompactionOrchestratorRepository,
   type SessionCompactionOrchestrationResult,
-} from '../context';
+} from '../context/compaction/session-compaction-orchestrator';
+import type { AgentInstructionSourcePort } from '../context/instructions/agent-instruction-source';
+import type { ModelInputMemoryRecallSource } from '../context/model-call-context';
 import {
   RuntimeEventLog,
   RuntimeEventPublisher,

@@ -15,11 +15,12 @@ export type DeveloperPromptLogger = {
 };
 
 export function composeCodingAgentContext(input: {
-  sessionRepository: ConstructorParameters<typeof ContextRepository>[0]['sessionRepository'];
+  sessionRepository: ConstructorParameters<typeof ContextRepository>[0]['sessionRepository']
+    & ConstructorParameters<typeof ContextRepository>[0]['activePathRepository'];
   runtimeEventRepository: ConstructorParameters<typeof ContextRepository>[0]['runtimeEventRepository'];
   agentInstructionSourceService?: ContextInstructionSourcePort;
-  summaryModelCallPort?: ContextSummaryModelCallPort;
-  modelConfigProvider?: (input: { session_id: string; workspace_id?: string }) => ModelConfig;
+  summaryModelCallPort: ContextSummaryModelCallPort;
+  modelConfigProvider: (input: { session_id: string; workspace_id?: string }) => ModelConfig;
   developerPromptLogger?: DeveloperPromptLogger;
 }) {
   const contextRepository = new ContextRepository({

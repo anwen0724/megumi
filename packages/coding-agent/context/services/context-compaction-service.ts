@@ -113,6 +113,7 @@ export class ContextCompactionService {
         purpose: prompt.purpose,
         session_id: request.session_id,
         messages: prompt.messages,
+        created_at: this.now(),
       });
 
       const modelResult = await this.options.modelCall.completePrompt({ prompt });

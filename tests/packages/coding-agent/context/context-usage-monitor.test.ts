@@ -15,7 +15,7 @@ function createMonitor(input: {
           workspace_id: 'workspace:1',
           sources: [{
             source_id: 'message:1',
-            source_kind: 'session_message',
+            source_kind: 'session_message' as const,
             text: input.text ?? 'hello',
             persisted: true,
           }],

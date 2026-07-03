@@ -1,11 +1,11 @@
 // Composes the standalone input runtime with product persistence defaults.
 import { InputProcessingService } from '../input/input-service';
 import type {
-  AgentInstructionSourcePort,
   ModelInputGlobalInstructionDirectoryProvider,
-  RunBaselineContextPort,
-} from '../context';
-import { ModelInputSourceOverrideService } from '../context';
+} from '../context/model-input-source-overrides';
+import { ModelInputSourceOverrideService } from '../context/model-input-source-overrides';
+import type { AgentInstructionSourcePort } from '../context/instructions/agent-instruction-source';
+import type { RunBaselineContextPort } from '../context/resources/run-context-service';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
 import { createInputProcessingCompositionIds } from './input-processing-ids';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
