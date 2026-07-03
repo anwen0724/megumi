@@ -639,7 +639,7 @@ describe('package and file structure source guards', () => {
     expect(modelInputSourceOverridesSource).toContain('export interface ModelInputGlobalInstructionDirectoryProvider');
     expect(modelInputSourceOverridesSource).toContain('export interface ModelInputSessionInstructionSourceProvider');
     expect(modelInputSourceOverridesSource).toContain('export interface ModelInputEffectiveCwdProvider');
-    expect(contextIndexSource).toContain("export * from './model-input-source-overrides';");
+    expect(contextIndexSource).not.toContain("export * from './model-input-source-overrides';");
     expect(sessionContextInputSource).toContain('export interface SessionContextInputBuildPort');
     expect(memoryRecallRuntimeSource).toContain('export interface MemoryRecallPort');
     expect(memoryCaptureRuntimeSource).toContain('export interface MemoryCapturePort');
