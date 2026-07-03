@@ -1,0 +1,1 @@
+Create a structured summary of the provided context so another model call can continue the same coding task. Preserve goals, constraints, decisions, progress, recent state, referenced files, and unresolved blockers. Do not answer the original user request.
