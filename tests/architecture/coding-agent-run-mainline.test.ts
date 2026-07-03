@@ -220,7 +220,7 @@ describe('coding agent run mainline guards', () => {
 
   it('keeps initial model input memory recall adaptation in the context owner', () => {
     const serviceSource = read('packages/coding-agent/input/input-service.ts');
-    const contextSource = read('packages/coding-agent/context/initial-model-input-preparation.ts');
+    const contextSource = read('packages/coding-agent/agent-loop/initial-input/initial-model-input-preparation.ts');
 
     expect(contextSource).toContain('export function createAgentLoopInitialModelInputMemoryRecallService');
     expect(serviceSource).toContain('createAgentLoopInitialModelInputMemoryRecallService({');
@@ -250,19 +250,19 @@ describe('coding agent run mainline guards', () => {
 
   it('keeps model call context materialization split into focused part builders', () => {
     for (const requiredPath of [
-      'packages/coding-agent/context/parts/runtime-constraints.ts',
-      'packages/coding-agent/context/parts/instructions.ts',
-      'packages/coding-agent/context/parts/session.ts',
-      'packages/coding-agent/context/parts/input-preprocessing.ts',
-      'packages/coding-agent/context/parts/memory.ts',
-      'packages/coding-agent/context/parts/tool-result-model-input.ts',
-      'packages/coding-agent/context/parts/provider-state.ts',
-      'packages/coding-agent/context/parts/index.ts',
+      'packages/coding-agent/agent-loop/model-input/parts/runtime-constraints.ts',
+      'packages/coding-agent/agent-loop/model-input/parts/instructions.ts',
+      'packages/coding-agent/agent-loop/model-input/parts/session.ts',
+      'packages/coding-agent/agent-loop/model-input/parts/input-preprocessing.ts',
+      'packages/coding-agent/agent-loop/model-input/parts/memory.ts',
+      'packages/coding-agent/agent-loop/model-input/parts/tool-result-model-input.ts',
+      'packages/coding-agent/agent-loop/model-input/parts/provider-state.ts',
+      'packages/coding-agent/agent-loop/model-input/parts/index.ts',
     ]) {
       expect(exists(requiredPath), requiredPath).toBe(true);
     }
 
-    const contextSource = read('packages/coding-agent/context/model-call-context.ts');
+    const contextSource = read('packages/coding-agent/agent-loop/model-input/model-call-context.ts');
 
     for (const movedImplementation of [
       'function instructionParts(',
@@ -279,7 +279,7 @@ describe('coding agent run mainline guards', () => {
 
   it('keeps baseline run context session mapping in the context owner', () => {
     const serviceSource = read('packages/coding-agent/input/input-service.ts');
-    const runContextSource = read('packages/coding-agent/context/resources/run-context-service.ts');
+    const runContextSource = read('packages/coding-agent/agent-loop/run-context/run-context-service.ts');
 
     expect(runContextSource).toContain('export function createBaselineContextForSession');
     expect(serviceSource).toContain('createBaselineContextForSession({');

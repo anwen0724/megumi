@@ -17,14 +17,14 @@ import type {
 import type { PermissionMode, PermissionModeSnapshot } from '@megumi/shared/permission';
 import type { SessionContextInput, SessionMessage } from '@megumi/shared/session';
 import type { ToolCall, ToolResult } from '@megumi/shared/tool';
-import type { ToolDefinition } from '../tools';
+import type { ToolDefinition } from '../../tools';
 import { resolveModelCallEffectiveCwd, type ModelCallEffectiveCwd } from './effective-cwd';
 import {
   createRuntimeFactsForRunInput,
   type CodingAgentRunInputFacts,
-} from '../input/facts';
+} from '../../input/facts';
 
-import type { LoadInstructionSourcesInput } from './instructions/agent-instruction-source';
+import type { LoadInstructionSourcesInput } from '../../adapters/local/context/agent-instruction-source';
 export type { LoadInstructionSourcesInput };
 
 export interface ModelCallInputBuildInstructionSourceService {

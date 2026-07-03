@@ -1,6 +1,6 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { buildModelCallInputContextFromSources } from '@megumi/coding-agent/context/model-call-context';
+import { buildModelCallInputContextFromSources } from '@megumi/coding-agent/agent-loop/model-input/model-call-context';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import {
   createModelMessageObservation,

@@ -72,26 +72,19 @@ import type { ModelCallProvider } from '../agent-loop/model-call';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
 import {
   DEFAULT_CONTEXT_BUDGET_POLICY,
-} from '../context/model-input-context-builder';
-import { createBaselineContextForSession, type RunBaselineContextPort } from '../context/resources/run-context-service';
+} from '../agent-loop/model-input/model-input-context-builder';
+import { createBaselineContextForSession, type RunBaselineContextPort } from '../agent-loop/run-context/run-context-service';
 import {
   createAgentLoopInitialModelInputMemoryRecallService,
   type AgentLoopInitialModelInputSourceOverrideProvider,
-} from '../context/initial-model-input-preparation';
+} from '../agent-loop/initial-input/initial-model-input-preparation';
 import {
   ModelCallInputBuildService,
   type ModelCallInputBuildPort,
-} from '../context/model-call-input-builder';
-import { ModelInputSourceOverrideService } from '../context/model-input-source-overrides';
-import {
-  SessionCompactionOrchestrator,
-  type CompactIfNeededInput,
-  type SessionCompactionActivePathRepository,
-  type SessionCompactionOrchestratorRepository,
-  type SessionCompactionOrchestrationResult,
-} from '../context/compaction/session-compaction-orchestrator';
-import type { AgentInstructionSourcePort } from '../context/instructions/agent-instruction-source';
-import type { ModelInputMemoryRecallSource } from '../context/model-call-context';
+} from '../agent-loop/model-input/model-call-input-builder';
+import { ModelInputSourceOverrideService } from '../agent-loop/model-input/model-input-source-overrides';
+import type { AgentInstructionSourcePort } from '../adapters/local/context/agent-instruction-source';
+import type { ModelInputMemoryRecallSource } from '../agent-loop/model-input/model-call-context';
 import {
   RuntimeEventLog,
   RuntimeEventPublisher,
@@ -119,10 +112,12 @@ import { SessionRunControlService } from '../state/session-run-control-service';
 import { toModelPermissionSnapshot } from '../permissions';
 import type {
   CommandAgentRunInput,
+  CommandExecutionContext,
   CommandExecutionResult,
   CommandService,
   HostInteractionRequest,
 } from '../commands';
+import type { ContextService, ContextUsageMonitor } from '../context';
 
 export interface InputSendRequest {
   requestId?: string;
@@ -199,6 +194,11 @@ export interface CreateInputServiceOptions {
   session: Pick<SessionServicePort, 'createSession' | 'listMessagesBySession' | 'listSessions'>;
   userInput: UserInputHandlerPort;
   commandService?: Pick<CommandService, 'handleCommandInput'>;
+  commandExecutionContextProvider?: (input: {
+    request: InputSendRequest;
+    requestId: string;
+    createdAt: string;
+  }) => CommandExecutionContext | undefined;
   ids?: Partial<InputServiceIds>;
 }
 
@@ -287,6 +287,9 @@ async function handleUserInput(
 
   const commandResult = await options.commandService?.handleCommandInput({
     raw_input: input.text,
+    ...(options.commandExecutionContextProvider ? {
+      execution_context: options.commandExecutionContextProvider({ request: input, requestId, createdAt }),
+    } : {}),
   });
 
   if (commandResult && commandResult.type !== 'not_command') {
@@ -743,7 +746,6 @@ export type InputActivePathRepositoryPort =
   & SessionContextInputActivePathRepository
   & SessionBranchActivePathRepository
   & SessionServiceActivePathRepository
-  & SessionCompactionActivePathRepository
   & RunRetryActivePathRepositoryPort;
 
 export interface InputProcessingServiceOptions {
@@ -753,6 +755,8 @@ export interface InputProcessingServiceOptions {
   runTerminalCoordinator: RunTerminalCoordinatorPort;
   runRetryCoordinator: RunRetryCoordinatorPort;
   contextService?: RunBaselineContextPort;
+  promptContextService?: Pick<ContextService, 'getSessionContext' | 'buildPrompt'>;
+  contextUsageMonitor?: Pick<ContextUsageMonitor, 'start' | 'refreshSession'>;
   permissionSnapshotService?: RunPermissionSnapshotServicePort;
   planArtifactService?: PlanArtifactServicePort;
   modelCallProvider?: ModelCallProvider;
@@ -768,10 +772,6 @@ export interface InputProcessingServiceOptions {
   megumiHomePath?: string;
   modelInputSourceOverrideProvider?: AgentLoopInitialModelInputSourceOverrideProvider;
   sessionContextInputService?: SessionContextInputBuildPort;
-  sessionCompactionOrchestrator?: {
-    compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
-  };
-  sessionCompactionRepository?: SessionCompactionOrchestratorRepository;
   activePathRepository?: InputActivePathRepositoryPort;
   sessionBranchService?: SessionBranchServicePort;
   workspaceChanges?: WorkspaceChangeReadPort;
@@ -894,6 +894,8 @@ export class InputProcessingService {
   private readonly runtimeEventPublisher: RuntimeEventPublisher<ChatStreamEventAdapter>;
   private readonly activePathRepository?: InputActivePathRepositoryPort;
   private readonly contextService?: RunBaselineContextPort;
+  private readonly promptContextService?: Pick<ContextService, 'getSessionContext' | 'buildPrompt'>;
+  private readonly contextUsageMonitor?: Pick<ContextUsageMonitor, 'start' | 'refreshSession'>;
   private readonly permissionSnapshotService?: RunPermissionSnapshotServicePort;
   private readonly planArtifactService?: PlanArtifactServicePort;
   private readonly modelCallProvider?: ModelCallProvider;
@@ -910,9 +912,6 @@ export class InputProcessingService {
   private readonly sessionContextInputService: SessionContextInputBuildPort;
   private readonly sessionMessageService: SessionMessageService;
   private readonly userInputHandler: UserInputHandlerPort;
-  private readonly sessionCompactionOrchestrator?: {
-    compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
-  };
   private readonly hostBoundary: RunHostBoundaryPort;
   private readonly clock: InputProcessingClock;
   private readonly ids: InputProcessingIds;
@@ -934,6 +933,8 @@ export class InputProcessingService {
     });
     this.activePathRepository = options.activePathRepository;
     this.contextService = options.contextService;
+    this.promptContextService = options.promptContextService;
+    this.contextUsageMonitor = options.contextUsageMonitor;
     this.permissionSnapshotService = options.permissionSnapshotService;
     this.planArtifactService = options.planArtifactService;
     this.modelCallProvider = options.modelCallProvider;
@@ -994,20 +995,6 @@ export class InputProcessingService {
         instructionSourceService: options.agentInstructionSourceService,
         defaultBudgetPolicy: DEFAULT_CONTEXT_BUDGET_POLICY,
       });
-    this.sessionCompactionOrchestrator = options.sessionCompactionOrchestrator
-      ?? (options.modelCallProvider && options.sessionCompactionRepository
-        ? new SessionCompactionOrchestrator({
-            repository: options.sessionCompactionRepository,
-            modelStepProvider: options.modelCallProvider,
-            clock: this.clock,
-            ids: {
-              compactionId: this.ids.compactionId,
-              eventId: this.ids.eventId,
-              sourceEntryId: this.ids.sourceEntryId,
-            },
-            ...(this.activePathRepository ? { activePathRepository: this.activePathRepository } : {}),
-          })
-        : undefined);
     this.hostBoundary = options.hostBoundary ?? defaultHostBoundary(this.clock, this.ids);
   }
 
@@ -1072,6 +1059,7 @@ export class InputProcessingService {
       },
       // === Optional / passthrough ports ===
       ...(this.contextService ? { contextService: this.contextService } : {}),
+      ...(this.promptContextService ? { promptContextService: this.promptContextService } : {}),
       toolSetService,
       sessionContextInputService: this.sessionContextInputService,
       sourceOverrideProvider: this.modelInputSourceOverrideProvider,
@@ -1093,7 +1081,6 @@ export class InputProcessingService {
         },
       } : {}),
       modelCallInputBuildService: this.modelCallInputBuildService,
-      ...(this.sessionCompactionOrchestrator ? { compactionOrchestrator: this.sessionCompactionOrchestrator } : {}),
       eventRecorder: this.createModelCallEventRecorder(chatStreamAdapter),
     };
   }
@@ -1277,6 +1264,7 @@ export class InputProcessingService {
   }
 
   private async *runAgentLoopForUserInput(input: RunUserInputAgentLoopInput): AsyncIterable<RuntimeEvent> {
+    await this.startAndRefreshContextUsageForRun(input);
     const loop = new AgentLoop(
       this.createAgentLoopOptions(input.chatStreamAdapter),
     );
@@ -1303,6 +1291,43 @@ export class InputProcessingService {
 
   private appendRuntimeEvent(event: RuntimeEvent, chatStreamAdapter?: ChatStreamEventAdapter): void {
     this.runtimeEventPublisher.append(event, chatStreamAdapter ? { chatStreamAdapter } : {});
+    this.refreshContextUsageFromRuntimeEvent(event);
+  }
+
+  private async startAndRefreshContextUsageForRun(input: RunUserInputAgentLoopInput): Promise<void> {
+    if (!this.contextUsageMonitor) {
+      return;
+    }
+
+    const workspaceId = input.payload.context?.workspaceId;
+    const request = {
+      session_id: input.session.sessionId,
+      ...(workspaceId ? { workspace_id: workspaceId } : {}),
+    };
+    const started = await this.contextUsageMonitor.start({
+      ...request,
+      model_config: {
+        model_id: input.payload.modelId,
+        context_window_tokens: DEFAULT_CONTEXT_BUDGET_POLICY.modelContextWindow,
+      },
+    });
+    if (started.status !== 'ok') {
+      return;
+    }
+    await this.contextUsageMonitor.refreshSession({
+      ...request,
+      reason: 'run_started',
+    });
+  }
+
+  private refreshContextUsageFromRuntimeEvent(event: RuntimeEvent): void {
+    if (!this.contextUsageMonitor || !event.sessionId) {
+      return;
+    }
+    void this.contextUsageMonitor.refreshSession({
+      session_id: event.sessionId,
+      reason: event.eventType,
+    });
   }
 
   private cancelPendingApprovalGroupsByRun(runId: string): void {

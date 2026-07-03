@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import {
   createContextPatchObservation,
   createContextUpdateInputPreview,
   isContextPatchObservation,
-} from '@megumi/coding-agent/context/context-observation-mapper';
+} from '@megumi/coding-agent/state/lifecycle/context-observation-mapper';
 import type { ContextPatch } from '@megumi/shared/run';
 
 const patch: ContextPatch = {

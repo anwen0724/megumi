@@ -6,6 +6,7 @@ import {
   extractContextCompactionMetadata,
   planContextCompaction,
 } from '../core/context-compaction';
+import { buildPromptParts } from '../core/prompt-parts';
 import { evaluateSessionContextUsage } from '../core/session-context-usage';
 import type { Prompt, RuntimeError } from '../contracts/context-contracts';
 import type {
@@ -101,9 +102,28 @@ export class ContextCompactionService {
         };
       }
 
+      const partsResult = buildPromptParts({
+        session_context: {
+          ...contextResult.session_context,
+          sources: plan.candidate_sources,
+        },
+        purpose: 'context_compaction',
+      });
+      if (partsResult.status === 'failed') {
+        const failure = {
+          code: partsResult.reason,
+          message: partsResult.message,
+        };
+        return {
+          status: 'failed',
+          failure,
+          events: [started, this.event('context.compaction.failed', request, { failure })],
+        };
+      }
+
       const prompt = buildContextCompactionPrompt({
         prompt_id: this.options.ids?.promptId() ?? `prompt:context-compaction:${Date.now()}`,
-        parts: plan.candidate_parts,
+        parts: partsResult.parts,
         prompt_resources: {
           context_compaction_prompt: this.options.promptResources.context_compaction_prompt,
         },

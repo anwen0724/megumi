@@ -1,7 +1,7 @@
 // Owns runtime source overrides used while building model input for an agent loop.
 import type { SessionInstructionSourceSnapshot } from '@megumi/shared/model';
 
-import type { AgentLoopInitialModelInputSourceOverrideProvider } from './initial-model-input-preparation';
+import type { AgentLoopInitialModelInputSourceOverrideProvider } from '../initial-input/initial-model-input-preparation';
 import type { BuildModelCallInputInput } from './model-call-input-builder';
 
 export interface ModelInputGlobalInstructionDirectoryProvider {

@@ -24,20 +24,17 @@ import type { ParsedInput } from '../input';
 import {
   AgentLoopInitialModelInputPreparationService,
   type AgentLoopInitialModelInputPreparation,
+  type AgentLoopInitialPromptContextService,
   type PrepareAgentLoopInitialModelInputInput,
-} from '../context/initial-model-input-preparation';
+} from './initial-input/initial-model-input-preparation';
 import type {
   BuildModelCallInputInput,
   BuildModelCallInputResult,
-} from '../context/model-call-input-builder';
+} from './model-input/model-call-input-builder';
 import {
   createModelCallInputContextId,
   type ModelInputMemoryRecallSource,
-} from '../context/model-call-context';
-import type {
-  CompactIfNeededInput,
-  SessionCompactionOrchestrationResult,
-} from '../context/compaction/session-compaction-orchestrator';
+} from './model-input/model-call-context';
 import {
   coalesceTextDeltaRuntimeEvents,
   createRunFailedEvent as createRuntimeRunFailedEvent,
@@ -306,6 +303,7 @@ export interface AgentLoopOptions {
   statePort: AgentLoopStatePort;
   failurePort: AgentLoopFailurePort;
   contextService?: AgentLoopContextService;
+  promptContextService?: AgentLoopInitialPromptContextService;
   sessionContextInputService: AgentLoopSessionContextInputService;
   sourceOverrideProvider: CodingAgentRunSourceOverrideProvider;
   memoryRecallService?: AgentLoopMemoryRecallService;
@@ -313,9 +311,6 @@ export interface AgentLoopOptions {
   toolCallRunnerFactory?: ToolRunnerFactory;
   modelCallInputBuildService: {
     buildModelCallInput(input: BuildModelCallInputInput): Promise<BuildModelCallInputResult>;
-  };
-  compactionOrchestrator?: {
-    compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
   };
   initialModelInputPreparationService?: {
     prepare(input: PrepareAgentLoopInitialModelInputInput): Promise<AgentLoopInitialModelInputPreparation>;
@@ -356,11 +351,11 @@ export class AgentLoop {
     this.initialModelInputPreparationService = options.initialModelInputPreparationService
       ?? new AgentLoopInitialModelInputPreparationService({
         contextService: options.contextService,
+        promptContextService: options.promptContextService,
         sessionContextInputService: options.sessionContextInputService,
         sourceOverrideProvider: options.sourceOverrideProvider,
         memoryRecallService: options.memoryRecallService,
         modelCallInputBuildService: options.modelCallInputBuildService,
-        compactionOrchestrator: options.compactionOrchestrator,
       });
     this.toolSetService = options.toolSetService;
   }
@@ -403,35 +398,6 @@ export class AgentLoop {
       });
       const memoryRecall = initialModelInputPreparation.memoryRecall;
 
-      if (initialModelInputPreparation.compactionProbeModelInput.failure) {
-        const runStarted = this.options.eventPort.append(
-          createRunStartedEvent({
-            eventId: this.options.ids.eventId(),
-            sessionId: String(input.session.sessionId),
-            runId: String(input.run.runId),
-            sequence: 1,
-            createdAt: input.createdAt,
-          }),
-          requestMeta.requestId,
-          requestMeta.runtimeContext,
-        );
-        runStartedAppended = true;
-        yield runStarted;
-        yield* this.options.failurePort.failBeforeModelCall({
-          requestId: input.requestId,
-          runtimeContext: input.runtimeContext,
-          sessionId: String(input.session.sessionId),
-          run: input.run,
-          step: input.step,
-          error: modelCallInputBuildFailureToRuntimeError(
-            initialModelInputPreparation.compactionProbeModelInput.failure,
-          ),
-        });
-        return;
-      }
-
-      const compactionPromise = initialModelInputPreparation.startCompaction();
-
       {
         const event = this.options.eventPort.append(
           createRunStartedEvent({
@@ -451,25 +417,8 @@ export class AgentLoop {
         yield this.options.eventPort.append(event, requestMeta.requestId, requestMeta.runtimeContext);
       }
 
-      const compaction = await compactionPromise;
-      for (const event of compaction.events) {
-        yield this.options.eventPort.append(event, requestMeta.requestId, requestMeta.runtimeContext);
-      }
-
       const currentRunStatus = this.options.statePort.getRunStatus(String(input.run.runId));
       if (currentRunStatus === 'cancelling' || currentRunStatus === 'cancelled') {
-        return;
-      }
-
-      if (compaction.status === 'failed') {
-        yield* this.options.failurePort.failBeforeModelCall({
-          requestId: input.requestId,
-          runtimeContext: input.runtimeContext,
-          sessionId: String(input.session.sessionId),
-          run: input.run,
-          step: input.step,
-          error: compaction.failure,
-        });
         return;
       }
 

@@ -5,7 +5,7 @@
 import { readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { RunContextSource } from '@megumi/shared/run';
-import type { WorkspaceSourceProviderPort } from '../../../context/resources';
+import type { WorkspaceSourceProviderPort } from '../../../agent-loop/run-context';
 
 const BLOCKED_FILE_NAMES = new Set(['.env', '.env.local', '.env.production']);
 

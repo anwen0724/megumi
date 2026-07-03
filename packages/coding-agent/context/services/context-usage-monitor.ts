@@ -45,7 +45,7 @@ export class ContextUsageMonitor {
     ids?: { signalId(): string; subscriptionId(): string };
     defaultThresholdRatio?: number;
     fixedPromptText?: string;
-    signalSink?: (input: { subscription_id: string; signal: ContextUsageSignal }) => void;
+    signalSink?: (input: { subscription_id: string; signal: ContextUsageSignal }) => void | Promise<void>;
   }) {}
 
   async start(request: StartContextUsageMonitorRequest): Promise<StartContextUsageMonitorResult> {
@@ -127,7 +127,7 @@ export class ContextUsageMonitor {
     state.usage = nextUsage;
 
     if (!previousUsage || usageKey(previousUsage) !== usageKey(nextUsage)) {
-      this.emitSignal(key, {
+      await this.emitSignal(key, {
         kind: 'usage_changed',
         signal_id: this.signalId(),
         session_id: input.session_id,
@@ -142,7 +142,7 @@ export class ContextUsageMonitor {
       && !state.compaction_running
       && state.last_auto_signal_key !== autoSignalKey) {
       state.last_auto_signal_key = autoSignalKey;
-      this.emitSignal(key, {
+      await this.emitSignal(key, {
         kind: 'auto_compaction_needed',
         signal_id: this.signalId(),
         session_id: input.session_id,
@@ -160,7 +160,7 @@ export class ContextUsageMonitor {
     }
   }
 
-  private emitSignal(sessionKeyValue: string, signal: ContextUsageSignal): void {
+  private async emitSignal(sessionKeyValue: string, signal: ContextUsageSignal): Promise<void> {
     for (const subscription of this.subscriptions.values()) {
       if (subscription.session_key !== sessionKeyValue) {
         continue;
@@ -168,7 +168,7 @@ export class ContextUsageMonitor {
       if (subscription.signal_kinds && !subscription.signal_kinds.includes(signal.kind)) {
         continue;
       }
-      this.options.signalSink?.({
+      await this.options.signalSink?.({
         subscription_id: subscription.subscription_id,
         signal,
       });

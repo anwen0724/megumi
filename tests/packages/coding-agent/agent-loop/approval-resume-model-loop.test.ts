@@ -1,6 +1,6 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import type { BuildModelCallInputInput, BuildModelCallInputResult } from '@megumi/coding-agent/context/model-call-input-builder';
+import type { BuildModelCallInputInput, BuildModelCallInputResult } from '@megumi/coding-agent/agent-loop/model-input/model-call-input-builder';
 import type { ModelInputContext, ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { RunStep } from '@megumi/shared/session';

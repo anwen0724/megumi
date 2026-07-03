@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -135,7 +135,7 @@ describe('09 session run integration final source guards', () => {
     expect(sessionRun).toContain('ModelCallInputBuildService');
     expect(sessionRun).toContain('modelCallInputBuildService');
     expect(sessionRun).toContain('sourceOverrideProvider: this.modelInputSourceOverrideProvider');
-    expect(source('packages/coding-agent/context/model-input-source-overrides.ts'))
+    expect(source('packages/coding-agent/agent-loop/model-input/model-input-source-overrides.ts'))
       .toContain('resolveModelInputSourceOverrides');
     expect(sessionRun).not.toContain('buildModelCallInputContextFromSources');
     expect(sessionRun).not.toContain('createModelCallInputContextId');
@@ -146,9 +146,9 @@ describe('09 session run integration final source guards', () => {
 
   it('keeps formal context build source free of old preflight naming', () => {
     const scannedFiles = [
-      'packages/coding-agent/context/compaction/session-compaction.ts',
+      'packages/coding-agent/context/core/context-compaction.ts',
+      'packages/coding-agent/context/services/context-compaction-service.ts',
       'packages/coding-agent/input/input-service.ts',
-      'packages/coding-agent/context/compaction/session-compaction-orchestrator.ts',
     ];
     const offenders = scannedFiles.filter((path) => /\bpreflight\b/i.test(source(path)));
 

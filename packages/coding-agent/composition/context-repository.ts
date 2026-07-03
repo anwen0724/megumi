@@ -2,10 +2,10 @@
  * Maps existing Coding Agent persistence records into Context module contracts.
  */
 import type {
+  ContextCompaction,
+  ContextSessionFactRepository,
   SessionContextSource,
-} from '../contracts/context-contracts';
-import type { ContextCompaction } from '../contracts/context-compaction-contracts';
-import type { ContextSessionFactRepository } from './context-service';
+} from '../context';
 
 export type PersistedSessionMessage = {
   messageId: string;

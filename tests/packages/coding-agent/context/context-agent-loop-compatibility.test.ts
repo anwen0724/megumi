@@ -1,12 +1,12 @@
-import fs from 'node:fs';
+﻿import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   AgentLoopInitialModelInputPreparationService,
   createLegacyModelInputContextFromPrompt,
-} from '@megumi/coding-agent/context/initial-model-input-preparation';
-import type { BuildModelCallInputInput } from '@megumi/coding-agent/context/model-call-input-builder';
-import type { BuildModelCallInputResult } from '@megumi/coding-agent/context/model-call-input-builder';
+} from '@megumi/coding-agent/agent-loop/initial-input/initial-model-input-preparation';
+import type { BuildModelCallInputInput } from '@megumi/coding-agent/agent-loop/model-input/model-call-input-builder';
+import type { BuildModelCallInputResult } from '@megumi/coding-agent/agent-loop/model-input/model-call-input-builder';
 import type { Prompt } from '@megumi/coding-agent/context';
 
 describe('context agent loop compatibility', () => {

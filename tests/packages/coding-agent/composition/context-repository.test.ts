@@ -1,10 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 import {
   ContextRepository,
   mapRuntimeEventToRuntimeFactSource,
   mapSessionCompactionToContextSource,
   mapSessionMessageToContextSource,
-} from '@megumi/coding-agent/context/services/context-repository';
+} from '@megumi/coding-agent/composition/context-repository';
 import type { ContextCompaction } from '@megumi/coding-agent/context';
 
 describe('context repository mapping', () => {

@@ -4,7 +4,6 @@
 import type { PromptSourceRef, SessionContext, SessionContextSource } from '../contracts/context-contracts';
 import type { ContextCompactionTrigger } from '../contracts/context-compaction-contracts';
 import type { SessionContextUsage } from '../contracts/context-usage-contracts';
-import type { PromptPart } from './prompt-parts';
 
 export type PlanContextCompactionInput = {
   session_context: SessionContext;
@@ -16,7 +15,7 @@ export type PlannedContextCompaction =
   | { status: 'skipped'; reason: 'not_needed' | 'nothing_to_compact' }
   | {
       status: 'ready';
-      candidate_parts: PromptPart[];
+      candidate_sources: SessionContextSource[];
       compacted_source_refs: PromptSourceRef[];
       preserved_source_refs: PromptSourceRef[];
     };
@@ -61,7 +60,7 @@ export function planContextCompaction(input: PlanContextCompactionInput): Planne
 
   return {
     status: 'ready',
-    candidate_parts: candidates.map(candidatePart),
+    candidate_sources: candidates,
     compacted_source_refs: candidates.map(sourceRef),
     preserved_source_refs: preserved.map(sourceRef),
   };
@@ -70,19 +69,6 @@ export function planContextCompaction(input: PlanContextCompactionInput): Planne
 export function extractContextCompactionMetadata(summary: string): Record<string, unknown> {
   return {
     summary_length: summary.length,
-  };
-}
-
-function candidatePart(source: SessionContextSource): PromptPart {
-  return {
-    part_id: source.source_id,
-    part_kind: 'context_compaction_candidate',
-    text: source.text,
-    source_refs: [sourceRef(source)],
-    priority: source.source_kind === 'session_message' ? 60 : 50,
-    required: false,
-    trim_policy: 'truncate',
-    ...(source.metadata ? { metadata: source.metadata } : {}),
   };
 }
 

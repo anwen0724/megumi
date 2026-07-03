@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -130,10 +130,10 @@ describe('session context source guards', () => {
 
   it('requires coding-agent context callers to pass explicit sessionContext instead of legacy history message inputs', () => {
     const source = [
-      read('packages/coding-agent/context/context-budget.ts'),
-      read('packages/coding-agent/context/model-input-context-builder.ts'),
-      read('packages/coding-agent/context/model-call-context.ts'),
-      read('packages/coding-agent/context/compaction/session-compaction.ts'),
+      read('packages/coding-agent/agent-loop/model-input/context-budget.ts'),
+      read('packages/coding-agent/agent-loop/model-input/model-input-context-builder.ts'),
+      read('packages/coding-agent/agent-loop/model-input/model-call-context.ts'),
+      read('packages/coding-agent/context/core/context-compaction.ts'),
     ].join('\n');
 
     for (const forbidden of forbiddenContextManagementNames) {

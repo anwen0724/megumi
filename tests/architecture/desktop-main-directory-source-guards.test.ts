@@ -158,7 +158,7 @@ describe('Desktop Main directory boundaries', () => {
     expect(source).toContain('@megumi/coding-agent/host-interface');
     expect(source).not.toContain('@megumi/coding-agent/obsolete-run');
     expect(source).toContain("normalizeRuntimeError } from '@megumi/coding-agent/state'");
-    expect(source).toContain('@megumi/coding-agent/context');
+    expect(source).toContain('@megumi/coding-agent/adapters/local/context');
   });
 
   it('keeps IPC handlers from constructing services or importing Electron directly', () => {

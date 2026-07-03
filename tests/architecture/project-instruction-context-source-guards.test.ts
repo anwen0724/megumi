@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -87,7 +87,7 @@ describe('Project Instruction Context source guards', () => {
     ])).toEqual([]);
 
     const contextOffenders = walkSourceFiles(path.join(root, 'packages/coding-agent/context'))
-      .filter((file) => relativePath(file) !== 'packages/coding-agent/context/model-input-source-overrides.ts')
+      .filter((file) => relativePath(file) !== 'packages/coding-agent/agent-loop/model-input/model-input-source-overrides.ts')
       .filter((file) => /listGlobalInstructionDirs|global-instruction:\/\//.test(fs.readFileSync(file, 'utf8')))
       .map(relativePath);
     expect(contextOffenders).toEqual([]);

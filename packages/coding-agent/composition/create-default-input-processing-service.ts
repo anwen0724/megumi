@@ -2,10 +2,10 @@
 import { InputProcessingService } from '../input/input-service';
 import type {
   ModelInputGlobalInstructionDirectoryProvider,
-} from '../context/model-input-source-overrides';
-import { ModelInputSourceOverrideService } from '../context/model-input-source-overrides';
-import type { AgentInstructionSourcePort } from '../context/instructions/agent-instruction-source';
-import type { RunBaselineContextPort } from '../context/resources/run-context-service';
+} from '../agent-loop/model-input/model-input-source-overrides';
+import { ModelInputSourceOverrideService } from '../agent-loop/model-input/model-input-source-overrides';
+import type { AgentInstructionSourcePort } from '../adapters/local/context/agent-instruction-source';
+import type { RunBaselineContextPort } from '../agent-loop/run-context/run-context-service';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
 import { createInputProcessingCompositionIds } from './input-processing-ids';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
@@ -68,7 +68,6 @@ export function createDefaultInputProcessingService(
       activePathRepository: sessionRepository,
       ids,
     }),
-    sessionCompactionRepository: sessionRepository,
     activePathRepository: sessionRepository,
     toolCallRepository,
     toolDefinitionProvider: new ToolRegistryService(),

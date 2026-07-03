@@ -35,12 +35,16 @@ function sourceUnder(relativeDirectory: string): string {
 describe('coding-agent package boundary', () => {
   it('exists as the Megumi Coding Agent product-core package', () => {
     expect(existsSync(join(root, 'packages/coding-agent/index.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/context/model-call-context.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/context/model-call-input-builder.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/context/compaction/session-compaction-orchestrator.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/context/contracts/context-contracts.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/context/services/context-service.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/context/services/context-usage-monitor.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/context/services/context-compaction-service.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/context/core/prompt-builder.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/agent-loop/model-input/model-call-context.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/agent-loop/model-input/model-call-input-builder.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/session/session-context-input.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/session/session-context.ts'))).toBe(false);
-    expect(existsSync(join(root, 'packages/coding-agent/context/parts/session-context.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/agent-loop/model-input/parts/session-context.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/input/facts/input-facts.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/index.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/input/input-service.ts'))).toBe(true);
@@ -78,8 +82,8 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/workspace/workspace-restore.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/settings/services/provider-settings.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/settings/services/provider-runtime.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/context/instructions/agent-instruction-source.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/context/resources/run-context-service.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/adapters/local/context/agent-instruction-source.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/agent-loop/run-context/run-context-service.ts'))).toBe(true);
   });
 
   it('keeps user input orchestration in coding-agent input service instead of desktop session service', () => {
@@ -97,7 +101,10 @@ describe('coding-agent package boundary', () => {
     expect(codingAgentLoop).toContain('class AgentLoop');
     expect(codingAgentLoop).toContain('runModelToolLoop');
     expect(codingAgentLoop).toContain('buildModelCallInput');
-    expect(codingAgentContext).toContain('class ModelCallInputBuildService');
+    expect(codingAgentContext).toContain('class ContextService');
+    expect(codingAgentContext).toContain('class ContextUsageMonitor');
+    expect(codingAgentContext).toContain('class ContextCompactionService');
+    expect(codingAgentLoop).toContain('class ModelCallInputBuildService');
     expect(codingAgentInput).toContain('createCodingAgentRunInputFacts');
     expect(existsSync(join(root, 'apps/desktop/src/main/services/session/session-run.service.ts'))).toBe(false);
     expect(desktopServices).not.toContain('new RunTurn');
@@ -126,8 +133,8 @@ describe('coding-agent package boundary', () => {
     const settings = sourceUnder('packages/coding-agent/settings');
     const hostInterface = sourceUnder('packages/coding-agent/host-interface');
     const inputService = sourceUnder('packages/coding-agent/input');
-    const instructions = sourceUnder('packages/coding-agent/context/instructions');
-    const resources = sourceUnder('packages/coding-agent/context/resources');
+    const instructions = sourceUnder('packages/coding-agent/adapters/local/context');
+    const resources = sourceUnder('packages/coding-agent/agent-loop/run-context');
     const desktopServices = sourceUnder('apps/desktop/src/main/services');
 
     expect(memory).toContain('class MemoryRecallRuntimeService');
@@ -153,7 +160,7 @@ describe('coding-agent package boundary', () => {
 
   it('keeps session facts separate from model context materialization', () => {
     const session = sourceUnder('packages/coding-agent/session');
-    const runContextParts = sourceUnder('packages/coding-agent/context/parts');
+    const runContextParts = sourceUnder('packages/coding-agent/agent-loop/model-input/parts');
 
     expect(session).not.toContain('ModelInputContextPartDraft');
     expect(session).not.toContain('context-budget');

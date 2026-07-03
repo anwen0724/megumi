@@ -1,4 +1,4 @@
-import fs from 'node:fs';
+﻿import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -26,6 +26,15 @@ function sourceUnder(relativePath: string): string {
 
 describe('context system source guards', () => {
   it('uses the target context module structure', () => {
+    const allowedTopLevelEntries = [
+      'contracts',
+      'core',
+      'index.ts',
+      'services',
+    ];
+    const actualTopLevelEntries = fs.readdirSync(path.join(root, 'packages/coding-agent/context')).sort();
+
+    expect(actualTopLevelEntries).toEqual(allowedTopLevelEntries);
     expect(exists('packages/coding-agent/context/contracts/context-contracts.ts')).toBe(true);
     expect(exists('packages/coding-agent/context/contracts/context-usage-contracts.ts')).toBe(true);
     expect(exists('packages/coding-agent/context/contracts/context-compaction-contracts.ts')).toBe(true);
@@ -37,6 +46,16 @@ describe('context system source guards', () => {
     expect(exists('packages/coding-agent/context/core/prompt-parts.ts')).toBe(true);
     expect(exists('packages/coding-agent/context/core/context-compaction.ts')).toBe(true);
     expect(exists('packages/coding-agent/context/adapters')).toBe(false);
+    expect(exists('packages/coding-agent/context/compaction')).toBe(false);
+    expect(exists('packages/coding-agent/context/instructions')).toBe(false);
+    expect(exists('packages/coding-agent/context/parts')).toBe(false);
+    expect(exists('packages/coding-agent/context/resources')).toBe(false);
+    expect(exists('packages/coding-agent/context/model-call-context.ts')).toBe(false);
+    expect(exists('packages/coding-agent/context/model-call-input-builder.ts')).toBe(false);
+    expect(exists('packages/coding-agent/context/model-input-context-builder.ts')).toBe(false);
+    expect(exists('packages/coding-agent/context/model-input-source-overrides.ts')).toBe(false);
+    expect(exists('packages/coding-agent/context/context-budget.ts')).toBe(false);
+    expect(exists('packages/coding-agent/context/initial-model-input-preparation.ts')).toBe(false);
   });
 
   it('does not expose old model input context concepts from the context public index', () => {

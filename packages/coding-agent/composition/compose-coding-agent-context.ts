@@ -4,18 +4,24 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { ContextRepository } from '../context/services/context-repository';
-import { ContextService, type ContextInstructionSourcePort, type PromptLogPort } from '../context/services/context-service';
-import { ContextUsageMonitor } from '../context/services/context-usage-monitor';
-import { ContextCompactionService, type ContextSummaryModelCallPort } from '../context/services/context-compaction-service';
-import type { ContextUsageSignal, ModelConfig } from '../context/contracts/context-usage-contracts';
+import { ContextRepository } from './context-repository';
+import {
+  ContextCompactionService,
+  ContextService,
+  ContextUsageMonitor,
+  type ContextInstructionSourcePort,
+  type ContextSummaryModelCallPort,
+  type ContextUsageSignal,
+  type ModelConfig,
+  type PromptLogPort,
+} from '../context';
 
 export type DeveloperPromptLogger = {
   debug(event_name: 'context.prompt.built', payload: Parameters<PromptLogPort['writePrompt']>[0]): void;
 };
 
 export type ContextUsageSignalBus = {
-  publish(input: { subscription_id: string; signal: ContextUsageSignal }): void;
+  publish(input: { subscription_id: string; signal: ContextUsageSignal }): Promise<void>;
   subscribe(
     signalKind: ContextUsageSignal['kind'],
     handler: (signal: ContextUsageSignal) => void | Promise<void>,
@@ -26,9 +32,9 @@ export function createContextUsageSignalBus(): ContextUsageSignalBus {
   const handlers = new Map<ContextUsageSignal['kind'], Set<(signal: ContextUsageSignal) => void | Promise<void>>>();
 
   return {
-    publish(input) {
+    async publish(input) {
       for (const handler of handlers.get(input.signal.kind) ?? []) {
-        void handler(input.signal);
+        await handler(input.signal);
       }
     },
     subscribe(signalKind, handler) {
@@ -76,9 +82,9 @@ export function composeCodingAgentContext(input: {
   const contextUsageMonitor = new ContextUsageMonitor({
     contextService,
     fixedPromptText: systemPromptText,
-    signalSink: (signalInput) => {
+    signalSink: async (signalInput) => {
       if (internalAutoCompactionSubscriptionIds.has(signalInput.subscription_id)) {
-        contextUsageSignalBus.publish(signalInput);
+        await contextUsageSignalBus.publish(signalInput);
       }
     },
   });

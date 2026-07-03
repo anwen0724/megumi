@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
 import type { ModelCapabilitySummary, RunContext, RunContextSource } from '@megumi/shared/run';
 import type { Session } from '@megumi/shared/session';
-import { DEFAULT_CONTEXT_BUDGET_POLICY } from '../model-input-context-builder';
+import { DEFAULT_CONTEXT_BUDGET_POLICY } from '../model-input/model-input-context-builder';
 
 export interface RunContextServiceClock {
   now(): string;

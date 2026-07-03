@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -159,7 +159,7 @@ describe('Command system source guards', () => {
   it('keeps required input preprocessing boundary comments in production code', () => {
     expect(source('packages/coding-agent/input/preprocessing/session-message-input-preprocessing.ts'))
       .toContain('before session runs trust it');
-    expect(source('packages/coding-agent/context/model-call-context.ts'))
+    expect(source('packages/coding-agent/agent-loop/model-input/model-call-context.ts'))
       .toContain('never parses raw slash commands');
     expect(source('packages/coding-agent/input/input-service.ts'))
       .toContain('runtime normalization is the trust boundary');

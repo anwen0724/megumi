@@ -177,13 +177,15 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/state/run-approval-resume.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/state/run-terminal-coordinator.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/context/index.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/context/model-call-input-builder.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/context/model-call-context.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/context/model-input-context-builder.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/context/parts/index.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/context/compaction/index.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/context/instructions/index.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/context/resources/index.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/model-input/model-call-input-builder.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/model-input/model-call-context.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/model-input/model-input-context-builder.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/model-input/parts/index.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/context/core/context-compaction.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/context/services/context-compaction-service.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/context/compaction/index.ts'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/adapters/local/context/agent-instruction-source.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/run-context/index.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/session/session-messages.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/input/preprocessing/index.ts'))).toBe(true);
@@ -192,7 +194,7 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/obsolete-run/runtime-input.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/obsolete-run/events/runtime-event-factory.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/obsolete-run/lifecycle/run-state-policy.ts'))).toBe(false);
-    expect(readFileSync(join(repoRoot, 'packages/coding-agent/context/model-call-input-builder.ts'), 'utf8'))
+    expect(readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/model-input/model-call-input-builder.ts'), 'utf8'))
       .toContain('export class ModelCallInputBuildService');
     expect(existsSync(join(repoRoot, 'packages/coding-agent/obsolete-run/run-contract.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/obsolete-run/turn/run-turn.ts'))).toBe(false);
@@ -331,7 +333,7 @@ describe('package and file structure source guards', () => {
     expect(ownerSource).toContain('this.database.transaction');
   });
 
-  it('wires session compaction orchestration through the aggregate session repository', () => {
+  it('wires context compaction through the Context module runtime', () => {
     const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
     const sessionRuntimeSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts'),
@@ -343,11 +345,12 @@ describe('package and file structure source guards', () => {
     );
     const normalizedInputProcessingServiceSource = InputProcessingServiceSource.replaceAll('\r\n', '\n');
 
-    expect(InputProcessingServiceSource).toContain('sessionCompactionRepository?: SessionCompactionOrchestratorRepository');
-    expect(InputProcessingServiceSource).toContain('repository: options.sessionCompactionRepository');
+    expect(InputProcessingServiceSource).not.toContain('SessionCompactionOrchestrator');
+    expect(InputProcessingServiceSource).not.toContain('compactIfNeeded');
     expect(normalizedInputProcessingServiceSource).not.toContain('repository: this.repository,\n            modelCallProvider: options.modelCallProvider');
     expect(sessionRuntimeSource).toContain('sessionRepository: SessionRepository');
-    expect(sessionRuntimeSource).toContain('sessionCompactionRepository: options.sessionRepository');
+    expect(sessionRuntimeSource).toContain('composeCodingAgentContext');
+    expect(sessionRuntimeSource).toContain('contextCompactionService');
     expect(runtimeSource).toContain('sessionRepository');
   });
 
@@ -548,19 +551,19 @@ describe('package and file structure source guards', () => {
     const workspaceIndexSource = readFileSync(join(repoRoot, 'packages/coding-agent/workspace/index.ts'), 'utf8');
     const agentLoopSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/agent-loop.ts'), 'utf8');
     const runContextServiceSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/context/resources/run-context-service.ts'),
+      join(repoRoot, 'packages/coding-agent/agent-loop/run-context/run-context-service.ts'),
       'utf8',
     );
     const agentInstructionSourceSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/context/instructions/agent-instruction-source.ts'),
+      join(repoRoot, 'packages/coding-agent/adapters/local/context/agent-instruction-source.ts'),
       'utf8',
     );
     const modelCallInputBuilderSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/context/model-call-input-builder.ts'),
+      join(repoRoot, 'packages/coding-agent/agent-loop/model-input/model-call-input-builder.ts'),
       'utf8',
     );
     const modelInputSourceOverridesSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/context/model-input-source-overrides.ts'),
+      join(repoRoot, 'packages/coding-agent/agent-loop/model-input/model-input-source-overrides.ts'),
       'utf8',
     );
     const contextIndexSource = readFileSync(join(repoRoot, 'packages/coding-agent/context/index.ts'), 'utf8');
@@ -934,11 +937,11 @@ describe('package and file structure source guards', () => {
     const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
     const agentLoopSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/agent-loop.ts'), 'utf8');
     const initialModelInputPreparationSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/context/initial-model-input-preparation.ts'),
+      join(repoRoot, 'packages/coding-agent/agent-loop/initial-input/initial-model-input-preparation.ts'),
       'utf8',
     );
-    const contextEffectiveCwdSource = readFileSync(join(repoRoot, 'packages/coding-agent/context/effective-cwd.ts'), 'utf8');
-    const modelInputContextBuilderSource = readFileSync(join(repoRoot, 'packages/coding-agent/context/model-input-context-builder.ts'), 'utf8');
+    const contextEffectiveCwdSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/model-input/effective-cwd.ts'), 'utf8');
+    const modelInputContextBuilderSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/model-input/model-input-context-builder.ts'), 'utf8');
 
     expect(agentLoopSource).not.toContain('resolveMemoryRecallEffectiveCwd');
     expect(agentLoopSource).not.toContain('function resolveRecallEffectiveCwd');

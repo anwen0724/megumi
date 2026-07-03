@@ -1,9 +1,12 @@
 // Composes session-owned services with the product input runtime.
 import { PermissionSnapshotService } from '../permissions/permission-snapshot-service';
-import { RunContextService } from '../context/resources';
+import { RunContextService } from '../agent-loop/run-context';
 import { createLocalWorkspaceSourceProvider } from '../adapters/local/run-context/workspace-source-provider';
 import { createInputService, InputProcessingService } from '../input/input-service';
 import { createCommandService } from '../commands';
+import { composeCodingAgentContext } from './compose-coding-agent-context';
+import { createLegacyModelInputContextFromPrompt } from '../agent-loop/initial-input/initial-model-input-preparation';
+import { DEFAULT_CONTEXT_BUDGET_POLICY } from '../agent-loop/model-input/model-input-context-builder';
 import type { RuntimeLogger } from '../host-interface/runtime-logger';
 import {
   SessionBranchService,
@@ -55,6 +58,49 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
   const runContextService = new RunContextService({
     contextRepository: options.agentLoopRepository,
     workspaceSourceProvider: createLocalWorkspaceSourceProvider(),
+  });
+  const contextRuntime = composeCodingAgentContext({
+    sessionRepository: options.sessionRepository as any,
+    runtimeEventRepository: options.agentLoopRepository as any,
+    summaryModelCallPort: {
+      async completePrompt({ prompt }) {
+        const now = new Date().toISOString();
+        const runId = `context-compaction-run:${crypto.randomUUID()}`;
+        const stepId = `context-compaction-step:${crypto.randomUUID()}`;
+        const result = await options.modelCallProviderService.completeModelCall({
+          requestId: `context-compaction:${prompt.prompt_id}`,
+          sessionId: 'context-compaction',
+          runId,
+          stepId,
+          providerId: 'deepseek',
+          modelId: 'deepseek-v4-flash',
+          inputContext: createLegacyModelInputContextFromPrompt({
+            prompt,
+            sessionId: 'context-compaction',
+            runId,
+            stepId,
+            builtAt: now,
+            budgetPolicy: DEFAULT_CONTEXT_BUDGET_POLICY,
+          }),
+          createdAt: now,
+        });
+        if (!result.ok) {
+          return { status: 'failed' as const, failure: result.error };
+        }
+        return {
+          status: 'ok' as const,
+          text: result.text,
+          metadata: {
+            finish_reason: result.finishReason,
+            usage: result.usage,
+          },
+        };
+      },
+    },
+    modelConfigProvider: () => ({
+      model_id: 'default',
+      context_window_tokens: 8192,
+    }),
   });
   const planArtifactCompatibility = new PlanArtifactCompatibilityService({
     repository: options.artifactRepository,
@@ -143,7 +189,8 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     postRunHooks,
     runTerminalCoordinator,
     runRetryCoordinator,
-    sessionCompactionRepository: options.sessionRepository,
+    promptContextService: contextRuntime.contextService,
+    contextUsageMonitor: contextRuntime.contextUsageMonitor,
     activePathRepository: options.sessionRepository,
     sessionContextInputService,
     sessionBranchService,
@@ -167,10 +214,22 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     session: sessionService,
     userInput: inputProcessingService,
     commandService,
+    commandExecutionContextProvider: ({ request }) => (
+      request.sessionId
+        ? {
+            session_id: request.sessionId,
+            ...(request.workspaceId ? { workspace_id: request.workspaceId } : {}),
+            services: {
+              context_compaction: contextRuntime.contextCompactionService,
+            },
+          }
+        : undefined
+    ),
   });
 
   return {
     runContextService,
+    contextRuntime,
     sessionService,
     sessionBranchService,
     inputService,

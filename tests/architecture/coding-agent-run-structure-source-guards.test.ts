@@ -61,8 +61,8 @@ describe('coding agent run structure source guards', () => {
 
     for (const ownerTestPath of [
       'tests/packages/coding-agent/events/runtime-event-factory.test.ts',
-      'tests/packages/coding-agent/context/instructions/agent-instruction-source.test.ts',
-      'tests/packages/coding-agent/context/resources/run-context-service.test.ts',
+      'tests/packages/coding-agent/adapters/local/context/agent-instruction-source.test.ts',
+      'tests/packages/coding-agent/agent-loop/run-context/run-context-service.test.ts',
       'tests/packages/coding-agent/permissions/permission-instruction.test.ts',
       'tests/packages/coding-agent/state/recovery-observation-mapper.test.ts',
       'tests/packages/coding-agent/state/run-error.test.ts',

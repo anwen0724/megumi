@@ -7,29 +7,25 @@ import type { ProviderId } from '@megumi/shared/provider';
 import type { ModelCapabilitySummary } from '@megumi/shared/run';
 import type { RuntimeContext } from '@megumi/shared/runtime';
 import type { Run, RunStep, Session, SessionContextInput, SessionMessage } from '@megumi/shared/session';
-import type { ToolDefinition } from '../tools';
+import type { ToolDefinition } from '../../tools';
 
-import type { ParsedInput } from '../input/parsed-input';
-import type { BuildPromptResult, GetSessionContextResult, Prompt, SessionContext } from './contracts/context-contracts';
-import type { MemoryRecallPort } from '../memory';
-import { createCodingAgentRunInputFacts } from '../input/facts';
+import type { ParsedInput } from '../../input/parsed-input';
+import type { BuildPromptResult, GetSessionContextResult, Prompt, SessionContext } from '../../context';
+import type { MemoryRecallPort } from '../../memory';
+import { createCodingAgentRunInputFacts } from '../../input/facts';
 import type {
   BuildModelCallInputInput,
   BuildModelCallInputResult,
-} from './model-call-input-builder';
-import type {
-  CompactIfNeededInput,
-  SessionCompactionOrchestrationResult,
-} from './compaction';
+} from '../model-input/model-call-input-builder';
 import {
   buildModelInputContext,
   DEFAULT_CONTEXT_BUDGET_POLICY,
-} from './model-input-context-builder';
-import type { ModelInputContextPartDraft } from './context-budget';
+} from '../model-input/model-input-context-builder';
+import type { ModelInputContextPartDraft } from '../model-input/context-budget';
 import {
   resolveMemoryRecallEffectiveCwd,
-} from './effective-cwd';
-import type { ModelInputMemoryRecallSource } from './model-call-context';
+} from '../model-input/effective-cwd';
+import type { ModelInputMemoryRecallSource } from '../model-input/model-call-context';
 
 export interface AgentLoopInitialModelInputContextService {
   createBaselineContext(input: {
@@ -88,10 +84,6 @@ export interface AgentLoopInitialModelInputBuildService {
   buildModelCallInput(input: BuildModelCallInputInput): Promise<BuildModelCallInputResult>;
 }
 
-export interface AgentLoopInitialModelInputCompactionOrchestrator {
-  compactIfNeeded(input: CompactIfNeededInput): Promise<SessionCompactionOrchestrationResult>;
-}
-
 export interface AgentLoopInitialPromptContextService {
   getSessionContext(input: {
     session_id: string;
@@ -112,7 +104,6 @@ export interface AgentLoopInitialModelInputPreparationOptions {
   sourceOverrideProvider: AgentLoopInitialModelInputSourceOverrideProvider;
   memoryRecallService?: AgentLoopInitialModelInputMemoryRecallService;
   modelCallInputBuildService: AgentLoopInitialModelInputBuildService;
-  compactionOrchestrator?: AgentLoopInitialModelInputCompactionOrchestrator;
 }
 
 export function createAgentLoopInitialModelInputMemoryRecallService(input: {
@@ -174,8 +165,6 @@ export interface PrepareAgentLoopInitialModelInputInput {
 export interface AgentLoopInitialModelInputPreparation {
   budgetPolicy: ContextBudgetPolicy;
   memoryRecall: AgentLoopInitialModelInputMemoryRecall;
-  compactionProbeModelInput: BuildModelCallInputResult;
-  startCompaction(): Promise<SessionCompactionOrchestrationResult>;
   buildInitialModelInput(): Promise<BuildModelCallInputResult>;
 }
 
@@ -184,12 +173,6 @@ const DEFAULT_MODEL_CAPABILITY_SUMMARY: ModelCapabilitySummary = {
   modelId: 'unknown',
   modelContextWindow: 8192,
 };
-
-const COMPACTION_PROBE_BUDGET_POLICY = {
-  modelContextWindow: Number.MAX_SAFE_INTEGER,
-  reservedOutputTokens: 0,
-  keepRecentTokens: Number.MAX_SAFE_INTEGER,
-} satisfies ContextBudgetPolicy;
 
 export class AgentLoopInitialModelInputPreparationService {
   constructor(private readonly options: AgentLoopInitialModelInputPreparationOptions) {}
@@ -212,43 +195,12 @@ export class AgentLoopInitialModelInputPreparationService {
       stepId: String(input.step.stepId),
       builtAt: input.createdAt,
     });
-    const compactionSessionContext = this.buildSessionContext(input);
     const memoryRecall = await this.recallMemory(input, modelInputSourceOverrides.requestedCwd);
     const runInputFacts = input.parsedInput ? createCodingAgentRunInputFacts(input.parsedInput) : undefined;
-    const compactionProbeModelInput = await this.options.modelCallInputBuildService.buildModelCallInput({
-      ...this.commonModelInput(input, modelInputSourceOverrides, budgetPolicy),
-      contextKind: 'compaction-probe',
-      sessionContext: compactionSessionContext,
-      ...memoryRecall,
-      ...(runInputFacts ? { runInputFacts } : {}),
-      ...(input.toolDefinitions ? { toolDefinitions: input.toolDefinitions } : {}),
-      budgetPolicy: COMPACTION_PROBE_BUDGET_POLICY,
-    });
 
     return {
       budgetPolicy,
       memoryRecall,
-      compactionProbeModelInput,
-      startCompaction: async () => {
-        if (compactionProbeModelInput.failure || !this.options.compactionOrchestrator) {
-          return { status: 'skipped', events: [] };
-        }
-
-        return this.options.compactionOrchestrator.compactIfNeeded({
-          requestId: input.requestId,
-          sessionId: String(input.session.sessionId),
-          runId: String(input.run.runId),
-          stepId: String(input.step.stepId),
-          providerId: input.providerId as ProviderId,
-          modelId: input.modelId,
-          runtimeContext: input.runtimeContext,
-          createdAt: input.createdAt,
-          sessionContext: compactionSessionContext,
-          budgetProbeInputContext: compactionProbeModelInput.inputContext,
-          budgetPolicy,
-          startSequence: 1,
-        });
-      },
       buildInitialModelInput: async () => this.buildInitialModelInput(
         input,
         modelInputSourceOverrides,

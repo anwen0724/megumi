@@ -40,10 +40,10 @@ describe('context compaction planning', () => {
 
     expect(result.status).toBe('ready');
     const ready = result.status === 'ready' ? result : undefined;
-    expect(ready?.candidate_parts.map((part) => part.part_kind)).toEqual([
-      'context_compaction_candidate',
-      'context_compaction_candidate',
-      'context_compaction_candidate',
+    expect(ready?.candidate_sources.map((source) => source.source_id)).toEqual([
+      'message:1',
+      'runtime:1',
+      'tool:1',
     ]);
     expect(ready?.compacted_source_refs.map((ref) => ref.source_id)).toEqual([
       'message:1',

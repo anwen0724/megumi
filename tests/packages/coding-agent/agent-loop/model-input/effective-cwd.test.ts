@@ -1,10 +1,10 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   resolveMemoryRecallEffectiveCwd,
   resolveModelCallEffectiveCwd,
-} from '@megumi/coding-agent/context/effective-cwd';
+} from '@megumi/coding-agent/agent-loop/model-input/effective-cwd';
 
 describe('resolveModelCallEffectiveCwd', () => {
   it('defaults to the project root when no requested cwd is provided', () => {

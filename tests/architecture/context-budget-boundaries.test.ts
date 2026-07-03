@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -39,8 +39,8 @@ const oldModelInputPathNames = [
 describe('context budget and model input chain boundaries', () => {
   it('keeps coding-agent context builder APIs centered on ContextBudgetPolicy', () => {
     const source = [
-      read('packages/coding-agent/context/model-input-context-builder.ts'),
-      read('packages/coding-agent/context/model-call-context.ts'),
+      read('packages/coding-agent/agent-loop/model-input/model-input-context-builder.ts'),
+      read('packages/coding-agent/agent-loop/model-input/model-call-context.ts'),
     ].join('\n');
 
     expect(source).toContain('budgetPolicy?: ContextBudgetPolicy');
@@ -51,7 +51,7 @@ describe('context budget and model input chain boundaries', () => {
   });
 
   it('keeps coding-agent context independent from RunContext budget result inputs', () => {
-    const source = read('packages/coding-agent/context/model-call-context.ts');
+    const source = read('packages/coding-agent/agent-loop/model-input/model-call-context.ts');
 
     expect(source).not.toContain('@megumi/shared/run');
     expect(source).not.toContain('runContext?:');
@@ -62,10 +62,10 @@ describe('context budget and model input chain boundaries', () => {
 
   it('keeps final budget decisions inside the context budget executor', () => {
     const sourceBuilders = [
-      read('packages/coding-agent/context/model-call-context.ts'),
-      read('packages/coding-agent/context/parts/session-context.ts'),
+      read('packages/coding-agent/agent-loop/model-input/model-call-context.ts'),
+      read('packages/coding-agent/agent-loop/model-input/parts/session-context.ts'),
     ].join('\n');
-    const budgetExecutor = read('packages/coding-agent/context/context-budget.ts');
+    const budgetExecutor = read('packages/coding-agent/agent-loop/model-input/context-budget.ts');
 
     expect(sourceBuilders).not.toContain('budgetStatus:');
     expect(sourceBuilders).not.toContain('outside_recent_session_window');
@@ -98,7 +98,6 @@ describe('context budget and model input chain boundaries', () => {
       sourceUnder('apps/desktop/src/renderer'),
       sourceUnder('apps/desktop/src/main'),
       sourceUnder('packages/coding-agent/agent-loop/model-call'),
-      sourceUnder('packages/coding-agent/agent-loop'),
     ].join('\n');
 
     expect(source).not.toContain('apply' + 'ContextBudget');

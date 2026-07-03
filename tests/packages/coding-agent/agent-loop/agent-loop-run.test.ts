@@ -4,15 +4,14 @@ import {
   AgentLoop,
   type AgentLoopOptions,
 } from '@megumi/coding-agent/agent-loop';
-import type { BuildModelCallInputInput, BuildModelCallInputResult } from '@megumi/coding-agent/context/model-call-input-builder';
-import type { SessionCompactionOrchestrationResult } from '@megumi/coding-agent/context/compaction/session-compaction-orchestrator';
+import type { BuildModelCallInputInput, BuildModelCallInputResult } from '@megumi/coding-agent/agent-loop/model-input/model-call-input-builder';
 import type { SessionContextInput } from '@megumi/shared/session';
 import type { ModelInputContext, ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import { createRuntimeEvent } from '@megumi/shared/runtime';
 
 describe('AgentLoop', () => {
-  it('builds compaction probe, runs compaction, builds initial input, and streams through agent runtime', async () => {
+  it('builds initial input and streams through agent runtime', async () => {
     const order: string[] = [];
     const buildInputs: BuildModelCallInputInput[] = [];
     const modelRequests: ModelStepRuntimeRequest[] = [];
@@ -21,10 +20,6 @@ describe('AgentLoop', () => {
         order.push(`build:${input.contextKind}`);
         buildInputs.push(input);
         return successfulModelStepInputBuild(input);
-      },
-      async compactIfNeeded(): Promise<SessionCompactionOrchestrationResult> {
-        order.push('compact');
-        return { status: 'skipped', events: [] };
       },
       async *streamModelCall({ request }: { request: ModelStepRuntimeRequest }): AsyncIterable<RuntimeEvent> {
         order.push('model');
@@ -53,8 +48,8 @@ describe('AgentLoop', () => {
       createdAt: '2026-06-21T00:00:00.000Z',
     }));
 
-    expect(order).toEqual(['session-context', 'memory', 'build:compaction-probe', 'compact', 'append:run.started', 'session-context', 'build:initial', 'model']);
-    expect(buildInputs.map((input) => input.contextKind)).toEqual(['compaction-probe', 'initial']);
+    expect(order).toEqual(['memory', 'append:run.started', 'session-context', 'build:initial', 'model']);
+    expect(buildInputs.map((input) => input.contextKind)).toEqual(['initial']);
     expect(modelRequests).toHaveLength(1);
     expect(modelRequests[0]?.inputContext.contextId).toBe('context:initial');
     expect(events.map((event) => event.eventType)).toEqual([
@@ -64,7 +59,7 @@ describe('AgentLoop', () => {
     ]);
   });
 
-  it('adds ParsedInput command facts to both compaction probe and initial model input builds', async () => {
+  it('adds ParsedInput command facts to initial model input builds', async () => {
     const buildInputs: BuildModelCallInputInput[] = [];
     const loop = new AgentLoop(createOptions({
       async buildModelCallInput(input) {
@@ -109,7 +104,7 @@ describe('AgentLoop', () => {
       createdAt: '2026-06-21T00:00:00.000Z',
     }));
 
-    expect(buildInputs).toHaveLength(2);
+    expect(buildInputs).toHaveLength(1);
     for (const input of buildInputs) {
       expect(input.runInputFacts?.effectiveUserText).toBe('/review src');
       expect(input.runInputFacts?.facts).toEqual([{
@@ -120,58 +115,6 @@ describe('AgentLoop', () => {
         raw_input: '/review src',
       }]);
     }
-  });
-
-  it('fails before provider streaming when compaction probe input build fails', async () => {
-    const modelRequests: ModelStepRuntimeRequest[] = [];
-    const loop = new AgentLoop(createOptions({
-      async buildModelCallInput(input) {
-        if (input.contextKind === 'compaction-probe') {
-          return {
-            ...successfulModelStepInputBuild(input),
-            failure: {
-              code: 'context_required_over_budget',
-              message: 'Required model input exceeds budget.',
-              retryable: false,
-            },
-          };
-        }
-        return successfulModelStepInputBuild(input);
-      },
-      async *streamModelCall({ request }: { request: ModelStepRuntimeRequest }): AsyncIterable<RuntimeEvent> {
-        modelRequests.push(request);
-      },
-    }));
-
-    const events = await collect(loop.run({
-      requestId: 'request-1',
-      session,
-      run,
-      step,
-      userMessage,
-      providerId: 'openai',
-      modelId: 'gpt-test',
-      permissionMode: 'default',
-      inputPreprocessing: {
-        originalText: 'Hello',
-        effectiveUserText: 'Hello',
-        entries: [],
-        diagnostics: [],
-      },
-      createdAt: '2026-06-21T00:00:00.000Z',
-    }));
-
-    expect(modelRequests).toEqual([]);
-    expect(events.map((event) => event.eventType)).toEqual([
-      'run.started',
-      'run.failed',
-    ]);
-    expect(events[1]?.payload).toMatchObject({
-      error: {
-        code: 'context_budget_exceeded',
-        message: 'Required model input exceeds budget.',
-      },
-    });
   });
 
   it('does not append run.started twice when the initial model input build throws', async () => {
@@ -205,7 +148,7 @@ describe('AgentLoop', () => {
       createdAt: '2026-06-21T00:00:00.000Z',
     }));
 
-    expect(buildInputs.map((input) => input.contextKind)).toEqual(['compaction-probe', 'initial']);
+    expect(buildInputs.map((input) => input.contextKind)).toEqual(['initial']);
     expect(order.filter((entry) => entry === 'append:run.started')).toHaveLength(1);
     expect(events.map((event) => event.eventType)).toEqual([
       'run.started',
@@ -258,7 +201,6 @@ const userMessage = {
 function createOptions(
   overrides: Partial<{
     buildModelCallInput(input: BuildModelCallInputInput): Promise<BuildModelCallInputResult>;
-    compactIfNeeded(): Promise<SessionCompactionOrchestrationResult>;
     streamModelCall(input: { request: ModelStepRuntimeRequest }): AsyncIterable<RuntimeEvent>;
   }> = {},
   order: string[] = [],
@@ -324,9 +266,6 @@ function createOptions(
     },
     modelCallInputBuildService: {
       buildModelCallInput: overrides.buildModelCallInput ?? (async (input) => successfulModelStepInputBuild(input)),
-    },
-    compactionOrchestrator: {
-      compactIfNeeded: overrides.compactIfNeeded ?? (async () => ({ status: 'skipped', events: [] })),
     },
     toolSetService: {
       prepareToolSet() {
