@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -55,10 +55,10 @@ describe('Command system source guards', () => {
   it('keeps the command system in coding-agent commands and removes the old input command design', () => {
     const commandBoundaryText = [
       ...filesUnder('packages/coding-agent/commands'),
-      'packages/coding-agent/input/normalizer.ts',
-      'packages/coding-agent/input/session-message.ts',
-      'packages/coding-agent/input/parsed-input.ts',
-      'packages/coding-agent/input/facts/input-facts.ts',
+      'packages/coding-agent/agent-loop/core/run-input-normalizer.ts',
+      'packages/coding-agent/agent-loop/services/agent-run-session-message.ts',
+      'packages/coding-agent/agent-loop/contracts/run-input-contracts.ts',
+      'packages/coding-agent/agent-loop/core/run-input-facts.ts',
     ]
       .map((relativePath) => source(relativePath))
       .join('\n');
@@ -157,11 +157,11 @@ describe('Command system source guards', () => {
   });
 
   it('keeps required input preprocessing boundary comments in production code', () => {
-    expect(source('packages/coding-agent/input/preprocessing/session-message-input-preprocessing.ts'))
+    expect(source('packages/coding-agent/agent-loop/preprocessing/session-message-input-preprocessing.ts'))
       .toContain('before session runs trust it');
     expect(source('packages/coding-agent/agent-loop/model-input/model-call-context.ts'))
       .toContain('never parses raw slash commands');
-    expect(source('packages/coding-agent/input/input-service.ts'))
+    expect(source('packages/coding-agent/agent-loop/services/agent-run-service.ts'))
       .toContain('runtime normalization is the trust boundary');
     expect(source('packages/shared/ipc/schemas.ts'))
       .toContain('runtime services own trusted normalization');
@@ -186,7 +186,7 @@ describe('Command system source guards', () => {
 
   it('keeps main runtime free of raw slash command parsing', () => {
     expect(offenders([
-      'packages/coding-agent/input/input-service.ts',
+      'packages/coding-agent/agent-loop/services/agent-run-service.ts',
       'packages/coding-agent/agent-loop/model-call/model-call-runner.ts',
       'packages/coding-agent/settings/services/provider-runtime.ts',
     ], [
@@ -195,12 +195,12 @@ describe('Command system source guards', () => {
       /listCommandSuggestions/,
       /\/review\b/,
     ])).toEqual([]);
-    const sessionMessageInput = readFileSync(join(repoRoot, 'packages/coding-agent/input/session-message.ts'), 'utf8');
-    const InputProcessingService = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+    const sessionMessageInput = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-session-message.ts'), 'utf8');
+    const AgentRunProcessingService = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
     expect(sessionMessageInput).not.toContain('BUILT_IN_INPUT_COMMAND_REGISTRY');
-    expect(InputProcessingService).not.toContain('BUILT_IN_INPUT_COMMAND_REGISTRY');
-    expect(InputProcessingService).not.toContain('parseSlashCommand');
-    expect(InputProcessingService).not.toContain('dispatchCommandText');
+    expect(AgentRunProcessingService).not.toContain('BUILT_IN_INPUT_COMMAND_REGISTRY');
+    expect(AgentRunProcessingService).not.toContain('parseSlashCommand');
+    expect(AgentRunProcessingService).not.toContain('dispatchCommandText');
   });
 
   it('keeps context management free of raw slash command parsing', () => {

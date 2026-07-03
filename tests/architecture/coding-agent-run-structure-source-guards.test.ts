@@ -55,6 +55,7 @@ describe('coding agent run structure source guards', () => {
       'tests/packages/coding-agent/obsolete-run/lifecycle/run-state-policy.test.ts',
       'tests/packages/coding-agent/obsolete-run/lifecycle/run-approval-resume.test.ts',
       'tests/packages/coding-agent/obsolete-run/lifecycle/run-terminal-coordinator.test.ts',
+      'tests/packages/coding-agent/input/run-input-facts.test.ts',
     ]) {
       expect(exists(removedTestPath), removedTestPath).toBe(false);
     }
@@ -69,7 +70,7 @@ describe('coding agent run structure source guards', () => {
       'tests/packages/coding-agent/state/run-state-policy.test.ts',
       'tests/packages/coding-agent/state/run-approval-resume.test.ts',
       'tests/packages/coding-agent/state/run-terminal-coordinator.test.ts',
-      'tests/packages/coding-agent/input/run-input-facts.test.ts',
+      'tests/packages/coding-agent/agent-loop/agent-run-service.test.ts',
     ]) {
       expect(exists(ownerTestPath), ownerTestPath).toBe(true);
     }
@@ -109,11 +110,11 @@ describe('coding agent run structure source guards', () => {
     }
   });
 
-  it('keeps the input runtime service, input preprocessing, agent loop, tool call, and lifecycle file names explicit', () => {
+  it('keeps the agent-run runtime service, input preprocessing, agent loop, tool call, and lifecycle file names explicit', () => {
     for (const requiredPath of [
-      'packages/coding-agent/input/input-service.ts',
-      'packages/coding-agent/composition/input-processing-ids.ts',
-      'packages/coding-agent/input/preprocessing/session-message-input-preprocessing.ts',
+      'packages/coding-agent/agent-loop/services/agent-run-service.ts',
+      'packages/coding-agent/composition/agent-run-processing-ids.ts',
+      'packages/coding-agent/agent-loop/preprocessing/session-message-input-preprocessing.ts',
       'packages/coding-agent/agent-loop/agent-loop.ts',
       'packages/coding-agent/agent-loop/model-call/model-call-runner.ts',
       'packages/coding-agent/agent-loop/model-call/model-call-contract.ts',
@@ -134,7 +135,7 @@ describe('coding agent run structure source guards', () => {
 
     for (const removedPath of [
       'packages/coding-agent/obsolete-run/session-run-service.ts',
-      'packages/coding-agent/obsolete-run/input-processing-ids.ts',
+      'packages/coding-agent/obsolete-run/agent-run-processing-ids.ts',
       'packages/coding-agent/obsolete-run/run-contract.ts',
       'packages/coding-agent/obsolete-run/run-orchestrator.ts',
       'packages/coding-agent/obsolete-run/runtime-input.ts',

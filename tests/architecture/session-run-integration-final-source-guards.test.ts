@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -130,7 +130,7 @@ describe('09 session run integration final source guards', () => {
   });
 
   it('routes session-run model input construction through ModelCallInputBuildService', () => {
-    const sessionRun = source('packages/coding-agent/input/input-service.ts');
+    const sessionRun = source('packages/coding-agent/agent-loop/services/agent-run-service.ts');
 
     expect(sessionRun).toContain('ModelCallInputBuildService');
     expect(sessionRun).toContain('modelCallInputBuildService');
@@ -148,7 +148,7 @@ describe('09 session run integration final source guards', () => {
     const scannedFiles = [
       'packages/coding-agent/context/core/context-compaction.ts',
       'packages/coding-agent/context/services/context-compaction-service.ts',
-      'packages/coding-agent/input/input-service.ts',
+      'packages/coding-agent/agent-loop/services/agent-run-service.ts',
     ];
     const offenders = scannedFiles.filter((path) => /\bpreflight\b/i.test(source(path)));
 

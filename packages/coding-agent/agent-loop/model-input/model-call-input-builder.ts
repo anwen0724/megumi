@@ -1,4 +1,4 @@
-﻿// Composes Coding Agent product sources into a provider-neutral ModelInputContext for one ModelStep.
+// Composes Coding Agent product sources into a provider-neutral ModelInputContext for one ModelStep.
 // This service does not call providers, execute tools, or perform memory recall scoring.
 import {
   buildModelCallInputContextFromBuildRequest,
@@ -6,7 +6,7 @@ import {
   type ModelInputMemoryRecallSource,
 } from './model-call-context';
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
-import type { InputPreprocessingResult } from '@megumi/coding-agent/input';
+import type { InputPreprocessingResult } from '../contracts/run-input-preprocessing-contracts';
 import type {
   AgentInstructionSourceSnapshot,
   ModelInputContext,
@@ -22,7 +22,7 @@ import { resolveModelCallEffectiveCwd, type ModelCallEffectiveCwd } from './effe
 import {
   createRuntimeFactsForRunInput,
   type CodingAgentRunInputFacts,
-} from '../../input/facts';
+} from '../core/run-input-facts';
 
 import type { LoadInstructionSourcesInput } from '../../adapters/local/context/agent-instruction-source';
 export type { LoadInstructionSourcesInput };

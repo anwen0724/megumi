@@ -2,7 +2,8 @@
 import { PermissionSnapshotService } from '../permissions/permission-snapshot-service';
 import { RunContextService } from '../agent-loop/run-context';
 import { createLocalWorkspaceSourceProvider } from '../adapters/local/run-context/workspace-source-provider';
-import { createInputService, InputProcessingService } from '../input/input-service';
+import { createInputService } from '../input';
+import { AgentRunProcessingService, createAgentRunService } from '../agent-loop';
 import { createCommandService } from '../commands';
 import { composeCodingAgentContext } from './compose-coding-agent-context';
 import { createLegacyModelInputContextFromPrompt } from '../agent-loop/initial-input/initial-model-input-preparation';
@@ -15,7 +16,7 @@ import {
 } from '../session';
 import type { ModelCallProvider } from '../agent-loop/model-call';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
-import { createInputProcessingCompositionIds } from './input-processing-ids';
+import { createAgentRunProcessingCompositionIds } from './agent-run-processing-ids';
 import type { AgentLoopRepository } from '../persistence/repos/agent-loop.repo';
 import type { ArtifactRepository } from '../persistence/repos/artifact.repo';
 import type { SessionRepository } from '../persistence/repos/session.repo';
@@ -49,12 +50,12 @@ export interface ComposeCodingAgentSessionRuntimeOptions {
   modelCallProviderService: ModelCallProvider;
   toolRuntimeFactory: ToolRuntimeFactory;
   memoryRuntime: MemoryRuntimeComposition['memoryRuntime'];
-  chatStreamEventSink?: ConstructorParameters<typeof InputProcessingService>[0]['chatStreamEventSink'];
-  workspaceChangeFooterProjector?: ConstructorParameters<typeof InputProcessingService>[0]['workspaceChanges'];
+  chatStreamEventSink?: ConstructorParameters<typeof AgentRunProcessingService>[0]['chatStreamEventSink'];
+  workspaceChangeFooterProjector?: ConstructorParameters<typeof AgentRunProcessingService>[0]['workspaceChanges'];
 }
 
 export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSessionRuntimeOptions) {
-  const inputProcessingIds = createInputProcessingCompositionIds();
+  const agentRunProcessingIds = createAgentRunProcessingCompositionIds();
   const runContextService = new RunContextService({
     contextRepository: options.agentLoopRepository,
     workspaceSourceProvider: createLocalWorkspaceSourceProvider(),
@@ -170,7 +171,7 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
       appendRuntimeEvent: (event) => options.agentLoopRepository.appendRuntimeEvent(event),
     },
     toolRepository: options.toolCallRepository,
-    ids: inputProcessingIds,
+    ids: agentRunProcessingIds,
   });
   const runRetryCoordinator = new RunRetryCoordinator({
     repository: {
@@ -181,9 +182,9 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     },
     activePathRepository: options.sessionRepository,
     sessionBranchService,
-    ids: inputProcessingIds,
+    ids: agentRunProcessingIds,
   });
-  const inputProcessingService = new InputProcessingService({
+  const agentRunProcessingService = new AgentRunProcessingService({
     sessionRepository: options.sessionRepository,
     agentLoopRepository: options.agentLoopRepository,
     postRunHooks,
@@ -207,12 +208,14 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     memorySettingsProvider: options.memoryRuntime.memorySettingsProvider,
     memoryMarkdownSyncService: options.memoryRuntime.markdownSyncService,
     megumiHomePath: options.homePaths.homePath,
-    ids: inputProcessingIds,
+    ids: agentRunProcessingIds,
   });
   const commandService = createCommandService();
-  const inputService = createInputService({
+  const inputService = createInputService();
+  const agentRunService = createAgentRunService({
+    inputService,
     session: sessionService,
-    userInput: inputProcessingService,
+    userInput: agentRunProcessingService,
     commandService,
     commandExecutionContextProvider: ({ request }) => (
       request.sessionId
@@ -233,7 +236,8 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     sessionService,
     sessionBranchService,
     inputService,
-    inputProcessingService,
+    agentRunService,
+    agentRunProcessingService,
     commandService,
     planArtifactService,
   };

@@ -1,4 +1,4 @@
-﻿// Guards the Coding Agent run mainline so the implementation stays readable from service to turn to loop.
+// Guards the Coding Agent run mainline so the implementation stays readable from service to turn to loop.
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
@@ -69,9 +69,9 @@ describe('coding agent run mainline guards', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('keeps user input session creation in input-service without owning branch and timeline entrypoints', () => {
-    const source = read('packages/coding-agent/input/input-service.ts');
-    const inputServiceSource = read('packages/coding-agent/input/input-service.ts');
+  it('keeps user input session creation in agent-run service without owning branch and timeline entrypoints', () => {
+    const source = read('packages/coding-agent/agent-loop/services/agent-run-service.ts');
+    const inputServiceSource = read('packages/coding-agent/agent-loop/services/agent-run-service.ts');
 
     for (const forbiddenImplementation of [
       'listTimelineMessagesBySession(',
@@ -81,13 +81,13 @@ describe('coding agent run mainline guards', () => {
       expect(source).not.toContain(forbiddenImplementation);
     }
     expect(inputServiceSource).toContain('return sessionService.createSession({');
-    expect(inputServiceSource).toContain('handleUserInput');
+    expect(inputServiceSource).toContain('handleAgentRunInput');
     expect(inputServiceSource).toContain('submitUserInputToAgentLoop');
   });
 
   it('keeps session message input sensing in the input owner', () => {
-    const serviceSource = read('packages/coding-agent/input/input-service.ts');
-    const inputSource = read('packages/coding-agent/input/session-message.ts');
+    const serviceSource = read('packages/coding-agent/agent-loop/services/agent-run-service.ts');
+    const inputSource = read('packages/coding-agent/agent-loop/services/agent-run-session-message.ts');
 
     expect(inputSource).toContain('export function prepareSessionMessageInput');
     expect(inputSource).toContain('export function parseSessionMessageRawInput');
@@ -99,9 +99,9 @@ describe('coding agent run mainline guards', () => {
   });
 
   it('keeps the run product port in host-interface instead of a run contract shell', () => {
-    const InputProcessingServicePort = read('packages/coding-agent/input/input-service.ts');
-    const serviceSource = read('packages/coding-agent/input/input-service.ts');
-    const inputServiceSource = read('packages/coding-agent/input/input-service.ts');
+    const AgentRunProcessingServicePort = read('packages/coding-agent/agent-loop/services/agent-run-service.ts');
+    const serviceSource = read('packages/coding-agent/agent-loop/services/agent-run-service.ts');
+    const inputServiceSource = read('packages/coding-agent/agent-loop/services/agent-run-service.ts');
     const hostInterfaceSource = read('packages/coding-agent/host-interface/host-interface.ts');
 
     expect(exists('packages/coding-agent/agent-loop/agent-loop-operation.ts')).toBe(false);
@@ -116,24 +116,24 @@ describe('coding agent run mainline guards', () => {
   });
 
   it('keeps plan artifact read and update operations out of the run port', () => {
-    const InputProcessingServicePort = read('packages/coding-agent/input/input-service.ts');
+    const AgentRunProcessingServicePort = read('packages/coding-agent/agent-loop/services/agent-run-service.ts');
     const hostInterface = read('packages/coding-agent/host-interface/host-interface.ts');
     const runtimeComposition = read('packages/coding-agent/composition/compose-coding-agent-runtime.ts');
-    const serviceSource = read('packages/coding-agent/input/input-service.ts');
+    const serviceSource = read('packages/coding-agent/agent-loop/services/agent-run-service.ts');
     const planArtifactService = read('packages/coding-agent/artifacts/plan-artifact-service.ts');
 
     expect(hostInterface).toContain('plan: PlanController');
     expect(runtimeComposition).toContain('plan: createPlanController(sessionRuntime.planArtifactService)');
     expect(planArtifactService).toContain('getPlanByRun(runId: string)');
     expect(planArtifactService).toContain('updatePlanStatus(input: PlanStatusUpdatePayload)');
-    expect(InputProcessingServicePort).not.toContain('getPlanByRun(');
-    expect(InputProcessingServicePort).not.toContain('updatePlanStatus(');
+    expect(AgentRunProcessingServicePort).not.toContain('getPlanByRun(');
+    expect(AgentRunProcessingServicePort).not.toContain('updatePlanStatus(');
     expect(serviceSource).not.toContain('getPlanByRun(runId: string)');
     expect(serviceSource).not.toContain('updatePlanStatus(input: PlanStatusUpdatePayload)');
   });
 
   it('keeps permission snapshot creation details in the permissions owner', () => {
-    const serviceSource = read('packages/coding-agent/input/input-service.ts');
+    const serviceSource = read('packages/coding-agent/agent-loop/services/agent-run-service.ts');
     const permissionsSource = read('packages/coding-agent/permissions/run-permission-snapshot.ts');
 
     expect(permissionsSource).toContain('export function createRunPermissionSnapshot');
@@ -151,8 +151,8 @@ describe('coding agent run mainline guards', () => {
   });
 
   it('keeps session message chat stream adapter creation in projections', () => {
-    const serviceSource = read('packages/coding-agent/input/input-service.ts');
-    const submitInputOperationSource = read('packages/coding-agent/input/input-service.ts');
+    const serviceSource = read('packages/coding-agent/agent-loop/services/agent-run-service.ts');
+    const submitInputOperationSource = read('packages/coding-agent/agent-loop/services/agent-run-service.ts');
     const chatStreamSource = read('packages/coding-agent/projections/chat-stream/chat-stream-event-adapter.ts');
 
     expect(chatStreamSource).toContain('export function createSessionMessageChatStreamAdapter');
@@ -161,8 +161,8 @@ describe('coding agent run mainline guards', () => {
     expect(serviceSource).not.toContain("streamKind: 'main'");
   });
 
-  it('keeps manual retry and rerun lifecycle rules out of InputProcessingService', () => {
-    const serviceSource = read('packages/coding-agent/input/input-service.ts');
+  it('keeps manual retry and rerun lifecycle rules out of AgentRunProcessingService', () => {
+    const serviceSource = read('packages/coding-agent/agent-loop/services/agent-run-service.ts');
     const retrySource = read('packages/coding-agent/state/run-retry-coordinator.ts');
 
     expect(retrySource).toContain('export class RunRetryCoordinator');
@@ -171,7 +171,7 @@ describe('coding agent run mainline guards', () => {
   });
 
   it('keeps active session message run tracking in the state owner', () => {
-    const serviceSource = read('packages/coding-agent/input/input-service.ts');
+    const serviceSource = read('packages/coding-agent/agent-loop/services/agent-run-service.ts');
     const stateSource = read('packages/coding-agent/state/active-session-message-runs.ts');
 
     expect(stateSource).toContain('export class ActiveSessionMessageRunTracker');
@@ -181,7 +181,7 @@ describe('coding agent run mainline guards', () => {
   });
 
   it('keeps model call event persistence in the agent loop persistence owner', () => {
-    const serviceSource = read('packages/coding-agent/input/input-service.ts');
+    const serviceSource = read('packages/coding-agent/agent-loop/services/agent-run-service.ts');
     const persistenceSource = read('packages/coding-agent/persistence/repos/agent-loop.repo.ts');
 
     expect(persistenceSource).toContain('recordModelCall');
@@ -190,8 +190,8 @@ describe('coding agent run mainline guards', () => {
   });
 
   it('keeps initial agent loop run startup in the state lifecycle owner', () => {
-    const serviceSource = read('packages/coding-agent/input/input-service.ts');
-    const submitInputOperationSource = read('packages/coding-agent/input/input-service.ts');
+    const serviceSource = read('packages/coding-agent/agent-loop/services/agent-run-service.ts');
+    const submitInputOperationSource = read('packages/coding-agent/agent-loop/services/agent-run-service.ts');
     const agentLoopSource = read('packages/coding-agent/agent-loop/agent-loop.ts');
     const approvalResumeGroupSource = read('packages/coding-agent/agent-loop/tool-call/approval/approval-resume-group.ts');
     const stateLifecycleSource = read('packages/coding-agent/state/lifecycle/run-lifecycle.ts');
@@ -219,7 +219,7 @@ describe('coding agent run mainline guards', () => {
   });
 
   it('keeps initial model input memory recall adaptation in the context owner', () => {
-    const serviceSource = read('packages/coding-agent/input/input-service.ts');
+    const serviceSource = read('packages/coding-agent/agent-loop/services/agent-run-service.ts');
     const contextSource = read('packages/coding-agent/agent-loop/initial-input/initial-model-input-preparation.ts');
 
     expect(contextSource).toContain('export function createAgentLoopInitialModelInputMemoryRecallService');
@@ -228,7 +228,7 @@ describe('coding agent run mainline guards', () => {
   });
 
   it('keeps memory enabled resolution in the settings owner', () => {
-    const runServiceSource = read('packages/coding-agent/input/input-service.ts');
+    const runServiceSource = read('packages/coding-agent/agent-loop/services/agent-run-service.ts');
     const sessionServiceSource = read('packages/coding-agent/session/session-service.ts');
     const settingsSource = read('packages/coding-agent/settings/services/product-settings.ts');
 
@@ -240,7 +240,7 @@ describe('coding agent run mainline guards', () => {
   });
 
   it('keeps pending approval indexing in the agent-loop tool-call approval module', () => {
-    const serviceSource = read('packages/coding-agent/input/input-service.ts');
+    const serviceSource = read('packages/coding-agent/agent-loop/services/agent-run-service.ts');
     const registrySource = read('packages/coding-agent/agent-loop/tool-call/approval/pending-approval-registry.ts');
 
     expect(registrySource).toContain('export class PendingApprovalRegistry');
@@ -278,7 +278,7 @@ describe('coding agent run mainline guards', () => {
   });
 
   it('keeps baseline run context session mapping in the context owner', () => {
-    const serviceSource = read('packages/coding-agent/input/input-service.ts');
+    const serviceSource = read('packages/coding-agent/agent-loop/services/agent-run-service.ts');
     const runContextSource = read('packages/coding-agent/agent-loop/run-context/run-context-service.ts');
 
     expect(runContextSource).toContain('export function createBaselineContextForSession');

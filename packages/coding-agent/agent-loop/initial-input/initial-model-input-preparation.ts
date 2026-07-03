@@ -1,6 +1,6 @@
 // Owns initial model input preparation for one agent loop without executing the loop itself.
 import type { ContextBudgetPolicy } from '@megumi/shared/context';
-import type { InputPreprocessingResult } from '@megumi/coding-agent/input';
+import type { InputPreprocessingResult } from '../contracts/run-input-preprocessing-contracts';
 import type { ModelInputContext, ModelInputContextBuildRequest } from '@megumi/shared/model';
 import type { PermissionMode, PermissionModeSnapshot } from '@megumi/shared/permission';
 import type { ProviderId } from '@megumi/shared/provider';
@@ -9,10 +9,10 @@ import type { RuntimeContext } from '@megumi/shared/runtime';
 import type { Run, RunStep, Session, SessionContextInput, SessionMessage } from '@megumi/shared/session';
 import type { ToolDefinition } from '../../tools';
 
-import type { ParsedInput } from '../../input/parsed-input';
+import type { ParsedInput } from '../contracts/run-input-contracts';
 import type { BuildPromptResult, GetSessionContextResult, Prompt, SessionContext } from '../../context';
 import type { MemoryRecallPort } from '../../memory';
-import { createCodingAgentRunInputFacts } from '../../input/facts';
+import { createCodingAgentRunInputFacts } from '../core/run-input-facts';
 import type {
   BuildModelCallInputInput,
   BuildModelCallInputResult,

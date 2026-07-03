@@ -1,7 +1,7 @@
 // Owns raw input facts before command dispatch, context construction, or downstream run creation.
 import { z } from 'zod';
 import { JsonObjectSchema, type IsoDateTime, type JsonObject } from '@megumi/shared/primitives';
-import type { RawInputId } from './ids';
+import type { RawInputId } from './run-input-ids';
 
 export const InputSourceKindSchema = z.enum(['composer', 'quick_action', 'system', 'desktop', 'app']);
 export type InputSourceKind = z.infer<typeof InputSourceKindSchema>;

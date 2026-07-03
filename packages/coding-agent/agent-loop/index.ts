@@ -3,3 +3,4 @@ export * from './agent-loop';
 export * from './loop-limits';
 export * from './model-call';
 export * from './tool-call';
+export * from './services/agent-run-service';

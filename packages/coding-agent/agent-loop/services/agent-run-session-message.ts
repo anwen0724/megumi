@@ -5,11 +5,11 @@ import type { PermissionMode, PermissionModeSelectionSource } from '@megumi/shar
 import {
   InputPreprocessingResultSchema,
   type InputPreprocessingResult,
-} from './contracts/preprocessing-contracts';
-import type { CommandAgentRunInput } from '../commands';
-import { parseRawInput } from './normalizer';
-import type { ParsedInput } from './parsed-input';
-import { normalizeSessionMessageInputPreprocessing } from './preprocessing';
+} from '../contracts/run-input-preprocessing-contracts';
+import type { CommandAgentRunInput } from '../../commands';
+import { parseRawInput } from '../core/run-input-normalizer';
+import type { ParsedInput } from '../contracts/run-input-contracts';
+import { normalizeSessionMessageInputPreprocessing } from '../preprocessing/session-message-input-preprocessing';
 
 export type SessionMessageInputMessage = NonNullable<SessionMessageSendPayload['message']>;
 

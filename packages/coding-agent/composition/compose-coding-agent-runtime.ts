@@ -130,7 +130,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   });
   const approvalResolutionService = new ApprovalResolutionService({
     repository: toolCallRepository,
-    resumeApproval: (request) => sessionRuntime.inputProcessingService.resumeToolApproval(request),
+    resumeApproval: (request) => sessionRuntime.agentRunProcessingService.resumeToolApproval(request),
   });
   const artifactContentStore = new ArtifactContentStore({
     artifactRoot: `${options.homePaths.homePath}/artifacts`,
@@ -158,7 +158,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   const artifacts = createArtifactController(artifactService);
 
   return createCodingAgentHostInterface({
-    input: sessionRuntime.inputService,
+    input: sessionRuntime.agentRunService,
     commands: sessionRuntime.commandService,
     workspace: createWorkspaceController({
       projectService,

@@ -1,5 +1,5 @@
 // Converts normalized input preprocessing output into model-visible instruction parts.
-import type { InputPreprocessingEntry, InputPreprocessingResult } from '@megumi/coding-agent/input';
+import type { InputPreprocessingEntry, InputPreprocessingResult } from '../../contracts/run-input-preprocessing-contracts';
 import type { ModelInputContextPart, ModelInputContextSourceRef } from '@megumi/shared/model';
 import type { JsonObject } from '@megumi/shared/primitives';
 

@@ -1,8 +1,8 @@
 // Defines parsed input facts consumed by later command, context, and runtime boundaries.
 import { z } from 'zod';
-import type { CommandSource } from '../commands';
+import type { CommandSource } from '../../commands';
 import { JsonObjectSchema, type IsoDateTime, type JsonObject } from '@megumi/shared/primitives';
-import type { ParsedInputId, RawInputId } from './ids';
+import type { ParsedInputId, RawInputId } from './run-input-ids';
 import {
   InputAttachmentSchema,
   InputReferenceSchema,
@@ -14,7 +14,7 @@ import {
   type InputSource,
   type InputTarget,
   type RawInputKind,
-} from './raw-input';
+} from './raw-run-input-contracts';
 
 export const ParsedInputKindSchema = z.enum(['user_input']);
 export type ParsedInputKind = z.infer<typeof ParsedInputKindSchema>;

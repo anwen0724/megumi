@@ -1,5 +1,5 @@
 // Builds current-turn and reused session-derived model context parts.
-import type { InputPreprocessingResult } from '@megumi/coding-agent/input';
+import type { InputPreprocessingResult } from '../../contracts/run-input-preprocessing-contracts';
 import type { ModelInputContextPart, ModelInputContextSourceRef } from '@megumi/shared/model';
 import type { SessionMessage } from '@megumi/shared/session';
 

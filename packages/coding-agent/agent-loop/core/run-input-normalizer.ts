@@ -1,8 +1,8 @@
 // Parses raw input into stable ParsedInput facts without creating runs or context.
-import type { CommandAgentRunInput } from '../commands';
-import type { ParsedInput, ParsedInputFact, ParsedInputKind } from './parsed-input';
-import type { RawInputKind } from './raw-input';
-import { RawInputSchema, type RawInput } from './raw-input';
+import type { CommandAgentRunInput } from '../../commands';
+import type { ParsedInput, ParsedInputFact, ParsedInputKind } from '../contracts/run-input-contracts';
+import type { RawInputKind } from '../contracts/raw-run-input-contracts';
+import { RawInputSchema, type RawInput } from '../contracts/raw-run-input-contracts';
 
 export interface ParseRawInputOptions {
   command?: CommandAgentRunInput['command'];

@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { extname, join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -81,7 +81,7 @@ describe('desktop shell and coding-agent host interface recovery', () => {
     expect(actual.filter((name) => !allowedServiceDirectories.has(name))).toEqual([]);
 
     const desktopServices = sourceUnder('apps/desktop/src/main/services');
-    expect(desktopServices).not.toContain('class InputProcessingService');
+    expect(desktopServices).not.toContain('class AgentRunProcessingService');
     expect(desktopServices).not.toContain('createToolOrchestratorService');
     expect(desktopServices).not.toContain('new SessionRunRepository');
     expect(desktopServices).not.toContain('applyCodingAgentDatabaseMigrations');
@@ -113,7 +113,8 @@ describe('desktop shell and coding-agent host interface recovery', () => {
 
   it('keeps package-level tests proving Coding Agent can run without desktop imports', () => {
     expect(existsSync(join(root, 'tests/packages/coding-agent/host-interface/host-interface.test.ts'))).toBe(true);
-    expect(existsSync(join(root, 'tests/packages/coding-agent/input/input-processing-service.test.ts'))).toBe(true);
+    expect(existsSync(join(root, 'tests/packages/coding-agent/input/input-service-v2.test.ts'))).toBe(true);
+    expect(existsSync(join(root, 'tests/packages/coding-agent/agent-loop/agent-run-service.test.ts'))).toBe(true);
     expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/session-run.repo.test.ts'))).toBe(false);
     expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/agent-loop.repo.test.ts'))).toBe(true);
     expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/session.repo.test.ts'))).toBe(true);

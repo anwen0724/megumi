@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -71,7 +71,7 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/shared/input'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/shared/hook'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/shared/settings'))).toBe(false);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/input/contracts/preprocessing-contracts.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/contracts/run-input-preprocessing-contracts.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/hooks/contracts/input-hook-contracts.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/settings/contracts/settings-contracts.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/settings/core/settings-resolution.ts'))).toBe(true);
@@ -186,10 +186,10 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/context/compaction/index.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/adapters/local/context/agent-instruction-source.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/run-context/index.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/session/session-messages.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/input/preprocessing/index.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/input/preprocessing/session-message-input-preprocessing.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/input/preprocessing/index.ts'))).toBe(false);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/preprocessing/session-message-input-preprocessing.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/obsolete-run/context'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/obsolete-run/runtime-input.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/obsolete-run/events/runtime-event-factory.ts'))).toBe(false);
@@ -218,7 +218,7 @@ describe('package and file structure source guards', () => {
       .filter((entry) => entry.endsWith('.service.ts'));
 
     expect(flatServiceFiles).toEqual([]);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/model-call/model-call-runner.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/tools/adapters/built-in-tools.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/adapters/local/settings/settings-json-storage.ts'))).toBe(true);
@@ -334,7 +334,7 @@ describe('package and file structure source guards', () => {
   });
 
   it('wires context compaction through the Context module runtime', () => {
-    const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+    const AgentRunProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
     const sessionRuntimeSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts'),
       'utf8',
@@ -343,11 +343,11 @@ describe('package and file structure source guards', () => {
       join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-runtime.ts'),
       'utf8',
     );
-    const normalizedInputProcessingServiceSource = InputProcessingServiceSource.replaceAll('\r\n', '\n');
+    const normalizedAgentRunProcessingServiceSource = AgentRunProcessingServiceSource.replaceAll('\r\n', '\n');
 
-    expect(InputProcessingServiceSource).not.toContain('SessionCompactionOrchestrator');
-    expect(InputProcessingServiceSource).not.toContain('compactIfNeeded');
-    expect(normalizedInputProcessingServiceSource).not.toContain('repository: this.repository,\n            modelCallProvider: options.modelCallProvider');
+    expect(AgentRunProcessingServiceSource).not.toContain('SessionCompactionOrchestrator');
+    expect(AgentRunProcessingServiceSource).not.toContain('compactIfNeeded');
+    expect(normalizedAgentRunProcessingServiceSource).not.toContain('repository: this.repository,\n            modelCallProvider: options.modelCallProvider');
     expect(sessionRuntimeSource).toContain('sessionRepository: SessionRepository');
     expect(sessionRuntimeSource).toContain('composeCodingAgentContext');
     expect(sessionRuntimeSource).toContain('contextCompactionService');
@@ -453,7 +453,7 @@ describe('package and file structure source guards', () => {
       join(repoRoot, 'packages/coding-agent/persistence/repos/agent-loop.repo.ts'),
       'utf8',
     );
-    const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+    const AgentRunProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
     const productRuntimeIndexSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/host-interface/index.ts'),
       'utf8',
@@ -464,7 +464,7 @@ describe('package and file structure source guards', () => {
     );
 
     expect(existsSync(join(repoRoot, 'packages/coding-agent/obsolete-run/run-contract.ts'))).toBe(false);
-    expect(InputProcessingServiceSource).not.toContain('SessionRunRepository');
+    expect(AgentRunProcessingServiceSource).not.toContain('SessionRunRepository');
     expect(retryCoordinatorSource).not.toContain('SessionRunRepository');
     expect(agentLoopRepositorySource).toContain('export class AgentLoopRepository');
     expect(retryCoordinatorSource).toContain('export interface RunRetryCoordinatorRepositoryPort');
@@ -473,17 +473,16 @@ describe('package and file structure source guards', () => {
     expect(productRuntimeIndexSource).not.toContain("export * from '../state'");
   });
 
-  it('keeps InputProcessingService options on aggregate repository dependencies', () => {
-    const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+  it('keeps AgentRunProcessingService options on aggregate repository dependencies', () => {
+    const AgentRunProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
 
-    expect(InputProcessingServiceSource).not.toContain('repository: AgentRunRepositoryPort;');
-    expect(InputProcessingServiceSource).toContain('sessionRepository: InputSessionRepositoryPort');
-    expect(InputProcessingServiceSource).toContain('agentLoopRepository: InputAgentLoopRepositoryPort');
-    expect(InputProcessingServiceSource).not.toContain('const repository = options.repository');
+    expect(AgentRunProcessingServiceSource).toContain('sessionRepository: AgentRunSessionRepositoryPort');
+    expect(AgentRunProcessingServiceSource).toContain('agentLoopRepository: AgentRunRepositoryPort');
+    expect(AgentRunProcessingServiceSource).not.toContain('const repository = options.repository');
   });
 
   it('keeps model-call and tool runtime contracts in the agent-loop owner', () => {
-    const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+    const AgentRunProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
     const modelCallContractSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/agent-loop/model-call/model-call-contract.ts'),
       'utf8',
@@ -493,43 +492,43 @@ describe('package and file structure source guards', () => {
       'utf8',
     );
 
-    expect(InputProcessingServiceSource).not.toContain('export interface AgentRunModelStepProvider');
-    expect(InputProcessingServiceSource).not.toContain('export type AgentRunModelCallProvider');
-    expect(InputProcessingServiceSource).not.toContain('export interface AgentRunToolRuntimeFactory');
+    expect(AgentRunProcessingServiceSource).not.toContain('export interface AgentRunModelStepProvider');
+    expect(AgentRunProcessingServiceSource).not.toContain('export type AgentRunModelCallProvider');
+    expect(AgentRunProcessingServiceSource).not.toContain('export interface AgentRunToolRuntimeFactory');
     expect(modelCallContractSource).toContain('export interface ModelCallProvider');
     expect(toolCallContractSource).toContain('export interface ToolRuntimeFactory');
   });
 
-  it('keeps InputProcessingService coordinator dependencies on aggregate repositories', () => {
-    const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+  it('keeps AgentRunProcessingService coordinator dependencies on aggregate repositories', () => {
+    const AgentRunProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
     const sessionRuntimeSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts'),
       'utf8',
     );
 
-    expect(InputProcessingServiceSource).not.toContain('private readonly runCompletionRepository');
-    expect(InputProcessingServiceSource).not.toContain('private readonly runTerminalRepository');
-    expect(InputProcessingServiceSource).not.toContain('private readonly runRetryRepository');
-    expect(InputProcessingServiceSource).not.toContain('this.runCompletionRepository = options.runCompletionRepository');
-    expect(InputProcessingServiceSource).not.toContain('this.runTerminalRepository = options.runTerminalRepository');
-    expect(InputProcessingServiceSource).not.toContain('this.runRetryRepository = options.runRetryRepository');
-    expect(InputProcessingServiceSource).not.toContain('this.runCompletionRepository = {');
-    expect(InputProcessingServiceSource).not.toContain('this.runTerminalRepository = {');
-    expect(InputProcessingServiceSource).not.toContain('this.runRetryRepository = {');
+    expect(AgentRunProcessingServiceSource).not.toContain('private readonly runCompletionRepository');
+    expect(AgentRunProcessingServiceSource).not.toContain('private readonly runTerminalRepository');
+    expect(AgentRunProcessingServiceSource).not.toContain('private readonly runRetryRepository');
+    expect(AgentRunProcessingServiceSource).not.toContain('this.runCompletionRepository = options.runCompletionRepository');
+    expect(AgentRunProcessingServiceSource).not.toContain('this.runTerminalRepository = options.runTerminalRepository');
+    expect(AgentRunProcessingServiceSource).not.toContain('this.runRetryRepository = options.runRetryRepository');
+    expect(AgentRunProcessingServiceSource).not.toContain('this.runCompletionRepository = {');
+    expect(AgentRunProcessingServiceSource).not.toContain('this.runTerminalRepository = {');
+    expect(AgentRunProcessingServiceSource).not.toContain('this.runRetryRepository = {');
     expect(existsSync(join(repoRoot, 'packages/coding-agent/composition/input-processing-repository-options.ts'))).toBe(false);
     expect(sessionRuntimeSource).toContain('agentLoopRepository: options.agentLoopRepository');
     expect(sessionRuntimeSource).toContain('sessionRepository: options.sessionRepository');
     expect(sessionRuntimeSource).toContain('toolCallRepository: options.toolCallRepository');
   });
 
-  it('keeps InputProcessingService coordinator construction in composition', () => {
-    const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+  it('keeps AgentRunProcessingService coordinator construction in composition', () => {
+    const AgentRunProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
     const sessionRuntimeSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts'),
       'utf8',
     );
-    const defaultInputProcessingServiceSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/composition/create-default-input-processing-service.ts'),
+    const defaultAgentRunProcessingServiceSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/composition/create-default-agent-run-processing-service.ts'),
       'utf8',
     );
     const postRunHooksSource = readFileSync(
@@ -590,44 +589,44 @@ describe('package and file structure source guards', () => {
     const sessionServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/session/session-service.ts'), 'utf8');
 
     expect(existsSync(join(repoRoot, 'packages/coding-agent/obsolete-run/run-contract.ts'))).toBe(false);
-    expect(InputProcessingServiceSource).not.toContain('export interface AgentRunPostRunHooksPort');
-    expect(InputProcessingServiceSource).not.toContain('export interface AgentRunTerminalCoordinatorPort');
-    expect(InputProcessingServiceSource).not.toContain('export interface AgentRunRetryCoordinatorPort');
-    expect(InputProcessingServiceSource).not.toContain('export interface SessionRunWorkspaceChangeReadPort');
-    expect(InputProcessingServiceSource).not.toContain('export interface SessionRunToolDefinitionProvider');
-    expect(InputProcessingServiceSource).not.toContain('export interface SessionRunProviderCapabilitySummaryProvider');
-    expect(InputProcessingServiceSource).not.toContain('export interface SessionRunToolRegistrySnapshotService');
-    expect(InputProcessingServiceSource).not.toContain('export interface SessionRunContextService');
-    expect(InputProcessingServiceSource).not.toContain('export interface SessionRunAgentInstructionSourceService');
-    expect(InputProcessingServiceSource).not.toContain('export interface SessionRunSessionContextInputService');
-    expect(InputProcessingServiceSource).not.toContain('export interface SessionRunModelCallInputBuildService');
-    expect(InputProcessingServiceSource).not.toContain('export interface SessionRunGlobalInstructionDirectoryProvider');
-    expect(InputProcessingServiceSource).not.toContain('export interface SessionRunSessionInstructionSourceProvider');
-    expect(InputProcessingServiceSource).not.toContain('export interface SessionRunEffectiveCwdProvider');
-    expect(InputProcessingServiceSource).not.toContain('export interface SessionRunMemoryRecallService');
-    expect(InputProcessingServiceSource).not.toContain('export interface SessionRunMemoryCaptureService');
-    expect(InputProcessingServiceSource).not.toContain('export interface SessionRunMemorySettingsProvider');
-    expect(InputProcessingServiceSource).not.toContain('export interface SessionRunMemoryMarkdownSyncService');
-    expect(InputProcessingServiceSource).not.toContain('export interface InputProcessingServiceHomePaths');
+    expect(AgentRunProcessingServiceSource).not.toContain('export interface AgentRunPostRunHooksPort');
+    expect(AgentRunProcessingServiceSource).not.toContain('export interface AgentRunTerminalCoordinatorPort');
+    expect(AgentRunProcessingServiceSource).not.toContain('export interface AgentRunRetryCoordinatorPort');
+    expect(AgentRunProcessingServiceSource).not.toContain('export interface SessionRunWorkspaceChangeReadPort');
+    expect(AgentRunProcessingServiceSource).not.toContain('export interface SessionRunToolDefinitionProvider');
+    expect(AgentRunProcessingServiceSource).not.toContain('export interface SessionRunProviderCapabilitySummaryProvider');
+    expect(AgentRunProcessingServiceSource).not.toContain('export interface SessionRunToolRegistrySnapshotService');
+    expect(AgentRunProcessingServiceSource).not.toContain('export interface SessionRunContextService');
+    expect(AgentRunProcessingServiceSource).not.toContain('export interface SessionRunAgentInstructionSourceService');
+    expect(AgentRunProcessingServiceSource).not.toContain('export interface SessionRunSessionContextInputService');
+    expect(AgentRunProcessingServiceSource).not.toContain('export interface SessionRunModelCallInputBuildService');
+    expect(AgentRunProcessingServiceSource).not.toContain('export interface SessionRunGlobalInstructionDirectoryProvider');
+    expect(AgentRunProcessingServiceSource).not.toContain('export interface SessionRunSessionInstructionSourceProvider');
+    expect(AgentRunProcessingServiceSource).not.toContain('export interface SessionRunEffectiveCwdProvider');
+    expect(AgentRunProcessingServiceSource).not.toContain('export interface SessionRunMemoryRecallService');
+    expect(AgentRunProcessingServiceSource).not.toContain('export interface SessionRunMemoryCaptureService');
+    expect(AgentRunProcessingServiceSource).not.toContain('export interface SessionRunMemorySettingsProvider');
+    expect(AgentRunProcessingServiceSource).not.toContain('export interface SessionRunMemoryMarkdownSyncService');
+    expect(AgentRunProcessingServiceSource).not.toContain('export interface AgentRunProcessingServiceHomePaths');
     expect(sessionServiceSource).not.toContain('export interface SessionMemorySettingsProvider');
     expect(sessionServiceSource).not.toContain('export interface SessionMemoryMarkdownSyncService');
-    expect(InputProcessingServiceSource).toContain('postRunHooks: PostRunHooksPort;');
-    expect(InputProcessingServiceSource).toContain('runTerminalCoordinator: RunTerminalCoordinatorPort;');
-    expect(InputProcessingServiceSource).toContain('runRetryCoordinator: RunRetryCoordinatorPort;');
-    expect(InputProcessingServiceSource).toContain('workspaceChanges?: WorkspaceChangeReadPort;');
-    expect(InputProcessingServiceSource).toContain('toolDefinitionProvider?: ToolSetRegistryProvider;');
-    expect(InputProcessingServiceSource).toContain('providerCapabilitySummaryProvider?: ToolSetCapabilityProvider;');
-    expect(InputProcessingServiceSource).not.toContain('toolRegistrySnapshotService');
-    expect(InputProcessingServiceSource).not.toContain('ToolRegistrySnapshotServicePort');
-    expect(InputProcessingServiceSource).toContain('contextService?: RunBaselineContextPort;');
-    expect(InputProcessingServiceSource).toContain('agentInstructionSourceService?: AgentInstructionSourcePort;');
-    expect(InputProcessingServiceSource).toContain('modelCallInputBuildService?: ModelCallInputBuildPort;');
-    expect(InputProcessingServiceSource).toContain('modelInputSourceOverrideProvider?: AgentLoopInitialModelInputSourceOverrideProvider;');
-    expect(InputProcessingServiceSource).toContain('sessionContextInputService?: SessionContextInputBuildPort;');
-    expect(InputProcessingServiceSource).toContain('memoryRecallService?: MemoryRecallPort;');
-    expect(InputProcessingServiceSource).not.toContain('memoryCaptureService?:');
-    expect(InputProcessingServiceSource).toContain('memorySettingsProvider?: MemorySettingsPort;');
-    expect(InputProcessingServiceSource).toContain('memoryMarkdownSyncService?: MemoryProjectMirrorSyncPort;');
+    expect(AgentRunProcessingServiceSource).toContain('postRunHooks: PostRunHooksPort;');
+    expect(AgentRunProcessingServiceSource).toContain('runTerminalCoordinator: RunTerminalCoordinatorPort;');
+    expect(AgentRunProcessingServiceSource).toContain('runRetryCoordinator: RunRetryCoordinatorPort;');
+    expect(AgentRunProcessingServiceSource).toContain('workspaceChanges?: WorkspaceChangeReadPort;');
+    expect(AgentRunProcessingServiceSource).toContain('toolDefinitionProvider?: ToolSetRegistryProvider;');
+    expect(AgentRunProcessingServiceSource).toContain('providerCapabilitySummaryProvider?: ToolSetCapabilityProvider;');
+    expect(AgentRunProcessingServiceSource).not.toContain('toolRegistrySnapshotService');
+    expect(AgentRunProcessingServiceSource).not.toContain('ToolRegistrySnapshotServicePort');
+    expect(AgentRunProcessingServiceSource).toContain('contextService?: RunBaselineContextPort;');
+    expect(AgentRunProcessingServiceSource).toContain('agentInstructionSourceService?: AgentInstructionSourcePort;');
+    expect(AgentRunProcessingServiceSource).toContain('modelCallInputBuildService?: ModelCallInputBuildPort;');
+    expect(AgentRunProcessingServiceSource).toContain('modelInputSourceOverrideProvider?: AgentLoopInitialModelInputSourceOverrideProvider;');
+    expect(AgentRunProcessingServiceSource).toContain('sessionContextInputService?: SessionContextInputBuildPort;');
+    expect(AgentRunProcessingServiceSource).toContain('memoryRecallService?: MemoryRecallPort;');
+    expect(AgentRunProcessingServiceSource).not.toContain('memoryCaptureService?:');
+    expect(AgentRunProcessingServiceSource).toContain('memorySettingsProvider?: MemorySettingsPort;');
+    expect(AgentRunProcessingServiceSource).toContain('memoryMarkdownSyncService?: MemoryProjectMirrorSyncPort;');
     expect(postRunHooksSource).toContain('export interface PostRunHooksPort');
     expect(runTerminalCoordinatorSource).toContain('export interface RunTerminalCoordinatorPort');
     expect(runRetryCoordinatorSource).toContain('export interface RunRetryCoordinatorPort');
@@ -648,26 +647,26 @@ describe('package and file structure source guards', () => {
     expect(memoryCaptureRuntimeSource).toContain('export interface MemoryCapturePort');
     expect(memoryRuntimePortsSource).toContain('export interface MemoryProjectMirrorSyncPort');
     expect(productSettingsSource).toContain('export interface MemorySettingsPort');
-    expect(InputProcessingServiceSource).not.toContain('new RunCompletionHooksCoordinator');
-    expect(InputProcessingServiceSource).not.toContain('new PostRunHooksCoordinator');
-    expect(InputProcessingServiceSource).not.toContain('new RunTerminalCoordinator');
-    expect(InputProcessingServiceSource).not.toContain('new RunRetryCoordinator');
-    expect(InputProcessingServiceSource).toContain('this.postRunHooks = options.postRunHooks');
-    expect(InputProcessingServiceSource).not.toContain('private readonly runTerminalCoordinator');
-    expect(InputProcessingServiceSource).not.toContain('private readonly runRetryCoordinator');
-    expect(InputProcessingServiceSource).toContain('terminalCoordinator: options.runTerminalCoordinator');
-    expect(InputProcessingServiceSource).toContain('retryCoordinator: options.runRetryCoordinator');
+    expect(AgentRunProcessingServiceSource).not.toContain('new RunCompletionHooksCoordinator');
+    expect(AgentRunProcessingServiceSource).not.toContain('new PostRunHooksCoordinator');
+    expect(AgentRunProcessingServiceSource).not.toContain('new RunTerminalCoordinator');
+    expect(AgentRunProcessingServiceSource).not.toContain('new RunRetryCoordinator');
+    expect(AgentRunProcessingServiceSource).toContain('this.postRunHooks = options.postRunHooks');
+    expect(AgentRunProcessingServiceSource).not.toContain('private readonly runTerminalCoordinator');
+    expect(AgentRunProcessingServiceSource).not.toContain('private readonly runRetryCoordinator');
+    expect(AgentRunProcessingServiceSource).toContain('terminalCoordinator: options.runTerminalCoordinator');
+    expect(AgentRunProcessingServiceSource).toContain('retryCoordinator: options.runRetryCoordinator');
     expect(sessionRuntimeSource).toContain("from '../hooks'");
     expect(sessionRuntimeSource).toContain("from '../state'");
     expect(sessionRuntimeSource).toContain('new PostRunHooksCoordinator');
     expect(sessionRuntimeSource).toContain('new RunTerminalCoordinator');
     expect(sessionRuntimeSource).toContain('new RunRetryCoordinator');
-    expect(defaultInputProcessingServiceSource).toContain("from '../hooks'");
-    expect(defaultInputProcessingServiceSource).toContain("from '../state'");
-    expect(defaultInputProcessingServiceSource).toContain('export interface CreateDefaultInputProcessingServiceHomePaths');
-    expect(defaultInputProcessingServiceSource).toContain('new PostRunHooksCoordinator');
-    expect(defaultInputProcessingServiceSource).toContain('new RunTerminalCoordinator');
-    expect(defaultInputProcessingServiceSource).toContain('new RunRetryCoordinator');
+    expect(defaultAgentRunProcessingServiceSource).toContain("from '../hooks'");
+    expect(defaultAgentRunProcessingServiceSource).toContain("from '../state'");
+    expect(defaultAgentRunProcessingServiceSource).toContain('export interface CreateDefaultAgentRunProcessingServiceHomePaths');
+    expect(defaultAgentRunProcessingServiceSource).toContain('new PostRunHooksCoordinator');
+    expect(defaultAgentRunProcessingServiceSource).toContain('new RunTerminalCoordinator');
+    expect(defaultAgentRunProcessingServiceSource).toContain('new RunRetryCoordinator');
   });
 
   it('keeps retry lifecycle ownership in the top-level state module', () => {
@@ -686,7 +685,7 @@ describe('package and file structure source guards', () => {
   });
 
   it('keeps approval resume event shaping in the approval submodule', () => {
-    const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+    const AgentRunProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
     const approvalResumeEventsPath = join(
       repoRoot,
       'packages/coding-agent/agent-loop/tool-call/approval/approval-resume-events.ts',
@@ -694,12 +693,12 @@ describe('package and file structure source guards', () => {
 
     expect(existsSync(approvalResumeEventsPath)).toBe(true);
     const approvalResumeEventsSource = readFileSync(approvalResumeEventsPath, 'utf8');
-    expect(InputProcessingServiceSource).not.toContain('private persistResumeRuntimeEvents');
-    expect(InputProcessingServiceSource).not.toContain('private createToolResultRuntimeEvent');
-    expect(InputProcessingServiceSource).not.toContain('function createToolResultSummary');
-    expect(InputProcessingServiceSource).not.toContain("eventType: 'approval.resolved'");
-    expect(InputProcessingServiceSource).not.toContain('resumeEvents.toolResultIdsWithEvents');
-    expect(InputProcessingServiceSource).not.toContain('for (const toolResult of toolResults)');
+    expect(AgentRunProcessingServiceSource).not.toContain('private persistResumeRuntimeEvents');
+    expect(AgentRunProcessingServiceSource).not.toContain('private createToolResultRuntimeEvent');
+    expect(AgentRunProcessingServiceSource).not.toContain('function createToolResultSummary');
+    expect(AgentRunProcessingServiceSource).not.toContain("eventType: 'approval.resolved'");
+    expect(AgentRunProcessingServiceSource).not.toContain('resumeEvents.toolResultIdsWithEvents');
+    expect(AgentRunProcessingServiceSource).not.toContain('for (const toolResult of toolResults)');
     expect(approvalResumeEventsSource).toContain('export function persistResumeRuntimeEvents');
     expect(approvalResumeEventsSource).toContain('export function createToolResultRuntimeEvent');
     expect(approvalResumeEventsSource).toContain('export function createApprovalResolvedRuntimeEvent');
@@ -707,7 +706,7 @@ describe('package and file structure source guards', () => {
   });
 
   it('keeps approval resume registry mutation in the approval submodule', () => {
-    const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+    const AgentRunProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
     const pendingApprovalRegistrySource = readFileSync(
       join(repoRoot, 'packages/coding-agent/agent-loop/tool-call/approval/pending-approval-registry.ts'),
       'utf8',
@@ -717,13 +716,13 @@ describe('package and file structure source guards', () => {
       'utf8',
     );
 
-    expect(InputProcessingServiceSource).not.toContain('approvalResume.pendingByApprovalId.delete(input.approvalRequestId)');
-    expect(InputProcessingServiceSource).not.toContain('this.pendingApprovalRegistry.deleteApproval(input.approvalRequestId)');
-    expect(InputProcessingServiceSource).not.toContain('approvalResume.resolvedResults.push(...toolResults)');
-    expect(InputProcessingServiceSource).not.toContain('this.pendingApprovalRegistry.deleteGroup(approvalResume.groupId)');
-    expect(InputProcessingServiceSource).not.toContain('const group: AgentRunApprovalResumeGroup');
-    expect(InputProcessingServiceSource).not.toContain('pendingByApprovalId: new Map(input.pendingApprovalResumes');
-    expect(InputProcessingServiceSource).not.toContain('waitForAgentLoopApproval({');
+    expect(AgentRunProcessingServiceSource).not.toContain('approvalResume.pendingByApprovalId.delete(input.approvalRequestId)');
+    expect(AgentRunProcessingServiceSource).not.toContain('this.pendingApprovalRegistry.deleteApproval(input.approvalRequestId)');
+    expect(AgentRunProcessingServiceSource).not.toContain('approvalResume.resolvedResults.push(...toolResults)');
+    expect(AgentRunProcessingServiceSource).not.toContain('this.pendingApprovalRegistry.deleteGroup(approvalResume.groupId)');
+    expect(AgentRunProcessingServiceSource).not.toContain('const group: AgentRunApprovalResumeGroup');
+    expect(AgentRunProcessingServiceSource).not.toContain('pendingByApprovalId: new Map(input.pendingApprovalResumes');
+    expect(AgentRunProcessingServiceSource).not.toContain('waitForAgentLoopApproval({');
     expect(pendingApprovalRegistrySource).toContain('export function resolvePendingApproval');
     expect(pendingApprovalRegistrySource).toContain('export function closePendingApprovalGroup');
     expect(approvalResumeGroupSource).toContain('export function registerApprovalResumeGroup');
@@ -731,7 +730,7 @@ describe('package and file structure source guards', () => {
   });
 
   it('keeps tool result model input emission ownership in the model-input submodule', () => {
-    const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+    const AgentRunProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
     const composeCodingAgentToolRuntimeSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-tool-runtime.ts'),
       'utf8',
@@ -750,7 +749,7 @@ describe('package and file structure source guards', () => {
   });
 
   it('keeps approval resume model input preparation in the approval submodule', () => {
-    const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+    const AgentRunProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
     const approvalResumeModelInputPath = join(
       repoRoot,
       'packages/coding-agent/agent-loop/tool-call/approval/approval-resume-model-input.ts',
@@ -758,14 +757,14 @@ describe('package and file structure source guards', () => {
 
     expect(existsSync(approvalResumeModelInputPath)).toBe(true);
     const approvalResumeModelInputSource = readFileSync(approvalResumeModelInputPath, 'utf8');
-    expect(InputProcessingServiceSource).not.toContain("contextKind: 'approval-resume'");
-    expect(InputProcessingServiceSource).not.toContain('pending.accumulatedToolResults');
-    expect(InputProcessingServiceSource).not.toContain('pending.accumulatedProviderStates');
+    expect(AgentRunProcessingServiceSource).not.toContain("contextKind: 'approval-resume'");
+    expect(AgentRunProcessingServiceSource).not.toContain('pending.accumulatedToolResults');
+    expect(AgentRunProcessingServiceSource).not.toContain('pending.accumulatedProviderStates');
     expect(approvalResumeModelInputSource).toContain('export async function prepareApprovalResumeModelInput');
   });
 
   it('keeps approval resume internals behind ToolCallRunner public capabilities', () => {
-    const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+    const AgentRunProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
     const agentLoopSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/agent-loop.ts'), 'utf8');
     const toolCallsIndexSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/tool-call/index.ts'), 'utf8');
     const toolCallRunnerSource = readFileSync(
@@ -775,14 +774,14 @@ describe('package and file structure source guards', () => {
 
     expect(toolCallsIndexSource).not.toContain("export * from './approval/");
     expect(toolCallsIndexSource).not.toContain("export * from './model-input/");
-    expect(InputProcessingServiceSource).not.toContain('closePendingApprovalGroup,');
-    expect(InputProcessingServiceSource).not.toContain('collectApprovalResumeRuntimeEvents,');
-    expect(InputProcessingServiceSource).not.toContain('createApprovalResolvedRuntimeEvent,');
-    expect(InputProcessingServiceSource).not.toContain('prepareApprovalResumeModelInput,');
-    expect(InputProcessingServiceSource).not.toContain('resolvePendingApproval,');
-    expect(InputProcessingServiceSource).not.toContain('approvalResume.toolRuntime.resumeToolApproval(input)');
-    expect(InputProcessingServiceSource).not.toContain('approvalResume.toolRuntime.createApprovalResolvedRuntimeEvent');
-    expect(InputProcessingServiceSource).not.toContain('approvalResume.toolRuntime.prepareApprovalResumeModelInput');
+    expect(AgentRunProcessingServiceSource).not.toContain('closePendingApprovalGroup,');
+    expect(AgentRunProcessingServiceSource).not.toContain('collectApprovalResumeRuntimeEvents,');
+    expect(AgentRunProcessingServiceSource).not.toContain('createApprovalResolvedRuntimeEvent,');
+    expect(AgentRunProcessingServiceSource).not.toContain('prepareApprovalResumeModelInput,');
+    expect(AgentRunProcessingServiceSource).not.toContain('resolvePendingApproval,');
+    expect(AgentRunProcessingServiceSource).not.toContain('approvalResume.toolRuntime.resumeToolApproval(input)');
+    expect(AgentRunProcessingServiceSource).not.toContain('approvalResume.toolRuntime.createApprovalResolvedRuntimeEvent');
+    expect(AgentRunProcessingServiceSource).not.toContain('approvalResume.toolRuntime.prepareApprovalResumeModelInput');
     expect(agentLoopSource).toContain('approvalResume.toolRuntime.resumeToolApproval');
     expect(agentLoopSource).toContain('approvalResume.toolRuntime.createApprovalResolvedRuntimeEvent');
     expect(agentLoopSource).toContain('approvalResume.toolRuntime.prepareApprovalResumeModelInput');
@@ -792,43 +791,43 @@ describe('package and file structure source guards', () => {
   });
 
   it('keeps approval resume model loop wiring in the top-level agent-loop owner', () => {
-    const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+    const AgentRunProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
     const agentLoopSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/agent-loop.ts'), 'utf8');
 
     expect(existsSync(join(repoRoot, 'packages/coding-agent/obsolete-run/loop'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/obsolete-run/turn'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/approval-resume-model-loop.ts'))).toBe(false);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/agent-loop/model-tool-loop-stream.ts'))).toBe(false);
-    expect(InputProcessingServiceSource).not.toContain('const resumedRequest: ModelStepRuntimeRequest');
-    expect(InputProcessingServiceSource).not.toContain('const resumedModelEvents = streamCodingAgentModelToolLoop({');
-    expect(InputProcessingServiceSource).not.toContain('approvalResume.toolRuntime.resolvePendingApproval');
-    expect(InputProcessingServiceSource).not.toContain('approvalResume.toolRuntime.closePendingApprovalGroup');
-    expect(InputProcessingServiceSource).not.toContain('approvalResume.toolRuntime.collectApprovalResumeRuntimeEvents');
-    expect(InputProcessingServiceSource).not.toContain('approvalResume.toolRuntime.prepareApprovalResumeModelInput');
-    expect(InputProcessingServiceSource).not.toContain('approvalResume.toolRuntime.markToolResultsSubmittedToModelInput');
-    expect(InputProcessingServiceSource).toContain("from '../agent-loop'");
-    expect(InputProcessingServiceSource).toContain('resumeToolApprovalAgentLoop({');
+    expect(AgentRunProcessingServiceSource).not.toContain('const resumedRequest: ModelStepRuntimeRequest');
+    expect(AgentRunProcessingServiceSource).not.toContain('const resumedModelEvents = streamCodingAgentModelToolLoop({');
+    expect(AgentRunProcessingServiceSource).not.toContain('approvalResume.toolRuntime.resolvePendingApproval');
+    expect(AgentRunProcessingServiceSource).not.toContain('approvalResume.toolRuntime.closePendingApprovalGroup');
+    expect(AgentRunProcessingServiceSource).not.toContain('approvalResume.toolRuntime.collectApprovalResumeRuntimeEvents');
+    expect(AgentRunProcessingServiceSource).not.toContain('approvalResume.toolRuntime.prepareApprovalResumeModelInput');
+    expect(AgentRunProcessingServiceSource).not.toContain('approvalResume.toolRuntime.markToolResultsSubmittedToModelInput');
+    expect(AgentRunProcessingServiceSource).toContain("from '../agent-loop'");
+    expect(AgentRunProcessingServiceSource).toContain('resumeToolApprovalAgentLoop({');
     expect(agentLoopSource).toContain('export function streamApprovalResumeModelLoop');
     expect(agentLoopSource).toContain('export async function* resumeToolApprovalAgentLoop');
     expect(agentLoopSource).toContain('export async function* streamCodingAgentModelToolLoop');
   });
 
   it('keeps model-call event recording in the top-level agent-loop owner', () => {
-    const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+    const AgentRunProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
     const agentLoopSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/agent-loop.ts'), 'utf8');
 
-    expect(InputProcessingServiceSource).not.toContain('private async *persistModelCallEvents');
-    expect(InputProcessingServiceSource).not.toContain('assistantContent += getAssistantDeltaContent');
-    expect(InputProcessingServiceSource).not.toContain('this.sessionMessageService.commitAssistantReply({');
-    expect(InputProcessingServiceSource).not.toContain('this.postRunHooks.scheduleRunCompletedMemoryCapture({');
-    expect(InputProcessingServiceSource).toContain('createAgentLoopEventRecorder<');
+    expect(AgentRunProcessingServiceSource).not.toContain('private async *persistModelCallEvents');
+    expect(AgentRunProcessingServiceSource).not.toContain('assistantContent += getAssistantDeltaContent');
+    expect(AgentRunProcessingServiceSource).not.toContain('this.sessionMessageService.commitAssistantReply({');
+    expect(AgentRunProcessingServiceSource).not.toContain('this.postRunHooks.scheduleRunCompletedMemoryCapture({');
+    expect(AgentRunProcessingServiceSource).toContain('createAgentLoopEventRecorder<');
     expect(agentLoopSource).toContain('export function createAgentLoopEventRecorder');
     expect(agentLoopSource).toContain('registerApprovalResumeGroup({');
     expect(agentLoopSource).toContain('completeAgentLoopModelCall({');
   });
 
   it('keeps approval resume run status restoration in top-level state owner', () => {
-    const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+    const AgentRunProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
     const approvalResumeStatePath = join(
       repoRoot,
       'packages/coding-agent/state/run-approval-resume.ts',
@@ -837,94 +836,94 @@ describe('package and file structure source guards', () => {
     expect(existsSync(approvalResumeStatePath)).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/obsolete-run/lifecycle/run-approval-resume.ts'))).toBe(false);
     const approvalResumeStateSource = readFileSync(approvalResumeStatePath, 'utf8');
-    expect(InputProcessingServiceSource).not.toContain("assertRunStatusTransition(persistedRun.status, 'running')");
-    expect(InputProcessingServiceSource).not.toContain("from: 'waiting_for_approval',\n      to: 'running'");
+    expect(AgentRunProcessingServiceSource).not.toContain("assertRunStatusTransition(persistedRun.status, 'running')");
+    expect(AgentRunProcessingServiceSource).not.toContain("from: 'waiting_for_approval',\n      to: 'running'");
     expect(approvalResumeStateSource).toContain('export function resumeRunAfterApproval');
     expect(approvalResumeStateSource).toContain("from: 'waiting_for_approval'");
     expect(approvalResumeStateSource).toContain("to: 'running'");
   });
 
-  it('keeps InputProcessingService internals on owner-named repository ports', () => {
-    const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+  it('keeps AgentRunProcessingService internals on owner-named repository ports', () => {
+    const AgentRunProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
     const submitInputOperationSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/input/input-service.ts'),
+      join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'),
       'utf8',
     );
 
-    expect(InputProcessingServiceSource).not.toContain('private readonly repository: AgentRunRepositoryPort');
-    expect(InputProcessingServiceSource).not.toContain('this.repository = options.repository');
-    expect(InputProcessingServiceSource).toContain('private readonly sessionRepository: InputSessionRepositoryPort');
-    expect(InputProcessingServiceSource).toContain('private readonly agentLoopRepository: InputAgentLoopRepositoryPort');
-    expect(InputProcessingServiceSource).toContain('private readonly sessionMessageService: SessionMessageService');
-    expect(InputProcessingServiceSource).toContain('sessionRepository: this.sessionRepository');
-    expect(InputProcessingServiceSource).not.toContain('private resolveSessionForMessage');
-    expect(InputProcessingServiceSource).not.toContain('private appendSourceAndMoveLeaf');
-    expect(InputProcessingServiceSource).not.toContain('private assertActiveBranchDraftMarker');
-    expect(InputProcessingServiceSource).not.toContain('private recordManualRerunAttemptForBranchDraft');
-    expect(InputProcessingServiceSource).not.toContain('function sessionMessageSourceRef');
-    expect(InputProcessingServiceSource).not.toContain('function sessionRunSourceRef');
-    expect(InputProcessingServiceSource).not.toContain('assertActiveBranchDraftMarker as assertSessionActiveBranchDraftMarker');
-    expect(InputProcessingServiceSource).not.toContain('activePathRepository: this.requireActivePathRepository()');
-    expect(InputProcessingServiceSource).not.toContain('requireSessionBranchService');
+    expect(AgentRunProcessingServiceSource).not.toContain('private readonly repository: AgentRunRepositoryPort');
+    expect(AgentRunProcessingServiceSource).not.toContain('this.repository = options.repository');
+    expect(AgentRunProcessingServiceSource).toContain('private readonly sessionRepository: AgentRunSessionRepositoryPort');
+    expect(AgentRunProcessingServiceSource).toContain('private readonly agentLoopRepository: AgentRunRepositoryPort');
+    expect(AgentRunProcessingServiceSource).toContain('private readonly sessionMessageService: SessionMessageService');
+    expect(AgentRunProcessingServiceSource).toContain('sessionRepository: this.sessionRepository');
+    expect(AgentRunProcessingServiceSource).not.toContain('private resolveSessionForMessage');
+    expect(AgentRunProcessingServiceSource).not.toContain('private appendSourceAndMoveLeaf');
+    expect(AgentRunProcessingServiceSource).not.toContain('private assertActiveBranchDraftMarker');
+    expect(AgentRunProcessingServiceSource).not.toContain('private recordManualRerunAttemptForBranchDraft');
+    expect(AgentRunProcessingServiceSource).not.toContain('function sessionMessageSourceRef');
+    expect(AgentRunProcessingServiceSource).not.toContain('function sessionRunSourceRef');
+    expect(AgentRunProcessingServiceSource).not.toContain('assertActiveBranchDraftMarker as assertSessionActiveBranchDraftMarker');
+    expect(AgentRunProcessingServiceSource).not.toContain('activePathRepository: this.requireActivePathRepository()');
+    expect(AgentRunProcessingServiceSource).not.toContain('requireSessionBranchService');
     expect(submitInputOperationSource).toContain('options.sessionBranchService.assertActiveBranchDraftMarker');
     expect(submitInputOperationSource).toContain('options.runRetryCoordinator.recordManualRerunAttemptForBranchDraft');
-    expect(InputProcessingServiceSource).not.toContain('repository: this.runTerminalRepository');
-    expect(InputProcessingServiceSource).not.toContain('repository: this.runRetryRepository');
-    expect(InputProcessingServiceSource).not.toContain('repository: this.runCompletionRepository');
+    expect(AgentRunProcessingServiceSource).not.toContain('repository: this.runTerminalRepository');
+    expect(AgentRunProcessingServiceSource).not.toContain('repository: this.runRetryRepository');
+    expect(AgentRunProcessingServiceSource).not.toContain('repository: this.runCompletionRepository');
   });
 
   it('keeps user input submission inside input-service instead of a separate operation file', () => {
-    const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+    const AgentRunProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
     const submitInputOperationSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/input/input-service.ts'),
+      join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'),
       'utf8',
     );
 
     expect(existsSync(join(repoRoot, 'packages/coding-agent/input/input-submission-operation.ts'))).toBe(false);
-    expect(InputProcessingServiceSource).toContain('handleUserInput');
-    expect(InputProcessingServiceSource).toContain('submitUserInputToAgentLoop');
+    expect(AgentRunProcessingServiceSource).toContain('handleAgentRunInput');
+    expect(AgentRunProcessingServiceSource).toContain('submitUserInputToAgentLoop');
     expect(submitInputOperationSource).toContain('prepareSessionMessageInput({');
     expect(submitInputOperationSource).toContain('createRunPermissionSnapshot({');
     expect(submitInputOperationSource).toContain('createSessionMessageChatStreamAdapter({');
     expect(submitInputOperationSource).toContain('startAgentLoopRun({');
   });
 
-  it('keeps session run control product operation out of the transitional InputProcessingService facade', () => {
-    const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+  it('keeps session run control product operation out of the transitional AgentRunProcessingService facade', () => {
+    const AgentRunProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
     const sessionRunControlServiceSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/state/session-run-control-service.ts'),
       'utf8',
     );
 
-    expect(InputProcessingServiceSource).toContain('this.sessionRunControlService.cancelSessionMessage(input)');
-    expect(InputProcessingServiceSource).toContain('this.sessionRunControlService.createManualRetryFromRun(input)');
-    expect(InputProcessingServiceSource).toContain('this.sessionRunControlService.createManualRerunFromUserMessage(input)');
-    expect(InputProcessingServiceSource).toContain('this.sessionRunControlService.cleanupInterruptedRunsOnStartup()');
-    expect(InputProcessingServiceSource).not.toContain('this.activeSessionMessageRuns.get(payload.targetRequestId)');
-    expect(InputProcessingServiceSource).not.toContain('this.runTerminalCoordinator.cancelActiveSessionMessageRun({');
-    expect(InputProcessingServiceSource).not.toContain('this.runTerminalCoordinator.cleanupInterruptedRunsOnStartup({');
-    expect(InputProcessingServiceSource).not.toContain('this.runRetryCoordinator.createManualRetryFromRun(input)');
-    expect(InputProcessingServiceSource).not.toContain('this.runRetryCoordinator.createManualRerunFromUserMessage(input)');
+    expect(AgentRunProcessingServiceSource).toContain('this.sessionRunControlService.cancelSessionMessage(input)');
+    expect(AgentRunProcessingServiceSource).toContain('this.sessionRunControlService.createManualRetryFromRun(input)');
+    expect(AgentRunProcessingServiceSource).toContain('this.sessionRunControlService.createManualRerunFromUserMessage(input)');
+    expect(AgentRunProcessingServiceSource).toContain('this.sessionRunControlService.cleanupInterruptedRunsOnStartup()');
+    expect(AgentRunProcessingServiceSource).not.toContain('this.activeSessionMessageRuns.get(payload.targetRequestId)');
+    expect(AgentRunProcessingServiceSource).not.toContain('this.runTerminalCoordinator.cancelActiveSessionMessageRun({');
+    expect(AgentRunProcessingServiceSource).not.toContain('this.runTerminalCoordinator.cleanupInterruptedRunsOnStartup({');
+    expect(AgentRunProcessingServiceSource).not.toContain('this.runRetryCoordinator.createManualRetryFromRun(input)');
+    expect(AgentRunProcessingServiceSource).not.toContain('this.runRetryCoordinator.createManualRerunFromUserMessage(input)');
     expect(sessionRunControlServiceSource).toContain('export class SessionRunControlService');
     expect(sessionRunControlServiceSource).toContain('cancelActiveSessionMessageRun({');
     expect(sessionRunControlServiceSource).toContain('cleanupInterruptedRunsOnStartup({');
   });
 
   it('keeps runtime event sequence and request metadata normalization in the events owner', () => {
-    const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+    const AgentRunProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
     const terminalCoordinatorSource = readFileSync(join(repoRoot, 'packages/coding-agent/state/run-terminal-coordinator.ts'), 'utf8');
     const retryCoordinatorSource = readFileSync(join(repoRoot, 'packages/coding-agent/state/run-retry-coordinator.ts'), 'utf8');
     const eventLogSource = readFileSync(join(repoRoot, 'packages/coding-agent/events/runtime-event-log.ts'), 'utf8');
     const eventPublisherSource = readFileSync(join(repoRoot, 'packages/coding-agent/events/runtime-event-publisher.ts'), 'utf8');
 
-    expect(InputProcessingServiceSource).toContain('private readonly runtimeEventLog: RuntimeEventLog');
-    expect(InputProcessingServiceSource).toContain('private readonly runtimeEventPublisher: RuntimeEventPublisher<ChatStreamEventAdapter>');
-    expect(InputProcessingServiceSource).not.toContain('withRequestMetadata(');
-    expect(InputProcessingServiceSource).not.toContain('withSequenceAfter(');
-    expect(InputProcessingServiceSource).not.toContain('withSessionMessageRequestMetadata(');
-    expect(InputProcessingServiceSource).not.toContain('onTerminalEvent:');
-    expect(InputProcessingServiceSource).not.toContain('private publishRunTerminalEventHooks');
-    expect(InputProcessingServiceSource).not.toContain('function nextRuntimeSequence');
+    expect(AgentRunProcessingServiceSource).toContain('private readonly runtimeEventLog: RuntimeEventLog');
+    expect(AgentRunProcessingServiceSource).toContain('private readonly runtimeEventPublisher: RuntimeEventPublisher<ChatStreamEventAdapter>');
+    expect(AgentRunProcessingServiceSource).not.toContain('withRequestMetadata(');
+    expect(AgentRunProcessingServiceSource).not.toContain('withSequenceAfter(');
+    expect(AgentRunProcessingServiceSource).not.toContain('withSessionMessageRequestMetadata(');
+    expect(AgentRunProcessingServiceSource).not.toContain('onTerminalEvent:');
+    expect(AgentRunProcessingServiceSource).not.toContain('private publishRunTerminalEventHooks');
+    expect(AgentRunProcessingServiceSource).not.toContain('function nextRuntimeSequence');
     expect(terminalCoordinatorSource).not.toContain('function nextRuntimeSequence');
     expect(retryCoordinatorSource).not.toContain('function nextRuntimeSequence');
     expect(eventLogSource).toContain('export class RuntimeEventLog');
@@ -934,7 +933,7 @@ describe('package and file structure source guards', () => {
   });
 
   it('keeps memory recall cwd resolution in the context owner', () => {
-    const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+    const AgentRunProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
     const agentLoopSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/agent-loop.ts'), 'utf8');
     const initialModelInputPreparationSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/agent-loop/initial-input/initial-model-input-preparation.ts'),
@@ -946,8 +945,8 @@ describe('package and file structure source guards', () => {
     expect(agentLoopSource).not.toContain('resolveMemoryRecallEffectiveCwd');
     expect(agentLoopSource).not.toContain('function resolveRecallEffectiveCwd');
     expect(agentLoopSource).not.toContain('const DEFAULT_CONTEXT_BUDGET_POLICY');
-    expect(InputProcessingServiceSource).not.toContain('function resolveRecallEffectiveCwd');
-    expect(InputProcessingServiceSource).not.toContain('const DEFAULT_CONTEXT_BUDGET_POLICY');
+    expect(AgentRunProcessingServiceSource).not.toContain('function resolveRecallEffectiveCwd');
+    expect(AgentRunProcessingServiceSource).not.toContain('const DEFAULT_CONTEXT_BUDGET_POLICY');
     expect(initialModelInputPreparationSource).toContain('resolveMemoryRecallEffectiveCwd');
     expect(initialModelInputPreparationSource).toContain('DEFAULT_CONTEXT_BUDGET_POLICY');
     expect(modelInputContextBuilderSource).toContain('export const DEFAULT_CONTEXT_BUDGET_POLICY');
@@ -955,16 +954,16 @@ describe('package and file structure source guards', () => {
   });
 
   it('keeps ToolSet selection in the agent loop owner', () => {
-    const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+    const AgentRunProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
     const agentLoopSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/agent-loop.ts'), 'utf8');
     const toolsDefinitionsPath = join(repoRoot, 'packages/coding-agent/tools/definitions/model-visible-tool-definitions.ts');
 
     expect(existsSync(join(repoRoot, 'packages/coding-agent/obsolete-run/turn'))).toBe(false);
-    expect(InputProcessingServiceSource).not.toContain('prepareToolSet({');
-    expect(InputProcessingServiceSource).not.toContain('prepareToolRunner({');
-    expect(InputProcessingServiceSource).not.toContain('toolCallRunnerFactory.create');
-    expect(InputProcessingServiceSource).not.toContain('createToolRegistrySnapshotForCodingAgentRun');
-    expect(InputProcessingServiceSource).not.toContain('createToolRegistrySnapshotCreatedEvent');
+    expect(AgentRunProcessingServiceSource).not.toContain('prepareToolSet({');
+    expect(AgentRunProcessingServiceSource).not.toContain('prepareToolRunner({');
+    expect(AgentRunProcessingServiceSource).not.toContain('toolCallRunnerFactory.create');
+    expect(AgentRunProcessingServiceSource).not.toContain('createToolRegistrySnapshotForCodingAgentRun');
+    expect(AgentRunProcessingServiceSource).not.toContain('createToolRegistrySnapshotCreatedEvent');
     expect(agentLoopSource).toContain('export class ToolSetService');
     expect(agentLoopSource).toContain('export class AgentLoop');
     expect(agentLoopSource).toContain('prepareToolSet');
@@ -997,16 +996,16 @@ describe('package and file structure source guards', () => {
     expect(runtimeSource).not.toContain('sessionRunRepository: persistence.sessionRunRepository');
   });
 
-  it('keeps default InputProcessingService persistence composition outside the run service owner', () => {
-    const InputProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/input/input-service.ts'), 'utf8');
+  it('keeps default AgentRunProcessingService persistence composition outside the run service owner', () => {
+    const AgentRunProcessingServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'), 'utf8');
 
-    expect(InputProcessingServiceSource).not.toContain('sessionRunRepository');
-    expect(InputProcessingServiceSource).not.toContain('composeCodingAgentPersistence');
-    expect(InputProcessingServiceSource).not.toContain('createDefaultAgentRunRepositoryPort');
-    expect(InputProcessingServiceSource).not.toContain('createDefaultInputProcessingService(');
-    expect(InputProcessingServiceSource).not.toContain('new PermissionSnapshotService');
-    expect(InputProcessingServiceSource).not.toContain('new PlanArtifactService');
-    expect(InputProcessingServiceSource).not.toContain('new ToolRegistrySnapshotService');
+    expect(AgentRunProcessingServiceSource).not.toContain('sessionRunRepository');
+    expect(AgentRunProcessingServiceSource).not.toContain('composeCodingAgentPersistence');
+    expect(AgentRunProcessingServiceSource).not.toContain('createDefaultAgentRunRepositoryPort');
+    expect(AgentRunProcessingServiceSource).not.toContain('createDefaultAgentRunProcessingService(');
+    expect(AgentRunProcessingServiceSource).not.toContain('new PermissionSnapshotService');
+    expect(AgentRunProcessingServiceSource).not.toContain('new PlanArtifactService');
+    expect(AgentRunProcessingServiceSource).not.toContain('new ToolRegistrySnapshotService');
   });
 
   it('keeps the session-run facade out of public persistence composition', () => {

@@ -45,9 +45,9 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/session/session-context-input.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/session/session-context.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/agent-loop/model-input/parts/session-context.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/input/facts/input-facts.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/agent-loop/core/run-input-facts.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/index.ts'))).toBe(false);
-    expect(existsSync(join(root, 'packages/coding-agent/input/input-service.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/agent-loop/services/agent-run-service.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/agent-loop/agent-loop-operation.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/agent-loop/agent-loop-operation-port.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/context/run-input-facts.ts'))).toBe(false);
@@ -94,9 +94,11 @@ describe('coding-agent package boundary', () => {
     const codingAgentInput = sourceUnder('packages/coding-agent/input');
     const desktopServices = sourceUnder('apps/desktop/src/main/services');
 
-    expect(inputService).toContain('class InputProcessingService');
-    expect(inputService).toContain('handleUserInput');
-    expect(inputService).toContain('submitUserInputToAgentLoop');
+    expect(inputService).toContain('processUserInput');
+    expect(inputService).not.toContain('CommandService');
+    expect(codingAgentLoop).toContain('class AgentRunProcessingService');
+    expect(codingAgentLoop).toContain('handleAgentRunInput');
+    expect(codingAgentLoop).toContain('submitUserInputToAgentLoop');
     expect(codingAgentState).toContain('class RunTerminalCoordinator');
     expect(codingAgentLoop).toContain('class AgentLoop');
     expect(codingAgentLoop).toContain('runModelToolLoop');
@@ -105,7 +107,8 @@ describe('coding-agent package boundary', () => {
     expect(codingAgentContext).toContain('class ContextUsageMonitor');
     expect(codingAgentContext).toContain('class ContextCompactionService');
     expect(codingAgentLoop).toContain('class ModelCallInputBuildService');
-    expect(codingAgentInput).toContain('createCodingAgentRunInputFacts');
+    expect(codingAgentInput).not.toContain('createCodingAgentRunInputFacts');
+    expect(codingAgentLoop).toContain('createCodingAgentRunInputFacts');
     expect(existsSync(join(root, 'apps/desktop/src/main/services/session/session-run.service.ts'))).toBe(false);
     expect(desktopServices).not.toContain('new RunTurn');
     expect(desktopServices).not.toContain("contextKind: 'compaction-probe'");

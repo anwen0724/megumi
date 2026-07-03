@@ -1,5 +1,5 @@
-// Composes the standalone input runtime with product persistence defaults.
-import { InputProcessingService } from '../input/input-service';
+// Composes the standalone agent-run runtime with product persistence defaults.
+import { AgentRunProcessingService } from '../agent-loop';
 import type {
   ModelInputGlobalInstructionDirectoryProvider,
 } from '../agent-loop/model-input/model-input-source-overrides';
@@ -7,7 +7,7 @@ import { ModelInputSourceOverrideService } from '../agent-loop/model-input/model
 import type { AgentInstructionSourcePort } from '../adapters/local/context/agent-instruction-source';
 import type { RunBaselineContextPort } from '../agent-loop/run-context/run-context-service';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
-import { createInputProcessingCompositionIds } from './input-processing-ids';
+import { createAgentRunProcessingCompositionIds } from './agent-run-processing-ids';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
 import { PermissionSnapshotService } from '../permissions';
 import { PlanArtifactService } from '../artifacts';
@@ -15,28 +15,28 @@ import { ToolRegistryService } from '../tools';
 import { PostRunHooksCoordinator } from '../hooks';
 import { RunRetryCoordinator, RunTerminalCoordinator } from '../state';
 
-export interface CreateDefaultInputProcessingServiceOptions {
+export interface CreateDefaultAgentRunProcessingServiceOptions {
   contextService?: RunBaselineContextPort;
   toolRuntimeFactory?: ToolRuntimeFactory;
   agentInstructionSourceService?: AgentInstructionSourcePort;
 }
 
-export interface CreateDefaultInputProcessingServiceHomePaths {
+export interface CreateDefaultAgentRunProcessingServiceHomePaths {
   homePath: string;
   sqlitePath: string;
 }
 
-export function createDefaultInputProcessingService(
-  homePaths: CreateDefaultInputProcessingServiceHomePaths,
-  options: CreateDefaultInputProcessingServiceOptions = {},
-): InputProcessingService {
+export function createDefaultAgentRunProcessingService(
+  homePaths: CreateDefaultAgentRunProcessingServiceHomePaths,
+  options: CreateDefaultAgentRunProcessingServiceOptions = {},
+): AgentRunProcessingService {
   const persistence = composeCodingAgentPersistence({ sqlitePath: homePaths.sqlitePath });
   const agentLoopRepository = persistence.agentLoopRepository as any;
   const sessionRepository = persistence.sessionRepository as any;
   const toolCallRepository = persistence.toolCallRepository;
-  const ids = createInputProcessingCompositionIds();
+  const ids = createAgentRunProcessingCompositionIds();
 
-  const inputProcessingService = new InputProcessingService({
+  const agentRunProcessingService = new AgentRunProcessingService({
     sessionRepository,
     agentLoopRepository,
     postRunHooks: new PostRunHooksCoordinator({
@@ -82,8 +82,8 @@ export function createDefaultInputProcessingService(
     }),
     ids,
   });
-  inputProcessingService.cleanupInterruptedInputsOnStartup();
-  return inputProcessingService;
+  agentRunProcessingService.cleanupInterruptedInputsOnStartup();
+  return agentRunProcessingService;
 }
 
 function defaultGlobalInstructionDirectoryProvider(homePath: string): ModelInputGlobalInstructionDirectoryProvider {
@@ -91,4 +91,3 @@ function defaultGlobalInstructionDirectoryProvider(homePath: string): ModelInput
     listGlobalInstructionDirs: () => [homePath],
   };
 }
-

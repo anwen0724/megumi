@@ -1,10 +1,10 @@
-﻿// Normalizes product input preprocessing before session runs trust it.
+// Normalizes product input preprocessing before session runs trust it.
 import {
   InputPreprocessingResultSchema,
   type InputPreprocessingEntry,
   type InputHookEntry,
   type InputPreprocessingResult,
-} from '../contracts/preprocessing-contracts';
+} from '../contracts/run-input-preprocessing-contracts';
 import type { JsonObject } from '@megumi/shared/primitives';
 import type { PermissionMode, PermissionModeSelectionSource } from '@megumi/shared/permission';
 
