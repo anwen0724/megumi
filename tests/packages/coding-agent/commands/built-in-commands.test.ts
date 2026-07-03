@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { built_in_commands } from '@megumi/coding-agent/commands/core/built-in-commands';
 
 describe('built_in_commands', () => {
@@ -41,5 +41,34 @@ describe('built_in_commands', () => {
         kind: 'context_compaction',
       },
     });
+  });
+
+  it('runs compact through ContextCompactionService when command execution context has a session', async () => {
+    const compact = built_in_commands.find((command) => command.name === 'compact');
+    const contextCompaction = {
+      compact: vi.fn(async () => ({ status: 'completed' as const })),
+    };
+
+    const result = await compact!.execute({
+      invocation: {
+        name: 'compact',
+        arguments_input: '',
+        raw_input: '/compact',
+      },
+      execution_context: {
+        session_id: 'session:1',
+        workspace_id: 'workspace:1',
+        services: {
+          context_compaction: contextCompaction,
+        },
+      },
+    });
+
+    expect(contextCompaction.compact).toHaveBeenCalledWith({
+      session_id: 'session:1',
+      workspace_id: 'workspace:1',
+      trigger: { kind: 'manual', requested_by: 'command' },
+    });
+    expect(result).toMatchObject({ type: 'completed' });
   });
 });

@@ -102,6 +102,32 @@ describe('createCommandService', () => {
       raw_input: '/missing',
     });
   });
+
+  it('passes execution context to command handlers', async () => {
+    const seen: unknown[] = [];
+    const service = createCommandService({
+      built_in_commands: [{
+        ...testCommand('compact'),
+        async execute(request) {
+          seen.push(request.execution_context);
+          return { type: 'completed' };
+        },
+      }],
+    });
+
+    await service.handleCommandInput({
+      raw_input: '/compact',
+      execution_context: {
+        session_id: 'session:1',
+        services: {},
+      },
+    });
+
+    expect(seen).toEqual([{
+      session_id: 'session:1',
+      services: {},
+    }]);
+  });
 });
 
 function testCommand(name: string): CommandDefinition {

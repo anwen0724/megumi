@@ -9,6 +9,7 @@ export {
 export type {
   CommandAgentRunInput,
   CommandDefinition,
+  CommandExecutionContext,
   CommandExecutionResult,
   CommandHandler,
   CommandInvocation,

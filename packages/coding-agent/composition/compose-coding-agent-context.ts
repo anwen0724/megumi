@@ -8,11 +8,39 @@ import { ContextRepository } from '../context/services/context-repository';
 import { ContextService, type ContextInstructionSourcePort, type PromptLogPort } from '../context/services/context-service';
 import { ContextUsageMonitor } from '../context/services/context-usage-monitor';
 import { ContextCompactionService, type ContextSummaryModelCallPort } from '../context/services/context-compaction-service';
-import type { ModelConfig } from '../context/contracts/context-usage-contracts';
+import type { ContextUsageSignal, ModelConfig } from '../context/contracts/context-usage-contracts';
 
 export type DeveloperPromptLogger = {
   debug(event_name: 'context.prompt.built', payload: Parameters<PromptLogPort['writePrompt']>[0]): void;
 };
+
+export type ContextUsageSignalBus = {
+  publish(input: { subscription_id: string; signal: ContextUsageSignal }): void;
+  subscribe(
+    signalKind: ContextUsageSignal['kind'],
+    handler: (signal: ContextUsageSignal) => void | Promise<void>,
+  ): () => void;
+};
+
+export function createContextUsageSignalBus(): ContextUsageSignalBus {
+  const handlers = new Map<ContextUsageSignal['kind'], Set<(signal: ContextUsageSignal) => void | Promise<void>>>();
+
+  return {
+    publish(input) {
+      for (const handler of handlers.get(input.signal.kind) ?? []) {
+        void handler(input.signal);
+      }
+    },
+    subscribe(signalKind, handler) {
+      const signalHandlers = handlers.get(signalKind) ?? new Set();
+      signalHandlers.add(handler);
+      handlers.set(signalKind, signalHandlers);
+      return () => {
+        signalHandlers.delete(handler);
+      };
+    },
+  };
+}
 
 export function composeCodingAgentContext(input: {
   sessionRepository: ConstructorParameters<typeof ContextRepository>[0]['sessionRepository']
@@ -23,6 +51,8 @@ export function composeCodingAgentContext(input: {
   modelConfigProvider: (input: { session_id: string; workspace_id?: string }) => ModelConfig;
   developerPromptLogger?: DeveloperPromptLogger;
 }) {
+  const contextUsageSignalBus = createContextUsageSignalBus();
+  const internalAutoCompactionSubscriptionIds = new Set<string>();
   const contextRepository = new ContextRepository({
     sessionRepository: input.sessionRepository,
     activePathRepository: input.sessionRepository,
@@ -46,6 +76,11 @@ export function composeCodingAgentContext(input: {
   const contextUsageMonitor = new ContextUsageMonitor({
     contextService,
     fixedPromptText: systemPromptText,
+    signalSink: (signalInput) => {
+      if (internalAutoCompactionSubscriptionIds.has(signalInput.subscription_id)) {
+        contextUsageSignalBus.publish(signalInput);
+      }
+    },
   });
   const contextCompactionService = new ContextCompactionService({
     contextService,
@@ -55,11 +90,55 @@ export function composeCodingAgentContext(input: {
     promptResources: { context_compaction_prompt: contextCompactionPromptText },
     promptLog: developerPromptLog,
   });
+  const originalStart = contextUsageMonitor.start.bind(contextUsageMonitor);
+  contextUsageMonitor.start = async (request) => {
+    const result = await originalStart(request);
+    if (result.status === 'ok') {
+      const subscription = contextUsageMonitor.subscribe({
+        session_id: request.session_id,
+        ...(request.workspace_id ? { workspace_id: request.workspace_id } : {}),
+        signal_kinds: ['auto_compaction_needed'],
+      });
+      if (subscription.status === 'ok') {
+        internalAutoCompactionSubscriptionIds.add(subscription.subscription_id);
+      }
+    }
+    return result;
+  };
+  contextUsageSignalBus.subscribe('auto_compaction_needed', async (signal) => {
+    if (signal.kind !== 'auto_compaction_needed') {
+      return;
+    }
+
+    contextUsageMonitor.markCompactionRunning({
+      session_id: signal.session_id,
+      ...(signal.workspace_id ? { workspace_id: signal.workspace_id } : {}),
+      running: true,
+    });
+    try {
+      await contextCompactionService.compact({
+        session_id: signal.session_id,
+        ...(signal.workspace_id ? { workspace_id: signal.workspace_id } : {}),
+        trigger: {
+          kind: 'auto',
+          reason: 'context_window_threshold',
+          signal_id: signal.signal_id,
+        },
+      });
+    } finally {
+      contextUsageMonitor.markCompactionRunning({
+        session_id: signal.session_id,
+        ...(signal.workspace_id ? { workspace_id: signal.workspace_id } : {}),
+        running: false,
+      });
+    }
+  });
 
   return {
     contextRepository,
     contextService,
     contextUsageMonitor,
+    contextUsageSignalBus,
     contextCompactionService,
   };
 }

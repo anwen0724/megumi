@@ -10,7 +10,27 @@ export const built_in_commands: CommandDefinition[] = [
     name: 'compact',
     description: 'Compact the current session context',
     source: { kind: 'built_in' },
-    async execute() {
+    async execute(request) {
+      const executionContext = request.execution_context;
+      const contextCompaction = executionContext?.services?.context_compaction;
+      if (executionContext?.session_id && contextCompaction) {
+        const result = await contextCompaction.compact({
+          session_id: executionContext.session_id,
+          ...(executionContext.workspace_id ? { workspace_id: executionContext.workspace_id } : {}),
+          trigger: { kind: 'manual', requested_by: 'command' },
+        });
+
+        if (result.status === 'failed') {
+          return { type: 'error', message: result.failure.message };
+        }
+
+        if (result.status === 'skipped') {
+          return { type: 'completed', message: `Context compaction skipped: ${result.reason}` };
+        }
+
+        return { type: 'completed', message: 'Context compacted.' };
+      }
+
       return {
         type: 'host_interaction_request',
         request: {

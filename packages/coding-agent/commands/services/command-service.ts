@@ -9,6 +9,7 @@ import {
 } from '../core/command-catalog';
 import type {
   CommandDefinition,
+  CommandExecutionContext,
   CommandExecutionResult,
   CommandInvocation,
   CommandListItem,
@@ -20,8 +21,8 @@ import type { SkillCommandDescriptor } from '../core/skill-commands';
 export type CommandService = {
   listCommands(): CommandListItem[];
   getCommandSuggestions(request: { draft_input: string }): CommandSuggestionResult;
-  handleCommandInput(request: { raw_input: string }): Promise<CommandExecutionResult>;
-  executeCommand(request: { invocation: CommandInvocation }): Promise<CommandExecutionResult>;
+  handleCommandInput(request: { raw_input: string; execution_context?: CommandExecutionContext }): Promise<CommandExecutionResult>;
+  executeCommand(request: { invocation: CommandInvocation; execution_context?: CommandExecutionContext }): Promise<CommandExecutionResult>;
 };
 
 export function createCommandService(options: {
@@ -49,7 +50,10 @@ export function createCommandService(options: {
         return { type: 'not_command', raw_input: request.raw_input };
       }
 
-      return this.executeCommand({ invocation: parsed.invocation });
+      return this.executeCommand({
+        invocation: parsed.invocation,
+        ...(request.execution_context ? { execution_context: request.execution_context } : {}),
+      });
     },
     async executeCommand(request) {
       const command = catalog.resolve(request.invocation.name);
@@ -57,7 +61,10 @@ export function createCommandService(options: {
         return { type: 'not_command', raw_input: request.invocation.raw_input };
       }
 
-      return command.execute({ invocation: request.invocation });
+      return command.execute({
+        invocation: request.invocation,
+        ...(request.execution_context ? { execution_context: request.execution_context } : {}),
+      });
     },
   };
 }

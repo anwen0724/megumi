@@ -22,6 +22,25 @@ export type CommandHandler = (
 
 export type ExecuteCommandRequest = {
   invocation: CommandInvocation;
+  execution_context?: CommandExecutionContext;
+};
+
+export type CommandExecutionContext = {
+  session_id: string;
+  workspace_id?: string;
+  services?: {
+    context_compaction?: {
+      compact(request: {
+        session_id: string;
+        workspace_id?: string;
+        trigger: { kind: 'manual'; requested_by: 'command' };
+      }): Promise<
+        | { status: 'completed' }
+        | { status: 'skipped'; reason: string }
+        | { status: 'failed'; failure: { message: string } }
+      >;
+    };
+  };
 };
 
 export type CommandInvocation = {
