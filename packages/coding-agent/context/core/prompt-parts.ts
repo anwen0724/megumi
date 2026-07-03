@@ -82,6 +82,15 @@ export function buildPromptParts(input: BuildPromptPartsInput): BuildPromptParts
       continue;
     }
 
+    if ((source.source_kind === 'agent_instruction' || source.source_kind === 'context_compaction_summary')
+      && source.text.trim().length === 0) {
+      return {
+        status: 'failed',
+        reason: 'missing_required_prompt_part',
+        message: `Required prompt source ${source.source_id} is empty.`,
+      };
+    }
+
     const part = createPromptPart(source, input);
     if (part) {
       parts.push(part);
