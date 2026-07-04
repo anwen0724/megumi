@@ -6,7 +6,7 @@ import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { MemoryCaptureSignal } from '@megumi/shared/memory';
 import type { MemoryCapturePort } from '../../memory';
 import type { ChatStreamEventAdapter } from '../../projections/chat-stream';
-import type { WorkspaceChangeFooterProjectorService } from '../../workspace';
+import type { WorkspaceChangeFooterProjectorService } from '../../projections/workspace/workspace-change-footer-projector';
 import type {
   PostRunHooksCoordinatorOptions,
   PostRunHooksRepositoryPort,

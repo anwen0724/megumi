@@ -5,7 +5,7 @@ import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { WorkspaceChangedFile } from '@megumi/shared/workspace';
 import type { MemoryCapturePort } from '../../memory';
 import type { ChatStreamEventAdapter } from '../../projections/chat-stream';
-import type { WorkspaceChangeFooterProjectorService } from '../../workspace';
+import type { WorkspaceChangeFooterProjectorService } from '../../projections/workspace/workspace-change-footer-projector';
 
 export interface PostRunHooksRepositoryPort {
   listRuntimeEventsByRun(runId: string): RuntimeEvent[];

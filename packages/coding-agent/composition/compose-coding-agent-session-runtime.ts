@@ -28,7 +28,7 @@ import { RunRetryCoordinator, RunTerminalCoordinator } from '../state';
 import {
   createWorkspaceChangeFooterProjectorService,
   isWorkspaceChangeFooterProjectorPort,
-} from '../workspace';
+} from '../projections/workspace/workspace-change-footer-projector';
 import type { SessionBranchControllerServicePort } from '../host-interface/session/branch-controller';
 import type { AgentRunSessionBranchServicePort } from '../agent-loop';
 import type { RunRetrySessionBranchServicePort } from '../state';
