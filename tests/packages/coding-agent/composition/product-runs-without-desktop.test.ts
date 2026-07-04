@@ -329,7 +329,27 @@ describe('coding-agent product runs without desktop', () => {
     }
 
     const runtimeEventTypes: string[] = [];
+    const runtimeEvents: RuntimeEvent[] = [];
     for await (const event of result.events) {
+      runtimeEvents.push(event as RuntimeEvent);
+      runtimeEventTypes.push((event as RuntimeEvent).eventType);
+    }
+
+    expect(runtimeEventTypes).toContain('approval.requested');
+    expect(runtimeEventTypes).not.toContain('run.completed');
+    const approvalRequest = runtimeEvents
+      .find((event) => event.eventType === 'approval.requested')
+      ?.payload as { approvalRequest?: { approvalRequestId?: string } } | undefined;
+    const approvalRequestId = approvalRequest?.approvalRequest?.approvalRequestId;
+    expect(approvalRequestId).toBeTruthy();
+
+    const approvalResult = runtime.permissions.resolve({
+      approvalRequestId: String(approvalRequestId),
+      decision: 'approved',
+      scope: 'once',
+      decidedAt: '2026-06-24T00:00:03.000Z',
+    });
+    for await (const event of approvalResult.events ?? []) {
       runtimeEventTypes.push((event as RuntimeEvent).eventType);
     }
 

@@ -193,12 +193,13 @@ describe('coding-agent package boundary', () => {
     expect(toolsIndex).not.toContain('ToolRegistrySnapshotService');
     expect(toolsIndex).not.toContain('createToolExecutionRouter');
     expect(toolsIndex).not.toContain('ToolService');
-    expect(permissions).toContain('evaluatePermissionPolicy');
-    expect(permissions).toContain('evaluateToolExecutionDecision');
+    expect(permissions).toContain('evaluateToolExecution');
+    expect(permissions).toContain('validateApprovalDecision');
+    expect(permissions).toContain('applyApprovalDecision');
     expect(desktopToolServices).not.toContain('function applyDecision');
     expect(desktopToolServices).not.toContain('function prepareRecords');
     expect(desktopToolServices).not.toContain('class ToolRegistrySnapshotService');
-    expect(desktopToolServices).not.toContain('function evaluateToolExecutionDecision');
+    expect(desktopToolServices).not.toContain('function evaluateToolExecution');
   });
 
   it('does not keep the context-management compatibility package after final cleanup', () => {
