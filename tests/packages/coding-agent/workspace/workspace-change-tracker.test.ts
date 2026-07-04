@@ -1,436 +1,298 @@
-﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import type { ToolExecution } from '@megumi/shared/tool';
+
 import type {
   WorkspaceChangedFile,
   WorkspaceChangeSet,
-  WorkspaceSnapshotContent,
-} from '@megumi/shared/workspace';
-import {
-  WorkspaceChangeTrackerService,
-  type WorkspaceChangeTrackerRepositoryPort,
 } from '@megumi/coding-agent/workspace';
+import { createWorkspacePathPolicyService } from '@megumi/coding-agent/workspace/services/workspace-path-policy-service';
+import { createWorkspaceChangeService } from '@megumi/coding-agent/workspace/services/workspace-change-service';
 
-describe('WorkspaceChangeTrackerService', () => {
-  it('records a created file mutation around a successful write_file execution', async () => {
-    const files = new Map<string, string>();
+describe('WorkspaceChangeService', () => {
+  it('executes read-only and unmanaged tools without recording changes', async () => {
     const repository = fakeRepository();
-    const tracker = createTracker({ files, repository });
+    const service = createService({ repository });
+    const read = vi.fn(async () => 'read');
+    const run = vi.fn(async () => 'ran');
 
-    const result = await tracker.trackToolExecution({
+    await expect(service.trackToolExecution({
       scope: scope(),
-      toolExecution: toolExecution('write_file', { path: 'src/new.ts', content: 'export {}' }),
+      tool_execution: toolExecution('read_file', { path: 'README.md' }),
+      execute: read,
+    })).resolves.toBe('read');
+    await expect(service.trackToolExecution({
+      scope: scope(),
+      tool_execution: toolExecution('run_command', { command: 'node -v' }),
+      execute: run,
+    })).resolves.toBe('ran');
+
+    expect(repository.changeSets).toEqual([]);
+    expect(repository.files).toEqual([]);
+  });
+
+  it('records successful write, edit, and delete mutations', async () => {
+    const files = new Map<string, boolean>();
+    const repository = fakeRepository();
+    const service = createService({ files, repository });
+
+    await service.trackToolExecution({
+      scope: scope(),
+      tool_execution: toolExecution('write_file', { path: 'src/new.ts' }),
       execute: async () => {
-        files.set('C:\\project\\src\\new.ts', 'export {}');
-        return 'ok';
+        files.set('C:\\project\\src\\new.ts', true);
+        return 'created';
       },
     });
-    const finalized = tracker.finalizeChangeSet(scope());
+    files.set('C:\\project\\src\\app.ts', true);
+    await service.trackToolExecution({
+      scope: scope(),
+      tool_execution: toolExecution('edit_file', { path: 'src/app.ts' }),
+      execute: async () => 'modified',
+    });
+    files.set('C:\\project\\src\\old.ts', true);
+    await service.trackToolExecution({
+      scope: scope(),
+      tool_execution: toolExecution('delete_file', { path: 'src/old.ts' }),
+      execute: async () => {
+        files.set('C:\\project\\src\\old.ts', false);
+        return 'deleted';
+      },
+    });
 
-    expect(result).toBe('ok');
-    expect(repository.recordWorkspaceChange).toHaveBeenCalledWith(expect.objectContaining({
-      sessionId: 'session-1',
-      runId: 'run-1',
-      stepId: 'step-1',
-      status: 'open',
-      changedFileCount: 0,
-    }));
-    expect(repository.recordChangedFile).toHaveBeenCalledWith(expect.objectContaining({
-      projectPath: 'src/new.ts',
-      changeKind: 'created',
-      restoreState: 'restorable',
-      beforeExists: false,
-      beforeContentRefId: undefined,
-      afterExists: true,
-      afterHash: expect.stringMatching(/^[a-f0-9]{64}$/),
-      afterByteLength: 9,
-    }));
-    expect(finalized).toMatchObject({
+    expect(repository.files.map((file) => [file.workspace_path, file.change_kind])).toEqual([
+      ['src/new.ts', 'created'],
+      ['src/app.ts', 'modified'],
+      ['src/old.ts', 'deleted'],
+    ]);
+    expect(repository.changeSets).toHaveLength(1);
+  });
+
+  it('records nothing when tool execution fails', async () => {
+    const files = new Map<string, boolean>();
+    const repository = fakeRepository();
+    const service = createService({ files, repository });
+
+    await expect(service.trackToolExecution({
+      scope: scope(),
+      tool_execution: toolExecution('write_file', { path: 'src/new.ts' }),
+      execute: async () => {
+        throw new Error('write failed');
+      },
+    })).rejects.toThrow('write failed');
+
+    expect(repository.changeSets).toEqual([]);
+    expect(repository.files).toEqual([]);
+  });
+
+  it('keeps one changed file per change set path and updates the change kind', async () => {
+    const files = new Map<string, boolean>();
+    const repository = fakeRepository();
+    const service = createService({ files, repository });
+
+    await service.trackToolExecution({
+      scope: scope(),
+      tool_execution: toolExecution('write_file', { path: 'src/app.ts' }),
+      execute: async () => {
+        files.set('C:\\project\\src\\app.ts', true);
+      },
+    });
+    await service.trackToolExecution({
+      scope: scope(),
+      tool_execution: toolExecution('edit_file', { path: 'src/app.ts' }),
+      execute: async () => undefined,
+    });
+
+    expect(repository.files).toEqual([
+      expect.objectContaining({
+        changed_file_id: 'changed-file:1',
+        workspace_path: 'src/app.ts',
+        change_kind: 'modified',
+      }),
+    ]);
+  });
+
+  it('finalizes and exposes summaries and changed files', async () => {
+    const files = new Map<string, boolean>();
+    const repository = fakeRepository();
+    const service = createService({ files, repository });
+
+    await service.trackToolExecution({
+      scope: scope(),
+      tool_execution: toolExecution('write_file', { path: 'src/new.ts' }),
+      execute: async () => {
+        files.set('C:\\project\\src\\new.ts', true);
+      },
+    });
+    expect(service.finalizeChangeSet({
+      workspace_id: 'workspace:one',
+      session_id: 'session:one',
+      run_id: 'run:one',
+      finalized_at: '2026-05-16T00:01:00.000Z',
+    })).toEqual({
       status: 'finalized',
-      changedFileCount: 1,
-    });
-  });
-
-  it('records a modified file mutation with before and after snapshots', async () => {
-    const files = new Map<string, string>([
-      ['C:\\project\\src\\app.ts', 'before'],
-    ]);
-    const repository = fakeRepository();
-    const tracker = createTracker({ files, repository });
-
-    await tracker.trackToolExecution({
-      scope: scope(),
-      toolExecution: toolExecution('edit_file', {
-        path: 'src/app.ts',
-        oldText: 'before',
-        newText: 'after',
+      change_set: expect.objectContaining({
+        status: 'finalized',
+        changed_file_count: 1,
       }),
-      execute: async () => {
-        files.set('C:\\project\\src\\app.ts', 'after');
-        return 'edited';
+    });
+
+    expect(service.getChangeSummary({ change_set_id: 'change-set:1' })).toEqual({
+      status: 'found',
+      summary: {
+        change_set: expect.objectContaining({ change_set_id: 'change-set:1' }),
+        files: [expect.objectContaining({ workspace_path: 'src/new.ts' })],
       },
     });
-
-    expect(repository.saveFileSnapshot).toHaveBeenCalledWith(expect.objectContaining({
-      contentRefId: 'snapshot-1',
-      projectPath: 'src/app.ts',
-      contentText: 'before',
-      byteLength: 6,
-    }));
-    expect(repository.saveFileSnapshot).toHaveBeenCalledWith(expect.objectContaining({
-      contentRefId: 'snapshot-2',
-      projectPath: 'src/app.ts',
-      contentText: 'after',
-      byteLength: 5,
-    }));
-    expect(repository.recordChangedFile).toHaveBeenCalledWith(expect.objectContaining({
-      projectPath: 'src/app.ts',
-      changeKind: 'modified',
-      beforeExists: true,
-      beforeContentRefId: 'snapshot-1',
-      beforeByteLength: 6,
-      afterExists: true,
-      afterContentRefId: 'snapshot-2',
-      afterByteLength: 5,
-    }));
+    expect(service.listChangedFiles({ by: 'change_set', change_set_id: 'change-set:1' }).files).toHaveLength(1);
+    expect(service.listChangedFiles({ by: 'run', run_id: 'run:one' }).files).toHaveLength(1);
   });
 
-  it('does not execute the write when before snapshot persistence fails', async () => {
-    const files = new Map<string, string>([
-      ['C:\\project\\src\\app.ts', 'before'],
-    ]);
-    const repository = fakeRepository({
-      saveFileSnapshot: vi.fn(() => {
-        throw new Error('snapshot failed');
-      }),
-    });
-    const tracker = createTracker({ files, repository });
-    const execute = vi.fn(async () => {
-      files.set('C:\\project\\src\\app.ts', 'after');
-      return 'edited';
-    });
-
-    await expect(tracker.trackToolExecution({
-      scope: scope(),
-      toolExecution: toolExecution('edit_file', {
-        path: 'src/app.ts',
-        oldText: 'before',
-        newText: 'after',
-      }),
-      execute,
-    })).rejects.toThrow('snapshot failed');
-
-    expect(execute).not.toHaveBeenCalled();
-    expect(files.get('C:\\project\\src\\app.ts')).toBe('before');
-    expect(repository.recordChangedFile).not.toHaveBeenCalled();
-  });
-
-  it('fails closed before writing unsupported snapshot text', async () => {
-    const files = new Map<string, string>([
-      ['C:\\project\\src\\binary.dat', 'before\u0000content'],
-    ]);
+  it('executes but skips recording after a finalized change set for the same run scope', async () => {
+    const files = new Map<string, boolean>();
     const repository = fakeRepository();
-    const tracker = createTracker({ files, repository });
-    const execute = vi.fn(async () => {
-      files.set('C:\\project\\src\\binary.dat', 'after');
-      return 'written';
-    });
+    const service = createService({ files, repository });
 
-    await expect(tracker.trackToolExecution({
+    await service.trackToolExecution({
       scope: scope(),
-      toolExecution: toolExecution('write_file', {
-        path: 'src/binary.dat',
-        content: 'after',
-      }),
-      execute,
-    })).rejects.toThrow('unsupported text content');
-
-    expect(execute).not.toHaveBeenCalled();
-    expect(files.get('C:\\project\\src\\binary.dat')).toBe('before\u0000content');
-    expect(repository.saveFileSnapshot).not.toHaveBeenCalled();
-    expect(repository.recordChangedFile).not.toHaveBeenCalled();
-  });
-
-  it('fails closed before recording projected unsupported after text', async () => {
-    const files = new Map<string, string>([
-      ['C:\\project\\src\\app.ts', 'before'],
-    ]);
-    const repository = fakeRepository();
-    const tracker = createTracker({ files, repository });
-    const execute = vi.fn(async () => {
-      files.set('C:\\project\\src\\app.ts', 'after\u0000content');
-      return 'written';
-    });
-
-    await expect(tracker.trackToolExecution({
-      scope: scope(),
-      toolExecution: toolExecution('write_file', {
-        path: 'src/app.ts',
-        content: 'after\u0000content',
-      }),
-      execute,
-    })).rejects.toThrow('unsupported text content');
-
-    expect(execute).not.toHaveBeenCalled();
-    expect(files.get('C:\\project\\src\\app.ts')).toBe('before');
-    expect(repository.recordChangedFile).not.toHaveBeenCalled();
-  });
-
-  it('does not create a changed file when execution fails after taking the before snapshot', async () => {
-    const files = new Map<string, string>([
-      ['C:\\project\\src\\app.ts', 'before'],
-    ]);
-    const repository = fakeRepository();
-    const tracker = createTracker({ files, repository });
-    const execute = vi.fn(async () => {
-      throw new Error('write failed before mutation');
-    });
-
-    await expect(tracker.trackToolExecution({
-      scope: scope(),
-      toolExecution: toolExecution('edit_file', {
-        path: 'src/app.ts',
-        oldText: 'missing',
-        newText: 'after',
-      }),
-      execute,
-    })).rejects.toThrow('write failed before mutation');
-
-    expect(execute).toHaveBeenCalledTimes(1);
-    expect(files.get('C:\\project\\src\\app.ts')).toBe('before');
-    expect(repository.recordChangedFile).not.toHaveBeenCalled();
-  });
-
-  it('does not record a changed file for a no-op overwrite', async () => {
-    const files = new Map<string, string>([
-      ['C:\\project\\src\\app.ts', 'same'],
-    ]);
-    const repository = fakeRepository();
-    const tracker = createTracker({ files, repository });
-
-    const result = await tracker.trackToolExecution({
-      scope: scope(),
-      toolExecution: toolExecution('write_file', { path: 'src/app.ts', content: 'same' }),
+      tool_execution: toolExecution('write_file', { path: 'src/first.ts' }),
       execute: async () => {
-        files.set('C:\\project\\src\\app.ts', 'same');
-        return 'ok';
+        files.set('C:\\project\\src\\first.ts', true);
       },
     });
-    const finalized = tracker.finalizeChangeSet(scope());
-
-    expect(result).toBe('ok');
-    expect(repository.recordChangedFile).not.toHaveBeenCalled();
-    expect(finalized).toMatchObject({
-      status: 'finalized',
-      changedFileCount: 0,
+    service.finalizeChangeSet({
+      workspace_id: 'workspace:one',
+      session_id: 'session:one',
+      run_id: 'run:one',
+      finalized_at: '2026-05-16T00:01:00.000Z',
     });
-  });
+    const execute = vi.fn(async () => {
+      files.set('C:\\project\\src\\second.ts', true);
+      return 'ran';
+    });
 
-  it('skips non-managed tools and has nothing to finalize', async () => {
-    const repository = fakeRepository();
-    const tracker = createTracker({ files: new Map(), repository });
-    const execute = vi.fn(async () => 'ran');
-
-    await expect(tracker.trackToolExecution({
+    await expect(service.trackToolExecution({
       scope: scope(),
-      toolExecution: toolExecution('run_command', { command: 'node -v' }),
+      tool_execution: toolExecution('write_file', { path: 'src/second.ts' }),
       execute,
     })).resolves.toBe('ran');
 
     expect(execute).toHaveBeenCalledTimes(1);
-    expect(repository.recordWorkspaceChange).not.toHaveBeenCalled();
-    expect(repository.recordChangedFile).not.toHaveBeenCalled();
-    expect(tracker.finalizeChangeSet(scope())).toBeUndefined();
+    expect(repository.files.map((file) => file.workspace_path)).toEqual(['src/first.ts']);
   });
 
-  it('skips project read tools because they are not managed mutations', async () => {
-    const repository = fakeRepository();
-    const tracker = createTracker({ files: new Map(), repository });
-    const execute = vi.fn(async () => 'read');
+  it('returns not_found when no open change set exists', () => {
+    const service = createService({ repository: fakeRepository() });
 
-    await expect(tracker.trackToolExecution({
-      scope: scope(),
-      toolExecution: toolExecution('read_file', { path: 'README.md' }),
-      execute,
-    })).resolves.toBe('read');
-
-    expect(execute).toHaveBeenCalledTimes(1);
-    expect(repository.recordWorkspaceChange).not.toHaveBeenCalled();
-    expect(repository.recordChangedFile).not.toHaveBeenCalled();
-    expect(tracker.finalizeChangeSet(scope())).toBeUndefined();
-  });
-
-  it('serializes managed mutations for the same file path', async () => {
-    const files = new Map<string, string>([
-      ['C:\\project\\src\\app.ts', 'one'],
-    ]);
-    const repository = fakeRepository();
-    const tracker = createTracker({ files, repository });
-    const firstRelease = createDeferred<void>();
-
-    const first = tracker.trackToolExecution({
-      scope: scope(),
-      toolExecution: toolExecution('write_file', { path: 'src/app.ts', content: 'two' }, 'tool-execution-1'),
-      execute: async () => {
-        await firstRelease.promise;
-        files.set('C:\\project\\src\\app.ts', 'two');
-      },
-    });
-    const second = tracker.trackToolExecution({
-      scope: scope(),
-      toolExecution: toolExecution('write_file', { path: 'src/app.ts', content: 'three' }, 'tool-execution-2'),
-      execute: async () => {
-        files.set('C:\\project\\src\\app.ts', 'three');
-      },
-    });
-
-    firstRelease.resolve();
-    await Promise.all([first, second]);
-
-    const savedSnapshots = repository.saveFileSnapshot.mock.calls
-      .map(([snapshot]) => snapshot.contentText);
-    expect(savedSnapshots).toEqual(['one', 'two', 'two', 'three']);
+    expect(service.finalizeChangeSet({
+      workspace_id: 'workspace:one',
+      session_id: 'session:one',
+      run_id: 'run:one',
+      finalized_at: '2026-05-16T00:01:00.000Z',
+    })).toEqual({ status: 'not_found' });
   });
 });
 
-function createTracker(input: {
-  files: Map<string, string>;
-  repository: WorkspaceChangeTrackerRepositoryPort;
+function createService(options: {
+  files?: Map<string, boolean>;
+  repository: FakeWorkspaceChangeRepository;
 }) {
-  return new WorkspaceChangeTrackerService({
-    projectRoot: 'C:/project',
-    fileSystem: fakeFileSystem(input.files),
-    repository: input.repository,
-    now: fakeClock([
-      '2026-06-05T10:00:00.000Z',
-      '2026-06-05T10:00:01.000Z',
-      '2026-06-05T10:00:02.000Z',
-      '2026-06-05T10:00:03.000Z',
-      '2026-06-05T10:00:04.000Z',
-      '2026-06-05T10:00:05.000Z',
-    ]),
-    ids: {
-      changeSetId: sequence('change-set'),
-      workspaceCheckpointId: sequence('checkpoint'),
-      snapshotContentRefId: sequence('snapshot'),
-      changedFileId: sequence('changed-file'),
+  const files = options.files ?? new Map<string, boolean>();
+  let changeSetId = 0;
+  let changedFileId = 0;
+  return createWorkspaceChangeService({
+    repository: options.repository,
+    path_policy: createWorkspacePathPolicyService(),
+    file_system: {
+      exists: async (path) => files.get(path) === true,
     },
+    ids: {
+      change_set_id: () => `change-set:${++changeSetId}`,
+      changed_file_id: () => `changed-file:${++changedFileId}`,
+    },
+    now: () => '2026-05-16T00:00:00.000Z',
   });
 }
 
 function scope() {
   return {
-    sessionId: 'session-1',
-    runId: 'run-1',
-    stepId: 'step-1',
+    workspace_id: 'workspace:one',
+    session_id: 'session:one',
+    run_id: 'run:one',
   };
 }
 
-function toolExecution(
-  toolName: string,
-  input: Record<string, unknown>,
-  toolExecutionId = 'tool-execution-1',
-): ToolExecution {
+function toolExecution(tool_name: string, input: unknown) {
   return {
-    toolExecutionId,
-    toolCallId: `tool-call-${toolExecutionId}`,
-    runId: 'run-1',
-    stepId: 'step-1',
-    toolName,
-    input: input as ToolExecution['input'],
-    inputPreview: {
-      summary: toolName,
-      targets: [],
-      redactionState: 'none',
-    },
-    capabilities: toolName === 'run_command' ? ['command_run'] : ['project_write'],
-    riskLevel: 'low',
-    sideEffect: toolName === 'run_command' ? 'execute_command' : 'project_file_operation',
-    status: 'running',
-    requestedAt: '2026-06-05T09:59:00.000Z',
+    tool_name,
+    input,
+    workspace_root: 'C:/project',
   };
 }
 
-function fakeRepository(overrides: Partial<WorkspaceChangeTrackerRepositoryPort> = {}) {
-  const changeSets = new Map<string, WorkspaceChangeSet>();
-  const changedFilesByChangeSet = new Map<string, WorkspaceChangedFile[]>();
-  const repository: WorkspaceChangeTrackerRepositoryPort = {
-    getWorkspaceChange: vi.fn((changeSetId: string) => changeSets.get(changeSetId)),
-    recordWorkspaceChange: vi.fn((changeSet: WorkspaceChangeSet) => {
-      changeSets.set(changeSet.changeSetId, changeSet);
-      return changeSet;
-    }),
-    finalizeWorkspaceChange: vi.fn((changeSetId: string, finalizedAt: string) => {
-      const existing = changeSets.get(changeSetId);
-      if (!existing) return undefined;
-      const changedFiles = changedFilesByChangeSet.get(changeSetId) ?? [];
-      const finalized = {
-        ...existing,
-        status: 'finalized' as const,
-        finalizedAt,
-        changedFileCount: changedFiles.length,
-      };
-      changeSets.set(changeSetId, finalized);
-      return finalized;
-    }),
-    saveFileSnapshot: vi.fn((snapshot: WorkspaceSnapshotContent) => snapshot),
-    recordChangedFile: vi.fn((changedFile: WorkspaceChangedFile) => {
-      const current = changedFilesByChangeSet.get(changedFile.changeSetId) ?? [];
-      current.push(changedFile);
-      changedFilesByChangeSet.set(changedFile.changeSetId, current);
-      return changedFile;
-    }),
-    ...overrides,
-  };
-  return repository as WorkspaceChangeTrackerRepositoryPort & {
-    getWorkspaceChange: ReturnType<typeof vi.fn>;
-    recordWorkspaceChange: ReturnType<typeof vi.fn>;
-    finalizeWorkspaceChange: ReturnType<typeof vi.fn>;
-    saveFileSnapshot: ReturnType<typeof vi.fn>;
-    recordChangedFile: ReturnType<typeof vi.fn>;
-  };
+interface FakeWorkspaceChangeRepository {
+  changeSets: WorkspaceChangeSet[];
+  files: WorkspaceChangedFile[];
+  insertChangeSet(change_set: WorkspaceChangeSet): WorkspaceChangeSet;
+  findOpenChangeSet(input: { workspace_id: string; session_id: string; run_id: string }): WorkspaceChangeSet | undefined;
+  listChangeSetsByRunId(run_id: string): WorkspaceChangeSet[];
+  finalizeChangeSet(input: { change_set_id: string; finalized_at: string }): WorkspaceChangeSet | undefined;
+  insertOrUpdateChangedFile(file: WorkspaceChangedFile): WorkspaceChangedFile;
+  listChangedFilesByChangeSetId(change_set_id: string): WorkspaceChangedFile[];
+  listChangedFilesByRunId(run_id: string): WorkspaceChangedFile[];
+  getChangeSummary(change_set_id: string): { change_set: WorkspaceChangeSet; files: WorkspaceChangedFile[] } | undefined;
 }
 
-function fakeFileSystem(files: Map<string, string>) {
-  return {
-    async readFile(filePath: string) {
-      const value = files.get(filePath);
-      if (value === undefined) throw missingFileError(filePath);
-      return value;
+function fakeRepository(): FakeWorkspaceChangeRepository {
+  const repository: FakeWorkspaceChangeRepository = {
+    changeSets: [],
+    files: [],
+    insertChangeSet(change_set) {
+      repository.changeSets.push(change_set);
+      return change_set;
     },
-    async stat(filePath: string) {
-      if (files.has(filePath)) {
-        return {
-          isFile: () => true,
-          isDirectory: () => false,
-          size: Buffer.byteLength(files.get(filePath) ?? '', 'utf8'),
-        };
+    findOpenChangeSet(input) {
+      return repository.changeSets.find((change_set) => change_set.workspace_id === input.workspace_id
+        && change_set.session_id === input.session_id
+        && change_set.run_id === input.run_id
+        && change_set.status === 'open');
+    },
+    listChangeSetsByRunId(run_id) {
+      return repository.changeSets.filter((change_set) => change_set.run_id === run_id);
+    },
+    finalizeChangeSet(input) {
+      const changeSet = repository.changeSets.find((item) => item.change_set_id === input.change_set_id);
+      if (!changeSet) {
+        return undefined;
       }
-      throw missingFileError(filePath);
+      changeSet.status = 'finalized';
+      changeSet.finalized_at = input.finalized_at;
+      changeSet.changed_file_count = repository.files.filter((file) => file.change_set_id === input.change_set_id).length;
+      return changeSet;
+    },
+    insertOrUpdateChangedFile(file) {
+      const existing = repository.files.find((item) => item.change_set_id === file.change_set_id
+        && item.workspace_path === file.workspace_path);
+      if (existing) {
+        existing.change_kind = file.change_kind;
+        return existing;
+      }
+      repository.files.push(file);
+      return file;
+    },
+    listChangedFilesByChangeSetId(change_set_id) {
+      return repository.files.filter((file) => file.change_set_id === change_set_id);
+    },
+    listChangedFilesByRunId(run_id) {
+      const changeSetIds = new Set(repository.changeSets
+        .filter((change_set) => change_set.run_id === run_id)
+        .map((change_set) => change_set.change_set_id));
+      return repository.files.filter((file) => changeSetIds.has(file.change_set_id));
+    },
+    getChangeSummary(change_set_id) {
+      const change_set = repository.changeSets.find((item) => item.change_set_id === change_set_id);
+      return change_set
+        ? { change_set, files: repository.listChangedFilesByChangeSetId(change_set_id) }
+        : undefined;
     },
   };
-}
-
-function missingFileError(filePath: string): NodeJS.ErrnoException {
-  const error = new Error(`Missing path: ${filePath}`) as NodeJS.ErrnoException;
-  error.code = 'ENOENT';
-  return error;
-}
-
-function sequence(prefix: string) {
-  let index = 0;
-  return () => `${prefix}-${++index}`;
-}
-
-function fakeClock(values: string[]) {
-  let index = 0;
-  return () => values[Math.min(index++, values.length - 1)];
-}
-
-function createDeferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((innerResolve) => {
-    resolve = innerResolve;
-  });
-  return { promise, resolve };
+  return repository;
 }
