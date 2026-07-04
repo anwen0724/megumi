@@ -106,4 +106,57 @@ describe('WorkspaceRepository', () => {
     expect(repository.deleteWorkspace('workspace:missing')).toBe(false);
     expect(repository.deleteWorkspace('workspace:one')).toBe(true);
   });
+
+  it('does not delete sessions, runs, or workspace changes when removing a referenced workspace', () => {
+    const database = createDatabase(':memory:');
+    applyCodingAgentDatabaseMigrations(database);
+    try {
+      const repository = new WorkspaceRepository(database);
+      repository.insertOrUpdateWorkspace(workspace());
+      database.prepare(`
+        INSERT INTO sessions (
+          session_id, workspace_id, title, status, active_entry_id,
+          created_at, updated_at, archived_at
+        ) VALUES (
+          'session:one', 'workspace:one', 'Session', 'active', NULL,
+          '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z', NULL
+        )
+      `).run();
+      database.prepare(`
+        INSERT INTO agent_loop_runs (
+          run_id, workspace_id, session_id, run_kind, user_message_id, assistant_message_id,
+          base_run_id, base_message_id, base_entry_id, attempt_number, status,
+          permission_mode, permission_snapshot_json, memory_recall_trace_id,
+          started_at, completed_at, cancelled_at, error_json, created_at, metadata_json
+        ) VALUES (
+          'run:one', 'workspace:one', 'session:one', 'message', NULL, NULL,
+          NULL, NULL, NULL, 1, 'completed',
+          'default', NULL, NULL,
+          NULL, NULL, NULL, NULL, '2026-05-16T00:00:00.000Z', NULL
+        )
+      `).run();
+      database.prepare(`
+        INSERT INTO workspace_changes (
+          change_set_id, workspace_id, session_id, run_id, status,
+          changed_file_count, created_at, finalized_at
+        ) VALUES (
+          'change-set:one', 'workspace:one', 'session:one', 'run:one', 'finalized',
+          0, '2026-05-16T00:00:00.000Z', '2026-05-16T00:01:00.000Z'
+        )
+      `).run();
+
+      expect(repository.deleteWorkspace('workspace:one')).toBe(false);
+      expect(repository.findWorkspaceById('workspace:one')).toEqual(workspace());
+      expect(countRows(database, 'sessions')).toBe(1);
+      expect(countRows(database, 'agent_loop_runs')).toBe(1);
+      expect(countRows(database, 'workspace_changes')).toBe(1);
+    } finally {
+      database.close();
+    }
+  });
 });
+
+function countRows(database: ReturnType<typeof createDatabase>, tableName: string): number {
+  const row = database.prepare(`SELECT COUNT(*) AS count FROM ${tableName}`).get() as { count: number };
+  return row.count;
+}

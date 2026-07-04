@@ -144,6 +144,12 @@ describe('WorkspaceChangeService', () => {
     });
     expect(service.listChangedFiles({ by: 'change_set', change_set_id: 'change-set:1' }).files).toHaveLength(1);
     expect(service.listChangedFiles({ by: 'run', run_id: 'run:one' }).files).toHaveLength(1);
+    expect(service.listChangeSummaries({ by: 'run', run_id: 'run:one' }).summaries).toEqual([
+      expect.objectContaining({
+        change_set: expect.objectContaining({ change_set_id: 'change-set:1' }),
+        files: [expect.objectContaining({ workspace_path: 'src/new.ts' })],
+      }),
+    ]);
   });
 
   it('executes but skips recording after a finalized change set for the same run scope', async () => {

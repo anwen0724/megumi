@@ -27,14 +27,13 @@ export const workspaces = sqliteTable('workspaces', {
 
 export const sessions = sqliteTable('sessions', {
   sessionId: text('session_id').primaryKey(),
-  workspaceId: text('workspace_id').notNull().references(() => workspaces.workspaceId, { onDelete: 'cascade' }),
+  workspaceId: text('workspace_id').notNull().references(() => workspaces.workspaceId),
   title: text('title').notNull(),
   status: text('status').notNull(),
   activeEntryId: text('active_entry_id'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
   archivedAt: text('archived_at'),
-  metadataJson: jsonText('metadata_json'),
 }, (table) => [
   index('idx_sessions_workspace_updated').on(table.workspaceId, table.updatedAt),
   index('idx_sessions_active_entry').on(table.activeEntryId),
@@ -97,7 +96,7 @@ export const sessionCompactions = sqliteTable('session_compactions', {
 
 export const agentLoopRuns = sqliteTable('agent_loop_runs', {
   runId: text('run_id').primaryKey(),
-  workspaceId: text('workspace_id').notNull().references(() => workspaces.workspaceId, { onDelete: 'cascade' }),
+  workspaceId: text('workspace_id').notNull().references(() => workspaces.workspaceId),
   sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
   runKind: text('run_kind').notNull(),
   userMessageId: text('user_message_id').references(() => sessionMessages.messageId, { onDelete: 'set null' }),
@@ -223,7 +222,7 @@ export const approvalRequests = sqliteTable('approval_requests', {
 
 export const workspaceChanges = sqliteTable('workspace_changes', {
   changeSetId: text('change_set_id').primaryKey(),
-  workspaceId: text('workspace_id').notNull().references(() => workspaces.workspaceId, { onDelete: 'cascade' }),
+  workspaceId: text('workspace_id').notNull().references(() => workspaces.workspaceId),
   sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
   runId: text('run_id').notNull().references(() => agentLoopRuns.runId, { onDelete: 'cascade' }),
   status: text('status').notNull(),

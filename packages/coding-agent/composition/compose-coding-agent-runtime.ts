@@ -113,11 +113,11 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     path_policy: workspacePathPolicyService,
     file_system: workspaceFileSystem,
   });
-  void workspaceChangeService;
   const toolRuntimeFactory = composeCodingAgentToolRuntimeFactory({
     toolRepository: toolCallRepository,
     toolRegistry,
-    workspaceChangeRepository: persistence.workspaceChangeRepository,
+    workspaceChangeService,
+    workspacePathPolicyService,
     runRepository: agentLoopRepository,
     permissionSettingsProvider: options.permissionSettingsProvider ?? settingsService,
   });
@@ -137,7 +137,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     agentLoopRepository,
     sessionRepository,
     toolCallRepository,
-    workspaceChangeRepository: persistence.workspaceChangeRepository,
+    workspaceChangeService,
     toolRegistry,
     modelCallProviderService,
     toolRuntimeFactory,

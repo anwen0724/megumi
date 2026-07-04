@@ -14,6 +14,7 @@ describe('tool definitions', () => {
       'search_text',
       'edit_file',
       'write_file',
+      'delete_file',
       'run_command',
     ]);
     expect(BUILT_IN_TOOL_DEFINITIONS.map((definition) => definition.name)).toEqual(BUILT_IN_TOOL_NAMES);

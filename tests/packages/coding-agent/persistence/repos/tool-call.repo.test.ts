@@ -634,10 +634,10 @@ function seedLifecycle(database: Database.Database): void {
 
     INSERT INTO sessions (
       session_id, workspace_id, title, status, active_entry_id,
-      created_at, updated_at, archived_at, metadata_json
+      created_at, updated_at, archived_at
     ) VALUES (
       'session-1', 'project-1', 'Tool session', 'active', NULL,
-      '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z', NULL, NULL
+      '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z', NULL
     );
 
     INSERT INTO agent_loop_runs (

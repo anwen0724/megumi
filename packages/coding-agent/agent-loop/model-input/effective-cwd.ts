@@ -1,7 +1,9 @@
 ﻿// Resolves the run-level working directory used by ModelStep input builds.
 // Tool-local cwd values are validated by tool executors and must not mutate this state.
 import path from 'node:path';
-import { classifyWorkspacePath } from '@megumi/coding-agent/workspace/core/workspace-path-policy';
+import { createWorkspacePathPolicyService } from '@megumi/coding-agent/workspace';
+
+const workspacePathPolicyService = createWorkspacePathPolicyService();
 
 export interface ResolveModelCallEffectiveCwdInput {
   projectRoot?: string;
@@ -26,7 +28,7 @@ export function resolveModelCallEffectiveCwd(
   }
 
   const targetPath = input.requestedCwd ?? '.';
-  const classification = classifyWorkspacePath({
+  const classification = workspacePathPolicyService.classifyPath({
     workspace_root: input.projectRoot,
     target_path: targetPath,
   });

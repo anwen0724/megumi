@@ -17,6 +17,7 @@ describe('ToolRegistryService desktop integration surface', () => {
       'search_text',
       'edit_file',
       'write_file',
+      'delete_file',
       'run_command',
     ]);
   });

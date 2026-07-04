@@ -22,6 +22,7 @@ import type {
   ToolExecutionRecord,
   ToolResult,
 } from '@megumi/shared/tool';
+import type { WorkspaceChangeService } from '../../workspace';
 import {
   evaluateToolExecutionDecision,
   type ToolExecutionDecisionInput,
@@ -93,6 +94,7 @@ export interface ToolCallRepositoryPort {
   getApprovalRequest(approvalRequestId: string): ApprovalRequest | undefined;
   completeToolCall(toolResult: ToolResult): ToolResult;
   getRunSessionId(runId: string): string | undefined;
+  getRunWorkspaceId?(runId: string): string | undefined;
   markToolResultsSubmittedToModelInput?(input: {
     toolExecutionIds: string[];
     emittedAt: string;
@@ -103,6 +105,7 @@ export interface ToolCallRunnerOptions {
   repository: ToolCallRepositoryPort;
   toolRegistryService: Pick<ToolRegistryService, 'getRegisteredTool'>;
   toolExecutionService: Pick<ToolExecutionService, 'executeTool'>;
+  workspaceChangeService?: Pick<WorkspaceChangeService, 'trackToolExecution'>;
   permissionMode: PermissionMode;
   projectRoot: string;
   settings: MergedPermissionSettings;

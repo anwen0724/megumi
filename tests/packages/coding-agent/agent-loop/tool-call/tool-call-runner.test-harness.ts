@@ -236,6 +236,7 @@ function createInMemoryToolCallStore(
       return result;
     }),
     getRunSessionId: vi.fn(() => 'session:1'),
+    getRunWorkspaceId: vi.fn(() => 'workspace:1'),
   };
 }
 

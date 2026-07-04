@@ -80,9 +80,19 @@ export type ListWorkspaceChangedFilesResult = {
   files: WorkspaceChangedFile[];
 };
 
+export type ListWorkspaceChangeSummariesRequest = {
+  by: 'run';
+  run_id: string;
+};
+
+export type ListWorkspaceChangeSummariesResult = {
+  summaries: WorkspaceChangeSummary[];
+};
+
 export interface WorkspaceChangeService {
   trackToolExecution<T>(request: TrackWorkspaceToolExecutionRequest<T>): Promise<T>;
   finalizeChangeSet(request: FinalizeWorkspaceChangeSetRequest): FinalizeWorkspaceChangeSetResult;
   getChangeSummary(request: GetWorkspaceChangeSummaryRequest): GetWorkspaceChangeSummaryResult;
   listChangedFiles(request: ListWorkspaceChangedFilesRequest): ListWorkspaceChangedFilesResult;
+  listChangeSummaries(request: ListWorkspaceChangeSummariesRequest): ListWorkspaceChangeSummariesResult;
 }

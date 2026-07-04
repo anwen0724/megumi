@@ -84,9 +84,23 @@ export class WorkspaceRepository {
   }
 
   deleteWorkspace(workspace_id: string): boolean {
+    if (this.workspaceHasBusinessFactReferences(workspace_id)) {
+      return false;
+    }
     const result = this.database.prepare('DELETE FROM workspaces WHERE workspace_id = ?')
       .run(workspace_id);
     return result.changes > 0;
+  }
+
+  private workspaceHasBusinessFactReferences(workspace_id: string): boolean {
+    const row = this.database.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM sessions WHERE workspace_id = @workspace_id)
+        + (SELECT COUNT(*) FROM agent_loop_runs WHERE workspace_id = @workspace_id)
+        + (SELECT COUNT(*) FROM workspace_changes WHERE workspace_id = @workspace_id)
+        AS reference_count
+    `).get({ workspace_id }) as { reference_count: number } | undefined;
+    return Number(row?.reference_count ?? 0) > 0;
   }
 }
 

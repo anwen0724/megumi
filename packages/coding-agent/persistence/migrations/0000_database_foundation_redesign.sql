@@ -34,7 +34,7 @@ CREATE TABLE `agent_loop_runs` (
 	`error_json` text,
 	`created_at` text NOT NULL,
 	`metadata_json` text,
-	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`workspace_id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`workspace_id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`session_id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`user_message_id`) REFERENCES `session_messages`(`message_id`) ON UPDATE no action ON DELETE set null,
 	FOREIGN KEY (`assistant_message_id`) REFERENCES `session_messages`(`message_id`) ON UPDATE no action ON DELETE set null,
@@ -297,8 +297,7 @@ CREATE TABLE `sessions` (
 	`created_at` text NOT NULL,
 	`updated_at` text NOT NULL,
 	`archived_at` text,
-	`metadata_json` text,
-	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`workspace_id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`workspace_id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`active_entry_id`) REFERENCES `session_entries`(`entry_id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
@@ -382,7 +381,7 @@ CREATE TABLE `workspace_changes` (
 	`changed_file_count` integer NOT NULL,
 	`created_at` text NOT NULL,
 	`finalized_at` text,
-	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`workspace_id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`workspace_id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`session_id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`run_id`) REFERENCES `agent_loop_runs`(`run_id`) ON UPDATE no action ON DELETE cascade
 );

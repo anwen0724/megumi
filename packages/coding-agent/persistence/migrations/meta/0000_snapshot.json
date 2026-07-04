@@ -248,13 +248,6 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
-        },
-        "metadata_json": {
-          "name": "metadata_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         }
       },
       "indexes": {
@@ -321,7 +314,7 @@
           "columnsTo": [
             "workspace_id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "no action",
           "onUpdate": "no action"
         },
         "agent_loop_runs_session_id_sessions_session_id_fk": {
@@ -489,13 +482,6 @@
         },
         "expires_at": {
           "name": "expires_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "metadata_json": {
-          "name": "metadata_json",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -2043,13 +2029,6 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
-        },
-        "metadata_json": {
-          "name": "metadata_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         }
       },
       "indexes": {
@@ -2080,7 +2059,7 @@
           "columnsTo": [
             "workspace_id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -2670,7 +2649,7 @@
           "columnsTo": [
             "workspace_id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "no action",
           "onUpdate": "no action"
         },
         "workspace_changes_session_id_sessions_session_id_fk": {

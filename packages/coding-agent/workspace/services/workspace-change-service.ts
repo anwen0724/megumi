@@ -9,11 +9,14 @@ import type {
   FinalizeWorkspaceChangeSetResult,
   GetWorkspaceChangeSummaryRequest,
   GetWorkspaceChangeSummaryResult,
+  ListWorkspaceChangeSummariesRequest,
+  ListWorkspaceChangeSummariesResult,
   ListWorkspaceChangedFilesRequest,
   ListWorkspaceChangedFilesResult,
   TrackWorkspaceToolExecutionRequest,
   WorkspaceChangedFile,
   WorkspaceChangeSet,
+  WorkspaceChangeSummary,
   WorkspaceChangeService,
 } from '../contracts/workspace-change-contracts';
 import type { WorkspacePathPolicyService } from '../contracts/workspace-contracts';
@@ -134,6 +137,14 @@ export function createWorkspaceChangeService(options: CreateWorkspaceChangeServi
         files: request.by === 'change_set'
           ? options.repository.listChangedFilesByChangeSetId(request.change_set_id)
           : options.repository.listChangedFilesByRunId(request.run_id),
+      };
+    },
+
+    listChangeSummaries(request: ListWorkspaceChangeSummariesRequest): ListWorkspaceChangeSummariesResult {
+      return {
+        summaries: options.repository.listChangeSetsByRunId(request.run_id)
+          .map((changeSet) => options.repository.getChangeSummary(changeSet.change_set_id))
+          .filter((summary): summary is WorkspaceChangeSummary => Boolean(summary)),
       };
     },
   };

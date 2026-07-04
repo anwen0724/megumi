@@ -6,6 +6,8 @@ import type { ToolExecutionRunOptions } from './tool-execution-window';
 import type { ResolvedToolCallRunnerOptions } from '../tool-call-runner';
 import { isTerminalForNextModelInput } from './tool-execution-window';
 
+const toolExecutionReturnedFailedResult = Symbol('tool_execution_returned_failed_result');
+
 export function runtimeErrorFromFailedRecord(record: ToolExecutionRecord): RuntimeError {
   return {
     code: record.error?.code ?? 'tool_execution_failed',
@@ -44,10 +46,10 @@ export async function runToolExecutionRecord(
   });
 
   try {
-    const executionResult = await options.toolExecutionService.executeTool({
-      toolName: running.toolName,
-      input: running.input,
-      ...(executionOptions?.signal ? { options: { signal: executionOptions.signal } } : {}),
+    const executionResult = await executeToolWithWorkspaceChangeTracking({
+      options,
+      record: running,
+      executionOptions,
     });
     const observation = observationFromExecutionResult(running, executionResult, options);
     return options.repository.recordToolExecution({
@@ -83,6 +85,67 @@ export async function runToolExecutionRecord(
       resultPreview: observation.content.slice(0, 500),
     });
   }
+}
+
+async function executeToolWithWorkspaceChangeTracking(input: {
+  options: ResolvedToolCallRunnerOptions;
+  record: ToolExecutionRecord;
+  executionOptions?: ToolExecutionRunOptions;
+}): Promise<ToolExecutionResult> {
+  const execute = () => input.options.toolExecutionService.executeTool({
+    toolName: input.record.toolName,
+    input: input.record.input,
+    ...(input.executionOptions?.signal ? { options: { signal: input.executionOptions.signal } } : {}),
+  });
+  const scope = workspaceChangeScopeForRecord(input.options, input.record);
+  if (!input.options.workspaceChangeService || !scope) {
+    return execute();
+  }
+
+  let failedResult: Extract<ToolExecutionResult, { type: 'failed' }> | undefined;
+  try {
+    return await input.options.workspaceChangeService.trackToolExecution({
+      scope,
+      tool_execution: {
+        tool_name: input.record.toolName,
+        input: input.record.input,
+        workspace_root: input.options.projectRoot,
+      },
+      execute: async () => {
+        const result = await execute();
+        if (result.type === 'failed') {
+          failedResult = result;
+          throw toolExecutionReturnedFailedResult;
+        }
+        return result;
+      },
+    });
+  } catch (error) {
+    if (error === toolExecutionReturnedFailedResult && failedResult) {
+      return failedResult;
+    }
+    throw error;
+  }
+}
+
+function workspaceChangeScopeForRecord(
+  options: ResolvedToolCallRunnerOptions,
+  record: ToolExecutionRecord,
+): Parameters<NonNullable<ResolvedToolCallRunnerOptions['workspaceChangeService']>['trackToolExecution']>[0]['scope'] {
+  const runId = String(record.runId);
+  const workspaceId = options.repository.getRunWorkspaceId?.(runId);
+  const sessionId = options.repository.getRunSessionId(runId);
+  if (!workspaceId || !sessionId) {
+    return undefined;
+  }
+  return {
+    workspace_id: workspaceId,
+    session_id: sessionId,
+    run_id: runId,
+    step_id: String(record.stepId),
+    tool_call_id: String(record.toolCallId),
+    tool_execution_id: String(record.toolExecutionId),
+  };
 }
 
 function observationFromExecutionResult(

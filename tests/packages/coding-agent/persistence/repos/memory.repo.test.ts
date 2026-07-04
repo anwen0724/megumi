@@ -247,10 +247,10 @@ function seedLifecycle(db: MegumiDatabase): void {
 
     INSERT INTO sessions (
       session_id, workspace_id, title, status, active_entry_id,
-      created_at, updated_at, archived_at, metadata_json
+      created_at, updated_at, archived_at
     ) VALUES (
       'session:1', 'workspace:1', 'Memory session', 'active', NULL,
-      '${now}', '${now}', NULL, NULL
+      '${now}', '${now}', NULL
     );
 
     INSERT INTO agent_loop_runs (

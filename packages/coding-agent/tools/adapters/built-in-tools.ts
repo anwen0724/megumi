@@ -49,6 +49,12 @@ export interface WorkspaceFileAccess {
     created: boolean;
     overwritten: boolean;
   }>;
+  deleteFile(input: {
+    path: string;
+  }): Promise<{
+    path: string;
+    deleted: boolean;
+  }>;
   resolveCommandCwd(input: {
     path: string;
   }): Promise<string>;
@@ -90,6 +96,8 @@ export function createBuiltInToolAdapter(input: {
           return editFile(context, request.input);
         case 'write_file':
           return writeFile(context, request.input);
+        case 'delete_file':
+          return deleteFile(context, request.input);
         case 'run_command':
           return runCommand(context, request.input, request.signal);
         default:
@@ -246,6 +254,23 @@ async function writeFile(
       bytesWritten: result.bytesWritten,
       created: result.created,
       overwritten: result.overwritten,
+    },
+  };
+}
+
+async function deleteFile(
+  context: BuiltInToolContext,
+  input: unknown,
+): Promise<RawToolResult> {
+  const record = inputRecord(input);
+  const targetPath = requireString(record, 'path');
+  const result = await context.workspaceFileAccess.deleteFile({ path: targetPath });
+
+  return {
+    outputKind: 'json',
+    content: {
+      path: result.path,
+      deleted: result.deleted,
     },
   };
 }

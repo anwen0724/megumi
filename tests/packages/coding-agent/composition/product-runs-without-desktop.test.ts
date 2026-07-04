@@ -93,6 +93,68 @@ function toolCallingModelStepProvider(targetFileName: string) {
   };
 }
 
+function singleToolCallingModelStepProvider(toolName: string, input: unknown) {
+  let call = 0;
+  return {
+    async *streamModelCall(request: { sessionId: string; runId: string; stepId: string }): AsyncIterable<RuntimeEvent> {
+      call += 1;
+      if (call === 1) {
+        yield {
+          eventId: `event-tool-call-${toolName}`,
+          schemaVersion: 1,
+          eventType: 'tool.call.created',
+          sessionId: request.sessionId,
+          runId: request.runId,
+          stepId: request.stepId,
+          sequence: 1,
+          createdAt: '2026-06-24T00:00:01.000Z',
+          source: 'provider',
+          visibility: 'system',
+          persist: 'required',
+          payload: {
+            toolCallId: `tool-call-${toolName}`,
+            modelStepId: `model-step-${toolName}`,
+            providerToolCallId: `provider-tool-call-${toolName}`,
+            toolName,
+            input,
+          },
+        } as RuntimeEvent;
+        yield {
+          eventId: `event-model-step-completed-${toolName}`,
+          schemaVersion: 1,
+          eventType: 'model.step.completed',
+          sessionId: request.sessionId,
+          runId: request.runId,
+          stepId: request.stepId,
+          sequence: 2,
+          createdAt: '2026-06-24T00:00:02.000Z',
+          source: 'provider',
+          visibility: 'system',
+          persist: 'required',
+          payload: { modelStepId: `model-step-${toolName}`, finishReason: 'tool_calls' },
+        } as RuntimeEvent;
+        return;
+      }
+      yield {
+        eventId: `event-assistant-completed-${toolName}`,
+        schemaVersion: 1,
+        eventType: 'assistant.output.completed',
+        sessionId: request.sessionId,
+        runId: request.runId,
+        stepId: request.stepId,
+        sequence: 1,
+        createdAt: '2026-06-24T00:00:03.000Z',
+        source: 'provider',
+        visibility: 'user',
+        persist: 'required',
+        payload: { content: `${toolName} finished.` },
+      } as RuntimeEvent;
+    },
+    completeModelCall: async (): Promise<ModelCallCompletionResult> => ({ ok: true, text: '' }),
+    cancelModelCall: () => false,
+  };
+}
+
 function seedProject(home: string, repoPath: string): string {
   const database = createDatabase(path.join(home, 'megumi.sqlite3'));
   try {
@@ -205,6 +267,7 @@ describe('coding-agent product runs without desktop', () => {
     expect(await readFile(targetPath, 'utf8')).toBe('hello from the workspace');
     expect(runtimeEventTypes).toContain('tool.call.created');
     expect(runtimeEventTypes.some((type) => type.startsWith('tool.execution.'))).toBe(true);
+    expect(workspaceChangeRows(home)).toEqual([]);
 
     // persists history: timeline rows committed
     const committed = runtime.session.listTimeline({
@@ -233,5 +296,135 @@ describe('coding-agent product runs without desktop', () => {
     const restartedSessions = runtime.session.list().sessions;
     expect(restartedSessions.some((s) => String(s.sessionId) === String(session.sessionId))).toBe(true);
   }, 30000);
+
+  it('records successful managed workspace mutations through the composed tool runtime', async () => {
+    home = await mkdtemp(path.join(os.tmpdir(), 'megumi-proof-home-'));
+    workspace = await mkdtemp(path.join(os.tmpdir(), 'megumi-proof-ws-'));
+    const projectId = seedProject(home, workspace);
+
+    runtime = composeCodingAgentRuntime({
+      homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
+      runtimeLogger: { warn: () => undefined },
+      modelCallProviderService: singleToolCallingModelStepProvider('write_file', {
+        path: 'CREATED.md',
+        content: 'created through tool runtime',
+        overwrite: false,
+      }),
+      settingsStorage: productSettingsStorage(),
+    });
+
+    const result = await runtime.input.send({
+      requestId: 'request-write',
+      sessionTitle: 'Write session',
+      workspaceId: projectId,
+      workspacePath: workspace,
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      text: 'Write CREATED.md',
+      permissionMode: 'accept_edits',
+      createdAt: '2026-06-24T00:00:00.000Z',
+    });
+    if (result.type !== 'agent_run') {
+      throw new Error(`Expected agent_run result, got ${result.type}`);
+    }
+
+    const runtimeEventTypes: string[] = [];
+    for await (const event of result.events) {
+      runtimeEventTypes.push((event as RuntimeEvent).eventType);
+    }
+
+    expect(runtimeEventTypes).toContain('run.completed');
+    await expect(readFile(path.join(workspace, 'CREATED.md'), 'utf8')).resolves.toBe('created through tool runtime');
+    expect(workspaceChangeRows(home)).toEqual([
+      { status: 'open', workspace_path: 'CREATED.md', change_kind: 'created' },
+    ]);
+  }, 30000);
+
+  it('does not record changed files when a managed workspace mutation tool fails', async () => {
+    home = await mkdtemp(path.join(os.tmpdir(), 'megumi-proof-home-'));
+    workspace = await mkdtemp(path.join(os.tmpdir(), 'megumi-proof-ws-'));
+    const projectId = seedProject(home, workspace);
+
+    runtime = composeCodingAgentRuntime({
+      homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
+      runtimeLogger: { warn: () => undefined },
+      modelCallProviderService: singleToolCallingModelStepProvider('write_file', { path: 'BROKEN.md' }),
+      settingsStorage: productSettingsStorage(),
+    });
+
+    const result = await runtime.input.send({
+      requestId: 'request-failed-write',
+      sessionTitle: 'Failed write session',
+      workspaceId: projectId,
+      workspacePath: workspace,
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      text: 'Try to write BROKEN.md',
+      permissionMode: 'accept_edits',
+      createdAt: '2026-06-24T00:00:00.000Z',
+    });
+    if (result.type !== 'agent_run') {
+      throw new Error(`Expected agent_run result, got ${result.type}`);
+    }
+
+    for await (const _event of result.events) {
+      // Drain the composed runtime stream.
+    }
+
+    await expect(stat(path.join(workspace, 'BROKEN.md'))).rejects.toThrow();
+    expect(workspaceChangeRows(home)).toEqual([]);
+  }, 30000);
+
+  it('records successful managed workspace deletes through the composed tool runtime', async () => {
+    home = await mkdtemp(path.join(os.tmpdir(), 'megumi-proof-home-'));
+    workspace = await mkdtemp(path.join(os.tmpdir(), 'megumi-proof-ws-'));
+    await writeFile(path.join(workspace, 'DELETE.md'), 'remove me', 'utf8');
+    const projectId = seedProject(home, workspace);
+
+    runtime = composeCodingAgentRuntime({
+      homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
+      runtimeLogger: { warn: () => undefined },
+      modelCallProviderService: singleToolCallingModelStepProvider('delete_file', { path: 'DELETE.md' }),
+      settingsStorage: productSettingsStorage(),
+    });
+
+    const result = await runtime.input.send({
+      requestId: 'request-delete',
+      sessionTitle: 'Delete session',
+      workspaceId: projectId,
+      workspacePath: workspace,
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+      text: 'Delete DELETE.md',
+      permissionMode: 'accept_edits',
+      createdAt: '2026-06-24T00:00:00.000Z',
+    });
+    if (result.type !== 'agent_run') {
+      throw new Error(`Expected agent_run result, got ${result.type}`);
+    }
+
+    for await (const _event of result.events) {
+      // Drain the composed runtime stream.
+    }
+
+    await expect(stat(path.join(workspace, 'DELETE.md'))).rejects.toThrow();
+    expect(workspaceChangeRows(home)).toEqual([
+      { status: 'open', workspace_path: 'DELETE.md', change_kind: 'deleted' },
+    ]);
+  }, 30000);
 });
+
+function workspaceChangeRows(homePath: string): Array<{ status: string; workspace_path: string; change_kind: string }> {
+  const database = createDatabase(path.join(homePath, 'megumi.sqlite3'));
+  try {
+    return database.prepare(`
+      SELECT wc.status, wcf.workspace_path, wcf.change_kind
+      FROM workspace_changes wc
+      INNER JOIN workspace_changed_files wcf ON wcf.change_set_id = wc.change_set_id
+      ORDER BY wcf.created_at ASC
+    `).all() as Array<{ status: string; workspace_path: string; change_kind: string }>;
+  } finally {
+    database.close();
+  }
+}
 

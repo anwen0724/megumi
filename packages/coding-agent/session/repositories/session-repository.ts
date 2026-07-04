@@ -24,10 +24,10 @@ export class SessionRepository {
     this.database.prepare(`
       INSERT INTO sessions (
         session_id, workspace_id, title, status, active_entry_id,
-        created_at, updated_at, archived_at, metadata_json
+        created_at, updated_at, archived_at
       ) VALUES (
         @session_id, @workspace_id, @title, @status, @active_entry_id,
-        @created_at, @updated_at, @archived_at, NULL
+        @created_at, @updated_at, @archived_at
       )
     `).run(toSessionRow(session));
     return session;

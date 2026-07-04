@@ -8,6 +8,7 @@ export const BUILT_IN_TOOL_NAMES = [
   'search_text',
   'edit_file',
   'write_file',
+  'delete_file',
   'run_command',
 ] as const;
 
@@ -234,6 +235,36 @@ const writeFileDefinition: ToolDefinition = {
   modelFacingDescription: 'Create or overwrite a project file with provided text content.',
 };
 
+const deleteFileDefinition: ToolDefinition = {
+  name: 'delete_file',
+  title: 'Delete file',
+  description: 'Delete an existing project file.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: 'Project-relative file path.' },
+    },
+    required: ['path'],
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      path: { type: 'string' },
+      deleted: { type: 'boolean' },
+    },
+    required: ['path', 'deleted'],
+  },
+  annotations: { destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  capabilities: ['project_write'],
+  riskLevel: 'medium',
+  sideEffect: 'project_file_operation',
+  availability: { status: 'available' },
+  executionMode: 'serial',
+  permissionMetadata: { ruleToolName: 'delete_file' },
+  modelFacingDescription: 'Delete an existing project file.',
+};
+
 const runCommandDefinition: ToolDefinition = {
   name: 'run_command',
   title: 'Run command',
@@ -295,6 +326,7 @@ export const BUILT_IN_TOOL_DEFINITIONS: readonly ToolDefinition[] = deepFreeze([
   searchTextDefinition,
   editFileDefinition,
   writeFileDefinition,
+  deleteFileDefinition,
   runCommandDefinition,
 ] satisfies ToolDefinition[]);
 

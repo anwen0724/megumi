@@ -19,7 +19,7 @@ import type { AgentLoopRepository } from '../persistence/repos/agent-loop.repo';
 import type { ArtifactRepository } from '../persistence/repos/artifact.repo';
 import type { SessionRepository as LegacySessionRepository } from '../persistence/repos/session.repo';
 import type { ToolCallRepository } from '../persistence/repos/tool-call.repo';
-import type { WorkspaceChangeRepository } from '../workspace/repositories/workspace-change-repository';
+import type { WorkspaceChangeService } from '../workspace';
 import type { ToolRegistryService } from '../tools';
 import { PlanArtifactCompatibilityService, PlanArtifactService } from '../artifacts';
 import type { MemoryRuntimeComposition } from './compose-coding-agent-memory';
@@ -27,7 +27,6 @@ import { PostRunHooksCoordinator } from '../hooks';
 import { RunRetryCoordinator, RunTerminalCoordinator } from '../state';
 import {
   createWorkspaceChangeFooterProjectorService,
-  isWorkspaceChangeFooterProjectorPort,
 } from '../projections/workspace/workspace-change-footer-projector';
 import type { SessionBranchControllerServicePort } from '../host-interface/session/branch-controller';
 import type { AgentRunSessionBranchServicePort } from '../agent-loop';
@@ -47,13 +46,13 @@ export interface ComposeCodingAgentSessionRuntimeOptions {
   agentLoopRepository: AgentLoopRepository;
   sessionRepository: LegacySessionRepository;
   toolCallRepository: ToolCallRepository;
-  workspaceChangeRepository: WorkspaceChangeRepository;
+  workspaceChangeService: WorkspaceChangeService;
   toolRegistry: ToolRegistryService;
   modelCallProviderService: ModelCallProvider;
   toolRuntimeFactory: ToolRuntimeFactory;
   memoryRuntime: MemoryRuntimeComposition['memoryRuntime'];
   chatStreamEventSink?: ConstructorParameters<typeof AgentRunProcessingService>[0]['chatStreamEventSink'];
-  workspaceChangeFooterProjector?: ConstructorParameters<typeof AgentRunProcessingService>[0]['workspaceChanges'];
+  workspaceChangeFooterProjector?: ConstructorParameters<typeof PostRunHooksCoordinator>[0]['workspaceChangeFooterProjector'];
 }
 
 export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSessionRuntimeOptions) {
@@ -118,10 +117,9 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     planArtifactCompatibility,
   });
   const sessionBranchService = createUnsupportedSessionBranchService();
-  const workspaceChanges = options.workspaceChangeFooterProjector ?? options.workspaceChangeRepository;
-  const workspaceChangeFooterProjector = isWorkspaceChangeFooterProjectorPort(workspaceChanges)
-    ? createWorkspaceChangeFooterProjectorService({ workspaceChanges })
-    : undefined;
+  const workspaceChanges = options.workspaceChangeService;
+  const workspaceChangeFooterProjector = options.workspaceChangeFooterProjector
+    ?? createWorkspaceChangeFooterProjectorService({ workspaceChanges });
   const postRunHooks = new PostRunHooksCoordinator({
     repository: {
       listRuntimeEventsByRun: (runId) => options.agentLoopRepository.listRuntimeEventsByRun(runId),

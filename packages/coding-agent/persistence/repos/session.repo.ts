@@ -117,7 +117,6 @@ export interface CreateSessionInput {
   workspaceId: string;
   title: string;
   now: string;
-  metadataJson?: string | null;
 }
 
 export interface AppendUserMessageInput {
@@ -154,7 +153,6 @@ interface SessionRow {
   created_at: string;
   updated_at: string;
   archived_at: Nullable<string>;
-  metadata_json: Nullable<string>;
 }
 
 interface SessionMessageRow {
@@ -206,10 +204,10 @@ export class SessionRepository {
     this.database.prepare(`
       INSERT INTO sessions (
         session_id, workspace_id, title, status, active_entry_id,
-        created_at, updated_at, archived_at, metadata_json
+        created_at, updated_at, archived_at
       ) VALUES (
         @session_id, @workspace_id, @title, @status, @active_entry_id,
-        @created_at, @updated_at, @archived_at, @metadata_json
+        @created_at, @updated_at, @archived_at
       )
       ON CONFLICT(session_id) DO UPDATE SET
         title = excluded.title,
@@ -217,8 +215,7 @@ export class SessionRepository {
         status = excluded.status,
         active_entry_id = excluded.active_entry_id,
         updated_at = excluded.updated_at,
-        archived_at = excluded.archived_at,
-        metadata_json = excluded.metadata_json
+        archived_at = excluded.archived_at
     `).run(row);
     return this.getSession(session.sessionId) ?? session;
   }
@@ -241,7 +238,6 @@ export class SessionRepository {
       status: 'active',
       createdAt: input.now,
       updatedAt: input.now,
-      ...(input.metadataJson ? { metadata: parseJson<JsonObject>(input.metadataJson) } : {}),
     });
     return { sessionId: input.sessionId };
   }
@@ -684,7 +680,6 @@ function toSessionRow(session: Session): SessionRow {
     created_at: session.createdAt,
     updated_at: session.updatedAt,
     archived_at: session.archivedAt ?? null,
-    metadata_json: session.metadata ? stringifyJson(session.metadata) : null,
   };
 }
 
@@ -697,7 +692,6 @@ function fromSessionRow(row: SessionRow): Session {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     ...(row.archived_at ? { archivedAt: row.archived_at } : {}),
-    ...(row.metadata_json ? { metadata: parseJson<JsonObject>(row.metadata_json) } : {}),
   };
 }
 

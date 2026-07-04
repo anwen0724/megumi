@@ -3,8 +3,8 @@
  * facts and exposes file paths/kinds only, without restore or snapshot fields.
  */
 import type {
-  WorkspaceChangeSet,
   WorkspaceChangeSummary,
+  WorkspaceChangeService,
 } from '../../workspace';
 
 export type WorkspaceChangeFooterFile = {
@@ -27,8 +27,7 @@ export type WorkspaceChangeFooterFact = {
 };
 
 export interface WorkspaceChangeFooterProjectorWorkspaceChangePort {
-  listChangeSetsByRunId(run_id: string): WorkspaceChangeSet[];
-  getChangeSummary(change_set_id: string): WorkspaceChangeSummary | undefined;
+  listChangeSummaries: Pick<WorkspaceChangeService, 'listChangeSummaries'>['listChangeSummaries'];
 }
 
 export interface WorkspaceChangeFooterProjectorService {
@@ -45,9 +44,9 @@ export function createWorkspaceChangeFooterProjectorService(
   return {
     projectRunFooter(run_id) {
       const changeSets = options.workspaceChanges
-        .listChangeSetsByRunId(run_id)
-        .filter((changeSet) => changeSet.status === 'finalized' && changeSet.changed_file_count > 0)
-        .map((changeSet) => projectChangeSet(changeSet, options.workspaceChanges.getChangeSummary(changeSet.change_set_id)))
+        .listChangeSummaries({ by: 'run', run_id }).summaries
+        .filter((summary) => summary.change_set.status === 'finalized' && summary.change_set.changed_file_count > 0)
+        .map(projectChangeSet)
         .filter((changeSet): changeSet is ProjectedChangeSet => Boolean(changeSet));
 
       if (changeSets.length === 0) {
@@ -69,8 +68,7 @@ export function isWorkspaceChangeFooterProjectorPort(
 ): value is WorkspaceChangeFooterProjectorWorkspaceChangePort {
   return typeof value === 'object'
     && value !== null
-    && 'listChangeSetsByRunId' in value
-    && 'getChangeSummary' in value;
+    && 'listChangeSummaries' in value;
 }
 
 type ProjectedChangeSet = WorkspaceChangeFooterChangeSet & {
@@ -78,10 +76,7 @@ type ProjectedChangeSet = WorkspaceChangeFooterChangeSet & {
   updatedAt: string;
 };
 
-function projectChangeSet(
-  changeSet: WorkspaceChangeSet,
-  summary: WorkspaceChangeSummary | undefined,
-): ProjectedChangeSet | undefined {
+function projectChangeSet(summary: WorkspaceChangeSummary): ProjectedChangeSet | undefined {
   if (!summary || summary.files.length === 0) {
     return undefined;
   }
@@ -95,7 +90,7 @@ function projectChangeSet(
       changeKind: file.change_kind,
     })),
     sessionId: summary.change_set.session_id,
-    updatedAt: summary.change_set.finalized_at ?? changeSet.finalized_at ?? summary.change_set.created_at,
+    updatedAt: summary.change_set.finalized_at ?? summary.change_set.created_at,
   };
 }
 

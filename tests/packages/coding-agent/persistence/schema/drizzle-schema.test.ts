@@ -85,6 +85,7 @@ describe('Drizzle schema target table list', () => {
         'last_opened_at',
       ]));
       expect(columns(database, 'workspaces')).not.toContain('metadata_json');
+      expect(columns(database, 'sessions')).not.toContain('metadata_json');
       expect(columns(database, 'workspace_changes')).toEqual(expect.arrayContaining([
         'change_set_id',
         'workspace_id',
@@ -131,10 +132,28 @@ describe('Drizzle schema target table list', () => {
         'created_at',
       ]));
       expect(foreignKeys(database, 'sessions')).toContainEqual({
+        from: 'workspace_id',
+        table: 'workspaces',
+        to: 'workspace_id',
+        onDelete: 'NO ACTION',
+      });
+      expect(foreignKeys(database, 'sessions')).toContainEqual({
         from: 'active_entry_id',
         table: 'session_entries',
         to: 'entry_id',
         onDelete: 'SET NULL',
+      });
+      expect(foreignKeys(database, 'agent_loop_runs')).toContainEqual({
+        from: 'workspace_id',
+        table: 'workspaces',
+        to: 'workspace_id',
+        onDelete: 'NO ACTION',
+      });
+      expect(foreignKeys(database, 'workspace_changes')).toContainEqual({
+        from: 'workspace_id',
+        table: 'workspaces',
+        to: 'workspace_id',
+        onDelete: 'NO ACTION',
       });
       expect(foreignKeys(database, 'session_entries')).toEqual(expect.arrayContaining([
         {

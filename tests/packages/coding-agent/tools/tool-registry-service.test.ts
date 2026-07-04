@@ -14,6 +14,7 @@ describe('ToolRegistryService', () => {
       'search_text',
       'edit_file',
       'write_file',
+      'delete_file',
       'run_command',
     ]);
     for (const tool of result.tools) {

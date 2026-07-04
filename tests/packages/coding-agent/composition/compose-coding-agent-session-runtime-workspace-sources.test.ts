@@ -8,6 +8,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { composeCodingAgentPersistence, composeCodingAgentSessionRuntime } from '@megumi/coding-agent/composition';
 import { composeCodingAgentToolRegistryService } from '@megumi/coding-agent/composition';
+import { createWorkspaceChangeService, createWorkspacePathPolicyService } from '@megumi/coding-agent/workspace';
 
 function noopMemoryRuntime() {
   return {
@@ -36,6 +37,7 @@ describe('composed session runtime workspace sources', () => {
     try {
       const agentLoopRepository = persistence.agentLoopRepository as any;
       const sessionRepository = persistence.sessionRepository as any;
+      const workspacePathPolicyService = createWorkspacePathPolicyService();
       const workspace = persistence.workspaceRepository.insertOrUpdateWorkspace({
         workspace_id: 'workspace:test',
         name: path.basename(home),
@@ -54,7 +56,11 @@ describe('composed session runtime workspace sources', () => {
         agentLoopRepository,
         sessionRepository,
         toolCallRepository: persistence.toolCallRepository,
-        workspaceChangeRepository: persistence.workspaceChangeRepository,
+        workspaceChangeService: createWorkspaceChangeService({
+          repository: persistence.workspaceChangeRepository,
+          path_policy: workspacePathPolicyService,
+          file_system: { exists: async () => false },
+        }),
         toolRegistry: composeCodingAgentToolRegistryService(),
         modelCallProviderService: {
           streamModelCall: async function* () {},

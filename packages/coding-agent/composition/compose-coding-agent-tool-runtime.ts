@@ -4,7 +4,6 @@ import fs from 'fs-extra';
 import { createToolCallRunner } from '../agent-loop/tool-call';
 import type { AgentLoopRepository } from '../persistence/repos/agent-loop.repo';
 import type { ToolCallRepository } from '../persistence/repos/tool-call.repo';
-import type { WorkspaceChangeRepository } from '../workspace/repositories/workspace-change-repository';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
 import type { PermissionSettingsProvider } from '../permissions/permission-settings-provider';
 import {
@@ -12,11 +11,13 @@ import {
   ToolRegistryService,
 } from '../tools';
 import { createBuiltInToolAdapter, type WorkspaceFileAccess } from '../tools/adapters/built-in-tools';
-import { classifyWorkspacePath } from '../workspace/core/workspace-path-policy';
+import type { WorkspaceChangeService, WorkspacePathPolicyService } from '../workspace';
+import { createWorkspacePathPolicyService } from '../workspace';
 
 export interface LocalWorkspaceFileSystem {
   readFile(path: string, encoding: 'utf8'): Promise<string>;
   writeFile(path: string, content: string, encoding: 'utf8'): Promise<void>;
+  unlink(path: string): Promise<void>;
   mkdir(path: string, options: { recursive: true }): Promise<unknown>;
   stat(path: string): Promise<{ isFile(): boolean; isDirectory(): boolean; size: number }>;
   readdir(path: string, options: { withFileTypes: true }): Promise<Array<{
@@ -34,6 +35,7 @@ export function composeCodingAgentToolExecutionService(input: {
   projectRoot: string;
   fileSystem?: LocalWorkspaceFileSystem;
   registryService?: ToolRegistryService;
+  workspacePathPolicyService?: WorkspacePathPolicyService;
 }): ToolExecutionService {
   const registryService = input.registryService ?? composeCodingAgentToolRegistryService();
   return new ToolExecutionService({
@@ -42,6 +44,7 @@ export function composeCodingAgentToolExecutionService(input: {
       workspaceFileAccess: createLocalWorkspaceFileAccess({
         projectRoot: input.projectRoot,
         fileSystem: input.fileSystem ?? fs,
+        workspacePathPolicyService: input.workspacePathPolicyService ?? createWorkspacePathPolicyService(),
       }),
     }),
   });
@@ -50,12 +53,14 @@ export function composeCodingAgentToolExecutionService(input: {
 export function createLocalWorkspaceFileAccess(input: {
   projectRoot: string;
   fileSystem?: LocalWorkspaceFileSystem;
+  workspacePathPolicyService?: WorkspacePathPolicyService;
 }): WorkspaceFileAccess {
   const fileSystem = input.fileSystem ?? fs;
+  const workspacePathPolicyService = input.workspacePathPolicyService ?? createWorkspacePathPolicyService();
 
   return {
     async readFile(request) {
-      const resolved = resolveReadablePath(input.projectRoot, request.path);
+      const resolved = resolveReadablePath(workspacePathPolicyService, input.projectRoot, request.path);
       const rawContent = await fileSystem.readFile(resolved.absolutePath, 'utf8');
       const truncated = truncateUtf8(rawContent, request.maxBytes);
       return {
@@ -66,7 +71,7 @@ export function createLocalWorkspaceFileAccess(input: {
       };
     },
     async listDirectory(request) {
-      const resolved = resolveReadablePath(input.projectRoot, request.path);
+      const resolved = resolveReadablePath(workspacePathPolicyService, input.projectRoot, request.path);
       const entries = await fileSystem.readdir(resolved.absolutePath, { withFileTypes: true });
       const visibleEntries = entries
         .filter((entry) => entry.isFile() || entry.isDirectory())
@@ -92,15 +97,16 @@ export function createLocalWorkspaceFileAccess(input: {
       return walkFiles({
         projectRoot: input.projectRoot,
         fileSystem,
+        workspacePathPolicyService,
         rootRelativePath: request.path,
       });
     },
     async readTextFile(request) {
-      const resolved = resolveReadablePath(input.projectRoot, request.path);
+      const resolved = resolveReadablePath(workspacePathPolicyService, input.projectRoot, request.path);
       return fileSystem.readFile(resolved.absolutePath, 'utf8');
     },
     async replaceText(request) {
-      const resolved = resolveWritablePath(input.projectRoot, request.path);
+      const resolved = resolveWritablePath(workspacePathPolicyService, input.projectRoot, request.path);
       const content = await fileSystem.readFile(resolved.absolutePath, 'utf8');
       const occurrences = content.split(request.oldText).length - 1;
       if (occurrences === 0) {
@@ -122,7 +128,7 @@ export function createLocalWorkspaceFileAccess(input: {
       };
     },
     async writeFile(request) {
-      const resolved = resolveWritablePath(input.projectRoot, request.path);
+      const resolved = resolveWritablePath(workspacePathPolicyService, input.projectRoot, request.path);
       const exists = await existsAsFile(fileSystem, resolved.absolutePath);
       if (exists && !request.overwrite) {
         throw new Error(`File already exists: ${resolved.relativePath}`);
@@ -138,8 +144,20 @@ export function createLocalWorkspaceFileAccess(input: {
         overwritten: exists,
       };
     },
+    async deleteFile(request) {
+      const resolved = resolveWritablePath(workspacePathPolicyService, input.projectRoot, request.path);
+      const exists = await existsAsFile(fileSystem, resolved.absolutePath);
+      if (!exists) {
+        throw new Error(`File does not exist: ${resolved.relativePath}`);
+      }
+      await fileSystem.unlink(resolved.absolutePath);
+      return {
+        path: resolved.relativePath,
+        deleted: true,
+      };
+    },
     async resolveCommandCwd(request) {
-      return resolveReadablePath(input.projectRoot, request.path).absolutePath;
+      return resolveReadablePath(workspacePathPolicyService, input.projectRoot, request.path).absolutePath;
     },
   };
 }
@@ -147,11 +165,11 @@ export function createLocalWorkspaceFileAccess(input: {
 export function composeCodingAgentToolRuntimeFactory(input: {
   toolRepository: ToolCallRepository;
   toolRegistry: ToolRegistryService;
-  workspaceChangeRepository: WorkspaceChangeRepository;
+  workspaceChangeService: Pick<WorkspaceChangeService, 'trackToolExecution'>;
+  workspacePathPolicyService: WorkspacePathPolicyService;
   runRepository: AgentLoopRepository;
   permissionSettingsProvider: PermissionSettingsProvider;
 }): ToolRuntimeFactory {
-  void input.workspaceChangeRepository;
   return {
     async create({ projectRoot, permissionMode }) {
       return createToolCallRunner({
@@ -172,12 +190,17 @@ export function composeCodingAgentToolRuntimeFactory(input: {
             const run = input.runRepository.getRun(runId);
             return run ? String(run.sessionId) : undefined;
           },
+          getRunWorkspaceId(runId) {
+            return input.runRepository.getRunWorkspaceId(runId);
+          },
         },
         toolRegistryService: input.toolRegistry,
         toolExecutionService: composeCodingAgentToolExecutionService({
           projectRoot,
           registryService: input.toolRegistry,
+          workspacePathPolicyService: input.workspacePathPolicyService,
         }),
+        workspaceChangeService: input.workspaceChangeService,
         permissionMode,
         projectRoot,
         settings: await input.permissionSettingsProvider.loadForProject(projectRoot),
@@ -195,39 +218,48 @@ export function composeCodingAgentToolRuntimeFactory(input: {
   };
 }
 
-function resolveReadablePath(projectRoot: string, targetPath: string): {
+function resolveReadablePath(
+  workspacePathPolicyService: WorkspacePathPolicyService,
+  projectRoot: string,
+  targetPath: string,
+): {
   absolutePath: string;
   relativePath: string;
 } {
-  const classification = classifyWorkspacePath({
+  const resolved = workspacePathPolicyService.assertOrdinaryPath({
     workspace_root: projectRoot,
     target_path: targetPath,
   });
-  if (!classification.inside_workspace) {
+  if (resolved.status === 'rejected' && resolved.reason === 'outside_workspace') {
     throw new Error(`Project path is outside the project: ${targetPath}`);
   }
-  if (classification.protected || classification.sensitive) {
-    throw new Error(`Project path cannot be accessed: ${classification.workspace_path}`);
+  if (resolved.status === 'rejected') {
+    throw new Error(`Project path cannot be accessed: ${targetPath}`);
   }
   return {
-    absolutePath: classification.absolute_path,
-    relativePath: classification.workspace_path || '.',
+    absolutePath: resolved.absolute_path,
+    relativePath: resolved.workspace_path || '.',
   };
 }
 
-function resolveWritablePath(projectRoot: string, targetPath: string): {
+function resolveWritablePath(
+  workspacePathPolicyService: WorkspacePathPolicyService,
+  projectRoot: string,
+  targetPath: string,
+): {
   absolutePath: string;
   relativePath: string;
 } {
-  return resolveReadablePath(projectRoot, targetPath);
+  return resolveReadablePath(workspacePathPolicyService, projectRoot, targetPath);
 }
 
 async function walkFiles(input: {
   projectRoot: string;
   fileSystem: LocalWorkspaceFileSystem;
+  workspacePathPolicyService: WorkspacePathPolicyService;
   rootRelativePath: string;
 }): Promise<string[]> {
-  const root = resolveReadablePath(input.projectRoot, input.rootRelativePath);
+  const root = resolveReadablePath(input.workspacePathPolicyService, input.projectRoot, input.rootRelativePath);
   const stats = await input.fileSystem.stat(root.absolutePath);
   if (stats.isFile()) {
     return [root.relativePath];

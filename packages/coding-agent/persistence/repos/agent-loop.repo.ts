@@ -215,6 +215,13 @@ export class AgentLoopRunRecordMethods {
     return row ? fromRunRow(row) : undefined;
   }
 
+  getRunWorkspaceId(runId: string): string | undefined {
+    const row = this.database
+      .prepare('SELECT workspace_id FROM agent_loop_runs WHERE run_id = ?')
+      .get(runId) as { workspace_id: string } | undefined;
+    return row?.workspace_id;
+  }
+
   listRunsBySession(sessionId: string): Run[] {
     return (this.database
       .prepare('SELECT * FROM agent_loop_runs WHERE session_id = ? ORDER BY created_at ASC, run_id ASC')

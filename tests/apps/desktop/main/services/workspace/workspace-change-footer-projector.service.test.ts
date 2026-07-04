@@ -34,8 +34,7 @@ describe('WorkspaceChangeFooterProjectorService', () => {
     });
     const service = createWorkspaceChangeFooterProjectorService({
       workspaceChanges: {
-        listChangeSetsByRunId: vi.fn(() => [changeSet]),
-        getChangeSummary: vi.fn(() => summary),
+        listChangeSummaries: vi.fn(() => ({ summaries: [summary] })),
       },
     });
 
@@ -70,19 +69,25 @@ describe('WorkspaceChangeFooterProjectorService', () => {
   it('omits runs without finalized changed files', () => {
     const service = createWorkspaceChangeFooterProjectorService({
       workspaceChanges: {
-        listChangeSetsByRunId: vi.fn(() => [
-          workspaceChangeSet({
-            change_set_id: 'workspace-change-set-draft',
-            status: 'open',
-            changed_file_count: 1,
-          }),
-          workspaceChangeSet({
-            change_set_id: 'workspace-change-set-empty',
-            status: 'finalized',
-            changed_file_count: 0,
-          }),
-        ]),
-        getChangeSummary: vi.fn(() => workspaceChangeSummary({ files: [] })),
+        listChangeSummaries: vi.fn(() => ({
+          summaries: [
+            workspaceChangeSummary({
+              change_set: workspaceChangeSet({
+                change_set_id: 'workspace-change-set-draft',
+                status: 'open',
+                changed_file_count: 1,
+              }),
+            }),
+            workspaceChangeSummary({
+              change_set: workspaceChangeSet({
+                change_set_id: 'workspace-change-set-empty',
+                status: 'finalized',
+                changed_file_count: 0,
+              }),
+              files: [],
+            }),
+          ],
+        })),
       },
     });
 
