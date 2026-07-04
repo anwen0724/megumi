@@ -1,9 +1,6 @@
-// Exposes product-level Coding Agent permission policy and decision helpers.
-export * from './command-classifier';
-export * from './permission-classifier';
-export * from './permission-rule-matcher';
-export * from './permission-snapshot-service';
-export * from './run-permission-snapshot';
-export * from './permission-instruction';
-export * from './tool-execution-decision';
-export * from './tool-policy';
+/*
+ * Public Permissions module boundary.
+ * Exports stable contracts and services only; core policy helpers stay internal.
+ */
+export * from './contracts/permission-contracts';
+export * from './contracts/approval-policy-contracts';
