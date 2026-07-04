@@ -84,7 +84,7 @@ function appRawToSettingsRaw(raw: AppSettingsRaw): SettingsRaw {
           ...(provider.kind ? { kind: provider.kind } : {}),
           ...(provider.displayName ? { display_name: provider.displayName } : {}),
           ...(provider.baseUrl ? { base_url: provider.baseUrl } : {}),
-          ...(provider.defaultModel ? { models: [provider.defaultModel] } : {}),
+          ...(provider.models ? { models: provider.models } : {}),
           ...(provider.apiKey !== undefined ? { api_key: provider.apiKey } : {}),
           ...(provider.apiKeyEnv !== undefined ? { api_key_env: provider.apiKeyEnv } : {}),
         },
@@ -114,7 +114,7 @@ const LegacyAppProviderSettingsRawSchema = z
     kind: z.enum(['openai-compatible', 'openai', 'anthropic']).optional(),
     displayName: z.string().min(1).optional(),
     baseUrl: z.string().url().optional(),
-    defaultModel: z.string().min(1).optional(),
+    models: z.array(z.string().min(1)).optional(),
     apiKey: z.string().min(1).nullable().optional(),
     apiKeyEnv: z.string().min(1).nullable().optional(),
   })

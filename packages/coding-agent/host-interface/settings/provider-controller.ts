@@ -32,7 +32,7 @@ export function createProviderController(
           displayName: provider.display_name,
           enabled: provider.enabled,
           ...(provider.base_url ? { baseUrl: provider.base_url } : {}),
-          defaultModelId: provider.models[0] ?? provider.provider_id,
+          modelIds: provider.models,
           hasApiKey: provider.has_api_key,
           credentialSource: provider.credential_source,
           envOverrideActive: provider.env_override_active,
@@ -50,7 +50,7 @@ export function createProviderController(
           ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
           ...(input.displayName ? { display_name: input.displayName } : {}),
           ...(input.baseUrl ? { base_url: input.baseUrl } : {}),
-          ...(input.defaultModelId ? { models: [input.defaultModelId] } : {}),
+          ...(input.modelIds ? { models: input.modelIds } : {}),
           ...(input.apiKeyEnv !== undefined ? { api_key_env: input.apiKeyEnv } : {}),
         },
       });

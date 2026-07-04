@@ -331,7 +331,7 @@ function providerStatesFromThinkingBlocks(
   return [{
     modelStepId: String(request.modelStepId ?? request.stepId),
     providerId: config.providerId,
-    modelId: String(request.modelId || config.defaultModelId),
+    modelId: String(request.modelId || config.modelId),
     blocks: [{
       type: 'thinking' as const,
       text: thinking,

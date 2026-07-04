@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 
 import {
   createRunPermissionSnapshot,
@@ -129,7 +129,7 @@ describe('createRunPermissionSnapshot', () => {
     });
   });
 
-  it('falls back to default model permission state for non-canonical stored modes', () => {
+  it('falls back to default permission state for non-canonical stored modes', () => {
     expect(toModelPermissionSnapshot({
       permissionSnapshotId: 'permission-snapshot:1',
       runId: 'run-1',

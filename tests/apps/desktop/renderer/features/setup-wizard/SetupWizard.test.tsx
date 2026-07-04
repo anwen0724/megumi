@@ -28,11 +28,11 @@ describe('SetupWizard', () => {
 
     await user.selectOptions(screen.getByLabelText('Provider'), 'openai');
     expect(screen.getByLabelText('Base URL')).toHaveValue('');
-    expect(screen.getByLabelText('Model ID')).toHaveValue('');
+    expect(screen.getByLabelText('Model IDs')).toHaveValue('');
     await user.clear(screen.getByLabelText('Base URL'));
     await user.type(screen.getByLabelText('Base URL'), 'https://api.openai.com/v1');
-    await user.clear(screen.getByLabelText('Model ID'));
-    await user.type(screen.getByLabelText('Model ID'), 'gpt-5.5');
+    await user.clear(screen.getByLabelText('Model IDs'));
+    await user.type(screen.getByLabelText('Model IDs'), 'gpt-5.5');
     await user.click(screen.getByRole('button', { name: 'Next' }));
 
     await user.type(screen.getByLabelText('API key'), 'sk-test-secret');
@@ -43,7 +43,7 @@ describe('SetupWizard', () => {
       theme: 'graphite-dark',
       providerId: 'openai',
       baseUrl: 'https://api.openai.com/v1',
-      defaultModelId: 'gpt-5.5',
+      modelIds: ['gpt-5.5'],
       apiKey: 'sk-test-secret',
     }));
   });
@@ -91,11 +91,11 @@ describe('SetupWizard', () => {
     expect(screen.getByRole('option', { name: 'Third-party compatible' })).toBeInTheDocument();
     expect(screen.getByLabelText('Provider')).toHaveValue('');
     expect(screen.getByLabelText('Base URL')).toHaveValue('');
-    expect(screen.getByLabelText('Model ID')).toHaveValue('');
+    expect(screen.getByLabelText('Model IDs')).toHaveValue('');
 
     await user.selectOptions(screen.getByLabelText('Provider'), 'custom');
 
     expect(screen.getByLabelText('Base URL')).toHaveValue('');
-    expect(screen.getByLabelText('Model ID')).toHaveValue('');
+    expect(screen.getByLabelText('Model IDs')).toHaveValue('');
   });
 });

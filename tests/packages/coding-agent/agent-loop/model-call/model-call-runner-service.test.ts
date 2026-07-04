@@ -20,7 +20,7 @@ const config: ProviderRuntimeConfig = {
   kind: 'openai-compatible',
   baseUrl: 'https://api.deepseek.com',
   apiKey: 'sk-deepseek',
-  defaultModelId: 'deepseek-v4-flash',
+  modelId: 'deepseek-v4-flash',
 };
 
 const request: ModelStepRuntimeRequest = {

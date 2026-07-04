@@ -20,7 +20,7 @@ export interface ProviderUpdateInput {
   enabled?: boolean;
   displayName?: string;
   baseUrl?: string;
-  defaultModelId?: string;
+  modelIds?: string[];
   apiKeyEnv?: string | null;
 }
 

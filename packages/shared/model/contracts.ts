@@ -97,18 +97,7 @@ export const MODEL_CATALOG: readonly ModelDescriptor[] = [
   },
 ];
 
-export const DEFAULT_MODEL_BY_PROVIDER: Record<ProviderId, ModelId> = {
-  deepseek: 'deepseek-v4-flash',
-  openai: 'gpt-5.5',
-  anthropic: 'claude-sonnet-4-6',
-  custom: 'custom-model',
-};
-
 export function getModelsForProvider(providerId: ProviderId): ModelDescriptor[] {
   return MODEL_CATALOG.filter((model) => model.providerId === providerId);
-}
-
-export function getDefaultModelId(providerId: ProviderId): ModelId {
-  return DEFAULT_MODEL_BY_PROVIDER[providerId];
 }
 

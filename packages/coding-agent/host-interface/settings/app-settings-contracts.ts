@@ -39,7 +39,7 @@ export const AppProviderSettingsRawSchema = z
     kind: z.enum(['openai-compatible', 'openai', 'anthropic']).optional(),
     displayName: z.string().min(1).optional(),
     baseUrl: z.string().url().optional(),
-    defaultModel: z.string().min(1).optional(),
+    models: z.array(z.string().min(1)).optional(),
     apiKey: z.string().min(1).nullable().optional(),
     apiKeyEnv: z.string().min(1).nullable().optional(),
   })
@@ -79,7 +79,7 @@ export const AppProviderSettingsResolvedSchema = z
     kind: z.enum(['openai-compatible', 'openai', 'anthropic']),
     displayName: z.string().min(1),
     baseUrl: z.string().url().optional(),
-    defaultModel: z.string().min(1),
+    models: z.array(z.string().min(1)),
     apiKeyEnv: z.string().min(1).optional(),
   })
   .strict();
@@ -118,7 +118,7 @@ export const DEFAULT_APP_SETTINGS = AppSettingsResolvedSchema.parse({
       kind: provider.kind,
       displayName: provider.display_name,
       ...(provider.base_url ? { baseUrl: provider.base_url } : {}),
-      defaultModel: provider.models[0] ?? providerId,
+      models: provider.models,
       ...(provider.api_key_env ? { apiKeyEnv: provider.api_key_env } : {}),
     },
   ])),

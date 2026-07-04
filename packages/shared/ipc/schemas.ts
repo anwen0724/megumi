@@ -100,7 +100,7 @@ export const ProviderPublicStatusSchema = z
     displayName: z.string().min(1),
     enabled: z.boolean(),
     baseUrl: z.string().url().optional(),
-    defaultModelId: z.string().min(1),
+    modelIds: z.array(z.string().min(1)),
     hasApiKey: z.boolean(),
     credentialSource: ProviderCredentialSourceSchema,
     envOverrideActive: z.boolean(),
@@ -123,7 +123,7 @@ export const ProviderUpdatePayloadSchema = z
     enabled: z.boolean().optional(),
     displayName: z.string().min(1).optional(),
     baseUrl: z.string().url().optional(),
-    defaultModelId: z.string().min(1).optional(),
+    modelIds: z.array(z.string().min(1)).optional(),
     apiKeyEnv: z.string().min(1).nullable().optional(),
   })
   .strict();

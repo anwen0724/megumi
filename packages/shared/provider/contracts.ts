@@ -19,7 +19,7 @@ export interface ProviderSettings {
   displayName: string;
   enabled: boolean;
   baseUrl?: string;
-  defaultModelId: ModelId | string;
+  modelIds: Array<ModelId | string>;
   apiKey?: string;
   apiKeyEnv?: string;
   createdAt: IsoDateTime;
@@ -33,7 +33,7 @@ export interface ProviderPublicStatus {
   displayName: string;
   enabled: boolean;
   baseUrl?: string;
-  defaultModelId: ModelId | string;
+  modelIds: Array<ModelId | string>;
   hasApiKey: boolean;
   credentialSource: ProviderCredentialSource;
   envOverrideActive: boolean;
@@ -51,7 +51,7 @@ export const DEFAULT_PROVIDER_SETTINGS: Record<ProviderId, ProviderSettings> = {
     displayName: 'DeepSeek',
     enabled: true,
     baseUrl: 'https://api.deepseek.com',
-    defaultModelId: 'deepseek-v4-flash',
+    modelIds: ['deepseek-v4-flash'],
     apiKeyEnv: 'DEEPSEEK_API_KEY',
     createdAt: DEFAULT_TIMESTAMP,
     updatedAt: DEFAULT_TIMESTAMP,
@@ -63,7 +63,7 @@ export const DEFAULT_PROVIDER_SETTINGS: Record<ProviderId, ProviderSettings> = {
     displayName: 'OpenAI',
     enabled: true,
     baseUrl: 'https://api.openai.com/v1',
-    defaultModelId: 'gpt-5.5',
+    modelIds: ['gpt-5.5'],
     apiKeyEnv: 'OPENAI_API_KEY',
     createdAt: DEFAULT_TIMESTAMP,
     updatedAt: DEFAULT_TIMESTAMP,
@@ -74,7 +74,7 @@ export const DEFAULT_PROVIDER_SETTINGS: Record<ProviderId, ProviderSettings> = {
     kind: 'anthropic',
     displayName: 'Anthropic',
     enabled: false,
-    defaultModelId: 'claude-sonnet-4-6',
+    modelIds: ['claude-sonnet-4-6'],
     apiKeyEnv: 'ANTHROPIC_API_KEY',
     createdAt: DEFAULT_TIMESTAMP,
     updatedAt: DEFAULT_TIMESTAMP,
@@ -85,7 +85,7 @@ export const DEFAULT_PROVIDER_SETTINGS: Record<ProviderId, ProviderSettings> = {
     kind: 'openai-compatible',
     displayName: 'Third-party compatible',
     enabled: false,
-    defaultModelId: 'custom-model',
+    modelIds: ['custom-model'],
     createdAt: DEFAULT_TIMESTAMP,
     updatedAt: DEFAULT_TIMESTAMP,
   },

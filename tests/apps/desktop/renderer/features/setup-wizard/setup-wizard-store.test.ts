@@ -75,7 +75,7 @@ describe('setup wizard store', () => {
       theme: 'graphite-dark',
       providerId: 'openai',
       baseUrl: 'https://api.openai.com/v1',
-      defaultModelId: 'gpt-5.5',
+      modelIds: ['gpt-5.5'],
       apiKey: 'sk-test-secret',
       completedAt: '2026-06-29T12:00:00.000Z',
     });
@@ -90,7 +90,7 @@ describe('setup wizard store', () => {
           openai: {
             enabled: true,
             baseUrl: 'https://api.openai.com/v1',
-            defaultModel: 'gpt-5.5',
+            models: ['gpt-5.5'],
             apiKey: 'sk-test-secret',
           },
         },
@@ -125,7 +125,7 @@ describe('setup wizard store', () => {
       language: 'zh-CN',
       theme: 'sage-mist',
       providerId: 'deepseek',
-      defaultModelId: '',
+      modelIds: [],
       skipProvider: true,
       completedAt: '2026-06-29T12:00:00.000Z',
     });
@@ -166,7 +166,7 @@ describe('setup wizard store', () => {
       language: 'zh-CN',
       theme: 'midnight-blue',
       providerId: 'deepseek',
-      defaultModelId: 'deepseek-v4-flash',
+      modelIds: ['deepseek-v4-flash'],
       skipProvider: true,
       completedAt: '2026-06-29T12:00:00.000Z',
     });

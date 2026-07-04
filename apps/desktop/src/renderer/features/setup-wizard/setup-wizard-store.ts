@@ -12,7 +12,7 @@ export interface CompleteSetupInput {
   theme: AppThemeName;
   providerId: ProviderId;
   baseUrl?: string;
-  defaultModelId: string;
+  modelIds: string[];
   apiKey?: string;
   skipProvider?: boolean;
   completedAt?: string;
@@ -59,7 +59,7 @@ export const useSetupWizardStore = create<SetupWizardState>((set) => ({
             [input.providerId]: {
               enabled: true,
               ...(input.baseUrl?.trim() ? { baseUrl: input.baseUrl.trim() } : {}),
-              defaultModel: input.defaultModelId,
+              models: input.modelIds,
               ...(apiKey ? { apiKey } : {}),
             },
           },

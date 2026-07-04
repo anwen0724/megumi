@@ -125,7 +125,7 @@ function createModelStepStarted(
     payload: {
       modelStepId: modelStepIdFor(input),
       providerId: input.config.providerId,
-      modelId: String(input.request.modelId || input.config.defaultModelId),
+      modelId: String(input.request.modelId || input.config.modelId),
     },
   });
 }
@@ -302,7 +302,7 @@ function createModelStepProviderStateRecorded(
     payload: {
       modelStepId: modelStepIdFor(input),
       providerId: input.config.providerId,
-      modelId: String(input.request.modelId || input.config.defaultModelId),
+      modelId: String(input.request.modelId || input.config.modelId),
       blocks: [
         {
           type: 'thinking',
@@ -383,7 +383,7 @@ function providerRuntimeError(
     source: 'provider' as const,
     details: {
       providerId: input.config.providerId,
-      modelId: String(input.request.modelId || input.config.defaultModelId),
+      modelId: String(input.request.modelId || input.config.modelId),
       ...diagnostics,
     },
   };

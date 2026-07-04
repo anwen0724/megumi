@@ -234,7 +234,7 @@ describe('Coding Agent host interface runtime', () => {
       providerId: 'openai',
       enabled: true,
       baseUrl: 'https://api.openai.com/v1',
-      defaultModelId: 'gpt-5.5',
+      modelIds: ['gpt-5.5'],
     });
     await runtime.settings.provider.setApiKey({
       providerId: 'openai',

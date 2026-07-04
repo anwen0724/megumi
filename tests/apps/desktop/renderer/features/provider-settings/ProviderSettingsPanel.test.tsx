@@ -14,7 +14,7 @@ describe('ProviderSettingsPanel', () => {
           displayName: 'DeepSeek',
           enabled: true,
           baseUrl: 'https://api.deepseek.com',
-          defaultModelId: 'deepseek-v4-flash',
+          modelIds: ['deepseek-v4-flash'],
           hasApiKey: false,
           credentialSource: 'missing',
           envOverrideActive: false,
@@ -26,7 +26,7 @@ describe('ProviderSettingsPanel', () => {
           displayName: 'OpenAI',
           enabled: true,
           baseUrl: 'https://api.openai.com/v1',
-          defaultModelId: 'gpt-5.5',
+          modelIds: ['gpt-5.5'],
           hasApiKey: true,
           credentialSource: 'environment',
           envOverrideActive: true,
@@ -68,7 +68,7 @@ describe('ProviderSettingsPanel', () => {
     expect(updateProvider).toHaveBeenCalledWith({
       providerId: 'deepseek',
       baseUrl: 'https://proxy.local/deepseek',
-      defaultModelId: 'deepseek-v4-pro',
+      modelIds: ['deepseek-v4-flash', 'deepseek-v4-pro'],
     });
   });
 
@@ -177,7 +177,7 @@ describe('ProviderSettingsPanel', () => {
     expect(screen.getByRole('button', { name: 'Delete DeepSeek API key' })).toBeDisabled();
   });
 
-  it('keeps custom default model ids editable when they are not in the known model list', async () => {
+  it('keeps custom model ids editable when they are not in the known model list', async () => {
     const user = userEvent.setup();
     const updateProvider = vi.fn();
     useProviderStore.setState((state) => ({
@@ -186,22 +186,22 @@ describe('ProviderSettingsPanel', () => {
       providers: state.providers.map((provider) => provider.providerId === 'deepseek'
         ? {
             ...provider,
-            defaultModelId: 'deepseek-custom-model',
+            modelIds: ['deepseek-custom-model'],
           }
         : provider),
     }));
 
     render(<ProviderSettingsPanel />);
 
-    expect(screen.getByLabelText('DeepSeek default model ID')).toHaveValue('deepseek-custom-model');
+    expect(screen.getByLabelText('DeepSeek model IDs')).toHaveValue('deepseek-custom-model');
 
-    await user.clear(screen.getByLabelText('DeepSeek default model ID'));
-    await user.type(screen.getByLabelText('DeepSeek default model ID'), 'deepseek-next');
+    await user.clear(screen.getByLabelText('DeepSeek model IDs'));
+    await user.type(screen.getByLabelText('DeepSeek model IDs'), 'deepseek-next');
     await user.click(screen.getByRole('button', { name: 'Save DeepSeek settings' }));
 
     expect(updateProvider).toHaveBeenCalledWith(expect.objectContaining({
       providerId: 'deepseek',
-      defaultModelId: 'deepseek-next',
+      modelIds: ['deepseek-next'],
     }));
   });
 });

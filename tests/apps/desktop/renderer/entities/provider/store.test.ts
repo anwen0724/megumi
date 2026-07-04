@@ -10,7 +10,7 @@ const providers: ProviderPublicStatus[] = [
     displayName: 'DeepSeek',
     enabled: true,
     baseUrl: 'https://api.deepseek.com',
-    defaultModelId: 'deepseek-v4-flash',
+    modelIds: ['deepseek-v4-flash'],
     hasApiKey: true,
     credentialSource: 'settings',
     envOverrideActive: false,
@@ -108,7 +108,7 @@ describe('useProviderStore', () => {
       providerId: 'deepseek',
       enabled: false,
       baseUrl: 'https://proxy.local/deepseek',
-      defaultModelId: 'deepseek-v4-pro',
+      modelIds: ['deepseek-v4-pro'],
     });
 
     expect(providerApi.update).toHaveBeenCalledWith(expect.objectContaining({
@@ -116,7 +116,7 @@ describe('useProviderStore', () => {
         providerId: 'deepseek',
         enabled: false,
         baseUrl: 'https://proxy.local/deepseek',
-        defaultModelId: 'deepseek-v4-pro',
+        modelIds: ['deepseek-v4-pro'],
       },
       meta: expect.objectContaining({
         channel: IPC_CHANNELS.provider.update,

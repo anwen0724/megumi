@@ -8,7 +8,7 @@ import { COMPOSER_MODEL_OPTIONS } from '../../chat/components/composer-options';
 interface ProviderFormState {
   enabled: boolean;
   baseUrl: string;
-  defaultModelId: string;
+  modelIdsText: string;
   apiKey: string;
   apiKeyEnv: string;
 }
@@ -29,10 +29,21 @@ function createInitialFormState(provider: ProviderPublicStatus): ProviderFormSta
   return {
     enabled: provider.enabled,
     baseUrl: provider.baseUrl ?? '',
-    defaultModelId: String(provider.defaultModelId),
+    modelIdsText: provider.modelIds.join(', '),
     apiKey: '',
     apiKeyEnv: provider.apiKeyEnvCustomized ? provider.apiKeyEnv ?? '' : '',
   };
+}
+
+function parseModelIds(value: string): string[] {
+  return value
+    .split(/[\n,]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function appendModelId(value: string, modelId: string): string {
+  return Array.from(new Set([...parseModelIds(value), modelId])).join(', ');
 }
 
 export function ProviderSettingsPanel() {
@@ -70,7 +81,7 @@ export function ProviderSettingsPanel() {
         ...(current[providerId] ?? {
           enabled: true,
           baseUrl: '',
-          defaultModelId: '',
+          modelIdsText: '',
           apiKey: '',
           apiKeyEnv: '',
         }),
@@ -86,7 +97,7 @@ export function ProviderSettingsPanel() {
     await updateProvider({
       providerId: provider.providerId,
       baseUrl: form.baseUrl.trim() || undefined,
-      defaultModelId: form.defaultModelId,
+      modelIds: parseModelIds(form.modelIdsText),
     });
   }
 
@@ -160,9 +171,6 @@ export function ProviderSettingsPanel() {
         {providers.map((provider) => {
           const form = forms[provider.providerId] ?? createInitialFormState(provider);
           const modelOptions = COMPOSER_MODEL_OPTIONS.filter((option) => option.providerId === provider.providerId);
-          const selectedKnownModel = modelOptions.some((option) => option.value === form.defaultModelId)
-            ? form.defaultModelId
-            : '';
 
           return (
             <section
@@ -196,25 +204,27 @@ export function ProviderSettingsPanel() {
                 />
 
                 <TextField
-                  label={`${provider.displayName} default model ID`}
-                  value={form.defaultModelId}
-                  onChange={(event) => updateForm(provider.providerId, { defaultModelId: event.target.value })}
-                  placeholder="model-id"
+                  label={`${provider.displayName} model IDs`}
+                  value={form.modelIdsText}
+                  onChange={(event) => updateForm(provider.providerId, { modelIdsText: event.target.value })}
+                  placeholder="model-id, another-model-id"
                 />
 
                 <label className="block text-xs font-medium text-[var(--color-text-muted)]">
                   {provider.displayName} known model
                   <select
                     aria-label={`${provider.displayName} known model`}
-                    value={selectedKnownModel}
+                    value=""
                     onChange={(event) => {
                       if (event.target.value) {
-                        updateForm(provider.providerId, { defaultModelId: event.target.value });
+                        updateForm(provider.providerId, {
+                          modelIdsText: appendModelId(form.modelIdsText, event.target.value),
+                        });
                       }
                     }}
                     className="mt-1 h-9 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-2 text-sm text-[var(--color-text)]"
                   >
-                    <option value="">Custom model ID</option>
+                    <option value="">Add known model</option>
                     {modelOptions.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}

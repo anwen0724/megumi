@@ -8,9 +8,7 @@ import {
   type ProviderSettings,
 } from '@megumi/shared/provider';
 import {
-  DEFAULT_MODEL_BY_PROVIDER,
   MODEL_CATALOG,
-  getDefaultModelId,
   getModelsForProvider,
 } from '@megumi/shared/model';
 
@@ -30,7 +28,7 @@ describe('provider contracts', () => {
     expect(deepseek.providerId).toBe('deepseek');
     expect(deepseek.enabled).toBe(true);
     expect(deepseek.baseUrl).toBe('https://api.deepseek.com');
-    expect(deepseek.defaultModelId).toBe(DEFAULT_MODEL_BY_PROVIDER.deepseek);
+    expect(deepseek.modelIds).toContain('deepseek-v4-flash');
     expect(deepseek.apiKeyEnv).toBe('DEEPSEEK_API_KEY');
     expect(deepseek.apiKey).toBeUndefined();
     expect(Object.values(DEFAULT_PROVIDER_SETTINGS).every((settings) => settings.apiKey === undefined)).toBe(true);
@@ -78,11 +76,5 @@ describe('model contracts', () => {
     expect(contextWindows.get('claude-sonnet-4-6')).toBe(1_000_000);
   });
 
-  it('returns default models for provider ids', () => {
-    expect(getDefaultModelId('deepseek')).toBe('deepseek-v4-flash');
-    expect(getDefaultModelId('openai')).toBe('gpt-5.5');
-    expect(getDefaultModelId('anthropic')).toBe('claude-sonnet-4-6');
-    expect(getDefaultModelId('custom')).toBe('custom-model');
-  });
 });
 

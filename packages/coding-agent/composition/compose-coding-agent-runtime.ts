@@ -258,7 +258,7 @@ function createModelCallRuntimeResolver(settingsService: SettingsService): Model
         kind: result.config.kind === 'openai' ? 'openai-compatible' : result.config.kind,
         ...(result.config.base_url ? { baseUrl: result.config.base_url } : {}),
         apiKey: result.config.api_key ?? '',
-        defaultModelId: result.config.model_id,
+        modelId: result.config.model_id,
       };
     },
   };

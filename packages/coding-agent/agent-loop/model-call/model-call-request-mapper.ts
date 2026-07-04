@@ -21,7 +21,7 @@ export function mapModelCallToAiInput(input: {
   return {
     model: {
       providerId: input.config.providerId,
-      modelId: String(input.request.modelId || input.config.defaultModelId),
+      modelId: String(input.request.modelId || input.config.modelId),
       capabilities: {
         streaming: true,
         toolCalls: true,

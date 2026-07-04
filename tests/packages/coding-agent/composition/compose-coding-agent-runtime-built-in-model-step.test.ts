@@ -1,4 +1,4 @@
-﻿// Verifies the host interface builds a real model step provider by default,
+﻿// Verifies the host interface builds a real model step provider when no caller supplies one,
 // so it can call models standalone without a UI shell supplying one.
 // @vitest-environment node
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -24,7 +24,7 @@ function memorySettingsService(initial: SettingsRaw = {}) {
   });
 }
 
-describe('Coding Agent host interface default model step provider', () => {
+describe('Coding Agent host interface built-in model step provider', () => {
   let temporaryHome: string | undefined;
   let runtime: CodingAgentHostInterface | undefined;
 
@@ -63,4 +63,3 @@ describe('Coding Agent host interface default model step provider', () => {
     expect(typeof runtime.input.send).toBe('function');
   });
 });
-

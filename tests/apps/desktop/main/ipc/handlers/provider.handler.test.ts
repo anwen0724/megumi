@@ -62,7 +62,7 @@ describe('registerProviderHandlers', () => {
         displayName: 'DeepSeek',
         enabled: true,
         baseUrl: 'https://api.deepseek.com',
-        defaultModelId: 'deepseek-v4-flash',
+        modelIds: ['deepseek-v4-flash'],
         hasApiKey: true,
         credentialSource: 'settings',
         envOverrideActive: false,
@@ -164,7 +164,7 @@ describe('registerProviderHandlers', () => {
       providerId: 'deepseek',
       enabled: false,
       baseUrl: 'https://proxy.local',
-      defaultModelId: 'deepseek-v4-pro',
+      modelIds: ['deepseek-v4-pro'],
     }))).resolves.toMatchObject({
       ok: true,
       data: {},
@@ -177,7 +177,7 @@ describe('registerProviderHandlers', () => {
       providerId: 'deepseek',
       enabled: false,
       baseUrl: 'https://proxy.local',
-      defaultModelId: 'deepseek-v4-pro',
+      modelIds: ['deepseek-v4-pro'],
     });
   });
 

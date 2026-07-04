@@ -626,7 +626,7 @@ describe('provider and chat ipc schemas', () => {
         enabled: true,
         displayName: 'DeepSeek',
         baseUrl: 'https://api.deepseek.com',
-        defaultModelId: 'deepseek-v4-flash',
+        modelIds: ['deepseek-v4-flash'],
         apiKeyEnv: 'DEEPSEEK_API_KEY',
       },
       meta: {
@@ -648,7 +648,7 @@ describe('provider and chat ipc schemas', () => {
           displayName: 'DeepSeek',
           enabled: true,
           baseUrl: 'https://api.deepseek.com',
-          defaultModelId: 'deepseek-v4-flash',
+          modelIds: ['deepseek-v4-flash'],
           hasApiKey: true,
           credentialSource: 'settings',
           envOverrideActive: false,

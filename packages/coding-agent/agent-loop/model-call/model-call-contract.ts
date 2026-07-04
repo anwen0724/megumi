@@ -10,7 +10,7 @@ export interface ProviderRuntimeConfig {
   kind: ProviderKind;
   baseUrl?: string;
   apiKey: string;
-  defaultModelId: string;
+  modelId: string;
 }
 
 export interface ModelCallRuntimeResolverPort {

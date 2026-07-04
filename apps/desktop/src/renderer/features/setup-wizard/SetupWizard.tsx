@@ -35,7 +35,7 @@ export function SetupWizard() {
   const [theme, setTheme] = useState<ThemeName>('midnight-blue');
   const [providerId, setProviderId] = useState<ProviderId | ''>('');
   const [baseUrl, setBaseUrl] = useState('');
-  const [defaultModelId, setDefaultModelId] = useState('');
+  const [modelIdsText, setModelIdsText] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [skipProvider, setSkipProvider] = useState(false);
 
@@ -43,7 +43,7 @@ export function SetupWizard() {
   const selectedProviderId = skipProvider ? 'deepseek' : providerId;
   const providerStepComplete = skipProvider || Boolean(providerId);
   const finishDisabled = saving || (
-    !skipProvider && (!providerId || !defaultModelId.trim() || (providerId !== 'anthropic' && !baseUrl.trim()))
+    !skipProvider && (!providerId || parseModelIds(modelIdsText).length === 0 || (providerId !== 'anthropic' && !baseUrl.trim()))
   );
 
   function handleThemeChange(nextTheme: ThemeName) {
@@ -61,7 +61,7 @@ export function SetupWizard() {
       theme,
       providerId: selectedProviderId,
       baseUrl,
-      defaultModelId,
+      modelIds: parseModelIds(modelIdsText),
       apiKey,
       skipProvider,
     });
@@ -179,11 +179,11 @@ export function SetupWizard() {
                 placeholder="https://api.example.com/v1"
               />
               <TextField
-                label="Model ID"
-                value={defaultModelId}
+                label="Model IDs"
+                value={modelIdsText}
                 disabled={skipProvider}
-                onChange={(event) => setDefaultModelId(event.target.value)}
-                placeholder="model-id"
+                onChange={(event) => setModelIdsText(event.target.value)}
+                placeholder="model-id, another-model-id"
               />
             </div>
           ) : null}
@@ -242,5 +242,12 @@ export function SetupWizard() {
       </section>
     </main>
   );
+}
+
+function parseModelIds(value: string): string[] {
+  return value
+    .split(/[\n,]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }
 
