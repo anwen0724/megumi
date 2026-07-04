@@ -12,17 +12,17 @@ import { composeCodingAgentPersistence } from '@megumi/coding-agent/composition/
 import { composeCodingAgentRuntime } from '@megumi/coding-agent/composition';
 import { WorkspaceRepository, createDatabase } from '@megumi/coding-agent/persistence';
 import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
-import type { AppSettingsRaw } from '@megumi/coding-agent/settings';
+import type { SettingsRaw } from '@megumi/coding-agent/settings';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
 import type { ModelCallCompletionResult } from '@megumi/coding-agent/agent-loop/model-call';
 import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
 
-function productSettingsStorage(initial: AppSettingsRaw = {}) {
-  let rawSettings: AppSettingsRaw = initial;
+function productSettingsStorage(initial: SettingsRaw = {}) {
+  let rawSettings: SettingsRaw = initial;
   return {
     readRawSettings: () => rawSettings,
-    writeRawSettings(next: AppSettingsRaw) {
+    writeRawSettings(next: SettingsRaw) {
       rawSettings = next;
     },
   };

@@ -1,11 +1,13 @@
 // Controller for product settings operations exposed to UI shells.
 import type {
-  AppSettingsRaw,
-  AppSettingsResolved,
   SettingsRaw,
   SettingsResolved,
   SettingsService,
 } from '../../settings';
+import type {
+  AppSettingsRaw,
+  AppSettingsResolved,
+} from './app-settings-contracts';
 import type { SettingsData } from './settings-ipc-contracts';
 
 export interface SettingsController {
@@ -92,7 +94,6 @@ function toAppSettingsResolved(settings: SettingsResolved): AppSettingsResolved 
         displayName: provider.display_name,
         ...(provider.base_url ? { baseUrl: provider.base_url } : {}),
         defaultModel: provider.models[0] ?? providerId,
-        ...(provider.api_key ? { apiKey: provider.api_key } : {}),
         ...(provider.api_key_env ? { apiKeyEnv: provider.api_key_env } : {}),
       },
     ])),

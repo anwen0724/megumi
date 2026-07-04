@@ -8,21 +8,21 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { composeCodingAgentRuntime } from '@megumi/coding-agent/composition';
 import {
-  mergeRawAppSettings,
-  resolveAppSettings,
-  type AppSettingsRaw,
+  createSettingsService,
+  type SettingsRaw,
 } from '@megumi/coding-agent/settings';
 import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
 
 function appSettingsProvider() {
-  let rawSettings: AppSettingsRaw = {};
-  return {
-    getResolvedSettings: () => resolveAppSettings(rawSettings),
-    updateSettings(patch: AppSettingsRaw) {
-      rawSettings = mergeRawAppSettings(rawSettings, patch);
-      return resolveAppSettings(rawSettings);
+  let rawSettings: SettingsRaw = {};
+  return createSettingsService({
+    file_store: {
+      readRawSettings: () => rawSettings,
+      writeRawSettings(next) {
+        rawSettings = next;
+      },
     },
-  };
+  });
 }
 
 describe('composed runtime project service', () => {

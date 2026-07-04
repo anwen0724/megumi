@@ -6,9 +6,3 @@ export * from './contracts/provider-settings-contracts';
 export * from './contracts/permission-settings-contracts';
 export * from './contracts/settings-json-schema';
 export * from './services/settings-service';
-export {
-  mergeRawAppSettings,
-  mergeRawSettings,
-  resolveAppSettings,
-  resolveSettings,
-} from './core/settings-resolution';

@@ -163,21 +163,21 @@ describe('Megumi Home foundation', () => {
           additionalProperties: false,
           properties: {
             completed: { type: 'boolean' },
-            completedAt: { type: 'string' },
           },
         },
         providers: {
-          properties: {
-            custom: {
-              properties: {
-                baseUrl: { type: 'string' },
-                defaultModel: { type: 'string' },
+          additionalProperties: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              base_url: { type: 'string' },
+              models: {
+                type: 'array',
+                items: { type: 'string', minLength: 1 },
               },
-            },
-            deepseek: {
-              properties: {
-                apiKey: { type: 'string' },
-                apiKeyEnv: { type: 'string' },
+              api_key_env: {
+                type: ['string', 'null'],
+                minLength: 1,
               },
             },
           },
@@ -186,9 +186,9 @@ describe('Megumi Home foundation', () => {
           type: 'object',
           additionalProperties: false,
           properties: {
-            allow: { type: 'array', items: { type: 'string' } },
-            ask: { type: 'array', items: { type: 'string' } },
-            deny: { type: 'array', items: { type: 'string' } },
+            allow: { type: 'array', items: { type: 'object' } },
+            ask: { type: 'array', items: { type: 'object' } },
+            deny: { type: 'array', items: { type: 'object' } },
           },
         },
       },

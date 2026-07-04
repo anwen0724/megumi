@@ -11,9 +11,8 @@ import { composeCodingAgentRuntime } from '@megumi/coding-agent/composition';
 import { WorkspaceRepository, createDatabase } from '@megumi/coding-agent/persistence';
 import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
 import {
-  mergeRawAppSettings,
-  resolveAppSettings,
-  type AppSettingsRaw,
+  createSettingsService,
+  type SettingsRaw,
 } from '@megumi/coding-agent/settings';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
@@ -39,14 +38,15 @@ function seedProject(homePath: string): { projectId: string; repoPath: string } 
 }
 
 function appSettingsProvider() {
-  let rawSettings: AppSettingsRaw = {};
-  return {
-    getResolvedSettings: () => resolveAppSettings(rawSettings),
-    updateSettings(patch: AppSettingsRaw) {
-      rawSettings = mergeRawAppSettings(rawSettings, patch);
-      return resolveAppSettings(rawSettings);
+  let rawSettings: SettingsRaw = {};
+  return createSettingsService({
+    file_store: {
+      readRawSettings: () => rawSettings,
+      writeRawSettings(next) {
+        rawSettings = next;
+      },
     },
-  };
+  });
 }
 
 // A model step provider that emits a single completed assistant answer, which the

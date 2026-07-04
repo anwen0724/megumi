@@ -11,7 +11,7 @@ import {
 import {
   AppSettingsRawSchema,
   AppSettingsResolvedSchema,
-} from '../../settings';
+} from './app-settings-contracts';
 
 export const SettingsGetPayloadSchema = z.object({}).strict();
 export const SettingsUpdatePayloadSchema = AppSettingsRawSchema;

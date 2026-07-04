@@ -87,9 +87,6 @@ export function mergeRawSettings(current: SettingsRaw, patch: SettingsRaw): Sett
   });
 }
 
-export const resolveAppSettings = resolveSettings;
-export const mergeRawAppSettings = mergeRawSettings;
-
 function resolveProviderSettings(providers: NonNullable<SettingsRaw['providers']>) {
   return Object.fromEntries(
     Object.entries({

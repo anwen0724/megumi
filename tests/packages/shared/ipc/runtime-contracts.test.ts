@@ -9,7 +9,7 @@ import {
 } from '@megumi/shared';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { JsonObjectSchema, JsonValueSchema } from '@megumi/shared/primitives';
-import { DEFAULT_APP_SETTINGS } from '@megumi/coding-agent/settings';
+import { DEFAULT_APP_SETTINGS } from '@megumi/coding-agent/host-interface';
 import {
   RUNTIME_IPC_ERROR_CODES,
   RuntimeIpcErrorSchema,

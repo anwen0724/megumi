@@ -7,11 +7,22 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { composeCodingAgentRuntime } from '@megumi/coding-agent/composition';
 import {
-  mergeRawAppSettings,
-  resolveAppSettings,
-  type AppSettingsRaw,
+  createSettingsService,
+  type SettingsRaw,
 } from '@megumi/coding-agent/settings';
 import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
+
+function memorySettingsService(initial: SettingsRaw = {}) {
+  let rawSettings = initial;
+  return createSettingsService({
+    file_store: {
+      readRawSettings: () => rawSettings,
+      writeRawSettings(next) {
+        rawSettings = next;
+      },
+    },
+  });
+}
 
 describe('Coding Agent host interface default model step provider', () => {
   let temporaryHome: string | undefined;
@@ -28,7 +39,6 @@ describe('Coding Agent host interface default model step provider', () => {
 
   it('composes a runnable session runtime without a caller-provided model step provider', async () => {
     temporaryHome = await mkdtemp(path.join(os.tmpdir(), 'megumi-default-model-step-'));
-    let rawSettings: AppSettingsRaw = {};
 
     runtime = composeCodingAgentRuntime({
       homePaths: {
@@ -40,13 +50,7 @@ describe('Coding Agent host interface default model step provider', () => {
         warn: () => undefined,
       },
       // No modelCallProviderService: the product must build its own.
-      appSettingsProvider: {
-        getResolvedSettings: () => resolveAppSettings(rawSettings),
-        updateSettings(patch: AppSettingsRaw) {
-          rawSettings = mergeRawAppSettings(rawSettings, patch);
-          return resolveAppSettings(rawSettings);
-        },
-      },
+      appSettingsProvider: memorySettingsService(),
       memorySettingsProvider: {
         isMemoryEnabled: () => false,
       },

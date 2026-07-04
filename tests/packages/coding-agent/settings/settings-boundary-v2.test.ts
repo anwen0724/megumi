@@ -21,4 +21,18 @@ describe('Settings module public boundary', () => {
       expect(constructorName in settingsModule).toBe(false);
     }
   });
+
+  it('does not expose internal core helpers or host compatibility settings contracts', () => {
+    for (const exportName of [
+      'resolveSettings',
+      'mergeRawSettings',
+      'resolveAppSettings',
+      'mergeRawAppSettings',
+      'AppSettingsRawSchema',
+      'AppSettingsResolvedSchema',
+      'DEFAULT_APP_SETTINGS',
+    ]) {
+      expect(exportName in settingsModule, exportName).toBe(false);
+    }
+  });
 });

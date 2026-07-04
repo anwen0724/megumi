@@ -3,6 +3,7 @@
 import fs from 'fs-extra';
 import os from 'os';
 import path from 'path';
+import { createSettingsJsonSchema } from '@megumi/coding-agent/settings';
 
 export const MEGUMI_HOME_VERSION = 1;
 export const MEGUMI_HOME_MIGRATION_ID = 'megumi-home-v1';
@@ -141,59 +142,7 @@ export function createMegumiHomeVersion(createdAt: Date): MegumiHomeVersion {
 }
 
 export function createMegumiSettingsSchema(): Record<string, unknown> {
-  return {
-    $schema: 'https://json-schema.org/draft/2020-12/schema',
-    title: 'Megumi settings',
-    type: 'object',
-    additionalProperties: false,
-    properties: {
-      language: { enum: ['zh-CN', 'en-US'] },
-      theme: { type: 'string' },
-      setup: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          completed: { type: 'boolean' },
-          completedAt: { type: 'string' },
-        },
-      },
-      memory: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          enabled: { type: 'boolean' },
-        },
-      },
-      compaction: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          enabled: { type: 'boolean' },
-          reserveTokens: { type: 'integer', minimum: 1 },
-          keepRecentTokens: { type: 'integer', minimum: 1 },
-        },
-      },
-      providers: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          deepseek: providerSettingsSchema(),
-          openai: providerSettingsSchema(),
-          anthropic: providerSettingsSchema(),
-          custom: providerSettingsSchema(),
-        },
-      },
-      permissions: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          allow: permissionRuleListSchema(),
-          ask: permissionRuleListSchema(),
-          deny: permissionRuleListSchema(),
-        },
-      },
-    },
-  };
+  return createSettingsJsonSchema();
 }
 
 export function createMegumiHomeReadme(): string {
@@ -218,37 +167,12 @@ export function createMegumiHomeReadme(): string {
     '',
     'Credential priority:',
     '',
-    '1. Plaintext `apiKey` in `settings.json` when intentionally provided.',
-    '2. Environment variable configured by `apiKeyEnv`.',
+    '1. Plaintext `api_key` in `settings.json` when intentionally provided.',
+    '2. Environment variable configured by `api_key_env`.',
     '',
     'Set `MEGUMI_HOME` to use a different Megumi Home directory.',
     '',
   ].join('\n');
-}
-
-function providerSettingsSchema(): Record<string, unknown> {
-  return {
-    type: 'object',
-    additionalProperties: false,
-    properties: {
-      enabled: { type: 'boolean' },
-      kind: { enum: ['openai-compatible', 'anthropic'] },
-      displayName: { type: 'string' },
-      baseUrl: { type: 'string' },
-      defaultModel: { type: 'string' },
-      apiKey: { type: 'string' },
-      apiKeyEnv: { type: 'string' },
-    },
-  };
-}
-
-function permissionRuleListSchema(): Record<string, unknown> {
-  return {
-    type: 'array',
-    items: {
-      type: 'string',
-    },
-  };
 }
 
 async function ensureMinimalDirectories(fileSystem: MegumiHomeFileSystem, paths: MegumiHomePaths): Promise<void> {

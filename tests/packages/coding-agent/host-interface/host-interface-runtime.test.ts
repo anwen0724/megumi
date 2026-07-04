@@ -6,9 +6,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { composeCodingAgentRuntime } from '@megumi/coding-agent/composition';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import {
-  mergeRawAppSettings,
-  resolveAppSettings,
-  type AppSettingsRaw,
+  createSettingsService,
+  type SettingsRaw,
 } from '@megumi/coding-agent/settings';
 import type { ModelCallCompletionResult } from '@megumi/coding-agent/agent-loop/model-call';
 import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
@@ -28,7 +27,7 @@ describe('Coding Agent host interface runtime', () => {
 
   it('composes product services without importing or constructing desktop shell modules', async () => {
     temporaryHome = await mkdtemp(path.join(os.tmpdir(), 'megumi-host-interface-'));
-    let rawSettings: AppSettingsRaw = {};
+    let rawSettings: SettingsRaw = {};
 
     runtime = composeCodingAgentRuntime({
       homePaths: {
@@ -44,13 +43,14 @@ describe('Coding Agent host interface runtime', () => {
         completeModelCall: async (): Promise<ModelCallCompletionResult> => ({ ok: true, text: '' }),
         cancelModelCall: () => false,
       },
-      appSettingsProvider: {
-        getResolvedSettings: () => resolveAppSettings(rawSettings),
-        updateSettings(patch: AppSettingsRaw) {
-          rawSettings = mergeRawAppSettings(rawSettings, patch);
-          return resolveAppSettings(rawSettings);
+      appSettingsProvider: createSettingsService({
+        file_store: {
+          readRawSettings: () => rawSettings,
+          writeRawSettings(next) {
+            rawSettings = next;
+          },
         },
-      },
+      }),
       memorySettingsProvider: {
         isMemoryEnabled: () => false,
       },

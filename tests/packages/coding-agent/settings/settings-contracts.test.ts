@@ -1,40 +1,49 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
+  createSettingsService,
   createSettingsJsonSchema,
   DEFAULT_SETTINGS,
-  mergeRawSettings,
   PermissionRuleSchema,
   ResolveProviderRuntimeConfigRequestSchema,
-  resolveSettings,
   SettingsRawSchema,
+  type SettingsRaw,
 } from '@megumi/coding-agent/settings';
 
 describe('Settings v2 contracts', () => {
   it('accepts sparse raw settings and resolves defaults', () => {
     expect(SettingsRawSchema.parse({})).toEqual({});
-    expect(resolveSettings({})).toEqual(DEFAULT_SETTINGS);
+    expect(createSettingsService({
+      file_store: memorySettingsFileStore(),
+    }).getResolvedSettings()).toEqual({ status: 'ok', settings: DEFAULT_SETTINGS });
   });
 
   it('merges sparse raw settings without expanding defaults', () => {
-    expect(mergeRawSettings({
+    const fileStore = memorySettingsFileStore({
       theme: 'midnight-blue',
       providers: {
         deepseek: {
           api_key: 'sk-deepseek',
         },
       },
-    }, {
-      language: 'en-US',
-      memory: {
-        enabled: true,
-      },
-      providers: {
-        deepseek: {
-          enabled: false,
+    });
+    const service = createSettingsService({ file_store: fileStore });
+
+    service.updateSettings({
+      patch: {
+        language: 'en-US',
+        memory: {
+          enabled: true,
+        },
+        providers: {
+          deepseek: {
+            enabled: false,
+          },
         },
       },
-    })).toEqual({
+    });
+
+    expect(fileStore.readRawSettings()).toEqual({
       theme: 'midnight-blue',
       language: 'en-US',
       memory: {
@@ -105,3 +114,13 @@ describe('Settings v2 contracts', () => {
     });
   });
 });
+
+function memorySettingsFileStore(initial: SettingsRaw = {}) {
+  let raw = initial;
+  return {
+    readRawSettings: () => raw,
+    writeRawSettings(next: SettingsRaw) {
+      raw = next;
+    },
+  };
+}

@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { ProviderId } from '@megumi/shared/provider';
-import type { AppLanguage, AppThemeName } from '@megumi/coding-agent/settings';
+import type { AppLanguage, AppThemeName } from '@megumi/coding-agent/host-interface';
 import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../shared/ipc';
 
 export type SetupWizardStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';

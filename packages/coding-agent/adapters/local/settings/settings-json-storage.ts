@@ -1,10 +1,9 @@
 // Provides local settings.json persistence for the shell-agnostic Coding Agent product.
 import fs from 'node:fs';
 import path from 'node:path';
+import { z } from 'zod';
 import {
-  AppSettingsRawSchema,
   SettingsRawSchema,
-  type AppSettingsRaw,
   type SettingsFileStore,
   type SettingsRaw,
 } from '@megumi/coding-agent/settings';
@@ -93,6 +92,52 @@ function appRawToSettingsRaw(raw: AppSettingsRaw): SettingsRaw {
     } : {}),
   };
 }
+
+const LegacyAppSetupSettingsRawSchema = z
+  .object({
+    completed: z.boolean().optional(),
+    completedAt: z.string().datetime().optional(),
+  })
+  .strict();
+
+const LegacyAppCompactionSettingsRawSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    reserveTokens: z.number().int().positive().optional(),
+    keepRecentTokens: z.number().int().positive().optional(),
+  })
+  .strict();
+
+const LegacyAppProviderSettingsRawSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    kind: z.enum(['openai-compatible', 'openai', 'anthropic']).optional(),
+    displayName: z.string().min(1).optional(),
+    baseUrl: z.string().url().optional(),
+    defaultModel: z.string().min(1).optional(),
+    apiKey: z.string().min(1).nullable().optional(),
+    apiKeyEnv: z.string().min(1).nullable().optional(),
+  })
+  .strict();
+
+const AppSettingsRawSchema = z
+  .object({
+    language: z.enum(['zh-CN', 'en-US']).optional(),
+    theme: z.enum([
+      'megumi-warm',
+      'neutral-light',
+      'graphite-dark',
+      'sage-mist',
+      'midnight-blue',
+    ]).optional(),
+    setup: LegacyAppSetupSettingsRawSchema.optional(),
+    memory: z.object({ enabled: z.boolean().optional() }).strict().optional(),
+    compaction: LegacyAppCompactionSettingsRawSchema.optional(),
+    providers: z.record(z.string().min(1), LegacyAppProviderSettingsRawSchema).optional(),
+  })
+  .strict();
+
+type AppSettingsRaw = z.infer<typeof AppSettingsRawSchema>;
 
 function readFileIfExistsSync(filePath: string): string | undefined {
   try {

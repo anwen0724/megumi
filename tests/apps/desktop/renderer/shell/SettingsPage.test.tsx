@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import { DEFAULT_APP_SETTINGS } from '@megumi/coding-agent/settings';
+import { DEFAULT_APP_SETTINGS } from '@megumi/coding-agent/host-interface';
 import { SettingsPage } from '@megumi/desktop/renderer/shell/SettingsPage';
 import { ThemeProvider, useThemeStore } from '@megumi/desktop/renderer/shared/theme';
 

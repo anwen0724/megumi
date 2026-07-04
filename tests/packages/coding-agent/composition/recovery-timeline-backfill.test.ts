@@ -16,21 +16,21 @@ import {
 } from '@megumi/coding-agent/persistence';
 import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
 import {
-  mergeRawAppSettings,
-  resolveAppSettings,
-  type AppSettingsRaw,
+  createSettingsService,
+  type SettingsRaw,
 } from '@megumi/coding-agent/settings';
 import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
 
 function appSettingsProvider() {
-  let rawSettings: AppSettingsRaw = {};
-  return {
-    getResolvedSettings: () => resolveAppSettings(rawSettings),
-    updateSettings(patch: AppSettingsRaw) {
-      rawSettings = mergeRawAppSettings(rawSettings, patch);
-      return resolveAppSettings(rawSettings);
+  let rawSettings: SettingsRaw = {};
+  return createSettingsService({
+    file_store: {
+      readRawSettings: () => rawSettings,
+      writeRawSettings(next) {
+        rawSettings = next;
+      },
     },
-  };
+  });
 }
 
 // Seed an orphan terminal run without committed session message projection directly into the SQLite file,
