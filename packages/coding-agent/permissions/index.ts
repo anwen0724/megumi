@@ -4,3 +4,4 @@
  */
 export * from './contracts/permission-contracts';
 export * from './contracts/approval-policy-contracts';
+export * from './services/permission-service';
