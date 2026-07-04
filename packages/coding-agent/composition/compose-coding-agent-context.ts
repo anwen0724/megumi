@@ -49,8 +49,7 @@ export function createContextUsageSignalBus(): ContextUsageSignalBus {
 }
 
 export function composeCodingAgentContext(input: {
-  sessionRepository: ConstructorParameters<typeof ContextRepository>[0]['sessionRepository']
-    & ConstructorParameters<typeof ContextRepository>[0]['activePathRepository'];
+  sessionRepository: ConstructorParameters<typeof ContextRepository>[0]['sessionRepository'];
   runtimeEventRepository: ConstructorParameters<typeof ContextRepository>[0]['runtimeEventRepository'];
   agentInstructionSourceService?: ContextInstructionSourcePort;
   summaryModelCallPort: ContextSummaryModelCallPort;
@@ -61,7 +60,6 @@ export function composeCodingAgentContext(input: {
   const internalAutoCompactionSubscriptionIds = new Set<string>();
   const contextRepository = new ContextRepository({
     sessionRepository: input.sessionRepository,
-    activePathRepository: input.sessionRepository,
     runtimeEventRepository: input.runtimeEventRepository,
   });
   const systemPromptText = loadPromptResource('system-prompt.md');

@@ -42,6 +42,7 @@ describe('composed session runtime workspace sources', () => {
       });
       const runtime = composeCodingAgentSessionRuntime({
         homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
+        database: persistence.database,
         runtimeLogger: { warn: () => undefined },
         artifactRepository: persistence.artifactRepository,
         agentLoopRepository,

@@ -9,17 +9,15 @@ import { composeCodingAgentContext } from './compose-coding-agent-context';
 import { createLegacyModelInputContextFromPrompt } from '../agent-loop/initial-input/initial-model-input-preparation';
 import { DEFAULT_CONTEXT_BUDGET_POLICY } from '../agent-loop/model-input/model-input-context-builder';
 import type { RuntimeLogger } from '../host-interface/runtime-logger';
-import {
-  SessionBranchService,
-  SessionContextInputService,
-  SessionService,
-} from '../session';
+import { createSessionService } from '../session';
+import { SessionRepository } from '../session/repositories/session-repository';
 import type { ModelCallProvider } from '../agent-loop/model-call';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
 import { createAgentRunProcessingCompositionIds } from './agent-run-processing-ids';
+import type { MegumiDatabase } from '../persistence/connection';
 import type { AgentLoopRepository } from '../persistence/repos/agent-loop.repo';
 import type { ArtifactRepository } from '../persistence/repos/artifact.repo';
-import type { SessionRepository } from '../persistence/repos/session.repo';
+import type { SessionRepository as LegacySessionRepository } from '../persistence/repos/session.repo';
 import type { ToolCallRepository } from '../persistence/repos/tool-call.repo';
 import type { WorkspaceChangeRepository } from '../persistence/repos/workspace-change.repo';
 import type { ToolRegistryService } from '../tools';
@@ -31,6 +29,9 @@ import {
   createWorkspaceChangeFooterProjectorService,
   isWorkspaceChangeFooterProjectorPort,
 } from '../workspace';
+import type { SessionBranchControllerServicePort } from '../host-interface/session/branch-controller';
+import type { AgentRunSessionBranchServicePort } from '../agent-loop';
+import type { RunRetrySessionBranchServicePort } from '../state';
 
 export interface CodingAgentHomePaths {
   homePath: string;
@@ -40,10 +41,11 @@ export interface CodingAgentHomePaths {
 
 export interface ComposeCodingAgentSessionRuntimeOptions {
   homePaths: CodingAgentHomePaths;
+  database: MegumiDatabase;
   runtimeLogger: RuntimeLogger;
   artifactRepository: ArtifactRepository;
   agentLoopRepository: AgentLoopRepository;
-  sessionRepository: SessionRepository;
+  sessionRepository: LegacySessionRepository;
   toolCallRepository: ToolCallRepository;
   workspaceChangeRepository: WorkspaceChangeRepository;
   toolRegistry: ToolRegistryService;
@@ -56,12 +58,14 @@ export interface ComposeCodingAgentSessionRuntimeOptions {
 
 export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSessionRuntimeOptions) {
   const agentRunProcessingIds = createAgentRunProcessingCompositionIds();
+  const sessionRepository = new SessionRepository(options.database);
+  const sessionService = createSessionService({ repository: sessionRepository });
   const runContextService = new RunContextService({
     contextRepository: options.agentLoopRepository,
     workspaceSourceProvider: createLocalWorkspaceSourceProvider(),
   });
   const contextRuntime = composeCodingAgentContext({
-    sessionRepository: options.sessionRepository as any,
+    sessionRepository,
     runtimeEventRepository: options.agentLoopRepository as any,
     summaryModelCallPort: {
       async completePrompt({ prompt }) {
@@ -113,40 +117,7 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     repository: options.agentLoopRepository,
     planArtifactCompatibility,
   });
-  const sessionService = new SessionService({
-    sessionRepository: options.sessionRepository,
-    messageRepository: options.sessionRepository,
-    runRepository: options.agentLoopRepository,
-    ids: { sessionId: () => `session:${crypto.randomUUID()}` },
-    activePathRepository: options.sessionRepository,
-    timelineMessageRepository: options.agentLoopRepository,
-    memorySettingsProvider: options.memoryRuntime.memorySettingsProvider,
-    memoryMarkdownSyncService: options.memoryRuntime.markdownSyncService,
-    megumiHomePath: options.homePaths.homePath,
-  });
-  const branchIds = {
-    branchMarkerId: () => `branch-marker:${crypto.randomUUID()}`,
-    sourceEntryId: () => `source-entry:${crypto.randomUUID()}`,
-    eventId: () => `event:${crypto.randomUUID()}`,
-    chatStreamEventId: () => `chat-stream-event:${crypto.randomUUID()}`,
-  };
-  const sessionBranchService = new SessionBranchService({
-    sessionRepository: options.sessionRepository,
-    messageRepository: options.sessionRepository,
-    runtimeEventRepository: options.agentLoopRepository,
-    activePathRepository: options.sessionRepository,
-    ids: branchIds,
-    chatStreamEventSink: options.chatStreamEventSink,
-  });
-  const sessionContextInputService = new SessionContextInputService({
-    sessionRepository: options.sessionRepository,
-    messageRepository: options.sessionRepository,
-    runRepository: options.agentLoopRepository,
-    runExecutionFactRepository: options.agentLoopRepository,
-    runtimeEventRepository: options.agentLoopRepository,
-    sessionCompactionRepository: options.sessionRepository,
-    activePathRepository: options.sessionRepository,
-  });
+  const sessionBranchService = createUnsupportedSessionBranchService();
   const workspaceChanges = options.workspaceChangeFooterProjector ?? options.workspaceChangeRepository;
   const workspaceChangeFooterProjector = isWorkspaceChangeFooterProjectorPort(workspaceChanges)
     ? createWorkspaceChangeFooterProjectorService({ workspaceChanges })
@@ -187,13 +158,13 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
   const agentRunProcessingService = new AgentRunProcessingService({
     sessionRepository: options.sessionRepository,
     agentLoopRepository: options.agentLoopRepository,
+    sessionService,
     postRunHooks,
     runTerminalCoordinator,
     runRetryCoordinator,
     promptContextService: contextRuntime.contextService,
     contextUsageMonitor: contextRuntime.contextUsageMonitor,
     activePathRepository: options.sessionRepository,
-    sessionContextInputService,
     sessionBranchService,
     permissionSnapshotService,
     planArtifactService,
@@ -234,11 +205,34 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     runContextService,
     contextRuntime,
     sessionService,
+    sessionRepository,
     sessionBranchService,
     inputService,
     agentRunService,
     agentRunProcessingService,
     commandService,
     planArtifactService,
+  };
+}
+
+type TransitionalSessionBranchService =
+  & SessionBranchControllerServicePort
+  & AgentRunSessionBranchServicePort
+  & RunRetrySessionBranchServicePort;
+
+function createUnsupportedSessionBranchService(): TransitionalSessionBranchService {
+  return {
+    createBranchDraft() {
+      throw new Error('Session branch drafts are not available during the Session module boundary transition.');
+    },
+    cancelBranchDraft() {
+      return { cancelled: false, reason: 'branch_marker_not_found' as const, events: [] };
+    },
+    assertActiveBranchDraftMarker() {
+      throw new Error('Session branch drafts are not available during the Session module boundary transition.');
+    },
+    createBranchFromUserMessage() {
+      throw new Error('Manual rerun branch creation is not available during the Session module boundary transition.');
+    },
   };
 }

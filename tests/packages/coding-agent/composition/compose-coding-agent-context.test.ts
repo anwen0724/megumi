@@ -13,7 +13,6 @@ describe('composeCodingAgentContext', () => {
         ],
         listSessionCompactionsBySession: () => [],
         saveSessionCompaction,
-        getActivePath: () => ({ entries: [] }),
       },
       runtimeEventRepository: {
         listRuntimeEventsByRun: () => [],

@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { createAgentRunService } from '@megumi/coding-agent/agent-loop';
 import type { AgentRunSendRequest } from '@megumi/coding-agent/agent-loop';
 import type { RawUserInputAttachment } from '@megumi/coding-agent/input';
-import type { Session, SessionMessage } from '@megumi/shared/session';
+import type { Session } from '@megumi/shared/session';
+import type { SessionMessageWithAttachments } from '@megumi/coding-agent/session';
 
 describe('AgentRunService input and command orchestration', () => {
   it('starts ordinary agent run from parsed message input', async () => {
@@ -31,6 +32,7 @@ describe('AgentRunService input and command orchestration', () => {
       providerId: 'deepseek',
       modelId: 'deepseek-v4-flash',
       text: '帮我看下代码',
+      workspaceId: 'workspace-1',
       createdAt: '2026-07-03T00:00:00.000Z',
     });
 
@@ -118,6 +120,7 @@ describe('AgentRunService input and command orchestration', () => {
       modelId: 'deepseek-v4-flash',
       text: '看一下这张图',
       attachments: [attachment],
+      workspaceId: 'workspace-1',
       createdAt: '2026-07-03T00:00:00.000Z',
     };
 
@@ -136,27 +139,50 @@ function createAgentRunHarness() {
   const sessionRecord: Session = {
     sessionId: 'session-1',
     title: 'Session',
+    workspaceId: 'workspace-1',
     status: 'active',
     createdAt: '2026-07-03T00:00:00.000Z',
     updatedAt: '2026-07-03T00:00:00.000Z',
   };
-  const messages: SessionMessage[] = [];
+  const messages: SessionMessageWithAttachments[] = [];
   const session = {
-    createSession: vi.fn(() => sessionRecord),
-    listMessagesBySession: vi.fn(() => messages),
-    listSessions: vi.fn(() => [sessionRecord]),
+    createSession: vi.fn(() => ({
+      status: 'created' as const,
+      session: {
+        session_id: 'session-1',
+        workspace_id: 'workspace-1',
+        title: 'Session',
+        status: 'active' as const,
+        created_at: '2026-07-03T00:00:00.000Z',
+        updated_at: '2026-07-03T00:00:00.000Z',
+      },
+    })),
+    getSession: vi.fn(() => ({
+      status: 'found' as const,
+      session: {
+        session_id: 'session-1',
+        workspace_id: 'workspace-1',
+        title: 'Session',
+        status: 'active' as const,
+        created_at: '2026-07-03T00:00:00.000Z',
+        updated_at: '2026-07-03T00:00:00.000Z',
+      },
+    })),
+    listMessages: vi.fn(() => ({ status: 'ok' as const, messages })),
   };
   const userInput = {
     handle: vi.fn(async (input: { payload: { message?: { content: string; createdAt: string } } }) => {
       messages.push({
-        messageId: 'message-1',
-        sessionId: 'session-1',
-        runId: 'run-1',
-        role: 'user',
-        content: input.payload.message?.content ?? '',
-        status: 'completed',
-        createdAt: input.payload.message?.createdAt ?? '2026-07-03T00:00:00.000Z',
-        completedAt: input.payload.message?.createdAt ?? '2026-07-03T00:00:00.000Z',
+        message: {
+          message_id: 'message-1',
+          session_id: 'session-1',
+          run_id: 'run-1',
+          role: 'user',
+          content_text: input.payload.message?.content ?? '',
+          created_at: input.payload.message?.createdAt ?? '2026-07-03T00:00:00.000Z',
+          completed_at: input.payload.message?.createdAt ?? '2026-07-03T00:00:00.000Z',
+        },
+        attachments: [],
       });
       return {
         data: {

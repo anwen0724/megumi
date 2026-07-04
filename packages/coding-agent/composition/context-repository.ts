@@ -113,9 +113,22 @@ export function mapRuntimeEventToRuntimeFactSource(event: PersistedRuntimeEvent)
 export class ContextRepository implements ContextSessionFactRepository {
   constructor(private readonly ports: {
     sessionRepository: {
-      listMessagesBySession(sessionId: string): PersistedSessionMessage[];
-      listSessionCompactionsBySession(sessionId: string): PersistedSessionCompaction[];
-      saveSessionCompaction(entry: {
+      listMessagesBySession?(sessionId: string): PersistedSessionMessage[];
+      listSessionCompactionsBySession?(sessionId: string): PersistedSessionCompaction[];
+      listMessagesBySessionId?(sessionId: string): Array<{
+        message_id: string;
+        session_id: string;
+        role: 'user' | 'assistant';
+        content_text: string;
+        created_at: string;
+        completed_at?: string;
+      }>;
+      listCompactionSummariesBySessionId?(sessionId: string): Array<{
+        compaction_id: string;
+        summary_text: string;
+        created_at: string;
+      }>;
+      saveSessionCompaction?(entry: {
         compactionId: string;
         sessionId: string;
         summary: string;
@@ -128,7 +141,7 @@ export class ContextRepository implements ContextSessionFactRepository {
         metadata?: Record<string, unknown>;
       }): void;
     };
-    activePathRepository: {
+    activePathRepository?: {
       getActivePath(sessionId: string): ActivePath;
     };
     runtimeEventRepository: {
@@ -137,14 +150,14 @@ export class ContextRepository implements ContextSessionFactRepository {
   }) {}
 
   listMessagesBySession(sessionId: string): ReturnType<ContextSessionFactRepository['listMessagesBySession']> {
-    return this.ports.sessionRepository.listMessagesBySession(sessionId)
+    return this.listPersistedMessages(sessionId)
       .filter((message) => message.status === 'completed' && message.content.trim().length > 0);
   }
 
   listSessionCompactionsBySession(
     sessionId: string,
   ): ReturnType<ContextSessionFactRepository['listSessionCompactionsBySession']> {
-    return this.ports.sessionRepository.listSessionCompactionsBySession(sessionId)
+    return this.listPersistedCompactions(sessionId)
       .filter((compaction) => compaction.status === 'completed' && compaction.summary.trim().length > 0);
   }
 
@@ -176,6 +189,10 @@ export class ContextRepository implements ContextSessionFactRepository {
       throw new Error(`Context compaction ${compaction.compaction_id} has no preserved source ref.`);
     }
 
+    if (!this.ports.sessionRepository.saveSessionCompaction) {
+      throw new Error('Context compaction persistence requires Session Service migration.');
+    }
+
     this.ports.sessionRepository.saveSessionCompaction({
       compactionId: compaction.compaction_id,
       sessionId: compaction.session_id,
@@ -199,6 +216,9 @@ export class ContextRepository implements ContextSessionFactRepository {
   }
 
   private runtimeSourcesForSession(sessionId: string): SessionContextSource[] {
+    if (!this.ports.activePathRepository) {
+      return [];
+    }
     const activePath = this.ports.activePathRepository.getActivePath(sessionId);
     const runIds = activePath.entries
       .filter((entry) => entry.sourceRef.sourceKind === 'session_run')
@@ -208,6 +228,33 @@ export class ContextRepository implements ContextSessionFactRepository {
       .flatMap((runId) => this.ports.runtimeEventRepository.listRuntimeEventsByRun(runId))
       .map(mapRuntimeEventToRuntimeFactSource)
       .filter((source): source is SessionContextSource => !!source);
+  }
+
+  private listPersistedMessages(sessionId: string): PersistedSessionMessage[] {
+    if (this.ports.sessionRepository.listMessagesBySessionId) {
+      return this.ports.sessionRepository.listMessagesBySessionId(sessionId).map((message) => ({
+        messageId: message.message_id,
+        sessionId: message.session_id,
+        role: message.role,
+        content: message.content_text,
+        status: 'completed',
+        createdAt: message.created_at,
+        ...(message.completed_at ? { completedAt: message.completed_at } : {}),
+      }));
+    }
+    return this.ports.sessionRepository.listMessagesBySession?.(sessionId) ?? [];
+  }
+
+  private listPersistedCompactions(sessionId: string): PersistedSessionCompaction[] {
+    if (this.ports.sessionRepository.listCompactionSummariesBySessionId) {
+      return this.ports.sessionRepository.listCompactionSummariesBySessionId(sessionId).map((compaction) => ({
+        compactionId: compaction.compaction_id,
+        summary: compaction.summary_text,
+        status: 'completed',
+        createdAt: compaction.created_at,
+      }));
+    }
+    return this.ports.sessionRepository.listSessionCompactionsBySession?.(sessionId) ?? [];
   }
 }
 

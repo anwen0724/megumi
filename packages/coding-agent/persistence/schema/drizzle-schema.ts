@@ -45,7 +45,8 @@ export const sessionEntries = sqliteTable('session_entries', {
   entryId: text('entry_id').primaryKey(),
   sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
   parentEntryId: text('parent_entry_id'),
-  entryKind: text('entry_kind').notNull(),
+  entryKind: text('entry_kind'),
+  entryType: text('entry_type'),
   messageId: text('message_id'),
   compactionId: text('compaction_id'),
   targetEntryId: text('target_entry_id'),
@@ -55,6 +56,7 @@ export const sessionEntries = sqliteTable('session_entries', {
   index('idx_session_entries_session_created').on(table.sessionId, table.createdAt),
   index('idx_session_entries_parent').on(table.sessionId, table.parentEntryId),
   index('idx_session_entries_kind').on(table.sessionId, table.entryKind),
+  index('idx_session_entries_type').on(table.sessionId, table.entryType),
   index('idx_session_entries_message').on(table.sessionId, table.messageId),
   index('idx_session_entries_compaction').on(table.sessionId, table.compactionId),
 ]);
@@ -85,6 +87,21 @@ export const sessionMessages = sqliteTable('session_messages', {
 }, (table) => [
   index('idx_session_messages_session_created').on(table.sessionId, table.createdAt),
   index('idx_session_messages_run').on(table.runId),
+]);
+
+export const sessionMessageAttachments = sqliteTable('session_message_attachments', {
+  attachmentId: text('attachment_id').primaryKey(),
+  messageId: text('message_id').notNull().references(() => sessionMessages.messageId, { onDelete: 'cascade' }),
+  sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
+  type: text('type').notNull(),
+  name: text('name'),
+  mimeType: text('mime_type'),
+  sourceType: text('source_type').notNull(),
+  sourceValue: text('source_value').notNull(),
+  createdAt: text('created_at').notNull(),
+}, (table) => [
+  index('idx_session_message_attachments_message').on(table.messageId),
+  index('idx_session_message_attachments_session').on(table.sessionId),
 ]);
 
 export const sessionCompactions = sqliteTable('session_compactions', {

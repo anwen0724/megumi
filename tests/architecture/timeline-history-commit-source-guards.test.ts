@@ -50,9 +50,10 @@ describe('timeline history commit boundaries', () => {
   });
 
   it('keeps renderer timeline history on timeline repository instead of flat session messages', () => {
-    const source = read('packages/coding-agent/session/session-service.ts');
+    const source = read('packages/coding-agent/composition/compose-coding-agent-runtime.ts');
 
-    expect(source).toContain('timelineMessageRepository.listCommittedMessagesBySession(input)');
+    expect(source).toContain('listTimelineMessagesBySession');
+    expect(source).toContain('agentLoopRepository.listCommittedMessagesBySession');
     expect(source).not.toContain('timelineMessagesFromPersistedMessages');
   });
 

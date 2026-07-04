@@ -43,7 +43,6 @@ import {
   createRuntimeErrorFromUnknown,
   modelCallInputBuildFailureToRuntimeError,
 } from '../events';
-import type { BuildSessionContextInputFromRepositoryInput } from '../session';
 import { runModelCall, type ModelCallPort } from './model-call';
 import {
   cancelAgentLoopModelCall,
@@ -256,6 +255,13 @@ export interface AgentLoopContextService {
 export interface AgentLoopSessionContextInputService {
   buildSessionContextInput(input: BuildSessionContextInputFromRepositoryInput): SessionContextInput;
 }
+
+export type BuildSessionContextInputFromRepositoryInput = {
+  sessionId: string;
+  currentRunId?: string;
+  currentMessageId?: string;
+  builtAt: string;
+};
 
 export interface AgentLoopMemoryRecallService {
   recallForNewUserInput(input: {
@@ -582,7 +588,7 @@ export interface AgentLoopEventRecorderOptions<TProjection = unknown> {
       runId: string;
       content: string;
       completedAt: string;
-    }): void;
+    }): void | Promise<void>;
   };
   postRunHooks: {
     scheduleRunCompletedMemoryCapture(input: {
@@ -837,7 +843,7 @@ async function* recordAgentLoopModelCallEvents<TProjection>(
     return;
   }
 
-  options.assistantReplies.commit({
+  await options.assistantReplies.commit({
     sessionId: input.request.sessionId,
     runId: input.request.runId,
     content: assistantContent,

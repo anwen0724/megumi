@@ -252,7 +252,8 @@ CREATE TABLE `session_entries` (
 	`entry_id` text PRIMARY KEY NOT NULL,
 	`session_id` text NOT NULL,
 	`parent_entry_id` text,
-	`entry_kind` text NOT NULL,
+	`entry_kind` text,
+	`entry_type` text,
 	`message_id` text,
 	`compaction_id` text,
 	`target_entry_id` text,
@@ -267,6 +268,7 @@ CREATE TABLE `session_entries` (
 CREATE INDEX `idx_session_entries_session_created` ON `session_entries` (`session_id`,`created_at`);--> statement-breakpoint
 CREATE INDEX `idx_session_entries_parent` ON `session_entries` (`session_id`,`parent_entry_id`);--> statement-breakpoint
 CREATE INDEX `idx_session_entries_kind` ON `session_entries` (`session_id`,`entry_kind`);--> statement-breakpoint
+CREATE INDEX `idx_session_entries_type` ON `session_entries` (`session_id`,`entry_type`);--> statement-breakpoint
 CREATE INDEX `idx_session_entries_message` ON `session_entries` (`session_id`,`message_id`);--> statement-breakpoint
 CREATE INDEX `idx_session_entries_compaction` ON `session_entries` (`session_id`,`compaction_id`);--> statement-breakpoint
 CREATE TABLE `session_leaf_changes` (
@@ -299,6 +301,22 @@ CREATE TABLE `session_messages` (
 --> statement-breakpoint
 CREATE INDEX `idx_session_messages_session_created` ON `session_messages` (`session_id`,`created_at`);--> statement-breakpoint
 CREATE INDEX `idx_session_messages_run` ON `session_messages` (`run_id`);--> statement-breakpoint
+CREATE TABLE `session_message_attachments` (
+	`attachment_id` text PRIMARY KEY NOT NULL,
+	`message_id` text NOT NULL,
+	`session_id` text NOT NULL,
+	`type` text NOT NULL,
+	`name` text,
+	`mime_type` text,
+	`source_type` text NOT NULL,
+	`source_value` text NOT NULL,
+	`created_at` text NOT NULL,
+	FOREIGN KEY (`message_id`) REFERENCES `session_messages`(`message_id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`session_id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `idx_session_message_attachments_message` ON `session_message_attachments` (`message_id`);--> statement-breakpoint
+CREATE INDEX `idx_session_message_attachments_session` ON `session_message_attachments` (`session_id`);--> statement-breakpoint
 CREATE TABLE `sessions` (
 	`session_id` text PRIMARY KEY NOT NULL,
 	`workspace_id` text NOT NULL,

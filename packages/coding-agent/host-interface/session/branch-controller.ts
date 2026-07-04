@@ -4,7 +4,6 @@ import type {
   SessionBranchDraftCancelData,
   SessionBranchDraftCreateData,
 } from '@megumi/shared/ipc';
-import type { SessionBranchServicePort } from '../../session';
 
 export interface SessionBranchController {
   createDraft(input: {
@@ -28,8 +27,30 @@ export interface SessionBranchController {
   };
 }
 
+export interface SessionBranchControllerServicePort {
+  createBranchDraft(input: {
+    requestId: string;
+    sessionId: string;
+    messageId: string;
+    intent: 'branch' | 'rerun';
+    createdAt: string;
+    runtimeContext?: RuntimeContext;
+  }): { branchDraft: SessionBranchDraftCreateData['branchDraft']; events: Iterable<RuntimeEvent> };
+  cancelBranchDraft(input: {
+    requestId: string;
+    sessionId: string;
+    branchMarkerId: string;
+    createdAt: string;
+    runtimeContext?: RuntimeContext;
+  }): {
+    cancelled: boolean;
+    reason?: SessionBranchDraftCancelData['reason'];
+    events: Iterable<RuntimeEvent>;
+  };
+}
+
 export function createSessionBranchController(
-  branchService: SessionBranchServicePort,
+  branchService: SessionBranchControllerServicePort,
 ): SessionBranchController {
   return {
     createDraft: (input) => branchService.createBranchDraft(input),

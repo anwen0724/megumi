@@ -15,7 +15,6 @@ import type {
   SessionSourceEntry,
 } from '@megumi/shared/session';
 
-import type { SessionBranchServicePort } from '../session';
 import { RuntimeEventLog } from '../events';
 
 export interface RunRetryCoordinatorIds {
@@ -29,6 +28,21 @@ export interface RunRetryCoordinatorRepositoryPort {
   getMessage(messageId: string): SessionMessage | undefined;
   listRuntimeEventsByRun(runId: string): RuntimeEvent[];
   appendRuntimeEvent(event: RuntimeEvent): RuntimeEvent;
+}
+
+export interface RunRetrySessionBranchServicePort {
+  assertActiveBranchDraftMarker?(input: {
+    sessionId: string;
+    branchMarkerId: string;
+  }): SessionBranchMarker;
+  createBranchDraft?(input: unknown): unknown;
+  cancelBranchDraft?(input: unknown): unknown;
+  createBranchFromUserMessage(input: CreateManualRerunFromUserMessageInput): {
+    branchMarker: SessionBranchMarker;
+    branchMarkerSourceEntry: SessionSourceEntry;
+    seedMessage: SessionMessage;
+    events: RuntimeEvent[];
+  };
 }
 
 export interface RunRetryActivePathRepositoryPort {
@@ -48,7 +62,7 @@ export interface RunRetryActivePathRepositoryPort {
 export interface RunRetryCoordinatorOptions {
   repository: RunRetryCoordinatorRepositoryPort;
   activePathRepository?: RunRetryActivePathRepositoryPort;
-  sessionBranchService?: SessionBranchServicePort;
+  sessionBranchService?: RunRetrySessionBranchServicePort;
   ids: RunRetryCoordinatorIds;
 }
 
@@ -102,7 +116,7 @@ export class RunRetryCoordinator {
   private readonly repository: RunRetryCoordinatorOptions['repository'];
   private readonly eventLog: RuntimeEventLog;
   private readonly activePathRepository?: RunRetryCoordinatorOptions['activePathRepository'];
-  private readonly sessionBranchService?: SessionBranchServicePort;
+  private readonly sessionBranchService?: RunRetrySessionBranchServicePort;
   private readonly ids: RunRetryCoordinatorIds;
 
   constructor(options: RunRetryCoordinatorOptions) {
@@ -318,7 +332,7 @@ export class RunRetryCoordinator {
     return this.activePathRepository;
   }
 
-  private requireSessionBranchService(): SessionBranchServicePort {
+  private requireSessionBranchService(): RunRetrySessionBranchServicePort {
     if (!this.sessionBranchService) {
       throw new Error('Manual rerun requires session branch service.');
     }

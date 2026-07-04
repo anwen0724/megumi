@@ -5,6 +5,7 @@ export const targetDatabaseTables = [
   'session_entries',
   'session_leaf_changes',
   'session_messages',
+  'session_message_attachments',
   'session_compactions',
   'agent_loop_runs',
   'model_calls',
