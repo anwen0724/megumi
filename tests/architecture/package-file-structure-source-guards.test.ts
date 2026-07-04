@@ -148,6 +148,13 @@ describe('package and file structure source guards', () => {
     ])).toEqual([]);
   });
 
+  it('keeps Settings contracts independent from legacy shared permission and provider contracts', () => {
+    expect(offenders(filesUnder('packages/coding-agent/settings'), [
+      /@megumi\/shared\/permission\b/,
+      /@megumi\/shared\/provider\b/,
+    ])).toEqual([]);
+  });
+
   it('removes the temporary input command compatibility shim after input foundation migration', () => {
     expect(existsSync(join(repoRoot, 'packages/shared/input-command'))).toBe(false);
   });
