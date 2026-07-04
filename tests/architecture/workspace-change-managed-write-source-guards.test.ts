@@ -6,16 +6,14 @@ import { describe, expect, it } from 'vitest';
 const repoRoot = process.cwd();
 
 describe('workspace change managed write source guards', () => {
-  it('keeps workspace change persistence out of renderer, provider, and coding-agent context', () => {
+  it('keeps workspace change persistence out of renderer, provider, and context code', () => {
     const forbidden = [
       'WorkspaceChangeRepository',
-      'WorkspaceChangeTrackerService',
-      'WorkspaceRestoreService',
-      'workspace_change_sets',
-      'workspace_checkpoints',
+      'WorkspaceChangeService',
+      'workspace_changes',
       'workspace_changed_files',
-      'workspace_restore_requests',
-      'workspace_snapshot_contents',
+      'workspace_restore',
+      'workspace_snapshot',
     ];
     const roots = [
       'apps/desktop/src/renderer',
@@ -27,48 +25,38 @@ describe('workspace change managed write source guards', () => {
     expect(matches).toEqual([]);
   });
 
-  it('does not make run_command restorable in production code', () => {
-    const trackerSource = fs.readFileSync(
-      path.join(repoRoot, 'packages/coding-agent/workspace/workspace-change-tracker.ts'),
-      'utf8',
-    );
-    expect(trackerSource).toContain("MANAGED_FILE_TOOL_NAMES = new Set(['edit_file', 'write_file'])");
-    expect(trackerSource).not.toMatch(/MANAGED_FILE_TOOL_NAMES[\s\S]*run_command/);
+  it('records only successful managed file mutations', () => {
+    const source = read('packages/coding-agent/workspace/services/workspace-change-service.ts');
+    const coreSource = read('packages/coding-agent/workspace/core/workspace-change-tracking.ts');
 
-    const roots = [
-      'apps/desktop/src/main',
-      'packages/shared',
-      'packages/coding-agent/persistence',
-    ];
-    const files = roots.flatMap((root) => productionFiles(path.join(repoRoot, root)));
-    const matches = files.flatMap((file) => scanRunCommandWorkspaceWindows(file));
-
-    expect(matches).toEqual([]);
+    expect(coreSource).toContain("tool_execution.tool_name !== 'write_file'");
+    expect(coreSource).toContain("tool_execution.tool_name !== 'edit_file'");
+    expect(coreSource).toContain("tool_execution.tool_name !== 'delete_file'");
+    expect(source).toMatch(/const result = await request\.execute\(\);[\s\S]*insertOrUpdateChangedFile/);
+    expect(coreSource).not.toContain("'run_command'");
   });
 
-  it('keeps run_command executor path away from workspace restore record writes', () => {
+  it('keeps run_command executor paths away from workspace restore record writes', () => {
     const files = [
-      'packages/coding-agent/tools/execution/tool-executors/run-command.executor.ts',
-      'packages/coding-agent/tools/execution/built-in-tool-source-executor.ts',
-      'packages/coding-agent/tools/execution/tool-execution-router.ts',
+      'packages/coding-agent/tools/adapters/built-in-tools.ts',
       'packages/coding-agent/agent-loop/tool-call/tool-call-runner.ts',
     ];
     const forbidden = [
-      'saveRestoreRequest',
-      'saveRestoreResult',
-      'saveRestoreFileResult',
-      'updateRestoreRequestStatus',
-      'updateChangedFileRestoreState',
-      'workspace_restore_requests',
-      'workspace_restore_results',
+      'workspace_restore_operations',
       'workspace_restore_file_results',
+      'restoreWorkspaceChangeSet',
+      'WorkspaceRestoreService',
+      'restoreState',
     ];
 
     const matches = files.flatMap((file) => scanFiles(path.join(repoRoot, file), forbidden));
-
     expect(matches).toEqual([]);
   });
 });
+
+function read(relativePath: string): string {
+  return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
+}
 
 function scanFiles(root: string, forbidden: string[]): string[] {
   if (!fs.existsSync(root)) return [];
@@ -90,42 +78,8 @@ function scanFiles(root: string, forbidden: string[]): string[] {
 }
 
 function scanFile(file: string, forbidden: string[]): string[] {
-  const output: string[] = [];
   const content = fs.readFileSync(file, 'utf8');
-  for (const term of forbidden) {
-    if (content.includes(term)) {
-      output.push(`${path.relative(repoRoot, file).replace(/\\/g, '/')} contains ${term}`);
-    }
-  }
-  return output;
-}
-
-function productionFiles(root: string): string[] {
-  if (!fs.existsSync(root)) return [];
-  const output: string[] = [];
-  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
-    const fullPath = path.join(root, entry.name);
-    if (entry.isDirectory()) {
-      output.push(...productionFiles(fullPath));
-      continue;
-    }
-    if (!/\.(ts|tsx)$/.test(entry.name)) continue;
-    output.push(fullPath);
-  }
-  return output;
-}
-
-function scanRunCommandWorkspaceWindows(file: string): string[] {
-  const relative = path.relative(repoRoot, file).replace(/\\/g, '/');
-  const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
-  const output: string[] = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    if (!lines[index].includes('run_command')) continue;
-    const window = lines.slice(Math.max(0, index - 3), Math.min(lines.length, index + 4)).join('\n');
-    if (/\b(workspace|restorable|restoreState|changeSet|checkpoint|changedFile)\b/i.test(window)) {
-      output.push(`${relative}:${index + 1}`);
-    }
-  }
-  return output;
+  return forbidden
+    .filter((term) => content.includes(term))
+    .map((term) => `${path.relative(repoRoot, file).replace(/\\/g, '/')} contains ${term}`);
 }

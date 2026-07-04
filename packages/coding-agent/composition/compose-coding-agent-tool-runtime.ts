@@ -12,7 +12,7 @@ import {
   ToolRegistryService,
 } from '../tools';
 import { createBuiltInToolAdapter, type WorkspaceFileAccess } from '../tools/adapters/built-in-tools';
-import { classifyProjectPath } from '../workspace';
+import { classifyWorkspacePath } from '../workspace/core/workspace-path-policy';
 
 export interface LocalWorkspaceFileSystem {
   readFile(path: string, encoding: 'utf8'): Promise<string>;
@@ -200,18 +200,18 @@ function resolveReadablePath(projectRoot: string, targetPath: string): {
   relativePath: string;
 } {
   const classification = classifyProjectPath({
-    projectRoot,
-    targetPath,
+    workspace_root: projectRoot,
+    target_path: targetPath,
   });
-  if (!classification.insideProject) {
+  if (!classification.inside_workspace) {
     throw new Error(`Project path is outside the project: ${targetPath}`);
   }
   if (classification.protected || classification.sensitive) {
-    throw new Error(`Project path cannot be accessed: ${classification.relativePath}`);
+    throw new Error(`Project path cannot be accessed: ${classification.workspace_path}`);
   }
   return {
-    absolutePath: classification.absolutePath,
-    relativePath: classification.relativePath || '.',
+    absolutePath: classification.absolute_path,
+    relativePath: classification.workspace_path || '.',
   };
 }
 

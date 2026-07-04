@@ -128,7 +128,7 @@ describe('coding agent run structure source guards', () => {
       'packages/coding-agent/permissions/tool-policy.ts',
       'packages/coding-agent/projections/chat-stream/chat-stream-event-adapter.ts',
       'packages/coding-agent/projections/timeline/timeline-history-projector.ts',
-      'packages/coding-agent/workspace/path-policy.ts',
+      'packages/coding-agent/workspace/core/workspace-path-policy.ts',
     ]) {
       expect(exists(requiredPath), requiredPath).toBe(true);
     }
@@ -250,7 +250,7 @@ describe('coding agent run structure source guards', () => {
   });
 
   it('keeps runtime path policy outside run and prevents tools from importing run', () => {
-    expect(read('packages/coding-agent/workspace/path-policy.ts')).not.toContain('run/permissions');
+    expect(read('packages/coding-agent/workspace/core/workspace-path-policy.ts')).not.toContain('run/permissions');
 
     const offenders = filesContaining('packages/coding-agent/tools', (source) => {
       return /from ['"][^'"]*@megumi\/coding-agent\/run/.test(source)

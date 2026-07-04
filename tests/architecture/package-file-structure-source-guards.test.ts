@@ -547,10 +547,6 @@ describe('package and file structure source guards', () => {
       join(repoRoot, 'packages/coding-agent/state/run-retry-coordinator.ts'),
       'utf8',
     );
-    const workspaceChangeReadSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/workspace/workspace-change-read.ts'),
-      'utf8',
-    );
     const workspaceIndexSource = readFileSync(join(repoRoot, 'packages/coding-agent/workspace/index.ts'), 'utf8');
     const agentLoopSource = readFileSync(join(repoRoot, 'packages/coding-agent/agent-loop/agent-loop.ts'), 'utf8');
     const runContextServiceSource = readFileSync(
@@ -633,7 +629,6 @@ describe('package and file structure source guards', () => {
     expect(postRunHooksSource).toContain('export interface PostRunHooksPort');
     expect(runTerminalCoordinatorSource).toContain('export interface RunTerminalCoordinatorPort');
     expect(runRetryCoordinatorSource).toContain('export interface RunRetryCoordinatorPort');
-    expect(workspaceChangeReadSource).toContain('export interface WorkspaceChangeReadPort');
     expect(workspaceIndexSource).toContain("export * from './services/workspace-service';");
     expect(workspaceIndexSource).toContain("export * from './services/workspace-path-policy-service';");
     expect(workspaceIndexSource).toContain("export * from './services/workspace-change-service';");

@@ -19,10 +19,9 @@ import {
   type PermissionClassifier,
 } from './permission-classifier';
 import {
-  classifyProjectPath,
-  DEFAULT_PROTECTED_PATHS,
-  type ProjectPathClassification,
-} from '../workspace/path-policy';
+  classifyWorkspacePath,
+  DEFAULT_PROTECTED_WORKSPACE_PATHS,
+} from '../workspace/core/workspace-path-policy';
 import { matchPermissionRule } from './permission-rule-matcher';
 
 export interface EvaluatePermissionPolicyInput {
@@ -56,6 +55,14 @@ type HardGuardResult = {
 type RuleBucket = keyof MergedPermissionSettings;
 
 export type EvaluateToolPolicyInput = EvaluatePermissionPolicyInput | EvaluateToolPolicyCompatibilityInput;
+
+interface ProjectPathClassification {
+  absolutePath: string;
+  relativePath: string;
+  insideProject: boolean;
+  protected: boolean;
+  sensitive: boolean;
+}
 
 export function evaluatePermissionPolicy(input: EvaluatePermissionPolicyInput): PermissionDecision {
   const commandClassification = classifyToolCommand(input);
@@ -154,6 +161,25 @@ function classifyToolCommand(input: EvaluatePermissionPolicyInput) {
 
   const command = input.toolExecution.input.command;
   return classifyCommand(typeof command === 'string' ? command : '');
+}
+
+function classifyProjectPath(input: {
+  projectRoot: string;
+  targetPath: string;
+  protectedPathHints?: readonly string[];
+}): ProjectPathClassification {
+  const classification = classifyWorkspacePath({
+    workspace_root: input.projectRoot,
+    target_path: input.targetPath,
+    protected_path_hints: input.protectedPathHints,
+  });
+  return {
+    absolutePath: classification.absolute_path,
+    relativePath: classification.workspace_path,
+    insideProject: classification.inside_workspace,
+    protected: classification.protected,
+    sensitive: classification.sensitive,
+  };
 }
 
 function classifyToolTargetPath(input: EvaluatePermissionPolicyInput): ProjectPathClassification | undefined {
@@ -320,8 +346,8 @@ function isProtectedOrSensitiveToken(token: string): boolean {
     || normalized === 'id_ed25519'
     || normalized.startsWith('secrets/')
     || /\.(?:pem|key)$/i.test(normalized)
-    || DEFAULT_PROTECTED_PATHS.files.includes(normalized as never)
-    || DEFAULT_PROTECTED_PATHS.directories.includes(firstSegment as never);
+    || DEFAULT_PROTECTED_WORKSPACE_PATHS.files.includes(normalized as never)
+    || DEFAULT_PROTECTED_WORKSPACE_PATHS.directories.includes(firstSegment as never);
 }
 
 function isSimpleFilenameToken(token: string): boolean {
