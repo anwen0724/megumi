@@ -84,8 +84,7 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/artifacts/plan-artifact-compatibility.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/workspace/services/workspace-change-service.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/workspace/workspace-restore.ts'))).toBe(false);
-    expect(existsSync(join(root, 'packages/coding-agent/settings/services/provider-settings.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/settings/services/provider-runtime.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/settings/services/settings-service.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/adapters/local/context/agent-instruction-source.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/agent-loop/run-context/run-context-service.ts'))).toBe(true);
   });
@@ -152,8 +151,8 @@ describe('coding-agent package boundary', () => {
     expect(workspace).toContain('createWorkspaceService');
     expect(workspace).toContain('createWorkspacePathPolicyService');
     expect(workspace).toContain('createWorkspaceChangeService');
-    expect(settings).toContain('class ProviderSettingsService');
-    expect(settings).toContain('class ProviderRuntimeService');
+    expect(settings).toContain('function createSettingsService');
+    expect(settings).toContain('resolveProviderRuntimeConfig');
     expect(hostInterface).toContain('input: InputController');
     expect(inputService).toContain('createInputService');
     expect(instructions).toContain('class AgentInstructionSourceService');

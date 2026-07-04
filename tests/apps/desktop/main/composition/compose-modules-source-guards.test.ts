@@ -43,7 +43,7 @@ describe('Desktop Main shell composition', () => {
     expect(productComposition).toContain('composeCodingAgentPersistence');
     expect(productComposition).toContain('composeCodingAgentToolRuntimeFactory');
     expect(productComposition).toContain('composeCodingAgentSessionRuntime');
-    expect(productComposition).toContain('new ProviderSettingsService');
+    expect(productComposition).toContain('createSettingsService');
     expect(persistenceComposition).toContain('migrateCodingAgentDatabase');
     expect(persistenceComposition).toContain('workspaceRepository: new WorkspaceRepository(database)');
     expect(persistenceComposition).toContain('sessionRepository: new SessionRepository(database)');

@@ -80,10 +80,10 @@ describe('Coding Agent host interface runtime', () => {
     });
   });
 
-  it('routes host settings updates through the caller-provided settings provider', async () => {
+  it('routes host settings updates through the Settings Service storage port', async () => {
     temporaryHome = await mkdtemp(path.join(os.tmpdir(), 'megumi-host-settings-'));
-    let rawSettings: AppSettingsRaw = {};
-    const writes: AppSettingsRaw[] = [];
+    let rawSettings = {};
+    const writes: unknown[] = [];
 
     runtime = composeCodingAgentRuntime({
       homePaths: {
@@ -99,12 +99,11 @@ describe('Coding Agent host interface runtime', () => {
         completeModelCall: async (): Promise<ModelCallCompletionResult> => ({ ok: true, text: '' }),
         cancelModelCall: () => false,
       },
-      appSettingsProvider: {
-        getResolvedSettings: () => resolveAppSettings(rawSettings),
-        updateSettings(patch: AppSettingsRaw) {
-          rawSettings = mergeRawAppSettings(rawSettings, patch);
+      settingsStorage: {
+        readRawSettings: () => rawSettings,
+        writeRawSettings(next) {
+          rawSettings = next;
           writes.push(rawSettings);
-          return resolveAppSettings(rawSettings);
         },
       },
       memorySettingsProvider: {
@@ -127,7 +126,7 @@ describe('Coding Agent host interface runtime', () => {
       theme: 'sage-mist',
       setup: {
         completed: true,
-        completedAt: '2026-06-29T14:00:00.000Z',
+        completed_at: '2026-06-29T14:00:00.000Z',
       },
     }]);
     expect(result.settings.setup.completed).toBe(true);
@@ -174,7 +173,7 @@ describe('Coding Agent host interface runtime', () => {
       theme: 'sage-mist',
       setup: {
         completed: true,
-        completedAt: '2026-06-29T15:00:00.000Z',
+        completed_at: '2026-06-29T15:00:00.000Z',
       },
     });
 
@@ -246,9 +245,9 @@ describe('Coding Agent host interface runtime', () => {
       providers: {
         openai: {
           enabled: true,
-          baseUrl: 'https://api.openai.com/v1',
-          defaultModel: 'gpt-5.5',
-          apiKey: 'sk-test-secret',
+          base_url: 'https://api.openai.com/v1',
+          models: ['gpt-5.5'],
+          api_key: 'sk-test-secret',
         },
       },
     });

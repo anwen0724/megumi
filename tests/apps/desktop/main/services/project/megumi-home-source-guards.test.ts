@@ -45,13 +45,13 @@ describe('Megumi Home source guards', () => {
 
   it('keeps provider credentials in Megumi Home settings.json instead of secret-store files', () => {
     const homeSource = readProjectFile('apps/desktop/src/main/services/workspace/megumi-home.service.ts');
-    const providerSettingsSource = readProjectFile('packages/coding-agent/settings/services/provider-settings.ts');
+    const settingsServiceSource = readProjectFile('packages/coding-agent/settings/services/settings-service.ts');
 
     expect(projectFileExists('apps/desktop/src/main/services/security/secret-store.service.ts')).toBe(false);
     expect(homeSource).toContain('settings.json');
     expect(homeSource).toContain('settings.schema.json');
-    expect(providerSettingsSource).toContain('setProviderApiKey');
-    expect(providerSettingsSource).toContain('apiKey');
+    expect(settingsServiceSource).toContain('setProviderApiKey');
+    expect(settingsServiceSource).toContain('api_key');
   });
 
   it('uses Megumi Home settings when constructing provider runtime services', () => {
@@ -64,7 +64,7 @@ describe('Megumi Home source guards', () => {
     expect(providerHandler).not.toContain('new ProviderSettingsService');
     expect(desktopComposition).not.toContain('appSettingsProvider: appSettingsService');
     expect(productComposition).toContain('createLocalSettingsJsonStorage');
-    expect(productComposition).toContain('new ProviderSettingsService');
+    expect(productComposition).toContain('createSettingsService');
     expect(productComposition).not.toContain('createElectronSecretStoreService');
   });
 
@@ -72,8 +72,7 @@ describe('Megumi Home source guards', () => {
     const mainSources = [
       'apps/desktop/src/main/ipc/handlers/provider.handler.ts',
       'apps/desktop/src/main/ipc/handlers/session.handler.ts',
-      'packages/coding-agent/settings/services/provider-settings.ts',
-      'packages/coding-agent/settings/services/provider-runtime.ts',
+      'packages/coding-agent/settings/services/settings-service.ts',
     ]
       .map(readProjectFile)
       .join('\n');
