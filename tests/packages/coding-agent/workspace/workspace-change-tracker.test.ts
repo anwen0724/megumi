@@ -29,7 +29,7 @@ describe('WorkspaceChangeService', () => {
     expect(repository.files).toEqual([]);
   });
 
-  it('records successful write, edit, and delete mutations', async () => {
+  it('records successful write and edit mutations', async () => {
     const files = new Map<string, boolean>();
     const repository = fakeRepository();
     const service = createService({ files, repository });
@@ -48,20 +48,9 @@ describe('WorkspaceChangeService', () => {
       tool_execution: toolExecution('edit_file', { path: 'src/app.ts' }),
       execute: async () => 'modified',
     });
-    files.set('C:\\project\\src\\old.ts', true);
-    await service.trackToolExecution({
-      scope: scope(),
-      tool_execution: toolExecution('delete_file', { path: 'src/old.ts' }),
-      execute: async () => {
-        files.set('C:\\project\\src\\old.ts', false);
-        return 'deleted';
-      },
-    });
-
     expect(repository.files.map((file) => [file.workspace_path, file.change_kind])).toEqual([
       ['src/new.ts', 'created'],
       ['src/app.ts', 'modified'],
-      ['src/old.ts', 'deleted'],
     ]);
     expect(repository.changeSets).toHaveLength(1);
   });

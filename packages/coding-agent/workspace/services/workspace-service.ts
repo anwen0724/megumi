@@ -125,9 +125,18 @@ export function createWorkspaceService(options: CreateWorkspaceServiceOptions): 
     },
 
     removeWorkspace(request: RemoveWorkspaceRequest): RemoveWorkspaceResult {
-      return options.repository.deleteWorkspace(request.workspace_id)
-        ? { status: 'removed', workspace_id: request.workspace_id }
-        : { status: 'not_found', workspace_id: request.workspace_id };
+      const result = options.repository.deleteWorkspace(request.workspace_id);
+      if (result === 'deleted') {
+        return { status: 'removed', workspace_id: request.workspace_id };
+      }
+      if (result === 'blocked') {
+        return {
+          status: 'blocked',
+          workspace_id: request.workspace_id,
+          reason: 'workspace_has_business_facts',
+        };
+      }
+      return { status: 'not_found', workspace_id: request.workspace_id };
     },
 
     listAuthorizedWorkspaceRoots(): ListAuthorizedWorkspaceRootsResult {

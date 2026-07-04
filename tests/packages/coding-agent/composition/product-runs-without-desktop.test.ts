@@ -375,43 +375,6 @@ describe('coding-agent product runs without desktop', () => {
     expect(workspaceChangeRows(home)).toEqual([]);
   }, 30000);
 
-  it('records successful managed workspace deletes through the composed tool runtime', async () => {
-    home = await mkdtemp(path.join(os.tmpdir(), 'megumi-proof-home-'));
-    workspace = await mkdtemp(path.join(os.tmpdir(), 'megumi-proof-ws-'));
-    await writeFile(path.join(workspace, 'DELETE.md'), 'remove me', 'utf8');
-    const projectId = seedProject(home, workspace);
-
-    runtime = composeCodingAgentRuntime({
-      homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
-      runtimeLogger: { warn: () => undefined },
-      modelCallProviderService: singleToolCallingModelStepProvider('delete_file', { path: 'DELETE.md' }),
-      settingsStorage: productSettingsStorage(),
-    });
-
-    const result = await runtime.input.send({
-      requestId: 'request-delete',
-      sessionTitle: 'Delete session',
-      workspaceId: projectId,
-      workspacePath: workspace,
-      providerId: 'deepseek',
-      modelId: 'deepseek-v4-flash',
-      text: 'Delete DELETE.md',
-      permissionMode: 'accept_edits',
-      createdAt: '2026-06-24T00:00:00.000Z',
-    });
-    if (result.type !== 'agent_run') {
-      throw new Error(`Expected agent_run result, got ${result.type}`);
-    }
-
-    for await (const _event of result.events) {
-      // Drain the composed runtime stream.
-    }
-
-    await expect(stat(path.join(workspace, 'DELETE.md'))).rejects.toThrow();
-    expect(workspaceChangeRows(home)).toEqual([
-      { status: 'open', workspace_path: 'DELETE.md', change_kind: 'deleted' },
-    ]);
-  }, 30000);
 });
 
 function workspaceChangeRows(homePath: string): Array<{ status: string; workspace_path: string; change_kind: string }> {

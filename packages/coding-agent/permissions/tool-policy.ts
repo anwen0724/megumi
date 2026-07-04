@@ -22,10 +22,6 @@ import { createWorkspacePathPolicyService } from '../workspace';
 import { matchPermissionRule } from './permission-rule-matcher';
 
 const workspacePathPolicyService = createWorkspacePathPolicyService();
-const DEFAULT_PERMISSION_PROTECTED_WORKSPACE_PATHS = {
-  directories: ['.git', '.vscode', '.idea', '.husky', '.megumi'],
-  files: ['.gitconfig', '.gitmodules', '.ripgreprc', '.mcp.json', '.megumi.json'],
-} as const;
 
 export interface EvaluatePermissionPolicyInput {
   definition: ToolDefinition;
@@ -341,16 +337,12 @@ function isExplicitPathToken(token: string): boolean {
 
 function isProtectedOrSensitiveToken(token: string): boolean {
   const normalized = token.replace(/\\/g, '/');
-  const firstSegment = normalized.split('/')[0];
 
-  return normalized === '.env'
-    || normalized.startsWith('.env.')
-    || normalized === 'id_rsa'
-    || normalized === 'id_ed25519'
-    || normalized.startsWith('secrets/')
-    || /\.(?:pem|key)$/i.test(normalized)
-    || DEFAULT_PERMISSION_PROTECTED_WORKSPACE_PATHS.files.includes(normalized as never)
-    || DEFAULT_PERMISSION_PROTECTED_WORKSPACE_PATHS.directories.includes(firstSegment as never);
+  const classification = workspacePathPolicyService.classifyPath({
+    workspace_root: '.',
+    target_path: normalized,
+  });
+  return classification.protected || classification.sensitive;
 }
 
 function isSimpleFilenameToken(token: string): boolean {

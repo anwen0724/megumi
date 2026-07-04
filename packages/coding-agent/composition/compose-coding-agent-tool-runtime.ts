@@ -17,7 +17,6 @@ import { createWorkspacePathPolicyService } from '../workspace';
 export interface LocalWorkspaceFileSystem {
   readFile(path: string, encoding: 'utf8'): Promise<string>;
   writeFile(path: string, content: string, encoding: 'utf8'): Promise<void>;
-  unlink(path: string): Promise<void>;
   mkdir(path: string, options: { recursive: true }): Promise<unknown>;
   stat(path: string): Promise<{ isFile(): boolean; isDirectory(): boolean; size: number }>;
   readdir(path: string, options: { withFileTypes: true }): Promise<Array<{
@@ -142,18 +141,6 @@ export function createLocalWorkspaceFileAccess(input: {
         bytesWritten: Buffer.byteLength(request.content, 'utf8'),
         created: !exists,
         overwritten: exists,
-      };
-    },
-    async deleteFile(request) {
-      const resolved = resolveWritablePath(workspacePathPolicyService, input.projectRoot, request.path);
-      const exists = await existsAsFile(fileSystem, resolved.absolutePath);
-      if (!exists) {
-        throw new Error(`File does not exist: ${resolved.relativePath}`);
-      }
-      await fileSystem.unlink(resolved.absolutePath);
-      return {
-        path: resolved.relativePath,
-        deleted: true,
       };
     },
     async resolveCommandCwd(request) {

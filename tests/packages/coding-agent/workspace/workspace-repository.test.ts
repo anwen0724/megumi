@@ -103,8 +103,8 @@ describe('WorkspaceRepository', () => {
       updated_at: '2026-05-18T00:00:00.000Z',
       last_opened_at: '2026-05-18T00:00:00.000Z',
     });
-    expect(repository.deleteWorkspace('workspace:missing')).toBe(false);
-    expect(repository.deleteWorkspace('workspace:one')).toBe(true);
+    expect(repository.deleteWorkspace('workspace:missing')).toBe('not_found');
+    expect(repository.deleteWorkspace('workspace:one')).toBe('deleted');
   });
 
   it('does not delete sessions, runs, or workspace changes when removing a referenced workspace', () => {
@@ -145,7 +145,7 @@ describe('WorkspaceRepository', () => {
         )
       `).run();
 
-      expect(repository.deleteWorkspace('workspace:one')).toBe(false);
+      expect(repository.deleteWorkspace('workspace:one')).toBe('blocked');
       expect(repository.findWorkspaceById('workspace:one')).toEqual(workspace());
       expect(countRows(database, 'sessions')).toBe(1);
       expect(countRows(database, 'agent_loop_runs')).toBe(1);

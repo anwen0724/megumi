@@ -83,13 +83,16 @@ export class WorkspaceRepository {
     return this.findWorkspaceById(input.workspace_id);
   }
 
-  deleteWorkspace(workspace_id: string): boolean {
+  deleteWorkspace(workspace_id: string): 'deleted' | 'not_found' | 'blocked' {
+    if (!this.findWorkspaceById(workspace_id)) {
+      return 'not_found';
+    }
     if (this.workspaceHasBusinessFactReferences(workspace_id)) {
-      return false;
+      return 'blocked';
     }
     const result = this.database.prepare('DELETE FROM workspaces WHERE workspace_id = ?')
       .run(workspace_id);
-    return result.changes > 0;
+    return result.changes > 0 ? 'deleted' : 'not_found';
   }
 
   private workspaceHasBusinessFactReferences(workspace_id: string): boolean {

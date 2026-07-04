@@ -144,4 +144,43 @@ describe('WorkspaceService', () => {
       workspace_id: opened.workspace.workspace_id,
     });
   });
+
+  it('returns blocked when an existing workspace has business facts', () => {
+    const database = createDatabase(':memory:');
+    applyCodingAgentDatabaseMigrations(database);
+    try {
+      const repository = new WorkspaceRepository(database);
+      const service = createWorkspaceService({
+        repository,
+        file_system: { stat: vi.fn(async () => directoryStat()) },
+      });
+      repository.insertOrUpdateWorkspace({
+        workspace_id: 'workspace:one',
+        name: 'One',
+        root_path: 'C:/work/one',
+        root_path_key: 'c:/work/one',
+        status: 'available',
+        created_at: '2026-05-16T00:00:00.000Z',
+        updated_at: '2026-05-16T00:00:00.000Z',
+        last_opened_at: '2026-05-16T00:00:00.000Z',
+      });
+      database.prepare(`
+        INSERT INTO sessions (
+          session_id, workspace_id, title, status, active_entry_id,
+          created_at, updated_at, archived_at
+        ) VALUES (
+          'session:one', 'workspace:one', 'Session', 'active', NULL,
+          '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z', NULL
+        )
+      `).run();
+
+      expect(service.removeWorkspace({ workspace_id: 'workspace:one' })).toEqual({
+        status: 'blocked',
+        workspace_id: 'workspace:one',
+        reason: 'workspace_has_business_facts',
+      });
+    } finally {
+      database.close();
+    }
+  });
 });

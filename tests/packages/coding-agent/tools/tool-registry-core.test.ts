@@ -37,7 +37,6 @@ describe('tool registry core', () => {
       'search_text',
       'edit_file',
       'write_file',
-      'delete_file',
       'run_command',
     ]);
   });
@@ -61,7 +60,6 @@ describe('tool registry core', () => {
       'search_text',
       'edit_file',
       'write_file',
-      'delete_file',
       'run_command',
     ]);
   });

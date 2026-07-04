@@ -31,7 +31,6 @@ describe('workspace change managed write source guards', () => {
 
     expect(coreSource).toContain("tool_execution.tool_name !== 'write_file'");
     expect(coreSource).toContain("tool_execution.tool_name !== 'edit_file'");
-    expect(coreSource).toContain("tool_execution.tool_name !== 'delete_file'");
     expect(source).toMatch(/const result = await request\.execute\(\);[\s\S]*insertOrUpdateChangedFile/);
     expect(coreSource).not.toContain("'run_command'");
   });

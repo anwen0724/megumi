@@ -53,7 +53,8 @@ export type RemoveWorkspaceRequest = {
 
 export type RemoveWorkspaceResult =
   | { status: 'removed'; workspace_id: string }
-  | { status: 'not_found'; workspace_id: string };
+  | { status: 'not_found'; workspace_id: string }
+  | { status: 'blocked'; workspace_id: string; reason: 'workspace_has_business_facts' };
 
 export type ListAuthorizedWorkspaceRootsResult = {
   roots: Array<{

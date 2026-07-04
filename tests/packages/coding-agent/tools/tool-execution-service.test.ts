@@ -156,17 +156,6 @@ function fakeWorkspaceFileAccess(files: Map<string, string>): WorkspaceFileAcces
         overwritten: exists,
       };
     },
-    async deleteFile(input) {
-      const filePath = `C:\\project\\${input.path}`;
-      const deleted = files.delete(filePath);
-      if (!deleted) {
-        throw new Error(`Missing file: ${input.path}`);
-      }
-      return {
-        path: input.path,
-        deleted: true,
-      };
-    },
     async resolveCommandCwd() {
       return 'C:\\project';
     },
