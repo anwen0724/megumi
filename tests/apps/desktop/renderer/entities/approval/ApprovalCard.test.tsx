@@ -42,13 +42,13 @@ describe('ApprovalCard', () => {
 
     render(<ApprovalCard request={request} onResolve={onResolve} />);
 
-    await userEvent.selectOptions(screen.getByLabelText('Approval scope'), 'run');
+    await userEvent.selectOptions(screen.getByLabelText('Approval scope'), 'session');
     await userEvent.click(screen.getByRole('button', { name: 'Approve run_command' }));
 
     expect(onResolve).toHaveBeenCalledWith({
       approvalRequestId: 'approval-1',
       decision: 'approved',
-      scope: 'run',
+      scope: 'session',
     });
   });
 
@@ -62,7 +62,7 @@ describe('ApprovalCard', () => {
     expect(onResolve).toHaveBeenCalledWith({
       approvalRequestId: 'approval-1',
       decision: 'denied',
-      scope: 'project',
+      scope: 'once',
     });
   });
 

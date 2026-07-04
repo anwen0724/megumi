@@ -23,7 +23,6 @@ import {
   PermissionModeStateSchema,
 } from '../permission/snapshot-contracts';
 import {
-  ApprovalScopeSchema,
   ApprovalRecordSchema,
   ToolExecutionSchema,
 } from '../tool/contracts';
@@ -518,7 +517,7 @@ export const ApprovalResolvePayloadSchema = z
   .object({
     approvalRequestId: z.string().min(1),
     decision: z.enum(['approved', 'denied']),
-    scope: ApprovalScopeSchema,
+    scope: z.enum(['once', 'session']),
     reason: z.string().min(1).optional(),
     decidedAt: IsoDateTimeSchema,
   })

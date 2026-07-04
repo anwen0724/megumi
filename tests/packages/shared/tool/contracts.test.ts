@@ -466,7 +466,7 @@ describe('tool-contracts', () => {
       toolExecutionId: 'tool-execution-1',
     });
 
-    expect(APPROVAL_SCOPES).toEqual(['once', 'run', 'project', 'local']);
+    expect(APPROVAL_SCOPES).toEqual(['once', 'run', 'project', 'local', 'session']);
     expect(SandboxRequirementSchema.parse({
       level: 'project_write',
       allowedRoots: ['C:/all/work/study/megumi'],

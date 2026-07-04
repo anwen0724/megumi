@@ -96,10 +96,14 @@ async function validateAndApplyApprovalDecision(
     return false;
   }
   const originalPermissionDecision = originalPermissionDecisionForRecord(approvedRecord);
+  const scope = toPermissionApprovalScope(input.scope ?? approvalRequest.requestedScope);
+  if (!scope) {
+    return false;
+  }
   const decision = {
     approval_request_id: input.approvalRequestId,
     decision: input.decision,
-    scope: toPermissionApprovalScope(input.scope ?? approvalRequest.requestedScope),
+    scope,
     decided_by: 'user' as const,
     ...(input.reason ? { reason: input.reason } : {}),
     decided_at: input.decidedAt,
@@ -178,8 +182,11 @@ function originalPermissionDecisionForRecord(
   };
 }
 
-function toPermissionApprovalScope(scope: string | undefined): PermissionApprovalScope {
-  return scope === 'once' ? 'once' : 'session';
+function toPermissionApprovalScope(scope: string | undefined): PermissionApprovalScope | undefined {
+  if (scope === 'once' || scope === 'session') {
+    return scope;
+  }
+  return undefined;
 }
 
 function toPermissionExecutionClass(

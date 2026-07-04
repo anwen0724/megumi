@@ -37,6 +37,7 @@ import {
   ArtifactGetRequestSchema,
   ArtifactGetResultSchema,
   ArtifactStatusUpdatePayloadSchema,
+  ApprovalResolvePayloadSchema,
   MemoryCandidateAcceptPayloadSchema,
   MemoryCandidateListPayloadSchema,
   MemoryListDataSchema,
@@ -203,6 +204,23 @@ describe('runtime ipc error schemas', () => {
       });
       expect(JSON.stringify(details)).not.toContain('sk-');
     }
+  });
+});
+
+describe('approval resolve ipc schemas', () => {
+  it('accepts only the approval scopes supported by Permission Service', () => {
+    const payload = {
+      approvalRequestId: 'approval-request-1',
+      decision: 'approved',
+      scope: 'session',
+      decidedAt: '2026-07-05T00:00:00.000Z',
+    };
+
+    expect(ApprovalResolvePayloadSchema.parse(payload)).toEqual(payload);
+    expect(ApprovalResolvePayloadSchema.safeParse({ ...payload, scope: 'once' }).success).toBe(true);
+    expect(ApprovalResolvePayloadSchema.safeParse({ ...payload, scope: 'run' }).success).toBe(false);
+    expect(ApprovalResolvePayloadSchema.safeParse({ ...payload, scope: 'project' }).success).toBe(false);
+    expect(ApprovalResolvePayloadSchema.safeParse({ ...payload, scope: 'local' }).success).toBe(false);
   });
 });
 

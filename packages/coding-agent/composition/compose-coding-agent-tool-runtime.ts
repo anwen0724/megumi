@@ -160,7 +160,7 @@ export function composeCodingAgentToolRuntimeFactory(input: {
   permissionSettingsResolver: Pick<SettingsService, 'resolvePermissionSettings'>;
 }): ToolRuntimeFactory {
   return {
-    async create({ projectRoot, permissionMode }) {
+    async create({ sessionId, projectRoot, permissionMode }) {
       return createToolCallRunner({
         repository: {
           startToolCall: (toolCall) => input.toolRepository.startToolCall(toolCall),
@@ -194,7 +194,10 @@ export function composeCodingAgentToolRuntimeFactory(input: {
         permissionService: input.permissionService,
         permissionMode,
         projectRoot,
-        permissionSettings: resolveToolPermissionSettings(input.permissionSettingsResolver, projectRoot),
+        permissionSettings: resolveToolPermissionSettings(input.permissionSettingsResolver, {
+          projectRoot,
+          sessionId,
+        }),
         ids: {
           toolExecutionId: () => `tool-execution:${crypto.randomUUID()}`,
           toolResultId: () => `tool-result:${crypto.randomUUID()}`,
@@ -211,9 +214,15 @@ export function composeCodingAgentToolRuntimeFactory(input: {
 
 function resolveToolPermissionSettings(
   settings: Pick<SettingsService, 'resolvePermissionSettings'>,
-  projectRoot: string,
+  input: {
+    projectRoot: string;
+    sessionId: string;
+  },
 ): PermissionSettings {
-  const result = settings.resolvePermissionSettings({ workspace_id: projectRoot });
+  const result = settings.resolvePermissionSettings({
+    workspace_id: input.projectRoot,
+    session_id: input.sessionId,
+  });
   if (result.status === 'failed') {
     throw new Error(result.failure.message);
   }

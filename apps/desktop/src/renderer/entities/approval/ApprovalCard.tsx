@@ -1,12 +1,15 @@
 ﻿import { useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
-import type { ApprovalRequest, ApprovalScope } from '@megumi/shared/tool';
+import type { ApprovalResolvePayload } from '@megumi/shared/ipc';
+import type { ApprovalRequest } from '@megumi/shared/tool';
 import { Badge, Button, Panel } from '../../shared/ui';
+
+type ApprovalResolveScope = ApprovalResolvePayload['scope'];
 
 export interface ApprovalCardResolvePayload {
   approvalRequestId: string;
   decision: 'approved' | 'denied';
-  scope: ApprovalScope;
+  scope: ApprovalResolveScope;
   reason?: string;
 }
 
@@ -15,10 +18,10 @@ interface ApprovalCardProps {
   onResolve: (payload: ApprovalCardResolvePayload) => void;
 }
 
-const approvalScopes: ApprovalScope[] = ['once', 'run', 'project', 'local'];
+const approvalScopes: ApprovalResolveScope[] = ['once', 'session'];
 
 export function ApprovalCard({ request, onResolve }: ApprovalCardProps) {
-  const [scope, setScope] = useState<ApprovalScope>(request.requestedScope);
+  const [scope, setScope] = useState<ApprovalResolveScope>(resolveInitialScope(request.requestedScope));
   const displayToolName = request.modelVisibleName ?? request.toolName;
 
   function resolve(decision: 'approved' | 'denied') {
@@ -52,7 +55,7 @@ export function ApprovalCard({ request, onResolve }: ApprovalCardProps) {
               id={`${request.approvalRequestId}-scope`}
               aria-label="Approval scope"
               value={scope}
-              onChange={(event) => setScope(event.target.value as ApprovalScope)}
+              onChange={(event) => setScope(event.target.value as ApprovalResolveScope)}
               className="h-8 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]"
             >
               {approvalScopes.map((option) => (
@@ -72,5 +75,9 @@ export function ApprovalCard({ request, onResolve }: ApprovalCardProps) {
       </div>
     </Panel>
   );
+}
+
+function resolveInitialScope(scope: string): ApprovalResolveScope {
+  return scope === 'session' ? 'session' : 'once';
 }
 

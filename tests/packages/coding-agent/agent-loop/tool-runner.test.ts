@@ -11,12 +11,14 @@ describe('prepareToolRunner', () => {
     };
 
     await expect(prepareToolRunner({
+      sessionId: 'session-1',
       projectRoot: 'C:/repo',
       permissionMode: 'default',
       factory,
     })).resolves.toBe(runner);
 
     expect(factory.create).toHaveBeenCalledWith({
+      sessionId: 'session-1',
       projectRoot: 'C:/repo',
       permissionMode: 'default',
     });

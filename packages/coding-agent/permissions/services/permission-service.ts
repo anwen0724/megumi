@@ -19,7 +19,7 @@ import { evaluateToolExecution as evaluateToolExecutionPolicy } from '../core/pe
 export type PermissionService = {
   evaluateToolExecution(
     request: EvaluateToolExecutionRequest,
-  ): Promise<EvaluateToolExecutionResult> | EvaluateToolExecutionResult;
+  ): EvaluateToolExecutionResult;
   validateApprovalDecision(
     request: ValidateApprovalDecisionRequest,
   ): Promise<ValidateApprovalDecisionResult> | ValidateApprovalDecisionResult;

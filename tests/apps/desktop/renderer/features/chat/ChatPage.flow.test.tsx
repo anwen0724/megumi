@@ -119,7 +119,7 @@ function createToolCall(overrides: Partial<ToolExecution> = {}): ToolExecution {
       sideEffect: 'execute_command',
       effectiveRiskLevel: 'medium',
       requiredApproval: {
-        scope: 'run',
+        scope: 'session',
         reason: 'Command execution requires approval in default mode.',
       },
       evaluatedAt: '2026-05-20T00:00:01.000Z',
@@ -675,14 +675,14 @@ describe('ChatPage flow', () => {
 
     render(<ChatPage />);
 
-    await userEvent.selectOptions(screen.getByLabelText('Approval scope'), 'run');
+    await userEvent.selectOptions(screen.getByLabelText('Approval scope'), 'session');
     await userEvent.click(screen.getByRole('button', { name: 'Approve run_command' }));
 
     expect(megumi.approval.resolve).toHaveBeenCalledWith(expect.objectContaining({
       payload: {
         approvalRequestId: 'approval-1',
         decision: 'approved',
-        scope: 'run',
+        scope: 'session',
         decidedAt: '2026-05-10T12:00:42.000Z',
       },
       meta: expect.objectContaining({
@@ -710,14 +710,14 @@ describe('ChatPage flow', () => {
     expect(approvalControls).toHaveAttribute('aria-live', 'polite');
     expect(approvalControls).toHaveAttribute('aria-atomic', 'true');
 
-    await userEvent.selectOptions(screen.getByLabelText('Approval scope'), 'run');
+    await userEvent.selectOptions(screen.getByLabelText('Approval scope'), 'session');
     await userEvent.click(screen.getByRole('button', { name: 'Approve run_command' }));
 
     expect(megumi.approval.resolve).toHaveBeenCalledWith(expect.objectContaining({
       payload: expect.objectContaining({
         approvalRequestId: 'approval-1',
         decision: 'approved',
-        scope: 'run',
+        scope: 'session',
       }),
     }));
   });

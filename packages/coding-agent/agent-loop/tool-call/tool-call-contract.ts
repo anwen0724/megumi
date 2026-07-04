@@ -30,6 +30,7 @@ export interface ToolCallRunner {
 
 export interface ToolRuntimeFactory {
   create(input: {
+    sessionId: string;
     projectRoot: string;
     permissionMode: PermissionMode;
   }): Promise<ToolCallRunner & ToolApprovalResumePort>;

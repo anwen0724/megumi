@@ -96,13 +96,13 @@ describe('agent action permission tools v1 renderer acceptance', () => {
       createdAt: '2026-05-20T00:00:00.000Z',
     }} onResolve={onResolve} />);
 
-    await user.selectOptions(screen.getByLabelText('Approval scope'), 'run');
+    await user.selectOptions(screen.getByLabelText('Approval scope'), 'session');
     await user.click(screen.getByRole('button', { name: 'Approve run_command' }));
 
     expect(onResolve).toHaveBeenCalledWith({
       approvalRequestId: 'approval-1',
       decision: 'approved',
-      scope: 'run',
+      scope: 'session',
     });
   });
 });

@@ -63,10 +63,6 @@ function applyDecision(
   record: ToolExecutionRecord,
 ): ToolExecutionRecord {
   const evaluated = options.permissionService.evaluateToolExecution(evaluateRequestForRecord(options, record));
-  if (evaluated instanceof Promise) {
-    throw new Error('PermissionService.evaluateToolExecution must be synchronous inside tool-call preparation.');
-  }
-
   const serviceDecision = evaluated.status === 'ok'
     ? evaluated.decision
     : serviceFailureDecision(evaluated.failure.message);

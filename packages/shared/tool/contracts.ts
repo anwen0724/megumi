@@ -206,7 +206,7 @@ export const PERMISSION_CLASSIFIER_LABELS = [
 ] as const;
 export type PermissionClassifierLabel = (typeof PERMISSION_CLASSIFIER_LABELS)[number];
 
-export const APPROVAL_SCOPES = ['once', 'run', 'project', 'local'] as const;
+export const APPROVAL_SCOPES = ['once', 'run', 'project', 'local', 'session'] as const;
 export type ApprovalScope = (typeof APPROVAL_SCOPES)[number];
 export const ApprovalScopeSchema = z.enum(APPROVAL_SCOPES);
 

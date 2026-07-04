@@ -164,12 +164,14 @@ function toolDefinitionFromRegisteredTool(tool: RegisteredTool): ToolDefinition 
 
 export interface ToolRunnerFactory {
   create(input: {
+    sessionId: string;
     projectRoot: string;
     permissionMode: PermissionMode;
   }): Promise<ToolCallRunnerService>;
 }
 
 export interface PrepareToolRunnerInput {
+  sessionId?: string;
   projectRoot?: string;
   permissionMode: PermissionMode;
   factory?: ToolRunnerFactory;
@@ -178,11 +180,12 @@ export interface PrepareToolRunnerInput {
 export async function prepareToolRunner(
   input: PrepareToolRunnerInput,
 ): Promise<ToolCallRunnerService | undefined> {
-  if (!input.projectRoot || !input.factory) {
+  if (!input.sessionId || !input.projectRoot || !input.factory) {
     return undefined;
   }
 
   return input.factory.create({
+    sessionId: input.sessionId,
     projectRoot: input.projectRoot,
     permissionMode: input.permissionMode,
   });
@@ -457,6 +460,7 @@ export class AgentLoop {
       let toolRuntime: ToolCallRunnerService | undefined;
       try {
         toolRuntime = await prepareToolRunner({
+          sessionId: String(input.session.sessionId),
           ...(input.session.workspacePath ? { projectRoot: input.session.workspacePath } : {}),
           permissionMode: input.permissionMode,
           ...(this.options.toolCallRunnerFactory ? { factory: this.options.toolCallRunnerFactory } : {}),
