@@ -1,41 +1,37 @@
 /*
- * Resolves and merges raw application settings using the Settings module contracts.
+ * Resolves and merges raw Settings-owned product settings without reading or writing settings.json.
  */
-import { z } from 'zod';
-import { PROVIDER_IDS } from '@megumi/shared/provider';
 import {
-  AppProviderSettingsRawSchema,
-  AppProvidersSettingsRawSchema,
-  AppProvidersSettingsResolvedSchema,
-  AppSettingsRawSchema,
-  AppSettingsResolvedSchema,
-  DEFAULT_APP_SETTINGS,
-  type AppSettingsRaw,
-  type AppSettingsResolved,
+  DEFAULT_SETTINGS,
+  SettingsRawSchema,
+  SettingsResolvedSchema,
+  type SettingsRaw,
+  type SettingsResolved,
 } from '../contracts/settings-contracts';
+import type { ProviderSettingsRaw } from '../contracts/provider-settings-contracts';
 
-export function resolveAppSettings(raw: unknown): AppSettingsResolved {
-  const parsed = AppSettingsRawSchema.parse(raw ?? {});
-  return AppSettingsResolvedSchema.parse({
-    ...DEFAULT_APP_SETTINGS,
+export function resolveSettings(raw: unknown): SettingsResolved {
+  const parsed = SettingsRawSchema.parse(raw ?? {});
+  return SettingsResolvedSchema.parse({
+    ...DEFAULT_SETTINGS,
     ...definedObject({
       language: parsed.language,
       theme: parsed.theme,
       setup: parsed.setup
         ? {
-            ...DEFAULT_APP_SETTINGS.setup,
+            ...DEFAULT_SETTINGS.setup,
             ...definedObject(parsed.setup),
           }
         : undefined,
       memory: parsed.memory
         ? {
-            ...DEFAULT_APP_SETTINGS.memory,
+            ...DEFAULT_SETTINGS.memory,
             ...definedObject(parsed.memory),
           }
         : undefined,
       compaction: parsed.compaction
         ? {
-            ...DEFAULT_APP_SETTINGS.compaction,
+            ...DEFAULT_SETTINGS.compaction,
             ...definedObject(parsed.compaction),
           }
         : undefined,
@@ -43,16 +39,19 @@ export function resolveAppSettings(raw: unknown): AppSettingsResolved {
         ? resolveProviderSettings(parsed.providers)
         : undefined,
       permissions: parsed.permissions
-        ? definedObject(parsed.permissions)
+        ? {
+            ...DEFAULT_SETTINGS.permissions,
+            ...definedObject(parsed.permissions),
+          }
         : undefined,
     }),
   });
 }
 
-export function mergeRawAppSettings(current: AppSettingsRaw, patch: AppSettingsRaw): AppSettingsRaw {
-  const currentParsed = AppSettingsRawSchema.parse(current);
-  const patchParsed = AppSettingsRawSchema.parse(patch);
-  return AppSettingsRawSchema.parse({
+export function mergeRawSettings(current: SettingsRaw, patch: SettingsRaw): SettingsRaw {
+  const currentParsed = SettingsRawSchema.parse(current);
+  const patchParsed = SettingsRawSchema.parse(patch);
+  return SettingsRawSchema.parse({
     ...currentParsed,
     ...definedObject({
       language: patchParsed.language,
@@ -88,58 +87,73 @@ export function mergeRawAppSettings(current: AppSettingsRaw, patch: AppSettingsR
   });
 }
 
-function resolveProviderSettings(providers: NonNullable<AppSettingsRaw['providers']>) {
-  return AppProvidersSettingsResolvedSchema.parse(Object.fromEntries(
-    PROVIDER_IDS.map((providerId) => [
+export const resolveAppSettings = resolveSettings;
+export const mergeRawAppSettings = mergeRawSettings;
+
+function resolveProviderSettings(providers: NonNullable<SettingsRaw['providers']>) {
+  return Object.fromEntries(
+    Object.entries({
+      ...DEFAULT_SETTINGS.providers,
+      ...providers,
+    }).map(([providerId]) => [
       providerId,
       {
-        ...DEFAULT_APP_SETTINGS.providers[providerId],
+        ...(DEFAULT_SETTINGS.providers[providerId] ?? defaultProvider(providerId)),
         ...definedProviderOverride(providers[providerId] ?? {}),
       },
     ]),
-  ));
+  );
 }
 
 function mergeRawProviders(
-  current: NonNullable<AppSettingsRaw['providers']>,
-  patch: NonNullable<AppSettingsRaw['providers']>,
+  current: NonNullable<SettingsRaw['providers']>,
+  patch: NonNullable<SettingsRaw['providers']>,
 ) {
-  return AppProvidersSettingsRawSchema.parse(Object.fromEntries(
-    PROVIDER_IDS.map((providerId) => [
+  return Object.fromEntries(
+    Object.entries({
+      ...current,
+      ...patch,
+    }).map(([providerId]) => [
       providerId,
       patch[providerId]
         ? mergeRawProvider(current[providerId] ?? {}, patch[providerId])
         : current[providerId],
     ]),
-  ));
+  );
 }
 
-function mergeRawProvider(
-  current: z.infer<typeof AppProviderSettingsRawSchema>,
-  patch: z.infer<typeof AppProviderSettingsRawSchema>,
-) {
+function mergeRawProvider(current: ProviderSettingsRaw, patch: ProviderSettingsRaw) {
   const merged = {
     ...current,
     ...definedObject(patch),
   };
-  if (patch.apiKey === null) {
-    delete merged.apiKey;
+  if (patch.api_key === null) {
+    delete merged.api_key;
   }
-  if (patch.apiKeyEnv === null) {
-    delete merged.apiKeyEnv;
+  if (patch.api_key_env === null) {
+    delete merged.api_key_env;
   }
   return merged;
 }
 
-function definedProviderOverride(value: z.infer<typeof AppProviderSettingsRawSchema>) {
+function definedProviderOverride(value: ProviderSettingsRaw) {
   const defined = definedObject(value);
-  if (defined.apiKey === null) {
-    delete defined.apiKey;
+  if (defined.api_key === null) {
+    delete defined.api_key;
   }
-  if (defined.apiKeyEnv === null) {
-    delete defined.apiKeyEnv;
+  if (defined.api_key_env === null) {
+    delete defined.api_key_env;
   }
   return defined;
+}
+
+function defaultProvider(providerId: string) {
+  return {
+    enabled: false,
+    kind: 'openai-compatible',
+    display_name: providerId,
+    models: [],
+  };
 }
 
 function definedObject<T extends Record<string, unknown>>(value: T): Partial<T> {

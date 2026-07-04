@@ -1,8 +1,8 @@
 /*
- * Generates editor-facing JSON Schema from the canonical Zod settings contract.
+ * Generates editor-facing JSON Schema from the Settings-owned raw settings contract.
  */
 import { z } from 'zod';
-import { AppSettingsRawSchema } from './settings-contracts';
+import { SettingsRawSchema } from './settings-contracts';
 
 export type SettingsJsonSchemaObject = Record<string, unknown> & {
   title?: string;
@@ -11,13 +11,15 @@ export type SettingsJsonSchemaObject = Record<string, unknown> & {
   additionalProperties?: boolean;
 };
 
-export function createAppSettingsJsonSchema(): SettingsJsonSchemaObject {
+export function createSettingsJsonSchema(): SettingsJsonSchemaObject {
   return {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     title: 'Megumi settings',
-    ...zodToJsonSchema(AppSettingsRawSchema),
+    ...zodToJsonSchema(SettingsRawSchema),
   };
 }
+
+export const createAppSettingsJsonSchema = createSettingsJsonSchema;
 
 function zodToJsonSchema(schema: z.ZodTypeAny): SettingsJsonSchemaObject {
   if (schema instanceof z.ZodOptional) {
@@ -47,6 +49,12 @@ function zodToJsonSchema(schema: z.ZodTypeAny): SettingsJsonSchemaObject {
       items: zodToJsonSchema(schema.element),
     };
   }
+  if (schema instanceof z.ZodRecord) {
+    return {
+      type: 'object',
+      additionalProperties: zodToJsonSchema(schema.valueSchema),
+    };
+  }
   if (schema instanceof z.ZodObject) {
     const shape = schema.shape;
     const properties = Object.fromEntries(
@@ -69,6 +77,7 @@ function stringSchema(schema: z.ZodString): SettingsJsonSchemaObject {
     if (check.kind === 'max') jsonSchema.maxLength = check.value;
     if (check.kind === 'regex') jsonSchema.pattern = check.regex.source;
     if (check.kind === 'url') jsonSchema.format = 'uri';
+    if (check.kind === 'datetime') jsonSchema.format = 'date-time';
   }
   return jsonSchema;
 }

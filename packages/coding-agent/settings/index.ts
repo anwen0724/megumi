@@ -1,9 +1,13 @@
 /*
- * Public exports for Coding Agent settings contracts and services.
+ * Public exports for Coding Agent Settings contracts and service entry points.
  */
 export * from './contracts/settings-contracts';
+export * from './contracts/provider-settings-contracts';
+export * from './contracts/permission-settings-contracts';
 export * from './contracts/settings-json-schema';
-export * from './core/settings-resolution';
-export * from './services/product-settings';
-export * from './services/provider-settings';
-export * from './services/provider-runtime';
+export {
+  mergeRawAppSettings,
+  mergeRawSettings,
+  resolveAppSettings,
+  resolveSettings,
+} from './core/settings-resolution';
