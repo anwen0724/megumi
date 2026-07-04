@@ -13,13 +13,17 @@ const targetTableSet = new Set<string>(targetDatabaseTables);
 
 const repositoryOwnership = {
   'workspace.repo.ts': persistenceTableOwnership.workspace.tables,
-  'session.repo.ts': persistenceTableOwnership.session.tables,
   'agent-loop.repo.ts': persistenceTableOwnership.agentLoop.tables,
   'tool-call.repo.ts': persistenceTableOwnership.toolCall.tables,
   'workspace-change.repo.ts': persistenceTableOwnership.workspaceChange.tables,
   'memory.repo.ts': persistenceTableOwnership.memory.tables,
   'artifact.repo.ts': persistenceTableOwnership.artifact.tables,
 } as const;
+
+const legacySessionCompatibilityTables = new Set<string>([
+  ...persistenceTableOwnership.session.tables,
+  ...persistenceTableOwnership.legacySessionCompatibility.tables,
+]);
 
 describe('persistence table ownership', () => {
   it('assigns every target product table to exactly one owner', () => {
@@ -32,12 +36,21 @@ describe('persistence table ownership', () => {
   it('documents the aggregate repository that owns each table group', () => {
     expect(persistenceTableOwnership.session).toMatchObject({
       repository: 'SessionRepository',
+      modulePath: 'packages/coding-agent/session',
       tables: [
         'sessions',
         'session_entries',
-        'session_leaf_changes',
         'session_messages',
+        'session_message_attachments',
         'session_compactions',
+      ],
+    });
+
+    expect(persistenceTableOwnership.legacySessionCompatibility).toMatchObject({
+      repository: 'LegacySessionRepository',
+      modulePath: 'packages/coding-agent/persistence/repos/session.repo.ts',
+      tables: [
+        'session_leaf_changes',
       ],
     });
 
@@ -66,6 +79,18 @@ describe('persistence table ownership', () => {
         }
       }
     }
+
+    expect(violations).toEqual([]);
+  });
+
+  it('keeps legacy persistence session repository as compatibility only', () => {
+    const source = fs.readFileSync(
+      path.join(root, 'packages/coding-agent/persistence/repos/session.repo.ts'),
+      'utf8',
+    );
+    const violations = findSqlWrites(source)
+      .filter((write) => !legacySessionCompatibilityTables.has(write.table))
+      .map((write) => `session.repo.ts ${write.operation} ${write.table}`);
 
     expect(violations).toEqual([]);
   });

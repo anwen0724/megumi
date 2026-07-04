@@ -42,7 +42,11 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/context/core/prompt-builder.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/agent-loop/model-input/model-call-context.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/agent-loop/model-input/model-call-input-builder.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/session/session-context-input.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/session/contracts/session-contracts.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/session/services/session-service.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/session/repositories/session-repository.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/session/core/session-path.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/session/session-context-input.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/session/session-context.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/agent-loop/model-input/parts/session-context.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/agent-loop/core/run-input-facts.ts'))).toBe(true);

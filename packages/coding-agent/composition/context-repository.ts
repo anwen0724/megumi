@@ -6,6 +6,7 @@ import type {
   ContextSessionFactRepository,
   SessionContextSource,
 } from '../context';
+import type { SessionHistoryItem, SessionService } from '../session';
 
 export type PersistedSessionMessage = {
   messageId: string;
@@ -31,15 +32,6 @@ export type PersistedRuntimeEvent = {
   eventType: string;
   createdAt: string;
   payload?: Record<string, unknown>;
-};
-
-type ActivePath = {
-  entries: Array<{
-    sourceRef: {
-      sourceKind: string;
-      sourceId: string;
-    };
-  }>;
 };
 
 export function mapSessionMessageToContextSource(message: PersistedSessionMessage): SessionContextSource {
@@ -112,39 +104,21 @@ export function mapRuntimeEventToRuntimeFactSource(event: PersistedRuntimeEvent)
 
 export class ContextRepository implements ContextSessionFactRepository {
   constructor(private readonly ports: {
-    sessionRepository: {
-      listMessagesBySession(sessionId: string): PersistedSessionMessage[];
-      listSessionCompactionsBySession(sessionId: string): PersistedSessionCompaction[];
-      saveSessionCompaction(entry: {
-        compactionId: string;
-        sessionId: string;
-        summary: string;
-        summaryKind: 'compaction';
-        firstKeptSourceRef: unknown;
-        tokensBefore: number;
-        triggerReason: 'context_budget_pressure';
-        status: 'completed';
-        createdAt: string;
-        metadata?: Record<string, unknown>;
-      }): void;
-    };
-    activePathRepository: {
-      getActivePath(sessionId: string): ActivePath;
-    };
+    sessionService: Pick<SessionService, 'getActiveHistory' | 'saveCompactionSummary'>;
     runtimeEventRepository: {
       listRuntimeEventsByRun(runId: string): PersistedRuntimeEvent[];
     };
   }) {}
 
   listMessagesBySession(sessionId: string): ReturnType<ContextSessionFactRepository['listMessagesBySession']> {
-    return this.ports.sessionRepository.listMessagesBySession(sessionId)
+    return this.listPersistedMessages(sessionId)
       .filter((message) => message.status === 'completed' && message.content.trim().length > 0);
   }
 
   listSessionCompactionsBySession(
     sessionId: string,
   ): ReturnType<ContextSessionFactRepository['listSessionCompactionsBySession']> {
-    return this.ports.sessionRepository.listSessionCompactionsBySession(sessionId)
+    return this.listPersistedCompactions(sessionId)
       .filter((compaction) => compaction.status === 'completed' && compaction.summary.trim().length > 0);
   }
 
@@ -171,44 +145,95 @@ export class ContextRepository implements ContextSessionFactRepository {
   }
 
   saveContextCompaction(compaction: ContextCompaction): void {
-    const firstKeptSourceRef = compaction.preserved_source_refs[0];
-    if (!firstKeptSourceRef) {
-      throw new Error(`Context compaction ${compaction.compaction_id} has no preserved source ref.`);
+    const activeHistory = this.activeHistory(compaction.session_id);
+    const coveredEntry = findLastHistoryEntryForRefs(activeHistory, compaction.compacted_source_refs);
+    if (!coveredEntry) {
+      throw new Error(`Context compaction ${compaction.compaction_id} has no covered session entry.`);
     }
+    const firstKeptEntry = findFirstHistoryEntryForRefsAfter(
+      activeHistory,
+      compaction.preserved_source_refs,
+      coveredEntry.entry.entry_id,
+    );
 
-    this.ports.sessionRepository.saveSessionCompaction({
-      compactionId: compaction.compaction_id,
-      sessionId: compaction.session_id,
-      summary: compaction.summary,
-      summaryKind: 'compaction',
-      firstKeptSourceRef: {
-        sourceKind: firstKeptSourceRef.source_kind,
-        sourceId: firstKeptSourceRef.source_id,
-      },
-      tokensBefore: compaction.usage_before.used_tokens,
-      triggerReason: 'context_budget_pressure',
-      status: 'completed',
-      createdAt: compaction.created_at,
-      metadata: compactMetadata({
-        ...compaction.metadata,
-        trigger: compaction.trigger,
-        compacted_source_refs: compaction.compacted_source_refs,
-        preserved_source_refs: compaction.preserved_source_refs,
-      }),
+    const result = this.ports.sessionService.saveCompactionSummary({
+      compaction_id: compaction.compaction_id,
+      session_id: compaction.session_id,
+      summary_text: compaction.summary,
+      covered_until_entry_id: coveredEntry.entry.entry_id,
+      ...(firstKeptEntry ? { first_kept_entry_id: firstKeptEntry.entry.entry_id } : {}),
+      created_at: compaction.created_at,
+      append_to_active_path: true,
     });
+    if (result.status === 'failed') {
+      throw new Error(result.failure.message);
+    }
   }
 
   private runtimeSourcesForSession(sessionId: string): SessionContextSource[] {
-    const activePath = this.ports.activePathRepository.getActivePath(sessionId);
-    const runIds = activePath.entries
-      .filter((entry) => entry.sourceRef.sourceKind === 'session_run')
-      .map((entry) => entry.sourceRef.sourceId);
-
-    return runIds
-      .flatMap((runId) => this.ports.runtimeEventRepository.listRuntimeEventsByRun(runId))
-      .map(mapRuntimeEventToRuntimeFactSource)
-      .filter((source): source is SessionContextSource => !!source);
+    void sessionId;
+    return [];
   }
+
+  private listPersistedMessages(sessionId: string): PersistedSessionMessage[] {
+    return this.activeHistory(sessionId)
+      .flatMap((item): PersistedSessionMessage[] => item.type === 'message'
+        ? [{
+            messageId: item.message.message_id,
+            sessionId: item.message.session_id,
+            role: item.message.role,
+            content: item.message.content_text,
+            status: 'completed',
+            createdAt: item.message.created_at,
+            ...(item.message.completed_at ? { completedAt: item.message.completed_at } : {}),
+          }]
+        : []);
+  }
+
+  private listPersistedCompactions(sessionId: string): PersistedSessionCompaction[] {
+    return this.activeHistory(sessionId)
+      .flatMap((item): PersistedSessionCompaction[] => item.type === 'compaction'
+        ? [{
+            compactionId: item.compaction.compaction_id,
+            summary: item.compaction.summary_text,
+            status: 'completed',
+            createdAt: item.compaction.created_at,
+          }]
+        : []);
+  }
+
+  private activeHistory(sessionId: string): SessionHistoryItem[] {
+    const result = this.ports.sessionService.getActiveHistory({ session_id: sessionId });
+    if (result.status === 'failed') {
+      throw new Error(result.failure.message);
+    }
+    return result.history;
+  }
+}
+
+function findLastHistoryEntryForRefs(history: SessionHistoryItem[], refs: ContextCompaction['compacted_source_refs']): SessionHistoryItem | undefined {
+  const refKeys = new Set(refs.map((ref) => `${ref.source_kind}:${ref.source_id}`));
+  return history
+    .filter((item) => refKeys.has(historyItemSourceKey(item)))
+    .at(-1);
+}
+
+function findFirstHistoryEntryForRefsAfter(
+  history: SessionHistoryItem[],
+  refs: ContextCompaction['preserved_source_refs'],
+  coveredEntryId: string,
+): SessionHistoryItem | undefined {
+  const coveredIndex = history.findIndex((item) => item.entry.entry_id === coveredEntryId);
+  const refKeys = new Set(refs.map((ref) => `${ref.source_kind}:${ref.source_id}`));
+  return history
+    .slice(Math.max(coveredIndex + 1, 0))
+    .find((item) => refKeys.has(historyItemSourceKey(item)));
+}
+
+function historyItemSourceKey(item: SessionHistoryItem): string {
+  return item.type === 'message'
+    ? `session_message:${item.message.message_id}`
+    : `context_compaction_summary:${item.compaction.compaction_id}`;
 }
 
 function runtimeFactText(event: PersistedRuntimeEvent): string | undefined {

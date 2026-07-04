@@ -57,10 +57,10 @@ export function registerSessionHandlers(
       channel: IPC_CHANNELS.session.create,
       requestSchema: SessionCreateRequestSchema,
       logger: options.logger,
-      handle: (
+      handle: async (
         request: RuntimeIpcRequest<SessionCreatePayload, typeof IPC_CHANNELS.session.create>,
-      ): SessionCreateData => ({
-        session: services.host.session.create(request.payload).session,
+      ): Promise<SessionCreateData> => ({
+        session: (await services.host.session.create(request.payload)).session,
       }),
       mapError: mapSessionIpcError,
     }),
@@ -72,8 +72,8 @@ export function registerSessionHandlers(
       channel: IPC_CHANNELS.session.list,
       requestSchema: SessionListRequestSchema,
       logger: options.logger,
-      handle: (): SessionListData => ({
-        sessions: services.host.session.list().sessions,
+      handle: async (): Promise<SessionListData> => ({
+        sessions: (await services.host.session.list()).sessions,
       }),
       mapError: mapSessionIpcError,
     }),
@@ -85,10 +85,10 @@ export function registerSessionHandlers(
       channel: IPC_CHANNELS.session.message.list,
       requestSchema: SessionMessageListRequestSchema,
       logger: options.logger,
-      handle: (
+      handle: async (
         request: RuntimeIpcRequest<SessionMessageListPayload, typeof IPC_CHANNELS.session.message.list>,
-      ): SessionMessageListData => ({
-        messages: services.host.session.listMessages(request.payload.sessionId).messages,
+      ): Promise<SessionMessageListData> => ({
+        messages: (await services.host.session.listMessages(request.payload.sessionId)).messages,
       }),
       mapError: mapSessionIpcError,
     }),

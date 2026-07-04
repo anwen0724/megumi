@@ -69,12 +69,12 @@ describe('memory foundation boundaries', () => {
       read(join(root, 'packages', 'coding-agent', 'composition', 'compose-coding-agent-memory.ts')),
       read(join(root, 'packages', 'coding-agent', 'composition', 'compose-coding-agent-session-runtime.ts')),
     ].join('\n');
-    const sessionService = read(join(root, 'packages', 'coding-agent', 'session', 'session-service.ts'));
+    const sessionService = read(join(root, 'packages', 'coding-agent', 'session', 'services', 'session-service.ts'));
 
     expect(index).toContain('syncUserMirrorOnAppStart');
     expect(index).toContain('options.memorySettingsProvider.isMemoryEnabled()');
     expect(index).toContain('memoryMarkdownSyncService: options.memoryRuntime.markdownSyncService');
-    expect(sessionService).toContain('syncProjectMirrorOnProjectOpened');
+    expect(sessionService).not.toContain('syncProjectMirrorOnProjectOpened');
   });
 
   it('keeps renderer free from legacy memory panel and recall preview UI', () => {

@@ -80,7 +80,7 @@ describe('coding agent run mainline guards', () => {
     ]) {
       expect(source).not.toContain(forbiddenImplementation);
     }
-    expect(inputServiceSource).toContain('return sessionService.createSession({');
+    expect(inputServiceSource).toContain('sessionService.createSession({');
     expect(inputServiceSource).toContain('handleAgentRunInput');
     expect(inputServiceSource).toContain('submitUserInputToAgentLoop');
   });
@@ -229,12 +229,12 @@ describe('coding agent run mainline guards', () => {
 
   it('keeps memory enabled resolution in the settings owner', () => {
     const runServiceSource = read('packages/coding-agent/agent-loop/services/agent-run-service.ts');
-    const sessionServiceSource = read('packages/coding-agent/session/session-service.ts');
+    const sessionServiceSource = read('packages/coding-agent/session/services/session-service.ts');
     const settingsSource = read('packages/coding-agent/settings/services/product-settings.ts');
 
     expect(settingsSource).toContain('export function resolveMemoryEnabled');
     expect(runServiceSource).toContain('resolveMemoryEnabled(this.memorySettingsProvider)');
-    expect(sessionServiceSource).toContain('resolveMemoryEnabled(this.memorySettingsProvider)');
+    expect(sessionServiceSource).not.toContain('resolveMemoryEnabled');
     expect(runServiceSource).not.toContain('private resolveMemoryEnabled');
     expect(sessionServiceSource).not.toContain('private resolveMemoryEnabled');
   });

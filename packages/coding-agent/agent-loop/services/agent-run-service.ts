@@ -38,15 +38,11 @@ import {
   type RunRetryCoordinatorPort,
 } from '../../state';
 import { runTurn, type RunHostBoundaryPort, type RunIdFactory } from '../../state/lifecycle';
-import {
-  SessionContextInputService,
-  SessionMessageService,
-  type SessionBranchActivePathRepository,
-  type SessionBranchServicePort,
-  type SessionContextInputActivePathRepository,
-  type SessionContextInputBuildPort,
-  type SessionServiceActivePathRepository,
-  type SessionServicePort,
+import type {
+  Session as SessionModuleRecord,
+  SessionMessage as SessionModuleMessage,
+  SessionMessageWithAttachments,
+  SessionService as SessionModuleService,
 } from '../../session';
 import {
   createSessionMessageChatStreamAdapter,
@@ -91,8 +87,8 @@ import {
 } from '../../events';
 import type { ModelCallRecord } from '../../persistence/repos/agent-loop.repo';
 import type {
-  SessionActivePath,
   SessionBranchMarker,
+  SessionContextInput,
   SessionRetryAttempt,
   SessionSourceEntry,
 } from '@megumi/shared/session';
@@ -194,7 +190,7 @@ export interface UserInputHandlerPort {
 
 export interface CreateAgentRunServiceOptions {
   inputService: Pick<UserInputService, 'processUserInput'>;
-  session: Pick<SessionServicePort, 'createSession' | 'listMessagesBySession' | 'listSessions'>;
+  session: Pick<SessionModuleService, 'createSession' | 'getSession' | 'listMessages'>;
   userInput: UserInputHandlerPort;
   commandService: Pick<CommandService, 'handleCommandInput'>;
   commandExecutionContextProvider?: (input: {
@@ -227,6 +223,22 @@ export interface UserInputStepRepository {
   saveStep(step: RunStep): RunStep;
 }
 
+export interface SessionContextInputBuildPort {
+  buildSessionContextInput(input: {
+    sessionId: string;
+    currentRunId?: string;
+    currentMessageId?: string;
+    builtAt: string;
+  }): SessionContextInput;
+}
+
+export interface AgentRunSessionBranchServicePort {
+  assertActiveBranchDraftMarker(input: {
+    sessionId: string;
+    branchMarkerId: string;
+  }): SessionBranchMarker;
+}
+
 export interface RunUserInputAgentLoopInput {
   requestId: string;
   payload: SessionMessageSendPayload;
@@ -246,12 +258,12 @@ export interface RunUserInputAgentLoopInput {
 export interface CreateUserInputHandlerOptions {
   clock: UserInputHandlerClock;
   ids: UserInputHandlerIds;
-  sessionMessages: SessionMessageService;
+  sessionService: Pick<SessionModuleService, 'getSession' | 'saveUserMessage' | 'saveAssistantMessage'>;
   activeRuns: ActiveSessionMessageRunTracker<ChatStreamEventAdapter>;
   runRepository: UserInputRunRepository;
   stepRepository: UserInputStepRepository;
   permissionSnapshotService?: RunPermissionSnapshotServicePort;
-  sessionBranchService?: SessionBranchServicePort;
+  sessionBranchService?: AgentRunSessionBranchServicePort;
   runRetryCoordinator: Pick<RunRetryCoordinatorPort, 'recordManualRerunAttemptForBranchDraft'>;
   chatStreamEventSink?: ChatStreamEventSink;
   appendEvent(event: RuntimeEvent, projection?: ChatStreamEventAdapter): void;
@@ -387,7 +399,7 @@ async function submitAgentRunInput(input: {
   createdAt: string;
   command?: CommandAgentRunInput['command'];
 }): Promise<AgentRunSendResult> {
-  const session = resolveOrCreateAgentRunSession(input.options.session, input.input, input.createdAt);
+  const session = await resolveOrCreateAgentRunSession(input.options.session, input.input, input.createdAt);
   const payload = createSessionMessageSendPayload(input.input, {
     sessionId: String(session.sessionId),
     clientMessageId: input.input.clientMessageId ?? input.ids.clientMessageId(),
@@ -399,13 +411,20 @@ async function submitAgentRunInput(input: {
     ...(input.input.runtimeContext ? { runtimeContext: input.input.runtimeContext } : {}),
     ...(input.command ? { command: input.command } : {}),
   });
+  const messagesResult = await input.options.session.listMessages({
+    session_id: String(session.sessionId),
+    active_path_only: false,
+  });
+  if (messagesResult.status !== 'ok') {
+    throw new Error(messagesResult.failure.message);
+  }
   const persistedUserMessage = findPersistedUserMessage(
-    input.options.session.listMessagesBySession(String(session.sessionId)),
+    messagesResult.messages,
     input.input.text,
     input.createdAt,
   );
 
-  if (!persistedUserMessage?.runId) {
+  if (!persistedUserMessage?.run_id) {
     throw new Error('Input service did not persist a user message run.');
   }
 
@@ -413,8 +432,8 @@ async function submitAgentRunInput(input: {
     type: 'agent_run',
     session,
     requestId: result.data.requestId,
-    userMessageId: String(persistedUserMessage.messageId),
-    runId: String(persistedUserMessage.runId),
+    userMessageId: String(persistedUserMessage.message_id),
+    runId: String(persistedUserMessage.run_id),
     events: result.events,
   };
 }
@@ -464,35 +483,92 @@ function createSessionMessageContext(input: AgentRunSendRequest): NonNullable<Se
 }
 
 function findPersistedUserMessage(
-  messages: SessionMessage[],
+  messages: SessionMessageWithAttachments[],
   content: string,
   createdAt: string,
-): SessionMessage | undefined {
+): SessionMessageWithAttachments['message'] | undefined {
   return messages
-    .filter((message) => message.role === 'user' && message.content === content && message.createdAt === createdAt)
+    .map((item) => item.message)
+    .filter((message) => message.role === 'user' && message.content_text === content && message.created_at === createdAt)
     .at(-1);
 }
 
-function resolveOrCreateAgentRunSession(
-  sessionService: Pick<SessionServicePort, 'createSession' | 'listSessions'>,
+async function resolveOrCreateAgentRunSession(
+  sessionService: Pick<SessionModuleService, 'createSession' | 'getSession'>,
   input: AgentRunSendRequest,
   createdAt: string,
-): Session {
+): Promise<Session> {
   if (input.sessionId) {
-    const session = sessionService.listSessions()
-      .find((candidate) => String(candidate.sessionId) === input.sessionId);
-    if (!session) {
+    const result = await sessionService.getSession({ session_id: input.sessionId });
+    if (result.status === 'not_found') {
       throw new Error(`Cannot send input to missing session: ${input.sessionId}`);
     }
-    return session;
+    if (result.status === 'failed') {
+      throw new Error(result.failure.message);
+    }
+    return toHostSession(result.session, input);
   }
 
-  return sessionService.createSession({
+  if (!input.workspaceId) {
+    throw new Error('Creating a session requires workspaceId.');
+  }
+  const result = await sessionService.createSession({
+    session_id: `session:${crypto.randomUUID()}`,
+    workspace_id: input.workspaceId,
     title: input.sessionTitle ?? titleFromInput(input.text),
-    ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
-    ...(input.workspacePath ? { workspacePath: input.workspacePath } : {}),
-    createdAt,
+    created_at: createdAt,
   });
+  if (result.status === 'failed') {
+    throw new Error(result.failure.message);
+  }
+  return toHostSession(result.session, input);
+}
+
+function toHostSession(
+  session: SessionModuleRecord,
+  input: Pick<AgentRunSendRequest, 'workspacePath'> = {},
+): Session {
+  return {
+    sessionId: session.session_id,
+    title: session.title,
+    workspaceId: session.workspace_id,
+    ...(input.workspacePath ? { workspacePath: input.workspacePath } : {}),
+    status: session.status,
+    createdAt: session.created_at,
+    updatedAt: session.updated_at,
+    ...(session.archived_at ? { archivedAt: session.archived_at } : {}),
+  };
+}
+
+async function requireHostSession(input: {
+  sessionService: Pick<SessionModuleService, 'getSession'>;
+  sessionId?: string;
+  workspacePath?: string;
+}): Promise<Session> {
+  if (!input.sessionId) {
+    throw new Error('Session message send requires a sessionId.');
+  }
+  const result = await input.sessionService.getSession({ session_id: input.sessionId });
+  if (result.status === 'not_found') {
+    throw new Error(`Cannot send input to missing session: ${input.sessionId}`);
+  }
+  if (result.status === 'failed') {
+    throw new Error(result.failure.message);
+  }
+  return toHostSession(result.session, { workspacePath: input.workspacePath });
+}
+
+function toHostMessage(message: SessionModuleMessage): SessionMessage {
+  return {
+    messageId: message.message_id,
+    sessionId: message.session_id,
+    ...(message.run_id ? { runId: message.run_id } : {}),
+    role: message.role,
+    content: message.content_text,
+    status: 'completed',
+    createdAt: message.created_at,
+    ...(message.completed_at ? { completedAt: message.completed_at } : {}),
+  };
 }
 
 function titleFromInput(text: string): string {
@@ -517,17 +593,22 @@ async function submitUserInputToAgentLoop(
   // runtime normalization is the trust boundary before persistence and model-visible context building.
   const sessionMessageInput = prepareSessionMessageInput({ payload: input.payload });
   const currentUserMessage = sessionMessageInput.currentUserMessage;
-  const preparedMessage = options.sessionMessages.prepareUserMessage({
-    ...(input.payload.sessionId ? { sessionId: input.payload.sessionId } : {}),
-    ...(input.payload.context?.sessionTitle ? { sessionTitle: input.payload.context.sessionTitle } : {}),
-    ...(input.payload.context?.workspaceId ? { workspaceId: input.payload.context.workspaceId } : {}),
-    ...(input.payload.context?.workspacePath ? { workspacePath: input.payload.context.workspacePath } : {}),
-    runId,
-    content: currentUserMessage.content,
-    messageCreatedAt: currentUserMessage.createdAt,
-    createdAt,
+  const session = await requireHostSession({
+    sessionService: options.sessionService,
+    sessionId: input.payload.sessionId,
+    workspacePath: input.payload.context?.workspacePath,
   });
-  const { session, userMessage } = preparedMessage;
+  const savedUserMessage = await options.sessionService.saveUserMessage({
+    message_id: currentUserMessage.id,
+    session_id: String(session.sessionId),
+    run_id: runId,
+    content_text: currentUserMessage.content,
+    created_at: currentUserMessage.createdAt,
+  });
+  if (savedUserMessage.status !== 'saved') {
+    throw new Error(savedUserMessage.failure.message);
+  }
+  const userMessage = toHostMessage(savedUserMessage.message);
   const parsedInput = parseSessionMessageRawInput({
     requestId: input.requestId,
     runId,
@@ -578,12 +659,6 @@ async function submitUserInputToAgentLoop(
       })
     : started.run;
   const step = started.step;
-  options.sessionMessages.recordSessionRunSource({
-    sessionId: String(session.sessionId),
-    runId: String(run.runId),
-    createdAt,
-  });
-
   const chatStreamAdapter = createChatStreamAdapterForUserInput({
     input,
     options,
@@ -644,7 +719,7 @@ async function submitUserInputToAgentLoop(
 function resolveBranchDraftMarker(
   payload: SessionMessageSendPayload,
   options: CreateUserInputHandlerOptions,
-): ReturnType<SessionBranchServicePort['assertActiveBranchDraftMarker']> | undefined {
+): ReturnType<AgentRunSessionBranchServicePort['assertActiveBranchDraftMarker']> | undefined {
   if (!payload.branchDraft) {
     return undefined;
   }
@@ -698,7 +773,7 @@ function appendManualRerunAuditEvent(input: {
     runtimeContext?: RuntimeContext;
   };
   options: CreateUserInputHandlerOptions;
-  branchDraftMarker: ReturnType<SessionBranchServicePort['assertActiveBranchDraftMarker']> | undefined;
+  branchDraftMarker: ReturnType<AgentRunSessionBranchServicePort['assertActiveBranchDraftMarker']> | undefined;
   session: Session;
   run: Run;
   createdAt: string;
@@ -768,13 +843,11 @@ export interface AgentRunToolCallRepositoryPort {
 }
 
 export type AgentRunActivePathRepositoryPort =
-  & SessionContextInputActivePathRepository
-  & SessionBranchActivePathRepository
-  & SessionServiceActivePathRepository
-  & RunRetryActivePathRepositoryPort;
+  RunRetryActivePathRepositoryPort;
 
 export interface AgentRunProcessingServiceOptions {
   sessionRepository: AgentRunSessionRepositoryPort;
+  sessionService?: Pick<SessionModuleService, 'getSession' | 'saveUserMessage' | 'saveAssistantMessage'>;
   agentLoopRepository: AgentRunRepositoryPort;
   postRunHooks: PostRunHooksPort;
   runTerminalCoordinator: RunTerminalCoordinatorPort;
@@ -798,7 +871,7 @@ export interface AgentRunProcessingServiceOptions {
   modelInputSourceOverrideProvider?: AgentLoopInitialModelInputSourceOverrideProvider;
   sessionContextInputService?: SessionContextInputBuildPort;
   activePathRepository?: AgentRunActivePathRepositoryPort;
-  sessionBranchService?: SessionBranchServicePort;
+  sessionBranchService?: AgentRunSessionBranchServicePort;
   workspaceChanges?: WorkspaceChangeReadPort;
   hostBoundary?: RunHostBoundaryPort;
   chatStreamEventSink?: ChatStreamEventSink;
@@ -816,6 +889,14 @@ type AgentRunApprovalResumeGroup = ApprovalResumeGroup<ChatStreamEventAdapter>;
 
 const defaultClock: AgentRunProcessingClock = {
   now: () => new Date().toISOString(),
+};
+
+const emptySessionContextInputService: SessionContextInputBuildPort = {
+  buildSessionContextInput: () => ({
+    historyEntries: [],
+    runtimeFacts: [],
+    maxHistoryEntries: 24,
+  }),
 };
 
 interface PersistModelCallRecordFromEventInput {
@@ -903,15 +984,6 @@ function createDefaultAgentRunProcessingIds(
     ...overrides,
   };
 }
-class EmptySessionEntryPathStore {
-  getActivePath(sessionId: string): SessionActivePath {
-    return {
-      sessionId,
-      entries: [],
-    };
-  }
-}
-
 export class AgentRunProcessingService {
   private readonly sessionRepository: AgentRunSessionRepositoryPort;
   private readonly agentLoopRepository: AgentRunRepositoryPort;
@@ -935,7 +1007,7 @@ export class AgentRunProcessingService {
   private readonly megumiHomePath?: string;
   private readonly modelInputSourceOverrideProvider: AgentLoopInitialModelInputSourceOverrideProvider;
   private readonly sessionContextInputService: SessionContextInputBuildPort;
-  private readonly sessionMessageService: SessionMessageService;
+  private readonly sessionService?: Pick<SessionModuleService, 'getSession' | 'saveUserMessage' | 'saveAssistantMessage'>;
   private readonly userInputHandler: UserInputHandlerPort;
   private readonly hostBoundary: RunHostBoundaryPort;
   private readonly clock: AgentRunProcessingClock;
@@ -972,24 +1044,10 @@ export class AgentRunProcessingService {
     this.memoryMarkdownSyncService = options.memoryMarkdownSyncService;
     this.megumiHomePath = options.megumiHomePath;
     this.modelInputSourceOverrideProvider = options.modelInputSourceOverrideProvider ?? new ModelInputSourceOverrideService();
+    this.sessionService = options.sessionService;
     this.clock = options.clock ?? defaultClock;
     this.ids = createDefaultAgentRunProcessingIds(options.ids);
-    this.sessionContextInputService = options.sessionContextInputService
-      ?? new SessionContextInputService({
-        sessionRepository: this.sessionRepository,
-        messageRepository: this.sessionRepository,
-        runRepository: this.agentLoopRepository,
-        runExecutionFactRepository: this.agentLoopRepository,
-        runtimeEventRepository: this.agentLoopRepository,
-        sessionCompactionRepository: this.sessionRepository,
-        activePathRepository: this.activePathRepository ?? new EmptySessionEntryPathStore(),
-      });
-    this.sessionMessageService = new SessionMessageService({
-      sessionRepository: this.sessionRepository,
-      messageRepository: this.sessionRepository,
-      ids: this.ids,
-      ...(this.activePathRepository ? { activePathRepository: this.activePathRepository } : {}),
-    });
+    this.sessionContextInputService = options.sessionContextInputService ?? emptySessionContextInputService;
     this.sessionRunControlService = new SessionRunControlService({
       clock: this.clock,
       ids: this.ids,
@@ -1003,7 +1061,7 @@ export class AgentRunProcessingService {
     this.userInputHandler = createUserInputHandler({
       clock: this.clock,
       ids: this.ids,
-      sessionMessages: this.sessionMessageService,
+      sessionService: this.requireSessionService(),
       activeRuns: this.activeSessionMessageRuns,
       runRepository: this.agentLoopRepository,
       stepRepository: this.agentLoopRepository,
@@ -1242,6 +1300,13 @@ export class AgentRunProcessingService {
     return this.agentLoopRepository.listRuntimeEventsByRun(runId);
   }
 
+  private requireSessionService(): Pick<SessionModuleService, 'getSession' | 'saveUserMessage' | 'saveAssistantMessage'> {
+    if (!this.sessionService) {
+      throw new Error('AgentRunProcessingService requires SessionService.');
+    }
+    return this.sessionService;
+  }
+
   private createModelCallEventRecorder(chatStreamAdapter?: ChatStreamEventAdapter) {
     return createAgentLoopEventRecorder<ChatStreamEventAdapter>({
       clock: this.clock,
@@ -1273,8 +1338,17 @@ export class AgentRunProcessingService {
         },
       },
       assistantReplies: {
-        commit: (input) => {
-          this.sessionMessageService.commitAssistantReply(input);
+        commit: async (input) => {
+          const result = await this.requireSessionService().saveAssistantMessage({
+            message_id: this.ids.messageId(),
+            session_id: input.sessionId,
+            run_id: input.runId,
+            content_text: input.content,
+            completed_at: input.completedAt,
+          });
+          if (result.status !== 'saved') {
+            throw new Error(result.failure.message);
+          }
         },
       },
       postRunHooks: this.postRunHooks,

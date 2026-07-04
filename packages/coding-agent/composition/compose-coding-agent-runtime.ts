@@ -115,6 +115,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   });
   const sessionRuntime = composeCodingAgentSessionRuntime({
     homePaths: options.homePaths,
+    database: persistence.database,
     runtimeLogger: options.runtimeLogger,
     artifactRepository: persistence.artifactRepository,
     agentLoopRepository,
@@ -165,7 +166,11 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
       recoveryService,
     }),
     session: {
-      ...createSessionController(sessionRuntime.sessionService),
+      ...createSessionController(sessionRuntime.sessionService, {
+        listWorkspaceIds: () => persistence.workspaceRepository.listProjects().map((project) => project.projectId),
+        listTimelineMessagesBySession: (payload) => agentLoopRepository.listCommittedMessagesBySession(payload),
+        listRunsBySession: (sessionId) => agentLoopRepository.listRunsBySession(sessionId),
+      }),
       ...createSessionBranchController(sessionRuntime.sessionBranchService),
     },
     settings: {

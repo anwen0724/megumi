@@ -10,6 +10,7 @@ const expectedProductTables = [
   'session_entries',
   'session_leaf_changes',
   'session_messages',
+  'session_message_attachments',
   'session_compactions',
   'agent_loop_runs',
   'model_calls',
@@ -42,6 +43,28 @@ describe('Drizzle schema target table list', () => {
     try {
       applyCodingAgentDatabaseMigrations(database);
 
+      expect(tables(database)).toContain('session_message_attachments');
+      expect(columns(database, 'session_messages')).toEqual(expect.arrayContaining([
+        'message_id',
+        'session_id',
+        'run_id',
+        'role',
+        'content_text',
+        'created_at',
+        'completed_at',
+      ]));
+      expect(columns(database, 'session_entries')).toContain('entry_type');
+      expect(columns(database, 'session_message_attachments')).toEqual(expect.arrayContaining([
+        'attachment_id',
+        'message_id',
+        'session_id',
+        'type',
+        'name',
+        'mime_type',
+        'source_type',
+        'source_value',
+        'created_at',
+      ]));
       expect(foreignKeys(database, 'sessions')).toContainEqual({
         from: 'active_entry_id',
         table: 'session_entries',
@@ -80,6 +103,20 @@ describe('Drizzle schema target table list', () => {
           table: 'session_entries',
           to: 'entry_id',
           onDelete: 'SET NULL',
+        },
+      ]));
+      expect(foreignKeys(database, 'session_message_attachments')).toEqual(expect.arrayContaining([
+        {
+          from: 'message_id',
+          table: 'session_messages',
+          to: 'message_id',
+          onDelete: 'CASCADE',
+        },
+        {
+          from: 'session_id',
+          table: 'sessions',
+          to: 'session_id',
+          onDelete: 'CASCADE',
         },
       ]));
       expect(foreignKeys(database, 'agent_loop_runs')).toEqual(expect.arrayContaining([
@@ -125,6 +162,18 @@ describe('Drizzle schema target table list', () => {
     }
   });
 });
+
+function tables(database: MegumiDatabase): string[] {
+  return (database.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{
+    name: string;
+  }>).map((row) => row.name);
+}
+
+function columns(database: MegumiDatabase, tableName: string): string[] {
+  return (database.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{
+    name: string;
+  }>).map((row) => row.name);
+}
 
 function foreignKeys(database: MegumiDatabase, tableName: string): Array<{
   from: string;

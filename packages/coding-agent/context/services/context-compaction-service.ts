@@ -20,11 +20,6 @@ import type { ContextService, PromptLogPort } from './context-service';
 
 export interface ContextCompactionRepository {
   saveContextCompaction(compaction: ContextCompaction): void;
-  updateSessionActivePathAfterCompaction?(input: {
-    session_id: string;
-    workspace_id?: string;
-    compaction: ContextCompaction;
-  }): void;
 }
 
 export interface ContextSummaryModelCallPort {
@@ -163,11 +158,6 @@ export class ContextCompactionService {
       };
 
       this.options.repository.saveContextCompaction(compaction);
-      this.options.repository.updateSessionActivePathAfterCompaction?.({
-        session_id: request.session_id,
-        ...(request.workspace_id ? { workspace_id: request.workspace_id } : {}),
-        compaction,
-      });
 
       return {
         status: 'completed',

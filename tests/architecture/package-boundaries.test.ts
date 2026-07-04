@@ -176,6 +176,11 @@ describe('package dependency boundaries', () => {
     expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/repos/session-run.repo.ts'))).toBe(false);
     expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/repos/agent-loop.repo.ts'))).toBe(true);
     expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/repos/session.repo.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/session/contracts/session-contracts.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/session/services/session-service.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/session/repositories/session-repository.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/session/core/session-path.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/session/session-context-input.ts'))).toBe(false);
     expect(fs.existsSync(path.join(root, 'packages/coding-agent/composition/compose-coding-agent-persistence.ts'))).toBe(true);
     expect(fs.existsSync(path.join(root, 'apps/desktop/src/main/persistence'))).toBe(false);
   });

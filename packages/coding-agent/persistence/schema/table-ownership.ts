@@ -4,6 +4,7 @@ import type { TargetDatabaseTable } from './table-list';
 export interface PersistenceTableOwner {
   repository: string;
   module: string;
+  modulePath?: string;
   tables: readonly TargetDatabaseTable[];
 }
 
@@ -18,12 +19,21 @@ export const persistenceTableOwnership = {
   session: {
     module: 'session',
     repository: 'SessionRepository',
+    modulePath: 'packages/coding-agent/session',
     tables: [
       'sessions',
       'session_entries',
-      'session_leaf_changes',
       'session_messages',
+      'session_message_attachments',
       'session_compactions',
+    ],
+  },
+  legacySessionCompatibility: {
+    module: 'session',
+    repository: 'LegacySessionRepository',
+    modulePath: 'packages/coding-agent/persistence/repos/session.repo.ts',
+    tables: [
+      'session_leaf_changes',
     ],
   },
   agentLoop: {

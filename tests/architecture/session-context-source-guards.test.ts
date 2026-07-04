@@ -197,11 +197,8 @@ describe('session context source guards', () => {
     expect(provider).not.toContain('cancel' + 'BranchDraft');
   });
 
-  it('keeps SessionContextInputService scoped to active path source selection', () => {
-    const source = read('packages/coding-agent/session/session-context-input.ts');
-
-    for (const forbidden of forbiddenSessionContextInputServiceCalls) {
-      expect(source).not.toContain(forbidden);
-    }
+  it('removes the old SessionContextInputService from the Session module', () => {
+    expect(fs.existsSync(path.join(root, 'packages/coding-agent/session/session-context-input.ts'))).toBe(false);
+    expect(read('packages/coding-agent/session/services/session-service.ts')).not.toContain('SessionContextInput');
   });
 });
