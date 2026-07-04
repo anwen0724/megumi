@@ -75,7 +75,7 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/hooks/contracts/input-hook-contracts.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/settings/contracts/settings-contracts.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/coding-agent/settings/core/settings-resolution.ts'))).toBe(true);
-    expect(existsSync(join(repoRoot, 'packages/coding-agent/settings/services/product-settings.ts'))).toBe(true);
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/settings/services/settings-service.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/shared/skill/contracts.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/shared/prompt-template/contracts.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'packages/shared/session/agent-profile-contracts.ts'))).toBe(true);
@@ -590,7 +590,7 @@ describe('package and file structure source guards', () => {
       'utf8',
     );
     const productSettingsSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/settings/services/product-settings.ts'),
+      join(repoRoot, 'packages/coding-agent/settings/contracts/settings-contracts.ts'),
       'utf8',
     );
     expect(existsSync(join(repoRoot, 'packages/coding-agent/obsolete-run/run-contract.ts'))).toBe(false);

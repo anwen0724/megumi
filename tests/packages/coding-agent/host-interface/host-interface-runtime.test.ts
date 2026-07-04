@@ -46,7 +46,7 @@ describe('Coding Agent host interface runtime', () => {
       },
       appSettingsProvider: {
         getResolvedSettings: () => resolveAppSettings(rawSettings),
-        updateSettings(patch) {
+        updateSettings(patch: AppSettingsRaw) {
           rawSettings = mergeRawAppSettings(rawSettings, patch);
           return resolveAppSettings(rawSettings);
         },
@@ -101,7 +101,7 @@ describe('Coding Agent host interface runtime', () => {
       },
       appSettingsProvider: {
         getResolvedSettings: () => resolveAppSettings(rawSettings),
-        updateSettings(patch) {
+        updateSettings(patch: AppSettingsRaw) {
           rawSettings = mergeRawAppSettings(rawSettings, patch);
           writes.push(rawSettings);
           return resolveAppSettings(rawSettings);

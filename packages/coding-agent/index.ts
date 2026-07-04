@@ -12,7 +12,6 @@ export * from './permissions';
 export * from './memory';
 export * from './artifacts';
 export * from './workspace';
-export * from './settings';
 export * from './persistence';
 export * from './projections';
 export * from './host-interface';

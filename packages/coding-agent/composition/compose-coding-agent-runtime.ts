@@ -17,7 +17,7 @@ import { composeCodingAgentSessionRuntime, type CodingAgentHomePaths } from './c
 import { composeCodingAgentMemory } from './compose-coding-agent-memory';
 import { composeCodingAgentRecoveryRuntime } from './compose-coding-agent-recovery-runtime';
 import type { RuntimeLogger } from '../host-interface/runtime-logger';
-import type { ModelCallProvider } from '../agent-loop/model-call';
+import type { ModelCallProvider, ModelCallRuntimeResolverPort } from '../agent-loop/model-call';
 import {
   createAiClient,
   createAnthropicProviderAdapter,
@@ -29,14 +29,12 @@ import {
 } from '@megumi/ai';
 import { createModelCallRunner, type ProviderRuntimeConfig } from '../agent-loop/model-call';
 import { TimelineHistoryCommitProjectorService } from '../projections/timeline';
-import type { PermissionSettingsProvider } from '../permissions/permission-settings-provider';
 import {
-  ProductSettingsService,
-  ProviderRuntimeService,
-  ProviderSettingsService,
+  createSettingsService,
+  ProviderRuntimeResolutionError,
   type MemorySettingsPort,
-  type ProductSettingsStoragePort,
-  type ProviderSettingsProductSettingsPort,
+  type SettingsFileStore,
+  type SettingsService,
 } from '../settings';
 import {
   createWorkspaceChangeService,
@@ -57,16 +55,16 @@ export interface ComposeCodingAgentRuntimeOptions {
   // Optional override for tests / alternative entries. When omitted, the product
   // builds a real OpenAI-compatible model call provider so it runs standalone.
   modelCallProviderService?: ModelCallProvider;
-  appSettingsProvider?: ProviderSettingsProductSettingsPort;
+  appSettingsProvider?: unknown;
   memorySettingsProvider?: MemorySettingsPort;
-  permissionSettingsProvider?: PermissionSettingsProvider;
+  permissionSettingsProvider?: unknown;
   chatStreamEventSink?: Parameters<typeof composeCodingAgentSessionRuntime>[0]['chatStreamEventSink'];
   workspaceChangeFooterProjector?: Parameters<typeof composeCodingAgentSessionRuntime>[0]['workspaceChangeFooterProjector'];
   // Optional UI-shell hooks for project lifecycle. Omitted in standalone/non-UI
   // runs: the picker defaults to a no-op (cancels) and the file system to node fs.
   directoryPicker?: DirectoryPickerPort;
   projectFileSystem?: LocalWorkspaceServiceFileSystem;
-  settingsStorage?: ProductSettingsStoragePort;
+  settingsStorage?: SettingsFileStore;
 }
 
 export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOptions): CodingAgentHostInterface {
@@ -78,26 +76,25 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   const sessionRepository = persistence.sessionRepository as any;
   const toolCallRepository = persistence.toolCallRepository as any;
   const toolRegistry = composeCodingAgentToolRegistryService();
-  const settingsService = new ProductSettingsService({
-    storage: options.settingsStorage ?? createLocalSettingsJsonStorage({
+  const settingsService = resolveSettingsService(options.appSettingsProvider) ?? createSettingsService({
+    file_store: options.settingsStorage ?? createLocalSettingsJsonStorage({
       settingsPath: options.homePaths.settingsPath,
     }),
-  });
-  const effectiveSettingsProvider = options.appSettingsProvider ?? settingsService;
-  const providerSettingsService = new ProviderSettingsService({
-    settings: effectiveSettingsProvider,
     env: process.env,
   });
   const modelCallProviderService = options.modelCallProviderService
     ?? createModelCallRunner({
-      resolver: new ProviderRuntimeService({ settings: providerSettingsService, env: process.env }),
+      resolver: createModelCallRuntimeResolver(settingsService),
       aiClientFactory: ({ config }) => createAiClientForProviderRuntime(config),
     });
   const memory = composeCodingAgentMemory({
     repository: persistence.memoryRepository,
     modelStepProvider: modelCallProviderService,
     memorySettingsProvider: options.memorySettingsProvider ?? {
-      isMemoryEnabled: () => effectiveSettingsProvider.getResolvedSettings().memory.enabled,
+      isMemoryEnabled: () => {
+        const result = settingsService.getResolvedSettings();
+        return result.status === 'ok' ? result.settings.memory.enabled : false;
+      },
     },
     runtimeLogger: options.runtimeLogger,
     megumiHomePath: options.homePaths.homePath,
@@ -119,7 +116,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     workspaceChangeService,
     workspacePathPolicyService,
     runRepository: agentLoopRepository,
-    permissionSettingsProvider: options.permissionSettingsProvider ?? settingsService,
+    permissionSettingsResolver: resolvePermissionSettingsResolver(options.permissionSettingsProvider) ?? settingsService,
   });
   // Persist committed timeline history in the product, forwarding events to any
   // caller-provided sink (e.g. the desktop UI bridge) downstream. This keeps
@@ -165,7 +162,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     timelineMessageRepository: agentLoopRepository,
     logger: options.runtimeLogger,
   });
-  const settings = createSettingsController(effectiveSettingsProvider);
+  const settings = createSettingsController(settingsService);
   const artifacts = createArtifactController(artifactService);
 
   return createCodingAgentHostInterface({
@@ -185,7 +182,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     },
     settings: {
       ...settings,
-      provider: createProviderController(providerSettingsService),
+      provider: createProviderController(settingsService),
     },
     permissions: createApprovalController(approvalResolutionService),
     artifacts: {
@@ -236,14 +233,55 @@ function requireBaseUrl(config: ProviderRuntimeConfig): string {
   return config.baseUrl;
 }
 
-function createVolatileProductSettingsStorage(): ProductSettingsStoragePort {
-  let rawSettings: ReturnType<ProductSettingsStoragePort['readRawSettings']> = {};
+function createModelCallRuntimeResolver(settingsService: SettingsService): ModelCallRuntimeResolverPort {
   return {
-    readRawSettings: () => rawSettings,
-    writeRawSettings: (next) => {
-      rawSettings = next;
+    async resolveProviderRuntimeConfig(input) {
+      const result = settingsService.resolveProviderRuntimeConfig({
+        provider_id: input.providerId,
+        model_id: input.modelId ?? '',
+      });
+
+      if (result.status === 'failed') {
+        throw new ProviderRuntimeResolutionError({
+          code: result.failure.code as any,
+          message: result.failure.message,
+          severity: 'error',
+          retryable: false,
+          source: 'provider',
+          ...(input.runtimeContext?.debugId ? { debugId: input.runtimeContext.debugId } : {}),
+          details: result.failure.details as any,
+        });
+      }
+
+      return {
+        providerId: result.config.provider_id as ProviderRuntimeConfig['providerId'],
+        kind: result.config.kind === 'openai' ? 'openai-compatible' : result.config.kind,
+        ...(result.config.base_url ? { baseUrl: result.config.base_url } : {}),
+        apiKey: result.config.api_key ?? '',
+        defaultModelId: result.config.model_id,
+      };
     },
   };
+}
+
+function resolveSettingsService(value: unknown): SettingsService | undefined {
+  return hasSettingsServiceShape(value) ? value : undefined;
+}
+
+function hasSettingsServiceShape(value: unknown): value is SettingsService {
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && 'resolveProviderRuntimeConfig' in value
+    && 'resolvePermissionSettings' in value
+    && 'getResolvedSettings' in value,
+  );
+}
+
+function resolvePermissionSettingsResolver(value: unknown): Pick<SettingsService, 'resolvePermissionSettings'> | undefined {
+  return Boolean(value && typeof value === 'object' && 'resolvePermissionSettings' in value)
+    ? value as Pick<SettingsService, 'resolvePermissionSettings'>
+    : undefined;
 }
 
 export function composeCodingAgentHostInterface(

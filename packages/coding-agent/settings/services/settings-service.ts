@@ -2,6 +2,7 @@
  * Public Settings Service that reads sparse raw settings, resolves product settings,
  * and exposes provider runtime and permission settings capabilities to callers.
  */
+import type { RuntimeError } from '@megumi/shared/runtime';
 import {
   mergeRawSettings,
   resolveSettings,
@@ -80,6 +81,13 @@ export interface SettingsService {
 
 export function createSettingsService(options: SettingsServiceOptions): SettingsService {
   return new DefaultSettingsService(options);
+}
+
+export class ProviderRuntimeResolutionError extends Error {
+  constructor(readonly payload: RuntimeError) {
+    super(payload.message);
+    this.name = 'ProviderRuntimeResolutionError';
+  }
 }
 
 class DefaultSettingsService implements SettingsService {
@@ -286,7 +294,7 @@ class DefaultSettingsService implements SettingsService {
     try {
       return SettingsRawSchema.parse(this.options.file_store.readRawSettings());
     } catch (error) {
-      return failed('settings_raw_invalid', 'Raw settings are invalid.', toFailureDetails(error));
+      return settingsFailure('settings_raw_invalid', 'Raw settings are invalid.', toFailureDetails(error));
     }
   }
 
@@ -308,6 +316,21 @@ function failed<T extends { status: string } = never>(
   message: string,
   details?: Record<string, unknown>,
 ): T | { status: 'failed'; failure: SettingsError } {
+  return {
+    status: 'failed',
+    failure: {
+      code,
+      message,
+      ...(details ? { details } : {}),
+    },
+  };
+}
+
+function settingsFailure(
+  code: string,
+  message: string,
+  details?: Record<string, unknown>,
+): { status: 'failed'; failure: SettingsError } {
   return {
     status: 'failed',
     failure: {

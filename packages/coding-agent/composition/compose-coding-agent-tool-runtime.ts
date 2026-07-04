@@ -5,7 +5,8 @@ import { createToolCallRunner } from '../agent-loop/tool-call';
 import type { AgentLoopRepository } from '../persistence/repos/agent-loop.repo';
 import type { ToolCallRepository } from '../persistence/repos/tool-call.repo';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
-import type { PermissionSettingsProvider } from '../permissions/permission-settings-provider';
+import type { MergedPermissionSettings } from '@megumi/shared/permission';
+import type { SettingsService } from '../settings';
 import {
   ToolExecutionService,
   ToolRegistryService,
@@ -155,7 +156,7 @@ export function composeCodingAgentToolRuntimeFactory(input: {
   workspaceChangeService: Pick<WorkspaceChangeService, 'trackToolExecution'>;
   workspacePathPolicyService: WorkspacePathPolicyService;
   runRepository: AgentLoopRepository;
-  permissionSettingsProvider: PermissionSettingsProvider;
+  permissionSettingsResolver: Pick<SettingsService, 'resolvePermissionSettings'>;
 }): ToolRuntimeFactory {
   return {
     async create({ projectRoot, permissionMode }) {
@@ -190,7 +191,7 @@ export function composeCodingAgentToolRuntimeFactory(input: {
         workspaceChangeService: input.workspaceChangeService,
         permissionMode,
         projectRoot,
-        settings: await input.permissionSettingsProvider.loadForProject(projectRoot),
+        settings: resolveToolPermissionSettings(input.permissionSettingsResolver, projectRoot),
         ids: {
           toolExecutionId: () => `tool-execution:${crypto.randomUUID()}`,
           toolResultId: () => `tool-result:${crypto.randomUUID()}`,
@@ -202,6 +203,31 @@ export function composeCodingAgentToolRuntimeFactory(input: {
         },
       });
     },
+  };
+}
+
+function resolveToolPermissionSettings(
+  settings: Pick<SettingsService, 'resolvePermissionSettings'>,
+  projectRoot: string,
+): MergedPermissionSettings {
+  const result = settings.resolvePermissionSettings({ workspace_id: projectRoot });
+  if (result.status === 'failed') {
+    throw new Error(result.failure.message);
+  }
+
+  return {
+    allow: result.permission_settings.allow.map((rule) => ({
+      scope: rule.source === 'user' ? 'user' : rule.source === 'workspace' ? 'project' : 'local',
+      pattern: rule.pattern,
+    })),
+    ask: result.permission_settings.ask.map((rule) => ({
+      scope: rule.source === 'user' ? 'user' : rule.source === 'workspace' ? 'project' : 'local',
+      pattern: rule.pattern,
+    })),
+    deny: result.permission_settings.deny.map((rule) => ({
+      scope: rule.source === 'user' ? 'user' : rule.source === 'workspace' ? 'project' : 'local',
+      pattern: rule.pattern,
+    })),
   };
 }
 

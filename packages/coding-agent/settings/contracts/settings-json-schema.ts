@@ -8,7 +8,7 @@ export type SettingsJsonSchemaObject = Record<string, unknown> & {
   title?: string;
   type?: string | string[];
   properties?: Record<string, SettingsJsonSchemaObject>;
-  additionalProperties?: boolean;
+  additionalProperties?: boolean | SettingsJsonSchemaObject;
 };
 
 export function createSettingsJsonSchema(): SettingsJsonSchemaObject {

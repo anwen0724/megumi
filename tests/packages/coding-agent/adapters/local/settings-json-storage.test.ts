@@ -1,11 +1,10 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createLocalSettingsJsonStorage, LocalSettingsJsonParseError } from '@megumi/coding-agent/adapters/local';
-import { ProductSettingsService } from '@megumi/coding-agent/settings';
-import { DEFAULT_APP_SETTINGS } from '@megumi/coding-agent/settings';
+import { createSettingsService, DEFAULT_SETTINGS } from '@megumi/coding-agent/settings';
 
 describe('Local settings.json storage', () => {
   let temporaryHome: string | undefined;
@@ -20,8 +19,8 @@ describe('Local settings.json storage', () => {
   async function createService() {
     temporaryHome = await mkdtemp(path.join(os.tmpdir(), 'megumi-local-settings-'));
     const settingsPath = path.join(temporaryHome, 'settings.json');
-    const service = new ProductSettingsService({
-      storage: createLocalSettingsJsonStorage({ settingsPath }),
+    const service = createSettingsService({
+      file_store: createLocalSettingsJsonStorage({ settingsPath }),
     });
     return { service, settingsPath };
   }
@@ -29,8 +28,8 @@ describe('Local settings.json storage', () => {
   it('returns resolved defaults when settings.json is missing', async () => {
     const { service } = await createService();
 
-    expect(service.getResolvedSettings()).toEqual(DEFAULT_APP_SETTINGS);
-    expect(service.getRawSettings()).toEqual({});
+    expect(service.getResolvedSettings()).toEqual({ status: 'ok', settings: DEFAULT_SETTINGS });
+    expect(service.getRawSettings()).toEqual({ status: 'ok', settings: {} });
   });
 
   it('merges partial raw settings with defaults', async () => {
@@ -42,11 +41,13 @@ describe('Local settings.json storage', () => {
       },
     }), 'utf8');
 
-    expect(service.getResolvedSettings()).toEqual({
-      ...DEFAULT_APP_SETTINGS,
-      theme: 'sage-mist',
-      memory: {
-        enabled: true,
+    expect(service.getResolvedSettings()).toMatchObject({
+      status: 'ok',
+      settings: {
+        theme: 'sage-mist',
+        memory: {
+          enabled: true,
+        },
       },
     });
   });
@@ -54,9 +55,11 @@ describe('Local settings.json storage', () => {
   it('writes only raw user overrides when updating one setting', async () => {
     const { service, settingsPath } = await createService();
 
-    expect(service.updateSettings({ theme: 'graphite-dark' })).toEqual({
-      ...DEFAULT_APP_SETTINGS,
-      theme: 'graphite-dark',
+    expect(service.updateSettings({ patch: { theme: 'graphite-dark' } })).toMatchObject({
+      status: 'updated',
+      settings: {
+        theme: 'graphite-dark',
+      },
     });
     expect(JSON.parse(await readFile(settingsPath, 'utf8'))).toEqual({
       theme: 'graphite-dark',
@@ -67,11 +70,13 @@ describe('Local settings.json storage', () => {
     const { service, settingsPath } = await createService();
 
     service.updateSettings({
-      language: 'zh-CN',
-      theme: 'sage-mist',
-      setup: {
-        completed: true,
-        completedAt: '2026-06-29T12:00:00.000Z',
+      patch: {
+        language: 'zh-CN',
+        theme: 'sage-mist',
+        setup: {
+          completed: true,
+          completed_at: '2026-06-29T12:00:00.000Z',
+        },
       },
     });
 
@@ -80,7 +85,7 @@ describe('Local settings.json storage', () => {
       theme: 'sage-mist',
       setup: {
         completed: true,
-        completedAt: '2026-06-29T12:00:00.000Z',
+        completed_at: '2026-06-29T12:00:00.000Z',
       },
     });
   });
@@ -89,32 +94,35 @@ describe('Local settings.json storage', () => {
     const { service, settingsPath } = await createService();
     await writeFile(settingsPath, JSON.stringify({
       compaction: {
-        reserveTokens: 32768,
+        reserve_tokens: 32768,
       },
     }), 'utf8');
 
     service.updateSettings({
-      memory: {
-        enabled: true,
+      patch: {
+        memory: {
+          enabled: true,
+        },
       },
     });
 
     expect(JSON.parse(await readFile(settingsPath, 'utf8'))).toEqual({
       compaction: {
-        reserveTokens: 32768,
+        reserve_tokens: 32768,
       },
       memory: {
         enabled: true,
       },
     });
-    expect(service.getResolvedSettings()).toEqual({
-      ...DEFAULT_APP_SETTINGS,
-      memory: {
-        enabled: true,
-      },
-      compaction: {
-        ...DEFAULT_APP_SETTINGS.compaction,
-        reserveTokens: 32768,
+    expect(service.getResolvedSettings()).toMatchObject({
+      status: 'ok',
+      settings: {
+        memory: {
+          enabled: true,
+        },
+        compaction: {
+          reserve_tokens: 32768,
+        },
       },
     });
   });
@@ -123,14 +131,15 @@ describe('Local settings.json storage', () => {
     const { service, settingsPath } = await createService();
     await writeFile(settingsPath, '{', 'utf8');
 
-    expect(() => service.getResolvedSettings()).toThrow(LocalSettingsJsonParseError);
-    try {
-      service.getResolvedSettings();
-      throw new Error('Expected settings read to fail.');
-    } catch (error) {
-      expect(error).toBeInstanceOf(LocalSettingsJsonParseError);
-      expect((error as LocalSettingsJsonParseError).settingsPath).toBe(settingsPath);
-    }
+    const result = service.getResolvedSettings();
+    expect(result.status).toBe('failed');
+    expect(result).toMatchObject({
+      status: 'failed',
+      failure: {
+        code: 'settings_raw_invalid',
+      },
+    });
+    expect(() => createLocalSettingsJsonStorage({ settingsPath }).readRawSettings())
+      .toThrow(LocalSettingsJsonParseError);
   });
 });
-

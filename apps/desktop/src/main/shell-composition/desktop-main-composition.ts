@@ -1,7 +1,6 @@
 // Composes the Electron UI shell and connects it to the Coding Agent host interface.
 import { initializeElectronMegumiHomeSync } from '../services/workspace/megumi-home.service';
 import { createRuntimeJsonlLoggerForMegumiHome } from '../services/agent-run/runtime-logger.service';
-import { createPermissionSettingsService } from '../services/security/permission-settings.service';
 import { createWorkspaceFilesService } from '../services/workspace/workspace-files.service';
 import {
   composeCodingAgentHostInterface,
@@ -16,10 +15,6 @@ import { resolveElectronPersistenceMigrationsFolder } from '../shell/electron-pe
 export function composeDesktopMain() {
   const megumiHomePaths = initializeElectronMegumiHomeSync();
   const runtimeLogger = createRuntimeJsonlLoggerForMegumiHome(megumiHomePaths);
-  const permissionSettingsService = createPermissionSettingsService({
-    userSettingsPath: megumiHomePaths.settingsPath,
-    fileSystem: fs,
-  });
   const codingAgentHomePaths: CodingAgentHomePaths = {
     homePath: megumiHomePaths.homePath,
     sqlitePath: megumiHomePaths.sqlitePath,
@@ -34,7 +29,6 @@ export function composeDesktopMain() {
     homePaths: codingAgentHomePaths,
     migrationsFolder,
     runtimeLogger,
-    permissionSettingsProvider: permissionSettingsService,
     chatStreamEventSink: chatStreamBroadcaster,
     directoryPicker: { chooseDirectory: () => electronDialogHost.chooseDirectory() },
   });

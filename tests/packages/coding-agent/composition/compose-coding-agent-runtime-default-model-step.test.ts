@@ -42,7 +42,7 @@ describe('Coding Agent host interface default model step provider', () => {
       // No modelCallProviderService: the product must build its own.
       appSettingsProvider: {
         getResolvedSettings: () => resolveAppSettings(rawSettings),
-        updateSettings(patch) {
+        updateSettings(patch: AppSettingsRaw) {
           rawSettings = mergeRawAppSettings(rawSettings, patch);
           return resolveAppSettings(rawSettings);
         },
