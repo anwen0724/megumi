@@ -119,9 +119,9 @@ export class PostRunHooksCoordinator {
       return [];
     }
     try {
-      return this.workspaceChanges.listChangedFilesByRun(runId)
-        .map((file) => file.projectPath)
-        .filter((projectPath) => isSourceOfTruthMemoryPath(projectPath));
+      return this.workspaceChanges.listChangedFilesByRunId(runId)
+        .map((file) => file.workspace_path)
+        .filter((workspacePath) => isSourceOfTruthMemoryPath(workspacePath));
     } catch {
       return [];
     }

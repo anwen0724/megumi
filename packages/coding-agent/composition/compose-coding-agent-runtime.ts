@@ -39,12 +39,16 @@ import {
   type ProviderSettingsProductSettingsPort,
 } from '../settings';
 import {
-  createProjectService,
-  type DirectoryPickerPort,
-  type ProjectFileSystem,
+  createWorkspaceChangeService,
+  createWorkspacePathPolicyService,
+  createWorkspaceService,
 } from '../workspace';
+import type { DirectoryPickerPort } from '../host-interface/workspace/workspace-controller';
 import { createLocalSettingsJsonStorage } from '../adapters/local/settings/settings-json-storage';
-import { createLocalProjectFileSystem } from '../adapters/local/workspace/project-file-system';
+import {
+  createLocalProjectFileSystem,
+  type LocalWorkspaceServiceFileSystem,
+} from '../adapters/local/workspace/project-file-system';
 
 export interface ComposeCodingAgentRuntimeOptions {
   homePaths: CodingAgentHomePaths;
@@ -61,7 +65,7 @@ export interface ComposeCodingAgentRuntimeOptions {
   // Optional UI-shell hooks for project lifecycle. Omitted in standalone/non-UI
   // runs: the picker defaults to a no-op (cancels) and the file system to node fs.
   directoryPicker?: DirectoryPickerPort;
-  projectFileSystem?: ProjectFileSystem;
+  projectFileSystem?: LocalWorkspaceServiceFileSystem;
   settingsStorage?: ProductSettingsStoragePort;
 }
 
@@ -98,6 +102,18 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     runtimeLogger: options.runtimeLogger,
     megumiHomePath: options.homePaths.homePath,
   });
+  const workspaceFileSystem = options.projectFileSystem ?? createLocalProjectFileSystem();
+  const workspacePathPolicyService = createWorkspacePathPolicyService();
+  const workspaceService = createWorkspaceService({
+    repository: persistence.workspaceRepository,
+    file_system: workspaceFileSystem,
+  });
+  const workspaceChangeService = createWorkspaceChangeService({
+    repository: persistence.workspaceChangeRepository,
+    path_policy: workspacePathPolicyService,
+    file_system: workspaceFileSystem,
+  });
+  void workspaceChangeService;
   const toolRuntimeFactory = composeCodingAgentToolRuntimeFactory({
     toolRepository: toolCallRepository,
     toolRegistry,
@@ -149,12 +165,6 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     timelineMessageRepository: agentLoopRepository,
     logger: options.runtimeLogger,
   });
-  const projectService = createProjectService({
-    repository: persistence.workspaceRepository,
-    fileSystem: options.projectFileSystem ?? createLocalProjectFileSystem(),
-    ...(options.directoryPicker ? { directoryPicker: options.directoryPicker } : {}),
-  });
-
   const settings = createSettingsController(effectiveSettingsProvider);
   const artifacts = createArtifactController(artifactService);
 
@@ -162,12 +172,12 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     input: sessionRuntime.agentRunService,
     commands: sessionRuntime.commandService,
     workspace: createWorkspaceController({
-      projectService,
-      recoveryService,
+      workspaceService,
+      ...(options.directoryPicker ? { directoryPicker: options.directoryPicker } : {}),
     }),
     session: {
       ...createSessionController(sessionRuntime.sessionService, {
-        listWorkspaceIds: () => persistence.workspaceRepository.listProjects().map((project) => project.projectId),
+        listWorkspaceIds: () => persistence.workspaceRepository.listWorkspaces().map((workspace) => workspace.workspace_id),
         listTimelineMessagesBySession: (payload) => agentLoopRepository.listCommittedMessagesBySession(payload),
         listRunsBySession: (sessionId) => agentLoopRepository.listRunsBySession(sessionId),
       }),

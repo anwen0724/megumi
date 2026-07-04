@@ -1,13 +1,12 @@
 // Composes the Coding Agent product recovery runtime without desktop UI projections.
-import fs from 'fs-extra';
 import type { JsonValue } from '@megumi/shared/primitives';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { WorkspaceRestoreData, WorkspaceRestorePayload } from '@megumi/shared/ipc';
 import type { TimelineMessage } from '@megumi/shared/timeline';
 import type { AgentLoopRepository } from '../persistence/repos/agent-loop.repo';
 import type { SessionRepository } from '../persistence/repos/session.repo';
-import { WorkspaceChangeRepository } from '../persistence/repos/workspace-change.repo';
+import { WorkspaceChangeRepository } from '../workspace/repositories/workspace-change-repository';
 import { createRecoveryService, type RecoveryLogger } from '../state';
-import { WorkspaceRestoreService } from '../workspace';
 
 export interface ComposeCodingAgentRecoveryRuntimeOptions {
   recoveryRepository: AgentLoopRepository;
@@ -30,7 +29,6 @@ export function composeCodingAgentRecoveryRuntime(options: ComposeCodingAgentRec
       eventId: () => `event:${crypto.randomUUID()}`,
       interruptedMarkerId: (runId) => `interrupted-marker:${runId}:${crypto.randomUUID()}`,
     },
-    workspaceChanges: options.workspaceChangeRepository,
     timelineBackfill: {
       listRunsNeedingTimelineBackfill: () => options.recoveryRepository.listRunsNeedingTimelineBackfill(),
       hasCommittedTimeline: (runId) => Boolean(options.timelineMessageRepository.getRunCommit(runId)),
@@ -57,14 +55,7 @@ export function composeCodingAgentRecoveryRuntime(options: ComposeCodingAgentRec
     },
     ...(options.logger ? { logger: options.logger } : {}),
     workspaceRestore: {
-      restoreChangeSet(input) {
-        return createWorkspaceRestoreForChangeSet({
-          changeSetId: input.changeSetId,
-          runRepository: options.runRepository,
-          sessionRepository: options.sessionRepository,
-          workspaceChangeRepository: options.workspaceChangeRepository,
-        }).restoreChangeSet(input);
-      },
+      restoreChangeSet: unsupportedWorkspaceRestore,
     },
     appendRuntimeEvent: (event) => {
       options.runtimeEventRepository.appendRuntimeEvent(event);
@@ -94,37 +85,8 @@ function timelineMessageText(message: TimelineMessage): string {
     .join('\n') || message.role;
 }
 
-function createWorkspaceRestoreForChangeSet(input: {
-  changeSetId: string;
-  runRepository: Pick<AgentLoopRepository, 'getRun'>;
-  sessionRepository: Pick<SessionRepository, 'getSession'>;
-  workspaceChangeRepository: WorkspaceChangeRepository;
-}): WorkspaceRestoreService {
-  const changeSet = input.workspaceChangeRepository.getWorkspaceChange(input.changeSetId);
-  if (!changeSet) {
-    throw new Error(`Workspace change set not found: ${input.changeSetId}`);
-  }
-
-  const run = input.runRepository.getRun(changeSet.runId);
-  if (!run) {
-    throw new Error(`Workspace restore requires run: ${changeSet.runId}`);
-  }
-
-  const session = input.sessionRepository.getSession(String(run.sessionId));
-  if (!session?.workspacePath) {
-    throw new Error(`Workspace restore requires workspacePath for session: ${run.sessionId}`);
-  }
-
-  return new WorkspaceRestoreService({
-    projectRoot: session.workspacePath,
-    fileSystem: fs,
-    repository: input.workspaceChangeRepository,
-    ids: {
-      restoreRequestId: () => `workspace-restore-request:${crypto.randomUUID()}`,
-      restoreResultId: () => `workspace-restore-result:${crypto.randomUUID()}`,
-      restoreFileResultId: () => `workspace-restore-file-result:${crypto.randomUUID()}`,
-    },
-  });
+async function unsupportedWorkspaceRestore(_payload: WorkspaceRestorePayload): Promise<WorkspaceRestoreData> {
+  throw new Error('Workspace restore is not supported by the target Workspace module.');
 }
 
 function nextPersistedRuntimeSequence(events: RuntimeEvent[]): number {

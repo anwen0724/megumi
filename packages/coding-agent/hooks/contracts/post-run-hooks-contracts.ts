@@ -2,7 +2,7 @@
  * Public post-run hook contracts exposed by the Coding Agent hook module.
  */
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import type { WorkspaceChangedFile } from '@megumi/shared/workspace';
+import type { WorkspaceChangedFile } from '../../workspace';
 import type { MemoryCapturePort } from '../../memory';
 import type { ChatStreamEventAdapter } from '../../projections/chat-stream';
 import type { WorkspaceChangeFooterProjectorService } from '../../projections/workspace/workspace-change-footer-projector';
@@ -12,7 +12,7 @@ export interface PostRunHooksRepositoryPort {
 }
 
 export interface PostRunHooksWorkspaceChangeReadPort {
-  listChangedFilesByRun(runId: string): WorkspaceChangedFile[];
+  listChangedFilesByRunId(runId: string): WorkspaceChangedFile[];
 }
 
 export interface PostRunHooksCoordinatorOptions {

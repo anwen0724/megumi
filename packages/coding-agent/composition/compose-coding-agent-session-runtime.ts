@@ -19,7 +19,7 @@ import type { AgentLoopRepository } from '../persistence/repos/agent-loop.repo';
 import type { ArtifactRepository } from '../persistence/repos/artifact.repo';
 import type { SessionRepository as LegacySessionRepository } from '../persistence/repos/session.repo';
 import type { ToolCallRepository } from '../persistence/repos/tool-call.repo';
-import type { WorkspaceChangeRepository } from '../persistence/repos/workspace-change.repo';
+import type { WorkspaceChangeRepository } from '../workspace/repositories/workspace-change-repository';
 import type { ToolRegistryService } from '../tools';
 import { PlanArtifactCompatibilityService, PlanArtifactService } from '../artifacts';
 import type { MemoryRuntimeComposition } from './compose-coding-agent-memory';

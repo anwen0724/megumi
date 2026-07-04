@@ -19,7 +19,7 @@ import {
   ProjectUseExistingRequestSchema,
 } from '@megumi/shared/ipc';
 import type { HostWorkspaceController } from '@megumi/coding-agent/host-interface';
-import { ProjectPathValidationError } from '@megumi/coding-agent/workspace';
+import { WorkspaceProjectCompatibilityError } from '@megumi/coding-agent/host-interface/workspace/workspace-controller';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-ipc-request-handler';
@@ -102,7 +102,7 @@ export function registerProjectHandlers(
 }
 
 function mapProjectIpcError(error: unknown): RuntimeIpcError {
-  if (error instanceof ProjectPathValidationError) {
+  if (error instanceof WorkspaceProjectCompatibilityError) {
     return {
       code: 'filesystem_error',
       message: 'Megumi could not use that project folder.',

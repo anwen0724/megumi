@@ -4,7 +4,7 @@ import fs from 'fs-extra';
 import { createToolCallRunner } from '../agent-loop/tool-call';
 import type { AgentLoopRepository } from '../persistence/repos/agent-loop.repo';
 import type { ToolCallRepository } from '../persistence/repos/tool-call.repo';
-import type { WorkspaceChangeRepository } from '../persistence/repos/workspace-change.repo';
+import type { WorkspaceChangeRepository } from '../workspace/repositories/workspace-change-repository';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
 import type { PermissionSettingsProvider } from '../permissions/permission-settings-provider';
 import {

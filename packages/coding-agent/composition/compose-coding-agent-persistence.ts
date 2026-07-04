@@ -5,9 +5,9 @@ import { ArtifactRepository } from '../persistence/repos/artifact.repo';
 import { MemoryRepository } from '../persistence/repos/memory.repo';
 import { SessionRepository } from '../persistence/repos/session.repo';
 import { ToolCallRepository } from '../persistence/repos/tool-call.repo';
-import { WorkspaceChangeRepository } from '../persistence/repos/workspace-change.repo';
-import { WorkspaceRepository } from '../persistence/repos/workspace.repo';
 import { migrateCodingAgentDatabase } from '../persistence/schema';
+import { WorkspaceChangeRepository } from '../workspace/repositories/workspace-change-repository';
+import { WorkspaceRepository } from '../workspace/repositories/workspace-repository';
 
 export interface ComposeCodingAgentPersistenceInput {
   sqlitePath: string;
