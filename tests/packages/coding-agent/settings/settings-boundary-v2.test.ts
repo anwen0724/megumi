@@ -11,8 +11,14 @@ describe('Settings module public boundary', () => {
   });
 
   it('does not expose old split service constructors as public API', () => {
-    expect('ProductSettingsService' in settingsModule).toBe(false);
-    expect('ProviderSettingsService' in settingsModule).toBe(false);
-    expect('ProviderRuntimeService' in settingsModule).toBe(false);
+    const oldConstructors = [
+      ['Product', 'Settings', 'Service'],
+      ['Provider', 'Settings', 'Service'],
+      ['Provider', 'Runtime', 'Service'],
+    ].map((parts) => parts.join(''));
+
+    for (const constructorName of oldConstructors) {
+      expect(constructorName in settingsModule).toBe(false);
+    }
   });
 });

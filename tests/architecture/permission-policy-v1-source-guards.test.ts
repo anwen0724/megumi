@@ -42,11 +42,12 @@ describe('permission policy v1 source guards', () => {
     expect(allowIndex).toBeGreaterThan(hardGuardIndex);
   });
 
-  it('keeps project settings locations explicit', () => {
-    const settings = read('apps/desktop/src/main/services/security/permission-settings.service.ts');
+  it('keeps permission settings owned by Coding Agent Settings Service', () => {
+    const settings = read('packages/coding-agent/settings/services/settings-service.ts');
+    const desktopComposition = read('apps/desktop/src/main/shell-composition/desktop-main-composition.ts');
 
-    expect(settings).toContain("'.megumi'");
-    expect(settings).toContain("'settings.json'");
-    expect(settings).toContain("'settings.local.json'");
+    expect(settings).toContain('resolvePermissionSettings');
+    expect(settings).toContain('addPermissionRule');
+    expect(desktopComposition).not.toContain('permissionSettingsProvider');
   });
 });
