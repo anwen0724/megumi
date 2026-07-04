@@ -7,7 +7,7 @@ import {
 } from '@megumi/shared';
 import type { RuntimeError } from '@megumi/shared/runtime';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import type { WorkspaceChangeFooterFact } from '@megumi/shared/workspace';
+import type { WorkspaceChangeFooterFact } from '../workspace/workspace-change-footer-projector';
 
 export interface ChatStreamEventSink {
   publish(event: ChatStreamEvent): void;
@@ -184,7 +184,7 @@ class ChatStreamEventAdapterImpl implements ChatStreamEventAdapter {
       ...this.base(createdAt),
       eventType: 'workspace.change.footer.updated',
       footer,
-    }));
+    } as never));
   }
 
   handleRuntimeEvent(event: RuntimeEvent): void {

@@ -36,9 +36,15 @@ describe('composed session runtime workspace sources', () => {
     try {
       const agentLoopRepository = persistence.agentLoopRepository as any;
       const sessionRepository = persistence.sessionRepository as any;
-      const workspace = persistence.workspaceRepository.upsertFromRepoPath({
-        repoPath: home,
-        now: '2026-06-24T00:00:00.000Z',
+      const workspace = persistence.workspaceRepository.insertOrUpdateWorkspace({
+        workspace_id: 'workspace:test',
+        name: path.basename(home),
+        root_path: home,
+        root_path_key: process.platform === 'win32' ? path.resolve(home).toLowerCase() : path.resolve(home),
+        status: 'available',
+        created_at: '2026-06-24T00:00:00.000Z',
+        updated_at: '2026-06-24T00:00:00.000Z',
+        last_opened_at: '2026-06-24T00:00:00.000Z',
       });
       const runtime = composeCodingAgentSessionRuntime({
         homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
@@ -62,7 +68,7 @@ describe('composed session runtime workspace sources', () => {
       const session = sessionRepository.saveSession({
         sessionId: 'session-1',
         title: 'Session',
-        workspaceId: workspace.projectId,
+        workspaceId: workspace.workspace_id,
         workspacePath: home,
         status: 'active',
         createdAt: '2026-06-24T00:00:00.000Z',
@@ -80,7 +86,7 @@ describe('composed session runtime workspace sources', () => {
 
       const sources = runtime.runContextService.listWorkspaceSources({
         runId: 'run-1',
-        workspaceId: workspace.projectId,
+        workspaceId: workspace.workspace_id,
         workspacePath: home,
       });
 

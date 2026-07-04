@@ -28,10 +28,10 @@ function createRepositories() {
   db.prepare(`
     INSERT INTO workspaces (
       workspace_id, name, root_path, root_path_key, status,
-      created_at, updated_at, last_opened_at, metadata_json
+      created_at, updated_at, last_opened_at
     ) VALUES (
       'workspace:default', 'Default', 'C:/workspaces/default', 'c:/workspaces/default', 'available',
-      '2026-06-14T00:00:00.000Z', '2026-06-14T00:00:00.000Z', '2026-06-14T00:00:00.000Z', NULL
+      '2026-06-14T00:00:00.000Z', '2026-06-14T00:00:00.000Z', '2026-06-14T00:00:00.000Z'
     )
   `).run();
   const modelCallRepository = new AgentLoopRepository(db);

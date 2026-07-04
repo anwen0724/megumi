@@ -199,7 +199,7 @@ function resolveReadablePath(projectRoot: string, targetPath: string): {
   absolutePath: string;
   relativePath: string;
 } {
-  const classification = classifyProjectPath({
+  const classification = classifyWorkspacePath({
     workspace_root: projectRoot,
     target_path: targetPath,
   });

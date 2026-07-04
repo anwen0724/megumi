@@ -103,6 +103,7 @@ import type {
   MemoryRecallPort,
 } from '../../memory';
 import { resolveMemoryEnabled, type MemorySettingsPort } from '../../settings';
+import type { WorkspaceChangedFile } from '../../workspace';
 import { SessionRunControlService } from '../../state/session-run-control-service';
 import { toModelPermissionSnapshot } from '../../permissions';
 import type {
@@ -178,7 +179,7 @@ export interface AgentRunServiceIds {
 }
 
 export interface WorkspaceChangeReadPort {
-  listChangedFilesByRunId(runId: string): unknown[];
+  listChangedFilesByRunId(runId: string): WorkspaceChangedFile[];
 }
 
 export interface UserInputHandlerPort {

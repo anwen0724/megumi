@@ -349,7 +349,7 @@ export class SessionRepository {
       parent_entry_id: parsed.parentSourceEntryId ?? null,
       entry_type: databaseEntryType(parsed.sourceRef.sourceKind),
       message_id: parsed.sourceRef.sourceKind === 'session_message' ? parsed.sourceRef.sourceId : null,
-      compaction_id: parsed.sourceRef.sourceKind === 'session_compaction' ? parsed.sourceRef.sourceId : null,
+      compaction_id: null,
       created_at: parsed.createdAt,
     });
     return parsed;

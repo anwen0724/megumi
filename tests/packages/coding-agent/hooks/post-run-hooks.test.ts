@@ -17,9 +17,9 @@ describe('post-run hooks coordinator', () => {
         listRuntimeEventsByRun: () => [toolResultEvent('Large tool result that should be summarized.')],
       },
       workspaceChanges: {
-        listChangedFilesByRun: () => [
-          { projectPath: 'AGENTS.md' },
-          { projectPath: 'src/app.ts' },
+        listChangedFilesByRunId: () => [
+          { workspace_path: 'AGENTS.md' },
+          { workspace_path: 'src/app.ts' },
         ] as never,
       },
     });
