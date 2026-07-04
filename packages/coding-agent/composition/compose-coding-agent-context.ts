@@ -15,6 +15,7 @@ import {
   type ModelConfig,
   type PromptLogPort,
 } from '../context';
+import type { SessionService } from '../session';
 
 export type DeveloperPromptLogger = {
   debug(event_name: 'context.prompt.built', payload: Parameters<PromptLogPort['writePrompt']>[0]): void;
@@ -49,7 +50,7 @@ export function createContextUsageSignalBus(): ContextUsageSignalBus {
 }
 
 export function composeCodingAgentContext(input: {
-  sessionRepository: ConstructorParameters<typeof ContextRepository>[0]['sessionRepository'];
+  sessionService: Pick<SessionService, 'getActiveHistory' | 'saveCompactionSummary'>;
   runtimeEventRepository: ConstructorParameters<typeof ContextRepository>[0]['runtimeEventRepository'];
   agentInstructionSourceService?: ContextInstructionSourcePort;
   summaryModelCallPort: ContextSummaryModelCallPort;
@@ -59,7 +60,7 @@ export function composeCodingAgentContext(input: {
   const contextUsageSignalBus = createContextUsageSignalBus();
   const internalAutoCompactionSubscriptionIds = new Set<string>();
   const contextRepository = new ContextRepository({
-    sessionRepository: input.sessionRepository,
+    sessionService: input.sessionService,
     runtimeEventRepository: input.runtimeEventRepository,
   });
   const systemPromptText = loadPromptResource('system-prompt.md');

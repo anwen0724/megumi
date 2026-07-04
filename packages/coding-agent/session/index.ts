@@ -5,5 +5,4 @@
 export * from './contracts/session-contracts';
 export {
   createSessionService,
-  DefaultSessionService,
 } from './services/session-service';

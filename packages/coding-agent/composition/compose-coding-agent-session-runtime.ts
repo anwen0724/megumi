@@ -65,7 +65,7 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     workspaceSourceProvider: createLocalWorkspaceSourceProvider(),
   });
   const contextRuntime = composeCodingAgentContext({
-    sessionRepository,
+    sessionService,
     runtimeEventRepository: options.agentLoopRepository as any,
     summaryModelCallPort: {
       async completePrompt({ prompt }) {

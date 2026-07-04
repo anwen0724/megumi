@@ -178,6 +178,23 @@ describe('SessionService', () => {
     });
   });
 
+  it('fails active path reads for missing sessions instead of returning empty history', () => {
+    const { service } = createService();
+
+    expect(service.getActivePath({ session_id: 'missing' })).toMatchObject({
+      status: 'failed',
+      failure: { code: 'session_not_found' },
+    });
+    expect(service.listMessages({ session_id: 'missing', active_path_only: true })).toMatchObject({
+      status: 'failed',
+      failure: { code: 'session_not_found' },
+    });
+    expect(service.getActiveHistory({ session_id: 'missing' })).toMatchObject({
+      status: 'failed',
+      failure: { code: 'session_not_found' },
+    });
+  });
+
   it('fails when appending an invalid message entry shape through service', async () => {
     const { service, workspaceId } = createService();
     await service.createSession({

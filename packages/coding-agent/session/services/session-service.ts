@@ -47,7 +47,7 @@ export function createSessionService(options: CreateSessionServiceOptions): Sess
   return new DefaultSessionService(options);
 }
 
-export class DefaultSessionService implements SessionService {
+class DefaultSessionService implements SessionService {
   constructor(private readonly options: CreateSessionServiceOptions) {}
 
   createSession(request: CreateSessionRequest): CreateSessionResult {
@@ -177,8 +177,11 @@ export class DefaultSessionService implements SessionService {
     try {
       const messages = request.active_path_only
         ? this.messagesForActivePath(request.session_id)
-        : this.options.repository.listMessagesBySessionId(request.session_id);
-      return { status: 'ok', messages: this.attachmentsForMessages(messages) };
+        : { status: 'ok' as const, messages: this.options.repository.listMessagesBySessionId(request.session_id) };
+      if (messages.status === 'failed') {
+        return messages;
+      }
+      return { status: 'ok', messages: this.attachmentsForMessages(messages.messages) };
     } catch (error) {
       return failed(error);
     }
@@ -186,7 +189,7 @@ export class DefaultSessionService implements SessionService {
 
   getActivePath(request: GetActivePathRequest): GetActivePathResult {
     try {
-      return { status: 'ok', entries: this.activePath(request.session_id) };
+      return this.activePath(request.session_id);
     } catch (error) {
       return failed(error);
     }
@@ -194,7 +197,11 @@ export class DefaultSessionService implements SessionService {
 
   getActiveHistory(request: GetActiveHistoryRequest): GetActiveHistoryResult {
     try {
-      const path = this.activePath(request.session_id);
+      const activePath = this.activePath(request.session_id);
+      if (activePath.status === 'failed') {
+        return activePath;
+      }
+      const path = activePath.entries;
       const messages = this.options.repository.listMessagesByIds(path.flatMap((entry) => entry.message_id ? [entry.message_id] : []));
       const messagesById = new Map(messages.map((message) => [message.message_id, message]));
       const attachmentsByMessageId = groupAttachments(this.options.repository.listAttachmentsByMessageIds([...messagesById.keys()]));
@@ -332,26 +339,39 @@ export class DefaultSessionService implements SessionService {
     }
   }
 
-  private activePath(sessionId: string): SessionEntry[] {
+  private activePath(sessionId: string): GetActivePathResult {
     const session = this.options.repository.findSessionById(sessionId);
-    return buildActivePath({
+    if (!session) {
+      return {
+        status: 'failed',
+        failure: { code: 'session_not_found', message: `Session ${sessionId} was not found` },
+      };
+    }
+    return {
+      status: 'ok',
+      entries: buildActivePath({
       session_id: sessionId,
-      active_entry_id: session?.active_entry_id,
+      active_entry_id: session.active_entry_id,
       entries: this.options.repository.listEntriesBySessionId(sessionId),
-    });
+      }),
+    };
   }
 
-  private messagesForActivePath(sessionId: string) {
-    const messageIds = this.activePath(sessionId).flatMap((entry) => (
+  private messagesForActivePath(sessionId: string): { status: 'ok'; messages: ReturnType<SessionRepository['listMessagesByIds']> } | Extract<ListMessagesResult, { status: 'failed' }> {
+    const activePath = this.activePath(sessionId);
+    if (activePath.status === 'failed') {
+      return activePath;
+    }
+    const messageIds = activePath.entries.flatMap((entry) => (
       entry.entry_type === 'message' && entry.message_id ? [entry.message_id] : []
     ));
     const messagesById = new Map(
       this.options.repository.listMessagesByIds(messageIds).map((message) => [message.message_id, message]),
     );
-    return messageIds.flatMap((messageId) => {
+    return { status: 'ok', messages: messageIds.flatMap((messageId) => {
       const message = messagesById.get(messageId);
       return message ? [message] : [];
-    });
+    }) };
   }
 
   private attachmentsForMessages(messages: ReturnType<SessionRepository['listMessagesByIds']>): SessionMessageWithAttachments[] {

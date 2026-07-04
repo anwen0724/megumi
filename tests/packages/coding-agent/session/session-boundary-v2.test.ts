@@ -30,6 +30,8 @@ describe('session module boundary v2', () => {
 
     expect(source).toContain("export * from './contracts/session-contracts'");
     expect(source).toContain("from './services/session-service'");
+    expect(source).toContain('createSessionService');
+    expect(source).not.toContain('DefaultSessionService');
     expect(source).not.toContain('./core/');
     expect(source).not.toContain('./repositories/');
   });
