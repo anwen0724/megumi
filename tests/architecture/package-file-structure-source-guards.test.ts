@@ -155,6 +155,24 @@ describe('package and file structure source guards', () => {
     ])).toEqual([]);
   });
 
+  it('keeps Permissions on its v2 public service boundary', () => {
+    expect(offenders(filesUnder('packages/coding-agent/permissions'), [
+      /@megumi\/shared\/permission\b/,
+      /@megumi\/shared\/tool\b/,
+      /permission-snapshot-service/,
+      /run-permission-snapshot/,
+      /permission-settings-provider/,
+    ])).toEqual([]);
+
+    const externalPermissionTests = filesUnder('tests/packages/coding-agent/permissions')
+      .filter((path) => !path.endsWith('permissions-boundary-v2.test.ts'));
+
+    expect(offenders(externalPermissionTests, [
+      /packages\/coding-agent\/permissions\/core/,
+      /@megumi\/coding-agent\/permissions\/core/,
+    ])).toEqual([]);
+  });
+
   it('removes the temporary input command compatibility shim after input foundation migration', () => {
     expect(existsSync(join(repoRoot, 'packages/shared/input-command'))).toBe(false);
   });
