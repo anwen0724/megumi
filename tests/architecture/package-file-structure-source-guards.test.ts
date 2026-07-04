@@ -259,6 +259,20 @@ describe('package and file structure source guards', () => {
     expect(existsSync(join(repoRoot, 'packages/coding-agent/persistence/repos/session-run.repo.ts'))).toBe(false);
   });
 
+  it('keeps Workspace on the v2 public service surface', () => {
+    const workspaceIndex = read('packages/coding-agent/workspace/index.ts');
+
+    expect(existsSync(join(repoRoot, 'packages/coding-agent/workspace/workspace-restore.ts'))).toBe(false);
+    expect(workspaceIndex).toContain('createWorkspaceService');
+    expect(workspaceIndex).toContain('createWorkspacePathPolicyService');
+    expect(workspaceIndex).toContain('createWorkspaceChangeService');
+    expect(workspaceIndex).not.toContain('ProjectService');
+    expect(workspaceIndex).not.toContain('createProjectService');
+    expect(workspaceIndex).not.toContain('WorkspaceRestoreService');
+    expect(workspaceIndex).not.toContain('WorkspaceChangeTrackerService');
+    expect(workspaceIndex).not.toContain('workspace-change-footer-projector');
+  });
+
   it('keeps agent-loop lifecycle facts as current agent-loop events, not compat run facts', () => {
     const ownerPath = join(repoRoot, 'packages/coding-agent/persistence/repos/agent-loop.repo.ts');
     const ownerSource = readFileSync(ownerPath, 'utf8');

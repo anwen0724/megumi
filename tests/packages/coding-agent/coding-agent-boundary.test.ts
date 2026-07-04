@@ -82,8 +82,8 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/memory/memory-management-service.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/artifacts/artifact-service.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/artifacts/plan-artifact-compatibility.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/workspace/workspace-change-tracker.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/workspace/workspace-restore.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/workspace/services/workspace-change-service.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/coding-agent/workspace/workspace-restore.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/settings/services/provider-settings.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/settings/services/provider-runtime.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/adapters/local/context/agent-instruction-source.ts'))).toBe(true);
@@ -149,8 +149,9 @@ describe('coding-agent package boundary', () => {
     expect(memory).toContain('createMemoryService');
     expect(artifacts).toContain('class ArtifactService');
     expect(artifacts).toContain('class PlanArtifactCompatibilityService');
-    expect(workspace).toContain('class WorkspaceChangeTrackerService');
-    expect(workspace).toContain('class WorkspaceRestoreService');
+    expect(workspace).toContain('createWorkspaceService');
+    expect(workspace).toContain('createWorkspacePathPolicyService');
+    expect(workspace).toContain('createWorkspaceChangeService');
     expect(settings).toContain('class ProviderSettingsService');
     expect(settings).toContain('class ProviderRuntimeService');
     expect(hostInterface).toContain('input: InputController');
@@ -161,7 +162,6 @@ describe('coding-agent package boundary', () => {
     expect(desktopServices).not.toContain('class MemoryRecallRuntimeService');
     expect(desktopServices).not.toContain('class MemoryRuntimeCaptureService');
     expect(desktopServices).not.toContain('class ArtifactService');
-    expect(desktopServices).not.toContain('class WorkspaceChangeTrackerService');
     expect(desktopServices).not.toContain('class WorkspaceRestoreService');
   });
 
