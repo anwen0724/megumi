@@ -11,7 +11,6 @@ import type {
   ToolCallRunner,
 } from './tool-call-contract';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
-import type { MergedPermissionSettings } from '@megumi/shared/permission';
 import type { PermissionMode } from '@megumi/shared/permission';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type {
@@ -23,10 +22,8 @@ import type {
   ToolResult,
 } from '@megumi/shared/tool';
 import type { WorkspaceChangeService } from '../../workspace';
-import {
-  evaluateToolExecutionDecision,
-  type ToolExecutionDecisionInput,
-} from '../../permissions/tool-execution-decision';
+import type { PermissionService, PermissionSettings, RuntimeCapabilityPolicy } from '../../permissions';
+import type { WorkspacePathPolicyService } from '../../workspace';
 import { resumeToolApproval } from './approval/approval-resume';
 import {
   collectApprovalResumeRuntimeEvents,
@@ -106,9 +103,11 @@ export interface ToolCallRunnerOptions {
   toolRegistryService: Pick<ToolRegistryService, 'getRegisteredTool'>;
   toolExecutionService: Pick<ToolExecutionService, 'executeTool'>;
   workspaceChangeService?: Pick<WorkspaceChangeService, 'trackToolExecution'>;
+  workspacePathPolicyService?: Pick<WorkspacePathPolicyService, 'classifyPath'>;
+  permissionService: Pick<PermissionService, 'evaluateToolExecution' | 'validateApprovalDecision' | 'applyApprovalDecision'>;
   permissionMode: PermissionMode;
   projectRoot: string;
-  settings: MergedPermissionSettings;
+  permissionSettings: PermissionSettings;
   now?: () => string;
   ids?: {
     toolExecutionId(): string;
@@ -119,17 +118,13 @@ export interface ToolCallRunnerOptions {
     observationId(): string;
     eventId?(): string;
   };
-  runtimeCapabilityPolicy?: ToolExecutionDecisionInput['runtimeCapabilityPolicy'];
-  decisionEvaluator?: {
-    evaluate(input: ToolExecutionDecisionInput): ToolExecutionDecision;
-  };
+  runtimeCapabilityPolicy?: RuntimeCapabilityPolicy;
 }
 
 export interface ResolvedToolCallRunnerOptions extends ToolCallRunnerOptions {
   now: () => string;
   ids: NonNullable<ToolCallRunnerOptions['ids']> & { eventId(): string };
-  runtimeCapabilityPolicy: ToolExecutionDecisionInput['runtimeCapabilityPolicy'];
-  decisionEvaluator: NonNullable<ToolCallRunnerOptions['decisionEvaluator']>;
+  runtimeCapabilityPolicy: RuntimeCapabilityPolicy;
 }
 
 type ToolResultModelInputEmissionRepository = NonNullable<Parameters<typeof markToolResultsSubmittedToModelInput>[0]['repository']>;
@@ -390,11 +385,9 @@ function resolveOptions(options: ToolCallRunnerOptions): ResolvedToolCallRunnerO
     now: options.now ?? (() => new Date().toISOString()),
     ids,
     runtimeCapabilityPolicy: options.runtimeCapabilityPolicy ?? {
-      customToolsEnabled: true,
-      processExecutionEnabled: true,
-    },
-    decisionEvaluator: options.decisionEvaluator ?? {
-      evaluate: evaluateToolExecutionDecision,
+      custom_tools_enabled: true,
+      process_execution_enabled: true,
+      network_enabled: true,
     },
   };
 }

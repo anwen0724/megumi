@@ -1,3 +1,7 @@
+/*
+ * Owns runtime permission mode instructions used by state lifecycle prompt setup.
+ * This is not part of the Permissions Service boundary.
+ */
 import type { PermissionMode, PermissionModeState } from '@megumi/shared/permission';
 import { PermissionModeSchema } from '@megumi/shared/permission';
 
@@ -56,4 +60,3 @@ export function createPermissionModeRuntimeInstruction(
     instruction: 'Default mode: read-only project context may proceed; writes and commands require ask-first policy handling.',
   };
 }
-

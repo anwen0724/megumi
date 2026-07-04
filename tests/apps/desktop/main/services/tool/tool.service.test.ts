@@ -109,8 +109,10 @@ describe('ApprovalResolutionService desktop integration surface', () => {
     expect(resumeApproval).toHaveBeenCalledWith({
       approvalRequestId: 'approval-request-1',
       decision: 'approved',
+      scope: 'once',
       decidedAt: '2026-05-20T00:00:03.000Z',
       reason: 'Looks fine',
+      approvalRequest,
     });
     expect(events).toEqual([expect.objectContaining({
       eventType: 'approval.resolved',

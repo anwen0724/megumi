@@ -50,7 +50,6 @@ describe('composed runtime project service', () => {
       } as never,
       appSettingsProvider: appSettingsProvider(),
       memorySettingsProvider: { isMemoryEnabled: () => false },
-      permissionSettingsProvider: { loadForProject: async () => ({ allow: [], ask: [], deny: [] }) },
     });
 
     expect(await runtime.workspace.useExistingProject()).toEqual({ cancelled: true });
@@ -69,7 +68,6 @@ describe('composed runtime project service', () => {
       } as never,
       appSettingsProvider: appSettingsProvider(),
       memorySettingsProvider: { isMemoryEnabled: () => false },
-      permissionSettingsProvider: { loadForProject: async () => ({ allow: [], ask: [], deny: [] }) },
       directoryPicker: { chooseDirectory: async () => ({ canceled: false, filePaths: [home!] }) },
     });
 

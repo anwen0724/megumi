@@ -76,7 +76,6 @@ function composeRuntime(home: string): CodingAgentHostInterface {
     } as never,
     appSettingsProvider: appSettingsProvider(),
     memorySettingsProvider: { isMemoryEnabled: () => false },
-    permissionSettingsProvider: { loadForProject: async () => ({ allow: [], ask: [], deny: [] }) },
   });
 }
 

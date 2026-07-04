@@ -4,7 +4,7 @@ import type {
   SessionMessageSendData,
   SessionMessageSendPayload,
 } from '@megumi/shared/ipc';
-import type { PermissionMode, PermissionModeState, PermissionSnapshotRecord } from '@megumi/shared/permission';
+import type { PermissionMode, PermissionModeState } from '@megumi/shared/permission';
 import type { ProviderId } from '@megumi/shared/provider';
 import type { RuntimeContext, RuntimeError, RuntimeEvent } from '@megumi/shared/runtime';
 import type {
@@ -24,14 +24,9 @@ import {
   type SessionMessageInputMessage,
 } from './agent-run-session-message';
 import {
-  createRunPermissionSnapshot,
-  type RunPermissionSnapshotServicePort,
-} from '../../permissions';
-import {
   canResumeApprovalFromRunStatus,
   failAgentLoopBeforeModelCall,
   type RunTerminalCoordinatorPort,
-  attachRunPermissionSnapshot,
   startAgentLoopRun,
   ActiveSessionMessageRunTracker,
   type RunRetryActivePathRepositoryPort,
@@ -105,7 +100,6 @@ import type {
 import { resolveMemoryEnabled, type MemorySettingsPort } from '../../settings';
 import type { WorkspaceChangeService } from '../../workspace';
 import { SessionRunControlService } from '../../state/session-run-control-service';
-import { toModelPermissionSnapshot } from '../../permissions';
 import type {
   CommandAgentRunInput,
   CommandExecutionContext,
@@ -254,7 +248,6 @@ export interface RunUserInputAgentLoopInput {
   currentUserMessage: SessionMessageInputMessage;
   permissionMode: PermissionMode;
   inputPreprocessing: InputPreprocessingResult;
-  permissionSnapshot?: PermissionSnapshotRecord;
   chatStreamAdapter?: ChatStreamEventAdapter;
   parsedInput?: ParsedInput;
 }
@@ -266,7 +259,6 @@ export interface CreateUserInputHandlerOptions {
   activeRuns: ActiveSessionMessageRunTracker<ChatStreamEventAdapter>;
   runRepository: UserInputRunRepository;
   stepRepository: UserInputStepRepository;
-  permissionSnapshotService?: RunPermissionSnapshotServicePort;
   sessionBranchService?: AgentRunSessionBranchServicePort;
   runRetryCoordinator: Pick<RunRetryCoordinatorPort, 'recordManualRerunAttemptForBranchDraft'>;
   chatStreamEventSink?: ChatStreamEventSink;
@@ -643,25 +635,7 @@ async function submitUserInputToAgentLoop(
       },
     },
   });
-  const permissionSnapshot = createRunPermissionSnapshot({
-    service: options.permissionSnapshotService,
-    runId,
-    permissionMode: sessionMessageInput.permissionMode,
-    permissionSource: sessionMessageInput.permissionSource,
-    ...(sessionMessageInput.metadata ? { metadata: sessionMessageInput.metadata } : {}),
-    createdAt,
-  });
-  const run = permissionSnapshot
-    ? attachRunPermissionSnapshot({
-        run: started.run,
-        permissionSnapshotRef: permissionSnapshot.permissionSnapshotRef,
-        lifecycle: {
-          saveRun: (runRecord) => {
-            options.runRepository.saveRun(runRecord);
-          },
-        },
-      })
-    : started.run;
+  const run = started.run;
   const step = started.step;
   const chatStreamAdapter = createChatStreamAdapterForUserInput({
     input,
@@ -711,7 +685,6 @@ async function submitUserInputToAgentLoop(
         currentUserMessage,
         permissionMode: sessionMessageInput.permissionMode,
         inputPreprocessing: sessionMessageInput.inputPreprocessing,
-        ...(permissionSnapshot ? { permissionSnapshot: permissionSnapshot.record } : {}),
         ...(chatStreamAdapter ? { chatStreamAdapter } : {}),
         parsedInput,
       }),
@@ -859,7 +832,6 @@ export interface AgentRunProcessingServiceOptions {
   contextService?: RunBaselineContextPort;
   promptContextService?: Pick<ContextService, 'getSessionContext' | 'buildPrompt'>;
   contextUsageMonitor?: Pick<ContextUsageMonitor, 'start' | 'refreshSession'>;
-  permissionSnapshotService?: RunPermissionSnapshotServicePort;
   planArtifactService?: PlanArtifactServicePort;
   modelCallProvider?: ModelCallProvider;
   toolRuntimeFactory?: ToolRuntimeFactory;
@@ -997,7 +969,6 @@ export class AgentRunProcessingService {
   private readonly contextService?: RunBaselineContextPort;
   private readonly promptContextService?: Pick<ContextService, 'getSessionContext' | 'buildPrompt'>;
   private readonly contextUsageMonitor?: Pick<ContextUsageMonitor, 'start' | 'refreshSession'>;
-  private readonly permissionSnapshotService?: RunPermissionSnapshotServicePort;
   private readonly planArtifactService?: PlanArtifactServicePort;
   private readonly modelCallProvider?: ModelCallProvider;
   private readonly toolRuntimeFactory?: ToolRuntimeFactory;
@@ -1036,7 +1007,6 @@ export class AgentRunProcessingService {
     this.contextService = options.contextService;
     this.promptContextService = options.promptContextService;
     this.contextUsageMonitor = options.contextUsageMonitor;
-    this.permissionSnapshotService = options.permissionSnapshotService;
     this.planArtifactService = options.planArtifactService;
     this.modelCallProvider = options.modelCallProvider;
     this.toolRuntimeFactory = options.toolRuntimeFactory;
@@ -1069,7 +1039,6 @@ export class AgentRunProcessingService {
       activeRuns: this.activeSessionMessageRuns,
       runRepository: this.agentLoopRepository,
       stepRepository: this.agentLoopRepository,
-      permissionSnapshotService: this.permissionSnapshotService,
       sessionBranchService: options.sessionBranchService,
       runRetryCoordinator: options.runRetryCoordinator,
       chatStreamEventSink: options.chatStreamEventSink,
@@ -1175,14 +1144,6 @@ export class AgentRunProcessingService {
   async startRun(payload: RunStartPayload): Promise<{ run: Run; events: RuntimeEvent[] }> {
     const session = this.sessionRepository.getSession(payload.sessionId);
     const runId = this.ids.runId();
-    const permissionSnapshot = createRunPermissionSnapshot({
-      service: this.permissionSnapshotService,
-      runId,
-      permissionMode: payload.mode,
-      ...(payload.permissionModeState ? { permissionModeState: payload.permissionModeState } : {}),
-      ...(payload.sourcePlanId ? { sourcePlanId: payload.sourcePlanId } : {}),
-      createdAt: payload.createdAt,
-    });
 
     const initialContext = createBaselineContextForSession({
       contextService: this.contextService,
@@ -1195,10 +1156,7 @@ export class AgentRunProcessingService {
       sessionId: payload.sessionId,
       ...(payload.triggerMessageId ? { triggerMessageId: payload.triggerMessageId } : {}),
       permissionMode: payload.mode,
-      ...(permissionSnapshot ? {
-        permissionModeState: permissionSnapshot.permissionModeState,
-        permissionSnapshotRef: permissionSnapshot.permissionSnapshotRef,
-      } : payload.permissionModeState ? { permissionModeState: payload.permissionModeState } : {}),
+      ...(payload.permissionModeState ? { permissionModeState: payload.permissionModeState } : {}),
       ...(payload.sourcePlanId ? { sourcePlanId: payload.sourcePlanId } : {}),
       goal: payload.goal,
       clock: this.clock,
@@ -1227,11 +1185,11 @@ export class AgentRunProcessingService {
       hostBoundary: this.hostBoundary,
     });
 
-    if (permissionSnapshot && this.planArtifactService && result.run.status === 'completed') {
+    if (payload.permissionModeState && this.planArtifactService && result.run.status === 'completed') {
       this.planArtifactService.createPlanRecordForRun({
         runId,
         goal: payload.goal,
-        permissionModeState: permissionSnapshot.permissionModeState,
+        permissionModeState: payload.permissionModeState,
         createdAt: result.run.completedAt ?? payload.createdAt,
       });
     }
@@ -1382,10 +1340,6 @@ export class AgentRunProcessingService {
       permissionMode: input.permissionMode,
       inputPreprocessing: input.inputPreprocessing,
       ...(input.parsedInput ? { parsedInput: input.parsedInput } : {}),
-      ...(input.permissionSnapshot ? {
-        permissionSnapshot: toModelPermissionSnapshot(input.permissionSnapshot, input.payload.createdAt),
-        permissionSnapshotRef: input.permissionSnapshot.permissionSnapshotId,
-      } : {}),
       ...(input.runtimeContext ? { runtimeContext: input.runtimeContext } : {}),
       createdAt: input.payload.createdAt,
       memoryEnabled: resolveMemoryEnabled(this.memorySettingsProvider),

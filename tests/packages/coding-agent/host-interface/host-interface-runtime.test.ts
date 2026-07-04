@@ -54,9 +54,6 @@ describe('Coding Agent host interface runtime', () => {
       memorySettingsProvider: {
         isMemoryEnabled: () => false,
       },
-      permissionSettingsProvider: {
-        loadForProject: async () => ({ allow: [], ask: [], deny: [] }),
-      },
     });
 
     expect(runtime.session).toBeDefined();
@@ -109,9 +106,6 @@ describe('Coding Agent host interface runtime', () => {
       memorySettingsProvider: {
         isMemoryEnabled: () => false,
       },
-      permissionSettingsProvider: {
-        loadForProject: async () => ({ allow: [], ask: [], deny: [] }),
-      },
     });
 
     const result = runtime.settings.update({
@@ -154,9 +148,6 @@ describe('Coding Agent host interface runtime', () => {
       memorySettingsProvider: {
         isMemoryEnabled: () => false,
       },
-      permissionSettingsProvider: {
-        loadForProject: async () => ({ allow: [], ask: [], deny: [] }),
-      },
     });
 
     runtime.settings.update({
@@ -195,9 +186,6 @@ describe('Coding Agent host interface runtime', () => {
       memorySettingsProvider: {
         isMemoryEnabled: () => false,
       },
-      permissionSettingsProvider: {
-        loadForProject: async () => ({ allow: [], ask: [], deny: [] }),
-      },
     });
 
     expect(runtime.settings.get().settings.setup.completed).toBe(true);
@@ -224,9 +212,6 @@ describe('Coding Agent host interface runtime', () => {
       },
       memorySettingsProvider: {
         isMemoryEnabled: () => false,
-      },
-      permissionSettingsProvider: {
-        loadForProject: async () => ({ allow: [], ask: [], deny: [] }),
       },
     });
 

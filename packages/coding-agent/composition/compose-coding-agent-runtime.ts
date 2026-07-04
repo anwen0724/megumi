@@ -41,6 +41,7 @@ import {
   createWorkspacePathPolicyService,
   createWorkspaceService,
 } from '../workspace';
+import { createPermissionService } from '../permissions';
 import type { DirectoryPickerPort } from '../host-interface/workspace/workspace-controller';
 import { createLocalSettingsJsonStorage } from '../adapters/local/settings/settings-json-storage';
 import {
@@ -57,7 +58,6 @@ export interface ComposeCodingAgentRuntimeOptions {
   modelCallProviderService?: ModelCallProvider;
   appSettingsProvider?: unknown;
   memorySettingsProvider?: MemorySettingsPort;
-  permissionSettingsProvider?: unknown;
   chatStreamEventSink?: Parameters<typeof composeCodingAgentSessionRuntime>[0]['chatStreamEventSink'];
   workspaceChangeFooterProjector?: Parameters<typeof composeCodingAgentSessionRuntime>[0]['workspaceChangeFooterProjector'];
   // Optional UI-shell hooks for project lifecycle. Omitted in standalone/non-UI
@@ -110,13 +110,24 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     path_policy: workspacePathPolicyService,
     file_system: workspaceFileSystem,
   });
+  const permissionService = createPermissionService({
+    settings_service: {
+      addPermissionRule(request) {
+        return settingsService.addPermissionRule({
+          rule: request.rule,
+          session_id: request.session_id,
+        });
+      },
+    },
+  });
   const toolRuntimeFactory = composeCodingAgentToolRuntimeFactory({
     toolRepository: toolCallRepository,
     toolRegistry,
     workspaceChangeService,
     workspacePathPolicyService,
     runRepository: agentLoopRepository,
-    permissionSettingsResolver: resolvePermissionSettingsResolver(options.permissionSettingsProvider) ?? settingsService,
+    permissionService,
+    permissionSettingsResolver: settingsService,
   });
   // Persist committed timeline history in the product, forwarding events to any
   // caller-provided sink (e.g. the desktop UI bridge) downstream. This keeps
@@ -276,12 +287,6 @@ function hasSettingsServiceShape(value: unknown): value is SettingsService {
     && 'resolvePermissionSettings' in value
     && 'getResolvedSettings' in value,
   );
-}
-
-function resolvePermissionSettingsResolver(value: unknown): Pick<SettingsService, 'resolvePermissionSettings'> | undefined {
-  return Boolean(value && typeof value === 'object' && 'resolvePermissionSettings' in value)
-    ? value as Pick<SettingsService, 'resolvePermissionSettings'>
-    : undefined;
 }
 
 export function composeCodingAgentHostInterface(

@@ -103,12 +103,6 @@ export interface StartAgentLoopRunResult {
   step: RunStep;
 }
 
-export interface AttachRunPermissionSnapshotInput {
-  run: Run;
-  permissionSnapshotRef: string;
-  lifecycle: Pick<RunLifecycleSink, 'saveRun'>;
-}
-
 export interface FailAgentLoopBeforeModelCallInput {
   requestId: string;
   runtimeContext?: RuntimeContext;

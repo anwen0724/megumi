@@ -2,7 +2,7 @@
 import type { ModelInputContext, ModelStepProviderState, ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { PermissionMode } from '@megumi/shared/permission';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import type { ApprovalRequest, ToolCall, ToolExecution, ToolResult } from '@megumi/shared/tool';
+import type { ApprovalRequest, ApprovalScope, ToolCall, ToolExecution, ToolResult } from '@megumi/shared/tool';
 
 export interface PendingToolApproval {
   approvalRequest: ApprovalRequest;
@@ -38,8 +38,10 @@ export interface ToolRuntimeFactory {
 export interface ResumeToolApprovalInput {
   approvalRequestId: string;
   decision: 'approved' | 'denied';
+  scope?: ApprovalScope;
   decidedAt: string;
   reason?: string;
+  approvalRequest?: ApprovalRequest;
 }
 
 export interface ResumeToolApprovalOutcome {

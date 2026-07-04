@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  attachRunPermissionSnapshot,
   cancelAgentLoopModelCall,
   completeAgentLoopModelCall,
   failAgentLoopBeforeModelCall,
@@ -98,32 +97,6 @@ describe('run runtime lifecycle events', () => {
     });
     expect(sink.saveRun).toHaveBeenCalledWith(result.run);
     expect(sink.saveStep).toHaveBeenCalledWith(result.step);
-  });
-
-  it('attaches a permission snapshot ref to an already started run through the state owner', () => {
-    const { sink } = createSink();
-    const run = {
-      runId: 'run-1',
-      sessionId: 'session-1',
-      triggerMessageId: 'message-1',
-      mode: 'default',
-      goal: 'Answer the user',
-      status: 'running',
-      createdAt: '2026-05-15T00:00:00.000Z',
-      startedAt: '2026-05-15T00:00:00.000Z',
-    } as const;
-
-    const updated = attachRunPermissionSnapshot({
-      run,
-      permissionSnapshotRef: 'permission-snapshot-1',
-      lifecycle: sink,
-    });
-
-    expect(updated).toEqual({
-      ...run,
-      permissionSnapshotRef: 'permission-snapshot-1',
-    });
-    expect(sink.saveRun).toHaveBeenCalledWith(updated);
   });
 
   it('fails an agent loop run before the first model call through the state owner', () => {

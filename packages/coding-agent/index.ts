@@ -8,7 +8,7 @@ export * from './state';
 export * from './context';
 export * from './hooks';
 export * from './tools';
-export * from './permissions';
+export * as permissions from './permissions';
 export * from './memory';
 export * from './artifacts';
 export * from './workspace';

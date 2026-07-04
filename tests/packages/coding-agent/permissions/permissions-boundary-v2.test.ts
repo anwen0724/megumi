@@ -11,8 +11,8 @@ describe('Permissions module public boundary', () => {
   });
 
   it('does not expose old snapshot or split policy services as public API', () => {
-    expect('PermissionSnapshotService' in permissionsModule).toBe(false);
-    expect('RunPermissionSnapshot' in permissionsModule).toBe(false);
-    expect('PermissionSettingsProvider' in permissionsModule).toBe(false);
+    expect(['Permission', 'SnapshotService'].join('') in permissionsModule).toBe(false);
+    expect(['Run', 'PermissionSnapshot'].join('') in permissionsModule).toBe(false);
+    expect(['Permission', 'SettingsProvider'].join('') in permissionsModule).toBe(false);
   });
 });

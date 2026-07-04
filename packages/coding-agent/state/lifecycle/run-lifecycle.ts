@@ -43,7 +43,6 @@ import {
   toCheckpointCreatedPayload,
 } from '../recovery-observation-mapper';
 import {
-  type AttachRunPermissionSnapshotInput,
   type CancelAgentLoopModelCallResult,
   type CompleteAgentLoopModelCallResult,
   type FailAgentLoopBeforeModelCallInput,
@@ -64,7 +63,7 @@ import {
 import {
   createPermissionModeRuntimeInstruction,
   resolvePermissionModeState,
-} from '../../permissions/permission-instruction';
+} from './permission-mode-runtime-instruction';
 
 export function startAgentLoopRun(input: StartAgentLoopRunInput): StartAgentLoopRunResult {
   const run: Run = {
@@ -90,16 +89,6 @@ export function startAgentLoopRun(input: StartAgentLoopRunInput): StartAgentLoop
   input.lifecycle.saveRun(run);
   input.lifecycle.saveStep(step);
   return { run, step };
-}
-
-export function attachRunPermissionSnapshot(input: AttachRunPermissionSnapshotInput): Run {
-  const run = {
-    ...input.run,
-    permissionSnapshotRef: input.permissionSnapshotRef,
-  };
-
-  input.lifecycle.saveRun(run);
-  return run;
 }
 
 export function failAgentLoopBeforeModelCall(

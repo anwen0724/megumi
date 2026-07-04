@@ -52,7 +52,7 @@ describe('Desktop Main shell composition', () => {
     expect(persistenceComposition).not.toContain('new SessionRunRepository(database)');
     expect(sessionComposition).toContain('new AgentRunProcessingService');
     expect(sessionComposition).toContain('createInputService');
-    expect(sessionComposition).toContain('new PermissionSnapshotService');
+    expect(productComposition).toContain('createPermissionService');
     expect(toolComposition).toContain('createToolCallRunner');
     expect(toolComposition).toContain('new ToolExecutionService');
     expect(toolComposition).toContain('createBuiltInToolAdapter');

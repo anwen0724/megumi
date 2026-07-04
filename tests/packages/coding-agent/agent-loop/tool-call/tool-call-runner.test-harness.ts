@@ -1,5 +1,6 @@
 ﻿import { vi } from 'vitest';
 import { createToolCallRunner } from '@megumi/coding-agent/agent-loop/tool-call';
+import type { PermissionDecision as ServicePermissionDecision } from '@megumi/coding-agent/permissions';
 import { ToolRegistryService, type ToolExecutionResult } from '@megumi/coding-agent/tools';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type {
@@ -26,13 +27,25 @@ export function createToolCallRunnerHarness(input: {
     toolExecutionService: executor.service,
     permissionMode: 'default',
     projectRoot: 'C:/project',
-    settings: { allow: [], ask: [], deny: [] },
-    decisionEvaluator: {
-      evaluate: () => decisions.shift() ?? allowParallel('read_file'),
+    permissionSettings: { allow: [], ask: [], deny: [] },
+    permissionService: {
+      evaluateToolExecution: () => ({
+        status: 'ok',
+        decision: serviceDecisionFromLegacy(decisions.shift() ?? allowParallel('read_file')),
+      }),
+      validateApprovalDecision: () => ({ status: 'accepted' }),
+      applyApprovalDecision: async () => ({
+        status: 'applied',
+        permission_state_change: { type: 'none' },
+      }),
     },
     ids: createDeterministicIds(),
     now: () => '2026-06-15T00:00:00.000Z',
-    runtimeCapabilityPolicy: { customToolsEnabled: false, processExecutionEnabled: true },
+    runtimeCapabilityPolicy: {
+      custom_tools_enabled: false,
+      process_execution_enabled: true,
+      network_enabled: true,
+    },
   });
   return {
     toolCallHandler,
@@ -40,6 +53,45 @@ export function createToolCallRunnerHarness(input: {
     executor,
     recordsByCallOrder: () => repository.records().sort((a, b) => (a.callOrder ?? 0) - (b.callOrder ?? 0)),
   };
+}
+
+function serviceDecisionFromLegacy(decision: ToolExecutionDecision): ServicePermissionDecision {
+  const executionClass = serviceExecutionClass(decision.executionClass);
+  if (decision.outcome === 'allow') {
+    return {
+      type: 'allow',
+      reason: decision.reason,
+      execution_class: executionClass,
+    };
+  }
+  if (decision.outcome === 'requireApproval') {
+    return {
+      type: 'requires_approval',
+      reason: decision.reason,
+      execution_class: executionClass,
+      approval: {
+        allowed_scopes: ['once', 'session'],
+        default_scope: 'once',
+      },
+    };
+  }
+  return {
+    type: 'deny',
+    reason: decision.reason,
+    execution_class: executionClass,
+    denial_code: decision.reasonCode === 'PATH_OUTSIDE_WORKSPACE'
+      ? 'outside_workspace'
+      : 'policy_denied',
+  };
+}
+
+function serviceExecutionClass(
+  executionClass: ToolExecutionDecision['executionClass'],
+): ServicePermissionDecision['execution_class'] {
+  if (executionClass === 'readOnly') return 'read_only';
+  if (executionClass === 'workspaceMutation') return 'workspace_mutation';
+  if (executionClass === 'processExecution') return 'process_execution';
+  return 'unknown';
 }
 
 export function createHandleInput(toolCalls: readonly ToolCall[]) {

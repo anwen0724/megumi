@@ -54,9 +54,6 @@ describe('Coding Agent host interface built-in model step provider', () => {
       memorySettingsProvider: {
         isMemoryEnabled: () => false,
       },
-      permissionSettingsProvider: {
-        loadForProject: async () => ({ allow: [], ask: [], deny: [] }),
-      },
     });
 
     expect(runtime.session).toBeDefined();

@@ -1075,7 +1075,10 @@ export async function* resumeToolApprovalAgentLoop<TProjection>(
     return;
   }
 
-  const resumeOutcome = await approvalResume.toolRuntime.resumeToolApproval(input.resumeInput);
+  const resumeOutcome = await approvalResume.toolRuntime.resumeToolApproval({
+    ...input.resumeInput,
+    approvalRequest: pending.pendingApproval.approvalRequest,
+  });
   if (!resumeOutcome) {
     return;
   }
@@ -1099,7 +1102,7 @@ export async function* resumeToolApprovalAgentLoop<TProjection>(
     sequence: lastSequence += 1,
     approvalRequestId: input.resumeInput.approvalRequestId,
     decision: input.resumeInput.decision,
-    scope: pending.pendingApproval.approvalRequest.requestedScope,
+    scope: input.resumeInput.scope ?? pending.pendingApproval.approvalRequest.requestedScope,
     decidedAt: input.resumeInput.decidedAt,
     ids: input.ids,
   });

@@ -5,8 +5,8 @@ import { createToolCallRunner } from '../agent-loop/tool-call';
 import type { AgentLoopRepository } from '../persistence/repos/agent-loop.repo';
 import type { ToolCallRepository } from '../persistence/repos/tool-call.repo';
 import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
-import type { MergedPermissionSettings } from '@megumi/shared/permission';
 import type { SettingsService } from '../settings';
+import type { PermissionService, PermissionSettings } from '../permissions';
 import {
   ToolExecutionService,
   ToolRegistryService,
@@ -156,6 +156,7 @@ export function composeCodingAgentToolRuntimeFactory(input: {
   workspaceChangeService: Pick<WorkspaceChangeService, 'trackToolExecution'>;
   workspacePathPolicyService: WorkspacePathPolicyService;
   runRepository: AgentLoopRepository;
+  permissionService: Pick<PermissionService, 'evaluateToolExecution' | 'validateApprovalDecision' | 'applyApprovalDecision'>;
   permissionSettingsResolver: Pick<SettingsService, 'resolvePermissionSettings'>;
 }): ToolRuntimeFactory {
   return {
@@ -189,9 +190,11 @@ export function composeCodingAgentToolRuntimeFactory(input: {
           workspacePathPolicyService: input.workspacePathPolicyService,
         }),
         workspaceChangeService: input.workspaceChangeService,
+        workspacePathPolicyService: input.workspacePathPolicyService,
+        permissionService: input.permissionService,
         permissionMode,
         projectRoot,
-        settings: resolveToolPermissionSettings(input.permissionSettingsResolver, projectRoot),
+        permissionSettings: resolveToolPermissionSettings(input.permissionSettingsResolver, projectRoot),
         ids: {
           toolExecutionId: () => `tool-execution:${crypto.randomUUID()}`,
           toolResultId: () => `tool-result:${crypto.randomUUID()}`,
@@ -209,26 +212,13 @@ export function composeCodingAgentToolRuntimeFactory(input: {
 function resolveToolPermissionSettings(
   settings: Pick<SettingsService, 'resolvePermissionSettings'>,
   projectRoot: string,
-): MergedPermissionSettings {
+): PermissionSettings {
   const result = settings.resolvePermissionSettings({ workspace_id: projectRoot });
   if (result.status === 'failed') {
     throw new Error(result.failure.message);
   }
 
-  return {
-    allow: result.permission_settings.allow.map((rule) => ({
-      scope: rule.source === 'user' ? 'user' : rule.source === 'workspace' ? 'project' : 'local',
-      pattern: rule.pattern,
-    })),
-    ask: result.permission_settings.ask.map((rule) => ({
-      scope: rule.source === 'user' ? 'user' : rule.source === 'workspace' ? 'project' : 'local',
-      pattern: rule.pattern,
-    })),
-    deny: result.permission_settings.deny.map((rule) => ({
-      scope: rule.source === 'user' ? 'user' : rule.source === 'workspace' ? 'project' : 'local',
-      pattern: rule.pattern,
-    })),
-  };
+  return result.permission_settings;
 }
 
 function resolveReadablePath(

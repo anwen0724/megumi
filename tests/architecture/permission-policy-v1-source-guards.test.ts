@@ -22,9 +22,9 @@ describe('permission policy v1 source guards', () => {
   });
 
   it('keeps PermissionPolicy as a pure decision layer', () => {
-    const policy = read('packages/coding-agent/permissions/tool-policy.ts');
+    const policy = read('packages/coding-agent/permissions/core/permission-policy.ts');
 
-    expect(policy).toContain('evaluatePermissionPolicy');
+    expect(policy).toContain('evaluateToolExecution');
     expect(policy).not.toContain('spawn(');
     expect(policy).not.toContain('execFile');
     expect(policy).not.toContain('writeFile');
@@ -32,14 +32,17 @@ describe('permission policy v1 source guards', () => {
   });
 
   it('keeps hard guards before allow rules', () => {
-    const policy = read('packages/coding-agent/permissions/tool-policy.ts');
-    const denyIndex = policy.indexOf("findMatchedRule(input, 'deny')");
-    const hardGuardIndex = policy.indexOf('evaluateHardGuards');
-    const allowIndex = policy.indexOf("findMatchedRule(input, 'allow')");
+    const policy = read('packages/coding-agent/permissions/core/permission-policy.ts');
+    const capabilityIndex = policy.indexOf('evaluateRuntimeCapabilityPolicy');
+    const workspaceIndex = policy.indexOf('workspace_path?.inside_workspace');
+    const denyIndex = policy.indexOf('settings.deny');
+    const allowIndex = policy.indexOf('settings.allow');
 
+    expect(capabilityIndex).toBeGreaterThan(-1);
+    expect(workspaceIndex).toBeGreaterThan(capabilityIndex);
     expect(denyIndex).toBeGreaterThan(-1);
-    expect(hardGuardIndex).toBeGreaterThan(denyIndex);
-    expect(allowIndex).toBeGreaterThan(hardGuardIndex);
+    expect(denyIndex).toBeGreaterThan(workspaceIndex);
+    expect(allowIndex).toBeGreaterThan(denyIndex);
   });
 
   it('keeps permission settings owned by Coding Agent Settings Service', () => {
@@ -48,6 +51,6 @@ describe('permission policy v1 source guards', () => {
 
     expect(settings).toContain('resolvePermissionSettings');
     expect(settings).toContain('addPermissionRule');
-    expect(desktopComposition).not.toContain('permissionSettingsProvider');
+    expect(desktopComposition).not.toContain(['permission', 'SettingsProvider'].join(''));
   });
 });

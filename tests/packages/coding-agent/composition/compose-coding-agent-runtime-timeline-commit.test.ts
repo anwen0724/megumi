@@ -122,7 +122,6 @@ describe('Coding Agent host interface timeline history commit', () => {
       modelCallProviderService: answeringModelStepProvider(),
       appSettingsProvider: appSettingsProvider(),
       memorySettingsProvider: { isMemoryEnabled: () => false },
-      permissionSettingsProvider: { loadForProject: async () => ({ allow: [], ask: [], deny: [] }) },
     });
 
     const sessionId = await sendOneMessage(runtime, project.projectId, project.repoPath);
@@ -146,7 +145,6 @@ describe('Coding Agent host interface timeline history commit', () => {
       modelCallProviderService: answeringModelStepProvider(),
       appSettingsProvider: appSettingsProvider(),
       memorySettingsProvider: { isMemoryEnabled: () => false },
-      permissionSettingsProvider: { loadForProject: async () => ({ allow: [], ask: [], deny: [] }) },
       chatStreamEventSink: { publish: (event) => forwarded.push(event) },
     });
 

@@ -71,7 +71,7 @@ describe('built-in tools and host adapters source guards', () => {
     const runRecord = functionSection(executionRecord, 'runToolExecutionRecord', 'observationFromExecutionResult');
 
     expect(applyDecision).toContain('permissionDecisionForRecord');
-    expect(applyDecision).toContain('decisionEvaluator.evaluate');
+    expect(applyDecision).toContain('permissionService.evaluateToolExecution');
     expect(applyDecision).toContain("decision.outcome === 'requireApproval'");
     expect(applyDecision).toContain("decision.outcome === 'reject'");
     expect(runRecord).toContain('toolExecutionService.executeTool');
@@ -98,7 +98,8 @@ describe('built-in tools and host adapters source guards', () => {
     expect(rejectApprovedRecord).toContain('createRejectionObservation');
     expect(approvedQueueIndex).toBeGreaterThan(saveApprovalIndex);
     expect(advanceIndex).toBeGreaterThan(approvedQueueIndex);
-    expect(resumeToolApproval).not.toContain('decisionEvaluator.evaluate');
+    expect(resumeToolApproval).toContain('validateApprovalDecision');
+    expect(resumeToolApproval).toContain('applyApprovalDecision');
   });
 
   it('does not introduce MCP, bypass permissions, or TaskIntent into built-in execution', () => {

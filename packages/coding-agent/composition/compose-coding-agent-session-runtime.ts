@@ -1,5 +1,4 @@
 // Composes session-owned services with the product input runtime.
-import { PermissionSnapshotService } from '../permissions/permission-snapshot-service';
 import { RunContextService } from '../agent-loop/run-context';
 import { createLocalWorkspaceSourceProvider } from '../adapters/local/run-context/workspace-source-provider';
 import { createInputService } from '../input';
@@ -109,9 +108,6 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
   const planArtifactCompatibility = new PlanArtifactCompatibilityService({
     repository: options.artifactRepository,
   });
-  const permissionSnapshotService = new PermissionSnapshotService({
-    repository: options.agentLoopRepository,
-  });
   const planArtifactService = new PlanArtifactService({
     repository: options.agentLoopRepository,
     planArtifactCompatibility,
@@ -164,7 +160,6 @@ export function composeCodingAgentSessionRuntime(options: ComposeCodingAgentSess
     contextUsageMonitor: contextRuntime.contextUsageMonitor,
     activePathRepository: options.sessionRepository,
     sessionBranchService,
-    permissionSnapshotService,
     planArtifactService,
     contextService: runContextService,
     modelCallProvider: options.modelCallProviderService,

@@ -94,13 +94,13 @@ describe('agent action permission tools v1 final source guards', () => {
 
   it('keeps first-version policy decisions to allow ask deny only', () => {
     const toolContracts = read('packages/shared/tool/contracts.ts');
-    const securityPolicy = read('packages/coding-agent/permissions/tool-policy.ts');
+    const permissionContracts = read('packages/coding-agent/permissions/contracts/permission-contracts.ts');
 
     expect(toolContracts).toContain("['allow', 'ask', 'deny']");
     expect(toolContracts).not.toContain('require_sandbox');
     expect(toolContracts).not.toContain('require_stronger_approval');
-    expect(securityPolicy).not.toContain('require_sandbox');
-    expect(securityPolicy).not.toContain('require_stronger_approval');
+    expect(permissionContracts).toContain("'requires_approval'");
+    expect(permissionContracts).not.toContain('require_stronger_approval');
   });
 
   it('keeps renderer and preload away from Host tool execution', () => {

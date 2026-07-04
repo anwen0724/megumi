@@ -1,7 +1,7 @@
 // Resolves tool approval decisions for host interfaces and resumes the agent loop when needed.
 import type { ApprovalResolveData, ApprovalResolvePayload } from '@megumi/shared/ipc';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import type { ApprovalRecord, ApprovalRequest } from '@megumi/shared/tool';
+import type { ApprovalRecord, ApprovalRequest, ApprovalScope } from '@megumi/shared/tool';
 
 export interface ApprovalResolutionRepository {
   getApprovalRequest(approvalRequestId: string): ApprovalRequest | undefined;
@@ -12,8 +12,10 @@ export interface ApprovalResolutionRepository {
 export interface ApprovalResumeInput {
   approvalRequestId: string;
   decision: 'approved' | 'denied';
+  scope: ApprovalScope;
   decidedAt: string;
   reason?: string;
+  approvalRequest: ApprovalRequest;
 }
 
 export interface ApprovalResolutionServiceOptions {
@@ -66,8 +68,10 @@ export class ApprovalResolutionService implements ApprovalResolutionPort {
       events: this.options.resumeApproval?.({
         approvalRequestId: request.approvalRequestId,
         decision: payload.decision,
+        scope: payload.scope,
         decidedAt: approval.decidedAt,
         ...(payload.reason ? { reason: payload.reason } : {}),
+        approvalRequest: request,
       }),
     };
   }

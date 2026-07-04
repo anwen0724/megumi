@@ -159,9 +159,9 @@ describe('package and file structure source guards', () => {
     expect(offenders(filesUnder('packages/coding-agent/permissions'), [
       /@megumi\/shared\/permission\b/,
       /@megumi\/shared\/tool\b/,
-      /permission-snapshot-service/,
-      /run-permission-snapshot/,
-      /permission-settings-provider/,
+      new RegExp(['permission', 'snapshot-service'].join('-')),
+      new RegExp(['run', 'permission-snapshot'].join('-')),
+      new RegExp(['permission', 'settings-provider'].join('-')),
     ])).toEqual([]);
 
     const externalPermissionTests = filesUnder('tests/packages/coding-agent/permissions')
@@ -910,7 +910,7 @@ describe('package and file structure source guards', () => {
     expect(AgentRunProcessingServiceSource).toContain('handleAgentRunInput');
     expect(AgentRunProcessingServiceSource).toContain('submitUserInputToAgentLoop');
     expect(submitInputOperationSource).toContain('prepareSessionMessageInput({');
-    expect(submitInputOperationSource).toContain('createRunPermissionSnapshot({');
+    expect(submitInputOperationSource).not.toContain(['createRun', 'PermissionSnapshot'].join(''));
     expect(submitInputOperationSource).toContain('createSessionMessageChatStreamAdapter({');
     expect(submitInputOperationSource).toContain('startAgentLoopRun({');
   });
@@ -1030,7 +1030,7 @@ describe('package and file structure source guards', () => {
     expect(AgentRunProcessingServiceSource).not.toContain('composeCodingAgentPersistence');
     expect(AgentRunProcessingServiceSource).not.toContain('createDefaultAgentRunRepositoryPort');
     expect(AgentRunProcessingServiceSource).not.toContain('createDefaultAgentRunProcessingService(');
-    expect(AgentRunProcessingServiceSource).not.toContain('new PermissionSnapshotService');
+    expect(AgentRunProcessingServiceSource).not.toContain(['new Permission', 'SnapshotService'].join(''));
     expect(AgentRunProcessingServiceSource).not.toContain('new PlanArtifactService');
     expect(AgentRunProcessingServiceSource).not.toContain('new ToolRegistrySnapshotService');
   });

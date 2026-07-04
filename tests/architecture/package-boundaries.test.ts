@@ -303,10 +303,9 @@ describe('package dependency boundaries', () => {
 
     expect(runnerSource).toContain('ToolCallRunner');
     expect(runnerSource).toContain('ToolApprovalResumePort');
-    expect(runnerSource).toContain('evaluateToolExecutionDecision');
+    expect(runnerSource).toContain('permissionService');
     expect(runnerSource).toContain('toolExecutionService');
-    expect(approvalSource).toContain('evaluatePermissionPolicy');
-    expect(approvalSource).toContain('decisionEvaluator.evaluate');
+    expect(approvalSource).toContain('evaluateToolExecution');
     expect(`${runnerSource}\n${approvalSource}`).not.toContain('createBuiltInToolSourceExecutor');
     expect(`${runnerSource}\n${approvalSource}`).not.toContain('fs-extra');
     expect(`${runnerSource}\n${approvalSource}`).not.toContain('child_process');

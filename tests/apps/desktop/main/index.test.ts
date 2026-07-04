@@ -79,19 +79,6 @@ const mocks = vi.hoisted(() => {
       isDestroyed: vi.fn(() => false),
       webContents: { send: vi.fn() },
     })),
-    PermissionSnapshotService: vi.fn(function PermissionSnapshotService(
-      this: { options?: unknown },
-      options: unknown,
-    ) {
-      this.options = options;
-      return {
-        createPermissionSnapshot: vi.fn(),
-        linkAcceptedSourcePlan: vi.fn(),
-        createPlanRecordForRun: vi.fn(),
-        getPlanByRun: vi.fn(),
-        updatePlanStatus: vi.fn(),
-      };
-    }),
     SessionRunService: vi.fn(function SessionRunService(
       this: { options?: unknown },
       options: unknown,
@@ -392,10 +379,6 @@ vi.mock('@megumi/coding-agent/composition', () => ({
   composeCodingAgentPersistence: mocks.composeCodingAgentPersistence,
 }));
 
-vi.mock('@megumi/desktop/main/services/security/permission-snapshot.service', () => ({
-  PermissionSnapshotService: mocks.PermissionSnapshotService,
-}));
-
 vi.mock('@megumi/desktop/main/services/artifact/artifact-content-store.service', () => ({
   ArtifactContentStore: mocks.ArtifactContentStore,
 }));
@@ -433,7 +416,6 @@ describe('main runtime logger composition', () => {
     mocks.registerRuntimeProcessErrorHandlers.mockClear();
     mocks.registerAppLifecycle.mockClear();
     mocks.createMainWindow.mockClear();
-    mocks.PermissionSnapshotService.mockClear();
     mocks.SessionRunService.mockClear();
     mocks.createModelCallRunner.mockClear();
     mocks.ProviderSettingsService.mockClear();
