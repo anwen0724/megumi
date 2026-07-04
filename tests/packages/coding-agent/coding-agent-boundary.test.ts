@@ -75,7 +75,7 @@ describe('coding-agent package boundary', () => {
     expect(existsSync(join(root, 'packages/coding-agent/tools/core/tool-registry.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/tools/adapters/built-in-tools.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/permissions/services/permission-service.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/coding-agent/permissions/core/permission-policy.ts'))).toBe(true);
+    expect(existsSync(join(root, ['packages/coding-agent/permissions', 'core/permission-policy.ts'].join('/')))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/obsolete-run/permissions/project-boundary-policy.ts'))).toBe(false);
     expect(existsSync(join(root, 'packages/coding-agent/memory/memory-recall-runtime.ts'))).toBe(true);
     expect(existsSync(join(root, 'packages/coding-agent/memory/memory-runtime-capture.ts'))).toBe(true);

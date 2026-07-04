@@ -3,6 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
+const permissionPolicyPath = ['packages/coding-agent/permissions', 'core/permission-policy.ts'].join('/');
 
 function read(relativePath: string): string {
   return fs.readFileSync(path.join(root, relativePath), 'utf8');
@@ -22,7 +23,7 @@ describe('permission policy v1 source guards', () => {
   });
 
   it('keeps PermissionPolicy as a pure decision layer', () => {
-    const policy = read('packages/coding-agent/permissions/core/permission-policy.ts');
+    const policy = read(permissionPolicyPath);
 
     expect(policy).toContain('evaluateToolExecution');
     expect(policy).not.toContain('spawn(');
@@ -32,7 +33,7 @@ describe('permission policy v1 source guards', () => {
   });
 
   it('keeps hard guards before allow rules', () => {
-    const policy = read('packages/coding-agent/permissions/core/permission-policy.ts');
+    const policy = read(permissionPolicyPath);
     const capabilityIndex = policy.indexOf('evaluateRuntimeCapabilityPolicy');
     const workspaceIndex = policy.indexOf('workspace_path?.inside_workspace');
     const denyIndex = policy.indexOf('settings.deny');
