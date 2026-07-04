@@ -8,7 +8,6 @@ const expectedProductTables = [
   'workspaces',
   'sessions',
   'session_entries',
-  'session_leaf_changes',
   'session_messages',
   'session_message_attachments',
   'session_compactions',
@@ -19,9 +18,6 @@ const expectedProductTables = [
   'approval_requests',
   'workspace_changes',
   'workspace_changed_files',
-  'workspace_file_snapshots',
-  'workspace_restore_operations',
-  'workspace_restore_file_results',
   'memory_records',
   'memory_markdown_mirrors',
   'artifacts',
@@ -44,6 +40,12 @@ describe('Drizzle schema target table list', () => {
       applyCodingAgentDatabaseMigrations(database);
 
       expect(tables(database)).toContain('session_message_attachments');
+      expect(tables(database)).not.toEqual(expect.arrayContaining([
+        'session_leaf_changes',
+        'workspace_file_snapshots',
+        'workspace_restore_operations',
+        'workspace_restore_file_results',
+      ]));
       expect(columns(database, 'session_messages')).toEqual(expect.arrayContaining([
         'message_id',
         'session_id',
@@ -53,7 +55,70 @@ describe('Drizzle schema target table list', () => {
         'created_at',
         'completed_at',
       ]));
+      expect(columns(database, 'session_messages')).not.toEqual(expect.arrayContaining([
+        'status',
+        'blocks_json',
+        'metadata_json',
+      ]));
       expect(columns(database, 'session_entries')).toContain('entry_type');
+      expect(columns(database, 'session_entries')).not.toEqual(expect.arrayContaining([
+        'entry_kind',
+        'target_entry_id',
+        'metadata_json',
+      ]));
+      expect(columns(database, 'session_compactions')).not.toEqual(expect.arrayContaining([
+        'status',
+        'token_count_before',
+        'token_count_after',
+        'completed_at',
+        'error_json',
+        'metadata_json',
+      ]));
+      expect(columns(database, 'workspaces')).toEqual(expect.arrayContaining([
+        'workspace_id',
+        'name',
+        'root_path',
+        'root_path_key',
+        'status',
+        'created_at',
+        'updated_at',
+        'last_opened_at',
+      ]));
+      expect(columns(database, 'workspaces')).not.toContain('metadata_json');
+      expect(columns(database, 'workspace_changes')).toEqual(expect.arrayContaining([
+        'change_set_id',
+        'workspace_id',
+        'session_id',
+        'run_id',
+        'status',
+        'changed_file_count',
+        'created_at',
+        'finalized_at',
+      ]));
+      expect(columns(database, 'workspace_changes')).not.toEqual(expect.arrayContaining([
+        'change_id',
+        'metadata_json',
+      ]));
+      expect(columns(database, 'workspace_changed_files')).toEqual(expect.arrayContaining([
+        'changed_file_id',
+        'change_set_id',
+        'workspace_path',
+        'change_kind',
+        'created_at',
+      ]));
+      expect(columns(database, 'workspace_changed_files')).not.toEqual(expect.arrayContaining([
+        'change_id',
+        'path',
+        'restore_state',
+        'before_exists',
+        'before_snapshot_id',
+        'before_hash',
+        'after_exists',
+        'after_snapshot_id',
+        'after_hash',
+        'updated_at',
+        'metadata_json',
+      ]));
       expect(columns(database, 'session_message_attachments')).toEqual(expect.arrayContaining([
         'attachment_id',
         'message_id',
@@ -82,26 +147,6 @@ describe('Drizzle schema target table list', () => {
           from: 'compaction_id',
           table: 'session_compactions',
           to: 'compaction_id',
-          onDelete: 'SET NULL',
-        },
-        {
-          from: 'target_entry_id',
-          table: 'session_entries',
-          to: 'entry_id',
-          onDelete: 'SET NULL',
-        },
-      ]));
-      expect(foreignKeys(database, 'session_leaf_changes')).toEqual(expect.arrayContaining([
-        {
-          from: 'previous_entry_id',
-          table: 'session_entries',
-          to: 'entry_id',
-          onDelete: 'SET NULL',
-        },
-        {
-          from: 'next_entry_id',
-          table: 'session_entries',
-          to: 'entry_id',
           onDelete: 'SET NULL',
         },
       ]));

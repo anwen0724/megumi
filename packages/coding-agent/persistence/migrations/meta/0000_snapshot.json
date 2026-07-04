@@ -1739,13 +1739,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "summary_text": {
           "name": "summary_text",
           "type": "text",
@@ -1767,46 +1760,11 @@
           "notNull": false,
           "autoincrement": false
         },
-        "token_count_before": {
-          "name": "token_count_before",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "token_count_after": {
-          "name": "token_count_after",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
-        },
-        "completed_at": {
-          "name": "completed_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "error_json": {
-          "name": "error_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "metadata_json": {
-          "name": "metadata_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         }
       },
@@ -1816,14 +1774,6 @@
           "columns": [
             "session_id",
             "created_at"
-          ],
-          "isUnique": false
-        },
-        "idx_session_compactions_session_status": {
-          "name": "idx_session_compactions_session_status",
-          "columns": [
-            "session_id",
-            "status"
           ],
           "isUnique": false
         }
@@ -1871,13 +1821,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "entry_kind": {
-          "name": "entry_kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "message_id": {
           "name": "message_id",
           "type": "text",
@@ -1892,25 +1835,11 @@
           "notNull": false,
           "autoincrement": false
         },
-        "target_entry_id": {
-          "name": "target_entry_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
-        },
-        "metadata_json": {
-          "name": "metadata_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         }
       },
@@ -1928,14 +1857,6 @@
           "columns": [
             "session_id",
             "parent_entry_id"
-          ],
-          "isUnique": false
-        },
-        "idx_session_entries_kind": {
-          "name": "idx_session_entries_kind",
-          "columns": [
-            "session_id",
-            "entry_kind"
           ],
           "isUnique": false
         },
@@ -1975,114 +1896,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "session_leaf_changes": {
-      "name": "session_leaf_changes",
-      "columns": {
-        "leaf_change_id": {
-          "name": "leaf_change_id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "session_id": {
-          "name": "session_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "previous_entry_id": {
-          "name": "previous_entry_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "next_entry_id": {
-          "name": "next_entry_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "reason": {
-          "name": "reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "metadata_json": {
-          "name": "metadata_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "idx_session_leaf_changes_session_created": {
-          "name": "idx_session_leaf_changes_session_created",
-          "columns": [
-            "session_id",
-            "created_at"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "session_leaf_changes_session_id_sessions_session_id_fk": {
-          "name": "session_leaf_changes_session_id_sessions_session_id_fk",
-          "tableFrom": "session_leaf_changes",
-          "tableTo": "sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "session_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "session_leaf_changes_previous_entry_id_session_entries_entry_id_fk": {
-          "name": "session_leaf_changes_previous_entry_id_session_entries_entry_id_fk",
-          "tableFrom": "session_leaf_changes",
-          "tableTo": "session_entries",
-          "columnsFrom": [
-            "previous_entry_id"
-          ],
-          "columnsTo": [
-            "entry_id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "session_leaf_changes_next_entry_id_session_entries_entry_id_fk": {
-          "name": "session_leaf_changes_next_entry_id_session_entries_entry_id_fk",
-          "tableFrom": "session_leaf_changes",
-          "tableTo": "session_entries",
-          "columnsFrom": [
-            "next_entry_id"
-          ],
-          "columnsTo": [
-            "entry_id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "session_messages": {
       "name": "session_messages",
       "columns": {
@@ -2114,25 +1927,11 @@
           "notNull": true,
           "autoincrement": false
         },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "content_text": {
           "name": "content_text",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
-        },
-        "blocks_json": {
-          "name": "blocks_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         },
         "created_at": {
@@ -2144,13 +1943,6 @@
         },
         "completed_at": {
           "name": "completed_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "metadata_json": {
-          "name": "metadata_json",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -2725,74 +2517,11 @@
           "notNull": true,
           "autoincrement": false
         },
-        "change_id": {
-          "name": "change_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "path": {
-          "name": "path",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "change_kind": {
           "name": "change_kind",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
-        },
-        "restore_state": {
-          "name": "restore_state",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "before_exists": {
-          "name": "before_exists",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "before_snapshot_id": {
-          "name": "before_snapshot_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "before_hash": {
-          "name": "before_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "after_exists": {
-          "name": "after_exists",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "after_snapshot_id": {
-          "name": "after_snapshot_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "after_hash": {
-          "name": "after_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         },
         "created_at": {
@@ -2802,18 +2531,18 @@
           "notNull": true,
           "autoincrement": false
         },
-        "updated_at": {
-          "name": "updated_at",
+        "change_set_id": {
+          "name": "change_set_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "metadata_json": {
-          "name": "metadata_json",
+        "workspace_path": {
+          "name": "workspace_path",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         }
       },
@@ -2821,16 +2550,17 @@
         "idx_workspace_changed_files_change": {
           "name": "idx_workspace_changed_files_change",
           "columns": [
-            "change_id"
+            "change_set_id"
           ],
           "isUnique": false
         },
-        "idx_workspace_changed_files_restore_state": {
-          "name": "idx_workspace_changed_files_restore_state",
+        "idx_workspace_changed_files_change_path": {
+          "name": "idx_workspace_changed_files_change_path",
           "columns": [
-            "restore_state"
+            "change_set_id",
+            "workspace_path"
           ],
-          "isUnique": false
+          "isUnique": true
         }
       },
       "foreignKeys": {
@@ -2839,38 +2569,12 @@
           "tableFrom": "workspace_changed_files",
           "tableTo": "workspace_changes",
           "columnsFrom": [
-            "change_id"
+            "change_set_id"
           ],
           "columnsTo": [
-            "change_id"
+            "change_set_id"
           ],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "workspace_changed_files_before_snapshot_id_workspace_file_snapshots_snapshot_id_fk": {
-          "name": "workspace_changed_files_before_snapshot_id_workspace_file_snapshots_snapshot_id_fk",
-          "tableFrom": "workspace_changed_files",
-          "tableTo": "workspace_file_snapshots",
-          "columnsFrom": [
-            "before_snapshot_id"
-          ],
-          "columnsTo": [
-            "snapshot_id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "workspace_changed_files_after_snapshot_id_workspace_file_snapshots_snapshot_id_fk": {
-          "name": "workspace_changed_files_after_snapshot_id_workspace_file_snapshots_snapshot_id_fk",
-          "tableFrom": "workspace_changed_files",
-          "tableTo": "workspace_file_snapshots",
-          "columnsFrom": [
-            "after_snapshot_id"
-          ],
-          "columnsTo": [
-            "snapshot_id"
-          ],
-          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -2881,13 +2585,6 @@
     "workspace_changes": {
       "name": "workspace_changes",
       "columns": {
-        "change_id": {
-          "name": "change_id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
         "workspace_id": {
           "name": "workspace_id",
           "type": "text",
@@ -2937,11 +2634,11 @@
           "notNull": false,
           "autoincrement": false
         },
-        "metadata_json": {
-          "name": "metadata_json",
+        "change_set_id": {
+          "name": "change_set_id",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false,
+          "primaryKey": true,
+          "notNull": true,
           "autoincrement": false
         }
       },
@@ -2998,341 +2695,6 @@
           ],
           "columnsTo": [
             "run_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "workspace_file_snapshots": {
-      "name": "workspace_file_snapshots",
-      "columns": {
-        "snapshot_id": {
-          "name": "snapshot_id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "run_id": {
-          "name": "run_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "path": {
-          "name": "path",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "storage": {
-          "name": "storage",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "encoding": {
-          "name": "encoding",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "sha256": {
-          "name": "sha256",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "byte_length": {
-          "name": "byte_length",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "content_text": {
-          "name": "content_text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "content_ref": {
-          "name": "content_ref",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "metadata_json": {
-          "name": "metadata_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "idx_workspace_file_snapshots_lookup": {
-          "name": "idx_workspace_file_snapshots_lookup",
-          "columns": [
-            "workspace_id",
-            "path",
-            "sha256"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "workspace_file_snapshots_workspace_id_workspaces_workspace_id_fk": {
-          "name": "workspace_file_snapshots_workspace_id_workspaces_workspace_id_fk",
-          "tableFrom": "workspace_file_snapshots",
-          "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "workspace_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "workspace_file_snapshots_run_id_agent_loop_runs_run_id_fk": {
-          "name": "workspace_file_snapshots_run_id_agent_loop_runs_run_id_fk",
-          "tableFrom": "workspace_file_snapshots",
-          "tableTo": "agent_loop_runs",
-          "columnsFrom": [
-            "run_id"
-          ],
-          "columnsTo": [
-            "run_id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "workspace_restore_file_results": {
-      "name": "workspace_restore_file_results",
-      "columns": {
-        "file_result_id": {
-          "name": "file_result_id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "restore_id": {
-          "name": "restore_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "changed_file_id": {
-          "name": "changed_file_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "path": {
-          "name": "path",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "conflict_reason": {
-          "name": "conflict_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "error_json": {
-          "name": "error_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "restored_at": {
-          "name": "restored_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "metadata_json": {
-          "name": "metadata_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "idx_workspace_restore_file_results_restore": {
-          "name": "idx_workspace_restore_file_results_restore",
-          "columns": [
-            "restore_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "workspace_restore_file_results_restore_id_workspace_restore_operations_restore_id_fk": {
-          "name": "workspace_restore_file_results_restore_id_workspace_restore_operations_restore_id_fk",
-          "tableFrom": "workspace_restore_file_results",
-          "tableTo": "workspace_restore_operations",
-          "columnsFrom": [
-            "restore_id"
-          ],
-          "columnsTo": [
-            "restore_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "workspace_restore_file_results_changed_file_id_workspace_changed_files_changed_file_id_fk": {
-          "name": "workspace_restore_file_results_changed_file_id_workspace_changed_files_changed_file_id_fk",
-          "tableFrom": "workspace_restore_file_results",
-          "tableTo": "workspace_changed_files",
-          "columnsFrom": [
-            "changed_file_id"
-          ],
-          "columnsTo": [
-            "changed_file_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "workspace_restore_operations": {
-      "name": "workspace_restore_operations",
-      "columns": {
-        "restore_id": {
-          "name": "restore_id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "change_id": {
-          "name": "change_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "requested_by": {
-          "name": "requested_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "requested_at": {
-          "name": "requested_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "completed_at": {
-          "name": "completed_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "result_json": {
-          "name": "result_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "error_json": {
-          "name": "error_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "metadata_json": {
-          "name": "metadata_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "idx_workspace_restore_operations_change_requested": {
-          "name": "idx_workspace_restore_operations_change_requested",
-          "columns": [
-            "change_id",
-            "requested_at"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "workspace_restore_operations_change_id_workspace_changes_change_id_fk": {
-          "name": "workspace_restore_operations_change_id_workspace_changes_change_id_fk",
-          "tableFrom": "workspace_restore_operations",
-          "tableTo": "workspace_changes",
-          "columnsFrom": [
-            "change_id"
-          ],
-          "columnsTo": [
-            "change_id"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -3399,13 +2761,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
-        },
-        "metadata_json": {
-          "name": "metadata_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         }
       },

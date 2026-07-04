@@ -12,18 +12,11 @@ const root = process.cwd();
 const targetTableSet = new Set<string>(targetDatabaseTables);
 
 const repositoryOwnership = {
-  'workspace.repo.ts': persistenceTableOwnership.workspace.tables,
   'agent-loop.repo.ts': persistenceTableOwnership.agentLoop.tables,
   'tool-call.repo.ts': persistenceTableOwnership.toolCall.tables,
-  'workspace-change.repo.ts': persistenceTableOwnership.workspaceChange.tables,
   'memory.repo.ts': persistenceTableOwnership.memory.tables,
   'artifact.repo.ts': persistenceTableOwnership.artifact.tables,
 } as const;
-
-const legacySessionCompatibilityTables = new Set<string>([
-  ...persistenceTableOwnership.session.tables,
-  ...persistenceTableOwnership.legacySessionCompatibility.tables,
-]);
 
 describe('persistence table ownership', () => {
   it('assigns every target product table to exactly one owner', () => {
@@ -43,14 +36,6 @@ describe('persistence table ownership', () => {
         'session_messages',
         'session_message_attachments',
         'session_compactions',
-      ],
-    });
-
-    expect(persistenceTableOwnership.legacySessionCompatibility).toMatchObject({
-      repository: 'LegacySessionRepository',
-      modulePath: 'packages/coding-agent/persistence/repos/session.repo.ts',
-      tables: [
-        'session_leaf_changes',
       ],
     });
 
@@ -83,14 +68,38 @@ describe('persistence table ownership', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps legacy persistence session repository as compatibility only', () => {
-    const source = fs.readFileSync(
-      path.join(root, 'packages/coding-agent/persistence/repos/session.repo.ts'),
-      'utf8',
-    );
-    const violations = findSqlWrites(source)
-      .filter((write) => !legacySessionCompatibilityTables.has(write.table))
-      .map((write) => `session.repo.ts ${write.operation} ${write.table}`);
+  it('keeps active persistence compatibility repos free of deleted Session and Workspace schema names', () => {
+    const deletedNames = [
+      'session_leaf_changes',
+      'blocks_json',
+      'entry_kind',
+      'target_entry_id',
+      'workspace_file_snapshots',
+      'workspace_restore_operations',
+      'workspace_restore_file_results',
+      'restore_state',
+      'before_exists',
+      'before_snapshot_id',
+      'before_hash',
+      'after_exists',
+      'after_snapshot_id',
+      'after_hash',
+    ];
+    const files = [
+      'packages/coding-agent/session/repositories/session-repository.ts',
+      'packages/coding-agent/persistence/repos/session.repo.ts',
+      'packages/coding-agent/persistence/repos/workspace.repo.ts',
+      'packages/coding-agent/persistence/repos/workspace-change.repo.ts',
+      'packages/coding-agent/persistence/repos/agent-loop.repo.ts',
+      'packages/coding-agent/persistence/schema/table-list.ts',
+      'packages/coding-agent/persistence/schema/table-ownership.ts',
+    ];
+    const violations = files.flatMap((file) => {
+      const source = fs.readFileSync(path.join(root, file), 'utf8');
+      return deletedNames
+        .filter((name) => source.includes(name))
+        .map((name) => `${file} contains ${name}`);
+    });
 
     expect(violations).toEqual([]);
   });

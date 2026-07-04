@@ -14,7 +14,6 @@ import type {
   RunObservation,
   RunStep,
   Session,
-  SessionBranchMarker,
   SessionCompactionEntry,
   SessionMessage,
   SessionInterruptedRunMarker,
@@ -1512,10 +1511,8 @@ interface SessionMessageRow {
   run_id: string | null;
   role: string;
   content_text: string;
-  blocks_json: string | null;
   created_at: string;
   completed_at: string | null;
-  metadata_json: string | null;
 }
 
 interface EventPayloadRow {
@@ -1558,7 +1555,7 @@ export class AgentLoopTimelineMessageMethods {
     sessionId: string;
   }): { messages: TimelineMessage[]; diagnostics: TimelineHydrationDiagnostic[] } {
     const rows = this.database.prepare(`
-      SELECT message_id, session_id, run_id, role, content_text, blocks_json, created_at, completed_at, metadata_json
+      SELECT message_id, session_id, run_id, role, content_text, created_at, completed_at
       FROM session_messages
       WHERE session_id = ?
       ORDER BY created_at ASC, run_id ASC, message_id ASC
@@ -1674,60 +1671,9 @@ function branchSeparatorMessagesBySession(
   database: MegumiDatabase,
   input: { projectId: string; sessionId: string },
 ): TimelineMessage[] {
-  const rows = database.prepare(`
-    SELECT entry_id, message_id, created_at, metadata_json
-    FROM session_entries
-    WHERE session_id = ?
-      AND entry_kind = 'branch_marker'
-    ORDER BY created_at ASC, entry_id ASC
-  `).all(input.sessionId) as Array<{
-    entry_id: string;
-    message_id: string | null;
-    created_at: string;
-    metadata_json: string | null;
-  }>;
-
-  return rows
-    .map((row) => {
-      const marker = parseJson<{ compatBranchMarker?: SessionBranchMarker }>(row.metadata_json)?.compatBranchMarker;
-      const sourceMessageId = marker?.seedSourceRef?.sourceKind === 'session_message'
-        ? marker.seedSourceRef.sourceId
-        : row.message_id;
-      if (!marker || !sourceMessageId) {
-        return undefined;
-      }
-      const sourceMessage = database.prepare('SELECT created_at FROM session_messages WHERE message_id = ?')
-        .get(sourceMessageId) as { created_at: string } | undefined;
-      const label = formatBranchDraftTime(sourceMessage?.created_at ?? marker.createdAt);
-      const message = {
-        messageId: `separator:${marker.branchMarkerId}`,
-        role: 'separator',
-        projectId: input.projectId,
-        sessionId: input.sessionId,
-        createdAt: marker.createdAt,
-        updatedAt: marker.createdAt,
-        blocks: [{
-          blockId: `branch-separator:${marker.branchMarkerId}`,
-          kind: 'branch_separator',
-          branchMarkerId: marker.branchMarkerId,
-          sourceMessageId,
-          label,
-          createdAt: marker.createdAt,
-          updatedAt: marker.createdAt,
-        }],
-      };
-      const parsed = TimelineMessageSchema.safeParse(message);
-      return parsed.success ? parsed.data : undefined;
-    })
-    .filter((message): message is TimelineMessage => Boolean(message));
-}
-
-function formatBranchDraftTime(timestamp: string): string {
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) {
-    return 'Branch from message';
-  }
-  return `Branch from ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  void database;
+  void input;
+  return [];
 }
 
 function parseTimelineMessage(row: SessionMessageRow, projectId: string):
@@ -1735,75 +1681,52 @@ function parseTimelineMessage(row: SessionMessageRow, projectId: string):
   | { ok: false; message: string }
   | { ok: false; skip: true } {
   try {
-    const message = parseJson<{ timelineMessage?: unknown }>(row.metadata_json)?.timelineMessage;
-    if (!message) {
-      if (row.role === 'separator' && row.blocks_json) {
-        const reconstructed = {
-          messageId: row.message_id,
-          projectId,
-          sessionId: row.session_id,
-          role: 'separator',
-          createdAt: row.created_at,
-          updatedAt: row.completed_at ?? row.created_at,
-          blocks: parseJson<unknown[]>(row.blocks_json),
-        };
-        const reconstructedResult = TimelineMessageSchema.safeParse(reconstructed);
-        return reconstructedResult.success
-          ? { ok: true, message: reconstructedResult.data }
-          : { ok: false, message: 'Persisted timeline message failed schema validation.' };
-      }
-      if (row.role === 'user') {
-        const reconstructed = {
-          messageId: row.message_id,
-          projectId,
-          sessionId: row.session_id,
-          role: 'user',
-          runId: row.run_id ?? undefined,
-          createdAt: row.created_at,
-          updatedAt: row.completed_at ?? row.created_at,
-          blocks: row.blocks_json ? parseJson<unknown[]>(row.blocks_json) : [{
-            blockId: `${row.message_id}:text`,
-            kind: 'user_text',
-            text: row.content_text,
-            format: 'plain',
-          }],
-        };
-        const reconstructedResult = TimelineMessageSchema.safeParse(reconstructed);
-        return reconstructedResult.success
-          ? { ok: true, message: reconstructedResult.data }
-          : { ok: false, message: 'Persisted user message failed schema validation.' };
-      }
-      if (row.role === 'assistant' && row.run_id) {
-        const reconstructed = {
-          messageId: row.message_id,
-          projectId,
-          sessionId: row.session_id,
-          role: 'assistant',
+    if (row.role === 'user') {
+      const reconstructed = {
+        messageId: row.message_id,
+        projectId,
+        sessionId: row.session_id,
+        role: 'user',
+        runId: row.run_id ?? undefined,
+        createdAt: row.created_at,
+        updatedAt: row.completed_at ?? row.created_at,
+        blocks: [{
+          blockId: `${row.message_id}:text`,
+          kind: 'user_text',
+          text: row.content_text,
+          format: 'plain',
+        }],
+      };
+      const reconstructedResult = TimelineMessageSchema.safeParse(reconstructed);
+      return reconstructedResult.success
+        ? { ok: true, message: reconstructedResult.data }
+        : { ok: false, message: 'Persisted user message failed schema validation.' };
+    }
+    if (row.role === 'assistant' && row.run_id) {
+      const reconstructed = {
+        messageId: row.message_id,
+        projectId,
+        sessionId: row.session_id,
+        role: 'assistant',
+        runId: row.run_id,
+        createdAt: row.created_at,
+        updatedAt: row.completed_at ?? row.created_at,
+        blocks: [{
+          blockId: `${row.message_id}:answer`,
+          kind: 'answer_text',
           runId: row.run_id,
-          createdAt: row.created_at,
-          updatedAt: row.completed_at ?? row.created_at,
-          blocks: row.blocks_json ? parseJson<unknown[]>(row.blocks_json) : [{
-            blockId: `${row.message_id}:answer`,
-            kind: 'answer_text',
-            runId: row.run_id,
-            textId: `${row.message_id}:answer`,
-            status: 'completed',
-            text: row.content_text,
-            format: 'markdown',
-          }],
-        };
-        const reconstructedResult = TimelineMessageSchema.safeParse(reconstructed);
-        return reconstructedResult.success
-          ? { ok: true, message: reconstructedResult.data }
-          : { ok: false, message: 'Persisted assistant message failed schema validation.' };
-      }
-      return { ok: false, skip: true };
+          textId: `${row.message_id}:answer`,
+          status: 'completed',
+          text: row.content_text,
+          format: 'markdown',
+        }],
+      };
+      const reconstructedResult = TimelineMessageSchema.safeParse(reconstructed);
+      return reconstructedResult.success
+        ? { ok: true, message: reconstructedResult.data }
+        : { ok: false, message: 'Persisted assistant message failed schema validation.' };
     }
-    const result = TimelineMessageSchema.safeParse(message);
-    if (!result.success) {
-      return { ok: false, message: 'Persisted timeline message failed schema validation.' };
-    }
-    return { ok: true, message: result.data };
+    return { ok: false, skip: true };
   } catch {
     return { ok: false, message: 'Persisted timeline message JSON could not be parsed.' };
   }

@@ -60,11 +60,11 @@ export class SessionRepository {
   insertMessage(message: SessionMessage): SessionMessage {
     this.database.prepare(`
       INSERT INTO session_messages (
-        message_id, session_id, run_id, role, status, content_text,
-        created_at, completed_at, metadata_json
+        message_id, session_id, run_id, role, content_text,
+        created_at, completed_at
       ) VALUES (
-        @message_id, @session_id, @run_id, @role, 'completed', @content_text,
-        @created_at, @completed_at, NULL
+        @message_id, @session_id, @run_id, @role, @content_text,
+        @created_at, @completed_at
       )
     `).run(toMessageRow(message));
     return message;
@@ -127,10 +127,10 @@ export class SessionRepository {
     this.database.prepare(`
       INSERT INTO session_entries (
         entry_id, session_id, parent_entry_id, entry_type,
-        message_id, compaction_id, created_at, metadata_json
+        message_id, compaction_id, created_at
       ) VALUES (
         @entry_id, @session_id, @parent_entry_id, @entry_type,
-        @message_id, @compaction_id, @created_at, NULL
+        @message_id, @compaction_id, @created_at
       )
     `).run(toEntryRow(entry));
     return entry;
@@ -175,13 +175,11 @@ export class SessionRepository {
   insertCompactionSummary(compaction: SessionCompactionSummary): SessionCompactionSummary {
     this.database.prepare(`
       INSERT INTO session_compactions (
-        compaction_id, session_id, status, summary_text, covered_until_entry_id,
-        first_kept_entry_id, token_count_before, token_count_after, created_at,
-        completed_at, error_json, metadata_json
+        compaction_id, session_id, summary_text, covered_until_entry_id,
+        first_kept_entry_id, created_at
       ) VALUES (
-        @compaction_id, @session_id, 'completed', @summary_text, @covered_until_entry_id,
-        @first_kept_entry_id, NULL, NULL, @created_at,
-        @created_at, NULL, NULL
+        @compaction_id, @session_id, @summary_text, @covered_until_entry_id,
+        @first_kept_entry_id, @created_at
       )
     `).run(toCompactionRow(compaction));
     return compaction;

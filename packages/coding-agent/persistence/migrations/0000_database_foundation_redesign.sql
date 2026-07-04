@@ -233,69 +233,40 @@ CREATE UNIQUE INDEX `idx_model_calls_run_order` ON `model_calls` (`run_id`,`call
 CREATE TABLE `session_compactions` (
 	`compaction_id` text PRIMARY KEY NOT NULL,
 	`session_id` text NOT NULL,
-	`status` text NOT NULL,
 	`summary_text` text NOT NULL,
 	`covered_until_entry_id` text,
 	`first_kept_entry_id` text,
-	`token_count_before` integer,
-	`token_count_after` integer,
 	`created_at` text NOT NULL,
-	`completed_at` text,
-	`error_json` text,
-	`metadata_json` text,
 	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`session_id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
 CREATE INDEX `idx_session_compactions_session_created` ON `session_compactions` (`session_id`,`created_at`);--> statement-breakpoint
-CREATE INDEX `idx_session_compactions_session_status` ON `session_compactions` (`session_id`,`status`);--> statement-breakpoint
 CREATE TABLE `session_entries` (
 	`entry_id` text PRIMARY KEY NOT NULL,
 	`session_id` text NOT NULL,
 	`parent_entry_id` text,
-	`entry_kind` text,
 	`entry_type` text,
 	`message_id` text,
 	`compaction_id` text,
-	`target_entry_id` text,
 	`created_at` text NOT NULL,
-	`metadata_json` text,
 	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`session_id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`parent_entry_id`) REFERENCES `session_entries`(`entry_id`) ON UPDATE no action ON DELETE set null,
-	FOREIGN KEY (`compaction_id`) REFERENCES `session_compactions`(`compaction_id`) ON UPDATE no action ON DELETE set null,
-	FOREIGN KEY (`target_entry_id`) REFERENCES `session_entries`(`entry_id`) ON UPDATE no action ON DELETE set null
+	FOREIGN KEY (`compaction_id`) REFERENCES `session_compactions`(`compaction_id`) ON UPDATE no action ON DELETE set null
 );
 --> statement-breakpoint
 CREATE INDEX `idx_session_entries_session_created` ON `session_entries` (`session_id`,`created_at`);--> statement-breakpoint
 CREATE INDEX `idx_session_entries_parent` ON `session_entries` (`session_id`,`parent_entry_id`);--> statement-breakpoint
-CREATE INDEX `idx_session_entries_kind` ON `session_entries` (`session_id`,`entry_kind`);--> statement-breakpoint
 CREATE INDEX `idx_session_entries_type` ON `session_entries` (`session_id`,`entry_type`);--> statement-breakpoint
 CREATE INDEX `idx_session_entries_message` ON `session_entries` (`session_id`,`message_id`);--> statement-breakpoint
 CREATE INDEX `idx_session_entries_compaction` ON `session_entries` (`session_id`,`compaction_id`);--> statement-breakpoint
-CREATE TABLE `session_leaf_changes` (
-	`leaf_change_id` text PRIMARY KEY NOT NULL,
-	`session_id` text NOT NULL,
-	`previous_entry_id` text,
-	`next_entry_id` text,
-	`reason` text NOT NULL,
-	`created_at` text NOT NULL,
-	`metadata_json` text,
-	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`session_id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`previous_entry_id`) REFERENCES `session_entries`(`entry_id`) ON UPDATE no action ON DELETE set null,
-	FOREIGN KEY (`next_entry_id`) REFERENCES `session_entries`(`entry_id`) ON UPDATE no action ON DELETE set null
-);
---> statement-breakpoint
-CREATE INDEX `idx_session_leaf_changes_session_created` ON `session_leaf_changes` (`session_id`,`created_at`);--> statement-breakpoint
 CREATE TABLE `session_messages` (
 	`message_id` text PRIMARY KEY NOT NULL,
 	`session_id` text NOT NULL,
 	`run_id` text,
 	`role` text NOT NULL,
-	`status` text NOT NULL,
 	`content_text` text NOT NULL,
-	`blocks_json` text,
 	`created_at` text NOT NULL,
 	`completed_at` text,
-	`metadata_json` text,
 	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`session_id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
@@ -393,28 +364,17 @@ CREATE TABLE `tool_sources` (
 CREATE INDEX `idx_tool_sources_workspace_type_name` ON `tool_sources` (`workspace_id`,`source_type`,`name`);--> statement-breakpoint
 CREATE TABLE `workspace_changed_files` (
 	`changed_file_id` text PRIMARY KEY NOT NULL,
-	`change_id` text NOT NULL,
-	`path` text NOT NULL,
+	`change_set_id` text NOT NULL,
+	`workspace_path` text NOT NULL,
 	`change_kind` text NOT NULL,
-	`restore_state` text NOT NULL,
-	`before_exists` integer NOT NULL,
-	`before_snapshot_id` text,
-	`before_hash` text,
-	`after_exists` integer NOT NULL,
-	`after_snapshot_id` text,
-	`after_hash` text,
 	`created_at` text NOT NULL,
-	`updated_at` text NOT NULL,
-	`metadata_json` text,
-	FOREIGN KEY (`change_id`) REFERENCES `workspace_changes`(`change_id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`before_snapshot_id`) REFERENCES `workspace_file_snapshots`(`snapshot_id`) ON UPDATE no action ON DELETE set null,
-	FOREIGN KEY (`after_snapshot_id`) REFERENCES `workspace_file_snapshots`(`snapshot_id`) ON UPDATE no action ON DELETE set null
+	FOREIGN KEY (`change_set_id`) REFERENCES `workspace_changes`(`change_set_id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `idx_workspace_changed_files_change` ON `workspace_changed_files` (`change_id`);--> statement-breakpoint
-CREATE INDEX `idx_workspace_changed_files_restore_state` ON `workspace_changed_files` (`restore_state`);--> statement-breakpoint
+CREATE INDEX `idx_workspace_changed_files_change` ON `workspace_changed_files` (`change_set_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `idx_workspace_changed_files_change_path` ON `workspace_changed_files` (`change_set_id`,`workspace_path`);--> statement-breakpoint
 CREATE TABLE `workspace_changes` (
-	`change_id` text PRIMARY KEY NOT NULL,
+	`change_set_id` text PRIMARY KEY NOT NULL,
 	`workspace_id` text NOT NULL,
 	`session_id` text NOT NULL,
 	`run_id` text NOT NULL,
@@ -422,7 +382,6 @@ CREATE TABLE `workspace_changes` (
 	`changed_file_count` integer NOT NULL,
 	`created_at` text NOT NULL,
 	`finalized_at` text,
-	`metadata_json` text,
 	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`workspace_id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`session_id`) ON UPDATE no action ON DELETE cascade,
 	FOREIGN KEY (`run_id`) REFERENCES `agent_loop_runs`(`run_id`) ON UPDATE no action ON DELETE cascade
@@ -430,53 +389,6 @@ CREATE TABLE `workspace_changes` (
 --> statement-breakpoint
 CREATE INDEX `idx_workspace_changes_run` ON `workspace_changes` (`run_id`);--> statement-breakpoint
 CREATE INDEX `idx_workspace_changes_workspace_created` ON `workspace_changes` (`workspace_id`,`created_at`);--> statement-breakpoint
-CREATE TABLE `workspace_file_snapshots` (
-	`snapshot_id` text PRIMARY KEY NOT NULL,
-	`workspace_id` text NOT NULL,
-	`run_id` text,
-	`path` text NOT NULL,
-	`storage` text NOT NULL,
-	`encoding` text NOT NULL,
-	`sha256` text NOT NULL,
-	`byte_length` integer NOT NULL,
-	`content_text` text,
-	`content_ref` text,
-	`created_at` text NOT NULL,
-	`metadata_json` text,
-	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`workspace_id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`run_id`) REFERENCES `agent_loop_runs`(`run_id`) ON UPDATE no action ON DELETE set null
-);
---> statement-breakpoint
-CREATE INDEX `idx_workspace_file_snapshots_lookup` ON `workspace_file_snapshots` (`workspace_id`,`path`,`sha256`);--> statement-breakpoint
-CREATE TABLE `workspace_restore_file_results` (
-	`file_result_id` text PRIMARY KEY NOT NULL,
-	`restore_id` text NOT NULL,
-	`changed_file_id` text NOT NULL,
-	`path` text NOT NULL,
-	`status` text NOT NULL,
-	`conflict_reason` text,
-	`error_json` text,
-	`restored_at` text,
-	`metadata_json` text,
-	FOREIGN KEY (`restore_id`) REFERENCES `workspace_restore_operations`(`restore_id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`changed_file_id`) REFERENCES `workspace_changed_files`(`changed_file_id`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
-CREATE INDEX `idx_workspace_restore_file_results_restore` ON `workspace_restore_file_results` (`restore_id`);--> statement-breakpoint
-CREATE TABLE `workspace_restore_operations` (
-	`restore_id` text PRIMARY KEY NOT NULL,
-	`change_id` text NOT NULL,
-	`requested_by` text NOT NULL,
-	`status` text NOT NULL,
-	`requested_at` text NOT NULL,
-	`completed_at` text,
-	`result_json` text,
-	`error_json` text,
-	`metadata_json` text,
-	FOREIGN KEY (`change_id`) REFERENCES `workspace_changes`(`change_id`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
-CREATE INDEX `idx_workspace_restore_operations_change_requested` ON `workspace_restore_operations` (`change_id`,`requested_at`);--> statement-breakpoint
 CREATE TABLE `workspaces` (
 	`workspace_id` text PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
@@ -485,8 +397,7 @@ CREATE TABLE `workspaces` (
 	`status` text NOT NULL,
 	`created_at` text NOT NULL,
 	`updated_at` text NOT NULL,
-	`last_opened_at` text NOT NULL,
-	`metadata_json` text
+	`last_opened_at` text NOT NULL
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `workspaces_root_path_key_unique` ON `workspaces` (`root_path_key`);--> statement-breakpoint

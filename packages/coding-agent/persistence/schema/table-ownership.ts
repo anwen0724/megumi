@@ -12,6 +12,7 @@ export const persistenceTableOwnership = {
   workspace: {
     module: 'workspace',
     repository: 'WorkspaceRepository',
+    modulePath: 'packages/coding-agent/workspace',
     tables: [
       'workspaces',
     ],
@@ -26,14 +27,6 @@ export const persistenceTableOwnership = {
       'session_messages',
       'session_message_attachments',
       'session_compactions',
-    ],
-  },
-  legacySessionCompatibility: {
-    module: 'session',
-    repository: 'LegacySessionRepository',
-    modulePath: 'packages/coding-agent/persistence/repos/session.repo.ts',
-    tables: [
-      'session_leaf_changes',
     ],
   },
   agentLoop: {
@@ -58,12 +51,10 @@ export const persistenceTableOwnership = {
   workspaceChange: {
     module: 'workspace',
     repository: 'WorkspaceChangeRepository',
+    modulePath: 'packages/coding-agent/workspace',
     tables: [
       'workspace_changes',
       'workspace_changed_files',
-      'workspace_file_snapshots',
-      'workspace_restore_operations',
-      'workspace_restore_file_results',
     ],
   },
   memory: {

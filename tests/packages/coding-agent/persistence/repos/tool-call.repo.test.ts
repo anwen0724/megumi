@@ -625,11 +625,11 @@ function toolIdentity() {
 function seedLifecycle(database: Database.Database): void {
   database.exec(`
     INSERT INTO workspaces (
-      workspace_id, name, root_path, root_path_key, status, created_at, updated_at, last_opened_at, metadata_json
+      workspace_id, name, root_path, root_path_key, status, created_at, updated_at, last_opened_at
     ) VALUES (
       'project-1', 'Project 1', 'C:\\workspace\\project-1', 'c:\\workspace\\project-1',
       'available', '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z',
-      '2026-05-16T00:00:00.000Z', NULL
+      '2026-05-16T00:00:00.000Z'
     );
 
     INSERT INTO sessions (

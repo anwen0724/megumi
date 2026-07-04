@@ -21,7 +21,6 @@ export const workspaces = sqliteTable('workspaces', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
   lastOpenedAt: text('last_opened_at').notNull(),
-  metadataJson: jsonText('metadata_json'),
 }, (table) => [
   index('idx_workspaces_last_opened_at').on(table.lastOpenedAt),
 ]);
@@ -45,32 +44,16 @@ export const sessionEntries = sqliteTable('session_entries', {
   entryId: text('entry_id').primaryKey(),
   sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
   parentEntryId: text('parent_entry_id'),
-  entryKind: text('entry_kind'),
   entryType: text('entry_type'),
   messageId: text('message_id'),
   compactionId: text('compaction_id'),
-  targetEntryId: text('target_entry_id'),
   createdAt: text('created_at').notNull(),
-  metadataJson: jsonText('metadata_json'),
 }, (table) => [
   index('idx_session_entries_session_created').on(table.sessionId, table.createdAt),
   index('idx_session_entries_parent').on(table.sessionId, table.parentEntryId),
-  index('idx_session_entries_kind').on(table.sessionId, table.entryKind),
   index('idx_session_entries_type').on(table.sessionId, table.entryType),
   index('idx_session_entries_message').on(table.sessionId, table.messageId),
   index('idx_session_entries_compaction').on(table.sessionId, table.compactionId),
-]);
-
-export const sessionLeafChanges = sqliteTable('session_leaf_changes', {
-  leafChangeId: text('leaf_change_id').primaryKey(),
-  sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
-  previousEntryId: text('previous_entry_id').references(() => sessionEntries.entryId, { onDelete: 'set null' }),
-  nextEntryId: text('next_entry_id').references(() => sessionEntries.entryId, { onDelete: 'set null' }),
-  reason: text('reason').notNull(),
-  createdAt: text('created_at').notNull(),
-  metadataJson: jsonText('metadata_json'),
-}, (table) => [
-  index('idx_session_leaf_changes_session_created').on(table.sessionId, table.createdAt),
 ]);
 
 export const sessionMessages = sqliteTable('session_messages', {
@@ -78,12 +61,9 @@ export const sessionMessages = sqliteTable('session_messages', {
   sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
   runId: text('run_id'),
   role: text('role').notNull(),
-  status: text('status').notNull(),
   contentText: text('content_text').notNull(),
-  blocksJson: jsonText('blocks_json'),
   createdAt: text('created_at').notNull(),
   completedAt: text('completed_at'),
-  metadataJson: jsonText('metadata_json'),
 }, (table) => [
   index('idx_session_messages_session_created').on(table.sessionId, table.createdAt),
   index('idx_session_messages_run').on(table.runId),
@@ -107,19 +87,12 @@ export const sessionMessageAttachments = sqliteTable('session_message_attachment
 export const sessionCompactions = sqliteTable('session_compactions', {
   compactionId: text('compaction_id').primaryKey(),
   sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
-  status: text('status').notNull(),
   summaryText: text('summary_text').notNull(),
   coveredUntilEntryId: text('covered_until_entry_id'),
   firstKeptEntryId: text('first_kept_entry_id'),
-  tokenCountBefore: integer('token_count_before'),
-  tokenCountAfter: integer('token_count_after'),
   createdAt: text('created_at').notNull(),
-  completedAt: text('completed_at'),
-  errorJson: jsonText('error_json'),
-  metadataJson: jsonText('metadata_json'),
 }, (table) => [
   index('idx_session_compactions_session_created').on(table.sessionId, table.createdAt),
-  index('idx_session_compactions_session_status').on(table.sessionId, table.status),
 ]);
 
 export const agentLoopRuns = sqliteTable('agent_loop_runs', {
@@ -249,7 +222,7 @@ export const approvalRequests = sqliteTable('approval_requests', {
 ]);
 
 export const workspaceChanges = sqliteTable('workspace_changes', {
-  changeId: text('change_id').primaryKey(),
+  changeSetId: text('change_set_id').primaryKey(),
   workspaceId: text('workspace_id').notNull().references(() => workspaces.workspaceId, { onDelete: 'cascade' }),
   sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
   runId: text('run_id').notNull().references(() => agentLoopRuns.runId, { onDelete: 'cascade' }),
@@ -257,75 +230,20 @@ export const workspaceChanges = sqliteTable('workspace_changes', {
   changedFileCount: integer('changed_file_count').notNull(),
   createdAt: text('created_at').notNull(),
   finalizedAt: text('finalized_at'),
-  metadataJson: jsonText('metadata_json'),
 }, (table) => [
   index('idx_workspace_changes_run').on(table.runId),
   index('idx_workspace_changes_workspace_created').on(table.workspaceId, table.createdAt),
 ]);
 
-export const workspaceFileSnapshots = sqliteTable('workspace_file_snapshots', {
-  snapshotId: text('snapshot_id').primaryKey(),
-  workspaceId: text('workspace_id').notNull().references(() => workspaces.workspaceId, { onDelete: 'cascade' }),
-  runId: text('run_id').references(() => agentLoopRuns.runId, { onDelete: 'set null' }),
-  path: text('path').notNull(),
-  storage: text('storage').notNull(),
-  encoding: text('encoding').notNull(),
-  sha256: text('sha256').notNull(),
-  byteLength: integer('byte_length').notNull(),
-  contentText: text('content_text'),
-  contentRef: text('content_ref'),
-  createdAt: text('created_at').notNull(),
-  metadataJson: jsonText('metadata_json'),
-}, (table) => [
-  index('idx_workspace_file_snapshots_lookup').on(table.workspaceId, table.path, table.sha256),
-]);
-
 export const workspaceChangedFiles = sqliteTable('workspace_changed_files', {
   changedFileId: text('changed_file_id').primaryKey(),
-  changeId: text('change_id').notNull().references(() => workspaceChanges.changeId, { onDelete: 'cascade' }),
-  path: text('path').notNull(),
+  changeSetId: text('change_set_id').notNull().references(() => workspaceChanges.changeSetId, { onDelete: 'cascade' }),
+  workspacePath: text('workspace_path').notNull(),
   changeKind: text('change_kind').notNull(),
-  restoreState: text('restore_state').notNull(),
-  beforeExists: integer('before_exists', { mode: 'boolean' }).notNull(),
-  beforeSnapshotId: text('before_snapshot_id').references(() => workspaceFileSnapshots.snapshotId, { onDelete: 'set null' }),
-  beforeHash: text('before_hash'),
-  afterExists: integer('after_exists', { mode: 'boolean' }).notNull(),
-  afterSnapshotId: text('after_snapshot_id').references(() => workspaceFileSnapshots.snapshotId, { onDelete: 'set null' }),
-  afterHash: text('after_hash'),
   createdAt: text('created_at').notNull(),
-  updatedAt: text('updated_at').notNull(),
-  metadataJson: jsonText('metadata_json'),
 }, (table) => [
-  index('idx_workspace_changed_files_change').on(table.changeId),
-  index('idx_workspace_changed_files_restore_state').on(table.restoreState),
-]);
-
-export const workspaceRestoreOperations = sqliteTable('workspace_restore_operations', {
-  restoreId: text('restore_id').primaryKey(),
-  changeId: text('change_id').notNull().references(() => workspaceChanges.changeId, { onDelete: 'cascade' }),
-  requestedBy: text('requested_by').notNull(),
-  status: text('status').notNull(),
-  requestedAt: text('requested_at').notNull(),
-  completedAt: text('completed_at'),
-  resultJson: jsonText('result_json'),
-  errorJson: jsonText('error_json'),
-  metadataJson: jsonText('metadata_json'),
-}, (table) => [
-  index('idx_workspace_restore_operations_change_requested').on(table.changeId, table.requestedAt),
-]);
-
-export const workspaceRestoreFileResults = sqliteTable('workspace_restore_file_results', {
-  fileResultId: text('file_result_id').primaryKey(),
-  restoreId: text('restore_id').notNull().references(() => workspaceRestoreOperations.restoreId, { onDelete: 'cascade' }),
-  changedFileId: text('changed_file_id').notNull().references(() => workspaceChangedFiles.changedFileId, { onDelete: 'cascade' }),
-  path: text('path').notNull(),
-  status: text('status').notNull(),
-  conflictReason: text('conflict_reason'),
-  errorJson: jsonText('error_json'),
-  restoredAt: text('restored_at'),
-  metadataJson: jsonText('metadata_json'),
-}, (table) => [
-  index('idx_workspace_restore_file_results_restore').on(table.restoreId),
+  index('idx_workspace_changed_files_change').on(table.changeSetId),
+  uniqueIndex('idx_workspace_changed_files_change_path').on(table.changeSetId, table.workspacePath),
 ]);
 
 export const memoryRecords = sqliteTable('memory_records', {

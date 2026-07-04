@@ -117,6 +117,6 @@ describe('desktop shell and coding-agent host interface recovery', () => {
     expect(existsSync(join(root, 'tests/packages/coding-agent/agent-loop/agent-run-service.test.ts'))).toBe(true);
     expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/session-run.repo.test.ts'))).toBe(false);
     expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/agent-loop.repo.test.ts'))).toBe(true);
-    expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/session.repo.test.ts'))).toBe(true);
+    expect(existsSync(join(root, 'tests/packages/coding-agent/persistence/repos/session.repo.test.ts'))).toBe(false);
   });
 });

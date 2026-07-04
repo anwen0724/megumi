@@ -239,10 +239,10 @@ function seedLifecycle(db: MegumiDatabase): void {
   db.exec(`
     INSERT INTO workspaces (
       workspace_id, name, root_path, root_path_key, status,
-      created_at, updated_at, last_opened_at, metadata_json
+      created_at, updated_at, last_opened_at
     ) VALUES (
       'workspace:1', 'Workspace 1', '/workspace-1', '/workspace-1', 'available',
-      '${now}', '${now}', '${now}', NULL
+      '${now}', '${now}', '${now}'
     );
 
     INSERT INTO sessions (
@@ -266,11 +266,11 @@ function seedLifecycle(db: MegumiDatabase): void {
     );
 
     INSERT INTO session_messages (
-      message_id, session_id, run_id, role, status, content_text,
-      blocks_json, created_at, completed_at, metadata_json
+      message_id, session_id, run_id, role, content_text,
+      created_at, completed_at
     ) VALUES (
-      'message:1', 'session:1', 'run:1', 'user', 'completed',
-      'Remember the test decision.', NULL, '${now}', '${now}', NULL
+      'message:1', 'session:1', 'run:1', 'user',
+      'Remember the test decision.', '${now}', '${now}'
     );
 
     INSERT INTO model_calls (
