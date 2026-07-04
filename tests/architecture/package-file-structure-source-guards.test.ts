@@ -261,11 +261,15 @@ describe('package and file structure source guards', () => {
 
   it('keeps Workspace on the v2 public service surface', () => {
     const workspaceIndex = read('packages/coding-agent/workspace/index.ts');
+    const workspaceSource = sourceUnder('packages/coding-agent/workspace');
 
     expect(existsSync(join(repoRoot, 'packages/coding-agent/workspace/workspace-restore.ts'))).toBe(false);
-    expect(workspaceIndex).toContain('createWorkspaceService');
-    expect(workspaceIndex).toContain('createWorkspacePathPolicyService');
-    expect(workspaceIndex).toContain('createWorkspaceChangeService');
+    expect(workspaceIndex).toContain('./services/workspace-service');
+    expect(workspaceIndex).toContain('./services/workspace-path-policy-service');
+    expect(workspaceIndex).toContain('./services/workspace-change-service');
+    expect(workspaceSource).toContain('createWorkspaceService');
+    expect(workspaceSource).toContain('createWorkspacePathPolicyService');
+    expect(workspaceSource).toContain('createWorkspaceChangeService');
     expect(workspaceIndex).not.toContain('ProjectService');
     expect(workspaceIndex).not.toContain('createProjectService');
     expect(workspaceIndex).not.toContain('WorkspaceRestoreService');

@@ -1,7 +1,6 @@
 // Public exports for Coding Agent workspace product services.
-export * from './path-policy';
-export * from './workspace-change-tracker';
-export * from './workspace-change-read';
-export * from './workspace-restore';
-export * from './workspace-change-footer-projector';
-export * from './project-service';
+export * from './contracts/workspace-contracts';
+export * from './contracts/workspace-change-contracts';
+export * from './services/workspace-service';
+export * from './services/workspace-path-policy-service';
+export * from './services/workspace-change-service';
