@@ -9,8 +9,11 @@ import {
   createSettingsService,
   type SettingsRaw,
 } from '@megumi/coding-agent/settings';
-import type { ModelCallCompletionResult } from '@megumi/coding-agent/agent-loop/model-call';
 import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
+
+type LegacyModelCallCompletionResult =
+  | { ok: true; text: string; structuredOutput?: unknown }
+  | { ok: false; error: { code: string; message: string } };
 
 describe('Coding Agent host interface runtime', () => {
   let temporaryHome: string | undefined;
@@ -40,7 +43,7 @@ describe('Coding Agent host interface runtime', () => {
       },
       modelCallProviderService: {
         streamModelCall: async function* (): AsyncIterable<RuntimeEvent> {},
-        completeModelCall: async (): Promise<ModelCallCompletionResult> => ({ ok: true, text: '' }),
+        completeModelCall: async (): Promise<LegacyModelCallCompletionResult> => ({ ok: true, text: '' }),
         cancelModelCall: () => false,
       },
       appSettingsProvider: createSettingsService({
@@ -93,7 +96,7 @@ describe('Coding Agent host interface runtime', () => {
       },
       modelCallProviderService: {
         streamModelCall: async function* (): AsyncIterable<RuntimeEvent> {},
-        completeModelCall: async (): Promise<ModelCallCompletionResult> => ({ ok: true, text: '' }),
+        completeModelCall: async (): Promise<LegacyModelCallCompletionResult> => ({ ok: true, text: '' }),
         cancelModelCall: () => false,
       },
       settingsStorage: {
@@ -142,7 +145,7 @@ describe('Coding Agent host interface runtime', () => {
       },
       modelCallProviderService: {
         streamModelCall: async function* (): AsyncIterable<RuntimeEvent> {},
-        completeModelCall: async (): Promise<ModelCallCompletionResult> => ({ ok: true, text: '' }),
+        completeModelCall: async (): Promise<LegacyModelCallCompletionResult> => ({ ok: true, text: '' }),
         cancelModelCall: () => false,
       },
       memorySettingsProvider: {
@@ -180,7 +183,7 @@ describe('Coding Agent host interface runtime', () => {
       },
       modelCallProviderService: {
         streamModelCall: async function* (): AsyncIterable<RuntimeEvent> {},
-        completeModelCall: async (): Promise<ModelCallCompletionResult> => ({ ok: true, text: '' }),
+        completeModelCall: async (): Promise<LegacyModelCallCompletionResult> => ({ ok: true, text: '' }),
         cancelModelCall: () => false,
       },
       memorySettingsProvider: {
@@ -207,7 +210,7 @@ describe('Coding Agent host interface runtime', () => {
       },
       modelCallProviderService: {
         streamModelCall: async function* (): AsyncIterable<RuntimeEvent> {},
-        completeModelCall: async (): Promise<ModelCallCompletionResult> => ({ ok: true, text: '' }),
+        completeModelCall: async (): Promise<LegacyModelCallCompletionResult> => ({ ok: true, text: '' }),
         cancelModelCall: () => false,
       },
       memorySettingsProvider: {

@@ -15,8 +15,11 @@ import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persist
 import type { SettingsRaw } from '@megumi/coding-agent/settings';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
-import type { ModelCallCompletionResult } from '@megumi/coding-agent/agent-loop/model-call';
 import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
+
+type LegacyModelCallCompletionResult =
+  | { ok: true; text: string; structuredOutput?: unknown }
+  | { ok: false; error: { code: string; message: string } };
 
 function productSettingsStorage(initial: SettingsRaw = {}) {
   let rawSettings: SettingsRaw = initial;
@@ -88,7 +91,7 @@ function toolCallingModelStepProvider(targetFileName: string) {
         payload: { content: 'Read the file as requested.' },
       } as RuntimeEvent;
     },
-    completeModelCall: async (): Promise<ModelCallCompletionResult> => ({ ok: true, text: '' }),
+    completeModelCall: async (): Promise<LegacyModelCallCompletionResult> => ({ ok: true, text: '' }),
     cancelModelCall: () => false,
   };
 }
@@ -150,7 +153,7 @@ function singleToolCallingModelStepProvider(toolName: string, input: unknown) {
         payload: { content: `${toolName} finished.` },
       } as RuntimeEvent;
     },
-    completeModelCall: async (): Promise<ModelCallCompletionResult> => ({ ok: true, text: '' }),
+    completeModelCall: async (): Promise<LegacyModelCallCompletionResult> => ({ ok: true, text: '' }),
     cancelModelCall: () => false,
   };
 }

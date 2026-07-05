@@ -449,7 +449,7 @@ describe('main runtime logger composition', () => {
   it('uses aggregate persistence naming for service composition', () => {
     const source = [
       'packages/coding-agent/composition/compose-coding-agent-persistence.ts',
-      'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts',
+      'packages/coding-agent/composition/compose-coding-agent-runtime.ts',
     ]
       .map((filePath) => readFileSync(join(process.cwd(), filePath), 'utf8'))
       .join('\n');

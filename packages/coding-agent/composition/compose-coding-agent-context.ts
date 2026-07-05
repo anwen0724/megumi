@@ -12,7 +12,7 @@ import {
   type ContextInstructionSourcePort,
   type ContextSummaryModelCallPort,
   type ContextUsageSignal,
-  type ModelConfig,
+  type ContextUsageWindow,
   type PromptLogPort,
 } from '../context';
 import type { SessionService } from '../session';
@@ -54,7 +54,7 @@ export function composeCodingAgentContext(input: {
   runtimeEventRepository: ConstructorParameters<typeof ContextRepository>[0]['runtimeEventRepository'];
   agentInstructionSourceService?: ContextInstructionSourcePort;
   summaryModelCallPort: ContextSummaryModelCallPort;
-  modelConfigProvider: (input: { session_id: string; workspace_id?: string }) => ModelConfig;
+  modelConfigProvider: (input: { session_id: string; workspace_id?: string }) => ContextUsageWindow;
   developerPromptLogger?: DeveloperPromptLogger;
 }) {
   const contextUsageSignalBus = createContextUsageSignalBus();

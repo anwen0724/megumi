@@ -57,23 +57,12 @@ describe('memory foundation boundaries', () => {
     expect(offenders(files, /MemoryRepository|@megumi\/db|better-sqlite3|memory-markdown-sync|memory-recall-runtime|memory-runtime-capture|recall-scoring|@megumi\/memory/)).toEqual([]);
   });
 
-  it('keeps AgentRunProcessingService orchestration behind the recall port instead of recall scoring', () => {
-    const files = [
-      join(root, 'packages', 'coding-agent', 'agent-loop', 'services', 'agent-run-service.ts'),
-    ];
-    expect(offenders(files, /@megumi\/memory|MemoryRepository|@megumi\/db\/repos\/memory|memory-runtime-capture\.service|memory-recall-runtime\.service|recall-scoring|buildMemoryRecallSnapshot|selectMemoryRecallResults/)).toEqual([]);
-  });
-
   it('wires memory markdown lifecycle sync through Desktop Main composition', () => {
-    const index = [
-      read(join(root, 'packages', 'coding-agent', 'composition', 'compose-coding-agent-memory.ts')),
-      read(join(root, 'packages', 'coding-agent', 'composition', 'compose-coding-agent-session-runtime.ts')),
-    ].join('\n');
+    const index = read(join(root, 'packages', 'coding-agent', 'composition', 'compose-coding-agent-memory.ts'));
     const sessionService = read(join(root, 'packages', 'coding-agent', 'session', 'services', 'session-service.ts'));
 
     expect(index).toContain('syncUserMirrorOnAppStart');
     expect(index).toContain('options.memorySettingsProvider.isMemoryEnabled()');
-    expect(index).toContain('memoryMarkdownSyncService: options.memoryRuntime.markdownSyncService');
     expect(sessionService).not.toContain('syncProjectMirrorOnProjectOpened');
   });
 

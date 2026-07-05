@@ -7,14 +7,28 @@ import {
   type MemoryExtractionOutput,
   type MemoryExtractionPrompt,
 } from './extraction';
-import type { ModelCallCompletionResult } from '@megumi/coding-agent/agent-loop/model-call';
 import type { ModelInputContext, ModelInputContextPart } from '@megumi/shared/model';
 import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
 import type { ProviderId } from '@megumi/shared/provider';
+import type { ChatTokenUsagePayload, RuntimeError } from '@megumi/shared/runtime';
+import type { JsonValue } from '@megumi/shared/primitives';
 
 export interface MemoryExtractionModelStepProvider {
-  completeModelCall(request: ModelStepRuntimeRequest): Promise<ModelCallCompletionResult>;
+  completeModelCall(request: ModelStepRuntimeRequest): Promise<MemoryExtractionModelCompletionResult>;
 }
+
+export type MemoryExtractionModelCompletionResult =
+  | {
+      ok: true;
+      text: string;
+      structuredOutput?: JsonValue;
+      finishReason?: string;
+      usage?: ChatTokenUsagePayload;
+    }
+  | {
+      ok: false;
+      error: RuntimeError;
+    };
 
 export interface ExtractMemoryCandidatesInput {
   runId: string;

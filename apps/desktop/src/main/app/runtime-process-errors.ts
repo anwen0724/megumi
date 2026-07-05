@@ -1,4 +1,4 @@
-import { normalizeRuntimeError } from '@megumi/coding-agent/state';
+import { normalizeRuntimeError } from '@megumi/coding-agent/runtime-error';
 import { createRuntimeDebugId } from '@megumi/shared/runtime';
 import { redactRuntimeValue } from '@megumi/coding-agent/adapters/local/security/redaction';
 import {

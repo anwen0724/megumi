@@ -15,7 +15,7 @@ import type {
   ContextCompaction,
   RuntimeEvent,
 } from '../contracts/context-compaction-contracts';
-import type { ModelConfig } from '../contracts/context-usage-contracts';
+import type { ContextUsageWindow } from '../contracts/context-usage-contracts';
 import type { ContextService, PromptLogPort } from './context-service';
 
 export interface ContextCompactionRepository {
@@ -38,7 +38,7 @@ export class ContextCompactionService {
     modelCall: ContextSummaryModelCallPort;
     clock?: { now(): string };
     ids?: { compactionId(): string; eventId(): string; promptId(): string };
-    modelConfigProvider: (input: { session_id: string; workspace_id?: string }) => ModelConfig;
+    modelConfigProvider: (input: { session_id: string; workspace_id?: string }) => ContextUsageWindow;
     thresholdRatio?: number;
     promptResources: {
       context_compaction_prompt: string;
@@ -210,7 +210,7 @@ function sessionKey(input: { session_id: string; workspace_id?: string }): strin
   return `${input.workspace_id ?? ''}::${input.session_id}`;
 }
 
-function emptyUsage(modelConfig: ModelConfig, thresholdRatio: number) {
+function emptyUsage(modelConfig: ContextUsageWindow, thresholdRatio: number) {
   return {
     used_tokens: 0,
     context_window_tokens: modelConfig.context_window_tokens,

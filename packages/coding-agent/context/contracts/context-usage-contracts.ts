@@ -3,7 +3,7 @@
  */
 import type { RuntimeError } from './context-contracts';
 
-export type ModelConfig = {
+export type ContextUsageWindow = {
   model_id: string;
   context_window_tokens: number;
 };
@@ -20,7 +20,7 @@ export type SessionContextUsage = {
 export type StartContextUsageMonitorRequest = {
   session_id: string;
   workspace_id?: string;
-  model_config: ModelConfig;
+  model_config: ContextUsageWindow;
   threshold_ratio?: number;
 };
 

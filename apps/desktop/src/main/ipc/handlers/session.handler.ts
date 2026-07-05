@@ -19,8 +19,7 @@ import type {
   SessionTimelineListData,
   SessionTimelineListPayload,
 } from '@megumi/shared/ipc';
-import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
-import type { AgentRunSendRequest } from '@megumi/coding-agent/agent-loop';
+import type { CodingAgentHostInterface, HostInputSendRequest } from '@megumi/coding-agent/host-interface';
 import {
   SessionBranchDraftCancelRequestSchema,
   SessionBranchDraftCreateRequestSchema,
@@ -223,7 +222,7 @@ function toHostInputSendRequest(
   requestId: string,
   payload: SessionMessageSendPayload,
   runtimeContext: Parameters<CodingAgentHostInterface['input']['send']>[0]['runtimeContext'],
-): AgentRunSendRequest {
+): HostInputSendRequest {
   const message = payload.message ?? payload.messages?.at(-1);
   if (!message) {
     throw new Error('Session message send requires a user message.');
@@ -243,7 +242,6 @@ function toHostInputSendRequest(
     sessionTitle: payload.context?.sessionTitle,
     permissionMode: payload.context?.permissionMode,
     permissionSource: payload.context?.permissionSource,
-    branchDraft: payload.branchDraft,
     runtimeContext,
   };
 }

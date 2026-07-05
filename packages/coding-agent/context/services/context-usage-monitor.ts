@@ -4,9 +4,9 @@
 import { evaluateSessionContextUsage } from '../core/session-context-usage';
 import type {
   ContextUsageSignal,
+  ContextUsageWindow,
   GetCurrentContextUsageRequest,
   GetCurrentContextUsageResult,
-  ModelConfig,
   SessionContextUsage,
   StartContextUsageMonitorRequest,
   StartContextUsageMonitorResult,
@@ -22,7 +22,7 @@ import type { ContextService } from './context-service';
 type SessionMonitorState = {
   session_id: string;
   workspace_id?: string;
-  model_config: ModelConfig;
+  model_config: ContextUsageWindow;
   threshold_ratio: number;
   usage?: SessionContextUsage;
   last_auto_signal_key?: string;

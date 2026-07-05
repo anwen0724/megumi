@@ -16,8 +16,11 @@ import {
 } from '@megumi/coding-agent/settings';
 import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
-import type { ModelCallCompletionResult } from '@megumi/coding-agent/agent-loop/model-call';
 import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
+
+type LegacyModelCallCompletionResult =
+  | { ok: true; text: string; structuredOutput?: unknown }
+  | { ok: false; error: { code: string; message: string } };
 
 // Seeds a real project row in the same SQLite file the runtime will open, mirroring
 // the production invariant that a session's workspaceId is always an opened project's
@@ -69,7 +72,7 @@ function answeringModelStepProvider() {
         payload: { content: 'Hello from the host interface' },
       } as RuntimeEvent;
     },
-    completeModelCall: async (): Promise<ModelCallCompletionResult> => ({ ok: true, text: '' }),
+    completeModelCall: async (): Promise<LegacyModelCallCompletionResult> => ({ ok: true, text: '' }),
     cancelModelCall: () => false,
   };
 }

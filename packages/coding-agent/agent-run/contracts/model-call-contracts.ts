@@ -7,7 +7,7 @@ import type { ProviderRuntimeConfig } from '../../settings';
 import type { ToolExecutionObservation } from '../../tools';
 import type { AgentRunFailure } from './agent-run-contracts';
 
-export type ModelConfig = ProviderRuntimeConfig;
+export type ModelCallConfig = ProviderRuntimeConfig;
 
 export type ToolSet = {
   items: ToolSetItem[];
@@ -25,7 +25,7 @@ export type ModelCallRequest = {
     | { type: 'agent_run'; run_id: string }
     | { type: 'context_compaction'; session_id: string; compaction_id?: string };
   prompt: Prompt;
-  model_config: ModelConfig;
+  model_config: ModelCallConfig;
   tool_set?: ToolSet;
   signal?: AbortSignal;
 };

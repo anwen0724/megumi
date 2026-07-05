@@ -42,7 +42,6 @@ import {
   composeCodingAgentToolRegistryService,
 } from './compose-coding-agent-tool-runtime';
 import { composeCodingAgentContext } from './compose-coding-agent-context';
-import type { CodingAgentHomePaths } from './compose-coding-agent-session-runtime';
 import {
   createSettingsService,
   type MemorySettingsPort,
@@ -77,6 +76,12 @@ import {
   type AssistantStreamEvent,
 } from '@megumi/ai';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
+
+export interface CodingAgentHomePaths {
+  homePath: string;
+  sqlitePath: string;
+  settingsPath: string;
+}
 
 export interface ComposeCodingAgentRuntimeOptions {
   homePaths: CodingAgentHomePaths;

@@ -1,18 +1,12 @@
-// Composes Coding Agent tool services and wires them into the agent loop.
+// Composes Coding Agent tool services for product runtime wiring.
 import path from 'node:path';
 import fs from 'fs-extra';
-import { createToolCallRunner } from '../agent-loop/tool-call';
-import type { AgentLoopRepository } from '../persistence/repos/agent-loop.repo';
-import type { ToolCallRepository } from '../persistence/repos/tool-call.repo';
-import type { ToolRuntimeFactory } from '../agent-loop/tool-call';
-import type { SettingsService } from '../settings';
-import type { PermissionService, PermissionSettings } from '../permissions';
 import {
   ToolExecutionService,
   ToolRegistryService,
 } from '../tools';
 import { createBuiltInToolAdapter, type WorkspaceFileAccess } from '../tools/adapters/built-in-tools';
-import type { WorkspaceChangeService, WorkspacePathPolicyService } from '../workspace';
+import type { WorkspacePathPolicyService } from '../workspace';
 import { createWorkspacePathPolicyService } from '../workspace';
 
 export interface LocalWorkspaceFileSystem {
@@ -148,86 +142,6 @@ export function createLocalWorkspaceFileAccess(input: {
       return resolveReadablePath(workspacePathPolicyService, input.projectRoot, request.path).absolutePath;
     },
   };
-}
-
-export function composeCodingAgentToolRuntimeFactory(input: {
-  toolRepository: ToolCallRepository;
-  toolRegistry: ToolRegistryService;
-  workspaceChangeService: Pick<WorkspaceChangeService, 'trackToolExecution'>;
-  workspacePathPolicyService: WorkspacePathPolicyService;
-  runRepository: AgentLoopRepository;
-  permissionService: Pick<PermissionService, 'evaluateToolExecution' | 'validateApprovalDecision' | 'applyApprovalDecision'>;
-  permissionSettingsResolver: Pick<SettingsService, 'resolvePermissionSettings'>;
-}): ToolRuntimeFactory {
-  return {
-    async create({ sessionId, projectRoot, permissionMode }) {
-      return createToolCallRunner({
-        repository: {
-          startToolCall: (toolCall) => input.toolRepository.startToolCall(toolCall),
-          getToolCall: (toolCallId) => input.toolRepository.getToolCall(toolCallId),
-          recordToolExecution: (toolExecution) => input.toolRepository.recordToolExecution(toolExecution),
-          getToolExecution: (toolExecutionId) => input.toolRepository.getToolExecution(toolExecutionId),
-          getToolExecutionByToolCallId: (request) => input.toolRepository.getToolExecutionByToolCallId(request),
-          listToolExecutionsByAssistantMessage: (request) => input.toolRepository.listToolExecutionsByAssistantMessage(request),
-          recordPermissionDecision: (permissionDecision) => input.toolRepository.recordPermissionDecision(permissionDecision),
-          createApprovalRequest: (approvalRequest) => input.toolRepository.createApprovalRequest(approvalRequest),
-          getApprovalRequest: (approvalRequestId) => input.toolRepository.getApprovalRequest(approvalRequestId),
-          completeToolCall: (toolResult) => input.toolRepository.completeToolCall(toolResult),
-          markToolResultsSubmittedToModelInput: (request) =>
-            input.toolRepository.markToolResultsSubmittedToModelInput(request),
-          getRunSessionId(runId) {
-            const run = input.runRepository.getRun(runId);
-            return run ? String(run.sessionId) : undefined;
-          },
-          getRunWorkspaceId(runId) {
-            return input.runRepository.getRunWorkspaceId(runId);
-          },
-        },
-        toolRegistryService: input.toolRegistry,
-        toolExecutionService: composeCodingAgentToolExecutionService({
-          projectRoot,
-          registryService: input.toolRegistry,
-          workspacePathPolicyService: input.workspacePathPolicyService,
-        }),
-        workspaceChangeService: input.workspaceChangeService,
-        workspacePathPolicyService: input.workspacePathPolicyService,
-        permissionService: input.permissionService,
-        permissionMode,
-        projectRoot,
-        permissionSettings: resolveToolPermissionSettings(input.permissionSettingsResolver, {
-          projectRoot,
-          sessionId,
-        }),
-        ids: {
-          toolExecutionId: () => `tool-execution:${crypto.randomUUID()}`,
-          toolResultId: () => `tool-result:${crypto.randomUUID()}`,
-          permissionDecisionId: () => `permission-decision:${crypto.randomUUID()}`,
-          approvalRequestId: () => `approval-request:${crypto.randomUUID()}`,
-          rawToolResultId: () => `raw-tool-result:${crypto.randomUUID()}`,
-          observationId: () => `tool-observation:${crypto.randomUUID()}`,
-          eventId: () => `event:${crypto.randomUUID()}`,
-        },
-      });
-    },
-  };
-}
-
-function resolveToolPermissionSettings(
-  settings: Pick<SettingsService, 'resolvePermissionSettings'>,
-  input: {
-    projectRoot: string;
-    sessionId: string;
-  },
-): PermissionSettings {
-  const result = settings.resolvePermissionSettings({
-    workspace_id: input.projectRoot,
-    session_id: input.sessionId,
-  });
-  if (result.status === 'failed') {
-    throw new Error(result.failure.message);
-  }
-
-  return result.permission_settings;
 }
 
 function resolveReadablePath(

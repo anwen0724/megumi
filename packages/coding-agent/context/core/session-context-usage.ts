@@ -2,11 +2,11 @@
  * Evaluates session context usage against a model context window.
  */
 import type { SessionContext } from '../contracts/context-contracts';
-import type { ModelConfig, SessionContextUsage } from '../contracts/context-usage-contracts';
+import type { ContextUsageWindow, SessionContextUsage } from '../contracts/context-usage-contracts';
 
 export function evaluateSessionContextUsage(input: {
   session_context: SessionContext;
-  model_config: ModelConfig;
+  model_config: ContextUsageWindow;
   threshold_ratio: number;
   fixed_prompt_text?: string;
 }): SessionContextUsage {

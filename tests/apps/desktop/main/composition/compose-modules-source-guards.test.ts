@@ -37,7 +37,6 @@ describe('Desktop Main shell composition', () => {
   it('keeps Coding Agent product composition under packages/coding-agent', () => {
     const productComposition = source('packages/coding-agent/composition/compose-coding-agent-runtime.ts');
     const persistenceComposition = source('packages/coding-agent/composition/compose-coding-agent-persistence.ts');
-    const sessionComposition = source('packages/coding-agent/composition/compose-coding-agent-session-runtime.ts');
     const toolComposition = source('packages/coding-agent/composition/compose-coding-agent-tool-runtime.ts');
 
     expect(productComposition).toContain('composeCodingAgentPersistence');
@@ -53,7 +52,6 @@ describe('Desktop Main shell composition', () => {
     expect(persistenceComposition).not.toContain('new SessionRunRepository(database)');
     expect(productComposition).toContain('createInputService');
     expect(productComposition).toContain('createPermissionService');
-    expect(toolComposition).toContain('createToolCallRunner');
     expect(toolComposition).toContain('new ToolExecutionService');
     expect(toolComposition).toContain('createBuiltInToolAdapter');
     expect(toolComposition).not.toContain('createToolExecutionRouter');

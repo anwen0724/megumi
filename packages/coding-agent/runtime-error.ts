@@ -1,8 +1,11 @@
+/*
+ * Shared runtime error utilities for host and product boundary code.
+ * This is not run state; it only normalizes unknown failures into RuntimeError.
+ */
 import type {
   RuntimeError,
   RuntimeErrorSource,
 } from '@megumi/shared/runtime';
-import type { RunTerminalReason } from '@megumi/shared/session';
 
 export interface RuntimeExceptionOptions {
   cause?: unknown;
@@ -60,27 +63,3 @@ export function assertRuntime(
     throwRuntimeError(error);
   }
 }
-
-export function createTerminalRuntimeError(input: {
-  reason: RunTerminalReason;
-  code: RuntimeError['code'];
-  message: string;
-  source: RuntimeError['source'];
-  retryable?: boolean;
-  debugId?: string;
-  details?: Record<string, unknown>;
-}): RuntimeError {
-  return {
-    code: input.code,
-    message: input.message,
-    severity: 'error',
-    retryable: input.retryable ?? false,
-    source: input.source,
-    ...(input.debugId ? { debugId: input.debugId } : {}),
-    details: {
-      ...(input.details ?? {}),
-      reason: input.reason,
-    },
-  };
-}
-

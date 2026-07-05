@@ -2,6 +2,7 @@
 import type { MemoryRepository } from '../persistence/repos/memory.repo';
 import {
   MemoryExtractionModelClientService,
+  type MemoryExtractionModelStepProvider,
   MemoryRecallRuntimeService,
   MemoryRuntimeCaptureService,
   createMemoryService,
@@ -9,13 +10,12 @@ import {
 import { MemoryDiagnosticWriter } from '../adapters/local/memory/memory-diagnostic-writer.service';
 import { MemoryMarkdownSyncService } from '../adapters/local/memory/memory-markdown-sync.service';
 import { createNodeMemoryRuntimeFileSystem } from '../adapters/local/memory/memory-runtime-file-system';
-import type { ModelCallProvider } from '../agent-loop/model-call';
 import type { RuntimeLogger } from '../host-interface/runtime-logger';
 import type { MemorySettingsPort } from '../settings';
 
 export interface ComposeCodingAgentMemoryOptions {
   repository: MemoryRepository;
-  modelStepProvider: ModelCallProvider;
+  modelStepProvider: MemoryExtractionModelStepProvider;
   memorySettingsProvider: MemorySettingsPort;
   runtimeLogger: RuntimeLogger;
   megumiHomePath: string;

@@ -1,7 +1,7 @@
 ﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { RuntimeException } from '@megumi/coding-agent/state';
+import { RuntimeException } from '@megumi/coding-agent/runtime-error';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { createRuntimeIpcRequestSchema } from '@megumi/shared/ipc';
 import { createIpcRequestHandler } from '@megumi/desktop/main/ipc/create-ipc-request-handler';
