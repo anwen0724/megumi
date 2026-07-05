@@ -1,4 +1,4 @@
-﻿import type { ChatStreamEvent } from '../chat-stream/events';
+﻿import type { ChatStreamEvent } from '../chat-stream/chat-stream-contracts';
 import type {
   AnswerTextBlock,
   ApprovalActivityItem,
@@ -15,7 +15,7 @@ import type {
   TimelineUserMessage,
   ToolActivityItem,
   UserTimelineBlock,
-} from '../timeline/message-blocks';
+} from './timeline-message-blocks';
 
 export function reduceChatStreamEvent(
   messages: TimelineMessage[],
@@ -743,4 +743,6 @@ function upsertProcessFactItem(
     process.items[existingIndex] = item;
   }
 }
+
+
 

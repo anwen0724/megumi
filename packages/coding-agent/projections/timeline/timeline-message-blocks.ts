@@ -5,8 +5,8 @@
   ToolCallId,
   ToolExecutionId,
   ToolResultId,
-} from '../primitives/ids';
-import type { WorkspaceChangeFooterFact } from '../workspace/change-contracts';
+} from '@megumi/shared/primitives';
+import type { WorkspaceChangeFooterFact } from '../workspace/workspace-change-footer-projector';
 
 export const TIMELINE_MESSAGE_ROLES = ['user', 'assistant', 'separator'] as const;
 export type TimelineMessageRole = (typeof TIMELINE_MESSAGE_ROLES)[number];
@@ -262,4 +262,6 @@ export interface TimelineAssistantMessage extends TimelineMessageBase {
 
 export type TimelineMessage = TimelineUserMessage | TimelineAssistantMessage | TimelineSeparatorMessage;
 export type TimelineBlock = UserTimelineBlock | AssistantTimelineBlock | BranchSeparatorBlock;
+
+
 

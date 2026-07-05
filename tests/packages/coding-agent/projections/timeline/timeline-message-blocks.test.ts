@@ -8,14 +8,14 @@ import {
   TimelineMessageRoleSchema,
   TimelineUserMessageSchema,
   ToolActivityItemSchema,
-} from '@megumi/shared/timeline';
+} from '@megumi/coding-agent/projections/timeline';
 import {
   ANSWER_TEXT_STATUSES,
   PROCESS_DISCLOSURE_STATUSES,
   TIMELINE_MESSAGE_ROLES,
   type TimelineAssistantMessage,
   type TimelineUserMessage,
-} from '@megumi/shared/timeline';
+} from '@megumi/coding-agent/projections/timeline';
 
 const messageBase = {
   messageId: 'message-1',
@@ -522,4 +522,5 @@ describe('timeline message and block contracts', () => {
     })).toThrow();
   });
 });
+
 

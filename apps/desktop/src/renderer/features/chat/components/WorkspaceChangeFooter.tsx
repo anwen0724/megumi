@@ -46,7 +46,7 @@ export function WorkspaceChangeFooter({
               </span>
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium leading-5 text-[var(--color-text)]">
-                  {fileName(file.workspacePath)}
+                  {fileName(displayPath(file))}
                 </div>
                 <div className="truncate text-xs leading-5 text-[var(--color-text-muted)]">
                   {fileKindText(file)}
@@ -58,7 +58,7 @@ export function WorkspaceChangeFooter({
               variant="secondary"
               size="sm"
               className="h-8 shrink-0 px-3 text-xs"
-              onClick={() => onOpenFile(file.workspacePath)}
+              onClick={() => onOpenFile(displayPath(file))}
             >
               打开
             </Button>
@@ -74,7 +74,12 @@ function fileName(workspacePath: string): string {
 }
 
 function fileKindText(file: WorkspaceChangeFooterFile): string {
-  const extension = file.workspacePath.split('.').at(-1);
-  const kind = extension && extension !== file.workspacePath ? extension.toUpperCase() : 'FILE';
+  const path = displayPath(file);
+  const extension = path.split('.').at(-1);
+  const kind = extension && extension !== path ? extension.toUpperCase() : 'FILE';
   return `文档 · ${kind}`;
+}
+
+function displayPath(file: WorkspaceChangeFooterFile): string {
+  return file.workspacePath ?? file.projectPath ?? '';
 }

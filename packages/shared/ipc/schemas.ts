@@ -1,4 +1,4 @@
-// Defines strict IPC schemas for renderer-to-main messages and runtime payloads.
+﻿// Defines strict IPC schemas for renderer-to-main messages and runtime payloads.
 // Shared IPC schemas validate transport shape only; runtime services own trusted normalization.
 import { z } from 'zod';
 import { JsonObjectSchema } from '../primitives/json';
@@ -70,7 +70,7 @@ import {
 import {
   WorkspaceChangeSummarySchema,
 } from '../workspace/change-contracts';
-import { TimelineMessageSchema } from '../timeline/message-block-schemas';
+import { TimelineMessageSchema } from '../../coding-agent/projections/timeline/timeline-message-block-schemas';
 import { RuntimeEventSchema } from '../runtime/event-schemas';
 import { IPC_CHANNELS } from '../ipc/channels';
 import { ProviderIdSchema } from '../provider/contracts';
@@ -1348,3 +1348,4 @@ export type WorkspaceFilesListPayload = z.infer<typeof WorkspaceFilesListPayload
 export type WorkspaceFilesListData = z.infer<typeof WorkspaceFilesListDataSchema>;
 export type WorkspaceFileOpenPayload = z.infer<typeof WorkspaceFileOpenPayloadSchema>;
 export type WorkspaceFileOpenData = z.infer<typeof WorkspaceFileOpenDataSchema>;
+

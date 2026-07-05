@@ -5,8 +5,8 @@
   ToolCallId,
   ToolExecutionId,
   ToolResultId,
-} from '../primitives/ids';
-import type { WorkspaceChangeFooterFact } from '../workspace/change-contracts';
+} from '@megumi/shared/primitives';
+import type { WorkspaceChangeFooterFact } from '../workspace/workspace-change-footer-projector';
 
 export const CHAT_STREAM_EVENT_TYPES = [
   'turn.started',
@@ -54,7 +54,7 @@ export const APPROVAL_RESOLUTION_STATUSES = [
 export type ApprovalResolutionStatus = (typeof APPROVAL_RESOLUTION_STATUSES)[number];
 
 export type ChatStreamKind = 'main' | (string & {});
-export type ChatStreamApprovalScope = 'user' | 'project' | 'local' | (string & {});
+export type ChatStreamApprovalScope = 'once' | 'session' | 'project' | 'user' | 'local' | (string & {});
 
 export interface ChatStreamEventBase {
   eventId: string;
@@ -293,4 +293,8 @@ export type TypedChatStreamEvent<TType extends ChatStreamEventType> = Extract<
   ChatStreamEvent,
   { eventType: TType }
 >;
+
+
+
+
 

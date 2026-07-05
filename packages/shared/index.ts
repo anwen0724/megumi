@@ -1,4 +1,4 @@
-export * from './primitives';
+﻿export * from './primitives';
 export * from './provider';
 export * from './model';
 export * from './session/agent-profile-contracts';
@@ -34,9 +34,9 @@ export * from './runtime/context';
 export * from './runtime/request';
 export * from './runtime/result';
 export { IsoDateTimeSchema } from './runtime/validation';
-export * from './chat-stream/events';
-export * from './chat-stream/event-factory';
-export * from './timeline/chat-stream-projection';
+export * from '../coding-agent/projections/chat-stream/chat-stream-contracts';
+export * from '../coding-agent/projections/chat-stream/chat-stream-event-factory';
+export * from '../coding-agent/projections/timeline/chat-stream-projection';
 export {
   ApprovalRequestStatusSchema,
   ApprovalResolutionStatusSchema,
@@ -70,6 +70,7 @@ export {
   ApprovalRequestedEventSchema as ChatStreamApprovalRequestedEventSchema,
   ApprovalResolvedEventSchema as ChatStreamApprovalResolvedEventSchema,
   type ChatStreamEventFromSchema,
-} from './chat-stream/event-schemas';
-export * from './timeline/message-blocks';
-export * from './timeline/message-block-schemas';
+} from '../coding-agent/projections/chat-stream/chat-stream-event-schemas';
+export * from '../coding-agent/projections/timeline/timeline-message-blocks';
+export * from '../coding-agent/projections/timeline/timeline-message-block-schemas';
+

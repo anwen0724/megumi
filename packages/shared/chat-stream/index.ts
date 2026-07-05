@@ -1,3 +1,4 @@
-export * from './events';
-export * from './event-factory';
-export * from './event-schemas';
+/*
+ * Transitional re-export while chat stream contracts move to coding-agent projections.
+ */
+export * from '../../coding-agent/projections/chat-stream';

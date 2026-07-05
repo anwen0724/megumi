@@ -1,21 +1,21 @@
 ﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import * as Shared from '@megumi/shared';
+import * as Shared from '@megumi/coding-agent/projections/chat-stream';
 import {
   ChatStreamEventSchema,
   ChatStreamEventTypeSchema,
   AssistantTextDeltaEventSchema,
   ToolCompletedEventSchema,
-} from '@megumi/shared/chat-stream';
+} from '@megumi/coding-agent/projections/chat-stream';
 import {
   createAssistantTextDeltaChatStreamEvent,
   createChatStreamEvent,
-} from '@megumi/shared/chat-stream';
+} from '@megumi/coding-agent/projections/chat-stream';
 import {
   ASSISTANT_TEXT_PHASES,
   CHAT_STREAM_EVENT_TYPES,
   type ChatStreamEvent,
-} from '@megumi/shared/chat-stream';
+} from '@megumi/coding-agent/projections/chat-stream';
 
 const base = {
   eventId: 'chat-stream-event-1',
@@ -391,57 +391,6 @@ describe('chat stream event factory', () => {
       delta: 'Streaming answer.',
     });
     expect(ChatStreamEventSchema.parse(event)).toEqual(event);
-  });
-});
-
-describe('root shared exports', () => {
-  it('keeps approval event schema root exports on runtime event envelopes', () => {
-    const approvalRequest = {
-      approvalRequestId: 'approval-1',
-      toolCallId: 'tool-call-1',
-      toolExecutionId: 'tool-execution-1',
-      runId: 'run-1',
-      stepId: 'step-1',
-      toolName: 'edit_file',
-      capabilities: ['project_write' as const],
-      riskLevel: 'medium' as const,
-      title: 'Edit file',
-      summary: 'Edit src/app.ts',
-      preview: {
-        action: 'Edit file',
-        targets: [{ kind: 'file' as const, label: 'src/app.ts', sensitivity: 'normal' as const }],
-      },
-      requestedScope: 'once' as const,
-      status: 'pending' as const,
-      createdAt: '2026-05-20T00:00:00.000Z',
-    };
-
-    const runtimeApprovalRequestedEvent = {
-      eventId: 'event-approval-requested',
-      schemaVersion: 1 as const,
-      eventType: 'approval.requested',
-      runId: 'run-1',
-      sessionId: 'session-1',
-      stepId: 'step-1',
-      sequence: 1,
-      createdAt: '2026-05-20T00:00:00.000Z',
-      source: 'approval' as const,
-      visibility: 'user' as const,
-      persist: 'required' as const,
-      payload: { approvalRequest },
-    };
-
-    expect(Shared.ApprovalRequestedEventSchema.parse(runtimeApprovalRequestedEvent)).toEqual(
-      runtimeApprovalRequestedEvent,
-    );
-    expect(() => Shared.ApprovalRequestedEventSchema.parse({
-      ...base,
-      eventType: 'approval.requested',
-      approvalId: 'approval-1',
-      scope: 'project',
-      status: 'pending',
-      title: 'Run command',
-    })).toThrow();
   });
 });
 

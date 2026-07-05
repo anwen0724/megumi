@@ -1,8 +1,8 @@
 ﻿import { describe, expect, it } from 'vitest';
-import { reduceChatStreamEvent } from '@megumi/shared/timeline';
-import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
-import type { AnswerTextBlock, ProcessDisclosureBlock, TimelineAssistantMessage, TimelineMessage, TimelineUserMessage } from '@megumi/shared/timeline';
-import type { WorkspaceChangeFooterFact } from '@megumi/shared/workspace';
+import { reduceChatStreamEvent } from '@megumi/coding-agent/projections/timeline';
+import type { ChatStreamEvent } from '@megumi/coding-agent/projections/chat-stream';
+import type { AnswerTextBlock, ProcessDisclosureBlock, TimelineAssistantMessage, TimelineMessage, TimelineUserMessage } from '@megumi/coding-agent/projections/timeline';
+import type { WorkspaceChangeFooterFact } from '@megumi/coding-agent/projections/workspace/workspace-change-footer-projector';
 
 type WorkspaceChangeFooterUpdatedEventInput = Partial<ChatStreamEvent> & {
   eventType: 'workspace.change.footer.updated';
@@ -570,4 +570,5 @@ describe('chat stream to timeline projection reducer', () => {
     });
   });
 });
+
 

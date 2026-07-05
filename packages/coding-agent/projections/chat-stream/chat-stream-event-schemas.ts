@@ -9,8 +9,8 @@ import {
   type AssistantTextPhase,
   type ChatStreamEvent,
   type ChatStreamEventType,
-} from '../chat-stream/events';
-import { WorkspaceChangeFooterFactSchema } from '../workspace/change-contracts';
+} from './chat-stream-contracts';
+import { WorkspaceChangeFooterFactSchema } from '../workspace/workspace-change-footer-projector';
 
 const CHAT_STREAM_EVENT_TYPE_VALUES = [...CHAT_STREAM_EVENT_TYPES] as [
   ChatStreamEventType,
@@ -299,4 +299,7 @@ const ChatStreamEventUnionSchema = z.union([
 export const ChatStreamEventSchema = ChatStreamEventUnionSchema satisfies z.ZodType<ChatStreamEvent>;
 
 export type ChatStreamEventFromSchema = z.infer<typeof ChatStreamEventSchema>;
+
+
+
 

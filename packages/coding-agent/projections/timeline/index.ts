@@ -1,2 +1,5 @@
-// Exposes timeline projection services for Coding Agent chat stream events.
+/*
+ * Timeline projection public exports.
+ */
+export * from './timeline-contracts';
 export * from './timeline-history-projector';

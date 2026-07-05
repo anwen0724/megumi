@@ -5,8 +5,8 @@ import {
   createSessionMessageChatStreamAdapter,
   type ChatStreamEventSink,
 } from '@megumi/coding-agent/projections/chat-stream';
-import { ChatStreamEventSchema, type ChatStreamEvent } from '@megumi/shared';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
+import { ChatStreamEventSchema, type ChatStreamEvent } from '@megumi/coding-agent/projections/chat-stream';
+import type { RuntimeEvent } from '@megumi/coding-agent/events';
 
 function collectSink(): { sink: ChatStreamEventSink; events: ChatStreamEvent[] } {
   const events: ChatStreamEvent[] = [];
@@ -1182,5 +1182,6 @@ describe('createChatStreamEventAdapter', () => {
     expect(events.map((event) => event.eventType)).not.toContain('turn.failed');
   });
 });
+
 
 

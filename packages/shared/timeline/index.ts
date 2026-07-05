@@ -1,3 +1,4 @@
-export * from './message-blocks';
-export * from './message-block-schemas';
-export * from './chat-stream-projection';
+/*
+ * Transitional re-export while timeline contracts move to coding-agent projections.
+ */
+export * from '../../coding-agent/projections/timeline';

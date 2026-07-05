@@ -3,7 +3,7 @@
   ChatStreamEventBase,
   ChatStreamEventType,
   TypedChatStreamEvent,
-} from '../chat-stream/events';
+} from './chat-stream-contracts';
 
 type ChatStreamEventCommonInput = Omit<ChatStreamEventBase, 'eventType'>;
 
@@ -31,4 +31,7 @@ export function createAssistantTextDeltaChatStreamEvent(
     eventType: 'assistant.text.delta',
   });
 }
+
+
+
 

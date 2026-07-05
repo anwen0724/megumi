@@ -1,8 +1,8 @@
-// Persists committed timeline history into product storage on terminal turns,
+﻿// Persists committed timeline history into product storage on terminal turns,
 // and forwards chat stream events to an optional downstream sink (e.g. a UI bridge).
-import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
-import { reduceChatStreamEvent } from '@megumi/shared/timeline';
-import type { TimelineMessage } from '@megumi/shared/timeline';
+import type { ChatStreamEvent } from '../chat-stream';
+import { reduceChatStreamEvent } from '../timeline';
+import type { TimelineMessage } from '../timeline';
 import type { ChatStreamEventSink } from '../chat-stream';
 
 export interface TimelineHistoryCommitDiagnostic {
@@ -181,5 +181,7 @@ function previewFromMessages(messages: TimelineMessage[]): string | undefined {
 
   return answer.text.slice(0, 160);
 }
+
+
 
 

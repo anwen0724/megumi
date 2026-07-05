@@ -1,7 +1,8 @@
-/*
+﻿/*
  * UI-safe Workspace change footer projection. It consumes Workspace change
  * facts and exposes file paths/kinds only, without restore or snapshot fields.
  */
+import { z } from 'zod';
 import type {
   WorkspaceChangeSummary,
   WorkspaceChangeService,
@@ -9,14 +10,21 @@ import type {
 
 export type WorkspaceChangeFooterFile = {
   changedFileId: string;
-  workspacePath: string;
+  workspacePath?: string;
+  projectPath?: string;
   changeKind: string;
+  restoreState?: string;
 };
 
 export type WorkspaceChangeFooterChangeSet = {
   changeSetId: string;
   changedFileCount: number;
   files: WorkspaceChangeFooterFile[];
+  restorableCount?: number;
+  restoredCount?: number;
+  conflictCount?: number;
+  failedCount?: number;
+  hasRestorableChanges?: boolean;
 };
 
 export type WorkspaceChangeFooterFact = {
@@ -25,6 +33,28 @@ export type WorkspaceChangeFooterFact = {
   updatedAt: string;
   changeSets: WorkspaceChangeFooterChangeSet[];
 };
+
+export const WorkspaceChangeFooterFactSchema = z.object({
+  runId: z.string().min(1),
+  sessionId: z.string().min(1),
+  updatedAt: z.string().min(1),
+  changeSets: z.array(z.object({
+    changeSetId: z.string().min(1),
+    changedFileCount: z.number().int().nonnegative(),
+    files: z.array(z.object({
+      changedFileId: z.string().min(1),
+      workspacePath: z.string().min(1).optional(),
+      projectPath: z.string().min(1).optional(),
+      changeKind: z.string().min(1),
+      restoreState: z.string().optional(),
+    }).passthrough()),
+    restorableCount: z.number().int().nonnegative().optional(),
+    restoredCount: z.number().int().nonnegative().optional(),
+    conflictCount: z.number().int().nonnegative().optional(),
+    failedCount: z.number().int().nonnegative().optional(),
+    hasRestorableChanges: z.boolean().optional(),
+  }).passthrough()),
+}).strict() satisfies z.ZodType<WorkspaceChangeFooterFact>;
 
 export interface WorkspaceChangeFooterProjectorWorkspaceChangePort {
   listChangeSummaries: Pick<WorkspaceChangeService, 'listChangeSummaries'>['listChangeSummaries'];
@@ -97,3 +127,4 @@ function projectChangeSet(summary: WorkspaceChangeSummary): ProjectedChangeSet |
 function latestUpdatedAt(values: string[]): string {
   return values.reduce((latest, value) => value > latest ? value : latest, values[0] ?? new Date(0).toISOString());
 }
+

@@ -46,8 +46,8 @@ import {
   type UserAttachmentBlock,
   type UserAttachmentSource,
   type UserTextBlock,
-} from '../timeline/message-blocks';
-import { WorkspaceChangeFooterFactSchema } from '../workspace/change-contracts';
+} from './timeline-message-blocks';
+import { WorkspaceChangeFooterFactSchema } from '../workspace/workspace-change-footer-projector';
 
 const TIMELINE_MESSAGE_ROLE_VALUES = [...TIMELINE_MESSAGE_ROLES] as [
   TimelineMessageRole,
@@ -383,4 +383,6 @@ export const TimelineMessageSchema = z.union([
 ]) satisfies z.ZodType<TimelineMessage>;
 
 export type TimelineMessageFromSchema = z.infer<typeof TimelineMessageSchema>;
+
+
 

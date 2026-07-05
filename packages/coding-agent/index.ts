@@ -13,6 +13,6 @@ export * from './memory';
 export * from './artifacts';
 export * from './workspace';
 export * from './persistence';
-export * from './projections';
+export * as projections from './projections';
 export * from './host-interface';
 export * from './composition';
