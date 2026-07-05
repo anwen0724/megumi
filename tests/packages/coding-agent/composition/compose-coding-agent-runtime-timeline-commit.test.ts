@@ -41,7 +41,17 @@ function seedProject(homePath: string): { projectId: string; repoPath: string } 
 }
 
 function appSettingsProvider() {
-  let rawSettings: SettingsRaw = {};
+  let rawSettings: SettingsRaw = {
+    providers: {
+      deepseek: {
+        enabled: true,
+        protocol: 'openai-compatible',
+        base_url: 'https://api.deepseek.com',
+        models: ['deepseek-v4-flash'],
+        api_key: 'sk-test',
+      },
+    },
+  };
   return createSettingsService({
     file_store: {
       readRawSettings: () => rawSettings,

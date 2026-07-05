@@ -80,8 +80,14 @@ export type AgentRunToolCallRequest = {
 export type AgentRunToolCallResult = {
   tool_calls: AgentRunToolCall[];
   tool_result_facts: ToolResultRuntimeFact[];
-  pending_approvals: AgentRunApprovalRequest[];
+  pending_approvals: AgentRunPendingApproval[];
+  deferred_tool_calls: ModelRequestedToolCall[];
   next_model_prompt_ready: boolean;
+};
+
+export type AgentRunPendingApproval = {
+  approval_request: AgentRunApprovalRequest;
+  permission_decision: Extract<PermissionDecision, { type: 'requires_approval' }>;
 };
 
 type ToolCallPlan = {
@@ -96,7 +102,7 @@ export async function orchestrateToolCallGroup(
 ): Promise<AgentRunToolCallResult> {
   const plans: ToolCallPlan[] = [];
   const toolResults: ToolResultRuntimeFact[] = [];
-  const pendingApprovals: AgentRunApprovalRequest[] = [];
+  const pendingApprovals: AgentRunPendingApproval[] = [];
 
   for (const [index, requested] of request.tool_calls.entries()) {
     const toolCall = createToolCall(request, requested, index);
@@ -150,8 +156,11 @@ export async function orchestrateToolCallGroup(
         registered_tool: registeredTool,
         decision: permission.decision,
       });
-      pendingApprovals.push(approval);
-      break;
+      pendingApprovals.push({
+        approval_request: approval,
+        permission_decision: permission.decision,
+      });
+      continue;
     }
 
     plans.push({
@@ -162,19 +171,31 @@ export async function orchestrateToolCallGroup(
     });
   }
 
-  if (pendingApprovals.length === 0) {
-    const executablePlans = plans.filter((plan) => plan.call.status === 'requested' && plan.registered_tool);
+  const firstApprovalOrder = plans.find((plan) => plan.call.status === 'waiting_for_approval')?.call.call_order;
+  const executablePlans = plans.filter((plan) => (
+    plan.call.status === 'requested'
+    && plan.registered_tool
+    && (firstApprovalOrder === undefined || plan.call.call_order < firstApprovalOrder)
+  ));
+  if (executablePlans.length > 0) {
     const executed = await executeWindows(request, executablePlans);
     for (const plan of executed.plans) {
       plans[plans.indexOf(plan.original)] = plan.next;
     }
     toolResults.push(...executed.tool_result_facts);
   }
+  const lastApprovalOrder = plans
+    .filter((plan) => plan.call.status === 'waiting_for_approval')
+    .at(-1)?.call.call_order;
+  const deferredToolCalls = lastApprovalOrder === undefined
+    ? []
+    : request.tool_calls.slice(lastApprovalOrder + 1);
 
   return {
     tool_calls: plans.map((plan) => plan.call),
     tool_result_facts: toolResults,
     pending_approvals: pendingApprovals,
+    deferred_tool_calls: deferredToolCalls,
     next_model_prompt_ready: pendingApprovals.length === 0,
   };
 }

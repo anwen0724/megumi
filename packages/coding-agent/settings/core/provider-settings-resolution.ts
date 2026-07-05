@@ -70,7 +70,7 @@ export function resolveProviderRuntimeConfig(
     return failed('provider_model_unknown', 'Provider model is not configured.', request);
   }
 
-  if (provider.kind === 'openai-compatible' && !provider.base_url) {
+  if (provider.protocol === 'openai-compatible' && !provider.base_url) {
     return failed('provider_config_invalid', 'Provider base URL is required.', request);
   }
 
@@ -83,7 +83,7 @@ export function resolveProviderRuntimeConfig(
     status: 'ok',
     config: {
       provider_id: request.provider_id,
-      kind: provider.kind,
+      protocol: provider.protocol,
       ...(provider.base_url ? { base_url: provider.base_url } : {}),
       model_id: request.model_id,
       api_key: apiKey,

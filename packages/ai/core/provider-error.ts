@@ -56,10 +56,10 @@ export function createProviderError(input: {
     );
 }
 
-export class ProviderRegistryError extends Error {
+export class ProtocolRegistryError extends Error {
     constructor(message: string) {
         super(message);
-        this.name = 'ProviderRegistryError';
+        this.name = 'ProtocolRegistryError';
     }
 }
 

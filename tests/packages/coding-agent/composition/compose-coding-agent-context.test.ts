@@ -2,8 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { composeCodingAgentContext } from '@megumi/coding-agent/composition/compose-coding-agent-context';
 
 describe('composeCodingAgentContext', () => {
-  it('routes monitor auto compaction signals through SessionService.saveCompactionSummary', async () => {
+  it('publishes monitor auto compaction signals without running compaction inside Context composition', async () => {
     const saveCompactionSummary = vi.fn(() => ({ status: 'saved' as const, compaction: {} as any }));
+    const completePrompt = vi.fn(async () => ({ status: 'ok' as const, text: 'summary' }));
     const runtime = composeCodingAgentContext({
       sessionService: {
         getActiveHistory: () => ({
@@ -20,10 +21,15 @@ describe('composeCodingAgentContext', () => {
         listRuntimeEventsByRun: () => [],
       },
       summaryModelCallPort: {
-        completePrompt: vi.fn(async () => ({ status: 'ok' as const, text: 'summary' })),
+        completePrompt,
       },
       modelConfigProvider: () => ({ model_id: 'test', context_window_tokens: 100 }),
     });
+    const signals: unknown[] = [];
+    runtime.contextUsageSignalBus.subscribe('auto_compaction_needed', (signal) => {
+      signals.push(signal);
+    });
+
     await runtime.contextUsageMonitor.start({
       session_id: 'session:1',
       workspace_id: 'workspace:1',
@@ -38,12 +44,14 @@ describe('composeCodingAgentContext', () => {
     });
 
     await vi.waitFor(() => {
-      expect(saveCompactionSummary).toHaveBeenCalledWith(expect.objectContaining({
+      expect(signals).toEqual([expect.objectContaining({
+        kind: 'auto_compaction_needed',
         session_id: 'session:1',
-        summary_text: 'summary',
-        append_to_active_path: true,
-      }));
+        workspace_id: 'workspace:1',
+      })]);
     });
+    expect(completePrompt).not.toHaveBeenCalled();
+    expect(saveCompactionSummary).not.toHaveBeenCalled();
   });
 });
 

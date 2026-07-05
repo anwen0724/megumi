@@ -2,12 +2,12 @@
  * Runs the model/tool loop for one Agent Run.
  * It coordinates Context, Model Call, Tool Set, Permissions, and Session services.
  */
-import type { PermissionMode, PermissionService } from '../../permissions';
+import type { PermissionDecision, PermissionMode, PermissionService } from '../../permissions';
 import type { SessionService } from '../../session';
 import type { SettingsService } from '../../settings';
 import type { ToolExecutionService } from '../../tools';
 import type { WorkspacePathPolicyService } from '../../workspace';
-import type { CompactContextResult, ContextUsageSignal } from '../../context';
+import type { CompactContextResult, ContextUsageSignal, SessionContextSource } from '../../context';
 import type {
   AgentRun,
   AgentRunEvent,
@@ -15,6 +15,7 @@ import type {
 } from '../contracts/agent-run-contracts';
 import type {
   ModelCallEvent,
+  ModelCallConfig,
   ModelCallService,
   ToolResultRuntimeFact,
 } from '../contracts/model-call-contracts';
@@ -35,7 +36,12 @@ export type RunOrchestratorDependencies = {
       | { status: 'ok'; session_context: unknown }
       | { status: 'failed'; failure: { code: string; message: string } }
     >;
-    buildPrompt(request: { session_context: unknown; purpose: 'agent_response'; current_user_message_id?: string }):
+    buildPrompt(request: {
+      session_context: unknown;
+      purpose: 'agent_response';
+      current_user_message_id?: string;
+      runtime_sources?: SessionContextSource[];
+    }):
       | { status: 'ok'; prompt: unknown }
       | { status: 'failed'; failure: { code: string; message: string } };
   };
@@ -50,6 +56,7 @@ export type RunOrchestratorDependencies = {
   event_sink: {
     emit(type: string, payload?: Record<string, unknown>): AgentRunEvent;
   };
+  on_model_call_started?: (input: { run_id: string; model_call_id: string }) => void;
   ids: {
     assistant_message_id(): string;
     approval_request_id(): string;
@@ -64,15 +71,33 @@ export type RunOrchestratorDependencies = {
 export type RunOrchestratorRequest = {
   run: AgentRun;
   user_message_id: string;
-  model_config: AgentRun['model_selection'] & Record<string, unknown>;
+  model_config: ModelCallConfig;
   permission_mode: PermissionMode;
   workspace_root?: string;
+  initial_runtime_sources?: SessionContextSource[];
+  signal?: AbortSignal;
 };
 
 export type RunOrchestratorResult =
   | { status: 'completed'; run: AgentRun }
-  | { status: 'waiting_for_approval'; run: AgentRun }
+  | {
+      status: 'waiting_for_approval';
+      run: AgentRun;
+      continuation: RunApprovalContinuation;
+    }
   | { status: 'failed'; run: AgentRun; failure: AgentRunFailure };
+
+export type RunApprovalContinuation = {
+  run_id: string;
+  pending_approval_ids: string[];
+  original_approval_policy_by_approval_id: Record<string, Extract<PermissionDecision, { type: 'requires_approval' }>>;
+  deferred_tool_calls: ModelRequestedToolCall[];
+  user_message_id: string;
+  model_config: RunOrchestratorRequest['model_config'];
+  permission_mode: PermissionMode;
+  workspace_root?: string;
+  runtime_sources: SessionContextSource[];
+};
 
 export type ConsumeContextUsageSignalRequest = {
   signal: ContextUsageSignal;
@@ -102,6 +127,7 @@ export async function runAgentModelToolLoop(
   let run = request.run;
   let modelCalls = 0;
   let toolRounds = 0;
+  const runtimeSources: SessionContextSource[] = [...(request.initial_runtime_sources ?? [])];
 
   while (true) {
     if (modelCalls >= dependencies.limits.max_model_calls) {
@@ -125,6 +151,7 @@ export async function runAgentModelToolLoop(
       session_context: context.session_context,
       purpose: 'agent_response',
       current_user_message_id: request.user_message_id,
+      runtime_sources: runtimeSources,
     });
     if (prompt.status === 'failed') {
       return failRun(dependencies, run, {
@@ -138,10 +165,15 @@ export async function runAgentModelToolLoop(
       prompt: prompt.prompt as never,
       model_config: request.model_config as never,
       tool_set: toolSet,
+      signal: request.signal,
     });
     if (modelCall.status === 'failed') {
       return failRun(dependencies, run, modelCall.failure);
     }
+    dependencies.on_model_call_started?.({
+      run_id: run.run_id,
+      model_call_id: modelCall.model_call_id,
+    });
 
     const modelEvents = await collectModelCallEvents(dependencies, modelCall.events);
     if (modelEvents.failure) {
@@ -202,6 +234,13 @@ export async function runAgentModelToolLoop(
         return tool ? [[item.name, tool] as const] : [];
       }),
     );
+    for (const toolCall of modelEvents.tool_calls) {
+      dependencies.event_sink.emit('tool_call.requested', {
+        run_id: run.run_id,
+        tool_call_id: toolCall.tool_call_id,
+        tool_name: toolCall.tool_name,
+      });
+    }
     const toolGroup = await orchestrateToolCallGroup({
       run_id: run.run_id,
       workspace_id: run.workspace_id,
@@ -221,9 +260,35 @@ export async function runAgentModelToolLoop(
       ...(dependencies.workspace_path_policy_service ? { workspace_path_policy_service: dependencies.workspace_path_policy_service } : {}),
       clock: dependencies.clock,
       ids: { approval_request_id: dependencies.ids.approval_request_id },
+      signal: request.signal,
     });
 
     for (const toolCall of toolGroup.tool_calls) {
+      dependencies.event_sink.emit('tool_execution.decided', {
+        run_id: run.run_id,
+        tool_call_id: toolCall.tool_call_id,
+        tool_name: toolCall.tool_name,
+        status: toolCall.status,
+      });
+      if (toolCall.status === 'completed' || toolCall.status === 'failed') {
+        dependencies.event_sink.emit('tool_execution.started', {
+          run_id: run.run_id,
+          tool_call_id: toolCall.tool_call_id,
+          tool_name: toolCall.tool_name,
+        });
+        dependencies.event_sink.emit(toolCall.status === 'completed' ? 'tool_execution.completed' : 'tool_execution.failed', {
+          run_id: run.run_id,
+          tool_call_id: toolCall.tool_call_id,
+          tool_name: toolCall.tool_name,
+        });
+      }
+      if (toolCall.status === 'denied') {
+        dependencies.event_sink.emit('tool_execution.denied', {
+          run_id: run.run_id,
+          tool_call_id: toolCall.tool_call_id,
+          tool_name: toolCall.tool_name,
+        });
+      }
       dependencies.event_sink.emit(`tool_call.${toolCall.status}`, {
         run_id: run.run_id,
         tool_call_id: toolCall.tool_call_id,
@@ -232,8 +297,10 @@ export async function runAgentModelToolLoop(
     }
     for (const toolResult of toolGroup.tool_result_facts) {
       emitToolResult(dependencies, run, toolResult);
+      runtimeSources.push(toolResultRuntimeSource(toolResult));
     }
-    for (const approval of toolGroup.pending_approvals) {
+    for (const pendingApproval of toolGroup.pending_approvals) {
+      const approval = pendingApproval.approval_request;
       dependencies.repository.createApprovalRequest(approval);
       dependencies.event_sink.emit('approval.requested', {
         run_id: run.run_id,
@@ -248,7 +315,26 @@ export async function runAgentModelToolLoop(
         changed_at: dependencies.clock.now(),
       }));
       dependencies.event_sink.emit('run.waiting_for_approval', { run_id: run.run_id });
-      return { status: 'waiting_for_approval', run };
+      return {
+        status: 'waiting_for_approval',
+        run,
+        continuation: {
+          run_id: run.run_id,
+          pending_approval_ids: toolGroup.pending_approvals.map((approval) => approval.approval_request.approval_request_id),
+          original_approval_policy_by_approval_id: Object.fromEntries(
+            toolGroup.pending_approvals.map((approval) => [
+              approval.approval_request.approval_request_id,
+              approval.permission_decision,
+            ]),
+          ),
+          deferred_tool_calls: toolGroup.deferred_tool_calls,
+          user_message_id: request.user_message_id,
+          model_config: request.model_config,
+          permission_mode: request.permission_mode,
+          ...(request.workspace_root ? { workspace_root: request.workspace_root } : {}),
+          runtime_sources: runtimeSources,
+        },
+      };
     }
 
     dependencies.event_sink.emit('tool_result_facts.submitted', {
@@ -256,6 +342,27 @@ export async function runAgentModelToolLoop(
       count: toolGroup.tool_result_facts.length,
     });
   }
+}
+
+function toolResultRuntimeSource(toolResult: ToolResultRuntimeFact): SessionContextSource {
+  return {
+    source_id: `tool-result:${toolResult.tool_call_id}:${toolResult.created_at}`,
+    source_kind: 'tool_result',
+    text: [
+      `tool_name: ${toolResult.tool_name}`,
+      `status: ${toolResult.status}`,
+      toolResult.content ? `content: ${toolResult.content}` : undefined,
+      toolResult.observation ? `observation: ${JSON.stringify(toolResult.observation)}` : undefined,
+    ].filter(Boolean).join('\n'),
+    persisted: false,
+    created_at: toolResult.created_at,
+    metadata: {
+      origin_module: 'agent-run',
+      tool_call_id: toolResult.tool_call_id,
+      tool_name: toolResult.tool_name,
+      status: toolResult.status,
+    },
+  };
 }
 
 export async function consumeContextUsageSignal(

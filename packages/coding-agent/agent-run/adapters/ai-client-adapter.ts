@@ -7,21 +7,17 @@ import type { JsonObject } from '@megumi/shared/primitives';
 import type { PromptMessage } from '../../context';
 import type { ModelCallRequest, ToolSet } from '../contracts/model-call-contracts';
 
-export type ModelCallAiRequestOptions = {
-  max_retries?: number;
-  max_retry_delay_ms?: number;
-};
-
 export function mapModelCallToAiRequest(
   request: ModelCallRequest,
-  options: ModelCallAiRequestOptions = {},
 ): AiCallRequest {
   const systemPrompt = request.prompt.messages.find((message) => message.role === 'system')?.content;
 
   return {
     model: {
       providerId: request.model_config.provider_id,
+      protocol: request.model_config.protocol,
       modelId: request.model_config.model_id,
+      ...(request.model_config.base_url ? { baseUrl: request.model_config.base_url } : {}),
     },
     context: {
       ...(systemPrompt ? { systemPrompt } : {}),
@@ -34,8 +30,6 @@ export function mapModelCallToAiRequest(
     ...(request.model_config.api_key ? {
       credential: { type: 'api_key', value: request.model_config.api_key },
     } : {}),
-    ...(options.max_retries !== undefined ? { maxRetries: options.max_retries } : {}),
-    ...(options.max_retry_delay_ms !== undefined ? { maxRetryDelayMs: options.max_retry_delay_ms } : {}),
     metadata: request.owner.type === 'agent_run'
       ? { runId: request.owner.run_id }
       : { sessionId: request.owner.session_id },

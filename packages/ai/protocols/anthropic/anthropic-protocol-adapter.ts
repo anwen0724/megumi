@@ -1,19 +1,19 @@
 import { createProviderError } from '../../core/provider-error';
 import { AssistantEventStream } from '../../streaming/assistant-event-stream';
 import {
-    createProviderAdapter,
-    type ProviderAdapter,
-} from '../provider-adapter';
+    createProtocolAdapter,
+    type ProtocolAdapter,
+} from '../protocol-adapter';
 import { type FetchLike } from '../openai-compatible';
 
-export interface AnthropicProviderAdapterOptions {
+export interface AnthropicProtocolAdapterOptions {
     baseUrl?: string;
     fetch?: FetchLike;
 }
 
-export function createAnthropicProviderAdapter(_options: AnthropicProviderAdapterOptions = {}): ProviderAdapter {
-    return createProviderAdapter({
-        providerId: 'anthropic',
+export function createAnthropicProtocolAdapter(_options: AnthropicProtocolAdapterOptions = {}): ProtocolAdapter {
+    return createProtocolAdapter({
+        protocol: 'anthropic',
 
         stream: (request) =>
             AssistantEventStream.from([
@@ -25,7 +25,7 @@ export function createAnthropicProviderAdapter(_options: AnthropicProviderAdapte
                         content: [],
                         stopReason: 'error',
                         error: createProviderError({
-                            providerId: 'anthropic',
+                            providerId: request.model.providerId,
                             modelId: request.model.modelId,
                             code: 'unknown_provider_error',
                             message: 'Anthropic provider is not implemented yet.',

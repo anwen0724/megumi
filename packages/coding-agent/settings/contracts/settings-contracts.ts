@@ -112,37 +112,7 @@ export const DEFAULT_SETTINGS = SettingsResolvedSchema.parse({
     reserve_tokens: 16384,
     keep_recent_tokens: 20000,
   },
-  providers: {
-    deepseek: {
-      enabled: true,
-      kind: 'openai-compatible',
-      display_name: 'DeepSeek',
-      base_url: 'https://api.deepseek.com',
-      models: ['deepseek-v4-flash'],
-      api_key_env: 'DEEPSEEK_API_KEY',
-    },
-    openai: {
-      enabled: true,
-      kind: 'openai-compatible',
-      display_name: 'OpenAI',
-      base_url: 'https://api.openai.com/v1',
-      models: ['gpt-5.5'],
-      api_key_env: 'OPENAI_API_KEY',
-    },
-    anthropic: {
-      enabled: false,
-      kind: 'anthropic',
-      display_name: 'Anthropic',
-      models: ['claude-sonnet-4-6'],
-      api_key_env: 'ANTHROPIC_API_KEY',
-    },
-    custom: {
-      enabled: false,
-      kind: 'openai-compatible',
-      display_name: 'Third-party compatible',
-      models: ['custom-model'],
-    },
-  },
+  providers: {},
   permissions: {
     allow: [],
     ask: [],

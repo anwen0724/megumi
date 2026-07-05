@@ -15,6 +15,7 @@ describe('pure AI contracts', () => {
   it('defines provider-bound model identity and model context input', () => {
     expect(defineAiModel({
       providerId: 'openai',
+      protocol: 'openai-compatible',
       modelId: 'gpt-5.5',
       displayName: 'GPT-5.5',
       capabilities: {
@@ -24,6 +25,7 @@ describe('pure AI contracts', () => {
       },
     })).toEqual({
       providerId: 'openai',
+      protocol: 'openai-compatible',
       modelId: 'gpt-5.5',
       displayName: 'GPT-5.5',
       capabilities: {

@@ -44,7 +44,7 @@ export type PromptPurpose = 'agent_response' | 'context_compaction';
 export type PromptSourceRef = {
   source_id: string;
   source_kind: SessionContextSourceKind;
-  origin_module?: 'session' | 'context' | 'agent-loop' | 'tools' | 'memory';
+  origin_module?: 'session' | 'context' | 'agent-run' | 'tools' | 'memory';
 };
 
 export type PromptMessage = {
@@ -77,6 +77,7 @@ export type BuildPromptRequest = {
   session_context: SessionContext;
   purpose: 'agent_response';
   current_user_message_id?: string;
+  runtime_sources?: SessionContextSource[];
 };
 
 export type BuildPromptFailureReason =

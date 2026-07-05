@@ -31,6 +31,7 @@ export type BuildPromptPartsInput = {
   session_context: SessionContext;
   purpose: 'agent_response' | 'context_compaction';
   current_user_message_id?: string;
+  runtime_sources?: SessionContextSource[];
 };
 
 export type BuildPromptPartsResult =
@@ -58,7 +59,12 @@ export function buildPromptParts(input: BuildPromptPartsInput): BuildPromptParts
   const seen = new Set<string>();
   const coveredSourceIds = new Set<string>();
 
-  for (const source of input.session_context.sources) {
+  const sources = [
+    ...input.session_context.sources,
+    ...(input.runtime_sources ?? []),
+  ];
+
+  for (const source of sources) {
     const covered = source.metadata?.covered_source_ids;
     if (source.source_kind === 'context_compaction_summary' && Array.isArray(covered)) {
       for (const sourceId of covered) {
@@ -71,7 +77,7 @@ export function buildPromptParts(input: BuildPromptPartsInput): BuildPromptParts
 
   const parts: PromptPart[] = [];
 
-  for (const source of input.session_context.sources) {
+  for (const source of sources) {
     const key = `${source.source_kind}:${source.source_id}`;
     if (seen.has(key)) {
       continue;

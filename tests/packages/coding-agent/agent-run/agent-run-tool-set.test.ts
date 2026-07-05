@@ -11,11 +11,9 @@ describe('run-level Tool Set builder', () => {
 
     const first = builder.getToolSet({
       run_id: 'run-1',
-      provider_capabilities: { supports_tool_call: true },
     });
     const second = builder.getToolSet({
       run_id: 'run-1',
-      provider_capabilities: { supports_tool_call: true },
     });
 
     expect(listAvailableTools).toHaveBeenCalledTimes(1);
@@ -31,7 +29,7 @@ describe('run-level Tool Set builder', () => {
     expect(builder.getRegisteredTool('run-1', 'read_file')?.definition.executionMode).toBe('parallel');
   });
 
-  it('returns an empty Tool Set without touching registry when provider does not support tools', () => {
+  it('does not filter the run Tool Set by provider capability flags', () => {
     const listAvailableTools = vi.fn(() => ({ tools: [registeredTool()] }));
     const builder = createRunToolSetBuilder({
       tool_registry_service: { listAvailableTools },
@@ -39,11 +37,10 @@ describe('run-level Tool Set builder', () => {
 
     const toolSet = builder.getToolSet({
       run_id: 'run-1',
-      provider_capabilities: { supports_tool_call: false },
     });
 
-    expect(toolSet.items).toEqual([]);
-    expect(listAvailableTools).not.toHaveBeenCalled();
+    expect(toolSet.items.map((item) => item.name)).toEqual(['read_file']);
+    expect(listAvailableTools).toHaveBeenCalledTimes(1);
   });
 });
 

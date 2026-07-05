@@ -2,7 +2,7 @@
  * Model Call Service public factory.
  * It executes one provider-neutral model call through the packages/ai client.
  */
-import type { AiClient, AssistantStreamEvent } from '@megumi/ai';
+import type { AiCallRequest, AiClient, AssistantStreamEvent } from '@megumi/ai';
 import type {
   CancelModelCallRequest,
   CancelModelCallResult,
@@ -64,12 +64,12 @@ class DefaultModelCallService implements ModelCallService {
     const aiRequest = mapModelCallToAiRequest({
       ...request,
       signal: request.signal ?? controller.signal,
-    }, this.options.retry);
+    });
 
     return {
       status: 'started',
       model_call_id: modelCallId,
-      events: this.streamModelCallEvents(modelCallId, this.options.ai_client.stream(aiRequest)),
+      events: this.streamModelCallEvents(modelCallId, aiRequest),
     };
   }
 
@@ -86,8 +86,10 @@ class DefaultModelCallService implements ModelCallService {
 
   private async *streamModelCallEvents(
     modelCallId: string,
-    events: AsyncIterable<AssistantStreamEvent>,
+    aiRequest: AiCallRequest,
   ): AsyncIterable<ModelCallEvent> {
+    const maxRetries = this.options.retry?.max_retries ?? 0;
+    const maxAttempts = maxRetries + 1;
     yield {
       type: 'started',
       model_call_id: modelCallId,
@@ -95,14 +97,65 @@ class DefaultModelCallService implements ModelCallService {
     };
 
     try {
-      for await (const event of events) {
-        const mapped = mapAssistantStreamEvent(event, modelCallId, this.clock.now());
-        if (mapped) {
-          yield mapped;
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        const attemptResult = await this.streamSingleAttempt(modelCallId, aiRequest);
+        for (const event of attemptResult.events) {
+          yield event;
         }
+
+        if (!attemptResult.failure) {
+          return;
+        }
+
+        if (!attemptResult.failure.retryable || attempt >= maxAttempts || aiRequest.signal?.aborted) {
+          yield failedModelCallEvent(modelCallId, attemptResult.failure, this.clock.now());
+          return;
+        }
+
+        const retryAfterMs = retryDelayMs(attempt, this.options.retry?.max_retry_delay_ms);
+        yield {
+          type: 'retrying',
+          model_call_id: modelCallId,
+          attempt,
+          max_attempts: maxAttempts,
+          failure: attemptResult.failure,
+          retry_after_ms: retryAfterMs,
+          created_at: this.clock.now(),
+        };
+        await sleep(retryAfterMs, aiRequest.signal);
       }
     } finally {
       this.activeCalls.delete(modelCallId);
+    }
+  }
+
+  private async streamSingleAttempt(
+    modelCallId: string,
+    aiRequest: AiCallRequest,
+  ): Promise<{ events: ModelCallEvent[]; failure?: ModelCallFailure }> {
+    const events: ModelCallEvent[] = [];
+
+    try {
+      for await (const event of this.options.ai_client!.stream(aiRequest)) {
+        const mapped = mapAssistantStreamEvent(event, modelCallId, this.clock.now());
+        if (!mapped) {
+          continue;
+        }
+        if (mapped.type === 'failed') {
+          return { events, failure: mapped.failure };
+        }
+        events.push(mapped);
+      }
+      return { events };
+    } catch (error) {
+      return {
+        events,
+        failure: {
+          code: 'model_call_failed',
+          message: error instanceof Error ? error.message : 'Model call stream failed.',
+          retryable: !aiRequest.signal?.aborted,
+        },
+      };
     }
   }
 }
@@ -171,6 +224,37 @@ function modelCallFailureFromAssistantError(event: Extract<AssistantStreamEvent,
     retryable: event.message.error?.retryable ?? false,
     ...(event.message.error?.details ? { details: event.message.error.details } : {}),
   };
+}
+
+function failedModelCallEvent(
+  modelCallId: string,
+  failure: ModelCallFailure,
+  createdAt: string,
+): ModelCallEvent {
+  return {
+    type: 'failed',
+    model_call_id: modelCallId,
+    failure,
+    created_at: createdAt,
+  };
+}
+
+function retryDelayMs(attempt: number, maxRetryDelayMs: number | undefined): number {
+  const capped = maxRetryDelayMs ?? 1000;
+  return Math.min(100 * (2 ** Math.max(0, attempt - 1)), capped);
+}
+
+function sleep(ms: number, signal: AbortSignal | undefined): Promise<void> {
+  if (ms <= 0 || signal?.aborted) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    const timeout = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timeout);
+      resolve();
+    }, { once: true });
+  });
 }
 
 function parseToolInput(argumentsText: string | undefined): unknown {

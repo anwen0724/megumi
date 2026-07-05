@@ -37,6 +37,15 @@ export type ModelCallEvent =
       created_at: string;
     }
   | {
+      type: 'retrying';
+      model_call_id: string;
+      attempt: number;
+      max_attempts: number;
+      failure: ModelCallFailure;
+      retry_after_ms: number;
+      created_at: string;
+    }
+  | {
       type: 'text_delta';
       model_call_id: string;
       delta: string;

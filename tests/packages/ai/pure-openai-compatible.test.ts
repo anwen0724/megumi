@@ -2,10 +2,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createAiClient,
-  createOpenAICompatibleProviderAdapter,
-  ProviderRegistry,
+  createOpenAICompatibleProtocolAdapter,
+  ProtocolRegistry,
   type FetchLike,
-  type ProviderAdapterRequest,
+  type ProtocolAdapterRequest,
 } from '@megumi/ai';
 
 function sseResponse(chunks: string[]): Response {
@@ -33,11 +33,13 @@ async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
   return output;
 }
 
-function request(overrides: Partial<ProviderAdapterRequest> = {}): ProviderAdapterRequest {
+function request(overrides: Partial<ProtocolAdapterRequest> = {}): ProtocolAdapterRequest {
   return {
     model: {
       providerId: 'openai',
+      protocol: 'openai-compatible',
       modelId: 'gpt-5.5',
+      baseUrl: 'https://api.openai.com/v1',
       capabilities: {
         streaming: true,
         toolCalls: true,
@@ -285,10 +287,8 @@ describe('pure OpenAI-compatible provider adapter', () => {
 
 function createOpenAICompatibleTestClient(fetch: FetchLike) {
   return createAiClient({
-    registry: new ProviderRegistry([
-      createOpenAICompatibleProviderAdapter({
-        providerId: 'openai',
-        baseUrl: 'https://api.openai.com/v1',
+    registry: new ProtocolRegistry([
+      createOpenAICompatibleProtocolAdapter({
         fetch,
       }),
     ]),

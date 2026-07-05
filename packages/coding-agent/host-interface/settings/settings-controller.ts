@@ -60,7 +60,7 @@ function toSettingsRawPatch(patch: AppSettingsRaw): SettingsRaw {
         providerId,
         {
           ...(provider.enabled !== undefined ? { enabled: provider.enabled } : {}),
-          ...(provider.kind ? { kind: provider.kind } : {}),
+          ...(provider.protocol ? { protocol: provider.protocol } : {}),
           ...(provider.displayName ? { display_name: provider.displayName } : {}),
           ...(provider.baseUrl ? { base_url: provider.baseUrl } : {}),
           ...(provider.models ? { models: provider.models } : {}),
@@ -90,7 +90,7 @@ function toAppSettingsResolved(settings: SettingsResolved): AppSettingsResolved 
       providerId,
       {
         enabled: provider.enabled,
-        kind: provider.kind,
+        protocol: provider.protocol,
         displayName: provider.display_name,
         ...(provider.base_url ? { baseUrl: provider.base_url } : {}),
         models: provider.models,

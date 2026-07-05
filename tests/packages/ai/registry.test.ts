@@ -3,9 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  ProviderRegistry,
-  createDeepSeekProviderAdapter,
-  createOpenAIProviderAdapter,
+  ProtocolRegistry,
+  createOpenAICompatibleProtocolAdapter,
   type FetchLike,
 } from '@megumi/ai';
 
@@ -24,57 +23,56 @@ function sseResponse(): Response {
   });
 }
 
-describe('pure AI provider registry', () => {
-  it('only registers provider adapters explicitly supplied by the caller', () => {
-    const registry = new ProviderRegistry([
-      createOpenAIProviderAdapter({
-        baseUrl: 'https://proxy.local/openai',
+describe('pure AI protocol registry', () => {
+  it('only registers protocol adapters explicitly supplied by the caller', () => {
+    const registry = new ProtocolRegistry([
+      createOpenAICompatibleProtocolAdapter({
         fetch: vi.fn<FetchLike>(),
       }),
     ]);
 
-    expect(registry.listProviderIds()).toEqual(['openai']);
-    expect(registry.get('openai').providerId).toBe('openai');
-    expect(() => registry.get('deepseek')).toThrow('AI provider adapter is not registered: deepseek');
+    expect(registry.listProtocols()).toEqual(['openai-compatible']);
+    expect(registry.get('openai-compatible').protocol).toBe('openai-compatible');
+    expect(() => registry.get('anthropic')).toThrow('AI protocol adapter is not registered: anthropic');
   });
 
-  it('throws a typed registry error for unknown providers', () => {
-    const registry = new ProviderRegistry([]);
+  it('throws a typed registry error for unknown protocols', () => {
+    const registry = new ProtocolRegistry([]);
 
-    expect(() => registry.get('missing')).toThrow('AI provider adapter is not registered: missing');
+    expect(() => registry.get('missing')).toThrow('AI protocol adapter is not registered: missing');
   });
 
-  it('does not expose a default provider registry from the AI package', async () => {
+  it('does not expose built-in provider registries or named provider adapters from the AI package', async () => {
     const ai = await import('@megumi/ai');
 
     expect('createDefaultProviderRegistry' in ai).toBe(false);
+    expect('createOpenAIProviderAdapter' in ai).toBe(false);
+    expect('createDeepSeekProviderAdapter' in ai).toBe(false);
     expect(existsSync(join(process.cwd(), 'packages/ai/providers/default-provider-registry.ts'))).toBe(false);
   });
 
-  it('requires explicit provider base URLs for named provider adapters', async () => {
+  it('uses each configured provider instance base URL through the shared protocol adapter', async () => {
     const openAiFetch = vi.fn<FetchLike>().mockResolvedValue(sseResponse());
     const deepSeekFetch = vi.fn<FetchLike>().mockResolvedValue(sseResponse());
+    const adapter = createOpenAICompatibleProtocolAdapter({ fetch: openAiFetch });
 
-    await collect(createOpenAIProviderAdapter({
-      baseUrl: 'https://proxy.local/openai',
-      fetch: openAiFetch,
-    }).stream(request('openai', 'gpt-5.5')));
+    await collect(adapter.stream(request('openai', 'gpt-5.5', 'https://proxy.local/openai')));
 
-    await collect(createDeepSeekProviderAdapter({
-      baseUrl: 'https://proxy.local/deepseek',
-      fetch: deepSeekFetch,
-    }).stream(request('deepseek', 'deepseek-v4-pro')));
+    await collect(createOpenAICompatibleProtocolAdapter({ fetch: deepSeekFetch })
+      .stream(request('deepseek', 'deepseek-v4-pro', 'https://proxy.local/deepseek')));
 
     expect(openAiFetch.mock.calls[0][0]).toBe('https://proxy.local/openai/chat/completions');
     expect(deepSeekFetch.mock.calls[0][0]).toBe('https://proxy.local/deepseek/chat/completions');
   });
 });
 
-function request(providerId: string, modelId: string) {
+function request(providerId: string, modelId: string, baseUrl: string) {
   return {
     model: {
       providerId,
+      protocol: 'openai-compatible' as const,
       modelId,
+      baseUrl,
     },
     context: {
       messages: [

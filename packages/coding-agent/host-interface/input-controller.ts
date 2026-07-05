@@ -76,6 +76,8 @@ export type CreateInputControllerOptions = {
 };
 
 export function createInputController(options: CreateInputControllerOptions): InputController {
+  const runIdByRequestId = new Map<string, string>();
+
   return {
     async send(input) {
       const requestId = input.requestId ?? `request:${crypto.randomUUID()}`;
@@ -95,11 +97,16 @@ export function createInputController(options: CreateInputControllerOptions): In
         },
         permission_mode: input.permissionMode ?? 'default',
       });
-      return mapStartRunResult(result, options.sessionLookup, input);
+      const mapped = mapStartRunResult(result, options.sessionLookup, input);
+      if (mapped.type === 'agent_run') {
+        runIdByRequestId.set(mapped.requestId, mapped.runId);
+      }
+      return mapped;
     },
 
     cancel(input) {
-      const result = options.agentRunService.cancelRun({ run_id: input.targetRequestId });
+      const runId = runIdByRequestId.get(input.targetRequestId) ?? input.targetRequestId;
+      const result = options.agentRunService.cancelRun({ run_id: runId });
       if (result instanceof Promise) {
         void result;
         return true;

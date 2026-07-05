@@ -1,7 +1,6 @@
 // Composes the Coding Agent product SQLite persistence repositories.
 import path from 'node:path';
 import { AgentLoopRepository } from '../persistence/repos/agent-loop.repo';
-import { createAgentRunRepository } from '../agent-run/repositories/agent-run-repository';
 import { ArtifactRepository } from '../persistence/repos/artifact.repo';
 import { MemoryRepository } from '../persistence/repos/memory.repo';
 import { SessionRepository } from '../persistence/repos/session.repo';
@@ -25,7 +24,6 @@ export function composeCodingAgentPersistence(input: ComposeCodingAgentPersisten
     database,
     workspaceRepository: new WorkspaceRepository(database),
     sessionRepository: new SessionRepository(database),
-    agentRunRepository: createAgentRunRepository({ database }),
     agentLoopRepository: new AgentLoopRepository(database),
     toolCallRepository: new ToolCallRepository(database),
     workspaceChangeRepository: new WorkspaceChangeRepository(database),

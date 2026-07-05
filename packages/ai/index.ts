@@ -16,11 +16,9 @@ export * from './tools/tool-set';
 export * from './streaming/assistant-stream-event';
 export * from './streaming/assistant-event-stream';
 
-export * from './providers/provider-adapter';
-export * from './providers/provider-adapter-request';
-export * from './providers/provider-registry';
+export * from './protocols/protocol-adapter';
+export * from './protocols/protocol-adapter-request';
+export * from './protocols/protocol-registry';
 
-export * from './providers/openai';
-export * from './providers/deepseek';
-export * from './providers/anthropic';
-export * from './providers/openai-compatible';
+export * from './protocols/anthropic';
+export * from './protocols/openai-compatible';

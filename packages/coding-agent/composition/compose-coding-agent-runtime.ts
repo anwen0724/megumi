@@ -64,11 +64,9 @@ import {
 } from '../adapters/local/workspace/project-file-system';
 import {
   createAiClient,
-  createAnthropicProviderAdapter,
-  createDeepSeekProviderAdapter,
-  createOpenAICompatibleProviderAdapter,
-  createOpenAIProviderAdapter,
-  ProviderRegistry,
+  createAnthropicProtocolAdapter,
+  createOpenAICompatibleProtocolAdapter,
+  ProtocolRegistry,
   AssistantEventStream,
   type AiClient,
   type AiCallRequest,
@@ -180,7 +178,10 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   const contextRuntime = composeCodingAgentContext({
     sessionService,
     runtimeEventRepository: persistence.agentLoopRepository as never,
-    summaryModelCallPort: options.summaryModelCallPort ?? createUnavailableSummaryModelCallPort(),
+    summaryModelCallPort: options.summaryModelCallPort ?? createContextSummaryModelCallPort({
+      modelCallService,
+      settingsService,
+    }),
     modelConfigProvider: () => ({
       model_id: 'configured-model',
       context_window_tokens: 8192,
@@ -201,7 +202,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     planArtifactCompatibility,
   });
   const agentRunService = createAgentRunService({
-    repository: persistence.agentRunRepository,
+    database: persistence.database,
     input_service: inputService,
     command_service: commandService,
     command_execution_context_provider: ({ request, session_id }) => ({
@@ -239,6 +240,9 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     permission_service: permissionService,
     workspace_service: workspaceService,
     workspace_path_policy_service: workspacePathPolicyService,
+    context_usage_signal_bus: contextRuntime.contextUsageSignalBus,
+    context_usage_monitor: contextRuntime.contextUsageMonitor,
+    context_compaction_service: contextRuntime.contextCompactionService,
     event_publisher: options.chatStreamEventSink
       ? {
           publish(event) {
@@ -323,13 +327,11 @@ export function composeCodingAgentHostInterface(
 }
 
 function createAiClientForConfiguredProviders(settingsService: SettingsService): AiClient {
-  const providerIds = settingsService.listProviderSettings();
-  const adapters = providerIds.status === 'ok'
-    ? providerIds.providers.flatMap((provider) => provider.enabled ? [createProviderAdapter(provider.provider_id, provider.base_url)] : [])
-    : [];
-
   return createAiClient({
-    registry: new ProviderRegistry(adapters),
+    registry: new ProtocolRegistry([
+      createOpenAICompatibleProtocolAdapter({ fetch }),
+      createAnthropicProtocolAdapter({ fetch }),
+    ]),
   });
 }
 
@@ -350,7 +352,7 @@ function createModelConfigSettingsFacade(settingsService: SettingsService): Pick
         status: 'ok',
         config: {
           provider_id: request.provider_id,
-          kind: provider.kind,
+          protocol: provider.protocol,
           ...(provider.base_url ? { base_url: provider.base_url } : {}),
           model_id: request.model_id,
         },
@@ -443,40 +445,73 @@ function stringPayload(event: RuntimeEvent, key: string): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-function createProviderAdapter(providerId: string, baseUrl: string | undefined) {
-  if (providerId === 'openai') {
-    return createOpenAIProviderAdapter({
-      baseUrl: baseUrl ?? 'https://api.openai.com/v1',
-      fetch,
-    });
-  }
-  if (providerId === 'deepseek') {
-    return createDeepSeekProviderAdapter({
-      baseUrl: baseUrl ?? 'https://api.deepseek.com',
-      fetch,
-    });
-  }
-  if (providerId === 'anthropic') {
-    return createAnthropicProviderAdapter({
-      ...(baseUrl ? { baseUrl } : {}),
-      fetch,
-    });
-  }
-  return createOpenAICompatibleProviderAdapter({
-    providerId,
-    baseUrl: baseUrl ?? 'http://localhost',
-    fetch,
-  });
-}
-
-function createUnavailableSummaryModelCallPort(): Parameters<typeof composeCodingAgentContext>[0]['summaryModelCallPort'] {
+function createContextSummaryModelCallPort(input: {
+  modelCallService: ModelCallService;
+  settingsService: Pick<SettingsService, 'listAvailableModels' | 'resolveProviderRuntimeConfig'>;
+}): Parameters<typeof composeCodingAgentContext>[0]['summaryModelCallPort'] {
   return {
-    async completePrompt() {
+    async completePrompt(request) {
+      const selected = input.settingsService.listAvailableModels();
+      if (selected.status === 'failed') {
+        return { status: 'failed', failure: selected.failure };
+      }
+      const model = selected.models[0];
+      if (!model) {
+        return {
+          status: 'failed',
+          failure: {
+            code: 'context_compaction_model_unavailable',
+            message: 'No enabled model is available for context compaction.',
+          },
+        };
+      }
+      const config = input.settingsService.resolveProviderRuntimeConfig({
+        provider_id: model.provider_id,
+        model_id: model.model_id,
+      });
+      if (config.status === 'failed') {
+        return { status: 'failed', failure: config.failure };
+      }
+
+      const result = await input.modelCallService.modelCall({
+        owner: {
+          type: 'context_compaction',
+          session_id: request.session_id,
+        },
+        prompt: request.prompt,
+        model_config: config.config,
+      });
+      if (result.status === 'failed') {
+        return { status: 'failed', failure: result.failure };
+      }
+
+      const deltas: string[] = [];
+      for await (const event of result.events) {
+        if (event.type === 'text_delta') {
+          deltas.push(event.delta);
+        }
+        if (event.type === 'completed') {
+          return {
+            status: 'ok',
+            text: event.content || deltas.join(''),
+            metadata: {
+              model_call_id: event.model_call_id,
+              provider_id: model.provider_id,
+              model_id: model.model_id,
+            },
+          };
+        }
+        if (event.type === 'failed') {
+          return { status: 'failed', failure: event.failure };
+        }
+      }
+
       return {
-        status: 'failed',
-        failure: {
-          code: 'context_compaction_model_unconfigured',
-          message: 'Context compaction summary model call is not configured.',
+        status: 'ok',
+        text: deltas.join(''),
+        metadata: {
+          provider_id: model.provider_id,
+          model_id: model.model_id,
         },
       };
     },

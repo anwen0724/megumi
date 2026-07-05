@@ -1,5 +1,5 @@
 import { type JsonObject } from '@megumi/shared/primitives/json';
-import { type ProviderRegistry } from '../providers/provider-registry';
+import { type ProtocolRegistry } from '../protocols/protocol-registry';
 
 export type ProviderCredential =
     | { type: 'api_key'; value: string }
@@ -11,7 +11,7 @@ export interface CredentialResolver {
 }
 
 export interface AiClientOptions {
-    registry: ProviderRegistry;
+    registry: ProtocolRegistry;
     credentialResolver?: CredentialResolver;
     defaultMetadata?: JsonObject;
     defaultMaxRetries?: number;

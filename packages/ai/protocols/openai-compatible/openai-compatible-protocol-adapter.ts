@@ -11,16 +11,14 @@ import { AssistantEventStream } from '../../streaming/assistant-event-stream';
 import { type AssistantStreamEvent } from '../../streaming/assistant-stream-event';
 import { type ProviderCredential } from '../../client/ai-client-options';
 import {
-    createProviderAdapter,
-    type ProviderAdapter,
-} from '../provider-adapter';
-import { type ProviderAdapterRequest } from '../provider-adapter-request';
+    createProtocolAdapter,
+    type ProtocolAdapter,
+} from '../protocol-adapter';
+import { type ProtocolAdapterRequest } from '../protocol-adapter-request';
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 export interface OpenAICompatibleAdapterOptions {
-    providerId: string;
-    baseUrl: string;
     fetch: FetchLike;
 }
 
@@ -78,11 +76,11 @@ interface OpenAICompatibleCompletionResponse {
     usage?: NonNullable<OpenAICompatibleStreamChunk['usage']>;
 }
 
-export function createOpenAICompatibleProviderAdapter(
+export function createOpenAICompatibleProtocolAdapter(
     options: OpenAICompatibleAdapterOptions,
-): ProviderAdapter {
-    return createProviderAdapter({
-        providerId: options.providerId,
+): ProtocolAdapter {
+    return createProtocolAdapter({
+        protocol: 'openai-compatible',
         stream: (request) =>
             AssistantEventStream.from(streamOpenAICompatible(options, request)),
     });
@@ -90,7 +88,7 @@ export function createOpenAICompatibleProviderAdapter(
 
 async function* streamOpenAICompatible(
     options: OpenAICompatibleAdapterOptions,
-    request: ProviderAdapterRequest,
+    request: ProtocolAdapterRequest,
 ): AsyncIterable<AssistantStreamEvent> {
     let credential: ProviderCredential | undefined;
 
@@ -101,7 +99,7 @@ async function* streamOpenAICompatible(
             code: 'credential_error',
             message: 'Provider credential resolution failed.',
             retryable: false,
-            providerId: options.providerId,
+            providerId: request.model.providerId,
             modelId: request.model.modelId,
             details: {
                 errorName: error instanceof Error ? error.name : 'UnknownError',
@@ -122,7 +120,7 @@ async function* streamOpenAICompatible(
             code: 'unknown_provider_error',
             message: 'Provider request failed.',
             retryable: true,
-            providerId: options.providerId,
+            providerId: request.model.providerId,
             modelId: request.model.modelId,
             details: {
                 errorName: error instanceof Error ? error.name : 'UnknownError',
@@ -135,7 +133,7 @@ async function* streamOpenAICompatible(
     }
 
     if (!response.ok) {
-        yield await createHttpErrorEvent(options.providerId, request, response);
+        yield await createHttpErrorEvent(request.model.providerId, request, response);
         return;
     }
 
@@ -165,7 +163,7 @@ async function* streamOpenAICompatible(
 
             if (chunk.usage) {
                 usage = usageFromProvider(
-                    options.providerId,
+                    request.model.providerId,
                     request.model.modelId,
                     chunk.usage,
                 );
@@ -327,7 +325,7 @@ async function* streamOpenAICompatible(
             code: 'stream_parse_error',
             message: 'Provider stream could not be parsed.',
             retryable: true,
-            providerId: options.providerId,
+            providerId: request.model.providerId,
             modelId: request.model.modelId,
             details: {
                 errorName: error instanceof Error ? error.name : 'UnknownError',
@@ -377,7 +375,7 @@ async function* streamOpenAICompatible(
                 code: 'stream_parse_error',
                 message: 'Provider stream could not be parsed.',
                 retryable: true,
-                providerId: options.providerId,
+                providerId: request.model.providerId,
                 modelId: request.model.modelId,
                 details: {
                     errorName: 'InvalidToolCall',
@@ -418,7 +416,7 @@ async function* streamOpenAICompatible(
 
 async function* streamOpenAICompatibleCompletion(
     options: OpenAICompatibleAdapterOptions,
-    request: ProviderAdapterRequest,
+    request: ProtocolAdapterRequest,
     response: Response,
 ): AsyncIterable<AssistantStreamEvent> {
     const completion = await parseOpenAICompatibleCompletionResponse(response);
@@ -538,7 +536,7 @@ async function* streamOpenAICompatibleCompletion(
             ...(completion.usage
                 ? {
                     usage: usageFromProvider(
-                        options.providerId,
+                        request.model.providerId,
                         request.model.modelId,
                         completion.usage,
                     ),
@@ -550,12 +548,15 @@ async function* streamOpenAICompatibleCompletion(
 
 async function postChatCompletion(
     options: OpenAICompatibleAdapterOptions,
-    request: ProviderAdapterRequest,
+    request: ProtocolAdapterRequest,
     credential: ProviderCredential | undefined,
 ): Promise<Response> {
     const headers = credentialHeaders(credential);
+    if (!request.model.baseUrl) {
+        throw new Error('OpenAI-compatible protocol requires model.baseUrl.');
+    }
 
-    return options.fetch(`${options.baseUrl.replace(/\/$/, '')}/chat/completions`, {
+    return options.fetch(`${request.model.baseUrl.replace(/\/$/, '')}/chat/completions`, {
         method: 'POST',
         headers,
         signal: request.signal,
@@ -586,7 +587,7 @@ function credentialHeaders(
     return headers;
 }
 
-function buildOpenAICompatibleRequestBody(request: ProviderAdapterRequest) {
+function buildOpenAICompatibleRequestBody(request: ProtocolAdapterRequest) {
     const messages = [];
 
     if (request.context.systemPrompt) {
@@ -688,7 +689,7 @@ function buildOpenAICompatibleRequestBody(request: ProviderAdapterRequest) {
 }
 
 async function resolveCredential(
-    request: ProviderAdapterRequest,
+    request: ProtocolAdapterRequest,
 ): Promise<ProviderCredential | undefined> {
     return (
         request.credential ??
@@ -811,7 +812,7 @@ function isJsonResponse(response: Response): boolean {
 
 async function createHttpErrorEvent(
     providerId: string,
-    request: ProviderAdapterRequest,
+    request: ProtocolAdapterRequest,
     response: Response,
 ): Promise<AssistantStreamEvent> {
     const preview = redactSecret((await response.text()).slice(0, 500));

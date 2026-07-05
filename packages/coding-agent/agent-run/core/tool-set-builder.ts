@@ -12,9 +12,6 @@ export type RunToolSetBuilder = {
 
 export type GetRunToolSetRequest = {
   run_id: string;
-  provider_capabilities?: {
-    supports_tool_call?: boolean;
-  };
 };
 
 export type CreateRunToolSetBuilderOptions = {
@@ -53,13 +50,6 @@ class DefaultRunToolSetBuilder implements RunToolSetBuilder {
   }
 
   private createToolSet(request: GetRunToolSetRequest): CachedRunToolSet {
-    if (request.provider_capabilities?.supports_tool_call === false) {
-      return {
-        tool_set: { items: [] },
-        registered_tools_by_name: new Map(),
-      };
-    }
-
     const registeredTools = this.options.tool_registry_service.listAvailableTools().tools;
     return {
       tool_set: {

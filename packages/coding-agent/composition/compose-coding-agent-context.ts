@@ -110,35 +110,6 @@ export function composeCodingAgentContext(input: {
     }
     return result;
   };
-  contextUsageSignalBus.subscribe('auto_compaction_needed', async (signal) => {
-    if (signal.kind !== 'auto_compaction_needed') {
-      return;
-    }
-
-    contextUsageMonitor.markCompactionRunning({
-      session_id: signal.session_id,
-      ...(signal.workspace_id ? { workspace_id: signal.workspace_id } : {}),
-      running: true,
-    });
-    try {
-      await contextCompactionService.compact({
-        session_id: signal.session_id,
-        ...(signal.workspace_id ? { workspace_id: signal.workspace_id } : {}),
-        trigger: {
-          kind: 'auto',
-          reason: 'context_window_threshold',
-          signal_id: signal.signal_id,
-        },
-      });
-    } finally {
-      contextUsageMonitor.markCompactionRunning({
-        session_id: signal.session_id,
-        ...(signal.workspace_id ? { workspace_id: signal.workspace_id } : {}),
-        running: false,
-      });
-    }
-  });
-
   return {
     contextRepository,
     contextService,

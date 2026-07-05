@@ -74,9 +74,7 @@ describe('Coding Agent host interface runtime', () => {
     expect(hostRecord.tools).toBeUndefined();
     expect(hostRecord.branch).toBeUndefined();
     await expect(runtime.settings.provider.list()).resolves.toEqual({
-      providers: expect.arrayContaining([
-        expect.objectContaining({ providerId: 'openai' }),
-      ]),
+      providers: [],
     });
   });
 

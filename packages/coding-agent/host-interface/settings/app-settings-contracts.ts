@@ -36,7 +36,7 @@ export const AppCompactionSettingsRawSchema = z
 export const AppProviderSettingsRawSchema = z
   .object({
     enabled: z.boolean().optional(),
-    kind: z.enum(['openai-compatible', 'openai', 'anthropic']).optional(),
+    protocol: z.enum(['openai-compatible', 'anthropic']).optional(),
     displayName: z.string().min(1).optional(),
     baseUrl: z.string().url().optional(),
     models: z.array(z.string().min(1)).optional(),
@@ -76,7 +76,7 @@ export const AppCompactionSettingsResolvedSchema = z
 export const AppProviderSettingsResolvedSchema = z
   .object({
     enabled: z.boolean(),
-    kind: z.enum(['openai-compatible', 'openai', 'anthropic']),
+    protocol: z.enum(['openai-compatible', 'anthropic']),
     displayName: z.string().min(1),
     baseUrl: z.string().url().optional(),
     models: z.array(z.string().min(1)),
@@ -115,7 +115,7 @@ export const DEFAULT_APP_SETTINGS = AppSettingsResolvedSchema.parse({
     providerId,
     {
       enabled: provider.enabled,
-      kind: provider.kind,
+      protocol: provider.protocol,
       displayName: provider.display_name,
       ...(provider.base_url ? { baseUrl: provider.base_url } : {}),
       models: provider.models,

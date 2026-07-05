@@ -1,6 +1,6 @@
 /*
- * Defines Settings-owned provider configuration and runtime resolution contracts.
- * These contracts describe settings.json provider facts, not provider adapter protocols.
+ * Defines Settings-owned provider instance configuration and runtime resolution contracts.
+ * A provider instance is user-configured; protocol selects the AI package request adapter.
  */
 import { z } from 'zod';
 import type { SettingsError } from './settings-contracts';
@@ -8,13 +8,13 @@ import type { SettingsError } from './settings-contracts';
 export const ProviderIdSchema = z.string().min(1);
 export type ProviderId = z.infer<typeof ProviderIdSchema>;
 
-export const ProviderKindSchema = z.enum(['openai-compatible', 'openai', 'anthropic']);
-export type ProviderKind = z.infer<typeof ProviderKindSchema>;
+export const ProviderProtocolSchema = z.enum(['openai-compatible', 'anthropic']);
+export type ProviderProtocol = z.infer<typeof ProviderProtocolSchema>;
 
 export const ProviderSettingsRawSchema = z
   .object({
     enabled: z.boolean().optional(),
-    kind: ProviderKindSchema.optional(),
+    protocol: ProviderProtocolSchema.optional(),
     display_name: z.string().min(1).optional(),
     base_url: z.string().url().optional(),
     models: z.array(z.string().min(1)).optional(),
@@ -27,7 +27,7 @@ export type ProviderSettingsRaw = z.infer<typeof ProviderSettingsRawSchema>;
 export const ProviderSettingsResolvedSchema = z
   .object({
     enabled: z.boolean(),
-    kind: ProviderKindSchema,
+    protocol: ProviderProtocolSchema,
     display_name: z.string().min(1),
     base_url: z.string().url().optional(),
     models: z.array(z.string().min(1)),
@@ -68,7 +68,7 @@ export type AvailableModelOption = z.infer<typeof AvailableModelOptionSchema>;
 export const ProviderRuntimeConfigSchema = z
   .object({
     provider_id: ProviderIdSchema,
-    kind: ProviderKindSchema,
+    protocol: ProviderProtocolSchema,
     base_url: z.string().url().optional(),
     model_id: z.string().min(1),
     api_key: z.string().min(1).optional(),

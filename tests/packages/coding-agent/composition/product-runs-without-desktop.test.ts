@@ -31,6 +31,20 @@ function productSettingsStorage(initial: SettingsRaw = {}) {
   };
 }
 
+function configuredDeepSeekSettings(): SettingsRaw {
+  return {
+    providers: {
+      deepseek: {
+        enabled: true,
+        protocol: 'openai-compatible',
+        base_url: 'https://api.deepseek.com',
+        models: ['deepseek-v4-flash'],
+        api_key: 'sk-test',
+      },
+    },
+  };
+}
+
 // A model step provider that asks the product to run the real built-in read_file
 // tool (auto-allowed for project reads), then emits a final assistant answer once
 // the tool result feeds back.
@@ -193,7 +207,6 @@ describe('coding-agent product runs without desktop', () => {
     try {
       expect(Object.keys(persistence).sort()).toEqual([
         'agentLoopRepository',
-        'agentRunRepository',
         'artifactRepository',
         'database',
         'memoryRepository',
@@ -228,7 +241,7 @@ describe('coding-agent product runs without desktop', () => {
       homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
       runtimeLogger: { warn: () => undefined },
       modelCallProviderService: toolCallingModelStepProvider('NOTES.md'),
-      settingsStorage: productSettingsStorage(),
+      settingsStorage: productSettingsStorage(configuredDeepSeekSettings()),
       chatStreamEventSink: { publish: (event) => chatStreamEvents.push(event) },
     });
 
@@ -287,7 +300,7 @@ describe('coding-agent product runs without desktop', () => {
       homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
       runtimeLogger: { warn: () => undefined },
       modelCallProviderService: toolCallingModelStepProvider('UNUSED.md'),
-      settingsStorage: productSettingsStorage(),
+      settingsStorage: productSettingsStorage(configuredDeepSeekSettings()),
     });
 
     const afterRestart = runtime.session.listTimeline({
@@ -314,7 +327,7 @@ describe('coding-agent product runs without desktop', () => {
         content: 'created through tool runtime',
         overwrite: false,
       }),
-      settingsStorage: productSettingsStorage(),
+      settingsStorage: productSettingsStorage(configuredDeepSeekSettings()),
     });
 
     const result = await runtime.input.send({
@@ -373,7 +386,7 @@ describe('coding-agent product runs without desktop', () => {
       homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
       runtimeLogger: { warn: () => undefined },
       modelCallProviderService: singleToolCallingModelStepProvider('write_file', { path: 'BROKEN.md' }),
-      settingsStorage: productSettingsStorage(),
+      settingsStorage: productSettingsStorage(configuredDeepSeekSettings()),
     });
 
     const result = await runtime.input.send({

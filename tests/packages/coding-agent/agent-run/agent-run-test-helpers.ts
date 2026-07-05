@@ -132,7 +132,7 @@ export function createMessageFlowDependencies(input: {
         status: 'ok' as const,
         config: {
           provider_id: 'deepseek',
-          kind: 'openai-compatible' as const,
+          protocol: 'openai-compatible' as const,
           base_url: 'https://api.deepseek.com',
           model_id: 'deepseek-chat',
           api_key: 'test-key',

@@ -14,7 +14,7 @@ class DefaultAiClient implements AiClient {
 
     stream(request: AiCallRequest): AssistantEventStream {
         try {
-            const adapter = this.options.registry.get(request.model.providerId);
+            const adapter = this.options.registry.get(request.model.protocol);
             const metadata = {
                 ...(this.options.defaultMetadata ?? {}),
                 ...(request.metadata ?? {}),

@@ -81,7 +81,7 @@ function appRawToSettingsRaw(raw: AppSettingsRaw): SettingsRaw {
         providerId,
         {
           ...(provider.enabled !== undefined ? { enabled: provider.enabled } : {}),
-          ...(provider.kind ? { kind: provider.kind } : {}),
+          ...(provider.protocol ? { protocol: provider.protocol } : {}),
           ...(provider.displayName ? { display_name: provider.displayName } : {}),
           ...(provider.baseUrl ? { base_url: provider.baseUrl } : {}),
           ...(provider.models ? { models: provider.models } : {}),
@@ -111,7 +111,7 @@ const LegacyAppCompactionSettingsRawSchema = z
 const LegacyAppProviderSettingsRawSchema = z
   .object({
     enabled: z.boolean().optional(),
-    kind: z.enum(['openai-compatible', 'openai', 'anthropic']).optional(),
+    protocol: z.enum(['openai-compatible', 'anthropic']).optional(),
     displayName: z.string().min(1).optional(),
     baseUrl: z.string().url().optional(),
     models: z.array(z.string().min(1)).optional(),

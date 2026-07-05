@@ -147,7 +147,7 @@ function definedProviderOverride(value: ProviderSettingsRaw) {
 function defaultProvider(providerId: string) {
   return {
     enabled: false,
-    kind: 'openai-compatible',
+    protocol: 'openai-compatible',
     display_name: providerId,
     models: [],
   };

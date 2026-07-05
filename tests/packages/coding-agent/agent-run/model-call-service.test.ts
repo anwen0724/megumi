@@ -9,13 +9,11 @@ import { mapModelCallToAiRequest } from '@megumi/coding-agent/agent-run/adapters
 
 describe('Model Call Service', () => {
   it('maps Prompt and run-level ToolSet to packages/ai request', () => {
-    const mapped = mapModelCallToAiRequest(sampleModelCallRequest(), {
-      max_retries: 2,
-      max_retry_delay_ms: 25,
-    });
+    const mapped = mapModelCallToAiRequest(sampleModelCallRequest());
 
     expect(mapped.model).toEqual({
       providerId: 'deepseek',
+      protocol: 'openai-compatible',
       modelId: 'deepseek-chat',
     });
     expect(mapped.context.systemPrompt).toBe('System prompt');
@@ -30,8 +28,8 @@ describe('Model Call Service', () => {
         inputSchema: { type: 'object' },
       },
     ]);
-    expect(mapped.maxRetries).toBe(2);
-    expect(mapped.maxRetryDelayMs).toBe(25);
+    expect('maxRetries' in mapped).toBe(false);
+    expect('maxRetryDelayMs' in mapped).toBe(false);
   });
 
   it('streams model events and supports cancellation by model_call_id', async () => {
@@ -99,33 +97,48 @@ describe('Model Call Service', () => {
       tool_name: 'read_file',
       input: { path: 'README.md' },
     });
-    expect(capturedRequest?.maxRetries).toBe(2);
+    expect(capturedRequest && 'maxRetries' in capturedRequest).toBe(false);
     expect(service.cancelModelCall({ model_call_id: 'model-call-1' })).toEqual({
       status: 'not_cancellable',
       model_call_id: 'model-call-1',
     });
   });
 
-  it('returns model_call_failed provider errors without retrying tool failures', async () => {
+  it('retries retryable provider failures inside Model Call Service', async () => {
+    let calls = 0;
     const aiClient: AiClient = {
       stream() {
+        calls += 1;
+        if (calls < 3) {
+          return AssistantEventStream.from([
+            {
+              type: 'error',
+              reason: 'error',
+              message: {
+                role: 'assistant',
+                content: [],
+                stopReason: 'error',
+                error: {
+                  providerId: 'deepseek',
+                  modelId: 'deepseek-chat',
+                  code: 'provider_http_error',
+                  message: 'provider failed',
+                  severity: 'error',
+                  source: 'ai',
+                  retryable: true,
+                },
+              },
+            },
+          ]);
+        }
+
         return AssistantEventStream.from([
           {
-            type: 'error',
-            reason: 'error',
+            type: 'message_end',
             message: {
               role: 'assistant',
-              content: [],
-              stopReason: 'error',
-              error: {
-                providerId: 'deepseek',
-                modelId: 'deepseek-chat',
-                code: 'provider_http_error',
-                message: 'provider failed',
-                severity: 'error',
-                source: 'ai',
-                retryable: true,
-              },
+              content: [{ type: 'text', text: 'Recovered' }],
+              stopReason: 'stop',
             },
           },
         ]);
@@ -145,13 +158,14 @@ describe('Model Call Service', () => {
     if (result.status !== 'started') return;
 
     const events = await collect(result.events);
-    expect(events.at(-1)).toMatchObject({
-      type: 'failed',
-      failure: {
-        code: 'model_call_failed',
-        retryable: true,
-      },
-    });
+    expect(calls).toBe(3);
+    expect(events.map((event) => event.type)).toEqual([
+      'started',
+      'retrying',
+      'retrying',
+      'completed',
+    ]);
+    expect(events.at(-1)).toMatchObject({ type: 'completed', content: 'Recovered' });
   });
 });
 
@@ -170,7 +184,7 @@ function sampleModelCallRequest(): ModelCallRequest {
     },
     model_config: {
       provider_id: 'deepseek',
-      kind: 'openai-compatible',
+      protocol: 'openai-compatible',
       model_id: 'deepseek-chat',
       api_key: 'sk-test',
     },

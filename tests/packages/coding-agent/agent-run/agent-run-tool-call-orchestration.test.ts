@@ -124,6 +124,47 @@ describe('Agent Run tool-call orchestration', () => {
     expect(result.next_model_prompt_ready).toBe(false);
     expect(result.tool_calls[0]?.status).toBe('waiting_for_approval');
   });
+
+  it('executes allowed tools before an approval barrier and defers tools after it', async () => {
+    const executeTool = vi.fn(async (request) => succeededToolResult(request.toolName));
+    const result = await orchestrateToolCallGroup({
+      ...baseInput(),
+      tool_calls: [
+        toolCall('call-1', 'read_file'),
+        toolCall('call-2', 'run_command'),
+        toolCall('call-3', 'list_files'),
+      ],
+      registered_tools_by_name: new Map([
+        ['read_file', registeredTool('read_file', 'parallel')],
+        ['run_command', registeredTool('run_command', 'serial')],
+        ['list_files', registeredTool('list_files', 'parallel')],
+      ]),
+      permission_service: {
+        evaluateToolExecution: vi.fn((request) => permissionResult(
+          request.tool_name === 'run_command'
+            ? {
+                type: 'requires_approval',
+                reason: 'needs approval',
+                execution_class: 'process_execution',
+                approval: { allowed_scopes: ['once', 'session'], default_scope: 'once' },
+              }
+            : allowDecision(),
+        )),
+      },
+      tool_execution_service: { executeTool },
+    });
+
+    expect(executeTool).toHaveBeenCalledTimes(1);
+    expect(executeTool).toHaveBeenCalledWith(expect.objectContaining({ toolName: 'read_file' }));
+    expect(result.pending_approvals).toHaveLength(1);
+    expect(result.deferred_tool_calls).toEqual([
+      expect.objectContaining({ tool_call_id: 'call-3', tool_name: 'list_files' }),
+    ]);
+    expect(result.tool_result_facts).toEqual([
+      expect.objectContaining({ tool_call_id: 'call-1', status: 'completed' }),
+    ]);
+    expect(result.next_model_prompt_ready).toBe(false);
+  });
 });
 
 function baseInput(): Omit<AgentRunToolCallRequest, 'tool_calls' | 'registered_tools_by_name' | 'permission_service' | 'tool_execution_service'> {

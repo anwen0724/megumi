@@ -92,8 +92,8 @@ describe('Settings Service', () => {
     const deepseek = result.providers.find((provider) => provider.provider_id === 'deepseek');
     expect(deepseek).toMatchObject({
       provider_id: 'deepseek',
-      display_name: 'DeepSeek',
-      enabled: true,
+      display_name: 'deepseek',
+      enabled: false,
       has_api_key: true,
       credential_source: 'settings',
     });
@@ -106,7 +106,7 @@ describe('Settings Service', () => {
       providers: {
         local: {
           enabled: true,
-          kind: 'openai-compatible',
+          protocol: 'openai-compatible',
           display_name: 'Local',
           base_url: 'http://localhost:11434/v1',
           models: ['llama3', 'qwen3'],
@@ -139,7 +139,7 @@ describe('Settings Service', () => {
       providers: {
         local: {
           enabled: true,
-          kind: 'openai-compatible',
+          protocol: 'openai-compatible',
           display_name: 'Local',
           base_url: 'http://localhost:11434/v1',
           models: ['llama3'],
@@ -156,7 +156,7 @@ describe('Settings Service', () => {
       status: 'ok',
       config: {
         provider_id: 'local',
-        kind: 'openai-compatible',
+        protocol: 'openai-compatible',
         base_url: 'http://localhost:11434/v1',
         model_id: 'llama3',
         api_key: 'sk-local',
@@ -170,14 +170,14 @@ describe('Settings Service', () => {
       providers: {
         missing_key: {
           enabled: true,
-          kind: 'openai-compatible',
+          protocol: 'openai-compatible',
           display_name: 'Missing key',
           base_url: 'http://localhost:11434/v1',
           models: ['llama3'],
         },
         disabled: {
           enabled: false,
-          kind: 'openai-compatible',
+          protocol: 'openai-compatible',
           display_name: 'Disabled',
           base_url: 'http://localhost:11434/v1',
           models: ['llama3'],

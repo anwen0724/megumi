@@ -130,7 +130,7 @@ export class ContextService {
           created_at: fact.createdAt,
           metadata: filterMetadata({
             ...fact.metadata,
-            origin_module: 'agent-loop',
+            origin_module: 'agent-run',
           }),
         })));
 
@@ -223,6 +223,7 @@ export class ContextService {
       session_context: request.session_context,
       purpose: request.purpose,
       current_user_message_id: request.current_user_message_id,
+      runtime_sources: request.runtime_sources,
     });
 
     if (partsResult.status === 'failed') {

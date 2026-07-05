@@ -10,10 +10,15 @@ export const AiModelCapabilitiesSchema = z
 
 export type AiModelCapabilities = z.infer<typeof AiModelCapabilitiesSchema>;
 
+export const AiProtocolSchema = z.enum(['openai-compatible', 'anthropic']);
+export type AiProtocol = z.infer<typeof AiProtocolSchema>;
+
 export const AiModelSchema = z
     .object({
         providerId: z.string().min(1),
+        protocol: AiProtocolSchema,
         modelId: z.string().min(1),
+        baseUrl: z.string().url().optional(),
         displayName: z.string().min(1).optional(),
         capabilities: AiModelCapabilitiesSchema.optional(),
     })

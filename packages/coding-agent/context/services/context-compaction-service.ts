@@ -23,7 +23,7 @@ export interface ContextCompactionRepository {
 }
 
 export interface ContextSummaryModelCallPort {
-  completePrompt(input: { prompt: Prompt }): Promise<
+  completePrompt(input: { prompt: Prompt; session_id: string; workspace_id?: string }): Promise<
     | { status: 'ok'; text: string; metadata?: Record<string, unknown> }
     | { status: 'failed'; failure: RuntimeError }
   >;
@@ -131,7 +131,11 @@ export class ContextCompactionService {
         created_at: this.now(),
       });
 
-      const modelResult = await this.options.modelCall.completePrompt({ prompt });
+      const modelResult = await this.options.modelCall.completePrompt({
+        prompt,
+        session_id: request.session_id,
+        ...(request.workspace_id ? { workspace_id: request.workspace_id } : {}),
+      });
       if (modelResult.status === 'failed') {
         return {
           status: 'failed',
