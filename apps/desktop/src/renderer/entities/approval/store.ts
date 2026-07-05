@@ -1,5 +1,31 @@
 ﻿import { create } from 'zustand';
-import type { ApprovalRequest, ApprovalStatus } from '@megumi/shared/tool';
+
+export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired' | 'cancelled';
+export type ApprovalScope = 'once' | 'session' | string;
+
+export interface ApprovalRequest {
+  approvalRequestId: string;
+  permissionDecisionId?: string;
+  runId: string;
+  stepId?: string;
+  toolCallId?: string;
+  toolExecutionId?: string;
+  canonicalToolId?: string;
+  sourceId?: string;
+  namespace?: string;
+  capabilities?: string[];
+  sourceToolName?: string;
+  riskLevel?: string;
+  title?: string;
+  status: ApprovalStatus;
+  requestedScope: ApprovalScope;
+  modelVisibleName?: string;
+  toolName?: string;
+  summary?: string;
+  preview: { action?: string; targets?: unknown[] };
+  createdAt: string;
+  resolvedAt?: string;
+}
 
 export interface ApprovalState {
   approvalRequestsById: Record<string, ApprovalRequest>;
@@ -42,4 +68,3 @@ export const useApprovalStore = create<ApprovalState>((set, get) => ({
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
   reset: () => set({ approvalRequestsById: {} }),
 }));
-

@@ -1,5 +1,5 @@
-import type { PermissionMode } from '@megumi/shared/permission';
-import type { ProviderPublicStatus } from '@megumi/shared/provider';
+﻿import type { PermissionMode } from '@megumi/coding-agent/permissions';
+import type { ProviderPublicStatusUiDto } from '@megumi/coding-agent/host-interface';
 
 export type ComposerPermissionMode = PermissionMode;
 export type ComposerModel = string;
@@ -32,7 +32,7 @@ export function getComposerPermissionModeLabel(permissionMode: ComposerPermissio
   return COMPOSER_PERMISSION_MODE_OPTIONS.find((option) => option.value === permissionMode)?.label ?? permissionMode;
 }
 
-export function getComposerModelOptionsForProviders(providers?: ProviderPublicStatus[]): ComposerModelOption[] {
+export function getComposerModelOptionsForProviders(providers?: ProviderPublicStatusUiDto[]): ComposerModelOption[] {
   if (!providers) {
     return [];
   }

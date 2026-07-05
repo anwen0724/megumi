@@ -1,5 +1,5 @@
-import { normalizeRuntimeError } from '@megumi/coding-agent/runtime-error';
-import { createRuntimeDebugId } from '@megumi/shared/runtime';
+﻿import { normalizeRuntimeError } from '@megumi/coding-agent/runtime-error';
+import { createRuntimeDebugId } from '@megumi/coding-agent/events';
 import { redactRuntimeValue } from '@megumi/coding-agent/adapters/local/security/redaction';
 import {
   noopRuntimeLogger,
@@ -46,5 +46,3 @@ function createDetails(
     }),
   }) as Record<string, unknown>;
 }
-
-

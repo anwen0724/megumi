@@ -1,6 +1,22 @@
 ﻿import { useState, useRef, useEffect } from 'react';
 import { useSessionStore } from '../../../entities/session/store';
-import { AGENT_DESCRIPTIONS, AGENT_LABELS, AGENT_TYPES, type AgentType } from '@megumi/shared/session';
+import type { AgentType } from '../../../entities/session/session-factory';
+
+const AGENT_TYPES: AgentType[] = ['analyst', 'architect', 'developer', 'reviewer', 'free'];
+const AGENT_LABELS: Record<AgentType, string> = {
+  analyst: 'Analyst',
+  architect: 'Architect',
+  developer: 'Developer',
+  reviewer: 'Reviewer',
+  free: 'Free',
+};
+const AGENT_DESCRIPTIONS: Record<AgentType, string> = {
+  analyst: 'Explore requirements and evidence',
+  architect: 'Shape structure and tradeoffs',
+  developer: 'Implement code changes',
+  reviewer: 'Review quality and risks',
+  free: 'General assistant mode',
+};
 
 const AGENT_COLORS: Record<AgentType, string> = {
   analyst: 'bg-green-500',
@@ -77,4 +93,3 @@ export default function AgentSwitcher() {
     </div>
   );
 }
-

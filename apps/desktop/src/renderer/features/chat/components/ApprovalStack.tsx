@@ -1,5 +1,5 @@
 ﻿import { ApprovalCard, type ApprovalCardResolvePayload } from '../../../entities/approval';
-import type { ApprovalRequest } from '@megumi/shared/tool';
+import type { ApprovalRequest } from '../../../entities/approval/store';
 
 interface ApprovalStackProps {
   requests: ApprovalRequest[];
@@ -26,4 +26,3 @@ export function ApprovalStack({ requests, onResolve }: ApprovalStackProps) {
     </section>
   );
 }
-

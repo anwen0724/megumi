@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Desktop IPC handlers for chat, session, command suggestions, and run hydration.
  */
 import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';

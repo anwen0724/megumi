@@ -3,7 +3,7 @@
   BranchSeparatorBlock,
   TimelineMessage as CanonicalTimelineMessage,
   UserTimelineBlock,
-} from '@megumi/shared/timeline';
+} from '@megumi/coding-agent/projections/timeline';
 import { TimelineMarkdown } from './TimelineMarkdown';
 import { ProcessDisclosureBlockView } from './ProcessDisclosureBlockView';
 
@@ -71,4 +71,3 @@ export function TimelineMessageBlocks({ message }: TimelineMessageBlocksProps) {
     </div>
   );
 }
-

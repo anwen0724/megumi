@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Desktop IPC handlers for approval decisions.
  */
 import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';

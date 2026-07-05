@@ -1,6 +1,4 @@
-﻿import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import type { RuntimeIpcError } from '@megumi/shared/ipc';
-import {
+﻿import {
   MemoryAccessLogsListRequestSchema,
   MemoryArchiveRequestSchema,
   MemoryCandidateAcceptRequestSchema,
@@ -16,11 +14,13 @@ import {
   MemoryRecallPreviewRequestSchema,
   MemorySourceRefsListRequestSchema,
   MemoryUpdateRequestSchema,
-} from '@megumi/shared/ipc';
+} from '../schemas';
 import { createIpcRequestHandler } from '../create-request-handler';
 import type { MemoryService } from '@megumi/coding-agent/memory';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import type { DesktopIpcMain } from '../../shell/electron-ipc-main-host';
+import { IPC_CHANNELS } from '../channels';
+import type { RuntimeIpcError } from '../errors';
 
 export type MemoryHandlersService = Pick<
   MemoryService,
@@ -213,4 +213,3 @@ function mapMemoryIpcError(): RuntimeIpcError {
     source: 'main',
   };
 }
-

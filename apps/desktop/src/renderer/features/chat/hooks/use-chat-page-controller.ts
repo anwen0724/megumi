@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ApprovalResolvePayload } from '@megumi/shared/ipc';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/shared/timeline';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ApprovalResolvePayload } from '@megumi/desktop/main/ipc/schemas';
+import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
+import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/coding-agent/projections/timeline';
 import { type ApprovalCardResolvePayload, useApprovalStore } from '../../../entities/approval';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
@@ -206,7 +206,7 @@ export function useChatPageController() {
 
     try {
       await window.megumi.workspace.files.open(createRendererRuntimeIpcRequest(
-        IPC_CHANNELS.workspace.files.open,
+        IPC_CHANNELS.workspace.filesOpen,
         {
           workspaceRoot: currentProject.repoPath,
           filePath: projectPath,

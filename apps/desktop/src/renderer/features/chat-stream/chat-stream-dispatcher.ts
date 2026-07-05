@@ -1,4 +1,4 @@
-﻿import { ChatStreamEventSchema } from '@megumi/shared/chat-stream';
+﻿import { ChatStreamEventSchema } from '@megumi/coding-agent/projections/chat-stream';
 import { useChatStreamStore } from './chat-stream-store';
 
 export function dispatchChatStreamEvent(payload: unknown): void {
@@ -10,4 +10,3 @@ export function dispatchChatStreamEvent(payload: unknown): void {
 
   useChatStreamStore.getState().dispatch(parsed.data);
 }
-

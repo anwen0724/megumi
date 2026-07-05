@@ -1,4 +1,7 @@
-﻿import type { ProjectRecord, ProjectStatus } from '@megumi/shared/project';
+﻿import type { WorkspaceProjectUiDto } from '@megumi/coding-agent/host-interface';
+
+export type ProjectStatus = WorkspaceProjectUiDto['status'];
+export type ProjectRecord = WorkspaceProjectUiDto;
 
 export interface Project {
   id: string;
@@ -12,15 +15,15 @@ export interface Project {
 }
 
 export function projectFromRecord(record: ProjectRecord): Project {
+  const openedAt = record.openedAt ?? record.lastActiveAt ?? new Date(0).toISOString();
   return {
     id: record.projectId,
     projectId: record.projectId,
     name: record.name,
-    repoPath: record.repoPath,
-    repoPathKey: record.repoPathKey,
+    repoPath: record.rootPath,
+    repoPathKey: record.rootPathKey,
     status: record.status,
-    createdAt: record.createdAt,
-    lastOpenedAt: record.lastOpenedAt,
+    createdAt: openedAt,
+    lastOpenedAt: record.lastActiveAt ?? openedAt,
   };
 }
-

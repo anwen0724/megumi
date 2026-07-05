@@ -1,5 +1,5 @@
 ﻿import { AlertCircle, CheckCircle2, Clock, Loader2, ShieldCheck, XCircle } from 'lucide-react';
-import type { ToolExecution, ToolExecutionStatus } from '@megumi/shared/tool';
+import type { ToolExecution, ToolExecutionStatus } from './store';
 import { Badge, Panel, cx } from '../../shared/ui';
 
 interface ToolCallStatusCardProps {
@@ -133,14 +133,18 @@ function readableInputPreview(inputPreview: ToolExecution['inputPreview']): {
   if (!inputPreview || typeof inputPreview !== 'object' || Array.isArray(inputPreview)) {
     return { summary: 'Tool input', targets: [] };
   }
-  const summary = typeof inputPreview.summary === 'string' ? inputPreview.summary : 'Tool input';
-  const targets = Array.isArray(inputPreview.targets)
-    ? inputPreview.targets.flatMap((target) => (
-      target && typeof target === 'object' && !Array.isArray(target)
-        && typeof target.kind === 'string' && typeof target.label === 'string'
-        ? [{ kind: target.kind, label: target.label }]
-        : []
-    ))
+  const preview = inputPreview as Record<string, unknown>;
+  const summary = typeof preview.summary === 'string' ? preview.summary : 'Tool input';
+  const targets = Array.isArray(preview.targets)
+    ? preview.targets.flatMap((target: unknown) => {
+      if (!target || typeof target !== 'object' || Array.isArray(target)) {
+        return [];
+      }
+      const candidate = target as Record<string, unknown>;
+      return typeof candidate.kind === 'string' && typeof candidate.label === 'string'
+        ? [{ kind: candidate.kind, label: candidate.label }]
+        : [];
+    })
     : [];
   return { summary, targets };
 }
@@ -154,4 +158,3 @@ function formatPreview(value: ToolExecution['resultPreview']): string {
   }
   return JSON.stringify(value);
 }
-

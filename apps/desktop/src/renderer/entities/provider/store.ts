@@ -1,13 +1,11 @@
 ﻿import { create } from 'zustand';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import type { RuntimeIpcResult } from '@megumi/shared/ipc';
+import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import type {
   ProviderApiKeyPayload,
   ProviderDeleteApiKeyPayload,
-  ProviderListData,
   ProviderUpdatePayload,
-} from '@megumi/shared/ipc';
-import type { ProviderId, ProviderPublicStatus } from '@megumi/shared/provider';
+} from '@megumi/desktop/main/ipc/schemas';
+import type { ProviderListUiResult, ProviderPublicStatusUiDto } from '@megumi/coding-agent/host-interface';
 import {
   createRendererRuntimeIpcRequest,
   getRuntimeIpcErrorMessage,
@@ -16,7 +14,7 @@ import {
 export type ProviderStoreStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';
 
 export interface ProviderUpdateInput {
-  providerId: ProviderId;
+  providerId: string;
   enabled?: boolean;
   displayName?: string;
   baseUrl?: string;
@@ -25,16 +23,16 @@ export interface ProviderUpdateInput {
 }
 
 export interface ProviderApiKeyInput {
-  providerId: ProviderId;
+  providerId: string;
   apiKey: string;
 }
 
 export interface ProviderDeleteApiKeyInput {
-  providerId: ProviderId;
+  providerId: string;
 }
 
 interface ProviderStoreState {
-  providers: ProviderPublicStatus[];
+  providers: ProviderPublicStatusUiDto[];
   status: ProviderStoreStatus;
   error: string | null;
   loadProviders: () => Promise<void>;
@@ -51,7 +49,7 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
     set({ status: 'loading', error: null });
 
     const result = await window.megumi.provider.list(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.provider.list, {}),
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.providerList, {}),
     );
 
     if (!result.ok) {
@@ -63,7 +61,7 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
     }
 
     set({
-      providers: (result.data as ProviderListData).providers,
+      providers: (result.data as ProviderListUiResult).providers,
       status: 'ready',
       error: null,
     });
@@ -73,7 +71,7 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
 
     const result = await window.megumi.provider.update(
       createRendererRuntimeIpcRequest(
-        IPC_CHANNELS.provider.update,
+        IPC_CHANNELS.settings.providerUpdate,
         input satisfies ProviderUpdatePayload,
       ),
     );
@@ -93,7 +91,7 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
 
     const result = await window.megumi.provider.setApiKey(
       createRendererRuntimeIpcRequest(
-        IPC_CHANNELS.provider.setApiKey,
+        IPC_CHANNELS.settings.providerSetApiKey,
         input satisfies ProviderApiKeyPayload,
       ),
     );
@@ -113,7 +111,7 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
 
     const result = await window.megumi.provider.deleteApiKey(
       createRendererRuntimeIpcRequest(
-        IPC_CHANNELS.provider.deleteApiKey,
+        IPC_CHANNELS.settings.providerDeleteApiKey,
         input satisfies ProviderDeleteApiKeyPayload,
       ),
     );
@@ -129,4 +127,3 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
     await get().loadProviders();
   },
 }));
-

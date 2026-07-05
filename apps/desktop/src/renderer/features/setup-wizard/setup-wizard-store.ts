@@ -1,7 +1,6 @@
 ﻿// Coordinates the renderer first-run setup flow through existing settings and provider IPC APIs.
 import { create } from 'zustand';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import type { ProviderId } from '@megumi/shared/provider';
+import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import type { AppLanguage, AppThemeName } from '@megumi/coding-agent/host-interface';
 import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../shared/ipc';
 
@@ -10,7 +9,7 @@ export type SetupWizardStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error
 export interface CompleteSetupInput {
   language: AppLanguage;
   theme: AppThemeName;
-  providerId?: ProviderId;
+  providerId?: string;
   baseUrl?: string;
   modelIds: string[];
   apiKey?: string;
@@ -98,4 +97,3 @@ export const useSetupWizardStore = create<SetupWizardState>((set) => ({
     });
   },
 }));
-

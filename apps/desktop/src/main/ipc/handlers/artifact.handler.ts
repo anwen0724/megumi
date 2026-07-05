@@ -1,14 +1,11 @@
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
-import type { RuntimeIpcError } from '@megumi/shared/ipc';
-import type {
+﻿import type {
   ArtifactListByRunPayload,
   ArtifactListBySessionPayload,
   ArtifactReferencePayload,
   ArtifactStatusUpdatePayload,
   ArtifactVersionCreatePayload,
   ArtifactVersionGetPayload,
-} from '@megumi/shared/ipc';
+} from '../schemas';
 import {
   ArtifactGetRequestSchema,
   ArtifactListByRunRequestSchema,
@@ -17,7 +14,7 @@ import {
   ArtifactStatusUpdateRequestSchema,
   ArtifactVersionCreateRequestSchema,
   ArtifactVersionGetRequestSchema,
-} from '@megumi/shared/ipc';
+} from '../schemas';
 import type {
   ArtifactController,
   ArtifactCreateVersionPayload,
@@ -32,6 +29,8 @@ import type {
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-request-handler';
+import { IPC_CHANNELS } from '../channels';
+import type { RuntimeIpcError, RuntimeIpcRequest } from '../contracts';
 
 export type ArtifactHandlersService = ArtifactController;
 

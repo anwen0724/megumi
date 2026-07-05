@@ -1,8 +1,7 @@
 ﻿import { useEffect } from 'react';
 import { ChevronRight, FileText, Folder } from 'lucide-react';
-import type { WorkspaceDirectoryEntry } from '@megumi/shared/workspace';
 import { useProjectStore } from '../../../entities/project/store';
-import { useWorkspaceFilesStore } from '../../../entities/workspace-files';
+import { useWorkspaceFilesStore, type WorkspaceDirectoryEntry } from '../../../entities/workspace-files';
 import { cx } from '../../../shared/ui';
 
 const EMPTY_ENTRIES: WorkspaceDirectoryEntry[] = [];
@@ -134,4 +133,3 @@ export function FilesPanelTab() {
     </nav>
   );
 }
-

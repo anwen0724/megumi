@@ -1,8 +1,7 @@
 ﻿import { create } from 'zustand';
-import type { ProjectRecord } from '@megumi/shared/project';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../shared/ipc';
-import { projectFromRecord, type Project } from './types';
+import { projectFromRecord, type Project, type ProjectRecord } from './types';
 import { useSessionStore } from '../../entities/session/store';
 
 interface ProjectState {
@@ -68,7 +67,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   loadProjects: async () => {
     set({ loading: true, error: null });
     const result = await window.megumi.project.list(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.project.list, {}),
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.workspace.projectList, {}),
     );
 
     if (!result.ok) {
@@ -91,7 +90,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   useExistingProject: async () => {
     set({ loading: true, error: null });
     const result = await window.megumi.project.useExisting(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.project.useExisting, {}),
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.workspace.projectUseExisting, {}),
     );
 
     if (!result.ok) {
@@ -99,7 +98,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       return null;
     }
 
-    if (result.data.cancelled) {
+    if (!result.data.project) {
       set({ loading: false, error: null });
       return null;
     }
@@ -118,7 +117,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   openProject: async (projectId) => {
     set({ loading: true, error: null });
     const result = await window.megumi.project.open(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.project.open, { projectId }),
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.workspace.projectOpen, { projectId }),
     );
 
     if (!result.ok) {
@@ -140,7 +139,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   removeProject: async (projectId) => {
     set({ loading: true, error: null });
     const result = await window.megumi.project.remove(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.project.remove, { projectId }),
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.workspace.projectRemove, { projectId }),
     );
 
     if (!result.ok) {
@@ -166,4 +165,3 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     return result.data.removed;
   },
 }));
-

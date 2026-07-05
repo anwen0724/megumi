@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import type { SessionMessageSendPayload } from '@megumi/shared/ipc';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
+﻿import { useCallback, useEffect, useRef, useState } from 'react';
+import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
+import type { SessionMessageSendPayload } from '@megumi/desktop/main/ipc/schemas';
+import type { RuntimeEvent } from '@megumi/coding-agent/events';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
 import { createSessionTitleFromPrompt } from '../../../entities/session/session-title';
@@ -311,7 +311,7 @@ export function useSessionTimeline() {
     const createdAt = new Date().toISOString();
     const requestId = `ipc-session-message-${createId('request')}`;
     const request = createRendererRuntimeIpcRequest(
-      IPC_CHANNELS.session.message.send,
+      IPC_CHANNELS.chat.sessionMessageSend,
       createSessionMessageSendPayload(
         payload,
         clientMessageId,
@@ -375,7 +375,7 @@ export function useSessionTimeline() {
     }
 
     const result = await window.megumi.session.message.cancel(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.session.message.cancel, {
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.sessionMessageCancel, {
         targetRequestId: requestId,
       }, {
         traceId: activeTraceIdRef.current ?? undefined,
@@ -418,7 +418,7 @@ export function useSessionTimeline() {
       : null;
 
     if (branchDraftForReplacement) {
-      const cancelRequest = createRendererRuntimeIpcRequest(IPC_CHANNELS.session.branchDraft.cancel, {
+      const cancelRequest = createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.branchDraftCancel, {
         sessionId: branchDraftForReplacement.sessionId,
         branchMarkerId: branchDraftForReplacement.branchMarkerId,
         createdAt: new Date().toISOString(),
@@ -448,7 +448,7 @@ export function useSessionTimeline() {
     const createSequence = branchDraftCreateSequenceRef.current + 1;
     branchDraftCreateSequenceRef.current = createSequence;
 
-    const request = createRendererRuntimeIpcRequest(IPC_CHANNELS.session.branchDraft.create, {
+    const request = createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.branchDraftCreate, {
       sessionId,
       messageId: input.messageId,
       intent: input.intent,
@@ -469,7 +469,7 @@ export function useSessionTimeline() {
     ) {
       try {
         await window.megumi.session.branchDraft.cancel(
-          createRendererRuntimeIpcRequest(IPC_CHANNELS.session.branchDraft.cancel, {
+          createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.branchDraftCancel, {
             sessionId: result.data.branchDraft.sessionId,
             branchMarkerId: result.data.branchDraft.branchMarkerId,
             createdAt: new Date().toISOString(),
@@ -484,6 +484,8 @@ export function useSessionTimeline() {
     updateBranchDraft({
       ...result.data.branchDraft,
       projectId,
+      seedText: input.messageId,
+      label: input.intent === 'rerun' ? 'Rerun' : 'Branch',
     });
   }, [updateBranchDraft]);
 
@@ -494,7 +496,7 @@ export function useSessionTimeline() {
       return;
     }
 
-    const request = createRendererRuntimeIpcRequest(IPC_CHANNELS.session.branchDraft.cancel, {
+    const request = createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.branchDraftCancel, {
       sessionId: branchDraftForCancel.sessionId,
       branchMarkerId: branchDraftForCancel.branchMarkerId,
       createdAt: new Date().toISOString(),

@@ -1,6 +1,6 @@
 ﻿import { create } from 'zustand';
-import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
-import type { TimelineMessage, TimelineUserMessage } from '@megumi/shared/timeline';
+import type { ChatStreamEvent } from '@megumi/coding-agent/projections/chat-stream';
+import type { TimelineMessage, TimelineUserMessage } from '@megumi/coding-agent/projections/timeline';
 import { createChatStreamBuffer, type ChatStreamBuffer } from './chat-stream-buffer';
 import { reduceChatStreamEvent } from './chat-stream-projection';
 
@@ -430,4 +430,3 @@ function statusFromEvent(event: ChatStreamEvent, current: ChatStreamStatus): Cha
   if (event.eventType === 'turn.cancelled') return 'cancelled';
   return 'running';
 }
-

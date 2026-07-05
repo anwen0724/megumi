@@ -1,4 +1,5 @@
-﻿import type { ArtifactKind, ArtifactStatus } from '@megumi/shared/artifact';
+﻿export type ArtifactKind = string;
+export type ArtifactStatus = 'draft' | 'active' | 'superseded' | 'archived' | 'failed' | 'deleted';
 
 export interface ArtifactCardData {
   artifactId: string;
@@ -8,4 +9,3 @@ export interface ArtifactCardData {
   textPreview: string;
   currentVersionId?: string;
 }
-

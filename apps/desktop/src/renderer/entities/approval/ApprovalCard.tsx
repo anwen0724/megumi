@@ -1,7 +1,7 @@
 ﻿import { useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
-import type { ApprovalResolvePayload } from '@megumi/shared/ipc';
-import type { ApprovalRequest } from '@megumi/shared/tool';
+import type { ApprovalResolvePayload } from '@megumi/desktop/main/ipc/schemas';
+import type { ApprovalRequest } from './store';
 import { Badge, Button, Panel } from '../../shared/ui';
 
 type ApprovalResolveScope = ApprovalResolvePayload['scope'];
@@ -80,4 +80,3 @@ export function ApprovalCard({ request, onResolve }: ApprovalCardProps) {
 function resolveInitialScope(scope: string): ApprovalResolveScope {
   return scope === 'session' ? 'session' : 'once';
 }
-

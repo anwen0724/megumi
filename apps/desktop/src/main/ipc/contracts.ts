@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Desktop IPC request and response envelope contracts.
  */
 import { z } from 'zod';

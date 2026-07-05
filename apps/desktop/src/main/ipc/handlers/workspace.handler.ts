@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Desktop IPC handlers for project/workspace operations and local file browsing.
  */
 import { PathSandboxViolationError } from '@megumi/coding-agent/adapters/local/security/sandbox-policy';

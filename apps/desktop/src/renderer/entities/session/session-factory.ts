@@ -1,4 +1,4 @@
-﻿import type { AgentType } from '@megumi/shared/session';
+﻿export type AgentType = 'developer' | 'analyst' | 'architect' | 'reviewer' | 'free';
 
 export interface LocalRendererSession {
   id: string;
@@ -43,4 +43,3 @@ export function createLocalSession({
     updatedAt: now,
   };
 }
-

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Electron IPC channel names owned by the desktop shell.
  */
 export const IPC_CHANNELS = {

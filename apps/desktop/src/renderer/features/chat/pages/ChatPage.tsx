@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+﻿import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import type { CommandSuggestionResult } from '@megumi/coding-agent/commands';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import { useProviderStore } from '../../../entities/provider/store';
 import { useProjectStore } from '../../../entities/project/store';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
@@ -25,7 +25,7 @@ export function ChatPage() {
   ): Promise<CommandSuggestionResult> => {
     try {
       const result = await window.megumi.command.suggestions(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.command.suggestions, request),
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.commandSuggestions, request),
       );
 
       return result.ok ? result.data.suggestions : { type: 'inactive' };

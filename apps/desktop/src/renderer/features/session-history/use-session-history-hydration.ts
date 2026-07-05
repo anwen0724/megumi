@@ -1,7 +1,7 @@
-import { useCallback } from 'react';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import type { Run } from '@megumi/shared/session';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
+﻿import { useCallback } from 'react';
+import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
+import type { ChatRunUiDto } from '@megumi/coding-agent/host-interface';
+import type { RuntimeEvent } from '@megumi/coding-agent/events';
 import { useApprovalStore } from '../../entities/approval';
 import { useChatUiStore } from '../../entities/chat-ui/store';
 import { useProjectStore } from '../../entities/project/store';
@@ -16,10 +16,10 @@ import {
   localSessionFromPersistedSession,
 } from './session-history-mappers';
 
-async function loadHydrationRuntimeEvents(runs: Run[]): Promise<Record<string, RuntimeEvent[]>> {
+async function loadHydrationRuntimeEvents(runs: ChatRunUiDto[]): Promise<Record<string, RuntimeEvent[]>> {
   const pairs = await Promise.all(runs.map(async (run) => {
     const result = await window.megumi.run.events.list(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.run.events.list, { runId: run.runId }),
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.runEventsList, { runId: run.runId }),
     );
     return [run.runId, result.ok ? result.data.events : []] as const;
   }));
@@ -45,7 +45,7 @@ function activeHydrationTarget(sessionId: string, projectId: string): boolean {
 export function useSessionHistoryHydration() {
   const hydrateSessions = useCallback(async () => {
     const result = await window.megumi.session.list(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.session.list, {}),
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.sessionList, {}),
     );
 
     if (!result.ok) {
@@ -78,7 +78,7 @@ export function useSessionHistoryHydration() {
     const projectId = activeSession.projectId;
 
     const timelineResult = await window.megumi.session.timeline.list(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.session.timeline.list, {
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.sessionTimelineList, {
         projectId,
         sessionId,
       }),
@@ -101,7 +101,7 @@ export function useSessionHistoryHydration() {
     useChatUiStore.getState().setLastError(null);
 
     const runsResult = await window.megumi.run.listBySession(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.run.listBySession, { sessionId }),
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.runListBySession, { sessionId }),
     );
 
     if (!activeHydrationTarget(sessionId, projectId)) {

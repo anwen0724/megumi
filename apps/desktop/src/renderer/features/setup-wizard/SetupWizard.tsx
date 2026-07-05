@@ -1,6 +1,5 @@
 ﻿// Renders the blocking first-run setup wizard before the desktop shell enters the main product UI.
 import { useState } from 'react';
-import type { ProviderId } from '@megumi/shared/provider';
 import type { AppLanguage } from '@megumi/coding-agent/host-interface';
 import { Button, TextField, cx } from '../../shared/ui';
 import { themeDefinitions, themeNames, useThemeStore, type ThemeName } from '../../shared/theme';
@@ -10,7 +9,7 @@ type Step = 'language' | 'theme' | 'provider' | 'api-key';
 
 const steps: Step[] = ['language', 'theme', 'provider', 'api-key'];
 
-const providerOptions: Array<{ id: ProviderId; label: string }> = [
+const providerOptions: Array<{ id: string; label: string }> = [
   { id: 'deepseek', label: 'DeepSeek' },
   { id: 'openai', label: 'OpenAI' },
   { id: 'anthropic', label: 'Anthropic' },
@@ -33,14 +32,14 @@ export function SetupWizard() {
   const [step, setStep] = useState<Step>('language');
   const [language, setLanguage] = useState<AppLanguage>('zh-CN');
   const [theme, setTheme] = useState<ThemeName>('midnight-blue');
-  const [providerId, setProviderId] = useState<ProviderId | ''>('');
+  const [providerId, setstring] = useState<string | ''>('');
   const [baseUrl, setBaseUrl] = useState('');
   const [modelIdsText, setModelIdsText] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [skipProvider, setSkipProvider] = useState(false);
 
   const saving = status === 'saving';
-  const selectedProviderId = skipProvider ? undefined : providerId;
+  const selectedstring = skipProvider ? undefined : providerId;
   const providerStepComplete = skipProvider || Boolean(providerId);
   const finishDisabled = saving || (
     !skipProvider && (!providerId || parseModelIds(modelIdsText).length === 0 || (providerId !== 'anthropic' && !baseUrl.trim()))
@@ -52,14 +51,14 @@ export function SetupWizard() {
   }
 
   async function handleFinish() {
-    if (!skipProvider && !selectedProviderId) {
+    if (!skipProvider && !selectedstring) {
       return;
     }
 
     await completeSetup({
       language,
       theme,
-      ...(selectedProviderId ? { providerId: selectedProviderId } : {}),
+      ...(selectedstring ? { providerId: selectedstring } : {}),
       baseUrl,
       modelIds: parseModelIds(modelIdsText),
       apiKey,
@@ -163,7 +162,7 @@ export function SetupWizard() {
                   className="mt-1 h-9 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-2 text-sm text-[var(--color-text)]"
                   value={providerId}
                   disabled={skipProvider}
-                  onChange={(event) => setProviderId(event.target.value as ProviderId)}
+                  onChange={(event) => setstring(event.target.value as string)}
                 >
                   <option value="">Select provider</option>
                   {providerOptions.map((provider) => (
@@ -250,4 +249,3 @@ function parseModelIds(value: string): string[] {
     .map((entry) => entry.trim())
     .filter(Boolean);
 }
-

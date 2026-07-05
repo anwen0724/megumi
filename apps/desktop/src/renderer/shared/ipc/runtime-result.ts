@@ -1,5 +1,5 @@
-﻿import type { BusinessIpcChannel, RuntimeIpcFailure, RuntimeIpcResult } from '@megumi/shared/ipc';
-import type { RuntimeIpcError } from '@megumi/shared/ipc';
+﻿import type { BusinessIpcChannel, RuntimeIpcFailure, RuntimeIpcResult } from '@megumi/desktop/main/ipc/contracts';
+import type { RuntimeIpcError } from '@megumi/desktop/main/ipc/errors';
 
 export function getRuntimeIpcFailure<TChannel extends BusinessIpcChannel>(
   result: RuntimeIpcResult<object, TChannel>,
@@ -14,4 +14,3 @@ export function getRuntimeIpcError(result: RuntimeIpcResult<object>): RuntimeIpc
 export function getRuntimeIpcErrorMessage(result: RuntimeIpcResult<object>): string {
   return result.ok ? 'Request succeeded.' : result.error.message;
 }
-

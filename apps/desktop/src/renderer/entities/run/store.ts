@@ -1,8 +1,9 @@
 ﻿import { create } from 'zustand';
-import type { RunStepKind, RunStepStatus, RunStatus } from '@megumi/shared/session';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { RuntimeEvent } from '@megumi/coding-agent/events';
 
-export type RendererRunStatus = RunStatus;
+export type RendererRunStatus = 'queued' | 'running' | 'waiting_for_approval' | 'completed' | 'failed' | 'cancelled' | string;
+export type RunStepKind = string;
+export type RunStepStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | string;
 
 export interface RendererRunSummary {
   runId: string;
@@ -166,4 +167,3 @@ export const useRunStore = create<RunState>((set) => ({
     lastError: null,
   }),
 }));
-

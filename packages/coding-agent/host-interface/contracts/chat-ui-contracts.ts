@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Chat/session UI DTOs exposed to hosts. These are projections of product data,
  * not session module service contracts.
  */
@@ -77,7 +77,7 @@ export interface ChatSendUserInputUiRequest {
     provider_id: string;
     model_id: string;
   };
-  permissionMode: 'default' | 'plan' | 'auto';
+  permissionMode: 'default' | 'accept_edits' | 'plan' | 'auto';
   permissionSource?: string;
   runtimeContext?: RuntimeContext;
 }

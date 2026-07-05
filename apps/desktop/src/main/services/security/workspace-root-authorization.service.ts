@@ -1,8 +1,7 @@
 ﻿import path from 'node:path';
-import type { Session } from '@megumi/shared/session';
 
 export interface WorkspaceRootSessionSource {
-  listSessions(): Session[];
+  listSessions(): Array<{ workspacePath?: string | null }>;
 }
 
 export interface WorkspaceRootProjectSource {
@@ -45,4 +44,3 @@ function toWorkspaceRootKey(workspaceRoot: string): string {
   const normalized = path.resolve(workspaceRoot);
   return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
 }
-

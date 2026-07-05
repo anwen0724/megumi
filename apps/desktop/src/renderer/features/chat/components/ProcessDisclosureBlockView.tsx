@@ -12,7 +12,7 @@ import type {
   RetryActivityItem,
   ThinkingItem,
   ToolActivityItem,
-} from '@megumi/shared/timeline';
+} from '@megumi/coding-agent/projections/timeline';
 import { cx } from '../../../shared/ui';
 import { TimelineMarkdown } from './TimelineMarkdown';
 
@@ -282,4 +282,3 @@ export function ProcessDisclosureBlockView({ block }: ProcessDisclosureBlockView
     </section>
   );
 }
-

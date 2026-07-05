@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Forwards Coding Agent runtime and chat-stream events to renderer windows.
  */
 import {

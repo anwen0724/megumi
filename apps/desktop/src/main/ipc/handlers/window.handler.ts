@@ -1,4 +1,4 @@
-import { IPC_CHANNELS } from '../channels';
+﻿import { IPC_CHANNELS } from '../channels';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import {
   electronWindowControlHost,

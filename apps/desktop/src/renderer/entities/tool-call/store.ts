@@ -1,5 +1,52 @@
 ﻿import { create } from 'zustand';
-import type { ToolExecution } from '@megumi/shared/tool';
+
+export type ToolExecutionStatus =
+  | 'created'
+  | 'awaitingApproval'
+  | 'rejected'
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled';
+
+export interface ToolPolicyDecision {
+  toolCallId?: string;
+  runId?: string;
+  source?: string;
+  mode?: string;
+  classifierLabel?: string;
+  target?: unknown;
+  capability?: string;
+  sideEffect?: string;
+  effectiveRiskLevel?: string;
+  evaluatedAt?: string;
+  decision: string;
+  reason?: string;
+  permissionDecisionId?: string;
+}
+
+export interface ToolExecution {
+  toolExecutionId: string;
+  toolCallId: string;
+  runId: string;
+  stepId?: string;
+  toolName: string;
+  modelVisibleName?: string;
+  status: ToolExecutionStatus;
+  requestedAt: string;
+  input?: unknown;
+  capabilities?: string[];
+  riskLevel?: string;
+  sideEffect?: string;
+  startedAt?: string;
+  completedAt?: string;
+  approvalRequestId?: string;
+  inputPreview?: unknown;
+  policyDecision?: ToolPolicyDecision;
+  resultPreview?: unknown;
+  error?: { code?: string; message?: string; severity?: string; retryable?: boolean; source?: string };
+}
 
 export interface ToolCallState {
   toolCallsById: Record<string, ToolExecution>;
@@ -24,4 +71,3 @@ export const useToolCallStore = create<ToolCallState>((set, get) => ({
     .sort((left, right) => left.requestedAt.localeCompare(right.requestedAt)),
   reset: () => set({ toolCallsById: {} }),
 }));
-

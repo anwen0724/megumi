@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Desktop IPC handlers for settings and provider configuration.
  */
 import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';

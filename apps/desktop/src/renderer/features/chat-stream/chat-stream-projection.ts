@@ -1,2 +1,1 @@
-﻿export { reduceChatStreamEvent } from '@megumi/shared/timeline';
-
+﻿export { reduceChatStreamEvent } from '@megumi/coding-agent/projections/timeline';

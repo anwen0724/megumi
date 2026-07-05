@@ -1,6 +1,6 @@
-import { useLayoutEffect, useRef } from 'react';
-import type { ApprovalRequest } from '@megumi/shared/tool';
-import type { ProviderPublicStatus } from '@megumi/shared/provider';
+﻿import { useLayoutEffect, useRef } from 'react';
+import type { ApprovalRequest } from '../../../entities/approval/store';
+import type { ProviderPublicStatusUiDto } from '@megumi/coding-agent/host-interface';
 import type { CommandSuggestionResult } from '@megumi/coding-agent/commands';
 import type { ApprovalCardResolvePayload } from '../../../entities/approval';
 import { ApprovalStack } from '../components/ApprovalStack';
@@ -16,7 +16,7 @@ interface ComposerDockProps {
   status: ComposerStatus;
   branchDraft: ComposerBranchDraftView | null;
   pendingApprovals: ApprovalRequest[];
-  providers?: ProviderPublicStatus[];
+  providers?: ProviderPublicStatusUiDto[];
   onApprovalResolve: (payload: ApprovalCardResolvePayload) => void;
   onSubmit: (payload: ComposerSubmitPayload) => void;
   onStop: () => void;

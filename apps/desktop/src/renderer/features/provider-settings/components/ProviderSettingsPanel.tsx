@@ -1,6 +1,6 @@
 ﻿import { FormEvent, useEffect, useState } from 'react';
 import { KeyRound, RefreshCw, Trash2 } from 'lucide-react';
-import type { ProviderId, ProviderPublicStatus } from '@megumi/shared/provider';
+import type { ProviderPublicStatusUiDto } from '@megumi/coding-agent/host-interface';
 import { useProviderStore } from '../../../entities/provider';
 import { Badge, Button, IconButton, TextField } from '../../../shared/ui';
 
@@ -12,19 +12,19 @@ interface ProviderFormState {
   apiKeyEnv: string;
 }
 
-function credentialLabel(provider: ProviderPublicStatus): string {
+function credentialLabel(provider: ProviderPublicStatusUiDto): string {
   if (provider.credentialSource === 'settings') return 'Settings key active';
   if (provider.credentialSource === 'environment') return 'Environment key active';
   return 'Missing key';
 }
 
-function credentialVariant(provider: ProviderPublicStatus): 'success' | 'warning' | 'neutral' {
+function credentialVariant(provider: ProviderPublicStatusUiDto): 'success' | 'warning' | 'neutral' {
   if (provider.envOverrideActive || provider.hasApiKey) return 'success';
   if (provider.providerId === 'anthropic') return 'neutral';
   return 'warning';
 }
 
-function createInitialFormState(provider: ProviderPublicStatus): ProviderFormState {
+function createInitialFormState(provider: ProviderPublicStatusUiDto): ProviderFormState {
   return {
     enabled: provider.enabled,
     baseUrl: provider.baseUrl ?? '',
@@ -69,7 +69,7 @@ export function ProviderSettingsPanel() {
     });
   }, [providers]);
 
-  function updateForm(providerId: ProviderId, update: Partial<ProviderFormState>) {
+  function updateForm(providerId: string, update: Partial<ProviderFormState>) {
     setForms((current) => ({
       ...current,
       [providerId]: {
@@ -85,7 +85,7 @@ export function ProviderSettingsPanel() {
     }));
   }
 
-  async function handleSettingsSubmit(event: FormEvent<HTMLFormElement>, provider: ProviderPublicStatus) {
+  async function handleSettingsSubmit(event: FormEvent<HTMLFormElement>, provider: ProviderPublicStatusUiDto) {
     event.preventDefault();
     const form = forms[provider.providerId] ?? createInitialFormState(provider);
 
@@ -96,7 +96,7 @@ export function ProviderSettingsPanel() {
     });
   }
 
-  async function handleEnabledChange(provider: ProviderPublicStatus, enabled: boolean) {
+  async function handleEnabledChange(provider: ProviderPublicStatusUiDto, enabled: boolean) {
     updateForm(provider.providerId, { enabled });
 
     await updateProvider({
@@ -105,7 +105,7 @@ export function ProviderSettingsPanel() {
     });
   }
 
-  async function handleApiKeySubmit(event: FormEvent<HTMLFormElement>, provider: ProviderPublicStatus) {
+  async function handleApiKeySubmit(event: FormEvent<HTMLFormElement>, provider: ProviderPublicStatusUiDto) {
     event.preventDefault();
     const form = forms[provider.providerId];
     const apiKey = form?.apiKey.trim();
@@ -116,7 +116,7 @@ export function ProviderSettingsPanel() {
     updateForm(provider.providerId, { apiKey: '' });
   }
 
-  async function handleApiKeyEnvSubmit(event: FormEvent<HTMLFormElement>, provider: ProviderPublicStatus) {
+  async function handleApiKeyEnvSubmit(event: FormEvent<HTMLFormElement>, provider: ProviderPublicStatusUiDto) {
     event.preventDefault();
     const form = forms[provider.providerId] ?? createInitialFormState(provider);
     const apiKeyEnv = form.apiKeyEnv.trim();
@@ -129,7 +129,7 @@ export function ProviderSettingsPanel() {
     });
   }
 
-  async function handleApiKeyEnvClear(provider: ProviderPublicStatus) {
+  async function handleApiKeyEnvClear(provider: ProviderPublicStatusUiDto) {
     updateForm(provider.providerId, { apiKeyEnv: '' });
 
     await updateProvider({
@@ -263,4 +263,3 @@ export function ProviderSettingsPanel() {
     </div>
   );
 }
-

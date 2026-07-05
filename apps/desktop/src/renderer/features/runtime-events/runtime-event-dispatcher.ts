@@ -4,9 +4,10 @@
   RuntimeEvent,
   ToolExecutionApprovalRequestedPayload,
   ToolResultCreatedPayload,
-} from '@megumi/shared/runtime';
-import type { RuntimeError } from '@megumi/shared/runtime';
-import type { ApprovalRequest, ApprovalStatus, ToolExecution, ToolPolicyDecision } from '@megumi/shared/tool';
+} from '@megumi/coding-agent/events';
+import type { RuntimeError } from '@megumi/coding-agent/events';
+import type { ApprovalRequest, ApprovalStatus } from '../../entities/approval/store';
+import type { ToolExecution, ToolPolicyDecision } from '../../entities/tool-call/store';
 import { useApprovalStore } from '../../entities/approval';
 import { useChatUiStore, type AgentRunStatus } from '../../entities/chat-ui/store';
 import { useRunStore } from '../../entities/run/store';
@@ -248,4 +249,3 @@ export function dispatchRuntimeEvent(event: RuntimeEvent, options?: DispatchRunt
     setLastErrorForSession(targetSessionId, reason);
   }
 }
-

@@ -1,6 +1,6 @@
-﻿import type { Run, Session } from '@megumi/shared/session';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
-import type { AnswerTextBlock, TimelineMessage } from '@megumi/shared/timeline';
+﻿import type { RuntimeEvent } from '@megumi/coding-agent/events';
+import type { ChatRunUiDto, ChatSessionUiDto } from '@megumi/coding-agent/host-interface';
+import type { AnswerTextBlock, TimelineMessage } from '@megumi/coding-agent/projections/timeline';
 import type { LocalRendererSession } from '../../entities/session/session-factory';
 
 export interface TimelineHistoryMessage {
@@ -10,18 +10,14 @@ export interface TimelineHistoryMessage {
   createdAt: string;
 }
 
-function sessionProjectId(session: Session): string {
-  return session.workspaceId ?? session.workspacePath ?? 'local';
-}
-
 function isCompletedAnswerTextBlock(block: TimelineMessage['blocks'][number]): block is AnswerTextBlock {
   return block.kind === 'answer_text' && block.status === 'completed';
 }
 
-export function localSessionFromPersistedSession(session: Session): LocalRendererSession {
+export function localSessionFromPersistedSession(session: ChatSessionUiDto): LocalRendererSession {
   return {
-    id: session.sessionId,
-    projectId: sessionProjectId(session),
+    id: session.id,
+    projectId: session.projectId,
     agentType: 'free',
     title: session.title,
     createdAt: session.createdAt,
@@ -56,7 +52,7 @@ export function chatMessagesFromTimelineMessages(messages: TimelineMessage[]): T
 }
 
 export function hydratedRuntimeEventsForRuns(
-  runs: Run[],
+  runs: Array<Pick<ChatRunUiDto, 'runId'>>,
   eventsByRun: Record<string, RuntimeEvent[]>,
 ): RuntimeEvent[] {
   const runIds = new Set(runs.map((run) => run.runId));
@@ -69,4 +65,3 @@ export function hydratedRuntimeEventsForRuns(
       return createdAtOrder === 0 ? left.sequence - right.sequence : createdAtOrder;
     });
 }
-

@@ -1,13 +1,15 @@
 ﻿import { create } from 'zustand';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import type {
-  WorkspaceDirectoryEntry,
-  WorkspaceFilesListPayload,
-} from '@megumi/shared/workspace';
+import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
+import type { WorkspaceFileEntryUiDto } from '@megumi/coding-agent/host-interface';
+import type { WorkspaceFilesListPayload } from '@megumi/desktop/main/ipc/schemas';
 import {
   createRendererRuntimeIpcRequest,
   getRuntimeIpcErrorMessage,
 } from '../../shared/ipc';
+
+export type WorkspaceDirectoryEntry = WorkspaceFileEntryUiDto & {
+  kind: WorkspaceFileEntryUiDto['type'];
+};
 
 export interface WorkspaceFilesStoreState {
   workspaceRoot: string | null;
@@ -66,7 +68,7 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesStoreState>((set, get
     try {
       const result = await window.megumi.workspace.files.list(
         createRendererRuntimeIpcRequest(
-          IPC_CHANNELS.workspace.files.list,
+          IPC_CHANNELS.workspace.filesList,
           payload satisfies WorkspaceFilesListPayload,
         ),
       );
@@ -86,7 +88,10 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesStoreState>((set, get
       set((state) => ({
         entriesByDirectory: {
           ...state.entriesByDirectory,
-          [result.data.directoryPath]: result.data.entries,
+          [result.data.directoryPath]: result.data.entries.map((entry) => ({
+            ...entry,
+            kind: entry.type ?? (entry as { kind?: WorkspaceDirectoryEntry['kind'] }).kind,
+          })),
         },
         loadingDirectories: state.loadingDirectories.filter((item) => item !== directoryPath),
         error: null,
@@ -110,4 +115,3 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesStoreState>((set, get
   setSelectedPath: (path) => set({ selectedPath: path }),
   reset: () => set(initialState),
 }));
-
