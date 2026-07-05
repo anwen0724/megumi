@@ -1,10 +1,10 @@
 ﻿// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import type { ProviderPublicStatus } from '@megumi/shared/provider';
+import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
+import type { ProviderPublicStatusUiDto } from '@megumi/coding-agent/host-interface';
 import { useProviderStore } from '@megumi/desktop/renderer/entities/provider/store';
 
-const providers: ProviderPublicStatus[] = [
+const providers: ProviderPublicStatusUiDto[] = [
   {
     providerId: 'deepseek',
     displayName: 'DeepSeek',
@@ -32,22 +32,22 @@ function installMegumiMock() {
     list: vi.fn().mockResolvedValue({
       ok: true,
       data: { providers },
-      meta: createSuccessMeta(IPC_CHANNELS.provider.list),
+      meta: createSuccessMeta(IPC_CHANNELS.settings.providerList),
     }),
     update: vi.fn().mockResolvedValue({
       ok: true,
       data: {},
-      meta: createSuccessMeta(IPC_CHANNELS.provider.update),
+      meta: createSuccessMeta(IPC_CHANNELS.settings.providerUpdate),
     }),
     setApiKey: vi.fn().mockResolvedValue({
       ok: true,
       data: {},
-      meta: createSuccessMeta(IPC_CHANNELS.provider.setApiKey),
+      meta: createSuccessMeta(IPC_CHANNELS.settings.providerSetApiKey),
     }),
     deleteApiKey: vi.fn().mockResolvedValue({
       ok: true,
       data: {},
-      meta: createSuccessMeta(IPC_CHANNELS.provider.deleteApiKey),
+      meta: createSuccessMeta(IPC_CHANNELS.settings.providerDeleteApiKey),
     }),
   };
 
@@ -86,7 +86,7 @@ describe('useProviderStore', () => {
     expect(providerApi.list).toHaveBeenCalledWith(expect.objectContaining({
       payload: {},
       meta: expect.objectContaining({
-        channel: IPC_CHANNELS.provider.list,
+        channel: IPC_CHANNELS.settings.providerList,
         source: 'renderer',
       }),
       context: expect.objectContaining({
@@ -119,7 +119,7 @@ describe('useProviderStore', () => {
         modelIds: ['deepseek-v4-pro'],
       },
       meta: expect.objectContaining({
-        channel: IPC_CHANNELS.provider.update,
+        channel: IPC_CHANNELS.settings.providerUpdate,
         source: 'renderer',
       }),
       context: expect.objectContaining({
@@ -145,13 +145,13 @@ describe('useProviderStore', () => {
         apiKey: 'test-api-key-fixture',
       },
       meta: expect.objectContaining({
-        channel: IPC_CHANNELS.provider.setApiKey,
+        channel: IPC_CHANNELS.settings.providerSetApiKey,
       }),
     }));
     expect(providerApi.deleteApiKey).toHaveBeenCalledWith(expect.objectContaining({
       payload: { providerId: 'deepseek' },
       meta: expect.objectContaining({
-        channel: IPC_CHANNELS.provider.deleteApiKey,
+        channel: IPC_CHANNELS.settings.providerDeleteApiKey,
       }),
     }));
     expect(JSON.stringify(useProviderStore.getState())).not.toContain('test-api-key-fixture');
@@ -173,7 +173,7 @@ describe('useProviderStore', () => {
               debugId: 'debug-provider-list-1',
             },
             meta: {
-              ...createSuccessMeta(IPC_CHANNELS.provider.list),
+              ...createSuccessMeta(IPC_CHANNELS.settings.providerList),
               debugId: 'debug-provider-list-1',
             },
           }),

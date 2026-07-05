@@ -1,7 +1,7 @@
 ﻿// @vitest-environment jsdom
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { TimelineAssistantMessage, TimelineUserMessage } from '@megumi/shared/timeline';
+import type { TimelineAssistantMessage, TimelineUserMessage } from '@megumi/coding-agent/projections/timeline';
 import { TimelineMessage } from '@megumi/desktop/renderer/features/chat/components/TimelineMessage';
 
 const createdAt = '2026-05-24T12:00:00.000Z';

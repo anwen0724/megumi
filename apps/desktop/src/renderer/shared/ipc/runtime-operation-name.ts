@@ -57,36 +57,6 @@ export function rendererRuntimeOperationNameFromChannel(channel: BusinessIpcChan
       return 'artifacts.status.update';
     case IPC_CHANNELS.artifacts.reference:
       return 'artifacts.reference';
-    case IPC_CHANNELS.memory.candidateList:
-      return 'memory.candidate.list';
-    case IPC_CHANNELS.memory.candidateAccept:
-      return 'memory.candidate.accept';
-    case IPC_CHANNELS.memory.candidateReject:
-      return 'memory.candidate.reject';
-    case IPC_CHANNELS.memory.candidateArchive:
-      return 'memory.candidate.archive';
-    case IPC_CHANNELS.memory.candidateEditAndAccept:
-      return 'memory.candidate.edit-and-accept';
-    case IPC_CHANNELS.memory.memoryList:
-      return 'memory.memory.list';
-    case IPC_CHANNELS.memory.memoryGet:
-      return 'memory.memory.get';
-    case IPC_CHANNELS.memory.memoryUpdate:
-      return 'memory.memory.update';
-    case IPC_CHANNELS.memory.memoryArchive:
-      return 'memory.memory.archive';
-    case IPC_CHANNELS.memory.memoryDelete:
-      return 'memory.memory.delete';
-    case IPC_CHANNELS.memory.memoryDisable:
-      return 'memory.memory.disable';
-    case IPC_CHANNELS.memory.memoryEnable:
-      return 'memory.memory.enable';
-    case IPC_CHANNELS.memory.sourceRefsList:
-      return 'memory.source-refs.list';
-    case IPC_CHANNELS.memory.accessLogsList:
-      return 'memory.access-logs.list';
-    case IPC_CHANNELS.memory.recallPreview:
-      return 'memory.recall-preview';
     case IPC_CHANNELS.workspace.projectList:
       return 'project.list';
     case IPC_CHANNELS.workspace.projectUseExisting:

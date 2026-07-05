@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import path from 'node:path';
 import { MemoryDiagnosticWriter } from '@megumi/coding-agent/adapters/local/memory/memory-diagnostic-writer.service';
 import { MemoryMarkdownSyncService } from '@megumi/coding-agent/adapters/local/memory/memory-markdown-sync.service';
@@ -11,7 +11,7 @@ import type {
   MemoryRecord,
   MemoryRecordStatus,
   MemoryScope,
-} from '@megumi/shared/memory';
+} from '@megumi/coding-agent/memory/legacy-contracts/memory-contracts';
 
 const now = '2026-06-13T10:00:00.000Z';
 const homePath = path.resolve('C:/tmp/megumi-home');

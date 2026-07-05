@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ToolCallStatusCard } from '@megumi/desktop/renderer/entities/tool-call';
-import type { ToolExecution } from '@megumi/shared/tool';
+import type { ToolExecution } from '@megumi/desktop/renderer/entities/tool-call';
 
 function createToolExecution(overrides: Partial<ToolExecution> = {}): ToolExecution {
   return {
@@ -34,7 +34,6 @@ describe('ToolCallStatusCard', () => {
           policyDecision: {
             permissionDecisionId: 'permission-1',
             toolCallId: 'tool-call-1',
-            toolExecutionId: 'tool-execution-1',
             runId: 'run-1',
             decision: 'ask',
             source: 'permission_mode',
@@ -43,10 +42,6 @@ describe('ToolCallStatusCard', () => {
             capability: 'command_run',
             sideEffect: 'execute_command',
             effectiveRiskLevel: 'medium',
-            requiredApproval: {
-              scope: 'run',
-              reason: 'Command execution requires approval in default mode.',
-            },
             evaluatedAt: '2026-05-20T00:00:01.000Z',
           },
         })}
@@ -90,10 +85,6 @@ describe('ToolCallStatusCard', () => {
         toolCall={createToolExecution({
           toolName: 'echo',
           modelVisibleName: 'demo_echo',
-          canonicalToolId: 'external_test:demo:echo',
-          sourceId: 'external_test',
-          namespace: 'demo',
-          sourceToolName: 'echo',
           status: 'succeeded',
           resultPreview: 'hello',
         })}

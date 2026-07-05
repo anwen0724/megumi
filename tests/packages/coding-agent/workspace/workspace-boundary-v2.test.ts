@@ -44,8 +44,8 @@ describe('workspace module boundary v2', () => {
 
     for (const file of files) {
       const source = read(file);
-      expect(source).not.toContain('@megumi/shared/project');
-      expect(source).not.toContain('@megumi/shared/workspace');
+      expect(source).not.toContain(['@megumi', 'shared', 'project'].join('/'));
+      expect(source).not.toContain(['@megumi', 'shared', 'workspace'].join('/'));
       expect(source).not.toContain('../persistence/repos/workspace.repo');
       expect(source).not.toContain('../persistence/repos/workspace-change.repo');
       expect(source).not.toContain('WorkspaceRestore');

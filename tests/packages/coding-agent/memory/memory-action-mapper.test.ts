@@ -5,7 +5,7 @@ import {
   createMemoryRecallContextSource,
   selectMemoryRecallIdsForContext,
 } from '@megumi/coding-agent/memory/memory-action-mapper';
-import type { MemoryRecallResult } from '@megumi/shared/memory';
+import type { MemoryRecallResult } from '@megumi/coding-agent/memory/legacy-contracts/memory-contracts';
 
 const now = '2026-05-16T00:00:00.000Z';
 

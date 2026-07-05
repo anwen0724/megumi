@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 
 import { createDatabase } from '@megumi/coding-agent/persistence/connection';
 import { ArtifactRepository } from '@megumi/coding-agent/persistence/repos/artifact.repo';
 import { SessionRepository } from '@megumi/coding-agent/session/repositories/session-repository';
 import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
-import type { Artifact, ArtifactVersion } from '@megumi/shared/artifact';
+import type { Artifact, ArtifactVersion } from '@megumi/coding-agent/artifacts/legacy-contracts/artifact-contracts';
 
 function createTestDatabase() {
   const database = createDatabase(':memory:');

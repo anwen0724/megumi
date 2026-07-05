@@ -39,7 +39,7 @@ describe('WorkspaceFilesService', () => {
     expect(result.entries[0]).toMatchObject({
       name: 'apps',
       relativePath: 'apps',
-      kind: 'directory',
+      type: 'directory',
       depth: 0,
       hidden: false,
       ignored: false,
@@ -47,7 +47,7 @@ describe('WorkspaceFilesService', () => {
     expect(result.entries[1]).toMatchObject({
       name: 'README.md',
       relativePath: 'README.md',
-      kind: 'file',
+      type: 'file',
       depth: 0,
       hidden: false,
       ignored: false,

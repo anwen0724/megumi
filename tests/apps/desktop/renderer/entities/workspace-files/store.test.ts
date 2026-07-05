@@ -1,6 +1,6 @@
 ﻿// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
 import { useWorkspaceFilesStore } from '@megumi/desktop/renderer/entities/workspace-files/store';
 
 function createDeferred<T>() {
@@ -45,7 +45,7 @@ function createWorkspaceFilesResult({
     },
     meta: {
       requestId: 'ipc-workspace-files-list-1',
-      channel: IPC_CHANNELS.workspace.files.list,
+      channel: IPC_CHANNELS.workspace.filesList,
       handledAt: '2026-05-18T00:00:00.100Z',
     },
   } as const;
@@ -79,7 +79,7 @@ function installWorkspaceFilesMock() {
       },
       meta: {
         requestId: 'ipc-workspace-files-list-1',
-        channel: IPC_CHANNELS.workspace.files.list,
+        channel: IPC_CHANNELS.workspace.filesList,
         handledAt: '2026-05-18T00:00:00.100Z',
       },
     })),
@@ -117,7 +117,7 @@ describe('useWorkspaceFilesStore', () => {
         directoryPath: '',
       },
       meta: expect.objectContaining({
-        channel: IPC_CHANNELS.workspace.files.list,
+        channel: IPC_CHANNELS.workspace.filesList,
         source: 'renderer',
       }),
       context: expect.objectContaining({
@@ -278,7 +278,7 @@ describe('useWorkspaceFilesStore', () => {
               },
               meta: {
                 requestId: 'ipc-workspace-files-list-1',
-                channel: IPC_CHANNELS.workspace.files.list,
+                channel: IPC_CHANNELS.workspace.filesList,
                 handledAt: '2026-05-18T00:00:00.100Z',
               },
             })),

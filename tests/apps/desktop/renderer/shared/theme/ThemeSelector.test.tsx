@@ -1,9 +1,9 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeProvider, ThemeSelector, useThemeStore } from '@megumi/desktop/renderer/shared/theme';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
 
 describe('ThemeSelector', () => {
   beforeEach(() => {

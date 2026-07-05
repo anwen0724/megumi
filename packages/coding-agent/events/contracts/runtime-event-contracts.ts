@@ -1,71 +1,57 @@
 ﻿import type { JsonValue } from '../../shared-json';
 import type { RuntimeError } from './runtime-error-contracts';
 import type { RuntimeContext } from './runtime-context-contracts';
-import type { ModelInputContextSourceRef } from '@megumi/shared/model';
-import type {
-  SessionActiveLeafReason,
-  SessionBranchMarkerReason,
-  SessionInterruptedRunPreviousStatus,
-  SessionInterruptedRunReason,
-} from '@megumi/shared/session';
-import type { SessionCompactionTriggerReason } from '@megumi/shared/session';
-import type {
-  RunActionKind,
-  RunActionStatus,
-  RunObservationSource,
-  RunStatus,
-  SessionMessageStatus,
-  SessionStatus,
-  RunStepKind,
-  RunStepStatus,
-} from '@megumi/shared/session';
-import type {
-  ContextEffectiveUpdatedPayload,
-  ContextPatchAppliedPayload,
-  ContextPatchRejectedPayload,
-  ContextPatchRequestedPayload,
-} from '@megumi/shared/run';
 import type {
   ApprovalRequest,
   ApprovalScope,
   ApprovalStatus,
-  PermissionDecision,
-  ToolExecution,
-  ToolName,
-  ToolPolicyDecision,
-} from '@megumi/shared/tool';
-import type {
+  ArtifactContentStorage,
+  ArtifactContentType,
+  ArtifactKind,
+  ArtifactStatus,
   CancelReason,
   CancelRequestedBy,
   CancelScope,
   CheckpointBoundary,
   CheckpointReason,
-  ResumeMode,
-  ResumeReason,
-  ResumeRequestedBy,
-  RetryKind,
-  RetryReason,
-  RetryRequestedBy,
-} from '@megumi/shared/recovery';
-import type {
-  WorkspaceRestoreRequestedBy,
-  WorkspaceRestoreResultStatus,
-} from '@megumi/shared/workspace';
-import type {
-  ArtifactContentStorage,
-  ArtifactContentType,
-  ArtifactKind,
-  ArtifactStatus,
-} from '@megumi/shared/artifact';
-import type {
+  ContextEffectiveUpdatedPayload,
+  ContextPatchAppliedPayload,
+  ContextPatchRejectedPayload,
+  ContextPatchRequestedPayload,
   MemoryAccessKind,
   MemoryCandidateStatus,
   MemoryKind,
   MemoryRecordStatus,
   MemoryRiskLevel,
   MemoryScope,
-} from '@megumi/shared/memory';
-import type { ModelStepProviderState } from '@megumi/shared/model';
+  ModelInputContextSourceRef,
+  ModelStepProviderState,
+  PermissionDecision,
+  ResumeMode,
+  ResumeReason,
+  ResumeRequestedBy,
+  RetryKind,
+  RetryReason,
+  RetryRequestedBy,
+  RunActionKind,
+  RunActionStatus,
+  RunObservationSource,
+  RunStatus,
+  RunStepKind,
+  RunStepStatus,
+  SessionActiveLeafReason,
+  SessionBranchMarkerReason,
+  SessionCompactionTriggerReason,
+  SessionInterruptedRunPreviousStatus,
+  SessionInterruptedRunReason,
+  SessionMessageStatus,
+  SessionStatus,
+  ToolExecution,
+  ToolName,
+  ToolPolicyDecision,
+  WorkspaceRestoreRequestedBy,
+  WorkspaceRestoreResultStatus,
+} from './runtime-event-dependencies';
 
 export const RUNTIME_EVENT_SCHEMA_VERSION = 1 as const;
 

@@ -1,7 +1,7 @@
 ﻿// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
-import type { TimelineAssistantMessage, TimelineUserMessage } from '@megumi/shared/timeline';
+import type { ChatStreamEvent } from '@megumi/coding-agent/projections/chat-stream';
+import type { TimelineAssistantMessage, TimelineUserMessage } from '@megumi/coding-agent/projections/timeline';
 import {
   chatStreamSessionKey,
   useChatStreamStore,

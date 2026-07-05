@@ -1,13 +1,11 @@
-﻿import type { ModelId } from '@megumi/shared/model';
-import type { ProviderId } from '@megumi/shared/provider';
-import type { RuntimeContext } from '../contracts/runtime-context-contracts';
+﻿import type { RuntimeContext } from '../contracts/runtime-context-contracts';
 import type { RuntimeError } from '../contracts/runtime-error-contracts';
 import type {
   ContextEffectiveUpdatedPayload,
   ContextPatchAppliedPayload,
   ContextPatchRejectedPayload,
   ContextPatchRequestedPayload,
-} from '@megumi/shared/run';
+} from '../contracts/runtime-event-dependencies';
 import type {
   AssistantOutputCompletedPayload,
   AssistantOutputDeltaPayload,
@@ -26,6 +24,8 @@ import type {
 } from '../contracts/runtime-event-contracts';
 
 type RunId = string;
+type ModelId = string;
+type ProviderId = string;
 
 export interface RuntimeEventRequestRef {
   requestId: string;

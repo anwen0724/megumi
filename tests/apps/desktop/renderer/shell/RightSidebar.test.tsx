@@ -2,7 +2,7 @@
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
 import { RightSidebar } from '@megumi/desktop/renderer/shell/RightSidebar';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useWorkspaceFilesStore } from '@megumi/desktop/renderer/entities/workspace-files/store';
@@ -22,7 +22,7 @@ function installWorkspaceFilesMock() {
             },
             meta: {
               requestId: 'ipc-workspace-files-list-1',
-              channel: IPC_CHANNELS.workspace.files.list,
+              channel: IPC_CHANNELS.workspace.filesList,
               handledAt: '2026-05-18T00:00:00.000Z',
             },
           })),

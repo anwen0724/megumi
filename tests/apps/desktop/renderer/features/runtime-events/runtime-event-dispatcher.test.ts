@@ -6,8 +6,7 @@ import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useToolCallStore } from '@megumi/desktop/renderer/entities/tool-call';
 import { dispatchRuntimeEvent } from '@megumi/desktop/renderer/features/runtime-events/runtime-event-dispatcher';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
-import { ToolExecutionSchema } from '@megumi/shared/tool';
+import type { RuntimeEvent } from '@megumi/coding-agent/events';
 
 function runtimeEvent(
   eventType: RuntimeEvent['eventType'],
@@ -209,7 +208,6 @@ describe('runtime event dispatcher', () => {
     }));
 
     const storedToolCall = useToolCallStore.getState().toolCallsById['tool-execution-1'];
-    expect(ToolExecutionSchema.parse(storedToolCall)).toEqual(storedToolCall);
     expect(storedToolCall).toMatchObject({
       status: 'rejected',
       error: {

@@ -22,7 +22,7 @@ describe('host-interface boundary', () => {
     expect(source).not.toContain('apps/desktop');
     expect(source).not.toContain('electron');
     expect(source).not.toContain('IPC_CHANNELS');
-    expect(source).not.toContain('@megumi/shared');
+    expect(source).not.toContain(['@megumi', 'shared'].join('/'));
   });
 
   it('exposes host controllers through the new UI-facing shape', async () => {

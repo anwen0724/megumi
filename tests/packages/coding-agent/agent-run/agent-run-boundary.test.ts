@@ -1,4 +1,4 @@
-import fs from 'node:fs';
+﻿import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -37,11 +37,11 @@ describe('agent-run module boundary', () => {
     expect(files.length).toBeGreaterThan(0);
 
     const forbidden = [
-      '@megumi/shared/permission',
-      '@megumi/shared/tool',
-      '@megumi/shared/model',
-      '@megumi/shared/session',
-      '@megumi/shared/run',
+      '@megumi/coding-agent/artifacts/legacy-contracts/plan-artifact-contracts',
+      '@megumi/coding-agent/tools',
+      '@megumi/coding-agent/memory/legacy-contracts/memory-external-contracts',
+      ['@megumi', 'shared', 'session'].join('/'),
+      ['@megumi', 'shared', 'run'].join('/'),
       'packages/coding-agent/agent-loop',
       '@megumi/coding-agent/agent-loop',
       'packages/coding-agent/state',

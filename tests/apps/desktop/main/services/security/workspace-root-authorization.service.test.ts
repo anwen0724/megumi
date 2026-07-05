@@ -1,7 +1,15 @@
 ﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { createWorkspaceRootAuthorizer } from '@megumi/desktop/main/services/security/workspace-root-authorization.service';
-import type { Session } from '@megumi/shared/session';
+type Session = {
+  sessionId: string;
+  title: string;
+  workspaceId: string;
+  workspacePath: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 function createSession(workspacePath: string): Session {
   return {

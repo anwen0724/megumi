@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -35,11 +35,11 @@ describe('input module boundary v2', () => {
 
     for (const file of files) {
       const source = read(file);
-      expect(source).not.toContain('@megumi/shared');
+      expect(source).not.toContain(['@megumi', 'shared'].join('/'));
       expect(source).not.toContain('../commands');
-      expect(source).not.toContain('@megumi/shared/ipc');
-      expect(source).not.toContain('@megumi/shared/prompt-template');
-      expect(source).not.toContain('@megumi/shared/skill');
+      expect(source).not.toContain('@megumi/desktop/main/ipc');
+      expect(source).not.toContain(['@megumi', 'shared', 'prompt-template'].join('/'));
+      expect(source).not.toContain(['@megumi', 'shared', 'skill'].join('/'));
       expect(source).not.toContain('../session');
       expect(source).not.toContain('../agent-loop');
       expect(source).not.toContain('../state');

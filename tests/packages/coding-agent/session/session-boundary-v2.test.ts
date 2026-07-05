@@ -47,7 +47,7 @@ describe('session module boundary v2', () => {
 
     for (const file of files) {
       const source = read(file);
-      expect(source).not.toContain(['@megumi/shared', 'session'].join('/'));
+      expect(source).not.toContain(['@megumi', 'shared', 'session'].join('/'));
       expect(source).not.toContain('../input');
       expect(source).not.toContain('../commands');
       expect(source).not.toContain('../tools');

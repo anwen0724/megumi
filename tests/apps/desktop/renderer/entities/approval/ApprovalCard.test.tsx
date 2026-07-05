@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApprovalCard } from '@megumi/desktop/renderer/entities/approval';
-import type { ApprovalRequest } from '@megumi/shared/tool';
+import type { ApprovalRequest } from '@megumi/desktop/renderer/entities/approval';
 
 const request: ApprovalRequest = {
   approvalRequestId: 'approval-1',

@@ -1,6 +1,6 @@
 ﻿import { beforeEach, describe, expect, it } from 'vitest';
 import { useApprovalStore } from '@megumi/desktop/renderer/entities/approval';
-import type { ApprovalRequest } from '@megumi/shared/tool';
+import type { ApprovalRequest } from '@megumi/desktop/renderer/entities/approval';
 
 const approval: ApprovalRequest = {
   approvalRequestId: 'approval-1',

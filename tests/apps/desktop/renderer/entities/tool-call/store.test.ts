@@ -1,13 +1,12 @@
 ﻿import { beforeEach, describe, expect, it } from 'vitest';
 import { useToolCallStore } from '@megumi/desktop/renderer/entities/tool-call';
-import type { ToolExecution } from '@megumi/shared/tool';
+import type { ToolExecution } from '@megumi/desktop/renderer/entities/tool-call';
 
 const toolCall: ToolExecution = {
   toolExecutionId: 'tool-execution-1',
   toolCallId: 'tool-call-1',
   runId: 'run-1',
   stepId: 'step-1',
-  actionId: 'action-1',
   toolName: 'read_file',
   input: { path: 'src/index.ts' },
   inputPreview: {

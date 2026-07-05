@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import {
   createDefaultMemoryPolicy,
   createMemoryCandidateDraft,
@@ -6,7 +6,7 @@ import {
   scoreMemoryRecordForRecall,
   selectMemoryRecallResults,
 } from '@megumi/coding-agent/memory';
-import type { MemoryRecord, MemorySourceRef } from '@megumi/shared/memory';
+import type { MemoryRecord, MemorySourceRef } from '@megumi/coding-agent/memory/legacy-contracts/memory-contracts';
 
 const now = '2026-06-12T00:00:00.000Z';
 

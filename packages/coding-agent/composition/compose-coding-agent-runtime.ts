@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Composes the Coding Agent product runtime and wraps it for host interfaces.
  * Runtime composition wires module services; host composition adapts those
  * services to UI/CLI/web-facing DTOs.
@@ -71,9 +71,26 @@ import {
 } from '@megumi/ai';
 import type { RuntimeEvent } from '../events';
 import type { TimelineMessage } from '../projections/timeline';
-import type { ImplementationPlanArtifactRecord } from '@megumi/shared/permission';
 import { WorkspaceChangeRepository } from '../workspace/repositories/workspace-change-repository';
 import { WorkspaceRepository } from '../workspace/repositories/workspace-repository';
+
+type ImplementationPlanArtifactRecord = {
+  planArtifactId: string;
+  producingRunId: string;
+  title: string;
+  status: 'draft' | 'proposed' | 'accepted' | 'rejected' | 'superseded';
+  createdAt: string;
+  updatedAt: string;
+  acceptedAt?: string;
+  rejectedAt?: string;
+  supersededAt?: string;
+  supersededByPlanId?: string;
+  metadata?: CompositionJsonObject;
+};
+
+type CompositionJsonPrimitive = string | number | boolean | null;
+type CompositionJsonValue = CompositionJsonPrimitive | CompositionJsonObject | CompositionJsonValue[];
+type CompositionJsonObject = { [key: string]: CompositionJsonValue };
 
 export interface CodingAgentHomePaths {
   homePath: string;

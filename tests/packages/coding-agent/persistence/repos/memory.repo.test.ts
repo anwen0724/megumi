@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+﻿import { afterEach, describe, expect, it } from 'vitest';
 
 import { createDatabase, type MegumiDatabase } from '@megumi/coding-agent/persistence/connection';
 import { MemoryRepository } from '@megumi/coding-agent/persistence/repos/memory.repo';
@@ -9,7 +9,7 @@ import type {
   MemoryRecallResult,
   MemoryRecord,
   MemorySourceRef,
-} from '@megumi/shared/memory';
+} from '@megumi/coding-agent/memory/legacy-contracts/memory-contracts';
 
 const now = '2026-06-12T00:00:00.000Z';
 let database: MegumiDatabase | undefined;

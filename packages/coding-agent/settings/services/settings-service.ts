@@ -2,7 +2,7 @@
  * Public Settings Service that reads sparse raw settings, resolves product settings,
  * and exposes provider runtime and permission settings capabilities to callers.
  */
-import type { RuntimeError } from '@megumi/shared/runtime';
+import type { RuntimeError } from '../../events';
 import {
   mergeRawSettings,
   resolveSettings,

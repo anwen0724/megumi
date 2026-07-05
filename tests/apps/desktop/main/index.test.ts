@@ -274,7 +274,7 @@ describe('main runtime logger composition', () => {
 
   it('does not keep main run-mode compatibility shim files', () => {
     expect(existsSync(join(process.cwd(), 'apps/desktop/src/main/services/run-mode.service.ts'))).toBe(false);
-    expect(existsSync(join(process.cwd(), 'packages/shared/run-mode-contracts.ts'))).toBe(false);
+    expect(existsSync(join(process.cwd(), 'packages', 'shared', 'run-mode-contracts.ts'))).toBe(false);
   });
 
   it('wires a Megumi Home JSONL runtime logger into process and IPC registration paths', async () => {
@@ -319,14 +319,11 @@ describe('main runtime logger composition', () => {
     expect(workspaceFilesOptions.isWorkspaceRootAllowed('C:/all/work/study/megumi')).toBe(true);
     expect(mocks.registerAllHandlers).toHaveBeenCalledWith({
       logger: processLogger,
-      providerService: mocks.codingAgentHost.settings.provider,
-      settingsService: mocks.codingAgentHost.settings,
-      sessionHandlers: { host: mocks.codingAgentHost },
-      planService: mocks.codingAgentHost.artifacts.plan,
-      permissionsService: mocks.codingAgentHost.permissions,
-      artifactService: mocks.codingAgentHost.artifacts,
-      projectService,
-      workspaceFilesService,
+      workspace: { host: mocks.codingAgentHost, workspaceFilesService },
+      chat: { host: mocks.codingAgentHost },
+      settings: { host: mocks.codingAgentHost },
+      approval: { host: mocks.codingAgentHost },
+      artifact: mocks.codingAgentHost.artifacts,
     });
 
     processLogger.error('runtime_review_probe', {

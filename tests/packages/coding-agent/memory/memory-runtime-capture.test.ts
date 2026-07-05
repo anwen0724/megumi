@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import type { MemoryDiagnosticWriterPort } from '@megumi/coding-agent/memory';
 import {
   MemoryRuntimeCaptureService,
@@ -10,8 +10,8 @@ import type {
   MemoryRecord,
   MemoryRecordStatus,
   MemoryScope,
-} from '@megumi/shared/memory';
-import type { JsonObject } from '@megumi/shared/primitives';
+} from '@megumi/coding-agent/memory/legacy-contracts/memory-contracts';
+import type { JsonObject } from '@megumi/coding-agent/memory/legacy-contracts/memory-json';
 
 const now = '2026-06-13T10:00:00.000Z';
 const homePath = 'C:/tmp/megumi-home';

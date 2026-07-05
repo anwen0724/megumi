@@ -2,7 +2,6 @@
 // The service performs discovery only; context priority and budget stay in @megumi/coding-agent/context.
 import path from 'node:path';
 import { TextDecoder } from 'node:util';
-import type { AgentInstructionSourceSnapshot } from '@megumi/shared/model';
 
 export const AGENT_INSTRUCTION_SOURCE_FILE = 'AGENTS.md';
 export const AGENT_INSTRUCTION_SOURCE_CANDIDATES = [
@@ -29,6 +28,21 @@ export interface LoadInstructionSourcesInput {
 export interface AgentInstructionSourcePort {
   loadInstructionSources(input: LoadInstructionSourcesInput): Promise<AgentInstructionSourceSnapshot[]>;
 }
+
+export type AgentInstructionSourceSnapshot = {
+  sourceId: string;
+  sourceKind: 'global_instruction' | 'project_instruction';
+  status: 'included' | 'included_truncated' | 'missing' | 'unavailable' | 'read_failed';
+  sourceUri?: string;
+  relativePath?: string;
+  text?: string;
+  loadedAt: string;
+  sizeBytes?: number;
+  includedBytes?: number;
+  hardCapBytes?: number;
+  truncated?: boolean;
+  reason?: string;
+};
 
 interface InstructionCandidate {
   sourceKind: 'global_instruction' | 'project_instruction';

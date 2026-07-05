@@ -5,6 +5,7 @@ import type {
   PermissionModeState,
 } from './legacy-contracts/plan-artifact-contracts';
 
+
 export interface PlanArtifactCompatibility {
   syncImplementationPlanArtifact(plan: ImplementationPlanArtifactRecord): void;
 }

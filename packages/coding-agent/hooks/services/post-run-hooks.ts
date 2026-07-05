@@ -1,10 +1,7 @@
-// Owns post-run hook dispatch for memory capture and workspace footer projection.
+﻿// Owns post-run hook dispatch for memory capture and workspace footer projection.
 // Hooks coordinate extension points without owning memory or workspace business rules.
-import { isProviderId } from '@megumi/shared/provider';
-import type { ProviderId } from '@megumi/shared/provider';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
-import type { MemoryCaptureSignal } from '@megumi/shared/memory';
-import type { MemoryCapturePort } from '../../memory';
+import type { RuntimeEvent } from '../../events';
+import type { MemoryCapturePort, MemoryCaptureSignal } from '../../memory';
 import type { ChatStreamEventAdapter } from '../../projections/chat-stream';
 import type { WorkspaceChangeFooterProjectorService } from '../../projections/workspace/workspace-change-footer-projector';
 import type {
@@ -13,6 +10,12 @@ import type {
   PostRunHooksWorkspaceChangeReadPort,
   ScheduleRunCompletedMemoryCaptureInput,
 } from '../contracts/post-run-hooks-contracts';
+
+type ProviderId = string;
+
+function isProviderId(value: string): value is ProviderId {
+  return value.length > 0;
+}
 
 export class PostRunHooksCoordinator {
   private readonly repository: PostRunHooksRepositoryPort;

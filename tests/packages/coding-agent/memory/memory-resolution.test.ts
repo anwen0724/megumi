@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { resolveMemoryCandidate } from '@megumi/coding-agent/memory';
-import type { MemoryRecord } from '@megumi/shared/memory';
+import type { MemoryRecord } from '@megumi/coding-agent/memory/legacy-contracts/memory-contracts';
 
 const now = '2026-06-12T00:00:00.000Z';
 

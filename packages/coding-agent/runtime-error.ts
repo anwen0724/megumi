@@ -5,7 +5,7 @@
 import type {
   RuntimeError,
   RuntimeErrorSource,
-} from '@megumi/shared/runtime';
+} from './events';
 
 export interface RuntimeExceptionOptions {
   cause?: unknown;

@@ -19,14 +19,17 @@ describe('Desktop Main shell composition', () => {
     const desktopComposition = source('apps/desktop/src/main/shell-composition/desktop-main-composition.ts');
 
     expect(desktopComposition).toContain('composeCodingAgentHostInterface');
-    expect(desktopComposition).toContain('providerService: codingAgentHost.settings.provider');
-    expect(desktopComposition).toContain('settingsService: codingAgentHost.settings');
-    expect(desktopComposition).toContain('sessionHandlers: { host: codingAgentHost }');
-    expect(desktopComposition).toContain('permissionsService: codingAgentHost.permissions');
-    expect(desktopComposition).toContain('projectService: codingAgentHost.workspace');
+    expect(desktopComposition).toContain('workspace: { host: codingAgentHost, workspaceFilesService }');
+    expect(desktopComposition).toContain('chat: { host: codingAgentHost }');
+    expect(desktopComposition).toContain('settings: { host: codingAgentHost }');
+    expect(desktopComposition).toContain('approval: { host: codingAgentHost }');
+    expect(desktopComposition).toContain('artifact: codingAgentHost.artifacts');
     expect(desktopComposition).not.toContain('runHandlers:');
     expect(desktopComposition).not.toContain('runContextService:');
     expect(desktopComposition).not.toContain('toolService:');
+    expect(desktopComposition).not.toContain('providerService:');
+    expect(desktopComposition).not.toContain('settingsService:');
+    expect(desktopComposition).not.toContain('sessionHandlers:');
     expect(desktopComposition).not.toContain('recoveryService:');
     expect(desktopComposition).not.toContain('new SessionRunService');
     expect(desktopComposition).not.toContain('new ProviderRuntimeService');

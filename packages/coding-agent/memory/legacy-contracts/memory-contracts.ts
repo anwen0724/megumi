@@ -1,6 +1,6 @@
 ﻿// Defines serializable memory contracts shared across package,
 // Desktop Main, preload, and renderer boundaries. This file owns shape only;
-// persistence mapping and runtime memory decisions live outside packages/shared.
+// persistence mapping and runtime memory decisions live outside this legacy file.
 import { z } from 'zod';
 export type IsoDateTime = string;
 import { JsonObjectSchema, type JsonObject } from './memory-json';

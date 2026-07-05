@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 import { PostRunHooksCoordinator } from '@megumi/coding-agent/hooks';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { RuntimeEvent } from '@megumi/coding-agent/events';
 
 describe('post-run hooks coordinator', () => {
   it('schedules completed-run memory capture with tool and source-of-truth activity signals', () => {

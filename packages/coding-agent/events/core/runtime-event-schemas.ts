@@ -2,28 +2,6 @@
 import { JsonObjectSchema, JsonValueSchema } from '../../shared-json';
 import { RuntimeContextSchema } from '../contracts/runtime-context-contracts';
 import { RuntimeErrorSchema } from '../contracts/runtime-error-contracts';
-import { ModelInputContextSourceRefSchema } from '@megumi/shared/model';
-import {
-  SESSION_ACTIVE_LEAF_REASONS,
-  SESSION_BRANCH_MARKER_REASONS,
-  SESSION_INTERRUPTED_RUN_PREVIOUS_STATUSES,
-  SESSION_INTERRUPTED_RUN_REASONS,
-} from '@megumi/shared/session';
-import { SESSION_COMPACTION_TRIGGER_REASONS } from '@megumi/shared/session';
-import {
-  RunActionKindSchema,
-  RunActionStatusSchema,
-  RunObservationSourceSchema,
-  RunStatusSchema,
-  RunStepKindSchema,
-  RunStepStatusSchema,
-  SessionMessageStatusSchema,
-  SessionStatusSchema,
-} from '@megumi/shared/session';
-import {
-  CONTEXT_PATCH_OPERATIONS,
-  CONTEXT_PATCH_REQUESTERS,
-} from '@megumi/shared/run';
 import {
   RUNTIME_EVENT_PERSIST_MODES,
   RUNTIME_EVENT_SCHEMA_VERSION,
@@ -40,44 +18,51 @@ import {
 import {
   APPROVAL_SCOPES,
   ApprovalRequestSchema,
-  PermissionDecisionSchema,
-  ToolExecutionSchema,
-  ToolNameSchema,
-  ToolPolicyDecisionSchema,
-  type ApprovalScope,
-} from '@megumi/shared/tool';
-import {
+  ArtifactContentStorageSchema,
+  ArtifactContentTypeSchema,
+  ArtifactKindSchema,
+  ArtifactStatusSchema,
   CancelReasonSchema,
   CancelRequestedBySchema,
   CancelScopeSchema,
   CheckpointBoundarySchema,
   CheckpointReasonSchema,
-  ResumeModeSchema,
-  ResumeReasonSchema,
-  ResumeRequestedBySchema,
-  RetryKindSchema,
-  RetryReasonSchema,
-  RetryRequestedBySchema,
-} from '@megumi/shared/recovery';
-import {
-  ArtifactContentStorageSchema,
-  ArtifactContentTypeSchema,
-  ArtifactKindSchema,
-  ArtifactStatusSchema,
-} from '@megumi/shared/artifact';
-import {
+  CONTEXT_PATCH_OPERATIONS,
+  CONTEXT_PATCH_REQUESTERS,
   MemoryAccessKindSchema,
   MemoryCandidateStatusSchema,
   MemoryKindSchema,
   MemoryRecordStatusSchema,
   MemoryRiskLevelSchema,
   MemoryScopeSchema,
-} from '@megumi/shared/memory';
-import {
+  ModelInputContextSourceRefSchema,
+  PermissionDecisionSchema,
+  ResumeModeSchema,
+  ResumeReasonSchema,
+  ResumeRequestedBySchema,
+  RetryKindSchema,
+  RetryReasonSchema,
+  RetryRequestedBySchema,
+  RunActionKindSchema,
+  RunActionStatusSchema,
+  RunObservationSourceSchema,
+  RunStatusSchema,
+  RunStepKindSchema,
+  RunStepStatusSchema,
+  SESSION_ACTIVE_LEAF_REASONS,
+  SESSION_BRANCH_MARKER_REASONS,
+  SESSION_COMPACTION_TRIGGER_REASONS,
+  SESSION_INTERRUPTED_RUN_PREVIOUS_STATUSES,
+  SESSION_INTERRUPTED_RUN_REASONS,
+  SessionMessageStatusSchema,
+  SessionStatusSchema,
+  ToolExecutionSchema,
+  ToolNameSchema,
+  ToolPolicyDecisionSchema,
   WorkspaceRestoreRequestedBySchema,
   WorkspaceRestoreResultStatusSchema,
-} from '@megumi/shared/workspace';
-
+  type ApprovalScope,
+} from '../contracts/runtime-event-dependencies';
 const RUNTIME_EVENT_TYPE_VALUES = [...RUNTIME_EVENT_TYPES] as [
   RuntimeEventType,
   ...RuntimeEventType[],

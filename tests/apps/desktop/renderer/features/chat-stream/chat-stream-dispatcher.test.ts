@@ -1,6 +1,6 @@
 ﻿// @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
+import type { ChatStreamEvent } from '@megumi/coding-agent/projections/chat-stream';
 import { dispatchChatStreamEvent } from '@megumi/desktop/renderer/features/chat-stream/chat-stream-dispatcher';
 import {
   chatStreamSessionKey,

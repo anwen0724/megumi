@@ -1,6 +1,6 @@
 ﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '@megumi/desktop/renderer/shared/ipc/runtime-request';
 import type { MegumiAPI } from '@megumi/desktop/preload/types';
 

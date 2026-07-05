@@ -23,7 +23,7 @@ export async function forwardRuntimeEvents(
       options.logger?.warn?.('Dropped invalid runtime event.', { error: parsed.error.message });
       continue;
     }
-    sender.send(IPC_CHANNELS.runtime.event, parsed.data);
+    sender.send(IPC_CHANNELS.runtime.event, parsed.data as RuntimeEvent);
   }
 }
 

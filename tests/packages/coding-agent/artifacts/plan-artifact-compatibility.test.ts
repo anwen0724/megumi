@@ -1,6 +1,6 @@
 ﻿import { describe, expect, it, vi } from 'vitest';
 import { PlanArtifactCompatibilityService, type PlanArtifactCompatibilityRepositoryPort } from '@megumi/coding-agent/artifacts';
-import type { ImplementationPlanArtifactRecord } from '@megumi/shared/permission';
+import type { ImplementationPlanArtifactRecord } from '@megumi/coding-agent/artifacts/legacy-contracts/plan-artifact-contracts';
 
 function createRepository(): PlanArtifactCompatibilityRepositoryPort {
   const artifacts = new Map<string, any>();

@@ -1,6 +1,6 @@
 ﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { RuntimeEvent } from '@megumi/coding-agent/events';
 import type { RendererRunSummary } from '@megumi/desktop/renderer/entities/run/store';
 import {
   createProcessingDisclosureModel,

@@ -2,7 +2,6 @@
   RunCancelledPayload,
   RunFailedPayload,
   RuntimeEvent,
-  ToolExecutionApprovalRequestedPayload,
   ToolResultCreatedPayload,
 } from '@megumi/coding-agent/events';
 import type { RuntimeError } from '@megumi/coding-agent/events';
@@ -66,7 +65,11 @@ function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): vo
   }
 
   if (event.eventType === 'tool.execution.approval_requested') {
-    const payload = event.payload as ToolExecutionApprovalRequestedPayload & { toolExecution?: ToolExecution };
+    const payload = event.payload as {
+      approvalRequest: ApprovalRequest;
+      toolExecutionId?: string;
+      toolExecution?: ToolExecution;
+    };
     const approvalRequestId = payload.approvalRequest.approvalRequestId;
 
     if (payload.toolExecution) {
@@ -76,6 +79,9 @@ function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): vo
         status: 'awaitingApproval',
       });
     } else {
+      if (!payload.toolExecutionId) {
+        return;
+      }
       const current = store.toolCallsById[payload.toolExecutionId];
       if (current) {
         store.upsertToolCall({

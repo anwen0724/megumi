@@ -10,6 +10,7 @@ import type {
   MemorySourceRef,
 } from './legacy-contracts/memory-contracts';
 
+export type { MemoryCaptureSignal } from './legacy-contracts/memory-contracts';
 export * from './capture-trigger-classifier';
 export * from './candidate-validation';
 export * from './extraction';

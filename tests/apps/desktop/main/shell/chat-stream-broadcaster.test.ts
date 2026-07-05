@@ -1,11 +1,11 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 // Verifies the chat-stream broadcaster forwards product chat stream events to the
 // current BrowserWindow's webContents, and is a no-op when no window is attached or
 // the window has been destroyed.
 import { describe, expect, it, vi } from 'vitest';
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
+import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
 import { createChatStreamBroadcaster } from '@megumi/desktop/main/shell/chat-stream-broadcaster';
-import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
+import type { ChatStreamEvent } from '@megumi/coding-agent/projections/chat-stream';
 
 function chatStreamEvent(): ChatStreamEvent {
   return {

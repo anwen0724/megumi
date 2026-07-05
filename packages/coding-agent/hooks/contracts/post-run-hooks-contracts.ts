@@ -1,7 +1,7 @@
 /*
  * Public post-run hook contracts exposed by the Coding Agent hook module.
  */
-import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { RuntimeEvent } from '../../events';
 import type { WorkspaceChangeService } from '../../workspace';
 import type { MemoryCapturePort } from '../../memory';
 import type { ChatStreamEventAdapter } from '../../projections/chat-stream';

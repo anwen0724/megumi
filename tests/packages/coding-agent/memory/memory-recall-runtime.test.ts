@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import {
   MemoryRecallRuntimeService,
@@ -18,7 +18,7 @@ import type {
   MemoryRecord,
   MemoryRecordStatus,
   MemoryScope,
-} from '@megumi/shared/memory';
+} from '@megumi/coding-agent/memory/legacy-contracts/memory-contracts';
 
 const now = '2026-06-13T10:00:00.000Z';
 

@@ -17,9 +17,7 @@
       "@megumi/coding-agent": ["packages/coding-agent/index.ts"],
       "@megumi/coding-agent/*": ["packages/coding-agent/*"],
       "@megumi/ai": ["packages/ai/index.ts"],
-      "@megumi/ai/*": ["packages/ai/*"],
-      "@megumi/shared": ["packages/shared/index.ts"],
-      "@megumi/shared/*": ["packages/shared/*"]
+      "@megumi/ai/*": ["packages/ai/*"]
     }
   },
   "include": ["apps/**/*", "packages/**/*", "tests/**/*"],
