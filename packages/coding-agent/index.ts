@@ -5,7 +5,7 @@ export * from './session';
 export * from './agent-run';
 export * from './events';
 export * from './runtime-error';
-export * from './context';
+export * as context from './context';
 export * from './hooks';
 export * from './tools';
 export * as permissions from './permissions';

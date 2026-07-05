@@ -1,5 +1,6 @@
 ﻿// Provides run-stream event utilities that are platform-independent and safe for package use.
-import type { RuntimeError, RuntimeEvent } from '@megumi/shared/runtime';
+import type { RuntimeEvent } from '../contracts/runtime-event-contracts';
+import type { RuntimeError } from '../contracts/runtime-error-contracts';
 
 export interface RuntimeEventContextBuildFailure {
   message: string;
@@ -207,3 +208,6 @@ function isRuntimeError(value: unknown): value is RuntimeError {
     && typeof (value as { retryable?: unknown }).retryable === 'boolean'
     && typeof (value as { source?: unknown }).source === 'string';
 }
+
+
+
