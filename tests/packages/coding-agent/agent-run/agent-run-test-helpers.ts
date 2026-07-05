@@ -19,6 +19,9 @@ export function createInMemoryAgentRunRepository(): AgentRunRepository {
       runs.set(run.run_id, run);
       return run;
     },
+    listRunsBySession(sessionId) {
+      return [...runs.values()].filter((run) => run.session_id === sessionId);
+    },
     listInterruptedRuns() {
       return [...runs.values()].filter((run) => (
         run.status === 'running'

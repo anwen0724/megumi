@@ -8,9 +8,11 @@ import { ArtifactService, PlanArtifactCompatibilityService, PlanArtifactService 
 import {
   createAgentRunService,
   createModelCallService,
+  type AgentRun,
   type AgentRunService,
   type ModelCallService,
 } from '../agent-run';
+import { createAgentRunRepository } from '../agent-run/repositories/agent-run-repository';
 import { createCommandService, type CommandService } from '../commands';
 import { createInputService, type InputService } from '../input';
 import { createSessionService, type SessionService } from '../session';
@@ -74,6 +76,11 @@ import {
   type AssistantStreamEvent,
 } from '@megumi/ai';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
+import type { TimelineMessage } from '@megumi/shared/timeline';
+import type { Run } from '@megumi/shared/session';
+import type { ImplementationPlanArtifactRecord } from '@megumi/shared/permission';
+import { WorkspaceChangeRepository } from '../workspace/repositories/workspace-change-repository';
+import { WorkspaceRepository } from '../workspace/repositories/workspace-repository';
 
 export interface CodingAgentHomePaths {
   homePath: string;
@@ -135,7 +142,10 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     sqlitePath: options.homePaths.sqlitePath,
     migrationsFolder: options.migrationsFolder,
   });
+  const workspaceRepository = new WorkspaceRepository(persistence.database);
+  const workspaceChangeRepository = new WorkspaceChangeRepository(persistence.database);
   const sessionRepository = new SessionV2Repository(persistence.database);
+  const agentRunRepository = createAgentRunRepository({ database: persistence.database });
   const sessionService = createSessionService({ repository: sessionRepository });
   const inputService = createInputService();
   const commandService = createCommandService();
@@ -152,11 +162,11 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   const workspaceFileSystem = options.projectFileSystem ?? createLocalProjectFileSystem();
   const workspacePathPolicyService = createWorkspacePathPolicyService();
   const workspaceService = createWorkspaceService({
-    repository: persistence.workspaceRepository,
+    repository: workspaceRepository,
     file_system: workspaceFileSystem,
   });
   const workspaceChangeService = createWorkspaceChangeService({
-    repository: persistence.workspaceChangeRepository,
+    repository: workspaceChangeRepository,
     path_policy: workspacePathPolicyService,
     file_system: workspaceFileSystem,
   });
@@ -177,7 +187,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   });
   const contextRuntime = composeCodingAgentContext({
     sessionService,
-    runtimeEventRepository: persistence.agentLoopRepository as never,
+    runtimeEventRepository: { listRuntimeEventsByRun: () => [] },
     summaryModelCallPort: options.summaryModelCallPort ?? createContextSummaryModelCallPort({
       modelCallService,
       settingsService,
@@ -198,7 +208,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     repository: persistence.artifactRepository,
   });
   const planArtifactService = new PlanArtifactService({
-    repository: persistence.agentLoopRepository,
+    repository: createInMemoryPlanArtifactRepository(),
     planArtifactCompatibility,
   });
   const agentRunService = createAgentRunService({
@@ -271,9 +281,9 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     contextRuntime,
     sessionBranchService: createUnsupportedSessionBranchService(),
     compatibility: {
-      listWorkspaceIds: () => persistence.workspaceRepository.listWorkspaces().map((workspace) => workspace.workspace_id),
-      listTimelineMessagesBySession: (payload) => persistence.agentLoopRepository.listCommittedMessagesBySession(payload),
-      listRunsBySession: (sessionId) => persistence.agentLoopRepository.listRunsBySession(sessionId),
+      listWorkspaceIds: () => workspaceRepository.listWorkspaces().map((workspace) => workspace.workspace_id),
+      listTimelineMessagesBySession: (payload) => listSessionTimelineMessages(sessionService, payload),
+      listRunsBySession: (sessionId) => agentRunRepository.listRunsBySession(sessionId).map(toSharedRun),
     },
     dispose: () => persistence.database.close(),
   };
@@ -547,6 +557,119 @@ function toChatStreamEvent(event: {
 function stringPayloadFromRecord(payload: Record<string, unknown> | undefined, key: string): string | undefined {
   const value = payload?.[key];
   return typeof value === 'string' ? value : undefined;
+}
+
+function listSessionTimelineMessages(
+  sessionService: SessionService,
+  payload: Parameters<CodingAgentRuntime['compatibility']['listTimelineMessagesBySession']>[0],
+): ReturnType<CodingAgentRuntime['compatibility']['listTimelineMessagesBySession']> {
+  const result = sessionService.listMessages({
+    session_id: payload.sessionId,
+    active_path_only: true,
+  });
+  if (result.status === 'failed') {
+    return { messages: [], diagnostics: [] };
+  }
+
+  return {
+    messages: result.messages.map((item): TimelineMessage => {
+      const message = item.message;
+      const createdAt = message.created_at;
+      if (message.role === 'assistant') {
+        const runId = message.run_id ?? `run:${message.message_id}`;
+        return {
+          messageId: message.message_id,
+          role: 'assistant',
+          projectId: payload.projectId,
+          sessionId: message.session_id,
+          runId,
+          createdAt,
+          ...(message.completed_at ? { updatedAt: message.completed_at } : {}),
+          blocks: [{
+            blockId: `answer:${message.message_id}`,
+            kind: 'answer_text',
+            runId,
+            textId: `text:${message.message_id}`,
+            status: 'completed',
+            text: message.content_text,
+            format: 'markdown',
+            createdAt,
+            ...(message.completed_at ? { updatedAt: message.completed_at } : {}),
+          }],
+        };
+      }
+
+      return {
+        messageId: message.message_id,
+        role: 'user',
+        projectId: payload.projectId,
+        sessionId: message.session_id,
+        ...(message.run_id ? { runId: message.run_id } : {}),
+        createdAt,
+        ...(message.completed_at ? { updatedAt: message.completed_at } : {}),
+        blocks: [{
+          blockId: `user-text:${message.message_id}`,
+          kind: 'user_text',
+          text: message.content_text,
+          format: 'plain',
+          createdAt,
+          ...(message.completed_at ? { updatedAt: message.completed_at } : {}),
+        }],
+      };
+    }),
+    diagnostics: [],
+  };
+}
+
+function toSharedRun(run: AgentRun): Run {
+  return {
+    runId: run.run_id,
+    sessionId: run.session_id,
+    ...(run.trigger.type === 'user_input' ? { triggerMessageId: run.trigger.user_message_id } : {}),
+    mode: run.trigger.type,
+    goal: run.trigger.type === 'command'
+      ? `/${run.trigger.command_name}`
+      : run.trigger.user_message_id,
+    status: run.status,
+    createdAt: run.created_at,
+    ...(run.started_at ? { startedAt: run.started_at } : {}),
+    ...(run.completed_at ? { completedAt: run.completed_at } : {}),
+    metadata: {
+      provider_id: run.model_selection.provider_id,
+      model_id: run.model_selection.model_id,
+      trigger: run.trigger,
+      ...(run.failure ? {
+        failure_code: run.failure.code,
+        failure_message: run.failure.message,
+      } : {}),
+    },
+  };
+}
+
+function createInMemoryPlanArtifactRepository() {
+  const plans = new Map<string, ImplementationPlanArtifactRecord>();
+  return {
+    saveImplementationPlan(plan: ImplementationPlanArtifactRecord): ImplementationPlanArtifactRecord {
+      plans.set(plan.planArtifactId, plan);
+      return plan;
+    },
+    getImplementationPlanByProducingRun(runId: string): ImplementationPlanArtifactRecord | undefined {
+      return [...plans.values()].find((plan) => plan.producingRunId === runId);
+    },
+    updateImplementationPlanStatus(input: { planArtifactId: string; status: ImplementationPlanArtifactRecord['status']; updatedAt: string }): ImplementationPlanArtifactRecord | undefined {
+      const current = plans.get(input.planArtifactId);
+      if (!current) {
+        return undefined;
+      }
+      const updated = {
+        ...current,
+        status: input.status,
+        updatedAt: input.updatedAt,
+      };
+      plans.set(updated.planArtifactId, updated);
+      return updated;
+    },
+  };
 }
 
 function createAgentRunApprovalResolutionPort(agentRunService: AgentRunService): ApprovalResolutionPort {

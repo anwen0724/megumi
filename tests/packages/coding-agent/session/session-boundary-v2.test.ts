@@ -67,6 +67,5 @@ describe('session module boundary v2', () => {
 
     expect(read('packages/coding-agent/session/services/session-service.ts')).not.toContain(['persistence/repos', 'session.repo'].join('/'));
     expect(read('packages/coding-agent/session/repositories/session-repository.ts')).not.toContain(['persistence/repos', 'session.repo'].join('/'));
-    expect(exists(['packages/coding-agent/persistence/repos', 'session.repo.ts'].join('/'))).toBe(true);
   });
 });

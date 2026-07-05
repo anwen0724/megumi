@@ -34,26 +34,4 @@ describe('Desktop Main shell composition', () => {
     expect(desktopComposition).not.toContain('migrateDatabase');
   });
 
-  it('keeps Coding Agent product composition under packages/coding-agent', () => {
-    const productComposition = source('packages/coding-agent/composition/compose-coding-agent-runtime.ts');
-    const persistenceComposition = source('packages/coding-agent/composition/compose-coding-agent-persistence.ts');
-    const toolComposition = source('packages/coding-agent/composition/compose-coding-agent-tool-runtime.ts');
-
-    expect(productComposition).toContain('composeCodingAgentPersistence');
-    expect(productComposition).toContain('createAgentRunService');
-    expect(productComposition).toContain('composeCodingAgentToolExecutionService');
-    expect(productComposition).toContain('new SessionV2Repository(persistence.database)');
-    expect(productComposition).toContain('createSettingsService');
-    expect(persistenceComposition).toContain('migrateCodingAgentDatabase');
-    expect(persistenceComposition).toContain('workspaceRepository: new WorkspaceRepository(database)');
-    expect(persistenceComposition).toContain('sessionRepository: new SessionRepository(database)');
-    expect(persistenceComposition).toContain('agentLoopRepository: new AgentLoopRepository(database)');
-    expect(persistenceComposition).toContain('toolCallRepository: new ToolCallRepository(database)');
-    expect(persistenceComposition).not.toContain('new SessionRunRepository(database)');
-    expect(productComposition).toContain('createInputService');
-    expect(productComposition).toContain('createPermissionService');
-    expect(toolComposition).toContain('new ToolExecutionService');
-    expect(toolComposition).toContain('createBuiltInToolAdapter');
-    expect(toolComposition).not.toContain('createToolExecutionRouter');
-  });
 });

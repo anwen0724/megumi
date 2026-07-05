@@ -9,6 +9,7 @@ export type AgentRunRepository = {
   createRun(run: AgentRun): AgentRun;
   getRun(runId: string): AgentRun | undefined;
   saveRun(run: AgentRun): AgentRun;
+  listRunsBySession(sessionId: string): AgentRun[];
   listInterruptedRuns(): AgentRun[];
   createApprovalRequest(request: AgentRunApprovalRequest): AgentRunApprovalRequest;
   getApprovalRequest(approvalRequestId: string): AgentRunApprovalRequest | undefined;
@@ -115,6 +116,15 @@ class SqliteAgentRunRepository implements AgentRunRepository {
       WHERE run_id = @run_id
     `).run(row);
     return run;
+  }
+
+  listRunsBySession(sessionId: string): AgentRun[] {
+    const rows = this.database.prepare(`
+      SELECT * FROM agent_runs
+      WHERE session_id = ?
+      ORDER BY created_at ASC, run_id ASC
+    `).all(sessionId) as AgentRunRow[];
+    return rows.map(runFromRow);
   }
 
   listInterruptedRuns(): AgentRun[] {

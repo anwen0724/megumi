@@ -4,7 +4,6 @@ import type {
   ImplementationPlanArtifactRecord,
   PermissionModeState,
 } from '@megumi/shared/permission';
-import type { AgentLoopRepository } from '../persistence/repos/agent-loop.repo';
 
 export interface PlanArtifactCompatibility {
   syncImplementationPlanArtifact(plan: ImplementationPlanArtifactRecord): void;
@@ -25,11 +24,14 @@ export interface PlanArtifactServicePort {
   updatePlanStatus(input: PlanStatusUpdatePayload): ImplementationPlanArtifactRecord;
 }
 
+export interface PlanArtifactRepositoryPort {
+  saveImplementationPlan(plan: ImplementationPlanArtifactRecord): ImplementationPlanArtifactRecord;
+  getImplementationPlanByProducingRun(runId: string): ImplementationPlanArtifactRecord | undefined;
+  updateImplementationPlanStatus(input: PlanStatusUpdatePayload): ImplementationPlanArtifactRecord | undefined;
+}
+
 export interface PlanArtifactServiceOptions {
-  repository: Pick<
-    AgentLoopRepository,
-    'saveImplementationPlan' | 'getImplementationPlanByProducingRun' | 'updateImplementationPlanStatus'
-  >;
+  repository: PlanArtifactRepositoryPort;
   planArtifactCompatibility?: PlanArtifactCompatibility;
   ids?: PlanArtifactServiceIds;
 }

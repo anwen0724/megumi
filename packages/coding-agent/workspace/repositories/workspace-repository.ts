@@ -99,7 +99,7 @@ export class WorkspaceRepository {
     const row = this.database.prepare(`
       SELECT
         (SELECT COUNT(*) FROM sessions WHERE workspace_id = @workspace_id)
-        + (SELECT COUNT(*) FROM agent_loop_runs WHERE workspace_id = @workspace_id)
+        + (SELECT COUNT(*) FROM agent_runs WHERE workspace_id = @workspace_id)
         + (SELECT COUNT(*) FROM workspace_changes WHERE workspace_id = @workspace_id)
         AS reference_count
     `).get({ workspace_id }) as { reference_count: number } | undefined;

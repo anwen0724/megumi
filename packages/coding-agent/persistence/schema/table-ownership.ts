@@ -29,16 +29,6 @@ export const persistenceTableOwnership = {
       'session_compactions',
     ],
   },
-  agentLoop: {
-    module: 'agent-loop',
-    repository: 'AgentLoopRepository',
-    tables: [
-      'agent_loop_runs',
-      'model_calls',
-      'agent_loop_events',
-      'tool_registry_snapshots',
-    ],
-  },
   agentRun: {
     module: 'agent-run',
     repository: 'AgentRunRepository',
@@ -46,15 +36,6 @@ export const persistenceTableOwnership = {
     tables: [
       'agent_runs',
       'agent_run_approval_requests',
-    ],
-  },
-  toolCall: {
-    module: 'tools',
-    repository: 'ToolCallRepository',
-    tables: [
-      'tool_sources',
-      'tool_calls',
-      'approval_requests',
     ],
   },
   workspaceChange: {

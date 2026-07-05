@@ -94,37 +94,6 @@ export const sessionCompactions = sqliteTable('session_compactions', {
   index('idx_session_compactions_session_created').on(table.sessionId, table.createdAt),
 ]);
 
-export const agentLoopRuns = sqliteTable('agent_loop_runs', {
-  runId: text('run_id').primaryKey(),
-  workspaceId: text('workspace_id').notNull().references(() => workspaces.workspaceId),
-  sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
-  runKind: text('run_kind').notNull(),
-  userMessageId: text('user_message_id').references(() => sessionMessages.messageId, { onDelete: 'set null' }),
-  assistantMessageId: text('assistant_message_id').references(() => sessionMessages.messageId, { onDelete: 'set null' }),
-  baseRunId: text('base_run_id').references((): AnySQLiteColumn => agentLoopRuns.runId, { onDelete: 'set null' }),
-  baseMessageId: text('base_message_id').references(() => sessionMessages.messageId, { onDelete: 'set null' }),
-  baseEntryId: text('base_entry_id').references(() => sessionEntries.entryId, { onDelete: 'set null' }),
-  attemptNumber: integer('attempt_number').notNull(),
-  status: text('status').notNull(),
-  permissionMode: text('permission_mode').notNull(),
-  permissionSnapshotJson: jsonText('permission_snapshot_json'),
-  memoryRecallTraceId: text('memory_recall_trace_id'),
-  startedAt: text('started_at'),
-  completedAt: text('completed_at'),
-  cancelledAt: text('cancelled_at'),
-  errorJson: jsonText('error_json'),
-  createdAt: text('created_at').notNull(),
-  metadataJson: jsonText('metadata_json'),
-}, (table) => [
-  index('idx_agent_loop_runs_session_created').on(table.sessionId, table.createdAt),
-  index('idx_agent_loop_runs_workspace_created').on(table.workspaceId, table.createdAt),
-  index('idx_agent_loop_runs_status').on(table.status),
-  index('idx_agent_loop_runs_user_message').on(table.userMessageId),
-  index('idx_agent_loop_runs_assistant_message').on(table.assistantMessageId),
-  index('idx_agent_loop_runs_base_run').on(table.baseRunId),
-  index('idx_agent_loop_runs_base_entry').on(table.baseEntryId),
-]);
-
 export const agentRuns = sqliteTable('agent_runs', {
   runId: text('run_id').primaryKey(),
   workspaceId: text('workspace_id').notNull().references(() => workspaces.workspaceId),
@@ -158,106 +127,11 @@ export const agentRunApprovalRequests = sqliteTable('agent_run_approval_requests
   index('idx_agent_run_approval_requests_run_status').on(table.runId, table.status),
 ]);
 
-export const modelCalls = sqliteTable('model_calls', {
-  modelCallId: text('model_call_id').primaryKey(),
-  runId: text('run_id').notNull().references(() => agentRuns.runId, { onDelete: 'cascade' }),
-  callOrder: integer('call_order').notNull(),
-  providerId: text('provider_id').notNull(),
-  modelId: text('model_id').notNull(),
-  status: text('status').notNull(),
-  inputSummaryJson: jsonText('input_summary_json'),
-  contextSnapshotJson: jsonText('context_snapshot_json'),
-  requestJson: jsonText('request_json'),
-  responseJson: jsonText('response_json'),
-  outputSummaryJson: jsonText('output_summary_json'),
-  tokenUsageJson: jsonText('token_usage_json'),
-  startedAt: text('started_at').notNull(),
-  completedAt: text('completed_at'),
-  errorJson: jsonText('error_json'),
-  metadataJson: jsonText('metadata_json'),
-}, (table) => [
-  uniqueIndex('idx_model_calls_run_order').on(table.runId, table.callOrder),
-]);
-
-export const toolSources = sqliteTable('tool_sources', {
-  toolSourceId: text('tool_source_id').primaryKey(),
-  workspaceId: text('workspace_id').references(() => workspaces.workspaceId, { onDelete: 'cascade' }),
-  sourceType: text('source_type').notNull(),
-  name: text('name').notNull(),
-  status: text('status').notNull(),
-  enabled: integer('enabled', { mode: 'boolean' }).notNull(),
-  configJson: jsonText('config_json'),
-  createdAt: text('created_at').notNull(),
-  updatedAt: text('updated_at').notNull(),
-  metadataJson: jsonText('metadata_json'),
-}, (table) => [
-  index('idx_tool_sources_workspace_type_name').on(table.workspaceId, table.sourceType, table.name),
-]);
-
-export const toolRegistrySnapshots = sqliteTable('tool_registry_snapshots', {
-  snapshotId: text('snapshot_id').primaryKey(),
-  runId: text('run_id').notNull().references(() => agentLoopRuns.runId, { onDelete: 'cascade' }),
-  workspaceId: text('workspace_id').references(() => workspaces.workspaceId, { onDelete: 'cascade' }),
-  toolCount: integer('tool_count').notNull(),
-  snapshotJson: jsonText('snapshot_json').notNull(),
-  createdAt: text('created_at').notNull(),
-  metadataJson: jsonText('metadata_json'),
-}, (table) => [
-  index('idx_tool_registry_snapshots_run').on(table.runId),
-]);
-
-export const toolCalls = sqliteTable('tool_calls', {
-  toolCallId: text('tool_call_id').primaryKey(),
-  runId: text('run_id').notNull().references(() => agentLoopRuns.runId, { onDelete: 'cascade' }),
-  modelCallId: text('model_call_id').notNull().references(() => modelCalls.modelCallId, { onDelete: 'cascade' }),
-  callOrder: integer('call_order').notNull(),
-  providerToolCallId: text('provider_tool_call_id'),
-  toolSourceId: text('tool_source_id').references(() => toolSources.toolSourceId, { onDelete: 'set null' }),
-  toolName: text('tool_name').notNull(),
-  modelVisibleName: text('model_visible_name').notNull(),
-  inputJson: jsonText('input_json').notNull(),
-  inputPreview: text('input_preview'),
-  status: text('status').notNull(),
-  permissionDecisionJson: jsonText('permission_decision_json'),
-  approvalRequestId: text('approval_request_id'),
-  resultJson: jsonText('result_json'),
-  resultPreview: text('result_preview'),
-  observationJson: jsonText('observation_json'),
-  submittedToModelAt: text('submitted_to_model_at'),
-  startedAt: text('started_at'),
-  completedAt: text('completed_at'),
-  errorJson: jsonText('error_json'),
-  metadataJson: jsonText('metadata_json'),
-}, (table) => [
-  index('idx_tool_calls_run_order').on(table.runId, table.callOrder),
-  index('idx_tool_calls_model_order').on(table.modelCallId, table.callOrder),
-  index('idx_tool_calls_status').on(table.status),
-]);
-
-export const approvalRequests = sqliteTable('approval_requests', {
-  approvalRequestId: text('approval_request_id').primaryKey(),
-  runId: text('run_id').notNull().references(() => agentLoopRuns.runId, { onDelete: 'cascade' }),
-  toolCallId: text('tool_call_id').notNull().references(() => toolCalls.toolCallId, { onDelete: 'cascade' }),
-  status: text('status').notNull(),
-  requestedScope: text('requested_scope').notNull(),
-  riskLevel: text('risk_level').notNull(),
-  requestJson: jsonText('request_json').notNull(),
-  decision: text('decision'),
-  decidedBy: text('decided_by'),
-  decidedAt: text('decided_at'),
-  createdAt: text('created_at').notNull(),
-  expiresAt: text('expires_at'),
-  metadataJson: jsonText('metadata_json'),
-}, (table) => [
-  index('idx_approval_requests_run_status').on(table.runId, table.status),
-  index('idx_approval_requests_tool_call').on(table.toolCallId),
-]);
-
 export const workspaceChanges = sqliteTable('workspace_changes', {
   changeSetId: text('change_set_id').primaryKey(),
   workspaceId: text('workspace_id').notNull().references(() => workspaces.workspaceId),
   sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
-  runId: text('run_id').notNull().references(() => agentLoopRuns.runId, { onDelete: 'cascade' }),
+  runId: text('run_id').notNull().references(() => agentRuns.runId, { onDelete: 'cascade' }),
   status: text('status').notNull(),
   changedFileCount: integer('changed_file_count').notNull(),
   createdAt: text('created_at').notNull(),
@@ -328,7 +202,7 @@ export const artifacts = sqliteTable('artifacts', {
   artifactId: text('artifact_id').primaryKey(),
   workspaceId: text('workspace_id').references(() => workspaces.workspaceId, { onDelete: 'set null' }),
   sessionId: text('session_id').references(() => sessions.sessionId, { onDelete: 'set null' }),
-  runId: text('run_id').references(() => agentLoopRuns.runId, { onDelete: 'set null' }),
+  runId: text('run_id').references(() => agentRuns.runId, { onDelete: 'set null' }),
   kind: text('kind').notNull(),
   title: text('title').notNull(),
   status: text('status').notNull(),
@@ -354,7 +228,7 @@ export const artifactVersions = sqliteTable('artifact_versions', {
   sizeBytes: integer('size_bytes'),
   sha256: text('sha256'),
   textPreview: text('text_preview'),
-  createdByRunId: text('created_by_run_id').references(() => agentLoopRuns.runId, { onDelete: 'set null' }),
+  createdByRunId: text('created_by_run_id').references(() => agentRuns.runId, { onDelete: 'set null' }),
   createdAt: text('created_at').notNull(),
   metadataJson: jsonText('metadata_json'),
 }, (table) => [
@@ -374,24 +248,10 @@ export const artifactSourceRefs = sqliteTable('artifact_source_refs', {
   index('idx_artifact_source_refs_artifact').on(table.artifactId),
 ]);
 
-export const agentLoopEvents = sqliteTable('agent_loop_events', {
-  eventId: text('event_id').primaryKey(),
-  runId: text('run_id').notNull().references(() => agentLoopRuns.runId, { onDelete: 'cascade' }),
-  sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
-  sequence: integer('sequence').notNull(),
-  eventType: text('event_type').notNull(),
-  visibility: text('visibility').notNull(),
-  createdAt: text('created_at').notNull(),
-  payloadJson: jsonText('payload_json').notNull(),
-  eventJson: jsonText('event_json').notNull(),
-}, (table) => [
-  uniqueIndex('idx_agent_loop_events_run_sequence').on(table.runId, table.sequence),
-]);
-
 export const memoryRecallTraces = sqliteTable('memory_recall_traces', {
   recallTraceId: text('recall_trace_id').primaryKey(),
-  runId: text('run_id').notNull().references(() => agentLoopRuns.runId, { onDelete: 'cascade' }),
-  modelCallId: text('model_call_id').references(() => modelCalls.modelCallId, { onDelete: 'set null' }),
+  runId: text('run_id').notNull().references(() => agentRuns.runId, { onDelete: 'cascade' }),
+  modelCallId: text('model_call_id'),
   workspaceId: text('workspace_id').references(() => workspaces.workspaceId, { onDelete: 'set null' }),
   sessionId: text('session_id').references(() => sessions.sessionId, { onDelete: 'set null' }),
   queryText: text('query_text').notNull(),
@@ -406,7 +266,7 @@ export const memoryRecallTraces = sqliteTable('memory_recall_traces', {
 
 export const memoryCaptureAttempts = sqliteTable('memory_capture_attempts', {
   captureAttemptId: text('capture_attempt_id').primaryKey(),
-  runId: text('run_id').references(() => agentLoopRuns.runId, { onDelete: 'set null' }),
+  runId: text('run_id').references(() => agentRuns.runId, { onDelete: 'set null' }),
   workspaceId: text('workspace_id').references(() => workspaces.workspaceId, { onDelete: 'set null' }),
   sessionId: text('session_id').references(() => sessions.sessionId, { onDelete: 'set null' }),
   status: text('status').notNull(),

@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { createDatabase } from '@megumi/coding-agent/persistence/connection';
-import { AgentLoopRepository } from '@megumi/coding-agent/persistence/repos/agent-loop.repo';
 import { ArtifactRepository } from '@megumi/coding-agent/persistence/repos/artifact.repo';
-import { SessionRepository } from '@megumi/coding-agent/persistence/repos/session.repo';
+import { SessionRepository } from '@megumi/coding-agent/session/repositories/session-repository';
 import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
 import type { Artifact, ArtifactVersion } from '@megumi/shared/artifact';
 
@@ -20,23 +19,25 @@ function createTestDatabase() {
     )
   `).run();
   const sessionRepository = new SessionRepository(database);
-  const runRepository = new AgentLoopRepository(database);
-  sessionRepository.saveSession({
-    sessionId: 'session:1',
-    workspaceId: 'workspace:default',
+  sessionRepository.insertSession({
+    session_id: 'session:1',
+    workspace_id: 'workspace:default',
     title: 'Session',
     status: 'active',
-    createdAt: '2026-05-16T00:00:00.000Z',
-    updatedAt: '2026-05-16T00:00:00.000Z',
+    created_at: '2026-05-16T00:00:00.000Z',
+    updated_at: '2026-05-16T00:00:00.000Z',
   });
-  runRepository.saveRun({
-    runId: 'run:1',
-    sessionId: 'session:1',
-    mode: 'plan',
-    goal: 'Write artifact',
-    status: 'completed',
-    createdAt: '2026-05-16T00:00:00.000Z',
-  });
+  database.prepare(`
+    INSERT INTO agent_runs (
+      run_id, workspace_id, session_id, provider_id, model_id, trigger_type,
+      trigger_user_message_id, trigger_command_name, status, created_at,
+      started_at, completed_at, failure_json
+    ) VALUES (
+      'run:1', 'workspace:default', 'session:1', 'deepseek', 'deepseek-chat',
+      'command', NULL, 'plan', 'completed', '2026-05-16T00:00:00.000Z',
+      '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z', NULL
+    )
+  `).run();
   return database;
 }
 

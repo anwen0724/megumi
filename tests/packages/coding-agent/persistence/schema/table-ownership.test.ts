@@ -12,8 +12,6 @@ const root = process.cwd();
 const targetTableSet = new Set<string>(targetDatabaseTables);
 
 const repositoryOwnership = {
-  'agent-loop.repo.ts': persistenceTableOwnership.agentLoop.tables,
-  'tool-call.repo.ts': persistenceTableOwnership.toolCall.tables,
   'memory.repo.ts': persistenceTableOwnership.memory.tables,
   'artifact.repo.ts': persistenceTableOwnership.artifact.tables,
 } as const;
@@ -36,16 +34,6 @@ describe('persistence table ownership', () => {
         'session_messages',
         'session_message_attachments',
         'session_compactions',
-      ],
-    });
-
-    expect(persistenceTableOwnership.agentLoop).toMatchObject({
-      repository: 'AgentLoopRepository',
-      tables: [
-        'agent_loop_runs',
-        'model_calls',
-        'agent_loop_events',
-        'tool_registry_snapshots',
       ],
     });
 
@@ -97,10 +85,8 @@ describe('persistence table ownership', () => {
     ];
     const files = [
       'packages/coding-agent/session/repositories/session-repository.ts',
-      'packages/coding-agent/persistence/repos/session.repo.ts',
-      'packages/coding-agent/persistence/repos/workspace.repo.ts',
-      'packages/coding-agent/persistence/repos/workspace-change.repo.ts',
-      'packages/coding-agent/persistence/repos/agent-loop.repo.ts',
+      'packages/coding-agent/workspace/repositories/workspace-repository.ts',
+      'packages/coding-agent/workspace/repositories/workspace-change-repository.ts',
       'packages/coding-agent/persistence/schema/table-list.ts',
       'packages/coding-agent/persistence/schema/table-ownership.ts',
     ];

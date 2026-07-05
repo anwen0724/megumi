@@ -5,13 +5,20 @@ import {
 import { SessionRepository } from '@megumi/coding-agent/session/repositories/session-repository';
 import { createDatabase } from '@megumi/coding-agent/persistence/connection';
 import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
-import { WorkspaceRepository } from '@megumi/coding-agent/persistence/repos/workspace.repo';
+import { WorkspaceRepository } from '@megumi/coding-agent/workspace/repositories/workspace-repository';
 
 function seedWorkspace(database: ReturnType<typeof createDatabase>): string {
-  return new WorkspaceRepository(database).upsertFromRepoPath({
-    repoPath: 'C:/workspaces/session-test',
-    now: '2026-07-04T00:00:00.000Z',
-  }).projectId;
+  const workspace = new WorkspaceRepository(database).insertOrUpdateWorkspace({
+    workspace_id: 'workspace:session-test',
+    name: 'session-test',
+    root_path: 'C:/workspaces/session-test',
+    root_path_key: 'c:/workspaces/session-test',
+    status: 'available',
+    created_at: '2026-07-04T00:00:00.000Z',
+    updated_at: '2026-07-04T00:00:00.000Z',
+    last_opened_at: '2026-07-04T00:00:00.000Z',
+  });
+  return workspace.workspace_id;
 }
 
 function createService() {

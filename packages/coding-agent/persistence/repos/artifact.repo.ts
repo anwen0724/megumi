@@ -316,7 +316,7 @@ function metadataSessionId(metadata: JsonObject | undefined): string | null {
 
 function workspaceIdForRun(database: MegumiDatabase, runId: string): string | null {
   const row = database
-    .prepare('SELECT workspace_id FROM agent_loop_runs WHERE run_id = ?')
+    .prepare('SELECT workspace_id FROM agent_runs WHERE run_id = ?')
     .get(runId) as { workspace_id: string } | undefined;
   return row?.workspace_id ?? null;
 }

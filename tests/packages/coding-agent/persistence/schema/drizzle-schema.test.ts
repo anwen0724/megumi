@@ -11,13 +11,8 @@ const expectedProductTables = [
   'session_messages',
   'session_message_attachments',
   'session_compactions',
-  'agent_loop_runs',
   'agent_runs',
   'agent_run_approval_requests',
-  'model_calls',
-  'tool_sources',
-  'tool_calls',
-  'approval_requests',
   'workspace_changes',
   'workspace_changed_files',
   'memory_records',
@@ -25,8 +20,6 @@ const expectedProductTables = [
   'artifacts',
   'artifact_versions',
   'artifact_source_refs',
-  'agent_loop_events',
-  'tool_registry_snapshots',
   'memory_recall_traces',
   'memory_capture_attempts',
 ] as const;
@@ -44,6 +37,13 @@ describe('Drizzle schema target table list', () => {
       expect(tables(database)).toContain('session_message_attachments');
       expect(tables(database)).not.toEqual(expect.arrayContaining([
         'session_leaf_changes',
+        'agent_loop_runs',
+        'agent_loop_events',
+        'model_calls',
+        'tool_registry_snapshots',
+        'tool_sources',
+        'tool_calls',
+        'approval_requests',
         'workspace_file_snapshots',
         'workspace_restore_operations',
         'workspace_restore_file_results',
@@ -145,12 +145,6 @@ describe('Drizzle schema target table list', () => {
         to: 'entry_id',
         onDelete: 'SET NULL',
       });
-      expect(foreignKeys(database, 'agent_loop_runs')).toContainEqual({
-        from: 'workspace_id',
-        table: 'workspaces',
-        to: 'workspace_id',
-        onDelete: 'NO ACTION',
-      });
       expect(columns(database, 'agent_runs')).toEqual([
         'run_id',
         'workspace_id',
@@ -221,42 +215,40 @@ describe('Drizzle schema target table list', () => {
           onDelete: 'CASCADE',
         },
       ]));
-      expect(foreignKeys(database, 'agent_loop_runs')).toEqual(expect.arrayContaining([
-        {
-          from: 'user_message_id',
-          table: 'session_messages',
-          to: 'message_id',
-          onDelete: 'SET NULL',
-        },
-        {
-          from: 'assistant_message_id',
-          table: 'session_messages',
-          to: 'message_id',
-          onDelete: 'SET NULL',
-        },
-        {
-          from: 'base_run_id',
-          table: 'agent_loop_runs',
-          to: 'run_id',
-          onDelete: 'SET NULL',
-        },
-        {
-          from: 'base_entry_id',
-          table: 'session_entries',
-          to: 'entry_id',
-          onDelete: 'SET NULL',
-        },
-      ]));
       expect(foreignKeys(database, 'memory_records')).toContainEqual({
         from: 'superseded_by_id',
         table: 'memory_records',
         to: 'memory_id',
         onDelete: 'SET NULL',
       });
+      expect(foreignKeys(database, 'memory_recall_traces')).toContainEqual({
+        from: 'run_id',
+        table: 'agent_runs',
+        to: 'run_id',
+        onDelete: 'CASCADE',
+      });
+      expect(foreignKeys(database, 'memory_capture_attempts')).toContainEqual({
+        from: 'run_id',
+        table: 'agent_runs',
+        to: 'run_id',
+        onDelete: 'SET NULL',
+      });
       expect(foreignKeys(database, 'artifacts')).toContainEqual({
         from: 'current_version_id',
         table: 'artifact_versions',
         to: 'artifact_version_id',
+        onDelete: 'SET NULL',
+      });
+      expect(foreignKeys(database, 'artifacts')).toContainEqual({
+        from: 'run_id',
+        table: 'agent_runs',
+        to: 'run_id',
+        onDelete: 'SET NULL',
+      });
+      expect(foreignKeys(database, 'artifact_versions')).toContainEqual({
+        from: 'created_by_run_id',
+        table: 'agent_runs',
+        to: 'run_id',
         onDelete: 'SET NULL',
       });
     } finally {

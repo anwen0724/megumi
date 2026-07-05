@@ -1,13 +1,8 @@
-// Composes the Coding Agent product SQLite persistence repositories.
+// Composes Coding Agent database infrastructure plus temporary legacy repositories.
 import path from 'node:path';
-import { AgentLoopRepository } from '../persistence/repos/agent-loop.repo';
 import { ArtifactRepository } from '../persistence/repos/artifact.repo';
 import { MemoryRepository } from '../persistence/repos/memory.repo';
-import { SessionRepository } from '../persistence/repos/session.repo';
-import { ToolCallRepository } from '../persistence/repos/tool-call.repo';
 import { migrateCodingAgentDatabase } from '../persistence/schema';
-import { WorkspaceChangeRepository } from '../workspace/repositories/workspace-change-repository';
-import { WorkspaceRepository } from '../workspace/repositories/workspace-repository';
 
 export interface ComposeCodingAgentPersistenceInput {
   sqlitePath: string;
@@ -22,11 +17,8 @@ export function composeCodingAgentPersistence(input: ComposeCodingAgentPersisten
 
   return {
     database,
-    workspaceRepository: new WorkspaceRepository(database),
-    sessionRepository: new SessionRepository(database),
-    agentLoopRepository: new AgentLoopRepository(database),
-    toolCallRepository: new ToolCallRepository(database),
-    workspaceChangeRepository: new WorkspaceChangeRepository(database),
+    // Memory and Artifacts have not been rebuilt into the target module shape yet.
+    // Keep their legacy repositories here until those modules own their DB access.
     artifactRepository: new ArtifactRepository(database),
     memoryRepository: new MemoryRepository(database),
   };

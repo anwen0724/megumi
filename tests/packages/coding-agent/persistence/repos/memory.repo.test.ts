@@ -253,16 +253,13 @@ function seedLifecycle(db: MegumiDatabase): void {
       '${now}', '${now}', NULL
     );
 
-    INSERT INTO agent_loop_runs (
-      run_id, workspace_id, session_id, run_kind, user_message_id,
-      assistant_message_id, base_run_id, base_message_id, base_entry_id,
-      attempt_number, status, permission_mode, permission_snapshot_json,
-      memory_recall_trace_id, started_at, completed_at, cancelled_at,
-      error_json, created_at, metadata_json
+    INSERT INTO agent_runs (
+      run_id, workspace_id, session_id, provider_id, model_id, trigger_type,
+      trigger_user_message_id, trigger_command_name, status, created_at,
+      started_at, completed_at, failure_json
     ) VALUES (
-      'run:1', 'workspace:1', 'session:1', 'input', NULL, NULL,
-      NULL, NULL, NULL, 1, 'running', 'chat', NULL, NULL,
-      '${now}', NULL, NULL, NULL, '${now}', NULL
+      'run:1', 'workspace:1', 'session:1', 'deepseek', 'deepseek-chat',
+      'user_input', NULL, NULL, 'running', '${now}', '${now}', NULL, NULL
     );
 
     INSERT INTO session_messages (
@@ -271,28 +268,6 @@ function seedLifecycle(db: MegumiDatabase): void {
     ) VALUES (
       'message:1', 'session:1', 'run:1', 'user',
       'Remember the test decision.', '${now}', '${now}'
-    );
-
-    INSERT INTO model_calls (
-      model_call_id, run_id, call_order, provider_id, model_id, status,
-      input_summary_json, context_snapshot_json, request_json, response_json,
-      output_summary_json, token_usage_json, started_at, completed_at,
-      error_json, metadata_json
-    ) VALUES (
-      'model-call:1', 'run:1', 1, 'openai-compatible', 'gpt-5', 'completed',
-      NULL, NULL, NULL, NULL, NULL, NULL, '${now}', '${now}', NULL, NULL
-    );
-
-    INSERT INTO tool_calls (
-      tool_call_id, run_id, model_call_id, call_order, provider_tool_call_id,
-      tool_source_id, tool_name, model_visible_name, input_json, input_preview,
-      status, permission_decision_json, approval_request_id, result_json,
-      result_preview, observation_json, submitted_to_model_at, started_at,
-      completed_at, error_json, metadata_json
-    ) VALUES (
-      'tool-call:1', 'run:1', 'model-call:1', 1, 'provider-tool-call:1',
-      NULL, 'read_file', 'read_file', '{}', NULL, 'completed',
-      NULL, NULL, NULL, NULL, NULL, NULL, '${now}', '${now}', NULL, NULL
     );
   `);
 }

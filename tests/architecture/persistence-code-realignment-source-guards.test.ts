@@ -130,18 +130,13 @@ describe('persistence code realignment source guards', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps persistence composition on the seven aggregate repositories only', () => {
+  it('keeps persistence composition on database infrastructure and temporary legacy repositories only', () => {
     const source = fs.readFileSync(
       path.join(root, 'packages/coding-agent/composition/compose-coding-agent-persistence.ts'),
       'utf8',
     );
 
     for (const expected of [
-      'workspaceRepository',
-      'sessionRepository',
-      'agentLoopRepository',
-      'toolCallRepository',
-      'workspaceChangeRepository',
       'memoryRepository',
       'artifactRepository',
     ]) {
@@ -149,6 +144,11 @@ describe('persistence code realignment source guards', () => {
     }
 
     for (const forbidden of [
+      'workspaceRepository',
+      'sessionRepository',
+      'agentLoopRepository',
+      'toolCallRepository',
+      'workspaceChangeRepository',
       'runRecordRepository',
       'modelStepRepository',
       'runtimeEventRepository',

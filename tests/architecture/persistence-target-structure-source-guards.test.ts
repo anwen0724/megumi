@@ -15,13 +15,8 @@ const expectedPersistenceChildren = [
 ];
 
 const expectedRepoFiles = [
-  'agent-loop.repo.ts',
   'artifact.repo.ts',
   'memory.repo.ts',
-  'session.repo.ts',
-  'tool-call.repo.ts',
-  'workspace-change.repo.ts',
-  'workspace.repo.ts',
 ];
 
 const oldRepositoryImports = [
@@ -51,7 +46,7 @@ describe('persistence target structure source guards', () => {
     expect(actual).toEqual(expectedPersistenceChildren);
   });
 
-  it('keeps only the seven aggregate repository files', () => {
+  it('keeps only the temporary legacy repositories for modules not yet rebuilt', () => {
     const actual = fs.readdirSync(path.join(root, 'packages/coding-agent/persistence/repos'))
       .filter((name) => name.endsWith('.ts'))
       .sort();

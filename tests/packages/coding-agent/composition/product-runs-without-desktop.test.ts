@@ -10,7 +10,8 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { composeCodingAgentPersistence } from '@megumi/coding-agent/composition/compose-coding-agent-persistence';
 import { composeCodingAgentHostInterface } from '@megumi/coding-agent/composition';
-import { WorkspaceRepository, createDatabase } from '@megumi/coding-agent/persistence';
+import { createDatabase } from '@megumi/coding-agent/persistence';
+import { WorkspaceRepository } from '@megumi/coding-agent/workspace/repositories/workspace-repository';
 import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
 import type { SettingsRaw } from '@megumi/coding-agent/settings';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
@@ -176,10 +177,17 @@ function seedProject(home: string, repoPath: string): string {
   const database = createDatabase(path.join(home, 'megumi.sqlite3'));
   try {
     applyCodingAgentDatabaseMigrations(database);
-    return new WorkspaceRepository(database).upsertFromRepoPath({
-      repoPath,
-      now: '2026-06-24T00:00:00.000Z',
-    }).projectId;
+    const workspace = new WorkspaceRepository(database).insertOrUpdateWorkspace({
+      workspace_id: 'workspace:proof',
+      name: path.basename(repoPath),
+      root_path: repoPath,
+      root_path_key: repoPath.toLowerCase(),
+      status: 'available',
+      created_at: '2026-06-24T00:00:00.000Z',
+      updated_at: '2026-06-24T00:00:00.000Z',
+      last_opened_at: '2026-06-24T00:00:00.000Z',
+    });
+    return workspace.workspace_id;
   } finally {
     database.close();
   }
@@ -206,14 +214,9 @@ describe('coding-agent product runs without desktop', () => {
     const persistence = composeCodingAgentPersistence({ sqlitePath: home });
     try {
       expect(Object.keys(persistence).sort()).toEqual([
-        'agentLoopRepository',
         'artifactRepository',
         'database',
         'memoryRepository',
-        'sessionRepository',
-        'toolCallRepository',
-        'workspaceChangeRepository',
-        'workspaceRepository',
       ].sort());
 
       expect(persistence).not.toHaveProperty('runRecordRepository');

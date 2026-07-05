@@ -603,7 +603,7 @@ function existingRunId(database: MegumiDatabase, runId: string | null | undefine
   if (!runId) {
     return null;
   }
-  const row = database.prepare('SELECT run_id FROM agent_loop_runs WHERE run_id = ?')
+  const row = database.prepare('SELECT run_id FROM agent_runs WHERE run_id = ?')
     .get(runId) as { run_id: string } | undefined;
   return row?.run_id ?? null;
 }
@@ -611,7 +611,7 @@ function existingRunId(database: MegumiDatabase, runId: string | null | undefine
 function requireExistingRun(database: MegumiDatabase, runId: string): string {
   const existing = existingRunId(database, runId);
   if (!existing) {
-    throw new Error(`Memory recall trace requires an existing agent loop run: ${runId}`);
+    throw new Error(`Memory recall trace requires an existing agent run: ${runId}`);
   }
   return existing;
 }

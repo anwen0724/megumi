@@ -79,148 +79,16 @@ const mocks = vi.hoisted(() => {
       isDestroyed: vi.fn(() => false),
       webContents: { send: vi.fn() },
     })),
-    SessionRunService: vi.fn(function SessionRunService(
-      this: { options?: unknown },
-      options: unknown,
-    ) {
-      this.options = options;
-      return {
-        createSession: vi.fn(),
-        listSessions: vi.fn(),
-        sendSessionMessage: vi.fn(),
-        cancelSessionMessage: vi.fn(),
-        listRuntimeEventsByRun: vi.fn(),
-        startRun: vi.fn(),
-        getPlanByRun: vi.fn(),
-        updatePlanStatus: vi.fn(),
-      };
-    }),
-    createModelCallRunner: vi.fn(() => ({
-      streamModelCall: vi.fn(),
-      cancelModelCall: vi.fn(),
-    })),
-    ProviderSettingsService: vi.fn(function ProviderSettingsService(
-      this: { options?: unknown },
-      options: unknown,
-    ) {
-      this.options = options;
-      return {
-        getProviderSettingsSync: vi.fn(),
-        listProviderStatuses: vi.fn(),
-        updateProviderSettings: vi.fn(),
-        setProviderApiKey: vi.fn(),
-        deleteProviderApiKey: vi.fn(),
-      };
-    }),
-    ProviderRuntimeService: vi.fn(function ProviderRuntimeService(
-      this: { options?: unknown },
-      options: unknown,
-    ) {
-      this.options = options;
-    }),
     createDatabase: vi.fn(() => ({ databaseId: 'recovery-database' })),
     migrateDatabase: vi.fn(),
     codingAgentRuntime: codingAgentHost,
     codingAgentHost,
     composeCodingAgentHostInterface: vi.fn(() => codingAgentHost),
-    composeCodingAgentPersistence: vi.fn(() => {
-      const db = { databaseId: 'desktop-persistence-database' };
-      return {
-        database: db,
-        workspaceRepository: new mocks.WorkspaceRepository(db),
-        sessionRepository: new mocks.SessionRepository(db),
-        agentLoopRepository: new mocks.AgentLoopRepository(db),
-        toolCallRepository: new mocks.ToolCallRepository(db),
-        artifactRepository: new mocks.ArtifactRepository(db),
-        memoryRepository: new mocks.MemoryRepository(db),
-        workspaceChangeRepository: new mocks.WorkspaceChangeRepository(db),
-      };
-    }),
-    WorkspaceRepository: vi.fn(function WorkspaceRepository(
-      this: { database?: unknown },
-      database: unknown,
-    ) {
-      this.database = database;
-    }),
-    SessionRepository: vi.fn(function SessionRepository(
-      this: { database?: unknown },
-      database: unknown,
-    ) {
-      this.database = database;
-    }),
-    AgentLoopRepository: vi.fn(function AgentLoopRepository(
-      this: { database?: unknown },
-      database: unknown,
-    ) {
-      this.database = database;
-    }),
-    WorkspaceChangeRepository: vi.fn(function WorkspaceChangeRepository(
-      this: {
-        database?: unknown;
-        getWorkspaceChange?: unknown;
-        listChangeSummariesByRun?: unknown;
-      },
-      database: unknown,
-    ) {
-      this.database = database;
-      this.getWorkspaceChange = vi.fn(() => ({
-        changeSetId: 'workspace-change-set-1',
-        sessionId: 'session_123',
-        runId: 'run_123',
-        status: 'finalized',
-        openedAt: '2026-06-05T10:00:00.000Z',
-        finalizedAt: '2026-06-05T10:00:01.000Z',
-        changedFileCount: 1,
-      }));
-      this.listChangeSummariesByRun = vi.fn(() => []);
-    }),
-    WorkspaceRestoreService: vi.fn(function WorkspaceRestoreService(
-      this: { options?: unknown; restoreChangeSet?: unknown },
-      options: unknown,
-    ) {
-      this.options = options;
-      this.restoreChangeSet = vi.fn(async (input) => ({
-        request: {
-          restoreRequestId: 'workspace-restore-request-1',
-          changeSetId: input.changeSetId,
-          sessionId: 'session_123',
-          runId: 'run_123',
-          requestedBy: input.requestedBy,
-          status: 'completed',
-          requestedAt: '2026-06-05T10:00:00.000Z',
-          completedAt: '2026-06-05T10:00:01.000Z',
-        },
-        result: {
-          restoreResultId: 'workspace-restore-result-1',
-          restoreRequestId: 'workspace-restore-request-1',
-          changeSetId: input.changeSetId,
-          sessionId: 'session_123',
-          runId: 'run_123',
-          status: 'restored',
-          restoredAt: '2026-06-05T10:00:01.000Z',
-          metadata: {
-            changedFileCount: 1,
-            restoredCount: 1,
-            conflictCount: 0,
-            failedCount: 0,
-            noopCount: 0,
-          },
-        },
-        fileResults: [],
-      }));
-    }),
     ArtifactRepository: vi.fn(function ArtifactRepository(
       this: { database?: unknown },
       database: unknown,
     ) {
       this.database = database;
-    }),
-    ToolCallRepository: vi.fn(function ToolCallRepository(
-      this: { database?: unknown; getToolExecution?: unknown },
-      database: unknown,
-    ) {
-      this.database = database;
-      this.getToolExecution = vi.fn();
     }),
     MemoryRepository: vi.fn(function MemoryRepository(
       this: { database?: unknown },
@@ -343,25 +211,7 @@ vi.mock('@megumi/desktop/main/app/create-window', () => ({
   createMainWindow: mocks.createMainWindow,
 }));
 
-vi.mock('@megumi/desktop/main/services/session/session-run.service', () => ({
-  SessionRunService: mocks.SessionRunService,
-}));
-
-vi.mock('@megumi/desktop/main/services/runtime/model-step-provider.service', () => ({
-  createModelCallRunner: mocks.createModelCallRunner,
-}));
-
-vi.mock('@megumi/coding-agent/settings', () => ({
-  ProviderSettingsService: mocks.ProviderSettingsService,
-  ProviderRuntimeService: mocks.ProviderRuntimeService,
-}));
-
-vi.mock('@megumi/desktop/main/services/runtime/recovery.service', () => ({
-  createRecoveryService: mocks.createRecoveryService,
-}));
-
 vi.mock('@megumi/coding-agent/workspace', () => ({
-  WorkspaceRestoreService: mocks.WorkspaceRestoreService,
   createWorkspaceChangeFooterProjectorService: vi.fn(() => ({ projectRunFooter: vi.fn() })),
   isWorkspaceChangeFooterProjectorPort: vi.fn(() => false),
 }));
@@ -370,13 +220,8 @@ vi.mock('@megumi/desktop/main/services/workspace/workspace-files.service', () =>
   createWorkspaceFilesService: mocks.createWorkspaceFilesService,
 }));
 
-vi.mock('@megumi/coding-agent/persistence', () => ({
-  composeCodingAgentPersistence: mocks.composeCodingAgentPersistence,
-}));
-
 vi.mock('@megumi/coding-agent/composition', () => ({
   composeCodingAgentHostInterface: mocks.composeCodingAgentHostInterface,
-  composeCodingAgentPersistence: mocks.composeCodingAgentPersistence,
 }));
 
 vi.mock('@megumi/desktop/main/services/artifact/artifact-content-store.service', () => ({
@@ -416,25 +261,13 @@ describe('main runtime logger composition', () => {
     mocks.registerRuntimeProcessErrorHandlers.mockClear();
     mocks.registerAppLifecycle.mockClear();
     mocks.createMainWindow.mockClear();
-    mocks.SessionRunService.mockClear();
-    mocks.createModelCallRunner.mockClear();
-    mocks.ProviderSettingsService.mockClear();
-    mocks.ProviderRuntimeService.mockClear();
     mocks.composeCodingAgentHostInterface.mockClear();
-    mocks.composeCodingAgentPersistence.mockClear();
-    mocks.WorkspaceRepository.mockClear();
-    mocks.SessionRepository.mockClear();
-    mocks.AgentLoopRepository.mockClear();
-    mocks.WorkspaceChangeRepository.mockClear();
-    mocks.WorkspaceRestoreService.mockClear();
     mocks.ArtifactRepository.mockClear();
-    mocks.ToolCallRepository.mockClear();
     mocks.MemoryRepository.mockClear();
     mocks.ArtifactContentStore.mockClear();
     mocks.ArtifactService.mockClear();
     mocks.createMemoryService.mockClear();
     mocks.PlanArtifactCompatibilityService.mockClear();
-    mocks.createRecoveryService.mockClear();
     mocks.createWorkspaceFilesService.mockClear();
     mocks.showOpenDialog.mockClear();
     mocks.getAllWindows.mockClear();
@@ -444,20 +277,6 @@ describe('main runtime logger composition', () => {
 
   afterEach(() => {
     rmSync(mocks.homePath, { recursive: true, force: true });
-  });
-
-  it('uses aggregate persistence naming for service composition', () => {
-    const source = [
-      'packages/coding-agent/composition/compose-coding-agent-persistence.ts',
-      'packages/coding-agent/composition/compose-coding-agent-runtime.ts',
-    ]
-      .map((filePath) => readFileSync(join(process.cwd(), filePath), 'utf8'))
-      .join('\n');
-
-    expect(source).toContain('WorkspaceRepository');
-    expect(source).toContain('SessionRepository');
-    expect(source).toContain('AgentLoopRepository');
-    expect(source).toContain('ToolCallRepository');
   });
 
   it('does not keep main run-mode compatibility shim files', () => {
