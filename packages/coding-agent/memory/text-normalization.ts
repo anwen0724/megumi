@@ -1,6 +1,6 @@
-// Provides deterministic text normalization shared by memory capture,
+﻿// Provides deterministic text normalization shared by memory capture,
 // Markdown import, dedupe, and recall scoring. It has no IO or provider access.
-import type { MemoryKind, MemoryScope } from '@megumi/shared/memory';
+import type { MemoryKind, MemoryScope } from './legacy-contracts/memory-contracts';
 
 export interface MemoryDedupeKeyInput {
   scope: MemoryScope;

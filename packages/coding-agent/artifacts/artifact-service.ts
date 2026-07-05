@@ -5,8 +5,8 @@
   ArtifactSourceRef,
   ArtifactStatus,
   ArtifactVersion,
-} from '@megumi/shared/artifact';
-import type { JsonObject } from '@megumi/shared/primitives';
+} from './legacy-contracts/artifact-contracts';
+import type { JsonObject } from './legacy-contracts/artifact-json';
 
 // Coding Agent artifact service owns artifact lifecycle, versioning, and source ref policies.
 // Repository and content store ports are supplied by the host (desktop with SQLite and filesystem).

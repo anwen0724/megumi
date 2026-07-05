@@ -1,4 +1,4 @@
-// Synchronizes editable Markdown memory mirrors with the authoritative SQLite store.
+﻿// Synchronizes editable Markdown memory mirrors with the authoritative SQLite store.
 // Markdown is a user-editable mirror; SQLite remains the runtime source of truth.
 import { createHash } from 'node:crypto';
 import {
@@ -15,8 +15,8 @@ import type {
   MemoryRecord,
   MemoryRecordStatus,
   MemoryScope,
-} from '@megumi/shared/memory';
-import type { JsonObject, JsonValue } from '@megumi/shared/primitives';
+} from '../../../memory/legacy-contracts/memory-contracts';
+import type { JsonObject, JsonValue } from '../../../memory/legacy-contracts/memory-json';
 import type { MemoryDiagnosticWriter } from './memory-diagnostic-writer.service';
 import type { MemoryRuntimeFileSystem } from './memory-runtime-file-system';
 import {

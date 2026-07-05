@@ -1,6 +1,6 @@
-﻿import type { Artifact, ArtifactStatus } from '@megumi/shared/artifact';
-import type { ImplementationPlanArtifactRecord } from '@megumi/shared/permission';
-import type { JsonObject } from '@megumi/shared/primitives';
+﻿import type { Artifact, ArtifactStatus } from './legacy-contracts/artifact-contracts';
+import type { ImplementationPlanArtifactRecord } from './legacy-contracts/plan-artifact-contracts';
+import type { JsonObject } from './legacy-contracts/artifact-json';
 
 // Coding Agent plan artifact compatibility service bridges implementation-plan records into the artifact system.
 // Repository port is supplied by the host.

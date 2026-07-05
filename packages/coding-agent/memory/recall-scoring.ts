@@ -1,4 +1,4 @@
-// Selects long-term memories for recall using deterministic lexical scoring
+﻿// Selects long-term memories for recall using deterministic lexical scoring
 // and builds run-scoped snapshots. It does not inspect persistence.
 import type {
   MemoryKind,
@@ -7,7 +7,7 @@ import type {
   MemoryRecallSnapshot,
   MemoryRecord,
   MemoryScope,
-} from '@megumi/shared/memory';
+} from './legacy-contracts/memory-contracts';
 import { estimateMemoryTokens, normalizeMemoryText } from './text-normalization';
 
 export interface RecallScore {

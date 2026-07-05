@@ -1,6 +1,6 @@
-// Ports used by Coding Agent memory runtime services for host persistence and diagnostics.
-import type { MemoryScope } from '@megumi/shared/memory';
-import type { JsonObject } from '@megumi/shared/primitives';
+﻿// Ports used by Coding Agent memory runtime services for host persistence and diagnostics.
+import type { MemoryScope } from './legacy-contracts/memory-contracts';
+import type { JsonObject } from './legacy-contracts/memory-json';
 
 export type MemoryMarkdownSyncResult =
   | { status: 'synced'; importedCount?: number; exportedCount?: number }

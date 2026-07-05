@@ -15,8 +15,8 @@ import type {
   MemoryRecordStatus,
   MemoryScope,
   MemorySourceRef,
-} from '@megumi/shared/memory';
-import type { JsonObject } from '@megumi/shared/primitives';
+} from './legacy-contracts/memory-contracts';
+import type { JsonObject } from './legacy-contracts/memory-json';
 import {
   createRuntimeMemoryAccessRecordedEvent,
   createRuntimeMemoryCandidateAcceptedEvent,
@@ -26,8 +26,8 @@ import {
   createRuntimeMemoryRecallRequestedEvent,
   createRuntimeMemoryRecordCreatedEvent,
   createRuntimeMemoryRecordStatusChangedEvent,
-} from '@megumi/shared/runtime';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
+} from '../events';
+import type { RuntimeEvent } from '../events';
 
 // Coding Agent memory management service owns memory lifecycle and recall policy.
 // The repository port is supplied by the host (desktop with SQLite, or test doubles).

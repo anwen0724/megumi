@@ -1,8 +1,8 @@
-// Builds provider-neutral extraction instructions and parses strict JSON output.
+﻿// Builds provider-neutral extraction instructions and parses strict JSON output.
 // It never calls a provider and never decides persistence.
 import { z } from 'zod';
-import type { MemoryCaptureSignal } from '@megumi/shared/memory';
-import type { JsonObject, JsonValue } from '@megumi/shared/primitives';
+import type { MemoryCaptureSignal } from './legacy-contracts/memory-contracts';
+import type { JsonObject, JsonValue } from './legacy-contracts/memory-json';
 
 const ExtractionEvidenceSchema = z.object({
   source: z.enum(['user_message', 'assistant_message', 'tool_result', 'source_file']),

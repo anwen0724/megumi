@@ -1,11 +1,11 @@
-// Persists memory records, recall traces, capture attempts, and markdown mirrors in the redesigned memory tables.
-import type { JsonObject } from '@megumi/shared/primitives';
+﻿// Persists memory records, recall traces, capture attempts, and markdown mirrors in the redesigned memory tables.
+import type { JsonObject } from '../../memory/legacy-contracts/memory-json';
 import {
   MemoryMarkdownMirrorSchema,
   MemoryRecallRequestSchema,
   MemoryRecallResultSchema,
   MemoryRecordSchema,
-} from '@megumi/shared/memory';
+} from '../../memory/legacy-contracts/memory-contracts';
 import type {
   MemoryMarkdownMirror,
   MemoryOwnerKind,
@@ -15,7 +15,7 @@ import type {
   MemoryRecordStatus,
   MemoryScope,
   MemorySourceRef,
-} from '@megumi/shared/memory';
+} from '../../memory/legacy-contracts/memory-contracts';
 
 import type { MegumiDatabase } from '../connection';
 

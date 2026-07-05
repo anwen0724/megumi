@@ -1,7 +1,7 @@
-import type { RunContextSource } from '@megumi/shared/run';
-import type { RunAction } from '@megumi/shared/session';
-import type { JsonObject } from '@megumi/shared/primitives';
-import type { MemoryRecallResult } from '@megumi/shared/memory';
+﻿import type { RunContextSource } from './legacy-contracts/memory-external-contracts';
+import type { RunAction } from './legacy-contracts/memory-external-contracts';
+import type { JsonObject } from './legacy-contracts/memory-json';
+import type { MemoryRecallResult } from './legacy-contracts/memory-contracts';
 
 export type MemoryUpdateOperation =
   | 'candidate_proposed'

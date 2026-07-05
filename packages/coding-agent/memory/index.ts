@@ -1,4 +1,4 @@
-// Public exports for Coding Agent memory product policy and runtime orchestration.
+﻿// Public exports for Coding Agent memory product policy and runtime orchestration.
 import type {
   MemoryCandidate,
   MemoryKind,
@@ -8,7 +8,7 @@ import type {
   MemoryScope,
   MemorySourceKind,
   MemorySourceRef,
-} from '@megumi/shared/memory';
+} from './legacy-contracts/memory-contracts';
 
 export * from './capture-trigger-classifier';
 export * from './candidate-validation';

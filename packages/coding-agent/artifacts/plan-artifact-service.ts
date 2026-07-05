@@ -1,9 +1,9 @@
-// Owns implementation plan artifact creation and status updates for Coding Agent runs.
-import type { PlanStatusUpdatePayload } from '@megumi/shared/ipc';
+﻿// Owns implementation plan artifact creation and status updates for Coding Agent runs.
+import type { PlanStatusUpdatePayload } from './legacy-contracts/plan-artifact-contracts';
 import type {
   ImplementationPlanArtifactRecord,
   PermissionModeState,
-} from '@megumi/shared/permission';
+} from './legacy-contracts/plan-artifact-contracts';
 
 export interface PlanArtifactCompatibility {
   syncImplementationPlanArtifact(plan: ImplementationPlanArtifactRecord): void;

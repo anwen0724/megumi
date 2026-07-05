@@ -1,6 +1,6 @@
-// Resolves normalized memory candidates against active records without
+﻿// Resolves normalized memory candidates against active records without
 // touching persistence. Callers apply the returned patches in their own layer.
-import type { MemoryRecord } from '@megumi/shared/memory';
+import type { MemoryRecord } from './legacy-contracts/memory-contracts';
 import { normalizeMemoryText } from './text-normalization';
 
 export type MemoryResolutionDecision =

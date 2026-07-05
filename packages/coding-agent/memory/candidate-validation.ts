@@ -1,7 +1,7 @@
-// Converts extraction or Markdown-import candidates into normalized,
+﻿// Converts extraction or Markdown-import candidates into normalized,
 // host-owned memory candidate data. It does not persist records.
 import { z } from 'zod';
-import type { MemoryEvidence, MemoryKind, MemoryRecordSource, MemoryScope } from '@megumi/shared/memory';
+import type { MemoryEvidence, MemoryKind, MemoryRecordSource, MemoryScope } from './legacy-contracts/memory-contracts';
 import { buildMemoryDedupeKey, clipMemoryEvidenceQuote, normalizeMemoryText } from './text-normalization';
 import { validateMemorySafety } from './memory-security-policy';
 

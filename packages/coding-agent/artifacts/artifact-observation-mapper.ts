@@ -1,9 +1,9 @@
-import type { RunAction, RunObservation } from '@megumi/shared/session';
-import type { ArtifactContentType, ArtifactKind } from '@megumi/shared/artifact';
+﻿import type { RunAction, RunObservation } from './legacy-contracts/artifact-runtime-contracts';
+import type { ArtifactContentType, ArtifactKind } from './legacy-contracts/artifact-contracts';
 import type {
   ArtifactReferencedPayload,
   ArtifactVersionCreatedPayload,
-} from '@megumi/shared/runtime';
+} from './legacy-contracts/artifact-runtime-contracts';
 
 export interface ArtifactActionInputPreviewInput {
   artifactKind: ArtifactKind;

@@ -1,6 +1,6 @@
-// Classifies whether a completed run should start memory extraction. This is
+﻿// Classifies whether a completed run should start memory extraction. This is
 // deterministic and intentionally does not call an LLM or inspect persistence.
-import type { MemoryCaptureSignal } from '@megumi/shared/memory';
+import type { MemoryCaptureSignal } from './legacy-contracts/memory-contracts';
 import { normalizeMemoryPatternText } from './text-normalization';
 
 export type MemoryCaptureRunStatus = 'completed' | 'failed' | 'cancelled' | 'interrupted' | 'running';

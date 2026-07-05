@@ -1,4 +1,4 @@
-// Coding Agent memory runtime capture orchestrates long-term memory capture after completed runs.
+﻿// Coding Agent memory runtime capture orchestrates long-term memory capture after completed runs.
 // The host validates and persists candidates; the extraction model only proposes JSON candidates.
 import { createHash } from 'node:crypto';
 import {
@@ -21,9 +21,9 @@ import type {
   MemoryRecord,
   MemoryRecordStatus,
   MemoryScope,
-} from '@megumi/shared/memory';
-import type { ProviderId } from '@megumi/shared/provider';
-import type { JsonObject, JsonValue } from '@megumi/shared/primitives';
+} from './legacy-contracts/memory-contracts';
+import type { ProviderId } from './legacy-contracts/memory-external-contracts';
+import type { JsonObject, JsonValue } from './legacy-contracts/memory-json';
 import type {
   MemoryDiagnosticWriterPort,
   MemoryMarkdownExportPort,

@@ -1,4 +1,4 @@
-// Coding Agent memory extraction model client adapts extraction prompts to hidden model-step requests.
+﻿// Coding Agent memory extraction model client adapts extraction prompts to hidden model-step requests.
 // The provider sees a normal ModelStepRuntimeRequest; memory persistence stays in host services.
 import {
   MEMORY_EXTRACTION_OUTPUT_JSON_SCHEMA,
@@ -7,14 +7,14 @@ import {
   type MemoryExtractionOutput,
   type MemoryExtractionPrompt,
 } from './extraction';
-import type { ModelInputContext, ModelInputContextPart } from '@megumi/shared/model';
-import type { ModelStepRuntimeRequest } from '@megumi/shared/model';
-import type { ProviderId } from '@megumi/shared/provider';
-import type { ChatTokenUsagePayload, RuntimeError } from '@megumi/shared/runtime';
-import type { JsonValue } from '@megumi/shared/primitives';
+import type { ModelInputContext, ModelInputContextPart } from './legacy-contracts/memory-external-contracts';
+import type { ModelStepRuntimeRequest } from './legacy-contracts/memory-external-contracts';
+import type { ProviderId } from './legacy-contracts/memory-external-contracts';
+import type { ChatTokenUsagePayload, RuntimeError } from './legacy-contracts/memory-external-contracts';
+import type { JsonValue } from './legacy-contracts/memory-json';
 
 export interface MemoryExtractionModelStepProvider {
-  completeModelCall(request: ModelStepRuntimeRequest): Promise<MemoryExtractionModelCompletionResult>;
+  completeModelCall(request: ModelStepRuntimeRequest | any): Promise<MemoryExtractionModelCompletionResult>;
 }
 
 export type MemoryExtractionModelCompletionResult =

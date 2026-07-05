@@ -4,8 +4,8 @@ import {
   buildMemoryRecallSnapshot,
   selectMemoryRecallResults,
 } from './recall-scoring';
-import type { ModelInputContextBuildRequest } from '@megumi/shared/model';
-import type { JsonObject, JsonValue } from '@megumi/shared/primitives';
+import type { ModelInputContextBuildRequest } from './legacy-contracts/memory-external-contracts';
+import type { JsonObject, JsonValue } from './legacy-contracts/memory-json';
 import type {
   MemoryAccessLog,
   MemoryAuditLog,
@@ -16,7 +16,7 @@ import type {
   MemoryRecord,
   MemoryRecordStatus,
   MemoryScope,
-} from '@megumi/shared/memory';
+} from './legacy-contracts/memory-contracts';
 import type {
   MemoryDiagnosticWriterPort,
   MemoryMarkdownSyncBeforeRecallPort,

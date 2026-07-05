@@ -1,6 +1,6 @@
-// Parses and renders the editable Markdown memory mirror format as pure text.
+﻿// Parses and renders the editable Markdown memory mirror format as pure text.
 // This module does not perform filesystem access or persistence.
-import type { MemoryKind, MemoryRecord, MemoryScope } from '@megumi/shared/memory';
+import type { MemoryKind, MemoryRecord, MemoryScope } from './legacy-contracts/memory-contracts';
 
 export interface ParsedMemoryMarkdownEntry {
   memoryId: string | null;

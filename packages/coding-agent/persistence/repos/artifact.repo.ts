@@ -1,12 +1,12 @@
-// Owns artifact metadata, versions and provenance refs on the new artifact tables.
+﻿// Owns artifact metadata, versions and provenance refs on the new artifact tables.
 import type { MegumiDatabase } from '../connection';
 import type {
   Artifact,
   ArtifactSourceRef,
   ArtifactStatus,
   ArtifactVersion,
-} from '@megumi/shared/artifact';
-import type { JsonObject } from '@megumi/shared/primitives';
+} from '../../artifacts/legacy-contracts/artifact-contracts';
+import type { JsonObject } from '../../artifacts/legacy-contracts/artifact-json';
 
 interface ArtifactRow {
   artifact_id: string;

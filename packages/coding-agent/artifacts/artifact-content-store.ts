@@ -1,7 +1,7 @@
 ﻿import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { ArtifactContentRef } from '@megumi/shared/artifact';
+import type { ArtifactContentRef } from './legacy-contracts/artifact-contracts';
 
 export interface ArtifactContentStoreOptions {
   artifactRoot: string;
