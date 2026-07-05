@@ -133,6 +133,11 @@ function baseInput(): Omit<AgentRunToolCallRequest, 'tool_calls' | 'registered_t
     workspace_root: 'C:/workspace',
     permission_mode: 'default',
     permission_settings: { allow: [], ask: [], deny: [] },
+    runtime_capability_policy: {
+      custom_tools_enabled: true,
+      process_execution_enabled: true,
+      network_enabled: true,
+    },
     tool_set: {
       items: [
         { name: 'read_file', description: 'Read file', input_schema: { type: 'object' }, source_tool_name: 'read_file' },

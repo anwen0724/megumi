@@ -27,6 +27,11 @@ export type AgentRunToolCallRequest = {
   workspace_root?: string;
   permission_mode: PermissionMode;
   permission_settings: PermissionSettings;
+  runtime_capability_policy: {
+    custom_tools_enabled: boolean;
+    process_execution_enabled: boolean;
+    network_enabled: boolean;
+  };
   tool_set: ToolSet;
   tool_calls: ModelRequestedToolCall[];
   registered_tools_by_name: Map<string, RegisteredTool>;
@@ -47,6 +52,11 @@ export type AgentRunToolCallRequest = {
       };
       permission_mode: PermissionMode;
       permission_settings?: PermissionSettings;
+      runtime_capability_policy: {
+        custom_tools_enabled: boolean;
+        process_execution_enabled: boolean;
+        network_enabled: boolean;
+      };
       workspace_path?: {
         inside_workspace: boolean;
         protected: boolean;
@@ -106,6 +116,7 @@ export async function orchestrateToolCallGroup(
       registered_tool: permissionFactsFromRegisteredTool(registeredTool),
       permission_mode: request.permission_mode,
       permission_settings: request.permission_settings,
+      runtime_capability_policy: request.runtime_capability_policy,
       ...(workspacePathFacts(request, requested.input) ? { workspace_path: workspacePathFacts(request, requested.input) } : {}),
       evaluated_at: request.clock.now(),
     });

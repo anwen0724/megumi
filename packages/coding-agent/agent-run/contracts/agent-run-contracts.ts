@@ -32,6 +32,8 @@ export type AgentRunFailure = {
     | 'approval_failed'
     | 'cancel_failed'
     | 'recovery_failed'
+    | 'loop_limit_exceeded'
+    | 'runtime_protocol_violation'
     | 'runtime_interrupted'
     | 'internal_error';
   message: string;
