@@ -7,6 +7,8 @@ export const targetDatabaseTables = [
   'session_message_attachments',
   'session_compactions',
   'agent_loop_runs',
+  'agent_runs',
+  'agent_run_approval_requests',
   'model_calls',
   'tool_sources',
   'tool_calls',

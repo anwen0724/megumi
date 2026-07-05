@@ -12,6 +12,8 @@ const expectedProductTables = [
   'session_message_attachments',
   'session_compactions',
   'agent_loop_runs',
+  'agent_runs',
+  'agent_run_approval_requests',
   'model_calls',
   'tool_sources',
   'tool_calls',
@@ -148,6 +150,42 @@ describe('Drizzle schema target table list', () => {
         table: 'workspaces',
         to: 'workspace_id',
         onDelete: 'NO ACTION',
+      });
+      expect(columns(database, 'agent_runs')).toEqual([
+        'run_id',
+        'workspace_id',
+        'session_id',
+        'provider_id',
+        'model_id',
+        'trigger_type',
+        'trigger_user_message_id',
+        'trigger_command_name',
+        'status',
+        'created_at',
+        'started_at',
+        'completed_at',
+        'failure_json',
+      ]);
+      expect(columns(database, 'agent_run_approval_requests')).toEqual([
+        'approval_request_id',
+        'run_id',
+        'subject_json',
+        'status',
+        'created_at',
+        'decided_at',
+        'decision_json',
+      ]);
+      expect(foreignKeys(database, 'agent_runs')).toContainEqual({
+        from: 'workspace_id',
+        table: 'workspaces',
+        to: 'workspace_id',
+        onDelete: 'NO ACTION',
+      });
+      expect(foreignKeys(database, 'agent_run_approval_requests')).toContainEqual({
+        from: 'run_id',
+        table: 'agent_runs',
+        to: 'run_id',
+        onDelete: 'CASCADE',
       });
       expect(foreignKeys(database, 'workspace_changes')).toContainEqual({
         from: 'workspace_id',

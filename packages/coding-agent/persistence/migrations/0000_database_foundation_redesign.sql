@@ -50,6 +50,41 @@ CREATE INDEX `idx_agent_loop_runs_user_message` ON `agent_loop_runs` (`user_mess
 CREATE INDEX `idx_agent_loop_runs_assistant_message` ON `agent_loop_runs` (`assistant_message_id`);--> statement-breakpoint
 CREATE INDEX `idx_agent_loop_runs_base_run` ON `agent_loop_runs` (`base_run_id`);--> statement-breakpoint
 CREATE INDEX `idx_agent_loop_runs_base_entry` ON `agent_loop_runs` (`base_entry_id`);--> statement-breakpoint
+CREATE TABLE `agent_runs` (
+	`run_id` text PRIMARY KEY NOT NULL,
+	`workspace_id` text NOT NULL,
+	`session_id` text NOT NULL,
+	`provider_id` text NOT NULL,
+	`model_id` text NOT NULL,
+	`trigger_type` text NOT NULL,
+	`trigger_user_message_id` text,
+	`trigger_command_name` text,
+	`status` text NOT NULL,
+	`created_at` text NOT NULL,
+	`started_at` text,
+	`completed_at` text,
+	`failure_json` text,
+	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`workspace_id`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`session_id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`trigger_user_message_id`) REFERENCES `session_messages`(`message_id`) ON UPDATE no action ON DELETE set null
+);
+--> statement-breakpoint
+CREATE INDEX `idx_agent_runs_session_created` ON `agent_runs` (`session_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `idx_agent_runs_workspace_created` ON `agent_runs` (`workspace_id`,`created_at`);--> statement-breakpoint
+CREATE INDEX `idx_agent_runs_status` ON `agent_runs` (`status`);--> statement-breakpoint
+CREATE INDEX `idx_agent_runs_trigger_user_message` ON `agent_runs` (`trigger_user_message_id`);--> statement-breakpoint
+CREATE TABLE `agent_run_approval_requests` (
+	`approval_request_id` text PRIMARY KEY NOT NULL,
+	`run_id` text NOT NULL,
+	`subject_json` text NOT NULL,
+	`status` text NOT NULL,
+	`created_at` text NOT NULL,
+	`decided_at` text,
+	`decision_json` text,
+	FOREIGN KEY (`run_id`) REFERENCES `agent_runs`(`run_id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `idx_agent_run_approval_requests_run_status` ON `agent_run_approval_requests` (`run_id`,`status`);--> statement-breakpoint
 CREATE TABLE `approval_requests` (
 	`approval_request_id` text PRIMARY KEY NOT NULL,
 	`run_id` text NOT NULL,

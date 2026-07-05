@@ -39,6 +39,15 @@ export const persistenceTableOwnership = {
       'tool_registry_snapshots',
     ],
   },
+  agentRun: {
+    module: 'agent-run',
+    repository: 'AgentRunRepository',
+    modulePath: 'packages/coding-agent/agent-run',
+    tables: [
+      'agent_runs',
+      'agent_run_approval_requests',
+    ],
+  },
   toolCall: {
     module: 'tools',
     repository: 'ToolCallRepository',

@@ -125,6 +125,39 @@ export const agentLoopRuns = sqliteTable('agent_loop_runs', {
   index('idx_agent_loop_runs_base_entry').on(table.baseEntryId),
 ]);
 
+export const agentRuns = sqliteTable('agent_runs', {
+  runId: text('run_id').primaryKey(),
+  workspaceId: text('workspace_id').notNull().references(() => workspaces.workspaceId),
+  sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
+  providerId: text('provider_id').notNull(),
+  modelId: text('model_id').notNull(),
+  triggerType: text('trigger_type').notNull(),
+  triggerUserMessageId: text('trigger_user_message_id').references(() => sessionMessages.messageId, { onDelete: 'set null' }),
+  triggerCommandName: text('trigger_command_name'),
+  status: text('status').notNull(),
+  createdAt: text('created_at').notNull(),
+  startedAt: text('started_at'),
+  completedAt: text('completed_at'),
+  failureJson: jsonText('failure_json'),
+}, (table) => [
+  index('idx_agent_runs_session_created').on(table.sessionId, table.createdAt),
+  index('idx_agent_runs_workspace_created').on(table.workspaceId, table.createdAt),
+  index('idx_agent_runs_status').on(table.status),
+  index('idx_agent_runs_trigger_user_message').on(table.triggerUserMessageId),
+]);
+
+export const agentRunApprovalRequests = sqliteTable('agent_run_approval_requests', {
+  approvalRequestId: text('approval_request_id').primaryKey(),
+  runId: text('run_id').notNull().references(() => agentRuns.runId, { onDelete: 'cascade' }),
+  subjectJson: jsonText('subject_json').notNull(),
+  status: text('status').notNull(),
+  createdAt: text('created_at').notNull(),
+  decidedAt: text('decided_at'),
+  decisionJson: jsonText('decision_json'),
+}, (table) => [
+  index('idx_agent_run_approval_requests_run_status').on(table.runId, table.status),
+]);
+
 export const modelCalls = sqliteTable('model_calls', {
   modelCallId: text('model_call_id').primaryKey(),
   runId: text('run_id').notNull().references(() => agentLoopRuns.runId, { onDelete: 'cascade' }),

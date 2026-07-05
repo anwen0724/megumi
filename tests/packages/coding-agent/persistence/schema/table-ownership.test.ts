@@ -48,6 +48,16 @@ describe('persistence table ownership', () => {
         'tool_registry_snapshots',
       ],
     });
+
+    expect(persistenceTableOwnership.agentRun).toMatchObject({
+      module: 'agent-run',
+      repository: 'AgentRunRepository',
+      modulePath: 'packages/coding-agent/agent-run',
+      tables: [
+        'agent_runs',
+        'agent_run_approval_requests',
+      ],
+    });
   });
 
   it('keeps repository SQL writes inside each aggregate owner', () => {
