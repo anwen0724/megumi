@@ -40,14 +40,20 @@ describe('UI polish source guard', () => {
   });
 
   it('keeps Settings as a main-area page instead of an overlay modal', () => {
+    const appBody = readSource('apps/desktop/src/renderer/shell/AppBody.tsx');
     const pageHost = readSource('apps/desktop/src/renderer/shell/PageHost.tsx');
     const settingsPage = readSource('apps/desktop/src/renderer/shell/SettingsPage.tsx');
 
-    expect(pageHost).toContain("from './SettingsPage'");
-    expect(pageHost).toContain('<SettingsPage');
+    expect(appBody).toContain("from './SettingsPage'");
+    expect(appBody).toContain('<SettingsPage');
+    expect(appBody).toContain('settingsOpen ?');
+    expect(pageHost).not.toContain("from './SettingsPage'");
+    expect(pageHost).not.toContain('<SettingsPage');
     expect(pageHost).not.toContain('Settings' + 'Modal');
     expect(settingsPage).toContain('data-testid="settings-page"');
-    expect(settingsPage).toContain('grid-cols-[13rem_minmax(0,1fr)]');
+    expect(settingsPage).toContain('sidebarWidth');
+    expect(settingsPage).toContain('gridTemplateColumns');
+    expect(settingsPage).toContain('Resize settings sidebar');
     expect(settingsPage).not.toMatch(new RegExp([
       'role=["\']dialog["\']',
       'aria-modal',

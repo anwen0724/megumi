@@ -9,6 +9,7 @@ import { Composer } from '@megumi/desktop/renderer/features/chat/components/Comp
 const providers = [{
   providerId: 'deepseek' as const,
   displayName: 'DeepSeek',
+  protocol: 'openai-compatible' as const,
   enabled: true,
   modelIds: ['deepseek-v4-flash'],
   hasApiKey: true,

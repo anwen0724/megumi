@@ -2,6 +2,7 @@
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import type {
   ProviderApiKeyPayload,
+  ProviderDeletePayload,
   ProviderDeleteApiKeyPayload,
   ProviderUpdatePayload,
 } from '@megumi/desktop/main/ipc/schemas';
@@ -16,6 +17,7 @@ export type ProviderStoreStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'err
 export interface ProviderUpdateInput {
   providerId: string;
   enabled?: boolean;
+  protocol?: 'openai-compatible' | 'anthropic';
   displayName?: string;
   baseUrl?: string;
   modelIds?: string[];
@@ -25,6 +27,10 @@ export interface ProviderUpdateInput {
 export interface ProviderApiKeyInput {
   providerId: string;
   apiKey: string;
+}
+
+export interface ProviderDeleteInput {
+  providerId: string;
 }
 
 export interface ProviderDeleteApiKeyInput {
@@ -37,6 +43,7 @@ interface ProviderStoreState {
   error: string | null;
   loadProviders: () => Promise<void>;
   updateProvider: (input: ProviderUpdateInput) => Promise<void>;
+  deleteProvider: (input: ProviderDeleteInput) => Promise<void>;
   setApiKey: (input: ProviderApiKeyInput) => Promise<void>;
   deleteApiKey: (input: ProviderDeleteApiKeyInput) => Promise<void>;
 }
@@ -73,6 +80,26 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
       createRendererRuntimeIpcRequest(
         IPC_CHANNELS.settings.providerUpdate,
         input satisfies ProviderUpdatePayload,
+      ),
+    );
+
+    if (!result.ok) {
+      set({
+        status: 'error',
+        error: getRuntimeIpcErrorMessage(result),
+      });
+      return;
+    }
+
+    await get().loadProviders();
+  },
+  deleteProvider: async (input) => {
+    set({ status: 'saving', error: null });
+
+    const result = await window.megumi.provider.delete(
+      createRendererRuntimeIpcRequest(
+        IPC_CHANNELS.settings.providerDelete,
+        input satisfies ProviderDeletePayload,
       ),
     );
 

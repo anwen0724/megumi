@@ -100,6 +100,37 @@ describe('Settings Service', () => {
     expect(JSON.stringify(result.providers)).not.toContain('sk-deepseek');
   });
 
+  it('deletes configured provider settings', () => {
+    const fileStore = new MemorySettingsFileStore();
+    fileStore.raw = {
+      providers: {
+        deepseek: {
+          enabled: true,
+          base_url: 'https://api.deepseek.com/v1',
+          models: ['deepseek-chat'],
+        },
+        local: {
+          enabled: true,
+          base_url: 'http://localhost:11434/v1',
+          models: ['llama3'],
+        },
+      },
+    };
+    const service = createSettingsService({ file_store: fileStore });
+
+    expect(service.deleteProviderSettings({ provider_id: 'deepseek' })).toEqual({
+      status: 'deleted',
+      provider_id: 'deepseek',
+    });
+    expect(fileStore.raw.providers).toEqual({
+      local: {
+        enabled: true,
+        base_url: 'http://localhost:11434/v1',
+        models: ['llama3'],
+      },
+    });
+  });
+
   it('lists enabled provider model options with provider and model ids', () => {
     const fileStore = new MemorySettingsFileStore();
     fileStore.raw = {

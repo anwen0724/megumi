@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useProviderStore } from '@megumi/desktop/renderer/entities/provider/store';
@@ -10,8 +10,9 @@ describe('ProviderSettingsPanel', () => {
     useProviderStore.setState({
       providers: [
         {
-          providerId: 'deepseek',
+          providerId: 'DeepSeek',
           displayName: 'DeepSeek',
+          protocol: 'openai-compatible',
           enabled: true,
           baseUrl: 'https://api.deepseek.com',
           modelIds: ['deepseek-v4-flash'],
@@ -24,6 +25,7 @@ describe('ProviderSettingsPanel', () => {
         {
           providerId: 'openai',
           displayName: 'OpenAI',
+          protocol: 'openai-compatible',
           enabled: true,
           baseUrl: 'https://api.openai.com/v1',
           modelIds: ['gpt-5.5'],
@@ -38,171 +40,124 @@ describe('ProviderSettingsPanel', () => {
       error: null,
       loadProviders: vi.fn(),
       updateProvider: vi.fn(),
+      deleteProvider: vi.fn(),
       setApiKey: vi.fn(),
       deleteApiKey: vi.fn(),
     });
   });
 
-  it('renders provider status without plaintext keys', () => {
+  it('renders a two-pane provider configuration surface without plaintext keys', () => {
     render(<ProviderSettingsPanel />);
 
-    expect(screen.getByText('DeepSeek')).toBeInTheDocument();
-    expect(screen.getByText('OpenAI')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Models' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Providers' })).toBeInTheDocument();
+    expect(screen.getAllByText('DeepSeek').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /OpenAI/ })).toBeInTheDocument();
     expect(screen.getByText('Missing key')).toBeInTheDocument();
-    expect(screen.getByText('Environment key active')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Display name')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('API Key env')).not.toBeInTheDocument();
     expect(screen.queryByText(/sk-/i)).not.toBeInTheDocument();
   });
 
-  it('updates provider settings', async () => {
+  it('updates the selected provider settings from the detail pane', async () => {
     const user = userEvent.setup();
     const updateProvider = vi.fn();
     useProviderStore.setState({ updateProvider });
 
     render(<ProviderSettingsPanel />);
 
-    await user.clear(screen.getByLabelText('DeepSeek base URL'));
-    await user.type(screen.getByLabelText('DeepSeek base URL'), 'https://proxy.local/deepseek');
-    await user.clear(screen.getByLabelText('DeepSeek model IDs'));
-    await user.type(screen.getByLabelText('DeepSeek model IDs'), 'deepseek-v4-flash, deepseek-v4-pro');
-    await user.click(screen.getByRole('button', { name: 'Save DeepSeek settings' }));
+    await user.clear(screen.getByLabelText('Base URL'));
+    await user.type(screen.getByLabelText('Base URL'), 'https://proxy.local/deepseek');
+    await user.clear(screen.getByLabelText('Models'));
+    await user.type(screen.getByLabelText('Models'), 'deepseek-v4-flash{enter}deepseek-v4-pro');
+    await user.selectOptions(screen.getByLabelText('Protocol'), 'anthropic');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(updateProvider).toHaveBeenCalledWith({
-      providerId: 'deepseek',
+      providerId: 'DeepSeek',
+      displayName: 'DeepSeek',
+      enabled: true,
+      protocol: 'anthropic',
       baseUrl: 'https://proxy.local/deepseek',
       modelIds: ['deepseek-v4-flash', 'deepseek-v4-pro'],
     });
   });
 
-  it('saves provider enabled changes immediately', async () => {
+  it('selects providers from the left list', async () => {
     const user = userEvent.setup();
-    const updateProvider = vi.fn();
-    useProviderStore.setState({ updateProvider });
 
     render(<ProviderSettingsPanel />);
 
-    const openAiSection = screen.getByText('OpenAI').closest('section');
-    expect(openAiSection).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: /OpenAI/ }));
 
-    await user.click(within(openAiSection as HTMLElement).getByRole('checkbox', { name: 'Enabled' }));
+    expect(screen.getByLabelText('Provider')).toHaveValue('openai');
+    expect(screen.getByLabelText('Base URL')).toHaveValue('https://api.openai.com/v1');
+    expect(screen.getByText('Environment key active')).toBeInTheDocument();
+  });
+
+  it('creates a provider from an empty settings state', async () => {
+    const user = userEvent.setup();
+    const updateProvider = vi.fn();
+    useProviderStore.setState({
+      providers: [],
+      updateProvider,
+    });
+
+    render(<ProviderSettingsPanel />);
+
+    await user.click(screen.getAllByRole('button', { name: 'Add provider' })[0]);
+    await user.type(screen.getByLabelText('Provider'), 'Local Proxy');
+    await user.selectOptions(screen.getByLabelText('Protocol'), 'anthropic');
+    await user.type(screen.getByLabelText('Base URL'), 'https://api.deepseek.com/v1');
+    await user.type(screen.getByLabelText('Models'), 'deepseek-chat{enter}deepseek-reasoner');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(updateProvider).toHaveBeenCalledWith({
-      providerId: 'openai',
-      enabled: false,
+      providerId: 'Local Proxy',
+      displayName: 'Local Proxy',
+      enabled: true,
+      protocol: 'anthropic',
+      baseUrl: 'https://api.deepseek.com/v1',
+      modelIds: ['deepseek-chat', 'deepseek-reasoner'],
     });
   });
 
-  it('sets and deletes API keys without keeping the typed key visible after submit', async () => {
+  it('saves API keys through the main Save action without keeping the typed key visible', async () => {
     const user = userEvent.setup();
+    const updateProvider = vi.fn();
     const setApiKey = vi.fn();
-    const deleteApiKey = vi.fn();
-    useProviderStore.setState((state) => ({
-      ...state,
-      setApiKey,
-      deleteApiKey,
-      providers: state.providers.map((provider) => provider.providerId === 'deepseek'
-        ? {
-            ...provider,
-            hasApiKey: true,
-            credentialSource: 'settings',
-          }
-        : provider),
-    }));
+    useProviderStore.setState({ updateProvider, setApiKey });
 
     render(<ProviderSettingsPanel />);
 
-    await user.type(screen.getByLabelText('DeepSeek API key'), 'sk-new-key');
-    await user.click(screen.getByRole('button', { name: 'Save DeepSeek API key' }));
+    await user.type(screen.getByLabelText('API Key'), 'sk-new-key');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(setApiKey).toHaveBeenCalledWith({ providerId: 'deepseek', apiKey: 'sk-new-key' });
-    await waitFor(() => expect(screen.getByLabelText('DeepSeek API key')).toHaveValue(''));
-
-    await user.click(screen.getByRole('button', { name: 'Delete DeepSeek API key' }));
-    expect(deleteApiKey).toHaveBeenCalledWith({ providerId: 'deepseek' });
+    expect(updateProvider).toHaveBeenCalledWith(expect.objectContaining({ providerId: 'DeepSeek' }));
+    expect(setApiKey).toHaveBeenCalledWith({ providerId: 'DeepSeek', apiKey: 'sk-new-key' });
+    await waitFor(() => expect(screen.getByLabelText('API Key')).toHaveValue(''));
   });
 
-  it('updates API key environment variable names', async () => {
+  it('deletes the selected provider configuration', async () => {
     const user = userEvent.setup();
-    const updateProvider = vi.fn();
-    useProviderStore.setState({ updateProvider });
+    const deleteProvider = vi.fn();
+    useProviderStore.setState({ deleteProvider });
 
     render(<ProviderSettingsPanel />);
 
-    expect(screen.getByLabelText('OpenAI API key environment variable')).toHaveValue('');
-    expect(screen.getByLabelText('OpenAI API key environment variable')).toHaveAttribute(
-      'placeholder',
-      'Default: OPENAI_API_KEY',
-    );
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
 
-    await user.clear(screen.getByLabelText('OpenAI API key environment variable'));
-    await user.type(screen.getByLabelText('OpenAI API key environment variable'), 'CUSTOM_OPENAI_KEY');
-    await user.click(screen.getByRole('button', { name: 'Save OpenAI environment variable' }));
-
-    expect(updateProvider).toHaveBeenCalledWith({
-      providerId: 'openai',
-      apiKeyEnv: 'CUSTOM_OPENAI_KEY',
-    });
+    expect(deleteProvider).toHaveBeenCalledWith({ providerId: 'DeepSeek' });
   });
 
-  it('clears custom API key environment variable names', async () => {
+  it('filters the provider list by search query', async () => {
     const user = userEvent.setup();
-    const updateProvider = vi.fn();
-    useProviderStore.setState((state) => ({
-      ...state,
-      updateProvider,
-      providers: state.providers.map((provider) => provider.providerId === 'openai'
-        ? {
-            ...provider,
-            apiKeyEnv: 'CUSTOM_OPENAI_KEY',
-            apiKeyEnvCustomized: true,
-          }
-        : provider),
-    }));
 
     render(<ProviderSettingsPanel />);
 
-    expect(screen.getByLabelText('OpenAI API key environment variable')).toHaveValue('CUSTOM_OPENAI_KEY');
+    await user.type(screen.getByLabelText('Search providers'), 'open');
 
-    const clearButton = screen.getByRole('button', { name: 'Clear OpenAI environment variable' });
-
-    expect(clearButton).toBeEnabled();
-    await user.click(clearButton);
-    expect(updateProvider).toHaveBeenCalledWith({
-      providerId: 'openai',
-      apiKeyEnv: null,
-    });
-  });
-
-  it('disables delete actions when the matching settings value is missing', () => {
-    render(<ProviderSettingsPanel />);
-
-    expect(screen.getByRole('button', { name: 'Delete DeepSeek API key' })).toBeDisabled();
-  });
-
-  it('keeps custom model ids editable when they are not in the known model list', async () => {
-    const user = userEvent.setup();
-    const updateProvider = vi.fn();
-    useProviderStore.setState((state) => ({
-      ...state,
-      updateProvider,
-      providers: state.providers.map((provider) => provider.providerId === 'deepseek'
-        ? {
-            ...provider,
-            modelIds: ['deepseek-custom-model'],
-          }
-        : provider),
-    }));
-
-    render(<ProviderSettingsPanel />);
-
-    expect(screen.getByLabelText('DeepSeek model IDs')).toHaveValue('deepseek-custom-model');
-
-    await user.clear(screen.getByLabelText('DeepSeek model IDs'));
-    await user.type(screen.getByLabelText('DeepSeek model IDs'), 'deepseek-next');
-    await user.click(screen.getByRole('button', { name: 'Save DeepSeek settings' }));
-
-    expect(updateProvider).toHaveBeenCalledWith(expect.objectContaining({
-      providerId: 'deepseek',
-      modelIds: ['deepseek-next'],
-    }));
+    expect(screen.getByRole('button', { name: /OpenAI/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /DeepSeek/ })).not.toBeInTheDocument();
   });
 });

@@ -59,6 +59,7 @@ export type ProviderPublicStatusUiDto = {
   providerId: string;
   displayName: string;
   enabled: boolean;
+  protocol: 'openai-compatible' | 'anthropic';
   baseUrl?: string;
   modelIds: string[];
   hasApiKey: boolean;
@@ -96,6 +97,7 @@ export interface ProviderListUiResult {
 export interface ProviderUpdateUiRequest {
   providerId: string;
   enabled?: boolean;
+  protocol?: 'openai-compatible' | 'anthropic';
   displayName?: string;
   baseUrl?: string;
   modelIds?: string[];
@@ -108,6 +110,10 @@ export interface ProviderSetApiKeyUiRequest {
 }
 
 export interface ProviderDeleteApiKeyUiRequest {
+  providerId: string;
+}
+
+export interface ProviderDeleteUiRequest {
   providerId: string;
 }
 

@@ -12,6 +12,7 @@ describe('SettingsPage provider settings', () => {
         {
           providerId: 'deepseek',
           displayName: 'DeepSeek',
+          protocol: 'openai-compatible',
           enabled: true,
           baseUrl: 'https://api.deepseek.com',
           modelIds: ['deepseek-v4-flash'],
@@ -24,6 +25,7 @@ describe('SettingsPage provider settings', () => {
       error: null,
       loadProviders: vi.fn(),
       updateProvider: vi.fn(),
+      deleteProvider: vi.fn(),
       setApiKey: vi.fn(),
       deleteApiKey: vi.fn(),
     });
@@ -36,7 +38,8 @@ describe('SettingsPage provider settings', () => {
 
     await user.click(screen.getByRole('tab', { name: 'Models' }));
 
-    expect(screen.getByText('Provider settings')).toBeInTheDocument();
-    expect(screen.getByText('DeepSeek')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Providers' })).toBeInTheDocument();
+    expect(screen.getAllByText('DeepSeek').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Provider and model runtime settings')).not.toBeInTheDocument();
   });
 });

@@ -79,6 +79,7 @@ export function toProviderPublicStatusUiDto(provider: {
   provider_id: string;
   display_name: string;
   enabled: boolean;
+  protocol: ProviderPublicStatusUiDto['protocol'];
   base_url?: string;
   models: string[];
   has_api_key: boolean;
@@ -91,6 +92,7 @@ export function toProviderPublicStatusUiDto(provider: {
     providerId: provider.provider_id,
     displayName: provider.display_name,
     enabled: provider.enabled,
+    protocol: provider.protocol,
     ...(provider.base_url ? { baseUrl: provider.base_url } : {}),
     modelIds: provider.models,
     hasApiKey: provider.has_api_key,

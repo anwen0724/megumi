@@ -43,7 +43,7 @@ export function getComposerModelOptionsForProviders(providers?: ProviderPublicSt
       value: modelOptionValue(provider.providerId, String(modelId)),
       modelId: String(modelId),
       providerId: provider.providerId,
-      label: `${provider.displayName} · ${String(modelId)}`,
+      label: String(modelId),
     })));
 }
 

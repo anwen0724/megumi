@@ -266,7 +266,8 @@ describe('LeftSidebar', () => {
     const { rerender } = render(<LeftSidebar {...defaultProps} />);
 
     expect(screen.getByTestId('left-sidebar')).toHaveClass('transition-[width]');
-    expect(screen.getByTestId('left-sidebar')).toHaveClass('w-72');
+    expect(screen.getByTestId('left-sidebar')).toHaveStyle({ width: '288px' });
+    expect(screen.getByRole('separator', { name: 'Resize chat sidebar' })).toBeInTheDocument();
 
     rerender(<LeftSidebar {...defaultProps} collapsed />);
 

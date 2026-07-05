@@ -21,11 +21,13 @@ describe('13.02 shell layout contract source guard', () => {
     expect(existsSync(resolve(repoRoot, 'apps/desktop/src/renderer/shell/AppShell.tsx'))).toBe(false);
   });
 
-  it('keeps AppBody as LeftSidebar | MainContent | RightSidebar', () => {
+  it('keeps AppBody as top-level SettingsPage or the chat shell layout', () => {
     const appBody = readSource('apps/desktop/src/renderer/shell/AppBody.tsx');
     const rightSidebar = readSource('apps/desktop/src/renderer/shell/RightSidebar.tsx');
 
     expect(appBody).toContain('data-testid="app-body"');
+    expect(appBody).toContain('<SettingsPage');
+    expect(appBody).toContain('settingsOpen ?');
     expect(appBody).toContain('<LeftSidebar');
     expect(appBody).toContain('<MainContent');
     expect(appBody).toContain('<RightSidebar');
@@ -48,14 +50,13 @@ describe('13.02 shell layout contract source guard', () => {
     expect(mainContent).not.toContain('<LeftSidebar');
   });
 
-  it('keeps PageHost as the main page outlet for ChatPage and SettingsPage', () => {
+  it('keeps PageHost as the main chat page outlet', () => {
     const pageHost = readSource('apps/desktop/src/renderer/shell/PageHost.tsx');
 
     expect(pageHost).toContain('data-testid="page-host"');
     expect(pageHost).toContain('className="relative flex min-h-0 flex-1 overflow-hidden"');
     expect(pageHost).toContain('<ChatPage');
-    expect(pageHost).toContain('<SettingsPage');
-    expect(pageHost).not.toMatch(/RightSidebar|WindowTitleBar|LeftSidebar/);
+    expect(pageHost).not.toMatch(/SettingsPage|RightSidebar|WindowTitleBar|LeftSidebar/);
   });
 
   it('keeps shell layout away from renderer-forbidden internals', () => {

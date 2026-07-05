@@ -24,6 +24,7 @@ export function listProviderStatuses(
       provider_id: providerId,
       display_name: provider.display_name,
       enabled: provider.enabled,
+      protocol: provider.protocol,
       ...(provider.base_url ? { base_url: provider.base_url } : {}),
       models: provider.models,
       has_api_key: settingsApiKeyActive || envOverrideActive,

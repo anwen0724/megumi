@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { ArrowLeft, Bot, BrainCircuit, CheckCircle2, Info, Palette, ShieldCheck } from 'lucide-react';
 import { MemorySettingsPanel } from '../features/memory-settings';
 import { ProviderSettingsPanel } from '../features/provider-settings';
@@ -9,6 +9,8 @@ type SettingsCategory = 'appearance' | 'models' | 'memory' | 'security' | 'about
 
 interface SettingsPageProps {
   onDone: () => void;
+  sidebarWidth?: number;
+  onStartSidebarResize?: (event: ReactPointerEvent) => void;
 }
 
 interface SettingsCategoryItem {
@@ -30,7 +32,7 @@ function activeCategoryLabel(category: SettingsCategory): SettingsCategoryItem {
   return categories.find((item) => item.id === category) ?? categories[0];
 }
 
-export function SettingsPage({ onDone }: SettingsPageProps) {
+export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize }: SettingsPageProps) {
   const [category, setCategory] = useState<SettingsCategory>('appearance');
   const activeCategory = activeCategoryLabel(category);
 
@@ -53,9 +55,17 @@ export function SettingsPage({ onDone }: SettingsPageProps) {
       <div className="h-full">
         <div
           data-testid="settings-page-content"
-          className="grid h-full min-h-0 grid-cols-[13rem_minmax(0,1fr)] overflow-hidden"
+          style={{ gridTemplateColumns: `${sidebarWidth}px minmax(0, 1fr)` }}
+          className="grid h-full min-h-0 overflow-hidden"
         >
-          <aside className="border-r border-[var(--color-border)] bg-[var(--color-surface-muted)] p-4">
+          <aside className="relative border-r border-[var(--color-border)] bg-[var(--color-surface-muted)] p-4">
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize settings sidebar"
+              onPointerDown={onStartSidebarResize}
+              className="absolute right-0 top-0 z-10 h-full w-1 cursor-col-resize bg-transparent hover:bg-[var(--color-focus)]/40"
+            />
             <Button
               type="button"
               variant="ghost"
@@ -100,11 +110,6 @@ export function SettingsPage({ onDone }: SettingsPageProps) {
             className="min-w-0 overflow-y-auto px-8 py-6"
           >
             <div className="mx-auto max-w-4xl">
-              <div className="mb-5">
-                <p className="text-sm font-semibold text-[var(--color-text)]">{activeCategory.label}</p>
-                <p className="mt-1 text-sm text-[var(--color-text-muted)]">{activeCategory.description}</p>
-              </div>
-
               {category === 'appearance' ? (
                 <div className="space-y-4">
                   <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">

@@ -17,6 +17,7 @@ export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.settings.update,
   IPC_CHANNELS.settings.providerList,
   IPC_CHANNELS.settings.providerUpdate,
+  IPC_CHANNELS.settings.providerDelete,
   IPC_CHANNELS.settings.providerSetApiKey,
   IPC_CHANNELS.settings.providerDeleteApiKey,
   IPC_CHANNELS.chat.commandSuggestions,

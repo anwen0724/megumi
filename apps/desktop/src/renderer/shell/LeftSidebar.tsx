@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
@@ -37,6 +37,8 @@ export interface SidebarProjectItem {
 
 interface LeftSidebarProps {
   collapsed: boolean;
+  width?: number;
+  onStartResize?: (event: ReactPointerEvent) => void;
   projects: SidebarProjectItem[];
   allProjects?: Project[];
   onToggleCollapsed: () => void;
@@ -51,6 +53,8 @@ interface LeftSidebarProps {
 
 export function LeftSidebar({
   collapsed,
+  width = 288,
+  onStartResize,
   projects,
   allProjects = [],
   onToggleCollapsed,
@@ -168,8 +172,16 @@ export function LeftSidebar({
   return (
     <aside
       data-testid="left-sidebar"
-      className="flex w-72 shrink-0 flex-col overflow-hidden border-r border-[var(--color-border)] bg-[var(--color-surface-muted)] transition-[width] duration-200 ease-out"
+      style={{ width }}
+      className="relative flex shrink-0 flex-col overflow-hidden border-r border-[var(--color-border)] bg-[var(--color-surface-muted)] transition-[width] duration-200 ease-out"
     >
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize chat sidebar"
+        onPointerDown={onStartResize}
+        className="absolute right-0 top-0 z-10 h-full w-1 cursor-col-resize bg-transparent hover:bg-[var(--color-focus)]/40"
+      />
       <div className="flex h-12 items-center justify-between px-3">
         <span className="truncate text-sm font-semibold text-[var(--color-text)]">Chats</span>
         <IconButton label="Collapse sidebar" onClick={onToggleCollapsed} size="sm">

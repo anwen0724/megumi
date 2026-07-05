@@ -9,6 +9,7 @@ const defaultProviders = [
   {
     providerId: 'deepseek' as const,
     displayName: 'DeepSeek',
+    protocol: 'openai-compatible' as const,
     enabled: true,
     modelIds: ['deepseek-v4-flash', 'deepseek-v4-pro'],
     hasApiKey: true,
@@ -18,6 +19,7 @@ const defaultProviders = [
   {
     providerId: 'openai' as const,
     displayName: 'OpenAI',
+    protocol: 'openai-compatible' as const,
     enabled: true,
     modelIds: ['gpt-5.5'],
     hasApiKey: true,
@@ -199,7 +201,7 @@ describe('Composer', () => {
       'deepseek:deepseek-v4-flash',
       'deepseek:deepseek-v4-pro',
     ]);
-    expect(screen.queryByRole('option', { name: 'OpenAI · gpt-5.5' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'gpt-5.5' })).not.toBeInTheDocument();
   });
 
   it('falls back when the selected model provider becomes disabled', async () => {
@@ -214,7 +216,7 @@ describe('Composer', () => {
     rerender(<TestComposer providers={deepseekOnlyProviders} onSubmit={() => undefined} />);
 
     expect(screen.getByLabelText('Model')).toHaveValue('deepseek:deepseek-v4-flash');
-    expect(screen.queryByRole('option', { name: 'OpenAI · gpt-5.5' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'gpt-5.5' })).not.toBeInTheDocument();
   });
 
   it('keeps slash prefixes as ordinary drafts until a trusted command catalog is wired in', async () => {
@@ -516,7 +518,7 @@ describe('Composer', () => {
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('continue');
     expect(screen.getByLabelText('Model')).toHaveValue('deepseek:deepseek-v4-pro');
     expect(rightControls).toHaveTextContent('Default');
-    expect(rightControls).toHaveTextContent('DeepSeek · deepseek-v4-pro');
+    expect(rightControls).toHaveTextContent('deepseek-v4-pro');
     expect(rightControls.lastElementChild).toBe(screen.getByRole('button', { name: 'Stop current run' }));
     expect(screen.getByRole('button', { name: 'Stop current run' })).toHaveClass('shrink-0');
     expect(screen.getByRole('button', { name: 'Stop current run' })).not.toHaveTextContent('Stop');

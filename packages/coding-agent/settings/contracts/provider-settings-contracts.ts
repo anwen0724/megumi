@@ -45,6 +45,7 @@ export const ProviderPublicStatusSchema = z
     provider_id: ProviderIdSchema,
     display_name: z.string().min(1),
     enabled: z.boolean(),
+    protocol: ProviderProtocolSchema,
     base_url: z.string().url().optional(),
     models: z.array(z.string().min(1)),
     has_api_key: z.boolean(),
@@ -97,6 +98,17 @@ export type UpdateProviderSettingsRequest = z.infer<typeof UpdateProviderSetting
 
 export type UpdateProviderSettingsResult =
   | { status: 'updated'; provider: ProviderSettingsResolved }
+  | { status: 'failed'; failure: SettingsError };
+
+export const DeleteProviderSettingsRequestSchema = z
+  .object({
+    provider_id: ProviderIdSchema,
+  })
+  .strict();
+export type DeleteProviderSettingsRequest = z.infer<typeof DeleteProviderSettingsRequestSchema>;
+
+export type DeleteProviderSettingsResult =
+  | { status: 'deleted'; provider_id: ProviderId }
   | { status: 'failed'; failure: SettingsError };
 
 export const SetProviderApiKeyRequestSchema = z

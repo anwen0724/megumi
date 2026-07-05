@@ -74,11 +74,13 @@ export const SettingsUpdatePayloadSchema = z.record(z.string(), z.unknown());
 export const ProviderUpdatePayloadSchema = z.object({
   providerId: z.string().min(1),
   enabled: z.boolean().optional(),
+  protocol: z.enum(['openai-compatible', 'anthropic']).optional(),
   displayName: z.string().min(1).optional(),
   baseUrl: z.string().url().optional(),
   modelIds: z.array(z.string().min(1)).optional(),
   apiKeyEnv: z.string().min(1).nullable().optional(),
 }).strict();
+export const ProviderDeletePayloadSchema = z.object({ providerId: z.string().min(1) }).strict();
 export const ProviderApiKeyPayloadSchema = z.object({
   providerId: z.string().min(1),
   apiKey: z.string().min(1),
@@ -225,6 +227,7 @@ export const SettingsGetRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNE
 export const SettingsUpdateRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.settings.update, SettingsUpdatePayloadSchema);
 export const ProviderListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.settings.providerList, EmptyPayloadSchema);
 export const ProviderUpdateRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.settings.providerUpdate, ProviderUpdatePayloadSchema);
+export const ProviderDeleteRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.settings.providerDelete, ProviderDeletePayloadSchema);
 export const ProviderApiKeyRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.settings.providerSetApiKey, ProviderApiKeyPayloadSchema);
 export const ProviderDeleteApiKeyRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.settings.providerDeleteApiKey, ProviderDeleteApiKeyPayloadSchema);
 
@@ -273,6 +276,7 @@ export type RunListBySessionPayload = z.infer<typeof RunListBySessionPayloadSche
 export type RunEventsListPayload = z.infer<typeof RunEventsListPayloadSchema>;
 export type SettingsUpdatePayload = z.infer<typeof SettingsUpdatePayloadSchema>;
 export type ProviderUpdatePayload = z.infer<typeof ProviderUpdatePayloadSchema>;
+export type ProviderDeletePayload = z.infer<typeof ProviderDeletePayloadSchema>;
 export type ProviderApiKeyPayload = z.infer<typeof ProviderApiKeyPayloadSchema>;
 export type ProviderDeleteApiKeyPayload = z.infer<typeof ProviderDeleteApiKeyPayloadSchema>;
 export type ApprovalResolvePayload = z.infer<typeof ApprovalResolvePayloadSchema>;

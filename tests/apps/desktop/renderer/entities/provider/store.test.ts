@@ -8,6 +8,7 @@ const providers: ProviderPublicStatusUiDto[] = [
   {
     providerId: 'deepseek',
     displayName: 'DeepSeek',
+    protocol: 'openai-compatible',
     enabled: true,
     baseUrl: 'https://api.deepseek.com',
     modelIds: ['deepseek-v4-flash'],
@@ -38,6 +39,11 @@ function installMegumiMock() {
       ok: true,
       data: {},
       meta: createSuccessMeta(IPC_CHANNELS.settings.providerUpdate),
+    }),
+    delete: vi.fn().mockResolvedValue({
+      ok: true,
+      data: {},
+      meta: createSuccessMeta(IPC_CHANNELS.settings.providerDelete),
     }),
     setApiKey: vi.fn().mockResolvedValue({
       ok: true,
@@ -124,6 +130,29 @@ describe('useProviderStore', () => {
       }),
       context: expect.objectContaining({
         operationName: 'provider.update',
+        source: 'renderer',
+      }),
+    }));
+    expect(providerApi.list).toHaveBeenCalledTimes(1);
+  });
+
+  it('deletes provider settings and reloads statuses', async () => {
+    const providerApi = installMegumiMock();
+
+    await useProviderStore.getState().deleteProvider({
+      providerId: 'deepseek',
+    });
+
+    expect(providerApi.delete).toHaveBeenCalledWith(expect.objectContaining({
+      payload: {
+        providerId: 'deepseek',
+      },
+      meta: expect.objectContaining({
+        channel: IPC_CHANNELS.settings.providerDelete,
+        source: 'renderer',
+      }),
+      context: expect.objectContaining({
+        operationName: 'provider.delete',
         source: 'renderer',
       }),
     }));

@@ -62,6 +62,7 @@ import type {
   ProjectOpenPayload,
   ProjectRemovePayload,
   ProviderApiKeyPayload,
+  ProviderDeletePayload,
   ProviderDeleteApiKeyPayload,
   ProviderUpdatePayload,
   RunEventsListPayload,
@@ -158,6 +159,10 @@ export const api = {
       request: BusinessRequest<ProviderUpdatePayload, typeof IPC_CHANNELS.settings.providerUpdate>,
     ): Promise<RuntimeIpcResult<EmptyUiResult, typeof IPC_CHANNELS.settings.providerUpdate>> =>
       invokeRuntimeIpc(IPC_CHANNELS.settings.providerUpdate, request),
+    delete: (
+      request: BusinessRequest<ProviderDeletePayload, typeof IPC_CHANNELS.settings.providerDelete>,
+    ): Promise<RuntimeIpcResult<EmptyUiResult, typeof IPC_CHANNELS.settings.providerDelete>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.settings.providerDelete, request),
     setApiKey: (
       request: BusinessRequest<ProviderApiKeyPayload, typeof IPC_CHANNELS.settings.providerSetApiKey>,
     ): Promise<RuntimeIpcResult<EmptyUiResult, typeof IPC_CHANNELS.settings.providerSetApiKey>> =>

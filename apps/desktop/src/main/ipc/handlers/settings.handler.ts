@@ -9,6 +9,7 @@ import { IPC_CHANNELS } from '../channels';
 import type { RuntimeIpcError } from '../contracts';
 import {
   ProviderApiKeyRequestSchema,
+  ProviderDeleteRequestSchema,
   ProviderDeleteApiKeyRequestSchema,
   ProviderListRequestSchema,
   ProviderUpdateRequestSchema,
@@ -60,6 +61,14 @@ export function registerSettingsHandlers(
     requestSchema: ProviderUpdateRequestSchema,
     logger: options.logger,
     handle: (request) => service.host.settings.updateProvider(request.payload),
+    mapError: mapSettingsIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.settings.providerDelete, createIpcRequestHandler({
+    channel: IPC_CHANNELS.settings.providerDelete,
+    requestSchema: ProviderDeleteRequestSchema,
+    logger: options.logger,
+    handle: (request) => service.host.settings.deleteProvider(request.payload),
     mapError: mapSettingsIpcError,
   }));
 

@@ -7,6 +7,8 @@ export function rendererRuntimeOperationNameFromChannel(channel: BusinessIpcChan
       return 'provider.list';
     case IPC_CHANNELS.settings.providerUpdate:
       return 'provider.update';
+    case IPC_CHANNELS.settings.providerDelete:
+      return 'provider.delete';
     case IPC_CHANNELS.settings.providerSetApiKey:
       return 'provider.set-api-key';
     case IPC_CHANNELS.settings.providerDeleteApiKey:

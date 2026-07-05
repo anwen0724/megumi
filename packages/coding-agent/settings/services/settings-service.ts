@@ -28,11 +28,14 @@ import {
 } from '../contracts/settings-contracts';
 import {
   ClearProviderApiKeyRequestSchema,
+  DeleteProviderSettingsRequestSchema,
   GetProviderSettingsRequestSchema,
   SetProviderApiKeyRequestSchema,
   UpdateProviderSettingsRequestSchema,
   type ClearProviderApiKeyRequest,
   type ClearProviderApiKeyResult,
+  type DeleteProviderSettingsRequest,
+  type DeleteProviderSettingsResult,
   type GetProviderSettingsRequest,
   type GetProviderSettingsResult,
   type ListAvailableModelsResult,
@@ -69,6 +72,7 @@ export interface SettingsService {
   listAvailableModels(): ListAvailableModelsResult;
   getProviderSettings(request: GetProviderSettingsRequest): GetProviderSettingsResult;
   updateProviderSettings(request: UpdateProviderSettingsRequest): UpdateProviderSettingsResult;
+  deleteProviderSettings(request: DeleteProviderSettingsRequest): DeleteProviderSettingsResult;
   setProviderApiKey(request: SetProviderApiKeyRequest): SetProviderApiKeyResult;
   clearProviderApiKey(request: ClearProviderApiKeyRequest): ClearProviderApiKeyResult;
   resolveProviderRuntimeConfig(
@@ -193,6 +197,36 @@ class DefaultSettingsService implements SettingsService {
     return {
       status: 'updated',
       provider: updated.settings.providers[parsed.data.provider_id],
+    };
+  }
+
+  deleteProviderSettings(request: DeleteProviderSettingsRequest): DeleteProviderSettingsResult {
+    const parsed = DeleteProviderSettingsRequestSchema.safeParse(request);
+    if (!parsed.success) {
+      return failed('provider_delete_invalid', 'Provider delete request is invalid.', {
+        issues: parsed.error.issues,
+      });
+    }
+
+    const raw = this.readRawSettings();
+    if (isSettingsFailure(raw)) return raw;
+    if (!raw.providers?.[parsed.data.provider_id]) {
+      return failed('provider_unknown', 'Provider settings were not found.', {
+        provider_id: parsed.data.provider_id,
+      });
+    }
+
+    const nextProviders = { ...raw.providers };
+    delete nextProviders[parsed.data.provider_id];
+    const next = SettingsRawSchema.parse({
+      ...raw,
+      providers: nextProviders,
+    });
+    this.options.file_store.writeRawSettings(next);
+
+    return {
+      status: 'deleted',
+      provider_id: parsed.data.provider_id,
     };
   }
 

@@ -9,6 +9,7 @@ import {
 } from '../mappers/settings-ui-mapper';
 import type {
   EmptyUiResult,
+  ProviderDeleteUiRequest,
   ProviderDeleteApiKeyUiRequest,
   ProviderListUiRequest,
   ProviderListUiResult,
@@ -25,6 +26,7 @@ export interface SettingsController {
   update(request: SettingsUpdateUiRequest): Promise<SettingsUpdateUiResult>;
   listProviders(request?: ProviderListUiRequest): Promise<ProviderListUiResult>;
   updateProvider(request: ProviderUpdateUiRequest): Promise<EmptyUiResult>;
+  deleteProvider(request: ProviderDeleteUiRequest): Promise<EmptyUiResult>;
   setProviderApiKey(request: ProviderSetApiKeyUiRequest): Promise<EmptyUiResult>;
   deleteProviderApiKey(request: ProviderDeleteApiKeyUiRequest): Promise<EmptyUiResult>;
 }
@@ -36,6 +38,7 @@ export function createSettingsController(
     | 'updateSettings'
     | 'listProviderSettings'
     | 'updateProviderSettings'
+    | 'deleteProviderSettings'
     | 'setProviderApiKey'
     | 'clearProviderApiKey'
   >,
@@ -63,11 +66,21 @@ export function createSettingsController(
         provider_id: providerId,
         patch: {
           ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+          ...(input.protocol ? { protocol: input.protocol } : {}),
           ...(input.displayName ? { display_name: input.displayName } : {}),
           ...(input.baseUrl ? { base_url: input.baseUrl } : {}),
           ...(input.modelIds ? { models: input.modelIds } : {}),
           ...(input.apiKeyEnv !== undefined ? { api_key_env: input.apiKeyEnv } : {}),
         },
+      });
+      if (result.status === 'failed') {
+        throw new Error(result.failure.message);
+      }
+      return {};
+    },
+    async deleteProvider(request) {
+      const result = settingsService.deleteProviderSettings({
+        provider_id: request.providerId,
       });
       if (result.status === 'failed') {
         throw new Error(result.failure.message);
