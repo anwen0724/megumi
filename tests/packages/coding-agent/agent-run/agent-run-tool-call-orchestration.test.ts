@@ -38,7 +38,7 @@ describe('Agent Run tool-call orchestration', () => {
       ['call-1', 0],
       ['call-2', 1],
     ]);
-    expect(result.tool_results.map((toolResult) => toolResult.status)).toEqual(['completed', 'completed']);
+    expect(result.tool_result_facts.map((toolResult) => toolResult.status)).toEqual(['completed', 'completed']);
     expect(order).toEqual(['start:read_file', 'start:list_files', 'end:read_file', 'end:list_files']);
     expect(result.next_model_prompt_ready).toBe(true);
   });
@@ -96,7 +96,7 @@ describe('Agent Run tool-call orchestration', () => {
     });
 
     expect(executeTool).not.toHaveBeenCalled();
-    expect(result.tool_results.map((toolResult) => toolResult.status)).toEqual(['failed', 'denied']);
+    expect(result.tool_result_facts.map((toolResult) => toolResult.status)).toEqual(['failed', 'denied']);
     expect(result.next_model_prompt_ready).toBe(true);
   });
 

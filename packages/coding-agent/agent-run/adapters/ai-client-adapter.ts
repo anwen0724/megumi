@@ -36,6 +36,9 @@ export function mapModelCallToAiRequest(
     } : {}),
     ...(options.max_retries !== undefined ? { maxRetries: options.max_retries } : {}),
     ...(options.max_retry_delay_ms !== undefined ? { maxRetryDelayMs: options.max_retry_delay_ms } : {}),
+    metadata: request.owner.type === 'agent_run'
+      ? { runId: request.owner.run_id }
+      : { sessionId: request.owner.session_id },
   };
 }
 

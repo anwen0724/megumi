@@ -123,16 +123,14 @@ describe('WorkspaceRepository', () => {
         )
       `).run();
       database.prepare(`
-        INSERT INTO agent_loop_runs (
-          run_id, workspace_id, session_id, run_kind, user_message_id, assistant_message_id,
-          base_run_id, base_message_id, base_entry_id, attempt_number, status,
-          permission_mode, permission_snapshot_json, memory_recall_trace_id,
-          started_at, completed_at, cancelled_at, error_json, created_at, metadata_json
+        INSERT INTO agent_runs (
+          run_id, workspace_id, session_id, provider_id, model_id,
+          trigger_type, trigger_user_message_id, trigger_command_name,
+          status, created_at, started_at, completed_at, failure_json
         ) VALUES (
-          'run:one', 'workspace:one', 'session:one', 'message', NULL, NULL,
-          NULL, NULL, NULL, 1, 'completed',
-          'default', NULL, NULL,
-          NULL, NULL, NULL, NULL, '2026-05-16T00:00:00.000Z', NULL
+          'run:one', 'workspace:one', 'session:one', 'provider:test', 'model:test',
+          'user_input', NULL, NULL,
+          'completed', '2026-05-16T00:00:00.000Z', NULL, '2026-05-16T00:01:00.000Z', NULL
         )
       `).run();
       database.prepare(`
@@ -148,7 +146,7 @@ describe('WorkspaceRepository', () => {
       expect(repository.deleteWorkspace('workspace:one')).toBe('blocked');
       expect(repository.findWorkspaceById('workspace:one')).toEqual(workspace());
       expect(countRows(database, 'sessions')).toBe(1);
-      expect(countRows(database, 'agent_loop_runs')).toBe(1);
+      expect(countRows(database, 'agent_runs')).toBe(1);
       expect(countRows(database, 'workspace_changes')).toBe(1);
     } finally {
       database.close();

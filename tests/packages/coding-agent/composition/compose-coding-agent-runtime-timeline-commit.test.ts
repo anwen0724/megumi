@@ -7,7 +7,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { composeCodingAgentRuntime } from '@megumi/coding-agent/composition';
+import { composeCodingAgentHostInterface } from '@megumi/coding-agent/composition';
 import { WorkspaceRepository, createDatabase } from '@megumi/coding-agent/persistence';
 import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
 import {
@@ -112,7 +112,7 @@ describe('Coding Agent host interface timeline history commit', () => {
   it('commits timeline history even without a caller-provided chat stream sink', async () => {
     temporaryHome = await mkdtemp(path.join(os.tmpdir(), 'megumi-timeline-commit-'));
     const project = seedProject(temporaryHome);
-    runtime = composeCodingAgentRuntime({
+    runtime = composeCodingAgentHostInterface({
       homePaths: {
         homePath: temporaryHome,
         sqlitePath: temporaryHome,
@@ -135,7 +135,7 @@ describe('Coding Agent host interface timeline history commit', () => {
     temporaryHome = await mkdtemp(path.join(os.tmpdir(), 'megumi-timeline-commit-sink-'));
     const project = seedProject(temporaryHome);
     const forwarded: ChatStreamEvent[] = [];
-    runtime = composeCodingAgentRuntime({
+    runtime = composeCodingAgentHostInterface({
       homePaths: {
         homePath: temporaryHome,
         sqlitePath: temporaryHome,

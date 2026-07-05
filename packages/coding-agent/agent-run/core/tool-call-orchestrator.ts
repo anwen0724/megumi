@@ -79,7 +79,7 @@ export type AgentRunToolCallRequest = {
 
 export type AgentRunToolCallResult = {
   tool_calls: AgentRunToolCall[];
-  tool_results: ToolResultRuntimeFact[];
+  tool_result_facts: ToolResultRuntimeFact[];
   pending_approvals: AgentRunApprovalRequest[];
   next_model_prompt_ready: boolean;
 };
@@ -168,12 +168,12 @@ export async function orchestrateToolCallGroup(
     for (const plan of executed.plans) {
       plans[plans.indexOf(plan.original)] = plan.next;
     }
-    toolResults.push(...executed.tool_results);
+    toolResults.push(...executed.tool_result_facts);
   }
 
   return {
     tool_calls: plans.map((plan) => plan.call),
-    tool_results: toolResults,
+    tool_result_facts: toolResults,
     pending_approvals: pendingApprovals,
     next_model_prompt_ready: pendingApprovals.length === 0,
   };
@@ -184,7 +184,7 @@ async function executeWindows(
   executablePlans: ToolCallPlan[],
 ): Promise<{
   plans: Array<{ original: ToolCallPlan; next: ToolCallPlan }>;
-  tool_results: ToolResultRuntimeFact[];
+  tool_result_facts: ToolResultRuntimeFact[];
 }> {
   const updates: Array<{ original: ToolCallPlan; next: ToolCallPlan }> = [];
   const toolResults: ToolResultRuntimeFact[] = [];
@@ -234,7 +234,7 @@ async function executeWindows(
     index += window.length;
   }
 
-  return { plans: updates, tool_results: toolResults };
+  return { plans: updates, tool_result_facts: toolResults };
 }
 
 function takeParallelWindow(plans: ToolCallPlan[], start: number): ToolCallPlan[] {

@@ -6,7 +6,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { composeCodingAgentRuntime } from '@megumi/coding-agent/composition';
+import { composeCodingAgentHostInterface } from '@megumi/coding-agent/composition';
 import {
   createSettingsService,
   type SettingsRaw,
@@ -40,7 +40,7 @@ describe('composed runtime project service', () => {
 
   it('exposes a project service whose useExistingProject cancels without a picker', async () => {
     home = await mkdtemp(path.join(os.tmpdir(), 'megumi-project-service-'));
-    runtime = composeCodingAgentRuntime({
+    runtime = composeCodingAgentHostInterface({
       homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
       runtimeLogger: { warn: () => undefined },
       modelCallProviderService: {
@@ -53,12 +53,12 @@ describe('composed runtime project service', () => {
     });
 
     expect(await runtime.workspace.useExistingProject()).toEqual({ cancelled: true });
-    expect(runtime.workspace.listProjects()).resolves.toEqual([]);
+    await expect(runtime.workspace.listProjects()).resolves.toEqual([]);
   });
 
   it('upserts and lists a project when a directory picker is injected', async () => {
     home = await mkdtemp(path.join(os.tmpdir(), 'megumi-project-service-picker-'));
-    runtime = composeCodingAgentRuntime({
+    runtime = composeCodingAgentHostInterface({
       homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
       runtimeLogger: { warn: () => undefined },
       modelCallProviderService: {

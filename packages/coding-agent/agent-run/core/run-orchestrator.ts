@@ -66,6 +66,7 @@ export type RunOrchestratorRequest = {
   user_message_id: string;
   model_config: AgentRun['model_selection'] & Record<string, unknown>;
   permission_mode: PermissionMode;
+  workspace_root?: string;
 };
 
 export type RunOrchestratorResult =
@@ -166,7 +167,11 @@ export async function runAgentModelToolLoop(
         to: 'completed',
         changed_at: dependencies.clock.now(),
       }));
-      dependencies.event_sink.emit('run.completed', { run_id: run.run_id });
+      dependencies.event_sink.emit('run.completed', {
+        run_id: run.run_id,
+        session_id: run.session_id,
+        workspace_id: run.workspace_id,
+      });
       await dependencies.memory_service?.captureCompletedRun({
         run_id: run.run_id,
         session_id: run.session_id,
@@ -200,6 +205,7 @@ export async function runAgentModelToolLoop(
     const toolGroup = await orchestrateToolCallGroup({
       run_id: run.run_id,
       workspace_id: run.workspace_id,
+      ...(request.workspace_root ? { workspace_root: request.workspace_root } : {}),
       permission_mode: request.permission_mode,
       permission_settings: permissionSettings.permission_settings,
       runtime_capability_policy: {
@@ -224,7 +230,7 @@ export async function runAgentModelToolLoop(
         tool_name: toolCall.tool_name,
       });
     }
-    for (const toolResult of toolGroup.tool_results) {
+    for (const toolResult of toolGroup.tool_result_facts) {
       emitToolResult(dependencies, run, toolResult);
     }
     for (const approval of toolGroup.pending_approvals) {
@@ -245,9 +251,9 @@ export async function runAgentModelToolLoop(
       return { status: 'waiting_for_approval', run };
     }
 
-    dependencies.event_sink.emit('tool_results.submitted', {
+    dependencies.event_sink.emit('tool_result_facts.submitted', {
       run_id: run.run_id,
-      count: toolGroup.tool_results.length,
+      count: toolGroup.tool_result_facts.length,
     });
   }
 }
@@ -370,6 +376,8 @@ function failRun(
   }));
   dependencies.event_sink.emit('run.failed', {
     run_id: failedRun.run_id,
+    session_id: failedRun.session_id,
+    workspace_id: failedRun.workspace_id,
     failure,
   });
   return { status: 'failed', run: failedRun, failure };

@@ -418,7 +418,7 @@ CREATE TABLE `workspace_changes` (
 	`finalized_at` text,
 	FOREIGN KEY (`workspace_id`) REFERENCES `workspaces`(`workspace_id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`session_id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`run_id`) REFERENCES `agent_loop_runs`(`run_id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`run_id`) REFERENCES `agent_runs`(`run_id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
 CREATE INDEX `idx_workspace_changes_run` ON `workspace_changes` (`run_id`);--> statement-breakpoint

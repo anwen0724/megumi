@@ -419,10 +419,6 @@ describe('package and file structure source guards', () => {
 
   it('wires session service through the Session module repository', () => {
     const sessionServiceSource = readFileSync(join(repoRoot, 'packages/coding-agent/session/services/session-service.ts'), 'utf8');
-    const sessionRuntimeSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-session-runtime.ts'),
-      'utf8',
-    );
     const runtimeSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-runtime.ts'),
       'utf8',
@@ -430,8 +426,9 @@ describe('package and file structure source guards', () => {
 
     expect(sessionServiceSource).not.toContain("SessionRunRepository");
     expect(sessionServiceSource).toContain('repository: SessionRepository');
-    expect(sessionRuntimeSource).toContain('sessionRepository');
-    expect(runtimeSource).toContain('sessionRuntime');
+    expect(runtimeSource).toContain('new SessionV2Repository(persistence.database)');
+    expect(runtimeSource).toContain('createSessionService({ repository: sessionRepository })');
+    expect(runtimeSource).not.toContain('composeCodingAgentSessionRuntime');
   });
 
   it('removes the old session branch service from the public Session module boundary', () => {
@@ -444,9 +441,9 @@ describe('package and file structure source guards', () => {
     expect(sessionRuntimeSource).not.toContain('new SessionBranchService');
   });
 
-  it('wires recovery runtime through aggregate repositories', () => {
-    const recoveryRuntimeSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/composition', `compose-coding-agent-${'recovery'}-runtime.ts`),
+  it('keeps interrupted run cleanup on the new Agent Run service boundary', () => {
+    const agentRunContractsSource = readFileSync(
+      join(repoRoot, 'packages/coding-agent/agent-run/contracts/agent-run-contracts.ts'),
       'utf8',
     );
     const runtimeSource = readFileSync(
@@ -454,27 +451,20 @@ describe('package and file structure source guards', () => {
       'utf8',
     );
 
-    expect(recoveryRuntimeSource).not.toContain('SessionRunRepository');
-    expect(recoveryRuntimeSource).toContain('runRepository: AgentLoopRepository');
-    expect(recoveryRuntimeSource).toContain('sessionRepository: SessionRepository');
-    expect(runtimeSource).toContain('runRepository: agentLoopRepository');
-    expect(runtimeSource).toContain('sessionRepository: sessionRepository');
+    expect(agentRunContractsSource).toContain('cleanupInterruptedRuns(');
+    expect(runtimeSource).not.toContain('composeCodingAgentRecoveryRuntime');
+    expect(runtimeSource).toContain('repository: persistence.agentRunRepository');
   });
 
-  it('wires tool runtime through the aggregate agent-loop repository', () => {
-    const toolRuntimeSource = readFileSync(
-      join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-tool-runtime.ts'),
-      'utf8',
-    );
+  it('wires run-level tool execution through the new Agent Run runtime factory', () => {
     const runtimeSource = readFileSync(
       join(repoRoot, 'packages/coding-agent/composition/compose-coding-agent-runtime.ts'),
       'utf8',
     );
 
-    expect(toolRuntimeSource).not.toContain('SessionRunRepository');
-    expect(toolRuntimeSource).toContain('runRepository: AgentLoopRepository');
-    expect(toolRuntimeSource).toContain('input.runRepository.getRun(runId)');
-    expect(runtimeSource).toContain('runRepository: agentLoopRepository');
+    expect(runtimeSource).not.toContain('composeCodingAgentToolRuntimeFactory');
+    expect(runtimeSource).toContain('tool_execution_service_factory');
+    expect(runtimeSource).toContain('composeCodingAgentToolExecutionService');
   });
 
   it('keeps run service contracts off the concrete session-run repository type', () => {

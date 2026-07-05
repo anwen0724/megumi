@@ -160,7 +160,7 @@ export const agentRunApprovalRequests = sqliteTable('agent_run_approval_requests
 
 export const modelCalls = sqliteTable('model_calls', {
   modelCallId: text('model_call_id').primaryKey(),
-  runId: text('run_id').notNull().references(() => agentLoopRuns.runId, { onDelete: 'cascade' }),
+  runId: text('run_id').notNull().references(() => agentRuns.runId, { onDelete: 'cascade' }),
   callOrder: integer('call_order').notNull(),
   providerId: text('provider_id').notNull(),
   modelId: text('model_id').notNull(),

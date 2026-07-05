@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { composeCodingAgentPersistence } from '@megumi/coding-agent/composition/compose-coding-agent-persistence';
-import { composeCodingAgentRuntime } from '@megumi/coding-agent/composition';
+import { composeCodingAgentHostInterface } from '@megumi/coding-agent/composition';
 import { WorkspaceRepository, createDatabase } from '@megumi/coding-agent/persistence';
 import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
 import type { SettingsRaw } from '@megumi/coding-agent/settings';
@@ -190,6 +190,7 @@ describe('coding-agent product runs without desktop', () => {
     try {
       expect(Object.keys(persistence).sort()).toEqual([
         'agentLoopRepository',
+        'agentRunRepository',
         'artifactRepository',
         'database',
         'memoryRepository',
@@ -220,7 +221,7 @@ describe('coding-agent product runs without desktop', () => {
     const projectId = seedProject(home, workspace);
     const chatStreamEvents: ChatStreamEvent[] = [];
 
-    runtime = composeCodingAgentRuntime({
+    runtime = composeCodingAgentHostInterface({
       homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
       runtimeLogger: { warn: () => undefined },
       modelCallProviderService: toolCallingModelStepProvider('NOTES.md'),
@@ -279,7 +280,7 @@ describe('coding-agent product runs without desktop', () => {
     // survives restart: dispose, reopen a fresh runtime on the same SQLite file,
     // history is still readable (no desktop involved at any point)
     runtime.dispose();
-    runtime = composeCodingAgentRuntime({
+    runtime = composeCodingAgentHostInterface({
       homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
       runtimeLogger: { warn: () => undefined },
       modelCallProviderService: toolCallingModelStepProvider('UNUSED.md'),
@@ -302,7 +303,7 @@ describe('coding-agent product runs without desktop', () => {
     workspace = await mkdtemp(path.join(os.tmpdir(), 'megumi-proof-ws-'));
     const projectId = seedProject(home, workspace);
 
-    runtime = composeCodingAgentRuntime({
+    runtime = composeCodingAgentHostInterface({
       homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
       runtimeLogger: { warn: () => undefined },
       modelCallProviderService: singleToolCallingModelStepProvider('write_file', {
@@ -365,7 +366,7 @@ describe('coding-agent product runs without desktop', () => {
     workspace = await mkdtemp(path.join(os.tmpdir(), 'megumi-proof-ws-'));
     const projectId = seedProject(home, workspace);
 
-    runtime = composeCodingAgentRuntime({
+    runtime = composeCodingAgentHostInterface({
       homePaths: { homePath: home, sqlitePath: home, settingsPath: path.join(home, 'settings.json') },
       runtimeLogger: { warn: () => undefined },
       modelCallProviderService: singleToolCallingModelStepProvider('write_file', { path: 'BROKEN.md' }),

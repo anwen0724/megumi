@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { composeCodingAgentRuntime } from '@megumi/coding-agent/composition';
+import { composeCodingAgentHostInterface } from '@megumi/coding-agent/composition';
 import type { RuntimeEvent } from '@megumi/shared/runtime';
 import {
   createSettingsService,
@@ -29,7 +29,7 @@ describe('Coding Agent host interface runtime', () => {
     temporaryHome = await mkdtemp(path.join(os.tmpdir(), 'megumi-host-interface-'));
     let rawSettings: SettingsRaw = {};
 
-    runtime = composeCodingAgentRuntime({
+    runtime = composeCodingAgentHostInterface({
       homePaths: {
         homePath: temporaryHome,
         sqlitePath: temporaryHome,
@@ -82,7 +82,7 @@ describe('Coding Agent host interface runtime', () => {
     let rawSettings = {};
     const writes: unknown[] = [];
 
-    runtime = composeCodingAgentRuntime({
+    runtime = composeCodingAgentHostInterface({
       homePaths: {
         homePath: temporaryHome,
         sqlitePath: temporaryHome,
@@ -131,7 +131,7 @@ describe('Coding Agent host interface runtime', () => {
     temporaryHome = await mkdtemp(path.join(os.tmpdir(), 'megumi-host-settings-file-'));
     const settingsPath = path.join(temporaryHome, 'settings.json');
 
-    runtime = composeCodingAgentRuntime({
+    runtime = composeCodingAgentHostInterface({
       homePaths: {
         homePath: temporaryHome,
         sqlitePath: temporaryHome,
@@ -169,7 +169,7 @@ describe('Coding Agent host interface runtime', () => {
     });
 
     runtime.dispose();
-    runtime = composeCodingAgentRuntime({
+    runtime = composeCodingAgentHostInterface({
       homePaths: {
         homePath: temporaryHome,
         sqlitePath: temporaryHome,
@@ -196,7 +196,7 @@ describe('Coding Agent host interface runtime', () => {
     temporaryHome = await mkdtemp(path.join(os.tmpdir(), 'megumi-host-provider-file-'));
     const settingsPath = path.join(temporaryHome, 'settings.json');
 
-    runtime = composeCodingAgentRuntime({
+    runtime = composeCodingAgentHostInterface({
       homePaths: {
         homePath: temporaryHome,
         sqlitePath: temporaryHome,

@@ -123,7 +123,7 @@ describe('coding agent run mainline guards', () => {
     const planArtifactService = read('packages/coding-agent/artifacts/plan-artifact-service.ts');
 
     expect(hostInterface).toContain('plan: PlanController');
-    expect(runtimeComposition).toContain('plan: createPlanController(sessionRuntime.planArtifactService)');
+    expect(runtimeComposition).toContain('plan: createPlanController(runtime.planArtifactService)');
     expect(planArtifactService).toContain('getPlanByRun(runId: string)');
     expect(planArtifactService).toContain('updatePlanStatus(input: PlanStatusUpdatePayload)');
     expect(AgentRunProcessingServicePort).not.toContain('getPlanByRun(');

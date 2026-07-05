@@ -2,15 +2,16 @@
  * Public Agent Run Service factory.
  * It owns user-input-to-run orchestration and delegates model/tool looping to core.
  */
-import type { CommandExecutionResult } from '../../commands';
+import type { CommandExecutionContext, CommandExecutionResult } from '../../commands';
 import type { InputService, ParsedUserInput } from '../../input';
 import type { PermissionMode, PermissionService } from '../../permissions';
 import type { SessionService } from '../../session';
 import type { SettingsService } from '../../settings';
 import type { ToolExecutionService, ToolRegistryService } from '../../tools';
-import type { WorkspacePathPolicyService } from '../../workspace';
+import type { WorkspacePathPolicyService, WorkspaceService } from '../../workspace';
 import type {
   AgentRun,
+  AgentRunApprovalRequest,
   AgentRunEvent,
   AgentRunFailure,
   AgentRunService,
@@ -33,15 +34,26 @@ export type CreateAgentRunServiceOptions = {
   repository: AgentRunRepository;
   input_service: Pick<InputService, 'processUserInput'>;
   command_service: {
-    handleCommandInput(request: { raw_input: string; execution_context?: { session_id: string; workspace_id?: string } }): Promise<CommandExecutionResult>;
+    handleCommandInput(request: { raw_input: string; execution_context?: CommandExecutionContext }): Promise<CommandExecutionResult>;
   };
+  command_execution_context_provider?: (input: {
+    request: StartRunRequest;
+    session_id: string;
+  }) => CommandExecutionContext | undefined;
   session_service: Pick<SessionService, 'createSession' | 'getSession' | 'saveUserMessage' | 'saveAssistantMessage'>;
   settings_service: Pick<SettingsService, 'resolveProviderRuntimeConfig' | 'resolvePermissionSettings'>;
   context_service: Parameters<typeof runAgentModelToolLoop>[0]['context_service'];
   model_call_service: ModelCallService;
   tool_registry_service: Pick<ToolRegistryService, 'listAvailableTools'>;
-  tool_execution_service: Pick<ToolExecutionService, 'executeTool'>;
+  tool_execution_service?: Pick<ToolExecutionService, 'executeTool'>;
+  tool_execution_service_factory?: (input: {
+    run_id: string;
+    session_id: string;
+    workspace_id: string;
+    workspace_root?: string;
+  }) => Pick<ToolExecutionService, 'executeTool'>;
   permission_service: Pick<PermissionService, 'evaluateToolExecution'>;
+  workspace_service?: Pick<WorkspaceService, 'getWorkspace'>;
   workspace_path_policy_service?: Pick<WorkspacePathPolicyService, 'classifyPath'>;
   memory_service?: Parameters<typeof runAgentModelToolLoop>[0]['memory_service'];
   event_publisher?: {
@@ -124,10 +136,7 @@ class DefaultAgentRunService implements AgentRunService {
     const command = input.parsed_user_input.type === 'command'
       ? await this.options.command_service.handleCommandInput({
           raw_input: input.parsed_user_input.text,
-          execution_context: {
-            session_id: session.session_id,
-            workspace_id: request.workspace_id,
-          },
+          execution_context: this.resolveCommandExecutionContext(request, session.session_id),
         })
       : undefined;
     const commandRoute = this.routeCommandResult(request, session.session_id, command);
@@ -169,6 +178,13 @@ class DefaultAgentRunService implements AgentRunService {
         session_id: session.session_id,
       };
     }
+    const workspaceRoot = this.resolveWorkspaceRoot(request.workspace_id);
+    if (workspaceRoot.status === 'failed') {
+      return {
+        ...failedStart(request, workspaceRoot.failure),
+        session_id: session.session_id,
+      };
+    }
 
     let run = this.options.repository.createRun({
       run_id: runId,
@@ -193,7 +209,12 @@ class DefaultAgentRunService implements AgentRunService {
       context_service: this.options.context_service,
       model_call_service: this.options.model_call_service,
       tool_set_builder: createRunToolSetBuilder({ tool_registry_service: this.options.tool_registry_service }),
-      tool_execution_service: this.options.tool_execution_service,
+      tool_execution_service: this.resolveToolExecutionService({
+        run_id: run.run_id,
+        session_id: run.session_id,
+        workspace_id: request.workspace_id,
+        workspace_root: workspaceRoot.workspace_root,
+      }),
       permission_service: this.options.permission_service,
       ...(this.options.workspace_path_policy_service ? { workspace_path_policy_service: this.options.workspace_path_policy_service } : {}),
       ...(this.options.memory_service ? { memory_service: this.options.memory_service } : {}),
@@ -209,6 +230,7 @@ class DefaultAgentRunService implements AgentRunService {
       user_message_id: userMessageId,
       model_config: modelConfig.config,
       permission_mode: request.permission_mode ?? 'default',
+      ...(workspaceRoot.workspace_root ? { workspace_root: workspaceRoot.workspace_root } : {}),
     });
 
     return {
@@ -247,8 +269,108 @@ class DefaultAgentRunService implements AgentRunService {
     return { status: 'cancelled', run: cancelled, events: [] };
   }
 
-  resumeRunAfterApproval(request: ResumeRunAfterApprovalRequest): ResumeRunAfterApprovalResult {
-    return { status: 'not_found', approval_request_id: request.approval_request_id };
+  async resumeRunAfterApproval(request: ResumeRunAfterApprovalRequest): Promise<ResumeRunAfterApprovalResult> {
+    const approval = this.options.repository.getApprovalRequest(request.approval_request_id);
+    if (!approval) return { status: 'not_found', approval_request_id: request.approval_request_id };
+    const run = this.options.repository.getRun(approval.run_id);
+    if (!run) {
+      return {
+        status: 'failed',
+        failure: {
+          code: 'approval_failed',
+          message: `Run was not found for approval request: ${request.approval_request_id}`,
+        },
+      };
+    }
+    if (run.status !== 'waiting_for_approval') {
+      return { status: 'not_waiting', run };
+    }
+    if (approval.status !== 'pending') {
+      return {
+        status: 'failed',
+        failure: {
+          code: 'approval_failed',
+          message: `Approval request is not pending: ${request.approval_request_id}`,
+        },
+      };
+    }
+
+    const events: AgentRunEvent[] = [];
+    const eventSink = {
+      emit: (type: string, payload?: Record<string, unknown>) => {
+        const event: AgentRunEvent = {
+          event_id: this.ids.event_id(),
+          type,
+          created_at: this.clock.now(),
+          run_id: run.run_id,
+          session_id: run.session_id,
+          ...(payload ? { payload } : {}),
+        };
+        events.push(event);
+        this.options.event_publisher?.publish(event);
+        return event;
+      },
+    };
+
+    const decidedApproval = this.options.repository.saveApprovalRequest({
+      ...approval,
+      status: request.decision.decision,
+      decision: request.decision,
+      decided_at: request.decision.decided_at,
+    });
+    eventSink.emit('approval.resolved', {
+      run_id: run.run_id,
+      workspace_id: run.workspace_id,
+      approval_request_id: decidedApproval.approval_request_id,
+      decision: request.decision.decision,
+    });
+
+    let running = this.options.repository.saveRun(transitionAgentRunStatus({
+      run,
+      to: 'running',
+      changed_at: this.clock.now(),
+    }));
+
+    if (request.decision.decision === 'denied') {
+      running = this.options.repository.saveRun(transitionAgentRunStatus({
+        run: running,
+        to: 'completed',
+        changed_at: this.clock.now(),
+      }));
+      eventSink.emit('tool_call.denied', {
+        run_id: running.run_id,
+        workspace_id: running.workspace_id,
+        tool_call_id: approval.subject.tool_call_id,
+        tool_name: approval.subject.tool_name,
+      });
+      eventSink.emit('run.completed', {
+        run_id: running.run_id,
+        session_id: running.session_id,
+        workspace_id: running.workspace_id,
+      });
+      return { status: 'resumed', run: running, events: asyncEvents(events) };
+    }
+
+    const workspaceRoot = this.resolveWorkspaceRoot(run.workspace_id);
+    if (workspaceRoot.status === 'failed') {
+      return { status: 'failed', failure: workspaceRoot.failure, events };
+    }
+    const toolResult = this.resolveToolExecutionService({
+      run_id: run.run_id,
+      session_id: run.session_id,
+      workspace_id: run.workspace_id,
+      workspace_root: workspaceRoot.workspace_root,
+    }).executeTool({
+      toolName: approval.subject.tool_name,
+      input: approval.subject.input,
+    });
+    return this.completeApprovedToolResume({
+      run: running,
+      approval,
+      toolResult,
+      eventSink,
+      events,
+    });
   }
 
   cleanupInterruptedRuns(_request: CleanupInterruptedRunsRequest): CleanupInterruptedRunsResult {
@@ -284,6 +406,120 @@ class DefaultAgentRunService implements AgentRunService {
       session_id: sessionId,
       failure: { code: 'session_failed', message: created.failure.message },
     };
+  }
+
+  private resolveCommandExecutionContext(
+    request: StartRunRequest,
+    sessionId: string,
+  ): CommandExecutionContext {
+    return this.options.command_execution_context_provider?.({
+      request,
+      session_id: sessionId,
+    }) ?? {
+      session_id: sessionId,
+      workspace_id: request.workspace_id,
+    };
+  }
+
+  private resolveWorkspaceRoot(workspaceId: string):
+    | { status: 'ok'; workspace_root?: string }
+    | { status: 'failed'; failure: AgentRunFailure } {
+    if (!this.options.workspace_service) {
+      return { status: 'ok' };
+    }
+    const workspace = this.options.workspace_service.getWorkspace({ workspace_id: workspaceId });
+    if (workspace.status === 'found') {
+      return { status: 'ok', workspace_root: workspace.workspace.root_path };
+    }
+    return {
+      status: 'failed',
+      failure: {
+        code: 'session_failed',
+        message: `Workspace ${workspaceId} was not found.`,
+      },
+    };
+  }
+
+  private resolveToolExecutionService(input: {
+    run_id: string;
+    session_id: string;
+    workspace_id: string;
+    workspace_root?: string;
+  }): Pick<ToolExecutionService, 'executeTool'> {
+    if (this.options.tool_execution_service_factory) {
+      return this.options.tool_execution_service_factory(input);
+    }
+    if (this.options.tool_execution_service) {
+      return this.options.tool_execution_service;
+    }
+    return {
+      async executeTool(request) {
+        return {
+          type: 'failed',
+          toolName: request.toolName,
+          error: {
+            code: 'tool_execution_failed',
+            message: 'Tool Execution Service is not configured.',
+          },
+          normalizedResult: {
+            kind: 'error',
+            content: 'Tool Execution Service is not configured.',
+            isError: true,
+            truncated: false,
+          },
+        };
+      },
+    };
+  }
+
+  private async completeApprovedToolResume(input: {
+    run: AgentRun;
+    approval: AgentRunApprovalRequest;
+    toolResult: ReturnType<Pick<ToolExecutionService, 'executeTool'>['executeTool']>;
+    eventSink: { emit(type: string, payload?: Record<string, unknown>): AgentRunEvent };
+    events: AgentRunEvent[];
+  }): Promise<ResumeRunAfterApprovalResult> {
+    const result = await input.toolResult;
+    input.eventSink.emit(result.type === 'succeeded' ? 'tool_call.completed' : 'tool_call.failed', {
+      run_id: input.run.run_id,
+      workspace_id: input.run.workspace_id,
+      tool_call_id: input.approval.subject.tool_call_id,
+      tool_name: input.approval.subject.tool_name,
+    });
+    const assistant = this.options.session_service.saveAssistantMessage({
+      message_id: this.ids.assistant_message_id(),
+      session_id: input.run.session_id,
+      run_id: input.run.run_id,
+      content_text: result.normalizedResult.content,
+      completed_at: this.clock.now(),
+    });
+    if (assistant.status === 'failed') {
+      const failed = this.options.repository.saveRun(transitionAgentRunStatus({
+        run: input.run,
+        to: 'failed',
+        changed_at: this.clock.now(),
+        failure: {
+          code: 'session_failed',
+          message: assistant.failure.message,
+        },
+      }));
+      return {
+        status: 'failed',
+        failure: failed.failure ?? { code: 'session_failed', message: assistant.failure.message },
+        events: input.events,
+      };
+    }
+    const completed = this.options.repository.saveRun(transitionAgentRunStatus({
+      run: input.run,
+      to: 'completed',
+      changed_at: this.clock.now(),
+    }));
+    input.eventSink.emit('run.completed', {
+      run_id: completed.run_id,
+      session_id: completed.session_id,
+      workspace_id: completed.workspace_id,
+    });
+    return { status: 'resumed', run: completed, events: asyncEvents(input.events) };
   }
 
   private routeCommandResult(

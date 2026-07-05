@@ -1,7 +1,7 @@
 // Defines the external host-facing interface for UI, CLI, web, and other shells.
-import type { AgentRunService } from '../agent-loop';
 import type { CommandService } from '../commands';
 import type { ArtifactController } from './artifacts/artifact-controller';
+import type { InputController } from './input-controller';
 import type { PlanController } from './artifacts/plan-controller';
 import type { ApprovalController } from './permissions/approval-controller';
 import type { ProviderController } from './settings/provider-controller';
@@ -10,7 +10,6 @@ import type { SessionBranchController } from './session/branch-controller';
 import type { SessionController } from './session/session-controller';
 import type { WorkspaceController } from './workspace/workspace-controller';
 
-export type InputController = AgentRunService;
 export type HostCommandController = Pick<CommandService, 'listCommands' | 'getCommandSuggestions'>;
 export type HostWorkspaceController = WorkspaceController;
 export type HostSessionController = SessionController & SessionBranchController;

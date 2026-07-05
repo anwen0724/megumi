@@ -5,7 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { composeCodingAgentRuntime } from '@megumi/coding-agent/composition';
+import { composeCodingAgentHostInterface } from '@megumi/coding-agent/composition';
 import {
   createSettingsService,
   type SettingsRaw,
@@ -40,7 +40,7 @@ describe('Coding Agent host interface built-in model step provider', () => {
   it('composes a runnable session runtime without a caller-provided model step provider', async () => {
     temporaryHome = await mkdtemp(path.join(os.tmpdir(), 'megumi-default-model-step-'));
 
-    runtime = composeCodingAgentRuntime({
+    runtime = composeCodingAgentHostInterface({
       homePaths: {
         homePath: temporaryHome,
         sqlitePath: temporaryHome,

@@ -1,5 +1,6 @@
 // Public exports for external host integration with the Coding Agent product core.
 export * from './host-interface';
+export * from './input-controller';
 export * from './runtime-logger';
 export * from './artifacts/artifact-controller';
 export * from './artifacts/plan-controller';
