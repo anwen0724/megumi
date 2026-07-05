@@ -7,6 +7,7 @@ import type { SessionService } from '../../session';
 import type { SettingsService } from '../../settings';
 import type { ToolExecutionService } from '../../tools';
 import type { WorkspacePathPolicyService } from '../../workspace';
+import type { CompactContextResult, ContextUsageSignal } from '../../context';
 import type {
   AgentRun,
   AgentRunEvent,
@@ -71,6 +72,26 @@ export type RunOrchestratorResult =
   | { status: 'completed'; run: AgentRun }
   | { status: 'waiting_for_approval'; run: AgentRun }
   | { status: 'failed'; run: AgentRun; failure: AgentRunFailure };
+
+export type ConsumeContextUsageSignalRequest = {
+  signal: ContextUsageSignal;
+  context_compaction_service: {
+    compact(request: {
+      session_id: string;
+      workspace_id?: string;
+      trigger: { kind: 'auto'; reason: 'context_window_threshold'; signal_id: string };
+    }): Promise<CompactContextResult> | CompactContextResult;
+  };
+  event_sink: {
+    emit(type: string, payload?: Record<string, unknown>): AgentRunEvent;
+  };
+};
+
+export type ConsumeContextUsageSignalResult =
+  | { status: 'ignored'; reason: 'not_auto_compaction_signal' }
+  | { status: 'skipped'; reason: string }
+  | { status: 'completed' }
+  | { status: 'failed'; failure: AgentRunFailure };
 
 export async function runAgentModelToolLoop(
   dependencies: RunOrchestratorDependencies,
@@ -229,6 +250,59 @@ export async function runAgentModelToolLoop(
       count: toolGroup.tool_results.length,
     });
   }
+}
+
+export async function consumeContextUsageSignal(
+  request: ConsumeContextUsageSignalRequest,
+): Promise<ConsumeContextUsageSignalResult> {
+  if (request.signal.kind !== 'auto_compaction_needed') {
+    return { status: 'ignored', reason: 'not_auto_compaction_signal' };
+  }
+
+  request.event_sink.emit('context.compaction.requested', {
+    session_id: request.signal.session_id,
+    ...(request.signal.workspace_id ? { workspace_id: request.signal.workspace_id } : {}),
+    signal_id: request.signal.signal_id,
+  });
+
+  const result = await request.context_compaction_service.compact({
+    session_id: request.signal.session_id,
+    ...(request.signal.workspace_id ? { workspace_id: request.signal.workspace_id } : {}),
+    trigger: {
+      kind: 'auto',
+      reason: 'context_window_threshold',
+      signal_id: request.signal.signal_id,
+    },
+  });
+
+  if (result.status === 'completed') {
+    request.event_sink.emit('context.compaction.completed', {
+      session_id: request.signal.session_id,
+      ...(request.signal.workspace_id ? { workspace_id: request.signal.workspace_id } : {}),
+      compaction_id: result.compaction.compaction_id,
+    });
+    return { status: 'completed' };
+  }
+
+  if (result.status === 'skipped') {
+    request.event_sink.emit('context.compaction.skipped', {
+      session_id: request.signal.session_id,
+      reason: result.reason,
+    });
+    return { status: 'skipped', reason: result.reason };
+  }
+
+  request.event_sink.emit('context.compaction.failed', {
+    session_id: request.signal.session_id,
+    failure: result.failure,
+  });
+  return {
+    status: 'failed',
+    failure: {
+      code: 'context_failed',
+      message: result.failure.message,
+    },
+  };
 }
 
 async function collectModelCallEvents(

@@ -1,0 +1,83 @@
+import { describe, expect, it, vi } from 'vitest';
+import { consumeContextUsageSignal } from '@megumi/coding-agent/agent-run/core/run-orchestrator';
+
+describe('Agent Run context compaction control flow', () => {
+  it('consumes auto compaction signals by calling Context Compaction Service', async () => {
+    const compact = vi.fn(async () => ({
+      status: 'completed' as const,
+      compaction: {
+        compaction_id: 'compaction-1',
+        session_id: 'session-1',
+        workspace_id: 'workspace-1',
+        trigger: { kind: 'auto' as const, reason: 'context_window_threshold' as const, signal_id: 'signal-1' },
+        summary: 'summary',
+        compacted_source_refs: [],
+        preserved_source_refs: [],
+        usage_before: usage(),
+        status: 'completed' as const,
+        created_at: '2026-01-01T00:00:00.000Z',
+      },
+      events: [],
+    }));
+    const emit = vi.fn((type, payload) => ({
+      event_id: `event:${type}`,
+      type,
+      created_at: '2026-01-01T00:00:00.000Z',
+      payload,
+    }));
+
+    const result = await consumeContextUsageSignal({
+      signal: {
+        kind: 'auto_compaction_needed',
+        signal_id: 'signal-1',
+        session_id: 'session-1',
+        workspace_id: 'workspace-1',
+        usage: usage(),
+        created_at: '2026-01-01T00:00:00.000Z',
+      },
+      context_compaction_service: { compact },
+      event_sink: { emit },
+    });
+
+    expect(compact).toHaveBeenCalledWith({
+      session_id: 'session-1',
+      workspace_id: 'workspace-1',
+      trigger: { kind: 'auto', reason: 'context_window_threshold', signal_id: 'signal-1' },
+    });
+    expect(result.status).toBe('completed');
+    expect(emit).toHaveBeenCalledWith('context.compaction.completed', expect.objectContaining({
+      session_id: 'session-1',
+      compaction_id: 'compaction-1',
+    }));
+  });
+
+  it('ignores non-auto-compaction context usage signals', async () => {
+    const compact = vi.fn();
+
+    const result = await consumeContextUsageSignal({
+      signal: {
+        kind: 'usage_changed',
+        signal_id: 'signal-1',
+        session_id: 'session-1',
+        usage: usage(),
+        created_at: '2026-01-01T00:00:00.000Z',
+      },
+      context_compaction_service: { compact },
+      event_sink: { emit: vi.fn() },
+    });
+
+    expect(result).toEqual({ status: 'ignored', reason: 'not_auto_compaction_signal' });
+    expect(compact).not.toHaveBeenCalled();
+  });
+});
+
+function usage() {
+  return {
+    used_tokens: 90,
+    context_window_tokens: 100,
+    remaining_tokens: 10,
+    used_ratio: 0.9,
+    auto_compaction_threshold_ratio: 0.8,
+    should_auto_compact: true,
+  };
+}

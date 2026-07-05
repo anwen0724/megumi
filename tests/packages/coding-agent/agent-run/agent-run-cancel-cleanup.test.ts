@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentRun, AgentRunApprovalRequest } from '@megumi/coding-agent/agent-run';
+import {
+  createAgentRunService,
+  type AgentRun,
+  type AgentRunApprovalRequest,
+  type CreateAgentRunServiceOptions,
+} from '@megumi/coding-agent/agent-run';
 import {
   cleanupInterruptedRuns,
   type InterruptedRunCleanupRepository,
 } from '@megumi/coding-agent/agent-run/core/run-recovery';
+import { createInMemoryAgentRunRepository, createMessageFlowDependencies } from './agent-run-test-helpers';
 
 describe('agent-run interrupted cleanup', () => {
   it('cleans interrupted runs without calling model, tools, or assistant persistence', () => {
@@ -25,6 +31,19 @@ describe('agent-run interrupted cleanup', () => {
     expect(repository.getRun('run-running')?.failure?.code).toBe('runtime_interrupted');
     expect(repository.getRun('run-waiting')?.status).toBe('cancelled');
     expect(repository.getRun('run-cancelling')?.status).toBe('cancelled');
+    expect(repository.getApprovalRequest('approval-1')?.status).toBe('cancelled');
+  });
+
+  it('cancelRun cancels pending approval requests for the run', async () => {
+    const repository = createInMemoryAgentRunRepository();
+    repository.createRun(sampleRun({ status: 'waiting_for_approval' }));
+    repository.createApprovalRequest(sampleApprovalRequest());
+    const service = createAgentRunService(createMessageFlowDependencies({ repository }) as unknown as CreateAgentRunServiceOptions);
+
+    const result = await service.cancelRun({ run_id: 'run-1' });
+
+    expect(result.status).toBe('cancelled');
+    expect(repository.getRun('run-1')?.status).toBe('cancelled');
     expect(repository.getApprovalRequest('approval-1')?.status).toBe('cancelled');
   });
 });

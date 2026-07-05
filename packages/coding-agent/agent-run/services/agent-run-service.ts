@@ -232,6 +232,13 @@ class DefaultAgentRunService implements AgentRunService {
       to: 'cancelling',
       changed_at: this.clock.now(),
     }));
+    for (const approval of this.options.repository.listPendingApprovalRequestsByRun(run.run_id)) {
+      this.options.repository.saveApprovalRequest({
+        ...approval,
+        status: 'cancelled',
+        decided_at: this.clock.now(),
+      });
+    }
     const cancelled = this.options.repository.saveRun(transitionAgentRunStatus({
       run: cancelling,
       to: 'cancelled',
