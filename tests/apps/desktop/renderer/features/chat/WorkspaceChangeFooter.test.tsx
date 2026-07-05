@@ -3,24 +3,21 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkspaceChangeFooter } from '@megumi/desktop/renderer/features/chat/components/WorkspaceChangeFooter';
-import type { WorkspaceChangeFooterFact } from '@megumi/shared/workspace';
+import type { WorkspaceChangeFooterFact } from '@megumi/coding-agent/projections/workspace/workspace-change-footer-projector';
 
 describe('WorkspaceChangeFooter', () => {
   it('renders renderer-owned Chinese copy from structured workspace change facts', async () => {
     const onOpenFile = vi.fn();
-    const onRestoreChangeSet = vi.fn();
 
     render(
       <WorkspaceChangeFooter
         footer={workspaceChangeFooter()}
-        pendingChangeSetIds={new Set()}
         onOpenFile={onOpenFile}
-        onRestoreChangeSet={onRestoreChangeSet}
       />,
     );
 
     expect(screen.getByRole('region', { name: '本轮工作区变更' })).toBeInTheDocument();
-    expect(screen.getByText('src/app.ts')).toBeInTheDocument();
+    expect(screen.getByText('app.ts')).toBeInTheDocument();
     expect(screen.getAllByText('README.md').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('contentText')).not.toBeInTheDocument();
     expect(screen.queryByText('beforeHash')).not.toBeInTheDocument();
@@ -28,9 +25,8 @@ describe('WorkspaceChangeFooter', () => {
     const fileList = screen.getByRole('list', { name: 'Changed files' });
     expect(fileList).toHaveClass('divide-y');
     expect(fileList).toHaveClass('rounded-md');
-    expect(screen.getByTestId('workspace-change-summary-row')).toHaveTextContent('已编辑 2 个文件');
-    expect(screen.getByTestId('workspace-change-summary-row')).toHaveTextContent('Megumi 修改了 2 个文件');
-    expect(screen.getByTestId('workspace-change-summary-row')).toHaveTextContent('可撤销 1 个，冲突 1 个');
+    expect(screen.getByText('Megumi 修改了 2 个文件')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '撤销' })).not.toBeInTheDocument();
 
     const appRow = screen.getByText('app.ts').closest('li');
     expect(appRow).not.toBeNull();
@@ -40,31 +36,8 @@ describe('WorkspaceChangeFooter', () => {
     expect(appRow).toHaveAttribute('data-workspace-change-file-row', 'true');
 
     await userEvent.click(within(appRow).getByRole('button', { name: '打开' }));
-    await userEvent.click(within(screen.getByTestId('workspace-change-summary-row')).getByRole('button', { name: '撤销' }));
 
     expect(onOpenFile).toHaveBeenCalledWith('src/app.ts');
-    expect(onRestoreChangeSet).toHaveBeenCalledWith('workspace-change-set-1');
-  });
-
-  it('disables restore when the change set has no restorable changes', () => {
-    render(
-      <WorkspaceChangeFooter
-        footer={{
-          ...workspaceChangeFooter(),
-          changeSets: [{
-            ...workspaceChangeFooter().changeSets[0],
-            restorableCount: 0,
-            conflictCount: 2,
-            hasRestorableChanges: false,
-          }],
-        }}
-        pendingChangeSetIds={new Set()}
-        onOpenFile={vi.fn()}
-        onRestoreChangeSet={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByRole('button', { name: '撤销' })).toBeDisabled();
   });
 });
 
@@ -76,23 +49,16 @@ function workspaceChangeFooter(): WorkspaceChangeFooterFact {
     changeSets: [{
       changeSetId: 'workspace-change-set-1',
       changedFileCount: 2,
-      restorableCount: 1,
-      restoredCount: 0,
-      conflictCount: 1,
-      failedCount: 0,
-      hasRestorableChanges: true,
       files: [
         {
           changedFileId: 'workspace-changed-file-1',
-          projectPath: 'src/app.ts',
+          workspacePath: 'src/app.ts',
           changeKind: 'modified',
-          restoreState: 'restorable',
         },
         {
           changedFileId: 'workspace-changed-file-2',
-          projectPath: 'README.md',
+          workspacePath: 'README.md',
           changeKind: 'modified',
-          restoreState: 'conflict',
         },
       ],
     }],

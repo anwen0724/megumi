@@ -1,10 +1,8 @@
 ﻿import { z } from 'zod';
 
-import { RunStatusSchema } from '../session/run-contracts';
 import { JsonObjectSchema } from '../primitives/json';
 import { RuntimeErrorSchema } from '../runtime/errors';
 import { IsoDateTimeSchema } from '../runtime/validation';
-import { WorkspaceChangeSummarySchema } from '../workspace/change-contracts';
 
 export const CHECKPOINT_REASONS = [
   'run_started',
@@ -84,15 +82,6 @@ export const RETRY_REASONS = [
 ] as const;
 
 export const CHECKPOINT_RESTORE_STATUSES = ['restored', 'failed'] as const;
-export const RECOVERABLE_RUN_REASONS = [
-  'waiting_for_approval',
-  'paused',
-  'failed',
-  'cancelled',
-  'interrupted',
-  'cancelling',
-] as const;
-
 export const CheckpointReasonSchema = z.enum(CHECKPOINT_REASONS);
 export const CheckpointStatusSchema = z.enum(CHECKPOINT_STATUSES);
 export const CheckpointBoundarySchema = z.enum(CHECKPOINT_BOUNDARIES);
@@ -107,7 +96,6 @@ export const RetryRequestedBySchema = z.enum(RETRY_REQUESTED_BY);
 export const RetryKindSchema = z.enum(RETRY_KINDS);
 export const RetryReasonSchema = z.enum(RETRY_REASONS);
 export const CheckpointRestoreStatusSchema = z.enum(CHECKPOINT_RESTORE_STATUSES);
-export const RecoverableRunReasonSchema = z.enum(RECOVERABLE_RUN_REASONS);
 
 export const SideEffectRefSchema = z.object({
   refId: z.string().min(1),
@@ -202,21 +190,6 @@ export const CheckpointRestoreRecordSchema = z.object({
 
 export type CheckpointRestoreRecord = z.infer<typeof CheckpointRestoreRecordSchema>;
 
-export const RecoverableRunSummarySchema = z.object({
-  runId: z.string().min(1),
-  sessionId: z.string().min(1),
-  status: RunStatusSchema,
-  reason: RecoverableRunReasonSchema,
-  latestCheckpointId: z.string().min(1).optional(),
-  latestCheckpointAt: IsoDateTimeSchema.optional(),
-  title: z.string().min(1).optional(),
-  preview: z.string().min(1).optional(),
-  workspaceChangeSummaries: z.array(WorkspaceChangeSummarySchema).optional(),
-  metadata: JsonObjectSchema.optional(),
-}).strict();
-
-export type RecoverableRunSummary = z.infer<typeof RecoverableRunSummarySchema>;
-
 export type CheckpointReason = z.infer<typeof CheckpointReasonSchema>;
 export type CheckpointStatus = z.infer<typeof CheckpointStatusSchema>;
 export type CheckpointBoundary = z.infer<typeof CheckpointBoundarySchema>;
@@ -229,5 +202,4 @@ export type CancelScope = z.infer<typeof CancelScopeSchema>;
 export type RetryRequestedBy = z.infer<typeof RetryRequestedBySchema>;
 export type RetryKind = z.infer<typeof RetryKindSchema>;
 export type RetryReason = z.infer<typeof RetryReasonSchema>;
-export type RecoverableRunReason = z.infer<typeof RecoverableRunReasonSchema>;
 

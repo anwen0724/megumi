@@ -6,11 +6,21 @@ import { ApprovalCard } from '@megumi/desktop/renderer/entities/approval';
 import { ToolCallStatusCard } from '@megumi/desktop/renderer/entities/tool-call';
 import { Composer } from '@megumi/desktop/renderer/features/chat/components/Composer';
 
+const providers = [{
+  providerId: 'deepseek' as const,
+  displayName: 'DeepSeek',
+  enabled: true,
+  modelIds: ['deepseek-v4-flash'],
+  hasApiKey: true,
+  credentialSource: 'settings' as const,
+  envOverrideActive: false,
+}];
+
 describe('agent action permission tools v1 renderer acceptance', () => {
   it('offers one permission selector with the v1 posture set', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
-    render(<Composer onSubmit={onSubmit} />);
+    render(<Composer providers={providers} onSubmit={onSubmit} />);
     const permissionModeSelect = screen.getByLabelText('Permission mode') as HTMLSelectElement;
 
     expect(permissionModeSelect).toHaveValue('default');

@@ -124,7 +124,6 @@ describe('setup wizard store', () => {
     await useSetupWizardStore.getState().completeSetup({
       language: 'zh-CN',
       theme: 'sage-mist',
-      providerId: 'deepseek',
       modelIds: [],
       skipProvider: true,
       completedAt: '2026-06-29T12:00:00.000Z',
@@ -165,7 +164,6 @@ describe('setup wizard store', () => {
     await useSetupWizardStore.getState().completeSetup({
       language: 'zh-CN',
       theme: 'midnight-blue',
-      providerId: 'deepseek',
       modelIds: ['deepseek-v4-flash'],
       skipProvider: true,
       completedAt: '2026-06-29T12:00:00.000Z',

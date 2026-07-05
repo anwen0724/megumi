@@ -54,13 +54,6 @@ export const IPC_CHANNELS = {
   approval: {
     resolve: 'approval:resolve',
   },
-  recovery: {
-    recoverableRunsList: 'recovery:recoverable-runs:list',
-    resume: 'recovery:resume',
-    cancel: 'recovery:cancel',
-    retry: 'recovery:retry',
-    workspaceRestore: 'recovery:workspace-restore',
-  },
   project: {
     list: 'project:list',
     useExisting: 'project:use-existing',
@@ -142,11 +135,6 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.tool.definitionsList,
   IPC_CHANNELS.tool.executionGet,
   IPC_CHANNELS.approval.resolve,
-  IPC_CHANNELS.recovery.recoverableRunsList,
-  IPC_CHANNELS.recovery.resume,
-  IPC_CHANNELS.recovery.cancel,
-  IPC_CHANNELS.recovery.retry,
-  IPC_CHANNELS.recovery.workspaceRestore,
   IPC_CHANNELS.project.list,
   IPC_CHANNELS.project.useExisting,
   IPC_CHANNELS.project.open,

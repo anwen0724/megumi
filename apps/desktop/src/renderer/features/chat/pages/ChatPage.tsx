@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import type { CommandSuggestionResult } from '@megumi/coding-agent/commands';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import { useProviderStore } from '../../../entities/provider/store';
@@ -8,7 +8,6 @@ import { useTimelineAutoScroll } from '../hooks/use-timeline-auto-scroll';
 import { useChatPageController } from '../hooks/use-chat-page-controller';
 import { ChatViewport } from '../layout/ChatViewport';
 import { ComposerDock } from '../layout/ComposerDock';
-import { RestoreFeedbackDialog } from '../components/RestoreFeedbackDialog';
 import { Composer } from '../components/Composer';
 
 const FALLBACK_COMPOSER_SPACER_HEIGHT = 188;
@@ -21,12 +20,6 @@ export function ChatPage() {
   const [composerHeight, setComposerHeight] = useState(FALLBACK_COMPOSER_SPACER_HEIGHT);
   const effectiveComposerDockHeight = composerHeight > 0 ? composerHeight : FALLBACK_COMPOSER_SPACER_HEIGHT;
   const bottomSpacerHeight = Math.max(effectiveComposerDockHeight + 24, FALLBACK_COMPOSER_SPACER_HEIGHT);
-  const enabledProviderIds = useMemo(
-    () => providers.length > 0
-      ? providers.filter((provider) => provider.enabled).map((provider) => provider.providerId)
-      : undefined,
-    [providers],
-  );
   const getCommandSuggestions = useCallback(async (
     request: { draft_input: string },
   ): Promise<CommandSuggestionResult> => {
@@ -102,20 +95,8 @@ export function ChatPage() {
               scrollPanel={scrollPanel}
               messageColumn={{
                 timelineMessages: controller.timelineMessages,
-                recoverableRunsByRunId: controller.recoverableRunsByRunId,
-                pendingWorkspaceChangeSetIds: controller.pendingWorkspaceChangeSetIds,
-                pendingRecoverableRunIds: controller.pendingRecoverableRunIds,
                 bottomSpacerHeight,
                 canShowUserMessageActions: controller.canShowUserMessageActions,
-                onRetryRecoverableRun: (run) => {
-                  void controller.retryRecoverableRun(run);
-                },
-                onRerunRecoverableRun: (run) => {
-                  void controller.rerunRecoverableRun(run);
-                },
-                onMarkRecoverableRunCancelled: (run) => {
-                  void controller.markRecoverableRunCancelled(run);
-                },
                 onBranchFromMessage: (message) => {
                   void controller.createBranchDraft({ messageId: message.messageId, intent: 'branch' });
                 },
@@ -125,9 +106,6 @@ export function ChatPage() {
                 onOpenWorkspaceChangedFile: (projectPath) => {
                   void controller.openWorkspaceChangedFile(projectPath);
                 },
-                onRestoreWorkspaceChangeSet: (changeSetId) => {
-                  void controller.restoreWorkspaceChangeSet(changeSetId);
-                },
               }}
             />
           </div>
@@ -135,20 +113,9 @@ export function ChatPage() {
             status={controller.composerStatus}
             branchDraft={branchDraft}
             pendingApprovals={controller.pendingApprovals}
-            recoverableRuns={controller.unmatchedRecoverableRuns}
-            pendingRecoverableRunIds={controller.pendingRecoverableRunIds}
-            enabledProviderIds={enabledProviderIds}
+            providers={providers}
             onApprovalResolve={(payload) => {
               void controller.resolveApproval(payload);
-            }}
-            onRetry={(run) => {
-              void controller.retryRecoverableRun(run);
-            }}
-            onRerun={(run) => {
-              void controller.rerunRecoverableRun(run);
-            }}
-            onMarkCancelled={(run) => {
-              void controller.markRecoverableRunCancelled(run);
             }}
             onSubmit={controller.handleSubmit}
             onStop={controller.handleStop}
@@ -179,24 +146,17 @@ export function ChatPage() {
               scrollPanel={scrollPanel}
               messageColumn={{
                 timelineMessages: [],
-                recoverableRunsByRunId: controller.recoverableRunsByRunId,
-                pendingWorkspaceChangeSetIds: controller.pendingWorkspaceChangeSetIds,
-                pendingRecoverableRunIds: controller.pendingRecoverableRunIds,
                 bottomSpacerHeight: 0,
                 canShowUserMessageActions: controller.canShowUserMessageActions,
-                onRetryRecoverableRun: () => undefined,
-                onRerunRecoverableRun: () => undefined,
-                onMarkRecoverableRunCancelled: () => undefined,
                 onBranchFromMessage: () => undefined,
                 onRerunMessage: () => undefined,
                 onOpenWorkspaceChangedFile: () => undefined,
-                onRestoreWorkspaceChangeSet: () => undefined,
               }}
             />
             <div data-testid="welcome-composer-layout" className="mt-10 w-full">
               <Composer
                 status={controller.composerStatus}
-                enabledProviderIds={enabledProviderIds}
+                providers={providers}
                 seedTextKey={branchDraft?.key ?? null}
                 seedText={branchDraft?.seedText ?? null}
                 onSubmit={controller.handleSubmit}
@@ -209,13 +169,6 @@ export function ChatPage() {
           </div>
         </div>
       )}
-
-      {controller.restoreFeedback ? (
-        <RestoreFeedbackDialog
-          feedback={controller.restoreFeedback}
-          onClose={() => controller.setRestoreFeedback(null)}
-        />
-      ) : null}
     </div>
   );
 }

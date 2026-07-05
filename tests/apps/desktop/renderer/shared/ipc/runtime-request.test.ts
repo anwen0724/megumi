@@ -114,7 +114,6 @@ describe('createRendererRuntimeIpcRequest', () => {
     expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.plan.byRunGet)).toBe('plan.by-run.get');
     expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.tool.definitionsList)).toBe('tool.definitions.list');
     expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.approval.resolve)).toBe('approval.resolve');
-    expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.recovery.resume)).toBe('recovery.resume');
     expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.artifacts.get)).toBe('artifacts.get');
     expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.artifacts.listByRun)).toBe('artifacts.list-by-run');
     expect(rendererRuntimeOperationNameFromChannel(IPC_CHANNELS.artifacts.listBySession)).toBe('artifacts.list-by-session');

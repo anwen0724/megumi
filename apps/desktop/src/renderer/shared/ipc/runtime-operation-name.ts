@@ -41,14 +41,6 @@ export function rendererRuntimeOperationNameFromChannel(channel: BusinessIpcChan
       return 'tool.execution.get';
     case IPC_CHANNELS.approval.resolve:
       return 'approval.resolve';
-    case IPC_CHANNELS.recovery.recoverableRunsList:
-      return 'recovery.recoverable-runs.list';
-    case IPC_CHANNELS.recovery.resume:
-      return 'recovery.resume';
-    case IPC_CHANNELS.recovery.cancel:
-      return 'recovery.cancel';
-    case IPC_CHANNELS.recovery.retry:
-      return 'recovery.retry';
     case IPC_CHANNELS.artifacts.listByRun:
       return 'artifacts.list-by-run';
     case IPC_CHANNELS.artifacts.listBySession:

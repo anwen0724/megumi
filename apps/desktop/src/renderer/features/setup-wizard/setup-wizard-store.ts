@@ -10,7 +10,7 @@ export type SetupWizardStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error
 export interface CompleteSetupInput {
   language: AppLanguage;
   theme: AppThemeName;
-  providerId: ProviderId;
+  providerId?: ProviderId;
   baseUrl?: string;
   modelIds: string[];
   apiKey?: string;
@@ -54,7 +54,7 @@ export const useSetupWizardStore = create<SetupWizardState>((set) => ({
     const apiKey = input.apiKey?.trim();
     const providerSettings = input.skipProvider
       ? {}
-      : {
+      : input.providerId ? {
           providers: {
             [input.providerId]: {
               enabled: true,
@@ -63,7 +63,7 @@ export const useSetupWizardStore = create<SetupWizardState>((set) => ({
               ...(apiKey ? { apiKey } : {}),
             },
           },
-        };
+        } : {};
 
     const settingsResult = await window.megumi.settings.update(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.update, {

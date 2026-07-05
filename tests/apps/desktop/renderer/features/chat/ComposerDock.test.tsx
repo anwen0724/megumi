@@ -4,10 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { ComposerDock } from '@megumi/desktop/renderer/features/chat/layout/ComposerDock';
 
-const emptySet = new Set<string>();
-
 describe('ComposerDock', () => {
-  it('owns approval, recoverable, branch draft, and composer surfaces outside the timeline log', () => {
+  it('owns approval, branch draft, and composer surfaces outside the timeline log', () => {
     render(
       <ComposerDock
         status="idle"
@@ -18,12 +16,7 @@ describe('ComposerDock', () => {
           onCancel: vi.fn(),
         }}
         pendingApprovals={[]}
-        recoverableRuns={[]}
-        pendingRecoverableRunIds={emptySet}
         onApprovalResolve={vi.fn()}
-        onRetry={vi.fn()}
-        onRerun={vi.fn()}
-        onMarkCancelled={vi.fn()}
         onSubmit={vi.fn()}
         onStop={vi.fn()}
       />,
@@ -42,12 +35,7 @@ describe('ComposerDock', () => {
         status="idle"
         branchDraft={null}
         pendingApprovals={[]}
-        recoverableRuns={[]}
-        pendingRecoverableRunIds={emptySet}
         onApprovalResolve={vi.fn()}
-        onRetry={vi.fn()}
-        onRerun={vi.fn()}
-        onMarkCancelled={vi.fn()}
         onSubmit={vi.fn()}
         onStop={vi.fn()}
       />,
@@ -103,12 +91,7 @@ describe('ComposerDock', () => {
           status="idle"
           branchDraft={null}
           pendingApprovals={[]}
-          recoverableRuns={[]}
-          pendingRecoverableRunIds={emptySet}
           onApprovalResolve={vi.fn()}
-          onRetry={vi.fn()}
-          onRerun={vi.fn()}
-          onMarkCancelled={vi.fn()}
           onSubmit={vi.fn()}
           onStop={vi.fn()}
           onHeightChange={onHeightChange}
@@ -129,12 +112,7 @@ describe('ComposerDock', () => {
         status="idle"
         branchDraft={null}
         pendingApprovals={[]}
-        recoverableRuns={[]}
-        pendingRecoverableRunIds={emptySet}
         onApprovalResolve={vi.fn()}
-        onRetry={vi.fn()}
-        onRerun={vi.fn()}
-        onMarkCancelled={vi.fn()}
         onSubmit={vi.fn()}
         onStop={vi.fn()}
       />,
@@ -158,12 +136,7 @@ describe('ComposerDock', () => {
         status="idle"
         branchDraft={null}
         pendingApprovals={[]}
-        recoverableRuns={[]}
-        pendingRecoverableRunIds={emptySet}
         onApprovalResolve={vi.fn()}
-        onRetry={vi.fn()}
-        onRerun={vi.fn()}
-        onMarkCancelled={vi.fn()}
         onSubmit={vi.fn()}
         onStop={vi.fn()}
         getCommandSuggestions={() => ({

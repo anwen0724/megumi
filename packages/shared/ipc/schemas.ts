@@ -31,12 +31,6 @@ import {
   PermissionModeSelectionSourceSchema,
 } from '../permission/mode-contracts';
 import {
-  CancelRequestSchema,
-  RecoverableRunSummarySchema,
-  ResumeRequestSchema,
-  RetryRequestSchema,
-} from '../recovery/contracts';
-import {
   ArtifactContentTypeSchema,
   ArtifactRelationSchema,
   ArtifactSchema,
@@ -75,10 +69,6 @@ import {
 } from '../workspace/file-contracts';
 import {
   WorkspaceChangeSummarySchema,
-  WorkspaceRestoreFileResultSchema,
-  WorkspaceRestoreRequestedBySchema,
-  WorkspaceRestoreRequestSchema as WorkspaceRestoreRecordSchema,
-  WorkspaceRestoreResultSchema as WorkspaceRestoreRecordResultSchema,
 } from '../workspace/change-contracts';
 import { TimelineMessageSchema } from '../timeline/message-block-schemas';
 import { RuntimeEventSchema } from '../runtime/event-schemas';
@@ -529,64 +519,6 @@ export const ApprovalResolveDataSchema = z
   })
   .strict();
 
-export const RecoverableRunListPayloadSchema = z.object({}).strict();
-
-export const RecoverableRunListDataSchema = z
-  .object({
-    runs: z.array(RecoverableRunSummarySchema),
-  })
-  .strict();
-
-export const RunResumePayloadSchema = ResumeRequestSchema.omit({
-  resumeRequestId: true,
-  createdAt: true,
-}).strict();
-
-export const RunResumeDataSchema = z
-  .object({
-    request: ResumeRequestSchema,
-  })
-  .strict();
-
-export const RunCancelPayloadSchema = CancelRequestSchema.omit({
-  cancelRequestId: true,
-  createdAt: true,
-}).strict();
-
-export const RunCancelDataSchema = z
-  .object({
-    request: CancelRequestSchema,
-  })
-  .strict();
-
-export const RunRetryPayloadSchema = RetryRequestSchema.omit({
-  retryRequestId: true,
-  createdAt: true,
-}).strict();
-
-export const RunRetryDataSchema = z
-  .object({
-    request: RetryRequestSchema,
-  })
-  .strict();
-
-export const WorkspaceRestorePayloadSchema = z
-  .object({
-    changeSetId: z.string().min(1),
-    requestedBy: WorkspaceRestoreRequestedBySchema.default('user'),
-    metadata: JsonObjectSchema.optional(),
-  })
-  .strict();
-
-export const WorkspaceRestoreDataSchema = z
-  .object({
-    request: WorkspaceRestoreRecordSchema,
-    result: WorkspaceRestoreRecordResultSchema,
-    fileResults: z.array(WorkspaceRestoreFileResultSchema),
-    summary: WorkspaceChangeSummarySchema.optional(),
-  })
-  .strict();
-
 export const ArtifactListByRunPayloadSchema = z
   .object({
     runId: z.string().min(1),
@@ -942,31 +874,6 @@ export const ApprovalResolveRequestSchema = createRuntimeIpcRequestSchema(
   ApprovalResolvePayloadSchema,
 );
 
-export const RecoverableRunListRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.recovery.recoverableRunsList,
-  RecoverableRunListPayloadSchema,
-);
-
-export const RunResumeRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.recovery.resume,
-  RunResumePayloadSchema,
-);
-
-export const RunCancelRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.recovery.cancel,
-  RunCancelPayloadSchema,
-);
-
-export const RunRetryRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.recovery.retry,
-  RunRetryPayloadSchema,
-);
-
-export const WorkspaceRestoreRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.recovery.workspaceRestore,
-  WorkspaceRestorePayloadSchema,
-);
-
 export const ArtifactListByRunRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.artifacts.listByRun,
   ArtifactListByRunPayloadSchema,
@@ -1180,31 +1087,6 @@ export const ToolExecutionGetResultSchema = createRuntimeIpcResultSchema(
 export const ApprovalResolveResultSchema = createRuntimeIpcResultSchema(
   ApprovalResolveDataSchema,
   IPC_CHANNELS.approval.resolve,
-);
-
-export const RecoverableRunListResultSchema = createRuntimeIpcResultSchema(
-  RecoverableRunListDataSchema,
-  IPC_CHANNELS.recovery.recoverableRunsList,
-);
-
-export const RunResumeResultSchema = createRuntimeIpcResultSchema(
-  RunResumeDataSchema,
-  IPC_CHANNELS.recovery.resume,
-);
-
-export const RunCancelResultSchema = createRuntimeIpcResultSchema(
-  RunCancelDataSchema,
-  IPC_CHANNELS.recovery.cancel,
-);
-
-export const RunRetryResultSchema = createRuntimeIpcResultSchema(
-  RunRetryDataSchema,
-  IPC_CHANNELS.recovery.retry,
-);
-
-export const WorkspaceRestoreResultSchema = createRuntimeIpcResultSchema(
-  WorkspaceRestoreDataSchema,
-  IPC_CHANNELS.recovery.workspaceRestore,
 );
 
 export const ArtifactListByRunResultSchema = createRuntimeIpcResultSchema(
@@ -1428,16 +1310,6 @@ export type ToolExecutionGetPayload = z.infer<typeof ToolExecutionGetPayloadSche
 export type ToolExecutionGetData = z.infer<typeof ToolExecutionGetDataSchema>;
 export type ApprovalResolvePayload = z.infer<typeof ApprovalResolvePayloadSchema>;
 export type ApprovalResolveData = z.infer<typeof ApprovalResolveDataSchema>;
-export type RecoverableRunListPayload = z.infer<typeof RecoverableRunListPayloadSchema>;
-export type RecoverableRunListData = z.infer<typeof RecoverableRunListDataSchema>;
-export type RunResumePayload = z.infer<typeof RunResumePayloadSchema>;
-export type RunResumeData = z.infer<typeof RunResumeDataSchema>;
-export type RunCancelPayload = z.infer<typeof RunCancelPayloadSchema>;
-export type RunCancelData = z.infer<typeof RunCancelDataSchema>;
-export type RunRetryPayload = z.infer<typeof RunRetryPayloadSchema>;
-export type RunRetryData = z.infer<typeof RunRetryDataSchema>;
-export type WorkspaceRestorePayload = z.infer<typeof WorkspaceRestorePayloadSchema>;
-export type WorkspaceRestoreData = z.infer<typeof WorkspaceRestoreDataSchema>;
 export type ArtifactListByRunPayload = z.infer<typeof ArtifactListByRunPayloadSchema>;
 export type ArtifactListBySessionPayload = z.infer<typeof ArtifactListBySessionPayloadSchema>;
 export type ArtifactGetPayload = z.infer<typeof ArtifactGetPayloadSchema>;

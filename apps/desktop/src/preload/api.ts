@@ -72,10 +72,6 @@ import type {
   ProviderListData,
   ProviderListPayload,
   ProviderUpdatePayload,
-  RecoverableRunListData,
-  RecoverableRunListPayload,
-  RunCancelData,
-  RunCancelPayload,
   RunContextBaselineGetData,
   RunContextBaselineGetPayload,
   RunContextSourcesListData,
@@ -84,12 +80,6 @@ import type {
   RunEventsListPayload,
   RunListBySessionData,
   RunListBySessionPayload,
-  RunResumeData,
-  RunResumePayload,
-  RunRetryData,
-  RunRetryPayload,
-  WorkspaceRestoreData,
-  WorkspaceRestorePayload,
   SessionCreateData,
   SessionCreatePayload,
   SessionBranchDraftCancelData,
@@ -289,28 +279,6 @@ export const api = {
       request: BusinessRequest<ApprovalResolvePayload, typeof IPC_CHANNELS.approval.resolve>,
     ): Promise<RuntimeIpcResult<ApprovalResolveData, typeof IPC_CHANNELS.approval.resolve>> =>
       invokeRuntimeIpc(IPC_CHANNELS.approval.resolve, request),
-  },
-  recovery: {
-    listRecoverableRuns: (
-      request: BusinessRequest<RecoverableRunListPayload, typeof IPC_CHANNELS.recovery.recoverableRunsList>,
-    ): Promise<RuntimeIpcResult<RecoverableRunListData, typeof IPC_CHANNELS.recovery.recoverableRunsList>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.recovery.recoverableRunsList, request),
-    resume: (
-      request: BusinessRequest<RunResumePayload, typeof IPC_CHANNELS.recovery.resume>,
-    ): Promise<RuntimeIpcResult<RunResumeData, typeof IPC_CHANNELS.recovery.resume>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.recovery.resume, request),
-    cancel: (
-      request: BusinessRequest<RunCancelPayload, typeof IPC_CHANNELS.recovery.cancel>,
-    ): Promise<RuntimeIpcResult<RunCancelData, typeof IPC_CHANNELS.recovery.cancel>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.recovery.cancel, request),
-    retry: (
-      request: BusinessRequest<RunRetryPayload, typeof IPC_CHANNELS.recovery.retry>,
-    ): Promise<RuntimeIpcResult<RunRetryData, typeof IPC_CHANNELS.recovery.retry>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.recovery.retry, request),
-    restoreWorkspaceChangeSet: (
-      request: BusinessRequest<WorkspaceRestorePayload, typeof IPC_CHANNELS.recovery.workspaceRestore>,
-    ): Promise<RuntimeIpcResult<WorkspaceRestoreData, typeof IPC_CHANNELS.recovery.workspaceRestore>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.recovery.workspaceRestore, request),
   },
   project: {
     list: (

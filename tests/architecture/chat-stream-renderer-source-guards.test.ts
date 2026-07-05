@@ -104,6 +104,7 @@ describe('renderer chat stream source guards', () => {
       'Dismiss',
       'Review',
       '审查',
+      '撤销',
       'Keep',
       'Accept',
     ];
@@ -115,7 +116,6 @@ describe('renderer chat stream source guards', () => {
       expect(source).not.toContain('`' + label + '`');
     }
     expect(source).toContain('打开');
-    expect(source).toContain('撤销');
   });
 
   it('does not add a right workspace sidebar Changes view for workspace change footer V1', () => {

@@ -10,7 +10,6 @@ import { dispatchChatStreamEvent, useChatStreamStore } from '../../chat-stream';
 import { dispatchRuntimeEvent } from '../.././runtime-events/runtime-event-dispatcher';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
 import type { ComposerSubmitPayload } from '../components/Composer';
-import { getProviderIdForModel } from '../components/composer-options';
 import { localSessionFromPersistedSession } from '../../session-history/session-history-mappers';
 
 // Coordinates chat timeline submission, optimistic user messages, and runtime
@@ -115,11 +114,9 @@ function createSessionMessageSendPayload(
   branchDraft: BranchDraftState | null,
   target: SessionMessageTarget,
 ): SessionMessageSendPayload {
-  const providerId = getProviderIdForModel(payload.model);
-
   const sendPayload: SessionMessageSendPayload = {
     ...(target.sessionId ? { sessionId: target.sessionId } : {}),
-    providerId,
+    providerId: payload.providerId as SessionMessageSendPayload['providerId'],
     modelId: payload.model,
     message: {
       id: finalClientMessageId,
@@ -359,7 +356,7 @@ export function useSessionTimeline() {
     return true;
   }, [branchDraft, updateBranchDraft]);
 
-  const retryLastSessionMessage = useCallback(async (override?: Pick<ComposerSubmitPayload, 'permissionMode' | 'model'>): Promise<boolean> => {
+  const retryLastSessionMessage = useCallback(async (override?: Pick<ComposerSubmitPayload, 'permissionMode' | 'providerId' | 'model'>): Promise<boolean> => {
     if (!lastPayloadRef.current) {
       return false;
     }

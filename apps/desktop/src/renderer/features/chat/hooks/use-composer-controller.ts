@@ -17,11 +17,13 @@ const COMPOSER_TEXTAREA_MAX_HEIGHT = 160;
 function createComposerSubmitPayload(input: {
   message: string;
   permissionMode: ComposerPermissionMode;
+  providerId: string;
   model: ComposerModel;
 }): ComposerSubmitPayload {
   return {
     message: input.message,
     permissionMode: input.permissionMode,
+    providerId: input.providerId,
     model: input.model,
   };
 }
@@ -29,7 +31,7 @@ function createComposerSubmitPayload(input: {
 export function useComposerController({
   status = 'idle',
   initialValue = '',
-  enabledProviderIds,
+  providers,
   seedTextKey = null,
   seedText = null,
   onSubmit,
@@ -46,9 +48,10 @@ export function useComposerController({
   const [permissionMode, setPermissionMode] = useState<ComposerPermissionMode>(DEFAULT_COMPOSER_PERMISSION_MODE);
   const [model, setModel] = useState<ComposerModel>(DEFAULT_COMPOSER_MODEL);
   const modelOptions = useMemo(
-    () => getComposerModelOptionsForProviders(enabledProviderIds),
-    [enabledProviderIds],
+    () => getComposerModelOptionsForProviders(providers),
+    [providers],
   );
+  const selectedModelOption = modelOptions.find((option) => option.value === model);
   const trimmedValue = value.trim();
   const inputLocked = false;
   const sendLocked = status === 'sending' || status === 'running' || status === 'waiting-approval';
@@ -138,11 +141,13 @@ export function useComposerController({
 
   function submitDraft() {
     if (!canSend) return;
+    if (!selectedModelOption) return;
 
     onSubmit(createComposerSubmitPayload({
       message: trimmedValue,
       permissionMode,
-      model,
+      providerId: selectedModelOption.providerId,
+      model: selectedModelOption.modelId,
     }));
     setValue('');
   }

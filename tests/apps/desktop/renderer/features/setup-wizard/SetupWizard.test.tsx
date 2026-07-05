@@ -62,9 +62,9 @@ describe('SetupWizard', () => {
     await user.click(screen.getByRole('button', { name: 'Finish setup' }));
 
     expect(completeSetup).toHaveBeenCalledWith(expect.objectContaining({
-      providerId: 'deepseek',
       skipProvider: true,
     }));
+    expect(completeSetup.mock.calls[0][0]).not.toHaveProperty('providerId');
   });
 
   it('previews theme changes immediately without persisting setup', async () => {

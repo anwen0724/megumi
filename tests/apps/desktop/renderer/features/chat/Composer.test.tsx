@@ -1,8 +1,39 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { Composer } from '@megumi/desktop/renderer/features/chat/components/Composer';
+import type { ComposerProps } from '@megumi/desktop/renderer/features/chat/components/composer-types';
+
+const defaultProviders = [
+  {
+    providerId: 'deepseek' as const,
+    displayName: 'DeepSeek',
+    enabled: true,
+    modelIds: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+    hasApiKey: true,
+    credentialSource: 'settings' as const,
+    envOverrideActive: false,
+  },
+  {
+    providerId: 'openai' as const,
+    displayName: 'OpenAI',
+    enabled: true,
+    modelIds: ['gpt-5.5'],
+    hasApiKey: true,
+    credentialSource: 'settings' as const,
+    envOverrideActive: false,
+  },
+];
+
+const deepseekOnlyProviders = defaultProviders.map((provider) => ({
+  ...provider,
+  enabled: provider.providerId === 'deepseek',
+}));
+
+function TestComposer(props: ComposerProps) {
+  return <Composer providers={defaultProviders} {...props} />;
+}
 
 function setTextareaScrollHeight(textarea: HTMLElement, scrollHeight: number) {
   Object.defineProperty(textarea, 'scrollHeight', {
@@ -13,10 +44,10 @@ function setTextareaScrollHeight(textarea: HTMLElement, scrollHeight: number) {
 
 describe('Composer', () => {
   it('renders permission mode, model, context, attachment, and disabled send controls', () => {
-    render(<Composer onSubmit={() => undefined} />);
+    render(<TestComposer onSubmit={() => undefined} />);
 
     expect(screen.getByLabelText('Permission mode')).toHaveValue('default');
-    expect(screen.getByLabelText('Model')).toHaveValue('deepseek-v4-flash');
+    expect(screen.getByLabelText('Model')).toHaveValue('deepseek:deepseek-v4-flash');
     expect(screen.getByRole('button', { name: 'Attach files' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Choose context' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
@@ -24,23 +55,24 @@ describe('Composer', () => {
 
   it('submits trimmed text with selected permission mode and model then clears the input', async () => {
     const onSubmit = vi.fn();
-    render(<Composer onSubmit={onSubmit} />);
+    render(<TestComposer onSubmit={onSubmit} />);
 
     await userEvent.selectOptions(screen.getByLabelText('Permission mode'), 'accept_edits');
-    await userEvent.selectOptions(screen.getByLabelText('Model'), 'deepseek-v4-pro');
+    await userEvent.selectOptions(screen.getByLabelText('Model'), 'deepseek:deepseek-v4-pro');
     await userEvent.type(screen.getByLabelText('Message Megumi'), '  hello Megumi  ');
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
 
     expect(onSubmit).toHaveBeenCalledWith({
       message: 'hello Megumi',
       permissionMode: 'accept_edits',
+      providerId: 'deepseek',
       model: 'deepseek-v4-pro',
     });
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('');
   });
 
   it('offers exactly the first-version permission posture choices', () => {
-    render(<Composer onSubmit={() => undefined} />);
+    render(<TestComposer onSubmit={() => undefined} />);
 
     expect(
       Array.from(screen.getByLabelText('Permission mode').querySelectorAll('option')).map((option) => [
@@ -61,7 +93,7 @@ describe('Composer', () => {
 
   it('submits with Enter and clears the input', async () => {
     const onSubmit = vi.fn();
-    render(<Composer onSubmit={onSubmit} />);
+    render(<TestComposer onSubmit={onSubmit} />);
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), 'Send from keyboard');
     await userEvent.keyboard('{Enter}');
@@ -69,6 +101,7 @@ describe('Composer', () => {
     expect(onSubmit).toHaveBeenCalledWith({
       message: 'Send from keyboard',
       permissionMode: 'default',
+      providerId: 'deepseek',
       model: 'deepseek-v4-flash',
     });
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('');
@@ -76,7 +109,7 @@ describe('Composer', () => {
 
   it('keeps Shift+Enter and Alt+Enter as newline shortcuts without submitting', async () => {
     const onSubmit = vi.fn();
-    render(<Composer onSubmit={onSubmit} />);
+    render(<TestComposer onSubmit={onSubmit} />);
     const input = screen.getByLabelText('Message Megumi');
     setTextareaScrollHeight(input, 96);
 
@@ -90,7 +123,7 @@ describe('Composer', () => {
 
   it('does not submit while an IME composition is confirming text', () => {
     const onSubmit = vi.fn();
-    render(<Composer onSubmit={onSubmit} />);
+    render(<TestComposer onSubmit={onSubmit} />);
     const input = screen.getByLabelText('Message Megumi');
 
     fireEvent.change(input, { target: { value: 'nihao' } });
@@ -105,7 +138,7 @@ describe('Composer', () => {
     const onAttachFiles = vi.fn();
 
     render(
-      <Composer
+      <TestComposer
         onSubmit={() => undefined}
         onChooseContext={onChooseContext}
         onAttachFiles={onAttachFiles}
@@ -120,7 +153,7 @@ describe('Composer', () => {
   });
 
   it('renders a compact toolbar with context on the left and permission mode, model, and Send on the right', () => {
-    render(<Composer onSubmit={() => undefined} />);
+    render(<TestComposer onSubmit={() => undefined} />);
 
     const toolbar = screen.getByTestId('composer-toolbar');
     const inputPanel = screen.getByTestId('composer-input-panel');
@@ -144,7 +177,7 @@ describe('Composer', () => {
   });
 
   it('themes native select dropdown options for dark and light themes', () => {
-    render(<Composer onSubmit={() => undefined} />);
+    render(<TestComposer onSubmit={() => undefined} />);
 
     for (const option of screen.getByLabelText('Permission mode').querySelectorAll('option')) {
       expect(option).toHaveClass('bg-[var(--color-surface-elevated)]');
@@ -158,34 +191,34 @@ describe('Composer', () => {
   });
 
   it('hides models whose providers are disabled', () => {
-    render(<Composer enabledProviderIds={['deepseek']} onSubmit={() => undefined} />);
+    render(<TestComposer providers={deepseekOnlyProviders} onSubmit={() => undefined} />);
 
     const modelOptions = Array.from(screen.getByLabelText('Model').querySelectorAll('option'));
 
     expect(modelOptions.map((option) => option.getAttribute('value'))).toEqual([
-      'deepseek-v4-flash',
-      'deepseek-v4-pro',
+      'deepseek:deepseek-v4-flash',
+      'deepseek:deepseek-v4-pro',
     ]);
-    expect(screen.queryByRole('option', { name: 'GPT-5.5' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'OpenAI · gpt-5.5' })).not.toBeInTheDocument();
   });
 
   it('falls back when the selected model provider becomes disabled', async () => {
     const { rerender } = render(
-      <Composer enabledProviderIds={['deepseek', 'openai']} onSubmit={() => undefined} />,
+      <TestComposer onSubmit={() => undefined} />,
     );
 
-    await userEvent.selectOptions(screen.getByLabelText('Model'), 'gpt-5.5');
+    await userEvent.selectOptions(screen.getByLabelText('Model'), 'openai:gpt-5.5');
 
-    expect(screen.getByLabelText('Model')).toHaveValue('gpt-5.5');
+    expect(screen.getByLabelText('Model')).toHaveValue('openai:gpt-5.5');
 
-    rerender(<Composer enabledProviderIds={['deepseek']} onSubmit={() => undefined} />);
+    rerender(<TestComposer providers={deepseekOnlyProviders} onSubmit={() => undefined} />);
 
-    expect(screen.getByLabelText('Model')).toHaveValue('deepseek-v4-flash');
-    expect(screen.queryByRole('option', { name: 'GPT-5.5' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Model')).toHaveValue('deepseek:deepseek-v4-flash');
+    expect(screen.queryByRole('option', { name: 'OpenAI · gpt-5.5' })).not.toBeInTheDocument();
   });
 
   it('keeps slash prefixes as ordinary drafts until a trusted command catalog is wired in', async () => {
-    render(<Composer onSubmit={() => undefined} />);
+    render(<TestComposer onSubmit={() => undefined} />);
     const input = screen.getByLabelText('Message Megumi');
 
     await userEvent.type(input, '/');
@@ -194,7 +227,7 @@ describe('Composer', () => {
   });
 
   it('renders command suggestions from the provider for slash drafts', async () => {
-    render(<Composer
+    render(<TestComposer
       onSubmit={() => undefined}
       getCommandSuggestions={() => ({
         type: 'suggestions',
@@ -226,7 +259,7 @@ describe('Composer', () => {
 
   it('uses Enter to complete the selected command suggestion without submitting', async () => {
     const onSubmit = vi.fn();
-    render(<Composer
+    render(<TestComposer
       onSubmit={onSubmit}
       getCommandSuggestions={() => ({
         type: 'suggestions',
@@ -256,7 +289,7 @@ describe('Composer', () => {
 
   it('uses Tab to complete the selected command suggestion without submitting', async () => {
     const onSubmit = vi.fn();
-    render(<Composer
+    render(<TestComposer
       onSubmit={onSubmit}
       getCommandSuggestions={() => ({
         type: 'suggestions',
@@ -286,7 +319,7 @@ describe('Composer', () => {
 
   it('keeps Enter submit behavior when suggestions are inactive', async () => {
     const onSubmit = vi.fn();
-    render(<Composer
+    render(<TestComposer
       onSubmit={onSubmit}
       getCommandSuggestions={() => ({ type: 'inactive' })}
     />);
@@ -300,7 +333,7 @@ describe('Composer', () => {
   });
 
   it('moves selected command suggestion with ArrowDown and ArrowUp', async () => {
-    render(<Composer
+    render(<TestComposer
       onSubmit={() => undefined}
       getCommandSuggestions={() => ({
         type: 'suggestions',
@@ -340,7 +373,7 @@ describe('Composer', () => {
 
   it('submits slash-prefixed text without renderer-owned preprocessing', async () => {
     const onSubmit = vi.fn();
-    render(<Composer onSubmit={onSubmit} />);
+    render(<TestComposer onSubmit={onSubmit} />);
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), '/review 当前改动');
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
@@ -348,6 +381,7 @@ describe('Composer', () => {
     expect(onSubmit).toHaveBeenCalledWith({
       message: '/review 当前改动',
       permissionMode: 'default',
+      providerId: 'deepseek',
       model: 'deepseek-v4-flash',
     });
     expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('intent');
@@ -358,7 +392,7 @@ describe('Composer', () => {
 
   it('keeps unknown slash commands as ordinary messages', async () => {
     const onSubmit = vi.fn();
-    render(<Composer onSubmit={onSubmit} />);
+    render(<TestComposer onSubmit={onSubmit} />);
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), '/unknown abc');
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
@@ -366,12 +400,13 @@ describe('Composer', () => {
     expect(onSubmit).toHaveBeenCalledWith({
       message: '/unknown abc',
       permissionMode: 'default',
+      providerId: 'deepseek',
       model: 'deepseek-v4-flash',
     });
   });
 
   it('uses a stable floating composer shell without page-level width ownership', () => {
-    render(<Composer onSubmit={() => undefined} />);
+    render(<TestComposer onSubmit={() => undefined} />);
 
     const form = screen.getByRole('form', { name: 'Message composer' });
     expect(form).toHaveClass('w-full');
@@ -387,7 +422,7 @@ describe('Composer', () => {
   it('resets seed text when seedTextKey changes without rendering branch chrome', async () => {
     const onSubmit = vi.fn();
     const { rerender } = render(
-      <Composer
+      <TestComposer
         onSubmit={onSubmit}
         seedTextKey="branch-marker-1"
         seedText="original prompt"
@@ -401,7 +436,7 @@ describe('Composer', () => {
     await userEvent.type(screen.getByLabelText('Message Megumi'), 'edited prompt');
 
     rerender(
-      <Composer
+      <TestComposer
         onSubmit={onSubmit}
         seedTextKey="branch-marker-2"
         seedText="second prompt"
@@ -412,7 +447,7 @@ describe('Composer', () => {
   });
 
   it('auto grows the textarea for multiline drafts while preserving a maximum height', async () => {
-    render(<Composer onSubmit={() => undefined} />);
+    render(<TestComposer onSubmit={() => undefined} />);
     const input = screen.getByLabelText('Message Megumi');
 
     expect(input).toHaveStyle({ height: '56px', overflowY: 'hidden' });
@@ -430,7 +465,7 @@ describe('Composer', () => {
 
   it('restores the compact textarea height after sending clears the draft', async () => {
     const onSubmit = vi.fn();
-    render(<Composer onSubmit={onSubmit} />);
+    render(<TestComposer onSubmit={onSubmit} />);
     const input = screen.getByLabelText('Message Megumi');
 
     setTextareaScrollHeight(input, 120);
@@ -448,7 +483,7 @@ describe('Composer', () => {
   it('shows sending status, allows drafting the next message, and shows Stop instead of Send', async () => {
     const onSubmit = vi.fn();
     const onStop = vi.fn();
-    render(<Composer status="sending" onSubmit={onSubmit} onStop={onStop} initialValue="Continue this plan" />);
+    render(<TestComposer status="sending" onSubmit={onSubmit} onStop={onStop} initialValue="Continue this plan" />);
 
     expect(screen.queryByText('Sending')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('Continue this plan');
@@ -466,22 +501,22 @@ describe('Composer', () => {
   it('keeps the normal placeholder while running and uses Stop for the active run', async () => {
     const onSubmit = vi.fn();
     const onStop = vi.fn();
-    render(<Composer status="running" onSubmit={onSubmit} onStop={onStop} />);
+    render(<TestComposer status="running" onSubmit={onSubmit} onStop={onStop} />);
 
     expect(screen.getByPlaceholderText('Ask Megumi anything...')).toBeInTheDocument();
     expect(screen.queryByText('Megumi is working')).not.toBeInTheDocument();
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), 'continue');
-    await userEvent.selectOptions(screen.getByLabelText('Model'), 'deepseek-v4-pro');
+    await userEvent.selectOptions(screen.getByLabelText('Model'), 'deepseek:deepseek-v4-pro');
     await userEvent.keyboard('{Enter}');
     await userEvent.click(screen.getByRole('button', { name: 'Stop current run' }));
 
     const rightControls = screen.getByTestId('composer-actions');
 
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('continue');
-    expect(screen.getByLabelText('Model')).toHaveValue('deepseek-v4-pro');
+    expect(screen.getByLabelText('Model')).toHaveValue('deepseek:deepseek-v4-pro');
     expect(rightControls).toHaveTextContent('Default');
-    expect(rightControls).toHaveTextContent('DeepSeek V4 Pro');
+    expect(rightControls).toHaveTextContent('DeepSeek · deepseek-v4-pro');
     expect(rightControls.lastElementChild).toBe(screen.getByRole('button', { name: 'Stop current run' }));
     expect(screen.getByRole('button', { name: 'Stop current run' })).toHaveClass('shrink-0');
     expect(screen.getByRole('button', { name: 'Stop current run' })).not.toHaveTextContent('Stop');
@@ -491,7 +526,7 @@ describe('Composer', () => {
 
   it('auto grows multiline follow-up drafts while a run is active', async () => {
     const onStop = vi.fn();
-    render(<Composer status="running" onSubmit={() => undefined} onStop={onStop} />);
+    render(<TestComposer status="running" onSubmit={() => undefined} onStop={onStop} />);
     const input = screen.getByLabelText('Message Megumi');
 
     setTextareaScrollHeight(input, 132);
@@ -503,7 +538,7 @@ describe('Composer', () => {
   });
 
   it('does not render an enabled Stop button without a stop handler', () => {
-    render(<Composer status="running" onSubmit={() => undefined} />);
+    render(<TestComposer status="running" onSubmit={() => undefined} />);
 
     expect(screen.getByRole('button', { name: 'Stop current run' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Send message' })).not.toBeInTheDocument();
@@ -513,7 +548,7 @@ describe('Composer', () => {
     const onSubmit = vi.fn();
     const onStop = vi.fn();
 
-    render(<Composer status="waiting-approval" onSubmit={onSubmit} onStop={onStop} />);
+    render(<TestComposer status="waiting-approval" onSubmit={onSubmit} onStop={onStop} />);
 
     expect(screen.queryByText('Waiting for approval')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Review approval' })).not.toBeInTheDocument();
@@ -533,7 +568,7 @@ describe('Composer', () => {
 
   it('does not render run error status inside the composer', () => {
     render(
-      <Composer
+      <TestComposer
         status="error"
         onSubmit={() => undefined}
       />,
@@ -549,13 +584,13 @@ describe('Composer', () => {
     const onSubmit = vi.fn();
 
     render(
-      <Composer
+      <TestComposer
         status="error"
         onSubmit={onSubmit}
       />,
     );
 
-    await userEvent.selectOptions(screen.getByLabelText('Model'), 'deepseek-v4-flash');
+    await userEvent.selectOptions(screen.getByLabelText('Model'), 'deepseek:deepseek-v4-flash');
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
 
     expect(onSubmit).not.toHaveBeenCalled();
@@ -565,19 +600,20 @@ describe('Composer', () => {
     const onSubmit = vi.fn();
 
     render(
-      <Composer
+      <TestComposer
         status="error"
         onSubmit={onSubmit}
       />,
     );
 
-    await userEvent.selectOptions(screen.getByLabelText('Model'), 'deepseek-v4-flash');
+    await userEvent.selectOptions(screen.getByLabelText('Model'), 'deepseek:deepseek-v4-flash');
     await userEvent.type(screen.getByLabelText('Message Megumi'), 'try again normally');
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
 
     expect(onSubmit).toHaveBeenCalledWith({
       message: 'try again normally',
       permissionMode: 'default',
+      providerId: 'deepseek',
       model: 'deepseek-v4-flash',
     });
   });

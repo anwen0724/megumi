@@ -1,6 +1,6 @@
 // Defines the public Composer payload shape consumed by chat timeline orchestration.
 import type { PermissionModeSelectionSource } from '@megumi/shared/permission';
-import type { ProviderId } from '@megumi/shared/provider';
+import type { ProviderPublicStatus } from '@megumi/shared/provider';
 import type { CommandSuggestionResult } from '@megumi/coding-agent/commands';
 import type { ComposerModel, ComposerPermissionMode } from './composer-options';
 
@@ -10,13 +10,14 @@ export interface ComposerSubmitPayload {
   message: string;
   permissionMode: ComposerPermissionMode;
   permissionSource?: PermissionModeSelectionSource;
+  providerId: string;
   model: ComposerModel;
 }
 
 export interface ComposerProps {
   status?: ComposerStatus;
   initialValue?: string;
-  enabledProviderIds?: ProviderId[];
+  providers?: ProviderPublicStatus[];
   seedTextKey?: string | null;
   seedText?: string | null;
   onSubmit: (payload: ComposerSubmitPayload) => void;

@@ -65,8 +65,6 @@ describe('13.02 chat layout contract source guard', () => {
     expect(messageScrollPanel).toContain('overflow-y-auto');
     expect(messageColumn).toContain('role="log"');
     expect(messageColumn).toContain('<BottomSpacer');
-    expect(messageColumn).toContain('RecoverableActionStack');
-    expect(messageColumn).toContain('recoverableRunsByRunId');
     expect(bottomSpacer).toContain('data-testid="message-bottom-spacer"');
     expect(composerDock).toContain('data-testid="composer-dock"');
     expect(composerDock).toContain('data-testid="composer-dock-column"');
@@ -76,7 +74,6 @@ describe('13.02 chat layout contract source guard', () => {
     expect(composerDock).not.toContain('bg-transparent px-6');
     expect(composerDock).not.toContain('pb-6');
     expect(composerDock).toContain('<ApprovalStack');
-    expect(composerDock).toContain('<RecoverableActionStack');
     expect(composerDock).toContain('<BranchDraftStack');
     expect(composerDock).toContain('<ComposerOverlayLayer');
     expect(composerDock).toContain('<ComposerSurface');

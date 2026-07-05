@@ -1,7 +1,6 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ApprovalResolvePayload, WorkspaceRestoreData } from '@megumi/shared/ipc';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ApprovalResolvePayload } from '@megumi/shared/ipc';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import type { RecoverableRunSummary } from '@megumi/shared/recovery';
 import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/shared/timeline';
 import { type ApprovalCardResolvePayload, useApprovalStore } from '../../../entities/approval';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
@@ -12,26 +11,8 @@ import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-req
 import { chatStreamSessionKey, useChatStreamStore } from '../../chat-stream';
 import { useSessionTimeline } from './use-session-timeline';
 import type { ComposerStatus, ComposerSubmitPayload } from '../components/Composer';
-import {
-  DEFAULT_COMPOSER_MODEL,
-  DEFAULT_COMPOSER_PERMISSION_MODE,
-} from '../components/composer-options';
 
 const EMPTY_CANONICAL_MESSAGES: CanonicalTimelineMessage[] = [];
-
-export type RecoverableAction = 'retry' | 'rerun' | 'mark_cancelled';
-
-export interface RestoreFeedback {
-  title: string;
-  description: string;
-  persistent: boolean;
-}
-
-export interface RecoverableRunActionHandlers {
-  retryRecoverableRun: (run: RecoverableRunSummary) => void;
-  rerunRecoverableRun: (run: RecoverableRunSummary) => void;
-  markRecoverableRunCancelled: (run: RecoverableRunSummary) => void;
-}
 
 function isActiveTimelineAssistantMessage(message: CanonicalTimelineMessage): boolean {
   if (message.role !== 'assistant') {
@@ -69,109 +50,6 @@ function canShowUserMessageActions(
   return assistant !== undefined && !isActiveTimelineAssistantMessage(assistant);
 }
 
-function getUserMessageText(message: CanonicalTimelineMessage): string | null {
-  if (message.role !== 'user') {
-    return null;
-  }
-
-  const text = message.blocks
-    .filter((block) => block.kind === 'user_text')
-    .map((block) => block.text)
-    .join('\n')
-    .trim();
-
-  return text.length > 0 ? text : null;
-}
-
-function createRetryPayloadFromTimelineRun(
-  runId: string,
-  messages: CanonicalTimelineMessage[],
-): ComposerSubmitPayload | null {
-  const directlyMatchedUser = [...messages]
-    .reverse()
-    .find((message) => message.role === 'user' && message.runId === runId);
-  const directText = directlyMatchedUser ? getUserMessageText(directlyMatchedUser) : null;
-
-  if (directText) {
-    return {
-      message: directText,
-      permissionMode: DEFAULT_COMPOSER_PERMISSION_MODE,
-      model: DEFAULT_COMPOSER_MODEL,
-    };
-  }
-
-  const assistantIndex = messages.findIndex((message) => message.role === 'assistant' && message.runId === runId);
-  if (assistantIndex <= 0) {
-    return null;
-  }
-
-  const nearestPreviousUser = [...messages.slice(0, assistantIndex)]
-    .reverse()
-    .find((message) => message.role === 'user');
-  const inferredText = nearestPreviousUser ? getUserMessageText(nearestPreviousUser) : null;
-
-  if (!inferredText) {
-    return null;
-  }
-
-  return {
-    message: inferredText,
-    permissionMode: DEFAULT_COMPOSER_PERMISSION_MODE,
-    model: DEFAULT_COMPOSER_MODEL,
-  };
-}
-
-export function recoverableActionsFor(run: RecoverableRunSummary): RecoverableAction[] {
-  if (run.reason === 'waiting_for_approval') return [];
-  if (run.reason === 'interrupted') return ['retry', 'mark_cancelled'];
-  if (run.status === 'failed' || run.reason === 'failed') return ['retry'];
-  if (run.status === 'cancelled' || run.reason === 'cancelled') return ['rerun'];
-  return [];
-}
-
-function restoreFeedbackFromData(data: WorkspaceRestoreData): RestoreFeedback {
-  const restoredCount = data.fileResults.filter((file) => file.status === 'restored').length;
-  const conflictCount = data.fileResults.filter((file) => file.status === 'conflict').length;
-  const failedCount = data.fileResults.filter((file) => file.status === 'failed').length;
-  const firstRestored = data.fileResults.find((file) => file.status === 'restored');
-  const firstConflict = data.fileResults.find((file) => file.status === 'conflict');
-  const firstFailed = data.fileResults.find((file) => file.status === 'failed');
-
-  if (data.result.status === 'restored' && restoredCount > 0) {
-    return {
-      title: `已撤销 ${restoredCount} 个文件`,
-      description: firstRestored
-        ? `${firstRestored.projectPath} 已恢复到修改前状态`
-        : '文件已恢复到修改前状态',
-      persistent: false,
-    };
-  }
-
-  if (data.result.status === 'conflict' || conflictCount > 0) {
-    return {
-      title: '撤销冲突',
-      description: firstConflict
-        ? `${firstConflict.projectPath} 当前内容已变化，需要手动处理`
-        : '文件当前内容已变化，需要手动处理',
-      persistent: true,
-    };
-  }
-
-  if (data.result.status === 'failed' || failedCount > 0) {
-    return {
-      title: '撤销失败',
-      description: firstFailed?.error?.message ?? data.result.error?.message ?? 'Megumi 现在无法撤销这些文件变更。',
-      persistent: true,
-    };
-  }
-
-  return {
-    title: '撤销完成',
-    description: '没有需要恢复的文件。',
-    persistent: false,
-  };
-}
-
 export function useChatPageController() {
   const rawAgentStatus = useChatUiStore((state) => state.agentStatus);
   const activeSessionId = useSessionStore((state) => state.activeSessionId);
@@ -182,14 +60,7 @@ export function useChatPageController() {
   const activeRunId = useRunStore((state) => state.activeRunId);
   const runs = useRunStore((state) => state.runs);
   const approvalRequestsById = useApprovalStore((state) => state.approvalRequestsById);
-  const [recoverableRuns, setRecoverableRuns] = useState<RecoverableRunSummary[]>([]);
-  const [dismissedRecoverableRunIds, setDismissedRecoverableRunIds] = useState<Set<string>>(() => new Set());
-  const [pendingRecoverableRunIds, setPendingRecoverableRunIds] = useState<Set<string>>(() => new Set());
-  const [pendingWorkspaceChangeSetIds, setPendingWorkspaceChangeSetIds] = useState<Set<string>>(() => new Set());
-  const [restoreFeedback, setRestoreFeedback] = useState<RestoreFeedback | null>(null);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
-  const pendingRecoverableRunIdsRef = useRef(new Set<string>());
-  const pendingWorkspaceChangeSetIdsRef = useRef(new Set<string>());
   const activeSession = sessions.find((session) =>
     session.id === activeSessionId && session.projectId === currentProjectId
   ) ?? null;
@@ -216,25 +87,6 @@ export function useChatPageController() {
       : EMPTY_CANONICAL_MESSAGES
   ));
   const timelineMessages = canonicalMessages;
-  const visibleRecoverableRuns = useMemo(
-    () => recoverableRuns.filter((run) => run.sessionId === effectiveActiveSessionId && !dismissedRecoverableRunIds.has(run.runId)),
-    [effectiveActiveSessionId, dismissedRecoverableRunIds, recoverableRuns],
-  );
-  const recoverableRunsByRunId = useMemo(() => {
-    const byRunId = new Map<string, RecoverableRunSummary>();
-    for (const run of visibleRecoverableRuns) {
-      byRunId.set(run.runId, run);
-    }
-    return byRunId;
-  }, [visibleRecoverableRuns]);
-  const visibleAssistantRunIds = useMemo(() => new Set(
-    timelineMessages
-      .flatMap((message) => (message.role === 'assistant' && message.runId ? [message.runId] : [])),
-  ), [timelineMessages]);
-  const unmatchedRecoverableRuns = useMemo(
-    () => visibleRecoverableRuns.filter((run) => !visibleAssistantRunIds.has(run.runId)),
-    [visibleAssistantRunIds, visibleRecoverableRuns],
-  );
   const timelineUpdateKey = useMemo(() => JSON.stringify(timelineMessages.map((message) => [
     message.messageId,
     message.updatedAt ?? message.createdAt,
@@ -256,7 +108,6 @@ export function useChatPageController() {
   const activeRun = activeRunCandidate && !isDraftNewSession && (!activeRunCandidate.sessionId || activeRunCandidate.sessionId === effectiveActiveSessionId)
     ? activeRunCandidate
     : null;
-  const recoveryBridge = window.megumi?.recovery;
   const visibleRunId = activeRun?.runId ?? null;
   const userActionsBlocked =
     agentStatus === 'sending' ||
@@ -295,93 +146,12 @@ export function useChatPageController() {
     pendingApprovals.length === 0 &&
     (isDraftNewSession || activeEmptyNewSession);
 
-  const loadRecoverableRuns = useCallback(async ({ clearOnFailure }: { clearOnFailure: boolean }) => {
-    if (!effectiveActiveSessionId || !recoveryBridge) {
-      setRecoverableRuns([]);
-      return;
-    }
-
-    try {
-      const result = await recoveryBridge.listRecoverableRuns(createRendererRuntimeIpcRequest(
-        IPC_CHANNELS.recovery.recoverableRunsList,
-        {},
-      ));
-
-      if (result.ok || clearOnFailure) {
-        setRecoverableRuns(result.ok ? result.data.runs : []);
-      }
-    } catch {
-      if (clearOnFailure) {
-        setRecoverableRuns([]);
-      }
-    }
-  }, [effectiveActiveSessionId, recoveryBridge]);
-
-  useEffect(() => {
-    void loadRecoverableRuns({ clearOnFailure: true });
-  }, [activeRun?.runId, activeRun?.status, loadRecoverableRuns]);
-
-  useEffect(() => {
-    setDismissedRecoverableRunIds(new Set());
-  }, [effectiveActiveSessionId]);
-
-  useEffect(() => {
-    if (!restoreFeedback || restoreFeedback.persistent) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      setRestoreFeedback(null);
-    }, 3000);
-
-    return () => window.clearTimeout(timeout);
-  }, [restoreFeedback]);
-
   function handleSubmit(payload: ComposerSubmitPayload) {
     void sendSessionMessage(payload);
   }
 
   function handleStop() {
     void cancelSessionMessage();
-  }
-
-  async function runRecoverableAction(
-    run: RecoverableRunSummary,
-    action: () => Promise<{ ok: boolean } | undefined>,
-  ) {
-    if (pendingRecoverableRunIdsRef.current.has(run.runId)) {
-      return;
-    }
-
-    pendingRecoverableRunIdsRef.current.add(run.runId);
-    setPendingRecoverableRunIds(new Set(pendingRecoverableRunIdsRef.current));
-
-    try {
-      const result = await action();
-      if (result?.ok) {
-        await loadRecoverableRuns({ clearOnFailure: false });
-      }
-    } catch {
-      // Keep the backend-sourced recoverable list as-is when an action or refresh fails.
-    } finally {
-      pendingRecoverableRunIdsRef.current.delete(run.runId);
-      setPendingRecoverableRunIds(new Set(pendingRecoverableRunIdsRef.current));
-    }
-  }
-
-  async function resendRecoverableRun(run: RecoverableRunSummary) {
-    const retryPayload = createRetryPayloadFromTimelineRun(run.runId, timelineMessages);
-    await runRecoverableAction(run, async () => {
-      if (!retryPayload) {
-        return { ok: false };
-      }
-
-      const sent = await sendSessionMessage(retryPayload);
-      if (sent) {
-        setDismissedRecoverableRunIds((current) => new Set(current).add(run.runId));
-      }
-      return { ok: sent };
-    });
   }
 
   async function switchNewSessionProject(projectId: string) {
@@ -429,23 +199,6 @@ export function useChatPageController() {
     setProjectPickerOpen(false);
   }
 
-  async function retryRecoverableRun(run: RecoverableRunSummary) {
-    await resendRecoverableRun(run);
-  }
-
-  async function rerunRecoverableRun(run: RecoverableRunSummary) {
-    await resendRecoverableRun(run);
-  }
-
-  async function markRecoverableRunCancelled(run: RecoverableRunSummary) {
-    await runRecoverableAction(run, () => recoveryBridge?.cancel(createRendererRuntimeIpcRequest(IPC_CHANNELS.recovery.cancel, {
-      runId: run.runId,
-      requestedBy: 'user',
-      reason: 'user_requested',
-      scope: 'run',
-    })));
-  }
-
   async function openWorkspaceChangedFile(projectPath: string) {
     if (!currentProject) {
       return;
@@ -461,47 +214,6 @@ export function useChatPageController() {
       ));
     } catch {
       // Opening a file is best-effort.
-    }
-  }
-
-  async function restoreWorkspaceChangeSet(changeSetId: string) {
-    if (!recoveryBridge || pendingWorkspaceChangeSetIdsRef.current.has(changeSetId)) {
-      return;
-    }
-
-    pendingWorkspaceChangeSetIdsRef.current.add(changeSetId);
-    setPendingWorkspaceChangeSetIds(new Set(pendingWorkspaceChangeSetIdsRef.current));
-
-    try {
-      const result = await recoveryBridge.restoreWorkspaceChangeSet(createRendererRuntimeIpcRequest(
-        IPC_CHANNELS.recovery.workspaceRestore,
-        {
-          changeSetId,
-          requestedBy: 'user',
-          metadata: {
-            source: 'workspace-change-footer',
-          },
-        },
-      ));
-      if (result.ok) {
-        setRestoreFeedback(restoreFeedbackFromData(result.data));
-        await loadRecoverableRuns({ clearOnFailure: false });
-      } else {
-        setRestoreFeedback({
-          title: '撤销失败',
-          description: 'Megumi 现在无法撤销这些文件变更。',
-          persistent: true,
-        });
-      }
-    } catch {
-      setRestoreFeedback({
-        title: '撤销失败',
-        description: 'Megumi 现在无法撤销这些文件变更。',
-        persistent: true,
-      });
-    } finally {
-      pendingWorkspaceChangeSetIdsRef.current.delete(changeSetId);
-      setPendingWorkspaceChangeSetIds(new Set(pendingWorkspaceChangeSetIdsRef.current));
     }
   }
 
@@ -528,27 +240,16 @@ export function useChatPageController() {
     timelineMessages,
     timelineUpdateKey,
     pendingApprovals,
-    visibleRecoverableRuns,
-    recoverableRunsByRunId,
-    unmatchedRecoverableRuns,
-    pendingRecoverableRunIds,
-    pendingWorkspaceChangeSetIds,
-    restoreFeedback,
     projectPickerOpen,
     composerStatus,
     hasTimelineContent,
     canChangeNewSessionProject,
     branchDraft,
-    setRestoreFeedback,
     setProjectPickerOpen,
     handleSubmit,
     handleStop,
     switchNewSessionProject,
-    retryRecoverableRun,
-    rerunRecoverableRun,
-    markRecoverableRunCancelled,
     openWorkspaceChangedFile,
-    restoreWorkspaceChangeSet,
     resolveApproval,
     createBranchDraft,
     cancelBranchDraft,
@@ -556,4 +257,3 @@ export function useChatPageController() {
       canShowUserMessageActions(message, timelineMessages, userActionsBlocked),
   };
 }
-

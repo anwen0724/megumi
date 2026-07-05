@@ -1,14 +1,12 @@
-﻿import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import type { ApprovalRequest } from '@megumi/shared/tool';
-import type { ProviderId } from '@megumi/shared/provider';
+import type { ProviderPublicStatus } from '@megumi/shared/provider';
 import type { CommandSuggestionResult } from '@megumi/coding-agent/commands';
-import type { RecoverableRunSummary } from '@megumi/shared/recovery';
 import type { ApprovalCardResolvePayload } from '../../../entities/approval';
 import { ApprovalStack } from '../components/ApprovalStack';
 import { BranchDraftStack, type ComposerBranchDraftView } from '../components/BranchDraftStack';
 import { ComposerSurface } from '../components/ComposerSurface';
 import type { ComposerStatus, ComposerSubmitPayload } from '../components/composer-types';
-import { RecoverableActionStack } from '../components/RecoverableActionStack';
 import { useComposerController } from '../hooks/use-composer-controller';
 import { ComposerOverlayLayer } from './ComposerOverlayLayer';
 
@@ -18,13 +16,8 @@ interface ComposerDockProps {
   status: ComposerStatus;
   branchDraft: ComposerBranchDraftView | null;
   pendingApprovals: ApprovalRequest[];
-  recoverableRuns: RecoverableRunSummary[];
-  pendingRecoverableRunIds: Set<string>;
-  enabledProviderIds?: ProviderId[];
+  providers?: ProviderPublicStatus[];
   onApprovalResolve: (payload: ApprovalCardResolvePayload) => void;
-  onRetry: (run: RecoverableRunSummary) => void;
-  onRerun: (run: RecoverableRunSummary) => void;
-  onMarkCancelled: (run: RecoverableRunSummary) => void;
   onSubmit: (payload: ComposerSubmitPayload) => void;
   onStop: () => void;
   onHeightChange?: (height: number) => void;
@@ -35,13 +28,8 @@ export function ComposerDock({
   status,
   branchDraft,
   pendingApprovals,
-  recoverableRuns,
-  pendingRecoverableRunIds,
-  enabledProviderIds,
+  providers,
   onApprovalResolve,
-  onRetry,
-  onRerun,
-  onMarkCancelled,
   onSubmit,
   onStop,
   onHeightChange,
@@ -50,7 +38,7 @@ export function ComposerDock({
   const composerSurfaceRef = useRef<HTMLFormElement | null>(null);
   const { composerSurfaceProps } = useComposerController({
     status,
-    enabledProviderIds,
+    providers,
     seedTextKey: branchDraft?.key ?? null,
     seedText: branchDraft?.seedText ?? null,
     onSubmit,
@@ -61,7 +49,6 @@ export function ComposerDock({
   });
   const hasOverlayContent =
     pendingApprovals.length > 0 ||
-    recoverableRuns.length > 0 ||
     Boolean(branchDraft);
 
   useLayoutEffect(() => {
@@ -96,13 +83,6 @@ export function ComposerDock({
         {hasOverlayContent ? (
           <ComposerOverlayLayer>
             <ApprovalStack requests={pendingApprovals} onResolve={onApprovalResolve} />
-            <RecoverableActionStack
-              runs={recoverableRuns}
-              pendingRunIds={pendingRecoverableRunIds}
-              onRetry={onRetry}
-              onRerun={onRerun}
-              onMarkCancelled={onMarkCancelled}
-            />
             <BranchDraftStack branchDraft={branchDraft} />
           </ComposerOverlayLayer>
         ) : null}
@@ -111,4 +91,3 @@ export function ComposerDock({
     </div>
   );
 }
-

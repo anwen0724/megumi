@@ -8,6 +8,7 @@ import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
 import type { SessionMessageSendPayload } from '@megumi/shared/ipc';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
+import { useProviderStore } from '@megumi/desktop/renderer/entities/provider/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useArtifactStore } from '@megumi/desktop/renderer/entities/artifact/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
@@ -160,7 +161,17 @@ function installMegumiMock() {
       provider: {
         list: vi.fn().mockResolvedValue({
           ok: true,
-          data: { providers: [] },
+          data: {
+            providers: [{
+              providerId: 'deepseek',
+              displayName: 'DeepSeek',
+              enabled: true,
+              modelIds: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+              hasApiKey: true,
+              credentialSource: 'settings',
+              envOverrideActive: false,
+            }],
+          },
           meta: {
             requestId: 'ipc-provider-list-1',
             channel: IPC_CHANNELS.provider.list,
@@ -421,6 +432,21 @@ function emitRuntimeFailure(request: SessionMessageSendRequest, message: string)
 }
 
 function resetStores() {
+  useProviderStore.setState({
+    providers: [{
+      providerId: 'deepseek',
+      displayName: 'DeepSeek',
+      enabled: true,
+      modelIds: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+      hasApiKey: true,
+      credentialSource: 'settings',
+      envOverrideActive: false,
+    }],
+    status: 'ready',
+    error: null,
+    loadProviders: vi.fn(),
+  });
+
   useProjectStore.setState({
     projects: [
       {
@@ -542,7 +568,7 @@ describe('interaction baseline acceptance', () => {
     const sendButton = screen.getByRole('button', { name: 'Send message' });
 
     fireEvent.change(modeSelect, { target: { value: 'auto' } });
-    fireEvent.change(modelSelect, { target: { value: 'deepseek-v4-pro' } });
+    fireEvent.change(modelSelect, { target: { value: 'deepseek:deepseek-v4-pro' } });
     fireEvent.change(textarea, { target: { value: 'Finish the interaction baseline' } });
     fireEvent.click(sendButton);
     await waitFor(() => expect(session.message.send).toHaveBeenCalledTimes(1));

@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/shared/ipc';
@@ -395,6 +395,7 @@ describe('useSessionTimeline', () => {
       await result.current.sendSessionMessage({
         message: 'Hello Megumi',
         permissionMode: 'plan',
+        providerId: 'deepseek',
         model: 'deepseek-v4-flash',
       });
     });
@@ -513,6 +514,7 @@ describe('useSessionTimeline', () => {
         message: '/review 当前改动',
         permissionMode: 'plan',
         permissionSource: 'intent_default',
+        providerId: 'deepseek',
         model: 'deepseek-v4-flash',
       });
     });
@@ -539,6 +541,7 @@ describe('useSessionTimeline', () => {
       await result.current.sendSessionMessage({
         message: 'Summarize runtime chat',
         permissionMode: 'auto',
+        providerId: 'deepseek',
         model: 'deepseek-v4-pro',
       });
     });
@@ -595,6 +598,7 @@ describe('useSessionTimeline', () => {
       await result.current.sendSessionMessage({
         message: 'Use OpenAI',
         permissionMode: 'default',
+        providerId: 'openai',
         model: 'gpt-4.1',
       });
     });
@@ -615,6 +619,7 @@ describe('useSessionTimeline', () => {
       await result.current.sendSessionMessage({
         message: 'Return final only',
         permissionMode: 'default',
+        providerId: 'deepseek',
         model: 'deepseek-v4-flash',
       });
     });
@@ -665,6 +670,7 @@ describe('useSessionTimeline', () => {
       await result.current.sendSessionMessage({
         message: 'Use unsupported provider',
         permissionMode: 'default',
+        providerId: 'anthropic',
         model: 'claude-opus-4-7',
       });
     });
@@ -709,6 +715,7 @@ describe('useSessionTimeline', () => {
       await result.current.sendSessionMessage({
         message: 'Try Claude first',
         permissionMode: 'default',
+        providerId: 'anthropic',
         model: 'claude-opus-4-7',
       });
     });
@@ -716,6 +723,7 @@ describe('useSessionTimeline', () => {
     await act(async () => {
       await result.current.retryLastSessionMessage({
         permissionMode: 'default',
+        providerId: 'deepseek',
         model: 'deepseek-v4-flash',
       });
     });
@@ -1222,6 +1230,7 @@ describe('useSessionTimeline', () => {
       await result.current.sendSessionMessage({
         message: 'New session prompt',
         permissionMode: 'default',
+        providerId: 'deepseek',
         model: 'deepseek-v4-flash',
       });
     });
@@ -1297,6 +1306,7 @@ describe('useSessionTimeline', () => {
       await result.current.sendSessionMessage({
         message: 'Other project prompt',
         permissionMode: 'default',
+        providerId: 'deepseek',
         model: 'deepseek-v4-flash',
       });
     });
@@ -1361,7 +1371,8 @@ describe('useSessionTimeline', () => {
     const sendPromise = result.current.sendSessionMessage({
       message: 'Send old draft',
       permissionMode: 'default',
-      model: 'deepseek-v4-flash',
+        providerId: 'deepseek',
+        model: 'deepseek-v4-flash',
     });
     await waitFor(() => expect(session.message.send).toHaveBeenCalledTimes(1));
 
@@ -1503,6 +1514,7 @@ describe('useSessionTimeline', () => {
       await result.current.sendSessionMessage({
         message: 'Next prompt',
         permissionMode: 'plan',
+        providerId: 'deepseek',
         model: 'deepseek-v4-flash',
       });
     });
@@ -1552,6 +1564,7 @@ describe('useSessionTimeline', () => {
       await result.current.sendSessionMessage({
         message: 'Next prompt',
         permissionMode: 'plan',
+        providerId: 'deepseek',
         model: 'deepseek-v4-flash',
       });
     });
@@ -1584,6 +1597,7 @@ describe('useSessionTimeline', () => {
       await result.current.sendSessionMessage({
         message: 'First prompt',
         permissionMode: 'default',
+        providerId: 'deepseek',
         model: 'deepseek-v4-flash',
       });
     });
@@ -1618,6 +1632,7 @@ describe('useSessionTimeline', () => {
       await result.current.sendSessionMessage({
         message: 'Second prompt',
         permissionMode: 'default',
+        providerId: 'deepseek',
         model: 'deepseek-v4-flash',
       });
     });
@@ -1650,6 +1665,7 @@ describe('useSessionTimeline', () => {
       await result.current.sendSessionMessage({
         message: 'Next prompt',
         permissionMode: 'plan',
+        providerId: 'deepseek',
         model: 'deepseek-v4-flash',
       });
     });
@@ -1670,6 +1686,7 @@ describe('useSessionTimeline', () => {
       await result.current.sendSessionMessage({
         message: 'Cancel me',
         permissionMode: 'default',
+        providerId: 'deepseek',
         model: 'deepseek-v4-flash',
       });
     });

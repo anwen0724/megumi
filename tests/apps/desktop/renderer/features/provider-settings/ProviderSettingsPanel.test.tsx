@@ -62,7 +62,8 @@ describe('ProviderSettingsPanel', () => {
 
     await user.clear(screen.getByLabelText('DeepSeek base URL'));
     await user.type(screen.getByLabelText('DeepSeek base URL'), 'https://proxy.local/deepseek');
-    await user.selectOptions(screen.getByLabelText('DeepSeek known model'), 'deepseek-v4-pro');
+    await user.clear(screen.getByLabelText('DeepSeek model IDs'));
+    await user.type(screen.getByLabelText('DeepSeek model IDs'), 'deepseek-v4-flash, deepseek-v4-pro');
     await user.click(screen.getByRole('button', { name: 'Save DeepSeek settings' }));
 
     expect(updateProvider).toHaveBeenCalledWith({

@@ -15,7 +15,6 @@ export * from './permission/mode-contracts';
 export * from './skill';
 export * from './prompt-template';
 export * from './permission/settings-contracts';
-export * from './recovery';
 export * from './artifact';
 export * from './memory';
 export * from './tool';
@@ -25,10 +24,6 @@ export * from './ipc/errors';
 export * from './ipc/contracts';
 export * from './project';
 export * from './workspace/change-contracts';
-export {
-  WorkspaceRestoreRequestSchema,
-  WorkspaceRestoreResultSchema,
-} from './workspace/change-contracts';
 export * from './ipc/schemas';
 export * from './runtime/errors';
 export * from './runtime/events';

@@ -68,7 +68,20 @@ function installMegumiMock() {
         remove: vi.fn().mockResolvedValue({ ok: true, data: { projectId: 'project-1', removed: true } }),
       },
       provider: {
-        list: vi.fn().mockResolvedValue({ ok: true, providers: [] }),
+        list: vi.fn().mockResolvedValue({
+          ok: true,
+          data: {
+            providers: [{
+              providerId: 'deepseek',
+              displayName: 'DeepSeek',
+              enabled: true,
+              modelIds: ['deepseek-v4-flash'],
+              hasApiKey: true,
+              credentialSource: 'settings',
+              envOverrideActive: false,
+            }],
+          },
+        }),
         update: vi.fn().mockResolvedValue({ ok: true }),
         setApiKey: vi.fn().mockResolvedValue({ ok: true }),
         deleteApiKey: vi.fn().mockResolvedValue({ ok: true }),

@@ -6,6 +6,7 @@ import type { Project } from '@megumi/desktop/renderer/entities/project/types';
 import type { LocalRendererSession } from '@megumi/desktop/renderer/entities/session/session-factory';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
+import { useProviderStore } from '@megumi/desktop/renderer/entities/provider/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import {
@@ -37,6 +38,21 @@ const otherProject: Project = {
 };
 
 function resetStores() {
+  useProviderStore.setState({
+    providers: [{
+      providerId: 'deepseek',
+      displayName: 'DeepSeek',
+      enabled: true,
+      modelIds: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+      hasApiKey: true,
+      credentialSource: 'settings',
+      envOverrideActive: false,
+    }],
+    status: 'ready',
+    error: null,
+    loadProviders: vi.fn(),
+  });
+
   useProjectStore.setState({
     projects: [project],
     currentProjectId: project.id,

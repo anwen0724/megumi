@@ -20,13 +20,11 @@ import { SessionRepository as SessionV2Repository } from '../session/repositorie
 import {
   createCodingAgentHostInterface,
   createInputController,
-  mapAgentRunEvents,
   type CodingAgentHostInterface,
 } from '../host-interface';
 import { createArtifactController } from '../host-interface/artifacts/artifact-controller';
 import { createPlanController } from '../host-interface/artifacts/plan-controller';
 import { createApprovalController } from '../host-interface/permissions/approval-controller';
-import type { ApprovalResolutionPort } from '../host-interface/permissions/approval-resolution-service';
 import { createProviderController } from '../host-interface/settings/provider-controller';
 import { createSettingsController } from '../host-interface/settings/settings-controller';
 import {
@@ -327,7 +325,7 @@ export function composeCodingAgentHostInterface(
       ...settings,
       provider: createProviderController(runtime.settingsService),
     },
-    permissions: createApprovalController(createAgentRunApprovalResolutionPort(runtime.agentRunService)),
+    permissions: createApprovalController(runtime.agentRunService),
     artifacts: {
       ...artifacts,
       plan: createPlanController(runtime.planArtifactService),
@@ -670,54 +668,6 @@ function createInMemoryPlanArtifactRepository() {
       return updated;
     },
   };
-}
-
-function createAgentRunApprovalResolutionPort(agentRunService: AgentRunService): ApprovalResolutionPort {
-  return {
-    resolve(payload) {
-      const events = resumeApproval(agentRunService, payload);
-      return {
-        data: {
-          approval: {
-            approvalRecordId: `approval-record:${crypto.randomUUID()}`,
-            approvalRequestId: payload.approvalRequestId,
-            toolCallId: 'unknown',
-            toolExecutionId: 'unknown',
-            runId: 'unknown',
-            stepId: 'unknown',
-            decision: payload.decision,
-            scope: payload.scope,
-            decidedBy: 'user',
-            ...(payload.reason ? { reason: payload.reason } : {}),
-            decidedAt: payload.decidedAt,
-          },
-        },
-        events,
-      };
-    },
-  };
-}
-
-async function* resumeApproval(
-  agentRunService: AgentRunService,
-  payload: Parameters<ApprovalResolutionPort['resolve']>[0],
-): AsyncIterable<RuntimeEvent> {
-  const result = await agentRunService.resumeRunAfterApproval({
-    approval_request_id: payload.approvalRequestId,
-    decision: {
-      approval_request_id: payload.approvalRequestId,
-      decision: payload.decision,
-      scope: payload.scope,
-      decided_by: 'user',
-      decided_at: payload.decidedAt,
-      ...(payload.reason ? { reason: payload.reason } : {}),
-    },
-  });
-  if (result.status === 'resumed') {
-    for await (const event of mapAgentRunEvents(result.events, payload.approvalRequestId)) {
-      yield event;
-    }
-  }
 }
 
 function resolveSettingsService(value: unknown): SettingsService | undefined {

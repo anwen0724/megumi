@@ -17,7 +17,6 @@ const mocks = vi.hoisted(() => {
       openProject: vi.fn(),
       removeProject: vi.fn(),
       listAuthorizedWorkspaceRoots: vi.fn(() => ['C:/all/work/study/megumi']),
-      restoreWorkspaceChangeSet: vi.fn(),
     },
     session: {
       create: vi.fn(),
@@ -79,7 +78,7 @@ const mocks = vi.hoisted(() => {
       isDestroyed: vi.fn(() => false),
       webContents: { send: vi.fn() },
     })),
-    createDatabase: vi.fn(() => ({ databaseId: 'recovery-database' })),
+    createDatabase: vi.fn(() => ({ databaseId: 'coding-agent-database' })),
     migrateDatabase: vi.fn(),
     codingAgentRuntime: codingAgentHost,
     codingAgentHost,
@@ -172,12 +171,6 @@ const mocks = vi.hoisted(() => {
         syncImplementationPlanArtifact: vi.fn(),
       };
     }),
-    createRecoveryService: vi.fn((_options?: unknown) => ({
-      listRecoverableRuns: vi.fn(),
-      resumeRun: vi.fn(),
-      cancelRun: vi.fn(),
-      retryRun: vi.fn(),
-    })),
     createWorkspaceFilesService: vi.fn(() => ({
       listDirectory: vi.fn(),
     })),

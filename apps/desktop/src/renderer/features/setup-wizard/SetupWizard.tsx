@@ -40,7 +40,7 @@ export function SetupWizard() {
   const [skipProvider, setSkipProvider] = useState(false);
 
   const saving = status === 'saving';
-  const selectedProviderId = skipProvider ? 'deepseek' : providerId;
+  const selectedProviderId = skipProvider ? undefined : providerId;
   const providerStepComplete = skipProvider || Boolean(providerId);
   const finishDisabled = saving || (
     !skipProvider && (!providerId || parseModelIds(modelIdsText).length === 0 || (providerId !== 'anthropic' && !baseUrl.trim()))
@@ -52,14 +52,14 @@ export function SetupWizard() {
   }
 
   async function handleFinish() {
-    if (!selectedProviderId) {
+    if (!skipProvider && !selectedProviderId) {
       return;
     }
 
     await completeSetup({
       language,
       theme,
-      providerId: selectedProviderId,
+      ...(selectedProviderId ? { providerId: selectedProviderId } : {}),
       baseUrl,
       modelIds: parseModelIds(modelIdsText),
       apiKey,

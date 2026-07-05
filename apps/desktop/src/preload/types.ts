@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   SessionBranchDraftCancelData,
   SessionBranchDraftCancelPayload,
   SessionBranchDraftCreateData,
@@ -7,8 +7,6 @@
   SessionMessageSendPayload,
   SessionTimelineListData,
   SessionTimelineListPayload,
-  WorkspaceRestoreData,
-  WorkspaceRestorePayload,
   WorkspaceFileOpenData,
   WorkspaceFileOpenPayload,
 } from '@megumi/shared/ipc';
@@ -23,8 +21,5 @@ export type SessionBranchDraftCreatePreloadPayload = SessionBranchDraftCreatePay
 export type SessionBranchDraftCreatePreloadData = SessionBranchDraftCreateData;
 export type SessionBranchDraftCancelPreloadPayload = SessionBranchDraftCancelPayload;
 export type SessionBranchDraftCancelPreloadData = SessionBranchDraftCancelData;
-export type WorkspaceRestorePreloadPayload = WorkspaceRestorePayload;
-export type WorkspaceRestorePreloadData = WorkspaceRestoreData;
 export type WorkspaceFileOpenPreloadPayload = WorkspaceFileOpenPayload;
 export type WorkspaceFileOpenPreloadData = WorkspaceFileOpenData;
-

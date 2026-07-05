@@ -3,7 +3,6 @@ import { KeyRound, RefreshCw, Trash2 } from 'lucide-react';
 import type { ProviderId, ProviderPublicStatus } from '@megumi/shared/provider';
 import { useProviderStore } from '../../../entities/provider';
 import { Badge, Button, IconButton, TextField } from '../../../shared/ui';
-import { COMPOSER_MODEL_OPTIONS } from '../../chat/components/composer-options';
 
 interface ProviderFormState {
   enabled: boolean;
@@ -40,10 +39,6 @@ function parseModelIds(value: string): string[] {
     .split(/[\n,]+/)
     .map((entry) => entry.trim())
     .filter(Boolean);
-}
-
-function appendModelId(value: string, modelId: string): string {
-  return Array.from(new Set([...parseModelIds(value), modelId])).join(', ');
 }
 
 export function ProviderSettingsPanel() {
@@ -170,7 +165,6 @@ export function ProviderSettingsPanel() {
       <div className="space-y-3">
         {providers.map((provider) => {
           const form = forms[provider.providerId] ?? createInitialFormState(provider);
-          const modelOptions = COMPOSER_MODEL_OPTIONS.filter((option) => option.providerId === provider.providerId);
 
           return (
             <section
@@ -209,29 +203,6 @@ export function ProviderSettingsPanel() {
                   onChange={(event) => updateForm(provider.providerId, { modelIdsText: event.target.value })}
                   placeholder="model-id, another-model-id"
                 />
-
-                <label className="block text-xs font-medium text-[var(--color-text-muted)]">
-                  {provider.displayName} known model
-                  <select
-                    aria-label={`${provider.displayName} known model`}
-                    value=""
-                    onChange={(event) => {
-                      if (event.target.value) {
-                        updateForm(provider.providerId, {
-                          modelIdsText: appendModelId(form.modelIdsText, event.target.value),
-                        });
-                      }
-                    }}
-                    className="mt-1 h-9 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-2 text-sm text-[var(--color-text)]"
-                  >
-                    <option value="">Add known model</option>
-                    {modelOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
 
                 <Button type="submit" size="sm" variant="secondary" disabled={status === 'saving'}>
                   Save {provider.displayName} settings
