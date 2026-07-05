@@ -1,4 +1,4 @@
-import { type JsonObject } from '@megumi/shared/primitives/json';
+import { type JsonObject } from '../../core/json';
 import { createProviderError, type ProviderErrorCode } from '../../core/provider-error';
 import { type TokenUsage } from '../../core/token-usage';
 import {

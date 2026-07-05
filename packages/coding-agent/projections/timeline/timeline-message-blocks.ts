@@ -1,12 +1,11 @@
-﻿import type {
-  MessageId,
-  RunId,
-  SessionId,
-  ToolCallId,
-  ToolExecutionId,
-  ToolResultId,
-} from '@megumi/shared/primitives';
-import type { WorkspaceChangeFooterFact } from '../workspace/workspace-change-footer-projector';
+﻿import type { WorkspaceChangeFooterFact } from '../workspace/workspace-change-footer-projector';
+
+type MessageId = string;
+type RunId = string;
+type SessionId = string;
+type ToolCallId = string;
+type ToolExecutionId = string;
+type ToolResultId = string;
 
 export const TIMELINE_MESSAGE_ROLES = ['user', 'assistant', 'separator'] as const;
 export type TimelineMessageRole = (typeof TIMELINE_MESSAGE_ROLES)[number];

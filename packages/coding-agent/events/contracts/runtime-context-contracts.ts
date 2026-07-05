@@ -1,5 +1,4 @@
 ﻿import { z } from 'zod';
-import type { IsoDateTime } from '@megumi/shared/primitives';
 import {
   IsoDateTimeSchema,
   RuntimeDebugIdSchema,
@@ -9,6 +8,8 @@ import {
   RuntimeTraceIdSchema,
   type RuntimeSource,
 } from '../core/runtime-event-validation';
+
+export type IsoDateTime = string;
 
 export const RuntimeContextSchema = z
   .object({

@@ -3,7 +3,7 @@
  * It isolates prompt/tool-set mapping from Model Call Service control flow.
  */
 import type { AiCallRequest, ConversationMessage, ToolSet as AiToolSet } from '@megumi/ai';
-import type { JsonObject } from '@megumi/shared/primitives';
+import type { JsonObject } from '../../shared-json';
 import type { PromptMessage } from '../../context';
 import type { ModelCallRequest, ToolSet } from '../contracts/model-call-contracts';
 

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import {
     JsonObjectSchema,
     type JsonObject,
-} from '@megumi/shared/primitives/json';
+} from '../core/json';
 
 export const ToolSetEntrySchema = z
     .object({

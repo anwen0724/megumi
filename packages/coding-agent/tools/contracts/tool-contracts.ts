@@ -1,5 +1,5 @@
 // Defines the public contracts exposed by the Coding Agent tools module.
-import type { JsonObject, JsonValue } from '@megumi/shared/primitives';
+import type { JsonObject, JsonValue } from '../../shared-json';
 
 export type JsonSchemaObject = JsonObject;
 

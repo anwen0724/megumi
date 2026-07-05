@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { type JsonObject } from '@megumi/shared/primitives/json';
+import { type JsonObject } from './json';
 
 export const ProviderErrorCodeSchema = z.enum([
     'credential_error',

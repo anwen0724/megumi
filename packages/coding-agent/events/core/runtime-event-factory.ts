@@ -1,5 +1,4 @@
-﻿import type { RunId } from '@megumi/shared/primitives';
-import type { ModelId } from '@megumi/shared/model';
+﻿import type { ModelId } from '@megumi/shared/model';
 import type { ProviderId } from '@megumi/shared/provider';
 import type { RuntimeContext } from '../contracts/runtime-context-contracts';
 import type { RuntimeError } from '../contracts/runtime-error-contracts';
@@ -25,6 +24,8 @@ import type {
   RuntimeEventVisibility,
   TypedRuntimeEvent,
 } from '../contracts/runtime-event-contracts';
+
+type RunId = string;
 
 export interface RuntimeEventRequestRef {
   requestId: string;

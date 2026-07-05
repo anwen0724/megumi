@@ -1,5 +1,4 @@
-import { type JsonObject } from '@megumi/shared/primitives/json';
-import { type JsonValue } from '@megumi/shared/primitives';
+import { type JsonObject, type JsonValue } from '../core/json';
 import { type AiModel } from '../core/ai-model';
 import { type ModelContext } from '../context/model-context';
 import { type ToolSet } from '../tools/tool-set';

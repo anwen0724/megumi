@@ -1,4 +1,4 @@
-import { type JsonObject } from '@megumi/shared/primitives/json';
+import { type JsonObject } from '../core/json';
 import { type ProtocolRegistry } from '../protocols/protocol-registry';
 
 export type ProviderCredential =
