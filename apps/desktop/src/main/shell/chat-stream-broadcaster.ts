@@ -2,8 +2,8 @@
 // Holds a mutable window ref so composition can build the broadcaster before the
 // window exists; createWindow attaches it via setWindow. Publishing is a no-op
 // while no live window is attached, so the host interface never blocks on UI.
-import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
-import { forwardChatStreamEvent } from '../ipc/chat-stream-event-forwarder';
+import type { ChatStreamEvent } from '@megumi/coding-agent/projections/chat-stream';
+import { forwardChatStreamEvent } from '../ipc/event-forwarders';
 import type { RuntimeLogger } from '../services/agent-run/runtime-logger.service';
 
 export interface BroadcastWindow {

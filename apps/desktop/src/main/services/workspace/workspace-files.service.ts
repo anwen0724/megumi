@@ -6,12 +6,12 @@ import {
   resolveSafePath,
 } from '@megumi/coding-agent/adapters/local/security/sandbox-policy';
 import type {
-  WorkspaceFileOpenData,
-  WorkspaceFileOpenPayload,
-  WorkspaceDirectoryEntry,
-  WorkspaceFilesListData,
-  WorkspaceFilesListPayload,
-} from '@megumi/shared/workspace';
+  WorkspaceFileEntryUiDto,
+  WorkspaceListFilesUiRequest,
+  WorkspaceListFilesUiResult,
+  WorkspaceOpenFileUiRequest,
+  WorkspaceOpenFileUiResult,
+} from '@megumi/coding-agent/host-interface';
 
 export const DEFAULT_WORKSPACE_FILE_IGNORE_NAMES = [
   '.git',
@@ -36,8 +36,8 @@ export interface WorkspaceFilesFileSystem {
 }
 
 export interface WorkspaceFilesService {
-  listDirectory(input: WorkspaceFilesListPayload): Promise<WorkspaceFilesListData>;
-  openFile(input: WorkspaceFileOpenPayload): Promise<WorkspaceFileOpenData>;
+  listDirectory(input: WorkspaceListFilesUiRequest): Promise<WorkspaceListFilesUiResult>;
+  openFile(input: WorkspaceOpenFileUiRequest): Promise<WorkspaceOpenFileUiResult>;
 }
 
 export interface CreateWorkspaceFilesServiceOptions {
@@ -69,7 +69,7 @@ export function createWorkspaceFilesService(
       const directoryPath = normalizeDirectoryPath(input.directoryPath);
       const resolvedDirectory = resolveSafePath(workspaceRoot, directoryPath);
       const entries = await fileSystem.readdir(resolvedDirectory, { withFileTypes: true });
-      const listedEntries: WorkspaceDirectoryEntry[] = [];
+      const listedEntries: WorkspaceFileEntryUiDto[] = [];
 
       for (const entry of entries) {
         if (!entry.isDirectory() && !entry.isFile()) {
@@ -82,16 +82,16 @@ export function createWorkspaceFilesService(
 
         const relativePath = toRelativePath(directoryPath, entry.name);
         const stats = await fileSystem.stat(path.join(resolvedDirectory, entry.name));
-        const kind = entry.isDirectory() ? 'directory' : 'file';
+        const type = entry.isDirectory() ? 'directory' : 'file';
 
         listedEntries.push({
           name: entry.name,
           relativePath,
-          kind,
+          type,
           depth: depthFor(relativePath),
           hidden: entry.name.startsWith('.'),
           ignored: false,
-          ...(kind === 'file' ? { sizeBytes: stats.size } : {}),
+          ...(type === 'file' ? { sizeBytes: stats.size } : {}),
           mtime: stats.mtime.toISOString(),
         });
       }
@@ -155,9 +155,9 @@ function depthFor(relativePath: string): number {
   return relativePath.split('/').filter(Boolean).length - 1;
 }
 
-function compareEntries(left: WorkspaceDirectoryEntry, right: WorkspaceDirectoryEntry): number {
-  if (left.kind !== right.kind) {
-    return left.kind === 'directory' ? -1 : 1;
+function compareEntries(left: WorkspaceFileEntryUiDto, right: WorkspaceFileEntryUiDto): number {
+  if (left.type !== right.type) {
+    return left.type === 'directory' ? -1 : 1;
   }
 
   return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });

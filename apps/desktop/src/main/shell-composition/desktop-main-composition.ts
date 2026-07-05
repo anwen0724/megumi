@@ -43,15 +43,13 @@ export function composeDesktopMain() {
     megumiHomePaths,
     runtimeLogger,
     chatStreamBroadcaster,
-    providerService: codingAgentHost.settings.provider,
-    settingsService: codingAgentHost.settings,
-    commandService: codingAgentHost.commands,
-    sessionHandlers: { host: codingAgentHost },
-    planService: codingAgentHost.artifacts.plan,
-    permissionsService: codingAgentHost.permissions,
-    artifactService: codingAgentHost.artifacts,
-    projectService: codingAgentHost.workspace,
-    workspaceFilesService,
-    dispose: () => codingAgentHost.dispose(),
+    workspace: { host: codingAgentHost, workspaceFilesService },
+    chat: { host: codingAgentHost },
+    settings: { host: codingAgentHost },
+    approval: { host: codingAgentHost },
+    artifact: codingAgentHost.artifacts,
+    dispose: () => {
+      void codingAgentHost.dispose?.();
+    },
   };
 }

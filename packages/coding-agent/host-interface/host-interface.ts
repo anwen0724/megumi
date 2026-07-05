@@ -1,55 +1,12 @@
-// Defines the external host-facing interface for UI, CLI, web, and other shells.
-import type { CommandService } from '../commands';
-import type { ArtifactController } from './artifacts/artifact-controller';
-import type { InputController } from './input-controller';
-import type { PlanController } from './artifacts/plan-controller';
-import type { ApprovalController } from './permissions/approval-controller';
-import type { ProviderController } from './settings/provider-controller';
-import type { SettingsController } from './settings/settings-controller';
-import type { SessionBranchController } from './session/branch-controller';
-import type { SessionController } from './session/session-controller';
-import type { WorkspaceController } from './workspace/workspace-controller';
+/*
+ * Creates the host-facing Coding Agent interface for UI, CLI, web, and other shells.
+ */
+import type { CodingAgentHostInterface } from './contracts/host-interface-contracts';
 
-export type HostCommandController = Pick<CommandService, 'listCommands' | 'getCommandSuggestions'>;
-export type HostWorkspaceController = WorkspaceController;
-export type HostSessionController = SessionController & SessionBranchController;
-export type HostSettingsController = SettingsController & { provider: ProviderController };
-export type HostPermissionController = ApprovalController;
-export type HostArtifactController = ArtifactController & { plan: PlanController };
-
-export interface CodingAgentHostInterface {
-  input: InputController;
-  commands: HostCommandController;
-  workspace: HostWorkspaceController;
-  session: HostSessionController;
-  settings: HostSettingsController;
-  permissions: HostPermissionController;
-  artifacts: HostArtifactController;
-  dispose(): void;
-}
-
-export interface CreateCodingAgentHostInterfaceOptions {
-  input: InputController;
-  commands: HostCommandController;
-  workspace: HostWorkspaceController;
-  session: HostSessionController;
-  settings: HostSettingsController;
-  permissions: HostPermissionController;
-  artifacts: HostArtifactController;
-  dispose(): void;
-}
+export type { CodingAgentHostInterface } from './contracts/host-interface-contracts';
 
 export function createCodingAgentHostInterface(
-  options: CreateCodingAgentHostInterfaceOptions,
+  options: CodingAgentHostInterface,
 ): CodingAgentHostInterface {
-  return {
-    input: options.input,
-    commands: options.commands,
-    workspace: options.workspace,
-    session: options.session,
-    settings: options.settings,
-    permissions: options.permissions,
-    artifacts: options.artifacts,
-    dispose: options.dispose,
-  };
+  return options;
 }

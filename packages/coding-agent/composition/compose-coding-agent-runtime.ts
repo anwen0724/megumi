@@ -19,23 +19,19 @@ import { createSessionService, type SessionService } from '../session';
 import { SessionRepository as SessionV2Repository } from '../session/repositories/session-repository';
 import {
   createCodingAgentHostInterface,
-  createInputController,
+  createApprovalController,
+  createChatController,
+  createSettingsController,
+  createWorkspaceController,
   type CodingAgentHostInterface,
+  type ChatControllerCompatibilityQueries,
+  type DirectoryPickerPort,
+  type SessionBranchControllerServicePort,
 } from '../host-interface';
 import { createArtifactController } from '../host-interface/artifacts/artifact-controller';
 import { createPlanController } from '../host-interface/artifacts/plan-controller';
-import { createApprovalController } from '../host-interface/permissions/approval-controller';
-import { createProviderController } from '../host-interface/settings/provider-controller';
-import { createSettingsController } from '../host-interface/settings/settings-controller';
-import {
-  createSessionBranchController,
-  type SessionBranchControllerServicePort,
-} from '../host-interface/session/branch-controller';
-import { createSessionController } from '../host-interface/session/session-controller';
-import { createWorkspaceController } from '../host-interface/workspace/workspace-controller';
-import type { DirectoryPickerPort } from '../host-interface/workspace/workspace-controller';
 import type { RuntimeLogger } from '../host-interface/runtime-logger';
-import type { ChatStreamEvent } from '@megumi/shared/chat-stream';
+import type { ChatStreamEvent } from '../projections/chat-stream';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
 import {
   composeCodingAgentToolExecutionService,
@@ -73,9 +69,8 @@ import {
   type AssistantMessage,
   type AssistantStreamEvent,
 } from '@megumi/ai';
-import type { RuntimeEvent } from '@megumi/shared/runtime';
-import type { TimelineMessage } from '@megumi/shared/timeline';
-import type { Run } from '@megumi/shared/session';
+import type { RuntimeEvent } from '../events';
+import type { TimelineMessage } from '../projections/timeline';
 import type { ImplementationPlanArtifactRecord } from '@megumi/shared/permission';
 import { WorkspaceChangeRepository } from '../workspace/repositories/workspace-change-repository';
 import { WorkspaceRepository } from '../workspace/repositories/workspace-repository';
@@ -117,10 +112,10 @@ export interface CodingAgentRuntime {
   planArtifactService: PlanArtifactService;
   contextRuntime: ReturnType<typeof composeCodingAgentContext>;
   sessionBranchService: SessionBranchControllerServicePort;
-  compatibility: {
+  compatibility: ChatControllerCompatibilityQueries & {
     listWorkspaceIds(): string[];
-    listTimelineMessagesBySession(payload: Parameters<ReturnType<typeof createSessionController>['listTimeline']>[0]): ReturnType<ReturnType<typeof createSessionController>['listTimeline']>;
-    listRunsBySession(sessionId: string): ReturnType<ReturnType<typeof createSessionController>['listRuns']>['runs'];
+    listTimelineMessagesBySession(payload: Parameters<ChatControllerCompatibilityQueries['listTimelineMessagesBySession']>[0]): ReturnType<ChatControllerCompatibilityQueries['listTimelineMessagesBySession']>;
+    listRunsBySession(sessionId: string): AgentRun[];
   };
   dispose(): void;
 }
@@ -281,7 +276,8 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     compatibility: {
       listWorkspaceIds: () => workspaceRepository.listWorkspaces().map((workspace) => workspace.workspace_id),
       listTimelineMessagesBySession: (payload) => listSessionTimelineMessages(sessionService, payload),
-      listRunsBySession: (sessionId) => agentRunRepository.listRunsBySession(sessionId).map(toSharedRun),
+      listRunsBySession: (sessionId) => agentRunRepository.listRunsBySession(sessionId),
+      listRuntimeEventsByRun: () => [],
     },
     dispose: () => persistence.database.close(),
   };
@@ -291,41 +287,22 @@ export function composeCodingAgentHostInterface(
   options: ComposeCodingAgentRuntimeOptions,
 ): CodingAgentHostInterface {
   const runtime = composeCodingAgentRuntime(options);
-  const settings = createSettingsController(runtime.settingsService);
   const artifacts = createArtifactController(runtime.artifactService);
 
   return createCodingAgentHostInterface({
-    input: createInputController({
+    chat: createChatController({
       agentRunService: runtime.agentRunService,
-      sessionLookup: {
-        getSession(sessionId) {
-          const result = runtime.sessionService.getSession({ session_id: sessionId });
-          if (result.status !== 'found') return undefined;
-          return {
-            sessionId: result.session.session_id,
-            title: result.session.title,
-            workspaceId: result.session.workspace_id,
-            status: result.session.status,
-            createdAt: result.session.created_at,
-            updatedAt: result.session.updated_at,
-          };
-        },
-      },
+      commandService: runtime.commandService,
+      sessionService: runtime.sessionService,
+      branchService: runtime.sessionBranchService,
+      compatibility: runtime.compatibility,
     }),
-    commands: runtime.commandService,
     workspace: createWorkspaceController({
       workspaceService: runtime.workspaceService,
       ...(options.directoryPicker ? { directoryPicker: options.directoryPicker } : {}),
     }),
-    session: {
-      ...createSessionController(runtime.sessionService, runtime.compatibility),
-      ...createSessionBranchController(runtime.sessionBranchService),
-    },
-    settings: {
-      ...settings,
-      provider: createProviderController(runtime.settingsService),
-    },
-    permissions: createApprovalController(runtime.agentRunService),
+    settings: createSettingsController(runtime.settingsService),
+    approval: createApprovalController(runtime.agentRunService),
     artifacts: {
       ...artifacts,
       plan: createPlanController(runtime.planArtifactService),
@@ -616,31 +593,6 @@ function listSessionTimelineMessages(
       };
     }),
     diagnostics: [],
-  };
-}
-
-function toSharedRun(run: AgentRun): Run {
-  return {
-    runId: run.run_id,
-    sessionId: run.session_id,
-    ...(run.trigger.type === 'user_input' ? { triggerMessageId: run.trigger.user_message_id } : {}),
-    mode: run.trigger.type,
-    goal: run.trigger.type === 'command'
-      ? `/${run.trigger.command_name}`
-      : run.trigger.user_message_id,
-    status: run.status,
-    createdAt: run.created_at,
-    ...(run.started_at ? { startedAt: run.started_at } : {}),
-    ...(run.completed_at ? { completedAt: run.completed_at } : {}),
-    metadata: {
-      provider_id: run.model_selection.provider_id,
-      model_id: run.model_selection.model_id,
-      trigger: run.trigger,
-      ...(run.failure ? {
-        failure_code: run.failure.code,
-        failure_message: run.failure.message,
-      } : {}),
-    },
   };
 }
 

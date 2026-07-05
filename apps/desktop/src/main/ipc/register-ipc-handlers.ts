@@ -1,50 +1,28 @@
-// Registers Desktop Main IPC channels with services assembled by composition.
+/*
+ * Registers Desktop Main IPC channels with host-interface controllers and shell adapters.
+ */
 import { registerWindowHandlers } from './handlers/window.handler';
-import { registerProviderHandlers, type ProviderHandlersService } from './handlers/provider.handler';
-import {
-  registerSettingsHandlers,
-  type SettingsHandlersService,
-} from './handlers/settings.handler';
-import {
-  registerCommandHandlers,
-  type CommandHandlersService,
-} from './handlers/command.handler';
-import { registerSessionHandlers, type SessionHandlersServices } from './handlers/session.handler';
-import {
-  registerPlanHandlers,
-  type PlanHandlersService,
-} from './handlers/plan.handler';
-import {
-  registerToolHandlers,
-  type PermissionHandlersService,
-} from './handlers/tool.handler';
+import { registerWorkspaceHandlers, type WorkspaceHandlersService } from './handlers/workspace.handler';
+import { registerChatHandlers, type ChatHandlersService } from './handlers/chat.handler';
+import { registerSettingsHandlers, type SettingsHandlersService } from './handlers/settings.handler';
+import { registerApprovalHandlers, type ApprovalHandlersService } from './handlers/approval.handler';
 import {
   registerArtifactHandlers,
   type ArtifactHandlersService,
 } from './handlers/artifact.handler';
-import {
-  registerProjectHandlers,
-  type ProjectHandlersService,
-} from './handlers/project.handler';
-import {
-  registerWorkspaceFilesHandlers,
-  type WorkspaceFilesHandlersService,
-} from './handlers/workspace-files.handler';
+import { registerMemoryHandlers, type MemoryHandlersService } from './handlers/memory.handler';
 import type { RuntimeLogger } from '../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../shell/electron-ipc-main-host';
 
 export interface RegisterAllHandlersOptions {
   logger?: RuntimeLogger;
   ipcMain?: DesktopIpcMain;
-  providerService?: ProviderHandlersService;
-  settingsService?: SettingsHandlersService;
-  commandService?: CommandHandlersService;
-  sessionHandlers?: SessionHandlersServices;
-  planService?: PlanHandlersService;
-  permissionsService?: PermissionHandlersService;
-  artifactService?: ArtifactHandlersService;
-  projectService?: ProjectHandlersService;
-  workspaceFilesService?: WorkspaceFilesHandlersService;
+  workspace?: WorkspaceHandlersService;
+  chat?: ChatHandlersService;
+  settings?: SettingsHandlersService;
+  approval?: ApprovalHandlersService;
+  artifact?: ArtifactHandlersService;
+  memory?: MemoryHandlersService;
 }
 
 export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): void {
@@ -52,43 +30,27 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
 
   registerWindowHandlers({ ipcMain });
 
-  if (options.providerService) {
-    registerProviderHandlers(options.providerService, { logger: options.logger, ipcMain });
+  if (options.workspace) {
+    registerWorkspaceHandlers(options.workspace, { logger: options.logger, ipcMain });
   }
 
-  if (options.settingsService) {
-    registerSettingsHandlers({
-      ipcMain,
-      settingsService: options.settingsService,
-      logger: options.logger,
-    });
+  if (options.chat) {
+    registerChatHandlers(options.chat, { logger: options.logger, ipcMain });
   }
 
-  if (options.commandService) {
-    registerCommandHandlers(options.commandService, { logger: options.logger, ipcMain });
+  if (options.settings) {
+    registerSettingsHandlers(options.settings, { logger: options.logger, ipcMain });
   }
 
-  if (options.sessionHandlers) {
-    registerSessionHandlers(options.sessionHandlers, { logger: options.logger, ipcMain });
+  if (options.approval) {
+    registerApprovalHandlers(options.approval, { logger: options.logger, ipcMain });
   }
 
-  if (options.planService) {
-    registerPlanHandlers(options.planService, { logger: options.logger, ipcMain });
+  if (options.artifact) {
+    registerArtifactHandlers(options.artifact, { logger: options.logger, ipcMain });
   }
 
-  if (options.permissionsService) {
-    registerToolHandlers(options.permissionsService, { logger: options.logger, ipcMain });
-  }
-
-  if (options.artifactService) {
-    registerArtifactHandlers(options.artifactService, { logger: options.logger, ipcMain });
-  }
-
-  if (options.projectService) {
-    registerProjectHandlers(options.projectService, { logger: options.logger, ipcMain });
-  }
-
-  if (options.workspaceFilesService) {
-    registerWorkspaceFilesHandlers(options.workspaceFilesService, { logger: options.logger, ipcMain });
+  if (options.memory) {
+    registerMemoryHandlers({ memoryService: options.memory, logger: options.logger, ipcMain });
   }
 }

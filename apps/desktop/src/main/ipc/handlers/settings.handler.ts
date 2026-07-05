@@ -1,40 +1,81 @@
-// Adapts renderer settings IPC calls to the Main-owned app settings service.
-// This handler never reads or writes renderer-local storage.
-import { IPC_CHANNELS } from '@megumi/shared/ipc';
-import type { RuntimeIpcError } from '@megumi/shared/ipc';
-import type { HostSettingsController } from '@megumi/coding-agent/host-interface';
+/*
+ * Desktop IPC handlers for settings and provider configuration.
+ */
+import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
+import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
+import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
+import { createIpcRequestHandler } from '../create-request-handler';
+import { IPC_CHANNELS } from '../channels';
+import type { RuntimeIpcError } from '../contracts';
 import {
+  ProviderApiKeyRequestSchema,
+  ProviderDeleteApiKeyRequestSchema,
+  ProviderListRequestSchema,
+  ProviderUpdateRequestSchema,
   SettingsGetRequestSchema,
   SettingsUpdateRequestSchema,
-} from '@megumi/coding-agent/host-interface';
-import { createIpcRequestHandler } from '../create-ipc-request-handler';
-import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
-import type { DesktopIpcMain } from '../../shell/electron-ipc-main-host';
+} from '../schemas';
 
-export type SettingsHandlersService = Pick<HostSettingsController, 'get' | 'update'>;
-
-export interface RegisterSettingsHandlersOptions {
-  ipcMain: DesktopIpcMain;
-  settingsService: SettingsHandlersService;
-  logger?: RuntimeLogger;
+export interface SettingsHandlersService {
+  host: Pick<CodingAgentHostInterface, 'settings'>;
 }
 
-export function registerSettingsHandlers(options: RegisterSettingsHandlersOptions): void {
-  const { ipcMain, settingsService, logger } = options;
+export interface RegisterSettingsHandlersOptions {
+  logger?: RuntimeLogger;
+  ipcMain?: DesktopIpcMain;
+}
+
+export function registerSettingsHandlers(
+  service: SettingsHandlersService,
+  options: RegisterSettingsHandlersOptions = {},
+): void {
+  const ipcMain = options.ipcMain ?? electronIpcMain;
 
   ipcMain.handle(IPC_CHANNELS.settings.get, createIpcRequestHandler({
     channel: IPC_CHANNELS.settings.get,
     requestSchema: SettingsGetRequestSchema,
-    logger,
-    handle: () => settingsService.get(),
+    logger: options.logger,
+    handle: () => service.host.settings.get({}),
     mapError: mapSettingsIpcError,
   }));
 
   ipcMain.handle(IPC_CHANNELS.settings.update, createIpcRequestHandler({
     channel: IPC_CHANNELS.settings.update,
     requestSchema: SettingsUpdateRequestSchema,
-    logger,
-    handle: (request) => settingsService.update(request.payload),
+    logger: options.logger,
+    handle: (request) => service.host.settings.update(request.payload),
+    mapError: mapSettingsIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.settings.providerList, createIpcRequestHandler({
+    channel: IPC_CHANNELS.settings.providerList,
+    requestSchema: ProviderListRequestSchema,
+    logger: options.logger,
+    handle: () => service.host.settings.listProviders({}),
+    mapError: mapSettingsIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.settings.providerUpdate, createIpcRequestHandler({
+    channel: IPC_CHANNELS.settings.providerUpdate,
+    requestSchema: ProviderUpdateRequestSchema,
+    logger: options.logger,
+    handle: (request) => service.host.settings.updateProvider(request.payload),
+    mapError: mapSettingsIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.settings.providerSetApiKey, createIpcRequestHandler({
+    channel: IPC_CHANNELS.settings.providerSetApiKey,
+    requestSchema: ProviderApiKeyRequestSchema,
+    logger: options.logger,
+    handle: (request) => service.host.settings.setProviderApiKey(request.payload),
+    mapError: mapSettingsIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.settings.providerDeleteApiKey, createIpcRequestHandler({
+    channel: IPC_CHANNELS.settings.providerDeleteApiKey,
+    requestSchema: ProviderDeleteApiKeyRequestSchema,
+    logger: options.logger,
+    handle: (request) => service.host.settings.deleteProviderApiKey(request.payload),
     mapError: mapSettingsIpcError,
   }));
 }

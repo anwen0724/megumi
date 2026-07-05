@@ -2,18 +2,11 @@ import { IPC_CHANNELS } from '@megumi/shared/ipc';
 import type { RuntimeIpcRequest } from '@megumi/shared/ipc';
 import type { RuntimeIpcError } from '@megumi/shared/ipc';
 import type {
-  ArtifactGetData,
-  ArtifactGetPayload,
   ArtifactListByRunPayload,
   ArtifactListBySessionPayload,
-  ArtifactListData,
-  ArtifactReferenceData,
   ArtifactReferencePayload,
-  ArtifactStatusUpdateData,
   ArtifactStatusUpdatePayload,
-  ArtifactVersionCreateData,
   ArtifactVersionCreatePayload,
-  ArtifactVersionGetData,
   ArtifactVersionGetPayload,
 } from '@megumi/shared/ipc';
 import {
@@ -25,12 +18,22 @@ import {
   ArtifactVersionCreateRequestSchema,
   ArtifactVersionGetRequestSchema,
 } from '@megumi/shared/ipc';
-import type { HostArtifactController } from '@megumi/coding-agent/host-interface';
+import type {
+  ArtifactController,
+  ArtifactCreateVersionPayload,
+  ArtifactGetData,
+  ArtifactListData,
+  ArtifactReferenceData,
+  ArtifactReferencePayload as HostArtifactReferencePayload,
+  ArtifactStatusUpdateData,
+  ArtifactVersionCreateData,
+  ArtifactVersionGetData,
+} from '@megumi/coding-agent/host-interface';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
-import { createIpcRequestHandler } from '../create-ipc-request-handler';
+import { createIpcRequestHandler } from '../create-request-handler';
 
-export type ArtifactHandlersService = Omit<HostArtifactController, 'plan'>;
+export type ArtifactHandlersService = ArtifactController;
 
 export interface RegisterArtifactHandlersOptions {
   logger?: RuntimeLogger;
@@ -67,7 +70,7 @@ export function registerArtifactHandlers(
     channel: IPC_CHANNELS.artifacts.get,
     requestSchema: ArtifactGetRequestSchema,
     logger: options.logger,
-    handle: (request: RuntimeIpcRequest<ArtifactGetPayload, typeof IPC_CHANNELS.artifacts.get>): ArtifactGetData =>
+    handle: (request): ArtifactGetData =>
       service.get(request.payload.artifactId),
     mapError: mapArtifactIpcError,
   }));
@@ -88,7 +91,7 @@ export function registerArtifactHandlers(
     logger: options.logger,
     handle: async (
       request: RuntimeIpcRequest<ArtifactVersionCreatePayload, typeof IPC_CHANNELS.artifacts.versionCreate>,
-    ): Promise<ArtifactVersionCreateData> => service.createVersion(request.payload),
+    ): Promise<ArtifactVersionCreateData> => service.createVersion(request.payload as ArtifactCreateVersionPayload),
     mapError: mapArtifactIpcError,
   }));
 
@@ -107,7 +110,7 @@ export function registerArtifactHandlers(
     requestSchema: ArtifactReferenceRequestSchema,
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<ArtifactReferencePayload, typeof IPC_CHANNELS.artifacts.reference>): ArtifactReferenceData => ({
-      sourceRef: service.reference(request.payload).sourceRef,
+      sourceRef: service.reference(request.payload as HostArtifactReferencePayload).sourceRef,
     }),
     mapError: mapArtifactIpcError,
   }));

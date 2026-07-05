@@ -17,7 +17,7 @@ import {
   MemorySourceRefsListRequestSchema,
   MemoryUpdateRequestSchema,
 } from '@megumi/shared/ipc';
-import { createIpcRequestHandler } from '../create-ipc-request-handler';
+import { createIpcRequestHandler } from '../create-request-handler';
 import type { MemoryService } from '@megumi/coding-agent/memory';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import type { DesktopIpcMain } from '../../shell/electron-ipc-main-host';

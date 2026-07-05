@@ -22,15 +22,11 @@ if (shouldQuitForSquirrelStartup()) {
     runMigrations: () => desktopMain.megumiHomePaths,
     registerAllHandlers: () => registerAllHandlers({
       logger: desktopMain.runtimeLogger,
-      providerService: desktopMain.providerService,
-      commandService: desktopMain.commandService,
-      sessionHandlers: desktopMain.sessionHandlers,
-      planService: desktopMain.planService,
-      permissionsService: desktopMain.permissionsService,
-      artifactService: desktopMain.artifactService,
-      settingsService: desktopMain.settingsService,
-      projectService: desktopMain.projectService,
-      workspaceFilesService: desktopMain.workspaceFilesService,
+      workspace: desktopMain.workspace,
+      chat: desktopMain.chat,
+      settings: desktopMain.settings,
+      approval: desktopMain.approval,
+      artifact: desktopMain.artifact,
     }),
     createWindow: () => {
       const window = createMainWindow({
