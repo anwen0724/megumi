@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Public Agent Run Service factory.
  * It owns user-input-to-run orchestration and delegates model/tool looping to core.
  */
@@ -10,7 +10,7 @@ import type { SettingsService } from '../../settings';
 import type { ToolExecutionService, ToolRegistryService } from '../../tools';
 import type { WorkspacePathPolicyService, WorkspaceService } from '../../workspace';
 import type { CompactContextResult, ContextUsageSignal, SessionContextSource } from '../../context';
-import type { RuntimeError, RuntimeEvent, RuntimeEventEnvelopeType } from '../../events';
+import type { RuntimeEvent } from '../../events';
 import type { MegumiDatabase } from '../../persistence/connection';
 import type {
   AgentRun,
@@ -49,6 +49,10 @@ import {
 } from '../core/tool-set-builder';
 import { cleanupInterruptedRuns as cleanupInterruptedRunsCore } from '../core/run-recovery';
 import { resumeApprovalFlow } from '../core/approval-flow';
+import {
+  createAgentRunRuntimeEvent,
+  type AgentRunRuntimeEventFactory,
+} from '../core/agent-run-runtime-events';
 import {
   createAgentRunRepository,
   type AgentRunRepository,
@@ -551,37 +555,21 @@ class DefaultAgentRunService implements AgentRunService {
   private createEventSink(
     queue: RuntimeEventQueue,
     run?: Pick<AgentRun, 'run_id' | 'session_id'>,
-  ): { emit(type: string, payload?: Record<string, unknown>): RuntimeEvent } {
+  ): AgentRunRuntimeEventFactory {
     return {
-      emit: (type: string, payload?: Record<string, unknown>) => {
-        const event = this.createRuntimeEvent(type, payload, queue.nextSequence(), run);
+      emit: (runtimeEvent) => {
+        const event = createAgentRunRuntimeEvent({
+          eventId: this.ids.event_id(),
+          sequence: queue.nextSequence(),
+          now: this.clock.now(),
+          event: {
+            run,
+            ...runtimeEvent,
+          },
+        });
         queue.emit(event);
         return event;
       },
-    };
-  }
-
-  private createRuntimeEvent(
-    type: string,
-    payload: Record<string, unknown> | undefined,
-    sequence: number,
-    run?: Pick<AgentRun, 'run_id' | 'session_id'>,
-  ): RuntimeEvent {
-    const runId = stringPayload(payload, 'run_id') ?? run?.run_id;
-    const sessionId = stringPayload(payload, 'session_id') ?? run?.session_id;
-    const normalized = normalizeRuntimeEventPayload(type, payload);
-    return {
-      eventId: this.ids.event_id(),
-      schemaVersion: 1,
-      eventType: normalized.eventType,
-      ...(runId ? { runId } : {}),
-      ...(sessionId ? { sessionId } : {}),
-      sequence,
-      createdAt: this.clock.now(),
-      source: 'core',
-      visibility: 'user',
-      persist: 'required',
-      payload: normalized.payload,
     };
   }
 
@@ -1040,307 +1028,6 @@ function textForRun(
   return parsedInput.text;
 }
 
-type NormalizedRuntimeEventPayload = {
-  eventType: RuntimeEventEnvelopeType;
-  payload: Record<string, unknown>;
-};
-
-function normalizeRuntimeEventPayload(
-  type: string,
-  payload: Record<string, unknown> | undefined,
-): NormalizedRuntimeEventPayload {
-  switch (type) {
-    case 'run.started':
-      return {
-        eventType: 'run.started',
-        payload: {
-          runKind: 'agent',
-          ...(stringPayload(payload, 'provider_id') ? { providerId: stringPayload(payload, 'provider_id') } : {}),
-          ...(stringPayload(payload, 'model_id') ? { modelId: stringPayload(payload, 'model_id') } : {}),
-        },
-      };
-    case 'run.completed':
-      return {
-        eventType: 'run.completed',
-        payload: {
-          ...(stringPayload(payload, 'assistant_message_id') ? { assistantMessageId: stringPayload(payload, 'assistant_message_id') } : {}),
-        },
-      };
-    case 'run.failed':
-      return {
-        eventType: 'run.failed',
-        payload: {
-          error: runtimeErrorFromPayload(payload, 'failure', {
-            code: 'runtime_unknown',
-            message: 'Agent Run failed.',
-            source: 'core',
-          }),
-        },
-      };
-    case 'run.cancelled':
-      return {
-        eventType: 'run.cancelled',
-        payload: {
-          ...(stringPayload(payload, 'reason') ? { reason: stringPayload(payload, 'reason') } : {}),
-        },
-      };
-    case 'run.cancelling':
-      return {
-        eventType: 'run.cancelling',
-        payload: {
-          cancelRequestId: stringPayload(payload, 'cancel_request_id') ?? `cancel:${stringPayload(payload, 'run_id') ?? 'unknown'}`,
-        },
-      };
-    case 'run.waiting_for_approval':
-      return {
-        eventType: 'run.waiting_for_approval',
-        payload: {
-          approvalRequestId: stringPayload(payload, 'approval_request_id') ?? 'approval:unknown',
-          toolCallId: stringPayload(payload, 'tool_call_id') ?? 'tool-call:unknown',
-          toolExecutionId: stringPayload(payload, 'tool_execution_id') ?? stringPayload(payload, 'tool_call_id') ?? 'tool-call:unknown',
-          reason: stringPayload(payload, 'reason') ?? 'approval_required',
-        },
-      };
-    case 'model_call.started':
-      return {
-        eventType: 'model_call.started',
-        payload: {
-          modelCallId: stringPayload(payload, 'model_call_id') ?? 'model-call:unknown',
-          providerId: stringPayload(payload, 'provider_id') ?? 'provider:unknown',
-          modelId: stringPayload(payload, 'model_id') ?? 'model:unknown',
-        },
-      };
-    case 'model_call.text_delta':
-      return {
-        eventType: 'model_call.text_delta',
-        payload: {
-          modelCallId: stringPayload(payload, 'model_call_id') ?? 'model-call:unknown',
-          delta: stringPayload(payload, 'delta') ?? '',
-        },
-      };
-    case 'model_call.tool_call':
-      return {
-        eventType: 'model_call.tool_call',
-        payload: {
-          modelCallId: stringPayload(payload, 'model_call_id') ?? 'model-call:unknown',
-          toolCallId: stringPayload(payload, 'tool_call_id') ?? 'tool-call:unknown',
-          toolName: stringPayload(payload, 'tool_name') ?? 'unknown_tool',
-          input: jsonPayload(payload?.input),
-        },
-      };
-    case 'model_call.completed':
-      return {
-        eventType: 'model_call.completed',
-        payload: {
-          modelCallId: stringPayload(payload, 'model_call_id') ?? 'model-call:unknown',
-          finishReason: stringPayload(payload, 'finish_reason') ?? 'stop',
-          ...(stringPayload(payload, 'content') ? { content: stringPayload(payload, 'content') } : {}),
-        },
-      };
-    case 'model_call.failed':
-      return {
-        eventType: 'model_call.completed',
-        payload: {
-          modelCallId: stringPayload(payload, 'model_call_id') ?? 'model-call:unknown',
-          finishReason: 'failed',
-        },
-      };
-    case 'tool_call.requested':
-    case 'tool_execution.decided':
-      return {
-        eventType: 'tool_call.requested',
-        payload: {
-          ...(stringPayload(payload, 'model_call_id') ? { modelCallId: stringPayload(payload, 'model_call_id') } : {}),
-          toolCallId: stringPayload(payload, 'tool_call_id') ?? 'tool-call:unknown',
-          toolName: stringPayload(payload, 'tool_name') ?? 'unknown_tool',
-          input: jsonPayload(payload?.input),
-        },
-      };
-    case 'tool_execution.started':
-    case 'tool_call.executing':
-      return {
-        eventType: 'tool_call.started',
-        payload: {
-          toolCallId: stringPayload(payload, 'tool_call_id') ?? 'tool-call:unknown',
-          toolExecutionId: stringPayload(payload, 'tool_execution_id') ?? stringPayload(payload, 'tool_call_id') ?? 'tool-call:unknown',
-          toolName: stringPayload(payload, 'tool_name') ?? 'unknown_tool',
-          input: jsonPayload(payload?.input),
-        },
-      };
-    case 'tool_execution.completed':
-    case 'tool_call.completed':
-      return {
-        eventType: 'tool_call.completed',
-        payload: {
-          toolCallId: stringPayload(payload, 'tool_call_id') ?? 'tool-call:unknown',
-          ...(stringPayload(payload, 'tool_execution_id') ?? stringPayload(payload, 'tool_call_id')
-            ? { toolExecutionId: stringPayload(payload, 'tool_execution_id') ?? stringPayload(payload, 'tool_call_id') }
-            : {}),
-          toolName: stringPayload(payload, 'tool_name') ?? 'unknown_tool',
-        },
-      };
-    case 'tool_execution.denied':
-    case 'tool_call.denied':
-      return {
-        eventType: 'tool_call.failed',
-        payload: {
-          toolCallId: stringPayload(payload, 'tool_call_id') ?? 'tool-call:unknown',
-          ...(stringPayload(payload, 'tool_execution_id') ?? stringPayload(payload, 'tool_call_id')
-            ? { toolExecutionId: stringPayload(payload, 'tool_execution_id') ?? stringPayload(payload, 'tool_call_id') }
-            : {}),
-          toolName: stringPayload(payload, 'tool_name') ?? 'unknown_tool',
-          error: runtimeError({
-            code: 'approval_denied',
-            message: 'Tool execution was denied.',
-            source: 'approval',
-          }),
-        },
-      };
-    case 'tool_execution.failed':
-    case 'tool_call.failed':
-      return {
-        eventType: 'tool_call.failed',
-        payload: {
-          toolCallId: stringPayload(payload, 'tool_call_id') ?? 'tool-call:unknown',
-          ...(stringPayload(payload, 'tool_execution_id') ?? stringPayload(payload, 'tool_call_id')
-            ? { toolExecutionId: stringPayload(payload, 'tool_execution_id') ?? stringPayload(payload, 'tool_call_id') }
-            : {}),
-          toolName: stringPayload(payload, 'tool_name') ?? 'unknown_tool',
-          error: runtimeErrorFromPayload(payload, 'error', {
-            code: 'tool_execution_failed',
-            message: stringPayload(payload, 'message') ?? 'Tool execution failed.',
-            source: 'tool',
-          }),
-        },
-      };
-    case 'tool_result.created':
-      return {
-        eventType: 'tool_result.created',
-        payload: {
-          toolResultId: stringPayload(payload, 'tool_result_id') ?? `tool-result:${stringPayload(payload, 'tool_call_id') ?? 'unknown'}`,
-          toolCallId: stringPayload(payload, 'tool_call_id') ?? 'tool-call:unknown',
-          ...(stringPayload(payload, 'tool_execution_id') ?? stringPayload(payload, 'tool_call_id')
-            ? { toolExecutionId: stringPayload(payload, 'tool_execution_id') ?? stringPayload(payload, 'tool_call_id') }
-            : {}),
-          toolName: stringPayload(payload, 'tool_name') ?? 'unknown_tool',
-          kind: toolResultKind(payload),
-          ...(toolResultSummary(payload) ? { summary: toolResultSummary(payload) } : {}),
-        },
-      };
-    case 'approval.requested':
-      return {
-        eventType: 'approval.requested',
-        payload: {
-          approvalRequest: payload?.approval_request ?? {
-            approval_request_id: stringPayload(payload, 'approval_request_id') ?? 'approval:unknown',
-          },
-        },
-      };
-    case 'approval.resolved':
-      return {
-        eventType: 'approval.resolved',
-        payload: {
-          approvalRequestId: stringPayload(payload, 'approval_request_id') ?? 'approval:unknown',
-          decision: approvalDecision(payload),
-          scope: stringPayload(payload, 'scope') ?? 'once',
-          decidedAt: stringPayload(payload, 'decided_at') ?? new Date().toISOString(),
-        },
-      };
-    default:
-      return {
-        eventType: 'error.raised',
-        payload: {
-          error: runtimeError({
-            code: 'runtime_protocol_violation',
-            message: `Unsupported agent run event: ${type}`,
-            source: 'core',
-          }),
-        },
-      };
-  }
-}
-
-function stringPayload(payload: Record<string, unknown> | undefined, key: string): string | undefined {
-  const value = payload?.[key];
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-function jsonPayload(value: unknown): unknown {
-  if (value === undefined) return null;
-  try {
-    return JSON.parse(JSON.stringify(value)) as unknown;
-  } catch {
-    return String(value);
-  }
-}
-
-function runtimeErrorFromPayload(
-  payload: Record<string, unknown> | undefined,
-  key: string,
-  fallback: { code: RuntimeError['code']; message: string; source: RuntimeError['source'] },
-): RuntimeError {
-  const value = payload?.[key];
-  if (value && typeof value === 'object') {
-    const record = value as Record<string, unknown>;
-    return runtimeError({
-      code: runtimeErrorCode(record.code) ?? fallback.code,
-      message: typeof record.message === 'string' ? record.message : fallback.message,
-      source: fallback.source,
-      retryable: typeof record.retryable === 'boolean' ? record.retryable : undefined,
-    });
-  }
-  return runtimeError(fallback);
-}
-
-function runtimeError(input: {
-  code: RuntimeError['code'];
-  message: string;
-  source: RuntimeError['source'];
-  retryable?: boolean;
-}): RuntimeError {
-  return {
-    code: input.code,
-    message: input.message,
-    severity: 'error',
-    retryable: input.retryable ?? false,
-    source: input.source,
-  };
-}
-
-function runtimeErrorCode(value: unknown): RuntimeError['code'] | undefined {
-  const mapped = typeof value === 'string' ? value : undefined;
-  if (mapped === 'tool_call_failed') return 'tool_execution_failed';
-  if (mapped === 'model_call_failed') return 'provider_invalid_request';
-  if (mapped === 'runtime_protocol_violation') return 'runtime_protocol_violation';
-  if (mapped === 'context_failed') return 'context_budget_exceeded';
-  if (mapped === 'approval_failed') return 'approval_denied';
-  if (mapped === 'internal_error') return 'runtime_unknown';
-  if (mapped === 'cancel_failed') return 'runtime_cancelled';
-  return undefined;
-}
-
-function toolResultKind(payload: Record<string, unknown> | undefined): 'success' | 'failed' | 'policy_denied' | 'user_rejected' {
-  const status = stringPayload(payload, 'status');
-  if (status === 'completed' || status === 'succeeded') return 'success';
-  if (status === 'denied') return 'policy_denied';
-  if (status === 'cancelled') return 'user_rejected';
-  return 'failed';
-}
-
-function toolResultSummary(payload: Record<string, unknown> | undefined): string | undefined {
-  return stringPayload(payload, 'content')
-    ?? stringPayload(payload, 'summary')
-    ?? stringPayload(payload, 'message');
-}
-
-function approvalDecision(payload: Record<string, unknown> | undefined): 'approved' | 'denied' | 'expired' | 'cancelled' {
-  const decision = stringPayload(payload, 'decision');
-  if (decision === 'approved' || decision === 'denied' || decision === 'expired' || decision === 'cancelled') {
-    return decision;
-  }
-  return 'denied';
-}
-
 type RuntimeEventQueue = {
   nextSequence(): number;
   emit(event: RuntimeEvent): void;
@@ -1426,3 +1113,4 @@ function failedStart(request: StartRunRequest, failure: AgentRunFailure): Extrac
     failure,
   };
 }
+
