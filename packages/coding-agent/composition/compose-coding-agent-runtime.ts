@@ -32,7 +32,6 @@ import {
 import { createArtifactController } from '../host-interface/artifacts/artifact-controller';
 import { createPlanController } from '../host-interface/artifacts/plan-controller';
 import type { RuntimeLogger } from '../host-interface/runtime-logger';
-import type { ChatStreamEvent } from '../projections/chat-stream';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
 import {
   composeCodingAgentToolExecutionService,
@@ -108,7 +107,7 @@ export interface ComposeCodingAgentRuntimeOptions {
   summaryModelCallPort?: Parameters<typeof composeCodingAgentContext>[0]['summaryModelCallPort'];
   appSettingsProvider?: unknown;
   memorySettingsProvider?: MemorySettingsPort;
-  chatStreamEventSink?: { publish(event: ChatStreamEvent): void };
+  runtimeEventSink?: { publish(event: RuntimeEvent): void };
   workspaceChangeFooterProjector?: unknown;
   directoryPicker?: DirectoryPickerPort;
   projectFileSystem?: LocalWorkspaceServiceFileSystem;
@@ -202,9 +201,26 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
       ?? (options.modelCallProviderService ? aiClientFromLegacyProvider(options.modelCallProviderService) : undefined)
       ?? createAiClientForConfiguredProviders(settingsService),
   });
+  const runtimeEventsByRun = new Map<string, RuntimeEvent[]>();
+  const recordRuntimeEvent = (event: RuntimeEvent): void => {
+    if (!event.runId) {
+      return;
+    }
+    const events = runtimeEventsByRun.get(event.runId) ?? [];
+    events.push(event);
+    runtimeEventsByRun.set(event.runId, events);
+  };
+
   const contextRuntime = composeCodingAgentContext({
     sessionService,
-    runtimeEventRepository: { listRuntimeEventsByRun: () => [] },
+    runtimeEventRepository: {
+      listRuntimeEventsByRun: (runId) => (runtimeEventsByRun.get(runId) ?? []).map((event) => ({
+        eventId: event.eventId,
+        eventType: event.eventType,
+        createdAt: event.createdAt,
+        payload: payloadRecord(event.payload),
+      })),
+    },
     summaryModelCallPort: options.summaryModelCallPort ?? createContextSummaryModelCallPort({
       modelCallService,
       settingsService,
@@ -271,16 +287,12 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     context_usage_signal_bus: contextRuntime.contextUsageSignalBus,
     context_usage_monitor: contextRuntime.contextUsageMonitor,
     context_compaction_service: contextRuntime.contextCompactionService,
-    event_publisher: options.chatStreamEventSink
-      ? {
-          publish(event) {
-            const chatEvent = toChatStreamEvent(event);
-            if (chatEvent) {
-              options.chatStreamEventSink?.publish(chatEvent);
-            }
-          },
-        }
-      : undefined,
+    event_publisher: {
+      publish(event) {
+        recordRuntimeEvent(event);
+        options.runtimeEventSink?.publish(event);
+      },
+    },
   });
 
   return {
@@ -302,7 +314,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
       listWorkspaceIds: () => workspaceRepository.listWorkspaces().map((workspace) => workspace.workspace_id),
       listTimelineMessagesBySession: (payload) => listSessionTimelineMessages(sessionService, payload),
       listRunsBySession: (sessionId) => agentRunRepository.listRunsBySession(sessionId),
-      listRuntimeEventsByRun: () => [],
+      listRuntimeEventsByRun: (runId) => runtimeEventsByRun.get(runId) ?? [],
     },
     dispose: () => persistence.database.close(),
   };
@@ -528,37 +540,6 @@ function createContextSummaryModelCallPort(input: {
   };
 }
 
-function toChatStreamEvent(event: {
-  event_id: string;
-  type: string;
-  run_id?: string;
-  session_id?: string;
-  created_at: string;
-  payload?: Record<string, unknown>;
-}): ChatStreamEvent | undefined {
-  if (event.type !== 'run.completed' || !event.run_id) {
-    return undefined;
-  }
-  const workspaceId = stringPayloadFromRecord(event.payload, 'workspace_id') ?? 'unknown-workspace';
-  const sessionId = event.session_id ?? stringPayloadFromRecord(event.payload, 'session_id') ?? 'unknown-session';
-  return {
-    eventId: `chat-stream:${event.event_id}`,
-    eventType: 'turn.completed',
-    projectId: workspaceId,
-    sessionId,
-    runId: event.run_id,
-    streamId: event.run_id,
-    streamKind: 'main',
-    seq: 0,
-    createdAt: event.created_at,
-  };
-}
-
-function stringPayloadFromRecord(payload: Record<string, unknown> | undefined, key: string): string | undefined {
-  const value = payload?.[key];
-  return typeof value === 'string' ? value : undefined;
-}
-
 function listSessionTimelineMessages(
   sessionService: SessionService,
   payload: Parameters<CodingAgentRuntime['compatibility']['listTimelineMessagesBySession']>[0],
@@ -619,6 +600,10 @@ function listSessionTimelineMessages(
     }),
     diagnostics: [],
   };
+}
+
+function payloadRecord(payload: object): Record<string, unknown> {
+  return payload && !Array.isArray(payload) ? payload as Record<string, unknown> : {};
 }
 
 function createInMemoryPlanArtifactRepository() {

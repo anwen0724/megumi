@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { consumeContextUsageSignal } from '@megumi/coding-agent/agent-run/core/run-orchestrator';
+import { RuntimeEventSchema } from '@megumi/coding-agent/events';
 
 describe('Agent Run context compaction control flow', () => {
   it('consumes auto compaction signals by calling Context Compaction Service', async () => {
@@ -19,11 +20,18 @@ describe('Agent Run context compaction control flow', () => {
       },
       events: [],
     }));
-    const emit = vi.fn((type, payload) => ({
-      event_id: `event:${type}`,
-      type,
-      created_at: '2026-01-01T00:00:00.000Z',
-      payload,
+    const emit = vi.fn((input) => ({
+      eventId: `event:${input.eventType.replaceAll('.', '_')}`,
+      schemaVersion: 1 as const,
+      eventType: input.eventType,
+      runId: 'run-1',
+      sessionId: input.sessionId ?? 'session-1',
+      sequence: 1,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      source: 'core' as const,
+      visibility: 'user' as const,
+      persist: 'required' as const,
+      payload: input.payload,
     }));
 
     const result = await consumeContextUsageSignal({
@@ -45,10 +53,23 @@ describe('Agent Run context compaction control flow', () => {
       trigger: { kind: 'auto', reason: 'context_window_threshold', signal_id: 'signal-1' },
     });
     expect(result.status).toBe('completed');
-    expect(emit).toHaveBeenCalledWith('context.compaction.completed', expect.objectContaining({
-      session_id: 'session-1',
-      compaction_id: 'compaction-1',
+    expect(emit).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'context.compaction.started',
+      sessionId: 'session-1',
+      payload: expect.objectContaining({
+        compactionId: 'signal-1',
+        triggerReason: 'context_limit',
+      }),
     }));
+    expect(emit).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'context.compaction.completed',
+      sessionId: 'session-1',
+      payload: expect.objectContaining({
+        compactionId: 'compaction-1',
+        triggerReason: 'context_limit',
+      }),
+    }));
+    expectRuntimeEventsSchemaValid(emit.mock.results.map((result) => result.value));
   });
 
   it('ignores non-auto-compaction context usage signals', async () => {
@@ -80,4 +101,10 @@ function usage() {
     auto_compaction_threshold_ratio: 0.8,
     should_auto_compact: true,
   };
+}
+
+function expectRuntimeEventsSchemaValid(events: unknown[]): void {
+  for (const event of events) {
+    expect(RuntimeEventSchema.safeParse(event).success).toBe(true);
+  }
 }

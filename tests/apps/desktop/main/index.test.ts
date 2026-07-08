@@ -299,7 +299,7 @@ describe('main runtime logger composition', () => {
         settingsPath: `${mocks.homePath}/settings.json`,
       },
       runtimeLogger: processLogger,
-      chatStreamEventSink: expect.objectContaining({
+      runtimeEventSink: expect.objectContaining({
         publish: expect.any(Function),
         setWindow: expect.any(Function),
       }),

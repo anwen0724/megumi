@@ -34,9 +34,9 @@ if (shouldQuitForSquirrelStartup()) {
         rendererName: MAIN_WINDOW_VITE_NAME,
         dirname: __dirname,
       });
-      desktopMain.chatStreamBroadcaster.setWindow(window);
+      desktopMain.runtimeEventBroadcaster.setWindow(window);
       window.on('closed', () => {
-        desktopMain.chatStreamBroadcaster.setWindow(undefined);
+        desktopMain.runtimeEventBroadcaster.setWindow(undefined);
       });
     },
     dispose: () => desktopMain.dispose(),

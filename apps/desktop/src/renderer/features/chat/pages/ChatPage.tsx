@@ -34,7 +34,7 @@ export function ChatPage() {
     }
   }, []);
   const timelineScroll = useTimelineAutoScroll({
-    sessionKey: controller.activeChatStreamSessionKey,
+    sessionKey: controller.activeRuntimeTimelineSessionKey,
     updateKey: `${controller.timelineUpdateKey}:${bottomSpacerHeight}`,
   });
 

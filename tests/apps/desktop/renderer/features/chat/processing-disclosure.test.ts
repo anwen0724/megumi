@@ -93,11 +93,10 @@ describe('processing disclosure projection', () => {
       run: runSummary('completed'),
       events: [
         runtimeEvent('run.started', 1, { runKind: 'chat' }),
-        runtimeEvent('tool.execution.completed', 2, {
+        runtimeEvent('tool_call.completed', 2, {
           toolCallId: 'tool-1',
+          toolExecutionId: 'tool-execution-1',
           toolName: 'workspace.read',
-          resultPreview: { files: 2 },
-          durationMs: 1200,
         }),
         runtimeEvent('artifact.created', 3, {
           artifactId: 'artifact-1',

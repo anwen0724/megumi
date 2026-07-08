@@ -8,7 +8,7 @@ import { useProjectStore } from '../../../entities/project/store';
 import { useRunStore } from '../../../entities/run/store';
 import { useSessionStore } from '../../../entities/session/store';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
-import { chatStreamSessionKey, useChatStreamStore } from '../../chat-stream';
+import { runtimeTimelineSessionKey, useRuntimeTimelineStore } from '../../runtime-timeline';
 import { useSessionTimeline } from './use-session-timeline';
 import type { ComposerStatus, ComposerSubmitPayload } from '../components/Composer';
 
@@ -78,12 +78,12 @@ export function useChatPageController() {
     createBranchDraft,
     cancelBranchDraft,
   } = useSessionTimeline();
-  const activeChatStreamSessionKey = currentProjectId && effectiveActiveSessionId
-    ? chatStreamSessionKey(currentProjectId, effectiveActiveSessionId)
+  const activeRuntimeTimelineSessionKey = currentProjectId && effectiveActiveSessionId
+    ? runtimeTimelineSessionKey(currentProjectId, effectiveActiveSessionId)
     : null;
-  const canonicalMessages = useChatStreamStore((state) => (
-    activeChatStreamSessionKey
-      ? state.sessions[activeChatStreamSessionKey]?.messages ?? EMPTY_CANONICAL_MESSAGES
+  const canonicalMessages = useRuntimeTimelineStore((state) => (
+    activeRuntimeTimelineSessionKey
+      ? state.sessions[activeRuntimeTimelineSessionKey]?.messages ?? EMPTY_CANONICAL_MESSAGES
       : EMPTY_CANONICAL_MESSAGES
   ));
   const timelineMessages = canonicalMessages;
@@ -172,7 +172,7 @@ export function useChatPageController() {
       (
         sessionBeforeOpen.title === 'New session' &&
         (
-          useChatStreamStore.getState().sessions[chatStreamSessionKey(sessionBeforeOpen.projectId, sessionBeforeOpen.id)]
+          useRuntimeTimelineStore.getState().sessions[runtimeTimelineSessionKey(sessionBeforeOpen.projectId, sessionBeforeOpen.id)]
             ?.messages.length ?? 0
         ) === 0
       );
@@ -192,7 +192,7 @@ export function useChatPageController() {
       const latestSession = sessionState.sessions.find((session) => session.id === sessionBeforeOpen.id);
       if (latestSession?.title === 'New session') {
         sessionState.updateSession(latestSession.id, { projectId: project.id });
-        useChatStreamStore.getState().setActiveSession(project.id, latestSession.id);
+        useRuntimeTimelineStore.getState().setActiveSession(project.id, latestSession.id);
       }
     }
 
@@ -236,7 +236,7 @@ export function useChatPageController() {
     currentProject,
     projects,
     activeRun,
-    activeChatStreamSessionKey,
+    activeRuntimeTimelineSessionKey,
     timelineMessages,
     timelineUpdateKey,
     pendingApprovals,

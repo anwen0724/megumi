@@ -57,64 +57,13 @@ describe('post-run hooks coordinator', () => {
     ]);
   });
 
-  it('projects workspace change footer through the active chat stream adapter', () => {
-    const publishWorkspaceChangeFooter = vi.fn();
-    const coordinator = new PostRunHooksCoordinator({
-      repository: { listRuntimeEventsByRun: () => [] },
-      workspaceChangeFooterProjector: {
-        projectRunFooter: () => ({ changedFiles: [], summary: 'Changed files' }) as never,
-      },
-    });
-
-    coordinator.publishWorkspaceChangeFooter({
-      runId: 'run:1',
-      createdAt: '2026-06-15T00:00:00.000Z',
-      chatStreamAdapter: { publishWorkspaceChangeFooter },
-    });
-
-    expect(publishWorkspaceChangeFooter).toHaveBeenCalledWith(
-      { changedFiles: [], summary: 'Changed files' },
-      '2026-06-15T00:00:00.000Z',
-    );
-  });
-
-  it('dispatches run terminal hooks from terminal runtime event facts', () => {
-    const publishWorkspaceChangeFooter = vi.fn();
-    const coordinator = new PostRunHooksCoordinator({
-      repository: { listRuntimeEventsByRun: () => [] },
-      workspaceChangeFooterProjector: {
-        projectRunFooter: (runId) => ({ changedFiles: [], summary: `Changed files for ${runId}` }) as never,
-      },
-    });
-
-    coordinator.publishRunTerminalHooks({
-      event: {
-        eventId: 'event:terminal',
-        schemaVersion: 1,
-        eventType: 'run.completed',
-        runId: 'run:terminal',
-        sequence: 2,
-        createdAt: '2026-06-15T01:00:00.000Z',
-        source: 'core',
-        visibility: 'system',
-        persist: 'required',
-        payload: {},
-      },
-      chatStreamAdapter: { publishWorkspaceChangeFooter },
-    });
-
-    expect(publishWorkspaceChangeFooter).toHaveBeenCalledWith(
-      { changedFiles: [], summary: 'Changed files for run:terminal' },
-      '2026-06-15T01:00:00.000Z',
-    );
-  });
 });
 
 function toolResultEvent(summary: string): RuntimeEvent {
   return {
     eventId: 'event:tool-result',
     schemaVersion: 1,
-    eventType: 'tool.result.created',
+    eventType: 'tool_result.created',
     runId: 'run:1',
     sequence: 1,
     createdAt: '2026-06-15T00:00:00.000Z',

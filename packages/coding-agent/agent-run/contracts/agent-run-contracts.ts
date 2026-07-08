@@ -6,6 +6,7 @@ import type { CommandAgentRunInput, HostInteractionRequest } from '../../command
 import type { RawUserInput } from '../../input';
 import type { ApprovalDecision, ApprovalScope, PermissionMode } from '../../permissions';
 import type { ProviderRuntimeConfig } from '../../settings';
+import type { RuntimeEvent } from '../../events';
 
 export type AgentRunModelSelection = {
   provider_id: string;
@@ -105,15 +106,6 @@ export type AgentRunApprovalRequest = {
   decision?: ApprovalDecision;
 };
 
-export type AgentRunEvent = {
-  event_id: string;
-  type: string;
-  run_id?: string;
-  session_id?: string;
-  created_at: string;
-  payload?: Record<string, unknown>;
-};
-
 export type StartRunRequest = {
   request_id: string;
   workspace_id: string;
@@ -132,7 +124,7 @@ export type StartRunResult =
       run: AgentRun;
       session_id: string;
       user_message_id: string;
-      events: AsyncIterable<AgentRunEvent>;
+      events: AsyncIterable<RuntimeEvent>;
     }
   | {
       status: 'host_interaction_required';
@@ -145,14 +137,14 @@ export type StartRunResult =
       request_id: string;
       session_id?: string;
       message?: string;
-      events?: AgentRunEvent[];
+      events?: RuntimeEvent[];
     }
   | {
       status: 'failed';
       request_id: string;
       session_id?: string;
       failure: AgentRunFailure;
-      events?: AgentRunEvent[];
+      events?: RuntimeEvent[];
     };
 
 export type CancelRunRequest = {
@@ -160,10 +152,10 @@ export type CancelRunRequest = {
 };
 
 export type CancelRunResult =
-  | { status: 'cancelled'; run: AgentRun; events: AgentRunEvent[] }
+  | { status: 'cancelled'; run: AgentRun; events: RuntimeEvent[] }
   | { status: 'not_found'; run_id: string }
   | { status: 'not_cancellable'; run: AgentRun; reason: 'already_terminal' | 'not_running' }
-  | { status: 'failed'; failure: AgentRunFailure; events?: AgentRunEvent[] };
+  | { status: 'failed'; failure: AgentRunFailure; events?: RuntimeEvent[] };
 
 export type ResumeRunAfterApprovalRequest = {
   approval_request_id: string;
@@ -171,18 +163,18 @@ export type ResumeRunAfterApprovalRequest = {
 };
 
 export type ResumeRunAfterApprovalResult =
-  | { status: 'resumed'; run: AgentRun; events: AsyncIterable<AgentRunEvent> }
+  | { status: 'resumed'; run: AgentRun; events: AsyncIterable<RuntimeEvent> }
   | { status: 'not_found'; approval_request_id: string }
   | { status: 'not_waiting'; run: AgentRun }
-  | { status: 'failed'; failure: AgentRunFailure; events?: AgentRunEvent[] };
+  | { status: 'failed'; failure: AgentRunFailure; events?: RuntimeEvent[] };
 
 export type CleanupInterruptedRunsRequest = {
   reason: 'runtime_started' | 'runtime_recovered';
 };
 
 export type CleanupInterruptedRunsResult =
-  | { status: 'completed'; cleaned_run_ids: string[]; events: AgentRunEvent[] }
-  | { status: 'failed'; failure: AgentRunFailure; events?: AgentRunEvent[] };
+  | { status: 'completed'; cleaned_run_ids: string[]; events: RuntimeEvent[] }
+  | { status: 'failed'; failure: AgentRunFailure; events?: RuntimeEvent[] };
 
 export type AgentRunCommandInput = CommandAgentRunInput;
 export type AgentRunModelConfig = ProviderRuntimeConfig;

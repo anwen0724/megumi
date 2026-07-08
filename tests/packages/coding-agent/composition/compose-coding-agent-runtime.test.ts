@@ -30,9 +30,12 @@ describe('composeCodingAgentRuntime trace wiring', () => {
     try {
       await startOneRun(runtime, home.workspaceRoot);
       const logPath = join(home.homePath, 'logs', 'agent-run-trace.jsonl');
-      await waitFor(() => existsSync(logPath));
-      const lines = (await readFile(logPath, 'utf8')).trim().split('\n');
-      expect(lines.map((line) => JSON.parse(line) as { event_type: string }))
+      const records = await waitForTraceEvents(logPath, [
+        'run.started',
+        'trace.prompt.built',
+        'run.completed',
+      ]);
+      expect(records)
         .toEqual(expect.arrayContaining([
           expect.objectContaining({ event_type: 'run.started' }),
           expect.objectContaining({ event_type: 'trace.prompt.built' }),
@@ -139,4 +142,24 @@ async function waitFor(predicate: () => boolean | Promise<boolean>): Promise<voi
     }
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
+}
+
+async function waitForTraceEvents(
+  logPath: string,
+  expectedEventTypes: string[],
+): Promise<Array<{ event_type: string }>> {
+  let records: Array<{ event_type: string }> = [];
+  await waitFor(async () => {
+    if (!existsSync(logPath)) {
+      return false;
+    }
+
+    const content = (await readFile(logPath, 'utf8')).trim();
+    records = content
+      ? content.split('\n').map((line) => JSON.parse(line) as { event_type: string })
+      : [];
+    const actualEventTypes = new Set(records.map((record) => record.event_type));
+    return expectedEventTypes.every((eventType) => actualEventTypes.has(eventType));
+  });
+  return records;
 }

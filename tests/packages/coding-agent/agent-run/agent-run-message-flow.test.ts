@@ -8,6 +8,7 @@ import {
   createInMemoryAgentRunRepository,
   createMessageFlowDependencies,
 } from './agent-run-test-helpers';
+import { RuntimeEventSchema } from '@megumi/coding-agent/events';
 
 describe('Agent Run message flow', () => {
   it('starts one run, builds prompts, saves assistant output, captures memory, and publishes events', async () => {
@@ -28,6 +29,7 @@ describe('Agent Run message flow', () => {
     if (result.status !== 'started') return;
 
     const events = await collectEvents(result.events);
+    expectRuntimeEventsSchemaValid(events);
     expect(result.request_id).toBe('request-1');
     expect(result.run.run_id).not.toBe('request-1');
     expect(result.user_message_id).toBe('message-1');
@@ -46,12 +48,22 @@ describe('Agent Run message flow', () => {
       run_id: result.run.run_id,
       session_id: 'session-1',
     }));
-    expect(events.map((event) => event.type)).toEqual(expect.arrayContaining([
+    expect(events.map((event) => event.eventType)).toEqual(expect.arrayContaining([
       'run.started',
       'model_call.started',
       'model_call.completed',
       'run.completed',
     ]));
+    expect(events.find((event) => event.eventType === 'run.started')).toMatchObject({
+      payload: {
+        runKind: 'agent',
+        providerId: 'deepseek',
+        modelId: 'deepseek-chat',
+      },
+    });
+    expect(events.map((event) => String(event.eventType))).not.toContain('error.raised');
+    expect(events.map((event) => String(event.eventType))).not.toContain(['tool', 'execution'].join('_') + '.started');
+    expect(events.map((event) => String(event.eventType))).not.toContain(['tool', 'execution'].join('_') + '.completed');
     expect(repository.getRun(result.run.run_id)?.status).toBe('completed');
   });
 
@@ -116,7 +128,8 @@ describe('Agent Run message flow', () => {
     expect(result.status).toBe('started');
     if (result.status !== 'started') return;
 
-    await collectEvents(result.events);
+    const events = await collectEvents(result.events);
+    expectRuntimeEventsSchemaValid(events);
 
     expect(modelCallRequests).toHaveLength(2);
     expect(modelCallRequests[1]).toMatchObject({
@@ -147,4 +160,10 @@ describe('Agent Run message flow', () => {
 
 async function* asyncEvents<T>(events: T[]): AsyncIterable<T> {
   yield* events;
+}
+
+function expectRuntimeEventsSchemaValid(events: unknown[]): void {
+  for (const event of events) {
+    expect(RuntimeEventSchema.safeParse(event).success).toBe(true);
+  }
 }

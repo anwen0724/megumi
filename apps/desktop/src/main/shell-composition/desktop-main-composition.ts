@@ -9,7 +9,7 @@ import {
 import fs from 'fs-extra';
 import { electronDialogHost } from '../shell/electron-dialog-host';
 import { electronShellHost } from '../shell/electron-shell-host';
-import { createChatStreamBroadcaster } from '../shell/chat-stream-broadcaster';
+import { createRuntimeEventBroadcaster } from '../shell/runtime-event-broadcaster';
 import { resolveElectronPersistenceMigrationsFolder } from '../shell/electron-persistence-migrations-host';
 
 export function composeDesktopMain() {
@@ -21,15 +21,12 @@ export function composeDesktopMain() {
     settingsPath: megumiHomePaths.settingsPath,
   };
   const migrationsFolder = resolveElectronPersistenceMigrationsFolder();
-  // The broadcaster is built before the window exists; createWindow attaches the
-  // live window via setWindow. The host interface persists timeline history and
-  // forwards chat stream events to this sink, which relays them to the renderer.
-  const chatStreamBroadcaster = createChatStreamBroadcaster({ logger: runtimeLogger });
+  const runtimeEventBroadcaster = createRuntimeEventBroadcaster({ logger: runtimeLogger });
   const codingAgentHost = composeCodingAgentHostInterface({
     homePaths: codingAgentHomePaths,
     migrationsFolder,
     runtimeLogger,
-    chatStreamEventSink: chatStreamBroadcaster,
+    runtimeEventSink: runtimeEventBroadcaster,
     directoryPicker: { chooseDirectory: () => electronDialogHost.chooseDirectory() },
   });
 
@@ -42,7 +39,7 @@ export function composeDesktopMain() {
   return {
     megumiHomePaths,
     runtimeLogger,
-    chatStreamBroadcaster,
+    runtimeEventBroadcaster,
     workspace: { host: codingAgentHost, workspaceFilesService },
     chat: { host: codingAgentHost },
     settings: { host: codingAgentHost },
