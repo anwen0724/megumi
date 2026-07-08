@@ -45,6 +45,7 @@ class AgentRunTraceFileLogger {
   private readonly sequenceByTraceId = new Map<string, number>();
   private readonly clock: Required<NonNullable<CreateAgentRunTraceFileLoggerOptions['clock']>>;
   private ensureDirectoryPromise: Promise<void> | undefined;
+  private writeQueue: Promise<void> = Promise.resolve();
 
   constructor(private readonly options: CreateAgentRunTraceFileLoggerOptions) {
     this.clock = {
@@ -54,7 +55,7 @@ class AgentRunTraceFileLogger {
 
   record(input: AgentRunTraceRecordInput): void {
     const record = this.createRecord(input);
-    void this.writeRecord(record).catch((error) => {
+    this.writeQueue = this.writeQueue.then(() => this.writeRecord(record)).catch((error) => {
       this.options.on_error?.(error);
     });
   }
