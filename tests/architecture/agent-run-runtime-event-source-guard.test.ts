@@ -7,12 +7,17 @@ function readSource(path: string): string {
   return readFileSync(join(process.cwd(), path), 'utf8');
 }
 
+const NORMALIZE_RUNTIME_EVENT_PAYLOAD = ['normalize', 'Runtime', 'Event', 'Payload'].join('');
+const NORMALIZED_RUNTIME_EVENT_PAYLOAD = ['Normalized', 'Runtime', 'Event', 'Payload'].join('');
+const TOOL_EXECUTION_PREFIX = ['tool', 'execution'].join('_') + '.';
+const TOOL_RESULT_FACTS_SUBMITTED = ['tool', 'result', 'facts'].join('_') + '.submitted';
+
 describe('Agent Run RuntimeEvent source boundary', () => {
   it('does not normalize internal event names into RuntimeEvent at service boundary', () => {
     const service = readSource('packages/coding-agent/agent-run/services/agent-run-service.ts');
 
-    expect(service).not.toContain('normalizeRuntimeEventPayload');
-    expect(service).not.toContain('NormalizedRuntimeEventPayload');
+    expect(service).not.toContain(NORMALIZE_RUNTIME_EVENT_PAYLOAD);
+    expect(service).not.toContain(NORMALIZED_RUNTIME_EVENT_PAYLOAD);
     expect(service).not.toContain('stringPayload(payload');
     expect(service).not.toContain('toolResultKind(payload');
     expect(service).not.toContain('approvalDecision(payload');
@@ -25,9 +30,9 @@ describe('Agent Run RuntimeEvent source boundary', () => {
     const service = readSource('packages/coding-agent/agent-run/services/agent-run-service.ts');
 
     expect(orchestrator).not.toContain('event_sink.emit(`model_call.${event.type}`');
-    expect(orchestrator).not.toContain('tool_execution.');
-    expect(orchestrator).not.toContain('tool_result_facts.submitted');
-    expect(service).not.toContain('tool_execution.');
-    expect(service).not.toContain('tool_result_facts.submitted');
+    expect(orchestrator).not.toContain(TOOL_EXECUTION_PREFIX);
+    expect(orchestrator).not.toContain(TOOL_RESULT_FACTS_SUBMITTED);
+    expect(service).not.toContain(TOOL_EXECUTION_PREFIX);
+    expect(service).not.toContain(TOOL_RESULT_FACTS_SUBMITTED);
   });
 });

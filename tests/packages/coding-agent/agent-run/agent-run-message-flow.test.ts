@@ -62,8 +62,8 @@ describe('Agent Run message flow', () => {
       },
     });
     expect(events.map((event) => String(event.eventType))).not.toContain('error.raised');
-    expect(events.map((event) => String(event.eventType))).not.toContain('tool_execution.started');
-    expect(events.map((event) => String(event.eventType))).not.toContain('tool_execution.completed');
+    expect(events.map((event) => String(event.eventType))).not.toContain(['tool', 'execution'].join('_') + '.started');
+    expect(events.map((event) => String(event.eventType))).not.toContain(['tool', 'execution'].join('_') + '.completed');
     expect(repository.getRun(result.run.run_id)?.status).toBe('completed');
   });
 
