@@ -1116,15 +1116,15 @@ export const ContextEffectiveUpdatedEventSchema = eventSchema(
   'context.effective.updated',
   ContextEffectiveUpdatedPayloadSchema,
 );
-export const ContextCompactionStartedEventSchema = eventSchema(
+export const ContextCompactionStartedEventSchema = sessionScopedEventSchema(
   'context.compaction.started',
   ContextCompactionStartedPayloadSchema,
 );
-export const ContextCompactionCompletedEventSchema = eventSchema(
+export const ContextCompactionCompletedEventSchema = sessionScopedEventSchema(
   'context.compaction.completed',
   ContextCompactionCompletedPayloadSchema,
 );
-export const ContextCompactionFailedEventSchema = eventSchema(
+export const ContextCompactionFailedEventSchema = sessionScopedEventSchema(
   'context.compaction.failed',
   ContextCompactionFailedPayloadSchema,
 );

@@ -105,7 +105,7 @@ describe('agent run runtime event schemas', () => {
       triggerReason: 'automatic',
       tokensBefore: 240000,
       error: {
-        code: 'context_compaction_failed',
+        code: 'runtime_unknown',
         message: 'Compaction failed.',
         severity: 'error',
         retryable: false,

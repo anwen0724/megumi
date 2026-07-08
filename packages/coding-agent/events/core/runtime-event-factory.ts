@@ -533,16 +533,14 @@ export function createContextEffectiveUpdatedEvent(input: {
 
 export function createContextCompactionStartedEvent(input: {
   eventId: string;
-  runId: string;
   sessionId: string;
-  stepId?: string;
   requestId?: string;
   sequence: number;
   createdAt: string;
-  runtimeContext?: RuntimeContext;
+  context?: RuntimeContext;
   payload: RuntimeEventPayloadByType['context.compaction.started'];
 }): TypedRuntimeEvent<'context.compaction.started'> {
-  return createRuntimeEvent({
+  return createSessionScopedRuntimeEvent({
     ...input,
     eventType: 'context.compaction.started',
     source: 'main',
@@ -553,16 +551,14 @@ export function createContextCompactionStartedEvent(input: {
 
 export function createContextCompactionCompletedEvent(input: {
   eventId: string;
-  runId: string;
   sessionId: string;
-  stepId?: string;
   requestId?: string;
   sequence: number;
   createdAt: string;
-  runtimeContext?: RuntimeContext;
+  context?: RuntimeContext;
   payload: RuntimeEventPayloadByType['context.compaction.completed'];
 }): TypedRuntimeEvent<'context.compaction.completed'> {
-  return createRuntimeEvent({
+  return createSessionScopedRuntimeEvent({
     ...input,
     eventType: 'context.compaction.completed',
     source: 'main',
@@ -573,16 +569,14 @@ export function createContextCompactionCompletedEvent(input: {
 
 export function createContextCompactionFailedEvent(input: {
   eventId: string;
-  runId: string;
   sessionId: string;
-  stepId?: string;
   requestId?: string;
   sequence: number;
   createdAt: string;
-  runtimeContext?: RuntimeContext;
+  context?: RuntimeContext;
   payload: RuntimeEventPayloadByType['context.compaction.failed'];
 }): TypedRuntimeEvent<'context.compaction.failed'> {
-  return createRuntimeEvent({
+  return createSessionScopedRuntimeEvent({
     ...input,
     eventType: 'context.compaction.failed',
     source: 'main',
