@@ -8,6 +8,7 @@ export const targetDatabaseTables = [
   'session_compactions',
   'agent_runs',
   'agent_run_approval_requests',
+  'agent_run_runtime_events',
   'workspace_changes',
   'workspace_changed_files',
   'memory_records',

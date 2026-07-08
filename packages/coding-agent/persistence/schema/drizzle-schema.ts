@@ -127,6 +127,22 @@ export const agentRunApprovalRequests = sqliteTable('agent_run_approval_requests
   index('idx_agent_run_approval_requests_run_status').on(table.runId, table.status),
 ]);
 
+export const agentRunRuntimeEvents = sqliteTable('agent_run_runtime_events', {
+  eventId: text('event_id').primaryKey(),
+  runId: text('run_id').notNull().references(() => agentRuns.runId, { onDelete: 'cascade' }),
+  sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
+  eventType: text('event_type').notNull(),
+  sequence: integer('sequence').notNull(),
+  createdAt: text('created_at').notNull(),
+  source: text('source').notNull(),
+  visibility: text('visibility').notNull(),
+  persist: text('persist').notNull(),
+  payloadJson: jsonText('payload_json').notNull(),
+}, (table) => [
+  index('idx_agent_run_runtime_events_run_sequence').on(table.runId, table.sequence),
+  index('idx_agent_run_runtime_events_session_created').on(table.sessionId, table.createdAt),
+]);
+
 export const workspaceChanges = sqliteTable('workspace_changes', {
   changeSetId: text('change_set_id').primaryKey(),
   workspaceId: text('workspace_id').notNull().references(() => workspaces.workspaceId),

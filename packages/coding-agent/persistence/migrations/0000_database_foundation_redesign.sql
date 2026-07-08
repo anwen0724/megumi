@@ -33,6 +33,23 @@ CREATE TABLE `agent_run_approval_requests` (
 );
 --> statement-breakpoint
 CREATE INDEX `idx_agent_run_approval_requests_run_status` ON `agent_run_approval_requests` (`run_id`,`status`);--> statement-breakpoint
+CREATE TABLE `agent_run_runtime_events` (
+	`event_id` text PRIMARY KEY NOT NULL,
+	`run_id` text NOT NULL,
+	`session_id` text NOT NULL,
+	`event_type` text NOT NULL,
+	`sequence` integer NOT NULL,
+	`created_at` text NOT NULL,
+	`source` text NOT NULL,
+	`visibility` text NOT NULL,
+	`persist` text NOT NULL,
+	`payload_json` text NOT NULL,
+	FOREIGN KEY (`run_id`) REFERENCES `agent_runs`(`run_id`) ON UPDATE no action ON DELETE cascade,
+	FOREIGN KEY (`session_id`) REFERENCES `sessions`(`session_id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `idx_agent_run_runtime_events_run_sequence` ON `agent_run_runtime_events` (`run_id`,`sequence`);--> statement-breakpoint
+CREATE INDEX `idx_agent_run_runtime_events_session_created` ON `agent_run_runtime_events` (`session_id`,`created_at`);--> statement-breakpoint
 CREATE TABLE `artifact_source_refs` (
 	`source_ref_id` text PRIMARY KEY NOT NULL,
 	`artifact_id` text NOT NULL,

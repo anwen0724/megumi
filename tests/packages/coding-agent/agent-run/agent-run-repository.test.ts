@@ -6,6 +6,7 @@ import {
   type AgentRunRepository,
 } from '@megumi/coding-agent/agent-run/repositories/agent-run-repository';
 import type { AgentRun, AgentRunApprovalRequest } from '@megumi/coding-agent/agent-run';
+import type { RuntimeEvent } from '@megumi/coding-agent/events';
 
 describe('AgentRunRepository', () => {
   it('persists AgentRun with architecture-owned fields only', () => {
@@ -118,6 +119,65 @@ describe('AgentRunRepository', () => {
     });
   });
 
+  it('persists and replays run-scoped runtime events in sequence order', () => {
+    withDatabase((database) => {
+      seedWorkspaceAndSession(database);
+      const repository = createAgentRunRepository({ database });
+      repository.createRun(sampleRun());
+
+      const later = sampleRuntimeEvent({
+        eventId: 'event-2',
+        eventType: 'model_call.text_delta',
+        sequence: 2,
+        payload: {
+          modelCallId: 'model-call-1',
+          delta: 'world',
+        },
+      });
+      const earlier = sampleRuntimeEvent({
+        eventId: 'event-1',
+        eventType: 'run.started',
+        sequence: 1,
+        payload: {
+          runKind: 'agent',
+          providerId: 'deepseek',
+          modelId: 'deepseek-chat',
+        },
+      });
+
+      repository.saveRuntimeEvent(later);
+      repository.saveRuntimeEvent(earlier);
+      repository.saveRuntimeEvent({ ...earlier, eventId: 'event-without-run', runId: undefined });
+      database.prepare(`
+        INSERT INTO agent_run_runtime_events (
+          event_id, run_id, session_id, event_type, sequence, created_at, source, visibility, persist, payload_json
+        ) VALUES (
+          'event-invalid', 'run-1', 'session-1', 'model_call.text_delta', 3,
+          '2026-01-01T00:00:03.000Z', 'core', 'user', 'required', '{}'
+        )
+      `).run();
+
+      expect(repository.listRuntimeEventsByRun('run-1').map((event) => event.eventId)).toEqual([
+        'event-1',
+        'event-2',
+      ]);
+      expect(repository.nextRuntimeEventSequence('run-1')).toBe(4);
+      expect(repository.nextRuntimeEventSequence('run-missing')).toBe(1);
+      expect(columns(database, 'agent_run_runtime_events')).toEqual([
+        'event_id',
+        'run_id',
+        'session_id',
+        'event_type',
+        'sequence',
+        'created_at',
+        'source',
+        'visibility',
+        'persist',
+        'payload_json',
+      ]);
+    });
+  });
+
   it('keeps Agent Run business persistence out of legacy persistence repos', () => {
     expect(() => require('@megumi/coding-agent/persistence/repos/agent-run.repo')).toThrow();
   });
@@ -186,6 +246,26 @@ function sampleApprovalRequest(
     },
     status: 'pending',
     created_at: '2026-01-01T00:00:30.000Z',
+    ...overrides,
+  };
+}
+
+function sampleRuntimeEvent(overrides: Partial<RuntimeEvent> = {}): RuntimeEvent {
+  return {
+    eventId: 'event-1',
+    schemaVersion: 1,
+    eventType: 'run.started',
+    runId: 'run-1',
+    sessionId: 'session-1',
+    requestId: 'request-1',
+    sequence: 1,
+    createdAt: '2026-01-01T00:00:01.000Z',
+    source: 'core',
+    visibility: 'user',
+    persist: 'required',
+    payload: {
+      runKind: 'agent',
+    },
     ...overrides,
   };
 }

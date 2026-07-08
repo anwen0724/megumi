@@ -45,6 +45,42 @@ describe('composeCodingAgentRuntime trace wiring', () => {
       runtime.dispose();
     }
   });
+
+  it('replays persisted Agent Run runtime events after runtime recreation', async () => {
+    const home = await createHome();
+    const settings = settingsStorage();
+    const firstRuntime = composeCodingAgentRuntime({
+      homePaths: home.paths,
+      runtimeLogger: { warn() {} },
+      aiClient: fakeAiClient(),
+      settingsStorage: settings,
+    });
+    let runId = '';
+
+    try {
+      runId = await startOneRun(firstRuntime, home.workspaceRoot);
+    } finally {
+      firstRuntime.dispose();
+    }
+
+    const secondRuntime = composeCodingAgentRuntime({
+      homePaths: home.paths,
+      runtimeLogger: { warn() {} },
+      aiClient: fakeAiClient(),
+      settingsStorage: settings,
+    });
+
+    try {
+      expect(secondRuntime.compatibility.listRuntimeEventsByRun(runId).map((event) => event.eventType))
+        .toEqual(expect.arrayContaining([
+          'run.started',
+          'model_call.started',
+          'run.completed',
+        ]));
+    } finally {
+      secondRuntime.dispose();
+    }
+  });
 });
 
 async function createHome(): Promise<{
@@ -70,13 +106,13 @@ async function createHome(): Promise<{
 async function startOneRun(
   runtime: ReturnType<typeof composeCodingAgentRuntime>,
   workspaceRoot: string,
-): Promise<void> {
+): Promise<string> {
   const workspace = await runtime.workspaceService.openWorkspace({
     root_path: workspaceRoot,
     opened_at: '2026-07-08T00:00:00.000Z',
   });
   expect(workspace.status).toBe('opened');
-  if (workspace.status !== 'opened') return;
+  if (workspace.status !== 'opened') return '';
 
   const run = await runtime.agentRunService.startRun({
     request_id: 'request-1',
@@ -86,8 +122,9 @@ async function startOneRun(
     model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
   });
   expect(run.status).toBe('started');
-  if (run.status !== 'started') return;
+  if (run.status !== 'started') return '';
   await collectEvents(run.events);
+  return run.run.run_id;
 }
 
 function settingsStorage() {

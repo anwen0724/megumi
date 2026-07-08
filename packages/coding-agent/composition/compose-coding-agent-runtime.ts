@@ -200,20 +200,10 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
       ?? (options.modelCallProviderService ? aiClientFromLegacyProvider(options.modelCallProviderService) : undefined)
       ?? createAiClientForConfiguredProviders(settingsService),
   });
-  const runtimeEventsByRun = new Map<string, RuntimeEvent[]>();
-  const recordRuntimeEvent = (event: RuntimeEvent): void => {
-    if (!event.runId) {
-      return;
-    }
-    const events = runtimeEventsByRun.get(event.runId) ?? [];
-    events.push(event);
-    runtimeEventsByRun.set(event.runId, events);
-  };
-
   const contextRuntime = composeCodingAgentContext({
     sessionService,
     runtimeEventRepository: {
-      listRuntimeEventsByRun: (runId) => (runtimeEventsByRun.get(runId) ?? []).map((event) => ({
+      listRuntimeEventsByRun: (runId) => agentRunRepository.listRuntimeEventsByRun(runId).map((event) => ({
         eventId: event.eventId,
         eventType: event.eventType,
         createdAt: event.createdAt,
@@ -286,11 +276,6 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     context_usage_signal_bus: contextRuntime.contextUsageSignalBus,
     context_usage_monitor: contextRuntime.contextUsageMonitor,
     context_compaction_service: contextRuntime.contextCompactionService,
-    event_publisher: {
-      publish(event) {
-        recordRuntimeEvent(event);
-      },
-    },
   });
 
   return {
@@ -312,7 +297,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
       listWorkspaceIds: () => workspaceRepository.listWorkspaces().map((workspace) => workspace.workspace_id),
       listTimelineMessagesBySession: (payload) => listSessionTimelineMessages(sessionService, payload),
       listRunsBySession: (sessionId) => agentRunRepository.listRunsBySession(sessionId),
-      listRuntimeEventsByRun: (runId) => runtimeEventsByRun.get(runId) ?? [],
+      listRuntimeEventsByRun: (runId) => agentRunRepository.listRuntimeEventsByRun(runId),
     },
     dispose: () => persistence.database.close(),
   };

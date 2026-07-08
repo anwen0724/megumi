@@ -13,6 +13,7 @@ const expectedProductTables = [
   'session_compactions',
   'agent_runs',
   'agent_run_approval_requests',
+  'agent_run_runtime_events',
   'workspace_changes',
   'workspace_changed_files',
   'memory_records',
@@ -169,6 +170,18 @@ describe('Drizzle schema target table list', () => {
         'decided_at',
         'decision_json',
       ]);
+      expect(columns(database, 'agent_run_runtime_events')).toEqual([
+        'event_id',
+        'run_id',
+        'session_id',
+        'event_type',
+        'sequence',
+        'created_at',
+        'source',
+        'visibility',
+        'persist',
+        'payload_json',
+      ]);
       expect(foreignKeys(database, 'agent_runs')).toContainEqual({
         from: 'workspace_id',
         table: 'workspaces',
@@ -181,6 +194,20 @@ describe('Drizzle schema target table list', () => {
         to: 'run_id',
         onDelete: 'CASCADE',
       });
+      expect(foreignKeys(database, 'agent_run_runtime_events')).toEqual(expect.arrayContaining([
+        {
+          from: 'run_id',
+          table: 'agent_runs',
+          to: 'run_id',
+          onDelete: 'CASCADE',
+        },
+        {
+          from: 'session_id',
+          table: 'sessions',
+          to: 'session_id',
+          onDelete: 'CASCADE',
+        },
+      ]));
       expect(foreignKeys(database, 'workspace_changes')).toContainEqual({
         from: 'workspace_id',
         table: 'workspaces',

@@ -3,6 +3,7 @@
  * Persistence provides the database; Agent Run owns these read/write rules.
  */
 import type { MegumiDatabase } from '../../persistence/connection';
+import { RuntimeEventSchema, type RuntimeEvent } from '../../events';
 import type { AgentRun, AgentRunApprovalRequest, AgentRunFailure } from '../contracts/agent-run-contracts';
 
 export type AgentRunRepository = {
@@ -15,6 +16,9 @@ export type AgentRunRepository = {
   getApprovalRequest(approvalRequestId: string): AgentRunApprovalRequest | undefined;
   saveApprovalRequest(request: AgentRunApprovalRequest): AgentRunApprovalRequest;
   listPendingApprovalRequestsByRun(runId: string): AgentRunApprovalRequest[];
+  saveRuntimeEvent(event: RuntimeEvent): RuntimeEvent;
+  listRuntimeEventsByRun(runId: string): RuntimeEvent[];
+  nextRuntimeEventSequence(runId: string): number;
 };
 
 export type CreateAgentRunRepositoryOptions = {
@@ -45,6 +49,19 @@ type AgentRunApprovalRequestRow = {
   created_at: string;
   decided_at: string | null;
   decision_json: string | null;
+};
+
+type AgentRunRuntimeEventRow = {
+  event_id: string;
+  run_id: string;
+  session_id: string;
+  event_type: string;
+  sequence: number;
+  created_at: string;
+  source: string;
+  visibility: string;
+  persist: string;
+  payload_json: string;
 };
 
 export function createAgentRunRepository(options: CreateAgentRunRepositoryOptions): AgentRunRepository {
@@ -190,6 +207,69 @@ class SqliteAgentRunRepository implements AgentRunRepository {
     `).all(runId) as AgentRunApprovalRequestRow[];
     return rows.map(approvalRequestFromRow);
   }
+
+  saveRuntimeEvent(event: RuntimeEvent): RuntimeEvent {
+    if (!event.runId) {
+      return event;
+    }
+    const sessionId = event.sessionId ?? this.getRun(event.runId)?.session_id;
+    if (!sessionId) {
+      return event;
+    }
+
+    this.database.prepare(`
+      INSERT OR IGNORE INTO agent_run_runtime_events (
+        event_id,
+        run_id,
+        session_id,
+        event_type,
+        sequence,
+        created_at,
+        source,
+        visibility,
+        persist,
+        payload_json
+      ) VALUES (
+        @event_id,
+        @run_id,
+        @session_id,
+        @event_type,
+        @sequence,
+        @created_at,
+        @source,
+        @visibility,
+        @persist,
+        @payload_json
+      )
+    `).run(rowFromRuntimeEvent(event, sessionId));
+    return event;
+  }
+
+  listRuntimeEventsByRun(runId: string): RuntimeEvent[] {
+    const rows = this.database.prepare(`
+      SELECT * FROM agent_run_runtime_events
+      WHERE run_id = ?
+      ORDER BY sequence ASC, created_at ASC, event_id ASC
+    `).all(runId) as AgentRunRuntimeEventRow[];
+
+    return rows.flatMap((row) => {
+      try {
+        const parsed = RuntimeEventSchema.safeParse(runtimeEventFromRow(row));
+        return parsed.success ? [parsed.data as RuntimeEvent] : [];
+      } catch {
+        return [];
+      }
+    });
+  }
+
+  nextRuntimeEventSequence(runId: string): number {
+    const row = this.database.prepare(`
+      SELECT MAX(sequence) AS max_sequence
+      FROM agent_run_runtime_events
+      WHERE run_id = ?
+    `).get(runId) as { max_sequence: number | null } | undefined;
+    return (row?.max_sequence ?? 0) + 1;
+  }
 }
 
 function rowFromRun(run: AgentRun): AgentRunRow {
@@ -260,6 +340,37 @@ function approvalRequestFromRow(row: AgentRunApprovalRequestRow): AgentRunApprov
     created_at: row.created_at,
     ...(row.decided_at ? { decided_at: row.decided_at } : {}),
     ...(row.decision_json ? { decision: parseJson<AgentRunApprovalRequest['decision']>(row.decision_json) } : {}),
+  };
+}
+
+function rowFromRuntimeEvent(event: RuntimeEvent, sessionId: string): AgentRunRuntimeEventRow {
+  return {
+    event_id: event.eventId,
+    run_id: event.runId!,
+    session_id: sessionId,
+    event_type: event.eventType,
+    sequence: event.sequence,
+    created_at: event.createdAt,
+    source: event.source,
+    visibility: event.visibility,
+    persist: event.persist,
+    payload_json: JSON.stringify(event.payload),
+  };
+}
+
+function runtimeEventFromRow(row: AgentRunRuntimeEventRow): RuntimeEvent {
+  return {
+    eventId: row.event_id,
+    schemaVersion: 1,
+    eventType: row.event_type as RuntimeEvent['eventType'],
+    runId: row.run_id,
+    sessionId: row.session_id,
+    sequence: row.sequence,
+    createdAt: row.created_at,
+    source: row.source as RuntimeEvent['source'],
+    visibility: row.visibility as RuntimeEvent['visibility'],
+    persist: row.persist as RuntimeEvent['persist'],
+    payload: parseJson<RuntimeEvent['payload']>(row.payload_json),
   };
 }
 

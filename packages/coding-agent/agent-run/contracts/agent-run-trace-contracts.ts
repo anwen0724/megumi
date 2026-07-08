@@ -17,7 +17,8 @@ export type AgentRunTraceEventType =
   | 'trace.tool_execution.result'
   | 'trace.continuation.runtime_sources'
   | 'trace.model_call.messages_appended'
-  | 'trace.loop.counters';
+  | 'trace.loop.counters'
+  | 'trace.runtime_event.persistence_failed';
 
 export type AgentRunTraceRecord = {
   schema_version: 1;

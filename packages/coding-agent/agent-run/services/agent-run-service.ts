@@ -140,7 +140,6 @@ class DefaultAgentRunService implements AgentRunService {
   private readonly activeRunAbortControllers = new Map<string, AbortController>();
   private readonly activeModelCallByRun = new Map<string, string>();
   private readonly approvalContinuations = new Map<string, RunApprovalContinuation>();
-  private readonly nextRuntimeEventSequenceByRun = new Map<string, number>();
 
   constructor(private readonly options: CreateAgentRunServiceOptions) {
     if (!options.repository && !options.database) {
@@ -614,6 +613,7 @@ class DefaultAgentRunService implements AgentRunService {
             ...runtimeEvent,
           },
         });
+        this.persistRuntimeEvent(event);
         queue.emit(event);
         return event;
       },
@@ -668,9 +668,28 @@ class DefaultAgentRunService implements AgentRunService {
     if (!runId) {
       return 1;
     }
-    const nextSequence = (this.nextRuntimeEventSequenceByRun.get(runId) ?? 0) + 1;
-    this.nextRuntimeEventSequenceByRun.set(runId, nextSequence);
-    return nextSequence;
+    return this.repository.nextRuntimeEventSequence(runId);
+  }
+
+  private persistRuntimeEvent(event: RuntimeEvent): void {
+    if (!event.runId || event.persist === 'transient') {
+      return;
+    }
+    try {
+      this.repository.saveRuntimeEvent(event);
+    } catch (error) {
+      this.traceLogger.record({
+        trace_id: event.runId,
+        event_type: 'trace.runtime_event.persistence_failed',
+        run_id: event.runId,
+        session_id: event.sessionId,
+        payload: {
+          event_id: event.eventId,
+          event_type: event.eventType,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
   }
 
   private async continueDeferredToolCallGroup(input: {

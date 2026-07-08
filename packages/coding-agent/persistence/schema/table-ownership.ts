@@ -36,6 +36,7 @@ export const persistenceTableOwnership = {
     tables: [
       'agent_runs',
       'agent_run_approval_requests',
+      'agent_run_runtime_events',
     ],
   },
   workspaceChange: {
