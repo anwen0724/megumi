@@ -7,6 +7,8 @@ import { ArtifactContentStore } from '../artifacts/artifact-content-store';
 import { ArtifactService, PlanArtifactCompatibilityService, PlanArtifactService } from '../artifacts';
 import {
   createAgentRunService,
+  createAgentRunTraceFileLogger,
+  createNoopAgentRunTraceLogger,
   createModelCallService,
   type AgentRun,
   type AgentRunService,
@@ -190,6 +192,14 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
       },
     },
   });
+  const agentRunTraceLogger = process.env.MEGUMI_AGENT_RUN_TRACE === '1'
+    ? createAgentRunTraceFileLogger({
+        log_file_path: `${options.homePaths.homePath}/logs/agent-run-trace.jsonl`,
+        on_error: (error) => options.runtimeLogger.warn('agent_run_trace.write_failed', {
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      })
+    : createNoopAgentRunTraceLogger();
   const modelCallService = createModelCallService({
     ai_client: options.aiClient
       ?? (options.modelCallProviderService ? aiClientFromLegacyProvider(options.modelCallProviderService) : undefined)
@@ -258,6 +268,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
       };
     },
     permission_service: permissionService,
+    trace_logger: agentRunTraceLogger,
     workspace_service: workspaceService,
     workspace_path_policy_service: workspacePathPolicyService,
     context_usage_signal_bus: contextRuntime.contextUsageSignalBus,

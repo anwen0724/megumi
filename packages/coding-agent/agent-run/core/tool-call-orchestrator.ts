@@ -13,6 +13,7 @@ import type {
 import type { RegisteredTool, ToolExecutionResult } from '../../tools';
 import type { WorkspacePathPolicyService } from '../../workspace';
 import type { AgentRunApprovalRequest, AgentRunToolCall } from '../contracts/agent-run-contracts';
+import type { AgentRunTraceLogger } from '../contracts/agent-run-trace-contracts';
 import type { ToolResultRuntimeFact, ToolSet } from '../contracts/model-call-contracts';
 
 export type ModelRequestedToolCall = {
@@ -69,6 +70,7 @@ export type AgentRunToolCallRequest = {
   tool_execution_service: {
     executeTool(request: { toolName: string; input: unknown; options?: { signal?: AbortSignal } }): Promise<ToolExecutionResult> | ToolExecutionResult;
   };
+  trace_logger?: AgentRunTraceLogger;
   workspace_path_policy_service?: Pick<WorkspacePathPolicyService, 'classifyPath'>;
   clock: { now(): string };
   ids: {
@@ -111,6 +113,22 @@ export async function orchestrateToolCallGroup(
     if (!registeredTool) {
       plans.push({ call: { ...toolCall, status: 'failed', completed_at: request.clock.now() }, requested });
       toolResults.push(failedToolResult(requested, 'Unknown or unavailable tool.', request.clock.now()));
+      request.trace_logger?.record({
+        trace_id: request.run_id,
+        event_type: 'trace.tool_execution.result',
+        run_id: request.run_id,
+        workspace_id: request.workspace_id,
+        tool_call_id: requested.tool_call_id,
+        payload: {
+          tool_call_id: requested.tool_call_id,
+          tool_name: requested.tool_name,
+          result_type: 'failed',
+          failure: {
+            code: 'unknown_tool',
+            message: 'Unknown or unavailable tool.',
+          },
+        },
+      });
       continue;
     }
 
@@ -133,6 +151,21 @@ export async function orchestrateToolCallGroup(
       continue;
     }
 
+    request.trace_logger?.record({
+      trace_id: request.run_id,
+      event_type: 'trace.tool_call.executable',
+      run_id: request.run_id,
+      workspace_id: request.workspace_id,
+      tool_call_id: requested.tool_call_id,
+      payload: {
+        tool_call_id: requested.tool_call_id,
+        tool_name: requested.tool_name,
+        registered_tool_name: registeredTool.registeredToolName,
+        permission_decision: permission.decision,
+        input: requested.input,
+      },
+    });
+
     if (permission.decision.type === 'deny') {
       plans.push({
         call: { ...toolCall, status: 'denied', completed_at: request.clock.now() },
@@ -141,6 +174,22 @@ export async function orchestrateToolCallGroup(
         decision: permission.decision,
       });
       toolResults.push(deniedToolResult(requested, permission.decision.reason, request.clock.now()));
+      request.trace_logger?.record({
+        trace_id: request.run_id,
+        event_type: 'trace.tool_execution.result',
+        run_id: request.run_id,
+        workspace_id: request.workspace_id,
+        tool_call_id: requested.tool_call_id,
+        payload: {
+          tool_call_id: requested.tool_call_id,
+          tool_name: registeredTool.registeredToolName,
+          result_type: 'denied',
+          failure: {
+            code: 'permission_denied',
+            message: permission.decision.reason,
+          },
+        },
+      });
       continue;
     }
 
@@ -220,10 +269,38 @@ async function executeWindows(
       : [current];
 
     const executions = await Promise.all(window.map(async (plan) => {
+      request.trace_logger?.record({
+        trace_id: request.run_id,
+        event_type: 'trace.tool_execution.request',
+        run_id: request.run_id,
+        workspace_id: request.workspace_id,
+        tool_call_id: plan.requested.tool_call_id,
+        payload: {
+          tool_call_id: plan.requested.tool_call_id,
+          tool_name: plan.registered_tool!.registeredToolName,
+          input: plan.requested.input,
+          execution_mode: plan.registered_tool!.definition.executionMode ?? 'serial',
+        },
+      });
       const result = await request.tool_execution_service.executeTool({
         toolName: plan.registered_tool!.registeredToolName,
         input: plan.requested.input,
         ...(request.signal ? { options: { signal: request.signal } } : {}),
+      });
+      request.trace_logger?.record({
+        trace_id: request.run_id,
+        event_type: 'trace.tool_execution.result',
+        run_id: request.run_id,
+        workspace_id: request.workspace_id,
+        tool_call_id: plan.requested.tool_call_id,
+        payload: {
+          tool_call_id: plan.requested.tool_call_id,
+          tool_name: result.toolName ?? plan.registered_tool!.registeredToolName,
+          result_type: result.type,
+          normalized_result: result.normalizedResult,
+          ...(result.toolExecutionObservation ? { tool_execution_observation: result.toolExecutionObservation } : {}),
+          ...(result.type === 'failed' ? { failure: result.error } : {}),
+        },
       });
       const completedAt = request.clock.now();
       const status: AgentRunToolCall['status'] = result.type === 'succeeded' ? 'completed' : 'failed';

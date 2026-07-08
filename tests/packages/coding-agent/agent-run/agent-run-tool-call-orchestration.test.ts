@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { AgentRunTraceRecordInput } from '@megumi/coding-agent/agent-run';
 import type { RegisteredTool, ToolExecutionResult } from '@megumi/coding-agent/tools';
 import type { EvaluateToolExecutionResult, PermissionDecision } from '@megumi/coding-agent/permissions';
 import {
@@ -9,8 +10,10 @@ import {
 describe('Agent Run tool-call orchestration', () => {
   it('validates tools, resolves permission facts, and executes parallel windows concurrently', async () => {
     const order: string[] = [];
+    const traceRecords: AgentRunTraceRecordInput[] = [];
     const result = await orchestrateToolCallGroup({
       ...baseInput(),
+      trace_logger: { record: (record) => traceRecords.push(record) },
       tool_calls: [
         toolCall('call-1', 'read_file'),
         toolCall('call-2', 'list_files'),
@@ -41,6 +44,11 @@ describe('Agent Run tool-call orchestration', () => {
     expect(result.tool_result_facts.map((toolResult) => toolResult.status)).toEqual(['completed', 'completed']);
     expect(order).toEqual(['start:read_file', 'start:list_files', 'end:read_file', 'end:list_files']);
     expect(result.next_model_prompt_ready).toBe(true);
+    expect(traceRecords.map((record) => record.event_type)).toEqual(expect.arrayContaining([
+      'trace.tool_call.executable',
+      'trace.tool_execution.request',
+      'trace.tool_execution.result',
+    ]));
   });
 
   it('uses serial execution mode as an execution window barrier', async () => {
@@ -75,8 +83,10 @@ describe('Agent Run tool-call orchestration', () => {
 
   it('does not execute unknown or denied tools and turns them into run context facts', async () => {
     const executeTool = vi.fn();
+    const traceRecords: AgentRunTraceRecordInput[] = [];
     const result = await orchestrateToolCallGroup({
       ...baseInput(),
+      trace_logger: { record: (record) => traceRecords.push(record) },
       tool_calls: [
         toolCall('call-1', 'unknown_tool'),
         toolCall('call-2', 'run_command'),
@@ -98,6 +108,16 @@ describe('Agent Run tool-call orchestration', () => {
     expect(executeTool).not.toHaveBeenCalled();
     expect(result.tool_result_facts.map((toolResult) => toolResult.status)).toEqual(['failed', 'denied']);
     expect(result.next_model_prompt_ready).toBe(true);
+    expect(traceRecords).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        event_type: 'trace.tool_execution.result',
+        payload: expect.objectContaining({ result_type: 'failed' }),
+      }),
+      expect.objectContaining({
+        event_type: 'trace.tool_execution.result',
+        payload: expect.objectContaining({ result_type: 'denied' }),
+      }),
+    ]));
   });
 
   it('creates pending approvals and stops before the next model call', async () => {

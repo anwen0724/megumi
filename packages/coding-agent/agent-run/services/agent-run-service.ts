@@ -26,6 +26,7 @@ import type {
   StartRunRequest,
   StartRunResult,
 } from '../contracts/agent-run-contracts';
+import type { AgentRunTraceLogger } from '../contracts/agent-run-trace-contracts';
 import type { ModelCallConfig, ModelCallService, ToolResultRuntimeFact } from '../contracts/model-call-contracts';
 import {
   consumeContextUsageSignal,
@@ -47,6 +48,7 @@ import {
   createAgentRunRepository,
   type AgentRunRepository,
 } from '../repositories/agent-run-repository';
+import { createNoopAgentRunTraceLogger } from './agent-run-trace-logger';
 
 export type CreateAgentRunServiceOptions = {
   repository?: AgentRunRepository;
@@ -94,6 +96,7 @@ export type CreateAgentRunServiceOptions = {
   event_publisher?: {
     publish(event: AgentRunEvent): AgentRunEvent | void;
   };
+  trace_logger?: AgentRunTraceLogger;
   ids?: Partial<AgentRunServiceIds>;
   clock?: { now(): string };
   limits?: Partial<AgentRunLoopLimits>;
@@ -123,6 +126,7 @@ class DefaultAgentRunService implements AgentRunService {
   private readonly ids: AgentRunServiceIds;
   private readonly clock: { now(): string };
   private readonly limits: AgentRunLoopLimits;
+  private readonly traceLogger: AgentRunTraceLogger;
   private readonly activeRunAbortControllers = new Map<string, AbortController>();
   private readonly activeModelCallByRun = new Map<string, string>();
   private readonly approvalContinuations = new Map<string, RunApprovalContinuation>();
@@ -146,6 +150,7 @@ class DefaultAgentRunService implements AgentRunService {
       max_model_calls: options.limits?.max_model_calls ?? 12,
       max_tool_rounds: options.limits?.max_tool_rounds ?? 6,
     };
+    this.traceLogger = options.trace_logger ?? createNoopAgentRunTraceLogger();
     this.subscribeContextUsageSignals();
   }
 
@@ -233,6 +238,21 @@ class DefaultAgentRunService implements AgentRunService {
     const queue = createAgentRunEventQueue((event) => this.options.event_publisher?.publish(event));
     const eventSink = this.createEventSink(queue, run);
     eventSink.emit('run.started', { run_id: run.run_id, session_id: run.session_id });
+    this.traceLogger.record({
+      trace_id: run.run_id,
+      event_type: 'run.started',
+      run_id: run.run_id,
+      session_id: run.session_id,
+      workspace_id: run.workspace_id,
+      payload: {
+        request_id: request.request_id,
+        user_message_id: userMessageId,
+        model_id: request.model_selection.model_id,
+        provider_id: request.model_selection.provider_id,
+        permission_mode: request.permission_mode ?? 'default',
+        limits: this.limits,
+      },
+    });
 
     const controller = new AbortController();
     this.activeRunAbortControllers.set(run.run_id, controller);
@@ -634,6 +654,7 @@ class DefaultAgentRunService implements AgentRunService {
         workspace_id: input.run.workspace_id,
         ...(input.continuation.workspace_root ? { workspace_root: input.continuation.workspace_root } : {}),
       }),
+      trace_logger: this.traceLogger,
       ...(this.options.workspace_path_policy_service ? { workspace_path_policy_service: this.options.workspace_path_policy_service } : {}),
       clock: this.clock,
       ids: { approval_request_id: this.ids.approval_request_id },
@@ -727,6 +748,7 @@ class DefaultAgentRunService implements AgentRunService {
           ...(input.workspace_root ? { workspace_root: input.workspace_root } : {}),
         }),
         permission_service: this.options.permission_service,
+        trace_logger: this.traceLogger,
         ...(this.options.workspace_path_policy_service ? { workspace_path_policy_service: this.options.workspace_path_policy_service } : {}),
         ...(this.options.memory_service ? { memory_service: this.options.memory_service } : {}),
         event_sink: input.eventSink,
@@ -777,6 +799,19 @@ class DefaultAgentRunService implements AgentRunService {
         failure: {
           code: 'internal_error',
           message: error instanceof Error ? error.message : 'Agent Run failed unexpectedly.',
+        },
+      });
+      this.traceLogger.record({
+        trace_id: input.run.run_id,
+        event_type: 'run.failed',
+        run_id: input.run.run_id,
+        session_id: input.run.session_id,
+        workspace_id: input.run.workspace_id,
+        payload: {
+          failure: {
+            code: 'internal_error',
+            message: error instanceof Error ? error.message : 'Agent Run failed unexpectedly.',
+          },
         },
       });
     } finally {
