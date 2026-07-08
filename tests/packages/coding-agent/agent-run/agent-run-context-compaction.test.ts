@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { consumeContextUsageSignal } from '@megumi/coding-agent/agent-run/core/run-orchestrator';
+import { RuntimeEventSchema } from '@megumi/coding-agent/events';
 
 describe('Agent Run context compaction control flow', () => {
   it('consumes auto compaction signals by calling Context Compaction Service', async () => {
@@ -20,7 +21,7 @@ describe('Agent Run context compaction control flow', () => {
       events: [],
     }));
     const emit = vi.fn((input) => ({
-      eventId: `event:${input.eventType}`,
+      eventId: `event:${input.eventType.replaceAll('.', '_')}`,
       schemaVersion: 1 as const,
       eventType: input.eventType,
       runId: 'run-1',
@@ -68,6 +69,7 @@ describe('Agent Run context compaction control flow', () => {
         triggerReason: 'context_limit',
       }),
     }));
+    expectRuntimeEventsSchemaValid(emit.mock.results.map((result) => result.value));
   });
 
   it('ignores non-auto-compaction context usage signals', async () => {
@@ -99,4 +101,10 @@ function usage() {
     auto_compaction_threshold_ratio: 0.8,
     should_auto_compact: true,
   };
+}
+
+function expectRuntimeEventsSchemaValid(events: unknown[]): void {
+  for (const event of events) {
+    expect(RuntimeEventSchema.safeParse(event).success).toBe(true);
+  }
 }

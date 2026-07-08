@@ -3,6 +3,7 @@ import {
   createAgentRunService,
   type CreateAgentRunServiceOptions,
 } from '@megumi/coding-agent/agent-run';
+import { RuntimeEventSchema } from '@megumi/coding-agent/events';
 import { collectEvents, createInMemoryAgentRunRepository, createMessageFlowDependencies } from './agent-run-test-helpers';
 
 describe('Agent Run loop limits', () => {
@@ -50,7 +51,8 @@ describe('Agent Run loop limits', () => {
     expect(result.status).toBe('started');
     if (result.status !== 'started') return;
 
-    await collectEvents(result.events);
+    const events = await collectEvents(result.events);
+    expectRuntimeEventsSchemaValid(events);
     expect(modelCallCount).toBe(9);
     expect(repository.getRun(result.run.run_id)).toMatchObject({
       status: 'completed',
@@ -79,6 +81,7 @@ describe('Agent Run loop limits', () => {
     if (result.status !== 'started') return;
 
     const events = await collectEvents(result.events);
+    expectRuntimeEventsSchemaValid(events);
     expect(repository.getRun(result.run.run_id)).toMatchObject({
       status: 'failed',
       failure: {
@@ -110,7 +113,8 @@ describe('Agent Run loop limits', () => {
     expect(result.status).toBe('started');
     if (result.status !== 'started') return;
 
-    await collectEvents(result.events);
+    const events = await collectEvents(result.events);
+    expectRuntimeEventsSchemaValid(events);
     expect(repository.getRun(result.run.run_id)).toMatchObject({
       status: 'failed',
       failure: {
@@ -141,4 +145,10 @@ function toolCallModelEvents(
 
 async function* asyncEvents<T>(events: T[]): AsyncIterable<T> {
   yield* events;
+}
+
+function expectRuntimeEventsSchemaValid(events: unknown[]): void {
+  for (const event of events) {
+    expect(RuntimeEventSchema.safeParse(event).success).toBe(true);
+  }
 }
