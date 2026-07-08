@@ -533,9 +533,10 @@ async function collectModelCallEvents(
   const textDeltas: string[] = [];
   const toolCalls: ModelRequestedToolCall[] = [];
   let completedContent: string | undefined;
+  const runtimeEventState: ModelCallRuntimeEventState = {};
 
   for await (const event of events) {
-    emitModelCallRuntimeEvent(dependencies, run, event);
+    emitModelCallRuntimeEvent(dependencies, run, event, runtimeEventState);
     dependencies.trace_logger?.record({
       trace_id: run.run_id,
       event_type: 'trace.model_call.event_received',
@@ -576,12 +577,23 @@ function emitModelCallRuntimeEvent(
   dependencies: RunOrchestratorDependencies,
   run: AgentRun,
   event: ModelCallEvent,
+  state: ModelCallRuntimeEventState,
 ): void {
   if (event.type === 'started') {
     return;
   }
 
   if (event.type === 'retrying') {
+    const retryRequestId = `retry:${event.model_call_id}:${event.attempt}`;
+    state.activeRetryRequestId = retryRequestId;
+    dependencies.event_sink.emit({
+      eventType: 'retry.started',
+      run,
+      payload: {
+        retryRequestId,
+        retryKind: 'model_call',
+      },
+    });
     return;
   }
 
@@ -592,6 +604,40 @@ function emitModelCallRuntimeEvent(
       payload: {
         modelCallId: event.model_call_id,
         delta: event.delta,
+      },
+    });
+    return;
+  }
+
+  if (event.type === 'thinking_started') {
+    dependencies.event_sink.emit({
+      eventType: 'model.thinking.started',
+      run,
+      payload: {
+        modelStepId: event.model_call_id,
+      },
+    });
+    return;
+  }
+
+  if (event.type === 'thinking_delta') {
+    dependencies.event_sink.emit({
+      eventType: 'model.thinking.delta',
+      run,
+      payload: {
+        modelStepId: event.model_call_id,
+        delta: event.delta,
+      },
+    });
+    return;
+  }
+
+  if (event.type === 'thinking_completed') {
+    dependencies.event_sink.emit({
+      eventType: 'model.thinking.completed',
+      run,
+      payload: {
+        modelStepId: event.model_call_id,
       },
     });
     return;
@@ -612,6 +658,17 @@ function emitModelCallRuntimeEvent(
   }
 
   if (event.type === 'completed') {
+    if (state.activeRetryRequestId) {
+      dependencies.event_sink.emit({
+        eventType: 'retry.completed',
+        run,
+        payload: {
+          retryRequestId: state.activeRetryRequestId,
+          retryKind: 'model_call',
+        },
+      });
+      state.activeRetryRequestId = undefined;
+    }
     dependencies.event_sink.emit({
       eventType: 'model_call.completed',
       run,
@@ -624,6 +681,18 @@ function emitModelCallRuntimeEvent(
     return;
   }
 
+  if (state.activeRetryRequestId) {
+    dependencies.event_sink.emit({
+      eventType: 'retry.failed',
+      run,
+      payload: {
+        retryRequestId: state.activeRetryRequestId,
+        retryKind: 'model_call',
+        error: agentRunFailureToRuntimeError(event.failure),
+      },
+    });
+    state.activeRetryRequestId = undefined;
+  }
   dependencies.event_sink.emit({
     eventType: 'model_call.completed',
     run,
@@ -633,6 +702,10 @@ function emitModelCallRuntimeEvent(
     },
   });
 }
+
+type ModelCallRuntimeEventState = {
+  activeRetryRequestId?: string;
+};
 
 function emitToolCallTerminalEvent(
   dependencies: RunOrchestratorDependencies,
