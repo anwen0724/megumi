@@ -24,7 +24,7 @@ describe('Agent Run context compaction control flow', () => {
       eventId: `event:${input.eventType.replaceAll('.', '_')}`,
       schemaVersion: 1 as const,
       eventType: input.eventType,
-      runId: 'run-1',
+      ...(input.runId ? { runId: input.runId } : {}),
       sessionId: input.sessionId ?? 'session-1',
       sequence: 1,
       createdAt: '2026-01-01T00:00:00.000Z',

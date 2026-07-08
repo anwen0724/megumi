@@ -71,7 +71,8 @@ describe('composeCodingAgentRuntime trace wiring', () => {
     });
 
     try {
-      expect(secondRuntime.compatibility.listRuntimeEventsByRun(runId).map((event) => event.eventType))
+      expect(secondRuntime.compatibility.listRuntimeEventsByRun).toBeDefined();
+      expect(secondRuntime.compatibility.listRuntimeEventsByRun!(runId).map((event) => event.eventType))
         .toEqual(expect.arrayContaining([
           'run.started',
           'model_call.started',

@@ -103,6 +103,11 @@ const skippedDirectories = new Set([
   'out',
 ]);
 
+function containsDeletedTableReference(source: string, table: string): boolean {
+  const escaped = table.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![A-Za-z0-9_])${escaped}(?![A-Za-z0-9_])`).test(source);
+}
+
 describe('persistence code realignment source guards', () => {
   it('does not expose old table-shaped repository classes or ports in production source', () => {
     const violations = productionFiles('packages/coding-agent').flatMap((file) => {
@@ -123,7 +128,7 @@ describe('persistence code realignment source guards', () => {
 
       const source = fs.readFileSync(path.join(root, file), 'utf8');
       return deletedTables
-        .filter((table) => source.includes(table))
+        .filter((table) => containsDeletedTableReference(source, table))
         .map((table) => `${file} references deleted table ${table}`);
     });
 

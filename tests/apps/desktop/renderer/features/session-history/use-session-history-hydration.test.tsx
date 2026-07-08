@@ -75,11 +75,12 @@ describe('useSessionHistoryHydration', () => {
     useProjectStore.setState({
       projects: [{
         id: 'project-1',
+        projectId: 'project-1',
         name: 'Project',
         repoPath: 'C:/repo',
-        status: 'active',
+        repoPathKey: 'repo-key',
+        status: 'available',
         createdAt,
-        updatedAt: createdAt,
         lastOpenedAt: createdAt,
       }],
       currentProjectId: 'project-1',

@@ -1,11 +1,13 @@
 import { vi } from 'vitest';
 import type { AgentRun, AgentRunApprovalRequest } from '@megumi/coding-agent/agent-run';
 import type { AgentRunRepository } from '@megumi/coding-agent/agent-run/repositories/agent-run-repository';
+import type { RuntimeEvent } from '@megumi/coding-agent/events';
 import type { RegisteredTool, ToolExecutionResult } from '@megumi/coding-agent/tools';
 
 export function createInMemoryAgentRunRepository(): AgentRunRepository {
   const runs = new Map<string, AgentRun>();
   const approvals = new Map<string, AgentRunApprovalRequest>();
+  const runtimeEvents = new Map<string, RuntimeEvent>();
 
   return {
     createRun(run) {
@@ -43,6 +45,23 @@ export function createInMemoryAgentRunRepository(): AgentRunRepository {
     listPendingApprovalRequestsByRun(runId) {
       return [...approvals.values()]
         .filter((approval) => approval.run_id === runId && approval.status === 'pending');
+    },
+    saveRuntimeEvent(event) {
+      runtimeEvents.set(event.eventId, event);
+      return event;
+    },
+    listRuntimeEventsByRun(runId) {
+      return [...runtimeEvents.values()]
+        .filter((event) => event.runId === runId)
+        .sort((left, right) => {
+          const sequenceOrder = left.sequence - right.sequence;
+          return sequenceOrder === 0 ? left.createdAt.localeCompare(right.createdAt) : sequenceOrder;
+        });
+    },
+    nextRuntimeEventSequence(runId) {
+      return Math.max(0, ...[...runtimeEvents.values()]
+        .filter((event) => event.runId === runId)
+        .map((event) => event.sequence)) + 1;
     },
   };
 }
