@@ -8,11 +8,14 @@ import type { SettingsService } from '../../settings';
 import type { ToolExecutionService } from '../../tools';
 import type { WorkspacePathPolicyService } from '../../workspace';
 import type { CompactContextResult, ContextUsageSignal, SessionContextSource } from '../../context';
+import type { JsonValue } from '../../shared-json';
+import type { RuntimeError } from '../../events';
 import type {
   AgentRun,
+  AgentRunApprovalRequest,
   AgentRunFailure,
+  AgentRunToolCall,
 } from '../contracts/agent-run-contracts';
-import type { RuntimeEvent } from '../../events';
 import type { AgentRunTraceLogger } from '../contracts/agent-run-trace-contracts';
 import type {
   ModelCallEvent,
@@ -28,6 +31,7 @@ import {
 } from './tool-call-orchestrator';
 import type { RunToolSetBuilder } from './tool-set-builder';
 import type { AgentRunRepository } from '../repositories/agent-run-repository';
+import type { AgentRunRuntimeEventFactory } from './agent-run-runtime-events';
 
 export type RunOrchestratorDependencies = {
   repository: AgentRunRepository;
@@ -55,9 +59,7 @@ export type RunOrchestratorDependencies = {
   memory_service?: {
     captureCompletedRun(request: { run_id: string; session_id: string; workspace_id: string }): Promise<unknown> | unknown;
   };
-  event_sink: {
-    emit(type: string, payload?: Record<string, unknown>): RuntimeEvent;
-  };
+  event_sink: AgentRunRuntimeEventFactory;
   trace_logger?: AgentRunTraceLogger;
   on_model_call_started?: (input: { run_id: string; model_call_id: string }) => void;
   ids: {
@@ -113,9 +115,7 @@ export type ConsumeContextUsageSignalRequest = {
       trigger: { kind: 'auto'; reason: 'context_window_threshold'; signal_id: string };
     }): Promise<CompactContextResult> | CompactContextResult;
   };
-  event_sink: {
-    emit(type: string, payload?: Record<string, unknown>): RuntimeEvent;
-  };
+  event_sink: AgentRunRuntimeEventFactory;
 };
 
 export type ConsumeContextUsageSignalResult =
@@ -202,11 +202,14 @@ export async function runAgentModelToolLoop(
       run_id: run.run_id,
       model_call_id: modelCall.model_call_id,
     });
-    dependencies.event_sink.emit('model_call.started', {
-      run_id: run.run_id,
-      model_call_id: modelCall.model_call_id,
-      provider_id: request.model_config.provider_id,
-      model_id: request.model_config.model_id,
+    dependencies.event_sink.emit({
+      eventType: 'model_call.started',
+      run,
+      payload: {
+        modelCallId: modelCall.model_call_id,
+        providerId: run.model_selection.provider_id,
+        modelId: run.model_selection.model_id,
+      },
     });
     traceRun(dependencies, run, 'trace.model_call.request_payload', {
       owner: { type: 'agent_run', run_id: run.run_id },
@@ -248,11 +251,13 @@ export async function runAgentModelToolLoop(
         to: 'completed',
         changed_at: dependencies.clock.now(),
       }));
-      dependencies.event_sink.emit('run.completed', {
-        run_id: run.run_id,
-        session_id: run.session_id,
-        workspace_id: run.workspace_id,
-        assistant_message_id: assistant.message.message_id,
+      dependencies.event_sink.emit({
+        eventType: 'run.completed',
+        run,
+        messageId: assistant.message.message_id,
+        payload: {
+          assistantMessageId: assistant.message.message_id,
+        },
       });
       traceRun(dependencies, run, 'run.completed', {
         assistant_message_id: assistant.message.message_id,
@@ -298,12 +303,15 @@ export async function runAgentModelToolLoop(
       }),
     );
     for (const toolCall of modelEvents.tool_calls) {
-      dependencies.event_sink.emit('tool_call.requested', {
-        run_id: run.run_id,
-        model_call_id: toolCall.model_call_id,
-        tool_call_id: toolCall.tool_call_id,
-        tool_name: toolCall.tool_name,
-        input: toolCall.input,
+      dependencies.event_sink.emit({
+        eventType: 'tool_call.requested',
+        run,
+        payload: {
+          ...(toolCall.model_call_id ? { modelCallId: toolCall.model_call_id } : {}),
+          toolCallId: toolCall.tool_call_id,
+          toolName: toolCall.tool_name,
+          input: toJsonValue(toolCall.input),
+        },
       });
     }
     traceRun(dependencies, run, 'trace.tool_call.requested', {
@@ -343,39 +351,7 @@ export async function runAgentModelToolLoop(
     });
 
     for (const toolCall of toolGroup.tool_calls) {
-      dependencies.event_sink.emit('tool_execution.decided', {
-        run_id: run.run_id,
-        tool_call_id: toolCall.tool_call_id,
-        tool_name: toolCall.tool_name,
-        status: toolCall.status,
-      });
-      if (toolCall.status === 'completed' || toolCall.status === 'failed') {
-        dependencies.event_sink.emit('tool_execution.started', {
-          run_id: run.run_id,
-          tool_call_id: toolCall.tool_call_id,
-          tool_name: toolCall.tool_name,
-          input: toolCall.input,
-        });
-        dependencies.event_sink.emit(toolCall.status === 'completed' ? 'tool_execution.completed' : 'tool_execution.failed', {
-          run_id: run.run_id,
-          tool_call_id: toolCall.tool_call_id,
-          tool_name: toolCall.tool_name,
-        });
-      }
-      if (toolCall.status === 'denied') {
-        dependencies.event_sink.emit('tool_execution.denied', {
-          run_id: run.run_id,
-          tool_call_id: toolCall.tool_call_id,
-          tool_name: toolCall.tool_name,
-        });
-      }
-      dependencies.event_sink.emit(`tool_call.${toolCall.status}`, {
-        run_id: run.run_id,
-        tool_call_id: toolCall.tool_call_id,
-        tool_name: toolCall.tool_name,
-        input: toolCall.input,
-        error: toolCall.failure,
-      });
+      emitToolCallTerminalEvent(dependencies, run, toolCall);
     }
     for (const toolResult of toolGroup.tool_result_facts) {
       emitToolResult(dependencies, run, toolResult);
@@ -390,9 +366,12 @@ export async function runAgentModelToolLoop(
     for (const pendingApproval of toolGroup.pending_approvals) {
       const approval = pendingApproval.approval_request;
       dependencies.repository.createApprovalRequest(approval);
-      dependencies.event_sink.emit('approval.requested', {
-        run_id: run.run_id,
-        approval_request: approval,
+      dependencies.event_sink.emit({
+        eventType: 'approval.requested',
+        run,
+        payload: {
+          approvalRequest: approvalRequestToRuntimePayload(approval),
+        },
       });
     }
 
@@ -402,12 +381,15 @@ export async function runAgentModelToolLoop(
         to: 'waiting_for_approval',
         changed_at: dependencies.clock.now(),
       }));
-      dependencies.event_sink.emit('run.waiting_for_approval', {
-        run_id: run.run_id,
-        approval_request_id: toolGroup.pending_approvals[0]?.approval_request.approval_request_id,
-        tool_call_id: toolGroup.pending_approvals[0]?.approval_request.subject.tool_call_id,
-        tool_execution_id: toolGroup.pending_approvals[0]?.approval_request.subject.tool_call_id,
-        reason: 'approval_required',
+      dependencies.event_sink.emit({
+        eventType: 'run.waiting_for_approval',
+        run,
+        payload: {
+          approvalRequestId: toolGroup.pending_approvals[0]?.approval_request.approval_request_id ?? 'approval:unknown',
+          toolCallId: toolGroup.pending_approvals[0]?.approval_request.subject.tool_call_id ?? 'tool-call:unknown',
+          toolExecutionId: toolGroup.pending_approvals[0]?.approval_request.subject.tool_call_id ?? 'tool-call:unknown',
+          reason: 'approval_required',
+        },
       });
       traceLoopCounters(dependencies, run, modelCalls, toolRounds, runtimeFacts.length);
       return {
@@ -433,10 +415,6 @@ export async function runAgentModelToolLoop(
       };
     }
 
-    dependencies.event_sink.emit('tool_result_facts.submitted', {
-      run_id: run.run_id,
-      count: toolGroup.tool_result_facts.length,
-    });
     traceLoopCounters(dependencies, run, modelCalls, toolRounds, runtimeFacts.length);
   }
 }
@@ -449,6 +427,28 @@ function toolResultToModelCallMessage(toolResult: ToolResultRuntimeFact): ModelC
   };
 }
 
+function sessionSourceRef(sessionId: string): { sourceRefId: string; sourceId: string; sourceKind: string; label: string } {
+  return {
+    sourceRefId: sessionId,
+    sourceId: sessionId,
+    sourceKind: 'session',
+    label: 'Session context',
+  };
+}
+
+function approvalRequestToRuntimePayload(request: AgentRunApprovalRequest): Record<string, unknown> {
+  return {
+    approvalRequestId: request.approval_request_id,
+    runId: request.run_id,
+    toolCallId: request.subject.tool_call_id,
+    toolExecutionId: request.subject.tool_call_id,
+    toolName: request.subject.tool_name,
+    title: request.subject.tool_name,
+    status: request.status,
+    createdAt: request.created_at,
+  };
+}
+
 export async function consumeContextUsageSignal(
   request: ConsumeContextUsageSignalRequest,
 ): Promise<ConsumeContextUsageSignalResult> {
@@ -456,10 +456,16 @@ export async function consumeContextUsageSignal(
     return { status: 'ignored', reason: 'not_auto_compaction_signal' };
   }
 
-  request.event_sink.emit('context.compaction.requested', {
-    session_id: request.signal.session_id,
-    ...(request.signal.workspace_id ? { workspace_id: request.signal.workspace_id } : {}),
-    signal_id: request.signal.signal_id,
+  request.event_sink.emit({
+    eventType: 'context.compaction.started',
+    sessionId: request.signal.session_id,
+    payload: {
+      compactionId: request.signal.signal_id,
+      triggerReason: 'context_limit',
+      tokensBefore: request.signal.usage.used_tokens,
+      firstKeptSourceRef: sessionSourceRef(request.signal.session_id),
+      summarizedSourceCount: 0,
+    },
   });
 
   const result = await request.context_compaction_service.compact({
@@ -473,25 +479,38 @@ export async function consumeContextUsageSignal(
   });
 
   if (result.status === 'completed') {
-    request.event_sink.emit('context.compaction.completed', {
-      session_id: request.signal.session_id,
-      ...(request.signal.workspace_id ? { workspace_id: request.signal.workspace_id } : {}),
-      compaction_id: result.compaction.compaction_id,
+    request.event_sink.emit({
+      eventType: 'context.compaction.completed',
+      sessionId: request.signal.session_id,
+      payload: {
+        compactionId: result.compaction.compaction_id,
+        triggerReason: 'context_limit',
+        tokensBefore: request.signal.usage.used_tokens,
+        firstKeptSourceRef: sessionSourceRef(request.signal.session_id),
+        summarizedSourceCount: 0,
+      },
     });
     return { status: 'completed' };
   }
 
   if (result.status === 'skipped') {
-    request.event_sink.emit('context.compaction.skipped', {
-      session_id: request.signal.session_id,
-      reason: result.reason,
-    });
     return { status: 'skipped', reason: result.reason };
   }
 
-  request.event_sink.emit('context.compaction.failed', {
-    session_id: request.signal.session_id,
-    failure: result.failure,
+  request.event_sink.emit({
+    eventType: 'context.compaction.failed',
+    sessionId: request.signal.session_id,
+    payload: {
+      triggerReason: 'context_limit',
+      tokensBefore: request.signal.usage.used_tokens,
+      error: {
+        code: 'context_budget_exceeded',
+        message: result.failure.message,
+        severity: 'error',
+        retryable: false,
+        source: 'core',
+      },
+    },
   });
   return {
     status: 'failed',
@@ -516,7 +535,7 @@ async function collectModelCallEvents(
   let completedContent: string | undefined;
 
   for await (const event of events) {
-    dependencies.event_sink.emit(`model_call.${event.type}`, { ...event });
+    emitModelCallRuntimeEvent(dependencies, run, event);
     dependencies.trace_logger?.record({
       trace_id: run.run_id,
       event_type: 'trace.model_call.event_received',
@@ -553,17 +572,130 @@ async function collectModelCallEvents(
   };
 }
 
+function emitModelCallRuntimeEvent(
+  dependencies: RunOrchestratorDependencies,
+  run: AgentRun,
+  event: ModelCallEvent,
+): void {
+  if (event.type === 'started') {
+    return;
+  }
+
+  if (event.type === 'retrying') {
+    return;
+  }
+
+  if (event.type === 'text_delta') {
+    dependencies.event_sink.emit({
+      eventType: 'model_call.text_delta',
+      run,
+      payload: {
+        modelCallId: event.model_call_id,
+        delta: event.delta,
+      },
+    });
+    return;
+  }
+
+  if (event.type === 'tool_call') {
+    dependencies.event_sink.emit({
+      eventType: 'model_call.tool_call',
+      run,
+      payload: {
+        modelCallId: event.model_call_id,
+        toolCallId: event.tool_call_id,
+        toolName: event.tool_name,
+        input: toJsonValue(event.input),
+      },
+    });
+    return;
+  }
+
+  if (event.type === 'completed') {
+    dependencies.event_sink.emit({
+      eventType: 'model_call.completed',
+      run,
+      payload: {
+        modelCallId: event.model_call_id,
+        finishReason: event.finish_reason ?? 'stop',
+        ...(event.content ? { content: event.content } : {}),
+      },
+    });
+    return;
+  }
+
+  dependencies.event_sink.emit({
+    eventType: 'model_call.completed',
+    run,
+    payload: {
+      modelCallId: event.model_call_id,
+      finishReason: 'failed',
+    },
+  });
+}
+
+function emitToolCallTerminalEvent(
+  dependencies: RunOrchestratorDependencies,
+  run: AgentRun,
+  toolCall: AgentRunToolCall,
+): void {
+  if (toolCall.status === 'completed') {
+    dependencies.event_sink.emit({
+      eventType: 'tool_call.completed',
+      run,
+      payload: {
+        toolCallId: toolCall.tool_call_id,
+        toolExecutionId: toolCall.tool_call_id,
+        toolName: toolCall.tool_name,
+      },
+    });
+    return;
+  }
+
+  if (toolCall.status === 'failed' || toolCall.status === 'denied') {
+    dependencies.event_sink.emit({
+      eventType: 'tool_call.failed',
+      run,
+      payload: {
+        toolCallId: toolCall.tool_call_id,
+        toolExecutionId: toolCall.tool_call_id,
+        toolName: toolCall.tool_name,
+        error: {
+          code: toolCall.status === 'denied' ? 'approval_denied' : 'tool_execution_failed',
+          message: toolCall.failure?.message ?? 'Tool call did not complete successfully.',
+          severity: toolCall.status === 'denied' ? 'info' : 'error',
+          retryable: false,
+          source: toolCall.status === 'denied' ? 'approval' : 'tool',
+        },
+      },
+    });
+  }
+}
+
 function emitToolResult(
   dependencies: RunOrchestratorDependencies,
   run: AgentRun,
   toolResult: ToolResultRuntimeFact,
 ): void {
-  dependencies.event_sink.emit('tool_result.created', {
-    run_id: run.run_id,
-    tool_call_id: toolResult.tool_call_id,
-    tool_name: toolResult.tool_name,
-    status: toolResult.status,
-    content: toolResult.content,
+  dependencies.event_sink.emit({
+    eventType: 'tool_result.created',
+    run,
+    payload: {
+      toolResultId: `tool-result:${toolResult.tool_call_id}`,
+      toolCallId: toolResult.tool_call_id,
+      toolExecutionId: toolResult.tool_call_id,
+      toolName: toolResult.tool_name,
+      kind: toolResult.status === 'completed'
+        ? 'success'
+        : toolResult.status === 'denied'
+          ? 'policy_denied'
+          : toolResult.status === 'cancelled'
+            ? 'user_rejected'
+            : 'failed',
+      ...(toolResult.content || toolResult.observation?.summary
+        ? { summary: toolResult.content ?? toolResult.observation?.summary }
+        : {}),
+    },
   });
 }
 
@@ -579,17 +711,66 @@ function failRun(
     changed_at: dependencies.clock.now(),
     failure,
   }));
-  dependencies.event_sink.emit('run.failed', {
-    run_id: failedRun.run_id,
-    session_id: failedRun.session_id,
-    workspace_id: failedRun.workspace_id,
-    failure,
+  dependencies.event_sink.emit({
+    eventType: 'run.failed',
+    run: failedRun,
+    payload: {
+      error: agentRunFailureToRuntimeError(failure),
+    },
   });
   traceRun(dependencies, failedRun, 'run.failed', {
     failure,
     ...(counters ? counters : {}),
   });
   return { status: 'failed', run: failedRun, failure };
+}
+
+function agentRunFailureToRuntimeError(failure: AgentRunFailure): RuntimeError {
+  return {
+    code: runtimeErrorCodeForAgentRunFailure(failure),
+    message: failure.message,
+    severity: 'error',
+    retryable: failure.retryable ?? false,
+    source: runtimeErrorSourceForAgentRunFailure(failure),
+  };
+}
+
+function runtimeErrorCodeForAgentRunFailure(failure: AgentRunFailure): RuntimeError['code'] {
+  switch (failure.code) {
+    case 'context_failed':
+      return 'context_budget_exceeded';
+    case 'model_call_failed':
+      return 'provider_invalid_request';
+    case 'tool_call_failed':
+      return 'tool_execution_failed';
+    case 'approval_failed':
+      return 'approval_denied';
+    case 'cancel_failed':
+      return 'runtime_cancelled';
+    case 'runtime_protocol_violation':
+    case 'loop_limit_exceeded':
+      return 'runtime_protocol_violation';
+    default:
+      return 'runtime_unknown';
+  }
+}
+
+function runtimeErrorSourceForAgentRunFailure(failure: AgentRunFailure): RuntimeError['source'] {
+  if (failure.code === 'model_call_failed') return 'provider';
+  if (failure.code === 'tool_call_failed') return 'tool';
+  if (failure.code === 'approval_failed') return 'approval';
+  return 'core';
+}
+
+function toJsonValue(value: unknown): JsonValue {
+  if (value === undefined) {
+    return null;
+  }
+  try {
+    return JSON.parse(JSON.stringify(value)) as JsonValue;
+  } catch {
+    return String(value);
+  }
 }
 
 function loopLimitFailure(message: string): AgentRunFailure {

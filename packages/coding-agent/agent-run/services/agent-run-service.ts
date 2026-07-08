@@ -16,6 +16,7 @@ import type {
   AgentRun,
   AgentRunApprovalRequest,
   AgentRunFailure,
+  AgentRunToolCall,
   AgentRunService,
   CancelRunRequest,
   CancelRunResult,
@@ -246,11 +247,15 @@ class DefaultAgentRunService implements AgentRunService {
     }));
     const queue = createAgentRunEventQueue((event) => this.options.event_publisher?.publish(event));
     const eventSink = this.createEventSink(queue, run);
-    eventSink.emit('run.started', {
-      run_id: run.run_id,
-      session_id: run.session_id,
-      provider_id: request.model_selection.provider_id,
-      model_id: request.model_selection.model_id,
+    eventSink.emit({
+      eventType: 'run.started',
+      run,
+      requestId: request.request_id,
+      payload: {
+        runKind: 'agent',
+        providerId: request.model_selection.provider_id,
+        modelId: request.model_selection.model_id,
+      },
     });
     this.traceLogger.record({
       trace_id: run.run_id,
@@ -304,10 +309,12 @@ class DefaultAgentRunService implements AgentRunService {
       to: 'cancelling',
       changed_at: this.clock.now(),
     }));
-    eventSink.emit('run.cancelling', {
-      run_id: run.run_id,
-      session_id: run.session_id,
-      cancel_request_id: `cancel:${run.run_id}`,
+    eventSink.emit({
+      eventType: 'run.cancelling',
+      run,
+      payload: {
+        cancelRequestId: `cancel:${run.run_id}`,
+      },
     });
     this.activeRunAbortControllers.get(run.run_id)?.abort();
     const activeModelCallId = this.activeModelCallByRun.get(run.run_id);
@@ -327,10 +334,12 @@ class DefaultAgentRunService implements AgentRunService {
       to: 'cancelled',
       changed_at: this.clock.now(),
     }));
-    eventSink.emit('run.cancelled', {
-      run_id: cancelled.run_id,
-      session_id: cancelled.session_id,
-      reason: 'user_cancelled',
+    eventSink.emit({
+      eventType: 'run.cancelled',
+      run: cancelled,
+      payload: {
+        reason: 'user_cancelled',
+      },
     });
     this.activeRunAbortControllers.delete(run.run_id);
     queue.close();
@@ -415,24 +424,32 @@ class DefaultAgentRunService implements AgentRunService {
     const resumedRun = flow.run.status !== run.status
       ? this.repository.saveRun(flow.run)
       : flow.run;
-    eventSink.emit('approval.resolved', {
-      run_id: run.run_id,
-      workspace_id: run.workspace_id,
-      approval_request_id: decidedApproval.approval_request_id,
-      decision: decision.decision,
-      scope: decision.scope,
-      decided_at: decision.decided_at,
+    eventSink.emit({
+      eventType: 'approval.resolved',
+      run,
+      payload: {
+        approvalRequestId: decidedApproval.approval_request_id,
+        decision: decision.decision,
+        scope: decision.scope,
+        decidedAt: decision.decided_at,
+      },
     });
 
     let runtimeFacts = continuation.runtime_sources;
     let modelCallMessages: ModelCallMessage[] = [...(continuation.model_call_messages ?? [])];
     if (flow.status === 'denied') {
       modelCallMessages = [...modelCallMessages, toolResultToModelCallMessage(flow.tool_result)];
-      eventSink.emit('tool_call.denied', {
-        run_id: resumedRun.run_id,
-        workspace_id: resumedRun.workspace_id,
-        tool_call_id: approval.subject.tool_call_id,
-        tool_name: approval.subject.tool_name,
+      eventSink.emit({
+        eventType: 'tool_result.created',
+        run: resumedRun,
+        payload: {
+          toolResultId: `tool-result:${approval.subject.tool_call_id}`,
+          toolCallId: approval.subject.tool_call_id,
+          toolExecutionId: approval.subject.tool_call_id,
+          toolName: approval.subject.tool_name,
+          kind: 'user_rejected',
+          summary: 'Tool call was rejected by approval decision.',
+        },
       });
     } else {
       const workspaceRoot = this.resolveWorkspaceRoot(run.workspace_id);
@@ -455,19 +472,48 @@ class DefaultAgentRunService implements AgentRunService {
         created_at: this.clock.now(),
       });
       modelCallMessages = [...modelCallMessages, toolResultToModelCallMessage(toolFact)];
-      eventSink.emit('tool_result.created', {
-        run_id: resumedRun.run_id,
-        workspace_id: resumedRun.workspace_id,
-        tool_call_id: toolFact.tool_call_id,
-        tool_name: toolFact.tool_name,
-        status: toolFact.status,
+      eventSink.emit({
+        eventType: 'tool_result.created',
+        run: resumedRun,
+        payload: {
+          toolResultId: `tool-result:${toolFact.tool_call_id}`,
+          toolCallId: toolFact.tool_call_id,
+          toolExecutionId: toolFact.tool_call_id,
+          toolName: toolFact.tool_name,
+          kind: toolFact.status === 'completed' ? 'success' : 'failed',
+          ...(toolFact.content || toolFact.observation?.summary
+            ? { summary: toolFact.content ?? toolFact.observation?.summary }
+            : {}),
+        },
       });
-      eventSink.emit(toolResult.type === 'succeeded' ? 'tool_call.completed' : 'tool_call.failed', {
-        run_id: resumedRun.run_id,
-        workspace_id: resumedRun.workspace_id,
-        tool_call_id: approval.subject.tool_call_id,
-        tool_name: approval.subject.tool_name,
-      });
+      if (toolResult.type === 'succeeded') {
+        eventSink.emit({
+          eventType: 'tool_call.completed',
+          run: resumedRun,
+          payload: {
+            toolCallId: approval.subject.tool_call_id,
+            toolExecutionId: approval.subject.tool_call_id,
+            toolName: approval.subject.tool_name,
+          },
+        });
+      } else {
+        eventSink.emit({
+          eventType: 'tool_call.failed',
+          run: resumedRun,
+          payload: {
+            toolCallId: approval.subject.tool_call_id,
+            toolExecutionId: approval.subject.tool_call_id,
+            toolName: approval.subject.tool_name,
+            error: {
+              code: 'tool_execution_failed',
+              message: toolResult.error.message,
+              severity: 'error',
+              retryable: false,
+              source: 'tool',
+            },
+          },
+        });
+      }
     }
 
     if (flow.continuation === 'waiting_for_other_approval') {
@@ -592,11 +638,16 @@ class DefaultAgentRunService implements AgentRunService {
           signal,
           context_compaction_service: this.options.context_compaction_service!,
           event_sink: {
-            emit: (type, payload) => {
-              const event = this.createRuntimeEvent(type, {
-                ...(signal.session_id ? { session_id: signal.session_id } : {}),
-                ...(payload ?? {}),
-              }, 1);
+            emit: (runtimeEvent) => {
+              const event = createAgentRunRuntimeEvent({
+                eventId: this.ids.event_id(),
+                sequence: 1,
+                now: this.clock.now(),
+                event: {
+                  sessionId: signal.session_id,
+                  ...runtimeEvent,
+                },
+              });
               this.options.event_publisher?.publish(event);
               return event;
             },
@@ -617,7 +668,7 @@ class DefaultAgentRunService implements AgentRunService {
     continuation: RunApprovalContinuation;
     runtime_sources: SessionContextSource[];
     model_call_messages: ModelCallMessage[];
-    eventSink: { emit(type: string, payload?: Record<string, unknown>): RuntimeEvent };
+    eventSink: AgentRunRuntimeEventFactory;
     signal?: AbortSignal;
   }): Promise<
     | { status: 'ready'; run: AgentRun; runtime_sources: SessionContextSource[]; model_call_messages: ModelCallMessage[] }
@@ -687,31 +738,22 @@ class DefaultAgentRunService implements AgentRunService {
     let runtimeFacts = input.runtime_sources;
     let modelCallMessages = input.model_call_messages;
     for (const toolCall of toolGroup.tool_calls) {
-      input.eventSink.emit(`tool_call.${toolCall.status}`, {
-        run_id: input.run.run_id,
-        workspace_id: input.run.workspace_id,
-        tool_call_id: toolCall.tool_call_id,
-        tool_name: toolCall.tool_name,
-      });
+      emitToolCallTerminalEvent(input.eventSink, input.run, toolCall);
     }
     for (const toolResult of toolGroup.tool_result_facts) {
-      input.eventSink.emit('tool_result.created', {
-        run_id: input.run.run_id,
-        workspace_id: input.run.workspace_id,
-        tool_call_id: toolResult.tool_call_id,
-        tool_name: toolResult.tool_name,
-        status: toolResult.status,
-      });
+      emitToolResultRuntimeEvent(input.eventSink, input.run, toolResult);
       modelCallMessages = [...modelCallMessages, toolResultToModelCallMessage(toolResult)];
     }
 
     if (toolGroup.pending_approvals.length > 0) {
       for (const pendingApproval of toolGroup.pending_approvals) {
         this.repository.createApprovalRequest(pendingApproval.approval_request);
-        input.eventSink.emit('approval.requested', {
-          run_id: input.run.run_id,
-          workspace_id: input.run.workspace_id,
-          approval_request_id: pendingApproval.approval_request.approval_request_id,
+        input.eventSink.emit({
+          eventType: 'approval.requested',
+          run: input.run,
+          payload: {
+            approvalRequest: approvalRequestToRuntimePayload(pendingApproval.approval_request),
+          },
         });
       }
       const waitingRun = this.repository.saveRun(transitionAgentRunStatus({
@@ -744,11 +786,6 @@ class DefaultAgentRunService implements AgentRunService {
       };
     }
 
-    input.eventSink.emit('tool_result_facts.submitted', {
-      run_id: input.run.run_id,
-      workspace_id: input.run.workspace_id,
-      count: toolGroup.tool_result_facts.length,
-    });
     return {
       status: 'ready',
       run: input.run,
@@ -759,7 +796,7 @@ class DefaultAgentRunService implements AgentRunService {
 
   private async executeRunLoop(input: {
     queue: RuntimeEventQueue;
-    eventSink: { emit(type: string, payload?: Record<string, unknown>): RuntimeEvent };
+    eventSink: AgentRunRuntimeEventFactory;
     run: AgentRun;
     user_message_id: string;
     model_config: ModelCallConfig;
@@ -829,13 +866,17 @@ class DefaultAgentRunService implements AgentRunService {
           },
         }));
       }
-      input.eventSink.emit('run.failed', {
-        run_id: input.run.run_id,
-        session_id: input.run.session_id,
-        workspace_id: input.run.workspace_id,
-        failure: {
-          code: 'internal_error',
-          message: error instanceof Error ? error.message : 'Agent Run failed unexpectedly.',
+      input.eventSink.emit({
+        eventType: 'run.failed',
+        run: input.run,
+        payload: {
+          error: {
+            code: 'runtime_unknown',
+            message: error instanceof Error ? error.message : 'Agent Run failed unexpectedly.',
+            severity: 'error',
+            retryable: false,
+            source: 'core',
+          },
         },
       });
       this.traceLogger.record({
@@ -1026,6 +1067,84 @@ function textForRun(
     return command.input.raw_input;
   }
   return parsedInput.text;
+}
+
+function approvalRequestToRuntimePayload(request: AgentRunApprovalRequest): Record<string, unknown> {
+  return {
+    approvalRequestId: request.approval_request_id,
+    runId: request.run_id,
+    toolCallId: request.subject.tool_call_id,
+    toolExecutionId: request.subject.tool_call_id,
+    toolName: request.subject.tool_name,
+    title: request.subject.tool_name,
+    status: request.status,
+    createdAt: request.created_at,
+  };
+}
+
+function emitToolResultRuntimeEvent(
+  eventSink: AgentRunRuntimeEventFactory,
+  run: AgentRun,
+  toolResult: ToolResultRuntimeFact,
+): void {
+  eventSink.emit({
+    eventType: 'tool_result.created',
+    run,
+    payload: {
+      toolResultId: `tool-result:${toolResult.tool_call_id}`,
+      toolCallId: toolResult.tool_call_id,
+      toolExecutionId: toolResult.tool_call_id,
+      toolName: toolResult.tool_name,
+      kind: toolResult.status === 'completed'
+        ? 'success'
+        : toolResult.status === 'denied'
+          ? 'policy_denied'
+          : toolResult.status === 'cancelled'
+            ? 'user_rejected'
+            : 'failed',
+      ...(toolResult.content || toolResult.observation?.summary
+        ? { summary: toolResult.content ?? toolResult.observation?.summary }
+        : {}),
+    },
+  });
+}
+
+function emitToolCallTerminalEvent(
+  eventSink: AgentRunRuntimeEventFactory,
+  run: AgentRun,
+  toolCall: AgentRunToolCall,
+): void {
+  if (toolCall.status === 'completed') {
+    eventSink.emit({
+      eventType: 'tool_call.completed',
+      run,
+      payload: {
+        toolCallId: toolCall.tool_call_id,
+        toolExecutionId: toolCall.tool_call_id,
+        toolName: toolCall.tool_name,
+      },
+    });
+    return;
+  }
+
+  if (toolCall.status === 'failed' || toolCall.status === 'denied') {
+    eventSink.emit({
+      eventType: 'tool_call.failed',
+      run,
+      payload: {
+        toolCallId: toolCall.tool_call_id,
+        toolExecutionId: toolCall.tool_call_id,
+        toolName: toolCall.tool_name,
+        error: {
+          code: toolCall.status === 'denied' ? 'approval_denied' : 'tool_execution_failed',
+          message: toolCall.failure?.message ?? 'Tool call did not complete successfully.',
+          severity: toolCall.status === 'denied' ? 'info' : 'error',
+          retryable: false,
+          source: toolCall.status === 'denied' ? 'approval' : 'tool',
+        },
+      },
+    });
+  }
 }
 
 type RuntimeEventQueue = {

@@ -19,18 +19,18 @@ describe('Agent Run context compaction control flow', () => {
       },
       events: [],
     }));
-    const emit = vi.fn((type, payload) => ({
-      eventId: `event:${type}`,
+    const emit = vi.fn((input) => ({
+      eventId: `event:${input.eventType}`,
       schemaVersion: 1 as const,
-      eventType: type,
+      eventType: input.eventType,
       runId: 'run-1',
-      sessionId: 'session-1',
+      sessionId: input.sessionId ?? 'session-1',
       sequence: 1,
       createdAt: '2026-01-01T00:00:00.000Z',
       source: 'core' as const,
       visibility: 'user' as const,
       persist: 'required' as const,
-      payload: payload ?? {},
+      payload: input.payload,
     }));
 
     const result = await consumeContextUsageSignal({
@@ -52,9 +52,21 @@ describe('Agent Run context compaction control flow', () => {
       trigger: { kind: 'auto', reason: 'context_window_threshold', signal_id: 'signal-1' },
     });
     expect(result.status).toBe('completed');
-    expect(emit).toHaveBeenCalledWith('context.compaction.completed', expect.objectContaining({
-      session_id: 'session-1',
-      compaction_id: 'compaction-1',
+    expect(emit).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'context.compaction.started',
+      sessionId: 'session-1',
+      payload: expect.objectContaining({
+        compactionId: 'signal-1',
+        triggerReason: 'context_limit',
+      }),
+    }));
+    expect(emit).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'context.compaction.completed',
+      sessionId: 'session-1',
+      payload: expect.objectContaining({
+        compactionId: 'compaction-1',
+        triggerReason: 'context_limit',
+      }),
     }));
   });
 
