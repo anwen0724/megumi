@@ -1,8 +1,13 @@
 ﻿// @vitest-environment jsdom
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { TimelineAssistantMessage, TimelineUserMessage } from '@megumi/coding-agent/projections/timeline';
+import type {
+  TimelineAssistantMessage,
+  TimelineSeparatorMessage,
+  TimelineUserMessage,
+} from '@megumi/coding-agent/projections/timeline';
 import { TimelineMessage } from '@megumi/desktop/renderer/features/chat/components/TimelineMessage';
+import { WorkspaceChangeFooter } from '@megumi/desktop/renderer/features/chat/components/WorkspaceChangeFooter';
 
 const createdAt = '2026-05-24T12:00:00.000Z';
 
@@ -91,6 +96,81 @@ function assistantMessage(overrides: Partial<TimelineAssistantMessage> = {}): Ti
 }
 
 describe('TimelineMessage canonical block rendering', () => {
+  it('renders user text and user attachment blocks from session timeline facts', () => {
+    render(<TimelineMessage message={{
+      ...userMessage(),
+      blocks: [
+        {
+          blockId: 'user-text-1',
+          kind: 'user_text',
+          text: '解释这张图',
+          format: 'plain',
+        },
+        {
+          blockId: 'user-attachment-1',
+          kind: 'user_attachment',
+          attachmentId: 'attachment-1',
+          name: 'error.png',
+          mediaType: 'image/png',
+          sizeBytes: 1024,
+          source: 'screenshot',
+        },
+      ],
+    }} />);
+
+    expect(screen.getByText('解释这张图')).toBeInTheDocument();
+    expect(screen.getByText('error.png')).toBeInTheDocument();
+  });
+
+  it('renders branch separators from session branch facts', () => {
+    const separator: TimelineSeparatorMessage = {
+      messageId: 'separator:branch-marker-1',
+      role: 'separator',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      createdAt,
+      blocks: [{
+        blockId: 'branch-separator:branch-marker-1',
+        kind: 'branch_separator',
+        branchMarkerId: 'branch-marker-1',
+        sourceMessageId: 'message-user-1',
+        label: 'Branch from 00:57',
+      }],
+    };
+
+    render(<TimelineMessage message={separator} />);
+
+    expect(screen.getByRole('separator', { name: 'Branch from 00:57' })).toBeInTheDocument();
+    expect(screen.getByText('Branch from 00:57')).toBeInTheDocument();
+  });
+
+  it('renders workspace change footer outside timeline message blocks', () => {
+    render(<TimelineMessage
+      message={assistantMessage()}
+      afterContent={<WorkspaceChangeFooter
+        footer={{
+          runId: 'run-1',
+          sessionId: 'session-1',
+          updatedAt: '2026-06-06T10:00:01.000Z',
+          changeSets: [{
+            changeSetId: 'workspace-change-set-1',
+            changedFileCount: 1,
+            files: [{
+              changedFileId: 'workspace-changed-file-1',
+              workspacePath: 'src/app.ts',
+              changeKind: 'modified',
+            }],
+          }],
+        }}
+        onOpenFile={() => undefined}
+      />}
+    />);
+
+    expect(screen.getByLabelText('本轮工作区变更')).toBeInTheDocument();
+    expect(screen.getByText('Megumi 修改了 1 个文件')).toBeInTheDocument();
+    expect(screen.getByText('app.ts')).toBeInTheDocument();
+  });
+
   it('renders user messages as a lightweight right aligned card with the time below', () => {
     render(<TimelineMessage message={userMessage()} />);
 
@@ -539,6 +619,103 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(screen.getByText('Retry attempt 1 failed')).toBeInTheDocument();
     expect(screen.getByText('rate_limited')).toBeInTheDocument();
     expect(screen.getByText('Previous run was interrupted')).toBeInTheDocument();
+  });
+
+  it('renders all runtime process item kinds inside the process disclosure', () => {
+    render(<TimelineMessage message={assistantMessage({
+      blocks: [
+        {
+          blockId: 'process:run-1',
+          kind: 'process_disclosure',
+          runId: 'run-1',
+          status: 'completed',
+          startedAt: '2026-06-01T10:00:00.000Z',
+          endedAt: '2026-06-01T10:00:04.000Z',
+          items: [
+            {
+              itemId: 'thinking:1',
+              kind: 'thinking',
+              thinkingId: 'thinking-1',
+              status: 'completed',
+              text: 'I should inspect the workspace.',
+              format: 'plain',
+            },
+            {
+              itemId: 'tool:1',
+              kind: 'tool_activity',
+              toolCallId: 'tool-call-1',
+              toolName: 'read_file',
+              inputSummary: 'README.md',
+              resultSummary: 'Read file.',
+              status: 'succeeded',
+            },
+            {
+              itemId: 'approval:1',
+              kind: 'approval_activity',
+              approvalId: 'approval-1',
+              scope: 'once',
+              status: 'approved',
+              title: 'Read file',
+              subjectSummary: 'README.md',
+            },
+            {
+              itemId: 'error:1',
+              kind: 'error_activity',
+              errorCode: 'provider_failed',
+              errorMessage: 'Provider failed.',
+              recoverable: true,
+            },
+            {
+              itemId: 'cancelled:1',
+              kind: 'cancelled_activity',
+              reason: 'user_requested',
+            },
+            {
+              itemId: 'compaction:1',
+              kind: 'compaction_activity',
+              compactionId: 'compaction-1',
+              status: 'completed',
+              label: 'Compacted context',
+            },
+            {
+              itemId: 'retry:1',
+              kind: 'retry_activity',
+              retryAttemptId: 'retry-1',
+              attemptNumber: 1,
+              status: 'completed',
+              label: 'Model call retry 1 completed',
+            },
+            {
+              itemId: 'recovery:1',
+              kind: 'recovery_activity',
+              status: 'interrupted',
+              label: 'Run was interrupted',
+            },
+          ],
+        },
+        {
+          blockId: 'answer:run-1',
+          kind: 'answer_text',
+          runId: 'run-1',
+          textId: 'text-answer-1',
+          status: 'completed',
+          text: 'Final answer.',
+          format: 'markdown',
+        },
+      ],
+    })} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Expand process disclosure/ }));
+
+    expect(screen.getByText('思考完成')).toBeInTheDocument();
+    expect(screen.getByText('已读取 README.md')).toBeInTheDocument();
+    expect(screen.getByText('已批准 Read file')).toBeInTheDocument();
+    expect(screen.getByText('Provider failed.')).toBeInTheDocument();
+    expect(screen.getByText('user_requested')).toBeInTheDocument();
+    expect(screen.getByText('Compacted context')).toBeInTheDocument();
+    expect(screen.getByText('Model call retry 1 completed')).toBeInTheDocument();
+    expect(screen.getByText('Run was interrupted')).toBeInTheDocument();
+    expect(screen.getByText('Final answer.')).toBeInTheDocument();
   });
 
   it('does not use success icons for failed retry or non-success recovery process states', () => {
