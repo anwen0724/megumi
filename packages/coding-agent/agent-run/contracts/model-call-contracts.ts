@@ -71,6 +71,22 @@ export type ModelCallEvent =
       created_at: string;
     }
   | {
+      type: 'thinking_started';
+      model_call_id: string;
+      created_at: string;
+    }
+  | {
+      type: 'thinking_delta';
+      model_call_id: string;
+      delta: string;
+      created_at: string;
+    }
+  | {
+      type: 'thinking_completed';
+      model_call_id: string;
+      created_at: string;
+    }
+  | {
       type: 'tool_call';
       model_call_id: string;
       tool_call_id: string;

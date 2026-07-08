@@ -98,17 +98,22 @@ class DefaultModelCallService implements ModelCallService {
 
     try {
       for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-        const attemptResult = await this.streamSingleAttempt(modelCallId, aiRequest);
-        for (const event of attemptResult.events) {
+        let attemptFailure: ModelCallFailure | undefined;
+
+        for await (const event of this.streamSingleAttempt(modelCallId, aiRequest)) {
+          if (event.type === 'attempt_failed') {
+            attemptFailure = event.failure;
+            break;
+          }
           yield event;
         }
 
-        if (!attemptResult.failure) {
+        if (!attemptFailure) {
           return;
         }
 
-        if (!attemptResult.failure.retryable || attempt >= maxAttempts || aiRequest.signal?.aborted) {
-          yield failedModelCallEvent(modelCallId, attemptResult.failure, this.clock.now());
+        if (!attemptFailure.retryable || attempt >= maxAttempts || aiRequest.signal?.aborted) {
+          yield failedModelCallEvent(modelCallId, attemptFailure, this.clock.now());
           return;
         }
 
@@ -118,7 +123,7 @@ class DefaultModelCallService implements ModelCallService {
           model_call_id: modelCallId,
           attempt,
           max_attempts: maxAttempts,
-          failure: attemptResult.failure,
+          failure: attemptFailure,
           retry_after_ms: retryAfterMs,
           created_at: this.clock.now(),
         };
@@ -129,16 +134,43 @@ class DefaultModelCallService implements ModelCallService {
     }
   }
 
-  private async streamSingleAttempt(
+  private async *streamSingleAttempt(
     modelCallId: string,
     aiRequest: AiCallRequest,
-  ): Promise<{ events: ModelCallEvent[]; failure?: ModelCallFailure }> {
-    const events: ModelCallEvent[] = [];
+  ): AsyncIterable<ModelCallAttemptEvent> {
     const toolCalls = new Map<number, ToolCallAccumulator>();
     const emittedToolCallIds = new Set<string>();
 
     try {
       for await (const event of this.options.ai_client!.stream(aiRequest)) {
+        if (event.type === 'content_block_start' && event.block.type === 'thinking') {
+          yield {
+            type: 'thinking_started',
+            model_call_id: modelCallId,
+            created_at: this.clock.now(),
+          };
+          continue;
+        }
+
+        if (event.type === 'content_block_delta' && event.delta.type === 'thinking_delta') {
+          yield {
+            type: 'thinking_delta',
+            model_call_id: modelCallId,
+            delta: event.delta.thinking,
+            created_at: this.clock.now(),
+          };
+          continue;
+        }
+
+        if (event.type === 'content_block_end' && event.block.type === 'thinking') {
+          yield {
+            type: 'thinking_completed',
+            model_call_id: modelCallId,
+            created_at: this.clock.now(),
+          };
+          continue;
+        }
+
         if (event.type === 'content_block_start' && event.block.type === 'toolCall') {
           toolCalls.set(event.index, {
             id: event.block.id,
@@ -166,7 +198,7 @@ class DefaultModelCallService implements ModelCallService {
             argumentsText: event.block.argumentsText ?? current?.argumentsText ?? '',
           }, modelCallId, this.clock.now());
           if (mapped) {
-            events.push(mapped);
+            yield mapped;
             emittedToolCallIds.add(mapped.tool_call_id);
           }
           toolCalls.delete(event.index);
@@ -180,7 +212,7 @@ class DefaultModelCallService implements ModelCallService {
             }
             const mapped = toolCallEventFromContentBlock(block, modelCallId, this.clock.now());
             if (mapped) {
-              events.push(mapped);
+              yield mapped;
               emittedToolCallIds.add(mapped.tool_call_id);
             }
           }
@@ -191,14 +223,14 @@ class DefaultModelCallService implements ModelCallService {
           continue;
         }
         if (mapped.type === 'failed') {
-          return { events, failure: mapped.failure };
+          yield { type: 'attempt_failed', failure: mapped.failure };
+          return;
         }
-        events.push(mapped);
+        yield mapped;
       }
-      return { events };
     } catch (error) {
-      return {
-        events,
+      yield {
+        type: 'attempt_failed',
         failure: {
           code: 'model_call_failed',
           message: error instanceof Error ? error.message : 'Model call stream failed.',
@@ -260,6 +292,13 @@ type ToolCallAccumulator = {
   name?: string;
   argumentsText: string;
 };
+
+type ModelCallAttemptEvent =
+  | ModelCallEvent
+  | {
+      type: 'attempt_failed';
+      failure: ModelCallFailure;
+    };
 
 function toolCallEventFromContentBlock(
   block: { id?: string; name?: string; argumentsText?: string },
