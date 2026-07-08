@@ -16,6 +16,7 @@ export type AgentRunTraceEventType =
   | 'trace.tool_execution.request'
   | 'trace.tool_execution.result'
   | 'trace.continuation.runtime_sources'
+  | 'trace.model_call.messages_appended'
   | 'trace.loop.counters';
 
 export type AgentRunTraceRecord = {

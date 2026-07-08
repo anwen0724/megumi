@@ -132,6 +132,7 @@ function toolCallModelEvents(
       tool_call_id: toolCallId,
       tool_name: 'read_file',
       input: { path: 'README.md' },
+      arguments_text: '{"path":"README.md"}',
       created_at: '2026-01-01T00:00:00.000Z',
     },
     { type: 'completed', model_call_id: modelCallId, content: '', created_at: '2026-01-01T00:00:00.000Z' },

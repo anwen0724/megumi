@@ -25,9 +25,28 @@ export type ModelCallRequest = {
     | { type: 'agent_run'; run_id: string }
     | { type: 'context_compaction'; session_id: string; compaction_id?: string };
   prompt: Prompt;
+  model_call_messages?: ModelCallMessage[];
   model_config: ModelCallConfig;
   tool_set?: ToolSet;
   signal?: AbortSignal;
+};
+
+export type ModelCallMessage =
+  | {
+      role: 'assistant';
+      content?: string;
+      tool_calls: ModelCallToolCall[];
+    }
+  | {
+      role: 'tool_result';
+      tool_call_id: string;
+      content: string;
+    };
+
+export type ModelCallToolCall = {
+  tool_call_id: string;
+  tool_name: string;
+  arguments_text: string;
 };
 
 export type ModelCallEvent =
@@ -57,6 +76,7 @@ export type ModelCallEvent =
       tool_call_id: string;
       tool_name: string;
       input: unknown;
+      arguments_text: string;
       created_at: string;
     }
   | {

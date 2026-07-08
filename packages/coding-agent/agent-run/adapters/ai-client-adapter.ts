@@ -5,7 +5,11 @@
 import type { AiCallRequest, ConversationMessage, ToolSet as AiToolSet } from '@megumi/ai';
 import type { JsonObject } from '../../shared-json';
 import type { PromptMessage } from '../../context';
-import type { ModelCallRequest, ToolSet } from '../contracts/model-call-contracts';
+import type {
+  ModelCallMessage,
+  ModelCallRequest,
+  ToolSet,
+} from '../contracts/model-call-contracts';
 
 export function mapModelCallToAiRequest(
   request: ModelCallRequest,
@@ -21,9 +25,12 @@ export function mapModelCallToAiRequest(
     },
     context: {
       ...(systemPrompt ? { systemPrompt } : {}),
-      messages: request.prompt.messages
-        .filter((message) => message.role !== 'system')
-        .map(promptMessageToConversationMessage),
+      messages: [
+        ...request.prompt.messages
+          .filter((message) => message.role !== 'system')
+          .map(promptMessageToConversationMessage),
+        ...(request.model_call_messages ?? []).map(modelCallMessageToConversationMessage),
+      ],
     },
     ...(request.tool_set ? { toolSet: toolSetToAiToolSet(request.tool_set) } : {}),
     ...(request.signal ? { signal: request.signal } : {}),
@@ -47,6 +54,29 @@ function promptMessageToConversationMessage(message: PromptMessage): Conversatio
   return {
     role: 'user',
     content: message.content,
+  };
+}
+
+function modelCallMessageToConversationMessage(message: ModelCallMessage): ConversationMessage {
+  if (message.role === 'tool_result') {
+    return {
+      role: 'toolResult',
+      toolCallId: message.tool_call_id,
+      content: message.content,
+    };
+  }
+
+  return {
+    role: 'assistant',
+    content: [
+      ...(message.content ? [{ type: 'text' as const, text: message.content }] : []),
+      ...message.tool_calls.map((toolCall) => ({
+        type: 'toolCall' as const,
+        id: toolCall.tool_call_id,
+        name: toolCall.tool_name,
+        argumentsText: toolCall.arguments_text,
+      })),
+    ],
   };
 }
 

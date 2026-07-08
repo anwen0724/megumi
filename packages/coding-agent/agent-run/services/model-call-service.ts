@@ -134,9 +134,58 @@ class DefaultModelCallService implements ModelCallService {
     aiRequest: AiCallRequest,
   ): Promise<{ events: ModelCallEvent[]; failure?: ModelCallFailure }> {
     const events: ModelCallEvent[] = [];
+    const toolCalls = new Map<number, ToolCallAccumulator>();
+    const emittedToolCallIds = new Set<string>();
 
     try {
       for await (const event of this.options.ai_client!.stream(aiRequest)) {
+        if (event.type === 'content_block_start' && event.block.type === 'toolCall') {
+          toolCalls.set(event.index, {
+            id: event.block.id,
+            name: event.block.name,
+            argumentsText: event.block.argumentsText ?? '',
+          });
+          continue;
+        }
+
+        if (event.type === 'content_block_delta' && event.delta.type === 'tool_call_delta') {
+          const current = toolCalls.get(event.index) ?? { argumentsText: '' };
+          toolCalls.set(event.index, {
+            id: event.delta.id ?? current.id,
+            name: event.delta.name ?? current.name,
+            argumentsText: `${current.argumentsText}${event.delta.argumentsTextDelta ?? ''}`,
+          });
+          continue;
+        }
+
+        if (event.type === 'content_block_end' && event.block.type === 'toolCall') {
+          const current = toolCalls.get(event.index);
+          const mapped = toolCallEventFromContentBlock({
+            id: event.block.id ?? current?.id,
+            name: event.block.name ?? current?.name,
+            argumentsText: event.block.argumentsText ?? current?.argumentsText ?? '',
+          }, modelCallId, this.clock.now());
+          if (mapped) {
+            events.push(mapped);
+            emittedToolCallIds.add(mapped.tool_call_id);
+          }
+          toolCalls.delete(event.index);
+          continue;
+        }
+
+        if (event.type === 'message_end') {
+          for (const block of event.message.content) {
+            if (block.type !== 'toolCall' || emittedToolCallIds.has(block.id)) {
+              continue;
+            }
+            const mapped = toolCallEventFromContentBlock(block, modelCallId, this.clock.now());
+            if (mapped) {
+              events.push(mapped);
+              emittedToolCallIds.add(mapped.tool_call_id);
+            }
+          }
+        }
+
         const mapped = mapAssistantStreamEvent(event, modelCallId, this.clock.now());
         if (!mapped) {
           continue;
@@ -174,17 +223,6 @@ function mapAssistantStreamEvent(
     };
   }
 
-  if (event.type === 'content_block_start' && event.block.type === 'toolCall' && event.block.name) {
-    return {
-      type: 'tool_call',
-      model_call_id: modelCallId,
-      tool_call_id: event.block.id ?? `tool-call:${crypto.randomUUID()}`,
-      tool_name: event.block.name,
-      input: parseToolInput(event.block.argumentsText),
-      created_at: createdAt,
-    };
-  }
-
   if (event.type === 'message_end') {
     return {
       type: 'completed',
@@ -215,6 +253,32 @@ function mapAssistantStreamEvent(
   }
 
   return undefined;
+}
+
+type ToolCallAccumulator = {
+  id?: string;
+  name?: string;
+  argumentsText: string;
+};
+
+function toolCallEventFromContentBlock(
+  block: { id?: string; name?: string; argumentsText?: string },
+  modelCallId: string,
+  createdAt: string,
+): Extract<ModelCallEvent, { type: 'tool_call' }> | undefined {
+  if (!block.name) {
+    return undefined;
+  }
+  const argumentsText = block.argumentsText ?? '';
+  return {
+    type: 'tool_call',
+    model_call_id: modelCallId,
+    tool_call_id: block.id ?? `tool-call:${crypto.randomUUID()}`,
+    tool_name: block.name,
+    input: parseToolInput(argumentsText),
+    arguments_text: argumentsText,
+    created_at: createdAt,
+  };
 }
 
 function modelCallFailureFromAssistantError(event: Extract<AssistantStreamEvent, { type: 'error' }>): ModelCallFailure {

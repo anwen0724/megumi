@@ -225,6 +225,7 @@ function toolCall(tool_call_id: string, tool_name: string): AgentRunToolCallRequ
     tool_call_id,
     tool_name,
     input: { path: 'README.md' },
+    arguments_text: '{"path":"README.md"}',
   };
 }
 

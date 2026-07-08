@@ -67,6 +67,7 @@ describe('Agent Run trace integration', () => {
                 tool_call_id: 'tool-call-1',
                 tool_name: 'read_file',
                 input: { path: 'README.md' },
+                arguments_text: '{"path":"README.md"}',
                 created_at: '2026-01-01T00:00:00.000Z',
               },
             ])
@@ -110,7 +111,7 @@ describe('Agent Run trace integration', () => {
       }),
       expect.objectContaining({ event_type: 'trace.tool_execution.request' }),
       expect.objectContaining({ event_type: 'trace.tool_execution.result' }),
-      expect.objectContaining({ event_type: 'trace.continuation.runtime_sources' }),
+      expect.objectContaining({ event_type: 'trace.model_call.messages_appended' }),
       expect.objectContaining({ event_type: 'trace.loop.counters' }),
     ]));
   });
@@ -127,6 +128,7 @@ describe('Agent Run trace integration', () => {
           tool_call_id: 'tool-call-1',
           tool_name: 'read_file',
           input: { path: 'README.md' },
+          arguments_text: '{"path":"README.md"}',
           created_at: '2026-01-01T00:00:00.000Z',
         },
       ],

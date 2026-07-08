@@ -20,6 +20,7 @@ export type ModelRequestedToolCall = {
   tool_call_id: string;
   tool_name: string;
   input: unknown;
+  arguments_text: string;
 };
 
 export type AgentRunToolCallRequest = {

@@ -51,6 +51,24 @@ describe('Model Call Service', () => {
               type: 'toolCall',
               id: 'provider-tool-call-1',
               name: 'read_file',
+              argumentsText: '',
+            },
+          },
+          {
+            type: 'content_block_delta',
+            index: 1,
+            delta: {
+              type: 'tool_call_delta',
+              argumentsTextDelta: '{"path":"README.md"}',
+            },
+          },
+          {
+            type: 'content_block_end',
+            index: 1,
+            block: {
+              type: 'toolCall',
+              id: 'provider-tool-call-1',
+              name: 'read_file',
               argumentsText: '{"path":"README.md"}',
             },
           },
@@ -102,6 +120,133 @@ describe('Model Call Service', () => {
       status: 'not_cancellable',
       model_call_id: 'model-call-1',
     });
+  });
+
+  it('waits for complete streaming tool-call arguments before emitting a tool call', async () => {
+    const aiClient: AiClient = {
+      stream() {
+        return AssistantEventStream.from([
+          { type: 'message_start', messageId: 'assistant-1', role: 'assistant' },
+          {
+            type: 'content_block_start',
+            index: 0,
+            block: {
+              type: 'toolCall',
+              id: 'provider-tool-call-1',
+              name: 'read_file',
+              argumentsText: '',
+            },
+          },
+          {
+            type: 'content_block_delta',
+            index: 0,
+            delta: {
+              type: 'tool_call_delta',
+              argumentsTextDelta: '{"path":',
+            },
+          },
+          {
+            type: 'content_block_delta',
+            index: 0,
+            delta: {
+              type: 'tool_call_delta',
+              argumentsTextDelta: '"README.md"}',
+            },
+          },
+          {
+            type: 'content_block_end',
+            index: 0,
+            block: {
+              type: 'toolCall',
+              id: 'provider-tool-call-1',
+              name: 'read_file',
+              argumentsText: '{"path":"README.md"}',
+            },
+          },
+          {
+            type: 'message_end',
+            message: {
+              role: 'assistant',
+              content: [
+                {
+                  type: 'toolCall',
+                  id: 'provider-tool-call-1',
+                  name: 'read_file',
+                  argumentsText: '{"path":"README.md"}',
+                },
+              ],
+              stopReason: 'tool_calls',
+            },
+          },
+        ]);
+      },
+      complete: vi.fn(),
+    };
+    const service = createModelCallService({
+      ai_client: aiClient,
+      ids: { model_call_id: () => 'model-call-1' },
+      clock: { now: () => '2026-01-01T00:00:00.000Z' },
+    });
+
+    const result = await service.modelCall(sampleModelCallRequest());
+
+    expect(result.status).toBe('started');
+    if (result.status !== 'started') return;
+
+    const events = await collect(result.events);
+    expect(events.filter((event) => event.type === 'tool_call')).toEqual([
+      expect.objectContaining({
+        tool_call_id: 'provider-tool-call-1',
+        tool_name: 'read_file',
+        input: { path: 'README.md' },
+      }),
+    ]);
+  });
+
+  it('maps run continuation tool messages into provider protocol messages', () => {
+    const mapped = mapModelCallToAiRequest({
+      ...sampleModelCallRequest(),
+      model_call_messages: [
+        {
+          role: 'assistant',
+          content: 'I need to read the file.',
+          tool_calls: [
+            {
+              tool_call_id: 'provider-tool-call-1',
+              tool_name: 'read_file',
+              arguments_text: '{"path":"README.md"}',
+            },
+          ],
+        },
+        {
+          role: 'tool_result',
+          tool_call_id: 'provider-tool-call-1',
+          content: 'README content',
+        },
+      ],
+    });
+
+    expect(mapped.context.messages).toEqual([
+      { role: 'user', content: 'Hello' },
+      { role: 'assistant', content: [{ type: 'text', text: 'Hi' }] },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'I need to read the file.' },
+          {
+            type: 'toolCall',
+            id: 'provider-tool-call-1',
+            name: 'read_file',
+            argumentsText: '{"path":"README.md"}',
+          },
+        ],
+      },
+      {
+        role: 'toolResult',
+        toolCallId: 'provider-tool-call-1',
+        content: 'README content',
+      },
+    ]);
   });
 
   it('retries retryable provider failures inside Model Call Service', async () => {

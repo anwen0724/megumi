@@ -27,7 +27,12 @@ import type {
   StartRunResult,
 } from '../contracts/agent-run-contracts';
 import type { AgentRunTraceLogger } from '../contracts/agent-run-trace-contracts';
-import type { ModelCallConfig, ModelCallService, ToolResultRuntimeFact } from '../contracts/model-call-contracts';
+import type {
+  ModelCallConfig,
+  ModelCallMessage,
+  ModelCallService,
+  ToolResultRuntimeFact,
+} from '../contracts/model-call-contracts';
 import {
   consumeContextUsageSignal,
   runAgentModelToolLoop,
@@ -400,9 +405,10 @@ class DefaultAgentRunService implements AgentRunService {
       decision: decision.decision,
     });
 
-    let runtimeSources = continuation.runtime_sources;
+    let runtimeFacts = continuation.runtime_sources;
+    let modelCallMessages: ModelCallMessage[] = [...(continuation.model_call_messages ?? [])];
     if (flow.status === 'denied') {
-      runtimeSources = [...runtimeSources, runtimeSourceFromToolResult(flow.tool_result)];
+      modelCallMessages = [...modelCallMessages, toolResultToModelCallMessage(flow.tool_result)];
       eventSink.emit('tool_call.denied', {
         run_id: resumedRun.run_id,
         workspace_id: resumedRun.workspace_id,
@@ -429,7 +435,7 @@ class DefaultAgentRunService implements AgentRunService {
         result: toolResult,
         created_at: this.clock.now(),
       });
-      runtimeSources = [...runtimeSources, runtimeSourceFromToolResult(toolFact)];
+      modelCallMessages = [...modelCallMessages, toolResultToModelCallMessage(toolFact)];
       eventSink.emit('tool_result.created', {
         run_id: resumedRun.run_id,
         workspace_id: resumedRun.workspace_id,
@@ -459,7 +465,8 @@ class DefaultAgentRunService implements AgentRunService {
           user_message_id: continuation.user_message_id,
           model_config: continuation.model_config,
           permission_mode: continuation.permission_mode,
-          runtime_sources: runtimeSources,
+          runtime_sources: runtimeFacts,
+          model_call_messages: modelCallMessages,
         });
       }
       queue.close();
@@ -473,11 +480,13 @@ class DefaultAgentRunService implements AgentRunService {
     const deferred = await this.continueDeferredToolCallGroup({
       run: resumedRun,
       continuation,
-      runtime_sources: runtimeSources,
+      runtime_sources: runtimeFacts,
+      model_call_messages: modelCallMessages,
       eventSink,
       signal: undefined,
     });
-    runtimeSources = deferred.runtime_sources;
+    runtimeFacts = deferred.runtime_sources;
+    modelCallMessages = deferred.model_call_messages;
     if (deferred.status === 'waiting_for_approval') {
       queue.close();
       return { status: 'resumed', run: deferred.run, events: queue.events() };
@@ -497,7 +506,8 @@ class DefaultAgentRunService implements AgentRunService {
       model_config: continuation.model_config,
       permission_mode: continuation.permission_mode,
       ...(continuation.workspace_root ? { workspace_root: continuation.workspace_root } : {}),
-      initial_runtime_sources: runtimeSources,
+      initial_runtime_sources: runtimeFacts,
+      initial_model_call_messages: modelCallMessages,
       signal: controller.signal,
     });
     return { status: 'resumed', run: deferred.run, events: queue.events() };
@@ -600,15 +610,21 @@ class DefaultAgentRunService implements AgentRunService {
     run: AgentRun;
     continuation: RunApprovalContinuation;
     runtime_sources: SessionContextSource[];
+    model_call_messages: ModelCallMessage[];
     eventSink: { emit(type: string, payload?: Record<string, unknown>): AgentRunEvent };
     signal?: AbortSignal;
   }): Promise<
-    | { status: 'ready'; run: AgentRun; runtime_sources: SessionContextSource[] }
-    | { status: 'waiting_for_approval'; run: AgentRun; runtime_sources: SessionContextSource[] }
-    | { status: 'failed'; failure: AgentRunFailure; runtime_sources: SessionContextSource[] }
+    | { status: 'ready'; run: AgentRun; runtime_sources: SessionContextSource[]; model_call_messages: ModelCallMessage[] }
+    | { status: 'waiting_for_approval'; run: AgentRun; runtime_sources: SessionContextSource[]; model_call_messages: ModelCallMessage[] }
+    | { status: 'failed'; failure: AgentRunFailure; runtime_sources: SessionContextSource[]; model_call_messages: ModelCallMessage[] }
   > {
     if (input.continuation.deferred_tool_calls.length === 0) {
-      return { status: 'ready', run: input.run, runtime_sources: input.runtime_sources };
+      return {
+        status: 'ready',
+        run: input.run,
+        runtime_sources: input.runtime_sources,
+        model_call_messages: input.model_call_messages,
+      };
     }
 
     const permissionSettings = this.options.settings_service.resolvePermissionSettings({
@@ -619,6 +635,7 @@ class DefaultAgentRunService implements AgentRunService {
       return {
         status: 'failed',
         runtime_sources: input.runtime_sources,
+        model_call_messages: input.model_call_messages,
         failure: {
           code: 'approval_failed',
           message: permissionSettings.failure.message,
@@ -661,7 +678,8 @@ class DefaultAgentRunService implements AgentRunService {
       ...(input.signal ? { signal: input.signal } : {}),
     });
 
-    let runtimeSources = input.runtime_sources;
+    let runtimeFacts = input.runtime_sources;
+    let modelCallMessages = input.model_call_messages;
     for (const toolCall of toolGroup.tool_calls) {
       input.eventSink.emit(`tool_call.${toolCall.status}`, {
         run_id: input.run.run_id,
@@ -678,7 +696,7 @@ class DefaultAgentRunService implements AgentRunService {
         tool_name: toolResult.tool_name,
         status: toolResult.status,
       });
-      runtimeSources = [...runtimeSources, runtimeSourceFromToolResult(toolResult)];
+      modelCallMessages = [...modelCallMessages, toolResultToModelCallMessage(toolResult)];
     }
 
     if (toolGroup.pending_approvals.length > 0) {
@@ -706,12 +724,18 @@ class DefaultAgentRunService implements AgentRunService {
           ]),
         ),
         deferred_tool_calls: toolGroup.deferred_tool_calls,
-        runtime_sources: runtimeSources,
+        runtime_sources: runtimeFacts,
+        model_call_messages: modelCallMessages,
       };
       for (const approvalId of nextContinuation.pending_approval_ids) {
         this.approvalContinuations.set(approvalId, nextContinuation);
       }
-      return { status: 'waiting_for_approval', run: waitingRun, runtime_sources: runtimeSources };
+      return {
+        status: 'waiting_for_approval',
+        run: waitingRun,
+        runtime_sources: runtimeFacts,
+        model_call_messages: modelCallMessages,
+      };
     }
 
     input.eventSink.emit('tool_result_facts.submitted', {
@@ -719,7 +743,12 @@ class DefaultAgentRunService implements AgentRunService {
       workspace_id: input.run.workspace_id,
       count: toolGroup.tool_result_facts.length,
     });
-    return { status: 'ready', run: input.run, runtime_sources: runtimeSources };
+    return {
+      status: 'ready',
+      run: input.run,
+      runtime_sources: runtimeFacts,
+      model_call_messages: modelCallMessages,
+    };
   }
 
   private async executeRunLoop(input: {
@@ -731,6 +760,7 @@ class DefaultAgentRunService implements AgentRunService {
     permission_mode: PermissionMode;
     workspace_root?: string;
     initial_runtime_sources?: SessionContextSource[];
+    initial_model_call_messages?: ModelCallMessage[];
     signal: AbortSignal;
   }): Promise<void> {
     try {
@@ -768,6 +798,7 @@ class DefaultAgentRunService implements AgentRunService {
         permission_mode: input.permission_mode,
         ...(input.workspace_root ? { workspace_root: input.workspace_root } : {}),
         ...(input.initial_runtime_sources ? { initial_runtime_sources: input.initial_runtime_sources } : {}),
+        ...(input.initial_model_call_messages ? { initial_model_call_messages: input.initial_model_call_messages } : {}),
         signal: input.signal,
       });
 
@@ -1038,24 +1069,11 @@ function createAgentRunEventQueue(
   };
 }
 
-function runtimeSourceFromToolResult(toolResult: ToolResultRuntimeFact): SessionContextSource {
+function toolResultToModelCallMessage(toolResult: ToolResultRuntimeFact): ModelCallMessage {
   return {
-    source_id: `tool-result:${toolResult.tool_call_id}:${toolResult.created_at}`,
-    source_kind: 'tool_result',
-    text: [
-      `tool_name: ${toolResult.tool_name}`,
-      `status: ${toolResult.status}`,
-      toolResult.content ? `content: ${toolResult.content}` : undefined,
-      toolResult.observation ? `observation: ${JSON.stringify(toolResult.observation)}` : undefined,
-    ].filter(Boolean).join('\n'),
-    persisted: false,
-    created_at: toolResult.created_at,
-    metadata: {
-      origin_module: 'agent-run',
-      tool_call_id: toolResult.tool_call_id,
-      tool_name: toolResult.tool_name,
-      status: toolResult.status,
-    },
+    role: 'tool_result',
+    tool_call_id: toolResult.tool_call_id,
+    content: toolResult.content ?? toolResult.observation?.summary ?? `${toolResult.tool_name} ${toolResult.status}`,
   };
 }
 

@@ -17,6 +17,7 @@ import type { AgentRunTraceLogger } from '../contracts/agent-run-trace-contracts
 import type {
   ModelCallEvent,
   ModelCallConfig,
+  ModelCallMessage,
   ModelCallService,
   ToolResultRuntimeFact,
 } from '../contracts/model-call-contracts';
@@ -77,6 +78,7 @@ export type RunOrchestratorRequest = {
   permission_mode: PermissionMode;
   workspace_root?: string;
   initial_runtime_sources?: SessionContextSource[];
+  initial_model_call_messages?: ModelCallMessage[];
   signal?: AbortSignal;
 };
 
@@ -99,6 +101,7 @@ export type RunApprovalContinuation = {
   permission_mode: PermissionMode;
   workspace_root?: string;
   runtime_sources: SessionContextSource[];
+  model_call_messages?: ModelCallMessage[];
 };
 
 export type ConsumeContextUsageSignalRequest = {
@@ -133,11 +136,12 @@ export async function runAgentModelToolLoop(
   let run = request.run;
   let modelCalls = 0;
   let toolRounds = 0;
-  const runtimeSources: SessionContextSource[] = [...(request.initial_runtime_sources ?? [])];
+  const runtimeFacts: SessionContextSource[] = [...(request.initial_runtime_sources ?? [])];
+  const modelCallMessages: ModelCallMessage[] = [...(request.initial_model_call_messages ?? [])];
 
   while (true) {
     if (modelCalls >= dependencies.limits.max_model_calls) {
-      traceLoopCounters(dependencies, run, modelCalls, toolRounds, runtimeSources.length);
+      traceLoopCounters(dependencies, run, modelCalls, toolRounds, runtimeFacts.length);
       return failRun(dependencies, run, loopLimitFailure('maxModelCalls exceeded.'), {
         model_calls: modelCalls,
         tool_rounds: toolRounds,
@@ -164,7 +168,7 @@ export async function runAgentModelToolLoop(
       session_context: context.session_context,
       purpose: 'agent_response',
       current_user_message_id: request.user_message_id,
-      runtime_sources: runtimeSources,
+      runtime_sources: runtimeFacts,
     });
     if (prompt.status === 'failed') {
       return failRun(dependencies, run, {
@@ -183,6 +187,7 @@ export async function runAgentModelToolLoop(
     const modelCall = await dependencies.model_call_service.modelCall({
       owner: { type: 'agent_run', run_id: run.run_id },
       prompt: prompt.prompt as never,
+      ...(modelCallMessages.length > 0 ? { model_call_messages: modelCallMessages } : {}),
       model_config: request.model_config as never,
       tool_set: toolSet,
       signal: request.signal,
@@ -202,6 +207,7 @@ export async function runAgentModelToolLoop(
       model_config: request.model_config,
       tool_set: toolSet,
       prompt: prompt.prompt,
+      model_call_messages: modelCallMessages,
     }, {
       model_call_id: modelCall.model_call_id,
     });
@@ -256,7 +262,7 @@ export async function runAgentModelToolLoop(
     }
 
     if (toolRounds >= dependencies.limits.max_tool_rounds) {
-      traceLoopCounters(dependencies, run, modelCalls, toolRounds, runtimeSources.length);
+      traceLoopCounters(dependencies, run, modelCalls, toolRounds, runtimeFacts.length);
       return failRun(dependencies, run, loopLimitFailure('maxToolRounds exceeded.'), {
         model_calls: modelCalls,
         tool_rounds: toolRounds,
@@ -294,6 +300,15 @@ export async function runAgentModelToolLoop(
     traceRun(dependencies, run, 'trace.tool_call.requested', {
       model_call_index: modelCalls,
       tool_calls: modelEvents.tool_calls,
+    });
+    modelCallMessages.push({
+      role: 'assistant',
+      ...(modelEvents.content ? { content: modelEvents.content } : {}),
+      tool_calls: modelEvents.tool_calls.map((toolCall) => ({
+        tool_call_id: toolCall.tool_call_id,
+        tool_name: toolCall.tool_name,
+        arguments_text: toolCall.arguments_text,
+      })),
     });
     const toolGroup = await orchestrateToolCallGroup({
       run_id: run.run_id,
@@ -352,12 +367,12 @@ export async function runAgentModelToolLoop(
     }
     for (const toolResult of toolGroup.tool_result_facts) {
       emitToolResult(dependencies, run, toolResult);
-      runtimeSources.push(toolResultRuntimeSource(toolResult));
+      modelCallMessages.push(toolResultToModelCallMessage(toolResult));
     }
     if (toolGroup.tool_result_facts.length > 0) {
-      traceRun(dependencies, run, 'trace.continuation.runtime_sources', {
+      traceRun(dependencies, run, 'trace.model_call.messages_appended', {
         added_count: toolGroup.tool_result_facts.length,
-        added_sources: runtimeSources.slice(-toolGroup.tool_result_facts.length),
+        model_call_messages: modelCallMessages.slice(-(toolGroup.tool_result_facts.length + 1)),
       });
     }
     for (const pendingApproval of toolGroup.pending_approvals) {
@@ -376,7 +391,7 @@ export async function runAgentModelToolLoop(
         changed_at: dependencies.clock.now(),
       }));
       dependencies.event_sink.emit('run.waiting_for_approval', { run_id: run.run_id });
-      traceLoopCounters(dependencies, run, modelCalls, toolRounds, runtimeSources.length);
+      traceLoopCounters(dependencies, run, modelCalls, toolRounds, runtimeFacts.length);
       return {
         status: 'waiting_for_approval',
         run,
@@ -394,7 +409,8 @@ export async function runAgentModelToolLoop(
           model_config: request.model_config,
           permission_mode: request.permission_mode,
           ...(request.workspace_root ? { workspace_root: request.workspace_root } : {}),
-          runtime_sources: runtimeSources,
+          runtime_sources: runtimeFacts,
+          model_call_messages: modelCallMessages,
         },
       };
     }
@@ -403,28 +419,15 @@ export async function runAgentModelToolLoop(
       run_id: run.run_id,
       count: toolGroup.tool_result_facts.length,
     });
-    traceLoopCounters(dependencies, run, modelCalls, toolRounds, runtimeSources.length);
+    traceLoopCounters(dependencies, run, modelCalls, toolRounds, runtimeFacts.length);
   }
 }
 
-function toolResultRuntimeSource(toolResult: ToolResultRuntimeFact): SessionContextSource {
+function toolResultToModelCallMessage(toolResult: ToolResultRuntimeFact): ModelCallMessage {
   return {
-    source_id: `tool-result:${toolResult.tool_call_id}:${toolResult.created_at}`,
-    source_kind: 'tool_result',
-    text: [
-      `tool_name: ${toolResult.tool_name}`,
-      `status: ${toolResult.status}`,
-      toolResult.content ? `content: ${toolResult.content}` : undefined,
-      toolResult.observation ? `observation: ${JSON.stringify(toolResult.observation)}` : undefined,
-    ].filter(Boolean).join('\n'),
-    persisted: false,
-    created_at: toolResult.created_at,
-    metadata: {
-      origin_module: 'agent-run',
-      tool_call_id: toolResult.tool_call_id,
-      tool_name: toolResult.tool_name,
-      status: toolResult.status,
-    },
+    role: 'tool_result',
+    tool_call_id: toolResult.tool_call_id,
+    content: toolResult.content ?? toolResult.observation?.summary ?? `${toolResult.tool_name} ${toolResult.status}`,
   };
 }
 
@@ -514,6 +517,7 @@ async function collectModelCallEvents(
         tool_call_id: event.tool_call_id,
         tool_name: event.tool_name,
         input: event.input,
+        arguments_text: event.arguments_text,
       });
     }
     if (event.type === 'completed') {
@@ -599,13 +603,13 @@ function traceLoopCounters(
   run: AgentRun,
   modelCalls: number,
   toolRounds: number,
-  runtimeSourcesCount: number,
+  runtimeFactsCount: number,
 ): void {
   traceRun(dependencies, run, 'trace.loop.counters', {
     model_calls: modelCalls,
     tool_rounds: toolRounds,
     max_model_calls: dependencies.limits.max_model_calls,
     max_tool_rounds: dependencies.limits.max_tool_rounds,
-    runtime_sources_count: runtimeSourcesCount,
+    runtime_facts_count: runtimeFactsCount,
   });
 }
