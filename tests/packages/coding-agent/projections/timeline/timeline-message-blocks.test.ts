@@ -320,6 +320,102 @@ describe('timeline message and block contracts', () => {
     expect(JSON.stringify(process)).not.toContain('sourceEntryId');
   });
 
+  it('parses every process disclosure item kind used by runtime event projection', () => {
+    const parsed = ProcessDisclosureBlockSchema.parse({
+      blockId: 'process-run-all-items',
+      kind: 'process_disclosure',
+      runId: 'run-all-items',
+      status: 'running',
+      items: [
+        {
+          itemId: 'thinking:model-call-1',
+          kind: 'thinking',
+          thinkingId: 'model-call-1',
+          status: 'completed',
+          text: 'The model should inspect files before answering.',
+          format: 'plain',
+        },
+        {
+          itemId: 'assistant-text:model-call-1',
+          kind: 'assistant_text',
+          textId: 'model-call-1',
+          phase: 'prelude',
+          status: 'completed',
+          text: 'I will read the file first.',
+          format: 'markdown',
+        },
+        {
+          itemId: 'tool:tool-call-1',
+          kind: 'tool_activity',
+          toolCallId: 'tool-call-1',
+          toolExecutionId: 'tool-execution-1',
+          toolResultId: 'tool-result-1',
+          toolName: 'read_file',
+          inputSummary: 'README.md',
+          resultSummary: 'Read file.',
+          status: 'succeeded',
+        },
+        {
+          itemId: 'approval:approval-1',
+          kind: 'approval_activity',
+          approvalId: 'approval-1',
+          toolCallId: 'tool-call-1',
+          toolExecutionId: 'tool-execution-1',
+          scope: 'once',
+          status: 'approved',
+          title: 'Read file',
+          description: 'Read README.md',
+          subjectSummary: 'README.md',
+        },
+        {
+          itemId: 'error:model-call',
+          kind: 'error_activity',
+          errorCode: 'model_call_failed',
+          errorMessage: 'Provider request failed.',
+          recoverable: true,
+        },
+        {
+          itemId: 'cancelled:user',
+          kind: 'cancelled_activity',
+          reason: 'user_requested',
+        },
+        {
+          itemId: 'compaction:context',
+          kind: 'compaction_activity',
+          compactionId: 'compaction-1',
+          status: 'completed',
+          label: 'Compacted context',
+        },
+        {
+          itemId: 'retry:model-call',
+          kind: 'retry_activity',
+          retryAttemptId: 'retry-1',
+          attemptNumber: 1,
+          status: 'completed',
+          label: 'Model call retry completed',
+        },
+        {
+          itemId: 'recovery:run',
+          kind: 'recovery_activity',
+          status: 'interrupted',
+          label: 'Run was interrupted',
+        },
+      ],
+    });
+
+    expect(parsed.items.map((item) => item.kind)).toEqual([
+      'thinking',
+      'assistant_text',
+      'tool_activity',
+      'approval_activity',
+      'error_activity',
+      'cancelled_activity',
+      'compaction_activity',
+      'retry_activity',
+      'recovery_activity',
+    ]);
+  });
+
   it('keeps partial answer text on failure or cancellation', () => {
     const failed = TimelineAssistantMessageSchema.parse({
       ...messageBase,

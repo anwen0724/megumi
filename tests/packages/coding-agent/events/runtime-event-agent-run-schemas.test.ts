@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { RuntimeEventSchema, type RuntimeEvent } from '@megumi/coding-agent/events';
 
-function event(eventType: RuntimeEvent['eventType'], payload: Record<string, unknown>): RuntimeEvent {
+function event(
+  eventType: RuntimeEvent['eventType'],
+  payload: Record<string, unknown>,
+  overrides: Partial<RuntimeEvent> = {},
+): RuntimeEvent {
   return {
     eventId: `event:${eventType.replaceAll('.', '_')}:1`,
     schemaVersion: 1,
@@ -15,6 +19,7 @@ function event(eventType: RuntimeEvent['eventType'], payload: Record<string, unk
     visibility: 'user',
     persist: 'required',
     payload,
+    ...overrides,
   };
 }
 
@@ -77,5 +82,43 @@ describe('agent run runtime event schemas', () => {
       kind: 'success',
       summary: 'Read directory.',
     })).success).toBe(false);
+  });
+
+  it('accepts session-scoped context compaction events without run ids', () => {
+    expect(RuntimeEventSchema.safeParse(event('context.compaction.started', {
+      compactionId: 'compaction:1',
+      triggerReason: 'automatic',
+      tokensBefore: 240000,
+      firstKeptSourceRef: { sourceId: 'message:1', sourceKind: 'message' },
+      summarizedSourceCount: 12,
+    }, { runId: undefined })).success).toBe(true);
+
+    expect(RuntimeEventSchema.safeParse(event('context.compaction.completed', {
+      compactionId: 'compaction:1',
+      triggerReason: 'automatic',
+      tokensBefore: 240000,
+      firstKeptSourceRef: { sourceId: 'message:1', sourceKind: 'message' },
+      summarizedSourceCount: 12,
+    }, { runId: undefined })).success).toBe(true);
+
+    expect(RuntimeEventSchema.safeParse(event('context.compaction.failed', {
+      triggerReason: 'automatic',
+      tokensBefore: 240000,
+      error: {
+        code: 'context_compaction_failed',
+        message: 'Compaction failed.',
+        severity: 'error',
+        retryable: false,
+        source: 'core',
+      },
+    }, { runId: undefined })).success).toBe(true);
+
+    expect(RuntimeEventSchema.safeParse(event('context.compaction.started', {
+      compactionId: 'compaction:1',
+      triggerReason: 'automatic',
+      tokensBefore: 240000,
+      firstKeptSourceRef: { sourceId: 'message:1', sourceKind: 'message' },
+      summarizedSourceCount: 12,
+    }, { runId: undefined, sessionId: undefined })).success).toBe(false);
   });
 });

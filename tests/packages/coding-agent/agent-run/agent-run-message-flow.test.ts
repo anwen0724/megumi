@@ -156,6 +156,77 @@ describe('Agent Run message flow', () => {
       content_text: 'Final answer.',
     }));
   });
+
+  it('maps thinking and model retry events into standard RuntimeEvents', async () => {
+    const repository = createInMemoryAgentRunRepository();
+    const deps = createMessageFlowDependencies({
+      repository,
+      modelEvents: [
+        { type: 'started', model_call_id: 'model-call-1', created_at: '2026-01-01T00:00:00.000Z' },
+        {
+          type: 'thinking_started',
+          model_call_id: 'model-call-1',
+          created_at: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          type: 'thinking_delta',
+          model_call_id: 'model-call-1',
+          delta: 'I should answer directly.',
+          created_at: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          type: 'thinking_completed',
+          model_call_id: 'model-call-1',
+          created_at: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          type: 'retrying',
+          model_call_id: 'model-call-1',
+          attempt: 1,
+          max_attempts: 2,
+          failure: {
+            code: 'model_call_failed',
+            message: 'Provider stream failed.',
+            retryable: true,
+          },
+          retry_after_ms: 1,
+          created_at: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          type: 'completed',
+          model_call_id: 'model-call-1',
+          content: 'assistant reply',
+          created_at: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    });
+    const service = createAgentRunService(deps as unknown as CreateAgentRunServiceOptions);
+
+    const result = await service.startRun({
+      request_id: 'request-1',
+      workspace_id: 'workspace-1',
+      session: { type: 'existing', session_id: 'session-1' },
+      user_input: { text: 'hello' },
+      model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
+      permission_mode: 'default',
+    });
+
+    expect(result.status).toBe('started');
+    if (result.status !== 'started') return;
+
+    const events = await collectEvents(result.events);
+    expectRuntimeEventsSchemaValid(events);
+    expect(events.map((event) => event.eventType)).toEqual(expect.arrayContaining([
+      'model.thinking.started',
+      'model.thinking.delta',
+      'model.thinking.completed',
+      'retry.started',
+      'retry.completed',
+      'model_call.completed',
+      'run.completed',
+    ]));
+    expect(events.map((event) => event.eventType)).not.toContain('model_call.failed');
+  });
 });
 
 async function* asyncEvents<T>(events: T[]): AsyncIterable<T> {

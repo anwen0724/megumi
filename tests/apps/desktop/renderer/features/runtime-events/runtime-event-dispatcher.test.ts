@@ -6,6 +6,7 @@ import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useToolCallStore } from '@megumi/desktop/renderer/entities/tool-call';
 import { dispatchRuntimeEvent } from '@megumi/desktop/renderer/features/runtime-events/runtime-event-dispatcher';
+import { useRuntimeTimelineStore } from '@megumi/desktop/renderer/features/runtime-timeline';
 import type { RuntimeEvent } from '@megumi/coding-agent/events';
 
 function runtimeEvent(
@@ -40,6 +41,7 @@ describe('runtime event dispatcher', () => {
       sessionStates: {},
     });
     useRunStore.getState().resetRuns();
+    useRuntimeTimelineStore.getState().reset();
     useToolCallStore.getState().reset();
     useApprovalStore.getState().reset();
     useSessionStore.setState({
@@ -260,6 +262,32 @@ describe('runtime event dispatcher', () => {
       startedAt: '2026-05-17T00:00:02.000Z',
     });
   });
+
+  it('does not drop different runtime events that share a sequence', () => {
+    dispatchRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
+    dispatchRuntimeEvent(runtimeEvent('model_call.text_delta', 2, {
+      modelCallId: 'model-call-1',
+      delta: 'Hello ',
+    }, { eventId: 'event-text-1' }));
+    dispatchRuntimeEvent(runtimeEvent('model_call.text_delta', 2, {
+      modelCallId: 'model-call-1',
+      delta: 'world',
+    }, { eventId: 'event-text-2' }));
+
+    const runtimeSession = useRuntimeTimelineStore.getState().sessions['runtime:session-1'];
+    const assistant = runtimeSession?.messages.find((message) => message.role === 'assistant');
+    const answer = assistant?.blocks.find((block) => block.kind === 'answer_text');
+
+    expect(useRunStore.getState().eventsByRun['run-1'].map((event) => event.eventId)).toEqual([
+      'event-1',
+      'event-text-1',
+      'event-text-2',
+    ]);
+    expect(answer).toMatchObject({
+      kind: 'answer_text',
+      text: 'Hello world',
+    });
+  });
 });
 
 describe('useRunStore', () => {
@@ -267,7 +295,7 @@ describe('useRunStore', () => {
     useRunStore.getState().resetRuns();
   });
 
-  it('deduplicates events by event id or sequence and sorts by sequence', () => {
+  it('deduplicates events by event id only and sorts by sequence', () => {
     const store = useRunStore.getState();
 
     store.applyRuntimeEvent(runtimeEvent('assistant.output.delta', 3, { delta: 'late' }));
@@ -275,7 +303,11 @@ describe('useRunStore', () => {
     store.applyRuntimeEvent(runtimeEvent('run.started', 2, {}, { eventId: 'same-event' }));
     store.applyRuntimeEvent(runtimeEvent('assistant.output.delta', 3, { delta: 'duplicate sequence' }, { eventId: 'different-event' }));
 
-    expect(useRunStore.getState().eventsByRun['run-1'].map((event) => event.sequence)).toEqual([1, 3]);
+    expect(useRunStore.getState().eventsByRun['run-1'].map((event) => event.eventId)).toEqual([
+      'same-event',
+      'event-3',
+      'different-event',
+    ]);
   });
 
   it('updates run status from terminal and status changed events', () => {

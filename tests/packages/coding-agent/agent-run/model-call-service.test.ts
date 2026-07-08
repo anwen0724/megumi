@@ -122,6 +122,101 @@ describe('Model Call Service', () => {
     });
   });
 
+  it('yields text deltas before the provider stream closes', async () => {
+    const providerStream = new AssistantEventStream();
+    const aiClient: AiClient = {
+      stream() {
+        return providerStream;
+      },
+      complete: vi.fn(),
+    };
+    const service = createModelCallService({
+      ai_client: aiClient,
+      ids: { model_call_id: () => 'model-call-1' },
+      clock: { now: () => '2026-01-01T00:00:00.000Z' },
+    });
+
+    const result = await service.modelCall(sampleModelCallRequest());
+
+    expect(result.status).toBe('started');
+    if (result.status !== 'started') return;
+
+    const iterator = result.events[Symbol.asyncIterator]();
+    await expect(iterator.next()).resolves.toMatchObject({
+      value: { type: 'started' },
+      done: false,
+    });
+
+    providerStream.push({
+      type: 'content_block_delta',
+      index: 0,
+      delta: { type: 'text_delta', text: 'Hello' },
+    });
+
+    const streamed = await nextWithin(iterator, 25);
+    providerStream.close();
+
+    expect(streamed).toMatchObject({
+      value: { type: 'text_delta', delta: 'Hello' },
+      done: false,
+    });
+  });
+
+  it('maps provider thinking blocks into model call thinking events', async () => {
+    const aiClient: AiClient = {
+      stream() {
+        return AssistantEventStream.from([
+          {
+            type: 'content_block_start',
+            index: 0,
+            block: { type: 'thinking', thinking: '' },
+          },
+          {
+            type: 'content_block_delta',
+            index: 0,
+            delta: { type: 'thinking_delta', thinking: 'I should inspect the file.' },
+          },
+          {
+            type: 'content_block_end',
+            index: 0,
+            block: { type: 'thinking', thinking: 'I should inspect the file.' },
+          },
+          {
+            type: 'message_end',
+            message: {
+              role: 'assistant',
+              content: [
+                { type: 'thinking', thinking: 'I should inspect the file.' },
+                { type: 'text', text: 'Done.' },
+              ],
+              stopReason: 'stop',
+            },
+          },
+        ]);
+      },
+      complete: vi.fn(),
+    };
+    const service = createModelCallService({
+      ai_client: aiClient,
+      ids: { model_call_id: () => 'model-call-1' },
+      clock: { now: () => '2026-01-01T00:00:00.000Z' },
+    });
+
+    const result = await service.modelCall(sampleModelCallRequest());
+
+    expect(result.status).toBe('started');
+    if (result.status !== 'started') return;
+
+    const events = await collect(result.events);
+    expect(events.map((event) => event.type)).toEqual([
+      'started',
+      'thinking_started',
+      'thinking_delta',
+      'thinking_completed',
+      'completed',
+    ]);
+  });
+
   it('waits for complete streaming tool-call arguments before emitting a tool call', async () => {
     const aiClient: AiClient = {
       stream() {
@@ -352,4 +447,16 @@ async function collect(events: AsyncIterable<ModelCallEvent>): Promise<ModelCall
     collected.push(event);
   }
   return collected;
+}
+
+async function nextWithin<T>(
+  iterator: AsyncIterator<T>,
+  timeoutMs: number,
+): Promise<IteratorResult<T> | { timeout: true }> {
+  return Promise.race([
+    iterator.next(),
+    new Promise<{ timeout: true }>((resolve) => {
+      setTimeout(() => resolve({ timeout: true }), timeoutMs);
+    }),
+  ]);
 }
