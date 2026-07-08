@@ -1,6 +1,13 @@
 ﻿import { create } from 'zustand';
 import type { RuntimeEvent } from '@megumi/coding-agent/events';
-import { reduceRuntimeTimelineEvent, type TimelineMessage, type TimelineUserMessage } from '@megumi/coding-agent/projections/timeline';
+import {
+  reduceRuntimeTimelineEvent,
+  type AnswerTextBlock,
+  type ProcessDisclosureBlock,
+  type TimelineAssistantMessage,
+  type TimelineMessage,
+  type TimelineUserMessage,
+} from '@megumi/coding-agent/projections/timeline';
 
 export type RuntimeTimelineStatus = 'running' | 'completed' | 'failed' | 'cancelled' | 'needs_replay';
 
@@ -203,6 +210,42 @@ function isActiveRunMessage(
   );
 }
 
+function assistantProcessBlocks(message: TimelineAssistantMessage): ProcessDisclosureBlock[] {
+  return message.blocks.filter((block): block is ProcessDisclosureBlock => block.kind === 'process_disclosure');
+}
+
+function assistantAnswerBlocks(message: TimelineAssistantMessage): AnswerTextBlock[] {
+  return message.blocks.filter((block): block is AnswerTextBlock => block.kind === 'answer_text');
+}
+
+function mergeAssistantMessage(
+  committed: TimelineAssistantMessage,
+  runtime: TimelineAssistantMessage,
+): TimelineAssistantMessage {
+  const processBlocks = new Map<string, ProcessDisclosureBlock>();
+  for (const block of assistantProcessBlocks(committed)) {
+    processBlocks.set(block.blockId, block);
+  }
+  for (const block of assistantProcessBlocks(runtime)) {
+    processBlocks.set(block.blockId, block);
+  }
+
+  const committedAnswerBlocks = assistantAnswerBlocks(committed);
+  const runtimeAnswerBlocks = assistantAnswerBlocks(runtime);
+  const answerBlocks = committedAnswerBlocks.length > 0 ? committedAnswerBlocks : runtimeAnswerBlocks;
+  const updatedAt = [committed.updatedAt, runtime.updatedAt].filter(Boolean).sort().at(-1);
+
+  return {
+    ...committed,
+    ...(updatedAt ? { updatedAt } : {}),
+    workspaceChangeFooter: committed.workspaceChangeFooter ?? runtime.workspaceChangeFooter,
+    blocks: [
+      ...processBlocks.values(),
+      ...answerBlocks,
+    ],
+  };
+}
+
 function mergeCommittedMessages(
   current: TimelineMessage[],
   committed: TimelineMessage[],
@@ -216,6 +259,12 @@ function mergeCommittedMessages(
 
   for (const message of current) {
     const identity = messageIdentity(message);
+    const committedMessage = byIdentity.get(identity);
+    if (committedMessage?.role === 'assistant' && message.role === 'assistant') {
+      byIdentity.set(identity, mergeAssistantMessage(committedMessage, message));
+      continue;
+    }
+
     if (isLiveStreamingMessage(message, streamsById) || isActiveRunMessage(message, streamsById)) {
       byIdentity.set(identity, message);
     }

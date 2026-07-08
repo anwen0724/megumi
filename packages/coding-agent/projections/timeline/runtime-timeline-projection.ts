@@ -48,6 +48,10 @@ export function reduceRuntimeTimelineEvent(
   if (event.eventType === 'model_call.text_delta') {
     const payload = event.payload as { modelCallId?: string; delta?: string };
     const assistant = ensureAssistantMessage(nextMessages, event);
+    if (hasCompletedAnswerBlock(assistant)) {
+      assistant.updatedAt = event.createdAt;
+      return nextMessages;
+    }
     const answer = ensureAnswerBlock(assistant, event, payload.modelCallId ?? event.runId);
     answer.text += payload.delta ?? '';
     answer.status = 'streaming';
@@ -391,7 +395,7 @@ function findAnswerBlock(assistant: TimelineAssistantMessage, textId: string): A
 
 function moveAnswerIntoProcess(assistant: TimelineAssistantMessage, event: RuntimeEvent, textId: string): void {
   const answer = findAnswerBlock(assistant, textId);
-  if (!answer || !answer.text) return;
+  if (!answer || !answer.text || answer.status === 'completed') return;
 
   const process = ensureProcessBlock(assistant, event);
   const item: AssistantTextItem = {
@@ -407,6 +411,12 @@ function moveAnswerIntoProcess(assistant: TimelineAssistantMessage, event: Runti
   };
   process.items.push(item);
   assistant.blocks = assistant.blocks.filter((block) => block !== answer);
+}
+
+function hasCompletedAnswerBlock(assistant: TimelineAssistantMessage): boolean {
+  return assistant.blocks.some(
+    (block) => block.kind === 'answer_text' && block.status === 'completed',
+  );
 }
 
 function ensureToolItem(process: ProcessDisclosureBlock, toolCallId: string, createdAt: string): ToolActivityItem {
