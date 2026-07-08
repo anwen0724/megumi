@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -33,7 +33,7 @@ describe('13.02 shell layout contract source guard', () => {
     expect(appBody).toContain('<RightSidebar');
     expect(appBody.indexOf('<LeftSidebar')).toBeLessThan(appBody.indexOf('<MainContent'));
     expect(appBody.indexOf('<MainContent')).toBeLessThan(appBody.indexOf('<RightSidebar'));
-    expect(appBody).not.toMatch(/useProjectStore|useSessionStore|useWorkspaceFilesStore|useSessionHistoryHydration|useChatStreamStore/);
+    expect(appBody).not.toMatch(/useProjectStore|useSessionStore|useWorkspaceFilesStore|useSessionHistoryHydration|useRuntimeTimelineStore/);
     expect(rightSidebar).toContain('w-[var(--right-sidebar-width)]');
     expect(rightSidebar).toContain('w-0');
   });

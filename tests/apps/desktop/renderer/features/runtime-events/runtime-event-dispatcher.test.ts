@@ -144,79 +144,46 @@ describe('runtime event dispatcher', () => {
   });
 
   it('projects tool call events into the renderer tool-call store', () => {
-    dispatchRuntimeEvent(runtimeEvent('tool.execution.requested', 1, {
-      toolExecution: {
-        toolExecutionId: 'tool-execution-1',
-        toolCallId: 'tool-call-1',
-        runId: 'run-1',
-        stepId: 'step-1',
-        actionId: 'action-1',
-        toolName: 'read_file',
-        input: { path: 'README.md' },
-        inputPreview: {
-          summary: 'Read README.md',
-          targets: [{ kind: 'file', label: 'README.md', sensitivity: 'normal' }],
-          redactionState: 'none',
-        },
-        capabilities: ['project_read'],
-        riskLevel: 'low',
-        sideEffect: 'none',
-        status: 'running',
-        requestedAt: '2026-05-20T00:00:00.000Z',
-      },
+    dispatchRuntimeEvent(runtimeEvent('tool_call.requested', 1, {
+      toolCallId: 'tool-call-1',
+      toolName: 'read_file',
+      input: { path: 'README.md' },
     }));
-    dispatchRuntimeEvent(runtimeEvent('tool.execution.started', 2, {
+    dispatchRuntimeEvent(runtimeEvent('tool_call.started', 2, {
+      toolCallId: 'tool-call-1',
       toolExecutionId: 'tool-execution-1',
-      startedAt: '2026-05-20T00:00:01.000Z',
+      toolName: 'read_file',
+      input: { path: 'README.md' },
     }));
 
     expect(useToolCallStore.getState().toolCallsById['tool-execution-1']).toMatchObject({
       toolCallId: 'tool-call-1',
       status: 'running',
-      startedAt: '2026-05-20T00:00:01.000Z',
+      startedAt: '2026-05-17T00:00:02.000Z',
     });
     expect(useChatUiStore.getState().agentStatus).toBe('running');
   });
 
-  it('stores denied tool calls with a shared-schema-valid runtime error', () => {
-    dispatchRuntimeEvent(runtimeEvent('tool.execution.requested', 1, {
-      toolExecution: {
-        toolExecutionId: 'tool-execution-1',
-        toolCallId: 'tool-call-1',
-        runId: 'run-1',
-        stepId: 'step-1',
-        assistantMessageId: 'assistant-message-1',
-        callOrder: 0,
-        toolName: 'edit_file',
-        input: { path: 'src/app.ts' },
-        inputPreview: {
-          summary: 'Edit src/app.ts',
-          targets: [{ kind: 'file', label: 'src/app.ts', sensitivity: 'normal' }],
-          redactionState: 'none',
-        },
-        capabilities: ['project_write'],
-        riskLevel: 'medium',
-        sideEffect: 'project_file_operation',
-        status: 'running',
-        requestedAt: '2026-05-20T00:00:00.000Z',
-        continuationEmitted: false,
-      },
-    }));
-    dispatchRuntimeEvent(runtimeEvent('tool.execution.denied', 2, {
+  it('stores denied tool calls from tool result events', () => {
+    dispatchRuntimeEvent(runtimeEvent('tool_call.started', 1, {
+      toolCallId: 'tool-call-1',
       toolExecutionId: 'tool-execution-1',
-      reason: 'User denied the requested tool call.',
+      toolName: 'edit_file',
+      input: { path: 'src/app.ts' },
+    }));
+    dispatchRuntimeEvent(runtimeEvent('tool_result.created', 2, {
+      toolResultId: 'tool-result-1',
+      toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-execution-1',
+      toolName: 'edit_file',
+      kind: 'user_rejected',
+      summary: 'User denied the requested tool call.',
     }));
 
     const storedToolCall = useToolCallStore.getState().toolCallsById['tool-execution-1'];
     expect(storedToolCall).toMatchObject({
       status: 'rejected',
-      error: {
-        code: 'approval_denied',
-        message: 'User denied the requested tool call.',
-        severity: 'info',
-        retryable: false,
-        source: 'approval',
-      },
+      resultPreview: 'User denied the requested tool call.',
     });
   });
 
@@ -261,35 +228,25 @@ describe('runtime event dispatcher', () => {
   });
 
   it('does not project duplicate tool events twice', () => {
-    const requested = runtimeEvent('tool.execution.requested', 1, {
-      toolExecution: {
-        toolExecutionId: 'tool-execution-1',
-        toolCallId: 'tool-call-1',
-        runId: 'run-1',
-        stepId: 'step-1',
-        toolName: 'read_file',
-        input: { path: 'README.md' },
-        inputPreview: {
-          summary: 'Read README.md',
-          targets: [{ kind: 'file', label: 'README.md', sensitivity: 'normal' }],
-          redactionState: 'none',
-        },
-        capabilities: ['project_read'],
-        riskLevel: 'low',
-        sideEffect: 'none',
-        status: 'running',
-        requestedAt: '2026-05-20T00:00:00.000Z',
-      },
+    const requested = runtimeEvent('tool_call.requested', 1, {
+      toolCallId: 'tool-call-1',
+      toolName: 'read_file',
+      input: { path: 'README.md' },
     });
-    const started = runtimeEvent('tool.execution.started', 2, {
+    const started = runtimeEvent('tool_call.started', 2, {
+      toolCallId: 'tool-call-1',
       toolExecutionId: 'tool-execution-1',
-      startedAt: '2026-05-20T00:00:01.000Z',
+      toolName: 'read_file',
+      input: { path: 'README.md' },
     });
     const duplicateStartedWithDifferentCreatedAt = {
       ...started,
       createdAt: '2026-05-20T00:00:09.000Z',
       payload: {
+        toolCallId: 'tool-call-1',
         toolExecutionId: 'tool-execution-1',
+        toolName: 'read_file',
+        input: { path: 'README.md' },
       },
     } as RuntimeEvent;
 
@@ -300,7 +257,7 @@ describe('runtime event dispatcher', () => {
 
     expect(useToolCallStore.getState().toolCallsById['tool-execution-1']).toMatchObject({
       status: 'running',
-      startedAt: '2026-05-20T00:00:01.000Z',
+      startedAt: '2026-05-17T00:00:02.000Z',
     });
   });
 });

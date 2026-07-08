@@ -2,8 +2,6 @@
 // Hooks coordinate extension points without owning memory or workspace business rules.
 import type { RuntimeEvent } from '../../events';
 import type { MemoryCapturePort, MemoryCaptureSignal } from '../../memory';
-import type { ChatStreamEventAdapter } from '../../projections/chat-stream';
-import type { WorkspaceChangeFooterProjectorService } from '../../projections/workspace/workspace-change-footer-projector';
 import type {
   PostRunHooksCoordinatorOptions,
   PostRunHooksRepositoryPort,
@@ -22,14 +20,12 @@ export class PostRunHooksCoordinator {
   private readonly memoryCaptureService?: MemoryCapturePort;
   private readonly megumiHomePath?: string;
   private readonly workspaceChanges?: PostRunHooksWorkspaceChangeReadPort;
-  private readonly workspaceChangeFooterProjector?: WorkspaceChangeFooterProjectorService;
 
   constructor(options: PostRunHooksCoordinatorOptions) {
     this.repository = options.repository;
     this.memoryCaptureService = options.memoryCaptureService;
     this.megumiHomePath = options.megumiHomePath;
     this.workspaceChanges = options.workspaceChanges;
-    this.workspaceChangeFooterProjector = options.workspaceChangeFooterProjector;
   }
 
   scheduleRunCompletedMemoryCapture(input: ScheduleRunCompletedMemoryCaptureInput): void {
@@ -60,32 +56,10 @@ export class PostRunHooksCoordinator {
     });
   }
 
-  publishWorkspaceChangeFooter(input: {
-    runId: string;
-    createdAt: string;
-    chatStreamAdapter?: Pick<ChatStreamEventAdapter, 'publishWorkspaceChangeFooter'>;
-  }): void {
-    if (!input.chatStreamAdapter || !this.workspaceChangeFooterProjector) {
-      return;
-    }
-
-    const footer = this.workspaceChangeFooterProjector.projectRunFooter(input.runId);
-    if (!footer) {
-      return;
-    }
-
-    input.chatStreamAdapter.publishWorkspaceChangeFooter?.(footer, input.createdAt);
-  }
-
   publishRunTerminalHooks(input: {
     event: RuntimeEvent;
-    chatStreamAdapter?: Pick<ChatStreamEventAdapter, 'publishWorkspaceChangeFooter'>;
   }): void {
-    this.publishWorkspaceChangeFooter({
-      runId: String(input.event.runId),
-      createdAt: input.event.createdAt,
-      ...(input.chatStreamAdapter ? { chatStreamAdapter: input.chatStreamAdapter } : {}),
-    });
+    void input;
   }
 
   private createMemoryCaptureActivitySummary(runId: string): { signals: MemoryCaptureSignal[]; summary?: string } {
@@ -98,7 +72,7 @@ export class PostRunHooksCoordinator {
     }
 
     const toolSummaries = this.repository.listRuntimeEventsByRun(runId)
-      .filter((event) => event.eventType === 'tool.result.created')
+      .filter((event) => event.eventType === 'tool_result.created')
       .map((event) => {
         if (!isObjectRecord(event.payload) || typeof event.payload.summary !== 'string') {
           return undefined;

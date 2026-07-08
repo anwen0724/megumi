@@ -85,7 +85,7 @@ describe('Agent Run loop limits', () => {
         code: 'loop_limit_exceeded',
       },
     });
-    expect(events.map((event) => event.type)).toContain('run.failed');
+    expect(events.map((event) => event.eventType)).toContain('run.failed');
   });
 
   it('fails the run when maxToolRounds is exceeded', async () => {

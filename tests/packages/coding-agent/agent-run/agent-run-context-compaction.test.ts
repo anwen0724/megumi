@@ -20,10 +20,17 @@ describe('Agent Run context compaction control flow', () => {
       events: [],
     }));
     const emit = vi.fn((type, payload) => ({
-      event_id: `event:${type}`,
-      type,
-      created_at: '2026-01-01T00:00:00.000Z',
-      payload,
+      eventId: `event:${type}`,
+      schemaVersion: 1 as const,
+      eventType: type,
+      runId: 'run-1',
+      sessionId: 'session-1',
+      sequence: 1,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      source: 'core' as const,
+      visibility: 'user' as const,
+      persist: 'required' as const,
+      payload: payload ?? {},
     }));
 
     const result = await consumeContextUsageSignal({

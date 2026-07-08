@@ -2,7 +2,6 @@
  * Host approval controller. It maps UI approval decisions to Agent Run resume calls.
  */
 import type { AgentRunService } from '../../agent-run';
-import { mapAgentRunEvents } from '../mappers/chat-ui-mapper';
 import { toApprovalDecision } from '../mappers/approval-ui-mapper';
 import type {
   ApprovalControllerResult,
@@ -53,7 +52,7 @@ async function* resumeApproval(
     return;
   }
 
-  for await (const event of mapAgentRunEvents(result.events, payload.approvalRequestId)) {
+  for await (const event of result.events) {
     yield event;
   }
 }

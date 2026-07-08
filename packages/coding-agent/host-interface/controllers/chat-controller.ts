@@ -5,7 +5,6 @@ import type { AgentRun, AgentRunService, StartRunResult } from '../../agent-run'
 import type { CommandService } from '../../commands';
 import type { Session, SessionMessageWithAttachments, SessionService } from '../../session';
 import {
-  mapAgentRunEvents,
   toChatMessageUiDto,
   toChatRunUiDto,
   toChatSessionUiDto,
@@ -137,7 +136,7 @@ export function createChatController(options: {
       const runId = runIdByRequestId.get(request.targetRequestId) ?? request.targetRequestId;
       const result = await options.agentRunService.cancelRun({ run_id: runId });
       if (result.status === 'cancelled') {
-        return { cancelled: true, events: mapAgentRunEvents(asyncIterableFrom(result.events), request.targetRequestId) };
+        return { cancelled: true, events: asyncIterableFrom(result.events) };
       }
       return { cancelled: false };
     },
@@ -176,7 +175,7 @@ function mapStartRunResult(
       requestId: result.request_id,
       userMessageId: result.user_message_id,
       run: toChatRunUiDto(result.run),
-      events: mapAgentRunEvents(result.events, result.request_id),
+      events: result.events,
     };
   }
 

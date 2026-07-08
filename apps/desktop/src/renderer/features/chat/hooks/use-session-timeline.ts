@@ -6,8 +6,8 @@ import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
 import { createSessionTitleFromPrompt } from '../../../entities/session/session-title';
 import { useSessionStore } from '../../../entities/session/store';
-import { dispatchChatStreamEvent, useChatStreamStore } from '../../chat-stream';
-import { dispatchRuntimeEvent } from '../.././runtime-events/runtime-event-dispatcher';
+import { useRuntimeTimelineStore } from '../../runtime-timeline';
+import { dispatchRuntimeEvent } from '../../runtime-events/runtime-event-dispatcher';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
 import type { ComposerSubmitPayload } from '../components/Composer';
 import { localSessionFromPersistedSession } from '../../session-history/session-history-mappers';
@@ -104,7 +104,7 @@ function renameEmptyManualSessionFromPrompt(payload: ComposerSubmitPayload, exis
 }
 
 function activeCanonicalMessageCount(projectId: string, sessionId: string): number {
-  return useChatStreamStore.getState().sessions[`${projectId}:${sessionId}`]?.messages.length ?? 0;
+  return useRuntimeTimelineStore.getState().sessions[`${projectId}:${sessionId}`]?.messages.length ?? 0;
 }
 
 function createSessionMessageSendPayload(
@@ -219,7 +219,7 @@ export function useSessionTimeline() {
       const { activeSessionId, sessions } = useSessionStore.getState();
 
       if (!currentProjectId || !activeSessionId) {
-        useChatStreamStore.getState().setActiveSession(null, null);
+        useRuntimeTimelineStore.getState().setActiveSession(null, null);
         useChatUiStore.getState().setActiveSession(null);
         updateBranchDraft(null);
         return;
@@ -228,13 +228,13 @@ export function useSessionTimeline() {
       const activeSession = sessions.find((session) => session.id === activeSessionId);
 
       if (!activeSession || activeSession.projectId !== currentProjectId) {
-        useChatStreamStore.getState().setActiveSession(null, null);
+        useRuntimeTimelineStore.getState().setActiveSession(null, null);
         useChatUiStore.getState().setActiveSession(null);
         updateBranchDraft(null);
         return;
       }
 
-      useChatStreamStore.getState().setActiveSession(activeSession.projectId, activeSession.id);
+      useRuntimeTimelineStore.getState().setActiveSession(activeSession.projectId, activeSession.id);
       useChatUiStore.getState().setActiveSession(activeSession.id);
 
       if (
@@ -259,14 +259,6 @@ export function useSessionTimeline() {
       unsubscribeSession();
     };
   }, [updateBranchDraft]);
-
-  useEffect(() => {
-    if (!window.megumi?.chatStream?.onEvent) {
-      return undefined;
-    }
-
-    return window.megumi.chatStream.onEvent(dispatchChatStreamEvent);
-  }, []);
 
   useEffect(() => {
     if (!window.megumi?.runtime?.onEvent) {
@@ -338,11 +330,11 @@ export function useSessionTimeline() {
 
     const runSessionId = adoptBackendSession(result.data.session);
     runSessionIdRef.current = runSessionId;
-    useChatStreamStore.getState().setActiveSession(target.projectId, runSessionId);
+    useRuntimeTimelineStore.getState().setActiveSession(target.projectId, runSessionId);
     useChatUiStore.getState().setActiveSession(runSessionId);
     useChatUiStore.getState().setAgentStatus('sending', runSessionId);
     useChatUiStore.getState().setLastError(null, runSessionId);
-    useChatStreamStore.getState().addPendingUserMessage(target.projectId, runSessionId, {
+    useRuntimeTimelineStore.getState().addPendingUserMessage(target.projectId, runSessionId, {
       clientMessageId,
       text: payload.message,
       createdAt,

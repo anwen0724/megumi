@@ -1,4 +1,2 @@
-﻿// Exposes Coding Agent product projections for UI streams and persisted timeline history.
-export * from './chat-stream';
+// Exposes Coding Agent product projections for runtime timeline and workspace UI facts.
 export * from './timeline';
-

@@ -46,7 +46,7 @@ describe('Agent Run message flow', () => {
       run_id: result.run.run_id,
       session_id: 'session-1',
     }));
-    expect(events.map((event) => event.type)).toEqual(expect.arrayContaining([
+    expect(events.map((event) => event.eventType)).toEqual(expect.arrayContaining([
       'run.started',
       'model_call.started',
       'model_call.completed',

@@ -1,4 +1,4 @@
-import fs from 'node:fs';
+﻿import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -41,7 +41,7 @@ describe('desktop ipc boundary', () => {
       .join('\n');
 
     expect(source).not.toContain('runtime-event-forwarder');
-    expect(source).not.toContain('chat-stream-event-forwarder');
+    expect(source).not.toContain('runtime-timeline-event-forwarder');
     expect(source).not.toContain('ipc-operation-name');
   });
 });

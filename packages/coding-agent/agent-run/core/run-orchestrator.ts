@@ -10,9 +10,9 @@ import type { WorkspacePathPolicyService } from '../../workspace';
 import type { CompactContextResult, ContextUsageSignal, SessionContextSource } from '../../context';
 import type {
   AgentRun,
-  AgentRunEvent,
   AgentRunFailure,
 } from '../contracts/agent-run-contracts';
+import type { RuntimeEvent } from '../../events';
 import type { AgentRunTraceLogger } from '../contracts/agent-run-trace-contracts';
 import type {
   ModelCallEvent,
@@ -56,7 +56,7 @@ export type RunOrchestratorDependencies = {
     captureCompletedRun(request: { run_id: string; session_id: string; workspace_id: string }): Promise<unknown> | unknown;
   };
   event_sink: {
-    emit(type: string, payload?: Record<string, unknown>): AgentRunEvent;
+    emit(type: string, payload?: Record<string, unknown>): RuntimeEvent;
   };
   trace_logger?: AgentRunTraceLogger;
   on_model_call_started?: (input: { run_id: string; model_call_id: string }) => void;
@@ -114,7 +114,7 @@ export type ConsumeContextUsageSignalRequest = {
     }): Promise<CompactContextResult> | CompactContextResult;
   };
   event_sink: {
-    emit(type: string, payload?: Record<string, unknown>): AgentRunEvent;
+    emit(type: string, payload?: Record<string, unknown>): RuntimeEvent;
   };
 };
 
@@ -202,6 +202,12 @@ export async function runAgentModelToolLoop(
       run_id: run.run_id,
       model_call_id: modelCall.model_call_id,
     });
+    dependencies.event_sink.emit('model_call.started', {
+      run_id: run.run_id,
+      model_call_id: modelCall.model_call_id,
+      provider_id: request.model_config.provider_id,
+      model_id: request.model_config.model_id,
+    });
     traceRun(dependencies, run, 'trace.model_call.request_payload', {
       owner: { type: 'agent_run', run_id: run.run_id },
       model_config: request.model_config,
@@ -246,6 +252,7 @@ export async function runAgentModelToolLoop(
         run_id: run.run_id,
         session_id: run.session_id,
         workspace_id: run.workspace_id,
+        assistant_message_id: assistant.message.message_id,
       });
       traceRun(dependencies, run, 'run.completed', {
         assistant_message_id: assistant.message.message_id,
@@ -293,8 +300,10 @@ export async function runAgentModelToolLoop(
     for (const toolCall of modelEvents.tool_calls) {
       dependencies.event_sink.emit('tool_call.requested', {
         run_id: run.run_id,
+        model_call_id: toolCall.model_call_id,
         tool_call_id: toolCall.tool_call_id,
         tool_name: toolCall.tool_name,
+        input: toolCall.input,
       });
     }
     traceRun(dependencies, run, 'trace.tool_call.requested', {
@@ -345,6 +354,7 @@ export async function runAgentModelToolLoop(
           run_id: run.run_id,
           tool_call_id: toolCall.tool_call_id,
           tool_name: toolCall.tool_name,
+          input: toolCall.input,
         });
         dependencies.event_sink.emit(toolCall.status === 'completed' ? 'tool_execution.completed' : 'tool_execution.failed', {
           run_id: run.run_id,
@@ -363,6 +373,8 @@ export async function runAgentModelToolLoop(
         run_id: run.run_id,
         tool_call_id: toolCall.tool_call_id,
         tool_name: toolCall.tool_name,
+        input: toolCall.input,
+        error: toolCall.failure,
       });
     }
     for (const toolResult of toolGroup.tool_result_facts) {
@@ -380,7 +392,7 @@ export async function runAgentModelToolLoop(
       dependencies.repository.createApprovalRequest(approval);
       dependencies.event_sink.emit('approval.requested', {
         run_id: run.run_id,
-        approval_request_id: approval.approval_request_id,
+        approval_request: approval,
       });
     }
 
@@ -390,7 +402,13 @@ export async function runAgentModelToolLoop(
         to: 'waiting_for_approval',
         changed_at: dependencies.clock.now(),
       }));
-      dependencies.event_sink.emit('run.waiting_for_approval', { run_id: run.run_id });
+      dependencies.event_sink.emit('run.waiting_for_approval', {
+        run_id: run.run_id,
+        approval_request_id: toolGroup.pending_approvals[0]?.approval_request.approval_request_id,
+        tool_call_id: toolGroup.pending_approvals[0]?.approval_request.subject.tool_call_id,
+        tool_execution_id: toolGroup.pending_approvals[0]?.approval_request.subject.tool_call_id,
+        reason: 'approval_required',
+      });
       traceLoopCounters(dependencies, run, modelCalls, toolRounds, runtimeFacts.length);
       return {
         status: 'waiting_for_approval',
@@ -514,6 +532,7 @@ async function collectModelCallEvents(
     }
     if (event.type === 'tool_call') {
       toolCalls.push({
+        model_call_id: event.model_call_id,
         tool_call_id: event.tool_call_id,
         tool_name: event.tool_name,
         input: event.input,

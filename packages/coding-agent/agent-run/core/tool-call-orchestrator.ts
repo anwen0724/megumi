@@ -17,6 +17,7 @@ import type { AgentRunTraceLogger } from '../contracts/agent-run-trace-contracts
 import type { ToolResultRuntimeFact, ToolSet } from '../contracts/model-call-contracts';
 
 export type ModelRequestedToolCall = {
+  model_call_id?: string;
   tool_call_id: string;
   tool_name: string;
   input: unknown;

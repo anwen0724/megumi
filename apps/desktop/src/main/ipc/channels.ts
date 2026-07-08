@@ -68,9 +68,6 @@ export const IPC_CHANNELS = {
     accessLogsList: 'memory:access-logs:list',
     recallPreview: 'memory:recall-preview',
   },
-  chatStream: {
-    event: 'chat-stream:event',
-  },
   runtime: {
     event: 'runtime:event',
   },
@@ -136,7 +133,6 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.memory.sourceRefsList,
   IPC_CHANNELS.memory.accessLogsList,
   IPC_CHANNELS.memory.recallPreview,
-  IPC_CHANNELS.chatStream.event,
   IPC_CHANNELS.runtime.event,
 ] as const;
 

@@ -4,8 +4,6 @@
 import type { RuntimeEvent } from '../../events';
 import type { WorkspaceChangeService } from '../../workspace';
 import type { MemoryCapturePort } from '../../memory';
-import type { ChatStreamEventAdapter } from '../../projections/chat-stream';
-import type { WorkspaceChangeFooterProjectorService } from '../../projections/workspace/workspace-change-footer-projector';
 
 export interface PostRunHooksRepositoryPort {
   listRuntimeEventsByRun(runId: string): RuntimeEvent[];
@@ -20,7 +18,6 @@ export interface PostRunHooksCoordinatorOptions {
   memoryCaptureService?: MemoryCapturePort;
   megumiHomePath?: string;
   workspaceChanges?: PostRunHooksWorkspaceChangeReadPort;
-  workspaceChangeFooterProjector?: WorkspaceChangeFooterProjectorService;
 }
 
 export interface ScheduleRunCompletedMemoryCaptureInput {
@@ -39,11 +36,5 @@ export interface PostRunHooksPort {
   scheduleRunCompletedMemoryCapture(input: ScheduleRunCompletedMemoryCaptureInput): void;
   publishRunTerminalHooks(input: {
     event: RuntimeEvent;
-    chatStreamAdapter?: Pick<ChatStreamEventAdapter, 'publishWorkspaceChangeFooter'>;
-  }): void;
-  publishWorkspaceChangeFooter(input: {
-    runId: string;
-    createdAt: string;
-    chatStreamAdapter?: Pick<ChatStreamEventAdapter, 'publishWorkspaceChangeFooter'>;
   }): void;
 }

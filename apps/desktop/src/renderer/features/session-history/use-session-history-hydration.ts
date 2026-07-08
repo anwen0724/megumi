@@ -8,7 +8,7 @@ import { useProjectStore } from '../../entities/project/store';
 import { useRunStore } from '../../entities/run/store';
 import { useSessionStore } from '../../entities/session/store';
 import { useToolCallStore } from '../../entities/tool-call';
-import { useChatStreamStore } from '../chat-stream';
+import { useRuntimeTimelineStore } from '../runtime-timeline';
 import { dispatchRuntimeEvent } from '.././runtime-events/runtime-event-dispatcher';
 import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../shared/ipc';
 import {
@@ -93,7 +93,7 @@ export function useSessionHistoryHydration() {
       return;
     }
 
-    useChatStreamStore.getState().hydrateCommittedMessages(
+    useRuntimeTimelineStore.getState().hydrateCommittedMessages(
       projectId,
       sessionId,
       timelineResult.data.messages,

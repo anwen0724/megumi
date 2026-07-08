@@ -60,9 +60,6 @@ function installMegumiMock(setupCompleted: boolean) {
       runtime: {
         onEvent: vi.fn(() => () => undefined),
       },
-      chatStream: {
-        onEvent: vi.fn(() => () => undefined),
-      },
     },
   });
 }

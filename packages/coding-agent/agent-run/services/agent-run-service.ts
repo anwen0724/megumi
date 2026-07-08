@@ -10,11 +10,11 @@ import type { SettingsService } from '../../settings';
 import type { ToolExecutionService, ToolRegistryService } from '../../tools';
 import type { WorkspacePathPolicyService, WorkspaceService } from '../../workspace';
 import type { CompactContextResult, ContextUsageSignal, SessionContextSource } from '../../context';
+import type { RuntimeError, RuntimeEvent, RuntimeEventEnvelopeType } from '../../events';
 import type { MegumiDatabase } from '../../persistence/connection';
 import type {
   AgentRun,
   AgentRunApprovalRequest,
-  AgentRunEvent,
   AgentRunFailure,
   AgentRunService,
   CancelRunRequest,
@@ -99,7 +99,7 @@ export type CreateAgentRunServiceOptions = {
     }): Promise<CompactContextResult> | CompactContextResult;
   };
   event_publisher?: {
-    publish(event: AgentRunEvent): AgentRunEvent | void;
+    publish(event: RuntimeEvent): RuntimeEvent | void;
   };
   trace_logger?: AgentRunTraceLogger;
   ids?: Partial<AgentRunServiceIds>;
@@ -242,7 +242,12 @@ class DefaultAgentRunService implements AgentRunService {
     }));
     const queue = createAgentRunEventQueue((event) => this.options.event_publisher?.publish(event));
     const eventSink = this.createEventSink(queue, run);
-    eventSink.emit('run.started', { run_id: run.run_id, session_id: run.session_id });
+    eventSink.emit('run.started', {
+      run_id: run.run_id,
+      session_id: run.session_id,
+      provider_id: request.model_selection.provider_id,
+      model_id: request.model_selection.model_id,
+    });
     this.traceLogger.record({
       trace_id: run.run_id,
       event_type: 'run.started',
@@ -295,7 +300,11 @@ class DefaultAgentRunService implements AgentRunService {
       to: 'cancelling',
       changed_at: this.clock.now(),
     }));
-    eventSink.emit('run.cancelling', { run_id: run.run_id, session_id: run.session_id });
+    eventSink.emit('run.cancelling', {
+      run_id: run.run_id,
+      session_id: run.session_id,
+      cancel_request_id: `cancel:${run.run_id}`,
+    });
     this.activeRunAbortControllers.get(run.run_id)?.abort();
     const activeModelCallId = this.activeModelCallByRun.get(run.run_id);
     if (activeModelCallId) {
@@ -314,7 +323,11 @@ class DefaultAgentRunService implements AgentRunService {
       to: 'cancelled',
       changed_at: this.clock.now(),
     }));
-    eventSink.emit('run.cancelled', { run_id: cancelled.run_id, session_id: cancelled.session_id });
+    eventSink.emit('run.cancelled', {
+      run_id: cancelled.run_id,
+      session_id: cancelled.session_id,
+      reason: 'user_cancelled',
+    });
     this.activeRunAbortControllers.delete(run.run_id);
     queue.close();
     return { status: 'cancelled', run: cancelled, events: queue.snapshot() };
@@ -403,6 +416,8 @@ class DefaultAgentRunService implements AgentRunService {
       workspace_id: run.workspace_id,
       approval_request_id: decidedApproval.approval_request_id,
       decision: decision.decision,
+      scope: decision.scope,
+      decided_at: decision.decided_at,
     });
 
     let runtimeFacts = continuation.runtime_sources;
@@ -528,39 +543,45 @@ class DefaultAgentRunService implements AgentRunService {
           this.approvalContinuations.delete(approvalId);
         }
       }
-      queue.emit({
-        event_id: this.ids.event_id(),
-        type: 'run.cleaned_interrupted',
-        run_id: runId,
-        created_at: this.clock.now(),
-        payload: { reason: _request.reason },
-      });
     }
     queue.close();
     return { status: 'completed', cleaned_run_ids: result.cleaned_run_ids, events: queue.snapshot() };
   }
 
   private createEventSink(
-    queue: AgentRunEventQueue,
+    queue: RuntimeEventQueue,
     run?: Pick<AgentRun, 'run_id' | 'session_id'>,
-  ): { emit(type: string, payload?: Record<string, unknown>): AgentRunEvent } {
+  ): { emit(type: string, payload?: Record<string, unknown>): RuntimeEvent } {
     return {
       emit: (type: string, payload?: Record<string, unknown>) => {
-        const event: AgentRunEvent = {
-          event_id: this.ids.event_id(),
-          type,
-          created_at: this.clock.now(),
-          ...(payload?.run_id && typeof payload.run_id === 'string'
-            ? { run_id: payload.run_id }
-            : run?.run_id ? { run_id: run.run_id } : {}),
-          ...(payload?.session_id && typeof payload.session_id === 'string'
-            ? { session_id: payload.session_id }
-            : run?.session_id ? { session_id: run.session_id } : {}),
-          ...(payload ? { payload } : {}),
-        };
+        const event = this.createRuntimeEvent(type, payload, queue.nextSequence(), run);
         queue.emit(event);
         return event;
       },
+    };
+  }
+
+  private createRuntimeEvent(
+    type: string,
+    payload: Record<string, unknown> | undefined,
+    sequence: number,
+    run?: Pick<AgentRun, 'run_id' | 'session_id'>,
+  ): RuntimeEvent {
+    const runId = stringPayload(payload, 'run_id') ?? run?.run_id;
+    const sessionId = stringPayload(payload, 'session_id') ?? run?.session_id;
+    const normalized = normalizeRuntimeEventPayload(type, payload);
+    return {
+      eventId: this.ids.event_id(),
+      schemaVersion: 1,
+      eventType: normalized.eventType,
+      ...(runId ? { runId } : {}),
+      ...(sessionId ? { sessionId } : {}),
+      sequence,
+      createdAt: this.clock.now(),
+      source: 'core',
+      visibility: 'user',
+      persist: 'required',
+      payload: normalized.payload,
     };
   }
 
@@ -584,13 +605,10 @@ class DefaultAgentRunService implements AgentRunService {
           context_compaction_service: this.options.context_compaction_service!,
           event_sink: {
             emit: (type, payload) => {
-              const event: AgentRunEvent = {
-                event_id: this.ids.event_id(),
-                type,
-                created_at: this.clock.now(),
+              const event = this.createRuntimeEvent(type, {
                 ...(signal.session_id ? { session_id: signal.session_id } : {}),
-                ...(payload ? { payload } : {}),
-              };
+                ...(payload ?? {}),
+              }, 1);
               this.options.event_publisher?.publish(event);
               return event;
             },
@@ -611,7 +629,7 @@ class DefaultAgentRunService implements AgentRunService {
     continuation: RunApprovalContinuation;
     runtime_sources: SessionContextSource[];
     model_call_messages: ModelCallMessage[];
-    eventSink: { emit(type: string, payload?: Record<string, unknown>): AgentRunEvent };
+    eventSink: { emit(type: string, payload?: Record<string, unknown>): RuntimeEvent };
     signal?: AbortSignal;
   }): Promise<
     | { status: 'ready'; run: AgentRun; runtime_sources: SessionContextSource[]; model_call_messages: ModelCallMessage[] }
@@ -752,8 +770,8 @@ class DefaultAgentRunService implements AgentRunService {
   }
 
   private async executeRunLoop(input: {
-    queue: AgentRunEventQueue;
-    eventSink: { emit(type: string, payload?: Record<string, unknown>): AgentRunEvent };
+    queue: RuntimeEventQueue;
+    eventSink: { emit(type: string, payload?: Record<string, unknown>): RuntimeEvent };
     run: AgentRun;
     user_message_id: string;
     model_config: ModelCallConfig;
@@ -1022,21 +1040,329 @@ function textForRun(
   return parsedInput.text;
 }
 
-type AgentRunEventQueue = {
-  emit(event: AgentRunEvent): void;
+type NormalizedRuntimeEventPayload = {
+  eventType: RuntimeEventEnvelopeType;
+  payload: Record<string, unknown>;
+};
+
+function normalizeRuntimeEventPayload(
+  type: string,
+  payload: Record<string, unknown> | undefined,
+): NormalizedRuntimeEventPayload {
+  switch (type) {
+    case 'run.started':
+      return {
+        eventType: 'run.started',
+        payload: {
+          runKind: 'agent',
+          ...(stringPayload(payload, 'provider_id') ? { providerId: stringPayload(payload, 'provider_id') } : {}),
+          ...(stringPayload(payload, 'model_id') ? { modelId: stringPayload(payload, 'model_id') } : {}),
+        },
+      };
+    case 'run.completed':
+      return {
+        eventType: 'run.completed',
+        payload: {
+          ...(stringPayload(payload, 'assistant_message_id') ? { assistantMessageId: stringPayload(payload, 'assistant_message_id') } : {}),
+        },
+      };
+    case 'run.failed':
+      return {
+        eventType: 'run.failed',
+        payload: {
+          error: runtimeErrorFromPayload(payload, 'failure', {
+            code: 'runtime_unknown',
+            message: 'Agent Run failed.',
+            source: 'core',
+          }),
+        },
+      };
+    case 'run.cancelled':
+      return {
+        eventType: 'run.cancelled',
+        payload: {
+          ...(stringPayload(payload, 'reason') ? { reason: stringPayload(payload, 'reason') } : {}),
+        },
+      };
+    case 'run.cancelling':
+      return {
+        eventType: 'run.cancelling',
+        payload: {
+          cancelRequestId: stringPayload(payload, 'cancel_request_id') ?? `cancel:${stringPayload(payload, 'run_id') ?? 'unknown'}`,
+        },
+      };
+    case 'run.waiting_for_approval':
+      return {
+        eventType: 'run.waiting_for_approval',
+        payload: {
+          approvalRequestId: stringPayload(payload, 'approval_request_id') ?? 'approval:unknown',
+          toolCallId: stringPayload(payload, 'tool_call_id') ?? 'tool-call:unknown',
+          toolExecutionId: stringPayload(payload, 'tool_execution_id') ?? stringPayload(payload, 'tool_call_id') ?? 'tool-call:unknown',
+          reason: stringPayload(payload, 'reason') ?? 'approval_required',
+        },
+      };
+    case 'model_call.started':
+      return {
+        eventType: 'model_call.started',
+        payload: {
+          modelCallId: stringPayload(payload, 'model_call_id') ?? 'model-call:unknown',
+          providerId: stringPayload(payload, 'provider_id') ?? 'provider:unknown',
+          modelId: stringPayload(payload, 'model_id') ?? 'model:unknown',
+        },
+      };
+    case 'model_call.text_delta':
+      return {
+        eventType: 'model_call.text_delta',
+        payload: {
+          modelCallId: stringPayload(payload, 'model_call_id') ?? 'model-call:unknown',
+          delta: stringPayload(payload, 'delta') ?? '',
+        },
+      };
+    case 'model_call.tool_call':
+      return {
+        eventType: 'model_call.tool_call',
+        payload: {
+          modelCallId: stringPayload(payload, 'model_call_id') ?? 'model-call:unknown',
+          toolCallId: stringPayload(payload, 'tool_call_id') ?? 'tool-call:unknown',
+          toolName: stringPayload(payload, 'tool_name') ?? 'unknown_tool',
+          input: jsonPayload(payload?.input),
+        },
+      };
+    case 'model_call.completed':
+      return {
+        eventType: 'model_call.completed',
+        payload: {
+          modelCallId: stringPayload(payload, 'model_call_id') ?? 'model-call:unknown',
+          finishReason: stringPayload(payload, 'finish_reason') ?? 'stop',
+          ...(stringPayload(payload, 'content') ? { content: stringPayload(payload, 'content') } : {}),
+        },
+      };
+    case 'model_call.failed':
+      return {
+        eventType: 'model_call.completed',
+        payload: {
+          modelCallId: stringPayload(payload, 'model_call_id') ?? 'model-call:unknown',
+          finishReason: 'failed',
+        },
+      };
+    case 'tool_call.requested':
+    case 'tool_execution.decided':
+      return {
+        eventType: 'tool_call.requested',
+        payload: {
+          ...(stringPayload(payload, 'model_call_id') ? { modelCallId: stringPayload(payload, 'model_call_id') } : {}),
+          toolCallId: stringPayload(payload, 'tool_call_id') ?? 'tool-call:unknown',
+          toolName: stringPayload(payload, 'tool_name') ?? 'unknown_tool',
+          input: jsonPayload(payload?.input),
+        },
+      };
+    case 'tool_execution.started':
+    case 'tool_call.executing':
+      return {
+        eventType: 'tool_call.started',
+        payload: {
+          toolCallId: stringPayload(payload, 'tool_call_id') ?? 'tool-call:unknown',
+          toolExecutionId: stringPayload(payload, 'tool_execution_id') ?? stringPayload(payload, 'tool_call_id') ?? 'tool-call:unknown',
+          toolName: stringPayload(payload, 'tool_name') ?? 'unknown_tool',
+          input: jsonPayload(payload?.input),
+        },
+      };
+    case 'tool_execution.completed':
+    case 'tool_call.completed':
+      return {
+        eventType: 'tool_call.completed',
+        payload: {
+          toolCallId: stringPayload(payload, 'tool_call_id') ?? 'tool-call:unknown',
+          ...(stringPayload(payload, 'tool_execution_id') ?? stringPayload(payload, 'tool_call_id')
+            ? { toolExecutionId: stringPayload(payload, 'tool_execution_id') ?? stringPayload(payload, 'tool_call_id') }
+            : {}),
+          toolName: stringPayload(payload, 'tool_name') ?? 'unknown_tool',
+        },
+      };
+    case 'tool_execution.denied':
+    case 'tool_call.denied':
+      return {
+        eventType: 'tool_call.failed',
+        payload: {
+          toolCallId: stringPayload(payload, 'tool_call_id') ?? 'tool-call:unknown',
+          ...(stringPayload(payload, 'tool_execution_id') ?? stringPayload(payload, 'tool_call_id')
+            ? { toolExecutionId: stringPayload(payload, 'tool_execution_id') ?? stringPayload(payload, 'tool_call_id') }
+            : {}),
+          toolName: stringPayload(payload, 'tool_name') ?? 'unknown_tool',
+          error: runtimeError({
+            code: 'approval_denied',
+            message: 'Tool execution was denied.',
+            source: 'approval',
+          }),
+        },
+      };
+    case 'tool_execution.failed':
+    case 'tool_call.failed':
+      return {
+        eventType: 'tool_call.failed',
+        payload: {
+          toolCallId: stringPayload(payload, 'tool_call_id') ?? 'tool-call:unknown',
+          ...(stringPayload(payload, 'tool_execution_id') ?? stringPayload(payload, 'tool_call_id')
+            ? { toolExecutionId: stringPayload(payload, 'tool_execution_id') ?? stringPayload(payload, 'tool_call_id') }
+            : {}),
+          toolName: stringPayload(payload, 'tool_name') ?? 'unknown_tool',
+          error: runtimeErrorFromPayload(payload, 'error', {
+            code: 'tool_execution_failed',
+            message: stringPayload(payload, 'message') ?? 'Tool execution failed.',
+            source: 'tool',
+          }),
+        },
+      };
+    case 'tool_result.created':
+      return {
+        eventType: 'tool_result.created',
+        payload: {
+          toolResultId: stringPayload(payload, 'tool_result_id') ?? `tool-result:${stringPayload(payload, 'tool_call_id') ?? 'unknown'}`,
+          toolCallId: stringPayload(payload, 'tool_call_id') ?? 'tool-call:unknown',
+          ...(stringPayload(payload, 'tool_execution_id') ?? stringPayload(payload, 'tool_call_id')
+            ? { toolExecutionId: stringPayload(payload, 'tool_execution_id') ?? stringPayload(payload, 'tool_call_id') }
+            : {}),
+          toolName: stringPayload(payload, 'tool_name') ?? 'unknown_tool',
+          kind: toolResultKind(payload),
+          ...(toolResultSummary(payload) ? { summary: toolResultSummary(payload) } : {}),
+        },
+      };
+    case 'approval.requested':
+      return {
+        eventType: 'approval.requested',
+        payload: {
+          approvalRequest: payload?.approval_request ?? {
+            approval_request_id: stringPayload(payload, 'approval_request_id') ?? 'approval:unknown',
+          },
+        },
+      };
+    case 'approval.resolved':
+      return {
+        eventType: 'approval.resolved',
+        payload: {
+          approvalRequestId: stringPayload(payload, 'approval_request_id') ?? 'approval:unknown',
+          decision: approvalDecision(payload),
+          scope: stringPayload(payload, 'scope') ?? 'once',
+          decidedAt: stringPayload(payload, 'decided_at') ?? new Date().toISOString(),
+        },
+      };
+    default:
+      return {
+        eventType: 'error.raised',
+        payload: {
+          error: runtimeError({
+            code: 'runtime_protocol_violation',
+            message: `Unsupported agent run event: ${type}`,
+            source: 'core',
+          }),
+        },
+      };
+  }
+}
+
+function stringPayload(payload: Record<string, unknown> | undefined, key: string): string | undefined {
+  const value = payload?.[key];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function jsonPayload(value: unknown): unknown {
+  if (value === undefined) return null;
+  try {
+    return JSON.parse(JSON.stringify(value)) as unknown;
+  } catch {
+    return String(value);
+  }
+}
+
+function runtimeErrorFromPayload(
+  payload: Record<string, unknown> | undefined,
+  key: string,
+  fallback: { code: RuntimeError['code']; message: string; source: RuntimeError['source'] },
+): RuntimeError {
+  const value = payload?.[key];
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return runtimeError({
+      code: runtimeErrorCode(record.code) ?? fallback.code,
+      message: typeof record.message === 'string' ? record.message : fallback.message,
+      source: fallback.source,
+      retryable: typeof record.retryable === 'boolean' ? record.retryable : undefined,
+    });
+  }
+  return runtimeError(fallback);
+}
+
+function runtimeError(input: {
+  code: RuntimeError['code'];
+  message: string;
+  source: RuntimeError['source'];
+  retryable?: boolean;
+}): RuntimeError {
+  return {
+    code: input.code,
+    message: input.message,
+    severity: 'error',
+    retryable: input.retryable ?? false,
+    source: input.source,
+  };
+}
+
+function runtimeErrorCode(value: unknown): RuntimeError['code'] | undefined {
+  const mapped = typeof value === 'string' ? value : undefined;
+  if (mapped === 'tool_call_failed') return 'tool_execution_failed';
+  if (mapped === 'model_call_failed') return 'provider_invalid_request';
+  if (mapped === 'runtime_protocol_violation') return 'runtime_protocol_violation';
+  if (mapped === 'context_failed') return 'context_budget_exceeded';
+  if (mapped === 'approval_failed') return 'approval_denied';
+  if (mapped === 'internal_error') return 'runtime_unknown';
+  if (mapped === 'cancel_failed') return 'runtime_cancelled';
+  return undefined;
+}
+
+function toolResultKind(payload: Record<string, unknown> | undefined): 'success' | 'failed' | 'policy_denied' | 'user_rejected' {
+  const status = stringPayload(payload, 'status');
+  if (status === 'completed' || status === 'succeeded') return 'success';
+  if (status === 'denied') return 'policy_denied';
+  if (status === 'cancelled') return 'user_rejected';
+  return 'failed';
+}
+
+function toolResultSummary(payload: Record<string, unknown> | undefined): string | undefined {
+  return stringPayload(payload, 'content')
+    ?? stringPayload(payload, 'summary')
+    ?? stringPayload(payload, 'message');
+}
+
+function approvalDecision(payload: Record<string, unknown> | undefined): 'approved' | 'denied' | 'expired' | 'cancelled' {
+  const decision = stringPayload(payload, 'decision');
+  if (decision === 'approved' || decision === 'denied' || decision === 'expired' || decision === 'cancelled') {
+    return decision;
+  }
+  return 'denied';
+}
+
+type RuntimeEventQueue = {
+  nextSequence(): number;
+  emit(event: RuntimeEvent): void;
   close(): void;
-  snapshot(): AgentRunEvent[];
-  events(): AsyncIterable<AgentRunEvent>;
+  snapshot(): RuntimeEvent[];
+  events(): AsyncIterable<RuntimeEvent>;
 };
 
 function createAgentRunEventQueue(
-  publish: (event: AgentRunEvent) => void,
-): AgentRunEventQueue {
-  const events: AgentRunEvent[] = [];
+  publish: (event: RuntimeEvent) => void,
+): RuntimeEventQueue {
+  const events: RuntimeEvent[] = [];
   const waiters: Array<() => void> = [];
   let closed = false;
+  let sequence = 0;
 
   return {
+    nextSequence() {
+      sequence += 1;
+      return sequence;
+    },
+
     emit(event) {
       if (closed) {
         return;

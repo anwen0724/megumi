@@ -1,17 +1,15 @@
 ﻿import { create } from 'zustand';
-import type { ChatStreamEvent } from '@megumi/coding-agent/projections/chat-stream';
-import type { TimelineMessage, TimelineUserMessage } from '@megumi/coding-agent/projections/timeline';
-import { createChatStreamBuffer, type ChatStreamBuffer } from './chat-stream-buffer';
-import { reduceChatStreamEvent } from './chat-stream-projection';
+import type { RuntimeEvent } from '@megumi/coding-agent/events';
+import { reduceRuntimeTimelineEvent, type TimelineMessage, type TimelineUserMessage } from '@megumi/coding-agent/projections/timeline';
 
-export type ChatStreamStatus = 'running' | 'completed' | 'failed' | 'cancelled' | 'needs_replay';
+export type RuntimeTimelineStatus = 'running' | 'completed' | 'failed' | 'cancelled' | 'needs_replay';
 
-export interface ChatStreamState {
+export interface RuntimeTimelineState {
   streamId: string;
   runId: string;
   streamKind: string;
   lastSeq: number;
-  status: ChatStreamStatus;
+  status: RuntimeTimelineStatus;
   needsReplay: boolean;
   gap?: {
     expectedSeq: number;
@@ -19,20 +17,20 @@ export interface ChatStreamState {
   };
 }
 
-export interface ChatStreamSessionState {
+export interface RuntimeTimelineSessionState {
   projectId: string;
   sessionId: string;
   messages: TimelineMessage[];
-  streamsById: Record<string, ChatStreamState>;
+  streamsById: Record<string, RuntimeTimelineState>;
 }
 
-export interface ChatStreamStoreState {
+export interface RuntimeTimelineStoreState {
   activeProjectId: string | null;
   activeSessionId: string | null;
   activeSessionKey: string | null;
-  sessions: Record<string, ChatStreamSessionState>;
+  sessions: Record<string, RuntimeTimelineSessionState>;
   setActiveSession(projectId: string | null, sessionId: string | null): void;
-  dispatch(event: ChatStreamEvent): void;
+  dispatch(event: RuntimeEvent): void;
   flushStream(projectId: string, sessionId: string, streamId: string): void;
   addPendingUserMessage(
     projectId: string,
@@ -43,7 +41,7 @@ export interface ChatStreamStoreState {
   reset(): void;
 }
 
-export function chatStreamSessionKey(projectId: string, sessionId: string): string {
+export function runtimeTimelineSessionKey(projectId: string, sessionId: string): string {
   return `${projectId}:${sessionId}`;
 }
 
@@ -53,7 +51,7 @@ function isActiveProcessItemStatus(status: string | undefined): boolean {
 
 function isLiveStreamingMessage(
   message: TimelineMessage,
-  streamsById: Record<string, ChatStreamState>,
+  streamsById: Record<string, RuntimeTimelineState>,
 ): boolean {
   if (message.role !== 'assistant') {
     return false;
@@ -194,7 +192,7 @@ function upsertPendingUserMessage(
 
 function isActiveRunMessage(
   message: TimelineMessage,
-  streamsById: Record<string, ChatStreamState>,
+  streamsById: Record<string, RuntimeTimelineState>,
 ): boolean {
   if (message.role !== 'assistant' && message.role !== 'user') {
     return false;
@@ -208,7 +206,7 @@ function isActiveRunMessage(
 function mergeCommittedMessages(
   current: TimelineMessage[],
   committed: TimelineMessage[],
-  streamsById: Record<string, ChatStreamState>,
+  streamsById: Record<string, RuntimeTimelineState>,
 ): TimelineMessage[] {
   const byIdentity = new Map<string, TimelineMessage>();
 
@@ -226,49 +224,38 @@ function mergeCommittedMessages(
   return [...byIdentity.values()].sort(compareTimelineMessages);
 }
 
-export const useChatStreamStore = create<ChatStreamStoreState>((set, get) => {
-  const buffers = new Map<string, ChatStreamBuffer>();
-
-  function sessionKey(event: Pick<ChatStreamEvent, 'projectId' | 'sessionId'>): string {
-    return chatStreamSessionKey(event.projectId, event.sessionId);
+export const useRuntimeTimelineStore = create<RuntimeTimelineStoreState>((set, get) => {
+  function eventProjectId(): string {
+    return get().activeProjectId ?? 'runtime';
   }
 
-  function streamKey(event: Pick<ChatStreamEvent, 'projectId' | 'sessionId' | 'streamId'>): string {
-    return `${sessionKey(event)}:${event.streamId}`;
+  function eventSessionId(event: RuntimeEvent): string {
+    return event.sessionId ?? get().activeSessionId ?? 'session:unknown';
   }
 
-  function ensureSession(event: ChatStreamEvent): ChatStreamSessionState {
-    const state = get();
-    const existing = state.sessions[sessionKey(event)];
-    if (existing) return existing;
-    return {
-      projectId: event.projectId,
-      sessionId: event.sessionId,
-      messages: [],
-      streamsById: {},
-    };
-  }
-
-  function applyProjectedEvent(event: ChatStreamEvent): void {
+  function applyProjectedEvent(event: RuntimeEvent): void {
     set((state) => {
-      const key = sessionKey(event);
+      const projectId = eventProjectId();
+      const sessionId = eventSessionId(event);
+      const key = runtimeTimelineSessionKey(projectId, sessionId);
       const session = state.sessions[key] ?? {
-        projectId: event.projectId,
-        sessionId: event.sessionId,
+        projectId,
+        sessionId,
         messages: [],
         streamsById: {},
       };
-      const currentStream = session.streamsById[event.streamId] ?? {
-        streamId: event.streamId,
-        runId: event.runId,
-        streamKind: event.streamKind,
+      const streamId = event.runId ?? event.eventId;
+      const currentStream = session.streamsById[streamId] ?? {
+        streamId,
+        runId: event.runId ?? streamId,
+        streamKind: 'main',
         lastSeq: 0,
         status: 'running' as const,
         needsReplay: false,
       };
-      const nextStream: ChatStreamState = {
+      const nextStream: RuntimeTimelineState = {
         ...currentStream,
-        lastSeq: Math.max(currentStream.lastSeq, event.seq),
+        lastSeq: Math.max(currentStream.lastSeq, event.sequence),
         status: statusFromEvent(event, currentStream.status),
       };
 
@@ -277,67 +264,15 @@ export const useChatStreamStore = create<ChatStreamStoreState>((set, get) => {
           ...state.sessions,
           [key]: {
             ...session,
-            messages: reduceChatStreamEvent(session.messages, event),
+            messages: reduceRuntimeTimelineEvent(session.messages, event),
             streamsById: {
               ...session.streamsById,
-              [event.streamId]: nextStream,
+              [streamId]: nextStream,
             },
           },
         },
       };
     });
-  }
-
-  function markGap(event: ChatStreamEvent, expectedSeq: number, receivedSeq: number): void {
-    set((state) => {
-      const key = sessionKey(event);
-      const session = state.sessions[key] ?? ensureSession(event);
-      const currentStream = session.streamsById[event.streamId] ?? {
-        streamId: event.streamId,
-        runId: event.runId,
-        streamKind: event.streamKind,
-        lastSeq: expectedSeq - 1,
-        status: 'running' as const,
-        needsReplay: false,
-      };
-      const nextStream: ChatStreamState = currentStream.needsReplay && currentStream.gap
-        ? currentStream
-        : {
-            ...currentStream,
-            status: 'needs_replay' as const,
-            needsReplay: true,
-            gap: { expectedSeq, receivedSeq },
-          };
-
-      return {
-        sessions: {
-          ...state.sessions,
-          [key]: {
-            ...session,
-            streamsById: {
-              ...session.streamsById,
-              [event.streamId]: nextStream,
-            },
-          },
-        },
-      };
-    });
-  }
-
-  function bufferFor(event: ChatStreamEvent): ChatStreamBuffer {
-    const key = streamKey(event);
-    const existing = buffers.get(key);
-    if (existing) return existing;
-
-    const buffer = createChatStreamBuffer({
-      applyEvent: applyProjectedEvent,
-      flushIntervalMs: 100,
-      onGap: ({ expectedSeq, receivedSeq, event: gapEvent }) => {
-        markGap(gapEvent, expectedSeq, receivedSeq);
-      },
-    });
-    buffers.set(key, buffer);
-    return buffer;
   }
 
   return {
@@ -349,22 +284,22 @@ export const useChatStreamStore = create<ChatStreamStoreState>((set, get) => {
       ? {
           activeProjectId,
           activeSessionId,
-          activeSessionKey: chatStreamSessionKey(activeProjectId, activeSessionId),
+          activeSessionKey: runtimeTimelineSessionKey(activeProjectId, activeSessionId),
         }
       : {
           activeProjectId: null,
           activeSessionId: null,
           activeSessionKey: null,
         }),
-    dispatch: (event) => {
-      bufferFor(event).handle(event);
-    },
+    dispatch: applyProjectedEvent,
     flushStream: (projectId, sessionId, streamId) => {
-      buffers.get(`${projectId}:${sessionId}:${streamId}`)?.flush();
+      void projectId;
+      void sessionId;
+      void streamId;
     },
     addPendingUserMessage: (projectId, sessionId, input) => {
       set((state) => {
-        const key = chatStreamSessionKey(projectId, sessionId);
+        const key = runtimeTimelineSessionKey(projectId, sessionId);
         const session = state.sessions[key] ?? {
           projectId,
           sessionId,
@@ -389,7 +324,7 @@ export const useChatStreamStore = create<ChatStreamStoreState>((set, get) => {
     },
     hydrateCommittedMessages: (projectId, sessionId, messages) => {
       set((state) => {
-        const key = chatStreamSessionKey(projectId, sessionId);
+        const key = runtimeTimelineSessionKey(projectId, sessionId);
         const session = state.sessions[key] ?? {
           projectId,
           sessionId,
@@ -409,10 +344,6 @@ export const useChatStreamStore = create<ChatStreamStoreState>((set, get) => {
       });
     },
     reset: () => {
-      for (const buffer of buffers.values()) {
-        buffer.dispose();
-      }
-      buffers.clear();
       set({
         activeProjectId: null,
         activeSessionId: null,
@@ -423,10 +354,10 @@ export const useChatStreamStore = create<ChatStreamStoreState>((set, get) => {
   };
 });
 
-function statusFromEvent(event: ChatStreamEvent, current: ChatStreamStatus): ChatStreamStatus {
+function statusFromEvent(event: RuntimeEvent, current: RuntimeTimelineStatus): RuntimeTimelineStatus {
   if (current === 'needs_replay') return current;
-  if (event.eventType === 'turn.completed') return 'completed';
-  if (event.eventType === 'turn.failed') return 'failed';
-  if (event.eventType === 'turn.cancelled') return 'cancelled';
+  if (event.eventType === 'run.completed') return 'completed';
+  if (event.eventType === 'run.failed') return 'failed';
+  if (event.eventType === 'run.cancelled') return 'cancelled';
   return 'running';
 }
