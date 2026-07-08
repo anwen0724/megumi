@@ -140,6 +140,7 @@ class DefaultAgentRunService implements AgentRunService {
   private readonly activeRunAbortControllers = new Map<string, AbortController>();
   private readonly activeModelCallByRun = new Map<string, string>();
   private readonly approvalContinuations = new Map<string, RunApprovalContinuation>();
+  private readonly nextRuntimeEventSequenceByRun = new Map<string, number>();
 
   constructor(private readonly options: CreateAgentRunServiceOptions) {
     if (!options.repository && !options.database) {
@@ -606,7 +607,7 @@ class DefaultAgentRunService implements AgentRunService {
       emit: (runtimeEvent) => {
         const event = createAgentRunRuntimeEvent({
           eventId: this.ids.event_id(),
-          sequence: queue.nextSequence(),
+          sequence: this.nextRuntimeEventSequence((runtimeEvent.run ?? run)?.run_id),
           now: this.clock.now(),
           event: {
             run,
@@ -661,6 +662,15 @@ class DefaultAgentRunService implements AgentRunService {
         });
       }
     });
+  }
+
+  private nextRuntimeEventSequence(runId: string | undefined): number {
+    if (!runId) {
+      return 1;
+    }
+    const nextSequence = (this.nextRuntimeEventSequenceByRun.get(runId) ?? 0) + 1;
+    this.nextRuntimeEventSequenceByRun.set(runId, nextSequence);
+    return nextSequence;
   }
 
   private async continueDeferredToolCallGroup(input: {
@@ -1148,7 +1158,6 @@ function emitToolCallTerminalEvent(
 }
 
 type RuntimeEventQueue = {
-  nextSequence(): number;
   emit(event: RuntimeEvent): void;
   close(): void;
   snapshot(): RuntimeEvent[];
@@ -1161,14 +1170,8 @@ function createAgentRunEventQueue(
   const events: RuntimeEvent[] = [];
   const waiters: Array<() => void> = [];
   let closed = false;
-  let sequence = 0;
 
   return {
-    nextSequence() {
-      sequence += 1;
-      return sequence;
-    },
-
     emit(event) {
       if (closed) {
         return;

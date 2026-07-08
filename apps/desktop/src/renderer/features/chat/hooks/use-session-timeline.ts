@@ -147,19 +147,19 @@ function createSessionMessageSendPayload(
 function shouldProcessRuntimeEvent(
   event: RuntimeEvent,
   activeRequestId: string | null,
-  processedSequences: Map<string, number>,
+  processedEventIdsByRun: Map<string, Set<string>>,
 ): boolean {
   if (!event.runId || event.requestId !== activeRequestId) {
     return false;
   }
 
-  const lastSequence = processedSequences.get(event.runId) ?? 0;
-
-  if (event.sequence <= lastSequence) {
+  const processedEventIds = processedEventIdsByRun.get(event.runId) ?? new Set<string>();
+  if (processedEventIds.has(event.eventId)) {
     return false;
   }
 
-  processedSequences.set(event.runId, event.sequence);
+  processedEventIds.add(event.eventId);
+  processedEventIdsByRun.set(event.runId, processedEventIds);
   return true;
 }
 
@@ -206,7 +206,7 @@ export function useSessionTimeline() {
   const activeTraceIdRef = useRef<string | null>(null);
   const runSessionIdRef = useRef<string | null>(null);
   const lastPayloadRef = useRef<ComposerSubmitPayload | null>(null);
-  const processedSequencesRef = useRef<Map<string, number>>(new Map());
+  const processedEventIdsByRunRef = useRef<Map<string, Set<string>>>(new Map());
 
   const updateBranchDraft = useCallback((draft: BranchDraftState | null) => {
     branchDraftRef.current = draft;
@@ -269,7 +269,7 @@ export function useSessionTimeline() {
       if (shouldProcessRuntimeEvent(
         event,
         activeRequestIdRef.current,
-        processedSequencesRef.current,
+        processedEventIdsByRunRef.current,
       )) {
         dispatchRuntimeEvent(event, { sessionId: runSessionIdRef.current });
       }
@@ -315,7 +315,7 @@ export function useSessionTimeline() {
     );
     activeRequestIdRef.current = request.requestId;
     activeTraceIdRef.current = request.context?.traceId ?? null;
-    processedSequencesRef.current.clear();
+    processedEventIdsByRunRef.current.clear();
 
     const state = useChatUiStore.getState();
     state.setAgentStatus('sending', target.sessionId ?? null);
@@ -379,7 +379,7 @@ export function useSessionTimeline() {
       activeRequestIdRef.current = null;
       activeTraceIdRef.current = null;
       runSessionIdRef.current = null;
-      processedSequencesRef.current.clear();
+      processedEventIdsByRunRef.current.clear();
     }
   }, []);
 

@@ -102,7 +102,7 @@ function statusFromEvent(event: RuntimeEvent): RendererRunStatus | null {
 }
 
 function upsertEvent(events: RuntimeEvent[], event: RuntimeEvent): RuntimeEvent[] {
-  if (events.some((item) => item.eventId === event.eventId || item.sequence === event.sequence)) {
+  if (events.some((item) => item.eventId === event.eventId)) {
     return events;
   }
   return [...events, event].sort((left, right) => left.sequence - right.sequence);

@@ -26,7 +26,7 @@ function hasRuntimeEventAlreadyBeenDispatched(event: RuntimeEvent): boolean {
   }
 
   const events = useRunStore.getState().eventsByRun[event.runId] ?? [];
-  return events.some((item) => item.eventId === event.eventId || item.sequence === event.sequence);
+  return events.some((item) => item.eventId === event.eventId);
 }
 
 function resolveEventSessionId(event: RuntimeEvent, options?: DispatchRuntimeEventOptions): string | null {
