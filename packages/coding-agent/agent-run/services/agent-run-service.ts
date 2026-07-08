@@ -147,8 +147,8 @@ class DefaultAgentRunService implements AgentRunService {
     };
     this.clock = options.clock ?? { now: () => new Date().toISOString() };
     this.limits = {
-      max_model_calls: options.limits?.max_model_calls ?? 12,
-      max_tool_rounds: options.limits?.max_tool_rounds ?? 6,
+      max_model_calls: options.limits?.max_model_calls ?? 80,
+      max_tool_rounds: options.limits?.max_tool_rounds ?? 50,
     };
     this.traceLogger = options.trace_logger ?? createNoopAgentRunTraceLogger();
     this.subscribeContextUsageSignals();
