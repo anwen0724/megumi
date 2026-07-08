@@ -9,7 +9,6 @@ import {
 import fs from 'fs-extra';
 import { electronDialogHost } from '../shell/electron-dialog-host';
 import { electronShellHost } from '../shell/electron-shell-host';
-import { createRuntimeEventBroadcaster } from '../shell/runtime-event-broadcaster';
 import { resolveElectronPersistenceMigrationsFolder } from '../shell/electron-persistence-migrations-host';
 
 export function composeDesktopMain() {
@@ -21,12 +20,10 @@ export function composeDesktopMain() {
     settingsPath: megumiHomePaths.settingsPath,
   };
   const migrationsFolder = resolveElectronPersistenceMigrationsFolder();
-  const runtimeEventBroadcaster = createRuntimeEventBroadcaster({ logger: runtimeLogger });
   const codingAgentHost = composeCodingAgentHostInterface({
     homePaths: codingAgentHomePaths,
     migrationsFolder,
     runtimeLogger,
-    runtimeEventSink: runtimeEventBroadcaster,
     directoryPicker: { chooseDirectory: () => electronDialogHost.chooseDirectory() },
   });
 
@@ -39,7 +36,6 @@ export function composeDesktopMain() {
   return {
     megumiHomePaths,
     runtimeLogger,
-    runtimeEventBroadcaster,
     workspace: { host: codingAgentHost, workspaceFilesService },
     chat: { host: codingAgentHost },
     settings: { host: codingAgentHost },

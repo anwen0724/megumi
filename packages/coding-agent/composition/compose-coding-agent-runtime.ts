@@ -107,7 +107,6 @@ export interface ComposeCodingAgentRuntimeOptions {
   summaryModelCallPort?: Parameters<typeof composeCodingAgentContext>[0]['summaryModelCallPort'];
   appSettingsProvider?: unknown;
   memorySettingsProvider?: MemorySettingsPort;
-  runtimeEventSink?: { publish(event: RuntimeEvent): void };
   workspaceChangeFooterProjector?: unknown;
   directoryPicker?: DirectoryPickerPort;
   projectFileSystem?: LocalWorkspaceServiceFileSystem;
@@ -290,7 +289,6 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     event_publisher: {
       publish(event) {
         recordRuntimeEvent(event);
-        options.runtimeEventSink?.publish(event);
       },
     },
   });

@@ -29,14 +29,10 @@ if (shouldQuitForSquirrelStartup()) {
       artifact: desktopMain.artifact,
     }),
     createWindow: () => {
-      const window = createMainWindow({
+      createMainWindow({
         devServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,
         rendererName: MAIN_WINDOW_VITE_NAME,
         dirname: __dirname,
-      });
-      desktopMain.runtimeEventBroadcaster.setWindow(window);
-      window.on('closed', () => {
-        desktopMain.runtimeEventBroadcaster.setWindow(undefined);
       });
     },
     dispose: () => desktopMain.dispose(),

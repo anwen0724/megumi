@@ -299,13 +299,12 @@ describe('main runtime logger composition', () => {
         settingsPath: `${mocks.homePath}/settings.json`,
       },
       runtimeLogger: processLogger,
-      runtimeEventSink: expect.objectContaining({
-        publish: expect.any(Function),
-        setWindow: expect.any(Function),
-      }),
       directoryPicker: expect.objectContaining({
         chooseDirectory: expect.any(Function),
       }),
+    }));
+    expect(mocks.composeCodingAgentHostInterface).not.toHaveBeenCalledWith(expect.objectContaining({
+      runtimeEventSink: expect.anything(),
     }));
     expect(mocks.createWorkspaceFilesService).toHaveBeenCalledWith(expect.objectContaining({
       fileSystem: expect.any(Object),
