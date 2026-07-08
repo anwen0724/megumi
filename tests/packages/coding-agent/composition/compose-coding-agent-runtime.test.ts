@@ -9,14 +9,8 @@ import { AssistantEventStream, type AiClient, type AssistantStreamEvent } from '
 import { collectEvents } from '../agent-run/agent-run-test-helpers';
 
 const tempDirectories: string[] = [];
-const originalTraceEnv = process.env.MEGUMI_AGENT_RUN_TRACE;
 
 afterEach(async () => {
-  if (originalTraceEnv === undefined) {
-    delete process.env.MEGUMI_AGENT_RUN_TRACE;
-  } else {
-    process.env.MEGUMI_AGENT_RUN_TRACE = originalTraceEnv;
-  }
   await Promise.all(tempDirectories.splice(0).map((directory) => rm(directory, {
     recursive: true,
     force: true,
@@ -24,26 +18,7 @@ afterEach(async () => {
 });
 
 describe('composeCodingAgentRuntime trace wiring', () => {
-  it('keeps Agent Run trace disabled by default', async () => {
-    delete process.env.MEGUMI_AGENT_RUN_TRACE;
-    const home = await createHome();
-    const runtime = composeCodingAgentRuntime({
-      homePaths: home.paths,
-      runtimeLogger: { warn() {} },
-      aiClient: fakeAiClient(),
-      settingsStorage: settingsStorage(),
-    });
-
-    try {
-      await startOneRun(runtime, home.workspaceRoot);
-      expect(existsSync(join(home.homePath, 'logs', 'agent-run-trace.jsonl'))).toBe(false);
-    } finally {
-      runtime.dispose();
-    }
-  });
-
-  it('writes Agent Run trace JSONL when explicitly enabled', async () => {
-    process.env.MEGUMI_AGENT_RUN_TRACE = '1';
+  it('writes Agent Run trace JSONL to the Megumi Home logs directory', async () => {
     const home = await createHome();
     const runtime = composeCodingAgentRuntime({
       homePaths: home.paths,
