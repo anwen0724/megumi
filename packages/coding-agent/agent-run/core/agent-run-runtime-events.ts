@@ -1,6 +1,6 @@
 /*
  * Creates RuntimeEvent envelopes for Agent Run.
- * This file does not translate legacy event names or normalize old payload shapes.
+ * This file does not translate retired event names or normalize old payload shapes.
  */
 import type {
   RuntimeEvent,

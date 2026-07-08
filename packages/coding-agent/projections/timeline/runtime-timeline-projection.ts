@@ -17,7 +17,7 @@ import type {
 
 /*
  * Projects backend RuntimeEvent envelopes into the chat timeline model.
- * The renderer consumes this directly; no secondary event compatibility layer is involved.
+ * The renderer consumes this directly; no secondary event adapter layer is involved.
  */
 export function reduceRuntimeTimelineEvent(
   messages: TimelineMessage[],

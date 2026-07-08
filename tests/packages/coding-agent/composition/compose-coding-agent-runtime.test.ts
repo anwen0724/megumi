@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { setTimeout as delay } from 'node:timers/promises';
 import { afterEach, describe, expect, it } from 'vitest';
 import { composeCodingAgentRuntime } from '@megumi/coding-agent/composition';
 import type { SettingsRaw } from '@megumi/coding-agent/settings';
@@ -11,10 +12,7 @@ import { collectEvents } from '../agent-run/agent-run-test-helpers';
 const tempDirectories: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(tempDirectories.splice(0).map((directory) => rm(directory, {
-    recursive: true,
-    force: true,
-  })));
+  await Promise.all(tempDirectories.splice(0).map((directory) => removeTempDirectory(directory)));
 });
 
 describe('composeCodingAgentRuntime trace wiring', () => {
@@ -180,6 +178,23 @@ async function waitFor(predicate: () => boolean | Promise<boolean>): Promise<voi
     }
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
+}
+
+async function removeTempDirectory(directory: string): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    try {
+      await rm(directory, {
+        recursive: true,
+        force: true,
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+      await delay(25);
+    }
+  }
+  throw lastError;
 }
 
 async function waitForTraceEvents(

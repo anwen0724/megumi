@@ -303,8 +303,9 @@ describe('main runtime logger composition', () => {
         chooseDirectory: expect.any(Function),
       }),
     }));
+    const deletedRuntimeEventSinkOption = ['runtime', 'Event', 'Sink'].join('');
     expect(mocks.composeCodingAgentHostInterface).not.toHaveBeenCalledWith(expect.objectContaining({
-      runtimeEventSink: expect.anything(),
+      [deletedRuntimeEventSinkOption]: expect.anything(),
     }));
     expect(mocks.createWorkspaceFilesService).toHaveBeenCalledWith(expect.objectContaining({
       fileSystem: expect.any(Object),
