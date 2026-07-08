@@ -344,6 +344,39 @@ const AssistantOutputCompletedPayloadSchema = z
   })
   .strict();
 
+const ModelCallStartedPayloadSchema = z
+  .object({
+    modelCallId: z.string().min(1),
+    providerId: z.string().min(1),
+    modelId: z.string().min(1),
+  })
+  .strict();
+
+const ModelCallTextDeltaPayloadSchema = z
+  .object({
+    modelCallId: z.string().min(1),
+    delta: z.string(),
+  })
+  .strict();
+
+const ModelCallCompletedPayloadSchema = z
+  .object({
+    modelCallId: z.string().min(1),
+    finishReason: z.string().min(1),
+    content: z.string().optional(),
+  })
+  .strict();
+
+const ModelCallToolCallPayloadSchema = z
+  .object({
+    modelCallId: z.string().min(1),
+    toolCallId: z.string().min(1),
+    providerToolCallId: z.string().min(1).optional(),
+    toolName: z.string().min(1),
+    input: JsonValueSchema,
+  })
+  .strict();
+
 const ModelStepStartedPayloadSchema = z
   .object({
     modelStepId: z.string().min(1),
@@ -470,13 +503,61 @@ const ToolInputValidationFailedPayloadSchema = z
   })
   .strict();
 
+const AgentRunToolCallRequestedPayloadSchema = z
+  .object({
+    modelCallId: z.string().min(1).optional(),
+    toolCallId: z.string().min(1),
+    toolName: z.string().min(1),
+    input: JsonValueSchema,
+  })
+  .strict();
+
+const AgentRunToolCallStartedPayloadSchema = z
+  .object({
+    toolCallId: z.string().min(1),
+    toolExecutionId: z.string().min(1),
+    toolName: z.string().min(1),
+    input: JsonValueSchema,
+  })
+  .strict();
+
+const AgentRunToolCallCompletedPayloadSchema = z
+  .object({
+    toolCallId: z.string().min(1),
+    toolExecutionId: z.string().min(1).optional(),
+    toolName: z.string().min(1),
+  })
+  .strict();
+
+const AgentRunToolCallFailedPayloadSchema = z
+  .object({
+    toolCallId: z.string().min(1),
+    toolExecutionId: z.string().min(1).optional(),
+    toolName: z.string().min(1),
+    error: RuntimeErrorSchema,
+  })
+  .strict();
+
+const AgentRunToolResultCreatedPayloadSchema = z
+  .object({
+    toolResultId: z.string().min(1),
+    toolCallId: z.string().min(1),
+    toolExecutionId: z.string().min(1).optional(),
+    toolName: z.string().min(1),
+    kind: z.enum(['success', 'failed', 'policy_denied', 'user_rejected']),
+    summary: z.string().optional(),
+  })
+  .strict();
+
 const ToolResultCreatedPayloadSchema = z
   .object({
     toolResultId: z.string().min(1),
     toolCallId: z.string().min(1),
     toolExecutionId: z.string().min(1).optional(),
+    toolName: z.string().min(1).optional(),
     kind: z.enum([
       'success',
+      'failed',
       'tool_error',
       'policy_denied',
       'user_rejected',
@@ -538,7 +619,13 @@ const ToolRegistryModelVisibleToolsDerivedPayloadSchema = z
   })
   .strict();
 
-const RunCompletedPayloadSchema = z.object({ usage: ChatUsageSchema.optional() }).strict();
+const RunCompletedPayloadSchema = z
+  .object({
+    assistantMessageId: z.string().min(1).optional(),
+    elapsedMs: z.number().int().nonnegative().optional(),
+    usage: ChatUsageSchema.optional(),
+  })
+  .strict();
 const RunFailedPayloadSchema = z.object({ error: RuntimeErrorSchema }).strict();
 const RunCancelledPayloadSchema = z
   .object({
@@ -1049,6 +1136,10 @@ export const AssistantOutputCompletedEventSchema = eventSchema(
   'assistant.output.completed',
   AssistantOutputCompletedPayloadSchema,
 );
+export const ModelCallStartedEventSchema = eventSchema('model_call.started', ModelCallStartedPayloadSchema);
+export const ModelCallTextDeltaEventSchema = eventSchema('model_call.text_delta', ModelCallTextDeltaPayloadSchema);
+export const ModelCallCompletedEventSchema = eventSchema('model_call.completed', ModelCallCompletedPayloadSchema);
+export const ModelCallToolCallEventSchema = eventSchema('model_call.tool_call', ModelCallToolCallPayloadSchema);
 export const ModelStepStartedEventSchema = eventSchema('model.step.started', ModelStepStartedPayloadSchema);
 export const ModelOutputDeltaEventSchema = eventSchema('model.output.delta', ModelOutputDeltaPayloadSchema);
 export const ModelStepProviderStateRecordedEventSchema = eventSchema(
@@ -1079,6 +1170,11 @@ export const ToolInputValidationFailedEventSchema = eventSchema(
   'tool.input.validation_failed',
   ToolInputValidationFailedPayloadSchema,
 );
+export const AgentRunToolCallRequestedEventSchema = eventSchema('tool_call.requested', AgentRunToolCallRequestedPayloadSchema);
+export const AgentRunToolCallStartedEventSchema = eventSchema('tool_call.started', AgentRunToolCallStartedPayloadSchema);
+export const AgentRunToolCallCompletedEventSchema = eventSchema('tool_call.completed', AgentRunToolCallCompletedPayloadSchema);
+export const AgentRunToolCallFailedEventSchema = eventSchema('tool_call.failed', AgentRunToolCallFailedPayloadSchema);
+export const AgentRunToolResultCreatedEventSchema = eventSchema('tool_result.created', AgentRunToolResultCreatedPayloadSchema);
 export const ToolResultCreatedEventSchema = eventSchema('tool.result.created', ToolResultCreatedPayloadSchema);
 export const ToolRegistrySourcesEnsuredEventSchema = eventSchema(
   'tool.registry.sources.ensured',
@@ -1247,6 +1343,10 @@ export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   ErrorRaisedEventSchema,
   AssistantOutputDeltaEventSchema,
   AssistantOutputCompletedEventSchema,
+  ModelCallStartedEventSchema,
+  ModelCallTextDeltaEventSchema,
+  ModelCallCompletedEventSchema,
+  ModelCallToolCallEventSchema,
   ModelStepStartedEventSchema,
   ModelOutputDeltaEventSchema,
   ModelStepProviderStateRecordedEventSchema,
@@ -1259,6 +1359,11 @@ export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   ToolCallResolvedEventSchema,
   ToolCallResolutionFailedEventSchema,
   ToolInputValidationFailedEventSchema,
+  AgentRunToolCallRequestedEventSchema,
+  AgentRunToolCallStartedEventSchema,
+  AgentRunToolCallCompletedEventSchema,
+  AgentRunToolCallFailedEventSchema,
+  AgentRunToolResultCreatedEventSchema,
   ToolResultCreatedEventSchema,
   ToolRegistrySourcesEnsuredEventSchema,
   ToolRegistrySnapshotCreatedEventSchema,

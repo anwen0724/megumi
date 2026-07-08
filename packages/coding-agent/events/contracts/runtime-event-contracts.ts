@@ -87,6 +87,10 @@ export const RUNTIME_EVENT_TYPES = [
   'error.raised',
   'assistant.output.delta',
   'assistant.output.completed',
+  'model_call.started',
+  'model_call.text_delta',
+  'model_call.completed',
+  'model_call.tool_call',
   'model.step.started',
   'model.output.delta',
   'model.step.provider_state.recorded',
@@ -95,10 +99,15 @@ export const RUNTIME_EVENT_TYPES = [
   'model.thinking.completed',
   'model.tool_call.detected',
   'model.step.completed',
+  'tool_call.requested',
+  'tool_call.started',
+  'tool_call.completed',
+  'tool_call.failed',
   'tool.call.created',
   'tool.call.resolved',
   'tool.call.resolution_failed',
   'tool.input.validation_failed',
+  'tool_result.created',
   'tool.result.created',
   'tool.registry.sources.ensured',
   'tool.registry.snapshot.created',
@@ -360,6 +369,31 @@ export interface AssistantOutputCompletedPayload {
   usage?: ChatTokenUsagePayload;
 }
 
+export interface ModelCallStartedPayload {
+  modelCallId: string;
+  providerId: string;
+  modelId: string;
+}
+
+export interface ModelCallTextDeltaPayload {
+  modelCallId: string;
+  delta: string;
+}
+
+export interface ModelCallCompletedPayload {
+  modelCallId: string;
+  finishReason: 'stop' | 'tool_calls' | 'cancelled' | 'failed' | string;
+  content?: string;
+}
+
+export interface ModelCallToolCallPayload {
+  modelCallId: string;
+  toolCallId: string;
+  providerToolCallId?: string;
+  toolName: string;
+  input: JsonValue;
+}
+
 export interface ModelStepStartedPayload {
   modelStepId: string;
   providerId: string;
@@ -450,12 +484,50 @@ export interface ToolInputValidationFailedPayload {
   sourceIdentity: RuntimeToolSourceIdentity;
 }
 
+export interface ToolCallRequestedPayload {
+  modelCallId?: string;
+  toolCallId: string;
+  toolName: string;
+  input: JsonValue;
+}
+
+export interface ToolCallStartedPayload {
+  toolCallId: string;
+  toolExecutionId: string;
+  toolName: string;
+  input: JsonValue;
+}
+
+export interface ToolCallCompletedPayload {
+  toolCallId: string;
+  toolExecutionId?: string;
+  toolName: string;
+}
+
+export interface ToolCallFailedPayload {
+  toolCallId: string;
+  toolExecutionId?: string;
+  toolName: string;
+  error: RuntimeError;
+}
+
+export interface AgentRunToolResultCreatedPayload {
+  toolResultId: string;
+  toolCallId: string;
+  toolExecutionId?: string;
+  toolName: string;
+  kind: 'success' | 'failed' | 'policy_denied' | 'user_rejected';
+  summary?: string;
+}
+
 export interface ToolResultCreatedPayload {
   toolResultId: string;
   toolCallId: string;
   toolExecutionId?: string;
+  toolName?: string;
   kind:
     | 'success'
+    | 'failed'
     | 'tool_error'
     | 'policy_denied'
     | 'user_rejected'
@@ -508,6 +580,8 @@ export interface ToolRegistryModelVisibleToolsDerivedPayload {
 }
 
 export interface RunCompletedPayload {
+  assistantMessageId?: string;
+  elapsedMs?: number;
   usage?: ChatTokenUsagePayload;
 }
 
@@ -877,6 +951,10 @@ export type RuntimeEventPayloadByType = {
   'error.raised': ErrorRaisedPayload;
   'assistant.output.delta': AssistantOutputDeltaPayload;
   'assistant.output.completed': AssistantOutputCompletedPayload;
+  'model_call.started': ModelCallStartedPayload;
+  'model_call.text_delta': ModelCallTextDeltaPayload;
+  'model_call.completed': ModelCallCompletedPayload;
+  'model_call.tool_call': ModelCallToolCallPayload;
   'model.step.started': ModelStepStartedPayload;
   'model.output.delta': ModelOutputDeltaPayload;
   'model.step.provider_state.recorded': ModelStepProviderStateRecordedPayload;
@@ -885,10 +963,15 @@ export type RuntimeEventPayloadByType = {
   'model.thinking.completed': ModelThinkingCompletedPayload;
   'model.tool_call.detected': ModelToolCallDetectedPayload;
   'model.step.completed': ModelStepCompletedPayload;
+  'tool_call.requested': ToolCallRequestedPayload;
+  'tool_call.started': ToolCallStartedPayload;
+  'tool_call.completed': ToolCallCompletedPayload;
+  'tool_call.failed': ToolCallFailedPayload;
   'tool.call.created': ToolCallCreatedPayload;
   'tool.call.resolved': ToolCallResolvedPayload;
   'tool.call.resolution_failed': ToolCallResolutionFailedPayload;
   'tool.input.validation_failed': ToolInputValidationFailedPayload;
+  'tool_result.created': AgentRunToolResultCreatedPayload;
   'tool.result.created': ToolResultCreatedPayload;
   'tool.registry.sources.ensured': ToolRegistrySourcesEnsuredPayload;
   'tool.registry.snapshot.created': ToolRegistrySnapshotCreatedPayload;
