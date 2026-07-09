@@ -75,7 +75,7 @@ export function createWorkspaceChangeFooterProjectorService(
     projectRunFooter(run_id) {
       const changeSets = options.workspaceChanges
         .listChangeSummaries({ by: 'run', run_id }).summaries
-        .filter((summary) => summary.change_set.status === 'finalized' && summary.change_set.changed_file_count > 0)
+        .filter((summary) => summary.change_set.changed_file_count > 0)
         .map(projectChangeSet)
         .filter((changeSet): changeSet is ProjectedChangeSet => Boolean(changeSet));
 

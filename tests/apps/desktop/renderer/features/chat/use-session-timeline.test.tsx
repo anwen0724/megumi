@@ -10,6 +10,11 @@ import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store
 import { useSessionTimeline } from '@megumi/desktop/renderer/features/chat/hooks/use-session-timeline';
 import { useRuntimeTimelineStore } from '@megumi/desktop/renderer/features/runtime-timeline';
 import { useToastStore } from '@megumi/desktop/renderer/shared/ui';
+import { useSessionHistoryHydration } from '@megumi/desktop/renderer/features/session-history/use-session-history-hydration';
+
+vi.mock('@megumi/desktop/renderer/features/session-history/use-session-history-hydration', () => ({
+  useSessionHistoryHydration: vi.fn(),
+}));
 
 const createdAt = '2026-05-17T00:00:00.000Z';
 
@@ -37,9 +42,15 @@ function runtimeEvent(
 
 describe('useSessionTimeline', () => {
   let runtimeEventCallback: ((event: RuntimeEvent) => void) | undefined;
+  let hydrateSessionTimeline: ReturnType<typeof vi.fn<(sessionId: string) => Promise<void>>>;
 
   beforeEach(() => {
     runtimeEventCallback = undefined;
+    hydrateSessionTimeline = vi.fn<(sessionId: string) => Promise<void>>().mockResolvedValue(undefined);
+    vi.mocked(useSessionHistoryHydration).mockReturnValue({
+      hydrateSessions: vi.fn(),
+      hydrateSessionTimeline,
+    });
     useToastStore.getState().clearToasts();
     useRuntimeTimelineStore.getState().reset();
     useRunStore.getState().resetRuns();
@@ -155,6 +166,7 @@ describe('useSessionTimeline', () => {
       agentStatus: 'idle',
       lastError: null,
     });
+    expect(hydrateSessionTimeline).toHaveBeenCalledWith('session-1');
   });
 
   it('cancels a hydrated active run from the run store', async () => {

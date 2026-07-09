@@ -13,6 +13,7 @@ import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-req
 import { showToast } from '../../../shared/ui';
 import type { ComposerSubmitPayload } from '../components/Composer';
 import { localSessionFromPersistedSession } from '../../session-history/session-history-mappers';
+import { useSessionHistoryHydration } from '../../session-history/use-session-history-hydration';
 
 // Coordinates chat timeline submission, optimistic user messages, and runtime
 // event routing for the active session. It forwards typed context hints only.
@@ -215,6 +216,7 @@ export function useSessionTimeline() {
   const runSessionIdRef = useRef<string | null>(null);
   const lastPayloadRef = useRef<ComposerSubmitPayload | null>(null);
   const processedEventIdsByRunRef = useRef<Map<string, Set<string>>>(new Map());
+  const { hydrateSessionTimeline } = useSessionHistoryHydration();
 
   const updateBranchDraft = useCallback((draft: BranchDraftState | null) => {
     branchDraftRef.current = draft;
@@ -281,13 +283,17 @@ export function useSessionTimeline() {
       )) {
         dispatchRuntimeEvent(event, { sessionId: runSessionIdRef.current });
         if (isTerminalRunEvent(event)) {
+          const terminalSessionId = runSessionIdRef.current ?? event.sessionId ?? null;
+          if (terminalSessionId) {
+            void hydrateSessionTimeline(terminalSessionId);
+          }
           activeRunIdRef.current = null;
           activeTraceIdRef.current = null;
           runSessionIdRef.current = null;
         }
       }
     });
-  }, []);
+  }, [hydrateSessionTimeline]);
 
   const sendSessionMessage = useCallback(async (payload: ComposerSubmitPayload): Promise<boolean> => {
     lastPayloadRef.current = payload;

@@ -427,7 +427,10 @@ export const useRuntimeTimelineStore = create<RuntimeTimelineStoreState>((set, g
         return {
           sessions: {
             ...state.sessions,
-            [key]: hydratedSession,
+            [key]: {
+              ...hydratedSession,
+              messages: [...hydratedSession.messages].sort(compareTimelineMessages),
+            },
           },
         };
       });

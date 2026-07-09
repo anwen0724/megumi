@@ -129,6 +129,90 @@ describe('runtime timeline store', () => {
     });
   });
 
+  it('sorts runtime-only assistant messages with their original user turn during hydration', () => {
+    const store = useRuntimeTimelineStore.getState();
+
+    store.hydrateSessionTimeline('project-1', 'session-1', [
+      {
+        messageId: 'user-old',
+        role: 'user',
+        projectId: 'project-1',
+        sessionId: 'session-1',
+        runId: 'run-old',
+        createdAt: '2026-07-09T07:01:00.000Z',
+        blocks: [{
+          blockId: 'user-text-old',
+          kind: 'user_text',
+          text: '用 ts 代码写一个 hollow world 吧',
+          format: 'plain',
+        }],
+      },
+      {
+        messageId: 'user-new',
+        role: 'user',
+        projectId: 'project-1',
+        sessionId: 'session-1',
+        runId: 'run-new',
+        createdAt: '2026-07-09T11:12:00.000Z',
+        blocks: [{
+          blockId: 'user-text-new',
+          kind: 'user_text',
+          text: '我的意思是直接输出代码',
+          format: 'plain',
+        }],
+      },
+      {
+        messageId: 'assistant-new',
+        role: 'assistant',
+        projectId: 'project-1',
+        sessionId: 'session-1',
+        runId: 'run-new',
+        createdAt: '2026-07-09T11:12:04.000Z',
+        blocks: [{
+          blockId: 'answer-new',
+          kind: 'answer_text',
+          runId: 'run-new',
+          textId: 'text-new',
+          status: 'completed',
+          text: '直接给你代码。',
+          format: 'markdown',
+        }],
+      },
+    ], [
+      runtimeEvent('run.started', 1, {}, {
+        runId: 'run-old',
+        eventId: 'event-old-run-started',
+        createdAt: '2026-07-09T07:01:01.000Z',
+      }),
+      runtimeEvent('model_call.text_delta', 2, {
+        modelCallId: 'model-call-old',
+        delta: '哈哈，hollow world。',
+      }, {
+        runId: 'run-old',
+        eventId: 'event-old-text',
+        createdAt: '2026-07-09T07:01:02.000Z',
+      }),
+      runtimeEvent('run.cancelled', 3, {
+        reason: 'runtime_started_cleanup',
+      }, {
+        runId: 'run-old',
+        eventId: 'event-old-cancelled',
+        createdAt: '2026-07-09T07:01:03.000Z',
+      }),
+    ]);
+
+    const session = useRuntimeTimelineStore.getState().sessions['project-1:session-1'];
+
+    expect(session?.messages.map((message) =>
+      message.role === 'separator' ? `separator:${message.messageId}` : `${message.role}:${message.runId}`,
+    )).toEqual([
+      'user:run-old',
+      'assistant:run-old',
+      'user:run-new',
+      'assistant:run-new',
+    ]);
+  });
+
   it('keeps committed answer text authoritative while replaying runtime process events', () => {
     const store = useRuntimeTimelineStore.getState();
     const committedAssistant: TimelineAssistantMessage = {

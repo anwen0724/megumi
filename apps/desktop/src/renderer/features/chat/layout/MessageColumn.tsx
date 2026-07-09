@@ -1,24 +1,8 @@
 ﻿import type { ReactNode } from 'react';
 import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/coding-agent/projections/timeline';
-import type { WorkspaceChangeFooterFact } from '@megumi/coding-agent/projections/workspace/workspace-change-footer-projector';
 import { TimelineMessage } from '../components/TimelineMessage';
 import { WorkspaceChangeFooter } from '../components/WorkspaceChangeFooter';
 import { BottomSpacer } from './BottomSpacer';
-
-type LegacyWorkspaceChangeFooterFact = {
-  runId: string;
-  sessionId: string;
-  updatedAt: string;
-  changeSets: Array<{
-    changeSetId: string;
-    changedFileCount: number;
-    files: Array<{
-      changedFileId: string;
-      projectPath: string;
-      changeKind: string;
-    }>;
-  }>;
-};
 
 interface MessageColumnProps {
   timelineMessages: CanonicalTimelineMessage[];
@@ -28,7 +12,6 @@ interface MessageColumnProps {
   onRerunMessage: (message: CanonicalTimelineMessage) => void;
   onOpenWorkspaceChangedFile: (projectPath: string) => void;
 }
-
 export function MessageColumn({
   timelineMessages,
   bottomSpacerHeight,
@@ -44,7 +27,7 @@ export function MessageColumn({
 
     return message.workspaceChangeFooter ? (
       <WorkspaceChangeFooter
-        footer={projectWorkspaceChangeFooter(message.workspaceChangeFooter as LegacyWorkspaceChangeFooterFact)}
+        footer={message.workspaceChangeFooter}
         onOpenFile={onOpenWorkspaceChangedFile}
       />
     ) : null;
@@ -67,23 +50,4 @@ export function MessageColumn({
       </div>
     </div>
   );
-}
-
-function projectWorkspaceChangeFooter(
-  footer: LegacyWorkspaceChangeFooterFact,
-): WorkspaceChangeFooterFact {
-  return {
-    runId: footer.runId,
-    sessionId: footer.sessionId,
-    updatedAt: footer.updatedAt,
-    changeSets: footer.changeSets.map((changeSet) => ({
-      changeSetId: changeSet.changeSetId,
-      changedFileCount: changeSet.changedFileCount,
-      files: changeSet.files.map((file) => ({
-        changedFileId: file.changedFileId,
-        workspacePath: file.projectPath,
-        changeKind: file.changeKind,
-      })),
-    })),
-  };
 }

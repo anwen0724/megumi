@@ -13,10 +13,10 @@ import {
   type AgentRunService,
   type ModelCallService,
 } from '../agent-run';
-import { createAgentRunRepository } from '../agent-run/repositories/agent-run-repository';
+import { createAgentRunRepository, type AgentRunRepository } from '../agent-run/repositories/agent-run-repository';
 import { createCommandService, type CommandService } from '../commands';
 import { createInputService, type InputService } from '../input';
-import { createSessionService, type SessionService } from '../session';
+import { createSessionService, type SessionMessageWithAttachments, type SessionService } from '../session';
 import { SessionRepository as SessionV2Repository } from '../session/repositories/session-repository';
 import {
   createCodingAgentHostInterface,
@@ -71,6 +71,10 @@ import {
 } from '@megumi/ai';
 import type { RuntimeEvent } from '../events';
 import type { TimelineMessage } from '../projections/timeline';
+import {
+  createWorkspaceChangeFooterProjectorService,
+  type WorkspaceChangeFooterProjectorService,
+} from '../projections/workspace/workspace-change-footer-projector';
 import { WorkspaceChangeRepository } from '../workspace/repositories/workspace-change-repository';
 import { WorkspaceRepository } from '../workspace/repositories/workspace-repository';
 
@@ -179,6 +183,10 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     path_policy: workspacePathPolicyService,
     file_system: workspaceFileSystem,
   });
+  const workspaceChangeFooterProjector = resolveWorkspaceChangeFooterProjector(
+    options.workspaceChangeFooterProjector,
+    workspaceChangeService,
+  );
   const permissionService = createPermissionService({
     settings_service: {
       addPermissionRule(request) {
@@ -276,6 +284,15 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     context_usage_signal_bus: contextRuntime.contextUsageSignalBus,
     context_usage_monitor: contextRuntime.contextUsageMonitor,
     context_compaction_service: contextRuntime.contextCompactionService,
+    event_publisher: {
+      publish(event) {
+        finalizeWorkspaceChangesForTerminalRunEvent({
+          event,
+          agentRuns: agentRunRepository,
+          workspaceChanges: workspaceChangeService,
+        });
+      },
+    },
   });
   const cleanupResult = agentRunService.cleanupInterruptedRuns({ reason: 'runtime_started' });
   void Promise.resolve(cleanupResult).then((result) => {
@@ -304,7 +321,11 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     sessionBranchService: createUnsupportedSessionBranchService(),
     compatibility: {
       listWorkspaceIds: () => workspaceRepository.listWorkspaces().map((workspace) => workspace.workspace_id),
-      listTimelineMessagesBySession: (payload) => listSessionTimelineMessages(sessionService, payload),
+      listTimelineMessagesBySession: (payload) => listSessionTimelineMessages(
+        sessionService,
+        workspaceChangeFooterProjector,
+        payload,
+      ),
       listRunsBySession: (sessionId) => agentRunRepository.listRunsBySession(sessionId),
       listRuntimeEventsByRun: (runId) => agentRunRepository.listRuntimeEventsByRun(runId),
     },
@@ -534,6 +555,7 @@ function createContextSummaryModelCallPort(input: {
 
 function listSessionTimelineMessages(
   sessionService: SessionService,
+  workspaceChangeFooterProjector: WorkspaceChangeFooterProjectorService,
   payload: Parameters<CodingAgentRuntime['compatibility']['listTimelineMessagesBySession']>[0],
 ): ReturnType<CodingAgentRuntime['compatibility']['listTimelineMessagesBySession']> {
   const result = sessionService.listMessages({
@@ -545,19 +567,35 @@ function listSessionTimelineMessages(
   }
 
   return {
-    messages: result.messages.map((item): TimelineMessage => {
+    messages: projectSessionTimelineMessages({
+      projectId: payload.projectId,
+      messages: result.messages,
+      workspaceChangeFooterProjector,
+    }),
+    diagnostics: [],
+  };
+}
+
+export function projectSessionTimelineMessages(input: {
+  projectId: string;
+  messages: SessionMessageWithAttachments[];
+  workspaceChangeFooterProjector?: Pick<WorkspaceChangeFooterProjectorService, 'projectRunFooter'>;
+}): TimelineMessage[] {
+  return input.messages.map((item): TimelineMessage => {
       const message = item.message;
       const createdAt = message.created_at;
       if (message.role === 'assistant') {
         const runId = message.run_id ?? `run:${message.message_id}`;
+        const workspaceChangeFooter = input.workspaceChangeFooterProjector?.projectRunFooter(runId);
         return {
           messageId: message.message_id,
           role: 'assistant',
-          projectId: payload.projectId,
+          projectId: input.projectId,
           sessionId: message.session_id,
           runId,
           createdAt,
           ...(message.completed_at ? { updatedAt: message.completed_at } : {}),
+          ...(workspaceChangeFooter ? { workspaceChangeFooter } : {}),
           blocks: [{
             blockId: `answer:${message.message_id}`,
             kind: 'answer_text',
@@ -575,7 +613,7 @@ function listSessionTimelineMessages(
       return {
         messageId: message.message_id,
         role: 'user',
-        projectId: payload.projectId,
+        projectId: input.projectId,
         sessionId: message.session_id,
         ...(message.run_id ? { runId: message.run_id } : {}),
         createdAt,
@@ -589,9 +627,55 @@ function listSessionTimelineMessages(
           ...(message.completed_at ? { updatedAt: message.completed_at } : {}),
         }],
       };
-    }),
-    diagnostics: [],
-  };
+    });
+}
+
+export function finalizeWorkspaceChangesForTerminalRunEvent(input: {
+  event: RuntimeEvent;
+  agentRuns: Pick<AgentRunRepository, 'getRun'>;
+  workspaceChanges: Pick<WorkspaceChangeService, 'finalizeChangeSet'>;
+}): void {
+  if (!isTerminalRunEvent(input.event) || !input.event.runId) {
+    return;
+  }
+
+  const run = input.agentRuns.getRun(input.event.runId);
+  if (!run) {
+    return;
+  }
+
+  input.workspaceChanges.finalizeChangeSet({
+    workspace_id: run.workspace_id,
+    session_id: run.session_id,
+    run_id: run.run_id,
+    finalized_at: input.event.createdAt,
+  });
+}
+
+function resolveWorkspaceChangeFooterProjector(
+  projector: unknown,
+  workspaceChangeService: WorkspaceChangeService,
+): WorkspaceChangeFooterProjectorService {
+  if (isWorkspaceChangeFooterProjectorService(projector)) {
+    return projector;
+  }
+
+  return createWorkspaceChangeFooterProjectorService({
+    workspaceChanges: workspaceChangeService,
+  });
+}
+
+function isWorkspaceChangeFooterProjectorService(value: unknown): value is WorkspaceChangeFooterProjectorService {
+  return typeof value === 'object'
+    && value !== null
+    && 'projectRunFooter' in value
+    && typeof value.projectRunFooter === 'function';
+}
+
+function isTerminalRunEvent(event: RuntimeEvent): boolean {
+  return event.eventType === 'run.completed' ||
+    event.eventType === 'run.failed' ||
+    event.eventType === 'run.cancelled';
 }
 
 function payloadRecord(payload: object): Record<string, unknown> {

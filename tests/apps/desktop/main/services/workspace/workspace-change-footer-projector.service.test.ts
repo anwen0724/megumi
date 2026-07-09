@@ -66,7 +66,7 @@ describe('WorkspaceChangeFooterProjectorService', () => {
     expect(JSON.stringify(footer)).not.toContain('hash');
   });
 
-  it('omits runs without finalized changed files', () => {
+  it('projects changed-file facts even when an older change set was not finalized', () => {
     const service = createWorkspaceChangeFooterProjectorService({
       workspaceChanges: {
         listChangeSummaries: vi.fn(() => ({
@@ -91,7 +91,13 @@ describe('WorkspaceChangeFooterProjectorService', () => {
       },
     });
 
-    expect(service.projectRunFooter('run-1')).toBeUndefined();
+    expect(service.projectRunFooter('run-1')).toMatchObject({
+      runId: 'run-1',
+      changeSets: [{
+        changeSetId: 'workspace-change-set-draft',
+        changedFileCount: 1,
+      }],
+    });
   });
 });
 
