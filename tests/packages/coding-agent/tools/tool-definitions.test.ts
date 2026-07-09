@@ -37,4 +37,20 @@ describe('tool definitions', () => {
       expect(definition.inputSchema).toMatchObject({ type: 'object' });
     }
   });
+
+  it('allows run_command to carry internal skill script metadata', () => {
+    const runCommand = listBuiltInToolDefinitions()
+      .find((definition) => definition.name === 'run_command');
+
+    expect(runCommand?.sideEffect).toBe('execute_command');
+    expect(runCommand?.capabilities).toContain('command_run');
+    expect(runCommand?.inputSchema).toMatchObject({
+      properties: {
+        metadata: {
+          type: 'object',
+          additionalProperties: true,
+        },
+      },
+    });
+  });
 });

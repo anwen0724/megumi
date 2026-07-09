@@ -250,6 +250,11 @@ const runCommandDefinition: ToolDefinition = {
         enum: ['default', 'minimal', 'none'],
         description: 'Environment exposure policy requested for the command.',
       },
+      metadata: {
+        type: 'object',
+        description: 'Internal execution metadata, for example a prepared skill script source.',
+        additionalProperties: true,
+      },
     },
     required: ['command'],
     additionalProperties: false,

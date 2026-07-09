@@ -2,6 +2,7 @@
 import { spawn as nodeSpawn } from 'node:child_process';
 import type { RawToolResult } from '../contracts/tool-contracts';
 import type { SkillService } from '../../skills';
+import type { JsonObject } from '../../shared-json';
 
 export interface WorkspaceFileAccess {
   readFile(input: {
@@ -339,6 +340,7 @@ async function runCommand(
       truncated: Buffer.byteLength(result.stdout + result.stderr, 'utf8') > 40_000,
     },
     isError: result.exitCode !== 0,
+    ...(isJsonObject(record.metadata) ? { metadata: record.metadata } : {}),
   };
 }
 
@@ -358,6 +360,10 @@ function inputRecord(input: unknown): Record<string, unknown> {
     throw new Error('Tool input must be an object');
   }
   return input as Record<string, unknown>;
+}
+
+function isJsonObject(value: unknown): value is JsonObject {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
 function requireString(input: Record<string, unknown>, key: string): string {
