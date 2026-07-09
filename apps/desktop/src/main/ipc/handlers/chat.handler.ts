@@ -17,6 +17,7 @@ import {
   SessionCreateRequestSchema,
   SessionListRequestSchema,
   SessionMessageCancelRequestSchema,
+  SessionContextUsageGetRequestSchema,
   SessionMessageListRequestSchema,
   SessionMessageSendRequestSchema,
   SessionTimelineListRequestSchema,
@@ -27,6 +28,7 @@ import {
   type SessionBranchDraftCreatePayload,
   type SessionCreatePayload,
   type SessionMessageCancelPayload,
+  type SessionContextUsageGetPayload,
   type SessionMessageListPayload,
   type SessionMessageSendPayload,
   type SessionTimelineListPayload,
@@ -91,6 +93,15 @@ export function registerChatHandlers(
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<SessionTimelineListPayload, typeof IPC_CHANNELS.chat.sessionTimelineList>) =>
       service.host.chat.listTimeline(request.payload),
+    mapError: mapChatIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.chat.sessionContextUsageGet, createIpcRequestHandler({
+    channel: IPC_CHANNELS.chat.sessionContextUsageGet,
+    requestSchema: SessionContextUsageGetRequestSchema,
+    logger: options.logger,
+    handle: (request: RuntimeIpcRequest<SessionContextUsageGetPayload, typeof IPC_CHANNELS.chat.sessionContextUsageGet>) =>
+      service.host.chat.getContextUsage(request.payload),
     mapError: mapChatIpcError,
   }));
 

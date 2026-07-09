@@ -169,3 +169,23 @@ export interface ChatListRunEventsUiRequest {
 export interface ChatListRunEventsUiResult {
   events: RuntimeEvent[];
 }
+
+export interface ChatGetContextUsageUiRequest {
+  sessionId: string;
+  projectId?: string;
+  modelId?: string;
+}
+
+export type ChatContextUsageUiDto = {
+  usedTokens: number;
+  totalTokens: number;
+  remainingTokens: number;
+  usedPercent: number;
+  autoCompactPercent: number;
+  shouldAutoCompact: boolean;
+};
+
+export type ChatGetContextUsageUiResult =
+  | { status: 'ok'; usage: ChatContextUsageUiDto }
+  | { status: 'not_available'; reason: 'not_started' | 'not_calculated' }
+  | { status: 'failed'; message: string };

@@ -8,6 +8,7 @@ import type {
   ChatCreateSessionUiResult,
   ChatGetCommandSuggestionsUiResult,
   ChatListMessagesUiResult,
+  ChatGetContextUsageUiResult,
   ChatListRunEventsUiResult,
   ChatListRunsUiResult,
   ChatListSessionsUiResult,
@@ -70,6 +71,7 @@ import type {
   SessionBranchDraftCreatePayload,
   SessionCreatePayload,
   SessionMessageCancelPayload,
+  SessionContextUsageGetPayload,
   SessionMessageListPayload,
   SessionMessageSendPayload,
   SessionTimelineListPayload,
@@ -225,6 +227,12 @@ export const api = {
         request: BusinessRequest<SessionTimelineListPayload, typeof IPC_CHANNELS.chat.sessionTimelineList>,
       ): Promise<RuntimeIpcResult<ChatListTimelineUiResult, typeof IPC_CHANNELS.chat.sessionTimelineList>> =>
         invokeRuntimeIpc(IPC_CHANNELS.chat.sessionTimelineList, request),
+    },
+    contextUsage: {
+      get: (
+        request: BusinessRequest<SessionContextUsageGetPayload, typeof IPC_CHANNELS.chat.sessionContextUsageGet>,
+      ): Promise<RuntimeIpcResult<ChatGetContextUsageUiResult, typeof IPC_CHANNELS.chat.sessionContextUsageGet>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.chat.sessionContextUsageGet, request),
     },
   },
   run: {

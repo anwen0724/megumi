@@ -3,6 +3,12 @@
  */
 import type { AgentRun, AgentRunService, StartRunResult } from '../../agent-run';
 import type { CommandService } from '../../commands';
+import type {
+  ContextUsageWindow,
+  GetCurrentContextUsageResult,
+  SessionContextUsage,
+  StartContextUsageMonitorResult,
+} from '../../context';
 import type { Session, SessionMessageWithAttachments, SessionService } from '../../session';
 import {
   toChatMessageUiDto,
@@ -20,6 +26,8 @@ import type {
   ChatCreateSessionUiResult,
   ChatGetCommandSuggestionsUiRequest,
   ChatGetCommandSuggestionsUiResult,
+  ChatGetContextUsageUiRequest,
+  ChatGetContextUsageUiResult,
   ChatListMessagesUiRequest,
   ChatListMessagesUiResult,
   ChatListRunEventsUiRequest,
@@ -46,6 +54,7 @@ export interface ChatController {
   getCommandSuggestions(request: ChatGetCommandSuggestionsUiRequest): Promise<ChatGetCommandSuggestionsUiResult>;
   listRuns(request: ChatListRunsUiRequest): Promise<ChatListRunsUiResult>;
   listRunEvents(request: ChatListRunEventsUiRequest): Promise<ChatListRunEventsUiResult>;
+  getContextUsage(request: ChatGetContextUsageUiRequest): Promise<ChatGetContextUsageUiResult>;
 }
 
 export interface ChatControllerCompatibilityQueries {
@@ -60,12 +69,24 @@ export interface SessionBranchControllerServicePort {
   cancelBranchDraft(input: ChatCancelBranchDraftUiRequest): ChatCancelBranchDraftUiResult;
 }
 
+export interface ChatContextUsageMonitorPort {
+  getCurrentUsage(request: { session_id: string; workspace_id?: string }): GetCurrentContextUsageResult;
+  start(request: {
+    session_id: string;
+    workspace_id?: string;
+    model_config: ContextUsageWindow;
+  }): Promise<StartContextUsageMonitorResult> | StartContextUsageMonitorResult;
+  refreshSession(request: { session_id: string; workspace_id?: string; reason: string }): Promise<void> | void;
+}
+
 export function createChatController(options: {
   agentRunService: Pick<AgentRunService, 'startRun' | 'cancelRun'>;
   commandService: Pick<CommandService, 'getCommandSuggestions'>;
   sessionService: SessionService;
   branchService: SessionBranchControllerServicePort;
   compatibility: ChatControllerCompatibilityQueries;
+  contextUsageMonitor?: ChatContextUsageMonitorPort;
+  contextUsageWindowProvider?: (request: { sessionId: string; projectId?: string; modelId?: string }) => ContextUsageWindow;
 }): ChatController {
   return {
     async createSession(request) {
@@ -154,6 +175,50 @@ export function createChatController(options: {
     async listRunEvents(request) {
       return { events: options.compatibility.listRuntimeEventsByRun?.(request.runId) ?? [] };
     },
+
+    async getContextUsage(request) {
+      if (!options.contextUsageMonitor || !options.contextUsageWindowProvider) {
+        return { status: 'not_available', reason: 'not_started' };
+      }
+
+      const startResult = await options.contextUsageMonitor.start({
+        session_id: request.sessionId,
+        ...(request.projectId ? { workspace_id: request.projectId } : {}),
+        model_config: options.contextUsageWindowProvider(request),
+      });
+      if (startResult.status === 'failed') {
+        return { status: 'failed', message: startResult.failure.message };
+      }
+
+      await options.contextUsageMonitor.refreshSession({
+        session_id: request.sessionId,
+        ...(request.projectId ? { workspace_id: request.projectId } : {}),
+        reason: 'ui_context_usage_requested',
+      });
+
+      const refreshed = options.contextUsageMonitor.getCurrentUsage({
+        session_id: request.sessionId,
+        ...(request.projectId ? { workspace_id: request.projectId } : {}),
+      });
+      if (refreshed.status === 'ok') {
+        return { status: 'ok', usage: toChatContextUsageUiDto(refreshed.usage) };
+      }
+      if (refreshed.status === 'failed') {
+        return { status: 'failed', message: refreshed.failure.message };
+      }
+      return refreshed;
+    },
+  };
+}
+
+function toChatContextUsageUiDto(usage: SessionContextUsage) {
+  return {
+    usedTokens: usage.used_tokens,
+    totalTokens: usage.context_window_tokens,
+    remainingTokens: usage.remaining_tokens,
+    usedPercent: Math.round(usage.used_ratio * 100),
+    autoCompactPercent: Math.round(usage.auto_compaction_threshold_ratio * 100),
+    shouldAutoCompact: usage.should_auto_compact,
   };
 }
 

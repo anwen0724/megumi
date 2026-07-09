@@ -114,6 +114,7 @@ export function ChatPage() {
             branchDraft={branchDraft}
             pendingApprovals={controller.pendingApprovals}
             providers={providers}
+            contextUsage={controller.contextUsage}
             onApprovalResolve={(payload) => {
               void controller.resolveApproval(payload);
             }}
@@ -157,6 +158,7 @@ export function ChatPage() {
               <Composer
                 status={controller.composerStatus}
                 providers={providers}
+                contextUsage={controller.contextUsage}
                 seedTextKey={branchDraft?.key ?? null}
                 seedText={branchDraft?.seedText ?? null}
                 onSubmit={controller.handleSubmit}

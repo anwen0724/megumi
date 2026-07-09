@@ -24,6 +24,11 @@ export const SessionTimelineListPayloadSchema = z.object({
   projectId: z.string().min(1),
   sessionId: z.string().min(1),
 }).strict();
+export const SessionContextUsageGetPayloadSchema = z.object({
+  sessionId: z.string().min(1),
+  projectId: z.string().min(1).optional(),
+  modelId: z.string().min(1).optional(),
+}).strict();
 
 export const SessionMessageSendPayloadSchema = z.object({
   sessionId: z.string().min(1).optional(),
@@ -218,6 +223,7 @@ export const SessionMessageListRequestSchema = createRuntimeIpcRequestSchema(IPC
 export const SessionTimelineListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.sessionTimelineList, SessionTimelineListPayloadSchema);
 export const SessionMessageSendRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.sessionMessageSend, SessionMessageSendPayloadSchema);
 export const SessionMessageCancelRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.sessionMessageCancel, SessionMessageCancelPayloadSchema);
+export const SessionContextUsageGetRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.sessionContextUsageGet, SessionContextUsageGetPayloadSchema);
 export const SessionBranchDraftCreateRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.branchDraftCreate, SessionBranchDraftCreatePayloadSchema);
 export const SessionBranchDraftCancelRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.branchDraftCancel, SessionBranchDraftCancelPayloadSchema);
 export const RunListBySessionRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.runListBySession, RunListBySessionPayloadSchema);
@@ -268,6 +274,7 @@ export type CommandSuggestionsPayload = z.infer<typeof CommandSuggestionsPayload
 export type SessionCreatePayload = z.infer<typeof SessionCreatePayloadSchema>;
 export type SessionMessageListPayload = z.infer<typeof SessionMessageListPayloadSchema>;
 export type SessionTimelineListPayload = z.infer<typeof SessionTimelineListPayloadSchema>;
+export type SessionContextUsageGetPayload = z.infer<typeof SessionContextUsageGetPayloadSchema>;
 export type SessionMessageSendPayload = z.infer<typeof SessionMessageSendPayloadSchema>;
 export type SessionMessageCancelPayload = z.infer<typeof SessionMessageCancelPayloadSchema>;
 export type SessionBranchDraftCreatePayload = z.infer<typeof SessionBranchDraftCreatePayloadSchema>;

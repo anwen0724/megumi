@@ -9,7 +9,7 @@ import type { SessionService } from '../../session';
 import type { SettingsService } from '../../settings';
 import type { ToolExecutionService, ToolRegistryService } from '../../tools';
 import type { WorkspacePathPolicyService, WorkspaceService } from '../../workspace';
-import type { CompactContextResult, ContextUsageSignal, SessionContextSource } from '../../context';
+import type { CompactContextResult, ContextUsageSignal, ContextUsageWindow, SessionContextSource } from '../../context';
 import type { RuntimeError, RuntimeEvent } from '../../events';
 import type { MegumiDatabase } from '../../persistence/connection';
 import type {
@@ -94,8 +94,19 @@ export type CreateAgentRunServiceOptions = {
     ): () => void;
   };
   context_usage_monitor?: {
+    start(request: {
+      session_id: string;
+      workspace_id?: string;
+      model_config: ContextUsageWindow;
+    }): Promise<{ status: 'ok' } | { status: 'failed'; failure: { message: string } }> | { status: 'ok' } | { status: 'failed'; failure: { message: string } };
+    refreshSession(request: { session_id: string; workspace_id?: string; reason: string }): Promise<void> | void;
     markCompactionRunning(input: { session_id: string; workspace_id?: string; running: boolean }): void;
   };
+  context_usage_window_provider?: (input: {
+    session_id: string;
+    workspace_id: string;
+    model_id: string;
+  }) => ContextUsageWindow;
   context_compaction_service?: {
     compact(request: {
       session_id: string;
@@ -345,6 +356,7 @@ class DefaultAgentRunService implements AgentRunService {
         reason: 'user_cancelled',
       },
     });
+    void this.refreshContextUsageAfterTerminalRun(cancelled, cancelled.model_selection.model_id);
     this.activeRunAbortControllers.delete(run.run_id);
     queue.close();
     return { status: 'cancelled', run: cancelled, events: queue.snapshot() };
@@ -973,8 +985,41 @@ class DefaultAgentRunService implements AgentRunService {
         },
       });
     } finally {
+      await this.refreshContextUsageAfterTerminalRun(input.run, input.model_config.model_id);
       queueMicrotask(() => input.queue.close());
     }
+  }
+
+  private async refreshContextUsageAfterTerminalRun(run: AgentRun, modelId: string): Promise<void> {
+    const monitor = this.options.context_usage_monitor;
+    const windowProvider = this.options.context_usage_window_provider;
+    if (!monitor || !windowProvider) {
+      return;
+    }
+
+    const latestRun = this.repository.getRun(run.run_id) ?? run;
+    if (latestRun.status !== 'completed' && latestRun.status !== 'failed' && latestRun.status !== 'cancelled') {
+      return;
+    }
+
+    const modelConfig = windowProvider({
+      session_id: latestRun.session_id,
+      workspace_id: latestRun.workspace_id,
+      model_id: modelId,
+    });
+    const startResult = await monitor.start({
+      session_id: latestRun.session_id,
+      workspace_id: latestRun.workspace_id,
+      model_config: modelConfig,
+    });
+    if (startResult.status === 'failed') {
+      return;
+    }
+    await monitor.refreshSession({
+      session_id: latestRun.session_id,
+      workspace_id: latestRun.workspace_id,
+      reason: `agent_run_${latestRun.status}`,
+    });
   }
 
   private resolveSession(request: StartRunRequest):

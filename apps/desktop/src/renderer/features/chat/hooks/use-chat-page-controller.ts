@@ -2,6 +2,7 @@
 import type { ApprovalResolvePayload } from '@megumi/desktop/main/ipc/schemas';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/coding-agent/projections/timeline';
+import type { ChatGetContextUsageUiResult } from '@megumi/coding-agent/host-interface';
 import { type ApprovalCardResolvePayload, useApprovalStore } from '../../../entities/approval';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
@@ -62,6 +63,7 @@ export function useChatPageController() {
   const runs = useRunStore((state) => state.runs);
   const approvalRequestsById = useApprovalStore((state) => state.approvalRequestsById);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
+  const [contextUsage, setContextUsage] = useState<ChatGetContextUsageUiResult | undefined>(undefined);
   const activeSession = sessions.find((session) =>
     session.id === activeSessionId && session.projectId === currentProjectId
   ) ?? null;
@@ -146,6 +148,41 @@ export function useChatPageController() {
     !activeRun &&
     pendingApprovals.length === 0 &&
     (isDraftNewSession || activeEmptyNewSession);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadContextUsage() {
+      if (!effectiveActiveSessionId || !effectiveProjectId) {
+        setContextUsage(undefined);
+        return;
+      }
+
+      const result = await window.megumi.session.contextUsage.get(createRendererRuntimeIpcRequest(
+        IPC_CHANNELS.chat.sessionContextUsageGet,
+        {
+          sessionId: effectiveActiveSessionId,
+          projectId: effectiveProjectId,
+        },
+      ));
+      if (cancelled) {
+        return;
+      }
+      setContextUsage(result.ok ? result.data : { status: 'failed', message: result.error.message });
+    }
+
+    if (agentStatus === 'idle' || agentStatus === 'error') {
+      void loadContextUsage().catch(() => {
+        if (!cancelled) {
+          setContextUsage({ status: 'failed', message: 'Context usage could not be loaded.' });
+        }
+      });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [agentStatus, effectiveActiveSessionId, effectiveProjectId]);
 
   function handleSubmit(payload: ComposerSubmitPayload) {
     void sendSessionMessage(payload);
@@ -258,6 +295,7 @@ export function useChatPageController() {
     pendingApprovals,
     projectPickerOpen,
     composerStatus,
+    contextUsage,
     hasTimelineContent,
     canChangeNewSessionProject,
     branchDraft,

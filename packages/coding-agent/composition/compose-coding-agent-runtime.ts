@@ -222,10 +222,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
       modelCallService,
       settingsService,
     }),
-    modelConfigProvider: () => ({
-      model_id: 'configured-model',
-      context_window_tokens: 8192,
-    }),
+    modelConfigProvider: () => createContextUsageWindow({}),
   });
   const artifactContentStore = new ArtifactContentStore({
     artifactRoot: `${options.homePaths.homePath}/artifacts`,
@@ -283,6 +280,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     workspace_path_policy_service: workspacePathPolicyService,
     context_usage_signal_bus: contextRuntime.contextUsageSignalBus,
     context_usage_monitor: contextRuntime.contextUsageMonitor,
+    context_usage_window_provider: ({ model_id }) => createContextUsageWindow({ modelId: model_id }),
     context_compaction_service: contextRuntime.contextCompactionService,
     event_publisher: {
       publish(event) {
@@ -346,6 +344,8 @@ export function composeCodingAgentHostInterface(
       sessionService: runtime.sessionService,
       branchService: runtime.sessionBranchService,
       compatibility: runtime.compatibility,
+      contextUsageMonitor: runtime.contextRuntime.contextUsageMonitor,
+      contextUsageWindowProvider: ({ modelId }) => createContextUsageWindow({ modelId }),
     }),
     workspace: createWorkspaceController({
       workspaceService: runtime.workspaceService,
@@ -359,6 +359,13 @@ export function composeCodingAgentHostInterface(
     },
     dispose: runtime.dispose,
   });
+}
+
+function createContextUsageWindow({ modelId }: { modelId?: string }) {
+  return {
+    model_id: modelId ?? 'configured-model',
+    context_window_tokens: 256_000,
+  };
 }
 
 function createAiClientForConfiguredProviders(settingsService: SettingsService): AiClient {

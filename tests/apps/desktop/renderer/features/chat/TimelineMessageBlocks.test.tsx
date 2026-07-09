@@ -177,7 +177,8 @@ describe('TimelineMessage canonical block rendering', () => {
     />);
 
     expect(screen.getByLabelText('本轮工作区变更')).toBeInTheDocument();
-    expect(screen.getByText('Megumi 修改了 1 个文件')).toBeInTheDocument();
+    expect(document.querySelector('[data-workspace-open-file-row="true"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-workspace-change-file-row="true"]')).toBeInTheDocument();
     expect(screen.getByText('app.ts')).toBeInTheDocument();
   });
 

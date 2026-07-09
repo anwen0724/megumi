@@ -9,7 +9,7 @@ import {
   type RegisterChatHandlersOptions,
 } from '@megumi/desktop/main/ipc/handlers/chat.handler';
 import type { RuntimeIpcRequest } from '@megumi/desktop/main/ipc/contracts';
-import type { SessionMessageSendPayload } from '@megumi/desktop/main/ipc/schemas';
+import type { SessionContextUsageGetPayload, SessionMessageSendPayload } from '@megumi/desktop/main/ipc/schemas';
 import { forwardRuntimeEvents } from '@megumi/desktop/main/ipc/event-forwarders';
 
 vi.mock('@megumi/desktop/main/ipc/event-forwarders', () => ({
@@ -50,6 +50,22 @@ function createSendRequest(): RuntimeIpcRequest<SessionMessageSendPayload, typeo
     },
     meta: {
       channel: IPC_CHANNELS.chat.sessionMessageSend,
+      createdAt: '2026-05-17T00:00:00.000Z',
+      source: 'renderer',
+    },
+  };
+}
+
+function createContextUsageRequest(): RuntimeIpcRequest<SessionContextUsageGetPayload, typeof IPC_CHANNELS.chat.sessionContextUsageGet> {
+  return {
+    requestId: 'request-context-usage-1',
+    payload: {
+      sessionId: 'session-1',
+      projectId: 'workspace-1',
+      modelId: 'deepseek-chat',
+    },
+    meta: {
+      channel: IPC_CHANNELS.chat.sessionContextUsageGet,
       createdAt: '2026-05-17T00:00:00.000Z',
       source: 'renderer',
     },
@@ -116,5 +132,55 @@ describe('registerChatHandlers', () => {
       events,
       expect.any(Object),
     );
+  });
+
+  it('routes session context usage requests through the chat host controller', async () => {
+    const { handlers, ipcMain } = createIpcMain();
+    const getContextUsage = vi.fn().mockResolvedValue({
+      status: 'ok',
+      usage: {
+        usedTokens: 10,
+        totalTokens: 100,
+        remainingTokens: 90,
+        usedPercent: 10,
+        autoCompactPercent: 80,
+        shouldAutoCompact: false,
+      },
+    });
+    const service = {
+      host: {
+        chat: {
+          getContextUsage,
+        },
+      },
+    } as unknown as ChatHandlersService;
+
+    registerChatHandlers(service, {
+      ipcMain: ipcMain as unknown as RegisterChatHandlersOptions['ipcMain'],
+    });
+
+    const handler = handlers.get(IPC_CHANNELS.chat.sessionContextUsageGet);
+    if (!handler) {
+      throw new Error('session context usage handler was not registered.');
+    }
+
+    const response = await handler({ sender: { send: vi.fn() } }, createContextUsageRequest());
+
+    expect(response).toMatchObject({
+      ok: true,
+      data: {
+        status: 'ok',
+        usage: {
+          usedTokens: 10,
+          totalTokens: 100,
+          usedPercent: 10,
+        },
+      },
+    });
+    expect(getContextUsage).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      projectId: 'workspace-1',
+      modelId: 'deepseek-chat',
+    });
   });
 });

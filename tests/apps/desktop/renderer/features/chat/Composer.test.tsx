@@ -45,14 +45,41 @@ function setTextareaScrollHeight(textarea: HTMLElement, scrollHeight: number) {
 }
 
 describe('Composer', () => {
-  it('renders permission mode, model, context, attachment, and disabled send controls', () => {
+  it('renders permission mode, model, context usage, attachment, and disabled send controls', () => {
     render(<TestComposer onSubmit={() => undefined} />);
 
     expect(screen.getByLabelText('Permission mode')).toHaveValue('default');
     expect(screen.getByLabelText('Model')).toHaveValue('deepseek:deepseek-v4-flash');
     expect(screen.getByRole('button', { name: 'Attach files' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Choose context' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Choose context' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Context usage')).toBeInTheDocument();
+    expect(screen.getByText('Context window:')).toBeInTheDocument();
+    expect(screen.getByText('Usage not available')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+  });
+
+  it('renders context usage from the active session usage dto', () => {
+    render(
+      <TestComposer
+        onSubmit={() => undefined}
+        contextUsage={{
+          status: 'ok',
+          usage: {
+            usedTokens: 222_000,
+            totalTokens: 258_000,
+            remainingTokens: 36_000,
+            usedPercent: 86,
+            autoCompactPercent: 80,
+            shouldAutoCompact: true,
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Context window:')).toBeInTheDocument();
+    expect(screen.getByText('86% used')).toBeInTheDocument();
+    expect(screen.getByText('Used 222k tokens of 258k')).toBeInTheDocument();
+    expect(screen.getByLabelText('Context usage')).toHaveAttribute('aria-valuenow', '86');
   });
 
   it('submits trimmed text with selected permission mode and model then clears the input', async () => {
@@ -135,7 +162,7 @@ describe('Composer', () => {
     expect(input).toHaveValue('nihao');
   });
 
-  it('calls context and attachment callbacks', async () => {
+  it('opens the file picker and keeps the attachment callback hook', async () => {
     const onChooseContext = vi.fn();
     const onAttachFiles = vi.fn();
 
@@ -147,14 +174,18 @@ describe('Composer', () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole('button', { name: 'Choose context' }));
+    const fileInput = screen.getByTestId('composer-file-input') as HTMLInputElement;
+    const fileInputClick = vi.spyOn(fileInput, 'click').mockImplementation(() => undefined);
+
     await userEvent.click(screen.getByRole('button', { name: 'Attach files' }));
 
-    expect(onChooseContext).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Choose context' })).not.toBeInTheDocument();
+    expect(onChooseContext).not.toHaveBeenCalled();
     expect(onAttachFiles).toHaveBeenCalledTimes(1);
+    expect(fileInputClick).toHaveBeenCalledTimes(1);
   });
 
-  it('renders a compact toolbar with context on the left and permission mode, model, and Send on the right', () => {
+  it('renders a compact toolbar with attachment and context usage on the left, then permission mode, model, and Send on the right', () => {
     render(<TestComposer onSubmit={() => undefined} />);
 
     const toolbar = screen.getByTestId('composer-toolbar');
@@ -162,13 +193,14 @@ describe('Composer', () => {
     const leftControls = toolbar.firstElementChild;
     const rightControls = screen.getByTestId('composer-actions');
 
-    expect(screen.getByRole('button', { name: 'Choose context' })).toHaveTextContent('Context');
     expect(inputPanel).toHaveClass('px-4');
     expect(inputPanel).toHaveClass('py-3');
     expect(inputPanel).not.toHaveClass('border-b');
     expect(toolbar).toHaveClass('justify-between');
     expect(toolbar).toHaveClass('flex-nowrap');
-    expect(leftControls).toHaveTextContent('Context');
+    expect(screen.queryByRole('button', { name: 'Choose context' })).not.toBeInTheDocument();
+    expect(leftControls?.children[0]).toBe(screen.getByRole('button', { name: 'Attach files' }));
+    expect(leftControls?.children[1]).toContainElement(screen.getByLabelText('Context usage'));
     expect(rightControls).toHaveClass('shrink-0');
     expect(rightControls.children).toHaveLength(3);
     expect(rightControls.children[0]).toContainElement(screen.getByLabelText('Permission mode'));

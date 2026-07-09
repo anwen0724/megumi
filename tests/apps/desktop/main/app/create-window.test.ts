@@ -29,10 +29,6 @@ describe('createMainWindow', () => {
     expect(window).toBeDefined();
     expect(browserWindowConstructor).toHaveBeenCalledWith(
       expect.objectContaining({
-        width: 1600,
-        height: 1200,
-        minWidth: 1024,
-        minHeight: 680,
         title: 'Megumi',
         frame: false,
         autoHideMenuBar: true,

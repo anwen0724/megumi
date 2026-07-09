@@ -1,14 +1,14 @@
-import { forwardRef, type FormEvent, type KeyboardEvent, type RefObject } from 'react';
+import { forwardRef, useRef, type FormEvent, type KeyboardEvent, type RefObject } from 'react';
 import {
-  AtSign,
   Bot,
   Brain,
   Paperclip,
   SendHorizontal,
   Square,
 } from 'lucide-react';
-import { Button, IconButton } from '../../../shared/ui';
+import { IconButton } from '../../../shared/ui';
 import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/coding-agent/commands';
+import type { ChatGetContextUsageUiResult } from '@megumi/coding-agent/host-interface';
 import {
   COMPOSER_PERMISSION_MODE_OPTIONS,
   type ComposerModel,
@@ -31,6 +31,7 @@ export interface ComposerSurfaceProps {
   textareaRef: RefObject<HTMLTextAreaElement | null>;
   commandSuggestions: CommandSuggestionResult;
   selectedCommandSuggestionIndex: number;
+  contextUsage?: ChatGetContextUsageUiResult;
   onValueChange: (value: string) => void;
   onCommandSuggestionChoose: (item: CommandSuggestionItem) => void;
   onPermissionModeChange: (permissionMode: ComposerPermissionMode) => void;
@@ -56,6 +57,7 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
   textareaRef,
   commandSuggestions,
   selectedCommandSuggestionIndex,
+  contextUsage,
   onValueChange,
   onCommandSuggestionChoose,
   onPermissionModeChange,
@@ -63,9 +65,15 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
   onKeyDown,
   onSubmit,
   onStop,
-  onChooseContext,
   onAttachFiles,
 }, ref) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  function handleAttachFiles() {
+    onAttachFiles?.();
+    fileInputRef.current?.click();
+  }
+
   return (
     <form
       ref={ref}
@@ -79,7 +87,16 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
         selectedIndex={selectedCommandSuggestionIndex}
         onChoose={onCommandSuggestionChoose}
       />
-      <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-soft)] transition-shadow duration-150">
+      <input
+        ref={fileInputRef}
+        data-testid="composer-file-input"
+        type="file"
+        multiple
+        tabIndex={-1}
+        aria-hidden="true"
+        className="sr-only"
+      />
+      <div className="overflow-visible rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-soft)] transition-shadow duration-150">
         <div data-testid="composer-input-panel" className="px-4 py-3">
           <label htmlFor="megumi-composer" className="sr-only">
             Message Megumi
@@ -99,20 +116,10 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
 
         <div data-testid="composer-toolbar" className="flex min-h-12 flex-nowrap items-center justify-between gap-2 px-3 py-2">
           <div className="flex shrink-0 items-center gap-1.5">
-            <IconButton label="Attach files" variant="ghost" size="sm" className="shrink-0" onClick={onAttachFiles}>
+            <IconButton label="Attach files" variant="ghost" size="sm" className="shrink-0" onClick={handleAttachFiles}>
               <Paperclip size={16} aria-hidden="true" />
             </IconButton>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="shrink-0"
-              onClick={onChooseContext}
-              aria-label="Choose context"
-            >
-              <AtSign size={15} aria-hidden="true" />
-              Context
-            </Button>
+            <ContextUsageIndicator contextUsage={contextUsage} />
           </div>
 
           <div data-testid="composer-actions" className="flex min-w-0 shrink-0 items-center justify-end gap-2">
@@ -196,3 +203,71 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
     </form>
   );
 });
+
+function ContextUsageIndicator({ contextUsage }: { contextUsage?: ChatGetContextUsageUiResult }) {
+  const usage = contextUsage?.status === 'ok' ? contextUsage.usage : null;
+  const usagePercent = usage?.usedPercent ?? 0;
+  const usageProgress = Math.max(0, Math.min(100, usagePercent));
+
+  return (
+    <div
+      aria-label="Context usage"
+      role="meter"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={usagePercent}
+      className="group relative flex h-8 w-8 shrink-0 items-center justify-center"
+    >
+      <svg
+        aria-hidden="true"
+        className="h-4 w-4 overflow-visible"
+        viewBox="0 0 16 16"
+      >
+        <circle
+          cx="8"
+          cy="8"
+          r="6"
+          fill="none"
+          stroke="color-mix(in srgb, var(--color-text-muted) 46%, transparent)"
+          strokeWidth="2.5"
+        />
+        <circle
+          cx="8"
+          cy="8"
+          r="6"
+          fill="none"
+          pathLength={100}
+          stroke="var(--color-accent)"
+          strokeLinecap="round"
+          strokeWidth="2.5"
+          strokeDasharray={`${usageProgress} 100`}
+          transform="rotate(-90 8 8)"
+        />
+      </svg>
+      <div
+        role="tooltip"
+        className="pointer-events-none absolute bottom-9 left-1/2 z-20 w-44 -translate-x-1/2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-2 text-center text-xs text-[var(--color-text-muted)] opacity-0 shadow-[var(--shadow-soft)] transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+      >
+        <div>Context window:</div>
+        {usage ? (
+          <>
+            <div className="mt-1 text-[var(--color-text)]">{usage.usedPercent}% used</div>
+            <div className="mt-1">Used {formatTokenCount(usage.usedTokens)} tokens of {formatTokenCount(usage.totalTokens)}</div>
+          </>
+        ) : (
+          <>
+            <div className="mt-1 text-[var(--color-text)]">Usage not available</div>
+            <div className="mt-1">Open a session or run the agent to calculate usage.</div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function formatTokenCount(tokens: number): string {
+  if (tokens >= 1000) {
+    return `${Math.round(tokens / 1000)}k`;
+  }
+  return String(tokens);
+}

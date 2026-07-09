@@ -67,6 +67,59 @@ describe('Agent Run message flow', () => {
     expect(repository.getRun(result.run.run_id)?.status).toBe('completed');
   });
 
+  it('refreshes context usage after a terminal run', async () => {
+    const repository = createInMemoryAgentRunRepository();
+    const deps = createMessageFlowDependencies({ repository });
+    const start = vi.fn(async () => ({ status: 'ok' as const }));
+    const refreshSession = vi.fn(async () => undefined);
+    const contextUsageWindowProvider = vi.fn(() => ({
+      model_id: 'deepseek-chat',
+      context_window_tokens: 256_000,
+    }));
+    const service = createAgentRunService({
+      ...deps,
+      context_usage_monitor: {
+        start,
+        refreshSession,
+        markCompactionRunning: vi.fn(),
+      },
+      context_usage_window_provider: contextUsageWindowProvider,
+    } as unknown as CreateAgentRunServiceOptions);
+
+    const result = await service.startRun({
+      request_id: 'request-1',
+      workspace_id: 'workspace-1',
+      session: { type: 'existing', session_id: 'session-1' },
+      user_input: { text: 'hello' },
+      model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
+      permission_mode: 'default',
+    });
+
+    expect(result.status).toBe('started');
+    if (result.status !== 'started') return;
+
+    await collectEvents(result.events);
+
+    expect(contextUsageWindowProvider).toHaveBeenCalledWith({
+      session_id: 'session-1',
+      workspace_id: 'workspace-1',
+      model_id: 'deepseek-chat',
+    });
+    expect(start).toHaveBeenCalledWith({
+      session_id: 'session-1',
+      workspace_id: 'workspace-1',
+      model_config: {
+        model_id: 'deepseek-chat',
+        context_window_tokens: 256_000,
+      },
+    });
+    expect(refreshSession).toHaveBeenCalledWith({
+      session_id: 'session-1',
+      workspace_id: 'workspace-1',
+      reason: 'agent_run_completed',
+    });
+  });
+
   it('feeds tool calls and tool results back through model-call continuation messages', async () => {
     const repository = createInMemoryAgentRunRepository();
     const deps = createMessageFlowDependencies({ repository });
