@@ -14,6 +14,11 @@ describe('createCommandService', () => {
       name: 'review',
       description: 'review command',
       source: { kind: 'built_in' },
+    }, {
+      name: 'skill',
+      description: 'Use a skill by skillId',
+      argument_hint: '<skillId> [args]',
+      source: { kind: 'built_in' },
     }]);
   });
 

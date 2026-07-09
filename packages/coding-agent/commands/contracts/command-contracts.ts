@@ -13,6 +13,14 @@ export type CommandDefinition = {
   description: string;
   argument_hint?: string;
   source: CommandSource;
+  suggestion?: {
+    display_name?: string;
+    source_badge?: string;
+    replacement_input?: string;
+    primary?: string;
+    secondary?: string;
+    badge?: string;
+  };
   execute: CommandHandler;
 };
 
@@ -58,6 +66,10 @@ export type CommandExecutionResult =
 
 export type CommandAgentRunInput = {
   raw_input: string;
+  requestedSkillActivation?: {
+    skillId: string;
+    trigger: 'command';
+  };
   command: {
     name: string;
     source: CommandSource;
@@ -99,6 +111,11 @@ export type CommandSuggestionItem = {
   argument_hint?: string;
   source: CommandSource;
   source_badge?: string;
+  display?: {
+    primary: string;
+    secondary?: string;
+    badge?: string;
+  };
   match: {
     field: 'name' | 'alias';
     value: string;

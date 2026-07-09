@@ -13,7 +13,7 @@ describe('createCommandCatalog', () => {
       ],
     });
 
-    expect(catalog.listCommands().map((command) => command.name)).toEqual(['review', 'status']);
+    expect(catalog.listCommands().map((command) => command.name)).toEqual(['review', 'status', 'skill']);
     expect(catalog.resolve('review')?.name).toBe('review');
     expect(catalog.resolve('missing')).toBeUndefined();
   });
@@ -27,7 +27,7 @@ describe('createCommandCatalog', () => {
       ],
     });
 
-    expect(catalog.listCommands().map((command) => command.name)).toEqual(['review', 'status']);
+    expect(catalog.listCommands().map((command) => command.name)).toEqual(['review', 'status', 'skill']);
   });
 
   it('rejects alias conflicts without overwriting existing commands', () => {
@@ -40,7 +40,7 @@ describe('createCommandCatalog', () => {
       ],
     });
 
-    expect(catalog.listCommands().map((command) => command.name)).toEqual(['settings']);
+    expect(catalog.listCommands().map((command) => command.name)).toEqual(['settings', 'skill']);
     expect(catalog.resolve('cfg')?.name).toBe('settings');
     expect(catalog.resolve('status')).toBeUndefined();
     expect(catalog.resolve('broken')).toBeUndefined();
@@ -52,9 +52,7 @@ describe('createCommandCatalog', () => {
         testCommand('review'),
         testCommand('settings', ['cfg']),
       ],
-      skill_commands: [
-        testCommand('skill:brainstorming', ['brainstorming'], { kind: 'skill', skill_id: 'brainstorming' }),
-      ],
+      skill_commands: createSkillSuggestionCommands(),
     });
 
     expect(catalog.getCommandSuggestions({ draft_input: '/' })).toMatchObject({
@@ -96,6 +94,27 @@ describe('createCommandCatalog', () => {
         items: [],
       }],
     });
+    expect(catalog.getCommandSuggestions({ draft_input: '/br' })).toMatchObject({
+      type: 'suggestions',
+      command_prefix: 'br',
+      groups: [{
+        id: 'commands',
+        items: [],
+      }, {
+        id: 'skills',
+        items: [{
+          name: 'brainstorming',
+          display: {
+            primary: 'brainstorming',
+            secondary: 'superpowers:brainstorming - Explore intent before implementation',
+            badge: 'System',
+          },
+          source_badge: 'System',
+          match: { field: 'name', value: 'brainstorming', prefix: 'br' },
+          completion: { replacement_input: '/skill superpowers:brainstorming ' },
+        }],
+      }],
+    });
   });
 
   it('returns inactive suggestions outside command name drafts', () => {
@@ -127,4 +146,30 @@ function testCommand(
       };
     },
   };
+}
+
+function createSkillSuggestionCommands(): CommandDefinition[] {
+  return [{
+    name: 'skill',
+    description: 'Use a skill by skillId',
+    source: { kind: 'built_in' },
+    async execute({ invocation }) {
+      return { type: 'completed', message: invocation.raw_input };
+    },
+  }, {
+    name: 'brainstorming',
+    aliases: ['brainstorm'],
+    description: 'Explore intent before implementation',
+    source: { kind: 'skill', skill_id: 'superpowers:brainstorming' },
+    suggestion: {
+      source_badge: 'System',
+      replacement_input: '/skill superpowers:brainstorming ',
+      primary: 'brainstorming',
+      secondary: 'superpowers:brainstorming - Explore intent before implementation',
+      badge: 'System',
+    },
+    async execute({ invocation }) {
+      return { type: 'not_command', raw_input: invocation.raw_input };
+    },
+  }];
 }
