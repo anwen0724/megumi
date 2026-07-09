@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -35,7 +35,7 @@ describe('SetupWizard', () => {
     await user.type(screen.getByLabelText('Model IDs'), 'gpt-5.5');
     await user.click(screen.getByRole('button', { name: 'Next' }));
 
-    await user.type(screen.getByLabelText('API key'), 'sk-test-secret');
+    await user.type(screen.getByLabelText('API key'), 'TEST_API_KEY_VALUE');
     await user.click(screen.getByRole('button', { name: 'Finish setup' }));
 
     expect(completeSetup).toHaveBeenCalledWith(expect.objectContaining({
@@ -44,7 +44,7 @@ describe('SetupWizard', () => {
       providerId: 'openai',
       baseUrl: 'https://api.openai.com/v1',
       modelIds: ['gpt-5.5'],
-      apiKey: 'sk-test-secret',
+      apiKey: 'TEST_API_KEY_VALUE',
     }));
   });
 

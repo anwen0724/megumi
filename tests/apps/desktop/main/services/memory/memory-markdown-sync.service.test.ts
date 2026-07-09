@@ -340,7 +340,7 @@ describe('MemoryMarkdownSyncService', () => {
       '',
       '## Preference',
       '',
-      '- api_key=sk-12345678901234567890 should never be saved',
+      '- api_key=TEST_API_KEY_VALUE should never be saved',
       '- User prefers short implementation reports.',
       '',
     ].join('\n'));
@@ -353,7 +353,7 @@ describe('MemoryMarkdownSyncService', () => {
     expect(fileSystem.diagnostics.map((diagnostic) => JSON.stringify(diagnostic.entry))).toEqual(
       expect.arrayContaining([expect.stringContaining('candidate_rejected')]),
     );
-    expect(JSON.stringify(repository.audits)).not.toContain('sk-12345678901234567890');
+    expect(JSON.stringify(repository.audits)).not.toContain('TEST_API_KEY_VALUE');
   });
 
   it('records conflicts without exporting over the user edited file', async () => {
@@ -582,14 +582,14 @@ describe('MemoryMarkdownSyncService', () => {
       '',
       '## Preference',
       '',
-      '- api_key=sk-12345678901234567890 should never be saved',
+      '- api_key=TEST_API_KEY_VALUE should never be saved',
       '',
     ].join('\n'));
 
     await service.importMirror({ homePath, scope: 'user' });
 
     expect(repository.audits.map((audit) => JSON.stringify(audit))).toEqual(
-      expect.arrayContaining([expect.not.stringContaining('sk-12345678901234567890')]),
+      expect.arrayContaining([expect.not.stringContaining('TEST_API_KEY_VALUE')]),
     );
     expect(JSON.stringify(repository.audits)).not.toContain('rawcontent');
   });

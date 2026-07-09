@@ -2,6 +2,7 @@
   "name": "megumi",
   "version": "0.1.0",
   "description": "AI-guided development workflow platform",
+  "license": "MIT",
   "author": "Megumi contributors",
   "main": ".vite/build/index.js",
   "scripts": {

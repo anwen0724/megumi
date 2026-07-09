@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import path from 'path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -50,10 +50,10 @@ describe('Megumi Home foundation', () => {
   it('resolves the default home directory from the user home directory', () => {
     const homePath = resolveMegumiHomePath({
       env: {},
-      homeDirectory: 'C:/Users/anwen',
+      homeDirectory: 'C:/Users/tester',
     });
 
-    expect(homePath).toBe(path.resolve('C:/Users/anwen', '.megumi'));
+    expect(homePath).toBe(path.resolve('C:/Users/tester', '.megumi'));
   });
 
   it('uses MEGUMI_HOME when the environment override is set', () => {
@@ -61,7 +61,7 @@ describe('Megumi Home foundation', () => {
       env: {
         MEGUMI_HOME: 'D:/portable/megumi-home',
       },
-      homeDirectory: 'C:/Users/anwen',
+      homeDirectory: 'C:/Users/tester',
     });
 
     expect(homePath).toBe(path.resolve('D:/portable/megumi-home'));
@@ -73,7 +73,7 @@ describe('Megumi Home foundation', () => {
         env: {
           MEGUMI_HOME: '   D:/trimmed/megumi-home   ',
         },
-        homeDirectory: 'C:/Users/anwen',
+        homeDirectory: 'C:/Users/tester',
       }),
     ).toBe(path.resolve('D:/trimmed/megumi-home'));
 
@@ -82,22 +82,22 @@ describe('Megumi Home foundation', () => {
         env: {
           MEGUMI_HOME: '   ',
         },
-        homeDirectory: 'C:/Users/anwen',
+        homeDirectory: 'C:/Users/tester',
       }),
-    ).toBe(path.resolve('C:/Users/anwen', '.megumi'));
+    ).toBe(path.resolve('C:/Users/tester', '.megumi'));
   });
 
   it('creates minimal directories and managed metadata without creating default settings.json', async () => {
     const paths = await initializeMegumiHome({
       env: {},
-      homeDirectory: 'C:/Users/anwen',
+      homeDirectory: 'C:/Users/tester',
       fileSystem,
       clock: {
         now: () => new Date('2026-05-11T12:00:00.000Z'),
       },
     });
 
-    expect(paths.homePath).toBe(path.resolve('C:/Users/anwen', '.megumi'));
+    expect(paths.homePath).toBe(path.resolve('C:/Users/tester', '.megumi'));
     expect(paths.settingsPath).toBe(path.join(paths.homePath, 'settings.json'));
     expect(fileSystem.directories).toEqual(
       new Set([
@@ -126,7 +126,7 @@ describe('Megumi Home foundation', () => {
   });
 
   it('does not overwrite existing user-managed settings or README files', async () => {
-    const homePath = path.resolve('C:/Users/anwen', '.megumi');
+    const homePath = path.resolve('C:/Users/tester', '.megumi');
     const settingsPath = path.join(homePath, 'settings.json');
     const readmePath = path.join(homePath, 'README.md');
 
@@ -137,7 +137,7 @@ describe('Megumi Home foundation', () => {
 
     const paths = await initializeMegumiHome({
       env: {},
-      homeDirectory: 'C:/Users/anwen',
+      homeDirectory: 'C:/Users/tester',
       fileSystem,
       clock: {
         now: () => new Date('2026-05-11T12:00:00.000Z'),
@@ -204,7 +204,7 @@ describe('Megumi Home foundation', () => {
       env: {
         MEGUMI_HOME: 'D:/megumi-home',
       },
-      homeDirectory: 'C:/Users/anwen',
+      homeDirectory: 'C:/Users/tester',
       fileSystem: {
         ensureDirSync: (directoryPath) => {
           syncDirectories.add(directoryPath);

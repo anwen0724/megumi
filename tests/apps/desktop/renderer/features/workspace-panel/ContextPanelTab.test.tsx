@@ -33,7 +33,7 @@ describe('ContextPanelTab', () => {
         {
           id: 'project-1',
           name: 'Megumi',
-          repoPath: 'C:/all/work/study/megumi',
+          repoPath: 'C:/workspaces/megumi',
           createdAt: '2026-05-09T00:00:00.000Z',
           projectId: 'project-1',
           repoPathKey: 'c:/all/work/study/megumi',
@@ -48,7 +48,7 @@ describe('ContextPanelTab', () => {
     render(<ContextPanelTab />);
 
     expect(screen.getByText('Megumi')).toBeInTheDocument();
-    expect(screen.getByText('C:/all/work/study/megumi')).toBeInTheDocument();
+    expect(screen.getByText('C:/workspaces/megumi')).toBeInTheDocument();
     expect(screen.getByText('available')).toBeInTheDocument();
   });
 });

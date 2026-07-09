@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import type {
   ClassifyWorkspacePathRequest,
   OpenWorkspaceRequest,
@@ -15,7 +15,7 @@ describe('workspace contracts v2', () => {
     const workspace: Workspace = {
       workspace_id: 'workspace:1',
       name: 'megumi',
-      root_path: 'C:/all/work/study/megumi',
+      root_path: 'C:/workspaces/megumi',
       root_path_key: 'c:/all/work/study/megumi',
       status: 'available',
       created_at: '2026-07-04T00:00:00.000Z',

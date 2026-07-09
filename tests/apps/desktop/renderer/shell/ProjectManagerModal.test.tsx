@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -9,7 +9,7 @@ const projects = [
     id: 'project-1',
     projectId: 'project:abc123',
     name: 'megumi',
-    repoPath: 'C:/all/work/study/megumi',
+    repoPath: 'C:/workspaces/megumi',
     repoPathKey: 'c:/all/work/study/megumi',
     status: 'available' as const,
     createdAt: '2026-05-19T00:00:00.000Z',
@@ -59,7 +59,7 @@ describe('ProjectManagerModal', () => {
     );
 
     expect(screen.getByRole('dialog', { name: '管理项目' })).toBeInTheDocument();
-    expect(screen.getByText('C:/all/work/study/megumi')).toBeInTheDocument();
+    expect(screen.getByText('C:/workspaces/megumi')).toBeInTheDocument();
     expect(screen.getByText('C:/Work/Older')).toBeInTheDocument();
     expect(screen.getByText('missing')).toBeInTheDocument();
 

@@ -137,4 +137,4 @@ tests                 Vitest test suite
 
 ## License
 
-License TBD.
+MIT License.

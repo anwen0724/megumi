@@ -137,4 +137,4 @@ Please keep changes focused, avoid committing local runtime data or secrets, and
 
 ## License
 
-License TBD.
+MIT License.

@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
   createSettingsService,
@@ -79,7 +79,7 @@ describe('Settings Service', () => {
     fileStore.raw = {
       providers: {
         deepseek: {
-          api_key: 'sk-deepseek',
+          api_key: 'TEST_DEEPSEEK_API_KEY',
         },
       },
     };
@@ -97,7 +97,7 @@ describe('Settings Service', () => {
       has_api_key: true,
       credential_source: 'settings',
     });
-    expect(JSON.stringify(result.providers)).not.toContain('sk-deepseek');
+    expect(JSON.stringify(result.providers)).not.toContain('TEST_DEEPSEEK_API_KEY');
   });
 
   it('deletes configured provider settings', () => {
@@ -212,7 +212,7 @@ describe('Settings Service', () => {
           display_name: 'Disabled',
           base_url: 'http://localhost:11434/v1',
           models: ['llama3'],
-          api_key: 'sk-disabled',
+          api_key: 'TEST_DISABLED_API_KEY',
         },
       },
     };

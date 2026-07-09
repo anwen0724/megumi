@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 
 import {
   DEFAULT_PROTECTED_WORKSPACE_PATHS,
@@ -8,7 +8,7 @@ import { createWorkspacePathPolicyService } from '@megumi/coding-agent/workspace
 
 describe('WorkspacePathPolicyService', () => {
   const service = createWorkspacePathPolicyService();
-  const workspace_root = 'C:/all/work/study/megumi';
+  const workspace_root = 'C:/workspaces/megumi';
 
   it('classifies workspace-local paths', () => {
     expect(service.classifyPath({

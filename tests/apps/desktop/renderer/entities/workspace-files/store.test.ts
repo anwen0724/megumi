@@ -56,7 +56,7 @@ function installWorkspaceFilesMock() {
     list: vi.fn(async () => ({
       ok: true,
       data: {
-        workspaceRoot: 'C:/all/work/study/megumi',
+        workspaceRoot: 'C:/workspaces/megumi',
         directoryPath: '',
         entries: [
           {
@@ -107,13 +107,13 @@ describe('useWorkspaceFilesStore', () => {
     const files = installWorkspaceFilesMock();
 
     await useWorkspaceFilesStore.getState().loadDirectory({
-      workspaceRoot: 'C:/all/work/study/megumi',
+      workspaceRoot: 'C:/workspaces/megumi',
       directoryPath: '',
     });
 
     expect(files.list).toHaveBeenCalledWith(expect.objectContaining({
       payload: {
-        workspaceRoot: 'C:/all/work/study/megumi',
+        workspaceRoot: 'C:/workspaces/megumi',
         directoryPath: '',
       },
       meta: expect.objectContaining({
@@ -288,7 +288,7 @@ describe('useWorkspaceFilesStore', () => {
     });
 
     await useWorkspaceFilesStore.getState().loadDirectory({
-      workspaceRoot: 'C:/all/work/study/megumi',
+      workspaceRoot: 'C:/workspaces/megumi',
       directoryPath: 'apps',
     });
 

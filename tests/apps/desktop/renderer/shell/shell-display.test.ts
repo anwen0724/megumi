@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { formatSessionUpdatedAt, getWorkspaceBasename } from '@megumi/desktop/renderer/shell/shell-display';
 
 describe('shell display helpers', () => {
   it('uses the last segment of a Windows workspace path', () => {
-    expect(getWorkspaceBasename({ workspaceName: 'Megumi', workspacePath: 'C:/all/work/study/megumi' })).toBe(
+    expect(getWorkspaceBasename({ workspaceName: 'Megumi', workspacePath: 'C:/workspaces/megumi' })).toBe(
       'megumi',
     );
   });

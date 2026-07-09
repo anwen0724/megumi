@@ -74,7 +74,7 @@ function selectMegumiProject() {
       {
         id: 'project-1',
         name: 'Megumi',
-        repoPath: 'C:/all/work/study/megumi',
+        repoPath: 'C:/workspaces/megumi',
         createdAt: '2026-05-18T00:00:00.000Z',
         projectId: 'project-1',
         repoPathKey: 'c:/all/work/study/megumi',
@@ -105,7 +105,7 @@ describe('FilesPanelTab', () => {
         {
           id: 'project-1',
           name: 'Megumi',
-          repoPath: 'C:/all/work/study/megumi',
+          repoPath: 'C:/workspaces/megumi',
           createdAt: '2026-05-18T00:00:00.000Z',
           projectId: 'project-1',
           repoPathKey: 'c:/all/work/study/megumi',
@@ -140,7 +140,7 @@ describe('FilesPanelTab', () => {
     expect(screen.getByRole('navigation', { name: 'Project files' })).toBeInTheDocument();
     expect(list).toHaveBeenCalledWith(expect.objectContaining({
       payload: {
-        workspaceRoot: 'C:/all/work/study/megumi',
+        workspaceRoot: 'C:/workspaces/megumi',
         directoryPath: '',
       },
       meta: expect.objectContaining({
@@ -166,7 +166,7 @@ describe('FilesPanelTab', () => {
     await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
     expect(list).toHaveBeenNthCalledWith(2, expect.objectContaining({
       payload: {
-        workspaceRoot: 'C:/all/work/study/megumi',
+        workspaceRoot: 'C:/workspaces/megumi',
         directoryPath: 'apps',
       },
     }));

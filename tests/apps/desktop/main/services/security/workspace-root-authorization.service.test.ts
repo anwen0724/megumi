@@ -38,12 +38,12 @@ describe('workspace root authorization', () => {
 
   it('allows explicitly configured host roots and rejects unknown roots', () => {
     const isWorkspaceRootAllowed = createWorkspaceRootAuthorizer({
-      staticRoots: ['C:/all/work/study/megumi'],
+      staticRoots: ['C:/workspaces/megumi'],
       sessionSource: { listSessions: () => [] },
     });
 
-    expect(isWorkspaceRootAllowed('C:/all/work/study/megumi')).toBe(true);
-    expect(isWorkspaceRootAllowed('C:/Users/anwen')).toBe(false);
+    expect(isWorkspaceRootAllowed('C:/workspaces/megumi')).toBe(true);
+    expect(isWorkspaceRootAllowed('C:/Users/tester')).toBe(false);
   });
 
   it('allows roots that Megumi has recorded as available projects', () => {

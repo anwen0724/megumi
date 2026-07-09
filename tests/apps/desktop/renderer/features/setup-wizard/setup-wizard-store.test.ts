@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSetupWizardStore } from '@megumi/desktop/renderer/features/setup-wizard';
 
@@ -76,7 +76,7 @@ describe('setup wizard store', () => {
       providerId: 'openai',
       baseUrl: 'https://api.openai.com/v1',
       modelIds: ['gpt-5.5'],
-      apiKey: 'sk-test-secret',
+      apiKey: 'TEST_API_KEY_VALUE',
       completedAt: '2026-06-29T12:00:00.000Z',
     });
 
@@ -91,7 +91,7 @@ describe('setup wizard store', () => {
             enabled: true,
             baseUrl: 'https://api.openai.com/v1',
             models: ['gpt-5.5'],
-            apiKey: 'sk-test-secret',
+            apiKey: 'TEST_API_KEY_VALUE',
           },
         },
         setup: {
@@ -101,7 +101,7 @@ describe('setup wizard store', () => {
       },
     }));
     expect(settingsUpdate).toHaveBeenCalledTimes(1);
-    expect(JSON.stringify(useSetupWizardStore.getState())).not.toContain('sk-test-secret');
+    expect(JSON.stringify(useSetupWizardStore.getState())).not.toContain('TEST_API_KEY_VALUE');
     expect(useSetupWizardStore.getState().setupCompleted).toBe(true);
   });
 

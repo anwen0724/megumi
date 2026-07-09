@@ -217,7 +217,7 @@ describe('useProviderStore', () => {
       error: 'Megumi settings are invalid. Fix C:\\Users\\anwen\\.megumi\\settings.json and try again.',
     });
     expect(JSON.stringify(useProviderStore.getState())).not.toContain('stack trace');
-    expect(JSON.stringify(useProviderStore.getState())).not.toContain('sk-test-secret');
+    expect(JSON.stringify(useProviderStore.getState())).not.toContain('TEST_API_KEY_VALUE');
   });
 });
 

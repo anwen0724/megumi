@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import {
   createCancelledToolResult,
   createFailedToolResult,
@@ -86,7 +86,7 @@ describe('tool execution result normalization', () => {
         outputKind: 'text',
         content: [
           'Authorization: Bearer abcdef1234567890',
-          'apiKey=sk-test-1234567890abcdef',
+          'apiKey=TEST_RUNTIME_API_KEY',
           'password: raw-password-value',
           'secret: raw-secret-value',
         ].join('\n'),
@@ -95,7 +95,7 @@ describe('tool execution result normalization', () => {
 
     expect(result.type).toBe('succeeded');
     expect(result.normalizedResult.content).not.toContain('abcdef1234567890');
-    expect(result.normalizedResult.content).not.toContain('sk-test-1234567890abcdef');
+    expect(result.normalizedResult.content).not.toContain('TEST_RUNTIME_API_KEY');
     expect(result.normalizedResult.content).not.toContain('raw-password-value');
     expect(result.normalizedResult.content).not.toContain('raw-secret-value');
     expect(result.normalizedResult.metadata).toMatchObject({

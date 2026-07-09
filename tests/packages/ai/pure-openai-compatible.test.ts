@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import {
   createAiClient,
@@ -254,7 +254,7 @@ describe('pure OpenAI-compatible provider adapter', () => {
 
   it('returns provider errors as assistant stream error events without leaking credentials', async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(new Response(
-      '{"error":{"message":"bad sk-provider-secret-12345678"}}',
+      '{"error":{"message":"bad apiKey=TEST_PROVIDER_SECRET"}}',
       { status: 401, statusText: 'Unauthorized' },
     ));
     const aiClient = createOpenAICompatibleTestClient(fetch);
@@ -281,7 +281,7 @@ describe('pure OpenAI-compatible provider adapter', () => {
         },
       },
     });
-    expect(JSON.stringify(event)).not.toContain('sk-provider-secret-12345678');
+    expect(JSON.stringify(event)).not.toContain('TEST_PROVIDER_SECRET');
   });
 });
 

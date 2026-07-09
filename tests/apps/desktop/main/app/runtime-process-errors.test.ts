@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import {
   registerRuntimeProcessErrorHandlers,
@@ -41,7 +41,7 @@ describe('registerRuntimeProcessErrorHandlers', () => {
     });
 
     processLike.listeners.get('uncaughtException')?.[0]?.(
-      new Error('raw process crash with sk-process-secret'),
+      new Error('raw process crash with TEST_PROCESS_SECRET'),
     );
 
     expect(logger.error).toHaveBeenCalledWith(
@@ -57,7 +57,7 @@ describe('registerRuntimeProcessErrorHandlers', () => {
         }),
       }),
     );
-    expect(JSON.stringify(logger.error.mock.calls)).not.toContain('sk-process-secret');
+    expect(JSON.stringify(logger.error.mock.calls)).not.toContain('TEST_PROCESS_SECRET');
     expect(JSON.stringify(logger.error.mock.calls)).not.toContain('raw process crash');
   });
 

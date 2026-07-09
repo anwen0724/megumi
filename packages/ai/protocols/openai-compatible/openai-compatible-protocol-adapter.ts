@@ -910,5 +910,9 @@ function createProviderErrorEvent(input: {
 }
 
 function redactSecret(text: string): string {
-    return text.replace(/sk-[A-Za-z0-9_-]+/g, '[redacted]');
+    return text
+        .replace(/\bsk-[A-Za-z0-9._-]+\b/g, '[redacted]')
+        .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{8,}\b/g, 'Bearer [redacted]')
+        .replace(/\b(apiKey|api_key|token|secret|password)=([^&\s"'}]+)/gi, '$1=[redacted]')
+        .replace(/"(apiKey|api_key|token|secret|password)"\s*:\s*"[^"]*"/gi, '"$1":"[redacted]"');
 }

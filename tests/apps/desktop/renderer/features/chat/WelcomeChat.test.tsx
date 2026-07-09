@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -7,13 +7,13 @@ import { WelcomeChat } from '@megumi/desktop/renderer/features/chat/components/W
 const megumiProject = {
   id: 'project-1',
   name: 'Megumi',
-  repoPath: 'C:/all/work/study/megumi',
+  repoPath: 'C:/workspaces/megumi',
 };
 
 const otherProject = {
   id: 'project-2',
   name: 'Other',
-  repoPath: 'C:/all/work/study/other',
+  repoPath: 'C:/workspaces/other',
 };
 
 function renderWelcomeChat(overrides: Partial<Parameters<typeof WelcomeChat>[0]> = {}) {

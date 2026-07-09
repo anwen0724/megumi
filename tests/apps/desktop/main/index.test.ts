@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => {
       useExistingProject: vi.fn(),
       openProject: vi.fn(),
       removeProject: vi.fn(),
-      listAuthorizedWorkspaceRoots: vi.fn(() => ['C:/all/work/study/megumi']),
+      listAuthorizedWorkspaceRoots: vi.fn(() => ['C:/workspaces/megumi']),
     },
     session: {
       create: vi.fn(),
@@ -316,7 +316,7 @@ describe('main runtime logger composition', () => {
       isWorkspaceRootAllowed(root: string): boolean;
     }]>;
     expect(workspaceFilesOptions.isWorkspaceRootAllowed(process.cwd())).toBe(false);
-    expect(workspaceFilesOptions.isWorkspaceRootAllowed('C:/all/work/study/megumi')).toBe(true);
+    expect(workspaceFilesOptions.isWorkspaceRootAllowed('C:/workspaces/megumi')).toBe(true);
     expect(mocks.registerAllHandlers).toHaveBeenCalledWith({
       logger: processLogger,
       workspace: { host: mocks.codingAgentHost, workspaceFilesService },
@@ -327,12 +327,12 @@ describe('main runtime logger composition', () => {
     });
 
     processLogger.error('runtime_review_probe', {
-      authorization: 'Bearer sk-runtime-secret',
+      authorization: 'Bearer TEST_RUNTIME_SECRET',
     });
 
     const logText = readFileSync(join(mocks.logsPath, 'runtime.jsonl'), 'utf8');
     expect(logText).toContain('runtime_review_probe');
-    expect(logText).not.toContain('sk-runtime-secret');
-    expect(logText).not.toContain('Bearer sk-runtime-secret');
+    expect(logText).not.toContain('TEST_RUNTIME_SECRET');
+    expect(logText).not.toContain('Bearer TEST_RUNTIME_SECRET');
   });
 });

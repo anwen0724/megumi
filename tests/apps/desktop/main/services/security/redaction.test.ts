@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
   redactObjectSecrets,
@@ -10,18 +10,20 @@ import {
 
 describe('redaction', () => {
   it('redacts full secret values by default', () => {
-    expect(redactSecret('sk-live-secret-value')).toBe('[redacted]');
+    expect(redactSecret('TEST_SECRET_VALUE')).toBe('[redacted]');
     expect(redactSecret('')).toBe('[redacted]');
   });
 
   it('keeps requested prefix and suffix without exposing the whole secret', () => {
-    expect(redactSecret('sk-1234567890', { visiblePrefix: 3, visibleSuffix: 2 })).toBe('sk-...[redacted]...90');
+    expect(redactSecret('TEST_SECRET_VALUE', { visiblePrefix: 3, visibleSuffix: 2 })).toBe(
+      'TES...[redacted]...UE',
+    );
   });
 
   it('redacts secret-like object keys recursively', () => {
     const input = {
       providerId: 'deepseek',
-      apiKey: 'sk-deepseek',
+      apiKey: 'TEST_DEEPSEEK_API_KEY',
       nested: {
         token: 'secret-token',
         normal: 'visible',
@@ -42,7 +44,7 @@ describe('redaction', () => {
     expect(redactRuntimeMessage('Authorization: Bearer abcdef1234567890')).toBe(
       'Authorization: Bearer [redacted]',
     );
-    expect(redactRuntimeMessage('apiKey=sk-test-1234567890abcdef')).toBe('apiKey=[redacted]');
+    expect(redactRuntimeMessage('apiKey=TEST_RUNTIME_API_KEY')).toBe('apiKey=[redacted]');
     expect(redactRuntimeMessage('token: secret-token-value')).toBe('token: [redacted]');
   });
 
@@ -58,7 +60,7 @@ describe('redaction', () => {
           authorization: 'Bearer abcdef1234567890',
         },
         nested: {
-          apiKey: 'sk-test-secret',
+          apiKey: 'TEST_API_KEY_VALUE',
           values: ['visible', 'Bearer abcdef1234567890'],
         },
       }),
@@ -83,11 +85,11 @@ describe('redaction', () => {
       redactRuntimeDetails({
         debugId: 'debug-provider-1',
         operationName: 'provider.list',
-        stack: 'Error: raw stack with sk-test-secret',
+        stack: 'Error: raw stack with TEST_API_KEY_VALUE',
         cause: {
           message: 'raw cause',
         },
-        rawProviderBody: '{"apiKey":"sk-test-secret"}',
+        rawProviderBody: '{"apiKey":"TEST_API_KEY_VALUE"}',
         message: 'Failed with Bearer abcdef1234567890',
       }),
     ).toEqual({

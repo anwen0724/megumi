@@ -27,12 +27,12 @@ describe('WorkspaceFilesService', () => {
     });
 
     const result = await service.listDirectory({
-      workspaceRoot: 'C:/all/work/study/megumi',
+      workspaceRoot: 'C:/workspaces/megumi',
       directoryPath: '',
     });
 
     expect(result).toMatchObject({
-      workspaceRoot: 'C:/all/work/study/megumi',
+      workspaceRoot: 'C:/workspaces/megumi',
       directoryPath: '',
     });
     expect(result.entries.map((entry) => entry.name)).toEqual(['apps', 'README.md']);
@@ -69,7 +69,7 @@ describe('WorkspaceFilesService', () => {
     });
 
     await expect(service.listDirectory({
-      workspaceRoot: 'C:/all/work/study/megumi',
+      workspaceRoot: 'C:/workspaces/megumi',
       directoryPath: '../outside',
     })).rejects.toThrow();
   });
@@ -89,12 +89,12 @@ describe('WorkspaceFilesService', () => {
     });
 
     const result = await service.openFile({
-      workspaceRoot: 'C:/all/work/study/megumi',
+      workspaceRoot: 'C:/workspaces/megumi',
       filePath: 'src/app.ts',
     });
 
     expect(result).toEqual({
-      workspaceRoot: 'C:/all/work/study/megumi',
+      workspaceRoot: 'C:/workspaces/megumi',
       filePath: 'src/app.ts',
       opened: true,
     });
@@ -116,7 +116,7 @@ describe('WorkspaceFilesService', () => {
     });
 
     await expect(service.openFile({
-      workspaceRoot: 'C:/all/work/study/megumi',
+      workspaceRoot: 'C:/workspaces/megumi',
       filePath: '../outside.ts',
     })).rejects.toThrow();
     expect(openPath).not.toHaveBeenCalled();
@@ -124,7 +124,7 @@ describe('WorkspaceFilesService', () => {
 
   it('rejects workspace roots outside the configured allow-list', async () => {
     const service = createWorkspaceFilesService({
-      allowedWorkspaceRoots: ['C:/all/work/study/megumi'],
+      allowedWorkspaceRoots: ['C:/workspaces/megumi'],
       fileSystem: {
         async readdir() {
           return [];
@@ -158,7 +158,7 @@ describe('WorkspaceFilesService', () => {
     });
 
     await expect(service.listDirectory({
-      workspaceRoot: 'C:/all/work/study/megumi',
+      workspaceRoot: 'C:/workspaces/megumi',
       directoryPath,
     })).rejects.toThrow();
   });
@@ -178,7 +178,7 @@ describe('WorkspaceFilesService', () => {
     });
 
     const result = await service.listDirectory({
-      workspaceRoot: 'C:/all/work/study/megumi',
+      workspaceRoot: 'C:/workspaces/megumi',
       directoryPath: 'apps\\desktop\\src\\',
     });
 

@@ -1,4 +1,4 @@
-// Verifies the desktop shell resolves packaged Coding Agent migration assets.
+﻿// Verifies the desktop shell resolves packaged Coding Agent migration assets.
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { resolveDesktopPersistenceMigrationsFolder } from '@megumi/desktop/main/shell/electron-persistence-migrations-host';
@@ -16,9 +16,9 @@ describe('resolveDesktopPersistenceMigrationsFolder', () => {
     expect(resolveDesktopPersistenceMigrationsFolder({
       isPackaged: true,
       cwd: 'C:/repo/megumi',
-      resourcesPath: 'C:/Users/anwen/AppData/Local/Megumi/app-0.1.0/resources',
+      resourcesPath: 'C:/Users/tester/AppData/Local/Megumi/app-0.1.0/resources',
     })).toBe(path.resolve(
-      'C:/Users/anwen/AppData/Local/Megumi/app-0.1.0/resources',
+      'C:/Users/tester/AppData/Local/Megumi/app-0.1.0/resources',
       'persistence/migrations',
     ));
   });

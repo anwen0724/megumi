@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
   createSettingsService,
@@ -23,7 +23,7 @@ describe('Settings v2 contracts', () => {
       theme: 'midnight-blue',
       providers: {
         deepseek: {
-          api_key: 'sk-deepseek',
+          api_key: 'TEST_DEEPSEEK_API_KEY',
         },
       },
     });
@@ -51,7 +51,7 @@ describe('Settings v2 contracts', () => {
       },
       providers: {
         deepseek: {
-          api_key: 'sk-deepseek',
+          api_key: 'TEST_DEEPSEEK_API_KEY',
           enabled: false,
         },
       },

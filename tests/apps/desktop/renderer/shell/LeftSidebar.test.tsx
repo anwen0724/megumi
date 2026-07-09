@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -8,7 +8,7 @@ const projects = [
   {
     id: 'project-1',
     name: 'megumi',
-    repoPath: 'C:/all/work/study/megumi',
+    repoPath: 'C:/workspaces/megumi',
     status: 'available' as const,
     sessions: [
       { id: 'session-1', title: '了解项目', meta: '1 天', active: true },

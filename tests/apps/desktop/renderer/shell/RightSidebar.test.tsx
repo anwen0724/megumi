@@ -41,7 +41,7 @@ describe('RightSidebar', () => {
         {
           id: 'project-1',
           name: 'Megumi',
-          repoPath: 'C:/all/work/study/megumi',
+          repoPath: 'C:/workspaces/megumi',
           createdAt: '2026-05-09T00:00:00.000Z',
           projectId: 'project-1',
           repoPathKey: 'c:/all/work/study/megumi',
@@ -111,7 +111,7 @@ describe('RightSidebar', () => {
 
     expect(screen.getByRole('heading', { name: 'Files' })).toBeInTheDocument();
     expect(screen.getByText('Megumi')).toBeInTheDocument();
-    expect(screen.getByText('C:/all/work/study/megumi')).toHaveAttribute('title', 'C:/all/work/study/megumi');
+    expect(screen.getByText('C:/workspaces/megumi')).toHaveAttribute('title', 'C:/workspaces/megumi');
     expect(await screen.findByText('No files found')).toBeInTheDocument();
     expect(screen.queryByText('Tools')).not.toBeInTheDocument();
 
