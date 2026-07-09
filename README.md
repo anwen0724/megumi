@@ -1,61 +1,82 @@
 # Megumi
 
-Megumi is a local-first desktop AI agent tool for working with local code workspaces.
+[English](./README.md) | [简体中文](./README.zh-CN.md)
 
-The first product direction is to bring a Claude Code / Codex-style agentic development workflow into a desktop app: choose a workspace, configure an AI provider, ask the agent to inspect context, plan work, request permission for actions, edit files, run commands, and stream progress in one visible session.
+Megumi is a local-first desktop coding agent for working with real codebases.
 
-## Status
+It brings a Codex-style development workflow into a desktop app: open a local workspace, configure your own model provider, ask the agent to understand the project, make changes, run verification commands, and follow its work in a visible session timeline.
 
-Megumi is in early development.
+Megumi is built for developers who want an agentic coding workflow without giving up local workspace control.
 
-The current build includes the desktop shell, custom UI, provider settings, local configuration storage, project/workspace selection, session/run streaming, and foundations for approvals, artifacts, memory, and workspace context. Concrete built-in tools, file edits, command execution, and richer permission workflows are still under development.
+## Why Megumi
 
-## Features
+Megumi brings a Codex-style coding agent workflow into a local desktop app.
 
-Available today:
+Instead of switching between a chat window, terminal, editor, and file browser, you can work with an agent in one visible session: ask it to understand a codebase, inspect relevant files, make changes, run verification commands, and explain what happened.
 
-- Electron desktop app with custom window chrome
-- Local provider configuration
-- DeepSeek / OpenAI-compatible chat runtime
-- Streaming assistant responses
-- Project/workspace selection
-- Session/run event timeline foundations
-- Foundations for approvals, artifacts, memory, and workspace context
-- Local `~/.megumi` runtime directory
-- Local settings and provider credentials stored in `~/.megumi/settings.json`
-- Warm and neutral desktop UI themes
+Megumi is designed around a few principles:
 
-Planned:
+- Local workspaces are first-class.
+- You choose the model provider.
+- Agent actions are visible as they happen.
+- File writes and command execution go through approval.
+- Sessions, settings, runtime data, and logs stay local by default.
+- Workspace changes produced by the agent are tracked in the conversation.
 
-- Built-in workspace tools
-- File editing and patch workflows
-- Command execution with permission controls
-- Richer approval and audit flows
-- Deeper context and memory integration
-- Claude Code-style agent workflows in a desktop interface
+## What It Does
 
-## Screenshots
+Megumi is designed to support the core work of a coding agent:
 
-Screenshots coming soon.
+- Understand codebases: explore project structure, read relevant files, trace implementation paths, and explain how systems fit together.
+- Plan changes: break down engineering tasks, reason about tradeoffs, and propose implementation steps before editing.
+- Modify code: implement features, fix bugs, refactor modules, update tests, and adjust documentation when needed.
+- Use tools: search files, inspect code, edit the workspace, run commands, execute tests, and collect diagnostics.
+- Debug systematically: read errors, reproduce failures, trace root causes, apply targeted fixes, and verify the result.
+- Review work: summarize changes, identify risks, surface missing tests, and help prepare code for review.
+- Manage context: carry project instructions, session history, tool results, workspace state, and long-running task context across an agent run.
+- Operate with approval: ask before sensitive file writes, command execution, or other high-impact actions.
 
-## Install Megumi
+## Install
 
-Windows users can download the latest unsigned installer from GitHub Releases.
+Windows users can download the latest installer from GitHub Releases.
 
-1. Download `MegumiSetup.exe` from the latest release.
+1. Download the latest `MegumiSetup.exe`.
 2. Run the installer.
-3. Windows SmartScreen may show an "Unknown publisher" warning because the open-source build is unsigned.
-4. Start Megumi and complete the first-run setup wizard.
+3. Start Megumi.
+4. Configure a model provider in Settings.
+5. Open a workspace and start working with the agent.
 
-Megumi creates its default home directory at:
+The current Windows build is unsigned, so Windows SmartScreen may show an "Unknown publisher" warning.
+
+## Configure a Model Provider
+
+Megumi uses model providers configured by the user.
+
+In Settings, add a provider with:
+
+- provider name
+- protocol
+- base URL
+- API key
+- model IDs
+
+Megumi currently targets OpenAI-compatible provider APIs.
+
+Provider settings are stored locally under the Megumi home directory.
+
+## Local-First Data
+
+Megumi stores local app data under:
 
 ```text
-C:\Users\<you>\.megumi
+~/.megumi
 ```
 
-Provider API keys entered during setup are intentionally written to `~/.megumi/settings.json` by the current settings design.
+This includes local settings, sessions, runtime database files, logs, and provider configuration.
 
-## Getting Started
+Workspace operations happen on your local machine. Prompts and relevant workspace context are sent only to the model provider you configure.
+
+## Development
 
 Install dependencies:
 
@@ -69,58 +90,50 @@ Start the desktop app:
 npm start
 ```
 
-If native modules need to be rebuilt for Electron:
+If Electron native modules need to be rebuilt:
 
 ```bash
 npm run start:fix-native
 ```
 
-## Configuration
-
-Megumi stores local runtime data under `~/.megumi` by default.
-
-Provider API keys can be configured in the app settings or with environment variables:
-
-```bash
-DEEPSEEK_API_KEY=<your-deepseek-api-key>
-OPENAI_API_KEY=<your-openai-api-key>
-ANTHROPIC_API_KEY=<your-anthropic-api-key>
-```
-
-You can copy `.env.example` to `.env` for local development. Do not commit `.env`.
-
-## Development
-
-Run the test suite:
+Run tests:
 
 ```bash
 npm test
 ```
 
-Type-check the project:
+Type-check:
 
 ```bash
 npx tsc --noEmit
 ```
 
-Package the desktop app:
+Package the app:
 
 ```bash
 npm run package
 ```
 
-Contributor and agent workflow notes live in `AGENTS.md`.
+If tests fail after switching between Electron and Node native module targets, rebuild the Node native module:
 
-## Tech Stack
+```bash
+npm run rebuild:native:node
+```
 
-- Electron
-- React
-- TypeScript
-- Zustand
-- Tailwind CSS
-- Vite
-- SQLite / better-sqlite3
-- Vitest
+## Repository Layout
+
+```text
+apps/desktop          Electron desktop app
+packages/coding-agent Core coding agent runtime
+packages/ai           Model provider protocol layer
+tests                 Vitest test suite
+```
+
+## Contributing
+
+Contributions are welcome.
+
+Please keep changes focused, avoid committing local runtime data or secrets, and run tests before opening a pull request.
 
 ## License
 
