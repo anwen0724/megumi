@@ -2,6 +2,7 @@ export { Badge } from './Badge';
 export { Button } from './Button';
 export { IconButton } from './IconButton';
 export { Panel, PanelHeader, PanelTitle } from './Panel';
+export { RecoverableErrorBoundary } from './RecoverableErrorBoundary';
 export { Tabs } from './Tabs';
 export { TextField } from './TextField';
 export { ToastViewport } from './ToastViewport';

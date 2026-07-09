@@ -1,6 +1,6 @@
 ﻿// @vitest-environment jsdom
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   TimelineAssistantMessage,
   TimelineSeparatorMessage,
@@ -8,8 +8,18 @@ import type {
 } from '@megumi/coding-agent/projections/timeline';
 import { TimelineMessage } from '@megumi/desktop/renderer/features/chat/components/TimelineMessage';
 import { WorkspaceChangeFooter } from '@megumi/desktop/renderer/features/chat/components/WorkspaceChangeFooter';
+import { ToastViewport, useToastStore } from '@megumi/desktop/renderer/shared/ui';
 
 const createdAt = '2026-05-24T12:00:00.000Z';
+
+beforeEach(() => {
+  useToastStore.getState().clearToasts();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  useToastStore.getState().clearToasts();
+});
 
 function userMessage(): TimelineUserMessage {
   return {
@@ -854,6 +864,43 @@ describe('TimelineMessage canonical block rendering', () => {
       const row = screen.getByText(label).closest('div');
       expect(row?.querySelector('svg')?.getAttribute('class')).not.toContain('text-[var(--color-success)]');
     }
+  });
+
+  it('keeps rendering safe blocks when one answer block is malformed', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    render(
+      <>
+        <ToastViewport />
+        <TimelineMessage message={assistantMessage({
+          blocks: [
+            {
+              blockId: 'answer-bad',
+              kind: 'answer_text',
+              runId: 'run-1',
+              textId: 'text-bad',
+              status: 'completed',
+              text: undefined,
+              format: 'markdown',
+              createdAt,
+            } as never,
+            {
+              blockId: 'answer-1',
+              kind: 'answer_text',
+              runId: 'run-1',
+              textId: 'text-1',
+              status: 'completed',
+              text: 'Final answer remains visible.',
+              format: 'markdown',
+              createdAt,
+            },
+          ],
+        })} />
+      </>,
+    );
+
+    expect(screen.getByText('Final answer remains visible.')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Assistant response could not be displayed');
   });
 });
 

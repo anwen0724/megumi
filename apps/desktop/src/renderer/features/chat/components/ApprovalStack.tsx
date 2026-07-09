@@ -1,5 +1,6 @@
-﻿import { ApprovalCard, type ApprovalCardResolvePayload } from '../../../entities/approval';
+import { ApprovalCard, type ApprovalCardResolvePayload } from '../../../entities/approval';
 import type { ApprovalRequest } from '../../../entities/approval/store';
+import { RecoverableErrorBoundary } from '../../../shared/ui';
 
 interface ApprovalStackProps {
   requests: ApprovalRequest[];
@@ -17,11 +18,16 @@ export function ApprovalStack({ requests, onResolve }: ApprovalStackProps) {
       className="space-y-2"
     >
       {requests.map((request) => (
-        <ApprovalCard
+        <RecoverableErrorBoundary
           key={request.approvalRequestId}
-          request={request}
-          onResolve={onResolve}
-        />
+          title="Approval could not be displayed"
+          resetKey={`${request.approvalRequestId}:${request.status}:${request.resolvedAt ?? ''}`}
+        >
+          <ApprovalCard
+            request={request}
+            onResolve={onResolve}
+          />
+        </RecoverableErrorBoundary>
       ))}
     </section>
   );

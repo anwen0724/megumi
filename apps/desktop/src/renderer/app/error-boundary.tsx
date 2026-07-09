@@ -1,27 +1,40 @@
 import { Component, type ReactNode } from 'react';
 
-interface State { error: Error | null; }
+interface State {
+  error: Error | null;
+}
 
 export default class ErrorBoundary extends Component<{ children: ReactNode }, State> {
   state: State = { error: null };
-  static getDerivedStateFromError(error: Error) { return { error }; }
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
   render() {
     if (this.state.error) {
       return (
-        <div className="h-screen flex items-center justify-center bg-gray-950">
-          <div className="text-center">
-            <h2 className="text-red-400 text-lg mb-2">出错了</h2>
-            <p className="text-gray-400 text-sm mb-4">{this.state.error.message}</p>
+        <div className="min-h-screen bg-[var(--color-app-bg)] text-[var(--color-text)]">
+          <div
+            role="alert"
+            className="fixed left-1/2 top-4 z-[100] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 rounded-md border border-[var(--color-danger)] bg-[var(--color-danger-soft)] px-3 py-2 text-sm shadow-lg"
+          >
+            <div className="font-medium">Something went wrong</div>
+            <div className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">
+              {this.state.error.message}
+            </div>
             <button
+              type="button"
               onClick={() => this.setState({ error: null })}
-              className="px-4 py-2 bg-blue-600 text-white text-sm rounded"
+              className="mt-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]"
             >
-              重试
+              Retry
             </button>
           </div>
         </div>
       );
     }
+
     return this.props.children;
   }
 }

@@ -6,6 +6,7 @@
 } from '@megumi/coding-agent/projections/timeline';
 import { TimelineMarkdown } from './TimelineMarkdown';
 import { ProcessDisclosureBlockView } from './ProcessDisclosureBlockView';
+import { RecoverableErrorBoundary } from '../../../shared/ui';
 
 function UserBlockView({ block }: { block: UserTimelineBlock }) {
   if (block.kind === 'user_attachment') {
@@ -37,6 +38,10 @@ function BranchSeparatorBlockView({ block }: { block: BranchSeparatorBlock }) {
   );
 }
 
+function blockResetKey(block: { blockId: string; status?: unknown }): string {
+  return `${block.blockId}:${String(block.status ?? '')}`;
+}
+
 interface TimelineMessageBlocksProps {
   message: CanonicalTimelineMessage;
 }
@@ -45,24 +50,55 @@ export function TimelineMessageBlocks({ message }: TimelineMessageBlocksProps) {
   if (message.role === 'user') {
     return (
       <>
-        {message.blocks.map((block) => <UserBlockView key={block.blockId} block={block} />)}
+        {message.blocks.map((block) => (
+          <RecoverableErrorBoundary
+            key={block.blockId}
+            title="Message block could not be displayed"
+            resetKey={block.blockId}
+          >
+            <UserBlockView block={block} />
+          </RecoverableErrorBoundary>
+        ))}
       </>
     );
   }
 
   if (message.role === 'separator') {
-    return <BranchSeparatorBlockView block={message.blocks[0]} />;
+    return (
+      <RecoverableErrorBoundary
+        title="Message separator could not be displayed"
+        resetKey={message.messageId}
+      >
+        <BranchSeparatorBlockView block={message.blocks[0]} />
+      </RecoverableErrorBoundary>
+    );
   }
 
   return (
     <div className="min-w-0 space-y-4">
       {message.blocks.map((block) => {
         if (block.kind === 'process_disclosure') {
-          return <ProcessDisclosureBlockView key={block.blockId} block={block} />;
+          return (
+            <RecoverableErrorBoundary
+              key={block.blockId}
+              title="Process details could not be displayed"
+              resetKey={blockResetKey(block)}
+            >
+              <ProcessDisclosureBlockView block={block} />
+            </RecoverableErrorBoundary>
+          );
         }
 
         if (block.kind === 'answer_text') {
-          return <AnswerTextBlockView key={block.blockId} block={block} />;
+          return (
+            <RecoverableErrorBoundary
+              key={block.blockId}
+              title="Assistant response could not be displayed"
+              resetKey={blockResetKey(block)}
+            >
+              <AnswerTextBlockView block={block} />
+            </RecoverableErrorBoundary>
+          );
         }
 
         const exhaustive: never = block;

@@ -1,7 +1,7 @@
 ﻿import { memo, type ReactNode } from 'react';
 import { GitBranch, RotateCcw } from 'lucide-react';
 import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/coding-agent/projections/timeline';
-import { IconButton } from '../../../shared/ui';
+import { IconButton, RecoverableErrorBoundary } from '../../../shared/ui';
 import { TimelineMessageBlocks } from './TimelineMessageBlocks';
 
 interface TimelineMessageProps {
@@ -86,7 +86,11 @@ function TimelineMessageComponent({
           >
             {formatTime(message.createdAt)}
           </time>
-          {afterContent}
+          {afterContent ? (
+            <RecoverableErrorBoundary title="Message details could not be displayed" resetKey={message.messageId}>
+              {afterContent}
+            </RecoverableErrorBoundary>
+          ) : null}
         </div>
       </article>
     );
@@ -105,7 +109,11 @@ function TimelineMessageComponent({
         </div>
 
         <TimelineMessageBlocks message={message} />
-        {afterContent}
+        {afterContent ? (
+          <RecoverableErrorBoundary title="Message details could not be displayed" resetKey={message.messageId}>
+            {afterContent}
+          </RecoverableErrorBoundary>
+        ) : null}
       </div>
     </article>
   );

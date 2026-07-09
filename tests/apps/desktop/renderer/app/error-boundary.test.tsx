@@ -22,15 +22,15 @@ describe('ErrorBoundary', () => {
     expect(screen.getByText('All good')).toBeTruthy();
   });
 
-  it('should catch errors and show error UI with retry button', () => {
+  it('should catch errors and show a small top fallback with retry button', () => {
     render(
       <ErrorBoundary>
         <BrokenComponent shouldThrow={true} />
       </ErrorBoundary>
     );
-    expect(screen.getByText('出错了')).toBeTruthy();
+    expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong');
     expect(screen.getByText('Test crash')).toBeTruthy();
-    expect(screen.getByText('重试')).toBeTruthy();
+    expect(screen.getByText('Retry')).toBeTruthy();
   });
 
   it('should re-render children after clicking retry', () => {
@@ -42,7 +42,7 @@ describe('ErrorBoundary', () => {
     expect(screen.queryByText('All good')).toBeNull();
 
     // Click retry — this time the child won't throw (we replace it)
-    screen.getByText('重试').click();
+    screen.getByText('Retry').click();
 
     // Re-render with a non-throwing child to simulate recovery
     rerender(
