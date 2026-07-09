@@ -8,6 +8,12 @@ It brings a Codex-style development workflow into a desktop app: open a local wo
 
 Megumi is built for developers who want an agentic coding workflow without giving up local workspace control.
 
+## Preview
+
+![Megumi startup screen](./assets/screenshots/startup-screen.png)
+
+![Megumi chat timeline](./assets/screenshots/chat-timeline.png)
+
 ## Why Megumi
 
 Megumi brings a Codex-style coding agent workflow into a local desktop app.
