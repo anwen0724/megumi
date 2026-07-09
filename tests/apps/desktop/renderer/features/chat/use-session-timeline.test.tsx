@@ -9,6 +9,7 @@ import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useSessionTimeline } from '@megumi/desktop/renderer/features/chat/hooks/use-session-timeline';
 import { useRuntimeTimelineStore } from '@megumi/desktop/renderer/features/runtime-timeline';
+import { useToastStore } from '@megumi/desktop/renderer/shared/ui';
 
 const createdAt = '2026-05-17T00:00:00.000Z';
 
@@ -39,6 +40,7 @@ describe('useSessionTimeline', () => {
 
   beforeEach(() => {
     runtimeEventCallback = undefined;
+    useToastStore.getState().clearToasts();
     useRuntimeTimelineStore.getState().reset();
     useRunStore.getState().resetRuns();
     useChatUiStore.setState({
@@ -153,5 +155,75 @@ describe('useSessionTimeline', () => {
       agentStatus: 'idle',
       lastError: null,
     });
+  });
+
+  it('cancels a hydrated active run from the run store', async () => {
+    useRunStore.setState({
+      activeRunId: 'run-1',
+      runs: {
+        'run-1': {
+          runId: 'run-1',
+          sessionId: 'session-1',
+          status: 'waiting_for_approval',
+          updatedAt: createdAt,
+        },
+      },
+    });
+    const cancel = vi.mocked(window.megumi.session.message.cancel);
+    const { result } = renderHook(() => useSessionTimeline());
+
+    await act(async () => {
+      await result.current.cancelSessionMessage();
+    });
+
+    expect(cancel).toHaveBeenCalledWith(expect.objectContaining({
+      payload: { runId: 'run-1' },
+    }));
+    expect(useChatUiStore.getState().sessionStates['session-1']).toMatchObject({
+      agentStatus: 'idle',
+    });
+  });
+
+  it('shows a toast when cancel fails', async () => {
+    useRunStore.setState({
+      activeRunId: 'run-1',
+      runs: {
+        'run-1': {
+          runId: 'run-1',
+          sessionId: 'session-1',
+          status: 'running',
+          updatedAt: createdAt,
+        },
+      },
+    });
+    vi.mocked(window.megumi.session.message.cancel).mockResolvedValueOnce({
+      ok: false,
+      error: {
+        code: 'ipc_handler_failed',
+        message: 'Cancel service failed.',
+        severity: 'error',
+        retryable: true,
+        source: 'main',
+      },
+      meta: {
+        requestId: 'request-cancel-1',
+        channel: 'session:message:cancel',
+        handledAt: createdAt,
+        durationMs: 1,
+      },
+    });
+    const { result } = renderHook(() => useSessionTimeline());
+
+    await act(async () => {
+      await result.current.cancelSessionMessage();
+    });
+
+    expect(useToastStore.getState().toasts).toEqual([
+      expect.objectContaining({
+        tone: 'error',
+        title: 'Stop failed',
+        message: 'Cancel service failed.',
+      }),
+    ]);
   });
 });

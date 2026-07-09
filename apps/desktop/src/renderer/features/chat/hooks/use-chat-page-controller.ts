@@ -8,6 +8,7 @@ import { useProjectStore } from '../../../entities/project/store';
 import { useRunStore } from '../../../entities/run/store';
 import { useSessionStore } from '../../../entities/session/store';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
+import { showToast } from '../../../shared/ui';
 import { runtimeTimelineSessionKey, useRuntimeTimelineStore } from '../../runtime-timeline';
 import { useSessionTimeline } from './use-session-timeline';
 import type { ComposerStatus, ComposerSubmitPayload } from '../components/Composer';
@@ -223,10 +224,25 @@ export function useChatPageController() {
       decidedAt: new Date().toISOString(),
     };
 
-    await window.megumi.approval.resolve(createRendererRuntimeIpcRequest(
+    const result = await window.megumi.approval.resolve(createRendererRuntimeIpcRequest(
       IPC_CHANNELS.approval.resolve,
       resolvePayload,
     ));
+    if (!result.ok) {
+      showToast({
+        tone: 'error',
+        title: 'Approval failed',
+        message: result.error.message,
+      });
+      return;
+    }
+    if (isApprovalResolveFailed(result.data)) {
+      showToast({
+        tone: 'error',
+        title: 'Approval failed',
+        message: result.data.failure.message,
+      });
+    }
   }
 
   return {
@@ -256,4 +272,18 @@ export function useChatPageController() {
     canShowUserMessageActions: (message: CanonicalTimelineMessage) =>
       canShowUserMessageActions(message, timelineMessages, userActionsBlocked),
   };
+}
+
+function isApprovalResolveFailed(value: unknown): value is {
+  status: 'failed';
+  failure: { message: string };
+} {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    'status' in value &&
+    (value as { status?: unknown }).status === 'failed' &&
+    'failure' in value &&
+    typeof (value as { failure?: { message?: unknown } }).failure?.message === 'string',
+  );
 }

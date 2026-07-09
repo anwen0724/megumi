@@ -4,11 +4,13 @@ import type { SessionMessageSendPayload } from '@megumi/desktop/main/ipc/schemas
 import type { RuntimeEvent } from '@megumi/coding-agent/events';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
+import { useRunStore } from '../../../entities/run/store';
 import { createSessionTitleFromPrompt } from '../../../entities/session/session-title';
 import { useSessionStore } from '../../../entities/session/store';
 import { useRuntimeTimelineStore } from '../../runtime-timeline';
 import { dispatchRuntimeEvent } from '../../runtime-events/runtime-event-dispatcher';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
+import { showToast } from '../../../shared/ui';
 import type { ComposerSubmitPayload } from '../components/Composer';
 import { localSessionFromPersistedSession } from '../../session-history/session-history-mappers';
 
@@ -372,26 +374,57 @@ export function useSessionTimeline() {
   }, [sendSessionMessage]);
 
   const cancelSessionMessage = useCallback(async () => {
-    const runId = activeRunIdRef.current;
+    const runState = useRunStore.getState();
+    const runId = activeRunIdRef.current ?? runState.activeRunId;
+    const runSessionId = runSessionIdRef.current ?? (runId ? runState.runs[runId]?.sessionId : null);
 
     if (!runId) {
+      showToast({
+        tone: 'warning',
+        title: 'Nothing to stop',
+        message: 'There is no active Agent Run to cancel.',
+      });
       return;
     }
 
-    const result = await window.megumi.session.message.cancel(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.sessionMessageCancel, {
-        runId,
-      }, {
-        traceId: activeTraceIdRef.current ?? undefined,
-      }),
-    );
+    try {
+      const result = await window.megumi.session.message.cancel(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.sessionMessageCancel, {
+          runId,
+        }, {
+          traceId: activeTraceIdRef.current ?? undefined,
+        }),
+      );
 
-    if (result?.ok && result.data.cancelled) {
-      useChatUiStore.getState().setAgentStatus('idle', runSessionIdRef.current);
+      if (!result?.ok) {
+        showToast({
+          tone: 'error',
+          title: 'Stop failed',
+          message: result?.error?.message ?? 'The Agent Run could not be cancelled.',
+        });
+        return;
+      }
+
+      if (!result.data.cancelled) {
+        showToast({
+          tone: 'warning',
+          title: 'Stop did not apply',
+          message: 'The Agent Run is no longer cancellable.',
+        });
+        return;
+      }
+
+      useChatUiStore.getState().setAgentStatus('idle', runSessionId);
       activeRunIdRef.current = null;
       activeTraceIdRef.current = null;
       runSessionIdRef.current = null;
       processedEventIdsByRunRef.current.clear();
+    } catch (error) {
+      showToast({
+        tone: 'error',
+        title: 'Stop failed',
+        message: error instanceof Error ? error.message : 'The Agent Run could not be cancelled.',
+      });
     }
   }, []);
 

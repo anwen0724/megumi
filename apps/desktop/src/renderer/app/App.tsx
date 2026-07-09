@@ -3,6 +3,7 @@ import { ThemeProvider } from '../shared/theme';
 import { AppBody } from '../shell/AppBody';
 import { WindowTitleBar } from '../shell/WindowTitleBar';
 import { SetupWizard, useSetupWizardStore } from '../features/setup-wizard';
+import { ToastViewport } from '../shared/ui';
 
 export default function App() {
   const status = useSetupWizardStore((state) => state.status);
@@ -36,6 +37,7 @@ export default function App() {
         ) : (
           <AppBody />
         )}
+        <ToastViewport />
       </div>
     </ThemeProvider>
   );
