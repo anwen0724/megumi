@@ -1,4 +1,10 @@
-import { describe, expect, it } from 'vitest';
+// @vitest-environment node
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createDatabase, type MegumiDatabase } from '@megumi/coding-agent/persistence/connection';
+import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
 import type {
   ActivateSkillResponse,
   ExecuteSkillCommandRequest,
@@ -12,6 +18,7 @@ import type {
   SkillService,
   SkillUsageRecord,
 } from '@megumi/coding-agent/skills';
+import { SkillRepository, SkillServiceImpl } from '@megumi/coding-agent/skills';
 
 describe('Skill module public contracts', () => {
   it('exports Skill model, entities, DTOs, and service method results', async () => {
@@ -129,3 +136,196 @@ describe('Skill module public contracts', () => {
     await expect(service.getSkillCatalog({})).resolves.toEqual({ status: 'ok', skills: [] });
   });
 });
+
+describe('SkillServiceImpl', () => {
+  let database: MegumiDatabase;
+  let repository: SkillRepository;
+  let tempRoot: string;
+
+  beforeEach(() => {
+    database = createDatabase(':memory:');
+    applyCodingAgentDatabaseMigrations(database);
+    seedWorkspaceSessionAndRun(database);
+    repository = new SkillRepository(database);
+    tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-skill-service-'));
+    writeSkill(tempRoot, 'checks', {
+      name: 'checks:test',
+      description: 'Run project checks',
+      content: 'Use this skill for project checks.',
+      files: {
+        'references/usage.md': 'Run npm test.',
+        'scripts/check.ps1': 'Write-Host ok',
+      },
+    });
+  });
+
+  afterEach(() => {
+    database.close();
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  });
+
+  it('lists, gets, enables, disables, and catalogs skills through one service', async () => {
+    const service = createService(repository, tempRoot);
+
+    await expect(service.listSkills({ workspaceId: 'workspace:1' })).resolves.toMatchObject({
+      status: 'ok',
+      skills: [{
+        skillId: 'checks:test',
+        available: true,
+      }],
+    });
+    await expect(service.getSkill({ skillId: 'checks:test', workspaceId: 'workspace:1' })).resolves.toMatchObject({
+      status: 'ok',
+      skill: {
+        content: 'Use this skill for project checks.\n',
+      },
+    });
+
+    const disabled = await service.disableSkill({ skillId: 'checks:test', workspaceId: 'workspace:1' });
+    expect(disabled).toMatchObject({
+      status: 'ok',
+      availability: { available: false },
+    });
+    await expect(service.getSkillCatalog({ workspaceId: 'workspace:1' })).resolves.toEqual({
+      status: 'ok',
+      skills: [],
+    });
+
+    const enabled = await service.enableSkill({ skillId: 'checks:test', workspaceId: 'workspace:1' });
+    expect(enabled).toMatchObject({
+      status: 'ok',
+      availability: { available: true },
+    });
+    await expect(service.getSkillCatalog({ workspaceId: 'workspace:1' })).resolves.toEqual({
+      status: 'ok',
+      skills: [{ skillId: 'checks:test', name: 'checks:test', description: 'Run project checks' }],
+    });
+  });
+
+  it('activates available skills, records usage, and returns only activated content', async () => {
+    const service = createService(repository, tempRoot);
+
+    const response = await service.activateSkill({
+      skillId: 'checks:test',
+      sessionId: 'session:1',
+      workspaceId: 'workspace:1',
+      runId: 'run:1',
+      trigger: 'command',
+    });
+
+    expect(response).toEqual({
+      status: 'ok',
+      activatedSkill: {
+        skillId: 'checks:test',
+        name: 'checks:test',
+        description: 'Run project checks',
+        content: 'Use this skill for project checks.\n',
+      },
+    });
+    expect(response).not.toHaveProperty('skillUsageRecordId');
+    expect(repository.listUsageRecordsBySession('session:1')).toHaveLength(1);
+  });
+
+  it('rejects unavailable activation and reads only allowed resources', async () => {
+    const service = createService(repository, tempRoot);
+    await service.disableSkill({ skillId: 'checks:test', workspaceId: 'workspace:1' });
+
+    await expect(service.activateSkill({
+      skillId: 'checks:test',
+      sessionId: 'session:1',
+      workspaceId: 'workspace:1',
+      runId: 'run:1',
+      trigger: 'model_tool',
+    })).resolves.toEqual({ status: 'unavailable', skillId: 'checks:test' });
+
+    await expect(service.readSkillResource({
+      skillId: 'checks:test',
+      resourcePath: 'references/usage.md',
+      workspaceId: 'workspace:1',
+    })).resolves.toEqual({
+      status: 'ok',
+      skillId: 'checks:test',
+      resourcePath: 'references/usage.md',
+      content: 'Run npm test.',
+      contentType: 'text',
+    });
+    await expect(service.readSkillResource({
+      skillId: 'checks:test',
+      resourcePath: 'scripts/check.ps1',
+      workspaceId: 'workspace:1',
+    })).resolves.toMatchObject({
+      status: 'not_allowed',
+      skillId: 'checks:test',
+    });
+  });
+});
+
+function createService(repository: SkillRepository, rootPath: string): SkillServiceImpl {
+  return new SkillServiceImpl({
+    repository,
+    rootResolver: {
+      resolveSkillRoots: () => [{ kind: 'project', rootPath }],
+    },
+    clock: { now: () => '2026-07-09T00:00:00.000Z' },
+    ids: {
+      skillAvailabilityId: () => 'skill-availability:generated',
+      skillUsageRecordId: () => 'skill-usage-record:generated',
+    },
+  });
+}
+
+function writeSkill(root: string, packageName: string, input: {
+  name: string;
+  description: string;
+  content: string;
+  files?: Record<string, string>;
+}): void {
+  const packagePath = path.join(root, packageName);
+  fs.mkdirSync(packagePath, { recursive: true });
+  fs.writeFileSync(path.join(packagePath, 'SKILL.md'), [
+    '---',
+    `name: ${input.name}`,
+    `description: ${input.description}`,
+    '---',
+    '',
+    input.content,
+    '',
+  ].join('\n'));
+  for (const [relativePath, content] of Object.entries(input.files ?? {})) {
+    const filePath = path.join(packagePath, relativePath);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, content);
+  }
+}
+
+function seedWorkspaceSessionAndRun(database: MegumiDatabase): void {
+  database.prepare(`
+    INSERT INTO workspaces (
+      workspace_id, name, root_path, root_path_key, status,
+      created_at, updated_at, last_opened_at
+    ) VALUES (
+      'workspace:1', 'Workspace', 'C:/workspace', 'c:/workspace', 'active',
+      '2026-07-09T00:00:00.000Z', '2026-07-09T00:00:00.000Z', '2026-07-09T00:00:00.000Z'
+    )
+  `).run();
+  database.prepare(`
+    INSERT INTO sessions (
+      session_id, workspace_id, title, status, active_entry_id,
+      created_at, updated_at, archived_at
+    ) VALUES (
+      'session:1', 'workspace:1', 'Session', 'active', NULL,
+      '2026-07-09T00:00:00.000Z', '2026-07-09T00:00:00.000Z', NULL
+    )
+  `).run();
+  database.prepare(`
+    INSERT INTO agent_runs (
+      run_id, workspace_id, session_id, provider_id, model_id,
+      trigger_type, trigger_user_message_id, trigger_command_name, status,
+      created_at, started_at, completed_at, failure_json
+    ) VALUES (
+      'run:1', 'workspace:1', 'session:1', 'openai', 'gpt-test',
+      'command', NULL, 'skill', 'completed',
+      '2026-07-09T00:00:00.000Z', NULL, NULL, NULL
+    )
+  `).run();
+}
