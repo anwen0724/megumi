@@ -31,13 +31,30 @@ export function registerApprovalHandlers(
     logger: options.logger,
     handle: async (request, event) => {
       const result = await service.host.approval.resolve(request.payload);
-      if (result.events) {
+      if (result.status === 'resolved' && result.events) {
         void forwardRuntimeEvents(event.sender, result.events, { logger: options.logger });
       }
-      return result.data;
+      if (result.status === 'failed' && result.events) {
+        void forwardRuntimeEvents(event.sender, asyncEvents(result.events), { logger: options.logger });
+      }
+      if (result.status === 'failed') {
+        return {
+          status: 'failed',
+          approvalRequestId: result.approvalRequestId,
+          failure: result.failure,
+        };
+      }
+      return {
+        status: 'resolved',
+        data: result.data,
+      };
     },
     mapError: mapApprovalIpcError,
   }));
+}
+
+async function* asyncEvents<T>(events: T[]): AsyncIterable<T> {
+  yield* events;
 }
 
 function mapApprovalIpcError(): RuntimeIpcError {
