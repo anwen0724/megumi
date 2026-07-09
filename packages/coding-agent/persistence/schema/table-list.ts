@@ -11,6 +11,8 @@ export const targetDatabaseTables = [
   'agent_run_runtime_events',
   'workspace_changes',
   'workspace_changed_files',
+  'skill_availability',
+  'skill_usage_record',
   'memory_records',
   'memory_markdown_mirrors',
   'artifacts',

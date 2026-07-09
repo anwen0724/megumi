@@ -168,6 +168,30 @@ export const workspaceChangedFiles = sqliteTable('workspace_changed_files', {
   uniqueIndex('idx_workspace_changed_files_change_path').on(table.changeSetId, table.workspacePath),
 ]);
 
+export const skillAvailability = sqliteTable('skill_availability', {
+  skillAvailabilityId: text('skill_availability_id').primaryKey(),
+  skillId: text('skill_id').notNull(),
+  workspaceId: text('workspace_id'),
+  available: integer('available').notNull(),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+}, (table) => [
+  uniqueIndex('idx_skill_availability_skill_workspace').on(table.skillId, table.workspaceId),
+]);
+
+export const skillUsageRecord = sqliteTable('skill_usage_record', {
+  skillUsageRecordId: text('skill_usage_record_id').primaryKey(),
+  skillId: text('skill_id').notNull(),
+  workspaceId: text('workspace_id'),
+  sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
+  runId: text('run_id').references(() => agentRuns.runId, { onDelete: 'set null' }),
+  triggerKind: text('trigger_kind').notNull(),
+  createdAt: text('created_at').notNull(),
+}, (table) => [
+  index('idx_skill_usage_record_session_created').on(table.sessionId, table.createdAt),
+  index('idx_skill_usage_record_run_created').on(table.runId, table.createdAt),
+]);
+
 export const memoryRecords = sqliteTable('memory_records', {
   memoryId: text('memory_id').primaryKey(),
   workspaceId: text('workspace_id').references(() => workspaces.workspaceId, { onDelete: 'set null' }),

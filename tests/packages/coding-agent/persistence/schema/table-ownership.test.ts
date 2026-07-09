@@ -47,6 +47,16 @@ describe('persistence table ownership', () => {
         'agent_run_runtime_events',
       ],
     });
+
+    expect(persistenceTableOwnership.skill).toMatchObject({
+      module: 'skills',
+      repository: 'SkillRepository',
+      modulePath: 'packages/coding-agent/skills',
+      tables: [
+        'skill_availability',
+        'skill_usage_record',
+      ],
+    });
   });
 
   it('keeps repository SQL writes inside each aggregate owner', () => {

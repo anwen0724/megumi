@@ -48,6 +48,15 @@ export const persistenceTableOwnership = {
       'workspace_changed_files',
     ],
   },
+  skill: {
+    module: 'skills',
+    repository: 'SkillRepository',
+    modulePath: 'packages/coding-agent/skills',
+    tables: [
+      'skill_availability',
+      'skill_usage_record',
+    ],
+  },
   memory: {
     module: 'memory',
     repository: 'MemoryRepository',
