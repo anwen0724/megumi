@@ -93,11 +93,6 @@ export function useSessionHistoryHydration() {
       return;
     }
 
-    useRuntimeTimelineStore.getState().hydrateCommittedMessages(
-      projectId,
-      sessionId,
-      timelineResult.data.messages,
-    );
     useChatUiStore.getState().setLastError(null);
 
     const runsResult = await window.megumi.run.listBySession(
@@ -119,8 +114,15 @@ export function useSessionHistoryHydration() {
     }
 
     resetHydratedRunProjection();
-    for (const event of hydratedRuntimeEventsForRuns(runsResult.data.runs, eventsByRun)) {
-      dispatchRuntimeEvent(event, { sessionId });
+    const runtimeEvents = hydratedRuntimeEventsForRuns(runsResult.data.runs, eventsByRun);
+    useRuntimeTimelineStore.getState().hydrateSessionTimeline(
+      projectId,
+      sessionId,
+      timelineResult.data.messages,
+      runtimeEvents,
+    );
+    for (const event of runtimeEvents) {
+      dispatchRuntimeEvent(event, { sessionId, projectTimeline: false });
     }
   }, []);
 

@@ -18,6 +18,7 @@ import { useRuntimeTimelineStore } from '../runtime-timeline';
 
 interface DispatchRuntimeEventOptions {
   sessionId?: string | null;
+  projectTimeline?: boolean;
 }
 
 function hasRuntimeEventAlreadyBeenDispatched(event: RuntimeEvent): boolean {
@@ -220,7 +221,9 @@ export function dispatchRuntimeEvent(event: RuntimeEvent, options?: DispatchRunt
     return;
   }
 
-  useRuntimeTimelineStore.getState().dispatch(event);
+  if (options?.projectTimeline !== false) {
+    useRuntimeTimelineStore.getState().dispatch(event);
+  }
   applyToolEvent(event, targetSessionId);
   applyApprovalEvent(event, targetSessionId);
 

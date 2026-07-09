@@ -11,6 +11,15 @@ import { useSessionHistoryHydration } from '@megumi/desktop/renderer/features/se
 
 const createdAt = '2026-05-17T00:00:00.000Z';
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((innerResolve) => {
+    resolve = innerResolve;
+  });
+
+  return { promise, resolve };
+}
+
 function runtimeEvent(
   eventType: RuntimeEvent['eventType'],
   sequence: number,
@@ -182,5 +191,76 @@ describe('useSessionHistoryHydration', () => {
     });
     expect(window.megumi.run.listBySession).toHaveBeenCalledTimes(1);
     expect(window.megumi.run.events.list).toHaveBeenCalledTimes(1);
+  });
+
+  it('rebuilds the session timeline idempotently when the same session is hydrated again', async () => {
+    const { result } = renderHook(() => useSessionHistoryHydration());
+
+    await act(async () => {
+      await result.current.hydrateSessionTimeline('session-1');
+      await result.current.hydrateSessionTimeline('session-1');
+    });
+
+    const session = useRuntimeTimelineStore.getState().sessions['project-1:session-1'];
+    const assistant = session?.messages.find((message): message is TimelineAssistantMessage =>
+      message.role === 'assistant' && message.runId === 'run-1',
+    );
+    const process = assistant?.blocks.find((block) => block.kind === 'process_disclosure');
+    const thinkingItems = process?.items.filter((item) => item.kind === 'thinking') ?? [];
+    const answerBlocks = assistant?.blocks.filter((block) => block.kind === 'answer_text') ?? [];
+
+    expect(thinkingItems).toHaveLength(1);
+    expect(thinkingItems[0]).toMatchObject({
+      kind: 'thinking',
+      text: 'Need greet.',
+    });
+    expect(answerBlocks).toHaveLength(1);
+    expect(answerBlocks[0]).toMatchObject({
+      kind: 'answer_text',
+      text: '你好，我是 Megumi。',
+    });
+    expect(window.megumi.run.listBySession).toHaveBeenCalledTimes(2);
+    expect(window.megumi.run.events.list).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not publish a partial committed-only timeline before runtime events are loaded', async () => {
+    const runsDeferred = deferred<unknown>();
+    window.megumi.run.listBySession = vi.fn().mockReturnValue(runsDeferred.promise);
+    const { result } = renderHook(() => useSessionHistoryHydration());
+
+    const hydratePromise = result.current.hydrateSessionTimeline('session-1');
+    await Promise.resolve();
+
+    expect(useRuntimeTimelineStore.getState().sessions['project-1:session-1']).toBeUndefined();
+
+    runsDeferred.resolve({
+      ok: true,
+      data: {
+        runs: [{
+          runId: 'run-1',
+          sessionId: 'session-1',
+          status: 'completed',
+          createdAt,
+          completedAt: '2026-05-17T00:00:10.000Z',
+        }],
+      },
+    });
+
+    await act(async () => {
+      await hydratePromise;
+    });
+
+    const session = useRuntimeTimelineStore.getState().sessions['project-1:session-1'];
+    const assistant = session?.messages.find((message): message is TimelineAssistantMessage =>
+      message.role === 'assistant' && message.runId === 'run-1',
+    );
+    const process = assistant?.blocks.find((block) => block.kind === 'process_disclosure');
+
+    expect(process?.items).toEqual([
+      expect.objectContaining({
+        kind: 'thinking',
+        text: 'Need greet.',
+      }),
+    ]);
   });
 });

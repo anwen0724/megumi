@@ -59,6 +59,76 @@ describe('runtime timeline store', () => {
     });
   });
 
+  it('does not project the same runtime event more than once', () => {
+    const store = useRuntimeTimelineStore.getState();
+    const thinkingDelta = runtimeEvent('model.thinking.delta', 3, {
+      modelStepId: 'thinking-1',
+      delta: 'Think once.',
+    });
+
+    store.dispatch(runtimeEvent('run.started', 1, { runKind: 'agent' }));
+    store.dispatch(runtimeEvent('model.thinking.started', 2, { modelStepId: 'thinking-1' }));
+    store.dispatch(thinkingDelta);
+    store.dispatch(thinkingDelta);
+
+    const session = useRuntimeTimelineStore.getState().sessions['project-1:session-1'];
+    const assistant = session?.messages.find((message): message is TimelineAssistantMessage =>
+      message.role === 'assistant' && message.runId === 'run-1',
+    );
+    const process = assistant?.blocks.find((block) => block.kind === 'process_disclosure');
+    const thinking = process?.items.find((item) => item.kind === 'thinking');
+
+    expect(thinking).toMatchObject({
+      kind: 'thinking',
+      text: 'Think once.',
+    });
+  });
+
+  it('rebuilds a hydrated session from committed messages before replaying runtime events', () => {
+    const store = useRuntimeTimelineStore.getState();
+    const committedAssistant: TimelineAssistantMessage = {
+      messageId: 'assistant:run-1',
+      role: 'assistant',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      createdAt: '2026-05-17T00:00:00.000Z',
+      updatedAt: '2026-05-17T00:00:10.000Z',
+      blocks: [({
+        blockId: 'answer:run-1',
+        kind: 'answer_text',
+        runId: 'run-1',
+        textId: 'text:committed',
+        status: 'completed',
+        text: 'Committed final answer.',
+        format: 'markdown',
+      })],
+    };
+
+    store.dispatch(runtimeEvent('run.started', 1, { runKind: 'agent' }));
+    store.dispatch(runtimeEvent('model.thinking.started', 2, { modelStepId: 'thinking-1' }));
+    store.dispatch(runtimeEvent('model.thinking.delta', 3, { modelStepId: 'thinking-1', delta: 'Dirty duplicate.' }));
+
+    store.hydrateCommittedMessages('project-1', 'session-1', [committedAssistant]);
+    store.dispatch(runtimeEvent('run.started', 1, { runKind: 'agent' }));
+    store.dispatch(runtimeEvent('model.thinking.started', 2, { modelStepId: 'thinking-1' }));
+    store.dispatch(runtimeEvent('model.thinking.delta', 3, { modelStepId: 'thinking-1', delta: 'Clean replay.' }, {
+      eventId: 'event-clean-thinking',
+    }));
+
+    const session = useRuntimeTimelineStore.getState().sessions['project-1:session-1'];
+    const assistant = session?.messages.find((message): message is TimelineAssistantMessage =>
+      message.role === 'assistant' && message.runId === 'run-1',
+    );
+    const process = assistant?.blocks.find((block) => block.kind === 'process_disclosure');
+    const thinking = process?.items.find((item) => item.kind === 'thinking');
+
+    expect(thinking).toMatchObject({
+      kind: 'thinking',
+      text: 'Clean replay.',
+    });
+  });
+
   it('keeps committed answer text authoritative while replaying runtime process events', () => {
     const store = useRuntimeTimelineStore.getState();
     const committedAssistant: TimelineAssistantMessage = {

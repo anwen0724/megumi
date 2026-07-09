@@ -29,6 +29,7 @@ export interface RuntimeTimelineSessionState {
   sessionId: string;
   messages: TimelineMessage[];
   streamsById: Record<string, RuntimeTimelineState>;
+  appliedEventIds: Record<string, true>;
 }
 
 export interface RuntimeTimelineStoreState {
@@ -45,6 +46,7 @@ export interface RuntimeTimelineStoreState {
     input: { clientMessageId: string; text: string; createdAt: string; runId?: string },
   ): void;
   hydrateCommittedMessages(projectId: string, sessionId: string, messages: TimelineMessage[]): void;
+  hydrateSessionTimeline(projectId: string, sessionId: string, messages: TimelineMessage[], events: RuntimeEvent[]): void;
   reset(): void;
 }
 
@@ -273,6 +275,53 @@ function mergeCommittedMessages(
   return [...byIdentity.values()].sort(compareTimelineMessages);
 }
 
+function emptySession(projectId: string, sessionId: string): RuntimeTimelineSessionState {
+  return {
+    projectId,
+    sessionId,
+    messages: [],
+    streamsById: {},
+    appliedEventIds: {},
+  };
+}
+
+function projectRuntimeEvent(
+  session: RuntimeTimelineSessionState,
+  event: RuntimeEvent,
+): RuntimeTimelineSessionState {
+  if (session.appliedEventIds[event.eventId]) {
+    return session;
+  }
+
+  const streamId = event.runId ?? event.eventId;
+  const currentStream = session.streamsById[streamId] ?? {
+    streamId,
+    runId: event.runId ?? streamId,
+    streamKind: 'main',
+    lastSeq: 0,
+    status: 'running' as const,
+    needsReplay: false,
+  };
+  const nextStream: RuntimeTimelineState = {
+    ...currentStream,
+    lastSeq: Math.max(currentStream.lastSeq, event.sequence),
+    status: statusFromEvent(event, currentStream.status),
+  };
+
+  return {
+    ...session,
+    messages: reduceRuntimeTimelineEvent(session.messages, event),
+    streamsById: {
+      ...session.streamsById,
+      [streamId]: nextStream,
+    },
+    appliedEventIds: {
+      ...session.appliedEventIds,
+      [event.eventId]: true,
+    },
+  };
+}
+
 export const useRuntimeTimelineStore = create<RuntimeTimelineStoreState>((set, get) => {
   function eventProjectId(): string {
     return get().activeProjectId ?? 'runtime';
@@ -287,38 +336,14 @@ export const useRuntimeTimelineStore = create<RuntimeTimelineStoreState>((set, g
       const projectId = eventProjectId();
       const sessionId = eventSessionId(event);
       const key = runtimeTimelineSessionKey(projectId, sessionId);
-      const session = state.sessions[key] ?? {
-        projectId,
-        sessionId,
-        messages: [],
-        streamsById: {},
-      };
-      const streamId = event.runId ?? event.eventId;
-      const currentStream = session.streamsById[streamId] ?? {
-        streamId,
-        runId: event.runId ?? streamId,
-        streamKind: 'main',
-        lastSeq: 0,
-        status: 'running' as const,
-        needsReplay: false,
-      };
-      const nextStream: RuntimeTimelineState = {
-        ...currentStream,
-        lastSeq: Math.max(currentStream.lastSeq, event.sequence),
-        status: statusFromEvent(event, currentStream.status),
-      };
+      const session = state.sessions[key] ?? emptySession(projectId, sessionId);
+      const nextSession = projectRuntimeEvent(session, event);
+      if (nextSession === session) return state;
 
       return {
         sessions: {
           ...state.sessions,
-          [key]: {
-            ...session,
-            messages: reduceRuntimeTimelineEvent(session.messages, event),
-            streamsById: {
-              ...session.streamsById,
-              [streamId]: nextStream,
-            },
-          },
+          [key]: nextSession,
         },
       };
     });
@@ -349,12 +374,7 @@ export const useRuntimeTimelineStore = create<RuntimeTimelineStoreState>((set, g
     addPendingUserMessage: (projectId, sessionId, input) => {
       set((state) => {
         const key = runtimeTimelineSessionKey(projectId, sessionId);
-        const session = state.sessions[key] ?? {
-          projectId,
-          sessionId,
-          messages: [],
-          streamsById: {},
-        };
+        const session = state.sessions[key] ?? emptySession(projectId, sessionId);
 
         return {
           sessions: {
@@ -374,20 +394,40 @@ export const useRuntimeTimelineStore = create<RuntimeTimelineStoreState>((set, g
     hydrateCommittedMessages: (projectId, sessionId, messages) => {
       set((state) => {
         const key = runtimeTimelineSessionKey(projectId, sessionId);
-        const session = state.sessions[key] ?? {
-          projectId,
-          sessionId,
-          messages: [],
-          streamsById: {},
-        };
+        const session = state.sessions[key] ?? emptySession(projectId, sessionId);
 
         return {
           sessions: {
             ...state.sessions,
             [key]: {
               ...session,
-              messages: mergeCommittedMessages(session.messages, messages, session.streamsById),
+              messages: mergeCommittedMessages([], messages, {}),
+              streamsById: {},
+              appliedEventIds: {},
             },
+          },
+        };
+      });
+    },
+    hydrateSessionTimeline: (projectId, sessionId, messages, events) => {
+      set((state) => {
+        const key = runtimeTimelineSessionKey(projectId, sessionId);
+        const baseSession: RuntimeTimelineSessionState = {
+          ...emptySession(projectId, sessionId),
+          messages: mergeCommittedMessages([], messages, {}),
+        };
+        const hydratedSession = events.reduce(
+          (session, event) => projectRuntimeEvent(session, {
+            ...event,
+            sessionId: event.sessionId ?? sessionId,
+          }),
+          baseSession,
+        );
+
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: hydratedSession,
           },
         };
       });
