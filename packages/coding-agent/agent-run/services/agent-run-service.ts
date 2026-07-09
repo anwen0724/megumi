@@ -247,44 +247,48 @@ class DefaultAgentRunService implements AgentRunService {
     }));
     const queue = createAgentRunEventQueue((event) => this.options.event_publisher?.publish(event));
     const eventSink = this.createEventSink(queue, run);
-    eventSink.emit({
-      eventType: 'run.started',
-      run,
-      requestId: request.request_id,
-      payload: {
-        runKind: 'agent',
-        providerId: request.model_selection.provider_id,
-        modelId: request.model_selection.model_id,
-      },
-    });
-    this.traceLogger.record({
-      trace_id: run.run_id,
-      event_type: 'run.started',
-      run_id: run.run_id,
-      session_id: run.session_id,
-      workspace_id: run.workspace_id,
-      payload: {
-        request_id: request.request_id,
-        user_message_id: userMessageId,
-        model_id: request.model_selection.model_id,
-        provider_id: request.model_selection.provider_id,
-        permission_mode: request.permission_mode ?? 'default',
-        limits: this.limits,
-      },
-    });
-
     const controller = new AbortController();
     this.activeRunAbortControllers.set(run.run_id, controller);
-    void this.executeRunLoop({
-      queue,
-      eventSink,
-      run,
-      user_message_id: userMessageId,
-      model_config: modelConfig.config,
-      permission_mode: request.permission_mode ?? 'default',
-      ...(workspaceRoot.workspace_root ? { workspace_root: workspaceRoot.workspace_root } : {}),
-      signal: controller.signal,
-    });
+    setTimeout(() => {
+      if (controller.signal.aborted) {
+        queue.close();
+        return;
+      }
+      eventSink.emit({
+        eventType: 'run.started',
+        run,
+        payload: {
+          runKind: 'agent',
+          providerId: request.model_selection.provider_id,
+          modelId: request.model_selection.model_id,
+        },
+      });
+      this.traceLogger.record({
+        trace_id: run.run_id,
+        event_type: 'run.started',
+        run_id: run.run_id,
+        session_id: run.session_id,
+        workspace_id: run.workspace_id,
+        payload: {
+          request_id: request.request_id,
+          user_message_id: userMessageId,
+          model_id: request.model_selection.model_id,
+          provider_id: request.model_selection.provider_id,
+          permission_mode: request.permission_mode ?? 'default',
+          limits: this.limits,
+        },
+      });
+      void this.executeRunLoop({
+        queue,
+        eventSink,
+        run,
+        user_message_id: userMessageId,
+        model_config: modelConfig.config,
+        permission_mode: request.permission_mode ?? 'default',
+        ...(workspaceRoot.workspace_root ? { workspace_root: workspaceRoot.workspace_root } : {}),
+        signal: controller.signal,
+      });
+    }, 0);
 
     return {
       status: 'started',
@@ -1106,6 +1110,12 @@ function approvalRequestToRuntimePayload(request: AgentRunApprovalRequest): Reco
     toolExecutionId: request.subject.tool_call_id,
     toolName: request.subject.tool_name,
     title: request.subject.tool_name,
+    summary: request.summary ?? `${request.subject.tool_name} requires approval.`,
+    requestedScope: request.requested_scope ?? 'once',
+    preview: request.preview ?? {
+      action: request.subject.tool_name,
+      targets: [],
+    },
     status: request.status,
     createdAt: request.created_at,
   };

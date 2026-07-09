@@ -100,11 +100,43 @@ describe('runtime timeline projection', () => {
 
     expect(process).toEqual(expect.objectContaining({ status: 'completed' }));
     expect(JSON.stringify(process)).toContain('我先读取目录。');
-    expect(JSON.stringify(process)).toContain('已读取目录。');
+    expect(JSON.stringify(process)).toContain('工作区目录');
+    expect(JSON.stringify(process)).not.toContain('已读取目录。');
     expect(answer).toEqual(expect.objectContaining({
       text: '目录里有 README.md。',
       status: 'completed',
     }));
+  });
+
+  it('projects built-in tool inputs into user-facing targets without raw argument JSON or result content', () => {
+    let messages = reduceRuntimeTimelineEvent([], event('run.started', {}, 1));
+    messages = reduceRuntimeTimelineEvent(messages, event('model_call.tool_call', {
+      modelCallId: 'model-call:1',
+      toolCallId: 'tool-call:1',
+      toolName: 'list_directory',
+      input: { path: '.', limit: 30 },
+    }, 2));
+    messages = reduceRuntimeTimelineEvent(messages, event('tool_result.created', {
+      toolResultId: 'tool-result:1',
+      toolCallId: 'tool-call:1',
+      toolExecutionId: 'tool-execution:1',
+      toolName: 'list_directory',
+      kind: 'success',
+      summary: '{"path":".","entries":[{"name":"README.md"}]}',
+    }, 3));
+
+    const assistant = messages.find((message) => message.role === 'assistant');
+    const process = assistant?.blocks.find((block) => block.kind === 'process_disclosure');
+    const tool = process?.items.find((item) => item.kind === 'tool_activity');
+
+    expect(tool).toMatchObject({
+      kind: 'tool_activity',
+      toolName: 'list_directory',
+      inputSummary: '工作区目录',
+      status: 'succeeded',
+    });
+    expect(JSON.stringify(tool)).not.toContain('"path":"."');
+    expect(JSON.stringify(tool)).not.toContain('README.md');
   });
 
   it('projects every run process event family into process disclosure items', () => {

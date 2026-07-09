@@ -110,7 +110,7 @@ export type ChatSendUserInputUiResult =
     };
 
 export interface ChatCancelUserInputUiRequest {
-  targetRequestId: string;
+  runId: string;
 }
 export interface ChatCancelUserInputUiResult {
   cancelled: boolean;

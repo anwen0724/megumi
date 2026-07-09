@@ -67,8 +67,6 @@ export function createChatController(options: {
   branchService: SessionBranchControllerServicePort;
   compatibility: ChatControllerCompatibilityQueries;
 }): ChatController {
-  const runIdByRequestId = new Map<string, string>();
-
   return {
     async createSession(request) {
       const result = options.sessionService.createSession({
@@ -126,15 +124,11 @@ export function createChatController(options: {
         permission_mode: request.permissionMode,
       });
       const mapped = mapStartRunResult(result, options.sessionService, request);
-      if (mapped.type === 'agent_run') {
-        runIdByRequestId.set(mapped.requestId, mapped.run.runId);
-      }
       return mapped;
     },
 
     async cancelUserInput(request) {
-      const runId = runIdByRequestId.get(request.targetRequestId) ?? request.targetRequestId;
-      const result = await options.agentRunService.cancelRun({ run_id: runId });
+      const result = await options.agentRunService.cancelRun({ run_id: request.runId });
       if (result.status === 'cancelled') {
         return { cancelled: true, events: asyncIterableFrom(result.events) };
       }

@@ -229,6 +229,38 @@ describe('runtime event dispatcher', () => {
     expect(useChatUiStore.getState().agentStatus).toBe('running');
   });
 
+  it('normalizes persisted approval events before storing them for UI rendering', () => {
+    dispatchRuntimeEvent(runtimeEvent('approval.requested', 1, {
+      approvalRequest: {
+        approvalRequestId: 'approval-legacy',
+        toolCallId: 'tool-call-1',
+        toolExecutionId: 'tool-call-1',
+        runId: 'run-1',
+        toolName: 'write_file',
+        title: 'write_file',
+        status: 'pending',
+        createdAt: '2026-05-20T00:00:00.000Z',
+      },
+    }));
+
+    expect(useApprovalStore.getState().approvalRequestsById['approval-legacy']).toMatchObject({
+      approvalRequestId: 'approval-legacy',
+      runId: 'run-1',
+      toolCallId: 'tool-call-1',
+      toolExecutionId: 'tool-call-1',
+      toolName: 'write_file',
+      title: 'write_file',
+      requestedScope: 'once',
+      summary: 'write_file requires approval.',
+      preview: {
+        action: 'write_file',
+        targets: [],
+      },
+      status: 'pending',
+      createdAt: '2026-05-20T00:00:00.000Z',
+    });
+  });
+
   it('does not project duplicate tool events twice', () => {
     const requested = runtimeEvent('tool_call.requested', 1, {
       toolCallId: 'tool-call-1',

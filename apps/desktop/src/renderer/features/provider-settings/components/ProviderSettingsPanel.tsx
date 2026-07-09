@@ -86,15 +86,12 @@ function parseModelIds(value: string): string[] {
     .filter(Boolean);
 }
 
-function providerIconClassName(index: number, selected: boolean): string {
-  const accents = [
-    'bg-blue-500/15 text-blue-300 ring-blue-400/30',
-    'bg-emerald-500/15 text-emerald-300 ring-emerald-400/30',
-    'bg-slate-500/20 text-slate-300 ring-slate-400/20',
-  ];
+function providerIconClassName(selected: boolean): string {
   return cx(
     'grid h-8 w-8 shrink-0 place-items-center rounded-md ring-1',
-    selected ? 'bg-blue-500/20 text-blue-200 ring-blue-300/40' : accents[index % accents.length],
+    selected
+      ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] ring-[var(--color-accent)]/35'
+      : 'bg-[var(--color-surface-muted)] text-[var(--color-text-muted)] ring-[var(--color-border)]',
   );
 }
 
@@ -288,7 +285,6 @@ export function ProviderSettingsPanel() {
               variant="secondary"
               onClick={startAddProvider}
               disabled={isSaving}
-              className="border-blue-400/25 bg-blue-500/10 text-blue-200 hover:bg-blue-500/15"
             >
               <Plus size={15} aria-hidden="true" />
               Add provider
@@ -308,7 +304,7 @@ export function ProviderSettingsPanel() {
           </label>
 
           <div className="mt-5">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-blue-300/80">API</p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-accent)]">API</p>
             <div className="space-y-2">
               {isCreating ? (
                 <ProviderListItem
@@ -319,18 +315,16 @@ export function ProviderSettingsPanel() {
                     protocol: selectedForm.protocol,
                   }}
                   modelCount={parseModelIds(selectedForm.modelIdsText).length}
-                  index={0}
                   selected
                   onClick={() => setSelectedProviderId(newProviderId)}
                 />
               ) : null}
 
-              {filteredEntries.map((entry, index) => (
+              {filteredEntries.map((entry) => (
                 <ProviderListItem
                   key={`${entry.source}:${entry.providerId}`}
                   entry={entry}
                   modelCount={entry.source === 'saved' ? entry.provider.modelIds.length : 0}
-                  index={index}
                   selected={selectedProviderId === entry.providerId}
                   onClick={() => selectEntry(entry)}
                 />
@@ -350,7 +344,7 @@ export function ProviderSettingsPanel() {
             <>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className={providerIconClassName(0, true)}>
+                  <div className={providerIconClassName(true)}>
                     <Bot size={19} aria-hidden="true" />
                   </div>
                   <div className="min-w-0">
@@ -384,7 +378,6 @@ export function ProviderSettingsPanel() {
                     size="sm"
                     variant="primary"
                     disabled={isSaving}
-                    className="border-blue-400/40 bg-blue-500/20 text-blue-100 hover:bg-blue-500/25"
                   >
                     <Save size={15} aria-hidden="true" />
                     Save
@@ -392,10 +385,9 @@ export function ProviderSettingsPanel() {
                   <Button
                     type="button"
                     size="sm"
-                    variant="secondary"
+                    variant="danger"
                     onClick={() => void handleDeleteProvider()}
                     disabled={!selectedProvider || isSaving}
-                    className="border-red-400/35 bg-red-500/10 text-red-300 hover:bg-red-500/15"
                   >
                     <Trash2 size={15} aria-hidden="true" />
                     Delete
@@ -491,13 +483,11 @@ const fieldClassName = 'h-9 w-full rounded-md border border-[var(--color-border)
 function ProviderListItem({
   entry,
   modelCount,
-  index,
   selected,
   onClick,
 }: {
   entry: ProviderListEntry;
   modelCount: number;
-  index: number;
   selected: boolean;
   onClick: () => void;
 }) {
@@ -515,15 +505,15 @@ function ProviderListItem({
           : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-elevated)]/70 hover:text-[var(--color-text)]',
       )}
     >
-      {selected ? <span className="absolute inset-y-0 left-0 w-0.5 rounded-full bg-blue-400" /> : null}
-      <span className={providerIconClassName(index, selected)}>
+      {selected ? <span className="absolute inset-y-0 left-0 w-0.5 rounded-full bg-[var(--color-accent)]" /> : null}
+      <span className={providerIconClassName(selected)}>
         <Bot size={18} aria-hidden="true" />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold">{entry.displayName}</span>
         {!enabled ? <span className="mt-0.5 block text-xs text-[var(--color-text-subtle)]">Disabled</span> : null}
       </span>
-      <span className="rounded-md bg-blue-500/15 px-2 py-1 text-xs font-medium text-blue-300">
+      <span className="rounded-md bg-[var(--color-accent-soft)] px-2 py-1 text-xs font-medium text-[var(--color-accent)]">
         {modelCount} {modelCount === 1 ? 'model' : 'models'}
       </span>
     </button>

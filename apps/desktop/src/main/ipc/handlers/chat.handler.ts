@@ -128,7 +128,9 @@ export function registerChatHandlers(
       if (result.type !== 'agent_run') {
         throw new Error(`Session message send does not support command result: ${result.type}`);
       }
-      void forwardRuntimeEvents(event.sender, result.events, { logger: options.logger });
+      setTimeout(() => {
+        void forwardRuntimeEvents(event.sender, result.events, { logger: options.logger });
+      }, 0);
       return {
         requestId: result.requestId,
         session: result.session,
@@ -143,8 +145,16 @@ export function registerChatHandlers(
     channel: IPC_CHANNELS.chat.sessionMessageCancel,
     requestSchema: SessionMessageCancelRequestSchema,
     logger: options.logger,
-    handle: async (request: RuntimeIpcRequest<SessionMessageCancelPayload, typeof IPC_CHANNELS.chat.sessionMessageCancel>) =>
-      service.host.chat.cancelUserInput(request.payload),
+    handle: async (
+      request: RuntimeIpcRequest<SessionMessageCancelPayload, typeof IPC_CHANNELS.chat.sessionMessageCancel>,
+      event,
+    ) => {
+      const result = await service.host.chat.cancelUserInput(request.payload);
+      if (result.events) {
+        void forwardRuntimeEvents(event.sender, result.events, { logger: options.logger });
+      }
+      return { cancelled: result.cancelled };
+    },
     mapError: mapChatIpcError,
   }));
 

@@ -101,6 +101,15 @@ export type AgentRunApprovalRequest = {
   run_id: string;
   subject: AgentRunApprovalSubject;
   status: 'pending' | 'approved' | 'denied' | 'cancelled';
+  requested_scope?: ApprovalScope;
+  summary?: string;
+  preview?: {
+    action: string;
+    targets: Array<{
+      kind: string;
+      label: string;
+    }>;
+  };
   created_at: string;
   decided_at?: string;
   decision?: ApprovalDecision;

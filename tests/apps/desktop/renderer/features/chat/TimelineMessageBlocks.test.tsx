@@ -461,9 +461,95 @@ describe('TimelineMessage canonical block rendering', () => {
       ],
     })} />);
 
-    expect(screen.getByText('已读取 hello')).toBeInTheDocument();
-    expect(screen.getByText('hello')).toBeInTheDocument();
+    expect(screen.getByText('已完成 hello')).toBeInTheDocument();
     expect(screen.queryByText('external_test:demo:echo')).not.toBeInTheDocument();
+  });
+
+  it('renders built-in tool activity with tool-specific labels and hides raw result summaries', () => {
+    render(<TimelineMessage message={assistantMessage({
+      blocks: [
+        {
+          blockId: 'process:run-1',
+          kind: 'process_disclosure',
+          runId: 'run-1',
+          status: 'completed',
+          startedAt: '2026-06-14T12:00:00.000Z',
+          endedAt: '2026-06-14T12:00:03.000Z',
+          items: [
+            {
+              itemId: 'tool:list-directory',
+              kind: 'tool_activity',
+              toolCallId: 'tool-call-list-directory',
+              toolName: 'list_directory',
+              inputSummary: '工作区目录',
+              resultSummary: '{"path":".","entries":[{"name":"README.md"}]}',
+              status: 'succeeded',
+            },
+            {
+              itemId: 'tool:read-file',
+              kind: 'tool_activity',
+              toolCallId: 'tool-call-read-file',
+              toolName: 'read_file',
+              inputSummary: 'Claude自我介绍.md',
+              resultSummary: '# Claude 自我介绍',
+              status: 'succeeded',
+            },
+            {
+              itemId: 'tool:glob',
+              kind: 'tool_activity',
+              toolCallId: 'tool-call-glob',
+              toolName: 'glob',
+              inputSummary: '**/*.md',
+              status: 'succeeded',
+            },
+            {
+              itemId: 'tool:search',
+              kind: 'tool_activity',
+              toolCallId: 'tool-call-search',
+              toolName: 'search_text',
+              inputSummary: 'Spring Boot',
+              status: 'succeeded',
+            },
+            {
+              itemId: 'tool:edit',
+              kind: 'tool_activity',
+              toolCallId: 'tool-call-edit',
+              toolName: 'edit_file',
+              inputSummary: 'README.md',
+              status: 'succeeded',
+            },
+            {
+              itemId: 'tool:write',
+              kind: 'tool_activity',
+              toolCallId: 'tool-call-write',
+              toolName: 'write_file',
+              inputSummary: 'notes.md',
+              status: 'succeeded',
+            },
+            {
+              itemId: 'tool:command',
+              kind: 'tool_activity',
+              toolCallId: 'tool-call-command',
+              toolName: 'run_command',
+              inputSummary: 'npm test',
+              status: 'succeeded',
+            },
+          ],
+        },
+      ],
+    })} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Expand process disclosure/ }));
+
+    expect(screen.getByText('已查看 工作区目录')).toBeInTheDocument();
+    expect(screen.getByText('已读取 Claude自我介绍.md')).toBeInTheDocument();
+    expect(screen.getByText('已查找 **/*.md')).toBeInTheDocument();
+    expect(screen.getByText('已搜索 Spring Boot')).toBeInTheDocument();
+    expect(screen.getByText('已编辑 README.md')).toBeInTheDocument();
+    expect(screen.getByText('已写入 notes.md')).toBeInTheDocument();
+    expect(screen.getByText('已执行命令 npm test')).toBeInTheDocument();
+    expect(screen.queryByText(/"entries"/)).not.toBeInTheDocument();
+    expect(screen.queryByText('# Claude 自我介绍')).not.toBeInTheDocument();
   });
 
   it('renders italic markdown in answer text without literal delimiters', () => {
@@ -564,7 +650,7 @@ describe('TimelineMessage canonical block rendering', () => {
     })} />);
 
     for (const label of [
-      '已拒绝 C:/secret.txt',
+      '已拒绝读取 C:/secret.txt',
       '已拒绝 run_command rm -rf',
       '审批已过期 run_command npm test',
       '审批已取消 run_command npm install',

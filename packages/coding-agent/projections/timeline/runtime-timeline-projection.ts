@@ -109,7 +109,7 @@ export function reduceRuntimeTimelineEvent(
     const process = ensureProcessBlock(assistant, event);
     const item = ensureToolItem(process, payload.toolCallId ?? event.eventId, event.createdAt);
     item.toolName = payload.toolName ?? 'unknown_tool';
-    item.inputSummary = summarizeInput(payload.input);
+    item.inputSummary = summarizeToolTarget(item.toolName, payload.input);
     item.status = 'running';
     item.updatedAt = event.createdAt;
     process.updatedAt = event.createdAt;
@@ -124,7 +124,7 @@ export function reduceRuntimeTimelineEvent(
     const item = ensureToolItem(process, payload.toolCallId ?? event.eventId, event.createdAt);
     item.toolExecutionId = payload.toolExecutionId;
     item.toolName = payload.toolName ?? item.toolName;
-    item.inputSummary = item.inputSummary ?? summarizeInput(payload.input);
+    item.inputSummary = item.inputSummary ?? summarizeToolTarget(item.toolName, payload.input);
     item.status = 'running';
     item.updatedAt = event.createdAt;
     process.updatedAt = event.createdAt;
@@ -163,7 +163,7 @@ export function reduceRuntimeTimelineEvent(
     item.toolResultId = payload.toolResultId;
     item.toolName = payload.toolName ?? item.toolName;
     item.status = payload.kind === 'success' ? 'succeeded' : payload.kind === 'policy_denied' || payload.kind === 'user_rejected' ? 'denied' : 'failed';
-    item.resultSummary = payload.summary;
+    item.resultSummary = undefined;
     item.updatedAt = event.createdAt;
     process.updatedAt = event.createdAt;
     assistant.updatedAt = event.createdAt;
@@ -574,12 +574,28 @@ function recoveryLabel(eventType: RuntimeEvent['eventType'], failureMessage: str
   return failureMessage ? `Run resume failed: ${failureMessage}` : 'Run resume failed';
 }
 
-function summarizeInput(input: unknown): string | undefined {
-  if (input === undefined || input === null) return undefined;
-  if (typeof input === 'string') return input;
-  try {
-    return JSON.stringify(input);
-  } catch {
-    return String(input);
-  }
+function summarizeToolTarget(toolName: string, input: unknown): string | undefined {
+  const data = isRecord(input) ? input : {};
+  if (toolName === 'list_directory') return displayPath(stringField(data, 'path'));
+  if (toolName === 'read_file') return displayPath(stringField(data, 'path'));
+  if (toolName === 'glob') return stringField(data, 'pattern');
+  if (toolName === 'search_text') return stringField(data, 'query');
+  if (toolName === 'edit_file') return displayPath(stringField(data, 'path'));
+  if (toolName === 'write_file') return displayPath(stringField(data, 'path'));
+  if (toolName === 'run_command') return stringField(data, 'command');
+  return undefined;
+}
+
+function displayPath(path: string | undefined): string | undefined {
+  if (!path || path === '.') return '工作区目录';
+  return path;
+}
+
+function stringField(data: Record<string, unknown>, field: string): string | undefined {
+  const value = data[field];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function isRecord(input: unknown): input is Record<string, unknown> {
+  return typeof input === 'object' && input !== null && !Array.isArray(input);
 }

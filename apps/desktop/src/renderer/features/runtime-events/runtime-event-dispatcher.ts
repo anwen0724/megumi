@@ -146,7 +146,10 @@ function applyApprovalEvent(event: RuntimeEvent, targetSessionId: string | null)
   const store = useApprovalStore.getState();
 
   if (event.eventType === 'approval.requested') {
-    const request = (event.payload as { approvalRequest?: ApprovalRequest }).approvalRequest;
+    const request = normalizeApprovalRequest(
+      (event.payload as { approvalRequest?: Partial<ApprovalRequest> }).approvalRequest,
+      event,
+    );
     if (request) {
       store.upsertApprovalRequest(request);
     }
@@ -161,6 +164,46 @@ function applyApprovalEvent(event: RuntimeEvent, targetSessionId: string | null)
     store.markResolved(payload.approvalRequestId, payload.decision, payload.decidedAt ?? event.createdAt);
     setAgentStatusForSession(targetSessionId, 'running');
   }
+}
+
+function normalizeApprovalRequest(
+  request: Partial<ApprovalRequest> | undefined,
+  event: RuntimeEvent,
+): ApprovalRequest | undefined {
+  if (!request?.approvalRequestId) {
+    return undefined;
+  }
+
+  const toolName = request.toolName ?? request.title ?? 'approval';
+  const title = request.title ?? toolName;
+  const previewAction = request.preview?.action ?? title;
+
+  return {
+    approvalRequestId: request.approvalRequestId,
+    ...(request.permissionDecisionId ? { permissionDecisionId: request.permissionDecisionId } : {}),
+    runId: request.runId ?? event.runId ?? '',
+    ...(request.stepId ? { stepId: request.stepId } : {}),
+    ...(request.toolCallId ? { toolCallId: request.toolCallId } : {}),
+    ...(request.toolExecutionId ? { toolExecutionId: request.toolExecutionId } : {}),
+    ...(request.canonicalToolId ? { canonicalToolId: request.canonicalToolId } : {}),
+    ...(request.sourceId ? { sourceId: request.sourceId } : {}),
+    ...(request.namespace ? { namespace: request.namespace } : {}),
+    ...(request.capabilities ? { capabilities: request.capabilities } : {}),
+    ...(request.sourceToolName ? { sourceToolName: request.sourceToolName } : {}),
+    ...(request.riskLevel ? { riskLevel: request.riskLevel } : {}),
+    title,
+    status: request.status ?? 'pending',
+    requestedScope: request.requestedScope ?? 'once',
+    ...(request.modelVisibleName ? { modelVisibleName: request.modelVisibleName } : {}),
+    toolName,
+    summary: request.summary ?? `${title} requires approval.`,
+    preview: {
+      action: previewAction,
+      targets: Array.isArray(request.preview?.targets) ? request.preview.targets : [],
+    },
+    createdAt: request.createdAt ?? event.createdAt,
+    ...(request.resolvedAt ? { resolvedAt: request.resolvedAt } : {}),
+  };
 }
 
 export function dispatchRuntimeEvent(event: RuntimeEvent, options?: DispatchRuntimeEventOptions): void {

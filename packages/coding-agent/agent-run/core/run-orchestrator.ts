@@ -444,6 +444,12 @@ function approvalRequestToRuntimePayload(request: AgentRunApprovalRequest): Reco
     toolExecutionId: request.subject.tool_call_id,
     toolName: request.subject.tool_name,
     title: request.subject.tool_name,
+    summary: request.summary ?? `${request.subject.tool_name} requires approval.`,
+    requestedScope: request.requested_scope ?? 'once',
+    preview: request.preview ?? {
+      action: request.subject.tool_name,
+      targets: [],
+    },
     status: request.status,
     createdAt: request.created_at,
   };

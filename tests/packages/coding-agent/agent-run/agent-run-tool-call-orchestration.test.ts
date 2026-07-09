@@ -141,6 +141,14 @@ describe('Agent Run tool-call orchestration', () => {
 
     expect(executeTool).not.toHaveBeenCalled();
     expect(result.pending_approvals).toHaveLength(1);
+    expect(result.pending_approvals[0]?.approval_request).toMatchObject({
+      requested_scope: 'once',
+      summary: 'run_command requires approval.',
+      preview: {
+        action: 'run_command README.md',
+        targets: [{ kind: 'file', label: 'README.md' }],
+      },
+    });
     expect(result.next_model_prompt_ready).toBe(false);
     expect(result.tool_calls[0]?.status).toBe('waiting_for_approval');
   });

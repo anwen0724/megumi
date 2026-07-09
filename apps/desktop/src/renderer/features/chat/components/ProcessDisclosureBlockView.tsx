@@ -42,10 +42,41 @@ function toolTarget(item: ToolActivityItem): string {
 
 function toolLabel(item: ToolActivityItem): string {
   const target = toolTarget(item);
-  if (item.status === 'running') return `正在读取 ${target}`;
-  if (item.status === 'succeeded') return `已读取 ${target}`;
-  if (item.status === 'failed') return `读取失败 ${target}`;
-  return `已拒绝 ${target}`;
+  const labels = toolActionLabels(item.toolName);
+  if (item.status === 'running') return `${labels.running} ${target}`;
+  if (item.status === 'succeeded') return `${labels.succeeded} ${target}`;
+  if (item.status === 'failed') return `${labels.failed} ${target}`;
+  return `${labels.denied} ${target}`;
+}
+
+function toolActionLabels(toolName: string): {
+  running: string;
+  succeeded: string;
+  failed: string;
+  denied: string;
+} {
+  if (toolName === 'list_directory') {
+    return { running: '正在查看', succeeded: '已查看', failed: '查看失败', denied: '已拒绝查看' };
+  }
+  if (toolName === 'read_file') {
+    return { running: '正在读取', succeeded: '已读取', failed: '读取失败', denied: '已拒绝读取' };
+  }
+  if (toolName === 'glob') {
+    return { running: '正在查找', succeeded: '已查找', failed: '查找失败', denied: '已拒绝查找' };
+  }
+  if (toolName === 'search_text') {
+    return { running: '正在搜索', succeeded: '已搜索', failed: '搜索失败', denied: '已拒绝搜索' };
+  }
+  if (toolName === 'edit_file') {
+    return { running: '正在编辑', succeeded: '已编辑', failed: '编辑失败', denied: '已拒绝编辑' };
+  }
+  if (toolName === 'write_file') {
+    return { running: '正在写入', succeeded: '已写入', failed: '写入失败', denied: '已拒绝写入' };
+  }
+  if (toolName === 'run_command') {
+    return { running: '正在执行命令', succeeded: '已执行命令', failed: '命令执行失败', denied: '已拒绝执行命令' };
+  }
+  return { running: '正在执行', succeeded: '已完成', failed: '执行失败', denied: '已拒绝执行' };
 }
 
 function approvalLabel(item: ApprovalActivityItem): string {
@@ -149,9 +180,6 @@ function ToolActivityItemView({ item }: { item: ToolActivityItem }) {
       <ItemIcon item={item} />
       <span className="min-w-0">
         <span className="block break-words text-[var(--color-text)] [overflow-wrap:anywhere]">{toolLabel(item)}</span>
-        {item.resultSummary ? (
-          <span className="block break-words text-xs text-[var(--color-text-muted)] [overflow-wrap:anywhere]">{item.resultSummary}</span>
-        ) : null}
       </span>
     </div>
   );

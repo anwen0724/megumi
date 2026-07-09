@@ -146,10 +146,10 @@ function createSessionMessageSendPayload(
 
 function shouldProcessRuntimeEvent(
   event: RuntimeEvent,
-  activeRequestId: string | null,
+  activeRunId: string | null,
   processedEventIdsByRun: Map<string, Set<string>>,
 ): boolean {
-  if (!event.runId || event.requestId !== activeRequestId) {
+  if (!event.runId || event.runId !== activeRunId) {
     return false;
   }
 
@@ -161,6 +161,12 @@ function shouldProcessRuntimeEvent(
   processedEventIds.add(event.eventId);
   processedEventIdsByRun.set(event.runId, processedEventIds);
   return true;
+}
+
+function isTerminalRunEvent(event: RuntimeEvent): boolean {
+  return event.eventType === 'run.completed' ||
+    event.eventType === 'run.failed' ||
+    event.eventType === 'run.cancelled';
 }
 
 function failSessionMessageSend(message: string, sessionId?: string | null) {
@@ -202,7 +208,7 @@ export function useSessionTimeline() {
   const [branchDraft, setBranchDraft] = useState<BranchDraftState | null>(null);
   const branchDraftRef = useRef<BranchDraftState | null>(null);
   const branchDraftCreateSequenceRef = useRef(0);
-  const activeRequestIdRef = useRef<string | null>(null);
+  const activeRunIdRef = useRef<string | null>(null);
   const activeTraceIdRef = useRef<string | null>(null);
   const runSessionIdRef = useRef<string | null>(null);
   const lastPayloadRef = useRef<ComposerSubmitPayload | null>(null);
@@ -268,10 +274,15 @@ export function useSessionTimeline() {
     return window.megumi.runtime.onEvent((event: RuntimeEvent) => {
       if (shouldProcessRuntimeEvent(
         event,
-        activeRequestIdRef.current,
+        activeRunIdRef.current,
         processedEventIdsByRunRef.current,
       )) {
         dispatchRuntimeEvent(event, { sessionId: runSessionIdRef.current });
+        if (isTerminalRunEvent(event)) {
+          activeRunIdRef.current = null;
+          activeTraceIdRef.current = null;
+          runSessionIdRef.current = null;
+        }
       }
     });
   }, []);
@@ -313,7 +324,7 @@ export function useSessionTimeline() {
       ),
       { requestId },
     );
-    activeRequestIdRef.current = request.requestId;
+    activeRunIdRef.current = null;
     activeTraceIdRef.current = request.context?.traceId ?? null;
     processedEventIdsByRunRef.current.clear();
 
@@ -330,6 +341,7 @@ export function useSessionTimeline() {
 
     const runSessionId = adoptBackendSession(result.data.session);
     runSessionIdRef.current = runSessionId;
+    activeRunIdRef.current = result.data.runId;
     useRuntimeTimelineStore.getState().setActiveSession(target.projectId, runSessionId);
     useChatUiStore.getState().setActiveSession(runSessionId);
     useChatUiStore.getState().setAgentStatus('sending', runSessionId);
@@ -360,15 +372,15 @@ export function useSessionTimeline() {
   }, [sendSessionMessage]);
 
   const cancelSessionMessage = useCallback(async () => {
-    const requestId = activeRequestIdRef.current;
+    const runId = activeRunIdRef.current;
 
-    if (!requestId) {
+    if (!runId) {
       return;
     }
 
     const result = await window.megumi.session.message.cancel(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.sessionMessageCancel, {
-        targetRequestId: requestId,
+        runId,
       }, {
         traceId: activeTraceIdRef.current ?? undefined,
       }),
@@ -376,7 +388,7 @@ export function useSessionTimeline() {
 
     if (result?.ok && result.data.cancelled) {
       useChatUiStore.getState().setAgentStatus('idle', runSessionIdRef.current);
-      activeRequestIdRef.current = null;
+      activeRunIdRef.current = null;
       activeTraceIdRef.current = null;
       runSessionIdRef.current = null;
       processedEventIdsByRunRef.current.clear();

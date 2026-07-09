@@ -196,7 +196,7 @@ export async function orchestrateToolCallGroup(
     }
 
     if (permission.decision.type === 'requires_approval') {
-      const approval = createPendingApproval(request, requested, registeredTool);
+      const approval = createPendingApproval(request, requested, registeredTool, permission.decision);
       plans.push({
         call: {
           ...toolCall,
@@ -379,7 +379,9 @@ function createPendingApproval(
   request: AgentRunToolCallRequest,
   toolCall: ModelRequestedToolCall,
   registeredTool: RegisteredTool,
+  decision: Extract<PermissionDecision, { type: 'requires_approval' }>,
 ): AgentRunApprovalRequest {
+  const preview = approvalPreview(registeredTool.registeredToolName, toolCall.input);
   return {
     approval_request_id: request.ids.approval_request_id(),
     run_id: request.run_id,
@@ -390,8 +392,33 @@ function createPendingApproval(
       input: toolCall.input,
     },
     status: 'pending',
+    requested_scope: decision.approval.default_scope,
+    summary: `${registeredTool.registeredToolName} requires approval.`,
+    preview,
     created_at: request.clock.now(),
   };
+}
+
+function approvalPreview(toolName: string, input: unknown): AgentRunApprovalRequest['preview'] {
+  const target = approvalTarget(input);
+  return {
+    action: target ? `${toolName} ${target.label}` : toolName,
+    targets: target ? [target] : [],
+  };
+}
+
+function approvalTarget(input: unknown): { kind: string; label: string } | undefined {
+  if (!input || typeof input !== 'object') {
+    return undefined;
+  }
+  const values = input as Record<string, unknown>;
+  if (typeof values.path === 'string' && values.path.length > 0) {
+    return { kind: 'file', label: values.path };
+  }
+  if (typeof values.command === 'string' && values.command.length > 0) {
+    return { kind: 'command', label: values.command };
+  }
+  return undefined;
 }
 
 function failedToolResult(

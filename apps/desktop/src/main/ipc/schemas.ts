@@ -55,7 +55,7 @@ export const SessionMessageSendPayloadSchema = z.object({
   createdAt: IsoDateTimeSchema,
 }).strict();
 
-export const SessionMessageCancelPayloadSchema = z.object({ targetRequestId: z.string().min(1) }).strict();
+export const SessionMessageCancelPayloadSchema = z.object({ runId: z.string().min(1) }).strict();
 export const SessionBranchDraftCreatePayloadSchema = z.object({
   sessionId: z.string().min(1),
   messageId: z.string().min(1),
