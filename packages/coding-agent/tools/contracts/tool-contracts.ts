@@ -116,6 +116,7 @@ export type RawToolResult = {
   content: unknown;
   isError?: boolean;
   metadata?: JsonObject;
+  runtimeSources?: ToolRuntimeSource[];
 };
 
 export type NormalizedToolResult = {
@@ -151,6 +152,7 @@ export type ToolExecutionResult =
       rawResult: RawToolResult;
       normalizedResult: NormalizedToolResult;
       toolExecutionObservation?: ToolExecutionObservation;
+      runtimeSources?: ToolRuntimeSource[];
       metadata?: JsonObject;
     }
   | {
@@ -161,5 +163,13 @@ export type ToolExecutionResult =
       toolExecutionObservation?: ToolExecutionObservation;
       metadata?: JsonObject;
     };
+
+export type ToolRuntimeSource = {
+  source_id: string;
+  source_kind: string;
+  text: string;
+  persisted: boolean;
+  metadata?: JsonObject;
+};
 
 export type { JsonObject, JsonValue };

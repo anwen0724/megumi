@@ -1,0 +1,178 @@
+import { describe, expect, it, vi } from 'vitest';
+import { ContextService } from '@megumi/coding-agent/context';
+import {
+  ToolExecutionService,
+  ToolRegistryService,
+  type ToolRuntimeSource,
+} from '@megumi/coding-agent/tools';
+import { createBuiltInToolAdapter, type WorkspaceFileAccess } from '@megumi/coding-agent/tools/adapters/built-in-tools';
+
+describe('activate_skill built-in tool', () => {
+  it('is registered as an available built-in tool with skillId input', () => {
+    const registry = new ToolRegistryService();
+
+    const tool = registry.getRegisteredTool({ toolName: 'activate_skill' });
+
+    expect(tool).toMatchObject({
+      type: 'found',
+      tool: {
+        registeredToolName: 'activate_skill',
+        definition: {
+          inputSchema: {
+            required: ['skillId'],
+            additionalProperties: false,
+          },
+          capabilities: ['project_read'],
+          riskLevel: 'low',
+          sideEffect: 'none',
+        },
+      },
+    });
+  });
+
+  it('executes through ToolExecutionService and returns activated runtime source', async () => {
+    const activateSkill = vi.fn(async () => ({
+      status: 'ok' as const,
+      activatedSkill: {
+        skillId: 'superpowers:brainstorming',
+        name: 'superpowers:brainstorming',
+        description: 'Explore intent before implementation',
+        content: 'Ask clarifying questions.',
+      },
+    }));
+    const service = new ToolExecutionService({
+      registryService: new ToolRegistryService(),
+      builtInTools: createBuiltInToolAdapter({
+        workspaceFileAccess: fakeWorkspaceFileAccess(),
+        skillService: { activateSkill },
+        runContext: {
+          runId: 'run:1',
+          sessionId: 'session:1',
+          workspaceId: 'workspace:1',
+        },
+      }),
+    });
+
+    const result = await service.executeTool({
+      toolName: 'activate_skill',
+      input: { skillId: 'superpowers:brainstorming' },
+    });
+
+    expect(activateSkill).toHaveBeenCalledWith({
+      skillId: 'superpowers:brainstorming',
+      sessionId: 'session:1',
+      workspaceId: 'workspace:1',
+      runId: 'run:1',
+      trigger: 'model_tool',
+    });
+    expect(result).toMatchObject({
+      type: 'succeeded',
+      toolName: 'activate_skill',
+      normalizedResult: {
+        kind: 'json',
+        isError: false,
+      },
+      runtimeSources: [{
+        source_id: 'skill:superpowers:brainstorming',
+        source_kind: 'skill',
+        text: 'Ask clarifying questions.',
+        persisted: false,
+        metadata: {
+          skillId: 'superpowers:brainstorming',
+          origin_module: 'skills',
+        },
+      }],
+    });
+  });
+
+  it('returns a normal tool failure when activation fails', async () => {
+    const service = new ToolExecutionService({
+      registryService: new ToolRegistryService(),
+      builtInTools: createBuiltInToolAdapter({
+        workspaceFileAccess: fakeWorkspaceFileAccess(),
+        skillService: {
+          activateSkill: vi.fn(async () => ({ status: 'not_found' as const, skillId: 'missing' })),
+        },
+        runContext: {
+          runId: 'run:1',
+          sessionId: 'session:1',
+          workspaceId: 'workspace:1',
+        },
+      }),
+    });
+
+    const result = await service.executeTool({
+      toolName: 'activate_skill',
+      input: { skillId: 'missing' },
+    });
+
+    expect(result).toMatchObject({
+      type: 'failed',
+      toolName: 'activate_skill',
+      normalizedResult: {
+        isError: true,
+      },
+    });
+    expect(result.type === 'succeeded' ? result.runtimeSources : undefined).toBeUndefined();
+  });
+
+  it('lets context render tool-produced runtime source as activated skill content', () => {
+    const runtimeSources: ToolRuntimeSource[] = [{
+      source_id: 'skill:checks:test',
+      source_kind: 'skill',
+      text: 'Run project checks now.',
+      persisted: false,
+      metadata: { origin_module: 'skills', skillId: 'checks:test' },
+    }];
+    const contextService = new ContextService({
+      repository: {
+        listMessagesBySession: () => [],
+        listSessionCompactionsBySession: () => [],
+        listRuntimeFactsBySession: () => [],
+        listToolResultsBySession: () => [],
+      },
+      promptResources: { system_prompt: 'You are Megumi' },
+      ids: { promptId: () => 'prompt:1' },
+    });
+
+    const prompt = contextService.buildPrompt({
+      session_context: { session_id: 'session:1', sources: [] },
+      purpose: 'agent_response',
+      runtime_sources: runtimeSources.map((source) => ({
+        source_id: source.source_id,
+        source_kind: 'skill',
+        text: source.text,
+        persisted: source.persisted,
+        metadata: source.metadata,
+      })),
+    });
+
+    expect(prompt.status === 'ok' ? prompt.prompt.messages[0]?.content : '').toContain('Run project checks now.');
+  });
+});
+
+function fakeWorkspaceFileAccess(): WorkspaceFileAccess {
+  return {
+    async readFile() {
+      throw new Error('not used');
+    },
+    async listDirectory() {
+      throw new Error('not used');
+    },
+    async walkFiles() {
+      return [];
+    },
+    async readTextFile() {
+      throw new Error('not used');
+    },
+    async replaceText() {
+      throw new Error('not used');
+    },
+    async writeFile() {
+      throw new Error('not used');
+    },
+    async resolveCommandCwd() {
+      return 'C:/workspace';
+    },
+  };
+}

@@ -191,6 +191,30 @@ describe('Permission Service', () => {
       }
     });
 
+    it('allows activate_skill as a low-risk built-in runtime context tool', async () => {
+      const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
+
+      const result = await service.evaluateToolExecution(baseEvaluateRequest({
+        tool_name: 'activate_skill',
+        tool_input: { skillId: 'superpowers:brainstorming' },
+        registered_tool: registeredTool({
+          registered_tool_name: 'activate_skill',
+          source_tool_name: 'activate_skill',
+          capabilities: ['project_read'],
+          risk_level: 'low',
+          side_effect: 'none',
+        }),
+      }));
+
+      expect(result.status).toBe('ok');
+      if (result.status === 'ok') {
+        expect(result.decision).toMatchObject({
+          type: 'allow',
+          execution_class: 'read_only',
+        });
+      }
+    });
+
     it('treats missing workspace path facts as no workspace path restriction', async () => {
       const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
 

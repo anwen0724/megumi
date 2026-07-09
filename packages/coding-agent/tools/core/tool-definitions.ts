@@ -9,6 +9,7 @@ export const BUILT_IN_TOOL_NAMES = [
   'edit_file',
   'write_file',
   'run_command',
+  'activate_skill',
 ] as const;
 
 export type BuiltInToolName = (typeof BUILT_IN_TOOL_NAMES)[number];
@@ -274,6 +275,37 @@ const runCommandDefinition: ToolDefinition = {
   modelFacingDescription: 'Run a project-scoped command through the host command adapter and return redacted output previews.',
 };
 
+const activateSkillDefinition: ToolDefinition = {
+  name: 'activate_skill',
+  title: 'Activate skill',
+  description: 'Activate a skill by skillId when the current task needs it.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      skillId: { type: 'string', description: 'Exact skillId from the available skill catalog.' },
+    },
+    required: ['skillId'],
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      activated: { type: 'boolean' },
+      skillId: { type: 'string' },
+      message: { type: 'string' },
+    },
+    required: ['activated', 'skillId', 'message'],
+  },
+  annotations: { readOnlyHint: true, idempotentHint: false, openWorldHint: false },
+  capabilities: ['project_read'],
+  riskLevel: 'low',
+  sideEffect: 'none',
+  availability: { status: 'available' },
+  executionMode: 'serial',
+  permissionMetadata: { ruleToolName: 'activate_skill' },
+  modelFacingDescription: 'Activate a skill by exact skillId from the available skill catalog.',
+};
+
 function cloneToolDefinition(definition: ToolDefinition): ToolDefinition {
   return JSON.parse(JSON.stringify(definition)) as ToolDefinition;
 }
@@ -296,6 +328,7 @@ export const BUILT_IN_TOOL_DEFINITIONS: readonly ToolDefinition[] = deepFreeze([
   editFileDefinition,
   writeFileDefinition,
   runCommandDefinition,
+  activateSkillDefinition,
 ] satisfies ToolDefinition[]);
 
 export function listBuiltInToolDefinitions(): ToolDefinition[] {

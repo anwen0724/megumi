@@ -44,6 +44,7 @@ export function normalizeRawToolResult(input: {
     toolExecutionObservation: {
       summary: `${input.toolName} completed`,
     },
+    ...(input.rawResult.runtimeSources ? { runtimeSources: input.rawResult.runtimeSources } : {}),
   };
 }
 
