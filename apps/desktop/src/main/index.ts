@@ -24,6 +24,7 @@ if (shouldQuitForSquirrelStartup()) {
       logger: desktopMain.runtimeLogger,
       workspace: desktopMain.workspace,
       chat: desktopMain.chat,
+      skill: desktopMain.skill,
       settings: desktopMain.settings,
       approval: desktopMain.approval,
       artifact: desktopMain.artifact,

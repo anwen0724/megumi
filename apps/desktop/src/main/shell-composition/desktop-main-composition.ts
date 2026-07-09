@@ -38,6 +38,7 @@ export function composeDesktopMain() {
     runtimeLogger,
     workspace: { host: codingAgentHost, workspaceFilesService },
     chat: { host: codingAgentHost },
+    skill: { host: codingAgentHost },
     settings: { host: codingAgentHost },
     approval: { host: codingAgentHost },
     artifact: codingAgentHost.artifacts,

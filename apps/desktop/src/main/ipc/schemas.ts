@@ -11,6 +11,15 @@ const EmptyPayloadSchema = z.object({}).strict();
 const IsoDateTimeSchema = z.string().datetime();
 
 export const CommandSuggestionsPayloadSchema = z.object({ draft_input: z.string() }).strict();
+export const SkillListPayloadSchema = z.object({
+  workspaceId: z.string().min(1).optional(),
+}).strict();
+export const SkillGetPayloadSchema = z.object({
+  skillId: z.string().min(1),
+  workspaceId: z.string().min(1).optional(),
+}).strict();
+export const SkillEnablePayloadSchema = SkillGetPayloadSchema;
+export const SkillDisablePayloadSchema = SkillGetPayloadSchema;
 
 export const SessionCreatePayloadSchema = z.object({
   title: z.string().min(1),
@@ -217,6 +226,10 @@ export const CommandSuggestionsRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.chat.commandSuggestions,
   CommandSuggestionsPayloadSchema,
 );
+export const SkillListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.skill.list, SkillListPayloadSchema);
+export const SkillGetRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.skill.get, SkillGetPayloadSchema);
+export const SkillEnableRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.skill.enable, SkillEnablePayloadSchema);
+export const SkillDisableRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.skill.disable, SkillDisablePayloadSchema);
 export const SessionCreateRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.sessionCreate, SessionCreatePayloadSchema);
 export const SessionListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.sessionList, EmptyPayloadSchema);
 export const SessionMessageListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.sessionMessageList, SessionMessageListPayloadSchema);
@@ -271,6 +284,10 @@ export const MemoryAccessLogsListRequestSchema = createRuntimeIpcRequestSchema(I
 export const MemoryRecallPreviewRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.memory.recallPreview, MemoryRecallPreviewPayloadSchema);
 
 export type CommandSuggestionsPayload = z.infer<typeof CommandSuggestionsPayloadSchema>;
+export type SkillListPayload = z.infer<typeof SkillListPayloadSchema>;
+export type SkillGetPayload = z.infer<typeof SkillGetPayloadSchema>;
+export type SkillEnablePayload = z.infer<typeof SkillEnablePayloadSchema>;
+export type SkillDisablePayload = z.infer<typeof SkillDisablePayloadSchema>;
 export type SessionCreatePayload = z.infer<typeof SessionCreatePayloadSchema>;
 export type SessionMessageListPayload = z.infer<typeof SessionMessageListPayloadSchema>;
 export type SessionTimelineListPayload = z.infer<typeof SessionTimelineListPayloadSchema>;

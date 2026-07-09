@@ -31,12 +31,14 @@ describe('host-interface boundary', () => {
     expect(host.createCodingAgentHostInterface({
       workspace: {} as never,
       chat: {} as never,
+      skill: {} as never,
       settings: {} as never,
       approval: {} as never,
       artifacts: {} as never,
     })).toEqual(expect.objectContaining({
       workspace: expect.any(Object),
       chat: expect.any(Object),
+      skill: expect.any(Object),
       settings: expect.any(Object),
       approval: expect.any(Object),
       artifacts: expect.any(Object),

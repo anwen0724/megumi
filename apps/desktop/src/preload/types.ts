@@ -4,6 +4,10 @@
   ChatGetContextUsageUiResult,
   ChatListTimelineUiResult,
   ChatSendUserInputUiResult,
+  DisableSkillUiResponse,
+  EnableSkillUiResponse,
+  GetSkillDetailUiResponse,
+  ListSkillsUiResponse,
   WorkspaceOpenFileUiResult,
 } from '@megumi/coding-agent/host-interface';
 import type {
@@ -12,6 +16,10 @@ import type {
   SessionMessageSendPayload,
   SessionContextUsageGetPayload,
   SessionTimelineListPayload,
+  SkillDisablePayload,
+  SkillEnablePayload,
+  SkillGetPayload,
+  SkillListPayload,
   WorkspaceFileOpenPayload,
 } from '../main/ipc/schemas';
 import type { api } from './api';
@@ -29,3 +37,11 @@ export type SessionBranchDraftCancelPreloadPayload = SessionBranchDraftCancelPay
 export type SessionBranchDraftCancelPreloadData = Omit<ChatCancelBranchDraftUiResult, 'events'>;
 export type WorkspaceFileOpenPreloadPayload = WorkspaceFileOpenPayload;
 export type WorkspaceFileOpenPreloadData = WorkspaceOpenFileUiResult;
+export type SkillListPreloadPayload = SkillListPayload;
+export type SkillListPreloadData = ListSkillsUiResponse;
+export type SkillGetPreloadPayload = SkillGetPayload;
+export type SkillGetPreloadData = GetSkillDetailUiResponse;
+export type SkillEnablePreloadPayload = SkillEnablePayload;
+export type SkillEnablePreloadData = EnableSkillUiResponse;
+export type SkillDisablePreloadPayload = SkillDisablePayload;
+export type SkillDisablePreloadData = DisableSkillUiResponse;

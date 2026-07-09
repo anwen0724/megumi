@@ -321,6 +321,7 @@ describe('main runtime logger composition', () => {
       logger: processLogger,
       workspace: { host: mocks.codingAgentHost, workspaceFilesService },
       chat: { host: mocks.codingAgentHost },
+      skill: { host: mocks.codingAgentHost },
       settings: { host: mocks.codingAgentHost },
       approval: { host: mocks.codingAgentHost },
       artifact: mocks.codingAgentHost.artifacts,

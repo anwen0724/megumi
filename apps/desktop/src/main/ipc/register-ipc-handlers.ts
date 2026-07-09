@@ -4,6 +4,7 @@
 import { registerWindowHandlers } from './handlers/window.handler';
 import { registerWorkspaceHandlers, type WorkspaceHandlersService } from './handlers/workspace.handler';
 import { registerChatHandlers, type ChatHandlersService } from './handlers/chat.handler';
+import { registerSkillHandlers, type SkillHandlersService } from './handlers/skill.handler';
 import { registerSettingsHandlers, type SettingsHandlersService } from './handlers/settings.handler';
 import { registerApprovalHandlers, type ApprovalHandlersService } from './handlers/approval.handler';
 import {
@@ -19,6 +20,7 @@ export interface RegisterAllHandlersOptions {
   ipcMain?: DesktopIpcMain;
   workspace?: WorkspaceHandlersService;
   chat?: ChatHandlersService;
+  skill?: SkillHandlersService;
   settings?: SettingsHandlersService;
   approval?: ApprovalHandlersService;
   artifact?: ArtifactHandlersService;
@@ -36,6 +38,10 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
 
   if (options.chat) {
     registerChatHandlers(options.chat, { logger: options.logger, ipcMain });
+  }
+
+  if (options.skill) {
+    registerSkillHandlers(options.skill, { logger: options.logger, ipcMain });
   }
 
   if (options.settings) {

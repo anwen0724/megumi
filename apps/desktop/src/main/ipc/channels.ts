@@ -30,6 +30,12 @@ export const IPC_CHANNELS = {
     runListBySession: 'run:list-by-session',
     runEventsList: 'run:events:list',
   },
+  skill: {
+    list: 'skill:list',
+    get: 'skill:get',
+    enable: 'skill:enable',
+    disable: 'skill:disable',
+  },
   approval: {
     resolve: 'approval:resolve',
   },
@@ -104,6 +110,10 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.chat.branchDraftCancel,
   IPC_CHANNELS.chat.runListBySession,
   IPC_CHANNELS.chat.runEventsList,
+  IPC_CHANNELS.skill.list,
+  IPC_CHANNELS.skill.get,
+  IPC_CHANNELS.skill.enable,
+  IPC_CHANNELS.skill.disable,
   IPC_CHANNELS.approval.resolve,
   IPC_CHANNELS.workspace.projectList,
   IPC_CHANNELS.workspace.projectUseExisting,
