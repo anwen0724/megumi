@@ -19,16 +19,22 @@ export type CleanupInterruptedRunsCoreRequest = {
 
 export type CleanupInterruptedRunsCoreResult = {
   cleaned_run_ids: string[];
+  cleaned_runs: Array<{
+    run: AgentRun;
+    previous_status: AgentRun['status'];
+    cancelled_approvals: AgentRunApprovalRequest[];
+  }>;
 };
 
 export function cleanupInterruptedRuns(
   request: CleanupInterruptedRunsCoreRequest,
 ): CleanupInterruptedRunsCoreResult {
   const cleanedRunIds: string[] = [];
+  const cleanedRuns: CleanupInterruptedRunsCoreResult['cleaned_runs'] = [];
 
   for (const run of request.repository.listInterruptedRuns()) {
     if (run.status === 'running') {
-      request.repository.saveRun(transitionAgentRunStatus({
+      const failedRun = request.repository.saveRun(transitionAgentRunStatus({
         run,
         to: 'failed',
         changed_at: request.cleaned_at,
@@ -39,11 +45,16 @@ export function cleanupInterruptedRuns(
         },
       }));
       cleanedRunIds.push(run.run_id);
+      cleanedRuns.push({
+        run: failedRun,
+        previous_status: run.status,
+        cancelled_approvals: [],
+      });
       continue;
     }
 
     if (run.status === 'waiting_for_approval') {
-      cancelPendingApprovals(request.repository, run.run_id, request.cleaned_at);
+      const cancelledApprovals = cancelPendingApprovals(request.repository, run.run_id, request.cleaned_at);
       const cancellingRun = transitionAgentRunStatus({
         run,
         to: 'cancelling',
@@ -57,32 +68,45 @@ export function cleanupInterruptedRuns(
       });
       request.repository.saveRun(cancelledRun);
       cleanedRunIds.push(run.run_id);
+      cleanedRuns.push({
+        run: cancelledRun,
+        previous_status: run.status,
+        cancelled_approvals: cancelledApprovals,
+      });
       continue;
     }
 
     if (run.status === 'cancelling') {
-      request.repository.saveRun(transitionAgentRunStatus({
+      const cancelledRun = request.repository.saveRun(transitionAgentRunStatus({
         run,
         to: 'cancelled',
         changed_at: request.cleaned_at,
       }));
       cleanedRunIds.push(run.run_id);
+      cleanedRuns.push({
+        run: cancelledRun,
+        previous_status: run.status,
+        cancelled_approvals: [],
+      });
     }
   }
 
-  return { cleaned_run_ids: cleanedRunIds };
+  return { cleaned_run_ids: cleanedRunIds, cleaned_runs: cleanedRuns };
 }
 
 function cancelPendingApprovals(
   repository: InterruptedRunCleanupRepository,
   runId: string,
   decidedAt: string,
-): void {
+): AgentRunApprovalRequest[] {
+  const cancelledApprovals: AgentRunApprovalRequest[] = [];
   for (const approval of repository.listPendingApprovalRequestsByRun(runId)) {
-    repository.saveApprovalRequest({
+    const cancelled = repository.saveApprovalRequest({
       ...approval,
       status: 'cancelled',
       decided_at: decidedAt,
     });
+    cancelledApprovals.push(cancelled);
   }
+  return cancelledApprovals;
 }

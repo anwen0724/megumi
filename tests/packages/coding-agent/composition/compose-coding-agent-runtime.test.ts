@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { afterEach, describe, expect, it } from 'vitest';
-import { composeCodingAgentRuntime } from '@megumi/coding-agent/composition';
+import { composeCodingAgentPersistence, composeCodingAgentRuntime } from '@megumi/coding-agent/composition';
+import { createAgentRunRepository } from '@megumi/coding-agent/agent-run/repositories/agent-run-repository';
 import type { SettingsRaw } from '@megumi/coding-agent/settings';
 import { AssistantEventStream, type AiClient, type AssistantStreamEvent } from '@megumi/ai';
 import { collectEvents } from '../agent-run/agent-run-test-helpers';
@@ -78,6 +79,81 @@ describe('composeCodingAgentRuntime trace wiring', () => {
         ]));
     } finally {
       secondRuntime.dispose();
+    }
+  });
+
+  it('cleans interrupted Agent Runs during runtime startup and leaves replayable events', async () => {
+    const home = await createHome();
+    const firstRuntime = composeCodingAgentRuntime({
+      homePaths: home.paths,
+      runtimeLogger: { warn() {} },
+      aiClient: fakeAiClient(),
+      settingsStorage: settingsStorage(),
+    });
+    const workspace = await firstRuntime.workspaceService.openWorkspace({
+      root_path: home.workspaceRoot,
+      opened_at: '2026-07-08T00:00:00.000Z',
+    });
+    expect(workspace.status).toBe('opened');
+    if (workspace.status !== 'opened') return;
+    const session = firstRuntime.sessionService.createSession({
+      session_id: 'session-1',
+      workspace_id: workspace.workspace.workspace_id,
+      title: 'Interrupted session',
+      created_at: '2026-07-08T00:00:00.000Z',
+    });
+    expect(session.status).toBe('created');
+    firstRuntime.sessionService.saveUserMessage({
+      message_id: 'message-1',
+      session_id: 'session-1',
+      run_id: 'run-waiting',
+      content_text: 'write hello world',
+      created_at: '2026-07-08T00:00:00.000Z',
+    });
+    firstRuntime.dispose();
+
+    const seeded = composeCodingAgentPersistence({ sqlitePath: home.paths.sqlitePath });
+    const repository = createAgentRunRepository({ database: seeded.database });
+    repository.createRun({
+      run_id: 'run-waiting',
+      workspace_id: workspace.workspace.workspace_id,
+      session_id: 'session-1',
+      model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
+      trigger: { type: 'user_input', user_message_id: 'message-1' },
+      status: 'waiting_for_approval',
+      created_at: '2026-07-08T00:00:00.000Z',
+      started_at: '2026-07-08T00:00:00.000Z',
+    });
+    repository.createApprovalRequest({
+      approval_request_id: 'approval-1',
+      run_id: 'run-waiting',
+      subject: {
+        type: 'tool_call',
+        tool_call_id: 'tool-call-1',
+        tool_name: 'write_file',
+        input: { path: 'hello.ts' },
+      },
+      status: 'pending',
+      requested_scope: 'once',
+      created_at: '2026-07-08T00:01:00.000Z',
+    });
+    seeded.database.close();
+
+    const runtime = composeCodingAgentRuntime({
+      homePaths: home.paths,
+      runtimeLogger: { warn() {} },
+      aiClient: fakeAiClient(),
+      settingsStorage: settingsStorage(),
+    });
+
+    try {
+      expect(runtime.compatibility.listRunsBySession('session-1')[0]?.status).toBe('cancelled');
+      expect(runtime.compatibility.listRuntimeEventsByRun!('run-waiting').map((event) => event.eventType)).toEqual([
+        'approval.resolved',
+        'run.cancelled',
+      ]);
+    } finally {
+      runtime.dispose();
     }
   });
 });

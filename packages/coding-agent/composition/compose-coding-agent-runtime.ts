@@ -277,6 +277,15 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     context_usage_monitor: contextRuntime.contextUsageMonitor,
     context_compaction_service: contextRuntime.contextCompactionService,
   });
+  const cleanupResult = agentRunService.cleanupInterruptedRuns({ reason: 'runtime_started' });
+  void Promise.resolve(cleanupResult).then((result) => {
+    if (result.status === 'failed') {
+      options.runtimeLogger.warn('agent_run.cleanup_failed', {
+        code: result.failure.code,
+        message: result.failure.message,
+      });
+    }
+  });
 
   return {
     agentRunService,

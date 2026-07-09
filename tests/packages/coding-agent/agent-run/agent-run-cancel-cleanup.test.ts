@@ -27,6 +27,31 @@ describe('agent-run interrupted cleanup', () => {
     });
 
     expect(result.cleaned_run_ids).toEqual(['run-running', 'run-waiting', 'run-cancelling']);
+    expect(result.cleaned_runs.map((entry) => ({
+      run_id: entry.run.run_id,
+      previous_status: entry.previous_status,
+      status: entry.run.status,
+      cancelled_approvals: entry.cancelled_approvals.map((approval) => approval.approval_request_id),
+    }))).toEqual([
+      {
+        run_id: 'run-running',
+        previous_status: 'running',
+        status: 'failed',
+        cancelled_approvals: [],
+      },
+      {
+        run_id: 'run-waiting',
+        previous_status: 'waiting_for_approval',
+        status: 'cancelled',
+        cancelled_approvals: ['approval-1'],
+      },
+      {
+        run_id: 'run-cancelling',
+        previous_status: 'cancelling',
+        status: 'cancelled',
+        cancelled_approvals: [],
+      },
+    ]);
     expect(repository.getRun('run-running')?.status).toBe('failed');
     expect(repository.getRun('run-running')?.failure?.code).toBe('runtime_interrupted');
     expect(repository.getRun('run-waiting')?.status).toBe('cancelled');
@@ -45,6 +70,58 @@ describe('agent-run interrupted cleanup', () => {
     expect(result.status).toBe('cancelled');
     expect(repository.getRun('run-1')?.status).toBe('cancelled');
     expect(repository.getApprovalRequest('approval-1')?.status).toBe('cancelled');
+  });
+
+  it('cleanupInterruptedRuns returns and persists replayable runtime events', async () => {
+    const repository = createInMemoryAgentRunRepository();
+    repository.createRun(sampleRun({ run_id: 'run-running', status: 'running' }));
+    repository.createRun(sampleRun({ run_id: 'run-waiting', status: 'waiting_for_approval' }));
+    repository.createApprovalRequest(sampleApprovalRequest({
+      approval_request_id: 'approval-1',
+      run_id: 'run-waiting',
+      requested_scope: 'once',
+    }));
+    const service = createAgentRunService(createMessageFlowDependencies({ repository }) as unknown as CreateAgentRunServiceOptions);
+
+    const result = await service.cleanupInterruptedRuns({ reason: 'runtime_started' });
+
+    expect(result.status).toBe('completed');
+    if (result.status !== 'completed') {
+      throw new Error('Expected cleanup to complete.');
+    }
+    expect(result.cleaned_run_ids).toEqual(['run-running', 'run-waiting']);
+    expect(result.events.map((event) => event.eventType)).toEqual([
+      'run.failed',
+      'approval.resolved',
+      'run.cancelled',
+    ]);
+    expect(result.events[0]).toMatchObject({
+      runId: 'run-running',
+      payload: {
+        error: {
+          message: 'Runtime interrupted before the Agent Run reached a terminal state.',
+          source: 'core',
+        },
+      },
+    });
+    expect(result.events[1]).toMatchObject({
+      runId: 'run-waiting',
+      payload: {
+        approvalRequestId: 'approval-1',
+        decision: 'cancelled',
+        scope: 'once',
+      },
+    });
+    expect(result.events[2]).toMatchObject({
+      runId: 'run-waiting',
+      payload: {
+        reason: 'runtime_started_cleanup',
+      },
+    });
+    expect(repository.listRuntimeEventsByRun('run-waiting').map((event) => event.eventType)).toEqual([
+      'approval.resolved',
+      'run.cancelled',
+    ]);
   });
 });
 

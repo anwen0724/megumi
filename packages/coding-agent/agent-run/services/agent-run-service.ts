@@ -10,7 +10,7 @@ import type { SettingsService } from '../../settings';
 import type { ToolExecutionService, ToolRegistryService } from '../../tools';
 import type { WorkspacePathPolicyService, WorkspaceService } from '../../workspace';
 import type { CompactContextResult, ContextUsageSignal, SessionContextSource } from '../../context';
-import type { RuntimeEvent } from '../../events';
+import type { RuntimeError, RuntimeEvent } from '../../events';
 import type { MegumiDatabase } from '../../persistence/connection';
 import type {
   AgentRun,
@@ -598,6 +598,53 @@ class DefaultAgentRunService implements AgentRunService {
         }
       }
     }
+    const eventSink = this.createEventSink(queue);
+    for (const cleaned of result.cleaned_runs) {
+      if (cleaned.previous_status === 'running') {
+        eventSink.emit({
+          eventType: 'run.failed',
+          run: cleaned.run,
+          payload: {
+            error: agentRunFailureToRuntimeError(cleaned.run.failure ?? {
+              code: 'runtime_interrupted',
+              message: 'Runtime interrupted before the Agent Run reached a terminal state.',
+              retryable: false,
+            }),
+          },
+        });
+        continue;
+      }
+
+      for (const approval of cleaned.cancelled_approvals) {
+        eventSink.emit({
+          eventType: 'approval.resolved',
+          run: cleaned.run,
+          payload: {
+            approvalRequestId: approval.approval_request_id,
+            decision: 'cancelled',
+            scope: approval.requested_scope ?? 'once',
+            decidedAt: approval.decided_at ?? this.clock.now(),
+          },
+        });
+      }
+
+      if (cleaned.previous_status === 'waiting_for_approval' || cleaned.previous_status === 'cancelling') {
+        eventSink.emit({
+          eventType: 'run.cancelled',
+          run: cleaned.run,
+          payload: {
+            reason: 'runtime_started_cleanup',
+            error: {
+              code: 'runtime_cancelled',
+              message: 'Runtime restarted before the Agent Run reached a terminal state.',
+              severity: 'warning',
+              retryable: false,
+              source: 'core',
+            },
+          },
+        });
+      }
+    }
     queue.close();
     return { status: 'completed', cleaned_run_ids: result.cleaned_run_ids, events: queue.snapshot() };
   }
@@ -1119,6 +1166,43 @@ function approvalRequestToRuntimePayload(request: AgentRunApprovalRequest): Reco
     status: request.status,
     createdAt: request.created_at,
   };
+}
+
+function agentRunFailureToRuntimeError(failure: AgentRunFailure): RuntimeError {
+  return {
+    code: runtimeErrorCodeForAgentRunFailure(failure),
+    message: failure.message,
+    severity: 'error',
+    retryable: failure.retryable ?? false,
+    source: runtimeErrorSourceForAgentRunFailure(failure),
+  };
+}
+
+function runtimeErrorCodeForAgentRunFailure(failure: AgentRunFailure): RuntimeError['code'] {
+  switch (failure.code) {
+    case 'context_failed':
+      return 'context_budget_exceeded';
+    case 'model_call_failed':
+      return 'provider_invalid_request';
+    case 'tool_call_failed':
+      return 'tool_execution_failed';
+    case 'approval_failed':
+      return 'approval_denied';
+    case 'cancel_failed':
+      return 'runtime_cancelled';
+    case 'runtime_protocol_violation':
+    case 'loop_limit_exceeded':
+      return 'runtime_protocol_violation';
+    default:
+      return 'runtime_unknown';
+  }
+}
+
+function runtimeErrorSourceForAgentRunFailure(failure: AgentRunFailure): RuntimeError['source'] {
+  if (failure.code === 'model_call_failed') return 'provider';
+  if (failure.code === 'tool_call_failed') return 'tool';
+  if (failure.code === 'approval_failed') return 'approval';
+  return 'core';
 }
 
 function emitToolResultRuntimeEvent(
