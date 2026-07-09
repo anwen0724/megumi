@@ -90,12 +90,6 @@ npm install
 npm start
 ```
 
-如果 Electron native modules 需要重建：
-
-```bash
-npm run start:fix-native
-```
-
 运行测试：
 
 ```bash
@@ -112,12 +106,6 @@ npx tsc --noEmit
 
 ```bash
 npm run package
-```
-
-如果在 Electron 和 Node native module target 之间切换后测试失败，可以重建 Node native module：
-
-```bash
-npm run rebuild:native:node
 ```
 
 ## 仓库结构

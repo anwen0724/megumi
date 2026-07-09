@@ -90,12 +90,6 @@ Start the desktop app:
 npm start
 ```
 
-If Electron native modules need to be rebuilt:
-
-```bash
-npm run start:fix-native
-```
-
 Run tests:
 
 ```bash
@@ -112,12 +106,6 @@ Package the app:
 
 ```bash
 npm run package
-```
-
-If tests fail after switching between Electron and Node native module targets, rebuild the Node native module:
-
-```bash
-npm run rebuild:native:node
 ```
 
 ## Repository Layout

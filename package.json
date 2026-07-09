@@ -6,11 +6,10 @@
   "author": "Megumi contributors",
   "main": ".vite/build/index.js",
   "scripts": {
-    "start": "electron-forge start",
-    "start:fix-native": "npm run rebuild:native:electron && npm start",
+    "start": "npm run rebuild:native:electron && electron-forge start",
     "package": "npm run rebuild:native:electron && electron-forge package",
     "make": "npm run rebuild:native:electron && electron-forge make",
-    "test": "vitest run",
+    "test": "npm run rebuild:native:node && vitest run",
     "rebuild:native:electron": "electron-rebuild -f -w better-sqlite3",
     "rebuild:native:node": "npm rebuild better-sqlite3"
   },
