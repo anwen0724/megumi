@@ -7,7 +7,7 @@ describe('context service skill sources', () => {
       repository: createRepository(),
       skillSource: {
         getSkillCatalog: vi.fn(async () => ({
-          status: 'ok',
+          status: 'ok' as const,
           skills: [{
             skillId: 'superpowers:brainstorming',
             name: 'superpowers:brainstorming',

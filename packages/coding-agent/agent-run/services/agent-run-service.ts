@@ -7,6 +7,7 @@ import type { InputService, ParsedUserInput } from '../../input';
 import type { PermissionMode, PermissionService } from '../../permissions';
 import type { SessionService } from '../../session';
 import type { SettingsService } from '../../settings';
+import type { ActivatedSkillContent, SkillService } from '../../skills';
 import type { ToolExecutionService, ToolRegistryService } from '../../tools';
 import type { WorkspacePathPolicyService, WorkspaceService } from '../../workspace';
 import type { CompactContextResult, ContextUsageSignal, ContextUsageWindow, SessionContextSource } from '../../context';
@@ -75,6 +76,7 @@ export type CreateAgentRunServiceOptions = {
   settings_service: Pick<SettingsService, 'resolveProviderRuntimeConfig' | 'resolvePermissionSettings'>;
   context_service: Parameters<typeof runAgentModelToolLoop>[0]['context_service'];
   model_call_service: ModelCallService;
+  skill_service?: Pick<SkillService, 'activateSkill'>;
   tool_registry_service: Pick<ToolRegistryService, 'listAvailableTools'>;
   tool_execution_service?: Pick<ToolExecutionService, 'executeTool'>;
   tool_execution_service_factory?: (input: {
@@ -258,6 +260,35 @@ class DefaultAgentRunService implements AgentRunService {
     }));
     const queue = createAgentRunEventQueue((event) => this.options.event_publisher?.publish(event));
     const eventSink = this.createEventSink(queue, run);
+    const commandSkillRuntimeSources = await this.resolveCommandSkillRuntimeSources({
+      command_result: commandRoute.command_result,
+      session_id: session.session_id,
+      workspace_id: request.workspace_id,
+      run_id: run.run_id,
+    });
+    if (commandSkillRuntimeSources.status === 'failed') {
+      const failedRun = this.repository.saveRun(transitionAgentRunStatus({
+        run,
+        to: 'failed',
+        changed_at: this.clock.now(),
+        failure: commandSkillRuntimeSources.failure,
+      }));
+      eventSink.emit({
+        eventType: 'run.failed',
+        run: failedRun,
+        payload: {
+          error: agentRunFailureToRuntimeError(commandSkillRuntimeSources.failure),
+        },
+      });
+      queue.close();
+      return {
+        status: 'failed',
+        request_id: request.request_id,
+        session_id: session.session_id,
+        failure: commandSkillRuntimeSources.failure,
+        events: queue.snapshot(),
+      };
+    }
     const controller = new AbortController();
     this.activeRunAbortControllers.set(run.run_id, controller);
     setTimeout(() => {
@@ -297,6 +328,9 @@ class DefaultAgentRunService implements AgentRunService {
         model_config: modelConfig.config,
         permission_mode: request.permission_mode ?? 'default',
         ...(workspaceRoot.workspace_root ? { workspace_root: workspaceRoot.workspace_root } : {}),
+        ...(commandSkillRuntimeSources.runtime_sources.length
+          ? { initial_runtime_sources: commandSkillRuntimeSources.runtime_sources }
+          : {}),
         signal: controller.signal,
       });
     }, 0);
@@ -488,6 +522,9 @@ class DefaultAgentRunService implements AgentRunService {
         created_at: this.clock.now(),
       });
       modelCallMessages = [...modelCallMessages, toolResultToModelCallMessage(toolFact)];
+      if (toolFact.runtime_sources?.length) {
+        runtimeFacts = [...runtimeFacts, ...toolFact.runtime_sources];
+      }
       eventSink.emit({
         eventType: 'tool_result.created',
         run: resumedRun,
@@ -835,6 +872,9 @@ class DefaultAgentRunService implements AgentRunService {
     for (const toolResult of toolGroup.tool_result_facts) {
       emitToolResultRuntimeEvent(input.eventSink, input.run, toolResult);
       modelCallMessages = [...modelCallMessages, toolResultToModelCallMessage(toolResult)];
+      if (toolResult.runtime_sources?.length) {
+        runtimeFacts = [...runtimeFacts, ...toolResult.runtime_sources];
+      }
     }
 
     if (toolGroup.pending_approvals.length > 0) {
@@ -1117,6 +1157,52 @@ class DefaultAgentRunService implements AgentRunService {
     };
   }
 
+  private async resolveCommandSkillRuntimeSources(input: {
+    command_result?: CommandExecutionResult;
+    session_id: string;
+    workspace_id: string;
+    run_id: string;
+  }): Promise<
+    | { status: 'ok'; runtime_sources: SessionContextSource[] }
+    | { status: 'failed'; failure: AgentRunFailure }
+  > {
+    if (input.command_result?.type !== 'agent_run' || !input.command_result.input.requestedSkillActivation) {
+      return { status: 'ok', runtime_sources: [] };
+    }
+    if (!this.options.skill_service) {
+      return {
+        status: 'failed',
+        failure: {
+          code: 'runtime_protocol_violation',
+          message: 'Skill Service is not configured for skill command activation.',
+        },
+      };
+    }
+
+    const activation = await this.options.skill_service.activateSkill({
+      skillId: input.command_result.input.requestedSkillActivation.skillId,
+      sessionId: input.session_id,
+      workspaceId: input.workspace_id,
+      runId: input.run_id,
+      trigger: 'command',
+    });
+    if (activation.status === 'ok') {
+      return {
+        status: 'ok',
+        runtime_sources: [activatedSkillToSessionContextSource(activation.activatedSkill)],
+      };
+    }
+    return {
+      status: 'failed',
+      failure: {
+        code: 'runtime_protocol_violation',
+        message: activation.status === 'failed'
+          ? activation.message
+          : `Skill ${activation.skillId} is ${activation.status === 'not_found' ? 'not found' : 'unavailable'}.`,
+      },
+    };
+  }
+
   private routeCommandResult(
     request: StartRunRequest,
     sessionId: string,
@@ -1382,7 +1468,29 @@ function toolResultRuntimeFactFromExecution(input: {
     status: input.result.type === 'succeeded' ? 'completed' : 'failed',
     content: input.result.normalizedResult.content,
     ...(input.result.toolExecutionObservation ? { observation: input.result.toolExecutionObservation } : {}),
+    ...(input.result.type === 'succeeded' && input.result.runtimeSources?.length
+      ? { runtime_sources: input.result.runtimeSources.map((source) => ({
+          source_id: source.source_id,
+          source_kind: source.source_kind as SessionContextSource['source_kind'],
+          text: source.text,
+          persisted: source.persisted,
+          ...(source.metadata ? { metadata: source.metadata } : {}),
+        })) }
+      : {}),
     created_at: input.created_at,
+  };
+}
+
+function activatedSkillToSessionContextSource(skill: ActivatedSkillContent): SessionContextSource {
+  return {
+    source_id: `skill:${skill.skillId}`,
+    source_kind: 'skill',
+    text: skill.content,
+    persisted: false,
+    metadata: {
+      skillId: skill.skillId,
+      origin_module: 'skills',
+    },
   };
 }
 

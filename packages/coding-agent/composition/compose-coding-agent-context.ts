@@ -10,6 +10,7 @@ import {
   ContextService,
   ContextUsageMonitor,
   type ContextInstructionSourcePort,
+  type ContextSkillSourcePort,
   type ContextSummaryModelCallPort,
   type ContextUsageSignal,
   type ContextUsageWindow,
@@ -53,6 +54,7 @@ export function composeCodingAgentContext(input: {
   sessionService: Pick<SessionService, 'getActiveHistory' | 'saveCompactionSummary'>;
   runtimeEventRepository: ConstructorParameters<typeof ContextRepository>[0]['runtimeEventRepository'];
   agentInstructionSourceService?: ContextInstructionSourcePort;
+  skillSource?: ContextSkillSourcePort;
   summaryModelCallPort: ContextSummaryModelCallPort;
   modelConfigProvider: (input: { session_id: string; workspace_id?: string }) => ContextUsageWindow;
   developerPromptLogger?: DeveloperPromptLogger;
@@ -75,6 +77,7 @@ export function composeCodingAgentContext(input: {
   const contextService = new ContextService({
     repository: contextRepository,
     instructionSource: input.agentInstructionSourceService,
+    skillSource: input.skillSource,
     promptResources: { system_prompt: systemPromptText },
     promptLog: developerPromptLog,
   });

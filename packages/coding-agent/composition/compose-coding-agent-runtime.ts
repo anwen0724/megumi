@@ -23,6 +23,7 @@ import {
   createApprovalController,
   createChatController,
   createSettingsController,
+  createSkillController,
   createWorkspaceController,
   type CodingAgentHostInterface,
   type ChatControllerCompatibilityQueries,
@@ -38,6 +39,7 @@ import {
   composeCodingAgentToolRegistryService,
 } from './compose-coding-agent-tool-runtime';
 import { composeCodingAgentContext } from './compose-coding-agent-context';
+import { composeCodingAgentSkills, type SkillService } from '../skills';
 import {
   createSettingsService,
   type MemorySettingsPort,
@@ -122,6 +124,7 @@ export interface CodingAgentRuntime {
   modelCallService: ModelCallService;
   inputService: InputService;
   commandService: CommandService;
+  skillService: SkillService;
   sessionService: SessionService;
   settingsService: SettingsService;
   workspaceService: WorkspaceService;
@@ -161,7 +164,6 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   const agentRunRepository = createAgentRunRepository({ database: persistence.database });
   const sessionService = createSessionService({ repository: sessionRepository });
   const inputService = createInputService();
-  const commandService = createCommandService();
   const toolRegistry = composeCodingAgentToolRegistryService();
   const settingsService = resolveSettingsService(options.appSettingsProvider) ?? createSettingsService({
     file_store: options.settingsStorage ?? createLocalSettingsJsonStorage({
@@ -178,6 +180,12 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     repository: workspaceRepository,
     file_system: workspaceFileSystem,
   });
+  const skillRuntime = composeCodingAgentSkills({
+    database: persistence.database,
+    homePath: options.homePaths.homePath,
+    workspaceService,
+  });
+  const commandService = createCommandService();
   const workspaceChangeService = createWorkspaceChangeService({
     repository: workspaceChangeRepository,
     path_policy: workspacePathPolicyService,
@@ -223,6 +231,9 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
       settingsService,
     }),
     modelConfigProvider: () => createContextUsageWindow({}),
+    skillSource: {
+      getSkillCatalog: (request) => skillRuntime.skillService.getSkillCatalog(request),
+    },
   });
   const artifactContentStore = new ArtifactContentStore({
     artifactRoot: `${options.homePaths.homePath}/artifacts`,
@@ -253,12 +264,19 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     settings_service: agentRunSettingsService,
     context_service: contextRuntime.contextService,
     model_call_service: modelCallService,
+    skill_service: skillRuntime.skillService,
     tool_registry_service: toolRegistry,
     tool_execution_service_factory: ({ run_id, session_id, workspace_id, workspace_root }) => {
       const toolExecutionService = composeCodingAgentToolExecutionService({
         projectRoot: workspace_root ?? process.cwd(),
         registryService: toolRegistry,
         workspacePathPolicyService,
+        skillService: skillRuntime.skillService,
+        runContext: {
+          runId: run_id,
+          sessionId: session_id,
+          workspaceId: workspace_id,
+        },
       });
       return {
         executeTool(request) {
@@ -307,6 +325,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     modelCallService,
     inputService,
     commandService,
+    skillService: skillRuntime.skillService,
     sessionService,
     settingsService,
     workspaceService,
@@ -347,6 +366,7 @@ export function composeCodingAgentHostInterface(
       contextUsageMonitor: runtime.contextRuntime.contextUsageMonitor,
       contextUsageWindowProvider: ({ modelId }) => createContextUsageWindow({ modelId }),
     }),
+    skill: createSkillController(runtime.skillService),
     workspace: createWorkspaceController({
       workspaceService: runtime.workspaceService,
       ...(options.directoryPicker ? { directoryPicker: options.directoryPicker } : {}),

@@ -2,7 +2,7 @@
  * Stable public contracts for Agent Run model calls.
  * Model Call Service consumes Context prompts and run-level Tool Sets.
  */
-import type { Prompt } from '../../context';
+import type { Prompt, SessionContextSource } from '../../context';
 import type { ProviderRuntimeConfig } from '../../settings';
 import type { ToolExecutionObservation } from '../../tools';
 import type { AgentRunFailure } from './agent-run-contracts';
@@ -142,5 +142,6 @@ export type ToolResultRuntimeFact = {
   status: 'completed' | 'failed' | 'denied' | 'cancelled';
   observation?: ToolExecutionObservation;
   content?: string;
+  runtime_sources?: SessionContextSource[];
   created_at: string;
 };

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -156,6 +156,57 @@ describe('composeCodingAgentRuntime trace wiring', () => {
       runtime.dispose();
     }
   });
+
+  it('wires project skills into SkillService and /skill Agent Run prompts', async () => {
+    const home = await createHome();
+    const capturedPrompts: string[] = [];
+    await writeProjectSkill({
+      workspaceRoot: home.workspaceRoot,
+      skillId: 'qa:review',
+      description: 'Review code changes',
+      content: 'Always inspect the diff before making claims.\n',
+    });
+    const runtime = composeCodingAgentRuntime({
+      homePaths: home.paths,
+      runtimeLogger: { warn() {} },
+      aiClient: capturingAiClient(capturedPrompts),
+      settingsStorage: settingsStorage(),
+    });
+
+    try {
+      const workspace = await runtime.workspaceService.openWorkspace({
+        root_path: home.workspaceRoot,
+        opened_at: '2026-07-08T00:00:00.000Z',
+      });
+      expect(workspace.status).toBe('opened');
+      if (workspace.status !== 'opened') return;
+
+      const skills = await runtime.skillService.listSkills({
+        workspaceId: workspace.workspace.workspace_id,
+      });
+      expect(skills.status).toBe('ok');
+      expect(skills.status === 'ok' ? skills.skills.map((skill) => skill.skillId) : [])
+        .toContain('qa:review');
+
+      const run = await runtime.agentRunService.startRun({
+        request_id: 'request-skill-1',
+        workspace_id: workspace.workspace.workspace_id,
+        session: { type: 'new', title: 'Skill run' },
+        user_input: { text: '/skill qa:review check this patch' },
+        model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
+      });
+      expect(run.status).toBe('started');
+      if (run.status !== 'started') return;
+      const events = await collectEvents(run.events);
+      expect(events.map((event) => event.eventType)).toContain('model_call.started');
+
+      expect(capturedPrompts.join('\n')).toContain('Active Skill Instructions');
+      expect(capturedPrompts.join('\n')).toContain('Always inspect the diff before making claims.');
+      expect(capturedPrompts.join('\n')).toContain('skillId: qa:review');
+    } finally {
+      runtime.dispose();
+    }
+  });
 });
 
 async function createHome(): Promise<{
@@ -233,6 +284,35 @@ function fakeAiClient(): AiClient {
       stopReason: 'end_turn',
     }),
   };
+}
+
+function capturingAiClient(capturedPrompts: string[]): AiClient {
+  return {
+    stream(request) {
+      capturedPrompts.push(JSON.stringify(request.context));
+      return AssistantEventStream.from(singleAssistantMessage());
+    },
+    complete: async () => ({
+      role: 'assistant',
+      content: [{ type: 'text', text: 'ok' }],
+      stopReason: 'end_turn',
+    }),
+  };
+}
+
+async function writeProjectSkill(input: {
+  workspaceRoot: string;
+  skillId: string;
+  description: string;
+  content: string;
+}): Promise<void> {
+  const skillRoot = join(input.workspaceRoot, '.megumi', 'skills', input.skillId.replace(/:/g, '-'));
+  await mkdir(skillRoot, { recursive: true });
+  await writeFile(
+    join(skillRoot, 'SKILL.md'),
+    `---\nname: ${input.skillId}\ndescription: ${input.description}\n---\n\n${input.content}`,
+    'utf8',
+  );
 }
 
 async function* singleAssistantMessage(): AsyncIterable<AssistantStreamEvent> {

@@ -136,7 +136,7 @@ export async function runAgentModelToolLoop(
   let run = request.run;
   let modelCalls = 0;
   let toolRounds = 0;
-  const runtimeFacts: SessionContextSource[] = [...(request.initial_runtime_sources ?? [])];
+  let runtimeFacts: SessionContextSource[] = [...(request.initial_runtime_sources ?? [])];
   const modelCallMessages: ModelCallMessage[] = [...(request.initial_model_call_messages ?? [])];
 
   while (true) {
@@ -356,6 +356,9 @@ export async function runAgentModelToolLoop(
     for (const toolResult of toolGroup.tool_result_facts) {
       emitToolResult(dependencies, run, toolResult);
       modelCallMessages.push(toolResultToModelCallMessage(toolResult));
+      if (toolResult.runtime_sources?.length) {
+        runtimeFacts = [...runtimeFacts, ...toolResult.runtime_sources];
+      }
     }
     if (toolGroup.tool_result_facts.length > 0) {
       traceRun(dependencies, run, 'trace.model_call.messages_appended', {
