@@ -3,13 +3,86 @@
  * Host factory implementations remain internal to Product Composition.
  */
 export * from './product-host-interface';
-export type * from './workspace-host';
-export type * from './chat-host';
-export type * from './skill-host';
-export type * from './settings-host';
-export type * from './approval-host';
-export type * from './artifact-host';
-export type * from './plan-host';
+export type {
+  DirectoryPickerPort,
+  FileOpenPort,
+  WorkspaceFileEntryUiDto,
+  WorkspaceHost,
+  WorkspaceListFilesUiResult,
+  WorkspaceListProjectsUiResult,
+  WorkspaceOpenFileUiResult,
+  WorkspaceOpenProjectUiResult,
+  WorkspaceProjectUiDto,
+  WorkspaceRemoveProjectUiResult,
+  WorkspaceUseExistingProjectUiResult,
+} from './workspace-host';
+export type {
+  ChatCancelBranchDraftUiResult,
+  ChatCancelUserInputUiResult,
+  ChatCancelUserInputUiPayload,
+  ChatCreateBranchDraftUiResult,
+  ChatCreateSessionUiResult,
+  ChatGetCommandSuggestionsUiResult,
+  ChatGetContextUsageUiResult,
+  ChatGetSessionHydrationUiResult,
+  ChatHost,
+  ChatListMessagesUiResult,
+  ChatListRunEventsUiResult,
+  ChatListRunsUiResult,
+  ChatListSessionsUiResult,
+  ChatListTimelineUiResult,
+  ChatRunUiDto,
+  ChatSendUserInputUiPayload,
+  ChatSendUserInputUiResult,
+  ChatSessionUiDto,
+  CommandSuggestionItem,
+  CommandSuggestionResult,
+  PermissionMode,
+} from './chat-host';
+export type {
+  DisableSkillUiResponse,
+  EnableSkillUiResponse,
+  GetSkillDetailUiResponse,
+  ListSkillsUiResponse,
+  SkillHost,
+} from './skill-host';
+export type {
+  AppLanguage,
+  AppThemeName,
+  EmptyUiResult,
+  ProviderListUiResult,
+  ProviderPublicStatusUiDto,
+  SettingsCompleteSetupUiResult,
+  SettingsCompleteSetupPayload,
+  SettingsData,
+  SettingsGetPayload,
+  SettingsGetUiResult,
+  SettingsHost,
+  SettingsUpdatePayload,
+  SettingsUpdateUiResult,
+} from './settings-host';
+export type {
+  ApprovalHost,
+  ApprovalHostResult,
+  ApprovalResolvePayload,
+} from './approval-host';
+export type {
+  ArtifactGetData,
+  ArtifactHost,
+  ArtifactListData,
+  ArtifactCreateVersionPayload,
+  ArtifactReferencePayload,
+  ArtifactReferenceData,
+  ArtifactStatusUpdatePayload,
+  ArtifactStatusUpdateData,
+  ArtifactVersionCreateData,
+  ArtifactVersionGetData,
+} from './artifact-host';
+export type {
+  PlanByRunGetData,
+  PlanHost,
+  PlanStatusUpdateData,
+} from './plan-host';
 export {
   WorkspaceListProjectsPayloadSchema,
   WorkspaceUseExistingProjectPayloadSchema,
@@ -98,20 +171,3 @@ export {
   PlanStatusUpdatePayloadSchema,
   PlanStatusUpdateDataSchema,
 } from './plan-host';
-export type { RuntimeContext, RuntimeEvent } from '../../coding-agent/events';
-export type * from '../../coding-agent/events';
-export type * from '../../coding-agent/projections/timeline';
-export type * from '../../coding-agent/projections/workspace/workspace-change-footer-projector';
-export type { PermissionMode } from '../../coding-agent/permissions';
-export {
-  RuntimeContextSchema,
-  RuntimeErrorSchema,
-  RuntimeEventSchema,
-  RuntimeIdSchema,
-  RuntimeResultMetaSchema,
-  createRuntimeContext as buildRuntimeContext,
-  createRuntimeDebugId as generateRuntimeDebugId,
-  createRuntimeTraceId as generateRuntimeTraceId,
-} from '../../coding-agent/events';
-export { normalizeRuntimeError as normalizeHostRuntimeError } from '../../coding-agent/runtime-error';
-export { reduceRuntimeTimelineEvent } from '../../coding-agent/projections/timeline';

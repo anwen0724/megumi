@@ -2,7 +2,7 @@
 import {
   generateRuntimeDebugId,
   normalizeHostRuntimeError,
-} from '@megumi/product/host-interface';
+} from '@megumi/product/runtime-events';
 import { redactRuntimeValue } from '@megumi/product/logging';
 import { noopRuntimeLogger, type RuntimeLogger } from '@megumi/product/logging';
 

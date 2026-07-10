@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import type { ChatRunUiDto } from '@megumi/product/host-interface';
-import type { RuntimeEvent } from '@megumi/product/host-interface';
+import type { RuntimeEvent } from '@megumi/product/runtime-events';
 import { useApprovalStore } from '../../entities/approval';
 import { useChatUiStore } from '../../entities/chat-ui/store';
 import { useProjectStore } from '../../entities/project/store';

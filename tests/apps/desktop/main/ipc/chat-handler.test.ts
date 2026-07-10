@@ -10,7 +10,7 @@ import {
 } from '@megumi/desktop/main/ipc/handlers/chat.handler';
 import type { RuntimeIpcRequest } from '@megumi/desktop/main/ipc/contracts';
 import type { SessionContextUsageGetPayload, SessionMessageSendPayload } from '@megumi/desktop/main/ipc/schemas';
-import type { RuntimeEvent } from '@megumi/product/host-interface';
+import type { RuntimeEvent } from '@megumi/product/runtime-events';
 
 type RegisteredHandler = (event: { sender: { send: ReturnType<typeof vi.fn> } }, request: unknown) => Promise<unknown>;
 

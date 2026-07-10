@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Desktop IPC request and response envelope contracts.
  */
 import { z } from 'zod';
@@ -7,7 +7,7 @@ import {
   RuntimeIdSchema,
   RuntimeResultMetaSchema,
   type RuntimeContext,
-} from '@megumi/product/host-interface';
+} from '@megumi/product/runtime-events';
 import { IPC_CHANNELS } from './channels';
 import { RuntimeIpcErrorSchema, type RuntimeIpcError } from './errors';
 export type { RuntimeIpcError } from './errors';

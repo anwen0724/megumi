@@ -17,6 +17,7 @@ import {
   ChatSendUserInputUiPayloadSchema,
   type ProductHostInterface,
 } from '@megumi/product/host-interface';
+import type { RuntimeEvent } from '@megumi/product/runtime-events';
 import type { RuntimeLogger } from '@megumi/product/logging';
 import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { createIpcRequestHandler } from '../create-request-handler';
@@ -241,8 +242,8 @@ function mapChatIpcError(): RuntimeIpcError {
 }
 
 function scheduleEvents(
-  sender: { send(channel: string, event: import('@megumi/product/host-interface').RuntimeEvent): void },
-  events: AsyncIterable<import('@megumi/product/host-interface').RuntimeEvent> | undefined,
+  sender: { send(channel: string, event: RuntimeEvent): void },
+  events: AsyncIterable<RuntimeEvent> | undefined,
   logger?: RuntimeLogger,
 ): void {
   if (!events) return;

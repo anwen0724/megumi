@@ -1,9 +1,9 @@
-﻿import type { BusinessIpcChannel, RuntimeIpcRequest } from '@megumi/desktop/main/ipc/contracts';
+import type { BusinessIpcChannel, RuntimeIpcRequest } from '@megumi/desktop/main/ipc/contracts';
 import {
   buildRuntimeContext,
   generateRuntimeTraceId,
   type RuntimeContext,
-} from '@megumi/product/host-interface';
+} from '@megumi/product/runtime-events';
 import { rendererRuntimeOperationNameFromChannel } from './runtime-operation-name';
 
 export interface CreateRendererRuntimeIpcRequestOptions {

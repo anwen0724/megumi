@@ -1,10 +1,10 @@
-﻿/*
+/*
  * Forwards Coding Agent runtime events to renderer windows.
  */
 import {
   RuntimeEventSchema,
   type RuntimeEvent,
-} from '@megumi/product/host-interface';
+} from '@megumi/product/runtime-events';
 import type { RuntimeLogger } from '@megumi/product/logging';
 import { IPC_CHANNELS } from './channels';
 

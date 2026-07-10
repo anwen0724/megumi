@@ -7,7 +7,7 @@
   ToolCallFailedPayload,
   ToolCallRequestedPayload,
   ToolCallStartedPayload,
-} from '@megumi/product/host-interface';
+} from '@megumi/product/runtime-events';
 import type { ApprovalRequest, ApprovalStatus } from '../../entities/approval/store';
 import { useApprovalStore } from '../../entities/approval';
 import { useChatUiStore, type AgentRunStatus } from '../../entities/chat-ui/store';

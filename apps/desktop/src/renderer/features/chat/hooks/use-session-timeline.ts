@@ -1,7 +1,7 @@
 ﻿import { useCallback, useEffect, useRef, useState } from 'react';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import type { SessionMessageSendPayload } from '@megumi/desktop/main/ipc/schemas';
-import type { RuntimeEvent } from '@megumi/product/host-interface';
+import type { RuntimeEvent } from '@megumi/product/runtime-events';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
 import { useRunStore } from '../../../entities/run/store';

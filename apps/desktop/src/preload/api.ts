@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron';
-import { generateRuntimeDebugId, type RuntimeEvent } from '@megumi/product/host-interface';
+import { generateRuntimeDebugId, type RuntimeEvent } from '@megumi/product/runtime-events';
 import type {
   ApprovalHostResult,
   ChatCancelBranchDraftUiResult,

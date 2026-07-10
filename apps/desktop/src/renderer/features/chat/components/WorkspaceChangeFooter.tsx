@@ -2,7 +2,7 @@ import { FileText } from 'lucide-react';
 import type {
   WorkspaceChangeFooterFact,
   WorkspaceChangeFooterFile,
-} from '@megumi/product/host-interface';
+} from '@megumi/product/workspace-read-models';
 import { Button } from '../../../shared/ui';
 
 interface WorkspaceChangeFooterProps {

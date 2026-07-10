@@ -4,8 +4,8 @@
 import {
   ApprovalResolveResultSchema,
   type ProductHostInterface,
-  type RuntimeEvent,
 } from '@megumi/product/host-interface';
+import type { RuntimeEvent } from '@megumi/product/runtime-events';
 import type { RuntimeLogger } from '@megumi/product/logging';
 import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { createIpcRequestHandler } from '../create-request-handler';

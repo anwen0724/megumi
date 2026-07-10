@@ -5,7 +5,7 @@ import { z } from 'zod';
 import {
   RuntimeErrorSchema as RuntimeIpcErrorSchema,
   type RuntimeError as RuntimeIpcError,
-} from '@megumi/product/host-interface';
+} from '@megumi/product/runtime-events';
 
 export { RuntimeIpcErrorSchema, type RuntimeIpcError };
 

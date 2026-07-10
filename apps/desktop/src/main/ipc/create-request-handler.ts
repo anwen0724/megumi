@@ -3,7 +3,7 @@
  */
 import type { IpcMainInvokeEvent } from 'electron';
 import type { z } from 'zod';
-import { generateRuntimeDebugId, type RuntimeContext } from '@megumi/product/host-interface';
+import { generateRuntimeDebugId, type RuntimeContext } from '@megumi/product/runtime-events';
 import type { RuntimeLogger } from '@megumi/product/logging';
 import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from './contracts';
 import type { RuntimeIpcError } from './errors';
