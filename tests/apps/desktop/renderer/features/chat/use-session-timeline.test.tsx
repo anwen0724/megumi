@@ -122,7 +122,7 @@ describe('useSessionTimeline', () => {
             }),
             cancel: vi.fn().mockResolvedValue({
               ok: true,
-              data: { cancelled: true },
+              data: { status: 'cancelled' },
             }),
           },
         },

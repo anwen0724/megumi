@@ -148,7 +148,23 @@ export const ChatGetSessionHydrationUiResultSchema = z.object({
   runs: z.array(ChatRunUiDtoSchema),
   runtimeEvents: z.array(RuntimeEventSchema),
 }).strict();
-export const ChatCancelUserInputUiPayloadSchema = z.object({ cancelled: z.boolean() }).strict();
+export const ChatCancelUserInputUiPayloadSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('cancelled') }).strict(),
+  z.object({ status: z.literal('not_found'), runId: z.string().min(1) }).strict(),
+  z.object({
+    status: z.literal('not_cancellable'),
+    run: ChatRunUiDtoSchema,
+    reason: z.enum(['already_terminal', 'not_running']),
+  }).strict(),
+  z.object({
+    status: z.literal('failed'),
+    failure: z.object({
+      code: z.string().min(1),
+      message: z.string(),
+      retryable: z.boolean().optional(),
+    }).strict(),
+  }).strict(),
+]);
 export const ChatCreateBranchDraftUiPayloadSchema = z.object({
   branchDraft: z.object({
     branchMarkerId: z.string().min(1), sessionId: z.string().min(1), sourceMessageId: z.string().min(1),
@@ -269,9 +285,31 @@ export function createChatHost(options: {
     async cancelUserInput(request) {
       const result = await options.agentRunService.cancelRun({ run_id: request.runId });
       if (result.status === 'cancelled') {
-        return { payload: { cancelled: true }, events: asyncIterableFrom(result.events) };
+        return { payload: { status: 'cancelled' }, events: asyncIterableFrom(result.events) };
       }
-      return { payload: { cancelled: false } };
+      if (result.status === 'not_found') {
+        return { payload: { status: 'not_found', runId: result.run_id } };
+      }
+      if (result.status === 'not_cancellable') {
+        return {
+          payload: {
+            status: 'not_cancellable',
+            run: toChatRunUiDto(result.run),
+            reason: result.reason,
+          },
+        };
+      }
+      return {
+        payload: {
+          status: 'failed',
+          failure: {
+            code: result.failure.code,
+            message: result.failure.message,
+            ...(result.failure.retryable !== undefined ? { retryable: result.failure.retryable } : {}),
+          },
+        },
+        ...(result.events ? { events: asyncIterableFrom(result.events) } : {}),
+      };
     },
 
     createBranchDraft(request) {
@@ -407,6 +445,7 @@ function mapStartRunResult(
       ...(result.session ? { session: toChatSessionUiDto(result.session) } : {}),
       requestId: result.request_id,
       ...(result.message ? { message: result.message } : {}),
+      ...(result.events ? { events: asyncIterableFrom(result.events) } : {}),
     };
   }
 
@@ -415,6 +454,7 @@ function mapStartRunResult(
     ...(result.session ? { session: toChatSessionUiDto(result.session) } : {}),
     requestId: result.request_id,
     message: result.failure.message,
+    ...(result.events ? { events: asyncIterableFrom(result.events) } : {}),
   };
 }
 
@@ -568,8 +608,13 @@ export interface ChatSendUserInputUiResult {
 export interface ChatCancelUserInputUiRequest {
   runId: string;
 }
+export type ChatCancelUserInputUiPayload =
+  | { status: 'cancelled' }
+  | { status: 'not_found'; runId: string }
+  | { status: 'not_cancellable'; run: ChatRunUiDto; reason: 'already_terminal' | 'not_running' }
+  | { status: 'failed'; failure: { code: string; message: string; retryable?: boolean } };
 export interface ChatCancelUserInputUiResult {
-  payload: { cancelled: boolean };
+  payload: ChatCancelUserInputUiPayload;
   events?: AsyncIterable<RuntimeEvent>;
 }
 

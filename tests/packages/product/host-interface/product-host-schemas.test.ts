@@ -6,6 +6,7 @@ import {
   ArtifactReferencePayloadSchema,
   ArtifactStatusUpdatePayloadSchema,
   ArtifactVersionCreatePayloadSchema,
+  ChatCancelUserInputUiPayloadSchema,
   ChatSendUserInputUiPayloadSchema,
   ListSkillsUiResponseSchema,
   ProviderListUiResultSchema,
@@ -58,6 +59,27 @@ describe('Product Host runtime schemas', () => {
       requestId: 'request:1',
       request: { kind: 'context_compaction', callback: () => undefined },
     }).success).toBe(false);
+  });
+
+  it('validates structured Chat cancel results', () => {
+    expect(ChatCancelUserInputUiPayloadSchema.safeParse({ cancelled: false }).success).toBe(false);
+    expect(ChatCancelUserInputUiPayloadSchema.safeParse({ status: 'cancelled' }).success).toBe(true);
+    expect(ChatCancelUserInputUiPayloadSchema.safeParse({ status: 'not_found', runId: 'run:1' }).success).toBe(true);
+    expect(ChatCancelUserInputUiPayloadSchema.safeParse({
+      status: 'not_cancellable',
+      reason: 'already_terminal',
+      run: {
+        runId: 'run:1',
+        sessionId: 'session:1',
+        status: 'completed',
+        createdAt: '2026-07-10T00:00:00.000Z',
+        completedAt: '2026-07-10T00:01:00.000Z',
+      },
+    }).success).toBe(true);
+    expect(ChatCancelUserInputUiPayloadSchema.safeParse({
+      status: 'failed',
+      failure: { code: 'cancel_failed', message: 'cannot cancel', retryable: true },
+    }).success).toBe(true);
   });
 
   it('rejects renderer-provided branch draft canonical fields and rerun mode', () => {

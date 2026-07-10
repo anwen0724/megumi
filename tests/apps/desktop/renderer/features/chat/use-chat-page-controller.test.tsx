@@ -83,7 +83,7 @@ describe('useChatPageController', () => {
           },
           message: {
             send: vi.fn(),
-            cancel: vi.fn().mockResolvedValue({ ok: true, data: { cancelled: true, events: [] } }),
+            cancel: vi.fn().mockResolvedValue({ ok: true, data: { status: 'cancelled', events: [] } }),
           },
           branchDraft: {
             create: vi.fn(),

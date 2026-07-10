@@ -135,6 +135,80 @@ describe('ChatHost product semantics', () => {
     expect(result.payload.type).toBe(expectedType);
   });
 
+  it('preserves Agent Run events for completed and failed send results', async () => {
+    const completedEvent = runtimeEvent({
+      eventId: 'event:completed',
+      eventType: 'run.completed',
+      payload: {},
+    });
+    const completedHost = createHost(vi.fn(async () => ({
+      status: 'completed' as const,
+      request_id: 'request:completed',
+      message: 'done',
+      events: [completedEvent],
+    })));
+
+    const completed = await completedHost.sendUserInput({
+      requestId: 'request:completed',
+      projectId: 'workspace:1',
+      text: '/done',
+      modelSelection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
+    });
+
+    expect(completed.payload).toMatchObject({ type: 'completed', message: 'done' });
+    await expect(collectAsync(completed.events!)).resolves.toEqual([completedEvent]);
+
+    const failedEvent = runtimeEvent({
+      eventId: 'event:failed',
+      eventType: 'run.failed',
+      payload: { code: 'command_failed', message: 'bad command' },
+    });
+    const failedHost = createHost(vi.fn(async () => ({
+      status: 'failed' as const,
+      request_id: 'request:failed',
+      failure: { code: 'command_failed' as const, message: 'bad command' },
+      events: [failedEvent],
+    })));
+
+    const failed = await failedHost.sendUserInput({
+      requestId: 'request:failed',
+      projectId: 'workspace:1',
+      text: '/fail',
+      modelSelection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
+    });
+
+    expect(failed.payload).toMatchObject({ type: 'error', message: 'bad command' });
+    await expect(collectAsync(failed.events!)).resolves.toEqual([failedEvent]);
+  });
+
+  it.each([
+    [{ status: 'not_found' as const, run_id: 'run:missing' }, { status: 'not_found', runId: 'run:missing' }],
+    [{
+      status: 'not_cancellable' as const,
+      reason: 'already_terminal' as const,
+      run: agentRun({ run_id: 'run:done', status: 'completed', completed_at: '2026-07-10T00:01:00.000Z' }),
+    }, { status: 'not_cancellable', reason: 'already_terminal' }],
+    [{
+      status: 'failed' as const,
+      failure: { code: 'cancel_failed' as const, message: 'cannot cancel', retryable: true },
+    }, { status: 'failed', failure: { code: 'cancel_failed', message: 'cannot cancel', retryable: true } }],
+  ] as const)('projects cancel result %s', async (ownerResult, expectedPayload) => {
+    const cancelRun = vi.fn(() => ownerResult);
+    const host = createChatHost({
+      agentRunService: { startRun: vi.fn(), cancelRun } as never,
+      commandService: { getCommandSuggestions: vi.fn() } as never,
+      sessionService: { createSession: vi.fn(), getSession: vi.fn() } as never,
+      branchService: createSessionBranchService(),
+      workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
+      sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
+      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [] },
+    });
+
+    await expect(host.cancelUserInput({ runId: 'run:1' })).resolves.toMatchObject({
+      payload: expectedPayload,
+    });
+  });
+
   it('projects explicit assistant-message branch draft references from the Session owner', async () => {
     const branch = createSessionBranchService({
       ids: {
@@ -317,4 +391,43 @@ function createHost(
     sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
     agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [] },
   });
+}
+
+async function collectAsync<T>(events: AsyncIterable<T>): Promise<T[]> {
+  const result: T[] = [];
+  for await (const event of events) result.push(event);
+  return result;
+}
+
+function runtimeEvent(input: {
+  eventId: string;
+  eventType: RuntimeEvent['eventType'];
+  payload: RuntimeEvent['payload'];
+}): RuntimeEvent {
+  return {
+    eventId: input.eventId,
+    schemaVersion: 1,
+    eventType: input.eventType,
+    runId: 'run:1',
+    sessionId: 'session:1',
+    sequence: 1,
+    createdAt: '2026-07-10T00:00:00.000Z',
+    source: 'core',
+    visibility: 'user',
+    persist: 'required',
+    payload: input.payload,
+  } as RuntimeEvent;
+}
+
+function agentRun(overrides: Partial<AgentRun> = {}): AgentRun {
+  return {
+    run_id: 'run:1',
+    workspace_id: 'workspace:1',
+    session_id: 'session:1',
+    model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
+    trigger: { type: 'user_input', user_message_id: 'message:1' },
+    status: 'running',
+    created_at: '2026-07-10T00:00:00.000Z',
+    ...overrides,
+  };
 }

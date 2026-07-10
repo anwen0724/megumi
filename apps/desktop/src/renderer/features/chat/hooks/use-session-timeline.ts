@@ -366,11 +366,13 @@ export function useSessionTimeline() {
         return;
       }
 
-      if (!result.data.cancelled) {
+      if (result.data.status !== 'cancelled') {
         showToast({
-          tone: 'warning',
-          title: 'Stop did not apply',
-          message: 'The Agent Run is no longer cancellable.',
+          tone: result.data.status === 'failed' ? 'error' : 'warning',
+          title: result.data.status === 'failed' ? 'Stop failed' : 'Stop did not apply',
+          message: result.data.status === 'failed'
+            ? result.data.failure.message
+            : 'The Agent Run is no longer cancellable.',
         });
         return;
       }
