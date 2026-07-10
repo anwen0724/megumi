@@ -17,6 +17,7 @@ export interface CreateIpcRequestHandlerOptions<
   channel: TChannel;
   requestSchema: z.ZodType<RuntimeIpcRequest<TPayload, TChannel>>;
   responseSchema: z.ZodType<TData>;
+  responseValidation?: 'strict' | 'dev-only' | 'off';
   logger?: RuntimeLogger;
   handle(
     request: RuntimeIpcRequest<TPayload, TChannel>,
@@ -63,7 +64,10 @@ export function createIpcRequestHandler<
 
     try {
       const handled = await options.handle(parsed.data, event, context);
-      const data = options.responseSchema.parse(handled);
+      const validationMode = options.responseValidation ?? 'strict';
+      const shouldValidateResponse = validationMode === 'strict'
+        || (validationMode === 'dev-only' && process.env.NODE_ENV !== 'production');
+      const data = shouldValidateResponse ? options.responseSchema.parse(handled) : handled as TData;
       return {
         ok: true,
         data,

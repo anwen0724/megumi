@@ -109,6 +109,7 @@ export function registerChatHandlers(
     channel: IPC_CHANNELS.chat.sessionTimelineList,
     requestSchema: SessionTimelineListRequestSchema,
     responseSchema: ChatListTimelineUiResultSchema,
+    responseValidation: 'dev-only',
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<SessionTimelineListPayload, typeof IPC_CHANNELS.chat.sessionTimelineList>) =>
       service.host.chat.listTimeline(request.payload),
@@ -119,6 +120,7 @@ export function registerChatHandlers(
     channel: IPC_CHANNELS.chat.sessionHydrationGet,
     requestSchema: SessionHydrationGetRequestSchema,
     responseSchema: ChatGetSessionHydrationUiResultSchema,
+    responseValidation: 'dev-only',
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<SessionHydrationGetPayload, typeof IPC_CHANNELS.chat.sessionHydrationGet>) =>
       service.host.chat.getSessionHydration(request.payload),
@@ -220,6 +222,7 @@ export function registerChatHandlers(
     channel: IPC_CHANNELS.chat.runEventsList,
     requestSchema: RunEventsListRequestSchema,
     responseSchema: ChatListRunEventsUiResultSchema,
+    responseValidation: 'dev-only',
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<RunEventsListPayload, typeof IPC_CHANNELS.chat.runEventsList>) =>
       service.host.chat.listRunEvents(request.payload),

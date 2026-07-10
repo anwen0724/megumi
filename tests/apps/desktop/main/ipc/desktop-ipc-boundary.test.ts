@@ -55,5 +55,7 @@ describe('desktop ipc boundary', () => {
 
     expect(handlerCount).toBeGreaterThan(0);
     expect(responseSchemaCount).toBe(handlerCount);
+    expect(handlerSource).toContain("responseValidation: 'dev-only'");
+    expect(handlerSource).not.toContain("responseValidation: 'off'");
   });
 });
