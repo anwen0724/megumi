@@ -3,7 +3,7 @@ import { Button } from '../../../shared/ui';
 export interface ComposerBranchDraftView {
   key: string;
   label: string;
-  seedText: string;
+  preview: string;
   onCancel: () => void;
 }
 
@@ -21,7 +21,10 @@ export function BranchDraftStack({ branchDraft }: BranchDraftStackProps) {
       data-testid="branch-draft-stack"
       className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text-muted)] shadow-[var(--shadow-soft)]"
     >
-      <span className="truncate">{branchDraft.label}</span>
+      <div className="min-w-0 space-y-0.5">
+        <div className="truncate">{branchDraft.label}</div>
+        <div className="truncate text-[var(--color-text)]">「{branchDraft.preview}」</div>
+      </div>
       <Button
         type="button"
         variant="ghost"

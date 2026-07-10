@@ -107,6 +107,14 @@ class DefaultSessionService implements SessionService {
             failure: { code: 'session_not_found', message: `Session ${request.session_id} was not found` },
           };
         }
+        const parentEntryId = this.resolveParentEntryId({
+          session_id: request.session_id,
+          explicit_parent_entry_id: request.parent_entry_id,
+          active_entry_id: session.active_entry_id,
+        });
+        if (parentEntryId.status === 'failed') {
+          return parentEntryId;
+        }
         const message = this.options.repository.insertMessage({
           message_id: request.message_id,
           session_id: request.session_id,
@@ -121,7 +129,7 @@ class DefaultSessionService implements SessionService {
         const entry = this.options.repository.insertEntry({
           entry_id: this.entryId({ kind: 'message', source_id: request.message_id }),
           session_id: request.session_id,
-          parent_entry_id: session.active_entry_id,
+          parent_entry_id: parentEntryId.parent_entry_id,
           entry_type: 'message',
           message_id: request.message_id,
           created_at: request.created_at,
@@ -392,6 +400,25 @@ class DefaultSessionService implements SessionService {
 
   private sessionId(): string {
     return this.options.ids?.sessionId?.() ?? `session:${crypto.randomUUID()}`;
+  }
+
+  private resolveParentEntryId(input: {
+    session_id: string;
+    explicit_parent_entry_id?: string;
+    active_entry_id?: string;
+  }): { status: 'ok'; parent_entry_id?: string } | Extract<SaveUserMessageResult, { status: 'failed' }> {
+    const parentEntryId = input.explicit_parent_entry_id ?? input.active_entry_id;
+    if (!input.explicit_parent_entry_id) {
+      return { status: 'ok', ...(parentEntryId ? { parent_entry_id: parentEntryId } : {}) };
+    }
+    const parent = this.options.repository.findEntryById(input.explicit_parent_entry_id);
+    if (!parent || parent.session_id !== input.session_id) {
+      return {
+        status: 'failed',
+        failure: { code: 'invalid_parent_entry', message: 'parent_entry_id must belong to the same session' },
+      };
+    }
+    return { status: 'ok', parent_entry_id: parentEntryId };
   }
 
   private now(): string {

@@ -67,6 +67,46 @@ describe('Agent Run message flow', () => {
     expect(repository.getRun(result.run.run_id)?.status).toBe('completed');
   });
 
+  it('applies a consumed branch draft as the parent for the next user message', async () => {
+    const repository = createInMemoryAgentRunRepository();
+    const deps = createMessageFlowDependencies({ repository });
+    const branchService = {
+      consumeBranchDraft: vi.fn(() => ({
+        status: 'consumed' as const,
+        branch_draft: {
+          branch_marker_id: 'branch-1',
+          session_id: 'session-1',
+          source_message_id: 'assistant-message-source',
+          source_entry_id: 'entry-assistant-source',
+          created_at: '2026-01-01T00:00:00.000Z',
+        },
+      })),
+    };
+    const service = createAgentRunService({
+      ...deps,
+      branch_service: branchService,
+    } as unknown as CreateAgentRunServiceOptions);
+
+    const result = await service.startRun({
+      request_id: 'request-1',
+      workspace_id: 'workspace-1',
+      session: { type: 'existing', session_id: 'session-1' },
+      branch_marker_id: 'branch-1',
+      user_input: { text: 'branch from there' },
+      model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
+      permission_mode: 'default',
+    });
+
+    expect(result.status).toBe('started');
+    expect(branchService.consumeBranchDraft).toHaveBeenCalledWith({
+      session_id: 'session-1',
+      branch_marker_id: 'branch-1',
+    });
+    expect(deps.session_service.saveUserMessage).toHaveBeenCalledWith(expect.objectContaining({
+      parent_entry_id: 'entry-assistant-source',
+    }));
+  });
+
   it('refreshes context usage after a terminal run', async () => {
     const repository = createInMemoryAgentRunRepository();
     const deps = createMessageFlowDependencies({ repository });

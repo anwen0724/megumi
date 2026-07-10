@@ -5,7 +5,7 @@
 import type { CommandExecutionContext, CommandExecutionResult } from '../../commands';
 import type { InputService, ParsedUserInput } from '../../input';
 import type { PermissionMode, PermissionService } from '../../permissions';
-import type { Session, SessionService } from '../../session';
+import type { Session, SessionBranchService, SessionService } from '../../session';
 import type { SettingsService } from '../../settings';
 import type { ActivatedSkillContent, SkillService } from '../../skills';
 import type { ToolExecutionService, ToolRegistryService } from '../../tools';
@@ -73,6 +73,7 @@ export type CreateAgentRunServiceOptions = {
     session_id: string;
   }) => CommandExecutionContext | undefined;
   session_service: Pick<SessionService, 'createSession' | 'getSession' | 'saveUserMessage' | 'saveAssistantMessage'>;
+  branch_service?: Pick<SessionBranchService, 'consumeBranchDraft'>;
   settings_service: Pick<SettingsService, 'resolveProviderRuntimeConfig' | 'resolvePermissionSettings'>;
   context_service: Parameters<typeof runAgentModelToolLoop>[0]['context_service'];
   model_call_service: ModelCallService;
@@ -208,12 +209,20 @@ class DefaultAgentRunService implements AgentRunService {
     const runId = this.ids.run_id();
     const userMessageId = this.ids.user_message_id();
     const parsedInput = commandRoute.parsed_user_input ?? input.parsed_user_input;
+    const branchParent = this.consumeBranchDraftForRun(request, session);
+    if (branchParent.status === 'failed') {
+      return {
+        ...failedStart(request, branchParent.failure),
+        session,
+      };
+    }
     const userMessage = this.options.session_service.saveUserMessage({
       message_id: userMessageId,
       session_id: sessionId,
       run_id: runId,
       content_text: textForRun(parsedInput, commandRoute.command_result),
       attachments: parsedInput.attachments,
+      ...(branchParent.parent_entry_id ? { parent_entry_id: branchParent.parent_entry_id } : {}),
       created_at: this.clock.now(),
     });
     if (userMessage.status === 'failed') {
@@ -1089,6 +1098,42 @@ class DefaultAgentRunService implements AgentRunService {
       status: 'failed',
       failure: { code: 'session_failed', message: created.failure.message },
     };
+  }
+
+  private consumeBranchDraftForRun(
+    request: StartRunRequest,
+    session: Session,
+  ): { status: 'ok'; parent_entry_id?: string } | { status: 'failed'; failure: AgentRunFailure } {
+    if (!request.branch_marker_id) {
+      return { status: 'ok' };
+    }
+    if (!this.options.branch_service) {
+      return {
+        status: 'failed',
+        failure: {
+          code: 'session_failed',
+          message: 'Branch draft service is not available.',
+        },
+      };
+    }
+
+    const consumed = this.options.branch_service.consumeBranchDraft({
+      session_id: session.session_id,
+      branch_marker_id: request.branch_marker_id,
+    });
+    if (consumed.status !== 'consumed') {
+      return {
+        status: 'failed',
+        failure: {
+          code: 'session_failed',
+          message: consumed.reason === 'branch_marker_not_found'
+            ? 'Branch draft was not found.'
+            : 'Branch draft does not belong to the active session.',
+        },
+      };
+    }
+
+    return { status: 'ok', parent_entry_id: consumed.branch_draft.source_entry_id };
   }
 
   private resolveCommandExecutionContext(

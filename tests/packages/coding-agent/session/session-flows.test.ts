@@ -60,6 +60,30 @@ describe('session service flows', () => {
     }
   });
 
+  it('creates a branch by saving the next user message under an explicit parent entry', async () => {
+    const { service, workspaceId } = createHarness();
+    service.createSession({ workspace_id: workspaceId, title: 'Session' });
+    service.saveUserMessage({ message_id: 'U1', session_id: 'S1', content_text: 'u1', created_at: '2026-07-04T00:01:00.000Z' });
+    const a1 = service.saveAssistantMessage({ message_id: 'A1', session_id: 'S1', run_id: 'R1', content_text: 'a1', completed_at: '2026-07-04T00:02:00.000Z' });
+    service.saveUserMessage({ message_id: 'U2', session_id: 'S1', content_text: 'u2', created_at: '2026-07-04T00:03:00.000Z' });
+    service.saveAssistantMessage({ message_id: 'A2', session_id: 'S1', run_id: 'R2', content_text: 'a2', completed_at: '2026-07-04T00:04:00.000Z' });
+
+    service.saveUserMessage({
+      message_id: 'U3',
+      session_id: 'S1',
+      content_text: 'u3',
+      parent_entry_id: a1.status === 'saved' ? a1.entry.entry_id : 'missing',
+      created_at: '2026-07-04T00:05:00.000Z',
+    });
+
+    const result = service.listMessages({ session_id: 'S1', active_path_only: true });
+
+    expect(result.status).toBe('ok');
+    if (result.status === 'ok') {
+      expect(result.messages.map((item) => item.message.message_id)).toEqual(['U1', 'A1', 'U3']);
+    }
+  });
+
   it('uses compaction summary in active history and skips it in active message listing', async () => {
     const { service, workspaceId } = createHarness();
     service.createSession({ workspace_id: workspaceId, title: 'Session' });

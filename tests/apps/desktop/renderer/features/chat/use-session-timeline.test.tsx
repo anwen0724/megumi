@@ -125,6 +125,23 @@ describe('useSessionTimeline', () => {
               data: { status: 'cancelled' },
             }),
           },
+          branchDraft: {
+            create: vi.fn().mockResolvedValue({
+              ok: true,
+              data: {
+                branchDraft: {
+                  branchMarkerId: 'branch-marker-1',
+                  sessionId: 'session-1',
+                  sourceMessageId: 'message-assistant-1',
+                  createdAt,
+                },
+              },
+            }),
+            cancel: vi.fn().mockResolvedValue({
+              ok: true,
+              data: { cancelled: true },
+            }),
+          },
         },
       },
     });
@@ -242,5 +259,61 @@ describe('useSessionTimeline', () => {
         message: 'Cancel service failed.',
       }),
     ]);
+  });
+
+  it('stores branch draft display copy without using the source message id as composer seed text', async () => {
+    const { result } = renderHook(() => useSessionTimeline());
+
+    await act(async () => {
+      await result.current.createBranchDraft({
+        messageId: 'message-assistant-1',
+        label: 'Branching from this reply',
+        preview: '我是 Megumi，一个 AI 编程助手！🤖',
+      });
+    });
+
+    expect(window.megumi.session.branchDraft.create).toHaveBeenCalledWith(expect.objectContaining({
+      payload: {
+        sessionId: 'session-1',
+        messageId: 'message-assistant-1',
+      },
+    }));
+    expect(result.current.branchDraft).toMatchObject({
+      branchMarkerId: 'branch-marker-1',
+      label: 'Branching from this reply',
+      preview: '我是 Megumi，一个 AI 编程助手！🤖',
+    });
+    expect(result.current.branchDraft).not.toHaveProperty('seedText');
+  });
+
+  it('sends the active branch marker with the next user message and keeps parent entries internal', async () => {
+    const { result } = renderHook(() => useSessionTimeline());
+
+    await act(async () => {
+      await result.current.createBranchDraft({
+        messageId: 'message-assistant-1',
+        label: 'Branching from this reply',
+        preview: 'assistant reply',
+      });
+    });
+    await act(async () => {
+      await result.current.sendSessionMessage({
+        message: 'continue here',
+        providerId: 'deepseek',
+        model: 'deepseek-chat',
+        permissionMode: 'default',
+      });
+    });
+
+    expect(window.megumi.session.message.send).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        branchMarkerId: 'branch-marker-1',
+      }),
+    }));
+    expect(window.megumi.session.message.send).not.toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        parentEntryId: expect.any(String),
+      }),
+    }));
   });
 });

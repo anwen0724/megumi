@@ -11,8 +11,8 @@ describe('ComposerDock', () => {
         status="idle"
         branchDraft={{
           key: 'branch-marker-1',
-          label: 'Branch from 07:28',
-          seedText: 'seed prompt',
+          label: 'Branching from this reply',
+          preview: '我是 Megumi。',
           onCancel: vi.fn(),
         }}
         pendingApprovals={[]}
@@ -24,8 +24,9 @@ describe('ComposerDock', () => {
 
     expect(screen.getByTestId('composer-dock')).toBeInTheDocument();
     expect(screen.getByTestId('composer-dock-column')).toBeInTheDocument();
-    expect(screen.getByTestId('branch-draft-stack')).toHaveTextContent('Branch from 07:28');
+    expect(screen.getByTestId('branch-draft-stack')).toHaveTextContent('Branching from this reply');
     expect(screen.getByRole('form', { name: 'Message composer' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Message Megumi')).toHaveValue('');
     expect(screen.queryByRole('log', { name: 'Chat timeline' })).not.toBeInTheDocument();
   });
 

@@ -22,8 +22,8 @@ export interface BranchDraftState {
   projectId: string;
   sessionId: string;
   sourceMessageId: string;
-  seedText: string;
   label: string;
+  preview: string;
   createdAt: string;
 }
 
@@ -76,10 +76,12 @@ function createSessionMessageSendPayload(
   finalClientMessageId: string,
   messageCreatedAt: string,
   target: SessionMessageTarget,
+  branchMarkerId?: string,
 ): SessionMessageSendPayload {
   return {
     ...(target.sessionId ? { sessionId: target.sessionId } : {}),
     projectId: target.projectId,
+    ...(branchMarkerId ? { branchMarkerId } : {}),
     text: payload.message,
     clientMessageId: finalClientMessageId,
     modelSelection: {
@@ -266,6 +268,7 @@ export function useSessionTimeline() {
         clientMessageId,
         createdAt,
         target,
+        branchDraftForSend?.branchMarkerId,
       ),
       { requestId },
     );
@@ -393,6 +396,8 @@ export function useSessionTimeline() {
 
   const createBranchDraft = useCallback(async (input: {
     messageId: string;
+    label: string;
+    preview: string;
   }) => {
     const sessionState = useSessionStore.getState();
     const projectState = useProjectStore.getState();
@@ -479,8 +484,8 @@ export function useSessionTimeline() {
     updateBranchDraft({
       ...result.data.branchDraft,
       projectId,
-      seedText: input.messageId,
-      label: 'Branch',
+      label: input.label,
+      preview: input.preview,
     });
   }, [updateBranchDraft]);
 

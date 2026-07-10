@@ -131,6 +131,7 @@ export type SaveUserMessageRequest = {
   run_id?: string;
   content_text: string;
   attachments?: SessionMessageAttachmentInput[];
+  parent_entry_id?: string;
   created_at: string;
 };
 

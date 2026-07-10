@@ -139,6 +139,31 @@ describe('ChatHost product semantics', () => {
     expect(result.payload).toMatchObject({ type: 'completed', message: 'done' });
   });
 
+  it('forwards branch draft selection to Agent Run without exposing parent entries', async () => {
+    const startRun = vi.fn(async () => ({
+      status: 'completed',
+      request_id: 'request:branch-send',
+      message: 'done',
+    }));
+    const host = createHost(startRun);
+
+    await host.sendUserInput({
+      requestId: 'request:branch-send',
+      projectId: 'workspace:1',
+      sessionId: 'session:1',
+      branchMarkerId: 'branch:1',
+      text: 'continue from there',
+      modelSelection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
+    });
+
+    expect(startRun).toHaveBeenCalledWith(expect.objectContaining({
+      branch_marker_id: 'branch:1',
+    }));
+    expect(startRun).not.toHaveBeenCalledWith(expect.objectContaining({
+      parent_entry_id: expect.any(String),
+    }));
+  });
+
   it('uses the Agent Run returned session instead of creating a fallback session', async () => {
     const startRun = vi.fn(async () => ({
       status: 'started' as const,

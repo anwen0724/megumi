@@ -141,6 +141,16 @@ export class SessionRepository {
     return row ? fromEntryRow(row) : undefined;
   }
 
+  findMessageEntry(input: { session_id: string; message_id: string }): SessionEntry | undefined {
+    const row = this.database.prepare(`
+      SELECT * FROM session_entries
+      WHERE session_id = @session_id
+        AND message_id = @message_id
+        AND entry_type = 'message'
+    `).get(input) as SessionEntryRow | undefined;
+    return row ? fromEntryRow(row) : undefined;
+  }
+
   listEntriesBySessionId(sessionId: string): SessionEntry[] {
     return (this.database.prepare(`
       SELECT * FROM session_entries

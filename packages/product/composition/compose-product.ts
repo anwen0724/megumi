@@ -6,7 +6,6 @@ import {
   composeCodingAgentRuntime,
   type ComposeCodingAgentRuntimeOptions,
 } from '@megumi/coding-agent/composition';
-import { createSessionBranchService } from '@megumi/coding-agent/session';
 import {
   initializeMegumiHomeSync,
   type InitializeMegumiHomeSyncOptions,
@@ -68,7 +67,7 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
       commandService: runtime.commandService,
       sessionService: runtime.sessionService,
       workspaceService: runtime.workspaceService,
-      branchService: createSessionBranchService(),
+      branchService: runtime.sessionBranchService,
       sessionTimelineQuery: runtime.sessionTimelineQuery,
       agentRunQueries: runtime.agentRunQueries,
       contextUsageMonitor: runtime.contextRuntime.contextUsageMonitor,

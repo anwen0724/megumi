@@ -11,14 +11,15 @@ describe('BranchDraftStack', () => {
       <BranchDraftStack
         branchDraft={{
           key: 'branch-marker-1',
-          label: 'Branch from 07:28',
-          seedText: 'original prompt',
+          label: 'Branching from this reply',
+          preview: '我是 Megumi，一个 AI 编程助手！🤖',
           onCancel,
         }}
       />,
     );
 
-    expect(screen.getByTestId('branch-draft-stack')).toHaveTextContent('Branch from 07:28');
+    expect(screen.getByTestId('branch-draft-stack')).toHaveTextContent('Branching from this reply');
+    expect(screen.getByTestId('branch-draft-stack')).toHaveTextContent('「我是 Megumi，一个 AI 编程助手！🤖」');
     await userEvent.click(screen.getByRole('button', { name: 'Cancel branch' }));
     expect(onCancel).toHaveBeenCalledTimes(1);
   });

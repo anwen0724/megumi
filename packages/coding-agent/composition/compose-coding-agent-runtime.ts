@@ -15,7 +15,7 @@ import {
 import { createAgentRunRepository, type AgentRunRepository } from '../agent-run/repositories/agent-run-repository';
 import { createCommandService, type CommandService, type SkillCommandDescriptor } from '../commands';
 import { createInputService, type InputService } from '../input';
-import { createSessionService, type SessionService } from '../session';
+import { createSessionBranchService, createSessionService, type SessionBranchService, type SessionService } from '../session';
 import { SessionRepository as SessionV2Repository } from '../session/repositories/session-repository';
 import type { RuntimeLogger } from './runtime-logger';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
@@ -117,6 +117,7 @@ export interface CodingAgentRuntime {
   commandService: CommandService;
   skillService: SkillService;
   sessionService: SessionService;
+  sessionBranchService: SessionBranchService;
   settingsService: SettingsService;
   workspaceService: WorkspaceService;
   workspaceFilesService: WorkspaceFilesService;
@@ -153,6 +154,11 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   const sessionRepository = new SessionV2Repository(persistence.database);
   const agentRunRepository = createAgentRunRepository({ database: persistence.database });
   const sessionService = createSessionService({ repository: sessionRepository });
+  const sessionBranchService = createSessionBranchService({
+    entries: {
+      findMessageEntry: (input) => sessionRepository.findMessageEntry(input),
+    },
+  });
   const inputService = createInputService();
   const toolRegistry = composeCodingAgentToolRegistryService();
   const settingsService = resolveSettingsService(options.appSettingsProvider) ?? createSettingsService({
@@ -278,6 +284,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
       },
     }),
     session_service: sessionService,
+    branch_service: sessionBranchService,
     settings_service: agentRunSettingsService,
     context_service: contextRuntime.contextService,
     model_call_service: modelCallService,
@@ -344,6 +351,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     commandService,
     skillService: skillRuntime.skillService,
     sessionService,
+    sessionBranchService,
     settingsService,
     workspaceService,
     workspaceFilesService,

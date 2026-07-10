@@ -69,6 +69,7 @@ export const SessionContextUsageGetPayloadSchema = z.object({
 }).strict();
 export const SessionMessageSendPayloadSchema = z.object({
   sessionId: z.string().min(1).optional(), projectId: z.string().min(1), text: z.string(),
+  branchMarkerId: z.string().min(1).optional(),
   clientMessageId: z.string().min(1).optional(), createdAt: IsoDateTimeSchema.optional(),
   modelSelection: z.object({ provider_id: z.string().min(1), model_id: z.string().min(1) }).strict(),
   permissionMode: z.enum(['default', 'accept_edits', 'plan', 'auto']).optional(), permissionSource: z.string().optional(),
@@ -282,6 +283,7 @@ export function createChatHost(options: {
               type: 'new',
               ...(request.sessionTitle ? { title: request.sessionTitle } : {}),
             },
+        ...(request.branchMarkerId ? { branch_marker_id: request.branchMarkerId } : {}),
         user_input: {
           text: request.text,
           ...(request.attachments ? { attachments: request.attachments } : {}),
@@ -582,6 +584,7 @@ export interface ChatSendUserInputUiRequest {
   projectId: string;
   projectLabel?: string;
   projectPath?: string;
+  branchMarkerId?: string;
   text: string;
   attachments?: RawUserInputAttachment[];
   clientMessageId?: string;

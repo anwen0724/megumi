@@ -124,6 +124,7 @@ export type StartRunRequest = {
   session:
     | { type: 'existing'; session_id: string }
     | { type: 'new'; title?: string };
+  branch_marker_id?: string;
   user_input: RawUserInput;
   model_selection: AgentRunModelSelection;
   permission_mode?: PermissionMode;

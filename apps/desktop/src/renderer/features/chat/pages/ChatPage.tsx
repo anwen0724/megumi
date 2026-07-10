@@ -4,6 +4,7 @@ import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import { useProviderStore } from '../../../entities/provider/store';
 import { useProjectStore } from '../../../entities/project/store';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
+import { createBranchDraftViewInput } from '../branch-draft-preview';
 import { useTimelineAutoScroll } from '../hooks/use-timeline-auto-scroll';
 import { useChatPageController } from '../hooks/use-chat-page-controller';
 import { ChatViewport } from '../layout/ChatViewport';
@@ -53,7 +54,7 @@ export function ChatPage() {
   const branchDraft = controller.branchDraft ? {
     key: controller.branchDraft.branchMarkerId,
     label: controller.branchDraft.label,
-    seedText: controller.branchDraft.seedText,
+    preview: controller.branchDraft.preview,
     onCancel: () => {
       void controller.cancelBranchDraft();
     },
@@ -102,7 +103,10 @@ export function ChatPage() {
                 bottomSpacerHeight,
                 canShowBranchAction: controller.canShowBranchAction,
                 onBranchFromMessage: (message) => {
-                  void controller.createBranchDraft({ messageId: message.messageId });
+                  void controller.createBranchDraft(createBranchDraftViewInput(
+                    message,
+                    controller.timelineMessages,
+                  ));
                 },
                 onOpenWorkspaceChangedFile: (projectPath) => {
                   void controller.openWorkspaceChangedFile(projectPath);
@@ -159,8 +163,8 @@ export function ChatPage() {
                 status={controller.composerStatus}
                 providers={providers}
                 contextUsage={controller.contextUsage}
-                seedTextKey={branchDraft?.key ?? null}
-                seedText={branchDraft?.seedText ?? null}
+                seedTextKey={null}
+                seedText={null}
                 onSubmit={controller.handleSubmit}
                 onStop={controller.handleStop}
                 onAttachFiles={() => undefined}
