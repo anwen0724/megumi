@@ -1,12 +1,12 @@
 /*
- * Verifies approval host controller result mapping.
+ * Verifies ApprovalHost result mapping.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { createApprovalController } from '@megumi/coding-agent/host-interface';
+import { createApprovalHost } from '@megumi/product/host-interface/approval-host';
 
-describe('createApprovalController', () => {
+describe('createApprovalHost', () => {
   it('returns failed when Agent Run cannot resume the approval', async () => {
-    const controller = createApprovalController({
+    const controller = createApprovalHost({
       resumeRunAfterApproval: vi.fn(async () => ({
         status: 'failed' as const,
         failure: {
@@ -39,7 +39,7 @@ describe('createApprovalController', () => {
 
   it('returns resolved and forwards Agent Run events when approval resumes', async () => {
     async function* events() {}
-    const controller = createApprovalController({
+    const controller = createApprovalHost({
       resumeRunAfterApproval: vi.fn(async () => ({
         status: 'resumed' as const,
         run: {

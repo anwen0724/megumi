@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   ChatCancelBranchDraftUiResult,
   ChatCreateBranchDraftUiResult,
   ChatGetContextUsageUiResult,
@@ -9,7 +9,7 @@
   GetSkillDetailUiResponse,
   ListSkillsUiResponse,
   WorkspaceOpenFileUiResult,
-} from '@megumi/coding-agent/host-interface';
+} from '@megumi/product/host-interface';
 import type {
   SessionBranchDraftCancelPayload,
   SessionBranchDraftCreatePayload,

@@ -1,5 +1,5 @@
-﻿import type { RuntimeEvent } from '@megumi/coding-agent/events';
-import type { ChatRunUiDto, ChatSessionUiDto } from '@megumi/coding-agent/host-interface';
+import type { RuntimeEvent } from '@megumi/coding-agent/events';
+import type { ChatRunUiDto, ChatSessionUiDto } from '@megumi/product/host-interface';
 import type { AnswerTextBlock, TimelineMessage } from '@megumi/coding-agent/projections/timeline';
 import type { LocalRendererSession } from '../../entities/session/session-factory';
 

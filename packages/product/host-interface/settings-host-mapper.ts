@@ -5,12 +5,12 @@ import type {
   SettingsRaw,
   SettingsResolved,
   SettingsThemeName,
-} from '../../settings';
+} from '../../coding-agent/settings';
 import type {
   ProviderPublicStatusUiDto,
   SettingsUiRaw,
   SettingsUiResolved,
-} from '../contracts/settings-ui-contracts';
+} from './settings-host-types';
 
 export function toSettingsRawPatch(patch: SettingsUiRaw): SettingsRaw {
   return {

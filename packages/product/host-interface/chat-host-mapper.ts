@@ -1,13 +1,13 @@
 /*
  * Maps session and agent-run facts into host-facing chat UI DTOs.
  */
-import type { AgentRun } from '../../agent-run';
-import type { Session, SessionMessageWithAttachments } from '../../session';
+import type { AgentRun } from '../../coding-agent/agent-run';
+import type { Session, SessionMessageWithAttachments } from '../../coding-agent/session';
 import type {
   ChatRunUiDto,
   ChatSessionMessageUiDto,
   ChatSessionUiDto,
-} from '../contracts/chat-ui-contracts';
+} from './chat-host-types';
 
 export function toChatSessionUiDto(session: Session): ChatSessionUiDto {
   return {

@@ -15,15 +15,17 @@ describe('Desktop Main shell composition', () => {
     expect(existsSync(join(root, 'apps/desktop/src/main/persistence'))).toBe(false);
   });
 
-  it('connects the Electron UI shell through the Coding Agent host interface', () => {
+  it('connects the Electron UI shell through Product Composition', () => {
     const desktopComposition = source('apps/desktop/src/main/shell-composition/desktop-main-composition.ts');
 
-    expect(desktopComposition).toContain('composeCodingAgentHostInterface');
-    expect(desktopComposition).toContain('workspace: { host: codingAgentHost, workspaceFilesService }');
-    expect(desktopComposition).toContain('chat: { host: codingAgentHost }');
-    expect(desktopComposition).toContain('settings: { host: codingAgentHost }');
-    expect(desktopComposition).toContain('approval: { host: codingAgentHost }');
-    expect(desktopComposition).toContain('artifact: codingAgentHost.artifacts');
+    expect(desktopComposition).toContain('composeProduct');
+    expect(desktopComposition).toContain('home: createElectronMegumiHomeSyncOptions()');
+    expect(desktopComposition).toContain('workspace: { host: productHost, workspaceFilesService }');
+    expect(desktopComposition).toContain('chat: { host: productHost }');
+    expect(desktopComposition).toContain('settings: { host: productHost }');
+    expect(desktopComposition).toContain('approval: { host: productHost }');
+    expect(desktopComposition).toContain('artifact: productHost.artifacts');
+    expect(desktopComposition).not.toContain('composeCodingAgentRuntime');
     expect(desktopComposition).not.toContain('runHandlers:');
     expect(desktopComposition).not.toContain('runContextService:');
     expect(desktopComposition).not.toContain('toolService:');

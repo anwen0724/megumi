@@ -15,5 +15,4 @@ export * from './artifacts';
 export * from './workspace';
 export * from './persistence';
 export * as projections from './projections';
-export * from './host-interface';
 export * from './composition';

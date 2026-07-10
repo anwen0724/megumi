@@ -1,7 +1,7 @@
 /*
- * Controller for plan artifact operations exposed to UI shells.
+ * Implements PlanHost over the Coding Agent Plan Artifact module.
  */
-import type { PlanArtifactServicePort } from '../../artifacts';
+import type { PlanArtifactServicePort } from '../../coding-agent/artifacts';
 
 export type ImplementationPlanArtifactRecord = NonNullable<ReturnType<PlanArtifactServicePort['getPlanByRun']>>;
 export type PlanStatusUpdatePayload = Parameters<PlanArtifactServicePort['updatePlanStatus']>[0];
@@ -14,14 +14,14 @@ export interface PlanStatusUpdateData {
   plan: ImplementationPlanArtifactRecord;
 }
 
-export interface PlanController {
+export interface PlanHost {
   getByRun(runId: string): PlanByRunGetData;
   updateStatus(payload: PlanStatusUpdatePayload): PlanStatusUpdateData;
 }
 
-export function createPlanController(
+export function createPlanHost(
   planArtifactService: PlanArtifactServicePort,
-): PlanController {
+): PlanHost {
   return {
     getByRun: (runId) => ({ plan: planArtifactService.getPlanByRun(runId) }),
     updateStatus: (payload) => ({ plan: planArtifactService.updatePlanStatus(payload) }),

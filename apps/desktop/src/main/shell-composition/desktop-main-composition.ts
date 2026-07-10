@@ -1,49 +1,40 @@
-// Composes the Electron UI shell and connects it to the Coding Agent host interface.
-import { initializeElectronMegumiHomeSync } from '../services/workspace/megumi-home.service';
+// Composes the Electron UI shell and connects it to the Product Host Interface.
+import { createElectronMegumiHomeSyncOptions } from '../services/workspace/megumi-home.service';
 import { createRuntimeJsonlLoggerForMegumiHome } from '../services/agent-run/runtime-logger.service';
 import { createWorkspaceFilesService } from '../services/workspace/workspace-files.service';
-import {
-  composeCodingAgentHostInterface,
-  type CodingAgentHomePaths,
-} from '@megumi/coding-agent/composition';
+import { composeProduct } from '@megumi/product/composition';
 import fs from 'fs-extra';
 import { electronDialogHost } from '../shell/electron-dialog-host';
 import { electronShellHost } from '../shell/electron-shell-host';
 import { resolveElectronPersistenceMigrationsFolder } from '../shell/electron-persistence-migrations-host';
 
 export function composeDesktopMain() {
-  const megumiHomePaths = initializeElectronMegumiHomeSync();
-  const runtimeLogger = createRuntimeJsonlLoggerForMegumiHome(megumiHomePaths);
-  const codingAgentHomePaths: CodingAgentHomePaths = {
-    homePath: megumiHomePaths.homePath,
-    sqlitePath: megumiHomePaths.sqlitePath,
-    settingsPath: megumiHomePaths.settingsPath,
-  };
   const migrationsFolder = resolveElectronPersistenceMigrationsFolder();
-  const codingAgentHost = composeCodingAgentHostInterface({
-    homePaths: codingAgentHomePaths,
+  const product = composeProduct({
+    home: createElectronMegumiHomeSyncOptions(),
     migrationsFolder,
-    runtimeLogger,
+    runtimeLoggerFactory: createRuntimeJsonlLoggerForMegumiHome,
     directoryPicker: { chooseDirectory: () => electronDialogHost.chooseDirectory() },
   });
+  const megumiHomePaths = product.homePaths;
+  const runtimeLogger = product.logger;
+  const productHost = product.host;
 
   const workspaceFilesService = createWorkspaceFilesService({
     fileSystem: fs,
-    isWorkspaceRootAllowed: (root) => codingAgentHost.workspace.listAuthorizedWorkspaceRoots().includes(root),
+    isWorkspaceRootAllowed: (root) => productHost.workspace.listAuthorizedWorkspaceRoots().includes(root),
     openPath: (absolutePath) => electronShellHost.openPath(absolutePath),
   });
 
   return {
     megumiHomePaths,
     runtimeLogger,
-    workspace: { host: codingAgentHost, workspaceFilesService },
-    chat: { host: codingAgentHost },
-    skill: { host: codingAgentHost },
-    settings: { host: codingAgentHost },
-    approval: { host: codingAgentHost },
-    artifact: codingAgentHost.artifacts,
-    dispose: () => {
-      void codingAgentHost.dispose?.();
-    },
+    workspace: { host: productHost, workspaceFilesService },
+    chat: { host: productHost },
+    skill: { host: productHost },
+    settings: { host: productHost },
+    approval: { host: productHost },
+    artifact: productHost.artifacts,
+    dispose: product.dispose,
   };
 }

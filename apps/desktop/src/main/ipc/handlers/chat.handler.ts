@@ -1,7 +1,7 @@
-﻿/*
+/*
  * Desktop IPC handlers for chat, session, command suggestions, and run hydration.
  */
-import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
+import type { ProductHostInterface } from '@megumi/product/host-interface';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-request-handler';
@@ -35,7 +35,7 @@ import {
 } from '../schemas';
 
 export interface ChatHandlersService {
-  host: Pick<CodingAgentHostInterface, 'chat'>;
+  host: Pick<ProductHostInterface, 'chat'>;
 }
 
 export interface RegisterChatHandlersOptions {

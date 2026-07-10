@@ -1,21 +1,21 @@
 /*
- * Host approval controller. It maps UI approval decisions to Agent Run resume calls.
+ * Implements ApprovalHost by mapping host decisions to Agent Run resume calls.
  */
-import type { AgentRunService } from '../../agent-run';
-import type { AgentRunFailure, ResumeRunAfterApprovalResult } from '../../agent-run';
-import { toApprovalDecision } from '../mappers/approval-ui-mapper';
+import type { AgentRunService } from '../../coding-agent/agent-run';
+import type { AgentRunFailure, ResumeRunAfterApprovalResult } from '../../coding-agent/agent-run';
+import { toApprovalDecision } from './approval-host-mapper';
 import type {
-  ApprovalControllerResult,
+  ApprovalHostResult,
   ApprovalResolvePayload,
-} from '../contracts/approval-ui-contracts';
+} from './approval-host-types';
 
-export interface ApprovalController {
-  resolve(request: ApprovalResolvePayload): Promise<ApprovalControllerResult>;
+export interface ApprovalHost {
+  resolve(request: ApprovalResolvePayload): Promise<ApprovalHostResult>;
 }
 
-export function createApprovalController(
+export function createApprovalHost(
   agentRunService: Pick<AgentRunService, 'resumeRunAfterApproval'>,
-): ApprovalController {
+): ApprovalHost {
   return {
     async resolve(request) {
       const result = await agentRunService.resumeRunAfterApproval({

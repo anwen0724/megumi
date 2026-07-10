@@ -1,6 +1,6 @@
-﻿import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import type { ApprovalRequest } from '../../../entities/approval/store';
-import type { ChatGetContextUsageUiResult, ProviderPublicStatusUiDto } from '@megumi/coding-agent/host-interface';
+import type { ChatGetContextUsageUiResult, ProviderPublicStatusUiDto } from '@megumi/product/host-interface';
 import type { CommandSuggestionResult } from '@megumi/coding-agent/commands';
 import type { ApprovalCardResolvePayload } from '../../../entities/approval';
 import { ApprovalStack } from '../components/ApprovalStack';

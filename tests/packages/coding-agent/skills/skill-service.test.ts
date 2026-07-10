@@ -11,7 +11,6 @@ import type {
   ExecuteSkillCommandResponse,
   GetSkillCatalogContextResponse,
   GetSkillCatalogResponse,
-  ListSkillsUiResponse,
   PrepareSkillScriptExecutionToolResponse,
   Skill,
   SkillAvailability,
@@ -61,19 +60,6 @@ describe('Skill module public contracts', () => {
         description: skill.description,
         content: skill.content,
       },
-    };
-    const uiResponse: ListSkillsUiResponse = {
-      status: 'ok',
-      skills: [{
-        skillId: 'checks:test',
-        name: 'test',
-        description: 'Run project checks',
-        sourceLabel: 'Project',
-        available: true,
-        hasResources: false,
-        hasScripts: false,
-        diagnostics: [],
-      }],
     };
     const commandRequest: ExecuteSkillCommandRequest = {
       skillId: 'checks:test',
@@ -129,7 +115,6 @@ describe('Skill module public contracts', () => {
     expect(usage.trigger).toBe('command');
     expect(catalog.status).toBe('ok');
     expect(activationResponse.status).toBe('ok');
-    expect(uiResponse.status).toBe('ok');
     expect(commandRequest.argumentsInput).toBe('--watch');
     expect(commandResponse.requestedSkillActivation.skillId).toBe('checks:test');
     expect(contextResponse.skills).toHaveLength(1);

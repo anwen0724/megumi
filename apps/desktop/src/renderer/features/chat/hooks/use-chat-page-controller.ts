@@ -1,8 +1,8 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ApprovalResolvePayload } from '@megumi/desktop/main/ipc/schemas';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/coding-agent/projections/timeline';
-import type { ChatGetContextUsageUiResult } from '@megumi/coding-agent/host-interface';
+import type { ChatGetContextUsageUiResult } from '@megumi/product/host-interface';
 import { type ApprovalCardResolvePayload, useApprovalStore } from '../../../entities/approval';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';

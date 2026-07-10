@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { IconButton } from '../../../shared/ui';
 import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/coding-agent/commands';
-import type { ChatGetContextUsageUiResult } from '@megumi/coding-agent/host-interface';
+import type { ChatGetContextUsageUiResult } from '@megumi/product/host-interface';
 import {
   COMPOSER_PERMISSION_MODE_OPTIONS,
   type ComposerModel,

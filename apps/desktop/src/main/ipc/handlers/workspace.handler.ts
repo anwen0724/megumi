@@ -1,8 +1,8 @@
-﻿/*
+/*
  * Desktop IPC handlers for project/workspace operations and local file browsing.
  */
 import { PathSandboxViolationError } from '@megumi/coding-agent/adapters/local/security/sandbox-policy';
-import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
+import type { ProductHostInterface } from '@megumi/product/host-interface';
 import type { WorkspaceFilesService } from '../../services/workspace/workspace-files.service';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
@@ -21,7 +21,7 @@ import {
 } from '../schemas';
 
 export interface WorkspaceHandlersService {
-  host: Pick<CodingAgentHostInterface, 'workspace'>;
+  host: Pick<ProductHostInterface, 'workspace'>;
   workspaceFilesService: Pick<WorkspaceFilesService, 'listDirectory' | 'openFile'>;
 }
 

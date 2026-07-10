@@ -1,4 +1,4 @@
-﻿import { ipcRenderer } from 'electron';
+import { ipcRenderer } from 'electron';
 import { createRuntimeDebugId, type RuntimeEvent } from '@megumi/coding-agent/events';
 import type {
   ApprovalResolveData,
@@ -37,7 +37,7 @@ import type {
   PlanStatusUpdatePayload as HostPlanStatusUpdatePayload,
   PlanStatusUpdateData,
   WorkspaceListFilesUiResult,
-} from '@megumi/coding-agent/host-interface';
+} from '@megumi/product/host-interface';
 import { IPC_CHANNELS } from '../main/ipc/channels';
 import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from '../main/ipc/contracts';
 import type { RuntimeIpcError } from '../main/ipc/errors';

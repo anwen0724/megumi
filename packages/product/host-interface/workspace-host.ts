@@ -1,10 +1,10 @@
 /*
- * Host workspace controller. It maps UI project requests to Workspace Service calls.
+ * Implements WorkspaceHost over the Coding Agent Workspace module and host ports.
  */
-import type { Workspace, WorkspaceService } from '../../workspace';
+import type { Workspace, WorkspaceService } from '../../coding-agent/workspace';
 import {
   toWorkspaceProjectUiDto,
-} from '../mappers/workspace-ui-mapper';
+} from './workspace-host-mapper';
 import type {
   WorkspaceListProjectsUiRequest,
   WorkspaceListProjectsUiResult,
@@ -14,7 +14,7 @@ import type {
   WorkspaceRemoveProjectUiResult,
   WorkspaceUseExistingProjectUiRequest,
   WorkspaceUseExistingProjectUiResult,
-} from '../contracts/workspace-ui-contracts';
+} from './workspace-host-types';
 
 export interface DirectoryPickerResult {
   canceled: boolean;
@@ -35,7 +35,7 @@ export class WorkspaceProjectCompatibilityError extends Error {
   }
 }
 
-export interface WorkspaceController {
+export interface WorkspaceHost {
   listProjects(request?: WorkspaceListProjectsUiRequest): Promise<WorkspaceListProjectsUiResult>;
   useExistingProject(request?: WorkspaceUseExistingProjectUiRequest): Promise<WorkspaceUseExistingProjectUiResult>;
   openProject(request: WorkspaceOpenProjectUiRequest): Promise<WorkspaceOpenProjectUiResult>;
@@ -43,11 +43,11 @@ export interface WorkspaceController {
   listAuthorizedWorkspaceRoots(): string[];
 }
 
-export function createWorkspaceController(input: {
+export function createWorkspaceHost(input: {
   workspaceService: WorkspaceService;
   directoryPicker?: DirectoryPickerPort;
   now?: () => string;
-}): WorkspaceController {
+}): WorkspaceHost {
   const now = input.now ?? (() => new Date().toISOString());
 
   return {

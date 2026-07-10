@@ -11,7 +11,7 @@ import type {
   WorkspaceListFilesUiResult,
   WorkspaceOpenFileUiRequest,
   WorkspaceOpenFileUiResult,
-} from '@megumi/coding-agent/host-interface';
+} from '@megumi/product/host-interface';
 
 export const DEFAULT_WORKSPACE_FILE_IGNORE_NAMES = [
   '.git',

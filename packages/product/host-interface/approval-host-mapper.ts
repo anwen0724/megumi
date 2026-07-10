@@ -1,7 +1,7 @@
 /*
  * Maps approval UI requests into Agent Run approval decisions.
  */
-import type { ApprovalResolvePayload } from '../contracts/approval-ui-contracts';
+import type { ApprovalResolvePayload } from './approval-host-types';
 
 export function toApprovalDecision(payload: ApprovalResolvePayload) {
   return {

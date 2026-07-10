@@ -1,8 +1,8 @@
 /*
  * Maps Workspace module facts into host-facing workspace UI DTOs.
  */
-import type { Workspace } from '../../workspace';
-import type { WorkspaceProjectUiDto } from '../contracts/workspace-ui-contracts';
+import type { Workspace } from '../../coding-agent/workspace';
+import type { WorkspaceProjectUiDto } from './workspace-host-types';
 
 export function toWorkspaceProjectUiDto(workspace: Workspace): WorkspaceProjectUiDto {
   return {

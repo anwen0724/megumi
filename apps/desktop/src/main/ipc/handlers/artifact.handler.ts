@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   ArtifactListByRunPayload,
   ArtifactListBySessionPayload,
   ArtifactReferencePayload,
@@ -16,7 +16,7 @@ import {
   ArtifactVersionGetRequestSchema,
 } from '../schemas';
 import type {
-  ArtifactController,
+  ArtifactHost,
   ArtifactCreateVersionPayload,
   ArtifactGetData,
   ArtifactListData,
@@ -25,14 +25,14 @@ import type {
   ArtifactStatusUpdateData,
   ArtifactVersionCreateData,
   ArtifactVersionGetData,
-} from '@megumi/coding-agent/host-interface';
+} from '@megumi/product/host-interface';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-request-handler';
 import { IPC_CHANNELS } from '../channels';
 import type { RuntimeIpcError, RuntimeIpcRequest } from '../contracts';
 
-export type ArtifactHandlersService = ArtifactController;
+export type ArtifactHandlersService = ArtifactHost;
 
 export interface RegisterArtifactHandlersOptions {
   logger?: RuntimeLogger;

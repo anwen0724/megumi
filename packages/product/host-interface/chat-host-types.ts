@@ -2,10 +2,10 @@
  * Chat/session UI DTOs exposed to hosts. These are projections of product data,
  * not session module service contracts.
  */
-import type { CommandSuggestionResult } from '../../commands';
-import type { RuntimeContext, RuntimeEvent } from '../../events';
-import type { TimelineMessage } from '../../projections/timeline';
-import type { RawUserInputAttachment } from '../../input';
+import type { CommandSuggestionResult } from '../../coding-agent/commands';
+import type { RuntimeContext, RuntimeEvent } from '../../coding-agent/events';
+import type { TimelineMessage } from '../../coding-agent/projections/timeline';
+import type { RawUserInputAttachment } from '../../coding-agent/input';
 
 export interface ChatSessionUiDto {
   id: string;

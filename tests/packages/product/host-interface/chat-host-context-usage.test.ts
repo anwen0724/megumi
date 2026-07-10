@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createChatController } from '@megumi/coding-agent/host-interface';
+import { createChatHost } from '@megumi/product/host-interface/chat-host';
 import type {
   ContextUsageWindow,
   GetCurrentContextUsageResult,
@@ -11,7 +11,7 @@ function createController(input: {
   start: (request: { session_id: string; workspace_id?: string; model_config: ContextUsageWindow }) => Promise<StartContextUsageMonitorResult> | StartContextUsageMonitorResult;
   refreshSession: (request: { session_id: string; workspace_id?: string; reason: string }) => Promise<void> | void;
 }) {
-  return createChatController({
+  return createChatHost({
     agentRunService: {} as never,
     commandService: { getCommandSuggestions: vi.fn() },
     sessionService: {} as never,
@@ -41,7 +41,7 @@ function createController(input: {
   });
 }
 
-describe('chat controller context usage', () => {
+describe('ChatHost context usage', () => {
   it('starts, refreshes, and returns current context usage for UI queries', async () => {
     const getCurrentUsage = vi.fn((): GetCurrentContextUsageResult => ({
       status: 'ok',

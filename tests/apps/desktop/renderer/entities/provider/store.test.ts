@@ -1,7 +1,7 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
-import type { ProviderPublicStatusUiDto } from '@megumi/coding-agent/host-interface';
+import type { ProviderPublicStatusUiDto } from '@megumi/product/host-interface';
 import { useProviderStore } from '@megumi/desktop/renderer/entities/provider/store';
 
 const providers: ProviderPublicStatusUiDto[] = [

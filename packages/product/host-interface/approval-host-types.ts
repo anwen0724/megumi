@@ -1,8 +1,8 @@
 /*
  * Approval UI DTOs exposed by the host interface.
  */
-import type { RuntimeEvent } from '../../events';
-import type { AgentRunFailure } from '../../agent-run';
+import type { RuntimeEvent } from '../../coding-agent/events';
+import type { AgentRunFailure } from '../../coding-agent/agent-run';
 
 export interface ApprovalResolvePayload {
   approvalRequestId: string;
@@ -28,19 +28,19 @@ export interface ApprovalResolveData {
   };
 }
 
-export interface ApprovalControllerResolvedResult {
+export interface ApprovalHostResolvedResult {
   status: 'resolved';
   data: ApprovalResolveData;
   events?: AsyncIterable<RuntimeEvent>;
 }
 
-export interface ApprovalControllerFailedResult {
+export interface ApprovalHostFailedResult {
   status: 'failed';
   approvalRequestId: string;
   failure: AgentRunFailure;
   events?: RuntimeEvent[];
 }
 
-export type ApprovalControllerResult =
-  | ApprovalControllerResolvedResult
-  | ApprovalControllerFailedResult;
+export type ApprovalHostResult =
+  | ApprovalHostResolvedResult
+  | ApprovalHostFailedResult;

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const root = path.resolve(__dirname, '../../../..');
-const hostRoot = path.join(root, 'packages/coding-agent/host-interface');
+const hostRoot = path.join(root, 'packages/product/host-interface');
 
 function readFiles(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -12,7 +12,7 @@ function readFiles(dir: string): string[] {
   });
 }
 
-describe('host-interface boundary', () => {
+describe('Product Host Interface boundary', () => {
   it('does not depend on desktop or IPC transport', () => {
     const source = readFiles(hostRoot)
       .filter((file) => file.endsWith('.ts'))
@@ -25,23 +25,9 @@ describe('host-interface boundary', () => {
     expect(source).not.toContain(['@megumi', 'shared'].join('/'));
   });
 
-  it('exposes host controllers through the new UI-facing shape', async () => {
-    const host = await import('@megumi/coding-agent/host-interface');
+  it('keeps Host factory implementations out of the renderer-safe public entry', async () => {
+    const host = await import('@megumi/product/host-interface');
 
-    expect(host.createCodingAgentHostInterface({
-      workspace: {} as never,
-      chat: {} as never,
-      skill: {} as never,
-      settings: {} as never,
-      approval: {} as never,
-      artifacts: {} as never,
-    })).toEqual(expect.objectContaining({
-      workspace: expect.any(Object),
-      chat: expect.any(Object),
-      skill: expect.any(Object),
-      settings: expect.any(Object),
-      approval: expect.any(Object),
-      artifacts: expect.any(Object),
-    }));
+    expect(Object.keys(host).filter((name) => name.startsWith('create'))).toEqual([]);
   });
 });

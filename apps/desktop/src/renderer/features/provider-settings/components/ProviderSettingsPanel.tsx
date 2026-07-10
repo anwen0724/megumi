@@ -9,7 +9,7 @@ import {
   Server,
   Trash2,
 } from 'lucide-react';
-import type { ProviderPublicStatusUiDto } from '@megumi/coding-agent/host-interface';
+import type { ProviderPublicStatusUiDto } from '@megumi/product/host-interface';
 import { useProviderStore } from '../../../entities/provider';
 import { Badge, Button, IconButton, cx } from '../../../shared/ui';
 

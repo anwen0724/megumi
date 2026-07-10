@@ -26,11 +26,11 @@ export function registerRuntimeProcessErrorHandlers(
   const debugIdFactory = options.debugIdFactory ?? createRuntimeDebugId;
 
   processLike.on('uncaughtException', (error) => {
-    logger.error('runtime_process_uncaught_exception', createDetails(error, debugIdFactory));
+    logger.error?.('runtime_process_uncaught_exception', createDetails(error, debugIdFactory));
   });
 
   processLike.on('unhandledRejection', (error) => {
-    logger.error('runtime_process_unhandled_rejection', createDetails(error, debugIdFactory));
+    logger.error?.('runtime_process_unhandled_rejection', createDetails(error, debugIdFactory));
   });
 }
 

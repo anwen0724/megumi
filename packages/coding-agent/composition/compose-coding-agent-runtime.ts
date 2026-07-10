@@ -1,7 +1,6 @@
 ﻿/*
- * Composes the Coding Agent product runtime and wraps it for host interfaces.
- * Runtime composition wires module services; host composition adapts those
- * services to UI/CLI/web-facing DTOs.
+ * Composes the Coding Agent runtime exposed to Product Composition.
+ * Host-facing adaptation is owned by packages/product.
  */
 import { ArtifactContentStore } from '../artifacts/artifact-content-store';
 import { ArtifactService, PlanArtifactCompatibilityService, PlanArtifactService } from '../artifacts';
@@ -18,19 +17,6 @@ import { createCommandService, type CommandService, type SkillCommandDescriptor 
 import { createInputService, type InputService } from '../input';
 import { createSessionService, type SessionService } from '../session';
 import { SessionRepository as SessionV2Repository } from '../session/repositories/session-repository';
-import {
-  createCodingAgentHostInterface,
-  createApprovalController,
-  createChatController,
-  createSettingsController,
-  createSkillController,
-  createWorkspaceController,
-  type CodingAgentHostInterface,
-  type DirectoryPickerPort,
-  type SessionBranchControllerServicePort,
-} from '../host-interface';
-import { createArtifactController } from '../host-interface/artifacts/artifact-controller';
-import { createPlanController } from '../host-interface/artifacts/plan-controller';
 import type { RuntimeLogger } from './runtime-logger';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
 import {
@@ -116,7 +102,6 @@ export interface ComposeCodingAgentRuntimeOptions {
   appSettingsProvider?: unknown;
   memorySettingsProvider?: MemorySettingsPort;
   workspaceChangeFooterProjector?: unknown;
-  directoryPicker?: DirectoryPickerPort;
   projectFileSystem?: LocalWorkspaceServiceFileSystem;
   settingsStorage?: SettingsFileStore;
 }
@@ -136,9 +121,9 @@ export interface CodingAgentRuntime {
   artifactService: ArtifactService;
   planArtifactService: PlanArtifactService;
   contextRuntime: ReturnType<typeof composeCodingAgentContext>;
-  sessionBranchService: SessionBranchControllerServicePort;
   agentRunQueries: AgentRunQueries;
   sessionTimelineQuery: SessionTimelineQuery;
+  contextUsageWindowProvider(request: { modelId?: string }): ReturnType<typeof createContextUsageWindow>;
   dispose(): void;
 }
 
@@ -356,9 +341,9 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     artifactService,
     planArtifactService,
     contextRuntime,
-    sessionBranchService: createUnsupportedSessionBranchService(),
     agentRunQueries,
     sessionTimelineQuery,
+    contextUsageWindowProvider: ({ modelId }) => createContextUsageWindow({ modelId }),
     dispose: () => persistence.database.close(),
   };
 }
@@ -376,39 +361,6 @@ function toSkillCommandDescriptor(skill: Skill): SkillCommandDescriptor {
 function commandNameFromSkillName(skillName: string): string {
   const segments = skillName.split(':').filter(Boolean);
   return segments.at(-1) ?? skillName;
-}
-
-export function composeCodingAgentHostInterface(
-  options: ComposeCodingAgentRuntimeOptions,
-): CodingAgentHostInterface {
-  const runtime = composeCodingAgentRuntime(options);
-  const artifacts = createArtifactController(runtime.artifactService);
-
-  return createCodingAgentHostInterface({
-    chat: createChatController({
-      agentRunService: runtime.agentRunService,
-      commandService: runtime.commandService,
-      sessionService: runtime.sessionService,
-      workspaceService: runtime.workspaceService,
-      branchService: runtime.sessionBranchService,
-      sessionTimelineQuery: runtime.sessionTimelineQuery,
-      agentRunQueries: runtime.agentRunQueries,
-      contextUsageMonitor: runtime.contextRuntime.contextUsageMonitor,
-      contextUsageWindowProvider: ({ modelId }) => createContextUsageWindow({ modelId }),
-    }),
-    skill: createSkillController(runtime.skillService),
-    workspace: createWorkspaceController({
-      workspaceService: runtime.workspaceService,
-      ...(options.directoryPicker ? { directoryPicker: options.directoryPicker } : {}),
-    }),
-    settings: createSettingsController(runtime.settingsService),
-    approval: createApprovalController(runtime.agentRunService),
-    artifacts: {
-      ...artifacts,
-      plan: createPlanController(runtime.planArtifactService),
-    },
-    dispose: runtime.dispose,
-  });
 }
 
 function createContextUsageWindow({ modelId }: { modelId?: string }) {
@@ -700,15 +652,4 @@ function hasSettingsServiceShape(value: unknown): value is SettingsService {
     && 'resolvePermissionSettings' in value
     && 'getResolvedSettings' in value,
   );
-}
-
-function createUnsupportedSessionBranchService(): SessionBranchControllerServicePort {
-  return {
-    createBranchDraft() {
-      throw new Error('Session branch drafts are not available during the Agent Run transition.');
-    },
-    cancelBranchDraft() {
-      return { cancelled: false, reason: 'branch_marker_not_found' as const, events: [] };
-    },
-  };
 }

@@ -41,7 +41,11 @@ export type {
 };
 
 export async function initializeElectronMegumiHome(): Promise<MegumiHomePaths> {
-  return initializeMegumiHome({
+  return initializeMegumiHome(createElectronMegumiHomeOptions());
+}
+
+export function createElectronMegumiHomeOptions(): InitializeMegumiHomeOptions {
+  return {
     env: process.env,
     homeDirectory: os.homedir(),
     fileSystem: createElectronMegumiHomeFileSystem(),
@@ -49,11 +53,15 @@ export async function initializeElectronMegumiHome(): Promise<MegumiHomePaths> {
       now: () => new Date(),
     },
     resourceLocator: createElectronMegumiHomeResourceLocator(),
-  });
+  };
 }
 
 export function initializeElectronMegumiHomeSync(): MegumiHomePaths {
-  return initializeMegumiHomeSync({
+  return initializeMegumiHomeSync(createElectronMegumiHomeSyncOptions());
+}
+
+export function createElectronMegumiHomeSyncOptions(): InitializeMegumiHomeSyncOptions {
+  return {
     env: process.env,
     homeDirectory: os.homedir(),
     fileSystem: createElectronMegumiHomeFileSystem(),
@@ -61,7 +69,7 @@ export function initializeElectronMegumiHomeSync(): MegumiHomePaths {
       now: () => new Date(),
     },
     resourceLocator: createElectronMegumiHomeResourceLocator(),
-  });
+  };
 }
 
 function createElectronMegumiHomeResourceLocator(): MegumiHomeResourceLocator {

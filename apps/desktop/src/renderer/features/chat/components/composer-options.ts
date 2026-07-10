@@ -1,5 +1,5 @@
-﻿import type { PermissionMode } from '@megumi/coding-agent/permissions';
-import type { ProviderPublicStatusUiDto } from '@megumi/coding-agent/host-interface';
+import type { PermissionMode } from '@megumi/coding-agent/permissions';
+import type { ProviderPublicStatusUiDto } from '@megumi/product/host-interface';
 
 export type ComposerPermissionMode = PermissionMode;
 export type ComposerModel = string;

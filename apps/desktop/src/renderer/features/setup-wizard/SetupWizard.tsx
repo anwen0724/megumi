@@ -1,6 +1,6 @@
-﻿// Renders the blocking first-run setup wizard before the desktop shell enters the main product UI.
+// Renders the blocking first-run setup wizard before the desktop shell enters the main product UI.
 import { useState } from 'react';
-import type { AppLanguage } from '@megumi/coding-agent/host-interface';
+import type { AppLanguage } from '@megumi/product/host-interface';
 import { Button, TextField, cx } from '../../shared/ui';
 import { themeDefinitions, themeNames, useThemeStore, type ThemeName } from '../../shared/theme';
 import { useSetupWizardStore } from './setup-wizard-store';

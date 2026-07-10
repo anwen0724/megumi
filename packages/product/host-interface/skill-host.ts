@@ -1,6 +1,10 @@
 /*
- * Host skill controller. It maps UI skill requests to SkillService calls.
+ * Implements SkillHost by mapping host requests to the Coding Agent Skill module.
  */
+import type {
+  Skill,
+  SkillService,
+} from '../../coding-agent/skills';
 import type {
   DisableSkillUiRequest,
   DisableSkillUiResponse,
@@ -10,22 +14,20 @@ import type {
   GetSkillDetailUiResponse,
   ListSkillsUiRequest,
   ListSkillsUiResponse,
-  Skill,
   SkillDetailUiDto,
   SkillListUiItem,
-  SkillService,
-} from '../../skills';
+} from './skill-host-types';
 
-export interface SkillController {
+export interface SkillHost {
   listSkills(request: ListSkillsUiRequest): Promise<ListSkillsUiResponse>;
   getSkillDetail(request: GetSkillDetailUiRequest): Promise<GetSkillDetailUiResponse>;
   enableSkill(request: EnableSkillUiRequest): Promise<EnableSkillUiResponse>;
   disableSkill(request: DisableSkillUiRequest): Promise<DisableSkillUiResponse>;
 }
 
-export function createSkillController(
+export function createSkillHost(
   skillService: Pick<SkillService, 'listSkills' | 'getSkill' | 'enableSkill' | 'disableSkill'>,
-): SkillController {
+): SkillHost {
   return {
     async listSkills(request) {
       const result = await skillService.listSkills(request);

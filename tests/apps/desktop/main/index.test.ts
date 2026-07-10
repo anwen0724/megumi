@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -59,7 +59,12 @@ const mocks = vi.hoisted(() => {
     homePath,
     logsPath,
     loadEnvFile: vi.fn(),
-    initializeElectronMegumiHomeSync: vi.fn(() => ({
+    createElectronMegumiHomeSyncOptions: vi.fn(() => ({
+      env: {},
+      homedir: () => homePath,
+      resourceLocator: { builtInSkillsPath: `${homePath}/resources/skills` },
+    })),
+    megumiHomePaths: {
       homePath,
       settingsPath: `${homePath}/settings.json`,
       settingsSchemaPath: `${homePath}/settings.schema.json`,
@@ -69,7 +74,7 @@ const mocks = vi.hoisted(() => {
       logsPath,
       cachePath: `${homePath}/cache`,
       tmpPath: `${homePath}/tmp`,
-    })),
+    },
     registerAllHandlers: vi.fn(),
     registerRuntimeProcessErrorHandlers: vi.fn(),
     registerAppLifecycle: vi.fn(),
@@ -80,9 +85,8 @@ const mocks = vi.hoisted(() => {
     })),
     createDatabase: vi.fn(() => ({ databaseId: 'coding-agent-database' })),
     migrateDatabase: vi.fn(),
-    codingAgentRuntime: codingAgentHost,
     codingAgentHost,
-    composeCodingAgentHostInterface: vi.fn(() => codingAgentHost),
+    composeProduct: vi.fn(),
     ArtifactRepository: vi.fn(function ArtifactRepository(
       this: { database?: unknown },
       database: unknown,
@@ -185,7 +189,7 @@ vi.mock('@megumi/desktop/main/config/env', () => ({
 }));
 
 vi.mock('@megumi/desktop/main/services/workspace/megumi-home.service', () => ({
-  initializeElectronMegumiHomeSync: mocks.initializeElectronMegumiHomeSync,
+  createElectronMegumiHomeSyncOptions: mocks.createElectronMegumiHomeSyncOptions,
 }));
 
 vi.mock('@megumi/desktop/main/ipc/register-ipc-handlers', () => ({
@@ -213,8 +217,8 @@ vi.mock('@megumi/desktop/main/services/workspace/workspace-files.service', () =>
   createWorkspaceFilesService: mocks.createWorkspaceFilesService,
 }));
 
-vi.mock('@megumi/coding-agent/composition', () => ({
-  composeCodingAgentHostInterface: mocks.composeCodingAgentHostInterface,
+vi.mock('@megumi/product/composition', () => ({
+  composeProduct: mocks.composeProduct,
 }));
 
 vi.mock('@megumi/desktop/main/services/artifact/artifact-content-store.service', () => ({
@@ -249,12 +253,20 @@ describe('main runtime logger composition', () => {
   beforeEach(() => {
     vi.resetModules();
     mocks.loadEnvFile.mockClear();
-    mocks.initializeElectronMegumiHomeSync.mockClear();
+    mocks.createElectronMegumiHomeSyncOptions.mockClear();
     mocks.registerAllHandlers.mockClear();
     mocks.registerRuntimeProcessErrorHandlers.mockClear();
     mocks.registerAppLifecycle.mockClear();
     mocks.createMainWindow.mockClear();
-    mocks.composeCodingAgentHostInterface.mockClear();
+    mocks.composeProduct.mockReset();
+    mocks.composeProduct.mockImplementation((options: {
+      runtimeLoggerFactory(paths: typeof mocks.megumiHomePaths): unknown;
+    }) => ({
+      homePaths: mocks.megumiHomePaths,
+      logger: options.runtimeLoggerFactory(mocks.megumiHomePaths),
+      host: mocks.codingAgentHost,
+      dispose: mocks.codingAgentHost.dispose,
+    }));
     mocks.ArtifactRepository.mockClear();
     mocks.MemoryRepository.mockClear();
     mocks.ArtifactContentStore.mockClear();
@@ -292,19 +304,17 @@ describe('main runtime logger composition', () => {
     const lifecycleOptions = mocks.registerAppLifecycle.mock.calls[0]?.[0];
     lifecycleOptions.registerAllHandlers();
 
-    expect(mocks.composeCodingAgentHostInterface).toHaveBeenCalledWith(expect.objectContaining({
-      homePaths: {
-        homePath: mocks.homePath,
-        sqlitePath: `${mocks.homePath}/sqlite`,
-        settingsPath: `${mocks.homePath}/settings.json`,
-      },
-      runtimeLogger: processLogger,
+    expect(mocks.composeProduct).toHaveBeenCalledWith(expect.objectContaining({
+      home: expect.objectContaining({
+        resourceLocator: expect.any(Object),
+      }),
+      runtimeLoggerFactory: expect.any(Function),
       directoryPicker: expect.objectContaining({
         chooseDirectory: expect.any(Function),
       }),
     }));
     const deletedRuntimeEventSinkOption = ['runtime', 'Event', 'Sink'].join('');
-    expect(mocks.composeCodingAgentHostInterface).not.toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.composeProduct).not.toHaveBeenCalledWith(expect.objectContaining({
       [deletedRuntimeEventSinkOption]: expect.anything(),
     }));
     expect(mocks.createWorkspaceFilesService).toHaveBeenCalledWith(expect.objectContaining({

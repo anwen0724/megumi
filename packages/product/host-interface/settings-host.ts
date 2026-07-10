@@ -1,12 +1,12 @@
 /*
- * Host settings controller. It maps UI settings requests to Settings Service calls.
+ * Implements the SettingsHost interface over the Coding Agent Settings module.
  */
-import type { SettingsService } from '../../settings';
+import type { SettingsService } from '../../coding-agent/settings';
 import {
   toProviderPublicStatusUiDto,
   toSettingsRawPatch,
   toSettingsUiResolved,
-} from '../mappers/settings-ui-mapper';
+} from './settings-host-mapper';
 import type {
   EmptyUiResult,
   ProviderDeleteUiRequest,
@@ -19,9 +19,9 @@ import type {
   SettingsGetUiResult,
   SettingsUpdateUiRequest,
   SettingsUpdateUiResult,
-} from '../contracts/settings-ui-contracts';
+} from './settings-host-types';
 
-export interface SettingsController {
+export interface SettingsHost {
   get(request?: SettingsGetUiRequest): Promise<SettingsGetUiResult>;
   update(request: SettingsUpdateUiRequest): Promise<SettingsUpdateUiResult>;
   listProviders(request?: ProviderListUiRequest): Promise<ProviderListUiResult>;
@@ -31,7 +31,7 @@ export interface SettingsController {
   deleteProviderApiKey(request: ProviderDeleteApiKeyUiRequest): Promise<EmptyUiResult>;
 }
 
-export function createSettingsController(
+export function createSettingsHost(
   settingsService: Pick<
     SettingsService,
     | 'getResolvedSettings'
@@ -42,7 +42,7 @@ export function createSettingsController(
     | 'setProviderApiKey'
     | 'clearProviderApiKey'
   >,
-): SettingsController {
+): SettingsHost {
   return {
     async get() {
       return { settings: toSettingsUiResolved(unwrap(settingsService.getResolvedSettings())) };

@@ -1,7 +1,7 @@
-﻿/*
+/*
  * Desktop IPC handlers for settings and provider configuration.
  */
-import type { CodingAgentHostInterface } from '@megumi/coding-agent/host-interface';
+import type { ProductHostInterface } from '@megumi/product/host-interface';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-request-handler';
@@ -18,7 +18,7 @@ import {
 } from '../schemas';
 
 export interface SettingsHandlersService {
-  host: Pick<CodingAgentHostInterface, 'settings'>;
+  host: Pick<ProductHostInterface, 'settings'>;
 }
 
 export interface RegisterSettingsHandlersOptions {

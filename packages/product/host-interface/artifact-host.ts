@@ -1,7 +1,7 @@
 /*
- * Controller for artifact operations exposed to UI shells.
+ * Implements ArtifactHost over the Coding Agent Artifact module.
  */
-import type { ArtifactServicePort } from '../../artifacts';
+import type { ArtifactServicePort } from '../../coding-agent/artifacts';
 
 export type ArtifactRecord = ReturnType<ArtifactServicePort['listByRun']>[number];
 export type ArtifactVersionRecord = NonNullable<ReturnType<ArtifactServicePort['getVersion']>>;
@@ -37,7 +37,7 @@ export interface ArtifactReferenceData {
   sourceRef: ArtifactSourceRefRecord;
 }
 
-export interface ArtifactController {
+export interface ArtifactHost {
   listByRun(runId: string): ArtifactListData;
   listBySession(sessionId: string): ArtifactListData;
   get(artifactId: string): ArtifactGetData;
@@ -47,9 +47,9 @@ export interface ArtifactController {
   reference(payload: ArtifactReferencePayload): ArtifactReferenceData;
 }
 
-export function createArtifactController(
+export function createArtifactHost(
   artifactService: ArtifactServicePort,
-): ArtifactController {
+): ArtifactHost {
   return {
     listByRun: (runId) => ({ artifacts: artifactService.listByRun(runId) }),
     listBySession: (sessionId) => ({ artifacts: artifactService.listBySession(sessionId) }),

@@ -2,7 +2,10 @@
 import { dirname } from 'node:path';
 import path from 'node:path';
 import { redactRuntimeValue } from '@megumi/coding-agent/adapters/local/security/redaction';
+import type { RuntimeLogger } from '@megumi/coding-agent/composition/runtime-logger';
 import type { MegumiHomePaths } from '../workspace/megumi-home.service';
+
+export type { RuntimeLogger } from '@megumi/coding-agent/composition/runtime-logger';
 
 export type RuntimeLogLevel = 'info' | 'warn' | 'error';
 
@@ -11,12 +14,6 @@ export interface RuntimeLogEntry {
   level: RuntimeLogLevel;
   event: string;
   details?: Record<string, unknown>;
-}
-
-export interface RuntimeLogger {
-  info(event: string, details?: Record<string, unknown>): void;
-  warn(event: string, details?: Record<string, unknown>): void;
-  error(event: string, details?: Record<string, unknown>): void;
 }
 
 export class RuntimeJsonlLogger implements RuntimeLogger {

@@ -1,22 +1,22 @@
 /*
- * Host chat controller. It maps UI chat requests to Coding Agent services and returns UI DTOs.
+ * Implements the ChatHost interface by orchestrating Coding Agent public modules.
  */
-import type { AgentRunQueries, AgentRunService, StartRunResult } from '../../agent-run';
-import type { CommandService } from '../../commands';
+import type { AgentRunQueries, AgentRunService, StartRunResult } from '../../coding-agent/agent-run';
+import type { CommandService } from '../../coding-agent/commands';
 import type {
   ContextUsageWindow,
   GetCurrentContextUsageResult,
   SessionContextUsage,
   StartContextUsageMonitorResult,
-} from '../../context';
-import type { Session, SessionMessageWithAttachments, SessionService } from '../../session';
-import type { SessionTimelineQuery } from '../../projections/timeline';
-import type { WorkspaceService } from '../../workspace';
+} from '../../coding-agent/context';
+import type { Session, SessionMessageWithAttachments, SessionService } from '../../coding-agent/session';
+import type { SessionTimelineQuery } from '../../coding-agent/projections/timeline';
+import type { WorkspaceService } from '../../coding-agent/workspace';
 import {
   toChatMessageUiDto,
   toChatRunUiDto,
   toChatSessionUiDto,
-} from '../mappers/chat-ui-mapper';
+} from './chat-host-mapper';
 import type {
   ChatCancelBranchDraftUiRequest,
   ChatCancelBranchDraftUiResult,
@@ -42,9 +42,9 @@ import type {
   ChatListTimelineUiResult,
   ChatSendUserInputUiRequest,
   ChatSendUserInputUiResult,
-} from '../contracts/chat-ui-contracts';
+} from './chat-host-types';
 
-export interface ChatController {
+export interface ChatHost {
   createSession(request: ChatCreateSessionUiRequest): Promise<ChatCreateSessionUiResult>;
   listSessions(request?: ChatListSessionsUiRequest): Promise<ChatListSessionsUiResult>;
   listMessages(request: ChatListMessagesUiRequest): Promise<ChatListMessagesUiResult>;
@@ -59,7 +59,7 @@ export interface ChatController {
   getContextUsage(request: ChatGetContextUsageUiRequest): Promise<ChatGetContextUsageUiResult>;
 }
 
-export interface SessionBranchControllerServicePort {
+export interface SessionBranchHostPort {
   createBranchDraft(input: ChatCreateBranchDraftUiRequest): ChatCreateBranchDraftUiResult;
   cancelBranchDraft(input: ChatCancelBranchDraftUiRequest): ChatCancelBranchDraftUiResult;
 }
@@ -74,17 +74,17 @@ export interface ChatContextUsageMonitorPort {
   refreshSession(request: { session_id: string; workspace_id?: string; reason: string }): Promise<void> | void;
 }
 
-export function createChatController(options: {
+export function createChatHost(options: {
   agentRunService: Pick<AgentRunService, 'startRun' | 'cancelRun'>;
   commandService: Pick<CommandService, 'getCommandSuggestions'>;
   sessionService: SessionService;
   workspaceService: Pick<WorkspaceService, 'listWorkspaces'>;
-  branchService: SessionBranchControllerServicePort;
+  branchService: SessionBranchHostPort;
   sessionTimelineQuery: SessionTimelineQuery;
   agentRunQueries: AgentRunQueries;
   contextUsageMonitor?: ChatContextUsageMonitorPort;
   contextUsageWindowProvider?: (request: { sessionId: string; projectId?: string; modelId?: string }) => ContextUsageWindow;
-}): ChatController {
+}): ChatHost {
   return {
     async createSession(request) {
       const result = options.sessionService.createSession({

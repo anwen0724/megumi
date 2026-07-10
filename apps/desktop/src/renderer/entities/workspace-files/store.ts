@@ -1,6 +1,6 @@
-﻿import { create } from 'zustand';
+import { create } from 'zustand';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
-import type { WorkspaceFileEntryUiDto } from '@megumi/coding-agent/host-interface';
+import type { WorkspaceFileEntryUiDto } from '@megumi/product/host-interface';
 import type { WorkspaceFilesListPayload } from '@megumi/desktop/main/ipc/schemas';
 import {
   createRendererRuntimeIpcRequest,

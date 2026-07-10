@@ -1,4 +1,4 @@
-﻿import { create } from 'zustand';
+import { create } from 'zustand';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import type {
   ProviderApiKeyPayload,
@@ -6,7 +6,7 @@ import type {
   ProviderDeleteApiKeyPayload,
   ProviderUpdatePayload,
 } from '@megumi/desktop/main/ipc/schemas';
-import type { ProviderListUiResult, ProviderPublicStatusUiDto } from '@megumi/coding-agent/host-interface';
+import type { ProviderListUiResult, ProviderPublicStatusUiDto } from '@megumi/product/host-interface';
 import {
   createRendererRuntimeIpcRequest,
   getRuntimeIpcErrorMessage,
