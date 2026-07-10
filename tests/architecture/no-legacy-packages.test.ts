@@ -12,8 +12,10 @@ const forbiddenDirectories = [
   'packages/memory',
   'packages/tools',
   'packages/security',
+  'packages/home',
   'tests/packages/tools',
   'tests/packages/security',
+  'tests/packages/home',
 ];
 
 const forbiddenAliases = [
@@ -23,6 +25,7 @@ const forbiddenAliases = [
   '@megumi/memory',
   '@megumi/tools',
   '@megumi/security',
+  '@megumi/home',
 ];
 
 const configFiles = [

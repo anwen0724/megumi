@@ -8,7 +8,7 @@ import {
   initializeMegumiHomeSync,
   resolveMegumiHomePath,
   type MegumiHomeFileSystem,
-} from '@megumi/home';
+} from '@megumi/product/home';
 
 class MemoryFileSystem implements MegumiHomeFileSystem {
   readonly directories = new Set<string>();
@@ -126,7 +126,9 @@ describe('Megumi Home', () => {
       clock: {
         now: () => new Date('2026-05-11T12:00:00.000Z'),
       },
-      builtInSkillSeedPath: seedPath,
+      resourceLocator: {
+        resolveBuiltInSystemSkillsPath: () => seedPath,
+      },
     });
 
     expect(fileSystem.copiedDirectories).toEqual([{
@@ -135,7 +137,7 @@ describe('Megumi Home', () => {
     }]);
   });
 
-  it('resolves the default built-in skill seed path inside the product home package', async () => {
+  it('does not infer built-in skill resources from the repository working directory', async () => {
     const defaultSeedPath = path.resolve(process.cwd(), 'packages', 'coding-agent', 'skills', 'built-in-skills');
     fileSystem.existingPaths.add(defaultSeedPath);
 
@@ -148,10 +150,8 @@ describe('Megumi Home', () => {
       },
     });
 
-    expect(fileSystem.copiedDirectories).toEqual([{
-      sourcePath: defaultSeedPath,
-      targetPath: paths.systemSkillsPath,
-    }]);
+    expect(paths.systemSkillsPath).toBe(path.join(paths.homePath, 'skills', '.system'));
+    expect(fileSystem.copiedDirectories).toEqual([]);
   });
 
   it('supports synchronous initialization for host composition', () => {
@@ -184,7 +184,9 @@ describe('Megumi Home', () => {
       clock: {
         now: () => new Date('2026-05-11T12:00:00.000Z'),
       },
-      builtInSkillSeedPath: seedPath,
+      resourceLocator: {
+        resolveBuiltInSystemSkillsPath: () => seedPath,
+      },
     });
 
     expect(paths.homePath).toBe(path.resolve('D:/megumi-home'));

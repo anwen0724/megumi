@@ -236,14 +236,14 @@ describe('Megumi Home foundation', () => {
     expect(syncTextFiles.get(paths.readmePath)).toContain('Megumi Home');
   });
 
-  it('keeps built-in skill seed path resolution out of the desktop adapter', () => {
+  it('keeps host resource paths out of the Product Home implementation', () => {
     const source = fs.readFileSync(
-      path.resolve('apps/desktop/src/main/services/workspace/megumi-home.service.ts'),
+      path.resolve('packages/product/home/megumi-home.ts'),
       'utf8',
     );
 
-    expect(source).not.toContain('builtInSkillSeedPath');
+    expect(source).not.toContain('process.cwd()');
     expect(source).not.toContain('built-in-skills');
-    expect(source).not.toContain('MEGUMI_BUILT_IN_SKILLS_PATH');
+    expect(source).not.toContain('packages/coding-agent');
   });
 });

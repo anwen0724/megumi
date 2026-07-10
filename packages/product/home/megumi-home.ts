@@ -7,7 +7,6 @@ import { createSettingsJsonSchema } from '../../coding-agent/settings';
 
 export const MEGUMI_HOME_VERSION = 1;
 export const MEGUMI_HOME_MIGRATION_ID = 'megumi-home-v1';
-const DEFAULT_BUILT_IN_SKILL_SEED_PATH = path.join('packages', 'coding-agent', 'skills', 'built-in-skills');
 
 export interface MegumiHomeEnv {
   MEGUMI_HOME?: string;
@@ -15,6 +14,10 @@ export interface MegumiHomeEnv {
 
 export interface MegumiHomeClock {
   now(): Date;
+}
+
+export interface MegumiHomeResourceLocator {
+  resolveBuiltInSystemSkillsPath(): string | undefined;
 }
 
 export interface MegumiHomeFileSystem {
@@ -61,13 +64,13 @@ export interface ResolveMegumiHomePathOptions {
 export interface InitializeMegumiHomeOptions extends ResolveMegumiHomePathOptions {
   fileSystem: MegumiHomeFileSystem;
   clock: MegumiHomeClock;
-  builtInSkillSeedPath?: string;
+  resourceLocator?: MegumiHomeResourceLocator;
 }
 
 export interface InitializeMegumiHomeSyncOptions extends ResolveMegumiHomePathOptions {
   fileSystem: MegumiHomeSyncFileSystem;
   clock: MegumiHomeClock;
-  builtInSkillSeedPath?: string;
+  resourceLocator?: MegumiHomeResourceLocator;
 }
 
 export function resolveMegumiHomePath(options: ResolveMegumiHomePathOptions): string {
@@ -105,7 +108,7 @@ export async function initializeMegumiHome(options: InitializeMegumiHomeOptions)
   await writeJsonIfMissing(options.fileSystem, paths.settingsSchemaPath, createMegumiSettingsSchema());
   await writeJsonIfMissing(options.fileSystem, paths.versionPath, createMegumiHomeVersion(options.clock.now()));
   await writeTextIfMissing(options.fileSystem, paths.readmePath, createMegumiHomeReadme());
-  await installBuiltInSystemSkills(options.fileSystem, paths, options.builtInSkillSeedPath);
+  await installBuiltInSystemSkills(options.fileSystem, paths, options.resourceLocator);
 
   return paths;
 }
@@ -117,7 +120,7 @@ export function initializeMegumiHomeSync(options: InitializeMegumiHomeSyncOption
   writeJsonIfMissingSync(options.fileSystem, paths.settingsSchemaPath, createMegumiSettingsSchema());
   writeJsonIfMissingSync(options.fileSystem, paths.versionPath, createMegumiHomeVersion(options.clock.now()));
   writeTextIfMissingSync(options.fileSystem, paths.readmePath, createMegumiHomeReadme());
-  installBuiltInSystemSkillsSync(options.fileSystem, paths, options.builtInSkillSeedPath);
+  installBuiltInSystemSkillsSync(options.fileSystem, paths, options.resourceLocator);
 
   return paths;
 }
@@ -245,15 +248,15 @@ function writeTextIfMissingSync(
 async function installBuiltInSystemSkills(
   fileSystem: MegumiHomeFileSystem,
   paths: MegumiHomePaths,
-  seedPath?: string,
+  resourceLocator?: MegumiHomeResourceLocator,
 ): Promise<void> {
-  const resolvedSeedPath = resolveBuiltInSkillSeedPath(seedPath);
+  const resolvedSeedPath = resourceLocator?.resolveBuiltInSystemSkillsPath()?.trim();
 
-  if (!fileSystem.copyDirectory || !(await fileSystem.pathExists(resolvedSeedPath))) {
+  if (!resolvedSeedPath || !fileSystem.copyDirectory || !(await fileSystem.pathExists(resolvedSeedPath))) {
     return;
   }
 
-  await fileSystem.copyDirectory(resolvedSeedPath, paths.systemSkillsPath, {
+  await fileSystem.copyDirectory(path.resolve(resolvedSeedPath), paths.systemSkillsPath, {
     overwrite: false,
     errorOnExist: false,
   });
@@ -262,26 +265,16 @@ async function installBuiltInSystemSkills(
 function installBuiltInSystemSkillsSync(
   fileSystem: MegumiHomeSyncFileSystem,
   paths: MegumiHomePaths,
-  seedPath?: string,
+  resourceLocator?: MegumiHomeResourceLocator,
 ): void {
-  const resolvedSeedPath = resolveBuiltInSkillSeedPath(seedPath);
+  const resolvedSeedPath = resourceLocator?.resolveBuiltInSystemSkillsPath()?.trim();
 
-  if (!fileSystem.copyDirectorySync || !fileSystem.pathExistsSync(resolvedSeedPath)) {
+  if (!resolvedSeedPath || !fileSystem.copyDirectorySync || !fileSystem.pathExistsSync(resolvedSeedPath)) {
     return;
   }
 
-  fileSystem.copyDirectorySync(resolvedSeedPath, paths.systemSkillsPath, {
+  fileSystem.copyDirectorySync(path.resolve(resolvedSeedPath), paths.systemSkillsPath, {
     overwrite: false,
     errorOnExist: false,
   });
-}
-
-function resolveBuiltInSkillSeedPath(seedPath?: string): string {
-  const configuredSeedPath = seedPath?.trim();
-
-  if (configuredSeedPath) {
-    return path.resolve(configuredSeedPath);
-  }
-
-  return path.resolve(process.cwd(), DEFAULT_BUILT_IN_SKILL_SEED_PATH);
 }

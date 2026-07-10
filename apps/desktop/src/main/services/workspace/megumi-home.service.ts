@@ -1,6 +1,8 @@
 // Electron adapter for Megumi Home initialization owned by the product packages.
 import fs from 'fs-extra';
 import os from 'os';
+import path from 'node:path';
+import { app } from 'electron';
 import {
   initializeMegumiHome,
   initializeMegumiHomeSync,
@@ -14,9 +16,10 @@ import {
   type MegumiHomeEnv,
   type MegumiHomeFileSystem,
   type MegumiHomePaths,
+  type MegumiHomeResourceLocator,
   type MegumiHomeSyncFileSystem,
   type MegumiHomeVersion,
-} from '@megumi/home';
+} from '@megumi/product/home';
 
 export {
   buildMegumiHomePaths,
@@ -45,6 +48,7 @@ export async function initializeElectronMegumiHome(): Promise<MegumiHomePaths> {
     clock: {
       now: () => new Date(),
     },
+    resourceLocator: createElectronMegumiHomeResourceLocator(),
   });
 }
 
@@ -56,7 +60,16 @@ export function initializeElectronMegumiHomeSync(): MegumiHomePaths {
     clock: {
       now: () => new Date(),
     },
+    resourceLocator: createElectronMegumiHomeResourceLocator(),
   });
+}
+
+function createElectronMegumiHomeResourceLocator(): MegumiHomeResourceLocator {
+  return {
+    resolveBuiltInSystemSkillsPath: () => app.isPackaged
+      ? path.resolve(process.resourcesPath, 'product', 'system-skills')
+      : path.resolve(process.cwd(), 'packages', 'coding-agent', 'skills', 'built-in-skills'),
+  };
 }
 
 function createElectronMegumiHomeFileSystem(): MegumiHomeFileSystem & MegumiHomeSyncFileSystem {
