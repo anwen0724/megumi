@@ -94,7 +94,7 @@ async function invokeRuntimeIpc<TPayload, TData extends object, TChannel extends
 
     return {
       ok: false,
-      error: createPreloadInvokeError(debugId),
+      data: createPreloadInvokeError(debugId),
       meta: {
         requestId: request.requestId,
         channel,

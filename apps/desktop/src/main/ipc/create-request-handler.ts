@@ -107,7 +107,7 @@ function failureResult<TChannel extends BusinessIpcChannel>(
 ): RuntimeIpcResult<never, TChannel> {
   return {
     ok: false,
-    error,
+    data: error,
     meta: {
       requestId,
       channel,

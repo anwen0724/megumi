@@ -215,7 +215,7 @@ describe('useSessionTimeline', () => {
     });
     vi.mocked(window.megumi.session.message.cancel).mockResolvedValueOnce({
       ok: false,
-      error: {
+      data: {
         code: 'ipc_handler_failed',
         message: 'Cancel service failed.',
         severity: 'error',

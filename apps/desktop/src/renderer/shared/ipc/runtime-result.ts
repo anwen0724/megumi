@@ -8,9 +8,9 @@ export function getRuntimeIpcFailure<TChannel extends BusinessIpcChannel>(
 }
 
 export function getRuntimeIpcError(result: RuntimeIpcResult<object>): RuntimeIpcError | null {
-  return result.ok ? null : result.error;
+  return result.ok ? null : result.data;
 }
 
 export function getRuntimeIpcErrorMessage(result: RuntimeIpcResult<object>): string {
-  return result.ok ? 'Request succeeded.' : result.error.message;
+  return result.ok ? 'Request succeeded.' : result.data.message;
 }

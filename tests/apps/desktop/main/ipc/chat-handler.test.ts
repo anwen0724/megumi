@@ -238,7 +238,7 @@ describe('registerChatHandlers', () => {
 
     expect(response).toMatchObject({
       ok: false,
-      error: { code: 'ipc_handler_failed', message: 'Chat service failed.' },
+      data: { code: 'ipc_handler_failed', message: 'Chat service failed.' },
     });
   });
 

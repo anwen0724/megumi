@@ -280,7 +280,7 @@ export function useSessionTimeline() {
     const result = await window.megumi.session.message.send(request);
 
     if (!result.ok) {
-      failSessionMessageSend(result.error.message, target.sessionId ?? null);
+      failSessionMessageSend(result.data.message, target.sessionId ?? null);
       return false;
     }
 
@@ -361,7 +361,7 @@ export function useSessionTimeline() {
         showToast({
           tone: 'error',
           title: 'Stop failed',
-          message: result?.error?.message ?? 'The Agent Run could not be cancelled.',
+          message: result?.data?.message ?? 'The Agent Run could not be cancelled.',
         });
         return;
       }
@@ -424,7 +424,7 @@ export function useSessionTimeline() {
       const cancelResult = await window.megumi.session.branchDraft.cancel(cancelRequest);
 
       if (!cancelResult.ok) {
-        failSessionMessageSend(cancelResult.error.message, sessionId);
+        failSessionMessageSend(cancelResult.data.message, sessionId);
         return;
       }
 
@@ -453,7 +453,7 @@ export function useSessionTimeline() {
     const result = await window.megumi.session.branchDraft.create(request);
 
     if (!result.ok) {
-      failSessionMessageSend(result.error.message, sessionId);
+      failSessionMessageSend(result.data.message, sessionId);
       return;
     }
 
@@ -498,7 +498,7 @@ export function useSessionTimeline() {
     const result = await window.megumi.session.branchDraft.cancel(request);
 
     if (!result.ok) {
-      failSessionMessageSend(result.error.message, branchDraftForCancel.sessionId);
+      failSessionMessageSend(result.data.message, branchDraftForCancel.sessionId);
       return;
     }
 

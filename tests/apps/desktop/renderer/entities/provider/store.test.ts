@@ -193,7 +193,7 @@ describe('useProviderStore', () => {
         provider: {
           list: vi.fn().mockResolvedValue({
             ok: false,
-            error: {
+            data: {
               code: 'config_invalid',
               message: 'Megumi settings are invalid. Fix C:\\Users\\anwen\\.megumi\\settings.json and try again.',
               severity: 'error',

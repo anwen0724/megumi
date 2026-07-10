@@ -273,7 +273,7 @@ describe('useWorkspaceFilesStore', () => {
           files: {
             list: vi.fn(async () => ({
               ok: false,
-              error: {
+              data: {
                 code: 'workspace_files_list_failed',
                 message: 'Megumi could not list workspace files.',
                 severity: 'error',

@@ -95,7 +95,7 @@ export interface RuntimeIpcSuccess<TData extends object, TChannel extends Busine
 
 export interface RuntimeIpcFailure<TChannel extends BusinessIpcChannel = BusinessIpcChannel> {
   ok: false;
-  error: RuntimeIpcError;
+  data: RuntimeIpcError;
   meta: z.infer<typeof RuntimeIpcResponseMetaSchema> & { channel: TChannel };
 }
 
@@ -130,6 +130,6 @@ export function createRuntimeIpcResultSchema<TData extends z.ZodTypeAny, TChanne
 
   return z.discriminatedUnion('ok', [
     z.object({ ok: z.literal(true), data: dataSchema, meta: metaSchema }).strict(),
-    z.object({ ok: z.literal(false), error: RuntimeIpcErrorSchema, meta: metaSchema }).strict(),
+    z.object({ ok: z.literal(false), data: RuntimeIpcErrorSchema, meta: metaSchema }).strict(),
   ]);
 }

@@ -164,7 +164,7 @@ export function useChatPageController() {
       if (cancelled) {
         return;
       }
-      setContextUsage(result.ok ? result.data : { status: 'failed', message: result.error.message });
+      setContextUsage(result.ok ? result.data : { status: 'failed', message: result.data.message });
     }
 
     if (agentStatus === 'idle' || agentStatus === 'error') {
@@ -247,7 +247,7 @@ export function useChatPageController() {
       showToast({
         tone: 'error',
         title: 'Approval failed',
-        message: result.error.message,
+        message: result.data.message,
       });
       return;
     }
