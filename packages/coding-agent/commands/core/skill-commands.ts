@@ -29,6 +29,7 @@ function createStableSkillCommand(): CommandDefinition {
     description: 'Use a skill by skillId',
     argument_hint: '<skillId> [args]',
     source: { kind: 'built_in' },
+    hide_from_suggestions: true,
     async execute({ invocation }) {
       const [skillId, ...argumentParts] = invocation.arguments_input.trim().split(/\s+/).filter(Boolean);
       if (!skillId) {

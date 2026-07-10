@@ -1,4 +1,5 @@
 ﻿// @vitest-environment node
+import fs from 'fs';
 import path from 'path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -102,6 +103,8 @@ describe('Megumi Home foundation', () => {
     expect(fileSystem.directories).toEqual(
       new Set([
         paths.homePath,
+        paths.skillsPath,
+        paths.systemSkillsPath,
         paths.sqlitePath,
         paths.logsPath,
         paths.cachePath,
@@ -223,11 +226,24 @@ describe('Megumi Home foundation', () => {
     });
 
     expect(paths.homePath).toBe(path.resolve('D:/megumi-home'));
+    expect(syncDirectories.has(paths.skillsPath)).toBe(true);
+    expect(syncDirectories.has(paths.systemSkillsPath)).toBe(true);
     expect(syncDirectories.has(paths.sqlitePath)).toBe(true);
     expect(syncJsonFiles.has(paths.settingsPath)).toBe(false);
     expect(syncJsonFiles.get(paths.settingsSchemaPath)).toMatchObject({
       title: 'Megumi settings',
     });
     expect(syncTextFiles.get(paths.readmePath)).toContain('Megumi Home');
+  });
+
+  it('keeps built-in skill seed path resolution out of the desktop adapter', () => {
+    const source = fs.readFileSync(
+      path.resolve('apps/desktop/src/main/services/workspace/megumi-home.service.ts'),
+      'utf8',
+    );
+
+    expect(source).not.toContain('builtInSkillSeedPath');
+    expect(source).not.toContain('built-in-skills');
+    expect(source).not.toContain('MEGUMI_BUILT_IN_SKILLS_PATH');
   });
 });

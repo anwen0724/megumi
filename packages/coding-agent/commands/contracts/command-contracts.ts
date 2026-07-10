@@ -13,6 +13,7 @@ export type CommandDefinition = {
   description: string;
   argument_hint?: string;
   source: CommandSource;
+  hide_from_suggestions?: boolean;
   suggestion?: {
     display_name?: string;
     source_badge?: string;

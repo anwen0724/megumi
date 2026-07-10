@@ -41,6 +41,29 @@ describe('skill command integration', () => {
     });
   });
 
+  it('keeps the stable /skill command hidden from suggestions', async () => {
+    const service = createCommandService({
+      skills: [{
+        skillId: 'checks:test',
+        commandName: 'test',
+        skillName: 'checks:test',
+        description: 'Run project checks',
+        sourceLabel: 'Project',
+      }],
+    });
+
+    await expect(service.getCommandSuggestions({ draft_input: '/sk' })).resolves.toMatchObject({
+      type: 'suggestions',
+      groups: [{
+        id: 'commands',
+        items: [],
+      }, {
+        id: 'skills',
+        items: [],
+      }],
+    });
+  });
+
   it('does not execute natural skill command names without suggestion selection', async () => {
     const service = createCommandService({
       skills: [{

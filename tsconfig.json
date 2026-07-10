@@ -14,6 +14,8 @@
     "baseUrl": ".",
     "paths": {
       "@megumi/desktop/*": ["apps/desktop/src/*"],
+      "@megumi/home": ["packages/home/index.ts"],
+      "@megumi/home/*": ["packages/home/*"],
       "@megumi/coding-agent": ["packages/coding-agent/index.ts"],
       "@megumi/coding-agent/*": ["packages/coding-agent/*"],
       "@megumi/ai": ["packages/ai/index.ts"],

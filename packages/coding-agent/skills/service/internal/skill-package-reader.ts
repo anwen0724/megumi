@@ -10,6 +10,7 @@ import { parseSkillManifest } from './skill-manifest-parser';
 export type SkillRoot = {
   kind: SkillSourceKind;
   rootPath: string;
+  excludedDirectoryNames?: string[];
 };
 
 const SOURCE_LABELS: Record<SkillSourceKind, string> = {
@@ -59,11 +60,11 @@ function readRootSkills(root: SkillRoot): Skill[] {
     return [];
   }
 
-  return findPackageDirectories(root.rootPath)
+  return findPackageDirectories(root.rootPath, new Set(root.excludedDirectoryNames ?? []))
     .flatMap((packagePath) => readSkillPackage(root, packagePath));
 }
 
-function findPackageDirectories(rootPath: string): string[] {
+function findPackageDirectories(rootPath: string, excludedDirectoryNames: ReadonlySet<string>): string[] {
   const packages: string[] = [];
   const stack = [path.resolve(rootPath)];
   while (stack.length > 0) {
@@ -76,6 +77,9 @@ function findPackageDirectories(rootPath: string): string[] {
       continue;
     }
     for (const child of safeReadDirectories(current)) {
+      if (excludedDirectoryNames.has(child)) {
+        continue;
+      }
       stack.push(path.join(current, child));
     }
   }

@@ -94,6 +94,30 @@ describe('readSkillPackages', () => {
 
     expect(skills.map((skill) => skill.skillId).sort()).toEqual(['packages-a:test', 'packages-b:test']);
   });
+
+  it('allows user roots to skip the .system directory', () => {
+    const userRoot = createTempRoot();
+    writeSkill(userRoot, 'user-smoke', {
+      name: 'user-smoke',
+      description: 'User smoke',
+      content: 'User copy',
+    });
+    writeSkill(path.join(userRoot, '.system'), 'system-smoke', {
+      name: 'system-smoke',
+      description: 'System smoke',
+      content: 'System copy',
+    });
+
+    const skills = readSkillPackages({
+      roots: [{
+        kind: 'user',
+        rootPath: userRoot,
+        excludedDirectoryNames: ['.system'],
+      }],
+    });
+
+    expect(skills.map((skill) => skill.skillId)).toEqual(['user-smoke']);
+  });
 });
 
 function createTempRoot(): string {

@@ -47,11 +47,12 @@ function defaultSkillRootResolver(input: {
       const roots: SkillRoot[] = [
         {
           kind: 'system',
-          rootPath: path.resolve(__dirname, '..', 'built-in-skills'),
+          rootPath: path.join(input.homePath, 'skills', '.system'),
         },
         {
           kind: 'user',
           rootPath: path.join(input.homePath, 'skills'),
+          excludedDirectoryNames: ['.system'],
         },
       ];
       if (request.workspaceId) {

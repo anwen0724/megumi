@@ -107,14 +107,14 @@ function getCommandSuggestions(input: {
       id: 'commands',
       label: 'Commands',
       items: input.commands
-        .filter((command) => command.source.kind === 'built_in')
+        .filter((command) => command.source.kind === 'built_in' && !command.hide_from_suggestions)
         .flatMap((command) => toSuggestionItem(command, command_prefix)),
     },
     {
       id: 'skills',
       label: 'Skills',
       items: input.commands
-        .filter((command) => command.source.kind === 'skill')
+        .filter((command) => command.source.kind === 'skill' && !command.hide_from_suggestions)
         .flatMap((command) => toSuggestionItem(command, command_prefix)),
     },
   ];
