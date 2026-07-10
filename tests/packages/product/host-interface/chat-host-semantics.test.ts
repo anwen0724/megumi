@@ -355,7 +355,7 @@ describe('ChatHost product semantics', () => {
     expect(JSON.stringify(result)).not.toContain('replacement_input');
   });
 
-  it('hydrates a session view with timeline, runs, and run events in one host call', async () => {
+  it('hydrates a session view with only active-path runs and run events', async () => {
     const message: TimelineMessage = {
       messageId: 'message-1',
       role: 'user',
@@ -445,14 +445,8 @@ describe('ChatHost product semantics', () => {
           createdAt: '2026-07-10T01:00:01.000Z',
           completedAt: '2026-07-10T01:00:02.000Z',
         },
-        {
-          runId: 'run-b',
-          sessionId: 'session-1',
-          status: 'running',
-          createdAt: '2026-07-10T01:00:03.000Z',
-        },
       ],
-      runtimeEvents: [...eventsByRun['run-a'], ...eventsByRun['run-b']],
+      runtimeEvents: eventsByRun['run-a'],
     });
 
     expect(listSessionTimeline).toHaveBeenCalledWith({
@@ -460,7 +454,9 @@ describe('ChatHost product semantics', () => {
       session_id: 'session-1',
     });
     expect(listRunsBySession).toHaveBeenCalledWith('session-1');
-    expect(listRuntimeEventsByRun).toHaveBeenCalledTimes(2);
+    expect(listRuntimeEventsByRun).toHaveBeenCalledTimes(1);
+    expect(listRuntimeEventsByRun).toHaveBeenCalledWith('run-a');
+    expect(listRuntimeEventsByRun).not.toHaveBeenCalledWith('run-b');
   });
 });
 

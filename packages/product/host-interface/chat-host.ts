@@ -379,7 +379,10 @@ export function createChatHost(options: {
         workspace_id: request.projectId,
         session_id: request.sessionId,
       });
-      const runs = options.agentRunQueries.listRunsBySession(request.sessionId);
+      const activeRunIds = extractRunIdsFromTimelineMessages(timeline.messages);
+      const runs = options.agentRunQueries
+        .listRunsBySession(request.sessionId)
+        .filter((run) => activeRunIds.has(run.run_id));
       return {
         messages: timeline.messages,
         diagnostics: timeline.diagnostics,
@@ -410,6 +413,16 @@ export function createChatHost(options: {
       return mapCurrentContextUsage(await options.contextUsageMonitor.refreshAndGetSessionUsage(refreshRequest));
     },
   };
+}
+
+function extractRunIdsFromTimelineMessages(messages: TimelineMessage[]): Set<string> {
+  const runIds = new Set<string>();
+  for (const message of messages) {
+    if ((message.role === 'assistant' || message.role === 'user') && message.runId) {
+      runIds.add(message.runId);
+    }
+  }
+  return runIds;
 }
 
 function mapCurrentContextUsage(current: GetCurrentContextUsageResult): ChatGetContextUsageUiResult {
