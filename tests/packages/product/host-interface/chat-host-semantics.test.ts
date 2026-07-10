@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createChatHost, createSessionBranchHost } from '@megumi/product/host-interface/chat-host';
+import type { AgentRun } from '@megumi/coding-agent/agent-run';
+import type { RuntimeEvent } from '@megumi/coding-agent/events';
+import type { TimelineMessage } from '@megumi/coding-agent/projections/timeline';
 
 describe('ChatHost product semantics', () => {
   it('owns request, title, and permission defaults', async () => {
@@ -90,7 +93,7 @@ describe('ChatHost product semantics', () => {
   });
 
   it('hydrates a session view with timeline, runs, and run events in one host call', async () => {
-    const message = {
+    const message: TimelineMessage = {
       messageId: 'message-1',
       role: 'user',
       projectId: 'project-1',
@@ -104,7 +107,7 @@ describe('ChatHost product semantics', () => {
         format: 'plain',
       }],
     };
-    const runA = {
+    const runA: AgentRun = {
       run_id: 'run-a',
       workspace_id: 'project-1',
       session_id: 'session-1',
@@ -114,15 +117,16 @@ describe('ChatHost product semantics', () => {
       created_at: '2026-07-10T01:00:01.000Z',
       completed_at: '2026-07-10T01:00:02.000Z',
     };
-    const runB = {
-      ...runA,
+    const runB: AgentRun = {
       run_id: 'run-b',
+      workspace_id: 'project-1',
+      session_id: 'session-1',
+      model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
       trigger: { type: 'user_input', user_message_id: 'message-2' },
       status: 'running',
       created_at: '2026-07-10T01:00:03.000Z',
-      completed_at: undefined,
     };
-    const eventsByRun = {
+    const eventsByRun: Record<string, RuntimeEvent[]> = {
       'run-a': [{
         eventId: 'event-a',
         schemaVersion: 1,
