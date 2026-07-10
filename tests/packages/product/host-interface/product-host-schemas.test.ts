@@ -138,12 +138,21 @@ describe('Product Host runtime schemas', () => {
 
   it('validates Skill result payloads', () => {
     expect(ListSkillsUiResponseSchema.safeParse({ status: 'ok', skills: [] }).success).toBe(true);
-    expect(ListSkillsUiResponseSchema.safeParse({ status: 'failed', message: 42 }).success).toBe(false);
+    expect(ListSkillsUiResponseSchema.safeParse({
+      status: 'failed',
+      failure: { code: 'skill_failed', message: 'failed' },
+    }).success).toBe(true);
+    expect(ListSkillsUiResponseSchema.safeParse({ status: 'failed', message: 'failed' }).success).toBe(false);
   });
 
   it('validates Settings result payloads', () => {
-    expect(ProviderListUiResultSchema.safeParse({ providers: [] }).success).toBe(true);
-    expect(ProviderListUiResultSchema.safeParse({ providers: [{ hasApiKey: 'yes' }] }).success).toBe(false);
+    expect(ProviderListUiResultSchema.safeParse({ status: 'ok', providers: [] }).success).toBe(true);
+    expect(ProviderListUiResultSchema.safeParse({
+      status: 'failed',
+      failure: { code: 'settings_invalid', message: 'invalid' },
+    }).success).toBe(true);
+    expect(ProviderListUiResultSchema.safeParse({ providers: [] }).success).toBe(false);
+    expect(ProviderListUiResultSchema.safeParse({ status: 'ok', providers: [{ hasApiKey: 'yes' }] }).success).toBe(false);
   });
 
   it('validates Approval result payloads and rejects non-serializable details', () => {

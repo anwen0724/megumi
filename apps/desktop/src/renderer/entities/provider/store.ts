@@ -6,7 +6,7 @@ import type {
   ProviderDeleteApiKeyPayload,
   ProviderUpdatePayload,
 } from '@megumi/desktop/main/ipc/schemas';
-import type { ProviderListUiResult, ProviderPublicStatusUiDto } from '@megumi/product/host-interface';
+import type { ProviderPublicStatusUiDto } from '@megumi/product/host-interface';
 import {
   createRendererRuntimeIpcRequest,
   getRuntimeIpcErrorMessage,
@@ -66,9 +66,16 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
       });
       return;
     }
+    if (result.data.status === 'failed') {
+      set({
+        status: 'error',
+        error: result.data.failure.message,
+      });
+      return;
+    }
 
     set({
-      providers: (result.data as ProviderListUiResult).providers,
+      providers: result.data.providers,
       status: 'ready',
       error: null,
     });
@@ -87,6 +94,13 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
       set({
         status: 'error',
         error: getRuntimeIpcErrorMessage(result),
+      });
+      return;
+    }
+    if (result.data.status === 'failed') {
+      set({
+        status: 'error',
+        error: result.data.failure.message,
       });
       return;
     }
@@ -110,6 +124,13 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
       });
       return;
     }
+    if (result.data.status === 'failed') {
+      set({
+        status: 'error',
+        error: result.data.failure.message,
+      });
+      return;
+    }
 
     await get().loadProviders();
   },
@@ -130,6 +151,13 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
       });
       return;
     }
+    if (result.data.status === 'failed') {
+      set({
+        status: 'error',
+        error: result.data.failure.message,
+      });
+      return;
+    }
 
     await get().loadProviders();
   },
@@ -147,6 +175,13 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
       set({
         status: 'error',
         error: getRuntimeIpcErrorMessage(result),
+      });
+      return;
+    }
+    if (result.data.status === 'failed') {
+      set({
+        status: 'error',
+        error: result.data.failure.message,
       });
       return;
     }

@@ -25,6 +25,11 @@ export function MemorySettingsPanel() {
         setError(getRuntimeIpcErrorMessage(result));
         return;
       }
+      if (result.data.status === 'failed') {
+        setStatus('error');
+        setError(result.data.failure.message);
+        return;
+      }
       setEnabled(result.data.settings.memory.enabled);
       setStatus('ready');
     }).catch((reason: unknown) => {
@@ -63,6 +68,12 @@ export function MemorySettingsPanel() {
       setEnabled(previous);
       setStatus('error');
       setError(getRuntimeIpcErrorMessage(result));
+      return;
+    }
+    if (result.data.status === 'failed') {
+      setEnabled(previous);
+      setStatus('error');
+      setError(result.data.failure.message);
       return;
     }
     setEnabled(result.data.settings.memory.enabled);

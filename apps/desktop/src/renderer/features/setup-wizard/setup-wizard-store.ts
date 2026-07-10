@@ -39,6 +39,10 @@ export const useSetupWizardStore = create<SetupWizardState>((set) => ({
       set({ status: 'error', error: getRuntimeIpcErrorMessage(result), setupCompleted: false });
       return;
     }
+    if (result.data.status === 'failed') {
+      set({ status: 'error', error: result.data.failure.message, setupCompleted: false });
+      return;
+    }
 
     set({
       status: 'ready',
@@ -70,6 +74,10 @@ export const useSetupWizardStore = create<SetupWizardState>((set) => ({
 
     if (!settingsResult.ok) {
       set({ status: 'error', error: getRuntimeIpcErrorMessage(settingsResult) });
+      return;
+    }
+    if (settingsResult.data.status === 'failed') {
+      set({ status: 'error', error: settingsResult.data.failure.message });
       return;
     }
 

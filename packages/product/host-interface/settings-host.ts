@@ -55,8 +55,8 @@ export const SettingsCompleteSetupPayloadSchema = z.object({
 export const ProviderListPayloadSchema = z.object({}).strict();
 export const ProviderUpdatePayloadSchema = z.object({
   providerId: z.string().min(1), enabled: z.boolean().optional(), protocol: z.enum(['openai-compatible', 'anthropic']).optional(),
-  displayName: z.string().min(1).optional(), baseUrl: z.string().url().optional(), modelIds: z.array(z.string().min(1)).optional(),
-  apiKeyEnv: z.string().min(1).nullable().optional(),
+  displayName: z.string().optional(), baseUrl: z.string().optional(), modelIds: z.array(z.string()).optional(),
+  apiKeyEnv: z.string().nullable().optional(),
 }).strict();
 export const ProviderDeletePayloadSchema = z.object({ providerId: z.string().min(1) }).strict();
 export const ProviderApiKeyPayloadSchema = z.object({ providerId: z.string().min(1), apiKey: z.string().min(1) }).strict();
@@ -94,11 +94,26 @@ const ProviderPublicStatusUiDtoSchema = z.object({
   apiKeyEnvCustomized: z.boolean().optional(),
 }).strict();
 
-export const SettingsGetUiResultSchema = z.object({ settings: SettingsUiResolvedSchema }).strict();
+const HostFailureSchema = z.object({
+  code: z.string().min(1),
+  message: z.string(),
+  retryable: z.boolean().optional(),
+}).strict();
+
+export const SettingsGetUiResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('ok'), settings: SettingsUiResolvedSchema }).strict(),
+  z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
+]);
 export const SettingsUpdateUiResultSchema = SettingsGetUiResultSchema;
 export const SettingsCompleteSetupUiResultSchema = SettingsGetUiResultSchema;
-export const ProviderListUiResultSchema = z.object({ providers: z.array(ProviderPublicStatusUiDtoSchema) }).strict();
-export const EmptyUiResultSchema = z.object({}).strict();
+export const ProviderListUiResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('ok'), providers: z.array(ProviderPublicStatusUiDtoSchema) }).strict(),
+  z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
+]);
+export const EmptyUiResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('ok') }).strict(),
+  z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
+]);
 
 export function createSettingsHost(
   settingsService: Pick<
@@ -115,14 +130,18 @@ export function createSettingsHost(
 ): SettingsHost {
   return {
     async get() {
-      return { settings: toSettingsUiResolved(unwrap(settingsService.getResolvedSettings())) };
+      const result = settingsService.getResolvedSettings();
+      if (result.status === 'failed') {
+        return { status: 'failed', failure: toHostFailure(result.failure) };
+      }
+      return { status: 'ok', settings: toSettingsUiResolved(result.settings) };
     },
     async update(patch) {
       const result = settingsService.updateSettings({ patch: toSettingsRawPatch(patch) });
       if (result.status === 'failed') {
-        throw new Error(result.failure.message);
+        return { status: 'failed', failure: toHostFailure(result.failure) };
       }
-      return { settings: toSettingsUiResolved(result.settings) };
+      return { status: 'ok', settings: toSettingsUiResolved(result.settings) };
     },
     async completeSetup(request) {
       const result = settingsService.completeSetup({
@@ -133,51 +152,51 @@ export function createSettingsHost(
             provider_id: request.provider.providerId,
             ...(request.provider.enabled !== undefined ? { enabled: request.provider.enabled } : {}),
             ...(request.provider.protocol ? { protocol: request.provider.protocol } : {}),
-            ...(request.provider.displayName ? { display_name: request.provider.displayName } : {}),
-            ...(request.provider.baseUrl ? { base_url: request.provider.baseUrl } : {}),
-            ...(request.provider.modelIds ? { models: request.provider.modelIds } : {}),
+            ...(request.provider.displayName !== undefined ? { display_name: request.provider.displayName } : {}),
+            ...(request.provider.baseUrl !== undefined ? { base_url: request.provider.baseUrl } : {}),
+            ...(request.provider.modelIds !== undefined ? { models: request.provider.modelIds } : {}),
             ...(request.provider.apiKey ? { api_key: request.provider.apiKey } : {}),
             ...(request.provider.apiKeyEnv !== undefined ? { api_key_env: request.provider.apiKeyEnv } : {}),
           },
         } : {}),
       });
       if (result.status === 'failed') {
-        throw new Error(result.failure.message);
+        return { status: 'failed', failure: toHostFailure(result.failure) };
       }
-      return { settings: toSettingsUiResolved(result.settings) };
+      return { status: 'ok', settings: toSettingsUiResolved(result.settings) };
     },
     async listProviders() {
       const result = settingsService.listProviderSettings();
       if (result.status === 'failed') {
-        throw new Error(result.failure.message);
+        return { status: 'failed', failure: toHostFailure(result.failure) };
       }
-      return { providers: result.providers.map(toProviderPublicStatusUiDto) };
+      return { status: 'ok', providers: result.providers.map(toProviderPublicStatusUiDto) };
     },
     async updateProvider({ providerId, ...input }) {
       const result = settingsService.updateProviderSettings({
         provider_id: providerId,
         patch: {
           ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
-          ...(input.protocol ? { protocol: input.protocol } : {}),
-          ...(input.displayName ? { display_name: input.displayName } : {}),
-          ...(input.baseUrl ? { base_url: input.baseUrl } : {}),
-          ...(input.modelIds ? { models: input.modelIds } : {}),
+          ...(input.protocol !== undefined ? { protocol: input.protocol } : {}),
+          ...(input.displayName !== undefined ? { display_name: input.displayName } : {}),
+          ...(input.baseUrl !== undefined ? { base_url: input.baseUrl } : {}),
+          ...(input.modelIds !== undefined ? { models: input.modelIds } : {}),
           ...(input.apiKeyEnv !== undefined ? { api_key_env: input.apiKeyEnv } : {}),
         },
       });
       if (result.status === 'failed') {
-        throw new Error(result.failure.message);
+        return { status: 'failed', failure: toHostFailure(result.failure) };
       }
-      return {};
+      return { status: 'ok' };
     },
     async deleteProvider(request) {
       const result = settingsService.deleteProviderSettings({
         provider_id: request.providerId,
       });
       if (result.status === 'failed') {
-        throw new Error(result.failure.message);
+        return { status: 'failed', failure: toHostFailure(result.failure) };
       }
-      return {};
+      return { status: 'ok' };
     },
     async setProviderApiKey(request) {
       const result = settingsService.setProviderApiKey({
@@ -185,27 +204,28 @@ export function createSettingsHost(
         api_key: request.apiKey,
       });
       if (result.status === 'failed') {
-        throw new Error(result.failure.message);
+        return { status: 'failed', failure: toHostFailure(result.failure) };
       }
-      return {};
+      return { status: 'ok' };
     },
     async deleteProviderApiKey(request) {
       const result = settingsService.clearProviderApiKey({
         provider_id: request.providerId,
       });
       if (result.status === 'failed') {
-        throw new Error(result.failure.message);
+        return { status: 'failed', failure: toHostFailure(result.failure) };
       }
-      return {};
+      return { status: 'ok' };
     },
   };
 }
 
-function unwrap(result: ReturnType<SettingsService['getResolvedSettings']>) {
-  if (result.status === 'failed') {
-    throw new Error(result.failure.message);
-  }
-  return result.settings;
+function toHostFailure(failure: { code?: string; message: string; retryable?: boolean }): HostFailure {
+  return {
+    code: failure.code ?? 'settings_failed',
+    message: failure.message,
+    ...(failure.retryable !== undefined ? { retryable: failure.retryable } : {}),
+  };
 }
 
 /*
@@ -278,6 +298,12 @@ export type ProviderPublicStatusUiDto = {
   apiKeyEnvCustomized?: boolean;
 };
 
+export type HostFailure = {
+  code: string;
+  message: string;
+  retryable?: boolean;
+};
+
 export type ProviderSettingsUiPatch = {
   enabled?: boolean;
   protocol?: 'openai-compatible' | 'anthropic';
@@ -303,19 +329,17 @@ export type SettingsCompleteSetupUiRequest = {
 };
 
 export interface SettingsGetUiRequest {}
-export interface SettingsGetUiResult {
-  settings: SettingsUiResolved;
-}
+export type SettingsGetUiResult =
+  | { status: 'ok'; settings: SettingsUiResolved }
+  | { status: 'failed'; failure: HostFailure };
 
 export type SettingsUpdateUiRequest = SettingsUiRaw;
-export interface SettingsUpdateUiResult {
-  settings: SettingsUiResolved;
-}
+export type SettingsUpdateUiResult = SettingsGetUiResult;
 
 export interface ProviderListUiRequest {}
-export interface ProviderListUiResult {
-  providers: ProviderPublicStatusUiDto[];
-}
+export type ProviderListUiResult =
+  | { status: 'ok'; providers: ProviderPublicStatusUiDto[] }
+  | { status: 'failed'; failure: HostFailure };
 
 export interface ProviderUpdateUiRequest {
   providerId: string;
@@ -340,7 +364,9 @@ export interface ProviderDeleteUiRequest {
   providerId: string;
 }
 
-export interface EmptyUiResult {}
+export type EmptyUiResult =
+  | { status: 'ok' }
+  | { status: 'failed'; failure: HostFailure };
 
 export type SettingsGetPayload = SettingsGetUiRequest;
 export type SettingsUpdatePayload = SettingsUpdateUiRequest;
@@ -375,10 +401,10 @@ export function toSettingsRawPatch(patch: SettingsUiRaw): SettingsRaw {
         providerId,
         {
           ...(provider.enabled !== undefined ? { enabled: provider.enabled } : {}),
-          ...(provider.protocol ? { protocol: provider.protocol } : {}),
-          ...(provider.displayName ? { display_name: provider.displayName } : {}),
-          ...(provider.baseUrl ? { base_url: provider.baseUrl } : {}),
-          ...(provider.models ? { models: provider.models } : {}),
+          ...(provider.protocol !== undefined ? { protocol: provider.protocol } : {}),
+          ...(provider.displayName !== undefined ? { display_name: provider.displayName } : {}),
+          ...(provider.baseUrl !== undefined ? { base_url: provider.baseUrl } : {}),
+          ...(provider.models !== undefined ? { models: provider.models } : {}),
           ...(provider.apiKeyEnv !== undefined ? { api_key_env: provider.apiKeyEnv } : {}),
         },
       ])),

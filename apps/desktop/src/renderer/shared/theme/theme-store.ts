@@ -20,7 +20,7 @@ export const useThemeStore = create<ThemeState>((set) => ({
     const result = await window.megumi.settings.get(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {}),
     );
-    if (result.ok) {
+    if (result.ok && result.data.status === 'ok') {
       set({ theme: result.data.settings.theme });
     }
   },
@@ -32,7 +32,7 @@ export const useThemeStore = create<ThemeState>((set) => ({
     const result = await window.megumi.settings.update(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.update, { theme }),
     );
-    if (result.ok) {
+    if (result.ok && result.data.status === 'ok') {
       set({ theme: result.data.settings.theme });
     }
   },
