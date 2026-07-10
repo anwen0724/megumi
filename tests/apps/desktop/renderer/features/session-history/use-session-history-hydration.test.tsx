@@ -112,6 +112,33 @@ describe('useSessionHistoryHydration', () => {
       configurable: true,
       value: {
         session: {
+          hydration: {
+            get: vi.fn().mockResolvedValue({
+              ok: true,
+              data: {
+                messages: committedTimelineMessages(),
+                diagnostics: [],
+                runs: [{
+                  runId: 'run-1',
+                  sessionId: 'session-1',
+                  status: 'completed',
+                  createdAt,
+                  completedAt: '2026-05-17T00:00:10.000Z',
+                }],
+                runtimeEvents: [
+                  runtimeEvent('run.started', 1, { runKind: 'agent' }),
+                  runtimeEvent('model.thinking.started', 2, { modelStepId: 'thinking-1' }),
+                  runtimeEvent('model.thinking.delta', 3, { modelStepId: 'thinking-1', delta: 'Need greet.' }),
+                  runtimeEvent('model.thinking.completed', 4, { modelStepId: 'thinking-1' }),
+                  runtimeEvent('model_call.text_delta', 5, {
+                    modelCallId: 'model-call-1',
+                    delta: 'Duplicate replay text.',
+                  }),
+                  runtimeEvent('run.completed', 6, {}),
+                ],
+              },
+            }),
+          },
           timeline: {
             list: vi.fn().mockResolvedValue({
               ok: true,
@@ -189,8 +216,9 @@ describe('useSessionHistoryHydration', () => {
       status: 'completed',
       text: '你好，我是 Megumi。',
     });
-    expect(window.megumi.run.listBySession).toHaveBeenCalledTimes(1);
-    expect(window.megumi.run.events.list).toHaveBeenCalledTimes(1);
+    expect(window.megumi.session.hydration.get).toHaveBeenCalledTimes(1);
+    expect(window.megumi.run.listBySession).not.toHaveBeenCalled();
+    expect(window.megumi.run.events.list).not.toHaveBeenCalled();
   });
 
   it('rebuilds the session timeline idempotently when the same session is hydrated again', async () => {
@@ -219,13 +247,14 @@ describe('useSessionHistoryHydration', () => {
       kind: 'answer_text',
       text: '你好，我是 Megumi。',
     });
-    expect(window.megumi.run.listBySession).toHaveBeenCalledTimes(2);
-    expect(window.megumi.run.events.list).toHaveBeenCalledTimes(2);
+    expect(window.megumi.session.hydration.get).toHaveBeenCalledTimes(1);
+    expect(window.megumi.run.listBySession).not.toHaveBeenCalled();
+    expect(window.megumi.run.events.list).not.toHaveBeenCalled();
   });
 
   it('does not publish a partial committed-only timeline before runtime events are loaded', async () => {
-    const runsDeferred = deferred<unknown>();
-    window.megumi.run.listBySession = vi.fn().mockReturnValue(runsDeferred.promise);
+    const hydrationDeferred = deferred<unknown>();
+    window.megumi.session.hydration.get = vi.fn().mockReturnValue(hydrationDeferred.promise);
     const { result } = renderHook(() => useSessionHistoryHydration());
 
     const hydratePromise = result.current.hydrateSessionTimeline('session-1');
@@ -233,9 +262,11 @@ describe('useSessionHistoryHydration', () => {
 
     expect(useRuntimeTimelineStore.getState().sessions['project-1:session-1']).toBeUndefined();
 
-    runsDeferred.resolve({
+    hydrationDeferred.resolve({
       ok: true,
       data: {
+        messages: committedTimelineMessages(),
+        diagnostics: [],
         runs: [{
           runId: 'run-1',
           sessionId: 'session-1',
@@ -243,6 +274,12 @@ describe('useSessionHistoryHydration', () => {
           createdAt,
           completedAt: '2026-05-17T00:00:10.000Z',
         }],
+        runtimeEvents: [
+          runtimeEvent('run.started', 1, { runKind: 'agent' }),
+          runtimeEvent('model.thinking.started', 2, { modelStepId: 'thinking-1' }),
+          runtimeEvent('model.thinking.delta', 3, { modelStepId: 'thinking-1', delta: 'Need greet.' }),
+          runtimeEvent('model.thinking.completed', 4, { modelStepId: 'thinking-1' }),
+        ],
       },
     });
 
@@ -262,5 +299,42 @@ describe('useSessionHistoryHydration', () => {
         text: 'Need greet.',
       }),
     ]);
+  });
+
+  it('skips host hydration when the session timeline cache is fresh', async () => {
+    useRuntimeTimelineStore.getState().markSessionTimelineHydrated('project-1', 'session-1', createdAt);
+    const { result } = renderHook(() => useSessionHistoryHydration());
+
+    await act(async () => {
+      await result.current.hydrateSessionTimeline('session-1');
+    });
+
+    expect(window.megumi.session.hydration.get).not.toHaveBeenCalled();
+  });
+
+  it('deduplicates concurrent hydration requests for the same session', async () => {
+    const hydrationDeferred = deferred<unknown>();
+    window.megumi.session.hydration.get = vi.fn().mockReturnValue(hydrationDeferred.promise);
+    const { result } = renderHook(() => useSessionHistoryHydration());
+
+    const first = result.current.hydrateSessionTimeline('session-1');
+    const second = result.current.hydrateSessionTimeline('session-1');
+
+    expect(window.megumi.session.hydration.get).toHaveBeenCalledTimes(1);
+
+    hydrationDeferred.resolve({
+      ok: true,
+      data: {
+        messages: committedTimelineMessages(),
+        diagnostics: [],
+        runs: [],
+        runtimeEvents: [],
+      },
+    });
+
+    await act(async () => {
+      await first;
+      await second;
+    });
   });
 });

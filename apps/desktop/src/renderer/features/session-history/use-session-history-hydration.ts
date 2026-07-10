@@ -8,7 +8,7 @@ import { useProjectStore } from '../../entities/project/store';
 import { useRunStore } from '../../entities/run/store';
 import { useSessionStore } from '../../entities/session/store';
 import { useToolCallStore } from '../../entities/tool-call';
-import { useRuntimeTimelineStore } from '../runtime-timeline';
+import { runtimeTimelineSessionKey, useRuntimeTimelineStore } from '../runtime-timeline';
 import { dispatchRuntimeEvent } from '.././runtime-events/runtime-event-dispatcher';
 import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../shared/ipc';
 import {
@@ -16,15 +16,16 @@ import {
   localSessionFromPersistedSession,
 } from './session-history-mappers';
 
-async function loadHydrationRuntimeEvents(runs: ChatRunUiDto[]): Promise<Record<string, RuntimeEvent[]>> {
-  const pairs = await Promise.all(runs.map(async (run) => {
-    const result = await window.megumi.run.events.list(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.runEventsList, { runId: run.runId }),
-    );
-    return [run.runId, result.ok ? result.data.events : []] as const;
-  }));
+const inFlightHydrations = new Map<string, Promise<void>>();
 
-  return Object.fromEntries(pairs);
+function runtimeEventsByRun(runs: ChatRunUiDto[], runtimeEvents: RuntimeEvent[]): Record<string, RuntimeEvent[]> {
+  const eventsByRun = Object.fromEntries(runs.map((run) => [run.runId, [] as RuntimeEvent[]]));
+  for (const event of runtimeEvents) {
+    if (event.runId && eventsByRun[event.runId]) {
+      eventsByRun[event.runId].push(event);
+    }
+  }
+  return eventsByRun;
 }
 
 function resetHydratedRunProjection(): void {
@@ -65,7 +66,7 @@ export function useSessionHistoryHydration() {
     }
   }, []);
 
-  const hydrateSessionTimeline = useCallback(async (sessionId: string) => {
+  const hydrateSessionTimeline = useCallback(async (sessionId: string, options?: { force?: boolean }) => {
     const sessionState = useSessionStore.getState();
     if (sessionState.activeSessionId !== sessionId) {
       return;
@@ -76,53 +77,26 @@ export function useSessionHistoryHydration() {
       return;
     }
     const projectId = activeSession.projectId;
+    const sessionUpdatedAt = activeSession.updatedAt;
+    const hydrationKey = runtimeTimelineSessionKey(projectId, sessionId);
+    const timelineStore = useRuntimeTimelineStore.getState();
 
-    const timelineResult = await window.megumi.session.timeline.list(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.sessionTimelineList, {
-        projectId,
-        sessionId,
-      }),
-    );
-
-    if (!activeHydrationTarget(sessionId, projectId)) {
+    if (!options?.force && timelineStore.isSessionTimelineFresh(projectId, sessionId, sessionUpdatedAt)) {
       return;
     }
 
-    if (!timelineResult.ok) {
-      useChatUiStore.getState().setLastError(getRuntimeIpcErrorMessage(timelineResult));
+    const existing = inFlightHydrations.get(hydrationKey);
+    if (existing) {
+      await existing;
       return;
     }
 
-    useChatUiStore.getState().setLastError(null);
-
-    const runsResult = await window.megumi.run.listBySession(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.runListBySession, { sessionId }),
-    );
-
-    if (!activeHydrationTarget(sessionId, projectId)) {
-      return;
-    }
-
-    if (!runsResult.ok) {
-      useChatUiStore.getState().setLastError(getRuntimeIpcErrorMessage(runsResult));
-      return;
-    }
-
-    const eventsByRun = await loadHydrationRuntimeEvents(runsResult.data.runs);
-    if (!activeHydrationTarget(sessionId, projectId)) {
-      return;
-    }
-
-    resetHydratedRunProjection();
-    const runtimeEvents = hydratedRuntimeEventsForRuns(runsResult.data.runs, eventsByRun);
-    useRuntimeTimelineStore.getState().hydrateSessionTimeline(
-      projectId,
-      sessionId,
-      timelineResult.data.messages,
-      runtimeEvents,
-    );
-    for (const event of runtimeEvents) {
-      dispatchRuntimeEvent(event, { sessionId, projectTimeline: false });
+    const hydration = hydrateSessionTimelineFromHost({ projectId, sessionId, sessionUpdatedAt });
+    inFlightHydrations.set(hydrationKey, hydration);
+    try {
+      await hydration;
+    } finally {
+      inFlightHydrations.delete(hydrationKey);
     }
   }, []);
 
@@ -130,4 +104,53 @@ export function useSessionHistoryHydration() {
     hydrateSessions,
     hydrateSessionTimeline,
   };
+}
+
+async function hydrateSessionTimelineFromHost(input: {
+  projectId: string;
+  sessionId: string;
+  sessionUpdatedAt: string;
+}): Promise<void> {
+  const { projectId, sessionId, sessionUpdatedAt } = input;
+  useRuntimeTimelineStore.getState().markSessionTimelineHydrating(projectId, sessionId, sessionUpdatedAt);
+
+  const hydrationResult = await window.megumi.session.hydration.get(
+    createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.sessionHydrationGet, {
+      projectId,
+      sessionId,
+    }),
+  );
+
+  if (!activeHydrationTarget(sessionId, projectId)) {
+    return;
+  }
+
+  if (!hydrationResult.ok) {
+    const message = getRuntimeIpcErrorMessage(hydrationResult);
+    useRuntimeTimelineStore.getState().markSessionTimelineHydrationFailed(
+      projectId,
+      sessionId,
+      sessionUpdatedAt,
+      message,
+    );
+    useChatUiStore.getState().setLastError(message);
+    return;
+  }
+
+  useChatUiStore.getState().setLastError(null);
+  resetHydratedRunProjection();
+  const runtimeEvents = hydratedRuntimeEventsForRuns(
+    hydrationResult.data.runs,
+    runtimeEventsByRun(hydrationResult.data.runs, hydrationResult.data.runtimeEvents),
+  );
+  useRuntimeTimelineStore.getState().hydrateSessionTimeline(
+    projectId,
+    sessionId,
+    hydrationResult.data.messages,
+    runtimeEvents,
+  );
+  for (const event of runtimeEvents) {
+    dispatchRuntimeEvent(event, { sessionId, projectTimeline: false });
+  }
+  useRuntimeTimelineStore.getState().markSessionTimelineHydrated(projectId, sessionId, sessionUpdatedAt);
 }

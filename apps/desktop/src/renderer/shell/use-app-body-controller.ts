@@ -61,7 +61,7 @@ export function useAppBodyController() {
     startNewSessionDraft(currentProject.id);
   }, [currentProject, startNewSessionDraft]);
 
-  const handleSelectSession = useCallback(async (sessionId: string) => {
+  const handleSelectSession = useCallback((sessionId: string) => {
     if (sessionId === activeSessionId) {
       setSettingsOpen(false);
       return;
@@ -77,7 +77,7 @@ export function useAppBodyController() {
     }
     setSettingsOpen(false);
     setActiveSession(sessionId);
-    await hydrateSessionTimeline(sessionId);
+    void hydrateSessionTimeline(sessionId);
   }, [activeSessionId, currentProjectId, hydrateSessionTimeline, sessions, setActiveSession]);
 
   const handleUseExistingProject = useCallback(() => {
