@@ -70,8 +70,8 @@ describe('composeCodingAgentRuntime trace wiring', () => {
     });
 
     try {
-      expect(secondRuntime.compatibility.listRuntimeEventsByRun).toBeDefined();
-      expect(secondRuntime.compatibility.listRuntimeEventsByRun!(runId).map((event) => event.eventType))
+      expect(secondRuntime.agentRunQueries.listRuntimeEventsByRun).toBeDefined();
+      expect(secondRuntime.agentRunQueries.listRuntimeEventsByRun(runId).map((event) => event.eventType))
         .toEqual(expect.arrayContaining([
           'run.started',
           'model_call.started',
@@ -147,8 +147,8 @@ describe('composeCodingAgentRuntime trace wiring', () => {
     });
 
     try {
-      expect(runtime.compatibility.listRunsBySession('session-1')[0]?.status).toBe('cancelled');
-      expect(runtime.compatibility.listRuntimeEventsByRun!('run-waiting').map((event) => event.eventType)).toEqual([
+      expect(runtime.agentRunQueries.listRunsBySession('session-1')[0]?.status).toBe('cancelled');
+      expect(runtime.agentRunQueries.listRuntimeEventsByRun('run-waiting').map((event) => event.eventType)).toEqual([
         'approval.resolved',
         'run.cancelled',
       ]);

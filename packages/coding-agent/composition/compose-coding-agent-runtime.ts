@@ -9,14 +9,14 @@ import {
   createAgentRunService,
   createAgentRunTraceFileLogger,
   createModelCallService,
-  type AgentRun,
+  type AgentRunQueries,
   type AgentRunService,
   type ModelCallService,
 } from '../agent-run';
 import { createAgentRunRepository, type AgentRunRepository } from '../agent-run/repositories/agent-run-repository';
 import { createCommandService, type CommandService, type SkillCommandDescriptor } from '../commands';
 import { createInputService, type InputService } from '../input';
-import { createSessionService, type SessionMessageWithAttachments, type SessionService } from '../session';
+import { createSessionService, type SessionService } from '../session';
 import { SessionRepository as SessionV2Repository } from '../session/repositories/session-repository';
 import {
   createCodingAgentHostInterface,
@@ -26,13 +26,12 @@ import {
   createSkillController,
   createWorkspaceController,
   type CodingAgentHostInterface,
-  type ChatControllerCompatibilityQueries,
   type DirectoryPickerPort,
   type SessionBranchControllerServicePort,
 } from '../host-interface';
 import { createArtifactController } from '../host-interface/artifacts/artifact-controller';
 import { createPlanController } from '../host-interface/artifacts/plan-controller';
-import type { RuntimeLogger } from '../host-interface/runtime-logger';
+import type { RuntimeLogger } from './runtime-logger';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
 import {
   composeCodingAgentToolExecutionService,
@@ -72,7 +71,10 @@ import {
   type AssistantStreamEvent,
 } from '@megumi/ai';
 import type { RuntimeEvent } from '../events';
-import type { TimelineMessage } from '../projections/timeline';
+import {
+  createSessionTimelineQuery,
+  type SessionTimelineQuery,
+} from '../projections/timeline';
 import {
   createWorkspaceChangeFooterProjectorService,
   type WorkspaceChangeFooterProjectorService,
@@ -135,11 +137,8 @@ export interface CodingAgentRuntime {
   planArtifactService: PlanArtifactService;
   contextRuntime: ReturnType<typeof composeCodingAgentContext>;
   sessionBranchService: SessionBranchControllerServicePort;
-  compatibility: ChatControllerCompatibilityQueries & {
-    listWorkspaceIds(): string[];
-    listTimelineMessagesBySession(payload: Parameters<ChatControllerCompatibilityQueries['listTimelineMessagesBySession']>[0]): ReturnType<ChatControllerCompatibilityQueries['listTimelineMessagesBySession']>;
-    listRunsBySession(sessionId: string): AgentRun[];
-  };
+  agentRunQueries: AgentRunQueries;
+  sessionTimelineQuery: SessionTimelineQuery;
   dispose(): void;
 }
 
@@ -209,6 +208,14 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     options.workspaceChangeFooterProjector,
     workspaceChangeService,
   );
+  const agentRunQueries: AgentRunQueries = {
+    listRunsBySession: (sessionId) => agentRunRepository.listRunsBySession(sessionId),
+    listRuntimeEventsByRun: (runId) => agentRunRepository.listRuntimeEventsByRun(runId),
+  };
+  const sessionTimelineQuery = createSessionTimelineQuery({
+    sessionService,
+    workspaceChangeFooterProjector,
+  });
   const permissionService = createPermissionService({
     settings_service: {
       addPermissionRule(request) {
@@ -350,16 +357,8 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     planArtifactService,
     contextRuntime,
     sessionBranchService: createUnsupportedSessionBranchService(),
-    compatibility: {
-      listWorkspaceIds: () => workspaceRepository.listWorkspaces().map((workspace) => workspace.workspace_id),
-      listTimelineMessagesBySession: (payload) => listSessionTimelineMessages(
-        sessionService,
-        workspaceChangeFooterProjector,
-        payload,
-      ),
-      listRunsBySession: (sessionId) => agentRunRepository.listRunsBySession(sessionId),
-      listRuntimeEventsByRun: (runId) => agentRunRepository.listRuntimeEventsByRun(runId),
-    },
+    agentRunQueries,
+    sessionTimelineQuery,
     dispose: () => persistence.database.close(),
   };
 }
@@ -390,8 +389,10 @@ export function composeCodingAgentHostInterface(
       agentRunService: runtime.agentRunService,
       commandService: runtime.commandService,
       sessionService: runtime.sessionService,
+      workspaceService: runtime.workspaceService,
       branchService: runtime.sessionBranchService,
-      compatibility: runtime.compatibility,
+      sessionTimelineQuery: runtime.sessionTimelineQuery,
+      agentRunQueries: runtime.agentRunQueries,
       contextUsageMonitor: runtime.contextRuntime.contextUsageMonitor,
       contextUsageWindowProvider: ({ modelId }) => createContextUsageWindow({ modelId }),
     }),
@@ -607,83 +608,6 @@ function createContextSummaryModelCallPort(input: {
       };
     },
   };
-}
-
-function listSessionTimelineMessages(
-  sessionService: SessionService,
-  workspaceChangeFooterProjector: WorkspaceChangeFooterProjectorService,
-  payload: Parameters<CodingAgentRuntime['compatibility']['listTimelineMessagesBySession']>[0],
-): ReturnType<CodingAgentRuntime['compatibility']['listTimelineMessagesBySession']> {
-  const result = sessionService.listMessages({
-    session_id: payload.sessionId,
-    active_path_only: true,
-  });
-  if (result.status === 'failed') {
-    return { messages: [], diagnostics: [] };
-  }
-
-  return {
-    messages: projectSessionTimelineMessages({
-      projectId: payload.projectId,
-      messages: result.messages,
-      workspaceChangeFooterProjector,
-    }),
-    diagnostics: [],
-  };
-}
-
-export function projectSessionTimelineMessages(input: {
-  projectId: string;
-  messages: SessionMessageWithAttachments[];
-  workspaceChangeFooterProjector?: Pick<WorkspaceChangeFooterProjectorService, 'projectRunFooter'>;
-}): TimelineMessage[] {
-  return input.messages.map((item): TimelineMessage => {
-      const message = item.message;
-      const createdAt = message.created_at;
-      if (message.role === 'assistant') {
-        const runId = message.run_id ?? `run:${message.message_id}`;
-        const workspaceChangeFooter = input.workspaceChangeFooterProjector?.projectRunFooter(runId);
-        return {
-          messageId: message.message_id,
-          role: 'assistant',
-          projectId: input.projectId,
-          sessionId: message.session_id,
-          runId,
-          createdAt,
-          ...(message.completed_at ? { updatedAt: message.completed_at } : {}),
-          ...(workspaceChangeFooter ? { workspaceChangeFooter } : {}),
-          blocks: [{
-            blockId: `answer:${message.message_id}`,
-            kind: 'answer_text',
-            runId,
-            textId: `text:${message.message_id}`,
-            status: 'completed',
-            text: message.content_text,
-            format: 'markdown',
-            createdAt,
-            ...(message.completed_at ? { updatedAt: message.completed_at } : {}),
-          }],
-        };
-      }
-
-      return {
-        messageId: message.message_id,
-        role: 'user',
-        projectId: input.projectId,
-        sessionId: message.session_id,
-        ...(message.run_id ? { runId: message.run_id } : {}),
-        createdAt,
-        ...(message.completed_at ? { updatedAt: message.completed_at } : {}),
-        blocks: [{
-          blockId: `user-text:${message.message_id}`,
-          kind: 'user_text',
-          text: message.content_text,
-          format: 'plain',
-          createdAt,
-          ...(message.completed_at ? { updatedAt: message.completed_at } : {}),
-        }],
-      };
-    });
 }
 
 export function finalizeWorkspaceChangesForTerminalRunEvent(input: {

@@ -19,9 +19,13 @@ function createController(input: {
       createBranchDraft: vi.fn() as never,
       cancelBranchDraft: vi.fn() as never,
     },
-    compatibility: {
-      listWorkspaceIds: () => [],
-      listTimelineMessagesBySession: vi.fn() as never,
+    workspaceService: {
+      listWorkspaces: async () => ({ workspaces: [] }),
+    },
+    sessionTimelineQuery: {
+      listSessionTimeline: vi.fn() as never,
+    },
+    agentRunQueries: {
       listRunsBySession: () => [],
       listRuntimeEventsByRun: () => [],
     },

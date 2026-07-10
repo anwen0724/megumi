@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   finalizeWorkspaceChangesForTerminalRunEvent,
-  projectSessionTimelineMessages,
 } from '@megumi/coding-agent/composition/compose-coding-agent-runtime';
+import {
+  createSessionTimelineQuery,
+  projectSessionTimelineMessages,
+} from '@megumi/coding-agent/projections/timeline';
 import type { AgentRun } from '@megumi/coding-agent/agent-run';
 import type { RuntimeEvent } from '@megumi/coding-agent/events';
 import type { SessionMessageWithAttachments } from '@megumi/coding-agent/session';
@@ -51,6 +54,41 @@ describe('projectSessionTimelineMessages', () => {
           }],
         }],
       },
+    });
+  });
+});
+
+describe('createSessionTimelineQuery', () => {
+  it('loads the active Session path and returns a Timeline projection', () => {
+    const listMessages = vi.fn(() => ({
+      status: 'ok' as const,
+      messages: [sessionMessage({
+        message_id: 'user-message-1',
+        role: 'user',
+        content_text: 'hello',
+      })],
+    }));
+    const query = createSessionTimelineQuery({
+      sessionService: { listMessages },
+    });
+
+    const result = query.listSessionTimeline({
+      workspace_id: 'workspace-1',
+      session_id: 'session-1',
+    });
+
+    expect(listMessages).toHaveBeenCalledWith({
+      session_id: 'session-1',
+      active_path_only: true,
+    });
+    expect(result).toMatchObject({
+      diagnostics: [],
+      messages: [{
+        messageId: 'user-message-1',
+        projectId: 'workspace-1',
+        sessionId: 'session-1',
+        role: 'user',
+      }],
     });
   });
 });

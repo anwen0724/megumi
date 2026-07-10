@@ -3,3 +3,4 @@ export * from './compose-coding-agent-persistence';
 export * from './compose-coding-agent-tool-runtime';
 export * from './compose-coding-agent-memory';
 export * from './compose-coding-agent-runtime';
+export * from './runtime-logger';

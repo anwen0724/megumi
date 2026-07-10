@@ -10,7 +10,7 @@ import {
 import { MemoryDiagnosticWriter } from '../adapters/local/memory/memory-diagnostic-writer.service';
 import { MemoryMarkdownSyncService } from '../adapters/local/memory/memory-markdown-sync.service';
 import { createNodeMemoryRuntimeFileSystem } from '../adapters/local/memory/memory-runtime-file-system';
-import type { RuntimeLogger } from '../host-interface/runtime-logger';
+import type { RuntimeLogger } from './runtime-logger';
 import type { MemorySettingsPort } from '../settings';
 
 export interface ComposeCodingAgentMemoryOptions {

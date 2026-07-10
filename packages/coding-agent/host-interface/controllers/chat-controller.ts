@@ -1,7 +1,7 @@
 /*
  * Host chat controller. It maps UI chat requests to Coding Agent services and returns UI DTOs.
  */
-import type { AgentRun, AgentRunService, StartRunResult } from '../../agent-run';
+import type { AgentRunQueries, AgentRunService, StartRunResult } from '../../agent-run';
 import type { CommandService } from '../../commands';
 import type {
   ContextUsageWindow,
@@ -10,6 +10,8 @@ import type {
   StartContextUsageMonitorResult,
 } from '../../context';
 import type { Session, SessionMessageWithAttachments, SessionService } from '../../session';
+import type { SessionTimelineQuery } from '../../projections/timeline';
+import type { WorkspaceService } from '../../workspace';
 import {
   toChatMessageUiDto,
   toChatRunUiDto,
@@ -57,13 +59,6 @@ export interface ChatController {
   getContextUsage(request: ChatGetContextUsageUiRequest): Promise<ChatGetContextUsageUiResult>;
 }
 
-export interface ChatControllerCompatibilityQueries {
-  listWorkspaceIds(): string[];
-  listTimelineMessagesBySession(payload: ChatListTimelineUiRequest): ChatListTimelineUiResult;
-  listRunsBySession(sessionId: string): AgentRun[];
-  listRuntimeEventsByRun?(runId: string): ChatListRunEventsUiResult['events'];
-}
-
 export interface SessionBranchControllerServicePort {
   createBranchDraft(input: ChatCreateBranchDraftUiRequest): ChatCreateBranchDraftUiResult;
   cancelBranchDraft(input: ChatCancelBranchDraftUiRequest): ChatCancelBranchDraftUiResult;
@@ -83,8 +78,10 @@ export function createChatController(options: {
   agentRunService: Pick<AgentRunService, 'startRun' | 'cancelRun'>;
   commandService: Pick<CommandService, 'getCommandSuggestions'>;
   sessionService: SessionService;
+  workspaceService: Pick<WorkspaceService, 'listWorkspaces'>;
   branchService: SessionBranchControllerServicePort;
-  compatibility: ChatControllerCompatibilityQueries;
+  sessionTimelineQuery: SessionTimelineQuery;
+  agentRunQueries: AgentRunQueries;
   contextUsageMonitor?: ChatContextUsageMonitorPort;
   contextUsageWindowProvider?: (request: { sessionId: string; projectId?: string; modelId?: string }) => ContextUsageWindow;
 }): ChatController {
@@ -104,8 +101,9 @@ export function createChatController(options: {
 
     async listSessions() {
       const sessions: Session[] = [];
-      for (const workspaceId of options.compatibility.listWorkspaceIds()) {
-        const result = options.sessionService.listSessions({ workspace_id: workspaceId });
+      const workspaces = await options.workspaceService.listWorkspaces();
+      for (const workspace of workspaces.workspaces) {
+        const result = options.sessionService.listSessions({ workspace_id: workspace.workspace_id });
         if (result.status === 'failed') {
           throw new Error(result.failure.message);
         }
@@ -126,7 +124,10 @@ export function createChatController(options: {
     },
 
     async listTimeline(request) {
-      return options.compatibility.listTimelineMessagesBySession(request);
+      return options.sessionTimelineQuery.listSessionTimeline({
+        workspace_id: request.projectId,
+        session_id: request.sessionId,
+      });
     },
 
     async sendUserInput(request) {
@@ -169,11 +170,11 @@ export function createChatController(options: {
     },
 
     async listRuns(request) {
-      return { runs: options.compatibility.listRunsBySession(request.sessionId).map(toChatRunUiDto) };
+      return { runs: options.agentRunQueries.listRunsBySession(request.sessionId).map(toChatRunUiDto) };
     },
 
     async listRunEvents(request) {
-      return { events: options.compatibility.listRuntimeEventsByRun?.(request.runId) ?? [] };
+      return { events: options.agentRunQueries.listRuntimeEventsByRun(request.runId) };
     },
 
     async getContextUsage(request) {
