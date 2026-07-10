@@ -64,11 +64,39 @@ describe('Product Host runtime schemas', () => {
   });
 
   it('validates Approval result payloads and rejects non-serializable details', () => {
+    expect(ApprovalResolvePayloadSchema.safeParse({
+      approvalRequestId: 'approval:1',
+      decision: 'approved',
+      scope: 'once',
+      decidedAt: '2026-07-09T00:00:00.000Z',
+    }).success).toBe(false);
+
     const failure = {
       status: 'failed', approvalRequestId: 'approval:1',
       failure: { code: 'approval_failed', message: 'failed', retryable: false },
     };
     expect(ApprovalResolveResultSchema.safeParse(failure).success).toBe(true);
+    expect(ApprovalResolveResultSchema.safeParse({
+      status: 'resolved',
+      approvalRequestId: 'approval:1',
+    }).success).toBe(true);
+    expect(ApprovalResolveResultSchema.safeParse({
+      status: 'resolved',
+      data: {
+        approval: {
+          approvalRecordId: 'approval-record:fake',
+          approvalRequestId: 'approval:1',
+          toolCallId: 'unknown',
+          toolExecutionId: 'unknown',
+          runId: 'unknown',
+          stepId: 'unknown',
+          decision: 'approved',
+          scope: 'once',
+          decidedBy: 'user',
+          decidedAt: '2026-07-09T00:00:00.000Z',
+        },
+      },
+    }).success).toBe(false);
     expect(ApprovalResolveResultSchema.safeParse({
       ...failure,
       failure: { ...failure.failure, details: { callback: () => undefined } },

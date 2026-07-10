@@ -1,7 +1,7 @@
 import { ipcRenderer } from 'electron';
 import { generateRuntimeDebugId, type RuntimeEvent } from '@megumi/product/host-interface';
 import type {
-  ApprovalResolveData,
+  ApprovalHostResult,
   ChatCancelBranchDraftUiResult,
   ChatCancelUserInputUiResult,
   ChatCreateBranchDraftUiResult,
@@ -254,7 +254,7 @@ export const api = {
   approval: {
     resolve: (
       request: BusinessRequest<ApprovalResolvePayload, typeof IPC_CHANNELS.approval.resolve>,
-    ): Promise<RuntimeIpcResult<ApprovalResolveData, typeof IPC_CHANNELS.approval.resolve>> =>
+    ): Promise<RuntimeIpcResult<ApprovalHostResult, typeof IPC_CHANNELS.approval.resolve>> =>
       invokeRuntimeIpc(IPC_CHANNELS.approval.resolve, request),
   },
   project: {

@@ -38,7 +38,6 @@ function approvalRequest(): RuntimeIpcRequest<ApprovalResolvePayload, typeof IPC
       approvalRequestId: 'approval-1',
       decision: 'approved',
       scope: 'once',
-      decidedAt: '2026-07-09T00:00:00.000Z',
     },
     meta: {
       channel: IPC_CHANNELS.approval.resolve,
@@ -114,20 +113,7 @@ describe('registerApprovalHandlers', () => {
           resolve: vi.fn(async () => ({
             payload: {
               status: 'resolved' as const,
-              data: {
-                approval: {
-                  approvalRecordId: 'approval-record-1',
-                  approvalRequestId: 'approval-1',
-                  toolCallId: 'tool-call-1',
-                  toolExecutionId: 'tool-call-1',
-                  runId: 'run-1',
-                  stepId: 'unknown',
-                  decision: 'approved' as const,
-                  scope: 'once' as const,
-                  decidedBy: 'user' as const,
-                  decidedAt: '2026-07-09T00:00:00.000Z',
-                },
-              },
+              approvalRequestId: 'approval-1',
             },
             events: events(),
           })),
@@ -151,12 +137,7 @@ describe('registerApprovalHandlers', () => {
       ok: true,
       data: {
         status: 'resolved',
-        data: {
-          approval: {
-            approvalRequestId: 'approval-1',
-            decision: 'approved',
-          },
-        },
+        approvalRequestId: 'approval-1',
       },
     });
     expect(forwardRuntimeEvents).not.toHaveBeenCalled();

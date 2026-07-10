@@ -17,7 +17,7 @@ export interface ApprovalHost {
 
 export const ApprovalResolvePayloadSchema = z.object({
   approvalRequestId: z.string().min(1), decision: z.enum(['approved', 'denied']), scope: z.enum(['once', 'session']),
-  reason: z.string().min(1).optional(), decidedAt: z.string().datetime(),
+  reason: z.string().min(1).optional(),
 }).strict();
 const JsonValueSchema: z.ZodType<unknown> = z.lazy(() => z.union([
   z.string(), z.number(), z.boolean(), z.null(), z.array(JsonValueSchema), z.record(z.string(), JsonValueSchema),
@@ -30,16 +30,8 @@ const AgentRunFailureSchema = z.object({
   ]),
   message: z.string(), retryable: z.boolean().optional(), details: z.record(z.string(), JsonValueSchema).optional(),
 }).strict();
-const ApprovalResolveDataSchema = z.object({
-  approval: z.object({
-    approvalRecordId: z.string().min(1), approvalRequestId: z.string().min(1), toolCallId: z.string().min(1),
-    toolExecutionId: z.string().min(1), runId: z.string().min(1), stepId: z.string().min(1),
-    decision: z.enum(['approved', 'denied']), scope: z.enum(['once', 'session']), decidedBy: z.literal('user'),
-    reason: z.string().optional(), decidedAt: z.string().datetime(),
-  }).strict(),
-}).strict();
 export const ApprovalResolveResultSchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('resolved'), data: ApprovalResolveDataSchema }).strict(),
+  z.object({ status: z.literal('resolved'), approvalRequestId: z.string().min(1) }).strict(),
   z.object({
     status: z.literal('failed'), approvalRequestId: z.string().min(1), failure: AgentRunFailureSchema,
   }).strict(),
@@ -70,21 +62,7 @@ export function createApprovalHost(
       return {
         payload: {
           status: 'resolved',
-          data: {
-            approval: {
-              approvalRecordId: `approval-record:${crypto.randomUUID()}`,
-              approvalRequestId: request.approvalRequestId,
-              toolCallId: 'unknown',
-              toolExecutionId: 'unknown',
-              runId: 'unknown',
-              stepId: 'unknown',
-              decision: request.decision,
-              scope: request.scope,
-              decidedBy: 'user',
-              ...(request.reason ? { reason: request.reason } : {}),
-              decidedAt: request.decidedAt,
-            },
-          },
+          approvalRequestId: request.approvalRequestId,
         },
         events: result.events,
       };
@@ -122,28 +100,11 @@ export interface ApprovalResolvePayload {
   decision: 'approved' | 'denied';
   scope: 'once' | 'session';
   reason?: string;
-  decidedAt: string;
-}
-
-export interface ApprovalResolveData {
-  approval: {
-    approvalRecordId: string;
-    approvalRequestId: string;
-    toolCallId: string;
-    toolExecutionId: string;
-    runId: string;
-    stepId: string;
-    decision: ApprovalResolvePayload['decision'];
-    scope: ApprovalResolvePayload['scope'];
-    decidedBy: 'user';
-    reason?: string;
-    decidedAt: string;
-  };
 }
 
 export interface ApprovalHostResolvedResult {
   status: 'resolved';
-  data: ApprovalResolveData;
+  approvalRequestId: string;
 }
 
 export interface ApprovalHostFailedResult {
@@ -175,7 +136,6 @@ export function toApprovalDecision(payload: ApprovalResolvePayload) {
     decision: payload.decision,
     scope: payload.scope,
     decided_by: 'user' as const,
-    decided_at: payload.decidedAt,
     ...(payload.reason ? { reason: payload.reason } : {}),
   };
 }

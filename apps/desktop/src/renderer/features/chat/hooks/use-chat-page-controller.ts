@@ -242,7 +242,6 @@ export function useChatPageController() {
   async function resolveApproval(payload: ApprovalCardResolvePayload) {
     const resolvePayload: ApprovalResolvePayload = {
       ...payload,
-      decidedAt: new Date().toISOString(),
     };
 
     const result = await window.megumi.approval.resolve(createRendererRuntimeIpcRequest(
