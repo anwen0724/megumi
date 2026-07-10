@@ -1,24 +1,12 @@
+import type {
+  Workspace,
+  WorkspaceFilesService,
+  WorkspaceService,
+} from '../../coding-agent/workspace';
+
 /*
  * Implements WorkspaceHost over the Coding Agent Workspace module and host ports.
  */
-import type { Workspace, WorkspaceFilesService, WorkspaceService } from '../../coding-agent/workspace';
-import {
-  toWorkspaceProjectUiDto,
-} from './workspace-host-mapper';
-import type {
-  WorkspaceListProjectsUiRequest,
-  WorkspaceListProjectsUiResult,
-  WorkspaceListFilesUiRequest,
-  WorkspaceListFilesUiResult,
-  WorkspaceOpenFileUiRequest,
-  WorkspaceOpenFileUiResult,
-  WorkspaceOpenProjectUiRequest,
-  WorkspaceOpenProjectUiResult,
-  WorkspaceRemoveProjectUiRequest,
-  WorkspaceRemoveProjectUiResult,
-  WorkspaceUseExistingProjectUiRequest,
-  WorkspaceUseExistingProjectUiResult,
-} from './workspace-host-types';
 
 export interface DirectoryPickerResult {
   canceled: boolean;
@@ -152,4 +140,93 @@ function compatibilityErrorFromFailure(pathOrId: string, code: string): Workspac
     pathOrId,
     code === 'workspace_path_not_directory' ? 'not_directory' : 'missing',
   );
+}
+
+/*
+ * Workspace/project UI DTOs exposed by the host interface.
+ */
+export type WorkspaceProjectUiStatus = 'available' | 'missing';
+
+export interface WorkspaceProjectUiDto {
+  projectId: string;
+  name: string;
+  rootPath: string;
+  rootPathKey: string;
+  status: WorkspaceProjectUiStatus;
+  openedAt?: string;
+  lastActiveAt?: string;
+}
+
+export interface WorkspaceListProjectsUiRequest {}
+export interface WorkspaceListProjectsUiResult {
+  projects: WorkspaceProjectUiDto[];
+}
+
+export interface WorkspaceUseExistingProjectUiRequest {}
+export interface WorkspaceUseExistingProjectUiResult {
+  project: WorkspaceProjectUiDto | null;
+}
+
+export interface WorkspaceOpenProjectUiRequest {
+  projectId: string;
+}
+export interface WorkspaceOpenProjectUiResult {
+  project: WorkspaceProjectUiDto;
+}
+
+export interface WorkspaceRemoveProjectUiRequest {
+  projectId: string;
+}
+export interface WorkspaceRemoveProjectUiResult {
+  removed: boolean;
+}
+
+export interface WorkspaceFileEntryUiDto {
+  name: string;
+  relativePath: string;
+  type: 'file' | 'directory';
+  depth: number;
+  hidden: boolean;
+  ignored: boolean;
+  sizeBytes?: number;
+  mtime: string;
+}
+
+export interface WorkspaceListFilesUiRequest {
+  projectId: string;
+  directoryPath: string;
+}
+export interface WorkspaceListFilesUiResult {
+  projectId: string;
+  workspaceRoot: string;
+  directoryPath: string;
+  entries: WorkspaceFileEntryUiDto[];
+}
+
+export interface WorkspaceOpenFileUiRequest {
+  projectId: string;
+  filePath: string;
+}
+export interface WorkspaceOpenFileUiResult {
+  projectId: string;
+  workspaceRoot: string;
+  filePath: string;
+  opened: true;
+}
+
+/*
+ * Maps Workspace module facts into host-facing workspace UI DTOs.
+ */
+
+
+export function toWorkspaceProjectUiDto(workspace: Workspace): WorkspaceProjectUiDto {
+  return {
+    projectId: workspace.workspace_id,
+    name: workspace.name,
+    rootPath: workspace.root_path,
+    rootPathKey: workspace.root_path_key,
+    status: workspace.status,
+    openedAt: workspace.created_at,
+    lastActiveAt: workspace.last_opened_at,
+  };
 }

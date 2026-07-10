@@ -1,7 +1,24 @@
-/*
- * Implements the ChatHost interface by orchestrating Coding Agent public modules.
- */
-import type { AgentRunQueries, AgentRunService, StartRunResult } from '../../coding-agent/agent-run';
+import type { RuntimeContext, RuntimeEvent } from '../../coding-agent/events';
+
+import type { TimelineMessage } from '../../coding-agent/projections/timeline';
+
+import type { RawUserInputAttachment } from '../../coding-agent/input';
+
+import type {
+  AgentRun,
+  AgentRunQueries,
+  AgentRunService,
+  StartRunResult,
+} from '../../coding-agent/agent-run';
+
+import type {
+  Session,
+  SessionMessageWithAttachments,
+  SessionService,
+} from '../../coding-agent/session';
+
+import { createSessionBranchDraftCancelledEvent, createSessionBranchMarkerCreatedEvent } from '../../coding-agent/events';
+
 import type { CommandService } from '../../coding-agent/commands';
 import type {
   ContextUsageWindow,
@@ -9,42 +26,12 @@ import type {
   SessionContextUsage,
   StartContextUsageMonitorResult,
 } from '../../coding-agent/context';
-import type { Session, SessionMessageWithAttachments, SessionService } from '../../coding-agent/session';
 import type { SessionTimelineQuery } from '../../coding-agent/projections/timeline';
 import type { WorkspaceService } from '../../coding-agent/workspace';
-import {
-  toChatMessageUiDto,
-  toChatRunUiDto,
-  toChatSessionUiDto,
-} from './chat-host-mapper';
-import type {
-  ChatCancelBranchDraftUiRequest,
-  ChatCancelBranchDraftUiResult,
-  ChatCancelUserInputUiRequest,
-  ChatCancelUserInputUiResult,
-  ChatCreateBranchDraftUiRequest,
-  ChatCreateBranchDraftUiResult,
-  ChatCreateSessionUiRequest,
-  ChatCreateSessionUiResult,
-  ChatGetCommandSuggestionsUiRequest,
-  ChatGetCommandSuggestionsUiResult,
-  HostCommandSuggestionResult,
-  ChatGetContextUsageUiRequest,
-  ChatGetContextUsageUiResult,
-  ChatListMessagesUiRequest,
-  ChatListMessagesUiResult,
-  ChatListRunEventsUiRequest,
-  ChatListRunEventsUiResult,
-  ChatListRunsUiRequest,
-  ChatListRunsUiResult,
-  ChatListSessionsUiRequest,
-  ChatListSessionsUiResult,
-  ChatListTimelineUiRequest,
-  ChatListTimelineUiResult,
-  ChatSendUserInputUiRequest,
-  ChatSendUserInputUiPayload,
-  ChatSendUserInputUiResult,
-} from './chat-host-types';
+
+/*
+ * Implements the ChatHost interface by orchestrating Coding Agent public modules.
+ */
 
 export interface ChatHost {
   createSession(request: ChatCreateSessionUiRequest): Promise<ChatCreateSessionUiResult>;
@@ -319,4 +306,336 @@ function toHostCommandSuggestions(
       })),
     })),
   };
+}
+
+/*
+ * Chat/session UI DTOs exposed to hosts. These are projections of product data,
+ * not session module service contracts.
+ */
+
+
+
+export interface ChatSessionUiDto {
+  id: string;
+  projectId: string;
+  title: string;
+  status: 'active' | 'archived';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChatSessionMessageUiDto {
+  id: string;
+  sessionId: string;
+  runId?: string;
+  role: 'user' | 'assistant';
+  text: string;
+  createdAt: string;
+}
+
+export interface ChatRunUiDto {
+  runId: string;
+  sessionId: string;
+  status: 'queued' | 'running' | 'waiting_for_approval' | 'completed' | 'failed' | 'cancelled' | string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface ChatCreateSessionUiRequest {
+  projectId: string;
+  title?: string;
+}
+export interface ChatCreateSessionUiResult {
+  session: ChatSessionUiDto;
+}
+
+export interface ChatListSessionsUiRequest {}
+export interface ChatListSessionsUiResult {
+  sessions: ChatSessionUiDto[];
+}
+
+export interface ChatListMessagesUiRequest {
+  sessionId: string;
+}
+export interface ChatListMessagesUiResult {
+  messages: ChatSessionMessageUiDto[];
+}
+
+export interface ChatListTimelineUiRequest {
+  projectId: string;
+  sessionId: string;
+}
+export interface ChatListTimelineUiResult {
+  messages: TimelineMessage[];
+  diagnostics?: Array<{ messageId: string; code: string; message: string }>;
+}
+
+export interface ChatSendUserInputUiRequest {
+  requestId?: string;
+  sessionId?: string;
+  sessionTitle?: string;
+  projectId: string;
+  projectLabel?: string;
+  projectPath?: string;
+  text: string;
+  attachments?: RawUserInputAttachment[];
+  clientMessageId?: string;
+  createdAt?: string;
+  modelSelection: {
+    provider_id: string;
+    model_id: string;
+  };
+  permissionMode?: 'default' | 'accept_edits' | 'plan' | 'auto';
+  permissionSource?: string;
+  runtimeContext?: RuntimeContext;
+}
+export type ChatSendUserInputUiPayload =
+  | {
+      type: 'agent_run';
+      session: ChatSessionUiDto;
+      requestId: string;
+      userMessageId: string;
+      run: ChatRunUiDto;
+    }
+  | {
+      type: 'host_interaction_request';
+      session?: ChatSessionUiDto;
+      requestId: string;
+      request: { kind: string };
+    }
+  | {
+      type: 'completed';
+      session?: ChatSessionUiDto;
+      requestId: string;
+      message?: string;
+    }
+  | {
+      type: 'error';
+      session?: ChatSessionUiDto;
+      requestId: string;
+      message: string;
+    };
+export interface ChatSendUserInputUiResult {
+  payload: ChatSendUserInputUiPayload;
+  events?: AsyncIterable<RuntimeEvent>;
+}
+
+export interface ChatCancelUserInputUiRequest {
+  runId: string;
+}
+export interface ChatCancelUserInputUiResult {
+  payload: { cancelled: boolean };
+  events?: AsyncIterable<RuntimeEvent>;
+}
+
+export interface ChatCreateBranchDraftUiRequest {
+  requestId: string;
+  sessionId: string;
+  messageId: string;
+  intent: 'branch' | 'rerun';
+  createdAt: string;
+  runtimeContext?: RuntimeContext;
+}
+export interface ChatCreateBranchDraftUiResult {
+  payload: { branchDraft: {
+    branchMarkerId: string;
+    sessionId: string;
+    sourceMessageId: string;
+    intent: 'branch' | 'rerun';
+    createdAt: string;
+  } };
+  events?: AsyncIterable<RuntimeEvent>;
+}
+
+export interface ChatCancelBranchDraftUiRequest {
+  requestId: string;
+  sessionId: string;
+  branchMarkerId: string;
+  createdAt: string;
+  runtimeContext?: RuntimeContext;
+}
+export interface ChatCancelBranchDraftUiResult {
+  payload: {
+    cancelled: boolean;
+    reason?: 'branch_has_new_sources' | 'branch_marker_not_active' | 'branch_marker_not_found' | string;
+  };
+  events?: AsyncIterable<RuntimeEvent>;
+}
+
+export interface ChatGetCommandSuggestionsUiRequest {
+  draft_input: string;
+  workspaceId?: string;
+}
+export interface ChatGetCommandSuggestionsUiResult {
+  suggestions: HostCommandSuggestionResult;
+}
+
+export type HostCommandSuggestionResult =
+  | { type: 'inactive' }
+  | {
+      type: 'suggestions';
+      draft_input: string;
+      command_prefix: string;
+      groups: Array<{ id: string; label: string; items: HostCommandSuggestionItem[] }>;
+    };
+
+export type HostCommandSuggestionItem = {
+  name: string;
+  aliases?: string[];
+  description: string;
+  argument_hint?: string;
+  source: { kind: 'built_in' } | { kind: 'skill'; skill_id: string };
+  source_badge?: string;
+  display?: { primary: string; secondary?: string; badge?: string };
+  match: { field: 'name' | 'alias'; value: string; prefix: string };
+  displayInput: string;
+  submitInput: string;
+};
+export type CommandSuggestionItem = HostCommandSuggestionItem;
+export type CommandSuggestionResult = HostCommandSuggestionResult;
+
+export interface ChatListRunsUiRequest {
+  sessionId: string;
+}
+export interface ChatListRunsUiResult {
+  runs: ChatRunUiDto[];
+}
+
+export interface ChatListRunEventsUiRequest {
+  runId: string;
+}
+export interface ChatListRunEventsUiResult {
+  events: RuntimeEvent[];
+}
+
+export interface ChatGetContextUsageUiRequest {
+  sessionId: string;
+  projectId?: string;
+  modelId?: string;
+}
+
+export type ChatContextUsageUiDto = {
+  usedTokens: number;
+  totalTokens: number;
+  remainingTokens: number;
+  usedPercent: number;
+  autoCompactPercent: number;
+  shouldAutoCompact: boolean;
+};
+
+export type ChatGetContextUsageUiResult =
+  | { status: 'ok'; usage: ChatContextUsageUiDto }
+  | { status: 'not_available'; reason: 'not_started' | 'not_calculated' }
+  | { status: 'failed'; message: string };
+
+/*
+ * Maps session and agent-run facts into host-facing chat UI DTOs.
+ */
+
+
+
+export function toChatSessionUiDto(session: Session): ChatSessionUiDto {
+  return {
+    id: session.session_id,
+    projectId: session.workspace_id,
+    title: session.title,
+    status: session.status,
+    createdAt: session.created_at,
+    updatedAt: session.updated_at,
+  };
+}
+export function toChatMessageUiDto(item: SessionMessageWithAttachments): ChatSessionMessageUiDto {
+  const { message } = item;
+  return {
+    id: message.message_id,
+    sessionId: message.session_id,
+    ...(message.run_id ? { runId: message.run_id } : {}),
+    role: message.role,
+    text: message.content_text,
+    createdAt: message.created_at,
+  };
+}
+
+export function toChatRunUiDto(run: AgentRun): ChatRunUiDto {
+  return {
+    runId: run.run_id,
+    sessionId: run.session_id,
+    status: run.status,
+    createdAt: run.created_at,
+    ...(run.completed_at ? { completedAt: run.completed_at } : {}),
+  };
+}
+
+/* Owns ephemeral branch-draft references exposed to hosts during composition. */
+
+
+export function createSessionBranchHost(): SessionBranchHostPort {
+  const drafts = new Map<string, { sessionId: string; messageId: string; createdAt: string; intent: 'branch' | 'rerun' }>();
+
+  return {
+    createBranchDraft(input) {
+      const branchMarkerId = `branch:${crypto.randomUUID()}`;
+      drafts.set(branchMarkerId, {
+        sessionId: input.sessionId,
+        messageId: input.messageId,
+        createdAt: input.createdAt,
+        intent: input.intent,
+      });
+      const event = createSessionBranchMarkerCreatedEvent({
+        eventId: `event:${crypto.randomUUID()}`,
+        sessionId: input.sessionId,
+        requestId: input.requestId,
+        context: input.runtimeContext,
+        sequence: 1,
+        createdAt: input.createdAt,
+        payload: {
+          branchMarkerId,
+          branchMarkerSourceEntryId: input.messageId,
+          targetLeafSourceEntryId: input.messageId,
+          selectedSourceRef: { sourceId: input.messageId, sourceKind: 'message' },
+          reason: input.intent,
+        },
+      });
+      return {
+        payload: {
+          branchDraft: {
+            branchMarkerId,
+            sessionId: input.sessionId,
+            sourceMessageId: input.messageId,
+            intent: input.intent,
+            createdAt: input.createdAt,
+          },
+        },
+        events: asyncEvents([event]),
+      };
+    },
+
+    cancelBranchDraft(input) {
+      const draft = drafts.get(input.branchMarkerId);
+      if (!draft) return { payload: { cancelled: false, reason: 'branch_marker_not_found' } };
+      if (draft.sessionId !== input.sessionId) {
+        return { payload: { cancelled: false, reason: 'branch_marker_not_active' } };
+      }
+      drafts.delete(input.branchMarkerId);
+      const event = createSessionBranchDraftCancelledEvent({
+        eventId: `event:${crypto.randomUUID()}`,
+        sessionId: input.sessionId,
+        requestId: input.requestId,
+        context: input.runtimeContext,
+        sequence: 1,
+        createdAt: input.createdAt,
+        payload: {
+          branchMarkerId: input.branchMarkerId,
+          branchMarkerSourceEntryId: draft.messageId,
+          restoredLeafSourceEntryId: draft.messageId,
+          reason: 'branch_cancelled',
+        },
+      });
+      return { payload: { cancelled: true }, events: asyncEvents([event]) };
+    },
+  };
+}
+
+async function* asyncEvents<T>(events: T[]): AsyncIterable<T> {
+  yield* events;
 }

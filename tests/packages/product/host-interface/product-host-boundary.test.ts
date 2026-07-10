@@ -13,6 +13,20 @@ function readFiles(dir: string): string[] {
 }
 
 describe('Product Host Interface boundary', () => {
+  it('keeps the approved flat Host module structure', () => {
+    expect(fs.readdirSync(hostRoot).sort()).toEqual([
+      'approval-host.ts',
+      'artifact-host.ts',
+      'chat-host.ts',
+      'index.ts',
+      'plan-host.ts',
+      'product-host-interface.ts',
+      'settings-host.ts',
+      'skill-host.ts',
+      'workspace-host.ts',
+    ]);
+  });
+
   it('does not depend on desktop or IPC transport', () => {
     const source = readFiles(hostRoot)
       .filter((file) => file.endsWith('.ts'))

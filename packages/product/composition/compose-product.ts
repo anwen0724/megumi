@@ -13,13 +13,12 @@ import {
 } from '../home';
 import { createApprovalHost } from '../host-interface/approval-host';
 import { createArtifactHost } from '../host-interface/artifact-host';
-import { createChatHost } from '../host-interface/chat-host';
+import { createChatHost, createSessionBranchHost } from '../host-interface/chat-host';
 import { createPlanHost } from '../host-interface/plan-host';
 import type { ProductHostInterface } from '../host-interface/product-host-interface';
 import { createSettingsHost } from '../host-interface/settings-host';
 import { createSkillHost } from '../host-interface/skill-host';
 import { createWorkspaceHost, type DirectoryPickerPort, type FileOpenPort } from '../host-interface/workspace-host';
-import { createSessionBranchHost } from '../host-interface/session-branch-host';
 import {
   createProductRuntimeLogger,
   type RuntimeLogClockPort,

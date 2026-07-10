@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createChatHost } from '@megumi/product/host-interface/chat-host';
-import { createSessionBranchHost } from '@megumi/product/host-interface/session-branch-host';
+import { createChatHost, createSessionBranchHost } from '@megumi/product/host-interface/chat-host';
 
 describe('ChatHost product semantics', () => {
   it('owns request, title, and permission defaults', async () => {
