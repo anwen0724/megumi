@@ -48,6 +48,15 @@ export type GetCurrentContextUsageResult =
   | { status: 'not_available'; reason: 'not_started' | 'not_calculated' }
   | { status: 'failed'; failure: RuntimeError };
 
+export type RefreshSessionContextUsageRequest = {
+  session_id: string;
+  workspace_id?: string;
+  model_config: ContextUsageWindow;
+  reason: 'host_context_usage_requested' | 'agent_run_completed' | 'agent_run_failed' | string;
+};
+
+export type RefreshSessionContextUsageResult = GetCurrentContextUsageResult;
+
 export type ContextUsageSignal =
   | {
       kind: 'usage_changed';

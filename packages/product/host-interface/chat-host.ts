@@ -24,7 +24,6 @@ import type {
   ContextUsageWindow,
   GetCurrentContextUsageResult,
   SessionContextUsage,
-  StartContextUsageMonitorResult,
 } from '../../coding-agent/context';
 import type { SessionTimelineQuery } from '../../coding-agent/projections/timeline';
 import type { WorkspaceService } from '../../coding-agent/workspace';
@@ -179,13 +178,12 @@ export interface SessionBranchHostPort {
 }
 
 export interface ChatContextUsageMonitorPort {
-  getCurrentUsage(request: { session_id: string; workspace_id?: string }): GetCurrentContextUsageResult;
-  start(request: {
+  refreshAndGetSessionUsage(request: {
     session_id: string;
     workspace_id?: string;
     model_config: ContextUsageWindow;
-  }): Promise<StartContextUsageMonitorResult> | StartContextUsageMonitorResult;
-  refreshSession(request: { session_id: string; workspace_id?: string; reason: string }): Promise<void> | void;
+    reason: string;
+  }): Promise<GetCurrentContextUsageResult> | GetCurrentContextUsageResult;
 }
 
 export function createChatHost(options: {
@@ -340,39 +338,21 @@ export function createChatHost(options: {
         return { status: 'not_available', reason: 'not_started' };
       }
 
-      const monitorRequest = {
+      const refreshRequest = {
         session_id: request.sessionId,
         ...(request.projectId ? { workspace_id: request.projectId } : {}),
         model_config: options.contextUsageWindowProvider(request),
-      };
-      const usageRequest = {
-        session_id: request.sessionId,
-        ...(request.projectId ? { workspace_id: request.projectId } : {}),
-      };
-      const refreshRequest = {
-        ...usageRequest,
-        reason: 'ui_context_usage_requested',
+        reason: 'host_context_usage_requested',
       };
 
       if (request.refresh === 'background') {
-        void Promise.resolve(options.contextUsageMonitor.start(monitorRequest))
-          .then((startResult) => {
-            if (startResult.status === 'failed') return undefined;
-            return options.contextUsageMonitor!.refreshSession(refreshRequest);
-          })
+        void Promise.resolve(options.contextUsageMonitor.refreshAndGetSessionUsage(refreshRequest))
           .catch(() => undefined);
 
-        return mapBackgroundContextUsage(options.contextUsageMonitor.getCurrentUsage(usageRequest));
+        return { status: 'not_available', reason: 'not_calculated' };
       }
 
-      const startResult = await options.contextUsageMonitor.start(monitorRequest);
-      if (startResult.status === 'failed') {
-        return { status: 'failed', message: startResult.failure.message };
-      }
-
-      await options.contextUsageMonitor.refreshSession(refreshRequest);
-
-      return mapCurrentContextUsage(options.contextUsageMonitor.getCurrentUsage(usageRequest));
+      return mapCurrentContextUsage(await options.contextUsageMonitor.refreshAndGetSessionUsage(refreshRequest));
     },
   };
 }
@@ -385,14 +365,6 @@ function mapCurrentContextUsage(current: GetCurrentContextUsageResult): ChatGetC
     return { status: 'failed', message: current.failure.message };
   }
   return current;
-}
-
-function mapBackgroundContextUsage(current: GetCurrentContextUsageResult): ChatGetContextUsageUiResult {
-  const mapped = mapCurrentContextUsage(current);
-  if (mapped.status === 'not_available' && mapped.reason === 'not_started') {
-    return { status: 'not_available', reason: 'not_calculated' };
-  }
-  return mapped;
 }
 
 function toChatContextUsageUiDto(usage: SessionContextUsage) {

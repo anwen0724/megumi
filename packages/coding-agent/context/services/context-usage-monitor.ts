@@ -7,6 +7,8 @@ import type {
   ContextUsageWindow,
   GetCurrentContextUsageRequest,
   GetCurrentContextUsageResult,
+  RefreshSessionContextUsageRequest,
+  RefreshSessionContextUsageResult,
   SessionContextUsage,
   StartContextUsageMonitorRequest,
   StartContextUsageMonitorResult,
@@ -82,6 +84,32 @@ export class ContextUsageMonitor {
       return { status: 'not_available', reason: 'not_calculated' };
     }
     return { status: 'ok', usage: state.usage };
+  }
+
+  async refreshAndGetSessionUsage(
+    request: RefreshSessionContextUsageRequest,
+  ): Promise<RefreshSessionContextUsageResult> {
+    const key = sessionKey(request);
+    if (!this.sessions.has(key)) {
+      const started = await this.start({
+        session_id: request.session_id,
+        ...(request.workspace_id ? { workspace_id: request.workspace_id } : {}),
+        model_config: request.model_config,
+      });
+      if (started.status === 'failed') {
+        return { status: 'failed', failure: started.failure };
+      }
+    }
+
+    await this.refreshSession({
+      session_id: request.session_id,
+      ...(request.workspace_id ? { workspace_id: request.workspace_id } : {}),
+      reason: request.reason,
+    });
+    return this.getCurrentUsage({
+      session_id: request.session_id,
+      ...(request.workspace_id ? { workspace_id: request.workspace_id } : {}),
+    });
   }
 
   subscribe(request: SubscribeContextUsageRequest): SubscribeContextUsageResult {

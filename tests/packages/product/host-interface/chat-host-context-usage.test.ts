@@ -3,13 +3,15 @@ import { createChatHost } from '@megumi/product/host-interface/chat-host';
 import type {
   ContextUsageWindow,
   GetCurrentContextUsageResult,
-  StartContextUsageMonitorResult,
 } from '@megumi/coding-agent/context';
 
 function createController(input: {
-  getCurrentUsage: (request: { session_id: string; workspace_id?: string }) => GetCurrentContextUsageResult;
-  start: (request: { session_id: string; workspace_id?: string; model_config: ContextUsageWindow }) => Promise<StartContextUsageMonitorResult> | StartContextUsageMonitorResult;
-  refreshSession: (request: { session_id: string; workspace_id?: string; reason: string }) => Promise<void> | void;
+  refreshAndGetSessionUsage: (request: {
+    session_id: string;
+    workspace_id?: string;
+    model_config: ContextUsageWindow;
+    reason: string;
+  }) => Promise<GetCurrentContextUsageResult> | GetCurrentContextUsageResult;
 }) {
   return createChatHost({
     agentRunService: {} as never,
@@ -30,9 +32,7 @@ function createController(input: {
       listRuntimeEventsByRun: () => [],
     },
     contextUsageMonitor: {
-      getCurrentUsage: input.getCurrentUsage,
-      start: input.start,
-      refreshSession: input.refreshSession,
+      refreshAndGetSessionUsage: input.refreshAndGetSessionUsage,
     },
     contextUsageWindowProvider: ({ modelId }) => ({
       model_id: modelId ?? 'configured-model',
@@ -42,8 +42,8 @@ function createController(input: {
 }
 
 describe('ChatHost context usage', () => {
-  it('starts, refreshes, and returns current context usage for UI queries', async () => {
-    const getCurrentUsage = vi.fn((): GetCurrentContextUsageResult => ({
+  it('delegates refresh and query lifecycle to the Context owner for UI queries', async () => {
+    const refreshAndGetSessionUsage = vi.fn((): GetCurrentContextUsageResult => ({
       status: 'ok',
       usage: {
         used_tokens: 222_000,
@@ -54,9 +54,7 @@ describe('ChatHost context usage', () => {
         should_auto_compact: true,
       },
     }));
-    const start = vi.fn(async (): Promise<StartContextUsageMonitorResult> => ({ status: 'ok' }));
-    const refreshSession = vi.fn(async () => undefined);
-    const controller = createController({ getCurrentUsage, start, refreshSession });
+    const controller = createController({ refreshAndGetSessionUsage });
 
     await expect(controller.getContextUsage({
       sessionId: 'session:1',
@@ -73,32 +71,23 @@ describe('ChatHost context usage', () => {
         shouldAutoCompact: true,
       },
     });
-    expect(start).toHaveBeenCalledWith({
+    expect(refreshAndGetSessionUsage).toHaveBeenCalledWith({
       session_id: 'session:1',
       workspace_id: 'workspace:1',
       model_config: {
         model_id: 'deepseek-v4-flash',
         context_window_tokens: 258_000,
       },
-    });
-    expect(refreshSession).toHaveBeenCalledWith({
-      session_id: 'session:1',
-      workspace_id: 'workspace:1',
-      reason: 'ui_context_usage_requested',
+      reason: 'host_context_usage_requested',
     });
   });
 
-  it('starts background refresh without waiting for refreshSession to settle', async () => {
-    let resolveRefresh!: () => void;
-    const getCurrentUsage = vi.fn((): GetCurrentContextUsageResult => ({
-      status: 'not_available',
-      reason: 'not_calculated',
-    }));
-    const start = vi.fn(async (): Promise<StartContextUsageMonitorResult> => ({ status: 'ok' }));
-    const refreshSession = vi.fn(() => new Promise<void>((resolve) => {
+  it('starts background refresh without waiting for Context owner refresh to settle', async () => {
+    let resolveRefresh!: (value: GetCurrentContextUsageResult) => void;
+    const refreshAndGetSessionUsage = vi.fn(() => new Promise<GetCurrentContextUsageResult>((resolve) => {
       resolveRefresh = resolve;
     }));
-    const controller = createController({ getCurrentUsage, start, refreshSession });
+    const controller = createController({ refreshAndGetSessionUsage });
 
     const result = await Promise.race([
       controller.getContextUsage({
@@ -110,23 +99,35 @@ describe('ChatHost context usage', () => {
     ]);
 
     expect(result).toEqual({ status: 'not_available', reason: 'not_calculated' });
-    expect(refreshSession).toHaveBeenCalledWith({
+    expect(refreshAndGetSessionUsage).toHaveBeenCalledWith({
       session_id: 'session:1',
       workspace_id: 'workspace:1',
-      reason: 'ui_context_usage_requested',
+      model_config: {
+        model_id: 'configured-model',
+        context_window_tokens: 258_000,
+      },
+      reason: 'host_context_usage_requested',
     });
 
-    resolveRefresh();
+    resolveRefresh({
+      status: 'not_available',
+      reason: 'not_calculated',
+    });
   });
 
-  it('normalizes missing background usage to not_calculated while refresh starts', async () => {
-    const getCurrentUsage = vi.fn((): GetCurrentContextUsageResult => ({
-      status: 'not_available',
-      reason: 'not_started',
+  it('returns not_calculated for background refresh even when owner has not finished', async () => {
+    const refreshAndGetSessionUsage = vi.fn(async (): Promise<GetCurrentContextUsageResult> => ({
+      status: 'ok',
+      usage: {
+        used_tokens: 10,
+        context_window_tokens: 100,
+        remaining_tokens: 90,
+        used_ratio: 0.1,
+        auto_compaction_threshold_ratio: 0.8,
+        should_auto_compact: false,
+      },
     }));
-    const start = vi.fn(async (): Promise<StartContextUsageMonitorResult> => ({ status: 'ok' }));
-    const refreshSession = vi.fn(async () => undefined);
-    const controller = createController({ getCurrentUsage, start, refreshSession });
+    const controller = createController({ refreshAndGetSessionUsage });
 
     await expect(controller.getContextUsage({
       sessionId: 'session:1',

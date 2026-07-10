@@ -96,6 +96,29 @@ describe('context usage monitor', () => {
     expect(signalSink.mock.calls.filter((call) => call[0].signal.kind === 'auto_compaction_needed')).toHaveLength(1);
   });
 
+  it('refreshes and returns session usage without resetting existing monitor state', async () => {
+    const signalSink = vi.fn();
+    const monitor = createMonitor({ text: 'x'.repeat(2000), signalSink, threshold: 0.1 });
+    monitor.subscribe({ session_id: 'session:1', workspace_id: 'workspace:1' });
+
+    await monitor.refreshAndGetSessionUsage({
+      session_id: 'session:1',
+      workspace_id: 'workspace:1',
+      model_config: { model_id: 'test', context_window_tokens: 100 },
+      reason: 'host_context_usage_requested',
+    });
+    const result = await monitor.refreshAndGetSessionUsage({
+      session_id: 'session:1',
+      workspace_id: 'workspace:1',
+      model_config: { model_id: 'test', context_window_tokens: 100 },
+      reason: 'host_context_usage_requested',
+    });
+
+    expect(result.status).toBe('ok');
+    expect(monitor.getCurrentUsage({ session_id: 'session:1', workspace_id: 'workspace:1' }).status).toBe('ok');
+    expect(signalSink.mock.calls.filter((call) => call[0].signal.kind === 'auto_compaction_needed')).toHaveLength(1);
+  });
+
   it('does not emit auto_compaction_needed while compaction is running', async () => {
     const signalSink = vi.fn();
     const monitor = createMonitor({ text: 'x'.repeat(2000), signalSink, threshold: 0.1 });
