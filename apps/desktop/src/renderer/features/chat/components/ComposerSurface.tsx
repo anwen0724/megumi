@@ -2,9 +2,11 @@ import { forwardRef, useRef, type FormEvent, type KeyboardEvent, type RefObject 
 import {
   Bot,
   Brain,
+  Package,
   Paperclip,
   SendHorizontal,
   Square,
+  Terminal,
 } from 'lucide-react';
 import { IconButton } from '../../../shared/ui';
 import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/product/host-interface';
@@ -31,6 +33,7 @@ export interface ComposerSurfaceProps {
   textareaRef: RefObject<HTMLTextAreaElement | null>;
   commandSuggestions: CommandSuggestionResult;
   selectedCommandSuggestionIndex: number;
+  selectedCommandCompletion: ComposerCommandCompletionUi | null;
   contextUsage?: ChatGetContextUsageUiResult;
   onValueChange: (value: string) => void;
   onCommandSuggestionChoose: (item: CommandSuggestionItem) => void;
@@ -42,6 +45,11 @@ export interface ComposerSurfaceProps {
   onChooseContext?: () => void;
   onAttachFiles?: () => void;
 }
+
+export type ComposerCommandCompletionUi = {
+  label: string;
+  sourceKind: CommandSuggestionItem['source']['kind'];
+};
 
 export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>(function ComposerSurface({
   value,
@@ -57,6 +65,7 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
   textareaRef,
   commandSuggestions,
   selectedCommandSuggestionIndex,
+  selectedCommandCompletion,
   contextUsage,
   onValueChange,
   onCommandSuggestionChoose,
@@ -80,12 +89,13 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
       data-testid="composer-surface"
       aria-label="Message composer"
       onSubmit={onSubmit}
-      className="pointer-events-auto mx-auto w-full transition-[width,transform,opacity] duration-200 ease-out"
+      className="pointer-events-auto relative mx-auto w-full transition-[width,transform,opacity] duration-200 ease-out"
     >
       <CommandSuggestionPanel
         suggestions={commandSuggestions}
         selectedIndex={selectedCommandSuggestionIndex}
         onChoose={onCommandSuggestionChoose}
+        className="absolute bottom-full left-0 right-0 z-50 max-h-[min(22rem,calc(100vh-12rem))]"
       />
       <input
         ref={fileInputRef}
@@ -101,17 +111,25 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
           <label htmlFor="megumi-composer" className="sr-only">
             Message Megumi
           </label>
-          <textarea
-            ref={textareaRef}
-            id="megumi-composer"
-            value={value}
-            disabled={inputLocked}
-            onChange={(event) => onValueChange(event.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder="Ask Megumi anything..."
-            rows={2}
-            className="max-h-40 min-h-14 w-full resize-none border-0 bg-transparent text-sm leading-5 text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-subtle)] disabled:cursor-not-allowed disabled:opacity-70"
-          />
+          <div className={selectedCommandCompletion ? 'flex items-start gap-2' : ''}>
+            {selectedCommandCompletion ? (
+              <CommandCompletionChip completion={selectedCommandCompletion} />
+            ) : null}
+            <textarea
+              ref={textareaRef}
+              id="megumi-composer"
+              value={value}
+              disabled={inputLocked}
+              onChange={(event) => onValueChange(event.target.value)}
+              onKeyDown={onKeyDown}
+              placeholder={selectedCommandCompletion ? 'Add arguments...' : 'Ask Megumi anything...'}
+              rows={selectedCommandCompletion ? 1 : 2}
+              className={[
+                'max-h-40 w-full resize-none border-0 bg-transparent text-sm leading-5 text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-subtle)] disabled:cursor-not-allowed disabled:opacity-70',
+                selectedCommandCompletion ? 'min-h-8 flex-1 py-1' : 'min-h-14',
+              ].join(' ')}
+            />
+          </div>
         </div>
 
         <div data-testid="composer-toolbar" className="flex min-h-12 flex-nowrap items-center justify-between gap-2 px-3 py-2">
@@ -203,6 +221,20 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
     </form>
   );
 });
+
+function CommandCompletionChip({ completion }: { completion: ComposerCommandCompletionUi }) {
+  return (
+    <span
+      data-testid="composer-command-chip"
+      className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-[var(--color-accent-soft)] px-2 text-sm font-medium text-[var(--color-accent)]"
+    >
+      {completion.sourceKind === 'skill'
+        ? <Package size={14} aria-hidden="true" />
+        : <Terminal size={14} aria-hidden="true" />}
+      <span>{completion.label}</span>
+    </span>
+  );
+}
 
 function ContextUsageIndicator({ contextUsage }: { contextUsage?: ChatGetContextUsageUiResult }) {
   const usage = contextUsage?.status === 'ok' ? contextUsage.usage : null;

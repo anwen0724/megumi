@@ -14,7 +14,10 @@ import type { ComposerSurfaceProps } from '../components/ComposerSurface';
 const COMPOSER_TEXTAREA_COMPACT_HEIGHT = 56;
 const COMPOSER_TEXTAREA_MAX_HEIGHT = 160;
 
-type SelectedCommandCompletion = Pick<CommandSuggestionItem, 'displayInput' | 'submitInput'>;
+type SelectedCommandCompletion = Pick<CommandSuggestionItem, 'displayInput' | 'submitInput'> & {
+  label: string;
+  sourceKind: CommandSuggestionItem['source']['kind'];
+};
 
 function createComposerSubmitPayload(input: {
   message: string;
@@ -31,11 +34,11 @@ function createComposerSubmitPayload(input: {
 }
 
 function resolveSubmitMessage(rawValue: string, completion: SelectedCommandCompletion | null): string {
-  if (!completion || !rawValue.startsWith(completion.displayInput)) {
+  if (!completion) {
     return rawValue.trim();
   }
 
-  return `${completion.submitInput}${rawValue.slice(completion.displayInput.length)}`.trim();
+  return `${completion.submitInput}${rawValue}`.trim();
 }
 
 export function useComposerController({
@@ -67,7 +70,7 @@ export function useComposerController({
   const trimmedValue = value.trim();
   const inputLocked = false;
   const sendLocked = status === 'sending' || status === 'running' || status === 'waiting-approval';
-  const canSend = trimmedValue.length > 0 && !sendLocked && modelOptions.length > 0;
+  const canSend = (trimmedValue.length > 0 || selectedCommandCompletion !== null) && !sendLocked && modelOptions.length > 0;
   const showStop = status === 'sending' || status === 'running' || status === 'waiting-approval';
   const canStop = showStop && Boolean(onStop);
   const [commandSuggestions, setCommandSuggestions] = useState<CommandSuggestionResult>({ type: 'inactive' });
@@ -107,16 +110,17 @@ export function useComposerController({
     textarea.style.height = `${COMPOSER_TEXTAREA_COMPACT_HEIGHT}px`;
 
     const scrollHeight = textarea.scrollHeight;
+    const compactHeight = COMPOSER_TEXTAREA_COMPACT_HEIGHT;
     const nextHeight = value
-      ? Math.max(COMPOSER_TEXTAREA_COMPACT_HEIGHT, Math.min(scrollHeight, COMPOSER_TEXTAREA_MAX_HEIGHT))
-      : COMPOSER_TEXTAREA_COMPACT_HEIGHT;
+      ? Math.max(compactHeight, Math.min(scrollHeight, COMPOSER_TEXTAREA_MAX_HEIGHT))
+      : compactHeight;
 
     textarea.style.height = `${nextHeight}px`;
     textarea.style.overflowY = scrollHeight > COMPOSER_TEXTAREA_MAX_HEIGHT ? 'auto' : 'hidden';
-  }, [value]);
+  }, [selectedCommandCompletion, value]);
 
   useEffect(() => {
-    if (!getCommandSuggestions || !value.trimStart().startsWith('/')) {
+    if (selectedCommandCompletion || !getCommandSuggestions || !value.trimStart().startsWith('/')) {
       setCommandSuggestions({ type: 'inactive' });
       return undefined;
     }
@@ -142,7 +146,7 @@ export function useComposerController({
     return () => {
       cancelled = true;
     };
-  }, [getCommandSuggestions, value]);
+  }, [getCommandSuggestions, selectedCommandCompletion, value]);
 
   useEffect(() => {
     if (visibleCommandSuggestionItems.length === 0) {
@@ -183,23 +187,27 @@ export function useComposerController({
 
   function handleValueChange(nextValue: string) {
     setValue(nextValue);
-    setSelectedCommandCompletion((completion) => (
-      completion && nextValue.startsWith(completion.displayInput) ? completion : null
-    ));
   }
 
   function applyCommandSuggestion(item: CommandSuggestionItem) {
-    const visibleInput = item.displayInput;
-    setValue(visibleInput);
+    setValue('');
     setSelectedCommandCompletion({
       displayInput: item.displayInput,
       submitInput: item.submitInput,
+      label: getCommandChipLabel(item),
+      sourceKind: item.source.kind,
     });
     setSelectedCommandSuggestionIndex(0);
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     const isComposing = event.nativeEvent.isComposing || (event as unknown as { isComposing?: boolean }).isComposing;
+
+    if (selectedCommandCompletion && event.key === 'Backspace' && value.length === 0) {
+      event.preventDefault();
+      setSelectedCommandCompletion(null);
+      return;
+    }
 
     if (event.key === 'ArrowDown' && visibleCommandSuggestionItems.length > 0) {
       event.preventDefault();
@@ -263,6 +271,7 @@ export function useComposerController({
     textareaRef,
     commandSuggestions: activeCommandSuggestions,
     selectedCommandSuggestionIndex,
+    selectedCommandCompletion,
     contextUsage,
     onValueChange: handleValueChange,
     onCommandSuggestionChoose: chooseCommandSuggestion,
@@ -278,4 +287,13 @@ export function useComposerController({
   return {
     composerSurfaceProps,
   };
+}
+
+function getCommandChipLabel(item: CommandSuggestionItem): string {
+  const rawName = item.display?.primary ?? item.name;
+  return rawName
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(' ');
 }

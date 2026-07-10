@@ -42,12 +42,13 @@ describe('CommandSuggestionPanel skill suggestions', () => {
       />,
     );
 
-    expect(screen.getByText('bra')).toBeInTheDocument();
+    expect(screen.getByText('Brainstorming')).toBeInTheDocument();
     expect(screen.getByText('superpowers:brainstorming - Explore intent before implementation')).toBeInTheDocument();
     expect(screen.getByText('System')).toBeInTheDocument();
+    expect(screen.getByTestId('command-suggestion-icon-skill')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('option', {
-      name: '/brainstorming superpowers:brainstorming - Explore intent before implementation System',
+      name: 'Brainstorming superpowers:brainstorming - Explore intent before implementation System',
     }));
 
     expect(onChoose).toHaveBeenCalledWith(expect.objectContaining({
@@ -84,6 +85,59 @@ describe('CommandSuggestionPanel skill suggestions', () => {
     expect(screen.getByText('qa:test - Run QA checks')).toBeInTheDocument();
     expect(consoleError).not.toHaveBeenCalledWith(expect.stringContaining('Encountered two children with the same key'));
     consoleError.mockRestore();
+  });
+
+  it('applies a visible accent style to the selected suggestion', () => {
+    const suggestions: CommandSuggestionResult = {
+      type: 'suggestions',
+      draft_input: '/test',
+      command_prefix: 'test',
+      groups: [{
+        id: 'skills',
+        label: 'Skills',
+        items: [
+          createSkillSuggestion('checks:test', 'Run project checks'),
+          createSkillSuggestion('qa:test', 'Run QA checks'),
+        ],
+      }],
+    };
+
+    render(
+      <CommandSuggestionPanel
+        suggestions={suggestions}
+        selectedIndex={1}
+        onChoose={vi.fn()}
+      />,
+    );
+
+    const options = screen.getAllByRole('option');
+    expect(options[1]).toHaveAttribute('aria-selected', 'true');
+    expect(options[1]).toHaveClass('aria-selected:bg-[var(--color-accent-soft)]');
+    expect(options[1]).toHaveClass('aria-selected:shadow-[inset_3px_0_0_var(--color-accent)]');
+    expect(options[0]).not.toHaveClass('aria-selected:bg-[var(--color-accent-soft)]');
+  });
+
+  it('gives pointer-hover suggestions a visible hover highlight', () => {
+    const suggestions: CommandSuggestionResult = {
+      type: 'suggestions',
+      draft_input: '/test',
+      command_prefix: 'test',
+      groups: [{
+        id: 'skills',
+        label: 'Skills',
+        items: [createSkillSuggestion('checks:test', 'Run project checks')],
+      }],
+    };
+
+    render(
+      <CommandSuggestionPanel
+        suggestions={suggestions}
+        selectedIndex={0}
+        onChoose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('option')).toHaveClass('hover:bg-[var(--color-accent-soft)]');
   });
 });
 

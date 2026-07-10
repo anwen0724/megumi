@@ -291,6 +291,42 @@ describe('Composer', () => {
     expect(screen.getByRole('option', { name: /review/i })).toBeInTheDocument();
   });
 
+  it('floats command suggestions above the composer without taking layout space', async () => {
+    render(<TestComposer
+      onSubmit={() => undefined}
+      getCommandSuggestions={() => ({
+        type: 'suggestions',
+        draft_input: '/',
+        command_prefix: '',
+        groups: [{
+          id: 'commands',
+          label: 'Commands',
+          items: [{
+            name: 'review',
+            description: 'Evaluate review feedback before implementing changes',
+            source: { kind: 'built_in' },
+            match: { field: 'name', value: 'review', prefix: '' },
+            displayInput: '/review ', submitInput: '/review ',
+          }],
+        }],
+      })}
+    />);
+
+    await userEvent.type(screen.getByLabelText('Message Megumi'), '/');
+
+    const form = screen.getByRole('form', { name: 'Message composer' });
+    const panel = screen.getByRole('listbox', { name: 'Command suggestions' });
+
+    expect(form).toHaveClass('relative');
+    expect(panel).toHaveClass('absolute');
+    expect(panel).toHaveClass('bottom-full');
+    expect(panel).toHaveClass('left-0');
+    expect(panel).toHaveClass('right-0');
+    expect(panel).toHaveClass('z-50');
+    expect(panel).toHaveClass('max-h-[min(22rem,calc(100vh-12rem))]');
+    expect(panel).toHaveClass('overflow-y-auto');
+  });
+
   it('uses Enter to complete the selected command suggestion without submitting', async () => {
     const onSubmit = vi.fn();
     render(<TestComposer
@@ -317,7 +353,8 @@ describe('Composer', () => {
     await userEvent.type(input, '/re');
     await userEvent.keyboard('{Enter}');
 
-    expect(input).toHaveValue('/review ');
+    expect(screen.getByTestId('composer-command-chip')).toHaveTextContent('Review');
+    expect(input).toHaveValue('');
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
@@ -352,7 +389,9 @@ describe('Composer', () => {
     await userEvent.type(input, '/te');
     await userEvent.keyboard('{Enter}');
 
-    expect(input).toHaveValue('/test ');
+    expect(screen.getByTestId('composer-command-chip')).toHaveTextContent('Test');
+    expect(screen.getByTestId('composer-command-chip')).toHaveClass('bg-[var(--color-accent-soft)]');
+    expect(input).toHaveValue('');
     expect(onSubmit).not.toHaveBeenCalled();
 
     await userEvent.type(input, '--watch');
@@ -361,6 +400,35 @@ describe('Composer', () => {
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       message: '/skill checks:test --watch',
     }));
+  });
+
+  it('keeps the normal compact input height after choosing a command suggestion', async () => {
+    render(<TestComposer
+      onSubmit={() => undefined}
+      getCommandSuggestions={() => ({
+        type: 'suggestions',
+        draft_input: '/re',
+        command_prefix: 're',
+        groups: [{
+          id: 'commands',
+          label: 'Commands',
+          items: [{
+            name: 'review',
+            description: 'Evaluate review feedback before implementing changes',
+            source: { kind: 'built_in' },
+            match: { field: 'name', value: 'review', prefix: 're' },
+            displayInput: '/review ', submitInput: '/review ',
+          }],
+        }],
+      })}
+    />);
+
+    const input = screen.getByLabelText('Message Megumi');
+    await userEvent.type(input, '/re');
+    await userEvent.keyboard('{Enter}');
+
+    expect(screen.getByTestId('composer-command-chip')).toHaveTextContent('Review');
+    expect(input).toHaveStyle({ height: '56px' });
   });
 
   it('does not convert a typed skill display command without choosing a suggestion', async () => {
@@ -430,7 +498,8 @@ describe('Composer', () => {
     await userEvent.type(input, '/re');
     await userEvent.keyboard('{Tab}');
 
-    expect(input).toHaveValue('/review ');
+    expect(screen.getByTestId('composer-command-chip')).toHaveTextContent('Review');
+    expect(input).toHaveValue('');
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
