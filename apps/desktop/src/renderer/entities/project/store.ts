@@ -98,7 +98,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       return null;
     }
 
-    if (!result.data.project) {
+    if (result.data.status === 'failed') {
+      set({ loading: false, error: result.data.failure.message });
+      return null;
+    }
+
+    if (result.data.status === 'cancelled') {
       set({ loading: false, error: null });
       return null;
     }
@@ -125,6 +130,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       return null;
     }
 
+    if (result.data.status === 'not_found') {
+      set({ loading: false, error: 'Project was not found.' });
+      return null;
+    }
+
+    if (result.data.status === 'failed') {
+      set({ loading: false, error: result.data.failure.message });
+      return null;
+    }
+
     const project = projectFromRecord(result.data.project);
     clearActiveSessionOutsideProject(project.id);
     useSessionStore.getState().setNewSessionDraftTargetProject(null);
@@ -144,6 +159,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
     if (!result.ok) {
       set({ loading: false, error: getRuntimeIpcErrorMessage(result) });
+      return false;
+    }
+
+    if (result.data.status === 'blocked') {
+      set({ loading: false, error: 'Project cannot be removed while product facts still reference it.' });
+      return false;
+    }
+
+    if (result.data.status === 'failed') {
+      set({ loading: false, error: result.data.failure.message });
       return false;
     }
 

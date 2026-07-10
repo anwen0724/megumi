@@ -164,13 +164,19 @@ export function useChatPageController() {
       if (cancelled) {
         return;
       }
-      setContextUsage(result.ok ? result.data : { status: 'failed', message: result.data.message });
+      setContextUsage(result.ok ? result.data : {
+        status: 'failed',
+        failure: { code: result.data.code, message: result.data.message },
+      });
     }
 
     if (agentStatus === 'idle' || agentStatus === 'error') {
       void loadContextUsage().catch(() => {
         if (!cancelled) {
-          setContextUsage({ status: 'failed', message: 'Context usage could not be loaded.' });
+          setContextUsage({
+            status: 'failed',
+            failure: { code: 'context_usage_load_failed', message: 'Context usage could not be loaded.' },
+          });
         }
       });
     }

@@ -85,13 +85,32 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesStoreState>((set, get
         return;
       }
 
+      if (result.data.status === 'workspace_not_found') {
+        set((state) => ({
+          loadingDirectories: state.loadingDirectories.filter((item) => item !== directoryPath),
+          error: 'Workspace was not found.',
+        }));
+        return;
+      }
+
+      if (result.data.status === 'path_rejected') {
+        set((state) => ({
+          loadingDirectories: state.loadingDirectories.filter((item) => item !== directoryPath),
+          error: 'Workspace path was rejected.',
+        }));
+        return;
+      }
+
+      const listedDirectoryPath = result.data.directoryPath;
+      const listedEntries = result.data.entries.map((entry) => ({
+        ...entry,
+        kind: entry.type ?? (entry as { kind?: WorkspaceDirectoryEntry['kind'] }).kind,
+      }));
+
       set((state) => ({
         entriesByDirectory: {
           ...state.entriesByDirectory,
-          [result.data.directoryPath]: result.data.entries.map((entry) => ({
-            ...entry,
-            kind: entry.type ?? (entry as { kind?: WorkspaceDirectoryEntry['kind'] }).kind,
-          })),
+          [listedDirectoryPath]: listedEntries,
         },
         loadingDirectories: state.loadingDirectories.filter((item) => item !== directoryPath),
         error: null,

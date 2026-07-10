@@ -35,6 +35,7 @@ describe('ChatHost product semantics', () => {
       projectId: 'workspace:1',
       title: 'Planning',
     })).resolves.toMatchObject({
+      status: 'created',
       session: {
         id: 'session:owner-1',
         projectId: 'workspace:1',
@@ -44,6 +45,72 @@ describe('ChatHost product semantics', () => {
     expect(createSession).toHaveBeenCalledWith({
       workspace_id: 'workspace:1',
       title: 'Planning',
+    });
+  });
+
+  it('returns Session owner failures from createSession without throwing', async () => {
+    const host = createHost(vi.fn(), vi.fn(), {
+      createSession: vi.fn(() => ({
+        status: 'failed' as const,
+        failure: { code: 'session_repository_error', message: 'Session store failed.' },
+      })),
+    });
+
+    await expect(host.createSession({
+      projectId: 'workspace:1',
+      title: 'Planning',
+    })).resolves.toEqual({
+      status: 'failed',
+      failure: { code: 'session_repository_error', message: 'Session store failed.' },
+    });
+  });
+
+  it('returns Session owner failures from listSessions without throwing', async () => {
+    const host = createChatHost({
+      agentRunService: { startRun: vi.fn(), cancelRun: vi.fn() } as never,
+      commandService: { getCommandSuggestions: vi.fn() } as never,
+      sessionService: {
+        listSessions: vi.fn(() => ({
+          status: 'failed' as const,
+          failure: { code: 'session_repository_error', message: 'Cannot list sessions.' },
+        })),
+      } as never,
+      branchService: createSessionBranchService(),
+      workspaceService: {
+        listWorkspaces: vi.fn(async () => ({
+          workspaces: [{
+            workspace_id: 'workspace:1',
+            name: 'megumi',
+            root_path: 'C:/work/megumi',
+            root_path_key: 'c:/work/megumi',
+            status: 'available' as const,
+            created_at: '2026-07-10T00:00:00.000Z',
+            updated_at: '2026-07-10T00:00:00.000Z',
+            last_opened_at: '2026-07-10T00:00:00.000Z',
+          }],
+        })),
+      },
+      sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
+      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [] },
+    });
+
+    await expect(host.listSessions()).resolves.toEqual({
+      status: 'failed',
+      failure: { code: 'session_repository_error', message: 'Cannot list sessions.' },
+    });
+  });
+
+  it('returns Session owner failures from listMessages without throwing', async () => {
+    const host = createHost(vi.fn(), vi.fn(), {
+      listMessages: vi.fn(() => ({
+        status: 'failed' as const,
+        failure: { code: 'session_not_found', message: 'Session was not found.' },
+      })),
+    });
+
+    await expect(host.listMessages({ sessionId: 'session:missing' })).resolves.toEqual({
+      status: 'failed',
+      failure: { code: 'session_not_found', message: 'Session was not found.' },
     });
   });
 

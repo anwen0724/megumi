@@ -48,7 +48,7 @@ describe('createApprovalHost', () => {
     });
   });
 
-  it('returns resolved and forwards Agent Run events when approval resumes', async () => {
+  it('returns resumed and forwards Agent Run events when approval resumes', async () => {
     async function* events() {}
     const resumeRunAfterApproval = vi.fn(async () => ({
       status: 'resumed' as const,
@@ -73,9 +73,13 @@ describe('createApprovalHost', () => {
       scope: 'session',
     });
 
-    expect(result.payload).toEqual({
-      status: 'resolved',
+    expect(result.payload).toMatchObject({
+      status: 'resumed',
       approvalRequestId: 'approval-1',
+      run: {
+        runId: 'run-1',
+        sessionId: 'session-1',
+      },
     });
     expect(result.payload).not.toHaveProperty('data');
     expect(result.events).toBeDefined();
@@ -86,6 +90,60 @@ describe('createApprovalHost', () => {
         decision: 'approved',
         scope: 'session',
         decided_by: 'user',
+      },
+    });
+  });
+
+  it('returns Agent Run not_found and not_waiting approval statuses without converting them to failed', async () => {
+    const notFound = createApprovalHost({
+      resumeRunAfterApproval: vi.fn(async () => ({
+        status: 'not_found' as const,
+        approval_request_id: 'approval-missing',
+      })),
+    });
+
+    await expect(notFound.resolve({
+      approvalRequestId: 'approval-missing',
+      decision: 'approved',
+      scope: 'once',
+    })).resolves.toEqual({
+      payload: {
+        status: 'not_found',
+        approvalRequestId: 'approval-missing',
+      },
+    });
+
+    const notWaiting = createApprovalHost({
+      resumeRunAfterApproval: vi.fn(async () => ({
+        status: 'not_waiting' as const,
+        run: {
+          run_id: 'run-1',
+          workspace_id: 'workspace-1',
+          session_id: 'session-1',
+          model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
+          trigger: { type: 'user_input' as const, user_message_id: 'message-1' },
+          status: 'completed' as const,
+          created_at: '2026-07-09T00:00:00.000Z',
+          completed_at: '2026-07-09T00:00:01.000Z',
+        },
+      })),
+    });
+
+    await expect(notWaiting.resolve({
+      approvalRequestId: 'approval-1',
+      decision: 'approved',
+      scope: 'once',
+    })).resolves.toEqual({
+      payload: {
+        status: 'not_waiting',
+        approvalRequestId: 'approval-1',
+        run: {
+          runId: 'run-1',
+          sessionId: 'session-1',
+          status: 'completed',
+          createdAt: '2026-07-09T00:00:00.000Z',
+          completedAt: '2026-07-09T00:00:01.000Z',
+        },
       },
     });
   });

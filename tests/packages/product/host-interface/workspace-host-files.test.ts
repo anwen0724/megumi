@@ -67,6 +67,32 @@ describe('WorkspaceHost files', () => {
       failure: { code: 'file_open_failed', message: 'No app associated.' },
     });
   });
+
+  it('returns workspace file owner statuses from listFiles and openFile without throwing', async () => {
+    const host = createWorkspaceHost({
+      workspaceService: workspaceServiceStub(),
+      workspaceFilesService: {
+        listDirectory: vi.fn(async () => ({
+          status: 'path_rejected' as const,
+          reason: 'outside_workspace' as const,
+        })),
+        resolveFile: vi.fn(() => ({
+          status: 'workspace_not_found' as const,
+          workspace_id: 'workspace:missing',
+        })),
+      },
+      fileOpen: { openPath: vi.fn() },
+    });
+
+    await expect(host.listFiles({ projectId: 'workspace:1', directoryPath: '../outside' })).resolves.toEqual({
+      status: 'path_rejected',
+      reason: 'outside_workspace',
+    });
+    await expect(host.openFile({ projectId: 'workspace:missing', filePath: 'README.md' })).resolves.toEqual({
+      status: 'workspace_not_found',
+      projectId: 'workspace:missing',
+    });
+  });
 });
 
 function workspaceServiceStub() {

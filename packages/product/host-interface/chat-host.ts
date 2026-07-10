@@ -91,6 +91,11 @@ const ChatRunUiDtoSchema = z.object({
   runId: z.string().min(1), sessionId: z.string().min(1), status: z.string().min(1),
   createdAt: z.string().datetime(), completedAt: z.string().datetime().optional(),
 }).strict();
+const HostFailureSchema = z.object({
+  code: z.string().min(1),
+  message: z.string(),
+  retryable: z.boolean().optional(),
+}).strict();
 export const ChatSendUserInputUiPayloadSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('agent_run'), session: ChatSessionUiDtoSchema, requestId: z.string(), userMessageId: z.string(),
@@ -130,14 +135,24 @@ export const ChatCommandSuggestionsUiResultSchema = z.object({
     }).strict(),
   ]),
 }).strict();
-export const ChatCreateSessionUiResultSchema = z.object({ session: ChatSessionUiDtoSchema }).strict();
-export const ChatListSessionsUiResultSchema = z.object({ sessions: z.array(ChatSessionUiDtoSchema) }).strict();
-export const ChatListMessagesUiResultSchema = z.object({
-  messages: z.array(z.object({
-    id: z.string().min(1), sessionId: z.string().min(1), runId: z.string().min(1).optional(),
-    role: z.enum(['user', 'assistant']), text: z.string(), createdAt: z.string().datetime(),
-  }).strict()),
-}).strict();
+export const ChatCreateSessionUiResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('created'), session: ChatSessionUiDtoSchema }).strict(),
+  z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
+]);
+export const ChatListSessionsUiResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('ok'), sessions: z.array(ChatSessionUiDtoSchema) }).strict(),
+  z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
+]);
+export const ChatListMessagesUiResultSchema = z.discriminatedUnion('status', [
+  z.object({
+    status: z.literal('ok'),
+    messages: z.array(z.object({
+      id: z.string().min(1), sessionId: z.string().min(1), runId: z.string().min(1).optional(),
+      role: z.enum(['user', 'assistant']), text: z.string(), createdAt: z.string().datetime(),
+    }).strict()),
+  }).strict(),
+  z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
+]);
 export const ChatListTimelineUiResultSchema = z.object({
   messages: z.array(TimelineMessageSchema),
   diagnostics: z.array(z.object({ messageId: z.string(), code: z.string(), message: z.string() }).strict()).optional(),
@@ -185,7 +200,7 @@ export const ChatGetContextUsageUiResultSchema = z.discriminatedUnion('status', 
     }).strict(),
   }).strict(),
   z.object({ status: z.literal('not_available'), reason: z.enum(['not_started', 'not_calculated']) }).strict(),
-  z.object({ status: z.literal('failed'), message: z.string() }).strict(),
+  z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
 ]);
 
 export interface SessionBranchHostPort {
@@ -220,9 +235,9 @@ export function createChatHost(options: {
         ...(request.title ? { title: request.title } : {}),
       });
       if (result.status === 'failed') {
-        throw new Error(result.failure.message);
+        return { status: 'failed', failure: toHostFailure(result.failure) };
       }
-      return { session: toChatSessionUiDto(result.session) };
+      return { status: 'created', session: toChatSessionUiDto(result.session) };
     },
 
     async listSessions() {
@@ -231,11 +246,11 @@ export function createChatHost(options: {
       for (const workspace of workspaces.workspaces) {
         const result = options.sessionService.listSessions({ workspace_id: workspace.workspace_id });
         if (result.status === 'failed') {
-          throw new Error(result.failure.message);
+          return { status: 'failed', failure: toHostFailure(result.failure) };
         }
         sessions.push(...result.sessions);
       }
-      return { sessions: sessions.map(toChatSessionUiDto) };
+      return { status: 'ok', sessions: sessions.map(toChatSessionUiDto) };
     },
 
     async listMessages(request) {
@@ -244,9 +259,9 @@ export function createChatHost(options: {
         active_path_only: true,
       });
       if (result.status === 'failed') {
-        throw new Error(result.failure.message);
+        return { status: 'failed', failure: toHostFailure(result.failure) };
       }
-      return { messages: result.messages.map(toChatMessageUiDto) };
+      return { status: 'ok', messages: result.messages.map(toChatMessageUiDto) };
     },
 
     async listTimeline(request) {
@@ -400,7 +415,7 @@ function mapCurrentContextUsage(current: GetCurrentContextUsageResult): ChatGetC
     return { status: 'ok', usage: toChatContextUsageUiDto(current.usage) };
   }
   if (current.status === 'failed') {
-    return { status: 'failed', message: current.failure.message };
+    return { status: 'failed', failure: toHostFailure(current.failure) };
   }
   return current;
 }
@@ -518,21 +533,26 @@ export interface ChatCreateSessionUiRequest {
   projectId: string;
   title?: string;
 }
-export interface ChatCreateSessionUiResult {
-  session: ChatSessionUiDto;
-}
+export type ChatHostFailure = {
+  code: string;
+  message: string;
+  retryable?: boolean;
+};
+export type ChatCreateSessionUiResult =
+  | { status: 'created'; session: ChatSessionUiDto }
+  | { status: 'failed'; failure: ChatHostFailure };
 
 export interface ChatListSessionsUiRequest {}
-export interface ChatListSessionsUiResult {
-  sessions: ChatSessionUiDto[];
-}
+export type ChatListSessionsUiResult =
+  | { status: 'ok'; sessions: ChatSessionUiDto[] }
+  | { status: 'failed'; failure: ChatHostFailure };
 
 export interface ChatListMessagesUiRequest {
   sessionId: string;
 }
-export interface ChatListMessagesUiResult {
-  messages: ChatSessionMessageUiDto[];
-}
+export type ChatListMessagesUiResult =
+  | { status: 'ok'; messages: ChatSessionMessageUiDto[] }
+  | { status: 'failed'; failure: ChatHostFailure };
 
 export interface ChatListTimelineUiRequest {
   projectId: string;
@@ -715,7 +735,7 @@ export type ChatContextUsageUiDto = {
 export type ChatGetContextUsageUiResult =
   | { status: 'ok'; usage: ChatContextUsageUiDto }
   | { status: 'not_available'; reason: 'not_started' | 'not_calculated' }
-  | { status: 'failed'; message: string };
+  | { status: 'failed'; failure: ChatHostFailure };
 
 /*
  * Maps session and agent-run facts into host-facing chat UI DTOs.
@@ -752,5 +772,13 @@ export function toChatRunUiDto(run: AgentRun): ChatRunUiDto {
     status: run.status,
     createdAt: run.created_at,
     ...(run.completed_at ? { completedAt: run.completed_at } : {}),
+  };
+}
+
+function toHostFailure(failure: { code: string; message: string; retryable?: boolean }): ChatHostFailure {
+  return {
+    code: failure.code,
+    message: failure.message,
+    ...(failure.retryable !== undefined ? { retryable: failure.retryable } : {}),
   };
 }

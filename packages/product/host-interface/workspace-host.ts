@@ -26,16 +26,6 @@ export interface FileOpenPort {
   openPath(absolutePath: string): Promise<FileOpenResult>;
 }
 
-export class WorkspaceProjectCompatibilityError extends Error {
-  constructor(
-    readonly pathOrId: string,
-    readonly reason: 'missing' | 'not_directory',
-  ) {
-    super(`Workspace project compatibility failed: ${reason}`);
-    this.name = 'WorkspaceProjectCompatibilityError';
-  }
-}
-
 export interface WorkspaceHost {
   listProjects(request?: WorkspaceListProjectsUiRequest): Promise<WorkspaceListProjectsUiResult>;
   useExistingProject(request?: WorkspaceUseExistingProjectUiRequest): Promise<WorkspaceUseExistingProjectUiResult>;
@@ -69,34 +59,56 @@ export const WorkspaceListProjectsUiResultSchema = z.object({
   projects: z.array(WorkspaceProjectUiDtoSchema),
 }).strict();
 export const WorkspaceUseExistingProjectUiResultSchema = z.object({
-  project: WorkspaceProjectUiDtoSchema.nullable(),
-}).strict();
-export const WorkspaceOpenProjectUiResultSchema = z.object({
+  status: z.literal('cancelled'),
+  project: z.null(),
+}).strict().or(z.object({
+  status: z.literal('opened'),
   project: WorkspaceProjectUiDtoSchema,
-}).strict();
+}).strict()).or(z.object({
+  status: z.literal('failed'),
+  failure: z.object({ code: z.string().min(1), message: z.string() }).strict(),
+}).strict());
+export const WorkspaceOpenProjectUiResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('activated'), project: WorkspaceProjectUiDtoSchema }).strict(),
+  z.object({ status: z.literal('not_found'), projectId: z.string().min(1) }).strict(),
+  z.object({
+    status: z.literal('failed'),
+    failure: z.object({ code: z.string().min(1), message: z.string() }).strict(),
+  }).strict(),
+]);
 export const WorkspaceRemoveProjectUiResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('removed'), projectId: z.string().min(1) }).strict(),
   z.object({ status: z.literal('not_found'), projectId: z.string().min(1) }).strict(),
+  z.object({
+    status: z.literal('blocked'),
+    projectId: z.string().min(1),
+    reason: z.literal('workspace_has_business_facts'),
+  }).strict(),
   z.object({
     status: z.literal('failed'),
     projectId: z.string().min(1),
     failure: z.object({ code: z.string().min(1), message: z.string() }).strict(),
   }).strict(),
 ]);
-export const WorkspaceListFilesUiResultSchema = z.object({
-  projectId: z.string().min(1),
-  workspaceRoot: z.string().min(1),
-  directoryPath: z.string(),
-  entries: z.array(z.object({
-    name: z.string(),
-    relativePath: z.string(),
-    type: z.enum(['file', 'directory']),
-    depth: z.number().int().nonnegative(),
-    hidden: z.boolean(),
-    sizeBytes: z.number().int().nonnegative().optional(),
-    mtime: z.string().datetime(),
-  }).strict()),
-}).strict();
+export const WorkspaceListFilesUiResultSchema = z.discriminatedUnion('status', [
+  z.object({
+    status: z.literal('ok'),
+    projectId: z.string().min(1),
+    workspaceRoot: z.string().min(1),
+    directoryPath: z.string(),
+    entries: z.array(z.object({
+      name: z.string(),
+      relativePath: z.string(),
+      type: z.enum(['file', 'directory']),
+      depth: z.number().int().nonnegative(),
+      hidden: z.boolean(),
+      sizeBytes: z.number().int().nonnegative().optional(),
+      mtime: z.string().datetime(),
+    }).strict()),
+  }).strict(),
+  z.object({ status: z.literal('workspace_not_found'), projectId: z.string().min(1) }).strict(),
+  z.object({ status: z.literal('path_rejected'), reason: z.enum(['absolute_path', 'outside_workspace']) }).strict(),
+]);
 export const WorkspaceOpenFileUiResultSchema = z.discriminatedUnion('status', [
   z.object({
     status: z.literal('opened'),
@@ -110,6 +122,8 @@ export const WorkspaceOpenFileUiResultSchema = z.discriminatedUnion('status', [
     filePath: z.string().min(1),
     failure: z.object({ code: z.string().min(1), message: z.string() }).strict(),
   }).strict(),
+  z.object({ status: z.literal('workspace_not_found'), projectId: z.string().min(1) }).strict(),
+  z.object({ status: z.literal('path_rejected'), reason: z.enum(['absolute_path', 'outside_workspace']) }).strict(),
 ]);
 
 export function createWorkspaceHost(input: {
@@ -127,27 +141,27 @@ export function createWorkspaceHost(input: {
     async useExistingProject() {
       const picked = await input.directoryPicker?.chooseDirectory();
       if (!picked || picked.canceled || picked.filePaths.length === 0) {
-        return { project: null };
+        return { status: 'cancelled', project: null };
       }
 
       const opened = await input.workspaceService.openWorkspace({
         root_path: picked.filePaths[0],
       });
       if (opened.status === 'failed') {
-        throw compatibilityErrorFromFailure(picked.filePaths[0], opened.failure.code);
+        return { status: 'failed', failure: toWorkspaceFailure(opened.failure) };
       }
-      return { project: toWorkspaceProjectUiDto(opened.workspace) };
+      return { status: 'opened', project: toWorkspaceProjectUiDto(opened.workspace) };
     },
 
     async openProject(request) {
       const found = await input.workspaceService.activateWorkspace({ workspace_id: request.projectId });
       if (found.status === 'not_found') {
-        throw new WorkspaceProjectCompatibilityError(request.projectId, 'missing');
+        return { status: 'not_found', projectId: found.workspace_id };
       }
       if (found.status === 'failed') {
-        throw compatibilityErrorFromFailure(request.projectId, found.failure.code);
+        return { status: 'failed', failure: toWorkspaceFailure(found.failure) };
       }
-      return { project: toWorkspaceProjectUiDto(found.workspace) };
+      return { status: 'activated', project: toWorkspaceProjectUiDto(found.workspace) };
     },
 
     removeProject(request) {
@@ -158,14 +172,7 @@ export function createWorkspaceHost(input: {
       if (result.status === 'not_found') {
         return { status: 'not_found', projectId: result.workspace_id };
       }
-      return {
-        status: 'failed',
-        projectId: result.workspace_id,
-        failure: {
-          code: 'workspace_remove_blocked',
-          message: 'Workspace cannot be removed while product facts still reference it.',
-        },
-      };
+      return { status: 'blocked', projectId: result.workspace_id, reason: result.reason };
     },
 
     async listFiles(request) {
@@ -173,8 +180,14 @@ export function createWorkspaceHost(input: {
         workspace_id: request.projectId,
         directory_path: request.directoryPath,
       });
-      if (result.status !== 'ok') throw workspaceFilesError(result);
+      if (result.status === 'workspace_not_found') {
+        return { status: 'workspace_not_found', projectId: result.workspace_id };
+      }
+      if (result.status === 'path_rejected') {
+        return { status: 'path_rejected', reason: result.reason };
+      }
       return {
+        status: 'ok',
         projectId: result.workspace_id,
         workspaceRoot: result.workspace_root,
         directoryPath: result.directory_path,
@@ -195,7 +208,12 @@ export function createWorkspaceHost(input: {
         workspace_id: request.projectId,
         file_path: request.filePath,
       });
-      if (result.status !== 'ok') throw workspaceFilesError(result);
+      if (result.status === 'workspace_not_found') {
+        return { status: 'workspace_not_found', projectId: result.workspace_id };
+      }
+      if (result.status === 'path_rejected') {
+        return { status: 'path_rejected', reason: result.reason };
+      }
       if (!input.fileOpen) throw new Error('File open adapter is not configured.');
       const opened = await input.fileOpen.openPath(result.absolute_path);
       if (opened.status === 'failed') {
@@ -216,15 +234,11 @@ export function createWorkspaceHost(input: {
   };
 }
 
-function workspaceFilesError(result: { status: string }): Error {
-  return new Error(result.status === 'workspace_not_found' ? 'Workspace not found.' : 'Workspace path was rejected.');
-}
-
-function compatibilityErrorFromFailure(pathOrId: string, code: string): WorkspaceProjectCompatibilityError {
-  return new WorkspaceProjectCompatibilityError(
-    pathOrId,
-    code === 'workspace_path_not_directory' ? 'not_directory' : 'missing',
-  );
+function toWorkspaceFailure(failure: { code: string; message: string }): { code: string; message: string } {
+  return {
+    code: failure.code,
+    message: failure.message,
+  };
 }
 
 /*
@@ -247,16 +261,18 @@ export interface WorkspaceListProjectsUiResult {
 }
 
 export interface WorkspaceUseExistingProjectUiRequest {}
-export interface WorkspaceUseExistingProjectUiResult {
-  project: WorkspaceProjectUiDto | null;
-}
+export type WorkspaceUseExistingProjectUiResult =
+  | { status: 'cancelled'; project: null }
+  | { status: 'opened'; project: WorkspaceProjectUiDto }
+  | { status: 'failed'; failure: { code: string; message: string } };
 
 export interface WorkspaceOpenProjectUiRequest {
   projectId: string;
 }
-export interface WorkspaceOpenProjectUiResult {
-  project: WorkspaceProjectUiDto;
-}
+export type WorkspaceOpenProjectUiResult =
+  | { status: 'activated'; project: WorkspaceProjectUiDto }
+  | { status: 'not_found'; projectId: string }
+  | { status: 'failed'; failure: { code: string; message: string } };
 
 export interface WorkspaceRemoveProjectUiRequest {
   projectId: string;
@@ -264,6 +280,7 @@ export interface WorkspaceRemoveProjectUiRequest {
 export type WorkspaceRemoveProjectUiResult =
   | { status: 'removed'; projectId: string }
   | { status: 'not_found'; projectId: string }
+  | { status: 'blocked'; projectId: string; reason: 'workspace_has_business_facts' }
   | { status: 'failed'; projectId: string; failure: { code: string; message: string } };
 
 export interface WorkspaceFileEntryUiDto {
@@ -280,12 +297,16 @@ export interface WorkspaceListFilesUiRequest {
   projectId: string;
   directoryPath: string;
 }
-export interface WorkspaceListFilesUiResult {
-  projectId: string;
-  workspaceRoot: string;
-  directoryPath: string;
-  entries: WorkspaceFileEntryUiDto[];
-}
+export type WorkspaceListFilesUiResult =
+  | {
+      status: 'ok';
+      projectId: string;
+      workspaceRoot: string;
+      directoryPath: string;
+      entries: WorkspaceFileEntryUiDto[];
+    }
+  | { status: 'workspace_not_found'; projectId: string }
+  | { status: 'path_rejected'; reason: 'absolute_path' | 'outside_workspace' };
 
 export interface WorkspaceOpenFileUiRequest {
   projectId: string;
@@ -293,7 +314,9 @@ export interface WorkspaceOpenFileUiRequest {
 }
 export type WorkspaceOpenFileUiResult =
   | { status: 'opened'; projectId: string; workspaceRoot: string; filePath: string }
-  | { status: 'failed'; projectId: string; filePath: string; failure: { code: string; message: string } };
+  | { status: 'failed'; projectId: string; filePath: string; failure: { code: string; message: string } }
+  | { status: 'workspace_not_found'; projectId: string }
+  | { status: 'path_rejected'; reason: 'absolute_path' | 'outside_workspace' };
 
 /*
  * Maps Workspace module facts into host-facing workspace UI DTOs.

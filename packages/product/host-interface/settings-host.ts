@@ -104,14 +104,21 @@ export const SettingsGetUiResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('ok'), settings: SettingsUiResolvedSchema }).strict(),
   z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
 ]);
-export const SettingsUpdateUiResultSchema = SettingsGetUiResultSchema;
-export const SettingsCompleteSetupUiResultSchema = SettingsGetUiResultSchema;
+export const SettingsUpdateUiResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('updated'), settings: SettingsUiResolvedSchema }).strict(),
+  z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
+]);
+export const SettingsCompleteSetupUiResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('completed'), settings: SettingsUiResolvedSchema }).strict(),
+  z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
+]);
 export const ProviderListUiResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('ok'), providers: z.array(ProviderPublicStatusUiDtoSchema) }).strict(),
   z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
 ]);
 export const EmptyUiResultSchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('ok') }).strict(),
+  z.object({ status: z.literal('updated'), provider: ProviderSettingsUiDtoSchema }).strict(),
+  z.object({ status: z.literal('deleted'), providerId: z.string().min(1) }).strict(),
   z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
 ]);
 
@@ -141,7 +148,7 @@ export function createSettingsHost(
       if (result.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(result.failure) };
       }
-      return { status: 'ok', settings: toSettingsUiResolved(result.settings) };
+      return { status: 'updated', settings: toSettingsUiResolved(result.settings) };
     },
     async completeSetup(request) {
       const result = settingsService.completeSetup({
@@ -163,7 +170,7 @@ export function createSettingsHost(
       if (result.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(result.failure) };
       }
-      return { status: 'ok', settings: toSettingsUiResolved(result.settings) };
+      return { status: 'completed', settings: toSettingsUiResolved(result.settings) };
     },
     async listProviders() {
       const result = settingsService.listProviderSettings();
@@ -187,7 +194,7 @@ export function createSettingsHost(
       if (result.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(result.failure) };
       }
-      return { status: 'ok' };
+      return { status: 'updated', provider: toProviderSettingsUiDto(result.provider) };
     },
     async deleteProvider(request) {
       const result = settingsService.deleteProviderSettings({
@@ -196,7 +203,7 @@ export function createSettingsHost(
       if (result.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(result.failure) };
       }
-      return { status: 'ok' };
+      return { status: 'deleted', providerId: result.provider_id };
     },
     async setProviderApiKey(request) {
       const result = settingsService.setProviderApiKey({
@@ -206,7 +213,7 @@ export function createSettingsHost(
       if (result.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(result.failure) };
       }
-      return { status: 'ok' };
+      return { status: 'updated', provider: toProviderSettingsUiDto(result.provider) };
     },
     async deleteProviderApiKey(request) {
       const result = settingsService.clearProviderApiKey({
@@ -215,7 +222,7 @@ export function createSettingsHost(
       if (result.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(result.failure) };
       }
-      return { status: 'ok' };
+      return { status: 'updated', provider: toProviderSettingsUiDto(result.provider) };
     },
   };
 }
@@ -334,7 +341,9 @@ export type SettingsGetUiResult =
   | { status: 'failed'; failure: HostFailure };
 
 export type SettingsUpdateUiRequest = SettingsUiRaw;
-export type SettingsUpdateUiResult = SettingsGetUiResult;
+export type SettingsUpdateUiResult =
+  | { status: 'updated'; settings: SettingsUiResolved }
+  | { status: 'failed'; failure: HostFailure };
 
 export interface ProviderListUiRequest {}
 export type ProviderListUiResult =
@@ -365,14 +374,17 @@ export interface ProviderDeleteUiRequest {
 }
 
 export type EmptyUiResult =
-  | { status: 'ok' }
+  | { status: 'updated'; provider: ProviderSettingsUiDto }
+  | { status: 'deleted'; providerId: string }
   | { status: 'failed'; failure: HostFailure };
 
 export type SettingsGetPayload = SettingsGetUiRequest;
 export type SettingsUpdatePayload = SettingsUpdateUiRequest;
 export type SettingsCompleteSetupPayload = SettingsCompleteSetupUiRequest;
 export type SettingsData = SettingsGetUiResult;
-export type SettingsCompleteSetupUiResult = SettingsGetUiResult;
+export type SettingsCompleteSetupUiResult =
+  | { status: 'completed'; settings: SettingsUiResolved }
+  | { status: 'failed'; failure: HostFailure };
 
 /*
  * Maps Settings module facts into host-facing settings UI DTOs.
@@ -465,5 +477,23 @@ export function toProviderPublicStatusUiDto(provider: {
     envOverrideActive: provider.env_override_active,
     ...(provider.api_key_env ? { apiKeyEnv: provider.api_key_env } : {}),
     ...(provider.api_key_env_customized !== undefined ? { apiKeyEnvCustomized: provider.api_key_env_customized } : {}),
+  };
+}
+
+export function toProviderSettingsUiDto(provider: {
+  enabled: boolean;
+  protocol: ProviderSettingsUiDto['protocol'];
+  display_name: string;
+  base_url?: string;
+  models: string[];
+  api_key_env?: string;
+}): ProviderSettingsUiDto {
+  return {
+    enabled: provider.enabled,
+    protocol: provider.protocol,
+    displayName: provider.display_name,
+    ...(provider.base_url ? { baseUrl: provider.base_url } : {}),
+    models: provider.models,
+    ...(provider.api_key_env ? { apiKeyEnv: provider.api_key_env } : {}),
   };
 }

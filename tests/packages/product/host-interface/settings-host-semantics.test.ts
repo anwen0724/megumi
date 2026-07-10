@@ -17,7 +17,10 @@ describe('SettingsHost semantics', () => {
   });
 
   it('does not drop schema-accepted empty provider fields during patch mapping', async () => {
-    const updateProviderSettings = vi.fn(() => ({ status: 'ok' as const }));
+    const updateProviderSettings = vi.fn(() => ({
+      status: 'updated' as const,
+      provider: providerSettings(),
+    }));
     const host = createSettingsHost({
       updateProviderSettings,
     } as never);
@@ -38,4 +41,70 @@ describe('SettingsHost semantics', () => {
       },
     });
   });
+
+  it('preserves Settings owner success statuses while projecting settings DTOs', async () => {
+    const settings = resolvedSettings();
+    const host = createSettingsHost({
+      updateSettings: vi.fn(() => ({ status: 'updated' as const, settings })),
+      completeSetup: vi.fn(() => ({ status: 'completed' as const, settings })),
+    } as never);
+
+    await expect(host.update({ theme: 'midnight-blue' })).resolves.toMatchObject({
+      status: 'updated',
+      settings: { theme: 'midnight-blue' },
+    });
+    await expect(host.completeSetup({ language: 'zh-CN' })).resolves.toMatchObject({
+      status: 'completed',
+      settings: { language: 'zh-CN' },
+    });
+  });
+
+  it('preserves provider mutation owner statuses', async () => {
+    const provider = providerSettings();
+    const host = createSettingsHost({
+      updateProviderSettings: vi.fn(() => ({ status: 'updated' as const, provider })),
+      deleteProviderSettings: vi.fn(() => ({ status: 'deleted' as const, provider_id: 'provider:1' })),
+      setProviderApiKey: vi.fn(() => ({ status: 'updated' as const, provider })),
+      clearProviderApiKey: vi.fn(() => ({ status: 'updated' as const, provider })),
+    } as never);
+
+    await expect(host.updateProvider({ providerId: 'provider:1', displayName: 'DeepSeek' })).resolves.toMatchObject({
+      status: 'updated',
+      provider: { displayName: 'DeepSeek' },
+    });
+    await expect(host.deleteProvider({ providerId: 'provider:1' })).resolves.toEqual({
+      status: 'deleted',
+      providerId: 'provider:1',
+    });
+    await expect(host.setProviderApiKey({ providerId: 'provider:1', apiKey: 'secret' })).resolves.toMatchObject({
+      status: 'updated',
+      provider: { displayName: 'DeepSeek' },
+    });
+    await expect(host.deleteProviderApiKey({ providerId: 'provider:1' })).resolves.toMatchObject({
+      status: 'updated',
+      provider: { displayName: 'DeepSeek' },
+    });
+  });
 });
+
+function resolvedSettings() {
+  return {
+    language: 'zh-CN' as const,
+    theme: 'midnight-blue' as const,
+    setup: { completed: true, completed_at: '2026-07-10T00:00:00.000Z' },
+    memory: { enabled: false },
+    compaction: { enabled: true, reserve_tokens: 16384, keep_recent_tokens: 20000 },
+    providers: {},
+    permissions: { allow: [], ask: [], deny: [] },
+  };
+}
+
+function providerSettings() {
+  return {
+    enabled: true,
+    protocol: 'openai-compatible' as const,
+    display_name: 'DeepSeek',
+    base_url: 'https://api.deepseek.com',
+    models: ['deepseek-chat'],
+  };
+}

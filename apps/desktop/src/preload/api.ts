@@ -19,8 +19,10 @@ import type {
   ProviderListUiResult,
   SettingsData,
   SettingsCompleteSetupPayload,
+  SettingsCompleteSetupUiResult,
   SettingsGetPayload,
   SettingsUpdatePayload,
+  SettingsUpdateUiResult,
   DisableSkillUiResponse,
   EnableSkillUiResponse,
   GetSkillDetailUiResponse,
@@ -161,11 +163,11 @@ export const api = {
       invokeRuntimeIpc(IPC_CHANNELS.settings.get, request),
     update: (
       request: BusinessRequest<SettingsUpdatePayload, typeof IPC_CHANNELS.settings.update>,
-    ): Promise<RuntimeIpcResult<SettingsData, typeof IPC_CHANNELS.settings.update>> =>
+    ): Promise<RuntimeIpcResult<SettingsUpdateUiResult, typeof IPC_CHANNELS.settings.update>> =>
       invokeRuntimeIpc(IPC_CHANNELS.settings.update, request),
     completeSetup: (
       request: BusinessRequest<SettingsCompleteSetupPayload, typeof IPC_CHANNELS.settings.completeSetup>,
-    ): Promise<RuntimeIpcResult<SettingsData, typeof IPC_CHANNELS.settings.completeSetup>> =>
+    ): Promise<RuntimeIpcResult<SettingsCompleteSetupUiResult, typeof IPC_CHANNELS.settings.completeSetup>> =>
       invokeRuntimeIpc(IPC_CHANNELS.settings.completeSetup, request),
   },
   command: {

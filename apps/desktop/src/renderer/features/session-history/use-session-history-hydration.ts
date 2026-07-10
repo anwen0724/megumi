@@ -55,6 +55,11 @@ export function useSessionHistoryHydration() {
       return;
     }
 
+    if (result.data.status === 'failed') {
+      useChatUiStore.getState().setLastError(result.data.failure.message);
+      return;
+    }
+
     const persistedSessions = result.data.sessions.map(localSessionFromPersistedSession);
     const sessionState = useSessionStore.getState();
     const currentActiveSessionId = sessionState.activeSessionId;

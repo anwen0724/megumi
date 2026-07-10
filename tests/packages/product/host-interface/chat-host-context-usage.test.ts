@@ -135,4 +135,27 @@ describe('ChatHost context usage', () => {
       refresh: 'background',
     })).resolves.toEqual({ status: 'not_available', reason: 'not_calculated' });
   });
+
+  it('preserves Context owner failure details for UI queries', async () => {
+    const controller = createController({
+      refreshAndGetSessionUsage: vi.fn((): GetCurrentContextUsageResult => ({
+        status: 'failed',
+        failure: {
+          code: 'context_usage_failed',
+          message: 'Could not calculate context usage.',
+        },
+      })),
+    });
+
+    await expect(controller.getContextUsage({
+      sessionId: 'session:1',
+      projectId: 'workspace:1',
+    })).resolves.toEqual({
+      status: 'failed',
+      failure: {
+        code: 'context_usage_failed',
+        message: 'Could not calculate context usage.',
+      },
+    });
+  });
 });

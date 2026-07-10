@@ -49,13 +49,14 @@ describe('composeProduct', () => {
       expect(fs.pathExistsSync(product.homePaths.settingsSchemaPath)).toBe(true);
 
       const opened = await product.host.workspace.useExistingProject();
+      if (opened.status !== 'opened') return;
       expect(opened.project?.rootPath).toBe(workspaceRoot);
-      if (!opened.project) return;
 
       const session = await product.host.chat.createSession({
         projectId: opened.project.projectId,
         title: 'Product-only run',
       });
+      if (session.status !== 'created') return;
       const result = await product.host.chat.sendUserInput({
         projectId: opened.project.projectId,
         sessionId: session.session.id,

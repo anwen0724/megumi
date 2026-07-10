@@ -7,6 +7,8 @@ import {
   ArtifactStatusUpdatePayloadSchema,
   ArtifactVersionCreatePayloadSchema,
   ChatCancelUserInputUiPayloadSchema,
+  ChatCreateSessionUiResultSchema,
+  ChatListSessionsUiResultSchema,
   ChatSendUserInputUiPayloadSchema,
   ListSkillsUiResponseSchema,
   ProviderListUiResultSchema,
@@ -48,6 +50,12 @@ describe('Product Host runtime schemas', () => {
   });
 
   it('validates every legal serializable Chat result branch', () => {
+    expect(ChatCreateSessionUiResultSchema.safeParse({
+      status: 'failed',
+      failure: { code: 'session_failed', message: 'failed' },
+    }).success).toBe(true);
+    expect(ChatListSessionsUiResultSchema.safeParse({ status: 'ok', sessions: [] }).success).toBe(true);
+    expect(ChatListSessionsUiResultSchema.safeParse({ sessions: [] }).success).toBe(false);
     expect(ChatSendUserInputUiPayloadSchema.safeParse({
       type: 'completed', requestId: 'request:1', message: 'done',
     }).success).toBe(true);
@@ -169,11 +177,21 @@ describe('Product Host runtime schemas', () => {
     };
     expect(ApprovalResolveResultSchema.safeParse(failure).success).toBe(true);
     expect(ApprovalResolveResultSchema.safeParse({
-      status: 'resolved',
+      status: 'resumed',
+      approvalRequestId: 'approval:1',
+      run: {
+        runId: 'run:1',
+        sessionId: 'session:1',
+        status: 'running',
+        createdAt: '2026-07-10T00:00:00.000Z',
+      },
+    }).success).toBe(true);
+    expect(ApprovalResolveResultSchema.safeParse({
+      status: 'not_found',
       approvalRequestId: 'approval:1',
     }).success).toBe(true);
     expect(ApprovalResolveResultSchema.safeParse({
-      status: 'resolved',
+      status: 'resumed',
       data: {
         approval: {
           approvalRecordId: 'approval-record:fake',

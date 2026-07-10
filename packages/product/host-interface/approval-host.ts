@@ -1,9 +1,9 @@
 import type { RuntimeEvent } from '../../coding-agent/events';
 
 import type {
+  AgentRun,
   AgentRunFailure,
   AgentRunService,
-  ResumeRunAfterApprovalResult,
 } from '../../coding-agent/agent-run';
 import { z } from 'zod';
 
@@ -30,8 +30,21 @@ const AgentRunFailureSchema = z.object({
   ]),
   message: z.string(), retryable: z.boolean().optional(), details: z.record(z.string(), JsonValueSchema).optional(),
 }).strict();
+const ApprovalRunUiDtoSchema = z.object({
+  runId: z.string().min(1),
+  sessionId: z.string().min(1),
+  status: z.string().min(1),
+  createdAt: z.string().datetime(),
+  completedAt: z.string().datetime().optional(),
+}).strict();
 export const ApprovalResolveResultSchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('resolved'), approvalRequestId: z.string().min(1) }).strict(),
+  z.object({
+    status: z.literal('resumed'), approvalRequestId: z.string().min(1), run: ApprovalRunUiDtoSchema,
+  }).strict(),
+  z.object({ status: z.literal('not_found'), approvalRequestId: z.string().min(1) }).strict(),
+  z.object({
+    status: z.literal('not_waiting'), approvalRequestId: z.string().min(1), run: ApprovalRunUiDtoSchema,
+  }).strict(),
   z.object({
     status: z.literal('failed'), approvalRequestId: z.string().min(1), failure: AgentRunFailureSchema,
   }).strict(),
@@ -46,47 +59,42 @@ export function createApprovalHost(
         approval_request_id: request.approvalRequestId,
         decision: toApprovalDecision(request),
       });
-      if (result.status !== 'resumed') {
+      if (result.status === 'failed') {
         return {
           payload: {
             status: 'failed',
             approvalRequestId: request.approvalRequestId,
-            failure: failureForResumeResult(result),
+            failure: result.failure,
           },
-          ...('events' in result && result.events
-            ? { events: toAsyncEvents(result.events) }
-            : {}),
+          ...(result.events ? { events: toAsyncEvents(result.events) } : {}),
         };
       }
-
+      if (result.status === 'not_found') {
+        return {
+          payload: {
+            status: 'not_found',
+            approvalRequestId: result.approval_request_id,
+          },
+        };
+      }
+      if (result.status === 'not_waiting') {
+        return {
+          payload: {
+            status: 'not_waiting',
+            approvalRequestId: request.approvalRequestId,
+            run: toApprovalRunUiDto(result.run),
+          },
+        };
+      }
       return {
         payload: {
-          status: 'resolved',
+          status: 'resumed',
           approvalRequestId: request.approvalRequestId,
+          run: toApprovalRunUiDto(result.run),
         },
         events: result.events,
       };
     },
-  };
-}
-
-function failureForResumeResult(
-  result: Exclude<ResumeRunAfterApprovalResult, { status: 'resumed' }>,
-): AgentRunFailure {
-  if (result.status === 'failed') {
-    return result.failure;
-  }
-  if (result.status === 'not_found') {
-    return {
-      code: 'approval_failed',
-      message: `Approval request was not found: ${result.approval_request_id}`,
-      retryable: false,
-    };
-  }
-  return {
-    code: 'runtime_interrupted',
-    message: 'This Agent Run is no longer waiting for approval.',
-    retryable: false,
   };
 }
 
@@ -102,9 +110,29 @@ export interface ApprovalResolvePayload {
   reason?: string;
 }
 
-export interface ApprovalHostResolvedResult {
-  status: 'resolved';
+export interface ApprovalRunUiDto {
+  runId: string;
+  sessionId: string;
+  status: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface ApprovalHostResumedResult {
+  status: 'resumed';
   approvalRequestId: string;
+  run: ApprovalRunUiDto;
+}
+
+export interface ApprovalHostNotFoundResult {
+  status: 'not_found';
+  approvalRequestId: string;
+}
+
+export interface ApprovalHostNotWaitingResult {
+  status: 'not_waiting';
+  approvalRequestId: string;
+  run: ApprovalRunUiDto;
 }
 
 export interface ApprovalHostFailedResult {
@@ -114,7 +142,9 @@ export interface ApprovalHostFailedResult {
 }
 
 export type ApprovalHostResult =
-  | ApprovalHostResolvedResult
+  | ApprovalHostResumedResult
+  | ApprovalHostNotFoundResult
+  | ApprovalHostNotWaitingResult
   | ApprovalHostFailedResult;
 
 export interface ApprovalHostInvocation {
@@ -137,5 +167,15 @@ export function toApprovalDecision(payload: ApprovalResolvePayload) {
     scope: payload.scope,
     decided_by: 'user' as const,
     ...(payload.reason ? { reason: payload.reason } : {}),
+  };
+}
+
+function toApprovalRunUiDto(run: AgentRun): ApprovalRunUiDto {
+  return {
+    runId: run.run_id,
+    sessionId: run.session_id,
+    status: run.status,
+    createdAt: run.created_at,
+    ...(run.completed_at ? { completedAt: run.completed_at } : {}),
   };
 }

@@ -102,7 +102,7 @@ describe('registerApprovalHandlers', () => {
     expect(forwardRuntimeEvents).toHaveBeenCalledTimes(1);
   });
 
-  it('returns resolved approval data and forwards runtime events', async () => {
+  it('returns resumed approval data and forwards runtime events', async () => {
     const { handlers, ipcMain } = createIpcMain();
     const warn = vi.fn();
     vi.mocked(forwardRuntimeEvents).mockRejectedValueOnce(new Error('renderer was destroyed'));
@@ -112,8 +112,14 @@ describe('registerApprovalHandlers', () => {
         approval: {
           resolve: vi.fn(async () => ({
             payload: {
-              status: 'resolved' as const,
+              status: 'resumed' as const,
               approvalRequestId: 'approval-1',
+              run: {
+                runId: 'run-1',
+                sessionId: 'session-1',
+                status: 'running',
+                createdAt: '2026-07-09T00:00:00.000Z',
+              },
             },
             events: events(),
           })),
@@ -136,8 +142,12 @@ describe('registerApprovalHandlers', () => {
     expect(response).toMatchObject({
       ok: true,
       data: {
-        status: 'resolved',
+        status: 'resumed',
         approvalRequestId: 'approval-1',
+        run: {
+          runId: 'run-1',
+          sessionId: 'session-1',
+        },
       },
     });
     expect(forwardRuntimeEvents).not.toHaveBeenCalled();
