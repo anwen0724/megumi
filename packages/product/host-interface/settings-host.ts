@@ -4,6 +4,7 @@ import type {
   SettingsService,
   SettingsThemeName,
 } from '../../coding-agent/settings';
+import { z } from 'zod';
 
 /*
  * Implements the SettingsHost interface over the Coding Agent Settings module.
@@ -18,6 +19,70 @@ export interface SettingsHost {
   setProviderApiKey(request: ProviderSetApiKeyUiRequest): Promise<EmptyUiResult>;
   deleteProviderApiKey(request: ProviderDeleteApiKeyUiRequest): Promise<EmptyUiResult>;
 }
+
+const ProviderSettingsUiPatchSchema = z.object({
+  enabled: z.boolean().optional(), protocol: z.enum(['openai-compatible', 'anthropic']).optional(),
+  displayName: z.string().optional(), baseUrl: z.string().optional(), models: z.array(z.string()).optional(),
+  apiKey: z.string().nullable().optional(), apiKeyEnv: z.string().nullable().optional(),
+}).strict();
+export const SettingsGetPayloadSchema = z.object({}).strict();
+export const SettingsUpdatePayloadSchema = z.object({
+  language: z.enum(['zh-CN', 'en-US']).optional(),
+  theme: z.enum(['megumi-warm', 'neutral-light', 'graphite-dark', 'sage-mist', 'midnight-blue']).optional(),
+  setup: z.object({ completed: z.boolean().optional(), completedAt: z.string().datetime().optional() }).strict().optional(),
+  memory: z.object({ enabled: z.boolean().optional() }).strict().optional(),
+  compaction: z.object({
+    enabled: z.boolean().optional(), reserveTokens: z.number().int().nonnegative().optional(),
+    keepRecentTokens: z.number().int().nonnegative().optional(),
+  }).strict().optional(),
+  providers: z.record(z.string(), ProviderSettingsUiPatchSchema).optional(),
+}).strict();
+export const ProviderListPayloadSchema = z.object({}).strict();
+export const ProviderUpdatePayloadSchema = z.object({
+  providerId: z.string().min(1), enabled: z.boolean().optional(), protocol: z.enum(['openai-compatible', 'anthropic']).optional(),
+  displayName: z.string().min(1).optional(), baseUrl: z.string().url().optional(), modelIds: z.array(z.string().min(1)).optional(),
+  apiKeyEnv: z.string().min(1).nullable().optional(),
+}).strict();
+export const ProviderDeletePayloadSchema = z.object({ providerId: z.string().min(1) }).strict();
+export const ProviderApiKeyPayloadSchema = z.object({ providerId: z.string().min(1), apiKey: z.string().min(1) }).strict();
+export const ProviderDeleteApiKeyPayloadSchema = ProviderDeletePayloadSchema;
+
+const ProviderSettingsUiDtoSchema = z.object({
+  enabled: z.boolean(),
+  protocol: z.enum(['openai-compatible', 'anthropic']),
+  displayName: z.string(),
+  baseUrl: z.string().optional(),
+  models: z.array(z.string()),
+  apiKeyEnv: z.string().optional(),
+}).strict();
+const SettingsUiResolvedSchema = z.object({
+  language: z.enum(['zh-CN', 'en-US']),
+  theme: z.enum(['megumi-warm', 'neutral-light', 'graphite-dark', 'sage-mist', 'midnight-blue']),
+  setup: z.object({ completed: z.boolean(), completedAt: z.string().datetime().optional() }).strict(),
+  memory: z.object({ enabled: z.boolean() }).strict(),
+  compaction: z.object({
+    enabled: z.boolean(), reserveTokens: z.number().int().nonnegative(), keepRecentTokens: z.number().int().nonnegative(),
+  }).strict(),
+  providers: z.record(z.string(), ProviderSettingsUiDtoSchema),
+}).strict();
+const ProviderPublicStatusUiDtoSchema = z.object({
+  providerId: z.string().min(1),
+  displayName: z.string(),
+  enabled: z.boolean(),
+  protocol: z.enum(['openai-compatible', 'anthropic']),
+  baseUrl: z.string().optional(),
+  modelIds: z.array(z.string()),
+  hasApiKey: z.boolean(),
+  credentialSource: z.enum(['settings', 'environment', 'missing']),
+  envOverrideActive: z.boolean(),
+  apiKeyEnv: z.string().optional(),
+  apiKeyEnvCustomized: z.boolean().optional(),
+}).strict();
+
+export const SettingsGetUiResultSchema = z.object({ settings: SettingsUiResolvedSchema }).strict();
+export const SettingsUpdateUiResultSchema = SettingsGetUiResultSchema;
+export const ProviderListUiResultSchema = z.object({ providers: z.array(ProviderPublicStatusUiDtoSchema) }).strict();
+export const EmptyUiResultSchema = z.object({}).strict();
 
 export function createSettingsHost(
   settingsService: Pick<

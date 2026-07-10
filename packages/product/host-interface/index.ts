@@ -10,6 +10,85 @@ export type * from './settings-host';
 export type * from './approval-host';
 export type * from './artifact-host';
 export type * from './plan-host';
+export {
+  WorkspaceListProjectsPayloadSchema,
+  WorkspaceUseExistingProjectPayloadSchema,
+  ProjectOpenPayloadSchema,
+  ProjectRemovePayloadSchema,
+  WorkspaceFilesListPayloadSchema,
+  WorkspaceFileOpenPayloadSchema,
+  WorkspaceListProjectsUiResultSchema,
+  WorkspaceUseExistingProjectUiResultSchema,
+  WorkspaceOpenProjectUiResultSchema,
+  WorkspaceRemoveProjectUiResultSchema,
+  WorkspaceListFilesUiResultSchema,
+  WorkspaceOpenFileUiResultSchema,
+} from './workspace-host';
+export {
+  CommandSuggestionsPayloadSchema,
+  SessionCreatePayloadSchema,
+  SessionListPayloadSchema,
+  SessionMessageListPayloadSchema,
+  SessionTimelineListPayloadSchema,
+  SessionContextUsageGetPayloadSchema,
+  SessionMessageSendPayloadSchema,
+  SessionMessageCancelPayloadSchema,
+  SessionBranchDraftCreatePayloadSchema,
+  SessionBranchDraftCancelPayloadSchema,
+  RunListBySessionPayloadSchema,
+  RunEventsListPayloadSchema,
+  ChatSendUserInputUiPayloadSchema,
+  ChatCommandSuggestionsUiResultSchema,
+  ChatCreateSessionUiResultSchema,
+  ChatListSessionsUiResultSchema,
+  ChatListMessagesUiResultSchema,
+  ChatListTimelineUiResultSchema,
+  ChatCancelUserInputUiPayloadSchema,
+  ChatCreateBranchDraftUiPayloadSchema,
+  ChatCancelBranchDraftUiPayloadSchema,
+  ChatListRunsUiResultSchema,
+  ChatListRunEventsUiResultSchema,
+  ChatGetContextUsageUiResultSchema,
+} from './chat-host';
+export {
+  SkillListPayloadSchema,
+  SkillGetPayloadSchema,
+  SkillEnablePayloadSchema,
+  SkillDisablePayloadSchema,
+  ListSkillsUiResponseSchema,
+  GetSkillDetailUiResponseSchema,
+  EnableSkillUiResponseSchema,
+  DisableSkillUiResponseSchema,
+} from './skill-host';
+export {
+  SettingsGetPayloadSchema,
+  SettingsUpdatePayloadSchema,
+  ProviderListPayloadSchema,
+  ProviderUpdatePayloadSchema,
+  ProviderDeletePayloadSchema,
+  ProviderApiKeyPayloadSchema,
+  ProviderDeleteApiKeyPayloadSchema,
+  SettingsGetUiResultSchema,
+  SettingsUpdateUiResultSchema,
+  ProviderListUiResultSchema,
+  EmptyUiResultSchema,
+} from './settings-host';
+export { ApprovalResolvePayloadSchema, ApprovalResolveResultSchema } from './approval-host';
+export {
+  ArtifactListByRunPayloadSchema,
+  ArtifactListBySessionPayloadSchema,
+  ArtifactGetPayloadSchema,
+  ArtifactVersionGetPayloadSchema,
+  ArtifactVersionCreatePayloadSchema,
+  ArtifactStatusUpdatePayloadSchema,
+  ArtifactReferencePayloadSchema,
+  ArtifactListDataSchema,
+  ArtifactGetDataSchema,
+  ArtifactVersionGetDataSchema,
+  ArtifactVersionCreateDataSchema,
+  ArtifactStatusUpdateDataSchema,
+  ArtifactReferenceDataSchema,
+} from './artifact-host';
 export type { RuntimeContext, RuntimeEvent } from '../../coding-agent/events';
 export type * from '../../coding-agent/events';
 export type * from '../../coding-agent/projections/timeline';

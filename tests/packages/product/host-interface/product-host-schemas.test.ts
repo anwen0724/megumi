@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   ApprovalResolvePayloadSchema,
+  ApprovalResolveResultSchema,
+  ArtifactGetDataSchema,
   ChatSendUserInputUiPayloadSchema,
+  ListSkillsUiResponseSchema,
+  ProviderListUiResultSchema,
+  SettingsUpdatePayloadSchema,
   SessionMessageSendPayloadSchema,
   SkillGetPayloadSchema,
   WorkspaceFilesListPayloadSchema,
+  WorkspaceListProjectsUiResultSchema,
 } from '@megumi/product/host-interface';
 
 describe('Product Host runtime schemas', () => {
@@ -35,5 +41,55 @@ describe('Product Host runtime schemas', () => {
     expect(ChatSendUserInputUiPayloadSchema.safeParse({
       type: 'error', requestId: 'request:1', message: 'failed', events: [],
     }).success).toBe(false);
+    expect(ChatSendUserInputUiPayloadSchema.safeParse({
+      type: 'host_interaction_request',
+      requestId: 'request:1',
+      request: { kind: 'context_compaction', callback: () => undefined },
+    }).success).toBe(false);
+  });
+
+  it('validates Workspace result payloads', () => {
+    expect(WorkspaceListProjectsUiResultSchema.safeParse({ projects: [] }).success).toBe(true);
+    expect(WorkspaceListProjectsUiResultSchema.safeParse({ projects: 'invalid' }).success).toBe(false);
+  });
+
+  it('validates Skill result payloads', () => {
+    expect(ListSkillsUiResponseSchema.safeParse({ status: 'ok', skills: [] }).success).toBe(true);
+    expect(ListSkillsUiResponseSchema.safeParse({ status: 'failed', message: 42 }).success).toBe(false);
+  });
+
+  it('validates Settings result payloads', () => {
+    expect(ProviderListUiResultSchema.safeParse({ providers: [] }).success).toBe(true);
+    expect(ProviderListUiResultSchema.safeParse({ providers: [{ hasApiKey: 'yes' }] }).success).toBe(false);
+  });
+
+  it('validates Approval result payloads and rejects non-serializable details', () => {
+    const failure = {
+      status: 'failed', approvalRequestId: 'approval:1',
+      failure: { code: 'approval_failed', message: 'failed', retryable: false },
+    };
+    expect(ApprovalResolveResultSchema.safeParse(failure).success).toBe(true);
+    expect(ApprovalResolveResultSchema.safeParse({
+      ...failure,
+      failure: { ...failure.failure, details: { callback: () => undefined } },
+    }).success).toBe(false);
+  });
+
+  it('validates Artifact result payloads and rejects non-serializable relations', () => {
+    expect(ArtifactGetDataSchema.safeParse({
+      artifact: undefined, currentVersion: undefined, sourceRefs: [], relations: [],
+    }).success).toBe(true);
+    expect(ArtifactGetDataSchema.safeParse({
+      sourceRefs: [], relations: [() => undefined],
+    }).success).toBe(false);
+  });
+
+  it('rejects malformed or unknown Settings update fields', () => {
+    expect(SettingsUpdatePayloadSchema.safeParse({ theme: 123 }).success).toBe(false);
+    expect(SettingsUpdatePayloadSchema.safeParse({ unknownSetting: true }).success).toBe(false);
+    expect(SettingsUpdatePayloadSchema.safeParse({
+      theme: 'midnight-blue',
+      compaction: { enabled: true, reserveTokens: 16_384 },
+    }).success).toBe(true);
   });
 });

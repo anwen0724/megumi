@@ -44,4 +44,16 @@ describe('desktop ipc boundary', () => {
     expect(source).not.toContain('runtime-timeline-event-forwarder');
     expect(source).not.toContain('ipc-operation-name');
   });
+
+  it('validates every public IPC handler result before crossing the shell boundary', () => {
+    const handlerSource = readFiles(path.join(ipcRoot, 'handlers'))
+      .filter((file) => file.endsWith('.handler.ts'))
+      .map((file) => fs.readFileSync(file, 'utf8'))
+      .join('\n');
+    const handlerCount = handlerSource.match(/createIpcRequestHandler\s*\(\s*\{/g)?.length ?? 0;
+    const responseSchemaCount = handlerSource.match(/responseSchema\s*:/g)?.length ?? 0;
+
+    expect(handlerCount).toBeGreaterThan(0);
+    expect(responseSchemaCount).toBe(handlerCount);
+  });
 });

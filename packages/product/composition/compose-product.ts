@@ -82,10 +82,8 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
     }),
     settings: createSettingsHost(runtime.settingsService),
     approval: createApprovalHost(runtime.agentRunService),
-    artifacts: {
-      ...artifacts,
-      plan: createPlanHost(runtime.planArtifactService),
-    },
+    artifacts,
+    plan: createPlanHost(runtime.planArtifactService),
   };
 
   return {

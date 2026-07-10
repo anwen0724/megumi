@@ -1,6 +1,7 @@
-import type { RuntimeContext, RuntimeEvent } from '../../coding-agent/events';
+import { RuntimeEventSchema, type RuntimeContext, type RuntimeEvent } from '../../coding-agent/events';
 
-import type { TimelineMessage } from '../../coding-agent/projections/timeline';
+import { TimelineMessageSchema, type TimelineMessage } from '../../coding-agent/projections/timeline';
+import { z } from 'zod';
 
 import type { RawUserInputAttachment } from '../../coding-agent/input';
 
@@ -47,6 +48,120 @@ export interface ChatHost {
   listRunEvents(request: ChatListRunEventsUiRequest): Promise<ChatListRunEventsUiResult>;
   getContextUsage(request: ChatGetContextUsageUiRequest): Promise<ChatGetContextUsageUiResult>;
 }
+
+const IsoDateTimeSchema = z.string().datetime();
+export const CommandSuggestionsPayloadSchema = z.object({
+  draft_input: z.string(), workspaceId: z.string().min(1).optional(),
+}).strict();
+export const SessionCreatePayloadSchema = z.object({
+  projectId: z.string().min(1), title: z.string().min(1).optional(),
+}).strict();
+export const SessionListPayloadSchema = z.object({}).strict();
+export const SessionMessageListPayloadSchema = z.object({ sessionId: z.string().min(1) }).strict();
+export const SessionTimelineListPayloadSchema = z.object({
+  projectId: z.string().min(1), sessionId: z.string().min(1),
+}).strict();
+export const SessionContextUsageGetPayloadSchema = z.object({
+  sessionId: z.string().min(1), projectId: z.string().min(1).optional(), modelId: z.string().min(1).optional(),
+}).strict();
+export const SessionMessageSendPayloadSchema = z.object({
+  sessionId: z.string().min(1).optional(), projectId: z.string().min(1), text: z.string(),
+  clientMessageId: z.string().min(1).optional(), createdAt: IsoDateTimeSchema.optional(),
+  modelSelection: z.object({ provider_id: z.string().min(1), model_id: z.string().min(1) }).strict(),
+  permissionMode: z.enum(['default', 'accept_edits', 'plan', 'auto']).optional(), permissionSource: z.string().optional(),
+}).strict();
+export const SessionMessageCancelPayloadSchema = z.object({ runId: z.string().min(1) }).strict();
+export const SessionBranchDraftCreatePayloadSchema = z.object({
+  sessionId: z.string().min(1), messageId: z.string().min(1), intent: z.enum(['branch', 'rerun']), createdAt: IsoDateTimeSchema,
+}).strict();
+export const SessionBranchDraftCancelPayloadSchema = z.object({
+  sessionId: z.string().min(1), branchMarkerId: z.string().min(1), createdAt: IsoDateTimeSchema,
+}).strict();
+export const RunListBySessionPayloadSchema = z.object({ sessionId: z.string().min(1) }).strict();
+export const RunEventsListPayloadSchema = z.object({ runId: z.string().min(1) }).strict();
+
+const ChatSessionUiDtoSchema = z.object({
+  id: z.string().min(1), projectId: z.string().min(1), title: z.string(),
+  status: z.enum(['active', 'archived']), createdAt: z.string().datetime(), updatedAt: z.string().datetime(),
+}).strict();
+const ChatRunUiDtoSchema = z.object({
+  runId: z.string().min(1), sessionId: z.string().min(1), status: z.string().min(1),
+  createdAt: z.string().datetime(), completedAt: z.string().datetime().optional(),
+}).strict();
+export const ChatSendUserInputUiPayloadSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('agent_run'), session: ChatSessionUiDtoSchema, requestId: z.string(), userMessageId: z.string(),
+    run: ChatRunUiDtoSchema,
+  }).strict(),
+  z.object({
+    type: z.literal('host_interaction_request'), session: ChatSessionUiDtoSchema.optional(), requestId: z.string(),
+    request: z.object({ kind: z.string() }).strict(),
+  }).strict(),
+  z.object({
+    type: z.literal('completed'), session: ChatSessionUiDtoSchema.optional(), requestId: z.string(), message: z.string().optional(),
+  }).strict(),
+  z.object({
+    type: z.literal('error'), session: ChatSessionUiDtoSchema.optional(), requestId: z.string(), message: z.string(),
+  }).strict(),
+]);
+const HostCommandSuggestionItemSchema = z.object({
+  name: z.string(), aliases: z.array(z.string()).optional(), description: z.string(), argument_hint: z.string().optional(),
+  source: z.union([
+    z.object({ kind: z.literal('built_in') }).strict(),
+    z.object({ kind: z.literal('skill'), skill_id: z.string() }).strict(),
+  ]),
+  source_badge: z.string().optional(),
+  display: z.object({ primary: z.string(), secondary: z.string().optional(), badge: z.string().optional() }).strict().optional(),
+  match: z.object({ field: z.enum(['name', 'alias']), value: z.string(), prefix: z.string() }).strict(),
+  displayInput: z.string(), submitInput: z.string(),
+}).strict();
+
+export const ChatCommandSuggestionsUiResultSchema = z.object({
+  suggestions: z.discriminatedUnion('type', [
+    z.object({ type: z.literal('inactive') }).strict(),
+    z.object({
+      type: z.literal('suggestions'), draft_input: z.string(), command_prefix: z.string(),
+      groups: z.array(z.object({
+        id: z.string(), label: z.string(), items: z.array(HostCommandSuggestionItemSchema),
+      }).strict()),
+    }).strict(),
+  ]),
+}).strict();
+export const ChatCreateSessionUiResultSchema = z.object({ session: ChatSessionUiDtoSchema }).strict();
+export const ChatListSessionsUiResultSchema = z.object({ sessions: z.array(ChatSessionUiDtoSchema) }).strict();
+export const ChatListMessagesUiResultSchema = z.object({
+  messages: z.array(z.object({
+    id: z.string().min(1), sessionId: z.string().min(1), runId: z.string().min(1).optional(),
+    role: z.enum(['user', 'assistant']), text: z.string(), createdAt: z.string().datetime(),
+  }).strict()),
+}).strict();
+export const ChatListTimelineUiResultSchema = z.object({
+  messages: z.array(TimelineMessageSchema),
+  diagnostics: z.array(z.object({ messageId: z.string(), code: z.string(), message: z.string() }).strict()).optional(),
+}).strict();
+export const ChatCancelUserInputUiPayloadSchema = z.object({ cancelled: z.boolean() }).strict();
+export const ChatCreateBranchDraftUiPayloadSchema = z.object({
+  branchDraft: z.object({
+    branchMarkerId: z.string().min(1), sessionId: z.string().min(1), sourceMessageId: z.string().min(1),
+    intent: z.enum(['branch', 'rerun']), createdAt: z.string().datetime(),
+  }).strict(),
+}).strict();
+export const ChatCancelBranchDraftUiPayloadSchema = z.object({
+  cancelled: z.boolean(), reason: z.string().optional(),
+}).strict();
+export const ChatListRunsUiResultSchema = z.object({ runs: z.array(ChatRunUiDtoSchema) }).strict();
+export const ChatListRunEventsUiResultSchema = z.object({ events: z.array(RuntimeEventSchema) }).strict();
+export const ChatGetContextUsageUiResultSchema = z.discriminatedUnion('status', [
+  z.object({
+    status: z.literal('ok'),
+    usage: z.object({
+      usedTokens: z.number().nonnegative(), totalTokens: z.number().nonnegative(), remainingTokens: z.number().nonnegative(),
+      usedPercent: z.number().nonnegative(), autoCompactPercent: z.number().nonnegative(), shouldAutoCompact: z.boolean(),
+    }).strict(),
+  }).strict(),
+  z.object({ status: z.literal('not_available'), reason: z.enum(['not_started', 'not_calculated']) }).strict(),
+  z.object({ status: z.literal('failed'), message: z.string() }).strict(),
+]);
 
 export interface SessionBranchHostPort {
   createBranchDraft(input: ChatCreateBranchDraftUiRequest): ChatCreateBranchDraftUiResult;

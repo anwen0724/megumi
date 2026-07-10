@@ -1,4 +1,5 @@
 import type { Skill, SkillDiagnostic, SkillService } from '../../coding-agent/skills';
+import { z } from 'zod';
 
 /*
  * Implements SkillHost by mapping host requests to the Coding Agent Skill module.
@@ -10,6 +11,50 @@ export interface SkillHost {
   enableSkill(request: EnableSkillUiRequest): Promise<EnableSkillUiResponse>;
   disableSkill(request: DisableSkillUiRequest): Promise<DisableSkillUiResponse>;
 }
+
+export const SkillListPayloadSchema = z.object({ workspaceId: z.string().min(1).optional() }).strict();
+export const SkillGetPayloadSchema = z.object({
+  skillId: z.string().min(1), workspaceId: z.string().min(1).optional(),
+}).strict();
+export const SkillEnablePayloadSchema = SkillGetPayloadSchema;
+export const SkillDisablePayloadSchema = SkillGetPayloadSchema.extend({ reason: z.string().optional() });
+
+const SkillDiagnosticUiItemSchema = z.object({
+  level: z.enum(['info', 'warning', 'error']),
+  message: z.string(),
+}).strict();
+const SkillListUiItemSchema = z.object({
+  skillId: z.string().min(1),
+  name: z.string(),
+  description: z.string(),
+  sourceLabel: z.string(),
+  available: z.boolean(),
+  hasResources: z.boolean(),
+  hasScripts: z.boolean(),
+  diagnostics: z.array(SkillDiagnosticUiItemSchema),
+}).strict();
+const SkillDetailUiDtoSchema = SkillListUiItemSchema.extend({
+  content: z.string().optional(),
+  resourcePaths: z.array(z.string()),
+  scriptNames: z.array(z.string()),
+}).strict();
+const SkillMutationUiResponseSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('ok'), skillId: z.string().min(1) }).strict(),
+  z.object({ status: z.literal('not_found'), skillId: z.string().min(1) }).strict(),
+  z.object({ status: z.literal('failed'), message: z.string() }).strict(),
+]);
+
+export const ListSkillsUiResponseSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('ok'), skills: z.array(SkillListUiItemSchema) }).strict(),
+  z.object({ status: z.literal('failed'), message: z.string() }).strict(),
+]);
+export const GetSkillDetailUiResponseSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('ok'), skill: SkillDetailUiDtoSchema }).strict(),
+  z.object({ status: z.literal('not_found'), skillId: z.string().min(1) }).strict(),
+  z.object({ status: z.literal('failed'), message: z.string() }).strict(),
+]);
+export const EnableSkillUiResponseSchema = SkillMutationUiResponseSchema;
+export const DisableSkillUiResponseSchema = SkillMutationUiResponseSchema;
 
 export function createSkillHost(
   skillService: Pick<SkillService, 'listSkills' | 'getSkill' | 'enableSkill' | 'disableSkill'>,

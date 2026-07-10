@@ -1,20 +1,17 @@
 import { app, BrowserWindow } from 'electron';
 
 export interface RegisterAppLifecycleOptions {
-  runMigrations: () => void;
   registerAllHandlers: () => void;
   createWindow: () => void;
   dispose?: () => void;
 }
 
 export function registerAppLifecycle({
-  runMigrations,
   registerAllHandlers,
   createWindow,
   dispose,
 }: RegisterAppLifecycleOptions): void {
   app.whenReady().then(() => {
-    runMigrations();
     registerAllHandlers();
     createWindow();
   });

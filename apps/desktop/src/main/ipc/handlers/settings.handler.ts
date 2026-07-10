@@ -1,7 +1,13 @@
 /*
  * Desktop IPC handlers for settings and provider configuration.
  */
-import type { ProductHostInterface } from '@megumi/product/host-interface';
+import {
+  EmptyUiResultSchema,
+  ProviderListUiResultSchema,
+  SettingsGetUiResultSchema,
+  SettingsUpdateUiResultSchema,
+  type ProductHostInterface,
+} from '@megumi/product/host-interface';
 import type { RuntimeLogger } from '@megumi/product/logging';
 import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { createIpcRequestHandler } from '../create-request-handler';
@@ -35,6 +41,7 @@ export function registerSettingsHandlers(
   ipcMain.handle(IPC_CHANNELS.settings.get, createIpcRequestHandler({
     channel: IPC_CHANNELS.settings.get,
     requestSchema: SettingsGetRequestSchema,
+    responseSchema: SettingsGetUiResultSchema,
     logger: options.logger,
     handle: () => service.host.settings.get({}),
     mapError: mapSettingsIpcError,
@@ -43,6 +50,7 @@ export function registerSettingsHandlers(
   ipcMain.handle(IPC_CHANNELS.settings.update, createIpcRequestHandler({
     channel: IPC_CHANNELS.settings.update,
     requestSchema: SettingsUpdateRequestSchema,
+    responseSchema: SettingsUpdateUiResultSchema,
     logger: options.logger,
     handle: (request) => service.host.settings.update(request.payload),
     mapError: mapSettingsIpcError,
@@ -51,6 +59,7 @@ export function registerSettingsHandlers(
   ipcMain.handle(IPC_CHANNELS.settings.providerList, createIpcRequestHandler({
     channel: IPC_CHANNELS.settings.providerList,
     requestSchema: ProviderListRequestSchema,
+    responseSchema: ProviderListUiResultSchema,
     logger: options.logger,
     handle: () => service.host.settings.listProviders({}),
     mapError: mapSettingsIpcError,
@@ -59,6 +68,7 @@ export function registerSettingsHandlers(
   ipcMain.handle(IPC_CHANNELS.settings.providerUpdate, createIpcRequestHandler({
     channel: IPC_CHANNELS.settings.providerUpdate,
     requestSchema: ProviderUpdateRequestSchema,
+    responseSchema: EmptyUiResultSchema,
     logger: options.logger,
     handle: (request) => service.host.settings.updateProvider(request.payload),
     mapError: mapSettingsIpcError,
@@ -67,6 +77,7 @@ export function registerSettingsHandlers(
   ipcMain.handle(IPC_CHANNELS.settings.providerDelete, createIpcRequestHandler({
     channel: IPC_CHANNELS.settings.providerDelete,
     requestSchema: ProviderDeleteRequestSchema,
+    responseSchema: EmptyUiResultSchema,
     logger: options.logger,
     handle: (request) => service.host.settings.deleteProvider(request.payload),
     mapError: mapSettingsIpcError,
@@ -75,6 +86,7 @@ export function registerSettingsHandlers(
   ipcMain.handle(IPC_CHANNELS.settings.providerSetApiKey, createIpcRequestHandler({
     channel: IPC_CHANNELS.settings.providerSetApiKey,
     requestSchema: ProviderApiKeyRequestSchema,
+    responseSchema: EmptyUiResultSchema,
     logger: options.logger,
     handle: (request) => service.host.settings.setProviderApiKey(request.payload),
     mapError: mapSettingsIpcError,
@@ -83,6 +95,7 @@ export function registerSettingsHandlers(
   ipcMain.handle(IPC_CHANNELS.settings.providerDeleteApiKey, createIpcRequestHandler({
     channel: IPC_CHANNELS.settings.providerDeleteApiKey,
     requestSchema: ProviderDeleteApiKeyRequestSchema,
+    responseSchema: EmptyUiResultSchema,
     logger: options.logger,
     handle: (request) => service.host.settings.deleteProviderApiKey(request.payload),
     mapError: mapSettingsIpcError,

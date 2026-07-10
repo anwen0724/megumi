@@ -11,6 +11,7 @@ import {
 import type { RuntimeIpcRequest } from '@megumi/desktop/main/ipc/contracts';
 import type { ApprovalResolvePayload } from '@megumi/desktop/main/ipc/schemas';
 import { forwardRuntimeEvents } from '@megumi/desktop/main/ipc/event-forwarders';
+import type { RuntimeLogger } from '@megumi/product/logging';
 
 vi.mock('@megumi/desktop/main/ipc/event-forwarders', () => ({
   forwardRuntimeEvents: vi.fn(),
@@ -49,7 +50,9 @@ function approvalRequest(): RuntimeIpcRequest<ApprovalResolvePayload, typeof IPC
 
 describe('registerApprovalHandlers', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     vi.mocked(forwardRuntimeEvents).mockReset();
+    vi.mocked(forwardRuntimeEvents).mockResolvedValue(undefined);
   });
 
   it('returns failed approval controller result as IPC data', async () => {
@@ -58,14 +61,16 @@ describe('registerApprovalHandlers', () => {
       host: {
         approval: {
           resolve: vi.fn(async () => ({
-            status: 'failed' as const,
-            approvalRequestId: 'approval-1',
-            failure: {
-              code: 'runtime_interrupted' as const,
-              message: 'Approval continuation is no longer available in this runtime.',
-              retryable: false,
+            payload: {
+              status: 'failed' as const,
+              approvalRequestId: 'approval-1',
+              failure: {
+                code: 'runtime_interrupted' as const,
+                message: 'Approval continuation is no longer available in this runtime.',
+                retryable: false,
+              },
             },
-            events: [],
+            events: (async function* events() {})(),
           })),
         },
       },
@@ -93,29 +98,35 @@ describe('registerApprovalHandlers', () => {
         },
       },
     });
+    expect(forwardRuntimeEvents).not.toHaveBeenCalled();
+    await vi.runOnlyPendingTimersAsync();
     expect(forwardRuntimeEvents).toHaveBeenCalledTimes(1);
   });
 
   it('returns resolved approval data and forwards runtime events', async () => {
     const { handlers, ipcMain } = createIpcMain();
+    const warn = vi.fn();
+    vi.mocked(forwardRuntimeEvents).mockRejectedValueOnce(new Error('renderer was destroyed'));
     async function* events() {}
     const service = {
       host: {
         approval: {
           resolve: vi.fn(async () => ({
-            status: 'resolved' as const,
-            data: {
-              approval: {
-                approvalRecordId: 'approval-record-1',
-                approvalRequestId: 'approval-1',
-                toolCallId: 'tool-call-1',
-                toolExecutionId: 'tool-call-1',
-                runId: 'run-1',
-                stepId: 'unknown',
-                decision: 'approved' as const,
-                scope: 'once' as const,
-                decidedBy: 'user' as const,
-                decidedAt: '2026-07-09T00:00:00.000Z',
+            payload: {
+              status: 'resolved' as const,
+              data: {
+                approval: {
+                  approvalRecordId: 'approval-record-1',
+                  approvalRequestId: 'approval-1',
+                  toolCallId: 'tool-call-1',
+                  toolExecutionId: 'tool-call-1',
+                  runId: 'run-1',
+                  stepId: 'unknown',
+                  decision: 'approved' as const,
+                  scope: 'once' as const,
+                  decidedBy: 'user' as const,
+                  decidedAt: '2026-07-09T00:00:00.000Z',
+                },
               },
             },
             events: events(),
@@ -126,6 +137,7 @@ describe('registerApprovalHandlers', () => {
 
     registerApprovalHandlers(service, {
       ipcMain: ipcMain as unknown as RegisterApprovalHandlersOptions['ipcMain'],
+      logger: { warn } as unknown as RuntimeLogger,
     });
 
     const handler = handlers.get(IPC_CHANNELS.approval.resolve);
@@ -147,6 +159,12 @@ describe('registerApprovalHandlers', () => {
         },
       },
     });
+    expect(forwardRuntimeEvents).not.toHaveBeenCalled();
+    await vi.runOnlyPendingTimersAsync();
     expect(forwardRuntimeEvents).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      'Runtime event forwarding failed.',
+      { error: 'Error: renderer was destroyed' },
+    );
   });
 });

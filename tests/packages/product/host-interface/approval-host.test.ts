@@ -26,14 +26,16 @@ describe('createApprovalHost', () => {
     });
 
     expect(result).toEqual({
-      status: 'failed',
-      approvalRequestId: 'approval-1',
-      failure: {
-        code: 'runtime_interrupted',
-        message: 'Approval continuation is no longer available in this runtime.',
-        retryable: false,
+      payload: {
+        status: 'failed',
+        approvalRequestId: 'approval-1',
+        failure: {
+          code: 'runtime_interrupted',
+          message: 'Approval continuation is no longer available in this runtime.',
+          retryable: false,
+        },
       },
-      events: [],
+      events: expect.anything(),
     });
   });
 
@@ -62,11 +64,11 @@ describe('createApprovalHost', () => {
       decidedAt: '2026-07-09T00:00:00.000Z',
     });
 
-    expect(result.status).toBe('resolved');
-    if (result.status !== 'resolved') {
+    expect(result.payload.status).toBe('resolved');
+    if (result.payload.status !== 'resolved') {
       throw new Error('Expected approval to resolve.');
     }
-    expect(result.data.approval).toMatchObject({
+    expect(result.payload.data.approval).toMatchObject({
       approvalRequestId: 'approval-1',
       decision: 'approved',
       scope: 'session',

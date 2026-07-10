@@ -2,6 +2,17 @@
  * Desktop IPC handlers for chat, session, command suggestions, and run hydration.
  */
 import {
+  ChatCancelBranchDraftUiPayloadSchema,
+  ChatCancelUserInputUiPayloadSchema,
+  ChatCommandSuggestionsUiResultSchema,
+  ChatCreateBranchDraftUiPayloadSchema,
+  ChatCreateSessionUiResultSchema,
+  ChatGetContextUsageUiResultSchema,
+  ChatListMessagesUiResultSchema,
+  ChatListRunEventsUiResultSchema,
+  ChatListRunsUiResultSchema,
+  ChatListSessionsUiResultSchema,
+  ChatListTimelineUiResultSchema,
   ChatSendUserInputUiPayloadSchema,
   type ProductHostInterface,
 } from '@megumi/product/host-interface';
@@ -55,6 +66,7 @@ export function registerChatHandlers(
   ipcMain.handle(IPC_CHANNELS.chat.commandSuggestions, createIpcRequestHandler({
     channel: IPC_CHANNELS.chat.commandSuggestions,
     requestSchema: CommandSuggestionsRequestSchema,
+    responseSchema: ChatCommandSuggestionsUiResultSchema,
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<CommandSuggestionsPayload, typeof IPC_CHANNELS.chat.commandSuggestions>) =>
       service.host.chat.getCommandSuggestions(request.payload),
@@ -64,6 +76,7 @@ export function registerChatHandlers(
   ipcMain.handle(IPC_CHANNELS.chat.sessionCreate, createIpcRequestHandler({
     channel: IPC_CHANNELS.chat.sessionCreate,
     requestSchema: SessionCreateRequestSchema,
+    responseSchema: ChatCreateSessionUiResultSchema,
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<SessionCreatePayload, typeof IPC_CHANNELS.chat.sessionCreate>) =>
       service.host.chat.createSession(request.payload),
@@ -73,6 +86,7 @@ export function registerChatHandlers(
   ipcMain.handle(IPC_CHANNELS.chat.sessionList, createIpcRequestHandler({
     channel: IPC_CHANNELS.chat.sessionList,
     requestSchema: SessionListRequestSchema,
+    responseSchema: ChatListSessionsUiResultSchema,
     logger: options.logger,
     handle: () => service.host.chat.listSessions({}),
     mapError: mapChatIpcError,
@@ -81,6 +95,7 @@ export function registerChatHandlers(
   ipcMain.handle(IPC_CHANNELS.chat.sessionMessageList, createIpcRequestHandler({
     channel: IPC_CHANNELS.chat.sessionMessageList,
     requestSchema: SessionMessageListRequestSchema,
+    responseSchema: ChatListMessagesUiResultSchema,
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<SessionMessageListPayload, typeof IPC_CHANNELS.chat.sessionMessageList>) =>
       service.host.chat.listMessages(request.payload),
@@ -90,6 +105,7 @@ export function registerChatHandlers(
   ipcMain.handle(IPC_CHANNELS.chat.sessionTimelineList, createIpcRequestHandler({
     channel: IPC_CHANNELS.chat.sessionTimelineList,
     requestSchema: SessionTimelineListRequestSchema,
+    responseSchema: ChatListTimelineUiResultSchema,
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<SessionTimelineListPayload, typeof IPC_CHANNELS.chat.sessionTimelineList>) =>
       service.host.chat.listTimeline(request.payload),
@@ -99,6 +115,7 @@ export function registerChatHandlers(
   ipcMain.handle(IPC_CHANNELS.chat.sessionContextUsageGet, createIpcRequestHandler({
     channel: IPC_CHANNELS.chat.sessionContextUsageGet,
     requestSchema: SessionContextUsageGetRequestSchema,
+    responseSchema: ChatGetContextUsageUiResultSchema,
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<SessionContextUsageGetPayload, typeof IPC_CHANNELS.chat.sessionContextUsageGet>) =>
       service.host.chat.getContextUsage(request.payload),
@@ -129,6 +146,7 @@ export function registerChatHandlers(
   ipcMain.handle(IPC_CHANNELS.chat.sessionMessageCancel, createIpcRequestHandler({
     channel: IPC_CHANNELS.chat.sessionMessageCancel,
     requestSchema: SessionMessageCancelRequestSchema,
+    responseSchema: ChatCancelUserInputUiPayloadSchema,
     logger: options.logger,
     handle: async (
       request: RuntimeIpcRequest<SessionMessageCancelPayload, typeof IPC_CHANNELS.chat.sessionMessageCancel>,
@@ -144,6 +162,7 @@ export function registerChatHandlers(
   ipcMain.handle(IPC_CHANNELS.chat.branchDraftCreate, createIpcRequestHandler({
     channel: IPC_CHANNELS.chat.branchDraftCreate,
     requestSchema: SessionBranchDraftCreateRequestSchema,
+    responseSchema: ChatCreateBranchDraftUiPayloadSchema,
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<SessionBranchDraftCreatePayload, typeof IPC_CHANNELS.chat.branchDraftCreate>, event, context) => {
       const result = service.host.chat.createBranchDraft({
@@ -160,6 +179,7 @@ export function registerChatHandlers(
   ipcMain.handle(IPC_CHANNELS.chat.branchDraftCancel, createIpcRequestHandler({
     channel: IPC_CHANNELS.chat.branchDraftCancel,
     requestSchema: SessionBranchDraftCancelRequestSchema,
+    responseSchema: ChatCancelBranchDraftUiPayloadSchema,
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<SessionBranchDraftCancelPayload, typeof IPC_CHANNELS.chat.branchDraftCancel>, event, context) => {
       const result = service.host.chat.cancelBranchDraft({
@@ -176,6 +196,7 @@ export function registerChatHandlers(
   ipcMain.handle(IPC_CHANNELS.chat.runListBySession, createIpcRequestHandler({
     channel: IPC_CHANNELS.chat.runListBySession,
     requestSchema: RunListBySessionRequestSchema,
+    responseSchema: ChatListRunsUiResultSchema,
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<RunListBySessionPayload, typeof IPC_CHANNELS.chat.runListBySession>) =>
       service.host.chat.listRuns(request.payload),
@@ -185,6 +206,7 @@ export function registerChatHandlers(
   ipcMain.handle(IPC_CHANNELS.chat.runEventsList, createIpcRequestHandler({
     channel: IPC_CHANNELS.chat.runEventsList,
     requestSchema: RunEventsListRequestSchema,
+    responseSchema: ChatListRunEventsUiResultSchema,
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<RunEventsListPayload, typeof IPC_CHANNELS.chat.runEventsList>) =>
       service.host.chat.listRunEvents(request.payload),
@@ -209,6 +231,8 @@ function scheduleEvents(
 ): void {
   if (!events) return;
   setTimeout(() => {
-    void forwardRuntimeEvents(sender, events, { logger });
+    void forwardRuntimeEvents(sender, events, { logger }).catch((error) => {
+      logger?.warn?.('Runtime event forwarding failed.', { error: String(error) });
+    });
   }, 0);
 }

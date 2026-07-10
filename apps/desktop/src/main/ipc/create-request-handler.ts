@@ -16,7 +16,7 @@ export interface CreateIpcRequestHandlerOptions<
 > {
   channel: TChannel;
   requestSchema: z.ZodType<RuntimeIpcRequest<TPayload, TChannel>>;
-  responseSchema?: z.ZodType<TData>;
+  responseSchema: z.ZodType<TData>;
   logger?: RuntimeLogger;
   handle(
     request: RuntimeIpcRequest<TPayload, TChannel>,
@@ -63,7 +63,7 @@ export function createIpcRequestHandler<
 
     try {
       const handled = await options.handle(parsed.data, event, context);
-      const data = options.responseSchema ? options.responseSchema.parse(handled) : handled;
+      const data = options.responseSchema.parse(handled);
       return {
         ok: true,
         data,

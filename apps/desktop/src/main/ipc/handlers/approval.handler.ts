@@ -1,7 +1,11 @@
 /*
  * Desktop IPC handlers for approval decisions.
  */
-import type { ProductHostInterface } from '@megumi/product/host-interface';
+import {
+  ApprovalResolveResultSchema,
+  type ProductHostInterface,
+  type RuntimeEvent,
+} from '@megumi/product/host-interface';
 import type { RuntimeLogger } from '@megumi/product/logging';
 import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { createIpcRequestHandler } from '../create-request-handler';
@@ -28,33 +32,29 @@ export function registerApprovalHandlers(
   ipcMain.handle(IPC_CHANNELS.approval.resolve, createIpcRequestHandler({
     channel: IPC_CHANNELS.approval.resolve,
     requestSchema: ApprovalResolveRequestSchema,
+    responseSchema: ApprovalResolveResultSchema,
     logger: options.logger,
     handle: async (request, event) => {
       const result = await service.host.approval.resolve(request.payload);
-      if (result.status === 'resolved' && result.events) {
-        void forwardRuntimeEvents(event.sender, result.events, { logger: options.logger });
+      if (result.events) {
+        scheduleEvents(event.sender, result.events, options.logger);
       }
-      if (result.status === 'failed' && result.events) {
-        void forwardRuntimeEvents(event.sender, asyncEvents(result.events), { logger: options.logger });
-      }
-      if (result.status === 'failed') {
-        return {
-          status: 'failed',
-          approvalRequestId: result.approvalRequestId,
-          failure: result.failure,
-        };
-      }
-      return {
-        status: 'resolved',
-        data: result.data,
-      };
+      return result.payload;
     },
     mapError: mapApprovalIpcError,
   }));
 }
 
-async function* asyncEvents<T>(events: T[]): AsyncIterable<T> {
-  yield* events;
+function scheduleEvents(
+  sender: { send(channel: string, event: RuntimeEvent): void },
+  events: AsyncIterable<RuntimeEvent>,
+  logger?: RuntimeLogger,
+): void {
+  setTimeout(() => {
+    void forwardRuntimeEvents(sender, events, { logger }).catch((error) => {
+      logger?.warn?.('Runtime event forwarding failed.', { error: String(error) });
+    });
+  }, 0);
 }
 
 function mapApprovalIpcError(): RuntimeIpcError {

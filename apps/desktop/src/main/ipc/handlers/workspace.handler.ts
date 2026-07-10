@@ -1,7 +1,15 @@
 /*
  * Desktop IPC handlers for project/workspace operations and local file browsing.
  */
-import type { ProductHostInterface } from '@megumi/product/host-interface';
+import {
+  WorkspaceListFilesUiResultSchema,
+  WorkspaceListProjectsUiResultSchema,
+  WorkspaceOpenFileUiResultSchema,
+  WorkspaceOpenProjectUiResultSchema,
+  WorkspaceRemoveProjectUiResultSchema,
+  WorkspaceUseExistingProjectUiResultSchema,
+  type ProductHostInterface,
+} from '@megumi/product/host-interface';
 import type { RuntimeLogger } from '@megumi/product/logging';
 import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { createIpcRequestHandler } from '../create-request-handler';
@@ -36,6 +44,7 @@ export function registerWorkspaceHandlers(
   ipcMain.handle(IPC_CHANNELS.workspace.projectList, createIpcRequestHandler({
     channel: IPC_CHANNELS.workspace.projectList,
     requestSchema: ProjectListRequestSchema,
+    responseSchema: WorkspaceListProjectsUiResultSchema,
     logger: options.logger,
     handle: () => service.host.workspace.listProjects({}),
     mapError: mapWorkspaceIpcError,
@@ -44,6 +53,7 @@ export function registerWorkspaceHandlers(
   ipcMain.handle(IPC_CHANNELS.workspace.projectUseExisting, createIpcRequestHandler({
     channel: IPC_CHANNELS.workspace.projectUseExisting,
     requestSchema: ProjectUseExistingRequestSchema,
+    responseSchema: WorkspaceUseExistingProjectUiResultSchema,
     logger: options.logger,
     handle: () => service.host.workspace.useExistingProject({}),
     mapError: mapWorkspaceIpcError,
@@ -52,6 +62,7 @@ export function registerWorkspaceHandlers(
   ipcMain.handle(IPC_CHANNELS.workspace.projectOpen, createIpcRequestHandler({
     channel: IPC_CHANNELS.workspace.projectOpen,
     requestSchema: ProjectOpenRequestSchema,
+    responseSchema: WorkspaceOpenProjectUiResultSchema,
     logger: options.logger,
     handle: (request) => service.host.workspace.openProject(request.payload),
     mapError: mapWorkspaceIpcError,
@@ -60,6 +71,7 @@ export function registerWorkspaceHandlers(
   ipcMain.handle(IPC_CHANNELS.workspace.projectRemove, createIpcRequestHandler({
     channel: IPC_CHANNELS.workspace.projectRemove,
     requestSchema: ProjectRemoveRequestSchema,
+    responseSchema: WorkspaceRemoveProjectUiResultSchema,
     logger: options.logger,
     handle: (request) => service.host.workspace.removeProject(request.payload),
     mapError: mapWorkspaceIpcError,
@@ -68,6 +80,7 @@ export function registerWorkspaceHandlers(
   ipcMain.handle(IPC_CHANNELS.workspace.filesList, createIpcRequestHandler({
     channel: IPC_CHANNELS.workspace.filesList,
     requestSchema: WorkspaceFilesListRequestSchema,
+    responseSchema: WorkspaceListFilesUiResultSchema,
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<WorkspaceFilesListPayload, typeof IPC_CHANNELS.workspace.filesList>) =>
       service.host.workspace.listFiles(request.payload),
@@ -77,6 +90,7 @@ export function registerWorkspaceHandlers(
   ipcMain.handle(IPC_CHANNELS.workspace.filesOpen, createIpcRequestHandler({
     channel: IPC_CHANNELS.workspace.filesOpen,
     requestSchema: WorkspaceFileOpenRequestSchema,
+    responseSchema: WorkspaceOpenFileUiResultSchema,
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<WorkspaceFileOpenPayload, typeof IPC_CHANNELS.workspace.filesOpen>) =>
       service.host.workspace.openFile(request.payload),

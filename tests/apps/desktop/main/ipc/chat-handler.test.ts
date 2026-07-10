@@ -10,11 +10,7 @@ import {
 } from '@megumi/desktop/main/ipc/handlers/chat.handler';
 import type { RuntimeIpcRequest } from '@megumi/desktop/main/ipc/contracts';
 import type { SessionContextUsageGetPayload, SessionMessageSendPayload } from '@megumi/desktop/main/ipc/schemas';
-import { forwardRuntimeEvents } from '@megumi/desktop/main/ipc/event-forwarders';
-
-vi.mock('@megumi/desktop/main/ipc/event-forwarders', () => ({
-  forwardRuntimeEvents: vi.fn(),
-}));
+import type { RuntimeEvent } from '@megumi/product/host-interface';
 
 type RegisteredHandler = (event: { sender: { send: ReturnType<typeof vi.fn> } }, request: unknown) => Promise<unknown>;
 
@@ -70,12 +66,28 @@ function createContextUsageRequest(): RuntimeIpcRequest<SessionContextUsageGetPa
 describe('registerChatHandlers', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.mocked(forwardRuntimeEvents).mockReset();
   });
 
   it('returns run id before starting runtime event forwarding', async () => {
     const { handlers, ipcMain } = createIpcMain();
-    const events = (async function* emptyEvents() {})();
+    const runtimeEvent: RuntimeEvent = {
+      eventId: 'event-1',
+      schemaVersion: 1,
+      eventType: 'run.started',
+      runId: 'run-1',
+      sessionId: 'session-1',
+      sequence: 1,
+      createdAt: '2026-05-17T00:00:00.000Z',
+      source: 'core',
+      visibility: 'system',
+      persist: 'transient',
+      payload: { runKind: 'chat' },
+    };
+    const events = (async function* immediateEvents() {
+      yield runtimeEvent;
+    })();
+    const order: string[] = [];
+    const send = vi.fn(() => order.push('event'));
 
     const service = {
       host: {
@@ -116,7 +128,8 @@ describe('registerChatHandlers', () => {
       throw new Error('session message send handler was not registered.');
     }
 
-    const response = await handler({ sender: { send: vi.fn() } }, createSendRequest());
+    const response = await handler({ sender: { send } }, createSendRequest());
+    order.push('response');
 
     expect(response).toMatchObject({
       ok: true,
@@ -125,16 +138,12 @@ describe('registerChatHandlers', () => {
         run: { runId: 'run-1' },
       },
     });
-    expect(forwardRuntimeEvents).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
 
     await vi.runOnlyPendingTimersAsync();
 
-    expect(forwardRuntimeEvents).toHaveBeenCalledTimes(1);
-    expect(forwardRuntimeEvents).toHaveBeenCalledWith(
-      expect.anything(),
-      events,
-      expect.any(Object),
-    );
+    expect(send).toHaveBeenCalledWith(IPC_CHANNELS.runtime.event, runtimeEvent);
+    expect(order).toEqual(['response', 'event']);
   });
 
   it('routes session context usage requests through the chat host controller', async () => {
@@ -184,6 +193,34 @@ describe('registerChatHandlers', () => {
       sessionId: 'session-1',
       projectId: 'workspace-1',
       modelId: 'deepseek-chat',
+    });
+  });
+
+  it('returns an IPC failure when the Product Host emits an invalid result payload', async () => {
+    const { handlers, ipcMain } = createIpcMain();
+    const service = {
+      host: {
+        chat: {
+          getContextUsage: vi.fn().mockResolvedValue({
+            status: 'ok',
+            usage: { usedTokens: 'invalid' },
+          }),
+        },
+      },
+    } as unknown as ChatHandlersService;
+
+    registerChatHandlers(service, {
+      ipcMain: ipcMain as unknown as RegisterChatHandlersOptions['ipcMain'],
+    });
+
+    const handler = handlers.get(IPC_CHANNELS.chat.sessionContextUsageGet);
+    if (!handler) throw new Error('session context usage handler was not registered.');
+
+    const response = await handler({ sender: { send: vi.fn() } }, createContextUsageRequest());
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'ipc_handler_failed', message: 'Chat service failed.' },
     });
   });
 });

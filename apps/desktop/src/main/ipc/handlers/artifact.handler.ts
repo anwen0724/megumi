@@ -26,6 +26,14 @@ import type {
   ArtifactVersionCreateData,
   ArtifactVersionGetData,
 } from '@megumi/product/host-interface';
+import {
+  ArtifactGetDataSchema,
+  ArtifactListDataSchema,
+  ArtifactReferenceDataSchema,
+  ArtifactStatusUpdateDataSchema,
+  ArtifactVersionCreateDataSchema,
+  ArtifactVersionGetDataSchema,
+} from '@megumi/product/host-interface';
 import type { RuntimeLogger } from '@megumi/product/logging';
 import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { createIpcRequestHandler } from '../create-request-handler';
@@ -48,26 +56,27 @@ export function registerArtifactHandlers(
   ipcMain.handle(IPC_CHANNELS.artifacts.listByRun, createIpcRequestHandler({
     channel: IPC_CHANNELS.artifacts.listByRun,
     requestSchema: ArtifactListByRunRequestSchema,
+    responseSchema: ArtifactListDataSchema,
     logger: options.logger,
-    handle: (request: RuntimeIpcRequest<ArtifactListByRunPayload, typeof IPC_CHANNELS.artifacts.listByRun>): ArtifactListData => ({
-      artifacts: service.listByRun(request.payload.runId).artifacts,
-    }),
+    handle: (request: RuntimeIpcRequest<ArtifactListByRunPayload, typeof IPC_CHANNELS.artifacts.listByRun>): ArtifactListData =>
+      service.listByRun(request.payload.runId),
     mapError: mapArtifactIpcError,
   }));
 
   ipcMain.handle(IPC_CHANNELS.artifacts.listBySession, createIpcRequestHandler({
     channel: IPC_CHANNELS.artifacts.listBySession,
     requestSchema: ArtifactListBySessionRequestSchema,
+    responseSchema: ArtifactListDataSchema,
     logger: options.logger,
-    handle: (request: RuntimeIpcRequest<ArtifactListBySessionPayload, typeof IPC_CHANNELS.artifacts.listBySession>): ArtifactListData => ({
-      artifacts: service.listBySession(request.payload.sessionId).artifacts,
-    }),
+    handle: (request: RuntimeIpcRequest<ArtifactListBySessionPayload, typeof IPC_CHANNELS.artifacts.listBySession>): ArtifactListData =>
+      service.listBySession(request.payload.sessionId),
     mapError: mapArtifactIpcError,
   }));
 
   ipcMain.handle(IPC_CHANNELS.artifacts.get, createIpcRequestHandler({
     channel: IPC_CHANNELS.artifacts.get,
     requestSchema: ArtifactGetRequestSchema,
+    responseSchema: ArtifactGetDataSchema,
     logger: options.logger,
     handle: (request): ArtifactGetData =>
       service.get(request.payload.artifactId),
@@ -77,16 +86,17 @@ export function registerArtifactHandlers(
   ipcMain.handle(IPC_CHANNELS.artifacts.versionGet, createIpcRequestHandler({
     channel: IPC_CHANNELS.artifacts.versionGet,
     requestSchema: ArtifactVersionGetRequestSchema,
+    responseSchema: ArtifactVersionGetDataSchema,
     logger: options.logger,
-    handle: (request: RuntimeIpcRequest<ArtifactVersionGetPayload, typeof IPC_CHANNELS.artifacts.versionGet>): ArtifactVersionGetData => ({
-      version: service.getVersion(request.payload.artifactVersionId).version,
-    }),
+    handle: (request: RuntimeIpcRequest<ArtifactVersionGetPayload, typeof IPC_CHANNELS.artifacts.versionGet>): ArtifactVersionGetData =>
+      service.getVersion(request.payload.artifactVersionId),
     mapError: mapArtifactIpcError,
   }));
 
   ipcMain.handle(IPC_CHANNELS.artifacts.versionCreate, createIpcRequestHandler({
     channel: IPC_CHANNELS.artifacts.versionCreate,
     requestSchema: ArtifactVersionCreateRequestSchema,
+    responseSchema: ArtifactVersionCreateDataSchema,
     logger: options.logger,
     handle: async (
       request: RuntimeIpcRequest<ArtifactVersionCreatePayload, typeof IPC_CHANNELS.artifacts.versionCreate>,
@@ -97,36 +107,22 @@ export function registerArtifactHandlers(
   ipcMain.handle(IPC_CHANNELS.artifacts.statusUpdate, createIpcRequestHandler({
     channel: IPC_CHANNELS.artifacts.statusUpdate,
     requestSchema: ArtifactStatusUpdateRequestSchema,
+    responseSchema: ArtifactStatusUpdateDataSchema,
     logger: options.logger,
-    handle: (request: RuntimeIpcRequest<ArtifactStatusUpdatePayload, typeof IPC_CHANNELS.artifacts.statusUpdate>): ArtifactStatusUpdateData => ({
-      artifact: service.updateStatus(request.payload).artifact,
-    }),
+    handle: (request: RuntimeIpcRequest<ArtifactStatusUpdatePayload, typeof IPC_CHANNELS.artifacts.statusUpdate>): ArtifactStatusUpdateData =>
+      service.updateStatus(request.payload),
     mapError: mapArtifactIpcError,
   }));
 
   ipcMain.handle(IPC_CHANNELS.artifacts.reference, createIpcRequestHandler({
     channel: IPC_CHANNELS.artifacts.reference,
     requestSchema: ArtifactReferenceRequestSchema,
+    responseSchema: ArtifactReferenceDataSchema,
     logger: options.logger,
-    handle: (request: RuntimeIpcRequest<ArtifactReferencePayload, typeof IPC_CHANNELS.artifacts.reference>): ArtifactReferenceData => ({
-      sourceRef: service.reference(request.payload as HostArtifactReferencePayload).sourceRef,
-    }),
+    handle: (request: RuntimeIpcRequest<ArtifactReferencePayload, typeof IPC_CHANNELS.artifacts.reference>): ArtifactReferenceData =>
+      service.reference(request.payload as HostArtifactReferencePayload),
     mapError: mapArtifactIpcError,
   }));
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 }
 
 function mapArtifactIpcError(): RuntimeIpcError {

@@ -14,12 +14,10 @@ export function composeDesktopMain() {
     directoryPicker: electronDirectoryPickerAdapter,
     fileOpen: electronFileOpenAdapter,
   });
-  const megumiHomePaths = product.homePaths;
   const runtimeLogger = product.logger;
   const productHost = product.host;
 
   return {
-    megumiHomePaths,
     runtimeLogger,
     workspace: { host: productHost },
     chat: { host: productHost },

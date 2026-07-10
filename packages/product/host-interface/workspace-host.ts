@@ -3,6 +3,7 @@ import type {
   WorkspaceFilesService,
   WorkspaceService,
 } from '../../coding-agent/workspace';
+import { z } from 'zod';
 
 /*
  * Implements WorkspaceHost over the Coding Agent Workspace module and host ports.
@@ -40,6 +41,59 @@ export interface WorkspaceHost {
   listFiles(request: WorkspaceListFilesUiRequest): Promise<WorkspaceListFilesUiResult>;
   openFile(request: WorkspaceOpenFileUiRequest): Promise<WorkspaceOpenFileUiResult>;
 }
+
+export const WorkspaceListProjectsPayloadSchema = z.object({}).strict();
+export const WorkspaceUseExistingProjectPayloadSchema = z.object({}).strict();
+export const ProjectOpenPayloadSchema = z.object({ projectId: z.string().min(1) }).strict();
+export const ProjectRemovePayloadSchema = ProjectOpenPayloadSchema;
+export const WorkspaceFilesListPayloadSchema = z.object({
+  projectId: z.string().min(1), directoryPath: z.string(),
+}).strict();
+export const WorkspaceFileOpenPayloadSchema = z.object({
+  projectId: z.string().min(1), filePath: z.string().min(1),
+}).strict();
+
+const WorkspaceProjectUiDtoSchema = z.object({
+  projectId: z.string().min(1),
+  name: z.string(),
+  rootPath: z.string().min(1),
+  rootPathKey: z.string().min(1),
+  status: z.enum(['available', 'missing']),
+  openedAt: z.string().datetime().optional(),
+  lastActiveAt: z.string().datetime().optional(),
+}).strict();
+
+export const WorkspaceListProjectsUiResultSchema = z.object({
+  projects: z.array(WorkspaceProjectUiDtoSchema),
+}).strict();
+export const WorkspaceUseExistingProjectUiResultSchema = z.object({
+  project: WorkspaceProjectUiDtoSchema.nullable(),
+}).strict();
+export const WorkspaceOpenProjectUiResultSchema = z.object({
+  project: WorkspaceProjectUiDtoSchema,
+}).strict();
+export const WorkspaceRemoveProjectUiResultSchema = z.object({ removed: z.boolean() }).strict();
+export const WorkspaceListFilesUiResultSchema = z.object({
+  projectId: z.string().min(1),
+  workspaceRoot: z.string().min(1),
+  directoryPath: z.string(),
+  entries: z.array(z.object({
+    name: z.string(),
+    relativePath: z.string(),
+    type: z.enum(['file', 'directory']),
+    depth: z.number().int().nonnegative(),
+    hidden: z.boolean(),
+    ignored: z.boolean(),
+    sizeBytes: z.number().int().nonnegative().optional(),
+    mtime: z.string().datetime(),
+  }).strict()),
+}).strict();
+export const WorkspaceOpenFileUiResultSchema = z.object({
+  projectId: z.string().min(1),
+  workspaceRoot: z.string().min(1),
+  filePath: z.string().min(1),
+  opened: z.literal(true),
+}).strict();
 
 export function createWorkspaceHost(input: {
   workspaceService: WorkspaceService;

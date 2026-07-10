@@ -19,7 +19,6 @@ if (shouldQuitForSquirrelStartup()) {
   registerRuntimeProcessErrorHandlers({ logger: desktopMain.runtimeLogger });
 
   registerAppLifecycle({
-    runMigrations: () => desktopMain.megumiHomePaths,
     registerAllHandlers: () => registerAllHandlers({
       logger: desktopMain.runtimeLogger,
       workspace: desktopMain.workspace,
