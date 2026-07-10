@@ -87,4 +87,35 @@ describe('ChatHost context usage', () => {
       reason: 'ui_context_usage_requested',
     });
   });
+
+  it('starts background refresh without waiting for refreshSession to settle', async () => {
+    let resolveRefresh!: () => void;
+    const getCurrentUsage = vi.fn((): GetCurrentContextUsageResult => ({
+      status: 'not_available',
+      reason: 'not_calculated',
+    }));
+    const start = vi.fn(async (): Promise<StartContextUsageMonitorResult> => ({ status: 'ok' }));
+    const refreshSession = vi.fn(() => new Promise<void>((resolve) => {
+      resolveRefresh = resolve;
+    }));
+    const controller = createController({ getCurrentUsage, start, refreshSession });
+
+    const result = await Promise.race([
+      controller.getContextUsage({
+        sessionId: 'session:1',
+        projectId: 'workspace:1',
+        refresh: 'background',
+      }),
+      Promise.resolve('not-awaited'),
+    ]);
+
+    expect(result).toEqual({ status: 'not_available', reason: 'not_calculated' });
+    expect(refreshSession).toHaveBeenCalledWith({
+      session_id: 'session:1',
+      workspace_id: 'workspace:1',
+      reason: 'ui_context_usage_requested',
+    });
+
+    resolveRefresh();
+  });
 });

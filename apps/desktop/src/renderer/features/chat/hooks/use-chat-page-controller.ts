@@ -163,6 +163,7 @@ export function useChatPageController() {
         {
           sessionId: effectiveActiveSessionId,
           projectId: effectiveProjectId,
+          refresh: 'background',
         },
       ));
       if (cancelled) {

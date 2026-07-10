@@ -2,7 +2,7 @@
 /*
  * Verifies chat page controller UI feedback for failed actions.
  */
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useApprovalStore } from '@megumi/desktop/renderer/entities/approval';
 import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
@@ -75,6 +75,12 @@ describe('useChatPageController', () => {
           }),
         },
         session: {
+          contextUsage: {
+            get: vi.fn().mockResolvedValue({
+              ok: true,
+              data: { status: 'not_available', reason: 'not_calculated' },
+            }),
+          },
           message: {
             send: vi.fn(),
             cancel: vi.fn().mockResolvedValue({ ok: true, data: { cancelled: true, events: [] } }),
@@ -111,5 +117,24 @@ describe('useChatPageController', () => {
         message: 'Approval continuation is no longer available in this runtime.',
       }),
     ]);
+  });
+
+  it('requests context usage with a background refresh for idle sessions', async () => {
+    useChatUiStore.setState({
+      ...useChatUiStore.getState(),
+      agentStatus: 'idle',
+    });
+
+    renderHook(() => useChatPageController());
+
+    await waitFor(() => {
+      expect(window.megumi.session.contextUsage.get).toHaveBeenCalledWith(expect.objectContaining({
+        payload: {
+          sessionId: 'session-1',
+          projectId: 'project-1',
+          refresh: 'background',
+        },
+      }));
+    });
   });
 });
