@@ -4,6 +4,7 @@
 import {
   EmptyUiResultSchema,
   ProviderListUiResultSchema,
+  SettingsCompleteSetupUiResultSchema,
   SettingsGetUiResultSchema,
   SettingsUpdateUiResultSchema,
   type ProductHostInterface,
@@ -20,6 +21,7 @@ import {
   ProviderListRequestSchema,
   ProviderUpdateRequestSchema,
   SettingsGetRequestSchema,
+  SettingsCompleteSetupRequestSchema,
   SettingsUpdateRequestSchema,
 } from '../schemas';
 
@@ -53,6 +55,15 @@ export function registerSettingsHandlers(
     responseSchema: SettingsUpdateUiResultSchema,
     logger: options.logger,
     handle: (request) => service.host.settings.update(request.payload),
+    mapError: mapSettingsIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.settings.completeSetup, createIpcRequestHandler({
+    channel: IPC_CHANNELS.settings.completeSetup,
+    requestSchema: SettingsCompleteSetupRequestSchema,
+    responseSchema: SettingsCompleteSetupUiResultSchema,
+    logger: options.logger,
+    handle: (request) => service.host.settings.completeSetup(request.payload),
     mapError: mapSettingsIpcError,
   }));
 

@@ -10,6 +10,7 @@ export const IPC_CHANNELS = {
   settings: {
     get: 'settings:get',
     update: 'settings:update',
+    completeSetup: 'settings:complete-setup',
     providerList: 'provider:list',
     providerUpdate: 'provider:update',
     providerDelete: 'provider:delete',
@@ -75,6 +76,7 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.window.close,
   IPC_CHANNELS.settings.get,
   IPC_CHANNELS.settings.update,
+  IPC_CHANNELS.settings.completeSetup,
   IPC_CHANNELS.settings.providerList,
   IPC_CHANNELS.settings.providerUpdate,
   IPC_CHANNELS.settings.providerDelete,

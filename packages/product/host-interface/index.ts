@@ -65,6 +65,7 @@ export {
 export {
   SettingsGetPayloadSchema,
   SettingsUpdatePayloadSchema,
+  SettingsCompleteSetupPayloadSchema,
   ProviderListPayloadSchema,
   ProviderUpdatePayloadSchema,
   ProviderDeletePayloadSchema,
@@ -72,6 +73,7 @@ export {
   ProviderDeleteApiKeyPayloadSchema,
   SettingsGetUiResultSchema,
   SettingsUpdateUiResultSchema,
+  SettingsCompleteSetupUiResultSchema,
   ProviderListUiResultSchema,
   EmptyUiResultSchema,
 } from './settings-host';

@@ -74,6 +74,37 @@ describe('Settings Service', () => {
     });
   });
 
+  it('completes setup using the settings owner clock', () => {
+    const fileStore = new MemorySettingsFileStore();
+    const service = createSettingsService({
+      file_store: fileStore,
+      now: () => '2026-07-10T00:00:00.000Z',
+    });
+
+    const result = service.completeSetup({
+      language: 'zh-CN',
+      theme: 'midnight-blue',
+    });
+
+    expect(fileStore.raw).toEqual({
+      language: 'zh-CN',
+      theme: 'midnight-blue',
+      setup: {
+        completed: true,
+        completed_at: '2026-07-10T00:00:00.000Z',
+      },
+    });
+    expect(result).toEqual({
+      status: 'completed',
+      settings: expect.objectContaining({
+        setup: {
+          completed: true,
+          completed_at: '2026-07-10T00:00:00.000Z',
+        },
+      }),
+    });
+  });
+
   it('lists provider settings without leaking plaintext API keys', () => {
     const fileStore = new MemorySettingsFileStore();
     fileStore.raw = {

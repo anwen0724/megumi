@@ -14,7 +14,6 @@ export interface CompleteSetupInput {
   modelIds: string[];
   apiKey?: string;
   skipProvider?: boolean;
-  completedAt?: string;
 }
 
 interface SetupWizardState {
@@ -51,28 +50,21 @@ export const useSetupWizardStore = create<SetupWizardState>((set) => ({
     set({ status: 'saving', error: null });
 
     const apiKey = input.apiKey?.trim();
-    const providerSettings = input.skipProvider
-      ? {}
-      : input.providerId ? {
-          providers: {
-            [input.providerId]: {
-              enabled: true,
-              ...(input.baseUrl?.trim() ? { baseUrl: input.baseUrl.trim() } : {}),
-              models: input.modelIds,
-              ...(apiKey ? { apiKey } : {}),
-            },
-          },
-        } : {};
+    const provider = input.skipProvider || !input.providerId
+      ? undefined
+      : {
+          providerId: input.providerId,
+          enabled: true,
+          ...(input.baseUrl?.trim() ? { baseUrl: input.baseUrl.trim() } : {}),
+          modelIds: input.modelIds,
+          ...(apiKey ? { apiKey } : {}),
+        };
 
-    const settingsResult = await window.megumi.settings.update(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.update, {
+    const settingsResult = await window.megumi.settings.completeSetup(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.completeSetup, {
         language: input.language,
         theme: input.theme,
-        ...providerSettings,
-        setup: {
-          completed: true,
-          completedAt: input.completedAt ?? new Date().toISOString(),
-        },
+        ...(provider ? { provider } : {}),
       }),
     );
 

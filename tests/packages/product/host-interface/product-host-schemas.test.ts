@@ -6,6 +6,7 @@ import {
   ChatSendUserInputUiPayloadSchema,
   ListSkillsUiResponseSchema,
   ProviderListUiResultSchema,
+  SettingsCompleteSetupPayloadSchema,
   SettingsUpdatePayloadSchema,
   SessionMessageSendPayloadSchema,
   SkillDisablePayloadSchema,
@@ -137,6 +138,16 @@ describe('Product Host runtime schemas', () => {
   it('rejects malformed or unknown Settings update fields', () => {
     expect(SettingsUpdatePayloadSchema.safeParse({ theme: 123 }).success).toBe(false);
     expect(SettingsUpdatePayloadSchema.safeParse({ unknownSetting: true }).success).toBe(false);
+    expect(SettingsUpdatePayloadSchema.safeParse({
+      setup: {
+        completed: true,
+        completedAt: '2026-07-10T00:00:00.000Z',
+      },
+    }).success).toBe(false);
+    expect(SettingsCompleteSetupPayloadSchema.safeParse({
+      language: 'zh-CN',
+      theme: 'midnight-blue',
+    }).success).toBe(true);
     expect(SettingsUpdatePayloadSchema.safeParse({
       theme: 'midnight-blue',
       compaction: { enabled: true, reserveTokens: 16_384 },

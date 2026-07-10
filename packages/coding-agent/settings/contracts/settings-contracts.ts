@@ -150,6 +150,32 @@ export type UpdateSettingsResult =
   | { status: 'updated'; settings: SettingsResolved }
   | { status: 'failed'; failure: SettingsError };
 
+export const CompleteSetupProviderRequestSchema = z
+  .object({
+    provider_id: z.string().min(1),
+    enabled: z.boolean().optional(),
+    protocol: z.enum(['openai-compatible', 'anthropic']).optional(),
+    display_name: z.string().min(1).optional(),
+    base_url: z.string().url().optional(),
+    models: z.array(z.string().min(1)).optional(),
+    api_key: z.string().min(1).optional(),
+    api_key_env: z.string().min(1).nullable().optional(),
+  })
+  .strict();
+
+export const CompleteSetupRequestSchema = z
+  .object({
+    language: SettingsLanguageSchema.optional(),
+    theme: SettingsThemeNameSchema.optional(),
+    provider: CompleteSetupProviderRequestSchema.optional(),
+  })
+  .strict();
+export type CompleteSetupRequest = z.infer<typeof CompleteSetupRequestSchema>;
+
+export type CompleteSetupResult =
+  | { status: 'completed'; settings: SettingsResolved }
+  | { status: 'failed'; failure: SettingsError };
+
 export interface MemorySettingsPort {
   isMemoryEnabled(): boolean;
 }

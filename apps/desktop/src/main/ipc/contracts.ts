@@ -15,6 +15,7 @@ export type { RuntimeIpcError } from './errors';
 export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.settings.get,
   IPC_CHANNELS.settings.update,
+  IPC_CHANNELS.settings.completeSetup,
   IPC_CHANNELS.settings.providerList,
   IPC_CHANNELS.settings.providerUpdate,
   IPC_CHANNELS.settings.providerDelete,

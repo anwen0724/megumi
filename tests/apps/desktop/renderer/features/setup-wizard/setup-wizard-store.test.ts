@@ -4,6 +4,7 @@ import { useSetupWizardStore } from '@megumi/desktop/renderer/features/setup-wiz
 
 const settingsGet = vi.fn();
 const settingsUpdate = vi.fn();
+const settingsCompleteSetup = vi.fn();
 const providerUpdate = vi.fn();
 const providerSetApiKey = vi.fn();
 
@@ -14,6 +15,7 @@ function installMegumiMock() {
       settings: {
         get: settingsGet,
         update: settingsUpdate,
+        completeSetup: settingsCompleteSetup,
       },
       provider: {
         update: providerUpdate,
@@ -28,6 +30,7 @@ describe('setup wizard store', () => {
     installMegumiMock();
     settingsGet.mockReset();
     settingsUpdate.mockReset();
+    settingsCompleteSetup.mockReset();
     providerUpdate.mockReset();
     providerSetApiKey.mockReset();
     useSetupWizardStore.setState(useSetupWizardStore.getInitialState(), true);
@@ -56,7 +59,7 @@ describe('setup wizard store', () => {
   });
 
   it('completes setup with one settings update and clears the transient API key from state', async () => {
-    settingsUpdate.mockResolvedValue({
+    settingsCompleteSetup.mockResolvedValue({
       ok: true,
       data: {
         settings: {
@@ -77,36 +80,31 @@ describe('setup wizard store', () => {
       baseUrl: 'https://api.openai.com/v1',
       modelIds: ['gpt-5.5'],
       apiKey: 'TEST_API_KEY_VALUE',
-      completedAt: '2026-06-29T12:00:00.000Z',
     });
 
     expect(providerUpdate).not.toHaveBeenCalled();
     expect(providerSetApiKey).not.toHaveBeenCalled();
-    expect(settingsUpdate).toHaveBeenCalledWith(expect.objectContaining({
+    expect(settingsUpdate).not.toHaveBeenCalled();
+    expect(settingsCompleteSetup).toHaveBeenCalledWith(expect.objectContaining({
       payload: {
         language: 'en-US',
         theme: 'graphite-dark',
-        providers: {
-          openai: {
+        provider: {
+          providerId: 'openai',
             enabled: true,
             baseUrl: 'https://api.openai.com/v1',
-            models: ['gpt-5.5'],
+          modelIds: ['gpt-5.5'],
             apiKey: 'TEST_API_KEY_VALUE',
-          },
-        },
-        setup: {
-          completed: true,
-          completedAt: '2026-06-29T12:00:00.000Z',
         },
       },
     }));
-    expect(settingsUpdate).toHaveBeenCalledTimes(1);
+    expect(settingsCompleteSetup).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(useSetupWizardStore.getState())).not.toContain('TEST_API_KEY_VALUE');
     expect(useSetupWizardStore.getState().setupCompleted).toBe(true);
   });
 
   it('writes setup completion to settings when provider configuration is skipped', async () => {
-    settingsUpdate.mockResolvedValue({
+    settingsCompleteSetup.mockResolvedValue({
       ok: true,
       data: {
         settings: {
@@ -126,27 +124,23 @@ describe('setup wizard store', () => {
       theme: 'sage-mist',
       modelIds: [],
       skipProvider: true,
-      completedAt: '2026-06-29T12:00:00.000Z',
     });
 
     expect(providerUpdate).not.toHaveBeenCalled();
     expect(providerSetApiKey).not.toHaveBeenCalled();
-    expect(settingsUpdate).toHaveBeenCalledWith(expect.objectContaining({
+    expect(settingsUpdate).not.toHaveBeenCalled();
+    expect(settingsCompleteSetup).toHaveBeenCalledWith(expect.objectContaining({
       payload: {
         language: 'zh-CN',
         theme: 'sage-mist',
-        setup: {
-          completed: true,
-          completedAt: '2026-06-29T12:00:00.000Z',
-        },
       },
     }));
-    expect(settingsUpdate).toHaveBeenCalledTimes(1);
+    expect(settingsCompleteSetup).toHaveBeenCalledTimes(1);
     expect(useSetupWizardStore.getState().setupCompleted).toBe(true);
   });
 
   it('does not leave the wizard when settings update does not confirm setup completion', async () => {
-    settingsUpdate.mockResolvedValue({
+    settingsCompleteSetup.mockResolvedValue({
       ok: true,
       data: {
         settings: {
@@ -166,7 +160,6 @@ describe('setup wizard store', () => {
       theme: 'midnight-blue',
       modelIds: ['deepseek-v4-flash'],
       skipProvider: true,
-      completedAt: '2026-06-29T12:00:00.000Z',
     });
 
     expect(useSetupWizardStore.getState()).toMatchObject({

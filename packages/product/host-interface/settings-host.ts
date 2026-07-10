@@ -13,6 +13,7 @@ import { z } from 'zod';
 export interface SettingsHost {
   get(request?: SettingsGetUiRequest): Promise<SettingsGetUiResult>;
   update(request: SettingsUpdateUiRequest): Promise<SettingsUpdateUiResult>;
+  completeSetup(request: SettingsCompleteSetupUiRequest): Promise<SettingsCompleteSetupUiResult>;
   listProviders(request?: ProviderListUiRequest): Promise<ProviderListUiResult>;
   updateProvider(request: ProviderUpdateUiRequest): Promise<EmptyUiResult>;
   deleteProvider(request: ProviderDeleteUiRequest): Promise<EmptyUiResult>;
@@ -23,19 +24,33 @@ export interface SettingsHost {
 const ProviderSettingsUiPatchSchema = z.object({
   enabled: z.boolean().optional(), protocol: z.enum(['openai-compatible', 'anthropic']).optional(),
   displayName: z.string().optional(), baseUrl: z.string().optional(), models: z.array(z.string()).optional(),
-  apiKey: z.string().nullable().optional(), apiKeyEnv: z.string().nullable().optional(),
+  apiKeyEnv: z.string().nullable().optional(),
 }).strict();
 export const SettingsGetPayloadSchema = z.object({}).strict();
 export const SettingsUpdatePayloadSchema = z.object({
   language: z.enum(['zh-CN', 'en-US']).optional(),
   theme: z.enum(['megumi-warm', 'neutral-light', 'graphite-dark', 'sage-mist', 'midnight-blue']).optional(),
-  setup: z.object({ completed: z.boolean().optional(), completedAt: z.string().datetime().optional() }).strict().optional(),
+  setup: z.object({ completed: z.boolean().optional() }).strict().optional(),
   memory: z.object({ enabled: z.boolean().optional() }).strict().optional(),
   compaction: z.object({
     enabled: z.boolean().optional(), reserveTokens: z.number().int().nonnegative().optional(),
     keepRecentTokens: z.number().int().nonnegative().optional(),
   }).strict().optional(),
   providers: z.record(z.string(), ProviderSettingsUiPatchSchema).optional(),
+}).strict();
+export const SettingsCompleteSetupPayloadSchema = z.object({
+  language: z.enum(['zh-CN', 'en-US']).optional(),
+  theme: z.enum(['megumi-warm', 'neutral-light', 'graphite-dark', 'sage-mist', 'midnight-blue']).optional(),
+  provider: z.object({
+    providerId: z.string().min(1),
+    enabled: z.boolean().optional(),
+    protocol: z.enum(['openai-compatible', 'anthropic']).optional(),
+    displayName: z.string().min(1).optional(),
+    baseUrl: z.string().url().optional(),
+    modelIds: z.array(z.string().min(1)).optional(),
+    apiKey: z.string().min(1).optional(),
+    apiKeyEnv: z.string().min(1).nullable().optional(),
+  }).strict().optional(),
 }).strict();
 export const ProviderListPayloadSchema = z.object({}).strict();
 export const ProviderUpdatePayloadSchema = z.object({
@@ -81,6 +96,7 @@ const ProviderPublicStatusUiDtoSchema = z.object({
 
 export const SettingsGetUiResultSchema = z.object({ settings: SettingsUiResolvedSchema }).strict();
 export const SettingsUpdateUiResultSchema = SettingsGetUiResultSchema;
+export const SettingsCompleteSetupUiResultSchema = SettingsGetUiResultSchema;
 export const ProviderListUiResultSchema = z.object({ providers: z.array(ProviderPublicStatusUiDtoSchema) }).strict();
 export const EmptyUiResultSchema = z.object({}).strict();
 
@@ -89,6 +105,7 @@ export function createSettingsHost(
     SettingsService,
     | 'getResolvedSettings'
     | 'updateSettings'
+    | 'completeSetup'
     | 'listProviderSettings'
     | 'updateProviderSettings'
     | 'deleteProviderSettings'
@@ -102,6 +119,28 @@ export function createSettingsHost(
     },
     async update(patch) {
       const result = settingsService.updateSettings({ patch: toSettingsRawPatch(patch) });
+      if (result.status === 'failed') {
+        throw new Error(result.failure.message);
+      }
+      return { settings: toSettingsUiResolved(result.settings) };
+    },
+    async completeSetup(request) {
+      const result = settingsService.completeSetup({
+        ...(request.language ? { language: request.language } : {}),
+        ...(request.theme ? { theme: request.theme as SettingsThemeName } : {}),
+        ...(request.provider ? {
+          provider: {
+            provider_id: request.provider.providerId,
+            ...(request.provider.enabled !== undefined ? { enabled: request.provider.enabled } : {}),
+            ...(request.provider.protocol ? { protocol: request.provider.protocol } : {}),
+            ...(request.provider.displayName ? { display_name: request.provider.displayName } : {}),
+            ...(request.provider.baseUrl ? { base_url: request.provider.baseUrl } : {}),
+            ...(request.provider.modelIds ? { models: request.provider.modelIds } : {}),
+            ...(request.provider.apiKey ? { api_key: request.provider.apiKey } : {}),
+            ...(request.provider.apiKeyEnv !== undefined ? { api_key_env: request.provider.apiKeyEnv } : {}),
+          },
+        } : {}),
+      });
       if (result.status === 'failed') {
         throw new Error(result.failure.message);
       }
@@ -177,7 +216,6 @@ export type SettingsUiRaw = {
   theme?: SettingsUiThemeName;
   setup?: {
     completed?: boolean;
-    completedAt?: string;
   };
   memory?: {
     enabled?: boolean;
@@ -246,8 +284,22 @@ export type ProviderSettingsUiPatch = {
   displayName?: string;
   baseUrl?: string;
   models?: string[];
-  apiKey?: string | null;
   apiKeyEnv?: string | null;
+};
+
+export type SettingsCompleteSetupUiRequest = {
+  language?: 'zh-CN' | 'en-US';
+  theme?: SettingsUiThemeName;
+  provider?: {
+    providerId: string;
+    enabled?: boolean;
+    protocol?: 'openai-compatible' | 'anthropic';
+    displayName?: string;
+    baseUrl?: string;
+    modelIds?: string[];
+    apiKey?: string;
+    apiKeyEnv?: string | null;
+  };
 };
 
 export interface SettingsGetUiRequest {}
@@ -292,24 +344,9 @@ export interface EmptyUiResult {}
 
 export type SettingsGetPayload = SettingsGetUiRequest;
 export type SettingsUpdatePayload = SettingsUpdateUiRequest;
+export type SettingsCompleteSetupPayload = SettingsCompleteSetupUiRequest;
 export type SettingsData = SettingsGetUiResult;
-
-export const DEFAULT_APP_SETTINGS: SettingsUiResolved = {
-  language: 'zh-CN',
-  theme: 'midnight-blue',
-  setup: {
-    completed: false,
-  },
-  memory: {
-    enabled: false,
-  },
-  compaction: {
-    enabled: true,
-    reserveTokens: 16384,
-    keepRecentTokens: 20000,
-  },
-  providers: {},
-};
+export type SettingsCompleteSetupUiResult = SettingsGetUiResult;
 
 /*
  * Maps Settings module facts into host-facing settings UI DTOs.
@@ -322,8 +359,7 @@ export function toSettingsRawPatch(patch: SettingsUiRaw): SettingsRaw {
     ...(patch.theme ? { theme: patch.theme as SettingsThemeName } : {}),
     ...(patch.setup ? {
       setup: {
-        ...(patch.setup.completed !== undefined ? { completed_at: patch.setup.completedAt, completed: patch.setup.completed } : {}),
-        ...(patch.setup.completedAt ? { completed_at: patch.setup.completedAt } : {}),
+        ...(patch.setup.completed !== undefined ? { completed: patch.setup.completed } : {}),
       },
     } : {}),
     ...(patch.memory ? { memory: patch.memory } : {}),
@@ -343,7 +379,6 @@ export function toSettingsRawPatch(patch: SettingsUiRaw): SettingsRaw {
           ...(provider.displayName ? { display_name: provider.displayName } : {}),
           ...(provider.baseUrl ? { base_url: provider.baseUrl } : {}),
           ...(provider.models ? { models: provider.models } : {}),
-          ...(provider.apiKey !== undefined ? { api_key: provider.apiKey } : {}),
           ...(provider.apiKeyEnv !== undefined ? { api_key_env: provider.apiKeyEnv } : {}),
         },
       ])),

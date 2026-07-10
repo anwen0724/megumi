@@ -18,7 +18,10 @@ import {
 } from '../core/permission-settings-resolution';
 import {
   SettingsRawSchema,
+  CompleteSetupRequestSchema,
   UpdateSettingsRequestSchema,
+  type CompleteSetupRequest,
+  type CompleteSetupResult,
   type GetRawSettingsResult,
   type GetResolvedSettingsResult,
   type SettingsError,
@@ -61,12 +64,14 @@ type EnvMap = NodeJS.ProcessEnv | Record<string, string | undefined>;
 export interface SettingsServiceOptions {
   file_store: SettingsFileStore;
   env?: EnvMap;
+  now?: () => string;
 }
 
 export interface SettingsService {
   getRawSettings(): GetRawSettingsResult;
   getResolvedSettings(): GetResolvedSettingsResult;
   updateSettings(request: UpdateSettingsRequest): UpdateSettingsResult;
+  completeSetup(request: CompleteSetupRequest): CompleteSetupResult;
 
   listProviderSettings(): ListProviderSettingsResult;
   listAvailableModels(): ListAvailableModelsResult;
@@ -132,6 +137,47 @@ class DefaultSettingsService implements SettingsService {
     this.options.file_store.writeRawSettings(next);
     return {
       status: 'updated',
+      settings: resolveSettings(next),
+    };
+  }
+
+  completeSetup(request: CompleteSetupRequest): CompleteSetupResult {
+    const parsed = CompleteSetupRequestSchema.safeParse(request);
+    if (!parsed.success) {
+      return failed('setup_completion_invalid', 'Setup completion request is invalid.', {
+        issues: parsed.error.issues,
+      });
+    }
+
+    const raw = this.readRawSettings();
+    if (isSettingsFailure(raw)) return raw;
+
+    const providerPatch = parsed.data.provider
+      ? {
+          [parsed.data.provider.provider_id]: {
+            ...(parsed.data.provider.enabled !== undefined ? { enabled: parsed.data.provider.enabled } : {}),
+            ...(parsed.data.provider.protocol ? { protocol: parsed.data.provider.protocol } : {}),
+            ...(parsed.data.provider.display_name ? { display_name: parsed.data.provider.display_name } : {}),
+            ...(parsed.data.provider.base_url ? { base_url: parsed.data.provider.base_url } : {}),
+            ...(parsed.data.provider.models ? { models: parsed.data.provider.models } : {}),
+            ...(parsed.data.provider.api_key ? { api_key: parsed.data.provider.api_key } : {}),
+            ...(parsed.data.provider.api_key_env !== undefined ? { api_key_env: parsed.data.provider.api_key_env } : {}),
+          },
+        }
+      : undefined;
+
+    const next = mergeRawSettings(raw, {
+      ...(parsed.data.language ? { language: parsed.data.language } : {}),
+      ...(parsed.data.theme ? { theme: parsed.data.theme } : {}),
+      setup: {
+        completed: true,
+        completed_at: this.now(),
+      },
+      ...(providerPatch ? { providers: providerPatch } : {}),
+    });
+    this.options.file_store.writeRawSettings(next);
+    return {
+      status: 'completed',
       settings: resolveSettings(next),
     };
   }
@@ -340,6 +386,10 @@ class DefaultSettingsService implements SettingsService {
     } catch (error) {
       return failed('settings_resolution_failed', 'Settings could not be resolved.', toFailureDetails(error));
     }
+  }
+
+  private now(): string {
+    return this.options.now?.() ?? new Date().toISOString();
   }
 }
 
