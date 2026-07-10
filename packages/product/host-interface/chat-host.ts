@@ -345,7 +345,7 @@ export function createChatHost(options: {
           })
           .catch(() => undefined);
 
-        return mapCurrentContextUsage(options.contextUsageMonitor.getCurrentUsage(usageRequest));
+        return mapBackgroundContextUsage(options.contextUsageMonitor.getCurrentUsage(usageRequest));
       }
 
       const startResult = await options.contextUsageMonitor.start(monitorRequest);
@@ -368,6 +368,14 @@ function mapCurrentContextUsage(current: GetCurrentContextUsageResult): ChatGetC
     return { status: 'failed', message: current.failure.message };
   }
   return current;
+}
+
+function mapBackgroundContextUsage(current: GetCurrentContextUsageResult): ChatGetContextUsageUiResult {
+  const mapped = mapCurrentContextUsage(current);
+  if (mapped.status === 'not_available' && mapped.reason === 'not_started') {
+    return { status: 'not_available', reason: 'not_calculated' };
+  }
+  return mapped;
 }
 
 function toChatContextUsageUiDto(usage: SessionContextUsage) {

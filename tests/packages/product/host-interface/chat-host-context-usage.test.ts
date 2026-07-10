@@ -118,4 +118,20 @@ describe('ChatHost context usage', () => {
 
     resolveRefresh();
   });
+
+  it('normalizes missing background usage to not_calculated while refresh starts', async () => {
+    const getCurrentUsage = vi.fn((): GetCurrentContextUsageResult => ({
+      status: 'not_available',
+      reason: 'not_started',
+    }));
+    const start = vi.fn(async (): Promise<StartContextUsageMonitorResult> => ({ status: 'ok' }));
+    const refreshSession = vi.fn(async () => undefined);
+    const controller = createController({ getCurrentUsage, start, refreshSession });
+
+    await expect(controller.getContextUsage({
+      sessionId: 'session:1',
+      projectId: 'workspace:1',
+      refresh: 'background',
+    })).resolves.toEqual({ status: 'not_available', reason: 'not_calculated' });
+  });
 });

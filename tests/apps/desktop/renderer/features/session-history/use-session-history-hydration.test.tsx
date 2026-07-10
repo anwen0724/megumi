@@ -337,4 +337,81 @@ describe('useSessionHistoryHydration', () => {
       await second;
     });
   });
+
+  it('does not deduplicate or apply stale in-flight hydration after the session owner version changes', async () => {
+    const oldHydration = deferred<unknown>();
+    const newHydration = deferred<unknown>();
+    window.megumi.session.hydration.get = vi.fn()
+      .mockReturnValueOnce(oldHydration.promise)
+      .mockReturnValueOnce(newHydration.promise);
+    const { result } = renderHook(() => useSessionHistoryHydration());
+
+    const oldRequest = result.current.hydrateSessionTimeline('session-1');
+    useSessionStore.setState({
+      ...useSessionStore.getState(),
+      sessions: useSessionStore.getState().sessions.map((session) =>
+        session.id === 'session-1'
+          ? { ...session, updatedAt: '2026-05-17T00:01:00.000Z' }
+          : session
+      ),
+    });
+    const newRequest = result.current.hydrateSessionTimeline('session-1');
+
+    expect(window.megumi.session.hydration.get).toHaveBeenCalledTimes(2);
+
+    newHydration.resolve({
+      ok: true,
+      data: {
+        messages: [{
+          messageId: 'message-new',
+          role: 'user',
+          projectId: 'project-1',
+          sessionId: 'session-1',
+          runId: 'run-new',
+          createdAt,
+          blocks: [{
+            blockId: 'user-text-new',
+            kind: 'user_text',
+            text: 'new owner version',
+            format: 'plain',
+          }],
+        }],
+        diagnostics: [],
+        runs: [],
+        runtimeEvents: [],
+      },
+    });
+    await act(async () => {
+      await newRequest;
+    });
+
+    oldHydration.resolve({
+      ok: true,
+      data: {
+        messages: [{
+          messageId: 'message-old',
+          role: 'user',
+          projectId: 'project-1',
+          sessionId: 'session-1',
+          runId: 'run-old',
+          createdAt,
+          blocks: [{
+            blockId: 'user-text-old',
+            kind: 'user_text',
+            text: 'old owner version',
+            format: 'plain',
+          }],
+        }],
+        diagnostics: [],
+        runs: [],
+        runtimeEvents: [],
+      },
+    });
+    await act(async () => {
+      await oldRequest;
+    });
+
+    const session = useRuntimeTimelineStore.getState().sessions['project-1:session-1'];
+    expect(session?.messages.map((message) => message.messageId)).toEqual(['message-new']);
+  });
 });

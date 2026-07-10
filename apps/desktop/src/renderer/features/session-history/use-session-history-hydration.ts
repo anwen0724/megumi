@@ -34,12 +34,13 @@ function resetHydratedRunProjection(): void {
   useApprovalStore.getState().reset();
 }
 
-function activeHydrationTarget(sessionId: string, projectId: string): boolean {
+function activeHydrationTarget(sessionId: string, projectId: string, sessionUpdatedAt?: string): boolean {
   const sessionState = useSessionStore.getState();
   const activeSession = sessionState.sessions.find((session) => session.id === sessionState.activeSessionId);
 
   return sessionState.activeSessionId === sessionId
     && activeSession?.projectId === projectId
+    && (!sessionUpdatedAt || activeSession.updatedAt === sessionUpdatedAt)
     && useProjectStore.getState().currentProjectId === projectId;
 }
 
@@ -78,7 +79,7 @@ export function useSessionHistoryHydration() {
     }
     const projectId = activeSession.projectId;
     const sessionUpdatedAt = activeSession.updatedAt;
-    const hydrationKey = runtimeTimelineSessionKey(projectId, sessionId);
+    const hydrationKey = `${runtimeTimelineSessionKey(projectId, sessionId)}:${sessionUpdatedAt}`;
     const timelineStore = useRuntimeTimelineStore.getState();
 
     if (!options?.force && timelineStore.isSessionTimelineFresh(projectId, sessionId, sessionUpdatedAt)) {
@@ -121,7 +122,7 @@ async function hydrateSessionTimelineFromHost(input: {
     }),
   );
 
-  if (!activeHydrationTarget(sessionId, projectId)) {
+  if (!activeHydrationTarget(sessionId, projectId, sessionUpdatedAt)) {
     return;
   }
 

@@ -65,7 +65,7 @@ function createContextUsageRequest(): RuntimeIpcRequest<SessionContextUsageGetPa
 
 function createSessionHydrationRequest(): RuntimeIpcRequest<
   { projectId: string; sessionId: string },
-  typeof IPC_CHANNELS.chat.sessionTimelineList
+  typeof IPC_CHANNELS.chat.sessionHydrationGet
 > {
   return {
     requestId: 'request-session-hydration-1',
@@ -74,7 +74,7 @@ function createSessionHydrationRequest(): RuntimeIpcRequest<
       sessionId: 'session-1',
     },
     meta: {
-      channel: 'session:hydration:get' as typeof IPC_CHANNELS.chat.sessionTimelineList,
+      channel: IPC_CHANNELS.chat.sessionHydrationGet,
       createdAt: '2026-05-17T00:00:00.000Z',
       source: 'renderer',
     },

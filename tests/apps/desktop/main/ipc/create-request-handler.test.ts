@@ -53,7 +53,7 @@ describe('createIpcRequestHandler response validation', () => {
     });
   });
 
-  it('uses dev-only response validation outside production', async () => {
+  it('skips dev-only response validation in production', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     const handler = createIpcRequestHandler({
       channel: IPC_CHANNELS.chat.sessionList,
