@@ -21,7 +21,7 @@ export function projectFromRecord(record: ProjectRecord): Project {
     projectId: record.projectId,
     name: record.name,
     repoPath: record.rootPath,
-    repoPathKey: record.rootPathKey,
+    repoPathKey: record.projectId,
     status: record.status,
     createdAt: openedAt,
     lastOpenedAt: record.lastActiveAt ?? openedAt,

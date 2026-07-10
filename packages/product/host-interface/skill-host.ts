@@ -17,7 +17,7 @@ export const SkillGetPayloadSchema = z.object({
   skillId: z.string().min(1), workspaceId: z.string().min(1).optional(),
 }).strict();
 export const SkillEnablePayloadSchema = SkillGetPayloadSchema;
-export const SkillDisablePayloadSchema = SkillGetPayloadSchema.extend({ reason: z.string().optional() });
+export const SkillDisablePayloadSchema = SkillGetPayloadSchema;
 
 const SkillDiagnosticUiItemSchema = z.object({
   level: z.enum(['info', 'warning', 'error']),
@@ -149,7 +149,6 @@ export type EnableSkillUiRequest = {
 export type DisableSkillUiRequest = {
   skillId: string;
   workspaceId?: string;
-  reason?: string;
 };
 
 export type SkillDiagnosticUiItem = SkillDiagnostic;

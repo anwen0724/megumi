@@ -37,7 +37,6 @@ export interface WorkspaceHost {
   useExistingProject(request?: WorkspaceUseExistingProjectUiRequest): Promise<WorkspaceUseExistingProjectUiResult>;
   openProject(request: WorkspaceOpenProjectUiRequest): Promise<WorkspaceOpenProjectUiResult>;
   removeProject(request: WorkspaceRemoveProjectUiRequest): WorkspaceRemoveProjectUiResult;
-  listAuthorizedWorkspaceRoots(): string[];
   listFiles(request: WorkspaceListFilesUiRequest): Promise<WorkspaceListFilesUiResult>;
   openFile(request: WorkspaceOpenFileUiRequest): Promise<WorkspaceOpenFileUiResult>;
 }
@@ -57,7 +56,6 @@ const WorkspaceProjectUiDtoSchema = z.object({
   projectId: z.string().min(1),
   name: z.string(),
   rootPath: z.string().min(1),
-  rootPathKey: z.string().min(1),
   status: z.enum(['available', 'missing']),
   openedAt: z.string().datetime().optional(),
   lastActiveAt: z.string().datetime().optional(),
@@ -83,7 +81,6 @@ export const WorkspaceListFilesUiResultSchema = z.object({
     type: z.enum(['file', 'directory']),
     depth: z.number().int().nonnegative(),
     hidden: z.boolean(),
-    ignored: z.boolean(),
     sizeBytes: z.number().int().nonnegative().optional(),
     mtime: z.string().datetime(),
   }).strict()),
@@ -139,10 +136,6 @@ export function createWorkspaceHost(input: {
       return { removed: result.status === 'removed' };
     },
 
-    listAuthorizedWorkspaceRoots() {
-      return input.workspaceService.listAuthorizedWorkspaceRoots().roots.map((root) => root.root_path);
-    },
-
     async listFiles(request) {
       const result = await input.workspaceFilesService.listDirectory({
         workspace_id: request.projectId,
@@ -159,7 +152,6 @@ export function createWorkspaceHost(input: {
           type: entry.type,
           depth: entry.depth,
           hidden: entry.hidden,
-          ignored: false,
           ...(entry.size_bytes === undefined ? {} : { sizeBytes: entry.size_bytes }),
           mtime: entry.modified_at,
         })),
@@ -205,7 +197,6 @@ export interface WorkspaceProjectUiDto {
   projectId: string;
   name: string;
   rootPath: string;
-  rootPathKey: string;
   status: WorkspaceProjectUiStatus;
   openedAt?: string;
   lastActiveAt?: string;
@@ -241,7 +232,6 @@ export interface WorkspaceFileEntryUiDto {
   type: 'file' | 'directory';
   depth: number;
   hidden: boolean;
-  ignored: boolean;
   sizeBytes?: number;
   mtime: string;
 }
@@ -278,7 +268,6 @@ export function toWorkspaceProjectUiDto(workspace: Workspace): WorkspaceProjectU
     projectId: workspace.workspace_id,
     name: workspace.name,
     rootPath: workspace.root_path,
-    rootPathKey: workspace.root_path_key,
     status: workspace.status,
     openedAt: workspace.created_at,
     lastActiveAt: workspace.last_opened_at,

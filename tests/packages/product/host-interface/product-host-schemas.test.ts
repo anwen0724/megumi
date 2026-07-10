@@ -8,6 +8,7 @@ import {
   ProviderListUiResultSchema,
   SettingsUpdatePayloadSchema,
   SessionMessageSendPayloadSchema,
+  SkillDisablePayloadSchema,
   SkillGetPayloadSchema,
   WorkspaceFilesListPayloadSchema,
   WorkspaceListProjectsUiResultSchema,
@@ -31,6 +32,10 @@ describe('Product Host runtime schemas', () => {
   it('owns Workspace, Skill, and Approval request validation', () => {
     expect(WorkspaceFilesListPayloadSchema.parse({ projectId: 'workspace:1', directoryPath: '' })).toBeDefined();
     expect(SkillGetPayloadSchema.parse({ skillId: 'review' })).toBeDefined();
+    expect(SkillDisablePayloadSchema.safeParse({
+      skillId: 'writing-plans',
+      reason: 'not used by owner',
+    }).success).toBe(false);
     expect(ApprovalResolvePayloadSchema.safeParse({ approvalRequestId: 'a', decision: 'maybe' }).success).toBe(false);
   });
 
@@ -51,6 +56,23 @@ describe('Product Host runtime schemas', () => {
   it('validates Workspace result payloads', () => {
     expect(WorkspaceListProjectsUiResultSchema.safeParse({ projects: [] }).success).toBe(true);
     expect(WorkspaceListProjectsUiResultSchema.safeParse({ projects: 'invalid' }).success).toBe(false);
+    expect(WorkspaceListProjectsUiResultSchema.safeParse({
+      projects: [{
+        projectId: 'workspace:1',
+        name: 'megumi',
+        rootPath: 'C:/work/megumi',
+        rootPathKey: 'c:/work/megumi',
+        status: 'available',
+      }],
+    }).success).toBe(false);
+    expect(WorkspaceListProjectsUiResultSchema.safeParse({
+      projects: [{
+        projectId: 'workspace:1',
+        name: 'megumi',
+        rootPath: 'C:/work/megumi',
+        status: 'available',
+      }],
+    }).success).toBe(true);
   });
 
   it('validates Skill result payloads', () => {

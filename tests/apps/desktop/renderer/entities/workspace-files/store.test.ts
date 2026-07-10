@@ -42,7 +42,6 @@ function createWorkspaceFilesResult({
           kind: 'directory',
           depth: 0,
           hidden: false,
-          ignored: false,
         },
       ],
     },
@@ -69,7 +68,6 @@ function installWorkspaceFilesMock() {
             kind: 'directory',
             depth: 0,
             hidden: false,
-            ignored: false,
           },
           {
             name: 'README.md',
@@ -77,7 +75,6 @@ function installWorkspaceFilesMock() {
             kind: 'file',
             depth: 0,
             hidden: false,
-            ignored: false,
           },
         ],
       },
