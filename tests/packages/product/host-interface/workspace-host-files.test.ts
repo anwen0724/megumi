@@ -48,6 +48,7 @@ describe('WorkspaceHost files', () => {
 function workspaceServiceStub() {
   return {
     openWorkspace: vi.fn(),
+    activateWorkspace: vi.fn(),
     getWorkspace: vi.fn(),
     listWorkspaces: vi.fn(async () => ({ workspaces: [] })),
     removeWorkspace: vi.fn(() => ({ status: 'not_found' as const, workspace_id: 'workspace:1' })),

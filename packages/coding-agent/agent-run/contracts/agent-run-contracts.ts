@@ -13,6 +13,8 @@ export type AgentRunModelSelection = {
   model_id: string;
 };
 
+export type ApprovalDecisionIntent = Omit<ApprovalDecision, 'decided_at'>;
+
 export type AgentRunStatus =
   | 'queued'
   | 'running'
@@ -168,7 +170,7 @@ export type CancelRunResult =
 
 export type ResumeRunAfterApprovalRequest = {
   approval_request_id: string;
-  decision: ApprovalDecision;
+  decision: ApprovalDecisionIntent;
 };
 
 export type ResumeRunAfterApprovalResult =
