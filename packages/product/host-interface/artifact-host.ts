@@ -2,12 +2,6 @@
  * Implements ArtifactHost over the Coding Agent Artifact module.
  */
 import type { ArtifactServicePort } from '../../coding-agent/artifacts';
-import type {
-  Artifact,
-  ArtifactSourceRef,
-  ArtifactStatus,
-  ArtifactVersion,
-} from '../../coding-agent/artifacts/legacy-contracts/artifact-contracts';
 import type { JsonObject } from '../../coding-agent/artifacts/legacy-contracts/artifact-json';
 import { z } from 'zod';
 
@@ -72,13 +66,14 @@ export const ArtifactVersionCreateDataSchema = z.object({ version: ArtifactVersi
 export const ArtifactStatusUpdateDataSchema = z.object({ artifact: ArtifactRecordSchema }).strict();
 export const ArtifactReferenceDataSchema = z.object({ sourceRef: ArtifactSourceRefRecordSchema }).strict();
 
-export type ArtifactRecord = Artifact;
-export type ArtifactVersionRecord = ArtifactVersion;
-export type ArtifactSourceRefRecord = ArtifactSourceRef;
+export type ArtifactRecord = z.infer<typeof ArtifactRecordSchema>;
+type ArtifactContentRefRecord = z.infer<typeof ArtifactContentRefSchema>;
+export type ArtifactVersionRecord = z.infer<typeof ArtifactVersionRecordSchema>;
+export type ArtifactSourceRefRecord = z.infer<typeof ArtifactSourceRefRecordSchema>;
 
 export interface ArtifactCreateVersionPayload {
   artifactId: string;
-  contentType: ArtifactVersion['contentType'];
+  contentType: ArtifactVersionRecord['contentType'];
   contentFormat: string;
   text: string;
   textPreview: string;
@@ -90,7 +85,7 @@ export interface ArtifactCreateVersionPayload {
 
 export interface ArtifactStatusUpdatePayload {
   artifactId: string;
-  status: ArtifactStatus;
+  status: ArtifactRecord['status'];
 }
 
 export interface ArtifactReferencePayload {
@@ -141,12 +136,89 @@ export function createArtifactHost(
   artifactService: ArtifactServicePort,
 ): ArtifactHost {
   return {
-    listByRun: (runId) => ({ artifacts: artifactService.listByRun(runId) }),
-    listBySession: (sessionId) => ({ artifacts: artifactService.listBySession(sessionId) }),
-    get: (artifactId) => artifactService.get(artifactId),
-    getVersion: (artifactVersionId) => ({ version: artifactService.getVersion(artifactVersionId) }),
-    createVersion: async (payload) => ({ version: await artifactService.createVersion(payload) }),
-    updateStatus: (payload) => ({ artifact: artifactService.updateStatus(payload) }),
-    reference: (payload) => ({ sourceRef: artifactService.reference(payload) }),
+    listByRun: (runId) => ({ artifacts: artifactService.listByRun(runId).map(toArtifactRecord) }),
+    listBySession: (sessionId) => ({ artifacts: artifactService.listBySession(sessionId).map(toArtifactRecord) }),
+    get: (artifactId) => {
+      const result = artifactService.get(artifactId);
+      return {
+        artifact: result.artifact ? toArtifactRecord(result.artifact) : undefined,
+        currentVersion: result.currentVersion ? toArtifactVersionRecord(result.currentVersion) : undefined,
+        sourceRefs: result.sourceRefs.map(toArtifactSourceRefRecord),
+      };
+    },
+    getVersion: (artifactVersionId) => {
+      const version = artifactService.getVersion(artifactVersionId);
+      return { version: version ? toArtifactVersionRecord(version) : undefined };
+    },
+    createVersion: async (payload) => ({ version: toArtifactVersionRecord(await artifactService.createVersion(payload)) }),
+    updateStatus: (payload) => ({ artifact: toArtifactRecord(artifactService.updateStatus(payload)) }),
+    reference: (payload) => ({ sourceRef: toArtifactSourceRefRecord(artifactService.reference(payload)) }),
+  };
+}
+
+type ArtifactOwnerRecordInput = ArtifactRecord;
+type ArtifactOwnerContentRefInput = ArtifactContentRefRecord;
+type ArtifactOwnerVersionInput = ArtifactVersionRecord;
+type ArtifactOwnerSourceRefInput = ArtifactSourceRefRecord;
+
+function toArtifactRecord(record: ArtifactOwnerRecordInput): ArtifactRecord {
+  return {
+    artifactId: record.artifactId,
+    kind: record.kind,
+    title: record.title,
+    status: record.status,
+    producingRunId: record.producingRunId,
+    ...(record.producingStepId ? { producingStepId: record.producingStepId } : {}),
+    ...(record.currentVersionId ? { currentVersionId: record.currentVersionId } : {}),
+    ...(record.pinnedVersionIds ? { pinnedVersionIds: [...record.pinnedVersionIds] } : {}),
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    ...(record.deletedAt ? { deletedAt: record.deletedAt } : {}),
+    ...(record.metadata ? { metadata: record.metadata } : {}),
+  };
+}
+
+function toArtifactContentRefRecord(record: ArtifactOwnerContentRefInput): ArtifactContentRefRecord {
+  return {
+    storage: record.storage,
+    ...(record.contentKey ? { contentKey: record.contentKey } : {}),
+    ...(record.inlineText ? { inlineText: record.inlineText } : {}),
+    mimeType: record.mimeType,
+    sizeBytes: record.sizeBytes,
+    sha256: record.sha256,
+    textPreview: record.textPreview,
+    redactionState: record.redactionState,
+    createdAt: record.createdAt,
+    ...(record.metadata ? { metadata: record.metadata } : {}),
+  };
+}
+
+function toArtifactVersionRecord(record: ArtifactOwnerVersionInput): ArtifactVersionRecord {
+  return {
+    artifactVersionId: record.artifactVersionId,
+    artifactId: record.artifactId,
+    versionNumber: record.versionNumber,
+    contentType: record.contentType,
+    contentFormat: record.contentFormat,
+    contentRef: toArtifactContentRefRecord(record.contentRef),
+    textPreview: record.textPreview,
+    ...(record.changeSummary ? { changeSummary: record.changeSummary } : {}),
+    createdByRunId: record.createdByRunId,
+    ...(record.createdByStepId ? { createdByStepId: record.createdByStepId } : {}),
+    createdAt: record.createdAt,
+    ...(record.metadata ? { metadata: record.metadata } : {}),
+  };
+}
+
+function toArtifactSourceRefRecord(record: ArtifactOwnerSourceRefInput): ArtifactSourceRefRecord {
+  return {
+    sourceRefId: record.sourceRefId,
+    artifactId: record.artifactId,
+    ...(record.artifactVersionId ? { artifactVersionId: record.artifactVersionId } : {}),
+    kind: record.kind,
+    refId: record.refId,
+    ...(record.label ? { label: record.label } : {}),
+    ...(record.metadata ? { metadata: record.metadata } : {}),
+    createdAt: record.createdAt,
   };
 }

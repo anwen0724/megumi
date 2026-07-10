@@ -23,4 +23,14 @@ describe('Product Host public seam', () => {
     expect(runtimeEvents).toContain('RuntimeEventSchema');
     expect(runtimeTimeline).toContain('reduceRuntimeTimelineEvent');
   });
+
+  it('does not expose owner record aliases from ArtifactHost or PlanHost', () => {
+    const artifactHost = readFileSync(join(root, 'packages/product/host-interface/artifact-host.ts'), 'utf8');
+    const planHost = readFileSync(join(root, 'packages/product/host-interface/plan-host.ts'), 'utf8');
+
+    expect(artifactHost).not.toContain('export type ArtifactRecord = Artifact');
+    expect(artifactHost).not.toContain('export type ArtifactVersionRecord = ArtifactVersion');
+    expect(artifactHost).not.toContain('export type ArtifactSourceRefRecord = ArtifactSourceRef');
+    expect(planHost).not.toContain('OwnerImplementationPlanArtifactRecord');
+  });
 });

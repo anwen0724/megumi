@@ -5,7 +5,6 @@ import type { PlanArtifactServicePort } from '../../coding-agent/artifacts';
 import {
   ImplementationPlanArtifactRecordSchema,
   ImplementationPlanArtifactStatusSchema,
-  type ImplementationPlanArtifactRecord as OwnerImplementationPlanArtifactRecord,
 } from '../../coding-agent/artifacts/legacy-contracts/plan-artifact-contracts';
 import { z } from 'zod';
 
@@ -21,7 +20,7 @@ export const PlanStatusUpdateDataSchema = z.object({
   plan: ImplementationPlanArtifactRecordSchema,
 }).strict();
 
-export type ImplementationPlanArtifactRecord = OwnerImplementationPlanArtifactRecord;
+export type ImplementationPlanArtifactRecord = z.infer<typeof ImplementationPlanArtifactRecordSchema>;
 export type PlanStatusUpdatePayload = z.infer<typeof PlanStatusUpdatePayloadSchema>;
 
 export interface PlanByRunGetData {
@@ -41,7 +40,28 @@ export function createPlanHost(
   planArtifactService: PlanArtifactServicePort,
 ): PlanHost {
   return {
-    getByRun: (runId) => ({ plan: planArtifactService.getPlanByRun(runId) }),
-    updateStatus: (payload) => ({ plan: planArtifactService.updatePlanStatus(payload) }),
+    getByRun: (runId) => {
+      const plan = planArtifactService.getPlanByRun(runId);
+      return { plan: plan ? toPlanArtifactHostRecord(plan) : undefined };
+    },
+    updateStatus: (payload) => ({ plan: toPlanArtifactHostRecord(planArtifactService.updatePlanStatus(payload)) }),
+  };
+}
+
+type PlanArtifactOwnerRecordInput = ImplementationPlanArtifactRecord;
+
+function toPlanArtifactHostRecord(record: PlanArtifactOwnerRecordInput): ImplementationPlanArtifactRecord {
+  return {
+    planArtifactId: record.planArtifactId,
+    producingRunId: record.producingRunId,
+    title: record.title,
+    status: record.status,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    ...(record.acceptedAt ? { acceptedAt: record.acceptedAt } : {}),
+    ...(record.rejectedAt ? { rejectedAt: record.rejectedAt } : {}),
+    ...(record.supersededAt ? { supersededAt: record.supersededAt } : {}),
+    ...(record.supersededByPlanId ? { supersededByPlanId: record.supersededByPlanId } : {}),
+    ...(record.metadata ? { metadata: record.metadata } : {}),
   };
 }
