@@ -3,7 +3,7 @@
  */
 import type { IpcMainInvokeEvent } from 'electron';
 import type { z } from 'zod';
-import { createRuntimeDebugId, type RuntimeContext } from '@megumi/coding-agent/events';
+import { generateRuntimeDebugId, type RuntimeContext } from '@megumi/product/host-interface';
 import type { RuntimeLogger } from '@megumi/product/logging';
 import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from './contracts';
 import type { RuntimeIpcError } from './errors';
@@ -55,7 +55,7 @@ export function createIpcRequestHandler<
     const context = parsed.data.context ?? {
       requestId: parsed.data.requestId,
       traceId: `trace-${parsed.data.requestId}`,
-      debugId: createRuntimeDebugId(),
+      debugId: generateRuntimeDebugId(),
       operationName: parsed.data.meta.channel,
       source: 'renderer' as const,
       createdAt: parsed.data.meta.createdAt,

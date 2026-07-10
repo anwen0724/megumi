@@ -4,7 +4,7 @@
 import {
   RuntimeEventSchema,
   type RuntimeEvent,
-} from '@megumi/coding-agent/events';
+} from '@megumi/product/host-interface';
 import type { RuntimeLogger } from '@megumi/product/logging';
 import { IPC_CHANNELS } from './channels';
 

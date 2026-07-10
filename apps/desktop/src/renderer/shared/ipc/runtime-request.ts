@@ -1,9 +1,9 @@
 ﻿import type { BusinessIpcChannel, RuntimeIpcRequest } from '@megumi/desktop/main/ipc/contracts';
 import {
-  createRuntimeContext,
-  createRuntimeTraceId,
+  buildRuntimeContext,
+  generateRuntimeTraceId,
   type RuntimeContext,
-} from '@megumi/coding-agent/events';
+} from '@megumi/product/host-interface';
 import { rendererRuntimeOperationNameFromChannel } from './runtime-operation-name';
 
 export interface CreateRendererRuntimeIpcRequestOptions {
@@ -51,9 +51,9 @@ function createRendererRuntimeContext<TChannel extends BusinessIpcChannel>(
     createdAt: string;
   },
 ): RuntimeContext {
-  return createRuntimeContext({
+  return buildRuntimeContext({
     requestId: input.requestId,
-    traceId: input.traceId ?? createRuntimeTraceId(),
+    traceId: input.traceId ?? generateRuntimeTraceId(),
     debugId: input.debugId,
     operationName: input.operationName ?? rendererRuntimeOperationNameFromChannel(channel),
     source: 'renderer',

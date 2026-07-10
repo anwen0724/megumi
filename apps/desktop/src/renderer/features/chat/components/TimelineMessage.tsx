@@ -1,6 +1,6 @@
 ﻿import { memo, type ReactNode } from 'react';
 import { GitBranch, RotateCcw } from 'lucide-react';
-import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/coding-agent/projections/timeline';
+import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/product/host-interface';
 import { IconButton, RecoverableErrorBoundary } from '../../../shared/ui';
 import { TimelineMessageBlocks } from './TimelineMessageBlocks';
 

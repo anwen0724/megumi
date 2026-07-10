@@ -12,7 +12,7 @@ import type {
   RetryActivityItem,
   ThinkingItem,
   ToolActivityItem,
-} from '@megumi/coding-agent/projections/timeline';
+} from '@megumi/product/host-interface';
 import { cx } from '../../../shared/ui';
 import { TimelineMarkdown } from './TimelineMarkdown';
 

@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron';
-import { createRuntimeDebugId, type RuntimeEvent } from '@megumi/coding-agent/events';
+import { generateRuntimeDebugId, type RuntimeEvent } from '@megumi/product/host-interface';
 import type {
   ApprovalResolveData,
   ChatCancelBranchDraftUiResult,
@@ -87,7 +87,7 @@ async function invokeRuntimeIpc<TPayload, TData extends object, TChannel extends
   try {
     return await ipcRenderer.invoke(channel, request) as RuntimeIpcResult<TData, TChannel>;
   } catch {
-    const debugId = request.context?.debugId ?? createRuntimeDebugId();
+    const debugId = request.context?.debugId ?? generateRuntimeDebugId();
 
     return {
       ok: false,

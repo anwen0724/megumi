@@ -1,4 +1,4 @@
-﻿import type { RuntimeEvent } from '@megumi/coding-agent/events';
+import type { RuntimeEvent } from '@megumi/product/host-interface';
 import type { RendererRunSummary } from '../../entities/run/store';
 
 export type ProcessingDisclosureStatus = 'running' | 'completed' | 'failed' | 'cancelled';

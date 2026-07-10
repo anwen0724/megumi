@@ -28,6 +28,7 @@ import type {
   ChatCreateSessionUiResult,
   ChatGetCommandSuggestionsUiRequest,
   ChatGetCommandSuggestionsUiResult,
+  HostCommandSuggestionResult,
   ChatGetContextUsageUiRequest,
   ChatGetContextUsageUiResult,
   ChatListMessagesUiRequest,
@@ -179,7 +180,7 @@ export function createChatHost(options: {
     },
 
     async getCommandSuggestions(request) {
-      return { suggestions: await options.commandService.getCommandSuggestions(request) };
+      return { suggestions: toHostCommandSuggestions(await options.commandService.getCommandSuggestions(request)) };
     },
 
     async listRuns(request) {
@@ -301,4 +302,21 @@ async function* asyncIterableFrom<T>(items: Iterable<T>): AsyncIterable<T> {
   for (const item of items) {
     yield item;
   }
+}
+
+function toHostCommandSuggestions(
+  result: Awaited<ReturnType<CommandService['getCommandSuggestions']>>,
+): HostCommandSuggestionResult {
+  if (result.type === 'inactive') return result;
+  return {
+    ...result,
+    groups: result.groups.map((group) => ({
+      ...group,
+      items: group.items.map(({ completion, ...item }) => ({
+        ...item,
+        displayInput: `/${item.display?.primary ?? item.name} `,
+        submitInput: completion.replacement_input,
+      })),
+    })),
+  };
 }

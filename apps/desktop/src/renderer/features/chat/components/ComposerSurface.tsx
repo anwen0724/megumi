@@ -7,7 +7,7 @@ import {
   Square,
 } from 'lucide-react';
 import { IconButton } from '../../../shared/ui';
-import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/coding-agent/commands';
+import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/product/host-interface';
 import type { ChatGetContextUsageUiResult } from '@megumi/product/host-interface';
 import {
   COMPOSER_PERMISSION_MODE_OPTIONS,

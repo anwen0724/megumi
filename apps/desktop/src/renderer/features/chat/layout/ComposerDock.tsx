@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from 'react';
 import type { ApprovalRequest } from '../../../entities/approval/store';
 import type { ChatGetContextUsageUiResult, ProviderPublicStatusUiDto } from '@megumi/product/host-interface';
-import type { CommandSuggestionResult } from '@megumi/coding-agent/commands';
+import type { CommandSuggestionResult } from '@megumi/product/host-interface';
 import type { ApprovalCardResolvePayload } from '../../../entities/approval';
 import { ApprovalStack } from '../components/ApprovalStack';
 import { BranchDraftStack, type ComposerBranchDraftView } from '../components/BranchDraftStack';

@@ -1,5 +1,5 @@
 ﻿import { useCallback, useEffect, useState, type CSSProperties } from 'react';
-import type { CommandSuggestionResult } from '@megumi/coding-agent/commands';
+import type { CommandSuggestionResult } from '@megumi/product/host-interface';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import { useProviderStore } from '../../../entities/provider/store';
 import { useProjectStore } from '../../../entities/project/store';

@@ -1,5 +1,5 @@
 ﻿import { create } from 'zustand';
-import type { RuntimeEvent } from '@megumi/coding-agent/events';
+import type { RuntimeEvent } from '@megumi/product/host-interface';
 
 export type RendererRunStatus = 'queued' | 'running' | 'waiting_for_approval' | 'completed' | 'failed' | 'cancelled' | string;
 export type RunStepKind = string;

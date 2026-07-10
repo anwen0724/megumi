@@ -2,7 +2,6 @@
  * Chat/session UI DTOs exposed to hosts. These are projections of product data,
  * not session module service contracts.
  */
-import type { CommandSuggestionResult } from '../../coding-agent/commands';
 import type { RuntimeContext, RuntimeEvent } from '../../coding-agent/events';
 import type { TimelineMessage } from '../../coding-agent/projections/timeline';
 import type { RawUserInputAttachment } from '../../coding-agent/input';
@@ -159,8 +158,32 @@ export interface ChatGetCommandSuggestionsUiRequest {
   workspaceId?: string;
 }
 export interface ChatGetCommandSuggestionsUiResult {
-  suggestions: CommandSuggestionResult;
+  suggestions: HostCommandSuggestionResult;
 }
+
+export type HostCommandSuggestionResult =
+  | { type: 'inactive' }
+  | {
+      type: 'suggestions';
+      draft_input: string;
+      command_prefix: string;
+      groups: Array<{ id: string; label: string; items: HostCommandSuggestionItem[] }>;
+    };
+
+export type HostCommandSuggestionItem = {
+  name: string;
+  aliases?: string[];
+  description: string;
+  argument_hint?: string;
+  source: { kind: 'built_in' } | { kind: 'skill'; skill_id: string };
+  source_badge?: string;
+  display?: { primary: string; secondary?: string; badge?: string };
+  match: { field: 'name' | 'alias'; value: string; prefix: string };
+  displayInput: string;
+  submitInput: string;
+};
+export type CommandSuggestionItem = HostCommandSuggestionItem;
+export type CommandSuggestionResult = HostCommandSuggestionResult;
 
 export interface ChatListRunsUiRequest {
   sessionId: string;

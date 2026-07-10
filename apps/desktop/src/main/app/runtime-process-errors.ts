@@ -1,10 +1,10 @@
-﻿import { normalizeRuntimeError } from '@megumi/coding-agent/runtime-error';
-import { createRuntimeDebugId } from '@megumi/coding-agent/events';
-import { redactRuntimeValue } from '@megumi/product/logging';
+/* Registers process-level failures against the Product runtime logger. */
 import {
-  noopRuntimeLogger,
-  type RuntimeLogger,
-} from '@megumi/product/logging';
+  generateRuntimeDebugId,
+  normalizeHostRuntimeError,
+} from '@megumi/product/host-interface';
+import { redactRuntimeValue } from '@megumi/product/logging';
+import { noopRuntimeLogger, type RuntimeLogger } from '@megumi/product/logging';
 
 type RuntimeProcessEventName = 'uncaughtException' | 'unhandledRejection';
 
@@ -23,23 +23,19 @@ export function registerRuntimeProcessErrorHandlers(
 ): void {
   const processLike = options.process ?? process;
   const logger = options.logger ?? noopRuntimeLogger;
-  const debugIdFactory = options.debugIdFactory ?? createRuntimeDebugId;
+  const debugIdFactory = options.debugIdFactory ?? generateRuntimeDebugId;
 
   processLike.on('uncaughtException', (error) => {
     logger.error?.('runtime_process_uncaught_exception', createDetails(error, debugIdFactory));
   });
-
   processLike.on('unhandledRejection', (error) => {
     logger.error?.('runtime_process_unhandled_rejection', createDetails(error, debugIdFactory));
   });
 }
 
-function createDetails(
-  error: unknown,
-  debugIdFactory: () => string,
-): Record<string, unknown> {
+function createDetails(error: unknown, debugIdFactory: () => string): Record<string, unknown> {
   return redactRuntimeValue({
-    error: normalizeRuntimeError(error, {
+    error: normalizeHostRuntimeError(error, {
       source: 'main',
       debugId: debugIdFactory(),
       fallbackMessage: 'Megumi runtime encountered an unexpected error.',

@@ -1,6 +1,6 @@
-import type { RuntimeEvent } from '@megumi/coding-agent/events';
+import type { RuntimeEvent } from '@megumi/product/host-interface';
 import type { ChatRunUiDto, ChatSessionUiDto } from '@megumi/product/host-interface';
-import type { AnswerTextBlock, TimelineMessage } from '@megumi/coding-agent/projections/timeline';
+import type { AnswerTextBlock, TimelineMessage } from '@megumi/product/host-interface';
 
 export interface TimelineHistoryMessage {
   id: string;

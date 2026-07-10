@@ -151,7 +151,7 @@ describe('ComposerDock', () => {
               description: 'Evaluate review feedback before implementing changes',
               source: { kind: 'built_in' },
               match: { field: 'name', value: 'review', prefix: 're' },
-              completion: { replacement_input: '/review ' },
+              displayInput: '/review ', submitInput: '/review ',
             }],
           }],
         })}

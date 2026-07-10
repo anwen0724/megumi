@@ -1,6 +1,6 @@
 // Owns Composer interaction state and builds the host-neutral submit payload.
 import { type FormEvent, type KeyboardEvent, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/coding-agent/commands';
+import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/product/host-interface';
 import {
   DEFAULT_COMPOSER_MODEL,
   DEFAULT_COMPOSER_PERMISSION_MODE,
@@ -14,10 +14,7 @@ import type { ComposerSurfaceProps } from '../components/ComposerSurface';
 const COMPOSER_TEXTAREA_COMPACT_HEIGHT = 56;
 const COMPOSER_TEXTAREA_MAX_HEIGHT = 160;
 
-type SelectedCommandCompletion = {
-  visiblePrefix: string;
-  backendPrefix: string;
-};
+type SelectedCommandCompletion = Pick<CommandSuggestionItem, 'displayInput' | 'submitInput'>;
 
 function createComposerSubmitPayload(input: {
   message: string;
@@ -33,16 +30,12 @@ function createComposerSubmitPayload(input: {
   };
 }
 
-function createVisibleCommandInput(item: CommandSuggestionItem): string {
-  return `/${item.display?.primary ?? item.name} `;
-}
-
 function resolveSubmitMessage(rawValue: string, completion: SelectedCommandCompletion | null): string {
-  if (!completion || !rawValue.startsWith(completion.visiblePrefix)) {
+  if (!completion || !rawValue.startsWith(completion.displayInput)) {
     return rawValue.trim();
   }
 
-  return `${completion.backendPrefix}${rawValue.slice(completion.visiblePrefix.length)}`.trim();
+  return `${completion.submitInput}${rawValue.slice(completion.displayInput.length)}`.trim();
 }
 
 export function useComposerController({
@@ -191,16 +184,16 @@ export function useComposerController({
   function handleValueChange(nextValue: string) {
     setValue(nextValue);
     setSelectedCommandCompletion((completion) => (
-      completion && nextValue.startsWith(completion.visiblePrefix) ? completion : null
+      completion && nextValue.startsWith(completion.displayInput) ? completion : null
     ));
   }
 
   function applyCommandSuggestion(item: CommandSuggestionItem) {
-    const visibleInput = createVisibleCommandInput(item);
+    const visibleInput = item.displayInput;
     setValue(visibleInput);
     setSelectedCommandCompletion({
-      visiblePrefix: visibleInput,
-      backendPrefix: item.completion.replacement_input,
+      displayInput: item.displayInput,
+      submitInput: item.submitInput,
     });
     setSelectedCommandSuggestionIndex(0);
   }

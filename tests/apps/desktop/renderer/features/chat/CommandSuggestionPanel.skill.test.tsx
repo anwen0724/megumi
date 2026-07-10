@@ -2,7 +2,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { CommandSuggestionPanel } from '@megumi/desktop/renderer/features/chat/components/CommandSuggestionPanel';
-import type { CommandSuggestionResult } from '@megumi/coding-agent/commands';
+import type { CommandSuggestionResult } from '@megumi/product/host-interface';
 
 describe('CommandSuggestionPanel skill suggestions', () => {
   it('renders skill command display fields and returns the replacement input on choose', () => {
@@ -28,9 +28,8 @@ describe('CommandSuggestionPanel skill suggestions', () => {
             value: 'brainstorming',
             prefix: 'bra',
           },
-          completion: {
-            replacement_input: '/skill superpowers:brainstorming ',
-          },
+          displayInput: '/brainstorming ',
+          submitInput: '/skill superpowers:brainstorming ',
         }],
       }],
     };
@@ -52,9 +51,8 @@ describe('CommandSuggestionPanel skill suggestions', () => {
     }));
 
     expect(onChoose).toHaveBeenCalledWith(expect.objectContaining({
-      completion: {
-        replacement_input: '/skill superpowers:brainstorming ',
-      },
+      displayInput: '/brainstorming ',
+      submitInput: '/skill superpowers:brainstorming ',
     }));
   });
 
@@ -107,8 +105,7 @@ function createSkillSuggestion(
       value: 'test',
       prefix: 'test',
     },
-    completion: {
-      replacement_input: `/skill ${skillId} `,
-    },
+    displayInput: '/test ',
+    submitInput: `/skill ${skillId} `,
   };
 }

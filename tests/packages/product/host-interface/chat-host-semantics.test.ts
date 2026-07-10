@@ -64,12 +64,40 @@ describe('ChatHost product semantics', () => {
     expect(cancelled.payload).toEqual({ cancelled: true });
     expect(cancelled.events).toBeDefined();
   });
+
+  it('projects internal command completion into display and submit values', async () => {
+    const host = createHost(vi.fn(), vi.fn(async () => ({
+      type: 'suggestions',
+      draft_input: '/te',
+      command_prefix: 'te',
+      groups: [{
+        id: 'skills',
+        label: 'Skills',
+        items: [{
+          name: 'test',
+          description: 'Run checks',
+          source: { kind: 'skill', skill_id: 'checks:test' },
+          display: { primary: 'test', secondary: 'checks:test - Run checks' },
+          match: { field: 'name', value: 'test', prefix: 'te' },
+          completion: { replacement_input: '/skill checks:test ' },
+        }],
+      }],
+    })));
+    const result = await host.getCommandSuggestions({ draft_input: '/te' });
+    expect(result.suggestions).toMatchObject({
+      groups: [{ items: [{ displayInput: '/test ', submitInput: '/skill checks:test ' }] }],
+    });
+    expect(JSON.stringify(result)).not.toContain('replacement_input');
+  });
 });
 
-function createHost(startRun: ReturnType<typeof vi.fn>) {
+function createHost(
+  startRun: ReturnType<typeof vi.fn>,
+  getCommandSuggestions: ReturnType<typeof vi.fn> = vi.fn(),
+) {
   return createChatHost({
     agentRunService: { startRun, cancelRun: vi.fn() } as never,
-    commandService: { getCommandSuggestions: vi.fn() },
+    commandService: { getCommandSuggestions } as never,
     sessionService: {
       getSession: vi.fn(() => ({ status: 'not_found' })),
     } as never,

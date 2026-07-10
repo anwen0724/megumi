@@ -275,7 +275,7 @@ describe('Composer', () => {
             description: 'Evaluate review feedback before implementing changes',
             source: { kind: 'built_in' },
             match: { field: 'name', value: 'review', prefix: '' },
-            completion: { replacement_input: '/review ' },
+            displayInput: '/review ', submitInput: '/review ',
           }],
         }, {
           id: 'skills',
@@ -307,7 +307,7 @@ describe('Composer', () => {
             description: 'Evaluate review feedback before implementing changes',
             source: { kind: 'built_in' },
             match: { field: 'name', value: 'review', prefix: 're' },
-            completion: { replacement_input: '/review ' },
+            displayInput: '/review ', submitInput: '/review ',
           }],
         }],
       })}
@@ -342,7 +342,7 @@ describe('Composer', () => {
               badge: 'Project',
             },
             match: { field: 'name', value: 'test', prefix: 'te' },
-            completion: { replacement_input: '/skill checks:test ' },
+            displayInput: '/test ', submitInput: '/skill checks:test ',
           }],
         }],
       })}
@@ -389,7 +389,7 @@ describe('Composer', () => {
                 badge: 'Project',
               },
               match: { field: 'name', value: 'test', prefix: draft_input.slice(1) },
-              completion: { replacement_input: '/skill checks:test ' },
+              displayInput: '/test ', submitInput: '/skill checks:test ',
             }],
           }],
         };
@@ -420,7 +420,7 @@ describe('Composer', () => {
             description: 'Evaluate review feedback before implementing changes',
             source: { kind: 'built_in' },
             match: { field: 'name', value: 'review', prefix: 're' },
-            completion: { replacement_input: '/review ' },
+            displayInput: '/review ', submitInput: '/review ',
           }],
         }],
       })}
@@ -465,14 +465,14 @@ describe('Composer', () => {
               description: 'Evaluate review feedback before implementing changes',
               source: { kind: 'built_in' },
               match: { field: 'name', value: 'review', prefix: '' },
-              completion: { replacement_input: '/review ' },
+              displayInput: '/review ', submitInput: '/review ',
             },
             {
               name: 'status',
               description: 'Show conversation status',
               source: { kind: 'built_in' },
               match: { field: 'name', value: 'status', prefix: '' },
-              completion: { replacement_input: '/status ' },
+              displayInput: '/status ', submitInput: '/status ',
             },
           ],
         }],

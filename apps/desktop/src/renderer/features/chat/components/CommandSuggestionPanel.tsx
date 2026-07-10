@@ -1,5 +1,5 @@
 // Renders command suggestions supplied by a trusted catalog; this component does not own command discovery.
-import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/coding-agent/commands';
+import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/product/host-interface';
 
 interface CommandSuggestionPanelProps {
   suggestions: CommandSuggestionResult;

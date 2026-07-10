@@ -2,7 +2,7 @@ import { FileText } from 'lucide-react';
 import type {
   WorkspaceChangeFooterFact,
   WorkspaceChangeFooterFile,
-} from '@megumi/coding-agent/projections/workspace/workspace-change-footer-projector';
+} from '@megumi/product/host-interface';
 import { Button } from '../../../shared/ui';
 
 interface WorkspaceChangeFooterProps {

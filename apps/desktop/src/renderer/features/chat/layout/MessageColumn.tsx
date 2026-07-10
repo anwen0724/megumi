@@ -1,5 +1,5 @@
 ﻿import type { ReactNode } from 'react';
-import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/coding-agent/projections/timeline';
+import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/product/host-interface';
 import { TimelineMessage } from '../components/TimelineMessage';
 import { WorkspaceChangeFooter } from '../components/WorkspaceChangeFooter';
 import { BottomSpacer } from './BottomSpacer';
