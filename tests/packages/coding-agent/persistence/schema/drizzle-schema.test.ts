@@ -16,6 +16,8 @@ const expectedProductTables = [
   'agent_run_runtime_events',
   'workspace_changes',
   'workspace_changed_files',
+  'skill_availability',
+  'skill_usage_record',
   'memory_records',
   'memory_markdown_mirrors',
   'artifacts',
@@ -214,6 +216,37 @@ describe('Drizzle schema target table list', () => {
         to: 'workspace_id',
         onDelete: 'NO ACTION',
       });
+      expect(columns(database, 'skill_availability')).toEqual([
+        'skill_availability_id',
+        'skill_id',
+        'workspace_id',
+        'available',
+        'created_at',
+        'updated_at',
+      ]);
+      expect(columns(database, 'skill_usage_record')).toEqual([
+        'skill_usage_record_id',
+        'skill_id',
+        'workspace_id',
+        'session_id',
+        'run_id',
+        'trigger_kind',
+        'created_at',
+      ]);
+      expect(foreignKeys(database, 'skill_usage_record')).toEqual(expect.arrayContaining([
+        {
+          from: 'session_id',
+          table: 'sessions',
+          to: 'session_id',
+          onDelete: 'CASCADE',
+        },
+        {
+          from: 'run_id',
+          table: 'agent_runs',
+          to: 'run_id',
+          onDelete: 'SET NULL',
+        },
+      ]));
       expect(foreignKeys(database, 'session_entries')).toEqual(expect.arrayContaining([
         {
           from: 'parent_entry_id',

@@ -15,6 +15,7 @@ describe('ToolRegistryService', () => {
       'edit_file',
       'write_file',
       'run_command',
+      'activate_skill',
     ]);
     for (const tool of result.tools) {
       expect(tool.status).toBe('available');

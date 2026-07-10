@@ -21,7 +21,9 @@ export type SessionContextSourceKind =
   | 'context_compaction_summary'
   | 'runtime_fact'
   | 'tool_result'
-  | 'memory_recall_result';
+  | 'memory_recall_result'
+  | 'skill_catalog'
+  | 'skill';
 
 export type SessionContextSource = {
   source_id: string;
@@ -44,7 +46,7 @@ export type PromptPurpose = 'agent_response' | 'context_compaction';
 export type PromptSourceRef = {
   source_id: string;
   source_kind: SessionContextSourceKind;
-  origin_module?: 'session' | 'context' | 'agent-run' | 'tools' | 'memory';
+  origin_module?: 'session' | 'context' | 'agent-run' | 'tools' | 'memory' | 'skills';
 };
 
 export type PromptMessage = {

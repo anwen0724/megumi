@@ -17,11 +17,12 @@ describe('context contracts', () => {
       session_id: 'session:1',
       workspace_id: 'workspace:1',
       sources: [{
-        source_id: 'message:1',
-        source_kind: 'session_message',
+        source_id: 'skill-catalog',
+        source_kind: 'skill_catalog',
         text: 'hello',
         persisted: true,
         created_at: '2026-07-03T00:00:00.000Z',
+        metadata: { origin_module: 'skills' },
       }],
     };
     const request: GetSessionContextRequest = {
@@ -30,7 +31,8 @@ describe('context contracts', () => {
       purpose: 'agent_response',
     };
 
-    expect(context.sources[0].source_kind).toBe('session_message');
+    expect(context.sources[0].source_kind).toBe('skill_catalog');
+    expect(context.sources[0].metadata?.origin_module).toBe('skills');
     expect(request.purpose).toBe('agent_response');
   });
 

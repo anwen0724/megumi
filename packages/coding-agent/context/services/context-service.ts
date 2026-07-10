@@ -73,10 +73,18 @@ export interface PromptLogPort {
   }): void;
 }
 
+export interface ContextSkillSourcePort {
+  getSkillCatalog(request: { workspaceId?: string }): Promise<
+    | { status: 'ok'; skills: Array<{ skillId: string; name: string; description: string }> }
+    | { status: 'failed'; message: string }
+  >;
+}
+
 export class ContextService {
   constructor(private readonly options: {
     repository: ContextSessionFactRepository;
     instructionSource?: ContextInstructionSourcePort;
+    skillSource?: ContextSkillSourcePort;
     promptResources: {
       system_prompt: string;
     };
@@ -89,6 +97,7 @@ export class ContextService {
   async getSessionContext(request: GetSessionContextRequest): Promise<GetSessionContextResult> {
     try {
       const sources: SessionContextSource[] = [];
+      const diagnostics: Array<{ code: string; message: string; origin_module: 'skills' }> = [];
       const messages = this.options.repository.listMessagesBySession(request.session_id)
         .filter((message) => message.status === 'completed')
         .map((message): SessionContextSource => ({
@@ -188,12 +197,34 @@ export class ContextService {
         });
       }
 
+      if (this.options.skillSource && request.purpose !== 'context_compaction') {
+        const catalog = await this.options.skillSource.getSkillCatalog({
+          ...(request.workspace_id ? { workspaceId: request.workspace_id } : {}),
+        });
+        if (catalog.status === 'ok' && catalog.skills.length > 0) {
+          sources.push({
+            source_id: 'skill-catalog',
+            source_kind: 'skill_catalog',
+            text: renderSkillCatalog(catalog.skills),
+            persisted: false,
+            metadata: { origin_module: 'skills' },
+          });
+        } else if (catalog.status === 'failed') {
+          diagnostics.push({
+            code: 'skill_catalog_failed',
+            message: catalog.message,
+            origin_module: 'skills',
+          });
+        }
+      }
+
       return {
         status: 'ok',
         session_context: {
           session_id: request.session_id,
           ...(request.workspace_id ? { workspace_id: request.workspace_id } : {}),
           sources,
+          ...(diagnostics.length > 0 ? { metadata: { diagnostics } } : {}),
         },
       };
     } catch (error) {
@@ -287,6 +318,20 @@ export class ContextService {
   private now(): string {
     return this.options.clock?.now() ?? new Date().toISOString();
   }
+}
+
+function renderSkillCatalog(skills: Array<{ skillId: string; description: string }>): string {
+  return [
+    'Available Skills',
+    '',
+    'The following skills are available for this workspace.',
+    'If a skill can help with the current task, call the activate_skill tool with the corresponding exact skillId.',
+    '',
+    ...skills.map((skill) => [
+      `- skillId: ${skill.skillId}`,
+      `  description: ${skill.description}`,
+    ].join('\n')),
+  ].join('\n');
 }
 
 function filterMetadata(metadata: Record<string, unknown>): Record<string, unknown> | undefined {

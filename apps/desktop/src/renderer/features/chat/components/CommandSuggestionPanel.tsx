@@ -41,14 +41,16 @@ export function CommandSuggestionPanel({
           {group.items.map((command) => {
             const currentIndex = itemIndex;
             itemIndex += 1;
+            const secondary = command.display?.secondary ?? command.description;
+            const badge = command.display?.badge ?? command.source_badge;
 
             return (
               <button
-                key={`${group.id}:${command.name}:${command.match.field}:${command.match.value}`}
+                key={suggestionKey(group.id, command)}
                 type="button"
                 role="option"
                 aria-selected={currentIndex === selectedIndex}
-                aria-label={`/${command.name} ${command.description}${command.source_badge ? ` ${command.source_badge}` : ''}`}
+                aria-label={`/${command.display?.primary ?? command.name} ${secondary}${badge ? ` ${badge}` : ''}`}
                 className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] aria-selected:bg-[var(--color-surface-hover)]"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => onChoose(command)}
@@ -57,11 +59,11 @@ export function CommandSuggestionPanel({
                   <CommandName item={command} />
                 </span>
                 <span className="min-w-0 flex-1 truncate text-xs text-[var(--color-text-muted)]">
-                  {command.description}
+                  {secondary}
                 </span>
-                {command.source_badge ? (
+                {badge ? (
                   <span className="shrink-0 text-xs text-[var(--color-text-subtle)]">
-                    {command.source_badge}
+                    {badge}
                   </span>
                 ) : null}
               </button>
@@ -74,8 +76,9 @@ export function CommandSuggestionPanel({
 }
 
 function CommandName({ item }: { item: CommandSuggestionItem }) {
+  const displayName = item.display?.primary ?? item.name;
   if (item.match.field !== 'name') {
-    return <>{`/${item.name}`}</>;
+    return <>{`/${displayName}`}</>;
   }
 
   const prefixLength = item.match.prefix.length;
@@ -83,8 +86,15 @@ function CommandName({ item }: { item: CommandSuggestionItem }) {
   return (
     <>
       /
-      <span className="text-[var(--color-accent)]">{item.name.slice(0, prefixLength)}</span>
-      {item.name.slice(prefixLength)}
+      <span className="text-[var(--color-accent)]">{displayName.slice(0, prefixLength)}</span>
+      {displayName.slice(prefixLength)}
     </>
   );
+}
+
+function suggestionKey(groupId: string, command: CommandSuggestionItem): string {
+  const sourceIdentity = command.source.kind === 'skill'
+    ? command.source.skill_id
+    : command.name;
+  return `${groupId}:${command.source.kind}:${sourceIdentity}:${command.match.field}:${command.match.value}`;
 }

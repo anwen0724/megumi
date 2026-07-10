@@ -6,6 +6,7 @@ import {
   ToolRegistryService,
 } from '../tools';
 import { createBuiltInToolAdapter, type WorkspaceFileAccess } from '../tools/adapters/built-in-tools';
+import type { SkillService } from '../skills';
 import type { WorkspacePathPolicyService } from '../workspace';
 import { createWorkspacePathPolicyService } from '../workspace';
 
@@ -30,6 +31,12 @@ export function composeCodingAgentToolExecutionService(input: {
   fileSystem?: LocalWorkspaceFileSystem;
   registryService?: ToolRegistryService;
   workspacePathPolicyService?: WorkspacePathPolicyService;
+  skillService?: Pick<SkillService, 'activateSkill'>;
+  runContext?: {
+    runId: string;
+    sessionId: string;
+    workspaceId?: string;
+  };
 }): ToolExecutionService {
   const registryService = input.registryService ?? composeCodingAgentToolRegistryService();
   return new ToolExecutionService({
@@ -40,6 +47,8 @@ export function composeCodingAgentToolExecutionService(input: {
         fileSystem: input.fileSystem ?? fs,
         workspacePathPolicyService: input.workspacePathPolicyService ?? createWorkspacePathPolicyService(),
       }),
+      ...(input.skillService ? { skillService: input.skillService } : {}),
+      ...(input.runContext ? { runContext: input.runContext } : {}),
     }),
   });
 }

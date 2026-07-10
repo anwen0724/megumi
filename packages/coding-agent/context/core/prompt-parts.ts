@@ -17,6 +17,8 @@ export type PromptPart = {
     | 'runtime_fact'
     | 'tool_result'
     | 'memory'
+    | 'skill_catalog'
+    | 'skill'
     | 'current_user_message'
     | 'context_compaction_candidate';
   text: string;
@@ -44,7 +46,9 @@ const SOURCE_KIND_RANK: Record<SessionContextSource['source_kind'], number> = {
   session_message: 2,
   runtime_fact: 3,
   tool_result: 4,
-  memory_recall_result: 5,
+  skill_catalog: 5,
+  skill: 6,
+  memory_recall_result: 7,
 };
 
 export function buildPromptParts(input: BuildPromptPartsInput): BuildPromptPartsResult {
@@ -137,6 +141,8 @@ function createPromptPart(source: SessionContextSource, input: BuildPromptPartsI
 
   const partKind = source.source_kind === 'memory_recall_result'
     ? 'memory'
+    : source.source_kind === 'skill'
+      ? 'skill'
     : source.source_kind === 'session_message' && source.source_id === input.current_user_message_id
       ? 'current_user_message'
       : source.source_kind;
@@ -144,13 +150,20 @@ function createPromptPart(source: SessionContextSource, input: BuildPromptPartsI
   return {
     part_id: source.source_id,
     part_kind: partKind,
-    text: source.text,
+    text: source.source_kind === 'skill' ? renderActivatedSkillContent(source.text) : source.text,
     source_refs: [sourceRef],
     priority: priorityForSource(source),
     required: source.source_kind === 'agent_instruction'
       || source.source_kind === 'context_compaction_summary'
+      || source.source_kind === 'skill_catalog'
+      || source.source_kind === 'skill'
       || partKind === 'current_user_message',
-    trim_policy: source.source_kind === 'agent_instruction' || partKind === 'current_user_message' ? 'none' : 'truncate',
+    trim_policy: source.source_kind === 'agent_instruction'
+      || source.source_kind === 'skill_catalog'
+      || source.source_kind === 'skill'
+      || partKind === 'current_user_message'
+      ? 'none'
+      : 'truncate',
     ...(source.metadata ? { metadata: source.metadata } : {}),
   };
 }
@@ -180,7 +193,23 @@ function priorityForSource(source: SessionContextSource): number {
       return 50;
     case 'tool_result':
       return 40;
+    case 'skill_catalog':
+      return 35;
+    case 'skill':
+      return 34;
     case 'memory_recall_result':
       return 30;
   }
+}
+
+function renderActivatedSkillContent(content: string): string {
+  return [
+    'Active Skill Instructions',
+    '',
+    'This skill was activated for the current task. Follow these instructions.',
+    '',
+    '<skill_content>',
+    content,
+    '</skill_content>',
+  ].join('\n');
 }

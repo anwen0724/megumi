@@ -38,6 +38,7 @@ describe('tool registry core', () => {
       'edit_file',
       'write_file',
       'run_command',
+      'activate_skill',
     ]);
   });
 
@@ -61,6 +62,7 @@ describe('tool registry core', () => {
       'edit_file',
       'write_file',
       'run_command',
+      'activate_skill',
     ]);
   });
 

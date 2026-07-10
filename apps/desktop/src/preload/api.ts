@@ -18,6 +18,10 @@ import type {
   SettingsData,
   SettingsGetPayload,
   SettingsUpdatePayload,
+  DisableSkillUiResponse,
+  EnableSkillUiResponse,
+  GetSkillDetailUiResponse,
+  ListSkillsUiResponse,
   WorkspaceListProjectsUiResult,
   WorkspaceOpenFileUiResult,
   WorkspaceOpenProjectUiResult,
@@ -67,6 +71,10 @@ import type {
   ProviderUpdatePayload,
   RunEventsListPayload,
   RunListBySessionPayload,
+  SkillDisablePayload,
+  SkillEnablePayload,
+  SkillGetPayload,
+  SkillListPayload,
   SessionBranchDraftCancelPayload,
   SessionBranchDraftCreatePayload,
   SessionCreatePayload,
@@ -188,6 +196,24 @@ export const api = {
       request: BusinessRequest<CommandSuggestionsPayload, typeof IPC_CHANNELS.chat.commandSuggestions>,
     ): Promise<RuntimeIpcResult<ChatGetCommandSuggestionsUiResult, typeof IPC_CHANNELS.chat.commandSuggestions>> =>
       invokeRuntimeIpc(IPC_CHANNELS.chat.commandSuggestions, request),
+  },
+  skill: {
+    list: (
+      request: BusinessRequest<SkillListPayload, typeof IPC_CHANNELS.skill.list>,
+    ): Promise<RuntimeIpcResult<ListSkillsUiResponse, typeof IPC_CHANNELS.skill.list>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.skill.list, request),
+    get: (
+      request: BusinessRequest<SkillGetPayload, typeof IPC_CHANNELS.skill.get>,
+    ): Promise<RuntimeIpcResult<GetSkillDetailUiResponse, typeof IPC_CHANNELS.skill.get>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.skill.get, request),
+    enable: (
+      request: BusinessRequest<SkillEnablePayload, typeof IPC_CHANNELS.skill.enable>,
+    ): Promise<RuntimeIpcResult<EnableSkillUiResponse, typeof IPC_CHANNELS.skill.enable>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.skill.enable, request),
+    disable: (
+      request: BusinessRequest<SkillDisablePayload, typeof IPC_CHANNELS.skill.disable>,
+    ): Promise<RuntimeIpcResult<DisableSkillUiResponse, typeof IPC_CHANNELS.skill.disable>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.skill.disable, request),
   },
   session: {
     create: (

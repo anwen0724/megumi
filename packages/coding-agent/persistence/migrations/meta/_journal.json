@@ -8,6 +8,13 @@
       "when": 1782819169216,
       "tag": "0000_database_foundation_redesign",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1783629600000,
+      "tag": "0001_skill_system",
+      "breakpoints": true
     }
   ]
 }

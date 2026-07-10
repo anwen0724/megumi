@@ -5,7 +5,10 @@
 export {
   createCommandService,
   type CommandService,
+  type CommandSuggestionRequest,
+  type SkillCommandProvider,
 } from './services/command-service';
+export type { SkillCommandDescriptor } from './core/skill-commands';
 export type {
   CommandAgentRunInput,
   CommandDefinition,

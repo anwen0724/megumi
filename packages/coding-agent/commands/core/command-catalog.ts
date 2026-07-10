@@ -7,6 +7,7 @@ import { built_in_commands as defaultBuiltInCommands } from './built-in-commands
 import type {
   CommandDefinition,
   CommandListItem,
+  CommandSuggestionItem,
   CommandSuggestionGroup,
   CommandSuggestionResult,
 } from '../contracts/command-contracts';
@@ -46,6 +47,9 @@ export function createCommandCatalog(options: {
 
     if (hasNameConflict) {
       diagnostics.push({ command_name: definition.name, reason: 'duplicate_name' });
+      if (definition.source.kind === 'skill') {
+        registered.push(definition);
+      }
       continue;
     }
     if (!aliasesAreUnique) {
@@ -54,6 +58,9 @@ export function createCommandCatalog(options: {
     }
     if (hasAliasConflict) {
       diagnostics.push({ command_name: definition.name, reason: 'alias_conflicts_with_name' });
+      if (definition.source.kind === 'skill') {
+        registered.push(definition);
+      }
       continue;
     }
 
@@ -135,11 +142,7 @@ function toSuggestionItem(
   prefix: string,
 ): CommandSuggestionGroup['items'] {
   if (command.name.startsWith(prefix)) {
-    return [{
-      ...toListItem(command),
-      match: { field: 'name', value: command.name, prefix },
-      completion: { replacement_input: `/${command.name} ` },
-    }];
+    return [createSuggestion(command, { field: 'name', value: command.name, prefix })];
   }
 
   const matchingAlias = command.aliases?.find((alias) => alias.startsWith(prefix));
@@ -147,9 +150,26 @@ function toSuggestionItem(
     return [];
   }
 
-  return [{
+  return [createSuggestion(command, { field: 'alias', value: matchingAlias, prefix })];
+}
+
+function createSuggestion(
+  command: CommandDefinition,
+  match: CommandSuggestionItem['match'],
+): CommandSuggestionItem {
+  return {
     ...toListItem(command),
-    match: { field: 'alias', value: matchingAlias, prefix },
-    completion: { replacement_input: `/${command.name} ` },
-  }];
+    ...(command.suggestion?.source_badge ? { source_badge: command.suggestion.source_badge } : {}),
+    ...(command.suggestion?.primary ? {
+      display: {
+        primary: command.suggestion.primary,
+        ...(command.suggestion.secondary ? { secondary: command.suggestion.secondary } : {}),
+        ...(command.suggestion.badge ? { badge: command.suggestion.badge } : {}),
+      },
+    } : {}),
+    match,
+    completion: {
+      replacement_input: command.suggestion?.replacement_input ?? `/${command.name} `,
+    },
+  };
 }

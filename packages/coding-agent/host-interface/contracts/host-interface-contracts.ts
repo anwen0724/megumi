@@ -7,11 +7,13 @@ import type { PlanController } from '../artifacts/plan-controller';
 import type { ApprovalController } from '../controllers/approval-controller';
 import type { ChatController } from '../controllers/chat-controller';
 import type { SettingsController } from '../controllers/settings-controller';
+import type { SkillController } from '../controllers/skill-controller';
 import type { WorkspaceController } from '../controllers/workspace-controller';
 
 export interface CodingAgentHostInterface {
   workspace: WorkspaceController;
   chat: ChatController;
+  skill: SkillController;
   settings: SettingsController;
   approval: ApprovalController;
   artifacts: ArtifactController & { plan: PlanController };

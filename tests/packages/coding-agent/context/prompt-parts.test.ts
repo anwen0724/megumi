@@ -43,6 +43,20 @@ describe('prompt parts', () => {
             text: 'remember this',
             persisted: false,
           },
+          {
+            source_id: 'skill-catalog',
+            source_kind: 'skill_catalog',
+            text: 'Available Skills',
+            persisted: false,
+            metadata: { origin_module: 'skills' },
+          },
+          {
+            source_id: 'skill:checks:test',
+            source_kind: 'skill',
+            text: 'Skill body',
+            persisted: false,
+            metadata: { origin_module: 'skills', skillId: 'checks:test' },
+          },
         ],
       },
       purpose: 'agent_response',
@@ -57,10 +71,23 @@ describe('prompt parts', () => {
       'session_message',
       'runtime_fact',
       'tool_result',
+      'skill_catalog',
+      'skill',
       'memory',
     ]);
     expect(parts.find((part) => part.part_kind === 'agent_instruction')?.required).toBe(true);
     expect(parts.find((part) => part.part_kind === 'agent_instruction')?.trim_policy).toBe('none');
+    expect(parts.find((part) => part.part_kind === 'skill_catalog')).toMatchObject({
+      required: true,
+      trim_policy: 'none',
+      source_refs: [{ source_id: 'skill-catalog', source_kind: 'skill_catalog', origin_module: 'skills' }],
+    });
+    expect(parts.find((part) => part.part_kind === 'skill')).toMatchObject({
+      required: true,
+      trim_policy: 'none',
+      source_refs: [{ source_id: 'skill:checks:test', source_kind: 'skill', origin_module: 'skills' }],
+    });
+    expect(parts.find((part) => part.part_kind === 'skill')?.text).toContain('<skill_content>');
   });
 
   it('excludes session messages covered by a compaction summary', () => {

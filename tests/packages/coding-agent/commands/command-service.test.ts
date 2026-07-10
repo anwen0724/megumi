@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   createCommandService,
   type CommandDefinition,
@@ -13,6 +13,11 @@ describe('createCommandService', () => {
     expect(service.listCommands()).toEqual([{
       name: 'review',
       description: 'review command',
+      source: { kind: 'built_in' },
+    }, {
+      name: 'skill',
+      description: 'Use a skill by skillId',
+      argument_hint: '<skillId> [args]',
       source: { kind: 'built_in' },
     }]);
   });
@@ -29,7 +34,7 @@ describe('createCommandService', () => {
       }],
     });
 
-    expect(service.getCommandSuggestions({ draft_input: '/re' })).toMatchObject({
+    await expect(service.getCommandSuggestions({ draft_input: '/re' })).resolves.toMatchObject({
       type: 'suggestions',
       command_prefix: 're',
       groups: [{
@@ -44,6 +49,50 @@ describe('createCommandService', () => {
       }],
     });
     expect(executed).toBe(false);
+  });
+
+  it('builds skill suggestions from a workspace-aware skill command provider', async () => {
+    const listSkillCommands = vi.fn(async () => [
+      {
+        skillId: 'superpowers:brainstorming',
+        commandName: 'brainstorming',
+        skillName: 'superpowers:brainstorming',
+        description: 'Explore intent before implementation',
+        sourceLabel: 'System',
+      },
+    ]);
+    const service = createCommandService({
+      built_in_commands: [testCommand('review')],
+      skillCommandProvider: { listSkillCommands },
+    });
+
+    const result = await service.getCommandSuggestions({
+      draft_input: '/bra',
+      workspaceId: 'workspace:1',
+    });
+
+    expect(listSkillCommands).toHaveBeenCalledWith({ workspaceId: 'workspace:1' });
+    expect(result).toMatchObject({
+      type: 'suggestions',
+      groups: [{
+        id: 'commands',
+      }, {
+        id: 'skills',
+        items: [{
+          name: 'brainstorming',
+          source: { kind: 'skill', skill_id: 'superpowers:brainstorming' },
+          display: {
+            primary: 'brainstorming',
+            secondary: 'superpowers:brainstorming - Explore intent before implementation',
+            badge: 'System',
+          },
+          completion: {
+            replacement_input: '/skill superpowers:brainstorming ',
+          },
+        }],
+      }],
+    });
+    expect(JSON.stringify(result)).not.toContain('workspace:1');
   });
 
   it('handles ordinary input, invalid slash input, and unknown commands as not command', async () => {

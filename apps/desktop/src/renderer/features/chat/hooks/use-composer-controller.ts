@@ -14,6 +14,11 @@ import type { ComposerSurfaceProps } from '../components/ComposerSurface';
 const COMPOSER_TEXTAREA_COMPACT_HEIGHT = 56;
 const COMPOSER_TEXTAREA_MAX_HEIGHT = 160;
 
+type SelectedCommandCompletion = {
+  visiblePrefix: string;
+  backendPrefix: string;
+};
+
 function createComposerSubmitPayload(input: {
   message: string;
   permissionMode: ComposerPermissionMode;
@@ -26,6 +31,18 @@ function createComposerSubmitPayload(input: {
     providerId: input.providerId,
     model: input.model,
   };
+}
+
+function createVisibleCommandInput(item: CommandSuggestionItem): string {
+  return `/${item.display?.primary ?? item.name} `;
+}
+
+function resolveSubmitMessage(rawValue: string, completion: SelectedCommandCompletion | null): string {
+  if (!completion || !rawValue.startsWith(completion.visiblePrefix)) {
+    return rawValue.trim();
+  }
+
+  return `${completion.backendPrefix}${rawValue.slice(completion.visiblePrefix.length)}`.trim();
 }
 
 export function useComposerController({
@@ -45,6 +62,7 @@ export function useComposerController({
   const modelId = useId();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [value, setValue] = useState(initialValue);
+  const [selectedCommandCompletion, setSelectedCommandCompletion] = useState<SelectedCommandCompletion | null>(null);
   const [selectedCommandSuggestionIndex, setSelectedCommandSuggestionIndex] = useState(0);
   const [permissionMode, setPermissionMode] = useState<ComposerPermissionMode>(DEFAULT_COMPOSER_PERMISSION_MODE);
   const [model, setModel] = useState<ComposerModel>(DEFAULT_COMPOSER_MODEL);
@@ -60,8 +78,11 @@ export function useComposerController({
   const showStop = status === 'sending' || status === 'running' || status === 'waiting-approval';
   const canStop = showStop && Boolean(onStop);
   const [commandSuggestions, setCommandSuggestions] = useState<CommandSuggestionResult>({ type: 'inactive' });
-  const visibleCommandSuggestionItems = commandSuggestions.type === 'suggestions'
-    ? commandSuggestions.groups.flatMap((group) => group.items)
+  const activeCommandSuggestions = commandSuggestions.type === 'suggestions' && commandSuggestions.draft_input === value
+    ? commandSuggestions
+    : { type: 'inactive' as const };
+  const visibleCommandSuggestionItems = activeCommandSuggestions.type === 'suggestions'
+    ? activeCommandSuggestions.groups.flatMap((group) => group.items)
     : [];
   const hasCommandSuggestionSelection = visibleCommandSuggestionItems.length > 0
     && selectedCommandSuggestionIndex >= 0;
@@ -69,6 +90,7 @@ export function useComposerController({
   useEffect(() => {
     if (seedTextKey && seedText !== null && seedText !== undefined) {
       setValue(seedText);
+      setSelectedCommandCompletion(null);
     }
   }, [seedTextKey, seedText]);
 
@@ -145,12 +167,13 @@ export function useComposerController({
     if (!selectedModelOption) return;
 
     onSubmit(createComposerSubmitPayload({
-      message: trimmedValue,
+      message: resolveSubmitMessage(value, selectedCommandCompletion),
       permissionMode,
       providerId: selectedModelOption.providerId,
       model: selectedModelOption.modelId,
     }));
     setValue('');
+    setSelectedCommandCompletion(null);
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -162,6 +185,24 @@ export function useComposerController({
     const selectionStart = textarea.selectionStart;
     const selectionEnd = textarea.selectionEnd;
     setValue(`${value.slice(0, selectionStart)}\n${value.slice(selectionEnd)}`);
+    setSelectedCommandCompletion(null);
+  }
+
+  function handleValueChange(nextValue: string) {
+    setValue(nextValue);
+    setSelectedCommandCompletion((completion) => (
+      completion && nextValue.startsWith(completion.visiblePrefix) ? completion : null
+    ));
+  }
+
+  function applyCommandSuggestion(item: CommandSuggestionItem) {
+    const visibleInput = createVisibleCommandInput(item);
+    setValue(visibleInput);
+    setSelectedCommandCompletion({
+      visiblePrefix: visibleInput,
+      backendPrefix: item.completion.replacement_input,
+    });
+    setSelectedCommandSuggestionIndex(0);
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -187,8 +228,7 @@ export function useComposerController({
       event.preventDefault();
       const item = visibleCommandSuggestionItems[selectedCommandSuggestionIndex];
       if (item) {
-        setValue(item.completion.replacement_input);
-        setSelectedCommandSuggestionIndex(0);
+        applyCommandSuggestion(item);
       }
       return;
     }
@@ -212,8 +252,7 @@ export function useComposerController({
   }
 
   function chooseCommandSuggestion(item: CommandSuggestionItem) {
-    setValue(item.completion.replacement_input);
-    setSelectedCommandSuggestionIndex(0);
+    applyCommandSuggestion(item);
     textareaRef.current?.focus();
   }
 
@@ -229,10 +268,10 @@ export function useComposerController({
     permissionModeId,
     modelId,
     textareaRef,
-    commandSuggestions,
+    commandSuggestions: activeCommandSuggestions,
     selectedCommandSuggestionIndex,
     contextUsage,
-    onValueChange: setValue,
+    onValueChange: handleValueChange,
     onCommandSuggestionChoose: chooseCommandSuggestion,
     onPermissionModeChange: setPermissionMode,
     onModelChange: setModel,

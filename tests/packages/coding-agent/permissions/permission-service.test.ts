@@ -69,6 +69,35 @@ describe('Permission Service', () => {
       }
     });
 
+    it('treats skill script run_command inputs as process execution', async () => {
+      const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
+
+      const result = await service.evaluateToolExecution(baseEvaluateRequest({
+        tool_name: 'run_command',
+        tool_input: {
+          command: 'C:\\skills\\checks\\scripts\\check.ps1 --watch',
+          metadata: {
+            source: 'skill',
+            skillId: 'checks:test',
+            scriptName: 'check',
+          },
+        },
+        registered_tool: registeredTool({
+          capabilities: ['command_run'],
+          risk_level: 'medium',
+          side_effect: 'process_execution',
+        }),
+      }));
+
+      expect(result.status).toBe('ok');
+      if (result.status === 'ok') {
+        expect(result.decision).toMatchObject({
+          type: 'requires_approval',
+          execution_class: 'process_execution',
+        });
+      }
+    });
+
     it('denies workspace paths outside the workspace', async () => {
       const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
 
@@ -188,6 +217,30 @@ describe('Permission Service', () => {
       expect(result.status).toBe('ok');
       if (result.status === 'ok') {
         expect(result.decision.type).toBe('requires_approval');
+      }
+    });
+
+    it('allows activate_skill as a low-risk built-in runtime context tool', async () => {
+      const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
+
+      const result = await service.evaluateToolExecution(baseEvaluateRequest({
+        tool_name: 'activate_skill',
+        tool_input: { skillId: 'superpowers:brainstorming' },
+        registered_tool: registeredTool({
+          registered_tool_name: 'activate_skill',
+          source_tool_name: 'activate_skill',
+          capabilities: ['project_read'],
+          risk_level: 'low',
+          side_effect: 'none',
+        }),
+      }));
+
+      expect(result.status).toBe('ok');
+      if (result.status === 'ok') {
+        expect(result.decision).toMatchObject({
+          type: 'allow',
+          execution_class: 'read_only',
+        });
       }
     });
 

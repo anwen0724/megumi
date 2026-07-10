@@ -321,6 +321,89 @@ describe('Composer', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it('shows the selected skill command name while submitting the stable skill command input', async () => {
+    const onSubmit = vi.fn();
+    render(<TestComposer
+      onSubmit={onSubmit}
+      getCommandSuggestions={() => ({
+        type: 'suggestions',
+        draft_input: '/te',
+        command_prefix: 'te',
+        groups: [{
+          id: 'skills',
+          label: 'Skills',
+          items: [{
+            name: 'test',
+            description: 'Run project checks',
+            source: { kind: 'skill', skill_id: 'checks:test' },
+            display: {
+              primary: 'test',
+              secondary: 'checks:test - Run project checks',
+              badge: 'Project',
+            },
+            match: { field: 'name', value: 'test', prefix: 'te' },
+            completion: { replacement_input: '/skill checks:test ' },
+          }],
+        }],
+      })}
+    />);
+
+    const input = screen.getByLabelText('Message Megumi');
+    await userEvent.type(input, '/te');
+    await userEvent.keyboard('{Enter}');
+
+    expect(input).toHaveValue('/test ');
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    await userEvent.type(input, '--watch');
+    await userEvent.keyboard('{Enter}');
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      message: '/skill checks:test --watch',
+    }));
+  });
+
+  it('does not convert a typed skill display command without choosing a suggestion', async () => {
+    const onSubmit = vi.fn();
+    render(<TestComposer
+      onSubmit={onSubmit}
+      getCommandSuggestions={({ draft_input }) => {
+        if (/\s/.test(draft_input.slice(1))) {
+          return { type: 'inactive' };
+        }
+
+        return {
+          type: 'suggestions',
+          draft_input,
+          command_prefix: draft_input.slice(1),
+          groups: [{
+            id: 'skills',
+            label: 'Skills',
+            items: [{
+              name: 'test',
+              description: 'Run project checks',
+              source: { kind: 'skill', skill_id: 'checks:test' },
+              display: {
+                primary: 'test',
+                secondary: 'checks:test - Run project checks',
+                badge: 'Project',
+              },
+              match: { field: 'name', value: 'test', prefix: draft_input.slice(1) },
+              completion: { replacement_input: '/skill checks:test ' },
+            }],
+          }],
+        };
+      }}
+    />);
+
+    await userEvent.type(screen.getByLabelText('Message Megumi'), '/test --watch');
+    await userEvent.keyboard('{Enter}');
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      message: '/test --watch',
+    }));
+  });
+
   it('uses Tab to complete the selected command suggestion without submitting', async () => {
     const onSubmit = vi.fn();
     render(<TestComposer

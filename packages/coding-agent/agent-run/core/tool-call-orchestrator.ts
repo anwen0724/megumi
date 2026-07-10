@@ -11,6 +11,7 @@ import type {
   ToolSideEffect,
 } from '../../permissions';
 import type { RegisteredTool, ToolExecutionResult } from '../../tools';
+import type { SessionContextSource } from '../../context';
 import type { WorkspacePathPolicyService } from '../../workspace';
 import type { AgentRunApprovalRequest, AgentRunToolCall } from '../contracts/agent-run-contracts';
 import type { AgentRunTraceLogger } from '../contracts/agent-run-trace-contracts';
@@ -460,7 +461,20 @@ function toolResultFromExecutionResult(
     status: result.type === 'succeeded' ? 'completed' : 'failed',
     content: result.normalizedResult.content,
     ...(result.toolExecutionObservation ? { observation: result.toolExecutionObservation } : {}),
+    ...(result.type === 'succeeded' && result.runtimeSources?.length
+      ? { runtime_sources: result.runtimeSources.map(toSessionContextSource) }
+      : {}),
     created_at: createdAt,
+  };
+}
+
+function toSessionContextSource(source: NonNullable<Extract<ToolExecutionResult, { type: 'succeeded' }>['runtimeSources']>[number]): SessionContextSource {
+  return {
+    source_id: source.source_id,
+    source_kind: source.source_kind as SessionContextSource['source_kind'],
+    text: source.text,
+    persisted: source.persisted,
+    ...(source.metadata ? { metadata: source.metadata } : {}),
   };
 }
 

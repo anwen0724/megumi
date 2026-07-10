@@ -1,5 +1,7 @@
+import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  mapSkillScriptExecutionRequestToRunCommandInput,
   ToolExecutionService,
   ToolRegistryService,
   type RegisteredTool,
@@ -97,6 +99,58 @@ describe('ToolExecutionService', () => {
       },
     });
     expect(adapter.execute).not.toHaveBeenCalled();
+  });
+
+  it('executes prepared skill script requests through run_command metadata', async () => {
+    const spawn = vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & {
+        stdout: EventEmitter;
+        stderr: EventEmitter;
+        kill(): void;
+      };
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.kill = vi.fn();
+      queueMicrotask(() => {
+        child.stdout.emit('data', 'script ok');
+        child.emit('close', 0);
+      });
+      return child;
+    });
+    const service = new ToolExecutionService({
+      registryService: new ToolRegistryService(),
+      builtInTools: createBuiltInToolAdapter({
+        workspaceFileAccess: fakeWorkspaceFileAccess(new Map()),
+        spawn: spawn as never,
+      }),
+    });
+    const input = mapSkillScriptExecutionRequestToRunCommandInput({
+      skillId: 'checks:test',
+      scriptName: 'check',
+      scriptPath: 'C:\\skills\\checks\\scripts\\check.ps1',
+      args: ['--watch'],
+      workspaceId: 'workspace:1',
+      sessionId: 'session:1',
+      runId: 'run:1',
+      approvalSummary: 'Run skill script check from checks:test',
+    });
+
+    const result = await service.executeTool({
+      toolName: 'run_command',
+      input,
+    });
+
+    expect(result.type).toBe('succeeded');
+    expect(spawn).toHaveBeenCalledWith(
+      'C:\\skills\\checks\\scripts\\check.ps1 --watch',
+      [],
+      expect.objectContaining({ cwd: 'C:\\project', shell: true }),
+    );
+    expect(result.type === 'succeeded' ? result.rawResult.metadata : undefined).toMatchObject({
+      source: 'skill',
+      skillId: 'checks:test',
+      scriptName: 'check',
+    });
   });
 });
 
