@@ -4,7 +4,7 @@
 import type { IpcMainInvokeEvent } from 'electron';
 import type { z } from 'zod';
 import { createRuntimeDebugId, type RuntimeContext } from '@megumi/coding-agent/events';
-import type { RuntimeLogger } from '../services/agent-run/runtime-logger.service';
+import type { RuntimeLogger } from '@megumi/product/logging';
 import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from './contracts';
 import type { RuntimeIpcError } from './errors';
 import { sanitizeZodIssues } from './errors';

@@ -98,6 +98,7 @@ export interface CodingAgentHomePaths {
 export interface ComposeCodingAgentRuntimeOptions {
   homePaths: CodingAgentHomePaths;
   migrationsFolder?: string;
+  migrationEnvironment?: Parameters<typeof composeCodingAgentPersistence>[0]['migrationEnvironment'];
   runtimeLogger: RuntimeLogger;
   aiClient?: AiClient;
   modelCallProviderService?: LegacyModelCallProviderForTests;
@@ -145,6 +146,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   const persistence = composeCodingAgentPersistence({
     sqlitePath: options.homePaths.sqlitePath,
     migrationsFolder: options.migrationsFolder,
+    migrationEnvironment: options.migrationEnvironment,
   });
   const workspaceRepository = new WorkspaceRepository(persistence.database);
   const workspaceChangeRepository = new WorkspaceChangeRepository(persistence.database);

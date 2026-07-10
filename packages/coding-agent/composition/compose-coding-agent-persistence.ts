@@ -7,12 +7,14 @@ import { migrateCodingAgentDatabase } from '../persistence/schema';
 export interface ComposeCodingAgentPersistenceInput {
   sqlitePath: string;
   migrationsFolder?: string;
+  migrationEnvironment?: Parameters<typeof migrateCodingAgentDatabase>[0]['migrationEnvironment'];
 }
 
 export function composeCodingAgentPersistence(input: ComposeCodingAgentPersistenceInput) {
   const { database } = migrateCodingAgentDatabase({
     sqliteDirectory: path.resolve(input.sqlitePath),
     migrationsFolder: input.migrationsFolder,
+    migrationEnvironment: input.migrationEnvironment,
   });
 
   return {

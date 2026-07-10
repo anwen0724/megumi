@@ -12,7 +12,7 @@ import {
   type ArtifactHandlersService,
 } from './handlers/artifact.handler';
 import { registerMemoryHandlers, type MemoryHandlersService } from './handlers/memory.handler';
-import type { RuntimeLogger } from '../services/agent-run/runtime-logger.service';
+import type { RuntimeLogger } from '@megumi/product/logging';
 import { electronIpcMain, type DesktopIpcMain } from '../shell/electron-ipc-main-host';
 
 export interface RegisterAllHandlersOptions {

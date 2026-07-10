@@ -5,7 +5,7 @@ import {
   RuntimeEventSchema,
   type RuntimeEvent,
 } from '@megumi/coding-agent/events';
-import type { RuntimeLogger } from '../services/agent-run/runtime-logger.service';
+import type { RuntimeLogger } from '@megumi/product/logging';
 import { IPC_CHANNELS } from './channels';
 
 export function forwardRuntimeEvent(

@@ -36,7 +36,7 @@ describe('composeProduct', () => {
         },
         clock: { now: () => new Date('2026-07-10T00:00:00.000Z') },
       },
-      runtimeLoggerFactory: () => ({ warn() {} }),
+      logWriter: { appendText: () => undefined },
       directoryPicker: {
         chooseDirectory: async () => ({ canceled: false, filePaths: [workspaceRoot] }),
       },

@@ -2,7 +2,7 @@
  * Desktop IPC handlers for project/workspace operations and local file browsing.
  */
 import type { ProductHostInterface } from '@megumi/product/host-interface';
-import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
+import type { RuntimeLogger } from '@megumi/product/logging';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-request-handler';
 import { IPC_CHANNELS } from '../channels';

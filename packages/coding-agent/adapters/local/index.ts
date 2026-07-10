@@ -1,5 +1,4 @@
 // Public exports for non-UI local Coding Agent adapters.
-export * from './security/redaction';
 export * from './security/sandbox-policy';
 export * from './memory/memory-diagnostic-writer.service';
 export * from './memory/memory-markdown-sync.service';

@@ -6,7 +6,11 @@ export interface ResolvePersistenceMigrationsFolderInput {
   migrationsFolder?: string;
   moduleDirectory?: string;
   cwd?: string;
+  isPackaged?: boolean;
+  resourcesPath?: string;
 }
+
+export const PERSISTENCE_MIGRATIONS_RESOURCE_PATH = 'product/persistence/migrations';
 
 export class PersistenceMigrationsFolderError extends Error {
   constructor(message: string, readonly folder: string) {
@@ -18,14 +22,22 @@ export class PersistenceMigrationsFolderError extends Error {
 export function resolvePersistenceMigrationsFolder(
   input: ResolvePersistenceMigrationsFolderInput = {},
 ): string {
-  const candidates = [
-    input.migrationsFolder,
-    path.resolve(input.moduleDirectory ?? __dirname, '../migrations'),
-    path.resolve(input.cwd ?? process.cwd(), 'packages/coding-agent/persistence/migrations'),
-  ].filter((candidate): candidate is string => Boolean(candidate));
+  const candidates = input.isPackaged
+    ? [
+        input.migrationsFolder,
+        input.resourcesPath
+          ? path.resolve(input.resourcesPath, PERSISTENCE_MIGRATIONS_RESOURCE_PATH)
+          : undefined,
+      ]
+    : [
+        input.migrationsFolder,
+        path.resolve(input.moduleDirectory ?? __dirname, '../migrations'),
+        path.resolve(input.cwd ?? process.cwd(), 'packages/coding-agent/persistence/migrations'),
+      ];
+  const availableCandidates = candidates.filter((candidate): candidate is string => Boolean(candidate));
 
-  const firstExisting = candidates.find((candidate) => fs.existsSync(candidate));
-  const resolved = firstExisting ?? candidates[0];
+  const firstExisting = availableCandidates.find((candidate) => fs.existsSync(candidate));
+  const resolved = firstExisting ?? availableCandidates[0] ?? '';
   assertPersistenceMigrationsFolder(resolved);
   return resolved;
 }

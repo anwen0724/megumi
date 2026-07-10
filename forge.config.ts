@@ -4,6 +4,7 @@ import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import fs from 'fs-extra';
 import path from 'node:path';
+import { getProductPackagingResources } from './packages/product/resources';
 
 const nativeRuntimeModuleRoots = [
   '/node_modules/better-sqlite3',
@@ -35,9 +36,9 @@ const config: ForgeConfig = {
     afterCopy: [
       async (buildPath, _electronVersion, _platform, _arch, done) => {
         try {
-          const source = path.resolve(process.cwd(), 'packages/coding-agent/persistence/migrations');
-          const target = path.resolve(buildPath, '..', 'persistence', 'migrations');
-          await fs.copy(source, target);
+          for (const resource of getProductPackagingResources(process.cwd())) {
+            await fs.copy(resource.source, path.resolve(buildPath, '..', resource.target));
+          }
           done();
         } catch (error) {
           done(error as Error);

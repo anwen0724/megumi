@@ -37,6 +37,20 @@ describe('resolvePersistenceMigrationsFolder', () => {
     expect(resolvePersistenceMigrationsFolder({ migrationsFolder: folder })).toBe(folder);
   });
 
+  it('resolves packaged migrations from host environment facts', () => {
+    const resourcesPath = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-packaged-resources-'));
+    tempDir = resourcesPath;
+    const folder = path.join(resourcesPath, 'product', 'persistence', 'migrations');
+    fs.mkdirSync(path.join(folder, 'meta'), { recursive: true });
+    fs.writeFileSync(path.join(folder, 'meta', '_journal.json'), '{}');
+
+    expect(resolvePersistenceMigrationsFolder({
+      isPackaged: true,
+      resourcesPath,
+      cwd: 'C:/must-not-be-used',
+    })).toBe(folder);
+  });
+
   it('throws a clear error when the folder is missing', () => {
     const missingFolder = path.join(os.tmpdir(), 'megumi-missing-migrations');
 

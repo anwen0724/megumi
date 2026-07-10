@@ -10,6 +10,7 @@ export interface MigrateCodingAgentDatabaseInput {
   sqliteDirectory: string;
   databaseFileName?: string;
   migrationsFolder?: string;
+  migrationEnvironment?: Omit<import('./migration-paths').ResolvePersistenceMigrationsFolderInput, 'migrationsFolder'>;
 }
 
 export interface MigrateCodingAgentDatabaseResult {
@@ -50,6 +51,7 @@ export function migrateCodingAgentDatabase(input: MigrateCodingAgentDatabaseInpu
 
   const migrationsFolder = resolvePersistenceMigrationsFolder({
     migrationsFolder: input.migrationsFolder,
+    ...input.migrationEnvironment,
   });
   const database = createDatabase(sqliteFile);
   try {

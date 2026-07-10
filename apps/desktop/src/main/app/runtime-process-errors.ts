@@ -1,10 +1,10 @@
 ﻿import { normalizeRuntimeError } from '@megumi/coding-agent/runtime-error';
 import { createRuntimeDebugId } from '@megumi/coding-agent/events';
-import { redactRuntimeValue } from '@megumi/coding-agent/adapters/local/security/redaction';
+import { redactRuntimeValue } from '@megumi/product/logging';
 import {
   noopRuntimeLogger,
   type RuntimeLogger,
-} from '../services/agent-run/runtime-logger.service';
+} from '@megumi/product/logging';
 
 type RuntimeProcessEventName = 'uncaughtException' | 'unhandledRejection';
 

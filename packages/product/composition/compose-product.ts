@@ -5,7 +5,6 @@
 import {
   composeCodingAgentRuntime,
   type ComposeCodingAgentRuntimeOptions,
-  type RuntimeLogger,
 } from '@megumi/coding-agent/composition';
 import {
   initializeMegumiHomeSync,
@@ -20,13 +19,20 @@ import type { ProductHostInterface } from '../host-interface/product-host-interf
 import { createSettingsHost } from '../host-interface/settings-host';
 import { createSkillHost } from '../host-interface/skill-host';
 import { createWorkspaceHost, type DirectoryPickerPort, type FileOpenPort } from '../host-interface/workspace-host';
+import {
+  createProductRuntimeLogger,
+  type RuntimeLogClockPort,
+  type RuntimeLogWriterPort,
+} from '../logging';
+import type { RuntimeLogger } from '@megumi/coding-agent/composition';
 
 export type ComposeProductOptions = Omit<
   ComposeCodingAgentRuntimeOptions,
   'homePaths' | 'runtimeLogger'
 > & {
   home: InitializeMegumiHomeSyncOptions;
-  runtimeLoggerFactory(homePaths: MegumiHomePaths): RuntimeLogger;
+  logWriter: RuntimeLogWriterPort;
+  logClock?: RuntimeLogClockPort;
   directoryPicker?: DirectoryPickerPort;
   fileOpen?: FileOpenPort;
 };
@@ -40,7 +46,11 @@ export interface ProductRuntime {
 
 export function composeProduct(options: ComposeProductOptions): ProductRuntime {
   const homePaths = initializeMegumiHomeSync(options.home);
-  const logger = options.runtimeLoggerFactory(homePaths);
+  const logger = createProductRuntimeLogger({
+    logsPath: homePaths.logsPath,
+    writer: options.logWriter,
+    clock: options.logClock ?? { now: () => new Date() },
+  });
   const runtime = composeCodingAgentRuntime({
     ...codingAgentOptions(options),
     homePaths: {
@@ -91,7 +101,8 @@ function codingAgentOptions(
 ): Omit<ComposeCodingAgentRuntimeOptions, 'homePaths' | 'runtimeLogger'> {
   const {
     home: _home,
-    runtimeLoggerFactory: _runtimeLoggerFactory,
+    logWriter: _logWriter,
+    logClock: _logClock,
     directoryPicker: _directoryPicker,
     fileOpen: _fileOpen,
     ...codingAgent

@@ -2,6 +2,7 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createProductRuntimeLogger } from '@megumi/product/logging';
 
 const mocks = vi.hoisted(() => {
   const homePath = `${process.cwd().replaceAll('\\', '/')}/.tmp/megumi-runtime-logger-review`;
@@ -253,13 +254,20 @@ describe('main runtime logger composition', () => {
     mocks.createMainWindow.mockClear();
     mocks.composeProduct.mockReset();
     mocks.composeProduct.mockImplementation((options: {
-      runtimeLoggerFactory(paths: typeof mocks.megumiHomePaths): unknown;
-    }) => ({
-      homePaths: mocks.megumiHomePaths,
-      logger: options.runtimeLoggerFactory(mocks.megumiHomePaths),
-      host: mocks.codingAgentHost,
-      dispose: mocks.codingAgentHost.dispose,
-    }));
+      logWriter: { appendText(filePath: string, text: string): void };
+    }) => {
+      const logger = createProductRuntimeLogger({
+        logsPath: mocks.megumiHomePaths.logsPath,
+        writer: options.logWriter,
+        clock: { now: () => new Date('2026-07-10T00:00:00.000Z') },
+      });
+      return {
+        homePaths: mocks.megumiHomePaths,
+        logger,
+        host: mocks.codingAgentHost,
+        dispose: mocks.codingAgentHost.dispose,
+      };
+    });
     mocks.ArtifactRepository.mockClear();
     mocks.MemoryRepository.mockClear();
     mocks.ArtifactContentStore.mockClear();
@@ -299,7 +307,7 @@ describe('main runtime logger composition', () => {
       home: expect.objectContaining({
         resourceLocator: expect.any(Object),
       }),
-      runtimeLoggerFactory: expect.any(Function),
+      logWriter: expect.objectContaining({ appendText: expect.any(Function) }),
       directoryPicker: expect.objectContaining({
         chooseDirectory: expect.any(Function),
       }),
