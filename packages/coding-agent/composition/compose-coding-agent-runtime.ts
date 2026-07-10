@@ -33,9 +33,11 @@ import {
 } from '../settings';
 import {
   createWorkspaceChangeService,
+  createWorkspaceFilesService,
   createWorkspacePathPolicyService,
   createWorkspaceService,
   type WorkspaceChangeService,
+  type WorkspaceFilesService,
   type WorkspacePathPolicyService,
   type WorkspaceService,
 } from '../workspace';
@@ -45,6 +47,7 @@ import {
   createLocalProjectFileSystem,
   type LocalWorkspaceServiceFileSystem,
 } from '../adapters/local/workspace/project-file-system';
+import { createLocalWorkspaceFilesFileSystem } from '../adapters/local/workspace/workspace-files-file-system';
 import {
   createAiClient,
   createAnthropicProtocolAdapter,
@@ -115,6 +118,7 @@ export interface CodingAgentRuntime {
   sessionService: SessionService;
   settingsService: SettingsService;
   workspaceService: WorkspaceService;
+  workspaceFilesService: WorkspaceFilesService;
   workspaceChangeService: WorkspaceChangeService;
   workspacePathPolicyService: WorkspacePathPolicyService;
   permissionService: PermissionService;
@@ -200,6 +204,11 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   const sessionTimelineQuery = createSessionTimelineQuery({
     sessionService,
     workspaceChangeFooterProjector,
+  });
+  const workspaceFilesService = createWorkspaceFilesService({
+    workspaceService,
+    pathPolicy: workspacePathPolicyService,
+    fileSystem: createLocalWorkspaceFilesFileSystem(),
   });
   const permissionService = createPermissionService({
     settings_service: {
@@ -335,6 +344,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     sessionService,
     settingsService,
     workspaceService,
+    workspaceFilesService,
     workspaceChangeService,
     workspacePathPolicyService,
     permissionService,

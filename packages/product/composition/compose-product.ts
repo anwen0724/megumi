@@ -19,7 +19,7 @@ import { createPlanHost } from '../host-interface/plan-host';
 import type { ProductHostInterface } from '../host-interface/product-host-interface';
 import { createSettingsHost } from '../host-interface/settings-host';
 import { createSkillHost } from '../host-interface/skill-host';
-import { createWorkspaceHost, type DirectoryPickerPort } from '../host-interface/workspace-host';
+import { createWorkspaceHost, type DirectoryPickerPort, type FileOpenPort } from '../host-interface/workspace-host';
 
 export type ComposeProductOptions = Omit<
   ComposeCodingAgentRuntimeOptions,
@@ -28,6 +28,7 @@ export type ComposeProductOptions = Omit<
   home: InitializeMegumiHomeSyncOptions;
   runtimeLoggerFactory(homePaths: MegumiHomePaths): RuntimeLogger;
   directoryPicker?: DirectoryPickerPort;
+  fileOpen?: FileOpenPort;
 };
 
 export interface ProductRuntime {
@@ -65,7 +66,9 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
     skill: createSkillHost(runtime.skillService),
     workspace: createWorkspaceHost({
       workspaceService: runtime.workspaceService,
+      workspaceFilesService: runtime.workspaceFilesService,
       ...(options.directoryPicker ? { directoryPicker: options.directoryPicker } : {}),
+      ...(options.fileOpen ? { fileOpen: options.fileOpen } : {}),
     }),
     settings: createSettingsHost(runtime.settingsService),
     approval: createApprovalHost(runtime.agentRunService),
@@ -90,6 +93,7 @@ function codingAgentOptions(
     home: _home,
     runtimeLoggerFactory: _runtimeLoggerFactory,
     directoryPicker: _directoryPicker,
+    fileOpen: _fileOpen,
     ...codingAgent
   } = options;
   return codingAgent;

@@ -246,7 +246,7 @@ export function useChatPageController() {
       await window.megumi.workspace.files.open(createRendererRuntimeIpcRequest(
         IPC_CHANNELS.workspace.filesOpen,
         {
-          workspaceRoot: currentProject.repoPath,
+          projectId: currentProject.id,
           filePath: projectPath,
         },
       ));

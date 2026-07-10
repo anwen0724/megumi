@@ -8,7 +8,7 @@ import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store
 import { useWorkspaceFilesStore } from '@megumi/desktop/renderer/entities/workspace-files/store';
 
 function installWorkspaceFilesMock() {
-  const list = vi.fn(async (request: { payload: { workspaceRoot: string; directoryPath: string } }) => {
+  const list = vi.fn(async (request: { payload: { projectId: string; directoryPath: string } }) => {
     const entries = request.payload.directoryPath === 'apps'
       ? [
           {
@@ -42,7 +42,8 @@ function installWorkspaceFilesMock() {
     return {
       ok: true,
       data: {
-        workspaceRoot: request.payload.workspaceRoot,
+        projectId: request.payload.projectId,
+        workspaceRoot: 'C:/workspaces/megumi',
         directoryPath: request.payload.directoryPath,
         entries,
       },
@@ -140,7 +141,7 @@ describe('FilesPanelTab', () => {
     expect(screen.getByRole('navigation', { name: 'Project files' })).toBeInTheDocument();
     expect(list).toHaveBeenCalledWith(expect.objectContaining({
       payload: {
-        workspaceRoot: 'C:/workspaces/megumi',
+        projectId: 'project-1',
         directoryPath: '',
       },
       meta: expect.objectContaining({
@@ -166,7 +167,7 @@ describe('FilesPanelTab', () => {
     await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
     expect(list).toHaveBeenNthCalledWith(2, expect.objectContaining({
       payload: {
-        workspaceRoot: 'C:/workspaces/megumi',
+        projectId: 'project-1',
         directoryPath: 'apps',
       },
     }));

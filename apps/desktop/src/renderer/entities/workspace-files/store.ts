@@ -12,7 +12,7 @@ export type WorkspaceDirectoryEntry = WorkspaceFileEntryUiDto & {
 };
 
 export interface WorkspaceFilesStoreState {
-  workspaceRoot: string | null;
+  projectId: string | null;
   entriesByDirectory: Record<string, WorkspaceDirectoryEntry[]>;
   expandedDirectoryPaths: string[];
   selectedPath: string | null;
@@ -25,7 +25,7 @@ export interface WorkspaceFilesStoreState {
 }
 
 const initialState = {
-  workspaceRoot: null,
+  projectId: null,
   entriesByDirectory: {},
   expandedDirectoryPaths: [],
   selectedPath: null,
@@ -33,7 +33,7 @@ const initialState = {
   error: null,
 } satisfies Pick<
   WorkspaceFilesStoreState,
-  | 'workspaceRoot'
+  | 'projectId'
   | 'entriesByDirectory'
   | 'expandedDirectoryPaths'
   | 'selectedPath'
@@ -44,14 +44,14 @@ const initialState = {
 export const useWorkspaceFilesStore = create<WorkspaceFilesStoreState>((set, get) => ({
   ...initialState,
   loadDirectory: async (payload) => {
-    const workspaceRoot = payload.workspaceRoot;
+    const projectId = payload.projectId;
     const directoryPath = payload.directoryPath;
 
     set((state) => {
-      if (state.workspaceRoot !== workspaceRoot) {
+      if (state.projectId !== projectId) {
         return {
           ...initialState,
-          workspaceRoot,
+          projectId,
           loadingDirectories: [directoryPath],
           error: null,
         };
@@ -73,7 +73,7 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesStoreState>((set, get
         ),
       );
 
-      if (get().workspaceRoot !== workspaceRoot) {
+      if (get().projectId !== projectId) {
         return;
       }
 
@@ -97,7 +97,7 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesStoreState>((set, get
         error: null,
       }));
     } catch (error) {
-      if (get().workspaceRoot !== workspaceRoot) {
+      if (get().projectId !== projectId) {
         return;
       }
 

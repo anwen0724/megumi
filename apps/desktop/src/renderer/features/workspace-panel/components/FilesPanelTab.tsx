@@ -12,10 +12,10 @@ function entryPadding(depth: number): string {
 
 interface FileRowProps {
   entry: WorkspaceDirectoryEntry;
-  workspaceRoot: string;
+  projectId: string;
 }
 
-function FileRow({ entry, workspaceRoot }: FileRowProps) {
+function FileRow({ entry, projectId }: FileRowProps) {
   const expanded = useWorkspaceFilesStore((state) => state.expandedDirectoryPaths.includes(entry.relativePath));
   const selectedPath = useWorkspaceFilesStore((state) => state.selectedPath);
   const loadedChildEntries = useWorkspaceFilesStore((state) => state.entriesByDirectory[entry.relativePath]);
@@ -38,7 +38,7 @@ function FileRow({ entry, workspaceRoot }: FileRowProps) {
     toggleDirectory(entry.relativePath);
 
     if (!expanded && !childrenLoaded) {
-      await loadDirectory({ workspaceRoot, directoryPath: entry.relativePath });
+      await loadDirectory({ projectId, directoryPath: entry.relativePath });
     }
   }
 
@@ -76,7 +76,7 @@ function FileRow({ entry, workspaceRoot }: FileRowProps) {
       {entry.kind === 'directory' && expanded && childEntries.length > 0 ? (
         <ul className="mt-1 space-y-1">
           {childEntries.map((child) => (
-            <FileRow key={child.relativePath} entry={child} workspaceRoot={workspaceRoot} />
+            <FileRow key={child.relativePath} entry={child} projectId={projectId} />
           ))}
         </ul>
       ) : null}
@@ -98,7 +98,7 @@ export function FilesPanelTab() {
       return;
     }
 
-    void loadDirectory({ workspaceRoot: project.repoPath, directoryPath: '' });
+    void loadDirectory({ projectId: project.id, directoryPath: '' });
   }, [loadDirectory, project?.repoPath, project?.status]);
 
   if (!project) {
@@ -121,13 +121,13 @@ export function FilesPanelTab() {
     return <p className="text-sm text-[var(--color-text-muted)]">No files found</p>;
   }
 
-  const workspaceRoot = project.repoPath;
+  const projectId = project.id;
 
   return (
     <nav aria-label="Project files">
       <ul className="space-y-1">
         {rootEntries.map((entry) => (
-          <FileRow key={entry.relativePath} entry={entry} workspaceRoot={workspaceRoot} />
+          <FileRow key={entry.relativePath} entry={entry} projectId={projectId} />
         ))}
       </ul>
     </nav>

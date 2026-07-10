@@ -49,20 +49,22 @@ export interface WorkspaceFileEntryUiDto {
 }
 
 export interface WorkspaceListFilesUiRequest {
-  workspaceRoot: string;
+  projectId: string;
   directoryPath: string;
 }
 export interface WorkspaceListFilesUiResult {
+  projectId: string;
   workspaceRoot: string;
   directoryPath: string;
   entries: WorkspaceFileEntryUiDto[];
 }
 
 export interface WorkspaceOpenFileUiRequest {
-  workspaceRoot: string;
+  projectId: string;
   filePath: string;
 }
 export interface WorkspaceOpenFileUiResult {
+  projectId: string;
   workspaceRoot: string;
   filePath: string;
   opened: true;

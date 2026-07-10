@@ -109,3 +109,50 @@ export interface WorkspacePathPolicyService {
   resolvePath(request: ResolveWorkspacePathRequest): ResolveWorkspacePathResult;
   assertOrdinaryPath(request: AssertOrdinaryWorkspacePathRequest): AssertOrdinaryWorkspacePathResult;
 }
+
+export type WorkspaceFileEntry = {
+  name: string;
+  relative_path: string;
+  type: 'file' | 'directory';
+  depth: number;
+  hidden: boolean;
+  size_bytes?: number;
+  modified_at: string;
+};
+
+export type ListWorkspaceDirectoryRequest = {
+  workspace_id: string;
+  directory_path: string;
+};
+
+export type ListWorkspaceDirectoryResult =
+  | {
+      status: 'ok';
+      workspace_id: string;
+      workspace_root: string;
+      directory_path: string;
+      entries: WorkspaceFileEntry[];
+    }
+  | { status: 'workspace_not_found'; workspace_id: string }
+  | { status: 'path_rejected'; reason: 'absolute_path' | 'outside_workspace' };
+
+export type ResolveWorkspaceFileRequest = {
+  workspace_id: string;
+  file_path: string;
+};
+
+export type ResolveWorkspaceFileResult =
+  | {
+      status: 'ok';
+      workspace_id: string;
+      workspace_root: string;
+      file_path: string;
+      absolute_path: string;
+    }
+  | { status: 'workspace_not_found'; workspace_id: string }
+  | { status: 'path_rejected'; reason: 'absolute_path' | 'outside_workspace' };
+
+export interface WorkspaceFilesService {
+  listDirectory(request: ListWorkspaceDirectoryRequest): Promise<ListWorkspaceDirectoryResult>;
+  resolveFile(request: ResolveWorkspaceFileRequest): ResolveWorkspaceFileResult;
+}

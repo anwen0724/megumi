@@ -1,13 +1,17 @@
 /*
  * Implements WorkspaceHost over the Coding Agent Workspace module and host ports.
  */
-import type { Workspace, WorkspaceService } from '../../coding-agent/workspace';
+import type { Workspace, WorkspaceFilesService, WorkspaceService } from '../../coding-agent/workspace';
 import {
   toWorkspaceProjectUiDto,
 } from './workspace-host-mapper';
 import type {
   WorkspaceListProjectsUiRequest,
   WorkspaceListProjectsUiResult,
+  WorkspaceListFilesUiRequest,
+  WorkspaceListFilesUiResult,
+  WorkspaceOpenFileUiRequest,
+  WorkspaceOpenFileUiResult,
   WorkspaceOpenProjectUiRequest,
   WorkspaceOpenProjectUiResult,
   WorkspaceRemoveProjectUiRequest,
@@ -23,6 +27,10 @@ export interface DirectoryPickerResult {
 
 export interface DirectoryPickerPort {
   chooseDirectory(): Promise<DirectoryPickerResult>;
+}
+
+export interface FileOpenPort {
+  openPath(absolutePath: string): Promise<string>;
 }
 
 export class WorkspaceProjectCompatibilityError extends Error {
@@ -41,11 +49,15 @@ export interface WorkspaceHost {
   openProject(request: WorkspaceOpenProjectUiRequest): Promise<WorkspaceOpenProjectUiResult>;
   removeProject(request: WorkspaceRemoveProjectUiRequest): WorkspaceRemoveProjectUiResult;
   listAuthorizedWorkspaceRoots(): string[];
+  listFiles(request: WorkspaceListFilesUiRequest): Promise<WorkspaceListFilesUiResult>;
+  openFile(request: WorkspaceOpenFileUiRequest): Promise<WorkspaceOpenFileUiResult>;
 }
 
 export function createWorkspaceHost(input: {
   workspaceService: WorkspaceService;
   directoryPicker?: DirectoryPickerPort;
+  workspaceFilesService: WorkspaceFilesService;
+  fileOpen?: FileOpenPort;
   now?: () => string;
 }): WorkspaceHost {
   const now = input.now ?? (() => new Date().toISOString());
@@ -88,7 +100,51 @@ export function createWorkspaceHost(input: {
     listAuthorizedWorkspaceRoots() {
       return input.workspaceService.listAuthorizedWorkspaceRoots().roots.map((root) => root.root_path);
     },
+
+    async listFiles(request) {
+      const result = await input.workspaceFilesService.listDirectory({
+        workspace_id: request.projectId,
+        directory_path: request.directoryPath,
+      });
+      if (result.status !== 'ok') throw workspaceFilesError(result);
+      return {
+        projectId: result.workspace_id,
+        workspaceRoot: result.workspace_root,
+        directoryPath: result.directory_path,
+        entries: result.entries.map((entry) => ({
+          name: entry.name,
+          relativePath: entry.relative_path,
+          type: entry.type,
+          depth: entry.depth,
+          hidden: entry.hidden,
+          ignored: false,
+          ...(entry.size_bytes === undefined ? {} : { sizeBytes: entry.size_bytes }),
+          mtime: entry.modified_at,
+        })),
+      };
+    },
+
+    async openFile(request) {
+      const result = input.workspaceFilesService.resolveFile({
+        workspace_id: request.projectId,
+        file_path: request.filePath,
+      });
+      if (result.status !== 'ok') throw workspaceFilesError(result);
+      if (!input.fileOpen) throw new Error('File open adapter is not configured.');
+      const openError = await input.fileOpen.openPath(result.absolute_path);
+      if (openError) throw new Error(openError);
+      return {
+        projectId: result.workspace_id,
+        workspaceRoot: result.workspace_root,
+        filePath: result.file_path,
+        opened: true,
+      };
+    },
   };
+}
+
+function workspaceFilesError(result: { status: string }): Error {
+  return new Error(result.status === 'workspace_not_found' ? 'Workspace not found.' : 'Workspace path was rejected.');
 }
 
 function compatibilityErrorFromFailure(pathOrId: string, code: string): WorkspaceProjectCompatibilityError {

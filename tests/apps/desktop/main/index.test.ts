@@ -175,9 +175,6 @@ const mocks = vi.hoisted(() => {
         syncImplementationPlanArtifact: vi.fn(),
       };
     }),
-    createWorkspaceFilesService: vi.fn(() => ({
-      listDirectory: vi.fn(),
-    })),
     showOpenDialog: vi.fn(),
     getAllWindows: vi.fn(() => []),
     quit: vi.fn(),
@@ -211,10 +208,6 @@ vi.mock('@megumi/desktop/main/app/create-window', () => ({
 vi.mock('@megumi/coding-agent/workspace', () => ({
   createWorkspaceChangeFooterProjectorService: vi.fn(() => ({ projectRunFooter: vi.fn() })),
   isWorkspaceChangeFooterProjectorPort: vi.fn(() => false),
-}));
-
-vi.mock('@megumi/desktop/main/services/workspace/workspace-files.service', () => ({
-  createWorkspaceFilesService: mocks.createWorkspaceFilesService,
 }));
 
 vi.mock('@megumi/product/composition', () => ({
@@ -273,7 +266,6 @@ describe('main runtime logger composition', () => {
     mocks.ArtifactService.mockClear();
     mocks.createMemoryService.mockClear();
     mocks.PlanArtifactCompatibilityService.mockClear();
-    mocks.createWorkspaceFilesService.mockClear();
     mocks.showOpenDialog.mockClear();
     mocks.getAllWindows.mockClear();
     mocks.quit.mockClear();
@@ -293,7 +285,6 @@ describe('main runtime logger composition', () => {
     await import('@megumi/desktop/main/index');
 
     const processLogger = mocks.registerRuntimeProcessErrorHandlers.mock.calls[0]?.[0]?.logger;
-    const workspaceFilesService = mocks.createWorkspaceFilesService.mock.results[0]?.value;
     const projectService = mocks.codingAgentHost.workspace;
     expect(processLogger).toEqual(expect.objectContaining({
       error: expect.any(Function),
@@ -312,24 +303,17 @@ describe('main runtime logger composition', () => {
       directoryPicker: expect.objectContaining({
         chooseDirectory: expect.any(Function),
       }),
+      fileOpen: expect.objectContaining({
+        openPath: expect.any(Function),
+      }),
     }));
     const deletedRuntimeEventSinkOption = ['runtime', 'Event', 'Sink'].join('');
     expect(mocks.composeProduct).not.toHaveBeenCalledWith(expect.objectContaining({
       [deletedRuntimeEventSinkOption]: expect.anything(),
     }));
-    expect(mocks.createWorkspaceFilesService).toHaveBeenCalledWith(expect.objectContaining({
-      fileSystem: expect.any(Object),
-      isWorkspaceRootAllowed: expect.any(Function),
-      openPath: expect.any(Function),
-    }));
-    const [[workspaceFilesOptions]] = mocks.createWorkspaceFilesService.mock.calls as unknown as Array<[{
-      isWorkspaceRootAllowed(root: string): boolean;
-    }]>;
-    expect(workspaceFilesOptions.isWorkspaceRootAllowed(process.cwd())).toBe(false);
-    expect(workspaceFilesOptions.isWorkspaceRootAllowed('C:/workspaces/megumi')).toBe(true);
     expect(mocks.registerAllHandlers).toHaveBeenCalledWith({
       logger: processLogger,
-      workspace: { host: mocks.codingAgentHost, workspaceFilesService },
+      workspace: { host: mocks.codingAgentHost },
       chat: { host: mocks.codingAgentHost },
       skill: { host: mocks.codingAgentHost },
       settings: { host: mocks.codingAgentHost },

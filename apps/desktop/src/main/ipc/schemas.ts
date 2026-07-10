@@ -115,11 +115,11 @@ export const ApprovalResolvePayloadSchema = z.object({
 export const ProjectOpenPayloadSchema = z.object({ projectId: z.string().min(1) }).strict();
 export const ProjectRemovePayloadSchema = ProjectOpenPayloadSchema;
 export const WorkspaceFilesListPayloadSchema = z.object({
-  workspaceRoot: z.string().min(1),
+  projectId: z.string().min(1),
   directoryPath: z.string(),
 }).strict();
 export const WorkspaceFileOpenPayloadSchema = z.object({
-  workspaceRoot: z.string().min(1),
+  projectId: z.string().min(1),
   filePath: z.string().min(1),
 }).strict();
 

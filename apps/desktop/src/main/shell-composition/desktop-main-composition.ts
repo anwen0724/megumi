@@ -1,11 +1,9 @@
 // Composes the Electron UI shell and connects it to the Product Host Interface.
 import { createElectronMegumiHomeSyncOptions } from '../services/workspace/megumi-home.service';
 import { createRuntimeJsonlLoggerForMegumiHome } from '../services/agent-run/runtime-logger.service';
-import { createWorkspaceFilesService } from '../services/workspace/workspace-files.service';
 import { composeProduct } from '@megumi/product/composition';
-import fs from 'fs-extra';
 import { electronDialogHost } from '../shell/electron-dialog-host';
-import { electronShellHost } from '../shell/electron-shell-host';
+import { electronFileOpenAdapter } from '../adapters/electron-file-open-adapter';
 import { resolveElectronPersistenceMigrationsFolder } from '../shell/electron-persistence-migrations-host';
 
 export function composeDesktopMain() {
@@ -15,21 +13,16 @@ export function composeDesktopMain() {
     migrationsFolder,
     runtimeLoggerFactory: createRuntimeJsonlLoggerForMegumiHome,
     directoryPicker: { chooseDirectory: () => electronDialogHost.chooseDirectory() },
+    fileOpen: electronFileOpenAdapter,
   });
   const megumiHomePaths = product.homePaths;
   const runtimeLogger = product.logger;
   const productHost = product.host;
 
-  const workspaceFilesService = createWorkspaceFilesService({
-    fileSystem: fs,
-    isWorkspaceRootAllowed: (root) => productHost.workspace.listAuthorizedWorkspaceRoots().includes(root),
-    openPath: (absolutePath) => electronShellHost.openPath(absolutePath),
-  });
-
   return {
     megumiHomePaths,
     runtimeLogger,
-    workspace: { host: productHost, workspaceFilesService },
+    workspace: { host: productHost },
     chat: { host: productHost },
     skill: { host: productHost },
     settings: { host: productHost },

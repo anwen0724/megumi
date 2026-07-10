@@ -1,9 +1,7 @@
 /*
  * Desktop IPC handlers for project/workspace operations and local file browsing.
  */
-import { PathSandboxViolationError } from '@megumi/coding-agent/adapters/local/security/sandbox-policy';
 import type { ProductHostInterface } from '@megumi/product/host-interface';
-import type { WorkspaceFilesService } from '../../services/workspace/workspace-files.service';
 import type { RuntimeLogger } from '../../services/agent-run/runtime-logger.service';
 import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
 import { createIpcRequestHandler } from '../create-request-handler';
@@ -22,7 +20,6 @@ import {
 
 export interface WorkspaceHandlersService {
   host: Pick<ProductHostInterface, 'workspace'>;
-  workspaceFilesService: Pick<WorkspaceFilesService, 'listDirectory' | 'openFile'>;
 }
 
 export interface RegisterWorkspaceHandlersOptions {
@@ -73,8 +70,8 @@ export function registerWorkspaceHandlers(
     requestSchema: WorkspaceFilesListRequestSchema,
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<WorkspaceFilesListPayload, typeof IPC_CHANNELS.workspace.filesList>) =>
-      service.workspaceFilesService.listDirectory(request.payload),
-    mapError: mapWorkspaceFilesIpcError,
+      service.host.workspace.listFiles(request.payload),
+    mapError: mapWorkspaceIpcError,
   }));
 
   ipcMain.handle(IPC_CHANNELS.workspace.filesOpen, createIpcRequestHandler({
@@ -82,8 +79,8 @@ export function registerWorkspaceHandlers(
     requestSchema: WorkspaceFileOpenRequestSchema,
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<WorkspaceFileOpenPayload, typeof IPC_CHANNELS.workspace.filesOpen>) =>
-      service.workspaceFilesService.openFile(request.payload),
-    mapError: mapWorkspaceFilesIpcError,
+      service.host.workspace.openFile(request.payload),
+    mapError: mapWorkspaceIpcError,
   }));
 }
 
@@ -96,25 +93,5 @@ function mapWorkspaceIpcError(error: unknown): RuntimeIpcError {
     retryable: true,
     source: 'main',
     ...(details ? { details } : {}),
-  };
-}
-
-function mapWorkspaceFilesIpcError(error: unknown): RuntimeIpcError {
-  if (!(error instanceof PathSandboxViolationError)) {
-    return {
-      code: 'ipc_handler_failed',
-      message: 'Megumi could not list workspace files right now.',
-      severity: 'error',
-      retryable: true,
-      source: 'main',
-    };
-  }
-
-  return {
-    code: 'workspace_path_denied',
-    message: 'Megumi could not list that workspace directory.',
-    severity: 'error',
-    retryable: false,
-    source: 'main',
   };
 }

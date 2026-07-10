@@ -19,10 +19,12 @@ function createDeferred<T>() {
 }
 
 function createWorkspaceFilesResult({
+  projectId,
   workspaceRoot,
   directoryPath,
   entryName,
 }: {
+  projectId: string;
   workspaceRoot: string;
   directoryPath: string;
   entryName: string;
@@ -30,6 +32,7 @@ function createWorkspaceFilesResult({
   return {
     ok: true,
     data: {
+      projectId,
       workspaceRoot,
       directoryPath,
       entries: [
@@ -56,6 +59,7 @@ function installWorkspaceFilesMock() {
     list: vi.fn(async () => ({
       ok: true,
       data: {
+        projectId: 'workspace:megumi',
         workspaceRoot: 'C:/workspaces/megumi',
         directoryPath: '',
         entries: [
@@ -107,13 +111,13 @@ describe('useWorkspaceFilesStore', () => {
     const files = installWorkspaceFilesMock();
 
     await useWorkspaceFilesStore.getState().loadDirectory({
-      workspaceRoot: 'C:/workspaces/megumi',
+      projectId: 'workspace:megumi',
       directoryPath: '',
     });
 
     expect(files.list).toHaveBeenCalledWith(expect.objectContaining({
       payload: {
-        workspaceRoot: 'C:/workspaces/megumi',
+        projectId: 'workspace:megumi',
         directoryPath: '',
       },
       meta: expect.objectContaining({
@@ -138,6 +142,7 @@ describe('useWorkspaceFilesStore', () => {
       list: vi
         .fn()
         .mockResolvedValueOnce(createWorkspaceFilesResult({
+          projectId: 'workspace:project-a',
           workspaceRoot: 'C:/work/project-a',
           directoryPath: '',
           entryName: 'project-a-apps',
@@ -154,7 +159,7 @@ describe('useWorkspaceFilesStore', () => {
     });
 
     await useWorkspaceFilesStore.getState().loadDirectory({
-      workspaceRoot: 'C:/work/project-a',
+      projectId: 'workspace:project-a',
       directoryPath: '',
     });
     useWorkspaceFilesStore.getState().toggleDirectory('project-a-apps');
@@ -165,12 +170,12 @@ describe('useWorkspaceFilesStore', () => {
     });
 
     const loadProjectB = useWorkspaceFilesStore.getState().loadDirectory({
-      workspaceRoot: 'C:/work/project-b',
+      projectId: 'workspace:project-b',
       directoryPath: '',
     });
 
     expect(useWorkspaceFilesStore.getState()).toMatchObject({
-      workspaceRoot: 'C:/work/project-b',
+      projectId: 'workspace:project-b',
       entriesByDirectory: {},
       expandedDirectoryPaths: [],
       selectedPath: null,
@@ -179,6 +184,7 @@ describe('useWorkspaceFilesStore', () => {
     });
 
     newWorkspaceLoad.resolve(createWorkspaceFilesResult({
+      projectId: 'workspace:project-b',
       workspaceRoot: 'C:/work/project-b',
       directoryPath: '',
       entryName: 'project-b-apps',
@@ -209,15 +215,16 @@ describe('useWorkspaceFilesStore', () => {
     });
 
     const loadProjectA = useWorkspaceFilesStore.getState().loadDirectory({
-      workspaceRoot: 'C:/work/project-a',
+      projectId: 'workspace:project-a',
       directoryPath: '',
     });
     const loadProjectB = useWorkspaceFilesStore.getState().loadDirectory({
-      workspaceRoot: 'C:/work/project-b',
+      projectId: 'workspace:project-b',
       directoryPath: '',
     });
 
     projectALoad.resolve(createWorkspaceFilesResult({
+      projectId: 'workspace:project-a',
       workspaceRoot: 'C:/work/project-a',
       directoryPath: '',
       entryName: 'project-a-apps',
@@ -225,13 +232,14 @@ describe('useWorkspaceFilesStore', () => {
     await loadProjectA;
 
     expect(useWorkspaceFilesStore.getState()).toMatchObject({
-      workspaceRoot: 'C:/work/project-b',
+      projectId: 'workspace:project-b',
       entriesByDirectory: {},
       loadingDirectories: [''],
       error: null,
     });
 
     projectBLoad.resolve(createWorkspaceFilesResult({
+      projectId: 'workspace:project-b',
       workspaceRoot: 'C:/work/project-b',
       directoryPath: '',
       entryName: 'project-b-apps',
@@ -239,7 +247,7 @@ describe('useWorkspaceFilesStore', () => {
     await loadProjectB;
 
     expect(useWorkspaceFilesStore.getState()).toMatchObject({
-      workspaceRoot: 'C:/work/project-b',
+      projectId: 'workspace:project-b',
       loadingDirectories: [],
       error: null,
     });
@@ -288,7 +296,7 @@ describe('useWorkspaceFilesStore', () => {
     });
 
     await useWorkspaceFilesStore.getState().loadDirectory({
-      workspaceRoot: 'C:/workspaces/megumi',
+      projectId: 'workspace:megumi',
       directoryPath: 'apps',
     });
 
