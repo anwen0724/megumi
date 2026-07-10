@@ -266,4 +266,38 @@ describe('runtime timeline store', () => {
       text: 'Committed final answer.',
     });
   });
+
+  it('tracks session timeline hydration freshness by session owner version', () => {
+    const store = useRuntimeTimelineStore.getState();
+
+    store.markSessionTimelineHydrated('project-1', 'session-1', '2026-07-10T01:00:00.000Z');
+
+    expect(store.isSessionTimelineFresh(
+      'project-1',
+      'session-1',
+      '2026-07-10T01:00:00.000Z',
+    )).toBe(true);
+    expect(store.isSessionTimelineFresh(
+      'project-1',
+      'session-1',
+      '2026-07-10T02:00:00.000Z',
+    )).toBe(false);
+
+    store.markSessionTimelineHydrating('project-1', 'session-1', '2026-07-10T02:00:00.000Z');
+    expect(store.getHydrationState('project-1', 'session-1')).toMatchObject({
+      status: 'hydrating',
+      sessionUpdatedAt: '2026-07-10T02:00:00.000Z',
+    });
+
+    store.markSessionTimelineHydrationFailed(
+      'project-1',
+      'session-1',
+      '2026-07-10T02:00:00.000Z',
+      'Hydration failed.',
+    );
+    expect(store.getHydrationState('project-1', 'session-1')).toMatchObject({
+      status: 'failed',
+      error: 'Hydration failed.',
+    });
+  });
 });

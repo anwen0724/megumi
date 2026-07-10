@@ -10,6 +10,7 @@ import {
 } from '@megumi/product/host-interface';
 
 export type RuntimeTimelineStatus = 'running' | 'completed' | 'failed' | 'cancelled' | 'needs_replay';
+export type TimelineHydrationStatus = 'idle' | 'hydrating' | 'ready' | 'failed';
 
 export interface RuntimeTimelineState {
   streamId: string;
@@ -32,11 +33,21 @@ export interface RuntimeTimelineSessionState {
   appliedEventIds: Record<string, true>;
 }
 
+export interface SessionTimelineHydrationState {
+  projectId: string;
+  sessionId: string;
+  sessionUpdatedAt: string;
+  status: TimelineHydrationStatus;
+  hydratedAt?: string;
+  error?: string;
+}
+
 export interface RuntimeTimelineStoreState {
   activeProjectId: string | null;
   activeSessionId: string | null;
   activeSessionKey: string | null;
   sessions: Record<string, RuntimeTimelineSessionState>;
+  hydrationBySessionKey: Record<string, SessionTimelineHydrationState>;
   setActiveSession(projectId: string | null, sessionId: string | null): void;
   dispatch(event: RuntimeEvent): void;
   flushStream(projectId: string, sessionId: string, streamId: string): void;
@@ -47,6 +58,16 @@ export interface RuntimeTimelineStoreState {
   ): void;
   hydrateCommittedMessages(projectId: string, sessionId: string, messages: TimelineMessage[]): void;
   hydrateSessionTimeline(projectId: string, sessionId: string, messages: TimelineMessage[], events: RuntimeEvent[]): void;
+  getHydrationState(projectId: string, sessionId: string): SessionTimelineHydrationState | undefined;
+  isSessionTimelineFresh(projectId: string, sessionId: string, sessionUpdatedAt: string): boolean;
+  markSessionTimelineHydrating(projectId: string, sessionId: string, sessionUpdatedAt: string): void;
+  markSessionTimelineHydrated(projectId: string, sessionId: string, sessionUpdatedAt: string): void;
+  markSessionTimelineHydrationFailed(
+    projectId: string,
+    sessionId: string,
+    sessionUpdatedAt: string,
+    message: string,
+  ): void;
   reset(): void;
 }
 
@@ -354,6 +375,7 @@ export const useRuntimeTimelineStore = create<RuntimeTimelineStoreState>((set, g
     activeSessionId: null,
     activeSessionKey: null,
     sessions: {},
+    hydrationBySessionKey: {},
     setActiveSession: (activeProjectId, activeSessionId) => set(activeProjectId && activeSessionId
       ? {
           activeProjectId,
@@ -435,12 +457,69 @@ export const useRuntimeTimelineStore = create<RuntimeTimelineStoreState>((set, g
         };
       });
     },
+    getHydrationState: (projectId, sessionId) =>
+      get().hydrationBySessionKey[runtimeTimelineSessionKey(projectId, sessionId)],
+    isSessionTimelineFresh: (projectId, sessionId, sessionUpdatedAt) => {
+      const hydration = get().hydrationBySessionKey[runtimeTimelineSessionKey(projectId, sessionId)];
+      return hydration?.status === 'ready' && hydration.sessionUpdatedAt === sessionUpdatedAt;
+    },
+    markSessionTimelineHydrating: (projectId, sessionId, sessionUpdatedAt) => {
+      set((state) => {
+        const key = runtimeTimelineSessionKey(projectId, sessionId);
+        return {
+          hydrationBySessionKey: {
+            ...state.hydrationBySessionKey,
+            [key]: {
+              projectId,
+              sessionId,
+              sessionUpdatedAt,
+              status: 'hydrating',
+            },
+          },
+        };
+      });
+    },
+    markSessionTimelineHydrated: (projectId, sessionId, sessionUpdatedAt) => {
+      set((state) => {
+        const key = runtimeTimelineSessionKey(projectId, sessionId);
+        return {
+          hydrationBySessionKey: {
+            ...state.hydrationBySessionKey,
+            [key]: {
+              projectId,
+              sessionId,
+              sessionUpdatedAt,
+              status: 'ready',
+              hydratedAt: new Date().toISOString(),
+            },
+          },
+        };
+      });
+    },
+    markSessionTimelineHydrationFailed: (projectId, sessionId, sessionUpdatedAt, message) => {
+      set((state) => {
+        const key = runtimeTimelineSessionKey(projectId, sessionId);
+        return {
+          hydrationBySessionKey: {
+            ...state.hydrationBySessionKey,
+            [key]: {
+              projectId,
+              sessionId,
+              sessionUpdatedAt,
+              status: 'failed',
+              error: message,
+            },
+          },
+        };
+      });
+    },
     reset: () => {
       set({
         activeProjectId: null,
         activeSessionId: null,
         activeSessionKey: null,
         sessions: {},
+        hydrationBySessionKey: {},
       });
     },
   };
