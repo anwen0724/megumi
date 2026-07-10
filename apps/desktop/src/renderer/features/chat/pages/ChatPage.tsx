@@ -100,12 +100,9 @@ export function ChatPage() {
               messageColumn={{
                 timelineMessages: controller.timelineMessages,
                 bottomSpacerHeight,
-                canShowUserMessageActions: controller.canShowUserMessageActions,
+                canShowBranchAction: controller.canShowBranchAction,
                 onBranchFromMessage: (message) => {
-                  void controller.createBranchDraft({ messageId: message.messageId, intent: 'branch' });
-                },
-                onRerunMessage: (message) => {
-                  void controller.createBranchDraft({ messageId: message.messageId, intent: 'rerun' });
+                  void controller.createBranchDraft({ messageId: message.messageId });
                 },
                 onOpenWorkspaceChangedFile: (projectPath) => {
                   void controller.openWorkspaceChangedFile(projectPath);
@@ -152,9 +149,8 @@ export function ChatPage() {
               messageColumn={{
                 timelineMessages: [],
                 bottomSpacerHeight: 0,
-                canShowUserMessageActions: controller.canShowUserMessageActions,
+                canShowBranchAction: controller.canShowBranchAction,
                 onBranchFromMessage: () => undefined,
-                onRerunMessage: () => undefined,
                 onOpenWorkspaceChangedFile: () => undefined,
               }}
             />

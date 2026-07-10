@@ -36,20 +36,15 @@ function isActiveTimelineAssistantMessage(message: CanonicalTimelineMessage): bo
   });
 }
 
-function canShowUserMessageActions(
+function canShowBranchAction(
   message: CanonicalTimelineMessage,
-  messages: CanonicalTimelineMessage[],
   userActionsBlocked: boolean,
 ): boolean {
-  if (userActionsBlocked || message.role !== 'user' || !message.runId) {
+  if (userActionsBlocked || message.role !== 'assistant' || !message.runId) {
     return false;
   }
 
-  const assistant = messages.find((candidate) =>
-    candidate.role === 'assistant' && candidate.runId === message.runId
-  );
-
-  return assistant !== undefined && !isActiveTimelineAssistantMessage(assistant);
+  return !isActiveTimelineAssistantMessage(message);
 }
 
 export function useChatPageController() {
@@ -290,8 +285,8 @@ export function useChatPageController() {
     resolveApproval,
     createBranchDraft,
     cancelBranchDraft,
-    canShowUserMessageActions: (message: CanonicalTimelineMessage) =>
-      canShowUserMessageActions(message, timelineMessages, userActionsBlocked),
+    canShowBranchAction: (message: CanonicalTimelineMessage) =>
+      canShowBranchAction(message, userActionsBlocked),
   };
 }
 

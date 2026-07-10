@@ -7,17 +7,15 @@ import { BottomSpacer } from './BottomSpacer';
 interface MessageColumnProps {
   timelineMessages: CanonicalTimelineMessage[];
   bottomSpacerHeight: number;
-  canShowUserMessageActions: (message: CanonicalTimelineMessage) => boolean;
+  canShowBranchAction: (message: CanonicalTimelineMessage) => boolean;
   onBranchFromMessage: (message: CanonicalTimelineMessage) => void;
-  onRerunMessage: (message: CanonicalTimelineMessage) => void;
   onOpenWorkspaceChangedFile: (projectPath: string) => void;
 }
 export function MessageColumn({
   timelineMessages,
   bottomSpacerHeight,
-  canShowUserMessageActions,
+  canShowBranchAction,
   onBranchFromMessage,
-  onRerunMessage,
   onOpenWorkspaceChangedFile,
 }: MessageColumnProps) {
   const renderAssistantAfterContent = (message: CanonicalTimelineMessage): ReactNode => {
@@ -40,10 +38,9 @@ export function MessageColumn({
           <TimelineMessage
             key={message.messageId}
             message={message}
-            showUserActions={canShowUserMessageActions(message)}
+            showBranchAction={canShowBranchAction(message)}
             afterContent={message.role === 'assistant' ? renderAssistantAfterContent(message) : null}
             onBranchFromMessage={onBranchFromMessage}
-            onRerunMessage={onRerunMessage}
           />
         ))}
         <BottomSpacer height={bottomSpacerHeight} />

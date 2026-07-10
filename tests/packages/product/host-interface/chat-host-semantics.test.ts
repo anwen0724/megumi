@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createChatHost, createSessionBranchHost } from '@megumi/product/host-interface/chat-host';
+import { createChatHost } from '@megumi/product/host-interface/chat-host';
 import type { AgentRun } from '@megumi/coding-agent/agent-run';
 import type { RuntimeEvent } from '@megumi/coding-agent/events';
 import type { TimelineMessage } from '@megumi/coding-agent/projections/timeline';
-import type { SessionService } from '@megumi/coding-agent/session';
+import { createSessionBranchService, type SessionService } from '@megumi/coding-agent/session';
 
 describe('ChatHost product semantics', () => {
   it('delegates explicit session creation request to the Session owner', async () => {
@@ -25,7 +25,7 @@ describe('ChatHost product semantics', () => {
         createSession,
         getSession: vi.fn(() => ({ status: 'not_found' })),
       } as never,
-      branchService: createSessionBranchHost(),
+      branchService: createSessionBranchService(),
       workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
       sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
       agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [] },
@@ -135,21 +135,30 @@ describe('ChatHost product semantics', () => {
     expect(result.payload.type).toBe(expectedType);
   });
 
-  it('creates and cancels opaque branch draft references', async () => {
-    const branch = createSessionBranchHost();
-    const created = branch.createBranchDraft({
+  it('projects explicit assistant-message branch draft references from the Session owner', async () => {
+    const branch = createSessionBranchService({
+      ids: {
+        branchMarkerId: () => 'branch:owner-1',
+        eventId: () => 'event:owner-1',
+      },
+      clock: { now: () => '2026-07-10T00:00:00.000Z' },
+    });
+    const host = createHost(vi.fn(), vi.fn(), {}, branch);
+    const created = host.createBranchDraft({
       requestId: 'request:branch',
       sessionId: 'session:1',
-      messageId: 'message:1',
-      intent: 'branch',
+      messageId: 'assistant-message:1',
+    });
+    expect(created.payload.branchDraft).toEqual({
+      branchMarkerId: 'branch:owner-1',
+      sessionId: 'session:1',
+      sourceMessageId: 'assistant-message:1',
       createdAt: '2026-07-10T00:00:00.000Z',
     });
-    expect(created.payload.branchDraft.branchMarkerId).toMatch(/^branch:/);
-    const cancelled = branch.cancelBranchDraft({
+    const cancelled = host.cancelBranchDraft({
       requestId: 'request:cancel',
       sessionId: 'session:1',
       branchMarkerId: created.payload.branchDraft.branchMarkerId,
-      createdAt: '2026-07-10T00:01:00.000Z',
     });
     expect(cancelled.payload).toEqual({ cancelled: true });
     expect(cancelled.events).toBeDefined();
@@ -250,7 +259,7 @@ describe('ChatHost product semantics', () => {
       agentRunService: { startRun: vi.fn(), cancelRun: vi.fn() } as never,
       commandService: { getCommandSuggestions: vi.fn() } as never,
       sessionService: { getSession: vi.fn(() => ({ status: 'not_found' })) } as never,
-      branchService: createSessionBranchHost(),
+      branchService: createSessionBranchService(),
       workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
       sessionTimelineQuery: { listSessionTimeline },
       agentRunQueries: { listRunsBySession, listRuntimeEventsByRun },
@@ -293,6 +302,7 @@ function createHost(
   startRun: ReturnType<typeof vi.fn>,
   getCommandSuggestions: ReturnType<typeof vi.fn> = vi.fn(),
   sessionOverrides: Partial<SessionService> = {},
+  branchService = createSessionBranchService(),
 ) {
   return createChatHost({
     agentRunService: { startRun, cancelRun: vi.fn() } as never,
@@ -302,7 +312,7 @@ function createHost(
       getSession: vi.fn(() => ({ status: 'not_found' })),
       ...sessionOverrides,
     } as never,
-    branchService: createSessionBranchHost(),
+    branchService,
     workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
     sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
     agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [] },

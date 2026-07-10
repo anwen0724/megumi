@@ -24,7 +24,6 @@ export interface BranchDraftState {
   sourceMessageId: string;
   seedText: string;
   label: string;
-  intent: 'branch' | 'rerun';
   createdAt: string;
 }
 
@@ -392,7 +391,6 @@ export function useSessionTimeline() {
 
   const createBranchDraft = useCallback(async (input: {
     messageId: string;
-    intent: 'branch' | 'rerun';
   }) => {
     const sessionState = useSessionStore.getState();
     const projectState = useProjectStore.getState();
@@ -420,7 +418,6 @@ export function useSessionTimeline() {
       const cancelRequest = createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.branchDraftCancel, {
         sessionId: branchDraftForReplacement.sessionId,
         branchMarkerId: branchDraftForReplacement.branchMarkerId,
-        createdAt: new Date().toISOString(),
       });
       const cancelResult = await window.megumi.session.branchDraft.cancel(cancelRequest);
 
@@ -450,8 +447,6 @@ export function useSessionTimeline() {
     const request = createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.branchDraftCreate, {
       sessionId,
       messageId: input.messageId,
-      intent: input.intent,
-      createdAt: new Date().toISOString(),
     });
     const result = await window.megumi.session.branchDraft.create(request);
 
@@ -471,7 +466,6 @@ export function useSessionTimeline() {
           createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.branchDraftCancel, {
             sessionId: result.data.branchDraft.sessionId,
             branchMarkerId: result.data.branchDraft.branchMarkerId,
-            createdAt: new Date().toISOString(),
           }),
         );
       } catch {
@@ -484,7 +478,7 @@ export function useSessionTimeline() {
       ...result.data.branchDraft,
       projectId,
       seedText: input.messageId,
-      label: input.intent === 'rerun' ? 'Rerun' : 'Branch',
+      label: 'Branch',
     });
   }, [updateBranchDraft]);
 
@@ -498,7 +492,6 @@ export function useSessionTimeline() {
     const request = createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.branchDraftCancel, {
       sessionId: branchDraftForCancel.sessionId,
       branchMarkerId: branchDraftForCancel.branchMarkerId,
-      createdAt: new Date().toISOString(),
     });
     const result = await window.megumi.session.branchDraft.cancel(request);
 

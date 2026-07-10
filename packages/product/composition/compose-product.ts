@@ -6,6 +6,7 @@ import {
   composeCodingAgentRuntime,
   type ComposeCodingAgentRuntimeOptions,
 } from '@megumi/coding-agent/composition';
+import { createSessionBranchService } from '@megumi/coding-agent/session';
 import {
   initializeMegumiHomeSync,
   type InitializeMegumiHomeSyncOptions,
@@ -13,7 +14,7 @@ import {
 } from '../home';
 import { createApprovalHost } from '../host-interface/approval-host';
 import { createArtifactHost } from '../host-interface/artifact-host';
-import { createChatHost, createSessionBranchHost } from '../host-interface/chat-host';
+import { createChatHost } from '../host-interface/chat-host';
 import { createPlanHost } from '../host-interface/plan-host';
 import type { ProductHostInterface } from '../host-interface/product-host-interface';
 import { createSettingsHost } from '../host-interface/settings-host';
@@ -67,7 +68,7 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
       commandService: runtime.commandService,
       sessionService: runtime.sessionService,
       workspaceService: runtime.workspaceService,
-      branchService: createSessionBranchHost(),
+      branchService: createSessionBranchService(),
       sessionTimelineQuery: runtime.sessionTimelineQuery,
       agentRunQueries: runtime.agentRunQueries,
       contextUsageMonitor: runtime.contextRuntime.contextUsageMonitor,

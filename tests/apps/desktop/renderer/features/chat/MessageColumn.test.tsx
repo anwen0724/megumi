@@ -10,9 +10,8 @@ describe('MessageColumn', () => {
       <MessageColumn
         timelineMessages={[assistantMessageWithFooter()]}
         bottomSpacerHeight={0}
-        canShowUserMessageActions={() => false}
+        canShowBranchAction={() => false}
         onBranchFromMessage={() => undefined}
-        onRerunMessage={() => undefined}
         onOpenWorkspaceChangedFile={vi.fn()}
       />,
     );

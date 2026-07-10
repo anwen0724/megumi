@@ -10,6 +10,8 @@ import {
   ListSkillsUiResponseSchema,
   ProviderListUiResultSchema,
   PlanStatusUpdatePayloadSchema,
+  SessionBranchDraftCancelPayloadSchema,
+  SessionBranchDraftCreatePayloadSchema,
   SettingsCompleteSetupPayloadSchema,
   SettingsUpdatePayloadSchema,
   SessionMessageSendPayloadSchema,
@@ -55,6 +57,38 @@ describe('Product Host runtime schemas', () => {
       type: 'host_interaction_request',
       requestId: 'request:1',
       request: { kind: 'context_compaction', callback: () => undefined },
+    }).success).toBe(false);
+  });
+
+  it('rejects renderer-provided branch draft canonical fields and rerun mode', () => {
+    expect(SessionBranchDraftCreatePayloadSchema.safeParse({
+      sessionId: 'session:1',
+      messageId: 'assistant-message:1',
+    }).success).toBe(true);
+    expect(SessionBranchDraftCreatePayloadSchema.safeParse({
+      sessionId: 'session:1',
+      messageId: 'assistant-message:1',
+      intent: 'branch',
+    }).success).toBe(false);
+    expect(SessionBranchDraftCreatePayloadSchema.safeParse({
+      sessionId: 'session:1',
+      messageId: 'assistant-message:1',
+      branchMode: 'branch',
+    }).success).toBe(false);
+    expect(SessionBranchDraftCreatePayloadSchema.safeParse({
+      sessionId: 'session:1',
+      messageId: 'assistant-message:1',
+      intent: 'rerun',
+    }).success).toBe(false);
+    expect(SessionBranchDraftCreatePayloadSchema.safeParse({
+      sessionId: 'session:1',
+      messageId: 'assistant-message:1',
+      createdAt: '2026-07-10T00:00:00.000Z',
+    }).success).toBe(false);
+    expect(SessionBranchDraftCancelPayloadSchema.safeParse({
+      sessionId: 'session:1',
+      branchMarkerId: 'branch:1',
+      createdAt: '2026-07-10T00:00:00.000Z',
     }).success).toBe(false);
   });
 

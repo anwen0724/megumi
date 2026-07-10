@@ -1,14 +1,13 @@
 ﻿import { memo, type ReactNode } from 'react';
-import { GitBranch, RotateCcw } from 'lucide-react';
+import { GitBranch } from 'lucide-react';
 import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/product/host-interface';
 import { IconButton, RecoverableErrorBoundary } from '../../../shared/ui';
 import { TimelineMessageBlocks } from './TimelineMessageBlocks';
 
 interface TimelineMessageProps {
   message: CanonicalTimelineMessage;
-  showUserActions?: boolean;
+  showBranchAction?: boolean;
   onBranchFromMessage?: (message: CanonicalTimelineMessage) => void;
-  onRerunMessage?: (message: CanonicalTimelineMessage) => void;
   afterContent?: ReactNode;
 }
 
@@ -21,15 +20,14 @@ function formatTime(timestamp: string): string {
 
 function TimelineMessageComponent({
   message,
-  showUserActions = false,
+  showBranchAction = false,
   onBranchFromMessage,
-  onRerunMessage,
   afterContent,
 }: TimelineMessageProps) {
   const role = message.role;
   const isUser = role === 'user';
   const isAssistant = role === 'assistant';
-  const canBranch = isUser && showUserActions;
+  const canBranch = isAssistant && showBranchAction;
 
   if (message.role === 'separator') {
     return (
@@ -53,27 +51,6 @@ function TimelineMessageComponent({
         className="flex w-full justify-end animate-[megumi-message-in_160ms_ease-out]"
       >
         <div className="relative group flex min-w-0 max-w-3xl flex-col items-end text-right text-sm leading-7 text-[var(--color-text)]">
-          {canBranch ? (
-            <div className="absolute -left-24 top-0 flex opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
-              <IconButton
-                label="Branch from here"
-                size="sm"
-                variant="ghost"
-                onClick={() => onBranchFromMessage?.(message)}
-              >
-                <GitBranch size={14} aria-hidden="true" />
-              </IconButton>
-              <IconButton
-                label="Rerun"
-                size="sm"
-                variant="ghost"
-                onClick={() => onRerunMessage?.(message)}
-              >
-                <RotateCcw size={14} aria-hidden="true" />
-              </IconButton>
-            </div>
-          ) : null}
-
           <div
             data-testid="user-message-card"
             className="max-w-full min-w-0 rounded-md bg-[var(--color-accent-soft)] px-3 py-2 text-left shadow-sm"
@@ -106,6 +83,16 @@ function TimelineMessageComponent({
         <div className="mb-2 flex items-center gap-2 text-xs text-[var(--color-text-muted)] justify-start">
           <span>{isAssistant ? 'Megumi' : role}</span>
           <time dateTime={message.createdAt}>{formatTime(message.createdAt)}</time>
+          {canBranch ? (
+            <IconButton
+              label="Branch from here"
+              size="sm"
+              variant="ghost"
+              onClick={() => onBranchFromMessage?.(message)}
+            >
+              <GitBranch size={14} aria-hidden="true" />
+            </IconButton>
+          ) : null}
         </div>
 
         <TimelineMessageBlocks message={message} />
