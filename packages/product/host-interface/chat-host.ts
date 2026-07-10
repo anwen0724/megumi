@@ -41,6 +41,7 @@ import type {
   ChatListTimelineUiRequest,
   ChatListTimelineUiResult,
   ChatSendUserInputUiRequest,
+  ChatSendUserInputUiPayload,
   ChatSendUserInputUiResult,
 } from './chat-host-types';
 
@@ -143,26 +144,38 @@ export function createChatHost(options: {
           ...(request.attachments ? { attachments: request.attachments } : {}),
         },
         model_selection: request.modelSelection,
-        permission_mode: request.permissionMode,
+        permission_mode: request.permissionMode ?? 'default',
       });
       const mapped = mapStartRunResult(result, options.sessionService, request);
-      return mapped;
+      const { events, ...payload } = mapped;
+      return {
+        payload: payload as ChatSendUserInputUiPayload,
+        ...(events ? { events } : {}),
+      };
     },
 
     async cancelUserInput(request) {
       const result = await options.agentRunService.cancelRun({ run_id: request.runId });
       if (result.status === 'cancelled') {
-        return { cancelled: true, events: asyncIterableFrom(result.events) };
+        return { payload: { cancelled: true }, events: asyncIterableFrom(result.events) };
       }
-      return { cancelled: false };
+      return { payload: { cancelled: false } };
     },
 
     createBranchDraft(request) {
-      return options.branchService.createBranchDraft(request);
+      const result = options.branchService.createBranchDraft(request);
+      return {
+        payload: result.payload,
+        ...(result.events ? { events: result.events } : {}),
+      };
     },
 
     cancelBranchDraft(request) {
-      return options.branchService.cancelBranchDraft(request);
+      const result = options.branchService.cancelBranchDraft(request);
+      return {
+        payload: result.payload,
+        ...(result.events ? { events: result.events } : {}),
+      };
     },
 
     async getCommandSuggestions(request) {
@@ -227,7 +240,7 @@ function mapStartRunResult(
   result: StartRunResult,
   sessionService: SessionService,
   input: ChatSendUserInputUiRequest,
-): ChatSendUserInputUiResult {
+): ChatSendUserInputUiPayload & { events?: AsyncIterable<import('../../coding-agent/events').RuntimeEvent> } {
   if (result.status === 'started') {
     return {
       type: 'agent_run',

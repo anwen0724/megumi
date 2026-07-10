@@ -39,10 +39,6 @@ export function rendererRuntimeOperationNameFromChannel(channel: BusinessIpcChan
       return 'run.list-by-session';
     case IPC_CHANNELS.chat.runEventsList:
       return 'run.events.list';
-    case IPC_CHANNELS.artifacts.planByRunGet:
-      return 'plan.by-run.get';
-    case IPC_CHANNELS.artifacts.planStatusUpdate:
-      return 'plan.status.update';
     case IPC_CHANNELS.approval.resolve:
       return 'approval.resolve';
     case IPC_CHANNELS.artifacts.listByRun:

@@ -114,37 +114,21 @@ function createSessionMessageSendPayload(
   payload: ComposerSubmitPayload,
   finalClientMessageId: string,
   messageCreatedAt: string,
-  branchDraft: BranchDraftState | null,
   target: SessionMessageTarget,
 ): SessionMessageSendPayload {
-  const sendPayload: SessionMessageSendPayload = {
+  return {
     ...(target.sessionId ? { sessionId: target.sessionId } : {}),
-    providerId: payload.providerId as SessionMessageSendPayload['providerId'],
-    modelId: payload.model,
-    message: {
-      id: finalClientMessageId,
-      content: payload.message,
-      createdAt: messageCreatedAt,
+    projectId: target.projectId,
+    text: payload.message,
+    clientMessageId: finalClientMessageId,
+    modelSelection: {
+      provider_id: payload.providerId,
+      model_id: payload.model,
     },
-    context: {
-      workspaceId: target.projectId,
-      ...(target.projectName ? { workspaceLabel: target.projectName } : {}),
-      ...(target.projectPath ? { workspacePath: target.projectPath } : {}),
-      sessionTitle: target.sessionTitle,
-      permissionMode: payload.permissionMode,
-      ...(payload.permissionSource ? { permissionSource: payload.permissionSource } : {}),
-    },
+    permissionMode: payload.permissionMode,
+    ...(payload.permissionSource ? { permissionSource: payload.permissionSource } : {}),
     createdAt: messageCreatedAt,
   };
-
-  if (branchDraft) {
-    sendPayload.branchDraft = {
-      branchMarkerId: branchDraft.branchMarkerId,
-      intent: branchDraft.intent,
-    };
-  }
-
-  return sendPayload;
 }
 
 function shouldProcessRuntimeEvent(
@@ -327,7 +311,6 @@ export function useSessionTimeline() {
         payload,
         clientMessageId,
         createdAt,
-        branchDraftForSend,
         target,
       ),
       { requestId },
@@ -347,18 +330,36 @@ export function useSessionTimeline() {
       return false;
     }
 
-    const runSessionId = adoptBackendSession(result.data.session);
+    if (result.data.type === 'error') {
+      failSessionMessageSend(result.data.message, result.data.session?.id ?? target.sessionId ?? null);
+      return false;
+    }
+
+    const runSessionId = result.data.session
+      ? adoptBackendSession(result.data.session)
+      : target.sessionId;
+    if (!runSessionId) {
+      failSessionMessageSend('The product did not return a session for this request.');
+      return false;
+    }
     runSessionIdRef.current = runSessionId;
-    activeRunIdRef.current = result.data.runId;
     useRuntimeTimelineStore.getState().setActiveSession(target.projectId, runSessionId);
     useChatUiStore.getState().setActiveSession(runSessionId);
-    useChatUiStore.getState().setAgentStatus('sending', runSessionId);
     useChatUiStore.getState().setLastError(null, runSessionId);
+
+    if (result.data.type !== 'agent_run') {
+      activeRunIdRef.current = null;
+      useChatUiStore.getState().setAgentStatus('idle', runSessionId);
+      return true;
+    }
+
+    activeRunIdRef.current = result.data.run.runId;
+    useChatUiStore.getState().setAgentStatus('sending', runSessionId);
     useRuntimeTimelineStore.getState().addPendingUserMessage(target.projectId, runSessionId, {
       clientMessageId,
       text: payload.message,
       createdAt,
-      runId: result.data.runId,
+      runId: result.data.run.runId,
     });
 
     if (isSameBranchDraft(branchDraftRef.current, branchDraftForSend)) {

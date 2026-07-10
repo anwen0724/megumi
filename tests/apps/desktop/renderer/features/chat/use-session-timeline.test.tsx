@@ -103,6 +103,7 @@ describe('useSessionTimeline', () => {
             send: vi.fn().mockResolvedValue({
               ok: true,
               data: {
+                type: 'agent_run',
                 requestId: 'request-1',
                 session: {
                   id: 'session-1',
@@ -112,12 +113,17 @@ describe('useSessionTimeline', () => {
                   updatedAt: createdAt,
                 },
                 userMessageId: 'message-user-1',
-                runId: 'run-1',
+                run: {
+                  runId: 'run-1',
+                  sessionId: 'session-1',
+                  status: 'running',
+                  createdAt,
+                },
               },
             }),
             cancel: vi.fn().mockResolvedValue({
               ok: true,
-              data: { cancelled: true, events: [] },
+              data: { cancelled: true },
             }),
           },
         },

@@ -11,7 +11,6 @@ import {
   registerArtifactHandlers,
   type ArtifactHandlersService,
 } from './handlers/artifact.handler';
-import { registerMemoryHandlers, type MemoryHandlersService } from './handlers/memory.handler';
 import type { RuntimeLogger } from '@megumi/product/logging';
 import { electronIpcMain, type DesktopIpcMain } from '../adapters/electron-ipc-main-adapter';
 
@@ -24,7 +23,6 @@ export interface RegisterAllHandlersOptions {
   settings?: SettingsHandlersService;
   approval?: ApprovalHandlersService;
   artifact?: ArtifactHandlersService;
-  memory?: MemoryHandlersService;
 }
 
 export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): void {
@@ -56,7 +54,4 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
     registerArtifactHandlers(options.artifact, { logger: options.logger, ipcMain });
   }
 
-  if (options.memory) {
-    registerMemoryHandlers({ memoryService: options.memory, logger: options.logger, ipcMain });
-  }
 }

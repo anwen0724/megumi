@@ -64,8 +64,8 @@ describe('composeProduct', () => {
         permissionMode: 'default',
       });
 
-      expect(result.type).toBe('agent_run');
-      if (result.type !== 'agent_run') return;
+      expect(result.payload.type).toBe('agent_run');
+      if (result.payload.type !== 'agent_run' || !result.events) return;
       const events = [];
       for await (const event of result.events) events.push(event.eventType);
       expect(events).toContain('run.completed');

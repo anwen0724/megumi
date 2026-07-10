@@ -50,23 +50,6 @@ export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.artifacts.versionCreate,
   IPC_CHANNELS.artifacts.statusUpdate,
   IPC_CHANNELS.artifacts.reference,
-  IPC_CHANNELS.artifacts.planByRunGet,
-  IPC_CHANNELS.artifacts.planStatusUpdate,
-  IPC_CHANNELS.memory.candidateList,
-  IPC_CHANNELS.memory.candidateAccept,
-  IPC_CHANNELS.memory.candidateReject,
-  IPC_CHANNELS.memory.candidateArchive,
-  IPC_CHANNELS.memory.candidateEditAndAccept,
-  IPC_CHANNELS.memory.memoryList,
-  IPC_CHANNELS.memory.memoryGet,
-  IPC_CHANNELS.memory.memoryUpdate,
-  IPC_CHANNELS.memory.memoryArchive,
-  IPC_CHANNELS.memory.memoryDelete,
-  IPC_CHANNELS.memory.memoryDisable,
-  IPC_CHANNELS.memory.memoryEnable,
-  IPC_CHANNELS.memory.sourceRefsList,
-  IPC_CHANNELS.memory.accessLogsList,
-  IPC_CHANNELS.memory.recallPreview,
 ] as const;
 
 export type BusinessIpcChannel = (typeof BUSINESS_IPC_CHANNELS)[number];

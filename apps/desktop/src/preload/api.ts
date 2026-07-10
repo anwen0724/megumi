@@ -13,6 +13,7 @@ import type {
   ChatListRunsUiResult,
   ChatListSessionsUiResult,
   ChatListTimelineUiResult,
+  ChatSendUserInputUiPayload,
   EmptyUiResult,
   ProviderListUiResult,
   SettingsData,
@@ -33,9 +34,6 @@ import type {
   ArtifactStatusUpdateData,
   ArtifactVersionCreateData,
   ArtifactVersionGetData,
-  PlanByRunGetData,
-  PlanStatusUpdatePayload as HostPlanStatusUpdatePayload,
-  PlanStatusUpdateData,
   WorkspaceListFilesUiResult,
 } from '@megumi/product/host-interface';
 import { IPC_CHANNELS } from '../main/ipc/channels';
@@ -51,18 +49,6 @@ import type {
   ArtifactVersionCreatePayload,
   ArtifactVersionGetPayload,
   CommandSuggestionsPayload,
-  MemoryAccessLogsListPayload,
-  MemoryCandidateAcceptPayload,
-  MemoryCandidateArchivePayload,
-  MemoryCandidateEditAndAcceptPayload,
-  MemoryCandidateListPayload,
-  MemoryCandidateRejectPayload,
-  MemoryGetPayload,
-  MemoryListPayload,
-  MemoryRecallPreviewPayload,
-  MemorySourceRefsListPayload,
-  MemoryStatusPayload,
-  MemoryUpdatePayload,
   ProjectOpenPayload,
   ProjectRemovePayload,
   ProviderApiKeyPayload,
@@ -90,25 +76,9 @@ import type {
 type BusinessRequest<TPayload, TChannel extends BusinessIpcChannel> = RuntimeIpcRequest<TPayload, TChannel>;
 type EmptyPayload = Record<string, never>;
 type EmptyData = Record<string, never>;
-type MemoryCandidateListData = { candidates: unknown[] };
-type MemoryCandidateAcceptData = { candidate: unknown; memory: unknown };
-type MemoryCandidateData = { candidate: unknown };
-type MemoryListData = { memories: unknown[] };
-type MemoryGetData = unknown;
-type MemoryData = { memory: unknown };
-type MemorySourceRefsListData = { sourceRefs: unknown[] };
-type MemoryAccessLogsListData = { accessLogs: unknown[] };
-type MemoryRecallPreviewData = unknown;
-type SessionMessageSendData = {
-  requestId: string;
-  session: ChatCreateSessionUiResult['session'];
-  userMessageId: string;
-  runId: string;
-};
-type SessionBranchDraftCreateData = Pick<ChatCreateBranchDraftUiResult, 'branchDraft'>;
-type SessionBranchDraftCancelData = Omit<ChatCancelBranchDraftUiResult, 'events'>;
-type PlanByRunGetPayload = { runId: string };
-type PlanStatusUpdatePayload = HostPlanStatusUpdatePayload;
+type SessionMessageSendData = ChatSendUserInputUiPayload;
+type SessionBranchDraftCreateData = ChatCreateBranchDraftUiResult['payload'];
+type SessionBranchDraftCancelData = ChatCancelBranchDraftUiResult['payload'];
 
 async function invokeRuntimeIpc<TPayload, TData extends object, TChannel extends BusinessIpcChannel>(
   channel: TChannel,
@@ -245,7 +215,7 @@ export const api = {
         invokeRuntimeIpc(IPC_CHANNELS.chat.sessionMessageSend, request),
       cancel: (
         request: BusinessRequest<SessionMessageCancelPayload, typeof IPC_CHANNELS.chat.sessionMessageCancel>,
-      ): Promise<RuntimeIpcResult<ChatCancelUserInputUiResult, typeof IPC_CHANNELS.chat.sessionMessageCancel>> =>
+      ): Promise<RuntimeIpcResult<ChatCancelUserInputUiResult['payload'], typeof IPC_CHANNELS.chat.sessionMessageCancel>> =>
         invokeRuntimeIpc(IPC_CHANNELS.chat.sessionMessageCancel, request),
     },
     timeline: {
@@ -272,16 +242,6 @@ export const api = {
       ): Promise<RuntimeIpcResult<ChatListRunEventsUiResult, typeof IPC_CHANNELS.chat.runEventsList>> =>
         invokeRuntimeIpc(IPC_CHANNELS.chat.runEventsList, request),
     },
-  },
-  plan: {
-    byRunGet: (
-      request: BusinessRequest<PlanByRunGetPayload, typeof IPC_CHANNELS.artifacts.planByRunGet>,
-    ): Promise<RuntimeIpcResult<PlanByRunGetData, typeof IPC_CHANNELS.artifacts.planByRunGet>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.artifacts.planByRunGet, request),
-    statusUpdate: (
-      request: BusinessRequest<PlanStatusUpdatePayload, typeof IPC_CHANNELS.artifacts.planStatusUpdate>,
-    ): Promise<RuntimeIpcResult<PlanStatusUpdateData, typeof IPC_CHANNELS.artifacts.planStatusUpdate>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.artifacts.planStatusUpdate, request),
   },
   approval: {
     resolve: (
@@ -336,68 +296,6 @@ export const api = {
       request: BusinessRequest<ArtifactReferencePayload, typeof IPC_CHANNELS.artifacts.reference>,
     ): Promise<RuntimeIpcResult<ArtifactReferenceData, typeof IPC_CHANNELS.artifacts.reference>> =>
       invokeRuntimeIpc(IPC_CHANNELS.artifacts.reference, request),
-  },
-  memory: {
-    candidateList: (
-      request: BusinessRequest<MemoryCandidateListPayload, typeof IPC_CHANNELS.memory.candidateList>,
-    ): Promise<RuntimeIpcResult<MemoryCandidateListData, typeof IPC_CHANNELS.memory.candidateList>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.memory.candidateList, request),
-    candidateAccept: (
-      request: BusinessRequest<MemoryCandidateAcceptPayload, typeof IPC_CHANNELS.memory.candidateAccept>,
-    ): Promise<RuntimeIpcResult<MemoryCandidateAcceptData, typeof IPC_CHANNELS.memory.candidateAccept>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.memory.candidateAccept, request),
-    candidateReject: (
-      request: BusinessRequest<MemoryCandidateRejectPayload, typeof IPC_CHANNELS.memory.candidateReject>,
-    ): Promise<RuntimeIpcResult<MemoryCandidateData, typeof IPC_CHANNELS.memory.candidateReject>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.memory.candidateReject, request),
-    candidateArchive: (
-      request: BusinessRequest<MemoryCandidateArchivePayload, typeof IPC_CHANNELS.memory.candidateArchive>,
-    ): Promise<RuntimeIpcResult<MemoryCandidateData, typeof IPC_CHANNELS.memory.candidateArchive>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.memory.candidateArchive, request),
-    candidateEditAndAccept: (
-      request: BusinessRequest<MemoryCandidateEditAndAcceptPayload, typeof IPC_CHANNELS.memory.candidateEditAndAccept>,
-    ): Promise<RuntimeIpcResult<MemoryCandidateAcceptData, typeof IPC_CHANNELS.memory.candidateEditAndAccept>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.memory.candidateEditAndAccept, request),
-    memoryList: (
-      request: BusinessRequest<MemoryListPayload, typeof IPC_CHANNELS.memory.memoryList>,
-    ): Promise<RuntimeIpcResult<MemoryListData, typeof IPC_CHANNELS.memory.memoryList>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.memory.memoryList, request),
-    memoryGet: (
-      request: BusinessRequest<MemoryGetPayload, typeof IPC_CHANNELS.memory.memoryGet>,
-    ): Promise<RuntimeIpcResult<MemoryGetData & object, typeof IPC_CHANNELS.memory.memoryGet>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.memory.memoryGet, request),
-    memoryUpdate: (
-      request: BusinessRequest<MemoryUpdatePayload, typeof IPC_CHANNELS.memory.memoryUpdate>,
-    ): Promise<RuntimeIpcResult<MemoryData, typeof IPC_CHANNELS.memory.memoryUpdate>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.memory.memoryUpdate, request),
-    memoryArchive: (
-      request: BusinessRequest<MemoryStatusPayload, typeof IPC_CHANNELS.memory.memoryArchive>,
-    ): Promise<RuntimeIpcResult<MemoryData, typeof IPC_CHANNELS.memory.memoryArchive>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.memory.memoryArchive, request),
-    memoryDelete: (
-      request: BusinessRequest<MemoryStatusPayload, typeof IPC_CHANNELS.memory.memoryDelete>,
-    ): Promise<RuntimeIpcResult<MemoryData, typeof IPC_CHANNELS.memory.memoryDelete>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.memory.memoryDelete, request),
-    memoryDisable: (
-      request: BusinessRequest<MemoryStatusPayload, typeof IPC_CHANNELS.memory.memoryDisable>,
-    ): Promise<RuntimeIpcResult<MemoryData, typeof IPC_CHANNELS.memory.memoryDisable>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.memory.memoryDisable, request),
-    memoryEnable: (
-      request: BusinessRequest<MemoryStatusPayload, typeof IPC_CHANNELS.memory.memoryEnable>,
-    ): Promise<RuntimeIpcResult<MemoryData, typeof IPC_CHANNELS.memory.memoryEnable>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.memory.memoryEnable, request),
-    memorySourceRefsList: (
-      request: BusinessRequest<MemorySourceRefsListPayload, typeof IPC_CHANNELS.memory.sourceRefsList>,
-    ): Promise<RuntimeIpcResult<MemorySourceRefsListData, typeof IPC_CHANNELS.memory.sourceRefsList>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.memory.sourceRefsList, request),
-    memoryAccessLogsList: (
-      request: BusinessRequest<MemoryAccessLogsListPayload, typeof IPC_CHANNELS.memory.accessLogsList>,
-    ): Promise<RuntimeIpcResult<MemoryAccessLogsListData, typeof IPC_CHANNELS.memory.accessLogsList>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.memory.accessLogsList, request),
-    recallPreview: (
-      request: BusinessRequest<MemoryRecallPreviewPayload, typeof IPC_CHANNELS.memory.recallPreview>,
-    ): Promise<RuntimeIpcResult<MemoryRecallPreviewData & object, typeof IPC_CHANNELS.memory.recallPreview>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.memory.recallPreview, request),
   },
   workspace: {
     files: {

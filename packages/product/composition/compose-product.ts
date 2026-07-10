@@ -116,7 +116,7 @@ function createUnsupportedSessionBranchHost(): SessionBranchHostPort {
       throw new Error('Session branch drafts are not available during the Agent Run transition.');
     },
     cancelBranchDraft() {
-      return { cancelled: false, reason: 'branch_marker_not_found', events: [] };
+      return { payload: { cancelled: false, reason: 'branch_marker_not_found' } };
     },
   };
 }

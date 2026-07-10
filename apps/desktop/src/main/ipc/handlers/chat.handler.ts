@@ -1,7 +1,10 @@
 /*
  * Desktop IPC handlers for chat, session, command suggestions, and run hydration.
  */
-import type { ProductHostInterface } from '@megumi/product/host-interface';
+import {
+  ChatSendUserInputUiPayloadSchema,
+  type ProductHostInterface,
+} from '@megumi/product/host-interface';
 import type { RuntimeLogger } from '@megumi/product/logging';
 import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { createIpcRequestHandler } from '../create-request-handler';
@@ -63,10 +66,7 @@ export function registerChatHandlers(
     requestSchema: SessionCreateRequestSchema,
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<SessionCreatePayload, typeof IPC_CHANNELS.chat.sessionCreate>) =>
-      service.host.chat.createSession({
-        projectId: request.payload.workspaceId ?? request.payload.workspacePath ?? 'workspace:default',
-        title: request.payload.title,
-      }),
+      service.host.chat.createSession(request.payload),
     mapError: mapChatIpcError,
   }));
 
@@ -108,46 +108,20 @@ export function registerChatHandlers(
   ipcMain.handle(IPC_CHANNELS.chat.sessionMessageSend, createIpcRequestHandler({
     channel: IPC_CHANNELS.chat.sessionMessageSend,
     requestSchema: SessionMessageSendRequestSchema,
+    responseSchema: ChatSendUserInputUiPayloadSchema,
     logger: options.logger,
     handle: async (
       request: RuntimeIpcRequest<SessionMessageSendPayload, typeof IPC_CHANNELS.chat.sessionMessageSend>,
       event,
       context,
     ) => {
-      const message = request.payload.message ?? request.payload.messages?.at(-1);
-      if (!message) {
-        throw new Error('Session message send requires a user message.');
-      }
       const result = await service.host.chat.sendUserInput({
         requestId: request.requestId,
-        sessionId: request.payload.sessionId,
-        projectId: request.payload.context?.workspaceId ?? 'workspace:default',
-        projectLabel: request.payload.context?.workspaceLabel,
-        projectPath: request.payload.context?.workspacePath,
-        sessionTitle: request.payload.context?.sessionTitle,
-        modelSelection: {
-          provider_id: request.payload.providerId,
-          model_id: request.payload.modelId,
-        },
-        text: message.content,
-        clientMessageId: message.id,
-        createdAt: request.payload.createdAt ?? message.createdAt,
-        permissionMode: request.payload.context?.permissionMode ?? 'default',
-        permissionSource: request.payload.context?.permissionSource,
+        ...request.payload,
         runtimeContext: context,
       });
-      if (result.type !== 'agent_run') {
-        throw new Error(`Session message send does not support command result: ${result.type}`);
-      }
-      setTimeout(() => {
-        void forwardRuntimeEvents(event.sender, result.events, { logger: options.logger });
-      }, 0);
-      return {
-        requestId: result.requestId,
-        session: result.session,
-        userMessageId: result.userMessageId,
-        runId: result.run.runId,
-      };
+      scheduleEvents(event.sender, result.events, options.logger);
+      return result.payload;
     },
     mapError: mapChatIpcError,
   }));
@@ -161,10 +135,8 @@ export function registerChatHandlers(
       event,
     ) => {
       const result = await service.host.chat.cancelUserInput(request.payload);
-      if (result.events) {
-        void forwardRuntimeEvents(event.sender, result.events, { logger: options.logger });
-      }
-      return { cancelled: result.cancelled };
+      scheduleEvents(event.sender, result.events, options.logger);
+      return result.payload;
     },
     mapError: mapChatIpcError,
   }));
@@ -179,8 +151,8 @@ export function registerChatHandlers(
         ...request.payload,
         runtimeContext: context,
       });
-      void forwardRuntimeEvents(event.sender, asyncIterableFrom(result.events), { logger: options.logger });
-      return { branchDraft: result.branchDraft };
+      scheduleEvents(event.sender, result.events, options.logger);
+      return result.payload;
     },
     mapError: mapChatIpcError,
   }));
@@ -195,8 +167,8 @@ export function registerChatHandlers(
         ...request.payload,
         runtimeContext: context,
       });
-      void forwardRuntimeEvents(event.sender, asyncIterableFrom(result.events), { logger: options.logger });
-      return { cancelled: result.cancelled, ...(result.reason ? { reason: result.reason } : {}) };
+      scheduleEvents(event.sender, result.events, options.logger);
+      return result.payload;
     },
     mapError: mapChatIpcError,
   }));
@@ -230,8 +202,13 @@ function mapChatIpcError(): RuntimeIpcError {
   };
 }
 
-async function* asyncIterableFrom<T>(items: Iterable<T>): AsyncIterable<T> {
-  for (const item of items) {
-    yield item;
-  }
+function scheduleEvents(
+  sender: { send(channel: string, event: import('@megumi/product/host-interface').RuntimeEvent): void },
+  events: AsyncIterable<import('@megumi/product/host-interface').RuntimeEvent> | undefined,
+  logger?: RuntimeLogger,
+): void {
+  if (!events) return;
+  setTimeout(() => {
+    void forwardRuntimeEvents(sender, events, { logger });
+  }, 0);
 }

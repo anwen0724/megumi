@@ -77,18 +77,17 @@ export interface ChatSendUserInputUiRequest {
     provider_id: string;
     model_id: string;
   };
-  permissionMode: 'default' | 'accept_edits' | 'plan' | 'auto';
+  permissionMode?: 'default' | 'accept_edits' | 'plan' | 'auto';
   permissionSource?: string;
   runtimeContext?: RuntimeContext;
 }
-export type ChatSendUserInputUiResult =
+export type ChatSendUserInputUiPayload =
   | {
       type: 'agent_run';
       session: ChatSessionUiDto;
       requestId: string;
       userMessageId: string;
       run: ChatRunUiDto;
-      events: AsyncIterable<RuntimeEvent>;
     }
   | {
       type: 'host_interaction_request';
@@ -108,12 +107,16 @@ export type ChatSendUserInputUiResult =
       requestId: string;
       message: string;
     };
+export interface ChatSendUserInputUiResult {
+  payload: ChatSendUserInputUiPayload;
+  events?: AsyncIterable<RuntimeEvent>;
+}
 
 export interface ChatCancelUserInputUiRequest {
   runId: string;
 }
 export interface ChatCancelUserInputUiResult {
-  cancelled: boolean;
+  payload: { cancelled: boolean };
   events?: AsyncIterable<RuntimeEvent>;
 }
 
@@ -126,14 +129,14 @@ export interface ChatCreateBranchDraftUiRequest {
   runtimeContext?: RuntimeContext;
 }
 export interface ChatCreateBranchDraftUiResult {
-  branchDraft: {
+  payload: { branchDraft: {
     branchMarkerId: string;
     sessionId: string;
     sourceMessageId: string;
     intent: 'branch' | 'rerun';
     createdAt: string;
-  };
-  events: Iterable<RuntimeEvent>;
+  } };
+  events?: AsyncIterable<RuntimeEvent>;
 }
 
 export interface ChatCancelBranchDraftUiRequest {
@@ -144,9 +147,11 @@ export interface ChatCancelBranchDraftUiRequest {
   runtimeContext?: RuntimeContext;
 }
 export interface ChatCancelBranchDraftUiResult {
-  cancelled: boolean;
-  reason?: 'branch_has_new_sources' | 'branch_marker_not_active' | 'branch_marker_not_found' | string;
-  events: Iterable<RuntimeEvent>;
+  payload: {
+    cancelled: boolean;
+    reason?: 'branch_has_new_sources' | 'branch_marker_not_active' | 'branch_marker_not_found' | string;
+  };
+  events?: AsyncIterable<RuntimeEvent>;
 }
 
 export interface ChatGetCommandSuggestionsUiRequest {

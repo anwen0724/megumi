@@ -34,17 +34,12 @@ function createSendRequest(): RuntimeIpcRequest<SessionMessageSendPayload, typeo
   return {
     requestId: 'request-1',
     payload: {
-      providerId: 'deepseek',
-      modelId: 'deepseek-chat',
-      message: {
-        id: 'client-message-1',
-        content: 'hello',
-        createdAt: '2026-05-17T00:00:00.000Z',
-      },
-      context: {
-        workspaceId: 'workspace-1',
-        workspacePath: 'C:/repo',
-        sessionTitle: 'hello',
+      projectId: 'workspace-1',
+      text: 'hello',
+      clientMessageId: 'client-message-1',
+      modelSelection: {
+        provider_id: 'deepseek',
+        model_id: 'deepseek-chat',
       },
       createdAt: '2026-05-17T00:00:00.000Z',
     },
@@ -86,17 +81,25 @@ describe('registerChatHandlers', () => {
       host: {
         chat: {
           sendUserInput: vi.fn().mockResolvedValue({
-            type: 'agent_run',
-            requestId: 'request-1',
-            session: {
-              id: 'session-1',
-              projectId: 'workspace-1',
-              title: 'hello',
-              createdAt: '2026-05-17T00:00:00.000Z',
-              updatedAt: '2026-05-17T00:00:00.000Z',
+            payload: {
+              type: 'agent_run',
+              requestId: 'request-1',
+              session: {
+                id: 'session-1',
+                projectId: 'workspace-1',
+                title: 'hello',
+                status: 'active',
+                createdAt: '2026-05-17T00:00:00.000Z',
+                updatedAt: '2026-05-17T00:00:00.000Z',
+              },
+              userMessageId: 'message-user-1',
+              run: {
+                runId: 'run-1',
+                sessionId: 'session-1',
+                status: 'running',
+                createdAt: '2026-05-17T00:00:00.000Z',
+              },
             },
-            userMessageId: 'message-user-1',
-            run: { runId: 'run-1' },
             events,
           }),
         },
@@ -119,7 +122,7 @@ describe('registerChatHandlers', () => {
       ok: true,
       data: {
         requestId: 'request-1',
-        runId: 'run-1',
+        run: { runId: 'run-1' },
       },
     });
     expect(forwardRuntimeEvents).not.toHaveBeenCalled();
