@@ -18,9 +18,18 @@ import type {
 import { parseSlashCommandInput } from '../core/slash-command-parser';
 import type { SkillCommandDescriptor } from '../core/skill-commands';
 
+export type CommandSuggestionRequest = {
+  draft_input: string;
+  workspaceId?: string;
+};
+
+export type SkillCommandProvider = {
+  listSkillCommands(request: { workspaceId?: string }): readonly SkillCommandDescriptor[] | Promise<readonly SkillCommandDescriptor[]>;
+};
+
 export type CommandService = {
   listCommands(): CommandListItem[];
-  getCommandSuggestions(request: { draft_input: string }): CommandSuggestionResult;
+  getCommandSuggestions(request: CommandSuggestionRequest): Promise<CommandSuggestionResult>;
   handleCommandInput(request: { raw_input: string; execution_context?: CommandExecutionContext }): Promise<CommandExecutionResult>;
   executeCommand(request: { invocation: CommandInvocation; execution_context?: CommandExecutionContext }): Promise<CommandExecutionResult>;
 };
@@ -29,6 +38,7 @@ export function createCommandService(options: {
   built_in_commands?: CommandDefinition[];
   skill_commands?: CommandDefinition[];
   skills?: readonly SkillCommandDescriptor[];
+  skillCommandProvider?: SkillCommandProvider;
   catalog?: CommandCatalog;
 } = {}): CommandService {
   const catalog = options.catalog ?? createCommandCatalog({
@@ -41,7 +51,17 @@ export function createCommandService(options: {
     listCommands() {
       return catalog.listCommands();
     },
-    getCommandSuggestions(request) {
+    async getCommandSuggestions(request) {
+      if (options.skillCommandProvider) {
+        const skills = await options.skillCommandProvider.listSkillCommands({
+          ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}),
+        });
+        return createCommandCatalog({
+          ...(options.built_in_commands ? { built_in_commands: options.built_in_commands } : {}),
+          ...(options.skill_commands ? { skill_commands: options.skill_commands } : {}),
+          skills,
+        }).getCommandSuggestions(request);
+      }
       return catalog.getCommandSuggestions(request);
     },
     async handleCommandInput(request) {

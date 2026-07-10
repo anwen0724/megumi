@@ -165,7 +165,7 @@ export function createChatController(options: {
     },
 
     async getCommandSuggestions(request) {
-      return { suggestions: options.commandService.getCommandSuggestions(request) };
+      return { suggestions: await options.commandService.getCommandSuggestions(request) };
     },
 
     async listRuns(request) {

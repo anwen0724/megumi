@@ -46,7 +46,7 @@ export function CommandSuggestionPanel({
 
             return (
               <button
-                key={`${group.id}:${command.name}:${command.match.field}:${command.match.value}`}
+                key={suggestionKey(group.id, command)}
                 type="button"
                 role="option"
                 aria-selected={currentIndex === selectedIndex}
@@ -90,4 +90,11 @@ function CommandName({ item }: { item: CommandSuggestionItem }) {
       {displayName.slice(prefixLength)}
     </>
   );
+}
+
+function suggestionKey(groupId: string, command: CommandSuggestionItem): string {
+  const sourceIdentity = command.source.kind === 'skill'
+    ? command.source.skill_id
+    : command.name;
+  return `${groupId}:${command.source.kind}:${sourceIdentity}:${command.match.field}:${command.match.value}`;
 }

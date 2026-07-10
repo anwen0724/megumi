@@ -24,15 +24,19 @@ export function ChatPage() {
     request: { draft_input: string },
   ): Promise<CommandSuggestionResult> => {
     try {
+      const payload = {
+        ...request,
+        ...(controller.currentProjectId ? { workspaceId: controller.currentProjectId } : {}),
+      };
       const result = await window.megumi.command.suggestions(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.commandSuggestions, request),
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.commandSuggestions, payload),
       );
 
       return result.ok ? result.data.suggestions : { type: 'inactive' };
     } catch {
       return { type: 'inactive' };
     }
-  }, []);
+  }, [controller.currentProjectId]);
   const timelineScroll = useTimelineAutoScroll({
     sessionKey: controller.activeRuntimeTimelineSessionKey,
     updateKey: `${controller.timelineUpdateKey}:${bottomSpacerHeight}`,

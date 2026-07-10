@@ -10,7 +10,10 @@ import { IPC_CHANNELS } from './channels';
 const EmptyPayloadSchema = z.object({}).strict();
 const IsoDateTimeSchema = z.string().datetime();
 
-export const CommandSuggestionsPayloadSchema = z.object({ draft_input: z.string() }).strict();
+export const CommandSuggestionsPayloadSchema = z.object({
+  draft_input: z.string(),
+  workspaceId: z.string().min(1).optional(),
+}).strict();
 export const SkillListPayloadSchema = z.object({
   workspaceId: z.string().min(1).optional(),
 }).strict();

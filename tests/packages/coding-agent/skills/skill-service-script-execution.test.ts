@@ -5,7 +5,8 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createDatabase, type MegumiDatabase } from '@megumi/coding-agent/persistence/connection';
 import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
-import { SkillRepository, SkillServiceImpl } from '@megumi/coding-agent/skills';
+import { SkillRepository } from '@megumi/coding-agent/skills';
+import { SkillServiceImpl } from '@megumi/coding-agent/skills/service/skill-service-impl';
 
 describe('SkillServiceImpl script execution boundary', () => {
   let database: MegumiDatabase;

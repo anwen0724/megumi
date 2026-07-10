@@ -57,4 +57,58 @@ describe('CommandSuggestionPanel skill suggestions', () => {
       },
     }));
   });
+
+  it('uses stable unique keys for same-name skill suggestions', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const suggestions: CommandSuggestionResult = {
+      type: 'suggestions',
+      draft_input: '/test',
+      command_prefix: 'test',
+      groups: [{
+        id: 'skills',
+        label: 'Skills',
+        items: [
+          createSkillSuggestion('checks:test', 'Run project checks'),
+          createSkillSuggestion('qa:test', 'Run QA checks'),
+        ],
+      }],
+    };
+
+    render(
+      <CommandSuggestionPanel
+        suggestions={suggestions}
+        selectedIndex={0}
+        onChoose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('checks:test - Run project checks')).toBeInTheDocument();
+    expect(screen.getByText('qa:test - Run QA checks')).toBeInTheDocument();
+    expect(consoleError).not.toHaveBeenCalledWith(expect.stringContaining('Encountered two children with the same key'));
+    consoleError.mockRestore();
+  });
 });
+
+function createSkillSuggestion(
+  skillId: string,
+  description: string,
+): Extract<CommandSuggestionResult, { type: 'suggestions' }>['groups'][number]['items'][number] {
+  return {
+    name: 'test',
+    description,
+    source: { kind: 'skill', skill_id: skillId },
+    display: {
+      primary: 'test',
+      secondary: `${skillId} - ${description}`,
+      badge: 'Project',
+    },
+    match: {
+      field: 'name',
+      value: 'test',
+      prefix: 'test',
+    },
+    completion: {
+      replacement_input: `/skill ${skillId} `,
+    },
+  };
+}

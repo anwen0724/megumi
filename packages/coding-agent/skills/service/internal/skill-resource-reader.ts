@@ -5,6 +5,8 @@
 import fs from 'node:fs';
 import { validateSkillResourcePath } from './skill-path-policy';
 
+const MAX_SKILL_RESOURCE_BYTES = 256_000;
+
 export function readSkillResourceFile(input: {
   packagePath: string;
   resourcePath: string;
@@ -20,6 +22,10 @@ export function readSkillResourceFile(input: {
   try {
     if (!fs.existsSync(validation.absolutePath) || !fs.statSync(validation.absolutePath).isFile()) {
       return { status: 'not_found' };
+    }
+    const stats = fs.statSync(validation.absolutePath);
+    if (stats.size > MAX_SKILL_RESOURCE_BYTES) {
+      return { status: 'not_allowed', message: `Skill resource is too large: ${input.resourcePath}` };
     }
     return {
       status: 'ok',

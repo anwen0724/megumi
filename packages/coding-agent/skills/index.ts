@@ -20,6 +20,5 @@ export * from './domain/dto/tool/skill-tool-request';
 export * from './domain/dto/tool/skill-tool-response';
 export * from './service/skill-service';
 export * from './service/skill-service-types';
-export * from './service/skill-service-impl';
 export * from './repository/skill-repository';
 export * from './config/compose-coding-agent-skills';

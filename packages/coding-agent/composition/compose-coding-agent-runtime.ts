@@ -14,7 +14,7 @@ import {
   type ModelCallService,
 } from '../agent-run';
 import { createAgentRunRepository, type AgentRunRepository } from '../agent-run/repositories/agent-run-repository';
-import { createCommandService, type CommandService } from '../commands';
+import { createCommandService, type CommandService, type SkillCommandDescriptor } from '../commands';
 import { createInputService, type InputService } from '../input';
 import { createSessionService, type SessionMessageWithAttachments, type SessionService } from '../session';
 import { SessionRepository as SessionV2Repository } from '../session/repositories/session-repository';
@@ -39,7 +39,7 @@ import {
   composeCodingAgentToolRegistryService,
 } from './compose-coding-agent-tool-runtime';
 import { composeCodingAgentContext } from './compose-coding-agent-context';
-import { composeCodingAgentSkills, type SkillService } from '../skills';
+import { composeCodingAgentSkills, type Skill, type SkillService } from '../skills';
 import {
   createSettingsService,
   type MemorySettingsPort,
@@ -185,7 +185,21 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     homePath: options.homePaths.homePath,
     workspaceService,
   });
-  const commandService = createCommandService();
+  const commandService = createCommandService({
+    skillCommandProvider: {
+      async listSkillCommands(request) {
+        const skills = await skillRuntime.skillService.listSkills({
+          ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}),
+        });
+        if (skills.status === 'failed') {
+          return [];
+        }
+        return skills.skills
+          .filter((skill) => skill.available)
+          .map(toSkillCommandDescriptor);
+      },
+    },
+  });
   const workspaceChangeService = createWorkspaceChangeService({
     repository: workspaceChangeRepository,
     path_policy: workspacePathPolicyService,
@@ -348,6 +362,21 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     },
     dispose: () => persistence.database.close(),
   };
+}
+
+function toSkillCommandDescriptor(skill: Skill): SkillCommandDescriptor {
+  return {
+    skillId: skill.skillId,
+    commandName: commandNameFromSkillName(skill.name),
+    skillName: skill.name,
+    description: skill.description,
+    sourceLabel: skill.source.label,
+  };
+}
+
+function commandNameFromSkillName(skillName: string): string {
+  const segments = skillName.split(':').filter(Boolean);
+  return segments.at(-1) ?? skillName;
 }
 
 export function composeCodingAgentHostInterface(

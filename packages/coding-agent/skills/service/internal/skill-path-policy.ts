@@ -15,7 +15,7 @@ export function validateSkillResourcePath(input: {
   if (hasHiddenSegment(resolved.relativePath)) {
     return { status: 'not_allowed', message: `Skill resource path is hidden or sensitive: ${input.resourcePath}` };
   }
-  if (resolved.relativePath === 'SKILL.md' || startsWithSegment(resolved.relativePath, 'references') || startsWithSegment(resolved.relativePath, 'assets')) {
+  if (resolved.relativePath === 'SKILL.md' || startsWithSegment(resolved.relativePath, 'references')) {
     return { status: 'ok', absolutePath: resolved.absolutePath };
   }
   return { status: 'not_allowed', message: `Skill resource path is not readable: ${input.resourcePath}` };

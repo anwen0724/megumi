@@ -151,6 +151,7 @@ export interface ChatCancelBranchDraftUiResult {
 
 export interface ChatGetCommandSuggestionsUiRequest {
   draft_input: string;
+  workspaceId?: string;
 }
 export interface ChatGetCommandSuggestionsUiResult {
   suggestions: CommandSuggestionResult;

@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { MegumiDatabase } from '../../persistence/connection';
 import type { WorkspaceService } from '../../workspace';
 import { SkillRepository } from '../repository/skill-repository';
+import type { SkillService } from '../service/skill-service';
 import { SkillServiceImpl, type SkillRootResolver } from '../service/skill-service-impl';
 import type { SkillRoot } from '../service/internal/skill-package-reader';
 
@@ -15,7 +16,7 @@ export function composeCodingAgentSkills(input: {
   workspaceService: Pick<WorkspaceService, 'getWorkspace'>;
   rootsOverride?: SkillRoot[];
   clock?: { now(): string };
-}): { skillService: SkillServiceImpl; skillRepository: SkillRepository } {
+}): { skillService: SkillService; skillRepository: SkillRepository } {
   const skillRepository = new SkillRepository(input.database);
   const rootResolver = input.rootsOverride
     ? staticRootResolver(input.rootsOverride)

@@ -78,6 +78,39 @@ describe('context service skill sources', () => {
     expect(systemText).not.toContain('Skill ID:');
     expect(systemText).not.toContain('Description: Explore intent before implementation');
   });
+
+  it('keeps agent context available and records metadata when skill catalog loading fails', async () => {
+    const service = new ContextService({
+      repository: createRepository(),
+      skillSource: {
+        getSkillCatalog: vi.fn(async () => ({
+          status: 'failed' as const,
+          message: 'Skill root is unreadable.',
+        })),
+      },
+      promptResources: { system_prompt: 'You are Megumi' },
+      ids: { promptId: () => 'prompt:1' },
+    });
+
+    const context = await service.getSessionContext({
+      session_id: 'session:1',
+      workspace_id: 'workspace:1',
+      purpose: 'agent_response',
+    });
+
+    expect(context).toMatchObject({
+      status: 'ok',
+      session_context: {
+        metadata: {
+          diagnostics: [{
+            code: 'skill_catalog_failed',
+            message: 'Skill root is unreadable.',
+            origin_module: 'skills',
+          }],
+        },
+      },
+    });
+  });
 });
 
 function createRepository(): ContextSessionFactRepository {

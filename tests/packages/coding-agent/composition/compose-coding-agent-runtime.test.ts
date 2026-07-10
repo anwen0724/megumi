@@ -187,6 +187,30 @@ describe('composeCodingAgentRuntime trace wiring', () => {
       expect(skills.status).toBe('ok');
       expect(skills.status === 'ok' ? skills.skills.map((skill) => skill.skillId) : [])
         .toContain('qa:review');
+      const suggestions = await runtime.commandService.getCommandSuggestions({
+        draft_input: '/rev',
+        workspaceId: workspace.workspace.workspace_id,
+      });
+      expect(suggestions).toMatchObject({
+        type: 'suggestions',
+        groups: [{
+          id: 'commands',
+        }, {
+          id: 'skills',
+          items: [{
+            name: 'review',
+            display: {
+              primary: 'review',
+              secondary: 'qa:review - Review code changes',
+              badge: 'Project',
+            },
+            completion: {
+              replacement_input: '/skill qa:review ',
+            },
+          }],
+        }],
+      });
+      expect(JSON.stringify(suggestions)).not.toContain(workspace.workspace.workspace_id);
 
       const run = await runtime.agentRunService.startRun({
         request_id: 'request-skill-1',

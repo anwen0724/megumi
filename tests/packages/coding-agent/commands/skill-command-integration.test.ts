@@ -41,7 +41,7 @@ describe('skill command integration', () => {
     });
   });
 
-  it('does not execute natural skill command names', async () => {
+  it('does not execute natural skill command names without suggestion selection', async () => {
     const service = createCommandService({
       skills: [{
         skillId: 'superpowers:brainstorming',
@@ -52,13 +52,13 @@ describe('skill command integration', () => {
       }],
     });
 
-    await expect(service.handleCommandInput({ raw_input: '/brainstorming' })).resolves.toEqual({
+    await expect(service.handleCommandInput({ raw_input: '/brainstorming topic' })).resolves.toEqual({
       type: 'not_command',
-      raw_input: '/brainstorming',
+      raw_input: '/brainstorming topic',
     });
   });
 
-  it('suggests skill display names but completes stable /skill input', () => {
+  it('suggests skill display names but completes stable /skill input', async () => {
     const service = createCommandService({
       skills: [{
         skillId: 'superpowers:brainstorming',
@@ -69,7 +69,9 @@ describe('skill command integration', () => {
       }],
     });
 
-    expect(service.getCommandSuggestions({ draft_input: '/br' })).toMatchObject({
+    const suggestions = await service.getCommandSuggestions({ draft_input: '/br' });
+
+    expect(suggestions).toMatchObject({
       type: 'suggestions',
       groups: [{
         id: 'commands',
@@ -89,7 +91,7 @@ describe('skill command integration', () => {
     });
   });
 
-  it('shows same-priority same display names as distinct skill suggestions', () => {
+  it('shows same-priority same display names as distinct skill suggestions', async () => {
     const service = createCommandService({
       skills: [{
         skillId: 'packages-a:test',
@@ -106,7 +108,7 @@ describe('skill command integration', () => {
       }],
     });
 
-    const suggestions = service.getCommandSuggestions({ draft_input: '/te' });
+    const suggestions = await service.getCommandSuggestions({ draft_input: '/te' });
     expect(suggestions.type === 'suggestions' ? suggestions.groups[1]?.items.map((item) => ({
       name: item.name,
       secondary: item.display?.secondary,

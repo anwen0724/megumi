@@ -18,7 +18,8 @@ import type {
   SkillService,
   SkillUsageRecord,
 } from '@megumi/coding-agent/skills';
-import { SkillRepository, SkillServiceImpl } from '@megumi/coding-agent/skills';
+import { SkillRepository } from '@megumi/coding-agent/skills';
+import { SkillServiceImpl } from '@megumi/coding-agent/skills/service/skill-service-impl';
 
 describe('Skill module public contracts', () => {
   it('exports Skill model, entities, DTOs, and service method results', async () => {
@@ -256,6 +257,28 @@ describe('SkillServiceImpl', () => {
     })).resolves.toMatchObject({
       status: 'not_allowed',
       skillId: 'checks:test',
+    });
+  });
+
+  it('rejects oversized text resources before reading them into service responses', async () => {
+    writeSkill(tempRoot, 'large-reference', {
+      name: 'checks:large',
+      description: 'Large reference',
+      content: 'Use this skill for large reference checks.',
+      files: {
+        'references/large.md': 'x'.repeat(300_000),
+      },
+    });
+    const service = createService(repository, tempRoot);
+
+    await expect(service.readSkillResource({
+      skillId: 'checks:large',
+      resourcePath: 'references/large.md',
+      workspaceId: 'workspace:1',
+    })).resolves.toMatchObject({
+      status: 'not_allowed',
+      skillId: 'checks:large',
+      resourcePath: 'references/large.md',
     });
   });
 });
