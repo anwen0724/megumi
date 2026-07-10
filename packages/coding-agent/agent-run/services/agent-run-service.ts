@@ -5,7 +5,7 @@
 import type { CommandExecutionContext, CommandExecutionResult } from '../../commands';
 import type { InputService, ParsedUserInput } from '../../input';
 import type { PermissionMode, PermissionService } from '../../permissions';
-import type { SessionService } from '../../session';
+import type { Session, SessionService } from '../../session';
 import type { SettingsService } from '../../settings';
 import type { ActivatedSkillContent, SkillService } from '../../skills';
 import type { ToolExecutionService, ToolRegistryService } from '../../tools';
@@ -127,7 +127,6 @@ export type CreateAgentRunServiceOptions = {
 
 type AgentRunServiceIds = {
   run_id(): string;
-  session_id(): string;
   user_message_id(): string;
   assistant_message_id(): string;
   approval_request_id(): string;
@@ -162,7 +161,6 @@ class DefaultAgentRunService implements AgentRunService {
     this.toolSetBuilder = createRunToolSetBuilder({ tool_registry_service: options.tool_registry_service });
     this.ids = {
       run_id: options.ids?.run_id ?? (() => `run:${crypto.randomUUID()}`),
-      session_id: options.ids?.session_id ?? (() => `session:${crypto.randomUUID()}`),
       user_message_id: options.ids?.user_message_id ?? (() => `message:${crypto.randomUUID()}`),
       assistant_message_id: options.ids?.assistant_message_id ?? (() => `message:${crypto.randomUUID()}`),
       approval_request_id: options.ids?.approval_request_id ?? (() => `approval:${crypto.randomUUID()}`),
@@ -186,18 +184,23 @@ class DefaultAgentRunService implements AgentRunService {
       });
     }
 
-    const session = this.resolveSession(request);
-    if (session.status === 'failed') {
-      return { ...failedStart(request, session.failure), session_id: session.session_id };
+    const resolvedSession = this.resolveSession(request);
+    if (resolvedSession.status === 'failed') {
+      return {
+        ...failedStart(request, resolvedSession.failure),
+        ...(resolvedSession.session ? { session: resolvedSession.session } : {}),
+      };
     }
+    const session = resolvedSession.session;
+    const sessionId = session.session_id;
 
     const command = input.parsed_user_input.type === 'command'
       ? await this.options.command_service.handleCommandInput({
           raw_input: input.parsed_user_input.text,
-          execution_context: this.resolveCommandExecutionContext(request, session.session_id),
+          execution_context: this.resolveCommandExecutionContext(request, sessionId),
         })
       : undefined;
-    const commandRoute = this.routeCommandResult(request, session.session_id, command);
+    const commandRoute = this.routeCommandResult(request, session, command);
     if (commandRoute.type !== 'continue') {
       return commandRoute.result;
     }
@@ -207,7 +210,7 @@ class DefaultAgentRunService implements AgentRunService {
     const parsedInput = commandRoute.parsed_user_input ?? input.parsed_user_input;
     const userMessage = this.options.session_service.saveUserMessage({
       message_id: userMessageId,
-      session_id: session.session_id,
+      session_id: sessionId,
       run_id: runId,
       content_text: textForRun(parsedInput, commandRoute.command_result),
       attachments: parsedInput.attachments,
@@ -219,7 +222,7 @@ class DefaultAgentRunService implements AgentRunService {
           code: 'session_failed',
           message: userMessage.failure.message,
         }),
-        session_id: session.session_id,
+        session,
       };
     }
 
@@ -233,21 +236,21 @@ class DefaultAgentRunService implements AgentRunService {
           code: 'model_call_failed',
           message: modelConfig.failure.message,
         }),
-        session_id: session.session_id,
+        session,
       };
     }
     const workspaceRoot = this.resolveWorkspaceRoot(request.workspace_id);
     if (workspaceRoot.status === 'failed') {
       return {
         ...failedStart(request, workspaceRoot.failure),
-        session_id: session.session_id,
+        session,
       };
     }
 
     let run = this.repository.createRun({
       run_id: runId,
       workspace_id: request.workspace_id,
-      session_id: session.session_id,
+      session_id: sessionId,
       model_selection: request.model_selection,
       trigger: triggerForRun(userMessageId, commandRoute.command_result),
       status: 'queued',
@@ -262,7 +265,7 @@ class DefaultAgentRunService implements AgentRunService {
     const eventSink = this.createEventSink(queue, run);
     const commandSkillRuntimeSources = await this.resolveCommandSkillRuntimeSources({
       command_result: commandRoute.command_result,
-      session_id: session.session_id,
+      session_id: sessionId,
       workspace_id: request.workspace_id,
       run_id: run.run_id,
     });
@@ -284,7 +287,7 @@ class DefaultAgentRunService implements AgentRunService {
       return {
         status: 'failed',
         request_id: request.request_id,
-        session_id: session.session_id,
+        session,
         failure: commandSkillRuntimeSources.failure,
         events: queue.snapshot(),
       };
@@ -339,7 +342,7 @@ class DefaultAgentRunService implements AgentRunService {
       status: 'started',
       request_id: request.request_id,
       run,
-      session_id: session.session_id,
+      session,
       user_message_id: userMessageId,
       events: queue.events(),
     };
@@ -1063,14 +1066,13 @@ class DefaultAgentRunService implements AgentRunService {
   }
 
   private resolveSession(request: StartRunRequest):
-    | { status: 'ok'; session_id: string }
-    | { status: 'failed'; session_id?: string; failure: AgentRunFailure } {
+    | { status: 'ok'; session: Session }
+    | { status: 'failed'; session?: Session; failure: AgentRunFailure } {
     if (request.session.type === 'existing') {
       const existing = this.options.session_service.getSession({ session_id: request.session.session_id });
-      if (existing.status === 'found') return { status: 'ok', session_id: existing.session.session_id };
+      if (existing.status === 'found') return { status: 'ok', session: existing.session };
       return {
         status: 'failed',
-        session_id: request.session.session_id,
         failure: {
           code: 'session_failed',
           message: existing.status === 'failed' ? existing.failure.message : 'Session was not found.',
@@ -1078,17 +1080,13 @@ class DefaultAgentRunService implements AgentRunService {
       };
     }
 
-    const sessionId = this.ids.session_id();
     const created = this.options.session_service.createSession({
-      session_id: sessionId,
       workspace_id: request.workspace_id,
-      title: request.session.title ?? 'New session',
-      created_at: this.clock.now(),
+      ...(request.session.title ? { title: request.session.title } : {}),
     });
-    if (created.status === 'created') return { status: 'ok', session_id: created.session.session_id };
+    if (created.status === 'created') return { status: 'ok', session: created.session };
     return {
       status: 'failed',
-      session_id: sessionId,
       failure: { code: 'session_failed', message: created.failure.message },
     };
   }
@@ -1205,7 +1203,7 @@ class DefaultAgentRunService implements AgentRunService {
 
   private routeCommandResult(
     request: StartRunRequest,
-    sessionId: string,
+    session: Session,
     command: CommandExecutionResult | undefined,
   ):
     | { type: 'continue'; command_result?: CommandExecutionResult; parsed_user_input?: ParsedUserInput }
@@ -1219,7 +1217,7 @@ class DefaultAgentRunService implements AgentRunService {
         result: {
           status: 'host_interaction_required',
           request_id: request.request_id,
-          session_id: sessionId,
+          session,
           interaction: command.request,
         },
       };
@@ -1230,7 +1228,7 @@ class DefaultAgentRunService implements AgentRunService {
         result: {
           status: 'completed',
           request_id: request.request_id,
-          session_id: sessionId,
+          session,
           ...(command.message ? { message: command.message } : {}),
         },
       };
@@ -1241,7 +1239,7 @@ class DefaultAgentRunService implements AgentRunService {
         result: {
           status: 'failed',
           request_id: request.request_id,
-          session_id: sessionId,
+          session,
           failure: {
             code: 'command_failed',
             message: command.message,

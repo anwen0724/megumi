@@ -7,6 +7,7 @@ import type { RawUserInput } from '../../input';
 import type { ApprovalDecision, ApprovalScope, PermissionMode } from '../../permissions';
 import type { ProviderRuntimeConfig } from '../../settings';
 import type { RuntimeEvent } from '../../events';
+import type { Session } from '../../session';
 
 export type AgentRunModelSelection = {
   provider_id: string;
@@ -133,27 +134,28 @@ export type StartRunResult =
       status: 'started';
       request_id: string;
       run: AgentRun;
-      session_id: string;
+      session: Session;
       user_message_id: string;
       events: AsyncIterable<RuntimeEvent>;
     }
   | {
       status: 'host_interaction_required';
       request_id: string;
-      session_id?: string;
+      session?: Session;
       interaction: HostInteractionRequest;
+      events?: RuntimeEvent[];
     }
   | {
       status: 'completed';
       request_id: string;
-      session_id?: string;
+      session?: Session;
       message?: string;
       events?: RuntimeEvent[];
     }
   | {
       status: 'failed';
       request_id: string;
-      session_id?: string;
+      session?: Session;
       failure: AgentRunFailure;
       events?: RuntimeEvent[];
     };

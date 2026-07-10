@@ -202,7 +202,7 @@ export function createChatHost(options: {
 }): ChatHost {
   return {
     async createSession(request) {
-      const result = options.sessionService.createSessionFromIntent({
+      const result = options.sessionService.createSession({
         workspace_id: request.projectId,
         ...(request.title ? { title: request.title } : {}),
       });
@@ -250,15 +250,18 @@ export function createChatHost(options: {
         workspace_id: request.projectId,
         session: request.sessionId
           ? { type: 'existing', session_id: request.sessionId }
-          : { type: 'new', title: request.sessionTitle ?? 'New session' },
+          : {
+              type: 'new',
+              ...(request.sessionTitle ? { title: request.sessionTitle } : {}),
+            },
         user_input: {
           text: request.text,
           ...(request.attachments ? { attachments: request.attachments } : {}),
         },
         model_selection: request.modelSelection,
-        permission_mode: request.permissionMode ?? 'default',
+        ...(request.permissionMode ? { permission_mode: request.permissionMode } : {}),
       });
-      const mapped = mapStartRunResult(result, options.sessionService, request);
+      const mapped = mapStartRunResult(result);
       const { events, ...payload } = mapped;
       return {
         payload: payload as ChatSendUserInputUiPayload,
@@ -389,13 +392,11 @@ function toChatContextUsageUiDto(usage: SessionContextUsage) {
 
 function mapStartRunResult(
   result: StartRunResult,
-  sessionService: SessionService,
-  input: ChatSendUserInputUiRequest,
 ): ChatSendUserInputUiPayload & { events?: AsyncIterable<import('../../coding-agent/events').RuntimeEvent> } {
   if (result.status === 'started') {
     return {
       type: 'agent_run',
-      session: getSessionOrFallback(sessionService, result.session_id, input),
+      session: toChatSessionUiDto(result.session),
       requestId: result.request_id,
       userMessageId: result.user_message_id,
       run: toChatRunUiDto(result.run),
@@ -406,7 +407,7 @@ function mapStartRunResult(
   if (result.status === 'host_interaction_required') {
     return {
       type: 'host_interaction_request',
-      ...(result.session_id ? { session: getSessionOrFallback(sessionService, result.session_id, input) } : {}),
+      ...(result.session ? { session: toChatSessionUiDto(result.session) } : {}),
       requestId: result.request_id,
       request: result.interaction,
     };
@@ -415,7 +416,7 @@ function mapStartRunResult(
   if (result.status === 'completed') {
     return {
       type: 'completed',
-      ...(result.session_id ? { session: getSessionOrFallback(sessionService, result.session_id, input) } : {}),
+      ...(result.session ? { session: toChatSessionUiDto(result.session) } : {}),
       requestId: result.request_id,
       ...(result.message ? { message: result.message } : {}),
     };
@@ -423,29 +424,10 @@ function mapStartRunResult(
 
   return {
     type: 'error',
-    ...(result.session_id ? { session: getSessionOrFallback(sessionService, result.session_id, input) } : {}),
+    ...(result.session ? { session: toChatSessionUiDto(result.session) } : {}),
     requestId: result.request_id,
     message: result.failure.message,
   };
-}
-
-function getSessionOrFallback(
-  sessionService: SessionService,
-  sessionId: string,
-  input: ChatSendUserInputUiRequest,
-) {
-  const result = sessionService.getSession({ session_id: sessionId });
-  if (result.status === 'found') {
-    return toChatSessionUiDto(result.session);
-  }
-  return toChatSessionUiDto({
-    session_id: sessionId,
-    workspace_id: input.projectId,
-    title: input.sessionTitle ?? 'New session',
-    status: 'active',
-    created_at: input.createdAt ?? new Date().toISOString(),
-    updated_at: input.createdAt ?? new Date().toISOString(),
-  });
 }
 
 async function* asyncIterableFrom<T>(items: Iterable<T>): AsyncIterable<T> {

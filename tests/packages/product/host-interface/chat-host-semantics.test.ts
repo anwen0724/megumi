@@ -3,10 +3,11 @@ import { createChatHost, createSessionBranchHost } from '@megumi/product/host-in
 import type { AgentRun } from '@megumi/coding-agent/agent-run';
 import type { RuntimeEvent } from '@megumi/coding-agent/events';
 import type { TimelineMessage } from '@megumi/coding-agent/projections/timeline';
+import type { SessionService } from '@megumi/coding-agent/session';
 
 describe('ChatHost product semantics', () => {
-  it('delegates explicit session creation intent to the Session owner', async () => {
-    const createSessionFromIntent = vi.fn(() => ({
+  it('delegates explicit session creation request to the Session owner', async () => {
+    const createSession = vi.fn(() => ({
       status: 'created' as const,
       session: {
         session_id: 'session:owner-1',
@@ -21,7 +22,7 @@ describe('ChatHost product semantics', () => {
       agentRunService: { startRun: vi.fn(), cancelRun: vi.fn() } as never,
       commandService: { getCommandSuggestions: vi.fn() } as never,
       sessionService: {
-        createSessionFromIntent,
+        createSession,
         getSession: vi.fn(() => ({ status: 'not_found' })),
       } as never,
       branchService: createSessionBranchHost(),
@@ -40,13 +41,13 @@ describe('ChatHost product semantics', () => {
         title: 'Planning',
       },
     });
-    expect(createSessionFromIntent).toHaveBeenCalledWith({
+    expect(createSession).toHaveBeenCalledWith({
       workspace_id: 'workspace:1',
       title: 'Planning',
     });
   });
 
-  it('owns request, title, and permission defaults', async () => {
+  it('does not assign session title or permission defaults for send requests', async () => {
     const startRun = vi.fn(async () => ({
       status: 'completed',
       request_id: 'request:generated',
@@ -63,10 +64,56 @@ describe('ChatHost product semantics', () => {
     expect(startRun).toHaveBeenCalledWith(expect.objectContaining({
       request_id: expect.stringMatching(/^request:/),
       workspace_id: 'workspace:1',
-      session: { type: 'new', title: 'New session' },
-      permission_mode: 'default',
+      session: { type: 'new' },
     }));
+    const startRunCalls = startRun.mock.calls as unknown as Array<[Record<string, unknown>]>;
+    const startRunRequest = startRunCalls[0]?.[0];
+    expect(startRunRequest).not.toHaveProperty('permission_mode');
     expect(result.payload).toMatchObject({ type: 'completed', message: 'done' });
+  });
+
+  it('uses the Agent Run returned session instead of creating a fallback session', async () => {
+    const startRun = vi.fn(async () => ({
+      status: 'started' as const,
+      request_id: 'request:1',
+      session: {
+        session_id: 'session:owner',
+        workspace_id: 'workspace:1',
+        title: 'Owner Session',
+        status: 'active' as const,
+        created_at: '2026-07-10T00:00:00.000Z',
+        updated_at: '2026-07-10T00:00:00.000Z',
+      },
+      user_message_id: 'message:1',
+      run: {
+        run_id: 'run:1',
+        workspace_id: 'workspace:1',
+        session_id: 'session:owner',
+        model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
+        trigger: { type: 'user_input' as const, user_message_id: 'message:1' },
+        status: 'running' as const,
+        created_at: '2026-07-10T00:00:01.000Z',
+      },
+      events: (async function* () {})(),
+    }));
+    const getSession = vi.fn(() => ({ status: 'not_found' as const }));
+    const host = createHost(startRun, vi.fn(), { getSession });
+
+    const result = await host.sendUserInput({
+      requestId: 'request:1',
+      projectId: 'workspace:1',
+      text: 'hello',
+      modelSelection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
+    });
+
+    expect(result.payload).toMatchObject({
+      type: 'agent_run',
+      session: {
+        id: 'session:owner',
+        title: 'Owner Session',
+      },
+    });
+    expect(getSession).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -245,12 +292,15 @@ describe('ChatHost product semantics', () => {
 function createHost(
   startRun: ReturnType<typeof vi.fn>,
   getCommandSuggestions: ReturnType<typeof vi.fn> = vi.fn(),
+  sessionOverrides: Partial<SessionService> = {},
 ) {
   return createChatHost({
     agentRunService: { startRun, cancelRun: vi.fn() } as never,
     commandService: { getCommandSuggestions } as never,
     sessionService: {
+      createSession: vi.fn(),
       getSession: vi.fn(() => ({ status: 'not_found' })),
+      ...sessionOverrides,
     } as never,
     branchService: createSessionBranchHost(),
     workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },

@@ -9,7 +9,6 @@ import type {
   ArchiveSessionRequest,
   ArchiveSessionResult,
   CreateSessionRequest,
-  CreateSessionFromIntentRequest,
   CreateSessionResult,
   GetActiveHistoryRequest,
   GetActiveHistoryResult,
@@ -56,28 +55,20 @@ class DefaultSessionService implements SessionService {
 
   createSession(request: CreateSessionRequest): CreateSessionResult {
     try {
+      const createdAt = this.now();
       const session = this.options.repository.insertSession({
-        session_id: request.session_id,
+        session_id: this.sessionId(),
         workspace_id: request.workspace_id,
-        title: request.title,
+        title: request.title?.trim() || 'New session',
         status: 'active',
         active_entry_id: undefined,
-        created_at: request.created_at,
-        updated_at: request.created_at,
+        created_at: createdAt,
+        updated_at: createdAt,
       });
       return { status: 'created', session };
     } catch (error) {
       return failed(error);
     }
-  }
-
-  createSessionFromIntent(request: CreateSessionFromIntentRequest): CreateSessionResult {
-    return this.createSession({
-      session_id: this.sessionId(),
-      workspace_id: request.workspace_id,
-      title: request.title?.trim() || 'New session',
-      created_at: this.now(),
-    });
   }
 
   getSession(request: GetSessionRequest): GetSessionResult {

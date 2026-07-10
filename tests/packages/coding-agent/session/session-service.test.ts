@@ -30,7 +30,14 @@ function createService() {
     database,
     repository,
     workspaceId,
-    service: createSessionService({ repository }),
+    service: createSessionService({
+      repository,
+      ids: {
+        sessionId: () => 'S1',
+        entryId: ({ kind, source_id }) => `${kind}:${source_id}`,
+      },
+      now: () => '2026-07-04T00:00:00.000Z',
+    }),
   };
 }
 
@@ -39,10 +46,8 @@ describe('SessionService', () => {
     const { service, workspaceId } = createService();
 
     expect(service.createSession({
-      session_id: 'S1',
       workspace_id: workspaceId,
       title: 'Session',
-      created_at: '2026-07-04T00:00:00.000Z',
     })).toMatchObject({
       status: 'created',
       session: {
@@ -60,7 +65,7 @@ describe('SessionService', () => {
     })).toMatchObject({ status: 'archived', session: { status: 'archived' } });
   });
 
-  it('creates sessions from host intent with owner-owned id, time, and default title', () => {
+  it('creates sessions with owner-owned id, time, and default title', () => {
     const database = createDatabase(':memory:');
     applyCodingAgentDatabaseMigrations(database);
     const workspaceId = seedWorkspace(database);
@@ -74,7 +79,7 @@ describe('SessionService', () => {
       now: () => '2026-07-10T00:00:00.000Z',
     });
 
-    const result = service.createSessionFromIntent({ workspace_id: workspaceId });
+    const result = service.createSession({ workspace_id: workspaceId });
 
     expect(result).toEqual({
       status: 'created',
@@ -91,10 +96,8 @@ describe('SessionService', () => {
   it('saves user message with attachments and moves active entry', async () => {
     const { service, workspaceId } = createService();
     await service.createSession({
-      session_id: 'S1',
       workspace_id: workspaceId,
       title: 'Session',
-      created_at: '2026-07-04T00:00:00.000Z',
     });
 
     const result = await service.saveUserMessage({
@@ -125,10 +128,8 @@ describe('SessionService', () => {
   it('saves assistant message without attachments and moves active entry', async () => {
     const { service, workspaceId } = createService();
     await service.createSession({
-      session_id: 'S1',
       workspace_id: workspaceId,
       title: 'Session',
-      created_at: '2026-07-04T00:00:00.000Z',
     });
     await service.saveUserMessage({
       message_id: 'M1',
@@ -152,7 +153,7 @@ describe('SessionService', () => {
 
   it('lists all messages or active path messages only', async () => {
     const { service, workspaceId } = createService();
-    await service.createSession({ session_id: 'S1', workspace_id: workspaceId, title: 'Session', created_at: '2026-07-04T00:00:00.000Z' });
+    await service.createSession({ workspace_id: workspaceId, title: 'Session' });
     const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', content_text: 'm1', created_at: '2026-07-04T00:01:00.000Z' });
     await service.saveAssistantMessage({ message_id: 'M2', session_id: 'S1', run_id: 'R1', content_text: 'm2', completed_at: '2026-07-04T00:02:00.000Z' });
     await service.switchActiveEntry({ session_id: 'S1', active_entry_id: m1.status === 'saved' ? m1.entry.entry_id : undefined, updated_at: '2026-07-04T00:03:00.000Z' });
@@ -177,7 +178,7 @@ describe('SessionService', () => {
 
   it('returns active history with compaction summaries and messages', async () => {
     const { service, workspaceId } = createService();
-    await service.createSession({ session_id: 'S1', workspace_id: workspaceId, title: 'Session', created_at: '2026-07-04T00:00:00.000Z' });
+    await service.createSession({ workspace_id: workspaceId, title: 'Session' });
     const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', content_text: 'm1', created_at: '2026-07-04T00:01:00.000Z' });
     const firstEntryId = m1.status === 'saved' ? m1.entry.entry_id : 'missing';
     await service.saveUserMessage({ message_id: 'M2', session_id: 'S1', content_text: 'm2', created_at: '2026-07-04T00:02:00.000Z' });
@@ -201,10 +202,8 @@ describe('SessionService', () => {
   it('returns empty active path for a new session', async () => {
     const { service, workspaceId } = createService();
     await service.createSession({
-      session_id: 'S1',
       workspace_id: workspaceId,
       title: 'Session',
-      created_at: '2026-07-04T00:00:00.000Z',
     });
 
     expect(service.getActivePath({ session_id: 'S1' })).toEqual({
@@ -233,10 +232,8 @@ describe('SessionService', () => {
   it('fails when appending an invalid message entry shape through service', async () => {
     const { service, workspaceId } = createService();
     await service.createSession({
-      session_id: 'S1',
       workspace_id: workspaceId,
       title: 'Session',
-      created_at: '2026-07-04T00:00:00.000Z',
     });
 
     expect(service.appendSessionEntry({

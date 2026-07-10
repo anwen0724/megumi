@@ -90,13 +90,6 @@ export type SessionHistoryItem =
     };
 
 export type CreateSessionRequest = {
-  session_id: string;
-  workspace_id: string;
-  title: string;
-  created_at: string;
-};
-
-export type CreateSessionFromIntentRequest = {
   workspace_id: string;
   title?: string;
 };
@@ -222,7 +215,6 @@ export type SaveCompactionSummaryResult =
 
 export type SessionService = {
   createSession(request: CreateSessionRequest): CreateSessionResult;
-  createSessionFromIntent(request: CreateSessionFromIntentRequest): CreateSessionResult;
   getSession(request: GetSessionRequest): GetSessionResult;
   listSessions(request: ListSessionsRequest): ListSessionsResult;
   archiveSession(request: ArchiveSessionRequest): ArchiveSessionResult;

@@ -22,13 +22,13 @@ describe('session contracts v2', () => {
       updated_at: '2026-07-04T00:00:00.000Z',
     };
     const request: CreateSessionRequest = {
-      session_id: session.session_id,
       workspace_id: session.workspace_id,
       title: session.title,
-      created_at: session.created_at,
     };
 
-    expect(request.session_id).toBe('session:1');
+    expect(request.workspace_id).toBe('workspace:1');
+    expect('session_id' in request).toBe(false);
+    expect('created_at' in request).toBe(false);
     expect('metadata_json' in session).toBe(false);
   });
 

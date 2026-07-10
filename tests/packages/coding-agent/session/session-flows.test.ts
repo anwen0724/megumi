@@ -29,14 +29,21 @@ function createHarness() {
   const database = createTestDatabase();
   const workspaceId = seedWorkspace(database);
   const repository = new SessionRepository(database);
-  const service = createSessionService({ repository });
+  const service = createSessionService({
+    repository,
+    ids: {
+      sessionId: () => 'S1',
+      entryId: ({ kind, source_id }) => `${kind}:${source_id}`,
+    },
+    now: () => '2026-07-04T00:00:00.000Z',
+  });
   return { repository, service, workspaceId };
 }
 
 describe('session service flows', () => {
   it('creates a branch by switching active entry and saving a new message', async () => {
     const { service, workspaceId } = createHarness();
-    service.createSession({ session_id: 'S1', workspace_id: workspaceId, title: 'Session', created_at: '2026-07-04T00:00:00.000Z' });
+    service.createSession({ workspace_id: workspaceId, title: 'Session' });
     const m1 = service.saveUserMessage({ message_id: 'M1', session_id: 'S1', content_text: 'm1', created_at: '2026-07-04T00:01:00.000Z' });
     service.saveAssistantMessage({ message_id: 'M2', session_id: 'S1', run_id: 'R1', content_text: 'm2', completed_at: '2026-07-04T00:02:00.000Z' });
     service.saveUserMessage({ message_id: 'M3', session_id: 'S1', content_text: 'm3', created_at: '2026-07-04T00:03:00.000Z' });
@@ -55,7 +62,7 @@ describe('session service flows', () => {
 
   it('uses compaction summary in active history and skips it in active message listing', async () => {
     const { service, workspaceId } = createHarness();
-    service.createSession({ session_id: 'S1', workspace_id: workspaceId, title: 'Session', created_at: '2026-07-04T00:00:00.000Z' });
+    service.createSession({ workspace_id: workspaceId, title: 'Session' });
     const m1 = service.saveUserMessage({ message_id: 'M1', session_id: 'S1', content_text: 'm1', created_at: '2026-07-04T00:01:00.000Z' });
     const m2 = service.saveAssistantMessage({ message_id: 'M2', session_id: 'S1', run_id: 'R1', content_text: 'm2', completed_at: '2026-07-04T00:02:00.000Z' });
     const firstKeptEntryId = m2.status === 'saved' ? m2.entry.entry_id : undefined;

@@ -96,15 +96,14 @@ describe('composeCodingAgentRuntime trace wiring', () => {
     expect(workspace.status).toBe('opened');
     if (workspace.status !== 'opened') return;
     const session = firstRuntime.sessionService.createSession({
-      session_id: 'session-1',
       workspace_id: workspace.workspace.workspace_id,
       title: 'Interrupted session',
-      created_at: '2026-07-08T00:00:00.000Z',
     });
     expect(session.status).toBe('created');
+    const sessionId = session.status === 'created' ? session.session.session_id : 'missing';
     firstRuntime.sessionService.saveUserMessage({
       message_id: 'message-1',
-      session_id: 'session-1',
+      session_id: sessionId,
       run_id: 'run-waiting',
       content_text: 'write hello world',
       created_at: '2026-07-08T00:00:00.000Z',
@@ -116,7 +115,7 @@ describe('composeCodingAgentRuntime trace wiring', () => {
     repository.createRun({
       run_id: 'run-waiting',
       workspace_id: workspace.workspace.workspace_id,
-      session_id: 'session-1',
+      session_id: sessionId,
       model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
       trigger: { type: 'user_input', user_message_id: 'message-1' },
       status: 'waiting_for_approval',
@@ -146,7 +145,7 @@ describe('composeCodingAgentRuntime trace wiring', () => {
     });
 
     try {
-      expect(runtime.agentRunQueries.listRunsBySession('session-1')[0]?.status).toBe('cancelled');
+      expect(runtime.agentRunQueries.listRunsBySession(sessionId)[0]?.status).toBe('cancelled');
       expect(runtime.agentRunQueries.listRuntimeEventsByRun('run-waiting').map((event) => event.eventType)).toEqual([
         'approval.resolved',
         'run.cancelled',
