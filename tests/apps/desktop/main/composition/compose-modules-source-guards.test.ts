@@ -13,6 +13,9 @@ describe('Desktop Main shell composition', () => {
   it('does not keep product composition modules under desktop main', () => {
     expect(existsSync(join(root, 'apps/desktop/src/main/composition'))).toBe(false);
     expect(existsSync(join(root, 'apps/desktop/src/main/persistence'))).toBe(false);
+    expect(existsSync(join(root, 'apps/desktop/src/main/services'))).toBe(false);
+    expect(existsSync(join(root, 'apps/desktop/src/main/shell'))).toBe(false);
+    expect(existsSync(join(root, 'tests/apps/desktop/main/services'))).toBe(false);
   });
 
   it('connects the Electron UI shell through Product Composition', () => {
@@ -20,7 +23,9 @@ describe('Desktop Main shell composition', () => {
 
     expect(desktopComposition).toContain('composeProduct');
     expect(desktopComposition).toContain('home: createElectronMegumiHomeSyncOptions()');
-    expect(desktopComposition).toContain('workspace: { host: productHost, workspaceFilesService }');
+    expect(desktopComposition).toContain('workspace: { host: productHost }');
+    expect(desktopComposition).toContain('directoryPicker: electronDirectoryPickerAdapter');
+    expect(desktopComposition).toContain('fileOpen: electronFileOpenAdapter');
     expect(desktopComposition).toContain('chat: { host: productHost }');
     expect(desktopComposition).toContain('settings: { host: productHost }');
     expect(desktopComposition).toContain('approval: { host: productHost }');
@@ -38,5 +43,4 @@ describe('Desktop Main shell composition', () => {
     expect(desktopComposition).not.toContain('new WorkspaceRestoreService');
     expect(desktopComposition).not.toContain('migrateDatabase');
   });
-
 });

@@ -2,13 +2,13 @@
 import { BrowserWindow } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 
-export interface DesktopWindowControlHost {
+export interface ElectronWindowControlAdapter {
   minimize(event: IpcMainInvokeEvent): void;
   toggleMaximize(event: IpcMainInvokeEvent): void;
   close(event: IpcMainInvokeEvent): void;
 }
 
-export const electronWindowControlHost: DesktopWindowControlHost = {
+export const electronWindowControlAdapter: ElectronWindowControlAdapter = {
   minimize(event) {
     getSenderWindow(event)?.minimize();
   },

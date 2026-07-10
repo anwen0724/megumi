@@ -1,7 +1,7 @@
 // Composes the Electron UI shell and connects it to the Product Host Interface.
-import { createElectronMegumiHomeSyncOptions } from '../services/workspace/megumi-home.service';
+import { createElectronMegumiHomeSyncOptions } from '../adapters/electron-home-adapter';
 import { composeProduct } from '@megumi/product/composition';
-import { electronDialogHost } from '../shell/electron-dialog-host';
+import { electronDirectoryPickerAdapter } from '../adapters/electron-directory-picker-adapter';
 import { electronFileOpenAdapter } from '../adapters/electron-file-open-adapter';
 import { electronRuntimeLogWriterAdapter } from '../adapters/electron-runtime-log-writer-adapter';
 import { getElectronProductEnvironment } from '../adapters/electron-product-environment-adapter';
@@ -11,7 +11,7 @@ export function composeDesktopMain() {
     home: createElectronMegumiHomeSyncOptions(),
     migrationEnvironment: getElectronProductEnvironment(),
     logWriter: electronRuntimeLogWriterAdapter,
-    directoryPicker: { chooseDirectory: () => electronDialogHost.chooseDirectory() },
+    directoryPicker: electronDirectoryPickerAdapter,
     fileOpen: electronFileOpenAdapter,
   });
   const megumiHomePaths = product.homePaths;

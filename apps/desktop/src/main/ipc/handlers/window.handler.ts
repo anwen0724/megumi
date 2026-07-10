@@ -1,18 +1,18 @@
 ﻿import { IPC_CHANNELS } from '../channels';
-import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
+import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import {
-  electronWindowControlHost,
-  type DesktopWindowControlHost,
-} from '../../shell/electron-window-control-host';
+  electronWindowControlAdapter,
+  type ElectronWindowControlAdapter,
+} from '../../adapters/electron-window-control-adapter';
 
 export interface RegisterWindowHandlersOptions {
   ipcMain?: DesktopIpcMain;
-  windowControls?: DesktopWindowControlHost;
+  windowControls?: ElectronWindowControlAdapter;
 }
 
 export function registerWindowHandlers(options: RegisterWindowHandlersOptions = {}): void {
   const ipcMain = options.ipcMain ?? electronIpcMain;
-  const windowControls = options.windowControls ?? electronWindowControlHost;
+  const windowControls = options.windowControls ?? electronWindowControlAdapter;
 
   ipcMain.handle(IPC_CHANNELS.window.minimize, (event) => {
     windowControls.minimize(event);

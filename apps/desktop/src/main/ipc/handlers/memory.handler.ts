@@ -18,7 +18,7 @@
 import { createIpcRequestHandler } from '../create-request-handler';
 import type { MemoryService } from '@megumi/coding-agent/memory';
 import type { RuntimeLogger } from '@megumi/product/logging';
-import type { DesktopIpcMain } from '../../shell/electron-ipc-main-host';
+import type { DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { IPC_CHANNELS } from '../channels';
 import type { RuntimeIpcError } from '../errors';
 

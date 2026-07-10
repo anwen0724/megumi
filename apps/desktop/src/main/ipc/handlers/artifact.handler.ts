@@ -27,7 +27,7 @@ import type {
   ArtifactVersionGetData,
 } from '@megumi/product/host-interface';
 import type { RuntimeLogger } from '@megumi/product/logging';
-import { electronIpcMain, type DesktopIpcMain } from '../../shell/electron-ipc-main-host';
+import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { createIpcRequestHandler } from '../create-request-handler';
 import { IPC_CHANNELS } from '../channels';
 import type { RuntimeIpcError, RuntimeIpcRequest } from '../contracts';

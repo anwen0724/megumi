@@ -186,7 +186,7 @@ vi.mock('@megumi/desktop/main/config/env', () => ({
   loadEnvFile: mocks.loadEnvFile,
 }));
 
-vi.mock('@megumi/desktop/main/services/workspace/megumi-home.service', () => ({
+vi.mock('@megumi/desktop/main/adapters/electron-home-adapter', () => ({
   createElectronMegumiHomeSyncOptions: mocks.createElectronMegumiHomeSyncOptions,
 }));
 
@@ -213,10 +213,6 @@ vi.mock('@megumi/coding-agent/workspace', () => ({
 
 vi.mock('@megumi/product/composition', () => ({
   composeProduct: mocks.composeProduct,
-}));
-
-vi.mock('@megumi/desktop/main/services/artifact/artifact-content-store.service', () => ({
-  ArtifactContentStore: mocks.ArtifactContentStore,
 }));
 
 vi.mock('@megumi/coding-agent/artifacts', () => ({
