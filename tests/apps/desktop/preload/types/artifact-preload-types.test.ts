@@ -26,7 +26,6 @@ describe('artifact preload API shape', () => {
       artifactId: 'artifact:1',
       referencedByKind: 'run',
       referencedById: 'run:next',
-      createdAt: '2026-05-16T00:00:00.000Z',
     }));
 
     expect(api.artifacts.get).toHaveBeenCalledWith(expect.objectContaining({

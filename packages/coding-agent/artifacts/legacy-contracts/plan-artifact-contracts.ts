@@ -142,9 +142,14 @@ export function toPermissionModeSnapshot(input: {
 
 
 
-export interface PlanStatusUpdatePayload {
+export interface PlanStatusUpdateIntent {
   planArtifactId: string;
   status: ImplementationPlanArtifactStatus;
   supersededByPlanId?: string;
+}
+
+export type PlanStatusUpdatePayload = PlanStatusUpdateIntent;
+
+export interface PlanStatusUpdateRepositoryPayload extends PlanStatusUpdateIntent {
   updatedAt: string;
 }

@@ -43,6 +43,7 @@ export interface ArtifactServiceOptions {
   repository: ArtifactRepositoryPort;
   contentStore?: ArtifactContentStorePort;
   ids?: ArtifactServiceIds;
+  now?: () => string;
 }
 
 const defaultIds: ArtifactServiceIds = {
@@ -71,7 +72,6 @@ export interface ArtifactServicePort {
     changeSummary?: string;
     createdByRunId: string;
     createdByStepId?: string;
-    createdAt: string;
     metadata?: JsonObject;
   }): Promise<ArtifactVersion>;
   reference(input: {
@@ -79,10 +79,9 @@ export interface ArtifactServicePort {
     artifactVersionId?: string;
     referencedByKind: 'run' | 'step' | 'artifact' | 'message';
     referencedById: string;
-    createdAt: string;
     metadata?: JsonObject;
   }): ArtifactSourceRef;
-  updateStatus(input: { artifactId: string; status: ArtifactStatus; updatedAt: string }): Artifact;
+  updateStatus(input: { artifactId: string; status: ArtifactStatus }): Artifact;
 }
 
 export class ArtifactService implements ArtifactServicePort {
@@ -182,13 +181,13 @@ export class ArtifactService implements ArtifactServicePort {
     changeSummary?: string;
     createdByRunId: string;
     createdByStepId?: string;
-    createdAt: string;
     metadata?: JsonObject;
   }): Promise<ArtifactVersion> {
     const artifact = this.options.repository.getArtifact(input.artifactId);
     if (!artifact) {
       throw new Error('Artifact was not found.');
     }
+    const createdAt = this.now();
     const artifactVersionId = this.ids.artifactVersionId();
     const contentRef = await this.writeContent({
       artifactId: input.artifactId,
@@ -207,20 +206,23 @@ export class ArtifactService implements ArtifactServicePort {
       ...(input.changeSummary ? { changeSummary: input.changeSummary } : {}),
       createdByRunId: input.createdByRunId,
       ...(input.createdByStepId ? { createdByStepId: input.createdByStepId } : {}),
-      createdAt: input.createdAt,
+      createdAt,
       ...(input.metadata ? { metadata: input.metadata } : {}),
     };
     this.options.repository.saveVersion(version);
     this.options.repository.saveArtifact({
       ...artifact,
       currentVersionId: artifactVersionId,
-      updatedAt: input.createdAt,
+      updatedAt: createdAt,
     });
     return version;
   }
 
-  updateStatus(input: { artifactId: string; status: ArtifactStatus; updatedAt: string }): Artifact {
-    const artifact = this.options.repository.updateArtifactStatus(input);
+  updateStatus(input: { artifactId: string; status: ArtifactStatus }): Artifact {
+    const artifact = this.options.repository.updateArtifactStatus({
+      ...input,
+      updatedAt: this.now(),
+    });
     if (!artifact) {
       throw new Error('Artifact was not found.');
     }
@@ -232,7 +234,6 @@ export class ArtifactService implements ArtifactServicePort {
     artifactVersionId?: string;
     referencedByKind: 'run' | 'step' | 'artifact' | 'message';
     referencedById: string;
-    createdAt: string;
     metadata?: JsonObject;
   }): ArtifactSourceRef {
     const sourceRef: ArtifactSourceRef = {
@@ -242,7 +243,7 @@ export class ArtifactService implements ArtifactServicePort {
       kind: input.referencedByKind === 'artifact' ? 'artifact' : input.referencedByKind,
       refId: input.referencedById,
       ...(input.metadata ? { metadata: input.metadata } : {}),
-      createdAt: input.createdAt,
+      createdAt: this.now(),
     };
     return this.options.repository.saveSourceRef(sourceRef);
   }
@@ -257,6 +258,10 @@ export class ArtifactService implements ArtifactServicePort {
       throw new Error('Artifact content store is not configured.');
     }
     return this.options.contentStore.writeText(input);
+  }
+
+  private now(): string {
+    return this.options.now?.() ?? new Date().toISOString();
   }
 }
 

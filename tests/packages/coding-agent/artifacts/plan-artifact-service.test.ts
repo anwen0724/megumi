@@ -67,6 +67,7 @@ describe('PlanArtifactService', () => {
       repository,
       planArtifactCompatibility: compatibility,
       ids: { planArtifactId: () => 'plan:1' },
+      now: () => '2026-06-11T00:01:00.000Z',
     });
 
     service.createPlanRecordForRun({
@@ -87,11 +88,11 @@ describe('PlanArtifactService', () => {
     expect(service.updatePlanStatus({
       planArtifactId: 'plan:1',
       status: 'accepted',
-      updatedAt: '2026-06-11T00:01:00.000Z',
     })).toMatchObject({
       planArtifactId: 'plan:1',
       status: 'accepted',
       acceptedAt: '2026-06-11T00:01:00.000Z',
+      updatedAt: '2026-06-11T00:01:00.000Z',
     });
     expect(compatibility.syncImplementationPlanArtifact).toHaveBeenCalledTimes(2);
   });

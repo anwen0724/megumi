@@ -2,9 +2,27 @@
  * Implements PlanHost over the Coding Agent Plan Artifact module.
  */
 import type { PlanArtifactServicePort } from '../../coding-agent/artifacts';
+import {
+  ImplementationPlanArtifactRecordSchema,
+  ImplementationPlanArtifactStatusSchema,
+  type ImplementationPlanArtifactRecord as OwnerImplementationPlanArtifactRecord,
+} from '../../coding-agent/artifacts/legacy-contracts/plan-artifact-contracts';
+import { z } from 'zod';
 
-export type ImplementationPlanArtifactRecord = NonNullable<ReturnType<PlanArtifactServicePort['getPlanByRun']>>;
-export type PlanStatusUpdatePayload = Parameters<PlanArtifactServicePort['updatePlanStatus']>[0];
+export const PlanByRunGetDataSchema = z.object({
+  plan: ImplementationPlanArtifactRecordSchema.optional(),
+}).strict();
+export const PlanStatusUpdatePayloadSchema = z.object({
+  planArtifactId: z.string().min(1),
+  status: ImplementationPlanArtifactStatusSchema,
+  supersededByPlanId: z.string().min(1).optional(),
+}).strict();
+export const PlanStatusUpdateDataSchema = z.object({
+  plan: ImplementationPlanArtifactRecordSchema,
+}).strict();
+
+export type ImplementationPlanArtifactRecord = OwnerImplementationPlanArtifactRecord;
+export type PlanStatusUpdatePayload = z.infer<typeof PlanStatusUpdatePayloadSchema>;
 
 export interface PlanByRunGetData {
   plan: ImplementationPlanArtifactRecord | undefined;

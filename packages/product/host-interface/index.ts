@@ -93,6 +93,11 @@ export {
   ArtifactStatusUpdateDataSchema,
   ArtifactReferenceDataSchema,
 } from './artifact-host';
+export {
+  PlanByRunGetDataSchema,
+  PlanStatusUpdatePayloadSchema,
+  PlanStatusUpdateDataSchema,
+} from './plan-host';
 export type { RuntimeContext, RuntimeEvent } from '../../coding-agent/events';
 export type * from '../../coding-agent/events';
 export type * from '../../coding-agent/projections/timeline';

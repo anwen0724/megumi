@@ -1,5 +1,8 @@
 ﻿// Owns implementation plan artifact creation and status updates for Coding Agent runs.
-import type { PlanStatusUpdatePayload } from './legacy-contracts/plan-artifact-contracts';
+import type {
+  PlanStatusUpdatePayload,
+  PlanStatusUpdateRepositoryPayload,
+} from './legacy-contracts/plan-artifact-contracts';
 import type {
   ImplementationPlanArtifactRecord,
   PermissionModeState,
@@ -28,13 +31,14 @@ export interface PlanArtifactServicePort {
 export interface PlanArtifactRepositoryPort {
   saveImplementationPlan(plan: ImplementationPlanArtifactRecord): ImplementationPlanArtifactRecord;
   getImplementationPlanByProducingRun(runId: string): ImplementationPlanArtifactRecord | undefined;
-  updateImplementationPlanStatus(input: PlanStatusUpdatePayload): ImplementationPlanArtifactRecord | undefined;
+  updateImplementationPlanStatus(input: PlanStatusUpdateRepositoryPayload): ImplementationPlanArtifactRecord | undefined;
 }
 
 export interface PlanArtifactServiceOptions {
   repository: PlanArtifactRepositoryPort;
   planArtifactCompatibility?: PlanArtifactCompatibility;
   ids?: PlanArtifactServiceIds;
+  now?: () => string;
 }
 
 const defaultIds: PlanArtifactServiceIds = {
@@ -80,7 +84,10 @@ export class PlanArtifactService implements PlanArtifactServicePort {
   }
 
   updatePlanStatus(input: PlanStatusUpdatePayload): ImplementationPlanArtifactRecord {
-    const plan = this.options.repository.updateImplementationPlanStatus(input);
+    const plan = this.options.repository.updateImplementationPlanStatus({
+      ...input,
+      updatedAt: this.now(),
+    });
 
     if (!plan) {
       throw new Error('Implementation plan was not found.');
@@ -88,5 +95,9 @@ export class PlanArtifactService implements PlanArtifactServicePort {
 
     this.options.planArtifactCompatibility?.syncImplementationPlanArtifact(plan);
     return plan;
+  }
+
+  private now(): string {
+    return this.options.now?.() ?? new Date().toISOString();
   }
 }

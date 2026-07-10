@@ -77,7 +77,10 @@ describe('ArtifactService', () => {
 
   it('updates common artifact status without accepting plans', async () => {
     const repo = createRepo();
-    const service = new ArtifactService({ repository: repo });
+    const service = new ArtifactService({
+      repository: repo,
+      now: () => '2026-05-16T00:00:01.000Z',
+    });
     repo.saveArtifact({
       artifactId: 'artifact:1',
       kind: 'report',
@@ -91,8 +94,72 @@ describe('ArtifactService', () => {
     expect(service.updateStatus({
       artifactId: 'artifact:1',
       status: 'active',
+    })).toMatchObject({
+      status: 'active',
       updatedAt: '2026-05-16T00:00:01.000Z',
-    }).status).toBe('active');
+    });
+  });
+
+  it('creates versions and source references with the artifact owner clock', async () => {
+    const repo = createRepo();
+    const service = new ArtifactService({
+      repository: repo,
+      contentStore: {
+        writeText: async () => ({
+          storage: 'inline',
+          inlineText: '# Report v2',
+          mimeType: 'text/markdown',
+          sizeBytes: 11,
+          sha256: 'e'.repeat(64),
+          textPreview: '# Report v2',
+          redactionState: 'safe',
+          createdAt: '2026-05-16T00:00:01.000Z',
+        }),
+      },
+      ids: {
+        artifactId: () => 'artifact:unused',
+        artifactVersionId: () => 'artifact-version:2',
+        sourceRefId: () => 'artifact-source:1',
+      },
+      now: () => '2026-05-16T00:00:01.000Z',
+    });
+    repo.saveArtifact({
+      artifactId: 'artifact:1',
+      kind: 'report',
+      title: 'Report',
+      status: 'draft',
+      producingRunId: 'run:1',
+      currentVersionId: 'artifact-version:1',
+      createdAt: '2026-05-16T00:00:00.000Z',
+      updatedAt: '2026-05-16T00:00:00.000Z',
+    });
+
+    await expect(service.createVersion({
+      artifactId: 'artifact:1',
+      contentType: 'markdown',
+      contentFormat: 'text/markdown',
+      text: '# Report v2',
+      textPreview: '# Report v2',
+      createdByRunId: 'run:1',
+    })).resolves.toMatchObject({
+      artifactVersionId: 'artifact-version:2',
+      createdAt: '2026-05-16T00:00:01.000Z',
+    });
+
+    expect(service.get('artifact:1').artifact).toMatchObject({
+      currentVersionId: 'artifact-version:2',
+      updatedAt: '2026-05-16T00:00:01.000Z',
+    });
+
+    expect(service.reference({
+      artifactId: 'artifact:1',
+      artifactVersionId: 'artifact-version:2',
+      referencedByKind: 'run',
+      referencedById: 'run:2',
+    })).toMatchObject({
+      sourceRefId: 'artifact-source:1',
+      createdAt: '2026-05-16T00:00:01.000Z',
+    });
   });
 });
 

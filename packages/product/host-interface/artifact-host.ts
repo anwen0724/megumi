@@ -23,17 +23,16 @@ export const ArtifactVersionCreatePayloadSchema = z.object({
   artifactId: z.string().min(1),
   contentType: z.enum(['text', 'markdown', 'json', 'code', 'document', 'summary', 'other']),
   contentFormat: z.string().min(1), text: z.string(), textPreview: z.string(), changeSummary: z.string().min(1).optional(),
-  createdByRunId: z.string().min(1), createdByStepId: z.string().min(1).optional(), createdAt: z.string().datetime(),
+  createdByRunId: z.string().min(1), createdByStepId: z.string().min(1).optional(),
   metadata: JsonObjectSchema.optional(),
 }).strict();
 export const ArtifactStatusUpdatePayloadSchema = z.object({
   artifactId: z.string().min(1), status: z.enum(['draft', 'active', 'superseded', 'archived', 'failed', 'deleted']),
-  updatedAt: z.string().datetime(),
 }).strict();
 export const ArtifactReferencePayloadSchema = z.object({
   artifactId: z.string().min(1), artifactVersionId: z.string().min(1).optional(),
   referencedByKind: z.enum(['run', 'step', 'artifact', 'message']), referencedById: z.string().min(1),
-  createdAt: z.string().datetime(), metadata: JsonObjectSchema.optional(),
+  metadata: JsonObjectSchema.optional(),
 }).strict();
 const ArtifactRecordSchema = z.object({
   artifactId: z.string().min(1),
@@ -86,14 +85,12 @@ export interface ArtifactCreateVersionPayload {
   changeSummary?: string;
   createdByRunId: string;
   createdByStepId?: string;
-  createdAt: string;
   metadata?: JsonObject;
 }
 
 export interface ArtifactStatusUpdatePayload {
   artifactId: string;
   status: ArtifactStatus;
-  updatedAt: string;
 }
 
 export interface ArtifactReferencePayload {
@@ -101,7 +98,6 @@ export interface ArtifactReferencePayload {
   artifactVersionId?: string;
   referencedByKind: 'run' | 'step' | 'artifact' | 'message';
   referencedById: string;
-  createdAt: string;
   metadata?: JsonObject;
 }
 

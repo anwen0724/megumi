@@ -3,9 +3,13 @@ import {
   ApprovalResolvePayloadSchema,
   ApprovalResolveResultSchema,
   ArtifactGetDataSchema,
+  ArtifactReferencePayloadSchema,
+  ArtifactStatusUpdatePayloadSchema,
+  ArtifactVersionCreatePayloadSchema,
   ChatSendUserInputUiPayloadSchema,
   ListSkillsUiResponseSchema,
   ProviderListUiResultSchema,
+  PlanStatusUpdatePayloadSchema,
   SettingsCompleteSetupPayloadSchema,
   SettingsUpdatePayloadSchema,
   SessionMessageSendPayloadSchema,
@@ -132,6 +136,34 @@ describe('Product Host runtime schemas', () => {
     }).success).toBe(true);
     expect(ArtifactGetDataSchema.safeParse({
       artifact: undefined, currentVersion: undefined, sourceRefs: [], relations: [],
+    }).success).toBe(false);
+  });
+
+  it('rejects renderer-provided Artifact and Plan canonical timestamps', () => {
+    expect(ArtifactVersionCreatePayloadSchema.safeParse({
+      artifactId: 'artifact:1',
+      contentType: 'markdown',
+      contentFormat: 'text/markdown',
+      text: '# Plan',
+      textPreview: '# Plan',
+      createdByRunId: 'run:1',
+      createdAt: '2026-05-16T00:00:00.000Z',
+    }).success).toBe(false);
+    expect(ArtifactStatusUpdatePayloadSchema.safeParse({
+      artifactId: 'artifact:1',
+      status: 'active',
+      updatedAt: '2026-05-16T00:00:00.000Z',
+    }).success).toBe(false);
+    expect(ArtifactReferencePayloadSchema.safeParse({
+      artifactId: 'artifact:1',
+      referencedByKind: 'run',
+      referencedById: 'run:1',
+      createdAt: '2026-05-16T00:00:00.000Z',
+    }).success).toBe(false);
+    expect(PlanStatusUpdatePayloadSchema.safeParse({
+      planArtifactId: 'plan:1',
+      status: 'accepted',
+      updatedAt: '2026-05-16T00:00:00.000Z',
     }).success).toBe(false);
   });
 
