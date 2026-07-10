@@ -91,7 +91,7 @@ export function createChatHost(options: {
       const result = options.sessionService.createSession({
         session_id: `session:${crypto.randomUUID()}`,
         workspace_id: request.projectId,
-        title: request.title ?? 'New Chat',
+        title: request.title ?? 'New session',
         created_at: new Date().toISOString(),
       });
       if (result.status === 'failed') {
@@ -138,7 +138,7 @@ export function createChatHost(options: {
         workspace_id: request.projectId,
         session: request.sessionId
           ? { type: 'existing', session_id: request.sessionId }
-          : { type: 'new', ...(request.sessionTitle ? { title: request.sessionTitle } : {}) },
+          : { type: 'new', title: request.sessionTitle ?? 'New session' },
         user_input: {
           text: request.text,
           ...(request.attachments ? { attachments: request.attachments } : {}),
@@ -290,7 +290,7 @@ function getSessionOrFallback(
   return toChatSessionUiDto({
     session_id: sessionId,
     workspace_id: input.projectId,
-    title: input.sessionTitle ?? 'Session',
+    title: input.sessionTitle ?? 'New session',
     status: 'active',
     created_at: input.createdAt ?? new Date().toISOString(),
     updated_at: input.createdAt ?? new Date().toISOString(),

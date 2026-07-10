@@ -13,12 +13,13 @@ import {
 } from '../home';
 import { createApprovalHost } from '../host-interface/approval-host';
 import { createArtifactHost } from '../host-interface/artifact-host';
-import { createChatHost, type SessionBranchHostPort } from '../host-interface/chat-host';
+import { createChatHost } from '../host-interface/chat-host';
 import { createPlanHost } from '../host-interface/plan-host';
 import type { ProductHostInterface } from '../host-interface/product-host-interface';
 import { createSettingsHost } from '../host-interface/settings-host';
 import { createSkillHost } from '../host-interface/skill-host';
 import { createWorkspaceHost, type DirectoryPickerPort, type FileOpenPort } from '../host-interface/workspace-host';
+import { createSessionBranchHost } from '../host-interface/session-branch-host';
 import {
   createProductRuntimeLogger,
   type RuntimeLogClockPort,
@@ -67,7 +68,7 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
       commandService: runtime.commandService,
       sessionService: runtime.sessionService,
       workspaceService: runtime.workspaceService,
-      branchService: createUnsupportedSessionBranchHost(),
+      branchService: createSessionBranchHost(),
       sessionTimelineQuery: runtime.sessionTimelineQuery,
       agentRunQueries: runtime.agentRunQueries,
       contextUsageMonitor: runtime.contextRuntime.contextUsageMonitor,
@@ -108,15 +109,4 @@ function codingAgentOptions(
     ...codingAgent
   } = options;
   return codingAgent;
-}
-
-function createUnsupportedSessionBranchHost(): SessionBranchHostPort {
-  return {
-    createBranchDraft() {
-      throw new Error('Session branch drafts are not available during the Agent Run transition.');
-    },
-    cancelBranchDraft() {
-      return { payload: { cancelled: false, reason: 'branch_marker_not_found' } };
-    },
-  };
 }
