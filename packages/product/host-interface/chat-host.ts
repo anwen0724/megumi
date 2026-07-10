@@ -46,6 +46,7 @@ export interface ChatHost {
   getCommandSuggestions(request: ChatGetCommandSuggestionsUiRequest): Promise<ChatGetCommandSuggestionsUiResult>;
   listRuns(request: ChatListRunsUiRequest): Promise<ChatListRunsUiResult>;
   listRunEvents(request: ChatListRunEventsUiRequest): Promise<ChatListRunEventsUiResult>;
+  getSessionHydration(request: ChatGetSessionHydrationUiRequest): Promise<ChatGetSessionHydrationUiResult>;
   getContextUsage(request: ChatGetContextUsageUiRequest): Promise<ChatGetContextUsageUiResult>;
 }
 
@@ -59,6 +60,9 @@ export const SessionCreatePayloadSchema = z.object({
 export const SessionListPayloadSchema = z.object({}).strict();
 export const SessionMessageListPayloadSchema = z.object({ sessionId: z.string().min(1) }).strict();
 export const SessionTimelineListPayloadSchema = z.object({
+  projectId: z.string().min(1), sessionId: z.string().min(1),
+}).strict();
+export const SessionHydrationGetPayloadSchema = z.object({
   projectId: z.string().min(1), sessionId: z.string().min(1),
 }).strict();
 export const SessionContextUsageGetPayloadSchema = z.object({
@@ -138,6 +142,12 @@ export const ChatListMessagesUiResultSchema = z.object({
 export const ChatListTimelineUiResultSchema = z.object({
   messages: z.array(TimelineMessageSchema),
   diagnostics: z.array(z.object({ messageId: z.string(), code: z.string(), message: z.string() }).strict()).optional(),
+}).strict();
+export const ChatGetSessionHydrationUiResultSchema = z.object({
+  messages: z.array(TimelineMessageSchema),
+  diagnostics: z.array(z.object({ messageId: z.string(), code: z.string(), message: z.string() }).strict()).optional(),
+  runs: z.array(ChatRunUiDtoSchema),
+  runtimeEvents: z.array(RuntimeEventSchema),
 }).strict();
 export const ChatCancelUserInputUiPayloadSchema = z.object({ cancelled: z.boolean() }).strict();
 export const ChatCreateBranchDraftUiPayloadSchema = z.object({
@@ -291,6 +301,20 @@ export function createChatHost(options: {
 
     async listRunEvents(request) {
       return { events: options.agentRunQueries.listRuntimeEventsByRun(request.runId) };
+    },
+
+    async getSessionHydration(request) {
+      const timeline = options.sessionTimelineQuery.listSessionTimeline({
+        workspace_id: request.projectId,
+        session_id: request.sessionId,
+      });
+      const runs = options.agentRunQueries.listRunsBySession(request.sessionId);
+      return {
+        messages: timeline.messages,
+        diagnostics: timeline.diagnostics,
+        runs: runs.map(toChatRunUiDto),
+        runtimeEvents: runs.flatMap((run) => options.agentRunQueries.listRuntimeEventsByRun(run.run_id)),
+      };
     },
 
     async getContextUsage(request) {
@@ -483,6 +507,18 @@ export interface ChatListTimelineUiRequest {
 export interface ChatListTimelineUiResult {
   messages: TimelineMessage[];
   diagnostics?: Array<{ messageId: string; code: string; message: string }>;
+}
+
+export interface ChatGetSessionHydrationUiRequest {
+  projectId: string;
+  sessionId: string;
+}
+
+export interface ChatGetSessionHydrationUiResult {
+  messages: TimelineMessage[];
+  diagnostics?: Array<{ messageId: string; code: string; message: string }>;
+  runs: ChatRunUiDto[];
+  runtimeEvents: RuntimeEvent[];
 }
 
 export interface ChatSendUserInputUiRequest {

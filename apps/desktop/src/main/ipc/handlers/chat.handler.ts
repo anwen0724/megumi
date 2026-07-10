@@ -7,6 +7,7 @@ import {
   ChatCommandSuggestionsUiResultSchema,
   ChatCreateBranchDraftUiPayloadSchema,
   ChatCreateSessionUiResultSchema,
+  ChatGetSessionHydrationUiResultSchema,
   ChatGetContextUsageUiResultSchema,
   ChatListMessagesUiResultSchema,
   ChatListRunEventsUiResultSchema,
@@ -29,6 +30,7 @@ import {
   SessionBranchDraftCancelRequestSchema,
   SessionBranchDraftCreateRequestSchema,
   SessionCreateRequestSchema,
+  SessionHydrationGetRequestSchema,
   SessionListRequestSchema,
   SessionMessageCancelRequestSchema,
   SessionContextUsageGetRequestSchema,
@@ -41,6 +43,7 @@ import {
   type SessionBranchDraftCancelPayload,
   type SessionBranchDraftCreatePayload,
   type SessionCreatePayload,
+  type SessionHydrationGetPayload,
   type SessionMessageCancelPayload,
   type SessionContextUsageGetPayload,
   type SessionMessageListPayload,
@@ -109,6 +112,16 @@ export function registerChatHandlers(
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<SessionTimelineListPayload, typeof IPC_CHANNELS.chat.sessionTimelineList>) =>
       service.host.chat.listTimeline(request.payload),
+    mapError: mapChatIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.chat.sessionHydrationGet, createIpcRequestHandler({
+    channel: IPC_CHANNELS.chat.sessionHydrationGet,
+    requestSchema: SessionHydrationGetRequestSchema,
+    responseSchema: ChatGetSessionHydrationUiResultSchema,
+    logger: options.logger,
+    handle: (request: RuntimeIpcRequest<SessionHydrationGetPayload, typeof IPC_CHANNELS.chat.sessionHydrationGet>) =>
+      service.host.chat.getSessionHydration(request.payload),
     mapError: mapChatIpcError,
   }));
 

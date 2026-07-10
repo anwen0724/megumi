@@ -6,6 +6,7 @@ import type {
   ChatCancelUserInputUiResult,
   ChatCreateBranchDraftUiResult,
   ChatCreateSessionUiResult,
+  ChatGetSessionHydrationUiResult,
   ChatGetCommandSuggestionsUiResult,
   ChatListMessagesUiResult,
   ChatGetContextUsageUiResult,
@@ -64,6 +65,7 @@ import type {
   SessionBranchDraftCancelPayload,
   SessionBranchDraftCreatePayload,
   SessionCreatePayload,
+  SessionHydrationGetPayload,
   SessionMessageCancelPayload,
   SessionContextUsageGetPayload,
   SessionMessageListPayload,
@@ -223,6 +225,12 @@ export const api = {
         request: BusinessRequest<SessionTimelineListPayload, typeof IPC_CHANNELS.chat.sessionTimelineList>,
       ): Promise<RuntimeIpcResult<ChatListTimelineUiResult, typeof IPC_CHANNELS.chat.sessionTimelineList>> =>
         invokeRuntimeIpc(IPC_CHANNELS.chat.sessionTimelineList, request),
+    },
+    hydration: {
+      get: (
+        request: BusinessRequest<SessionHydrationGetPayload, typeof IPC_CHANNELS.chat.sessionHydrationGet>,
+      ): Promise<RuntimeIpcResult<ChatGetSessionHydrationUiResult, typeof IPC_CHANNELS.chat.sessionHydrationGet>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.chat.sessionHydrationGet, request),
     },
     contextUsage: {
       get: (

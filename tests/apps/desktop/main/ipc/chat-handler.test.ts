@@ -63,6 +63,24 @@ function createContextUsageRequest(): RuntimeIpcRequest<SessionContextUsageGetPa
   };
 }
 
+function createSessionHydrationRequest(): RuntimeIpcRequest<
+  { projectId: string; sessionId: string },
+  typeof IPC_CHANNELS.chat.sessionTimelineList
+> {
+  return {
+    requestId: 'request-session-hydration-1',
+    payload: {
+      projectId: 'workspace-1',
+      sessionId: 'session-1',
+    },
+    meta: {
+      channel: 'session:hydration:get' as typeof IPC_CHANNELS.chat.sessionTimelineList,
+      createdAt: '2026-05-17T00:00:00.000Z',
+      source: 'renderer',
+    },
+  };
+}
+
 describe('registerChatHandlers', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -221,6 +239,45 @@ describe('registerChatHandlers', () => {
     expect(response).toMatchObject({
       ok: false,
       error: { code: 'ipc_handler_failed', message: 'Chat service failed.' },
+    });
+  });
+
+  it('routes session hydration requests through the chat host controller', async () => {
+    const { handlers, ipcMain } = createIpcMain();
+    const getSessionHydration = vi.fn().mockResolvedValue({
+      messages: [],
+      diagnostics: [],
+      runs: [],
+      runtimeEvents: [],
+    });
+    const service = {
+      host: {
+        chat: {
+          getSessionHydration,
+        },
+      },
+    } as unknown as ChatHandlersService;
+
+    registerChatHandlers(service, {
+      ipcMain: ipcMain as unknown as RegisterChatHandlersOptions['ipcMain'],
+    });
+
+    const handler = handlers.get('session:hydration:get');
+    if (!handler) throw new Error('session hydration handler was not registered.');
+
+    const response = await handler({ sender: { send: vi.fn() } }, createSessionHydrationRequest());
+
+    expect(response).toMatchObject({
+      ok: true,
+      data: {
+        messages: [],
+        runs: [],
+        runtimeEvents: [],
+      },
+    });
+    expect(getSessionHydration).toHaveBeenCalledWith({
+      projectId: 'workspace-1',
+      sessionId: 'session-1',
     });
   });
 });

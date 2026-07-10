@@ -27,6 +27,7 @@ export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.chat.sessionMessageSend,
   IPC_CHANNELS.chat.sessionMessageCancel,
   IPC_CHANNELS.chat.sessionTimelineList,
+  IPC_CHANNELS.chat.sessionHydrationGet,
   IPC_CHANNELS.chat.sessionContextUsageGet,
   IPC_CHANNELS.chat.branchDraftCreate,
   IPC_CHANNELS.chat.branchDraftCancel,

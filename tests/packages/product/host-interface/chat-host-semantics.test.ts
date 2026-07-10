@@ -88,6 +88,113 @@ describe('ChatHost product semantics', () => {
     });
     expect(JSON.stringify(result)).not.toContain('replacement_input');
   });
+
+  it('hydrates a session view with timeline, runs, and run events in one host call', async () => {
+    const message = {
+      messageId: 'message-1',
+      role: 'user',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-a',
+      createdAt: '2026-07-10T01:00:00.000Z',
+      blocks: [{
+        blockId: 'user-text-1',
+        kind: 'user_text',
+        text: 'hello',
+        format: 'plain',
+      }],
+    };
+    const runA = {
+      run_id: 'run-a',
+      workspace_id: 'project-1',
+      session_id: 'session-1',
+      model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
+      trigger: { type: 'user_input', user_message_id: 'message-1' },
+      status: 'completed',
+      created_at: '2026-07-10T01:00:01.000Z',
+      completed_at: '2026-07-10T01:00:02.000Z',
+    };
+    const runB = {
+      ...runA,
+      run_id: 'run-b',
+      trigger: { type: 'user_input', user_message_id: 'message-2' },
+      status: 'running',
+      created_at: '2026-07-10T01:00:03.000Z',
+      completed_at: undefined,
+    };
+    const eventsByRun = {
+      'run-a': [{
+        eventId: 'event-a',
+        schemaVersion: 1,
+        eventType: 'run.completed',
+        runId: 'run-a',
+        sessionId: 'session-1',
+        sequence: 1,
+        createdAt: '2026-07-10T01:00:02.000Z',
+        source: 'core',
+        visibility: 'user',
+        persist: 'required',
+        payload: {},
+      }],
+      'run-b': [{
+        eventId: 'event-b',
+        schemaVersion: 1,
+        eventType: 'run.started',
+        runId: 'run-b',
+        sessionId: 'session-1',
+        sequence: 1,
+        createdAt: '2026-07-10T01:00:03.000Z',
+        source: 'core',
+        visibility: 'user',
+        persist: 'required',
+        payload: { runKind: 'agent' },
+      }],
+    };
+    const listSessionTimeline = vi.fn(() => ({ messages: [message], diagnostics: [] }));
+    const listRunsBySession = vi.fn(() => [runA, runB]);
+    const listRuntimeEventsByRun = vi.fn((runId: string) =>
+      eventsByRun[runId as keyof typeof eventsByRun] ?? []);
+    const host = createChatHost({
+      agentRunService: { startRun: vi.fn(), cancelRun: vi.fn() } as never,
+      commandService: { getCommandSuggestions: vi.fn() } as never,
+      sessionService: { getSession: vi.fn(() => ({ status: 'not_found' })) } as never,
+      branchService: createSessionBranchHost(),
+      workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
+      sessionTimelineQuery: { listSessionTimeline },
+      agentRunQueries: { listRunsBySession, listRuntimeEventsByRun },
+    });
+
+    await expect(host.getSessionHydration({
+      projectId: 'project-1',
+      sessionId: 'session-1',
+    })).resolves.toEqual({
+      messages: [message],
+      diagnostics: [],
+      runs: [
+        {
+          runId: 'run-a',
+          sessionId: 'session-1',
+          status: 'completed',
+          createdAt: '2026-07-10T01:00:01.000Z',
+          completedAt: '2026-07-10T01:00:02.000Z',
+        },
+        {
+          runId: 'run-b',
+          sessionId: 'session-1',
+          status: 'running',
+          createdAt: '2026-07-10T01:00:03.000Z',
+        },
+      ],
+      runtimeEvents: [...eventsByRun['run-a'], ...eventsByRun['run-b']],
+    });
+
+    expect(listSessionTimeline).toHaveBeenCalledWith({
+      workspace_id: 'project-1',
+      session_id: 'session-1',
+    });
+    expect(listRunsBySession).toHaveBeenCalledWith('session-1');
+    expect(listRuntimeEventsByRun).toHaveBeenCalledTimes(2);
+  });
 });
 
 function createHost(

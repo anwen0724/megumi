@@ -1,6 +1,7 @@
 import type {
   ChatCancelBranchDraftUiResult,
   ChatCreateBranchDraftUiResult,
+  ChatGetSessionHydrationUiResult,
   ChatGetContextUsageUiResult,
   ChatListTimelineUiResult,
   ChatSendUserInputUiPayload,
@@ -13,6 +14,7 @@ import type {
 import type {
   SessionBranchDraftCancelPayload,
   SessionBranchDraftCreatePayload,
+  SessionHydrationGetPayload,
   SessionMessageSendPayload,
   SessionContextUsageGetPayload,
   SessionTimelineListPayload,
@@ -29,6 +31,8 @@ export type SessionMessageSendPreloadPayload = SessionMessageSendPayload;
 export type SessionMessageSendPreloadData = ChatSendUserInputUiPayload;
 export type SessionTimelineListPreloadPayload = SessionTimelineListPayload;
 export type SessionTimelineListPreloadData = ChatListTimelineUiResult;
+export type SessionHydrationGetPreloadPayload = SessionHydrationGetPayload;
+export type SessionHydrationGetPreloadData = ChatGetSessionHydrationUiResult;
 export type SessionContextUsageGetPreloadPayload = SessionContextUsageGetPayload;
 export type SessionContextUsageGetPreloadData = ChatGetContextUsageUiResult;
 export type SessionBranchDraftCreatePreloadPayload = SessionBranchDraftCreatePayload;
