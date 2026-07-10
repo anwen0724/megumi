@@ -19,7 +19,14 @@ describe('Agent Run command flow', () => {
     expect(result).toEqual({
       status: 'host_interaction_required',
       request_id: 'request-1',
-      session_id: 'session-1',
+      session: {
+        session_id: 'session-1',
+        workspace_id: 'workspace-1',
+        title: 'Session',
+        status: 'active',
+        created_at: '2026-01-01T00:00:00.000Z',
+        updated_at: '2026-01-01T00:00:00.000Z',
+      },
       interaction: { kind: 'status_panel' },
     });
     expect(deps.session_service.saveUserMessage).not.toHaveBeenCalled();
