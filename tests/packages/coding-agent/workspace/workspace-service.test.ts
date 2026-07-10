@@ -29,7 +29,6 @@ describe('WorkspaceService', () => {
 
     await expect(service.openWorkspace({
       root_path: 'C:/Work/Megumi',
-      opened_at: '2026-05-19T00:00:00.000Z',
     })).resolves.toMatchObject({
       status: 'opened',
       workspace: {
@@ -57,14 +56,12 @@ describe('WorkspaceService', () => {
 
     await expect(missing.openWorkspace({
       root_path: 'C:/missing',
-      opened_at: '2026-05-19T00:00:00.000Z',
     })).resolves.toMatchObject({
       status: 'failed',
       failure: { code: 'workspace_path_missing' },
     });
     await expect(file.openWorkspace({
       root_path: 'C:/file.txt',
-      opened_at: '2026-05-19T00:00:00.000Z',
     })).resolves.toMatchObject({
       status: 'failed',
       failure: { code: 'workspace_path_not_directory' },
@@ -73,19 +70,20 @@ describe('WorkspaceService', () => {
 
   it('reuses the same normalized Windows root path case-insensitively', async () => {
     const repository = createRepository();
+    let now = '2026-05-19T00:00:00.000Z';
     const service = createWorkspaceService({
       repository,
       file_system: { stat: vi.fn(async () => directoryStat()) },
       platform: 'win32',
+      now: () => now,
     });
 
     const first = await service.openWorkspace({
       root_path: 'C:/Work/Megumi',
-      opened_at: '2026-05-19T00:00:00.000Z',
     });
+    now = '2026-05-19T00:00:10.000Z';
     const second = await service.openWorkspace({
       root_path: 'c:/work/megumi',
-      opened_at: '2026-05-19T00:00:10.000Z',
     });
 
     expect(first.status).toBe('opened');
@@ -112,7 +110,6 @@ describe('WorkspaceService', () => {
 
     const opened = await service.openWorkspace({
       root_path: 'C:/Work/Megumi',
-      opened_at: '2026-05-19T00:00:00.000Z',
     });
     if (opened.status !== 'opened') {
       throw new Error('workspace should open');
@@ -142,6 +139,33 @@ describe('WorkspaceService', () => {
     expect(service.removeWorkspace({ workspace_id: opened.workspace.workspace_id })).toEqual({
       status: 'removed',
       workspace_id: opened.workspace.workspace_id,
+    });
+  });
+
+  it('activates an existing workspace with owner-owned last_opened_at', async () => {
+    const repository = createRepository();
+    let now = '2026-05-19T00:00:00.000Z';
+    const service = createWorkspaceService({
+      repository,
+      file_system: { stat: vi.fn(async () => directoryStat()) },
+      platform: 'win32',
+      now: () => now,
+    });
+
+    const opened = await service.openWorkspace({ root_path: 'C:/Work/Megumi' });
+    expect(opened.status).toBe('opened');
+    if (opened.status !== 'opened') return;
+
+    now = '2026-05-19T00:01:00.000Z';
+    const activated = await service.activateWorkspace({ workspace_id: opened.workspace.workspace_id });
+
+    expect(activated).toEqual({
+      status: 'activated',
+      workspace: expect.objectContaining({
+        workspace_id: opened.workspace.workspace_id,
+        last_opened_at: '2026-05-19T00:01:00.000Z',
+        updated_at: '2026-05-19T00:01:00.000Z',
+      }),
     });
   });
 

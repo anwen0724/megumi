@@ -97,10 +97,7 @@ export function createWorkspaceHost(input: {
   directoryPicker?: DirectoryPickerPort;
   workspaceFilesService: WorkspaceFilesService;
   fileOpen?: FileOpenPort;
-  now?: () => string;
 }): WorkspaceHost {
-  const now = input.now ?? (() => new Date().toISOString());
-
   return {
     async listProjects() {
       const result = await input.workspaceService.listWorkspaces({ refresh_status: true });
@@ -115,7 +112,6 @@ export function createWorkspaceHost(input: {
 
       const opened = await input.workspaceService.openWorkspace({
         root_path: picked.filePaths[0],
-        opened_at: now(),
       });
       if (opened.status === 'failed') {
         throw compatibilityErrorFromFailure(picked.filePaths[0], opened.failure.code);
@@ -124,9 +120,12 @@ export function createWorkspaceHost(input: {
     },
 
     async openProject(request) {
-      const found = input.workspaceService.getWorkspace({ workspace_id: request.projectId });
+      const found = await input.workspaceService.activateWorkspace({ workspace_id: request.projectId });
       if (found.status === 'not_found') {
         throw new WorkspaceProjectCompatibilityError(request.projectId, 'missing');
+      }
+      if (found.status === 'failed') {
+        throw compatibilityErrorFromFailure(request.projectId, found.failure.code);
       }
       return { project: toWorkspaceProjectUiDto(found.workspace) };
     },

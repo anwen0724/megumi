@@ -24,10 +24,10 @@ describe('workspace contracts v2', () => {
     };
     const request: OpenWorkspaceRequest = {
       root_path: workspace.root_path,
-      opened_at: workspace.last_opened_at,
     };
 
     expect(request.root_path).toBe(workspace.root_path);
+    expect('opened_at' in request).toBe(false);
     expect('projectId' in workspace).toBe(false);
     expect('repoPath' in workspace).toBe(false);
     expect('metadata_json' in workspace).toBe(false);

@@ -5,6 +5,7 @@
 import crypto from 'node:crypto';
 import path from 'node:path';
 import type {
+  ActivateWorkspaceResult,
   GetWorkspaceRequest,
   GetWorkspaceResult,
   ListAuthorizedWorkspaceRootsResult,
@@ -82,6 +83,7 @@ export function createWorkspaceService(options: CreateWorkspaceServiceOptions): 
 
   return {
     async openWorkspace(request: OpenWorkspaceRequest): Promise<OpenWorkspaceResult> {
+      const openedAt = now();
       const normalizedRootPath = normalizeWorkspaceRootPath(request.root_path, platform);
       const validationFailure = await validateWorkspaceRoot(normalizedRootPath);
       if (validationFailure) {
@@ -96,15 +98,32 @@ export function createWorkspaceService(options: CreateWorkspaceServiceOptions): 
         root_path: normalizedRootPath,
         root_path_key: rootPathKey,
         status: 'available',
-        created_at: existing?.created_at ?? request.opened_at,
-        updated_at: request.opened_at,
-        last_opened_at: request.opened_at,
+        created_at: existing?.created_at ?? openedAt,
+        updated_at: openedAt,
+        last_opened_at: openedAt,
       };
 
       return {
         status: 'opened',
         workspace: options.repository.insertOrUpdateWorkspace(workspace),
       };
+    },
+
+    async activateWorkspace(request): Promise<ActivateWorkspaceResult> {
+      const workspace = options.repository.findWorkspaceById(request.workspace_id);
+      if (!workspace) {
+        return { status: 'not_found', workspace_id: request.workspace_id };
+      }
+
+      const activatedAt = now();
+      const status = await getPathStatus(workspace.root_path);
+      const activated = options.repository.insertOrUpdateWorkspace({
+        ...workspace,
+        status,
+        updated_at: activatedAt,
+        last_opened_at: activatedAt,
+      });
+      return { status: 'activated', workspace: activated };
     },
 
     getWorkspace(request: GetWorkspaceRequest): GetWorkspaceResult {

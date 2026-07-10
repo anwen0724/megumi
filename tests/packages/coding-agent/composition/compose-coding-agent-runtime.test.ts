@@ -92,7 +92,6 @@ describe('composeCodingAgentRuntime trace wiring', () => {
     });
     const workspace = await firstRuntime.workspaceService.openWorkspace({
       root_path: home.workspaceRoot,
-      opened_at: '2026-07-08T00:00:00.000Z',
     });
     expect(workspace.status).toBe('opened');
     if (workspace.status !== 'opened') return;
@@ -176,7 +175,6 @@ describe('composeCodingAgentRuntime trace wiring', () => {
     try {
       const workspace = await runtime.workspaceService.openWorkspace({
         root_path: home.workspaceRoot,
-        opened_at: '2026-07-08T00:00:00.000Z',
       });
       expect(workspace.status).toBe('opened');
       if (workspace.status !== 'opened') return;
@@ -259,7 +257,6 @@ async function startOneRun(
 ): Promise<string> {
   const workspace = await runtime.workspaceService.openWorkspace({
     root_path: workspaceRoot,
-    opened_at: '2026-07-08T00:00:00.000Z',
   });
   expect(workspace.status).toBe('opened');
   if (workspace.status !== 'opened') return '';

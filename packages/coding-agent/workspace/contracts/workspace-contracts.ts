@@ -19,7 +19,6 @@ export type Workspace = {
 
 export type OpenWorkspaceRequest = {
   root_path: string;
-  opened_at: string;
 };
 
 export type WorkspaceFailure = {
@@ -29,6 +28,15 @@ export type WorkspaceFailure = {
 
 export type OpenWorkspaceResult =
   | { status: 'opened'; workspace: Workspace }
+  | { status: 'failed'; failure: WorkspaceFailure };
+
+export type ActivateWorkspaceRequest = {
+  workspace_id: string;
+};
+
+export type ActivateWorkspaceResult =
+  | { status: 'activated'; workspace: Workspace }
+  | { status: 'not_found'; workspace_id: string }
   | { status: 'failed'; failure: WorkspaceFailure };
 
 export type GetWorkspaceRequest = {
@@ -98,6 +106,7 @@ export type AssertOrdinaryWorkspacePathResult =
 
 export interface WorkspaceService {
   openWorkspace(request: OpenWorkspaceRequest): Promise<OpenWorkspaceResult>;
+  activateWorkspace(request: ActivateWorkspaceRequest): Promise<ActivateWorkspaceResult>;
   getWorkspace(request: GetWorkspaceRequest): GetWorkspaceResult;
   listWorkspaces(request?: ListWorkspacesRequest): Promise<ListWorkspacesResult>;
   removeWorkspace(request: RemoveWorkspaceRequest): RemoveWorkspaceResult;
