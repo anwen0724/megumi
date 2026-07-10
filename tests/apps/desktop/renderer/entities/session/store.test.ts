@@ -1,61 +1,30 @@
-﻿// @vitest-environment node
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 
+const session = {
+  id: 'session:1',
+  projectId: 'workspace:1',
+  title: 'Product session',
+  status: 'active' as const,
+  createdAt: '2026-07-10T00:00:00.000Z',
+  updatedAt: '2026-07-10T00:00:00.000Z',
+};
+
 describe('useSessionStore', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-05-09T12:00:00.000Z'));
-    useSessionStore.setState({
-      sessions: [],
-      activeSessionId: null,
-      activeAgentType: 'free',
-    });
+  beforeEach(() => useSessionStore.setState({
+    sessions: [], activeSessionId: null, newSessionDraftTargetProjectId: null,
+  }));
+
+  it('stores and replaces canonical Product Host Session projections', () => {
+    useSessionStore.getState().upsertSession(session);
+    useSessionStore.getState().upsertSession({ ...session, title: 'Updated by Product' });
+    expect(useSessionStore.getState().sessions).toEqual([{ ...session, title: 'Updated by Product' }]);
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('adds and selects a local session', () => {
-    const session = useSessionStore.getState().createLocalSession({
-      projectId: 'project-1',
-      title: 'Planning the UI',
+  it('represents a new session only as a UI draft target', () => {
+    useSessionStore.getState().startNewSessionDraft('workspace:1');
+    expect(useSessionStore.getState()).toMatchObject({
+      sessions: [], activeSessionId: null, newSessionDraftTargetProjectId: 'workspace:1',
     });
-
-    expect(session.title).toBe('Planning the UI');
-    expect(session.projectId).toBe('project-1');
-    expect(session.agentType).toBe('free');
-    expect(session.createdAt).toBe('2026-05-09T12:00:00.000Z');
-    expect(useSessionStore.getState().sessions).toEqual([session]);
-    expect(useSessionStore.getState().activeSessionId).toBe(session.id);
-  });
-
-  it('creates local sessions at the top of the list', () => {
-    const first = useSessionStore.getState().createLocalSession({
-      projectId: 'project-1',
-      title: 'First',
-    });
-    const second = useSessionStore.getState().createLocalSession({
-      projectId: 'project-1',
-      title: 'Second',
-      agentType: 'reviewer',
-    });
-
-    expect(useSessionStore.getState().sessions.map((session) => session.id)).toEqual([second.id, first.id]);
-    expect(useSessionStore.getState().activeSessionId).toBe(second.id);
-    expect(second.agentType).toBe('reviewer');
-  });
-
-  it('selects an existing session', () => {
-    const session = useSessionStore.getState().createLocalSession({
-      projectId: 'project-1',
-      title: 'Planning',
-    });
-
-    useSessionStore.getState().setActiveSession(null);
-    useSessionStore.getState().setActiveSession(session.id);
-
-    expect(useSessionStore.getState().activeSessionId).toBe(session.id);
   });
 });

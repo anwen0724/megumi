@@ -1,7 +1,6 @@
 import type { RuntimeEvent } from '@megumi/coding-agent/events';
 import type { ChatRunUiDto, ChatSessionUiDto } from '@megumi/product/host-interface';
 import type { AnswerTextBlock, TimelineMessage } from '@megumi/coding-agent/projections/timeline';
-import type { LocalRendererSession } from '../../entities/session/session-factory';
 
 export interface TimelineHistoryMessage {
   id: string;
@@ -14,15 +13,8 @@ function isCompletedAnswerTextBlock(block: TimelineMessage['blocks'][number]): b
   return block.kind === 'answer_text' && block.status === 'completed';
 }
 
-export function localSessionFromPersistedSession(session: ChatSessionUiDto): LocalRendererSession {
-  return {
-    id: session.id,
-    projectId: session.projectId,
-    agentType: 'free',
-    title: session.title,
-    createdAt: session.createdAt,
-    updatedAt: session.updatedAt,
-  };
+export function localSessionFromPersistedSession(session: ChatSessionUiDto): ChatSessionUiDto {
+  return session;
 }
 
 export function chatMessagesFromTimelineMessages(messages: TimelineMessage[]): TimelineHistoryMessage[] {

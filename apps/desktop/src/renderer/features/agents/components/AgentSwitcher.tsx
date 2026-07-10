@@ -1,6 +1,5 @@
 ﻿import { useState, useRef, useEffect } from 'react';
-import { useSessionStore } from '../../../entities/session/store';
-import type { AgentType } from '../../../entities/session/session-factory';
+import { useAgentPreferenceStore, type AgentType } from '../store';
 
 const AGENT_TYPES: AgentType[] = ['analyst', 'architect', 'developer', 'reviewer', 'free'];
 const AGENT_LABELS: Record<AgentType, string> = {
@@ -27,8 +26,8 @@ const AGENT_COLORS: Record<AgentType, string> = {
 };
 
 export default function AgentSwitcher() {
-  const activeAgentType = useSessionStore((s) => s.activeAgentType);
-  const setActiveAgentType = useSessionStore((s) => s.setActiveAgentType);
+  const activeAgentType = useAgentPreferenceStore((s) => s.activeAgentType);
+  const setActiveAgentType = useAgentPreferenceStore((s) => s.setActiveAgentType);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 

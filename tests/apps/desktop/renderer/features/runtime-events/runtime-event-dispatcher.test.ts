@@ -47,7 +47,6 @@ describe('runtime event dispatcher', () => {
     useSessionStore.setState({
       sessions: [],
       activeSessionId: 'session-1',
-      activeAgentType: 'free',
     });
   });
 
@@ -113,7 +112,6 @@ describe('runtime event dispatcher', () => {
     useSessionStore.setState({
       sessions: [],
       activeSessionId: 'session-2',
-      activeAgentType: 'free',
     });
 
     dispatchRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'chat' }, { sessionId: 'session-1' }));

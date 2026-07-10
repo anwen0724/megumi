@@ -205,15 +205,7 @@ export function useChatPageController() {
     }
 
     const sessionBeforeOpen = activeSession;
-    const canMoveActiveSession =
-      !sessionBeforeOpen ||
-      (
-        sessionBeforeOpen.title === 'New session' &&
-        (
-          useRuntimeTimelineStore.getState().sessions[runtimeTimelineSessionKey(sessionBeforeOpen.projectId, sessionBeforeOpen.id)]
-            ?.messages.length ?? 0
-        ) === 0
-      );
+    const canMoveActiveSession = !sessionBeforeOpen;
 
     if (!canMoveActiveSession) {
       setProjectPickerOpen(false);
@@ -223,15 +215,6 @@ export function useChatPageController() {
     const project = await useProjectStore.getState().openProject(projectId);
     if (!project) {
       return;
-    }
-
-    if (sessionBeforeOpen) {
-      const sessionState = useSessionStore.getState();
-      const latestSession = sessionState.sessions.find((session) => session.id === sessionBeforeOpen.id);
-      if (latestSession?.title === 'New session') {
-        sessionState.updateSession(latestSession.id, { projectId: project.id });
-        useRuntimeTimelineStore.getState().setActiveSession(project.id, latestSession.id);
-      }
     }
 
     setProjectPickerOpen(false);

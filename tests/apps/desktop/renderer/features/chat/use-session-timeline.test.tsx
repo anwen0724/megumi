@@ -79,13 +79,12 @@ describe('useSessionTimeline', () => {
       sessions: [{
         id: 'session-1',
         projectId: 'project-1',
-        agentType: 'free',
         title: 'Session',
+        status: 'active',
         createdAt,
         updatedAt: createdAt,
       }],
       activeSessionId: 'session-1',
-      activeAgentType: 'free',
       newSessionDraftTargetProjectId: null,
     });
 

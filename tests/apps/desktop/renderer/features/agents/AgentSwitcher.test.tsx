@@ -2,11 +2,11 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import AgentSwitcher from '@megumi/desktop/renderer/features/agents/components/AgentSwitcher';
-import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
+import { useAgentPreferenceStore } from '@megumi/desktop/renderer/features/agents/store';
 
 describe('AgentSwitcher', () => {
   beforeEach(() => {
-    useSessionStore.setState({ activeAgentType: 'analyst' });
+    useAgentPreferenceStore.setState({ activeAgentType: 'analyst' });
   });
 
   it('should render current agent name', () => {
@@ -25,6 +25,6 @@ describe('AgentSwitcher', () => {
     render(<AgentSwitcher />);
     await userEvent.click(screen.getByText('Analyst'));
     await userEvent.click(screen.getByText('Developer'));
-    expect(useSessionStore.getState().activeAgentType).toBe('developer');
+    expect(useAgentPreferenceStore.getState().activeAgentType).toBe('developer');
   });
 });

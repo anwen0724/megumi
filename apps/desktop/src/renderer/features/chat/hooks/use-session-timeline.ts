@@ -5,7 +5,6 @@ import type { RuntimeEvent } from '@megumi/coding-agent/events';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
 import { useRunStore } from '../../../entities/run/store';
-import { createSessionTitleFromPrompt } from '../../../entities/session/session-title';
 import { useSessionStore } from '../../../entities/session/store';
 import { useRuntimeTimelineStore } from '../../runtime-timeline';
 import { dispatchRuntimeEvent } from '../../runtime-events/runtime-event-dispatcher';
@@ -40,12 +39,9 @@ function createId(prefix: string): string {
 interface SessionMessageTarget {
   sessionId?: string;
   projectId: string;
-  projectName?: string;
-  projectPath?: string;
-  sessionTitle: string;
 }
 
-function resolveSessionMessageTarget(payload: ComposerSubmitPayload): SessionMessageTarget | null {
+function resolveSessionMessageTarget(): SessionMessageTarget | null {
   const sessionState = useSessionStore.getState();
   const projectState = useProjectStore.getState();
 
@@ -55,13 +51,9 @@ function resolveSessionMessageTarget(payload: ComposerSubmitPayload): SessionMes
       return null;
     }
 
-    const activeProject = projectState.projects.find((project) => project.id === activeSession.projectId);
     return {
       sessionId: activeSession.id,
       projectId: activeSession.projectId,
-      projectName: activeProject?.name,
-      projectPath: activeProject?.repoPath,
-      sessionTitle: activeSession.title,
     };
   }
 
@@ -77,37 +69,7 @@ function resolveSessionMessageTarget(payload: ComposerSubmitPayload): SessionMes
 
   return {
     projectId: targetProject.id,
-    projectName: targetProject.name,
-    projectPath: targetProject.repoPath,
-    sessionTitle: createSessionTitleFromPrompt(payload.message),
   };
-}
-
-function renameEmptyManualSessionFromPrompt(payload: ComposerSubmitPayload, existingMessageCount: number) {
-  if (existingMessageCount > 0) {
-    return;
-  }
-
-  const sessionState = useSessionStore.getState();
-  const activeSessionId = sessionState.activeSessionId;
-
-  if (!activeSessionId) {
-    return;
-  }
-
-  const activeSession = sessionState.sessions.find((session) => session.id === activeSessionId);
-
-  if (!activeSession || activeSession.title !== 'New session') {
-    return;
-  }
-
-  sessionState.updateSession(activeSessionId, {
-    title: createSessionTitleFromPrompt(payload.message),
-  });
-}
-
-function activeCanonicalMessageCount(projectId: string, sessionId: string): number {
-  return useRuntimeTimelineStore.getState().sessions[`${projectId}:${sessionId}`]?.messages.length ?? 0;
 }
 
 function createSessionMessageSendPayload(
@@ -167,10 +129,7 @@ function adoptBackendSession(session: Parameters<typeof localSessionFromPersiste
   const sessionState = useSessionStore.getState();
   const projectState = useProjectStore.getState();
 
-  sessionState.upsertSession({
-    ...localSession,
-    agentType: sessionState.activeAgentType,
-  });
+  sessionState.upsertSession(localSession);
   if (projectState.currentProjectId !== localSession.projectId) {
     projectState.setCurrentProject(localSession.projectId);
   }
@@ -281,7 +240,7 @@ export function useSessionTimeline() {
 
   const sendSessionMessage = useCallback(async (payload: ComposerSubmitPayload): Promise<boolean> => {
     lastPayloadRef.current = payload;
-    const target = resolveSessionMessageTarget(payload);
+    const target = resolveSessionMessageTarget();
     runSessionIdRef.current = target?.sessionId ?? null;
 
     if (!target) {
@@ -290,10 +249,6 @@ export function useSessionTimeline() {
     }
 
     const projectState = useProjectStore.getState();
-
-    if (target.sessionId) {
-      renameEmptyManualSessionFromPrompt(payload, activeCanonicalMessageCount(target.projectId, target.sessionId));
-    }
 
     const branchDraftForSend = target.sessionId &&
       branchDraft?.sessionId === target.sessionId &&
