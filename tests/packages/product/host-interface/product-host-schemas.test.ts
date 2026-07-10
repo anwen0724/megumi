@@ -103,12 +103,12 @@ describe('Product Host runtime schemas', () => {
     }).success).toBe(false);
   });
 
-  it('validates Artifact result payloads and rejects non-serializable relations', () => {
+  it('validates Artifact result payloads without fabricated relations', () => {
     expect(ArtifactGetDataSchema.safeParse({
-      artifact: undefined, currentVersion: undefined, sourceRefs: [], relations: [],
+      artifact: undefined, currentVersion: undefined, sourceRefs: [],
     }).success).toBe(true);
     expect(ArtifactGetDataSchema.safeParse({
-      sourceRefs: [], relations: [() => undefined],
+      artifact: undefined, currentVersion: undefined, sourceRefs: [], relations: [],
     }).success).toBe(false);
   });
 

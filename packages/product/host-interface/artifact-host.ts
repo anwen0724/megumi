@@ -2,6 +2,13 @@
  * Implements ArtifactHost over the Coding Agent Artifact module.
  */
 import type { ArtifactServicePort } from '../../coding-agent/artifacts';
+import type {
+  Artifact,
+  ArtifactSourceRef,
+  ArtifactStatus,
+  ArtifactVersion,
+} from '../../coding-agent/artifacts/legacy-contracts/artifact-contracts';
+import type { JsonObject } from '../../coding-agent/artifacts/legacy-contracts/artifact-json';
 import { z } from 'zod';
 
 const JsonValueSchema: z.ZodType<unknown> = z.lazy(() => z.union([
@@ -59,19 +66,44 @@ const ArtifactSourceRefRecordSchema = z.object({
 export const ArtifactListDataSchema = z.object({ artifacts: z.array(ArtifactRecordSchema) }).strict();
 export const ArtifactGetDataSchema = z.object({
   artifact: ArtifactRecordSchema.optional(), currentVersion: ArtifactVersionRecordSchema.optional(),
-  sourceRefs: z.array(ArtifactSourceRefRecordSchema), relations: z.array(JsonValueSchema),
+  sourceRefs: z.array(ArtifactSourceRefRecordSchema),
 }).strict();
 export const ArtifactVersionGetDataSchema = z.object({ version: ArtifactVersionRecordSchema.optional() }).strict();
 export const ArtifactVersionCreateDataSchema = z.object({ version: ArtifactVersionRecordSchema }).strict();
 export const ArtifactStatusUpdateDataSchema = z.object({ artifact: ArtifactRecordSchema }).strict();
 export const ArtifactReferenceDataSchema = z.object({ sourceRef: ArtifactSourceRefRecordSchema }).strict();
 
-export type ArtifactRecord = ReturnType<ArtifactServicePort['listByRun']>[number];
-export type ArtifactVersionRecord = NonNullable<ReturnType<ArtifactServicePort['getVersion']>>;
-export type ArtifactSourceRefRecord = ReturnType<ArtifactServicePort['get']>['sourceRefs'][number];
-export type ArtifactCreateVersionPayload = Parameters<ArtifactServicePort['createVersion']>[0];
-export type ArtifactStatusUpdatePayload = Parameters<ArtifactServicePort['updateStatus']>[0];
-export type ArtifactReferencePayload = Parameters<ArtifactServicePort['reference']>[0];
+export type ArtifactRecord = Artifact;
+export type ArtifactVersionRecord = ArtifactVersion;
+export type ArtifactSourceRefRecord = ArtifactSourceRef;
+
+export interface ArtifactCreateVersionPayload {
+  artifactId: string;
+  contentType: ArtifactVersion['contentType'];
+  contentFormat: string;
+  text: string;
+  textPreview: string;
+  changeSummary?: string;
+  createdByRunId: string;
+  createdByStepId?: string;
+  createdAt: string;
+  metadata?: JsonObject;
+}
+
+export interface ArtifactStatusUpdatePayload {
+  artifactId: string;
+  status: ArtifactStatus;
+  updatedAt: string;
+}
+
+export interface ArtifactReferencePayload {
+  artifactId: string;
+  artifactVersionId?: string;
+  referencedByKind: 'run' | 'step' | 'artifact' | 'message';
+  referencedById: string;
+  createdAt: string;
+  metadata?: JsonObject;
+}
 
 export interface ArtifactListData {
   artifacts: ArtifactRecord[];
@@ -81,7 +113,6 @@ export interface ArtifactGetData {
   artifact: ArtifactRecord | undefined;
   currentVersion: ArtifactVersionRecord | undefined;
   sourceRefs: ArtifactSourceRefRecord[];
-  relations: unknown[];
 }
 
 export interface ArtifactVersionGetData {
@@ -116,10 +147,7 @@ export function createArtifactHost(
   return {
     listByRun: (runId) => ({ artifacts: artifactService.listByRun(runId) }),
     listBySession: (sessionId) => ({ artifacts: artifactService.listBySession(sessionId) }),
-    get: (artifactId) => ({
-      ...artifactService.get(artifactId),
-      relations: [],
-    }),
+    get: (artifactId) => artifactService.get(artifactId),
     getVersion: (artifactVersionId) => ({ version: artifactService.getVersion(artifactVersionId) }),
     createVersion: async (payload) => ({ version: await artifactService.createVersion(payload) }),
     updateStatus: (payload) => ({ artifact: artifactService.updateStatus(payload) }),
