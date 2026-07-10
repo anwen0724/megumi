@@ -2,12 +2,14 @@
  * Implements the public Session Service. The service owns session business
  * actions and delegates SQL to the SessionRepository.
  */
+import crypto from 'node:crypto';
 import type {
   AppendSessionEntryRequest,
   AppendSessionEntryResult,
   ArchiveSessionRequest,
   ArchiveSessionResult,
   CreateSessionRequest,
+  CreateSessionFromIntentRequest,
   CreateSessionResult,
   GetActiveHistoryRequest,
   GetActiveHistoryResult,
@@ -39,8 +41,10 @@ import type { SessionRepository } from '../repositories/session-repository';
 export type CreateSessionServiceOptions = {
   repository: SessionRepository;
   ids?: {
+    sessionId?: () => string;
     entryId(input: { kind: 'message' | 'compaction'; source_id: string }): string;
   };
+  now?: () => string;
 };
 
 export function createSessionService(options: CreateSessionServiceOptions): SessionService {
@@ -65,6 +69,15 @@ class DefaultSessionService implements SessionService {
     } catch (error) {
       return failed(error);
     }
+  }
+
+  createSessionFromIntent(request: CreateSessionFromIntentRequest): CreateSessionResult {
+    return this.createSession({
+      session_id: this.sessionId(),
+      workspace_id: request.workspace_id,
+      title: request.title?.trim() || 'New session',
+      created_at: this.now(),
+    });
   }
 
   getSession(request: GetSessionRequest): GetSessionResult {
@@ -384,6 +397,14 @@ class DefaultSessionService implements SessionService {
 
   private entryId(input: { kind: 'message' | 'compaction'; source_id: string }): string {
     return this.options.ids?.entryId(input) ?? `${input.kind}:${input.source_id}`;
+  }
+
+  private sessionId(): string {
+    return this.options.ids?.sessionId?.() ?? `session:${crypto.randomUUID()}`;
+  }
+
+  private now(): string {
+    return this.options.now?.() ?? new Date().toISOString();
   }
 }
 

@@ -96,6 +96,11 @@ export type CreateSessionRequest = {
   created_at: string;
 };
 
+export type CreateSessionFromIntentRequest = {
+  workspace_id: string;
+  title?: string;
+};
+
 export type CreateSessionResult =
   | { status: 'created'; session: Session }
   | { status: 'failed'; failure: RuntimeError };
@@ -217,6 +222,7 @@ export type SaveCompactionSummaryResult =
 
 export type SessionService = {
   createSession(request: CreateSessionRequest): CreateSessionResult;
+  createSessionFromIntent(request: CreateSessionFromIntentRequest): CreateSessionResult;
   getSession(request: GetSessionRequest): GetSessionResult;
   listSessions(request: ListSessionsRequest): ListSessionsResult;
   archiveSession(request: ArchiveSessionRequest): ArchiveSessionResult;

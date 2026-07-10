@@ -60,6 +60,34 @@ describe('SessionService', () => {
     })).toMatchObject({ status: 'archived', session: { status: 'archived' } });
   });
 
+  it('creates sessions from host intent with owner-owned id, time, and default title', () => {
+    const database = createDatabase(':memory:');
+    applyCodingAgentDatabaseMigrations(database);
+    const workspaceId = seedWorkspace(database);
+    const repository = new SessionRepository(database);
+    const service = createSessionService({
+      repository,
+      ids: {
+        sessionId: () => 'session:owner-1',
+        entryId: ({ kind, source_id }) => `${kind}:${source_id}`,
+      },
+      now: () => '2026-07-10T00:00:00.000Z',
+    });
+
+    const result = service.createSessionFromIntent({ workspace_id: workspaceId });
+
+    expect(result).toEqual({
+      status: 'created',
+      session: expect.objectContaining({
+        session_id: 'session:owner-1',
+        workspace_id: workspaceId,
+        title: 'New session',
+        created_at: '2026-07-10T00:00:00.000Z',
+        updated_at: '2026-07-10T00:00:00.000Z',
+      }),
+    });
+  });
+
   it('saves user message with attachments and moves active entry', async () => {
     const { service, workspaceId } = createService();
     await service.createSession({

@@ -5,6 +5,47 @@ import type { RuntimeEvent } from '@megumi/coding-agent/events';
 import type { TimelineMessage } from '@megumi/coding-agent/projections/timeline';
 
 describe('ChatHost product semantics', () => {
+  it('delegates explicit session creation intent to the Session owner', async () => {
+    const createSessionFromIntent = vi.fn(() => ({
+      status: 'created' as const,
+      session: {
+        session_id: 'session:owner-1',
+        workspace_id: 'workspace:1',
+        title: 'Planning',
+        status: 'active' as const,
+        created_at: '2026-07-10T00:00:00.000Z',
+        updated_at: '2026-07-10T00:00:00.000Z',
+      },
+    }));
+    const host = createChatHost({
+      agentRunService: { startRun: vi.fn(), cancelRun: vi.fn() } as never,
+      commandService: { getCommandSuggestions: vi.fn() } as never,
+      sessionService: {
+        createSessionFromIntent,
+        getSession: vi.fn(() => ({ status: 'not_found' })),
+      } as never,
+      branchService: createSessionBranchHost(),
+      workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
+      sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
+      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [] },
+    });
+
+    await expect(host.createSession({
+      projectId: 'workspace:1',
+      title: 'Planning',
+    })).resolves.toMatchObject({
+      session: {
+        id: 'session:owner-1',
+        projectId: 'workspace:1',
+        title: 'Planning',
+      },
+    });
+    expect(createSessionFromIntent).toHaveBeenCalledWith({
+      workspace_id: 'workspace:1',
+      title: 'Planning',
+    });
+  });
+
   it('owns request, title, and permission defaults', async () => {
     const startRun = vi.fn(async () => ({
       status: 'completed',

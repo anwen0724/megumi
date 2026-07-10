@@ -202,11 +202,9 @@ export function createChatHost(options: {
 }): ChatHost {
   return {
     async createSession(request) {
-      const result = options.sessionService.createSession({
-        session_id: `session:${crypto.randomUUID()}`,
+      const result = options.sessionService.createSessionFromIntent({
         workspace_id: request.projectId,
-        title: request.title ?? 'New session',
-        created_at: new Date().toISOString(),
+        ...(request.title ? { title: request.title } : {}),
       });
       if (result.status === 'failed') {
         throw new Error(result.failure.message);
