@@ -570,7 +570,7 @@ export interface ChatSendUserInputUiRequest {
     provider_id: string;
     model_id: string;
   };
-  permissionMode?: 'default' | 'accept_edits' | 'plan' | 'auto';
+  permissionMode?: PermissionMode;
   permissionSource?: string;
   runtimeContext?: RuntimeContext;
 }
@@ -604,6 +604,8 @@ export interface ChatSendUserInputUiResult {
   payload: ChatSendUserInputUiPayload;
   events?: AsyncIterable<RuntimeEvent>;
 }
+
+export type PermissionMode = 'default' | 'accept_edits' | 'plan' | 'auto';
 
 export interface ChatCancelUserInputUiRequest {
   runId: string;
