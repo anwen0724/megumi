@@ -162,6 +162,6 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         error: null,
       };
     });
-    return result.data.removed;
+    return result.data.status === 'removed';
   },
 }));

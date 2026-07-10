@@ -15,7 +15,7 @@ export interface Project {
 }
 
 export function projectFromRecord(record: ProjectRecord): Project {
-  const openedAt = record.openedAt ?? record.lastActiveAt ?? new Date(0).toISOString();
+  const openedAt = record.createdAt ?? record.lastOpenedAt ?? new Date(0).toISOString();
   return {
     id: record.projectId,
     projectId: record.projectId,
@@ -24,6 +24,6 @@ export function projectFromRecord(record: ProjectRecord): Project {
     repoPathKey: record.projectId,
     status: record.status,
     createdAt: openedAt,
-    lastOpenedAt: record.lastActiveAt ?? openedAt,
+    lastOpenedAt: record.lastOpenedAt ?? openedAt,
   };
 }

@@ -18,8 +18,12 @@ export interface DirectoryPickerPort {
   chooseDirectory(): Promise<DirectoryPickerResult>;
 }
 
+export type FileOpenResult =
+  | { status: 'opened' }
+  | { status: 'failed'; message: string };
+
 export interface FileOpenPort {
-  openPath(absolutePath: string): Promise<string>;
+  openPath(absolutePath: string): Promise<FileOpenResult>;
 }
 
 export class WorkspaceProjectCompatibilityError extends Error {
@@ -57,8 +61,8 @@ const WorkspaceProjectUiDtoSchema = z.object({
   name: z.string(),
   rootPath: z.string().min(1),
   status: z.enum(['available', 'missing']),
-  openedAt: z.string().datetime().optional(),
-  lastActiveAt: z.string().datetime().optional(),
+  createdAt: z.string().datetime().optional(),
+  lastOpenedAt: z.string().datetime().optional(),
 }).strict();
 
 export const WorkspaceListProjectsUiResultSchema = z.object({
@@ -70,7 +74,15 @@ export const WorkspaceUseExistingProjectUiResultSchema = z.object({
 export const WorkspaceOpenProjectUiResultSchema = z.object({
   project: WorkspaceProjectUiDtoSchema,
 }).strict();
-export const WorkspaceRemoveProjectUiResultSchema = z.object({ removed: z.boolean() }).strict();
+export const WorkspaceRemoveProjectUiResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('removed'), projectId: z.string().min(1) }).strict(),
+  z.object({ status: z.literal('not_found'), projectId: z.string().min(1) }).strict(),
+  z.object({
+    status: z.literal('failed'),
+    projectId: z.string().min(1),
+    failure: z.object({ code: z.string().min(1), message: z.string() }).strict(),
+  }).strict(),
+]);
 export const WorkspaceListFilesUiResultSchema = z.object({
   projectId: z.string().min(1),
   workspaceRoot: z.string().min(1),
@@ -85,12 +97,20 @@ export const WorkspaceListFilesUiResultSchema = z.object({
     mtime: z.string().datetime(),
   }).strict()),
 }).strict();
-export const WorkspaceOpenFileUiResultSchema = z.object({
-  projectId: z.string().min(1),
-  workspaceRoot: z.string().min(1),
-  filePath: z.string().min(1),
-  opened: z.literal(true),
-}).strict();
+export const WorkspaceOpenFileUiResultSchema = z.discriminatedUnion('status', [
+  z.object({
+    status: z.literal('opened'),
+    projectId: z.string().min(1),
+    workspaceRoot: z.string().min(1),
+    filePath: z.string().min(1),
+  }).strict(),
+  z.object({
+    status: z.literal('failed'),
+    projectId: z.string().min(1),
+    filePath: z.string().min(1),
+    failure: z.object({ code: z.string().min(1), message: z.string() }).strict(),
+  }).strict(),
+]);
 
 export function createWorkspaceHost(input: {
   workspaceService: WorkspaceService;
@@ -132,7 +152,20 @@ export function createWorkspaceHost(input: {
 
     removeProject(request) {
       const result = input.workspaceService.removeWorkspace({ workspace_id: request.projectId });
-      return { removed: result.status === 'removed' };
+      if (result.status === 'removed') {
+        return { status: 'removed', projectId: result.workspace_id };
+      }
+      if (result.status === 'not_found') {
+        return { status: 'not_found', projectId: result.workspace_id };
+      }
+      return {
+        status: 'failed',
+        projectId: result.workspace_id,
+        failure: {
+          code: 'workspace_remove_blocked',
+          message: 'Workspace cannot be removed while product facts still reference it.',
+        },
+      };
     },
 
     async listFiles(request) {
@@ -164,13 +197,20 @@ export function createWorkspaceHost(input: {
       });
       if (result.status !== 'ok') throw workspaceFilesError(result);
       if (!input.fileOpen) throw new Error('File open adapter is not configured.');
-      const openError = await input.fileOpen.openPath(result.absolute_path);
-      if (openError) throw new Error(openError);
+      const opened = await input.fileOpen.openPath(result.absolute_path);
+      if (opened.status === 'failed') {
+        return {
+          status: 'failed',
+          projectId: result.workspace_id,
+          filePath: result.file_path,
+          failure: { code: 'file_open_failed', message: opened.message },
+        };
+      }
       return {
+        status: 'opened',
         projectId: result.workspace_id,
         workspaceRoot: result.workspace_root,
         filePath: result.file_path,
-        opened: true,
       };
     },
   };
@@ -197,8 +237,8 @@ export interface WorkspaceProjectUiDto {
   name: string;
   rootPath: string;
   status: WorkspaceProjectUiStatus;
-  openedAt?: string;
-  lastActiveAt?: string;
+  createdAt?: string;
+  lastOpenedAt?: string;
 }
 
 export interface WorkspaceListProjectsUiRequest {}
@@ -221,9 +261,10 @@ export interface WorkspaceOpenProjectUiResult {
 export interface WorkspaceRemoveProjectUiRequest {
   projectId: string;
 }
-export interface WorkspaceRemoveProjectUiResult {
-  removed: boolean;
-}
+export type WorkspaceRemoveProjectUiResult =
+  | { status: 'removed'; projectId: string }
+  | { status: 'not_found'; projectId: string }
+  | { status: 'failed'; projectId: string; failure: { code: string; message: string } };
 
 export interface WorkspaceFileEntryUiDto {
   name: string;
@@ -250,12 +291,9 @@ export interface WorkspaceOpenFileUiRequest {
   projectId: string;
   filePath: string;
 }
-export interface WorkspaceOpenFileUiResult {
-  projectId: string;
-  workspaceRoot: string;
-  filePath: string;
-  opened: true;
-}
+export type WorkspaceOpenFileUiResult =
+  | { status: 'opened'; projectId: string; workspaceRoot: string; filePath: string }
+  | { status: 'failed'; projectId: string; filePath: string; failure: { code: string; message: string } };
 
 /*
  * Maps Workspace module facts into host-facing workspace UI DTOs.
@@ -268,7 +306,7 @@ export function toWorkspaceProjectUiDto(workspace: Workspace): WorkspaceProjectU
     name: workspace.name,
     rootPath: workspace.root_path,
     status: workspace.status,
-    openedAt: workspace.created_at,
-    lastActiveAt: workspace.last_opened_at,
+    createdAt: workspace.created_at,
+    lastOpenedAt: workspace.last_opened_at,
   };
 }

@@ -3,7 +3,7 @@ import { createWorkspaceHost } from '@megumi/product/host-interface/workspace-ho
 
 describe('WorkspaceHost files', () => {
   it('maps canonical Workspace file results and opens only the resolved absolute path', async () => {
-    const openPath = vi.fn(async () => '');
+    const openPath = vi.fn(async () => ({ status: 'opened' as const }));
     const host = createWorkspaceHost({
       workspaceService: workspaceServiceStub(),
       workspaceFilesService: {
@@ -39,9 +39,33 @@ describe('WorkspaceHost files', () => {
     });
     await expect(host.openFile({ projectId: 'workspace:1', filePath: 'README.md' })).resolves.toMatchObject({
       projectId: 'workspace:1',
-      opened: true,
+      status: 'opened',
     });
     expect(openPath).toHaveBeenCalledWith('C:/work/megumi/README.md');
+  });
+
+  it('projects file open adapter failures without using empty-string sentinels', async () => {
+    const host = createWorkspaceHost({
+      workspaceService: workspaceServiceStub(),
+      workspaceFilesService: {
+        listDirectory: vi.fn(),
+        resolveFile: vi.fn(() => ({
+          status: 'ok' as const,
+          workspace_id: 'workspace:1',
+          workspace_root: 'C:/work/megumi',
+          file_path: 'README.md',
+          absolute_path: 'C:/work/megumi/README.md',
+        })),
+      },
+      fileOpen: { openPath: vi.fn(async () => ({ status: 'failed' as const, message: 'No app associated.' })) },
+    });
+
+    await expect(host.openFile({ projectId: 'workspace:1', filePath: 'README.md' })).resolves.toEqual({
+      status: 'failed',
+      projectId: 'workspace:1',
+      filePath: 'README.md',
+      failure: { code: 'file_open_failed', message: 'No app associated.' },
+    });
   });
 });
 
