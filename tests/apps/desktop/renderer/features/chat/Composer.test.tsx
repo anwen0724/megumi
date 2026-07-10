@@ -82,6 +82,18 @@ describe('Composer', () => {
     expect(screen.getByLabelText('Context usage')).toHaveAttribute('aria-valuenow', '86');
   });
 
+  it('shows a calculating context usage state while background usage is not calculated yet', () => {
+    render(
+      <TestComposer
+        onSubmit={() => undefined}
+        contextUsage={{ status: 'not_available', reason: 'not_calculated' }}
+      />,
+    );
+
+    expect(screen.getByText('Calculating usage...')).toBeInTheDocument();
+    expect(screen.queryByText('Usage not available')).not.toBeInTheDocument();
+  });
+
   it('submits trimmed text with selected permission mode and model then clears the input', async () => {
     const onSubmit = vi.fn();
     render(<TestComposer onSubmit={onSubmit} />);

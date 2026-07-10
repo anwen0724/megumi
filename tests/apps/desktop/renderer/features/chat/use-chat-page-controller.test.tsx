@@ -3,7 +3,7 @@
  * Verifies chat page controller UI feedback for failed actions.
  */
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useApprovalStore } from '@megumi/desktop/renderer/entities/approval';
 import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
@@ -11,6 +11,7 @@ import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useChatPageController } from '@megumi/desktop/renderer/features/chat/hooks/use-chat-page-controller';
 import { useRuntimeTimelineStore } from '@megumi/desktop/renderer/features/runtime-timeline';
+import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import { useToastStore } from '@megumi/desktop/renderer/shared/ui';
 
 const createdAt = '2026-07-09T00:00:00.000Z';
@@ -99,6 +100,10 @@ describe('useChatPageController', () => {
     });
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('shows a top toast when approval resume fails', async () => {
     const { result } = renderHook(() => useChatPageController());
 
@@ -137,4 +142,77 @@ describe('useChatPageController', () => {
       }));
     });
   });
+
+  it('follows a background context usage calculation with a sync refresh for the active session', async () => {
+    useChatUiStore.setState({
+      ...useChatUiStore.getState(),
+      agentStatus: 'idle',
+    });
+    vi.mocked(window.megumi.session.contextUsage.get)
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { status: 'not_available', reason: 'not_calculated' },
+        meta: contextUsageResponseMeta(),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: {
+          status: 'ok',
+          usage: {
+            usedTokens: 100,
+            totalTokens: 1000,
+            remainingTokens: 900,
+            usedPercent: 10,
+            autoCompactPercent: 80,
+            shouldAutoCompact: false,
+          },
+        },
+        meta: contextUsageResponseMeta(),
+      });
+
+    const { result } = renderHook(() => useChatPageController());
+
+    await waitFor(() => {
+      expect(window.megumi.session.contextUsage.get).toHaveBeenCalledWith(expect.objectContaining({
+        payload: {
+          sessionId: 'session-1',
+          projectId: 'project-1',
+          refresh: 'background',
+        },
+      }));
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 550));
+    });
+
+    await waitFor(() => {
+      expect(window.megumi.session.contextUsage.get).toHaveBeenCalledWith(expect.objectContaining({
+        payload: {
+          sessionId: 'session-1',
+          projectId: 'project-1',
+          refresh: 'sync',
+        },
+      }));
+    });
+    expect(result.current.contextUsage).toEqual({
+      status: 'ok',
+      usage: {
+        usedTokens: 100,
+        totalTokens: 1000,
+        remainingTokens: 900,
+        usedPercent: 10,
+        autoCompactPercent: 80,
+        shouldAutoCompact: false,
+      },
+    });
+  });
 });
+
+function contextUsageResponseMeta() {
+  return {
+    requestId: 'request-1',
+    channel: IPC_CHANNELS.chat.sessionContextUsageGet,
+    handledAt: createdAt,
+  };
+}
