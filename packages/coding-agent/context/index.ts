@@ -16,3 +16,5 @@ export * from './domain/dto/ui/context-ui-response';
 
 export * from './service/context-service-types';
 export * from './service/context-service';
+export * from './service/context-service-impl';
+export * from './config/compose-coding-agent-context';

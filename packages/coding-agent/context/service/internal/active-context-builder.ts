@@ -3,10 +3,7 @@
  */
 import type { ToolSetEntry } from '@megumi/ai';
 import type { EffectiveAgentInstructions, SystemInstruction } from '../../../instructions';
-import type {
-  ActivatedSkillContextItem,
-  SkillCatalogItem,
-} from '../../../skills/domain/dto/context/skill-context-response';
+import type { SkillCatalogItem } from '../../../skills/domain/dto/context/skill-context-response';
 import type { ActiveContext } from '../../domain/model/active-context';
 import type {
   ConversationTurn,
@@ -14,6 +11,7 @@ import type {
 } from '../../domain/model/conversation-turn';
 import type {
   ContextSourceRef,
+  ActivatedSkillInstruction,
   MemoryContextInput,
   VisibleCompactionSummary,
 } from '../../domain/model/prompt';
@@ -23,7 +21,7 @@ export type BuildActiveContextRequest = {
   systemInstructions: SystemInstruction[];
   agentInstructions: EffectiveAgentInstructions;
   skillCatalog: SkillCatalogItem[];
-  activatedSkills: ActivatedSkillContextItem[];
+  activatedSkills: ActivatedSkillInstruction[];
   compactionSummary?: VisibleCompactionSummary;
   memoryRecall?: MemoryContextInput;
   historicalTurns: ConversationTurn[];
