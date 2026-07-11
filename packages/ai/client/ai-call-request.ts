@@ -7,7 +7,7 @@ import { type ProviderCredential } from './ai-client-options';
 export interface AiCallRequest {
     model: AiModel;
     context: ModelContext;
-    toolSet?: ToolSet;
+    tools?: ToolSet;
 
     signal?: AbortSignal;
 

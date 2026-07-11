@@ -27,7 +27,6 @@ export type ModelCallRequest = {
   prompt: Prompt;
   model_call_messages?: ModelCallMessage[];
   model_config: ModelCallConfig;
-  tool_set?: ToolSet;
   signal?: AbortSignal;
 };
 
@@ -121,7 +120,6 @@ export type ModelCallFailure = Omit<AgentRunFailure, 'code'> & {
 export type CountPromptRequest = {
   prompt: Prompt;
   model_config: ModelCallConfig;
-  tool_set: ToolSet;
 };
 
 export type CountPromptResult =

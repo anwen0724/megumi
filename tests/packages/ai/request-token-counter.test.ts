@@ -106,7 +106,7 @@ function completeRequest(): AiCallRequest {
         { role: 'user', content: 'Conversation' },
       ],
     },
-    toolSet: [{
+    tools: [{
       name: 'lookup',
       description: 'Reference a record',
       inputSchema: { type: 'object', properties: { id: { type: 'number' } } },

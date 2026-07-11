@@ -39,12 +39,15 @@ describe('Model Call Service', () => {
       { role: 'user', content: 'Hello' },
       {
         role: 'assistant',
-        content: [{
-          type: 'toolCall',
-          id: 'call-lookup',
-          name: 'lookup',
-          argumentsText: '{"id":1}',
-        }],
+        content: [
+          { type: 'text', text: 'Looking up' },
+          {
+            type: 'toolCall',
+            id: 'call-lookup',
+            name: 'lookup',
+            argumentsText: '{"id":1}',
+          },
+        ],
       },
       {
         role: 'toolResult',
@@ -52,7 +55,7 @@ describe('Model Call Service', () => {
         content: '{"toolName":"lookup","status":"success","content":"{\\"answer\\":42}"}',
       },
     ]);
-    expect(mapped.toolSet).toEqual([
+    expect(mapped.tools).toEqual([
       {
         name: 'lookup',
         description: 'Lookup an item',
@@ -61,6 +64,103 @@ describe('Model Call Service', () => {
     ]);
     expect('maxRetries' in mapped).toBe(false);
     expect('maxRetryDelayMs' in mapped).toBe(false);
+    expect(mapped).not.toHaveProperty('toolSet');
+  });
+
+  it('combines assistant text and one following tool call into one protocol message', () => {
+    expect(mapConversation([
+      { type: 'user_message', content: [{ type: 'text', text: 'Lookup one' }] },
+      { type: 'assistant_message', content: [{ type: 'text', text: 'Calling lookup' }] },
+      { type: 'tool_call', toolCallId: 'call-1', toolName: 'lookup', arguments: { id: 1 } },
+      {
+        type: 'tool_result',
+        toolCallId: 'call-1',
+        toolName: 'lookup',
+        status: 'success',
+        content: [{ type: 'text', text: 'one' }],
+      },
+    ])).toEqual([
+      { role: 'user', content: 'Lookup one' },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'Calling lookup' },
+          { type: 'toolCall', id: 'call-1', name: 'lookup', argumentsText: '{"id":1}' },
+        ],
+      },
+      {
+        role: 'toolResult',
+        toolCallId: 'call-1',
+        content: '{"toolName":"lookup","status":"success","content":"one"}',
+      },
+    ]);
+  });
+
+  it('keeps text, parallel tool calls, and paired results in provider protocol order', () => {
+    expect(mapConversation([
+      { type: 'user_message', content: [{ type: 'text', text: 'Lookup two' }] },
+      {
+        type: 'assistant_message',
+        content: [
+          { type: 'text', text: 'Calling both' },
+          { type: 'json', value: { plan: 'parallel' } },
+        ],
+      },
+      { type: 'tool_call', toolCallId: 'call-1', toolName: 'lookup', arguments: { id: 1 } },
+      { type: 'tool_call', toolCallId: 'call-2', toolName: 'lookup', arguments: { id: 2 } },
+      {
+        type: 'tool_result',
+        toolCallId: 'call-1',
+        toolName: 'lookup',
+        status: 'success',
+        content: [{ type: 'text', text: 'one' }],
+      },
+      {
+        type: 'tool_result',
+        toolCallId: 'call-2',
+        toolName: 'lookup',
+        status: 'failure',
+        content: [{ type: 'text', text: 'missing' }],
+      },
+    ])).toEqual([
+      { role: 'user', content: 'Lookup two' },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'Calling both' },
+          { type: 'text', text: '{"plan":"parallel"}' },
+          { type: 'toolCall', id: 'call-1', name: 'lookup', argumentsText: '{"id":1}' },
+          { type: 'toolCall', id: 'call-2', name: 'lookup', argumentsText: '{"id":2}' },
+        ],
+      },
+      {
+        role: 'toolResult',
+        toolCallId: 'call-1',
+        content: '{"toolName":"lookup","status":"success","content":"one"}',
+      },
+      {
+        role: 'toolResult',
+        toolCallId: 'call-2',
+        content: '{"toolName":"lookup","status":"failure","content":"missing"}',
+      },
+    ]);
+  });
+
+  it('combines consecutive parallel tool calls without assistant text', () => {
+    expect(mapConversation([
+      { type: 'user_message', content: [{ type: 'text', text: 'Lookup two' }] },
+      { type: 'tool_call', toolCallId: 'call-1', toolName: 'lookup', arguments: { id: 1 } },
+      { type: 'tool_call', toolCallId: 'call-2', toolName: 'lookup', arguments: { id: 2 } },
+    ])).toEqual([
+      { role: 'user', content: 'Lookup two' },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'toolCall', id: 'call-1', name: 'lookup', argumentsText: '{"id":1}' },
+          { type: 'toolCall', id: 'call-2', name: 'lookup', argumentsText: '{"id":2}' },
+        ],
+      },
+    ]);
   });
 
   it('uses the same Prompt materialization for counting and the actual model call', async () => {
@@ -92,7 +192,6 @@ describe('Model Call Service', () => {
     await expect(service.countPrompt({
       prompt: request.prompt,
       model_config: request.model_config,
-      tool_set: request.tool_set!,
     })).resolves.toEqual({
       status: 'counted',
       input_tokens: 321,
@@ -123,7 +222,6 @@ describe('Model Call Service', () => {
     const result = await service.countPrompt({
       prompt: request.prompt,
       model_config: request.model_config,
-      tool_set: request.tool_set!,
     });
 
     expect(result).toMatchObject({
@@ -145,7 +243,6 @@ describe('Model Call Service', () => {
     const result = await service.countPrompt({
       prompt: request.prompt,
       model_config: request.model_config,
-      tool_set: request.tool_set!,
     });
 
     expect(result).toMatchObject({
@@ -473,12 +570,15 @@ describe('Model Call Service', () => {
       { role: 'user', content: 'Hello' },
       {
         role: 'assistant',
-        content: [{
-          type: 'toolCall',
-          id: 'call-lookup',
-          name: 'lookup',
-          argumentsText: '{"id":1}',
-        }],
+        content: [
+          { type: 'text', text: 'Looking up' },
+          {
+            type: 'toolCall',
+            id: 'call-lookup',
+            name: 'lookup',
+            argumentsText: '{"id":1}',
+          },
+        ],
       },
       {
         role: 'toolResult',
@@ -597,6 +697,7 @@ function sampleModelCallRequest(): ModelCallRequest {
         { type: 'user_message', content: [{ type: 'text', text: 'Earlier question' }] },
         { type: 'assistant_message', content: [{ type: 'text', text: 'Earlier answer' }] },
         { type: 'user_message', content: [{ type: 'text', text: 'Hello' }] },
+        { type: 'assistant_message', content: [{ type: 'text', text: 'Looking up' }] },
         { type: 'tool_call', toolCallId: 'call-lookup', toolName: 'lookup', arguments: { id: 1 } },
         {
           type: 'tool_result',
@@ -614,17 +715,14 @@ function sampleModelCallRequest(): ModelCallRequest {
       model_id: 'deepseek-chat',
       api_key: 'sk-test',
     },
-    tool_set: {
-      items: [
-        {
-          name: 'read_file',
-          description: 'Read a file',
-          input_schema: { type: 'object' },
-          source_tool_name: 'read_file',
-        },
-      ],
-    },
   };
+}
+
+function mapConversation(conversation: ModelCallRequest['prompt']['conversation']) {
+  const request = sampleModelCallRequest();
+  request.prompt.referenceContext = { skillCatalog: [] };
+  request.prompt.conversation = conversation;
+  return mapModelCallToAiRequest(request).context.messages;
 }
 
 function contextMessage(kind: 'skill_catalog' | 'compaction_summary' | 'memory_recall', content: unknown) {

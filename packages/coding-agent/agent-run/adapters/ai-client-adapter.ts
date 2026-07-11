@@ -4,6 +4,7 @@
  */
 import type {
   AiCallRequest,
+  AssistantContentBlock,
   ContentBlock,
   ContextMessage,
   ConversationItem,
@@ -16,13 +17,11 @@ import type {
   ModelCallMessage,
   ModelCallRequest,
   ModelCallConfig,
-  ToolSet,
 } from '../contracts/model-call-contracts';
 
 export type PromptAiRequestInput = {
   prompt: Prompt;
   model_config: ModelCallConfig;
-  tool_set: ToolSet;
   signal?: AbortSignal;
 };
 
@@ -60,7 +59,7 @@ export function mapPromptToAiRequest(request: PromptAiRequestInput): AiCallReque
       systemPrompt: materializeInstructions(request.prompt),
       messages: materializePromptMessages(request.prompt),
     },
-    toolSet: promptToolsToAiToolSet(request.prompt.tools),
+    tools: promptToolsToAiToolSet(request.prompt.tools),
     ...(request.signal ? { signal: request.signal } : {}),
     ...(request.model_config.api_key ? {
       credential: { type: 'api_key', value: request.model_config.api_key },
@@ -72,7 +71,6 @@ export function mapModelCallToAiRequest(request: ModelCallRequest): AiCallReques
   const baseRequest = mapPromptToAiRequest({
     prompt: request.prompt,
     model_config: request.model_config,
-    tool_set: request.tool_set ?? { items: [] },
     ...(request.signal ? { signal: request.signal } : {}),
   });
 
@@ -97,7 +95,6 @@ function materializeInstructions(prompt: Prompt): string {
 }
 
 function materializePromptMessages(prompt: Prompt): ConversationMessage[] {
-  const conversation = prompt.conversation.flatMap(conversationItemToMessages);
   const references: ContextMessage[] = [];
 
   if (prompt.referenceContext.skillCatalog.length > 0) {
@@ -120,7 +117,7 @@ function materializePromptMessages(prompt: Prompt): ConversationMessage[] {
   }
 
   const memory = prompt.referenceContext.memoryRecall;
-  if (!memory) return [...references, ...conversation];
+  if (!memory) return [...references, ...materializeConversation(prompt.conversation)];
 
   const currentUserIndex = findLastUserMessageIndex(prompt.conversation);
   if (currentUserIndex < 0) {
@@ -137,9 +134,9 @@ function materializePromptMessages(prompt: Prompt): ConversationMessage[] {
   // before it, while any current-run tool protocol items remain after it.
   return [
     ...references,
-    ...conversation.slice(0, currentUserIndex),
+    ...materializeConversation(prompt.conversation.slice(0, currentUserIndex)),
     memoryMessage,
-    ...conversation.slice(currentUserIndex),
+    ...materializeConversation(prompt.conversation.slice(currentUserIndex)),
   ];
 }
 
@@ -156,31 +153,60 @@ function contentBlockToJson(block: ContentBlock): JsonValue {
   throw new UnsupportedModelContentError(block.type);
 }
 
-function conversationItemToMessages(item: ConversationItem): ConversationMessage[] {
-  if (item.type === 'user_message') {
-    return [{ role: 'user', content: materializeContentBlocks(item.content) }];
+function materializeConversation(conversation: ConversationItem[]): ConversationMessage[] {
+  const messages: ConversationMessage[] = [];
+
+  for (let index = 0; index < conversation.length; index += 1) {
+    const item = conversation[index]!;
+
+    if (item.type === 'user_message') {
+      messages.push({ role: 'user', content: materializeContentBlocks(item.content) });
+      continue;
+    }
+
+    if (item.type === 'tool_result') {
+      messages.push(toolResultToMessage(item));
+      continue;
+    }
+
+    const content: AssistantContentBlock[] = item.type === 'assistant_message'
+      ? item.content.map(contentBlockToAssistantText)
+      : [toolCallToContentBlock(item)];
+
+    while (conversation[index + 1]?.type === 'tool_call') {
+      index += 1;
+      content.push(toolCallToContentBlock(
+        conversation[index] as Extract<ConversationItem, { type: 'tool_call' }>,
+      ));
+    }
+
+    messages.push({ role: 'assistant', content });
   }
 
-  if (item.type === 'assistant_message') {
-    return [{
-      role: 'assistant',
-      content: [{ type: 'text', text: materializeContentBlocks(item.content) }],
-    }];
-  }
+  return messages;
+}
 
-  if (item.type === 'tool_call') {
-    return [{
-      role: 'assistant',
-      content: [{
-        type: 'toolCall',
-        id: item.toolCallId,
-        name: item.toolName,
-        argumentsText: JSON.stringify(item.arguments),
-      }],
-    }];
-  }
+function contentBlockToAssistantText(block: ContentBlock): AssistantContentBlock {
+  if (block.type === 'text') return block;
+  if (block.type === 'json') return { type: 'text', text: JSON.stringify(block.value) };
+  throw new UnsupportedModelContentError(block.type);
+}
 
-  return [{
+function toolCallToContentBlock(
+  item: Extract<ConversationItem, { type: 'tool_call' }>,
+): AssistantContentBlock {
+  return {
+    type: 'toolCall',
+    id: item.toolCallId,
+    name: item.toolName,
+    argumentsText: JSON.stringify(item.arguments),
+  };
+}
+
+function toolResultToMessage(
+  item: Extract<ConversationItem, { type: 'tool_result' }>,
+): ConversationMessage {
+  return {
     role: 'toolResult',
     toolCallId: item.toolCallId,
     content: JSON.stringify({
@@ -188,7 +214,7 @@ function conversationItemToMessages(item: ConversationItem): ConversationMessage
       status: item.status,
       content: materializeContentBlocks(item.content),
     }),
-  }];
+  };
 }
 
 function materializeContentBlocks(content: ContentBlock[]): string {

@@ -659,7 +659,7 @@ function materializeOpenAICompatibleRequest(request: ProtocolAdapterRequest) {
         });
     }
 
-    const tools = request.toolSet?.map((tool) => ({
+    const tools = request.tools?.map((tool) => ({
         type: 'function' as const,
         function: {
             name: tool.name,
