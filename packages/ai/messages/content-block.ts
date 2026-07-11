@@ -38,9 +38,19 @@ export const HostReferenceImageSourceSchema = z
     })
     .strict();
 
-export type ImageSource = z.infer<typeof HostReferenceImageSourceSchema>;
+export const LocalFileImageSourceSchema = z
+    .object({
+        type: z.literal('local_file'),
+        path: z.string().min(1),
+    })
+    .strict();
 
-export const ImageSourceSchema = HostReferenceImageSourceSchema;
+export const ImageSourceSchema = z.discriminatedUnion('type', [
+    LocalFileImageSourceSchema,
+    HostReferenceImageSourceSchema,
+]);
+
+export type ImageSource = z.infer<typeof ImageSourceSchema>;
 
 export const ImageContentBlockSchema = z
     .object({

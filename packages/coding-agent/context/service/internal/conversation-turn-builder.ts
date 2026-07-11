@@ -29,7 +29,7 @@ type MessageHistoryItem = Extract<SessionHistoryItem, { type: 'message' }>;
 export function buildConversationTurns(
   request: BuildConversationTurnsRequest,
 ): BuildConversationTurnsResult {
-  const messages = request.history.filter(
+  const messages = historyAfterEffectiveCompaction(request.history).filter(
     (item): item is MessageHistoryItem => item.type === 'message',
   );
   const turns: ConversationTurn[] = [];
@@ -114,19 +114,32 @@ function messageContent(
   ];
 }
 
+function historyAfterEffectiveCompaction(
+  history: SessionHistoryItem[],
+): SessionHistoryItem[] {
+  // The last compaction on the active path is the effective rolling Summary.
+  // Earlier messages are already represented by it and must not be sent twice.
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    if (history[index].type === 'compaction') return history.slice(index + 1);
+  }
+  return history;
+}
+
 function attachmentContent(attachment: SessionMessageAttachment): ContentBlock {
   if (attachment.type === 'image') {
-    // Session retains the source provenance; Context keeps the image reference structured
-    // and leaves provider support validation to packages/ai.
     return {
       type: 'image',
-      source: { type: 'host_reference', referenceId: attachment.source_value },
+      source: attachment.source_type === 'local_file'
+        ? { type: 'local_file', path: attachment.source_value }
+        : { type: 'host_reference', referenceId: attachment.source_value },
     };
   }
 
   return {
     type: 'file',
-    fileId: attachment.source_value,
+    // fileId is the canonical Session attachment identity. Host/AI resolves its
+    // Session-owned source later without leaking source fields into ContentBlock.
+    fileId: attachment.attachment_id,
     ...(attachment.name ? { name: attachment.name } : {}),
     ...(attachment.mime_type ? { mediaType: attachment.mime_type } : {}),
   };

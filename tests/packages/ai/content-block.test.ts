@@ -18,6 +18,10 @@ describe('provider-neutral content blocks', () => {
         source: { type: 'host_reference', referenceId: 'image:1' },
       },
       {
+        type: 'image',
+        source: { type: 'local_file', path: 'C:/tmp/image.png' },
+      },
+      {
         type: 'file',
         fileId: 'file:1',
         name: 'report.txt',
