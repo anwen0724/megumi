@@ -37,18 +37,9 @@ export type ExecuteCommandRequest = {
 export type CommandExecutionContext = {
   session_id: string;
   workspace_id?: string;
+  model_context?: import('../../context').ContextCapacity;
   services?: {
-    context_compaction?: {
-      compact(request: {
-        session_id: string;
-        workspace_id?: string;
-        trigger: { kind: 'manual'; requested_by: 'command' };
-      }): Promise<
-        | { status: 'completed' }
-        | { status: 'skipped'; reason: string }
-        | { status: 'failed'; failure: { message: string } }
-      >;
-    };
+    context?: Pick<import('../../context').ContextService, 'compactSession'>;
   };
 };
 

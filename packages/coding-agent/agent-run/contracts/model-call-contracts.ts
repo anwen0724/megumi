@@ -1,51 +1,21 @@
 /*
  * Stable public contracts for Agent Run model calls.
- * Model Call Service consumes Context prompts and run-level Tool Sets.
+ * Model Call Service consumes one complete Context Prompt per request.
  */
-import type { Prompt, SessionContextSource } from '../../context';
+import type { Prompt } from '../../context';
 import type { ProviderRuntimeConfig } from '../../settings';
 import type { ToolExecutionObservation } from '../../tools';
 import type { AgentRunFailure } from './agent-run-contracts';
 
 export type ModelCallConfig = ProviderRuntimeConfig;
 
-export type ToolSet = {
-  items: ToolSetItem[];
-};
-
-export type ToolSetItem = {
-  name: string;
-  description: string;
-  input_schema: Record<string, unknown>;
-  source_tool_name: string;
-};
-
 export type ModelCallRequest = {
   owner:
     | { type: 'agent_run'; run_id: string }
     | { type: 'context_compaction'; session_id: string; compaction_id?: string };
   prompt: Prompt;
-  model_call_messages?: ModelCallMessage[];
   model_config: ModelCallConfig;
   signal?: AbortSignal;
-};
-
-export type ModelCallMessage =
-  | {
-      role: 'assistant';
-      content?: string;
-      tool_calls: ModelCallToolCall[];
-    }
-  | {
-      role: 'tool_result';
-      tool_call_id: string;
-      content: string;
-    };
-
-export type ModelCallToolCall = {
-  tool_call_id: string;
-  tool_name: string;
-  arguments_text: string;
 };
 
 export type ModelCallEvent =
@@ -151,6 +121,5 @@ export type ToolResultRuntimeFact = {
   status: 'completed' | 'failed' | 'denied' | 'cancelled';
   observation?: ToolExecutionObservation;
   content?: string;
-  runtime_sources?: SessionContextSource[];
   created_at: string;
 };

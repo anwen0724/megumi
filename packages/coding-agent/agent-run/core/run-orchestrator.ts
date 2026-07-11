@@ -7,7 +7,13 @@ import type { SessionService } from '../../session';
 import type { SettingsService } from '../../settings';
 import type { ToolExecutionService } from '../../tools';
 import type { WorkspacePathPolicyService } from '../../workspace';
-import type { CompactContextResult, ContextUsageSignal, SessionContextSource } from '../../context';
+import type {
+  ActivatedSkillInstruction,
+  ContextCapacity,
+  ContextService,
+  CurrentConversationTurn,
+  PreparedModelCall,
+} from '../../context';
 import type { JsonValue } from '../../shared-json';
 import type { RuntimeError } from '../../events';
 import type {
@@ -20,7 +26,6 @@ import type { AgentRunTraceLogger } from '../contracts/agent-run-trace-contracts
 import type {
   ModelCallEvent,
   ModelCallConfig,
-  ModelCallMessage,
   ModelCallService,
   ToolResultRuntimeFact,
 } from '../contracts/model-call-contracts';
@@ -37,20 +42,7 @@ export type RunOrchestratorDependencies = {
   repository: AgentRunRepository;
   session_service: Pick<SessionService, 'saveAssistantMessage'>;
   settings_service: Pick<SettingsService, 'resolvePermissionSettings'>;
-  context_service: {
-    getSessionContext(request: { session_id: string; workspace_id?: string; purpose?: 'agent_response' }): Promise<
-      | { status: 'ok'; session_context: unknown }
-      | { status: 'failed'; failure: { code: string; message: string } }
-    >;
-    buildPrompt(request: {
-      session_context: unknown;
-      purpose: 'agent_response';
-      current_user_message_id?: string;
-      runtime_sources?: SessionContextSource[];
-    }):
-      | { status: 'ok'; prompt: unknown }
-      | { status: 'failed'; failure: { code: string; message: string } };
-  };
+  context_service: Pick<ContextService, 'prepareModelCall' | 'recordCompletedRunUsage'>;
   model_call_service: ModelCallService;
   tool_set_builder: RunToolSetBuilder;
   tool_execution_service: Pick<ToolExecutionService, 'executeTool'>;
@@ -75,12 +67,12 @@ export type RunOrchestratorDependencies = {
 
 export type RunOrchestratorRequest = {
   run: AgentRun;
-  user_message_id: string;
+  current_turn: CurrentConversationTurn;
+  activated_skills: ActivatedSkillInstruction[];
+  model_context: ContextCapacity;
   model_config: ModelCallConfig;
   permission_mode: PermissionMode;
   workspace_root?: string;
-  initial_runtime_sources?: SessionContextSource[];
-  initial_model_call_messages?: ModelCallMessage[];
   signal?: AbortSignal;
 };
 
@@ -98,31 +90,13 @@ export type RunApprovalContinuation = {
   pending_approval_ids: string[];
   original_approval_policy_by_approval_id: Record<string, Extract<PermissionDecision, { type: 'requires_approval' }>>;
   deferred_tool_calls: ModelRequestedToolCall[];
-  user_message_id: string;
+  current_turn: CurrentConversationTurn;
+  activated_skills: ActivatedSkillInstruction[];
+  model_context: ContextCapacity;
   model_config: RunOrchestratorRequest['model_config'];
   permission_mode: PermissionMode;
   workspace_root?: string;
-  runtime_sources: SessionContextSource[];
-  model_call_messages?: ModelCallMessage[];
 };
-
-export type ConsumeContextUsageSignalRequest = {
-  signal: ContextUsageSignal;
-  context_compaction_service: {
-    compact(request: {
-      session_id: string;
-      workspace_id?: string;
-      trigger: { kind: 'auto'; reason: 'context_window_threshold'; signal_id: string };
-    }): Promise<CompactContextResult> | CompactContextResult;
-  };
-  event_sink: AgentRunRuntimeEventFactory;
-};
-
-export type ConsumeContextUsageSignalResult =
-  | { status: 'ignored'; reason: 'not_auto_compaction_signal' }
-  | { status: 'skipped'; reason: string }
-  | { status: 'completed' }
-  | { status: 'failed'; failure: AgentRunFailure };
 
 export async function runAgentModelToolLoop(
   dependencies: RunOrchestratorDependencies,
@@ -130,18 +104,22 @@ export async function runAgentModelToolLoop(
 ): Promise<RunOrchestratorResult> {
   const toolSet = dependencies.tool_set_builder.getToolSet({ run_id: request.run.run_id });
   traceRun(dependencies, request.run, 'trace.tool_set.created', {
-    tool_count: toolSet.items.length,
-    tools: toolSet.items,
+    tool_count: toolSet.length,
+    tools: toolSet,
   });
   let run = request.run;
   let modelCalls = 0;
   let toolRounds = 0;
-  let runtimeFacts: SessionContextSource[] = [...(request.initial_runtime_sources ?? [])];
-  const modelCallMessages: ModelCallMessage[] = [...(request.initial_model_call_messages ?? [])];
+  let currentTurn: CurrentConversationTurn = {
+    ...request.current_turn,
+    runItems: [...request.current_turn.runItems],
+  };
+  let lastPrepared: PreparedModelCall | undefined;
+  let lastProviderInputTokens: number | undefined;
 
   while (true) {
     if (modelCalls >= dependencies.limits.max_model_calls) {
-      traceLoopCounters(dependencies, run, modelCalls, toolRounds, runtimeFacts.length);
+      traceLoopCounters(dependencies, run, modelCalls, toolRounds, currentTurn.runItems.length);
       return failRun(dependencies, run, loopLimitFailure('maxModelCalls exceeded.'), {
         model_calls: modelCalls,
         tool_rounds: toolRounds,
@@ -149,47 +127,35 @@ export async function runAgentModelToolLoop(
     }
     modelCalls += 1;
 
-    const context = await dependencies.context_service.getSessionContext({
-      session_id: run.session_id,
-      workspace_id: run.workspace_id,
-      purpose: 'agent_response',
+    const preparation = await dependencies.context_service.prepareModelCall({
+      sessionId: run.session_id,
+      workspaceId: run.workspace_id,
+      currentTurn,
+      activatedSkills: request.activated_skills,
+      tools: toolSet,
+      modelContext: request.model_context,
+      ...(request.signal ? { signal: request.signal } : {}),
     });
-    if (context.status === 'failed') {
+    if (preparation.status === 'failed') {
       return failRun(dependencies, run, {
         code: 'context_failed',
-        message: context.failure.message,
+        message: preparation.failure.message,
       }, {
         model_calls: modelCalls,
         tool_rounds: toolRounds,
       });
     }
 
-    const prompt = dependencies.context_service.buildPrompt({
-      session_context: context.session_context,
-      purpose: 'agent_response',
-      current_user_message_id: request.user_message_id,
-      runtime_sources: runtimeFacts,
-    });
-    if (prompt.status === 'failed') {
-      return failRun(dependencies, run, {
-        code: 'context_failed',
-        message: prompt.failure.message,
-      }, {
-        model_calls: modelCalls,
-        tool_rounds: toolRounds,
-      });
-    }
+    lastPrepared = preparation.prepared;
     traceRun(dependencies, run, 'trace.prompt.built', {
       model_call_index: modelCalls,
-      prompt: prompt.prompt,
+      prompt: lastPrepared.prompt,
     });
 
     const modelCall = await dependencies.model_call_service.modelCall({
       owner: { type: 'agent_run', run_id: run.run_id },
-      prompt: prompt.prompt as never,
-      ...(modelCallMessages.length > 0 ? { model_call_messages: modelCallMessages } : {}),
-      model_config: request.model_config as never,
-      tool_set: toolSet,
+      prompt: lastPrepared.prompt,
+      model_config: request.model_config,
       signal: request.signal,
     });
     if (modelCall.status === 'failed') {
@@ -214,14 +180,13 @@ export async function runAgentModelToolLoop(
     traceRun(dependencies, run, 'trace.model_call.request_payload', {
       owner: { type: 'agent_run', run_id: run.run_id },
       model_config: request.model_config,
-      tool_set: toolSet,
-      prompt: prompt.prompt,
-      model_call_messages: modelCallMessages,
+      prompt: lastPrepared.prompt,
     }, {
       model_call_id: modelCall.model_call_id,
     });
 
     const modelEvents = await collectModelCallEvents(dependencies, run, modelCall.events);
+    lastProviderInputTokens = modelEvents.provider_input_tokens;
     if (modelEvents.failure) {
       return failRun(dependencies, run, modelEvents.failure, {
         model_calls: modelCalls,
@@ -265,6 +230,24 @@ export async function runAgentModelToolLoop(
         model_calls: modelCalls,
         tool_rounds: toolRounds,
       });
+      try {
+        const snapshot = dependencies.context_service.recordCompletedRunUsage({
+          sessionId: run.session_id,
+          runId: run.run_id,
+          modelContext: request.model_context,
+          preCallUsage: lastPrepared.usage,
+          ...(lastProviderInputTokens !== undefined ? { providerInputTokens: lastProviderInputTokens } : {}),
+        });
+        if (snapshot.status === 'failed') {
+          traceRun(dependencies, run, 'trace.context.snapshot_failed', {
+            code: snapshot.failure.code,
+          });
+        }
+      } catch {
+        traceRun(dependencies, run, 'trace.context.snapshot_failed', {
+          code: 'snapshot_write_failed',
+        });
+      }
       await dependencies.memory_service?.captureCompletedRun({
         run_id: run.run_id,
         session_id: run.session_id,
@@ -274,7 +257,7 @@ export async function runAgentModelToolLoop(
     }
 
     if (toolRounds >= dependencies.limits.max_tool_rounds) {
-      traceLoopCounters(dependencies, run, modelCalls, toolRounds, runtimeFacts.length);
+      traceLoopCounters(dependencies, run, modelCalls, toolRounds, currentTurn.runItems.length);
       return failRun(dependencies, run, loopLimitFailure('maxToolRounds exceeded.'), {
         model_calls: modelCalls,
         tool_rounds: toolRounds,
@@ -297,7 +280,7 @@ export async function runAgentModelToolLoop(
     }
 
     const registeredTools = new Map(
-      toolSet.items.flatMap((item) => {
+      toolSet.flatMap((item) => {
         const tool = dependencies.tool_set_builder.getRegisteredTool(run.run_id, item.name);
         return tool ? [[item.name, tool] as const] : [];
       }),
@@ -318,15 +301,16 @@ export async function runAgentModelToolLoop(
       model_call_index: modelCalls,
       tool_calls: modelEvents.tool_calls,
     });
-    modelCallMessages.push({
-      role: 'assistant',
-      ...(modelEvents.content ? { content: modelEvents.content } : {}),
-      tool_calls: modelEvents.tool_calls.map((toolCall) => ({
-        tool_call_id: toolCall.tool_call_id,
-        tool_name: toolCall.tool_name,
-        arguments_text: toolCall.arguments_text,
-      })),
-    });
+    const appendedItems: CurrentConversationTurn['runItems'] = [];
+    if (modelEvents.content) {
+      appendedItems.push({ type: 'assistant_message', content: [{ type: 'text', text: modelEvents.content }] });
+    }
+    appendedItems.push(...modelEvents.tool_calls.map((toolCall) => ({
+      type: 'tool_call' as const,
+      toolCallId: toolCall.tool_call_id,
+      toolName: toolCall.tool_name,
+      arguments: toJsonValue(toolCall.input),
+    })));
     const toolGroup = await orchestrateToolCallGroup({
       run_id: run.run_id,
       workspace_id: run.workspace_id,
@@ -355,17 +339,15 @@ export async function runAgentModelToolLoop(
     }
     for (const toolResult of toolGroup.tool_result_facts) {
       emitToolResult(dependencies, run, toolResult);
-      modelCallMessages.push(toolResultToModelCallMessage(toolResult));
-      if (toolResult.runtime_sources?.length) {
-        runtimeFacts = [...runtimeFacts, ...toolResult.runtime_sources];
-      }
+      appendedItems.push(toolResultToConversationItem(toolResult));
     }
     if (toolGroup.tool_result_facts.length > 0) {
       traceRun(dependencies, run, 'trace.model_call.messages_appended', {
         added_count: toolGroup.tool_result_facts.length,
-        model_call_messages: modelCallMessages.slice(-(toolGroup.tool_result_facts.length + 1)),
+        run_items: appendedItems,
       });
     }
+    currentTurn = { ...currentTurn, runItems: [...currentTurn.runItems, ...appendedItems] };
     for (const pendingApproval of toolGroup.pending_approvals) {
       const approval = pendingApproval.approval_request;
       dependencies.repository.createApprovalRequest(approval);
@@ -394,7 +376,7 @@ export async function runAgentModelToolLoop(
           reason: 'approval_required',
         },
       });
-      traceLoopCounters(dependencies, run, modelCalls, toolRounds, runtimeFacts.length);
+      traceLoopCounters(dependencies, run, modelCalls, toolRounds, currentTurn.runItems.length);
       return {
         status: 'waiting_for_approval',
         run,
@@ -408,34 +390,27 @@ export async function runAgentModelToolLoop(
             ]),
           ),
           deferred_tool_calls: toolGroup.deferred_tool_calls,
-          user_message_id: request.user_message_id,
+          current_turn: currentTurn,
+          activated_skills: request.activated_skills,
+          model_context: request.model_context,
           model_config: request.model_config,
           permission_mode: request.permission_mode,
           ...(request.workspace_root ? { workspace_root: request.workspace_root } : {}),
-          runtime_sources: runtimeFacts,
-          model_call_messages: modelCallMessages,
         },
       };
     }
 
-    traceLoopCounters(dependencies, run, modelCalls, toolRounds, runtimeFacts.length);
+    traceLoopCounters(dependencies, run, modelCalls, toolRounds, currentTurn.runItems.length);
   }
 }
 
-function toolResultToModelCallMessage(toolResult: ToolResultRuntimeFact): ModelCallMessage {
+function toolResultToConversationItem(toolResult: ToolResultRuntimeFact): CurrentConversationTurn['runItems'][number] {
   return {
-    role: 'tool_result',
-    tool_call_id: toolResult.tool_call_id,
-    content: toolResult.content ?? toolResult.observation?.summary ?? `${toolResult.tool_name} ${toolResult.status}`,
-  };
-}
-
-function sessionSourceRef(sessionId: string): { sourceRefId: string; sourceId: string; sourceKind: string; label: string } {
-  return {
-    sourceRefId: sessionId,
-    sourceId: sessionId,
-    sourceKind: 'session',
-    label: 'Session context',
+    type: 'tool_result',
+    toolCallId: toolResult.tool_call_id,
+    toolName: toolResult.tool_name,
+    status: toolResult.status === 'completed' ? 'success' : 'failure',
+    content: [{ type: 'text', text: toolResult.content ?? toolResult.observation?.summary ?? `${toolResult.tool_name} ${toolResult.status}` }],
   };
 }
 
@@ -458,78 +433,6 @@ function approvalRequestToRuntimePayload(request: AgentRunApprovalRequest): Reco
   };
 }
 
-export async function consumeContextUsageSignal(
-  request: ConsumeContextUsageSignalRequest,
-): Promise<ConsumeContextUsageSignalResult> {
-  if (request.signal.kind !== 'auto_compaction_needed') {
-    return { status: 'ignored', reason: 'not_auto_compaction_signal' };
-  }
-
-  request.event_sink.emit({
-    eventType: 'context.compaction.started',
-    sessionId: request.signal.session_id,
-    payload: {
-      compactionId: request.signal.signal_id,
-      triggerReason: 'context_limit',
-      tokensBefore: request.signal.usage.used_tokens,
-      firstKeptSourceRef: sessionSourceRef(request.signal.session_id),
-      summarizedSourceCount: 0,
-    },
-  });
-
-  const result = await request.context_compaction_service.compact({
-    session_id: request.signal.session_id,
-    ...(request.signal.workspace_id ? { workspace_id: request.signal.workspace_id } : {}),
-    trigger: {
-      kind: 'auto',
-      reason: 'context_window_threshold',
-      signal_id: request.signal.signal_id,
-    },
-  });
-
-  if (result.status === 'completed') {
-    request.event_sink.emit({
-      eventType: 'context.compaction.completed',
-      sessionId: request.signal.session_id,
-      payload: {
-        compactionId: result.compaction.compaction_id,
-        triggerReason: 'context_limit',
-        tokensBefore: request.signal.usage.used_tokens,
-        firstKeptSourceRef: sessionSourceRef(request.signal.session_id),
-        summarizedSourceCount: 0,
-      },
-    });
-    return { status: 'completed' };
-  }
-
-  if (result.status === 'skipped') {
-    return { status: 'skipped', reason: result.reason };
-  }
-
-  request.event_sink.emit({
-    eventType: 'context.compaction.failed',
-    sessionId: request.signal.session_id,
-    payload: {
-      triggerReason: 'context_limit',
-      tokensBefore: request.signal.usage.used_tokens,
-      error: {
-        code: 'context_budget_exceeded',
-        message: result.failure.message,
-        severity: 'error',
-        retryable: false,
-        source: 'core',
-      },
-    },
-  });
-  return {
-    status: 'failed',
-    failure: {
-      code: 'context_failed',
-      message: result.failure.message,
-    },
-  };
-}
-
 async function collectModelCallEvents(
   dependencies: RunOrchestratorDependencies,
   run: AgentRun,
@@ -537,11 +440,13 @@ async function collectModelCallEvents(
 ): Promise<{
   content: string;
   tool_calls: ModelRequestedToolCall[];
+  provider_input_tokens?: number;
   failure?: AgentRunFailure;
 }> {
   const textDeltas: string[] = [];
   const toolCalls: ModelRequestedToolCall[] = [];
   let completedContent: string | undefined;
+  let providerInputTokens: number | undefined;
   const runtimeEventState: ModelCallRuntimeEventState = {};
 
   for await (const event of events) {
@@ -570,6 +475,7 @@ async function collectModelCallEvents(
     }
     if (event.type === 'completed') {
       completedContent = event.content;
+      providerInputTokens = event.usage?.input_tokens;
     }
     if (event.type === 'failed') {
       return { content: '', tool_calls: [], failure: event.failure };
@@ -579,6 +485,7 @@ async function collectModelCallEvents(
   return {
     content: completedContent ?? textDeltas.join(''),
     tool_calls: toolCalls,
+    ...(providerInputTokens !== undefined ? { provider_input_tokens: providerInputTokens } : {}),
   };
 }
 

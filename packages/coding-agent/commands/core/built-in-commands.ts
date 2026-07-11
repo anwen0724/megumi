@@ -12,19 +12,19 @@ export const built_in_commands: CommandDefinition[] = [
     source: { kind: 'built_in' },
     async execute(request) {
       const executionContext = request.execution_context;
-      const contextCompaction = executionContext?.services?.context_compaction;
-      if (executionContext?.session_id && contextCompaction) {
-        const result = await contextCompaction.compact({
-          session_id: executionContext.session_id,
-          ...(executionContext.workspace_id ? { workspace_id: executionContext.workspace_id } : {}),
-          trigger: { kind: 'manual', requested_by: 'command' },
+      const contextService = executionContext?.services?.context;
+      if (executionContext?.session_id && executionContext.workspace_id && executionContext.model_context && contextService) {
+        const result = await contextService.compactSession({
+          sessionId: executionContext.session_id,
+          workspaceId: executionContext.workspace_id,
+          modelContext: executionContext.model_context,
         });
 
         if (result.status === 'failed') {
           return { type: 'error', message: result.failure.message };
         }
 
-        if (result.status === 'skipped') {
+        if (result.status === 'nothing_to_compact') {
           return { type: 'completed', message: `Context compaction skipped: ${result.reason}` };
         }
 

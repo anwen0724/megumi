@@ -5,12 +5,22 @@
 import type { CommandExecutionContext, CommandExecutionResult } from '../../commands';
 import type { InputService, ParsedUserInput } from '../../input';
 import type { PermissionMode, PermissionService } from '../../permissions';
-import type { Session, SessionBranchService, SessionService } from '../../session';
+import type {
+  Session,
+  SessionBranchService,
+  SessionEntry,
+  SessionMessageWithAttachments,
+  SessionService,
+} from '../../session';
 import type { SettingsService } from '../../settings';
 import type { ActivatedSkillContent, SkillService } from '../../skills';
 import type { ToolExecutionService, ToolRegistryService } from '../../tools';
 import type { WorkspacePathPolicyService, WorkspaceService } from '../../workspace';
-import type { CompactContextResult, ContextUsageSignal, ContextUsageWindow, SessionContextSource } from '../../context';
+import type {
+  ActivatedSkillInstruction,
+  ContextCapacity,
+  CurrentConversationTurn,
+} from '../../context';
 import type { RuntimeError, RuntimeEvent } from '../../events';
 import type { MegumiDatabase } from '../../persistence/connection';
 import type {
@@ -31,12 +41,10 @@ import type {
 import type { AgentRunTraceLogger } from '../contracts/agent-run-trace-contracts';
 import type {
   ModelCallConfig,
-  ModelCallMessage,
   ModelCallService,
   ToolResultRuntimeFact,
 } from '../contracts/model-call-contracts';
 import {
-  consumeContextUsageSignal,
   runAgentModelToolLoop,
   type RunApprovalContinuation,
 } from '../core/run-orchestrator';
@@ -78,6 +86,7 @@ export type CreateAgentRunServiceOptions = {
   branch_service?: Pick<SessionBranchService, 'consumeBranchDraft'>;
   settings_service: Pick<SettingsService, 'resolveProviderRuntimeConfig' | 'resolvePermissionSettings'>;
   context_service: Parameters<typeof runAgentModelToolLoop>[0]['context_service'];
+  model_context_provider(selection: { providerId: string; modelId: string }): ContextCapacity;
   model_call_service: ModelCallService;
   skill_service?: Pick<SkillService, 'activateSkill'>;
   tool_registry_service: Pick<ToolRegistryService, 'listAvailableTools'>;
@@ -92,33 +101,6 @@ export type CreateAgentRunServiceOptions = {
   workspace_service?: Pick<WorkspaceService, 'getWorkspace'>;
   workspace_path_policy_service?: Pick<WorkspacePathPolicyService, 'classifyPath'>;
   memory_service?: Parameters<typeof runAgentModelToolLoop>[0]['memory_service'];
-  context_usage_signal_bus?: {
-    subscribe(
-      signalKind: 'auto_compaction_needed',
-      handler: (signal: ContextUsageSignal) => void | Promise<void>,
-    ): () => void;
-  };
-  context_usage_monitor?: {
-    start(request: {
-      session_id: string;
-      workspace_id?: string;
-      model_config: ContextUsageWindow;
-    }): Promise<{ status: 'ok' } | { status: 'failed'; failure: { message: string } }> | { status: 'ok' } | { status: 'failed'; failure: { message: string } };
-    refreshSession(request: { session_id: string; workspace_id?: string; reason: string }): Promise<void> | void;
-    markCompactionRunning(input: { session_id: string; workspace_id?: string; running: boolean }): void;
-  };
-  context_usage_window_provider?: (input: {
-    session_id: string;
-    workspace_id: string;
-    model_id: string;
-  }) => ContextUsageWindow;
-  context_compaction_service?: {
-    compact(request: {
-      session_id: string;
-      workspace_id?: string;
-      trigger: { kind: 'auto'; reason: 'context_window_threshold'; signal_id: string };
-    }): Promise<CompactContextResult> | CompactContextResult;
-  };
   event_publisher?: {
     publish(event: RuntimeEvent): RuntimeEvent | void;
   };
@@ -175,7 +157,6 @@ class DefaultAgentRunService implements AgentRunService {
       max_tool_rounds: options.limits?.max_tool_rounds ?? 50,
     };
     this.traceLogger = options.trace_logger ?? createNoopAgentRunTraceLogger();
-    this.subscribeContextUsageSignals();
   }
 
   async startRun(request: StartRunRequest): Promise<StartRunResult> {
@@ -274,24 +255,24 @@ class DefaultAgentRunService implements AgentRunService {
     }));
     const queue = createAgentRunEventQueue((event) => this.options.event_publisher?.publish(event));
     const eventSink = this.createEventSink(queue, run);
-    const commandSkillRuntimeSources = await this.resolveCommandSkillRuntimeSources({
+    const commandSkills = await this.resolveCommandSkills({
       command_result: commandRoute.command_result,
       session_id: sessionId,
       workspace_id: request.workspace_id,
       run_id: run.run_id,
     });
-    if (commandSkillRuntimeSources.status === 'failed') {
+    if (commandSkills.status === 'failed') {
       const failedRun = this.repository.saveRun(transitionAgentRunStatus({
         run,
         to: 'failed',
         changed_at: this.clock.now(),
-        failure: commandSkillRuntimeSources.failure,
+        failure: commandSkills.failure,
       }));
       eventSink.emit({
         eventType: 'run.failed',
         run: failedRun,
         payload: {
-          error: agentRunFailureToRuntimeError(commandSkillRuntimeSources.failure),
+          error: agentRunFailureToRuntimeError(commandSkills.failure),
         },
       });
       queue.close();
@@ -299,7 +280,7 @@ class DefaultAgentRunService implements AgentRunService {
         status: 'failed',
         request_id: request.request_id,
         session,
-        failure: commandSkillRuntimeSources.failure,
+        failure: commandSkills.failure,
         events: queue.snapshot(),
       };
     }
@@ -338,13 +319,15 @@ class DefaultAgentRunService implements AgentRunService {
         queue,
         eventSink,
         run,
-        user_message_id: userMessageId,
+        current_turn: currentTurnFromSavedUserMessage(run.run_id, userMessage.message, userMessage.entry),
+        activated_skills: commandSkills.activated_skills,
+        model_context: this.options.model_context_provider({
+          providerId: request.model_selection.provider_id,
+          modelId: request.model_selection.model_id,
+        }),
         model_config: modelConfig.config,
         permission_mode: request.permission_mode ?? 'default',
         ...(workspaceRoot.workspace_root ? { workspace_root: workspaceRoot.workspace_root } : {}),
-        ...(commandSkillRuntimeSources.runtime_sources.length
-          ? { initial_runtime_sources: commandSkillRuntimeSources.runtime_sources }
-          : {}),
         signal: controller.signal,
       });
     }, 0);
@@ -404,7 +387,6 @@ class DefaultAgentRunService implements AgentRunService {
         reason: 'user_cancelled',
       },
     });
-    void this.refreshContextUsageAfterTerminalRun(cancelled, cancelled.model_selection.model_id);
     this.activeRunAbortControllers.delete(run.run_id);
     queue.close();
     return { status: 'cancelled', run: cancelled, events: queue.snapshot() };
@@ -499,10 +481,9 @@ class DefaultAgentRunService implements AgentRunService {
       },
     });
 
-    let runtimeFacts = continuation.runtime_sources;
-    let modelCallMessages: ModelCallMessage[] = [...(continuation.model_call_messages ?? [])];
+    let currentTurn = continuation.current_turn;
     if (flow.status === 'denied') {
-      modelCallMessages = [...modelCallMessages, toolResultToModelCallMessage(flow.tool_result)];
+      currentTurn = { ...currentTurn, runItems: [...currentTurn.runItems, toolResultToConversationItem(flow.tool_result)] };
       eventSink.emit({
         eventType: 'tool_result.created',
         run: resumedRun,
@@ -535,10 +516,7 @@ class DefaultAgentRunService implements AgentRunService {
         result: toolResult,
         created_at: this.clock.now(),
       });
-      modelCallMessages = [...modelCallMessages, toolResultToModelCallMessage(toolFact)];
-      if (toolFact.runtime_sources?.length) {
-        runtimeFacts = [...runtimeFacts, ...toolFact.runtime_sources];
-      }
+      currentTurn = { ...currentTurn, runItems: [...currentTurn.runItems, toolResultToConversationItem(toolFact)] };
       eventSink.emit({
         eventType: 'tool_result.created',
         run: resumedRun,
@@ -595,11 +573,9 @@ class DefaultAgentRunService implements AgentRunService {
           pending_approval_ids: pendingApprovalIds,
           original_approval_policy_by_approval_id: continuation.original_approval_policy_by_approval_id,
           run_id: resumedRun.run_id,
-          user_message_id: continuation.user_message_id,
+          current_turn: currentTurn,
           model_config: continuation.model_config,
           permission_mode: continuation.permission_mode,
-          runtime_sources: runtimeFacts,
-          model_call_messages: modelCallMessages,
         });
       }
       queue.close();
@@ -613,13 +589,11 @@ class DefaultAgentRunService implements AgentRunService {
     const deferred = await this.continueDeferredToolCallGroup({
       run: resumedRun,
       continuation,
-      runtime_sources: runtimeFacts,
-      model_call_messages: modelCallMessages,
+      current_turn: currentTurn,
       eventSink,
       signal: undefined,
     });
-    runtimeFacts = deferred.runtime_sources;
-    modelCallMessages = deferred.model_call_messages;
+    currentTurn = deferred.current_turn;
     if (deferred.status === 'waiting_for_approval') {
       queue.close();
       return { status: 'resumed', run: deferred.run, events: queue.events() };
@@ -635,12 +609,12 @@ class DefaultAgentRunService implements AgentRunService {
       queue,
       eventSink,
       run: deferred.run,
-      user_message_id: continuation.user_message_id,
+      current_turn: currentTurn,
+      activated_skills: continuation.activated_skills,
+      model_context: continuation.model_context,
       model_config: continuation.model_config,
       permission_mode: continuation.permission_mode,
       ...(continuation.workspace_root ? { workspace_root: continuation.workspace_root } : {}),
-      initial_runtime_sources: runtimeFacts,
-      initial_model_call_messages: modelCallMessages,
       signal: controller.signal,
     });
     return { status: 'resumed', run: deferred.run, events: queue.events() };
@@ -735,50 +709,6 @@ class DefaultAgentRunService implements AgentRunService {
     };
   }
 
-  private subscribeContextUsageSignals(): void {
-    if (!this.options.context_usage_signal_bus || !this.options.context_compaction_service) {
-      return;
-    }
-
-    this.options.context_usage_signal_bus.subscribe('auto_compaction_needed', async (signal) => {
-      if (signal.kind !== 'auto_compaction_needed') {
-        return;
-      }
-      this.options.context_usage_monitor?.markCompactionRunning({
-        session_id: signal.session_id,
-        ...(signal.workspace_id ? { workspace_id: signal.workspace_id } : {}),
-        running: true,
-      });
-      try {
-        await consumeContextUsageSignal({
-          signal,
-          context_compaction_service: this.options.context_compaction_service!,
-          event_sink: {
-            emit: (runtimeEvent) => {
-              const event = createAgentRunRuntimeEvent({
-                eventId: this.ids.event_id(),
-                sequence: 1,
-                now: this.clock.now(),
-                event: {
-                  sessionId: signal.session_id,
-                  ...runtimeEvent,
-                },
-              });
-              this.options.event_publisher?.publish(event);
-              return event;
-            },
-          },
-        });
-      } finally {
-        this.options.context_usage_monitor?.markCompactionRunning({
-          session_id: signal.session_id,
-          ...(signal.workspace_id ? { workspace_id: signal.workspace_id } : {}),
-          running: false,
-        });
-      }
-    });
-  }
-
   private nextRuntimeEventSequence(runId: string | undefined): number {
     if (!runId) {
       return 1;
@@ -810,21 +740,19 @@ class DefaultAgentRunService implements AgentRunService {
   private async continueDeferredToolCallGroup(input: {
     run: AgentRun;
     continuation: RunApprovalContinuation;
-    runtime_sources: SessionContextSource[];
-    model_call_messages: ModelCallMessage[];
+    current_turn: CurrentConversationTurn;
     eventSink: AgentRunRuntimeEventFactory;
     signal?: AbortSignal;
   }): Promise<
-    | { status: 'ready'; run: AgentRun; runtime_sources: SessionContextSource[]; model_call_messages: ModelCallMessage[] }
-    | { status: 'waiting_for_approval'; run: AgentRun; runtime_sources: SessionContextSource[]; model_call_messages: ModelCallMessage[] }
-    | { status: 'failed'; failure: AgentRunFailure; runtime_sources: SessionContextSource[]; model_call_messages: ModelCallMessage[] }
+    | { status: 'ready'; run: AgentRun; current_turn: CurrentConversationTurn }
+    | { status: 'waiting_for_approval'; run: AgentRun; current_turn: CurrentConversationTurn }
+    | { status: 'failed'; failure: AgentRunFailure; current_turn: CurrentConversationTurn }
   > {
     if (input.continuation.deferred_tool_calls.length === 0) {
       return {
         status: 'ready',
         run: input.run,
-        runtime_sources: input.runtime_sources,
-        model_call_messages: input.model_call_messages,
+        current_turn: input.current_turn,
       };
     }
 
@@ -835,8 +763,7 @@ class DefaultAgentRunService implements AgentRunService {
     if (permissionSettings.status === 'failed') {
       return {
         status: 'failed',
-        runtime_sources: input.runtime_sources,
-        model_call_messages: input.model_call_messages,
+        current_turn: input.current_turn,
         failure: {
           code: 'approval_failed',
           message: permissionSettings.failure.message,
@@ -846,7 +773,7 @@ class DefaultAgentRunService implements AgentRunService {
 
     const toolSet = this.toolSetBuilder.getToolSet({ run_id: input.run.run_id });
     const registeredTools = new Map(
-      toolSet.items.flatMap((item) => {
+      toolSet.flatMap((item) => {
         const tool = this.toolSetBuilder.getRegisteredTool(input.run.run_id, item.name);
         return tool ? [[item.name, tool] as const] : [];
       }),
@@ -879,17 +806,13 @@ class DefaultAgentRunService implements AgentRunService {
       ...(input.signal ? { signal: input.signal } : {}),
     });
 
-    let runtimeFacts = input.runtime_sources;
-    let modelCallMessages = input.model_call_messages;
+    let currentTurn = input.current_turn;
     for (const toolCall of toolGroup.tool_calls) {
       emitToolCallTerminalEvent(input.eventSink, input.run, toolCall);
     }
     for (const toolResult of toolGroup.tool_result_facts) {
       emitToolResultRuntimeEvent(input.eventSink, input.run, toolResult);
-      modelCallMessages = [...modelCallMessages, toolResultToModelCallMessage(toolResult)];
-      if (toolResult.runtime_sources?.length) {
-        runtimeFacts = [...runtimeFacts, ...toolResult.runtime_sources];
-      }
+      currentTurn = { ...currentTurn, runItems: [...currentTurn.runItems, toolResultToConversationItem(toolResult)] };
     }
 
     if (toolGroup.pending_approvals.length > 0) {
@@ -919,8 +842,7 @@ class DefaultAgentRunService implements AgentRunService {
           ]),
         ),
         deferred_tool_calls: toolGroup.deferred_tool_calls,
-        runtime_sources: runtimeFacts,
-        model_call_messages: modelCallMessages,
+        current_turn: currentTurn,
       };
       for (const approvalId of nextContinuation.pending_approval_ids) {
         this.approvalContinuations.set(approvalId, nextContinuation);
@@ -928,16 +850,14 @@ class DefaultAgentRunService implements AgentRunService {
       return {
         status: 'waiting_for_approval',
         run: waitingRun,
-        runtime_sources: runtimeFacts,
-        model_call_messages: modelCallMessages,
+        current_turn: currentTurn,
       };
     }
 
     return {
       status: 'ready',
       run: input.run,
-      runtime_sources: runtimeFacts,
-      model_call_messages: modelCallMessages,
+      current_turn: currentTurn,
     };
   }
 
@@ -945,12 +865,12 @@ class DefaultAgentRunService implements AgentRunService {
     queue: RuntimeEventQueue;
     eventSink: AgentRunRuntimeEventFactory;
     run: AgentRun;
-    user_message_id: string;
+    current_turn: CurrentConversationTurn;
+    activated_skills: ActivatedSkillInstruction[];
+    model_context: ContextCapacity;
     model_config: ModelCallConfig;
     permission_mode: PermissionMode;
     workspace_root?: string;
-    initial_runtime_sources?: SessionContextSource[];
-    initial_model_call_messages?: ModelCallMessage[];
     signal: AbortSignal;
   }): Promise<void> {
     try {
@@ -983,12 +903,12 @@ class DefaultAgentRunService implements AgentRunService {
         limits: this.limits,
       }, {
         run: input.run,
-        user_message_id: input.user_message_id,
+        current_turn: input.current_turn,
+        activated_skills: input.activated_skills,
+        model_context: input.model_context,
         model_config: input.model_config,
         permission_mode: input.permission_mode,
         ...(input.workspace_root ? { workspace_root: input.workspace_root } : {}),
-        ...(input.initial_runtime_sources ? { initial_runtime_sources: input.initial_runtime_sources } : {}),
-        ...(input.initial_model_call_messages ? { initial_model_call_messages: input.initial_model_call_messages } : {}),
         signal: input.signal,
       });
 
@@ -1040,41 +960,8 @@ class DefaultAgentRunService implements AgentRunService {
         },
       });
     } finally {
-      await this.refreshContextUsageAfterTerminalRun(input.run, input.model_config.model_id);
       queueMicrotask(() => input.queue.close());
     }
-  }
-
-  private async refreshContextUsageAfterTerminalRun(run: AgentRun, modelId: string): Promise<void> {
-    const monitor = this.options.context_usage_monitor;
-    const windowProvider = this.options.context_usage_window_provider;
-    if (!monitor || !windowProvider) {
-      return;
-    }
-
-    const latestRun = this.repository.getRun(run.run_id) ?? run;
-    if (latestRun.status !== 'completed' && latestRun.status !== 'failed' && latestRun.status !== 'cancelled') {
-      return;
-    }
-
-    const modelConfig = windowProvider({
-      session_id: latestRun.session_id,
-      workspace_id: latestRun.workspace_id,
-      model_id: modelId,
-    });
-    const startResult = await monitor.start({
-      session_id: latestRun.session_id,
-      workspace_id: latestRun.workspace_id,
-      model_config: modelConfig,
-    });
-    if (startResult.status === 'failed') {
-      return;
-    }
-    await monitor.refreshSession({
-      session_id: latestRun.session_id,
-      workspace_id: latestRun.workspace_id,
-      reason: `agent_run_${latestRun.status}`,
-    });
   }
 
   private resolveSession(request: StartRunRequest):
@@ -1203,17 +1090,17 @@ class DefaultAgentRunService implements AgentRunService {
     };
   }
 
-  private async resolveCommandSkillRuntimeSources(input: {
+  private async resolveCommandSkills(input: {
     command_result?: CommandExecutionResult;
     session_id: string;
     workspace_id: string;
     run_id: string;
   }): Promise<
-    | { status: 'ok'; runtime_sources: SessionContextSource[] }
+    | { status: 'ok'; activated_skills: ActivatedSkillInstruction[] }
     | { status: 'failed'; failure: AgentRunFailure }
   > {
     if (input.command_result?.type !== 'agent_run' || !input.command_result.input.requestedSkillActivation) {
-      return { status: 'ok', runtime_sources: [] };
+      return { status: 'ok', activated_skills: [] };
     }
     if (!this.options.skill_service) {
       return {
@@ -1235,7 +1122,7 @@ class DefaultAgentRunService implements AgentRunService {
     if (activation.status === 'ok') {
       return {
         status: 'ok',
-        runtime_sources: [activatedSkillToSessionContextSource(activation.activatedSkill)],
+        activated_skills: [activatedSkillToInstruction(activation.activatedSkill)],
       };
     }
     return {
@@ -1495,11 +1382,13 @@ function createAgentRunEventQueue(
   };
 }
 
-function toolResultToModelCallMessage(toolResult: ToolResultRuntimeFact): ModelCallMessage {
+function toolResultToConversationItem(toolResult: ToolResultRuntimeFact): CurrentConversationTurn['runItems'][number] {
   return {
-    role: 'tool_result',
-    tool_call_id: toolResult.tool_call_id,
-    content: toolResult.content ?? toolResult.observation?.summary ?? `${toolResult.tool_name} ${toolResult.status}`,
+    type: 'tool_result',
+    toolCallId: toolResult.tool_call_id,
+    toolName: toolResult.tool_name,
+    status: toolResult.status === 'completed' ? 'success' : 'failure',
+    content: [{ type: 'text', text: toolResult.content ?? toolResult.observation?.summary ?? `${toolResult.tool_name} ${toolResult.status}` }],
   };
 }
 
@@ -1515,29 +1404,49 @@ function toolResultRuntimeFactFromExecution(input: {
     status: input.result.type === 'succeeded' ? 'completed' : 'failed',
     content: input.result.normalizedResult.content,
     ...(input.result.toolExecutionObservation ? { observation: input.result.toolExecutionObservation } : {}),
-    ...(input.result.type === 'succeeded' && input.result.runtimeSources?.length
-      ? { runtime_sources: input.result.runtimeSources.map((source) => ({
-          source_id: source.source_id,
-          source_kind: source.source_kind as SessionContextSource['source_kind'],
-          text: source.text,
-          persisted: source.persisted,
-          ...(source.metadata ? { metadata: source.metadata } : {}),
-        })) }
-      : {}),
     created_at: input.created_at,
   };
 }
 
-function activatedSkillToSessionContextSource(skill: ActivatedSkillContent): SessionContextSource {
+function activatedSkillToInstruction(skill: ActivatedSkillContent): ActivatedSkillInstruction {
   return {
-    source_id: `skill:${skill.skillId}`,
-    source_kind: 'skill',
-    text: skill.content,
-    persisted: false,
-    metadata: {
-      skillId: skill.skillId,
-      origin_module: 'skills',
+    skillId: skill.skillId,
+    name: skill.name,
+    content: skill.content,
+  };
+}
+
+function currentTurnFromSavedUserMessage(
+  runId: string,
+  saved: SessionMessageWithAttachments,
+  entry: SessionEntry,
+): CurrentConversationTurn {
+  return {
+    runId,
+    userEntry: {
+      entryId: entry.entry_id,
+      ...(entry.parent_entry_id ? { parentEntryId: entry.parent_entry_id } : {}),
     },
+    userMessage: {
+      type: 'user_message',
+      content: [
+        { type: 'text', text: saved.message.content_text },
+        ...saved.attachments.map((attachment) => attachment.type === 'image'
+          ? {
+              type: 'image' as const,
+              source: attachment.source_type === 'local_file'
+                ? { type: 'local_file' as const, path: attachment.source_value }
+                : { type: 'host_reference' as const, referenceId: attachment.source_value },
+            }
+          : {
+              type: 'file' as const,
+              fileId: attachment.source_value,
+              ...(attachment.name ? { name: attachment.name } : {}),
+              ...(attachment.mime_type ? { mediaType: attachment.mime_type } : {}),
+            }),
+      ],
+    },
+    runItems: [],
   };
 }
 

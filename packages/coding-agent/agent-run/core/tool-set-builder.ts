@@ -2,8 +2,8 @@
  * Builds and caches the stable run-level Tool Set.
  * Agent Run chooses the model-visible set; Tool Registry only supplies available tools.
  */
+import type { ToolSet, ToolSetEntry } from '@megumi/ai';
 import type { RegisteredTool } from '../../tools';
-import type { ToolSet, ToolSetItem } from '../contracts/model-call-contracts';
 
 export type RunToolSetBuilder = {
   getToolSet(request: GetRunToolSetRequest): ToolSet;
@@ -52,9 +52,7 @@ class DefaultRunToolSetBuilder implements RunToolSetBuilder {
   private createToolSet(request: GetRunToolSetRequest): CachedRunToolSet {
     const registeredTools = this.options.tool_registry_service.listAvailableTools().tools;
     return {
-      tool_set: {
-        items: registeredTools.map(toolSetItemFromRegisteredTool),
-      },
+      tool_set: registeredTools.map(toolSetItemFromRegisteredTool),
       registered_tools_by_name: new Map(
         registeredTools.map((tool) => [tool.registeredToolName, tool]),
       ),
@@ -62,11 +60,10 @@ class DefaultRunToolSetBuilder implements RunToolSetBuilder {
   }
 }
 
-function toolSetItemFromRegisteredTool(tool: RegisteredTool): ToolSetItem {
+function toolSetItemFromRegisteredTool(tool: RegisteredTool): ToolSetEntry {
   return {
     name: tool.registeredToolName,
     description: tool.definition.modelFacingDescription ?? tool.definition.description,
-    input_schema: tool.definition.inputSchema,
-    source_tool_name: tool.identity.sourceToolName,
+    inputSchema: tool.definition.inputSchema,
   };
 }

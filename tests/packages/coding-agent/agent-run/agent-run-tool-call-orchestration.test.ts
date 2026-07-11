@@ -207,13 +207,11 @@ function baseInput(): Omit<AgentRunToolCallRequest, 'tool_calls' | 'registered_t
       process_execution_enabled: true,
       network_enabled: true,
     },
-    tool_set: {
-      items: [
-        { name: 'read_file', description: 'Read file', input_schema: { type: 'object' }, source_tool_name: 'read_file' },
-        { name: 'list_files', description: 'List files', input_schema: { type: 'object' }, source_tool_name: 'list_files' },
-        { name: 'run_command', description: 'Run command', input_schema: { type: 'object' }, source_tool_name: 'run_command' },
-      ],
-    },
+    tool_set: [
+      { name: 'read_file', description: 'Read file', inputSchema: { type: 'object' } },
+      { name: 'list_files', description: 'List files', inputSchema: { type: 'object' } },
+      { name: 'run_command', description: 'Run command', inputSchema: { type: 'object' } },
+    ],
     workspace_path_policy_service: {
       classifyPath: vi.fn(() => ({
         absolute_path: 'C:/workspace/README.md',

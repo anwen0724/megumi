@@ -13,11 +13,7 @@ import type {
   ToolSet as AiToolSet,
 } from '@megumi/ai';
 import type { Prompt } from '../../context';
-import type {
-  ModelCallMessage,
-  ModelCallRequest,
-  ModelCallConfig,
-} from '../contracts/model-call-contracts';
+import type { ModelCallRequest, ModelCallConfig } from '../contracts/model-call-contracts';
 
 export type PromptAiRequestInput = {
   prompt: Prompt;
@@ -68,22 +64,11 @@ export function mapPromptToAiRequest(request: PromptAiRequestInput): AiCallReque
 }
 
 export function mapModelCallToAiRequest(request: ModelCallRequest): AiCallRequest {
-  const baseRequest = mapPromptToAiRequest({
+  return mapPromptToAiRequest({
     prompt: request.prompt,
     model_config: request.model_config,
     ...(request.signal ? { signal: request.signal } : {}),
   });
-
-  return {
-    ...baseRequest,
-    context: {
-      ...baseRequest.context,
-      messages: [
-        ...baseRequest.context.messages,
-        ...(request.model_call_messages ?? []).map(modelCallMessageToConversationMessage),
-      ],
-    },
-  };
 }
 
 function materializeInstructions(prompt: Prompt): string {
@@ -242,29 +227,6 @@ function assertSupportedPromptContent(prompt: Prompt): void {
       throw new UnsupportedModelContentError(block.type);
     }
   }
-}
-
-function modelCallMessageToConversationMessage(message: ModelCallMessage): ConversationMessage {
-  if (message.role === 'tool_result') {
-    return {
-      role: 'toolResult',
-      toolCallId: message.tool_call_id,
-      content: message.content,
-    };
-  }
-
-  return {
-    role: 'assistant',
-    content: [
-      ...(message.content ? [{ type: 'text' as const, text: message.content }] : []),
-      ...message.tool_calls.map((toolCall) => ({
-        type: 'toolCall' as const,
-        id: toolCall.tool_call_id,
-        name: toolCall.tool_name,
-        argumentsText: toolCall.arguments_text,
-      })),
-    ],
-  };
 }
 
 function promptToolsToAiToolSet(tools: Prompt['tools']): AiToolSet {

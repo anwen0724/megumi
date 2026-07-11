@@ -18,12 +18,11 @@ describe('run-level Tool Set builder', () => {
 
     expect(listAvailableTools).toHaveBeenCalledTimes(1);
     expect(first).toBe(second);
-    expect(first.items).toEqual([
+    expect(first).toEqual([
       {
         name: 'read_file',
         description: 'Read files for the model',
-        input_schema: { type: 'object' },
-        source_tool_name: 'read_file',
+        inputSchema: { type: 'object' },
       },
     ]);
     expect(builder.getRegisteredTool('run-1', 'read_file')?.definition.executionMode).toBe('parallel');
@@ -39,7 +38,7 @@ describe('run-level Tool Set builder', () => {
       run_id: 'run-1',
     });
 
-    expect(toolSet.items.map((item) => item.name)).toEqual(['read_file']);
+    expect(toolSet.map((item) => item.name)).toEqual(['read_file']);
     expect(listAvailableTools).toHaveBeenCalledTimes(1);
   });
 });

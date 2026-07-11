@@ -38,7 +38,21 @@ describe('Agent Run message flow', () => {
       model_id: 'deepseek-chat',
     });
     expect(deps.tool_registry_service.listAvailableTools).toHaveBeenCalledTimes(1);
-    expect(deps.context_service.buildPrompt).toHaveBeenCalledTimes(1);
+    expect(deps.context_service.prepareModelCall).toHaveBeenCalledTimes(1);
+    expect(deps.context_service.prepareModelCall).toHaveBeenCalledWith(expect.objectContaining({
+      currentTurn: {
+        runId: result.run.run_id,
+        userEntry: { entryId: 'entry-message-1' },
+        userMessage: {
+          type: 'user_message',
+          content: [
+            { type: 'text', text: 'hello' },
+            { type: 'file', fileId: 'README.md' },
+          ],
+        },
+        runItems: [],
+      },
+    }));
     expect(deps.session_service.saveAssistantMessage).toHaveBeenCalledWith(expect.objectContaining({
       run_id: result.run.run_id,
       session_id: 'session-1',
@@ -72,6 +86,8 @@ describe('Agent Run message flow', () => {
     expect(events.map((event) => String(event.eventType))).not.toContain(['tool', 'execution'].join('_') + '.started');
     expect(events.map((event) => String(event.eventType))).not.toContain(['tool', 'execution'].join('_') + '.completed');
     expect(repository.getRun(result.run.run_id)?.status).toBe('completed');
+    expect(deps.context_service.recordCompletedRunUsage.mock.calls[0]?.[0])
+      .not.toHaveProperty('providerInputTokens');
   });
 
   it('applies a consumed branch draft as the parent for the next user message', async () => {
@@ -114,7 +130,7 @@ describe('Agent Run message flow', () => {
     }));
   });
 
-  it('refreshes context usage after a terminal run', async () => {
+  it('records completed usage without refreshing the legacy usage monitor', async () => {
     const repository = createInMemoryAgentRunRepository();
     const deps = createMessageFlowDependencies({ repository });
     const start = vi.fn(async () => ({ status: 'ok' as const }));
@@ -147,24 +163,136 @@ describe('Agent Run message flow', () => {
 
     await collectEvents(result.events);
 
-    expect(contextUsageWindowProvider).toHaveBeenCalledWith({
-      session_id: 'session-1',
-      workspace_id: 'workspace-1',
-      model_id: 'deepseek-chat',
+    expect(start).not.toHaveBeenCalled();
+    expect(refreshSession).not.toHaveBeenCalled();
+    expect(contextUsageWindowProvider).not.toHaveBeenCalled();
+    expect(deps.context_service.recordCompletedRunUsage).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: 'session-1',
+      runId: 'run-1',
+    }));
+    expect(deps.context_service.recordCompletedRunUsage.mock.calls[0]?.[0])
+      .not.toHaveProperty('providerInputTokens');
+  });
+
+  it('prefers final provider input tokens for the completed usage snapshot', async () => {
+    const repository = createInMemoryAgentRunRepository();
+    const deps = createMessageFlowDependencies({
+      repository,
+      modelEvents: [
+        { type: 'started', model_call_id: 'model-call-1', created_at: '2026-01-01T00:00:00.000Z' },
+        {
+          type: 'completed',
+          model_call_id: 'model-call-1',
+          content: 'assistant reply',
+          usage: { input_tokens: 777 },
+          created_at: '2026-01-01T00:00:00.000Z',
+        },
+      ],
     });
-    expect(start).toHaveBeenCalledWith({
-      session_id: 'session-1',
-      workspace_id: 'workspace-1',
-      model_config: {
-        model_id: 'deepseek-chat',
-        context_window_tokens: 256_000,
+    const service = createAgentRunService(deps as unknown as CreateAgentRunServiceOptions);
+
+    const result = await service.startRun(runRequest());
+    expect(result.status).toBe('started');
+    if (result.status !== 'started') return;
+    await collectEvents(result.events);
+
+    expect(deps.context_service.recordCompletedRunUsage).toHaveBeenCalledWith(expect.objectContaining({
+      providerInputTokens: 777,
+    }));
+  });
+
+  it('does not record a snapshot for a failed run', async () => {
+    const repository = createInMemoryAgentRunRepository();
+    const deps = createMessageFlowDependencies({ repository });
+    const service = createAgentRunService({
+      ...deps,
+      model_call_service: {
+        ...deps.model_call_service,
+        modelCall: vi.fn(() => ({
+          status: 'failed' as const,
+          failure: { code: 'model_call_failed' as const, message: 'provider failed' },
+        })),
       },
+    } as unknown as CreateAgentRunServiceOptions);
+
+    const result = await service.startRun(runRequest());
+    expect(result.status).toBe('started');
+    if (result.status !== 'started') return;
+    await collectEvents(result.events);
+
+    expect(repository.getRun(result.run.run_id)?.status).toBe('failed');
+    expect(deps.context_service.recordCompletedRunUsage).not.toHaveBeenCalled();
+  });
+
+  it('does not record a snapshot while a run is waiting for approval', async () => {
+    const repository = createInMemoryAgentRunRepository();
+    const deps = createMessageFlowDependencies({
+      repository,
+      modelEvents: [
+        { type: 'started', model_call_id: 'model-call-1', created_at: '2026-01-01T00:00:00.000Z' },
+        {
+          type: 'tool_call',
+          model_call_id: 'model-call-1',
+          tool_call_id: 'provider-tool-call-1',
+          tool_name: 'read_file',
+          input: { path: 'README.md' },
+          arguments_text: '{"path":"README.md"}',
+          created_at: '2026-01-01T00:00:00.000Z',
+        },
+        { type: 'completed', model_call_id: 'model-call-1', content: '', finish_reason: 'tool_calls', created_at: '2026-01-01T00:00:00.000Z' },
+      ],
     });
-    expect(refreshSession).toHaveBeenCalledWith({
-      session_id: 'session-1',
-      workspace_id: 'workspace-1',
-      reason: 'agent_run_completed',
-    });
+    const service = createAgentRunService({
+      ...deps,
+      permission_service: {
+        ...deps.permission_service,
+        evaluateToolExecution: vi.fn(() => ({
+          status: 'ok' as const,
+          decision: {
+            type: 'requires_approval' as const,
+            reason: 'needs approval',
+            execution_class: 'read_only' as const,
+            approval: { allowed_scopes: ['once' as const], default_scope: 'once' as const },
+          },
+        })),
+      },
+    } as unknown as CreateAgentRunServiceOptions);
+
+    const result = await service.startRun(runRequest());
+    expect(result.status).toBe('started');
+    if (result.status !== 'started') return;
+    await collectEvents(result.events);
+
+    expect(repository.getRun(result.run.run_id)?.status).toBe('waiting_for_approval');
+    expect(deps.context_service.recordCompletedRunUsage).not.toHaveBeenCalled();
+  });
+
+  it('keeps a successful run completed when snapshot recording fails', async () => {
+    const repository = createInMemoryAgentRunRepository();
+    const deps = createMessageFlowDependencies({ repository });
+    const record = vi.fn();
+    const service = createAgentRunService({
+      ...deps,
+      context_service: {
+        ...deps.context_service,
+        recordCompletedRunUsage: vi.fn(() => ({
+          status: 'failed' as const,
+          failure: { code: 'usage_snapshot_invalid' as const, message: 'snapshot rejected', retryable: false },
+        })),
+      },
+      trace_logger: { record },
+    } as unknown as CreateAgentRunServiceOptions);
+
+    const result = await service.startRun(runRequest());
+    expect(result.status).toBe('started');
+    if (result.status !== 'started') return;
+    await collectEvents(result.events);
+
+    expect(repository.getRun(result.run.run_id)?.status).toBe('completed');
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({
+      event_type: 'trace.context.snapshot_failed',
+      payload: expect.objectContaining({ code: 'usage_snapshot_invalid' }),
+    }));
   });
 
   it('feeds tool calls and tool results back through model-call continuation messages', async () => {
@@ -193,6 +321,7 @@ describe('Agent Run message flow', () => {
               model_call_id: 'model-call-1',
               content: 'I need to read the file.',
               finish_reason: 'tool_calls',
+              usage: { input_tokens: 333 },
               created_at: '2026-01-01T00:00:00.000Z',
             },
           ]),
@@ -213,8 +342,10 @@ describe('Agent Run message flow', () => {
         ]),
       };
     });
-    deps.model_call_service.modelCall = modelCall as never;
-    const service = createAgentRunService(deps as unknown as CreateAgentRunServiceOptions);
+    const service = createAgentRunService({
+      ...deps,
+      model_call_service: { ...deps.model_call_service, modelCall },
+    } as unknown as CreateAgentRunServiceOptions);
 
     const result = await service.startRun({
       request_id: 'request-1',
@@ -232,26 +363,22 @@ describe('Agent Run message flow', () => {
     expectRuntimeEventsSchemaValid(events);
 
     expect(modelCallRequests).toHaveLength(2);
+    expect(modelCallRequests[1]).not.toHaveProperty('model_call_messages');
     expect(modelCallRequests[1]).toMatchObject({
-      model_call_messages: [
-        {
-          role: 'assistant',
-          content: 'I need to read the file.',
-          tool_calls: [
-            {
-              tool_call_id: 'provider-tool-call-1',
-              tool_name: 'read_file',
-              arguments_text: '{"path":"README.md"}',
-            },
-          ],
-        },
-        {
-          role: 'tool_result',
-          tool_call_id: 'provider-tool-call-1',
-          content: 'tool ok',
-        },
-      ],
+      prompt: {
+        conversation: [
+          expect.objectContaining({ type: 'user_message' }),
+          { type: 'assistant_message', content: [{ type: 'text', text: 'I need to read the file.' }] },
+          { type: 'tool_call', toolCallId: 'provider-tool-call-1', toolName: 'read_file', arguments: { path: 'README.md' } },
+          { type: 'tool_result', toolCallId: 'provider-tool-call-1', toolName: 'read_file', status: 'success', content: [{ type: 'text', text: 'tool ok' }] },
+        ],
+      },
     });
+    expect(deps.context_service.prepareModelCall).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      currentTurn: expect.objectContaining({ runItems: expect.any(Array) }),
+    }));
+    expect(deps.context_service.recordCompletedRunUsage.mock.calls[0]?.[0])
+      .not.toHaveProperty('providerInputTokens');
     expect(deps.session_service.saveAssistantMessage).toHaveBeenCalledWith(expect.objectContaining({
       content_text: 'Final answer.',
     }));
@@ -346,4 +473,15 @@ function expectRuntimeEventsSchemaValid(events: unknown[]): void {
   for (const event of events) {
     expect(RuntimeEventSchema.safeParse(event).success).toBe(true);
   }
+}
+
+function runRequest() {
+  return {
+    request_id: 'request-1',
+    workspace_id: 'workspace-1',
+    session: { type: 'existing' as const, session_id: 'session-1' },
+    user_input: { text: 'hello' },
+    model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
+    permission_mode: 'default' as const,
+  };
 }

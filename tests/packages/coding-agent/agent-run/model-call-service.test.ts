@@ -538,27 +538,19 @@ describe('Model Call Service', () => {
     ]);
   });
 
-  it('maps run continuation tool messages into provider protocol messages', () => {
+  it('maps provider-neutral Prompt continuation items into provider protocol messages', () => {
+    const request = sampleModelCallRequest();
     const mapped = mapModelCallToAiRequest({
-      ...sampleModelCallRequest(),
-      model_call_messages: [
-        {
-          role: 'assistant',
-          content: 'I need to read the file.',
-          tool_calls: [
-            {
-              tool_call_id: 'provider-tool-call-1',
-              tool_name: 'read_file',
-              arguments_text: '{"path":"README.md"}',
-            },
-          ],
-        },
-        {
-          role: 'tool_result',
-          tool_call_id: 'provider-tool-call-1',
-          content: 'README content',
-        },
-      ],
+      ...request,
+      prompt: {
+        ...request.prompt,
+        conversation: [
+          ...request.prompt.conversation,
+          { type: 'assistant_message', content: [{ type: 'text', text: 'I need to read the file.' }] },
+          { type: 'tool_call', toolCallId: 'provider-tool-call-1', toolName: 'read_file', arguments: { path: 'README.md' } },
+          { type: 'tool_result', toolCallId: 'provider-tool-call-1', toolName: 'read_file', status: 'success', content: [{ type: 'text', text: 'README content' }] },
+        ],
+      },
     });
 
     expect(mapped.context.messages).toEqual([
@@ -600,7 +592,7 @@ describe('Model Call Service', () => {
       {
         role: 'toolResult',
         toolCallId: 'provider-tool-call-1',
-        content: 'README content',
+        content: '{"toolName":"read_file","status":"success","content":"README content"}',
       },
     ]);
   });
