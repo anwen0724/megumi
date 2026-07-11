@@ -52,25 +52,43 @@ export function getRunTranscript(
 function projectTranscript(runId: string, events: RuntimeEvent[]): GetRunTranscriptResult {
   const modelCalls = new Map<string, ModelCallGroup>();
   const toolResults: ToolResultEvent[] = [];
+  const modelCallIdByToolCallId = new Map<string, string>();
+  let protocolFailure: GetRunTranscriptResult | undefined;
 
   events.forEach((event, order) => {
+    if (protocolFailure) return;
     if (event.eventType === 'model_call.completed') {
       const payload = event.payload as ModelCallCompletedPayload;
-      getOrCreateModelCall(modelCalls, payload.modelCallId).completion ??= payload;
+      const group = getOrCreateModelCall(modelCalls, payload.modelCallId);
+      if (group.completion) {
+        protocolFailure = duplicateFactFailure(
+          `Duplicate model_call.completed fact for modelCallId ${payload.modelCallId}.`,
+        );
+        return;
+      }
+      group.completion = payload;
       return;
     }
     if (event.eventType === 'model_call.tool_call') {
       const payload = event.payload as ModelCallToolCallPayload;
-      const group = getOrCreateModelCall(modelCalls, payload.modelCallId);
-      if (!group.toolCalls.some((toolCall) => toolCall.payload.toolCallId === payload.toolCallId)) {
-        group.toolCalls.push({ payload, order });
+      const existingModelCallId = modelCallIdByToolCallId.get(payload.toolCallId);
+      if (existingModelCallId) {
+        protocolFailure = duplicateFactFailure(existingModelCallId === payload.modelCallId
+          ? `Duplicate model_call.tool_call fact for toolCallId ${payload.toolCallId}.`
+          : `Duplicate model_call.tool_call fact for toolCallId ${payload.toolCallId} across model calls.`);
+        return;
       }
+      modelCallIdByToolCallId.set(payload.toolCallId, payload.modelCallId);
+      const group = getOrCreateModelCall(modelCalls, payload.modelCallId);
+      group.toolCalls.push({ payload, order });
       return;
     }
     if (event.eventType === 'tool_result.created') {
       toolResults.push({ payload: event.payload as ToolResultCreatedPayload, order });
     }
   });
+
+  if (protocolFailure) return protocolFailure;
 
   if (modelCalls.size === 0 || [...modelCalls.values()].some((group) => !group.completion)) {
     return { status: 'incomplete', runId, reason: 'missing_model_call_completion' };
@@ -148,6 +166,13 @@ function incomplete(
   toolCallId: string,
 ): GetRunTranscriptResult {
   return { status: 'incomplete', runId, reason, toolCallId };
+}
+
+function duplicateFactFailure(message: string): GetRunTranscriptResult {
+  return {
+    status: 'failed',
+    failure: { code: 'runtime_protocol_violation', message },
+  };
 }
 
 function compareRuntimeEvents(left: RuntimeEvent, right: RuntimeEvent): number {

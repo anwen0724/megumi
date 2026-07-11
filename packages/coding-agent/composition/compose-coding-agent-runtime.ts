@@ -8,6 +8,7 @@ import {
   createAgentRunService,
   createAgentRunTraceFileLogger,
   createModelCallService,
+  getRunTranscript,
   type AgentRunQueries,
   type AgentRunService,
   type ModelCallService,
@@ -143,6 +144,14 @@ type LegacyModelCallProviderForTests = {
   cancelModelCall?(request: unknown): boolean;
 };
 
+export function createAgentRunQueries(repository: AgentRunRepository): AgentRunQueries {
+  return {
+    listRunsBySession: (sessionId) => repository.listRunsBySession(sessionId),
+    listRuntimeEventsByRun: (runId) => repository.listRuntimeEventsByRun(runId),
+    getRunTranscript: (runId) => getRunTranscript(repository, runId),
+  };
+}
+
 export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOptions): CodingAgentRuntime {
   const persistence = composeCodingAgentPersistence({
     sqlitePath: options.homePaths.sqlitePath,
@@ -205,10 +214,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     options.workspaceChangeFooterProjector,
     workspaceChangeService,
   );
-  const agentRunQueries: AgentRunQueries = {
-    listRunsBySession: (sessionId) => agentRunRepository.listRunsBySession(sessionId),
-    listRuntimeEventsByRun: (runId) => agentRunRepository.listRuntimeEventsByRun(runId),
-  };
+  const agentRunQueries = createAgentRunQueries(agentRunRepository);
   const sessionTimelineQuery = createSessionTimelineQuery({
     sessionService,
     workspaceChangeFooterProjector,

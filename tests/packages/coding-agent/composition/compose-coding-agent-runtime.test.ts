@@ -77,6 +77,10 @@ describe('composeCodingAgentRuntime trace wiring', () => {
           'model_call.started',
           'run.completed',
         ]));
+      expect(secondRuntime.agentRunQueries.getRunTranscript(runId)).toEqual({
+        status: 'found',
+        transcript: { runId, items: [] },
+      });
     } finally {
       secondRuntime.dispose();
     }

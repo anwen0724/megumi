@@ -216,6 +216,113 @@ describe('getRunTranscript', () => {
       .toEqual(['tool-call-a', 'tool-call-b', 'tool-call-c']);
   });
 
+  it('projects two model-call tool rounds in model-call order', () => {
+    const repository = repositoryWithRun();
+    saveEvents(repository, [
+      ...toolRoundEvents('first', 1),
+      ...toolRoundEvents('second', 4),
+    ]);
+
+    const result = getRunTranscript(repository, 'run-1');
+    expect(result.status).toBe('found');
+    if (result.status !== 'found') return;
+    expect(result.transcript.items.map((item) => item.type === 'tool_call' ? item.toolCallId : item.type))
+      .toEqual([
+        'assistant_message',
+        'tool-call-first',
+        'tool_result',
+        'assistant_message',
+        'tool-call-second',
+        'tool_result',
+      ]);
+  });
+
+  it('fails on duplicate model-call completion facts', () => {
+    const repository = repositoryWithRun();
+    saveEvents(repository, [
+      event('completed-a', 1, 'model_call.completed', {
+        modelCallId: 'model-call-1',
+        finishReason: 'stop',
+        content: [{ type: 'text', text: 'first' }],
+      }),
+      event('completed-b', 2, 'model_call.completed', {
+        modelCallId: 'model-call-1',
+        finishReason: 'stop',
+        content: [{ type: 'text', text: 'second' }],
+      }),
+    ]);
+
+    expect(getRunTranscript(repository, 'run-1')).toEqual({
+      status: 'failed',
+      failure: {
+        code: 'runtime_protocol_violation',
+        message: 'Duplicate model_call.completed fact for modelCallId model-call-1.',
+      },
+    });
+  });
+
+  it('fails on a duplicate toolCallId in one model-call group', () => {
+    const repository = repositoryWithRun();
+    saveEvents(repository, [
+      event('call-a', 1, 'model_call.tool_call', {
+        modelCallId: 'model-call-1',
+        toolCallId: 'tool-call-1',
+        toolName: 'read_file',
+        input: { path: 'a' },
+      }),
+      event('call-b', 2, 'model_call.tool_call', {
+        modelCallId: 'model-call-1',
+        toolCallId: 'tool-call-1',
+        toolName: 'read_file',
+        input: { path: 'b' },
+      }),
+      event('completed', 3, 'model_call.completed', {
+        modelCallId: 'model-call-1',
+        finishReason: 'tool_calls',
+      }),
+      event('result', 4, 'tool_result.created', {
+        toolResultId: 'tool-result-1',
+        toolCallId: 'tool-call-1',
+        toolName: 'read_file',
+        kind: 'success',
+        content: [{ type: 'text', text: 'contents' }],
+      }),
+    ]);
+
+    expect(getRunTranscript(repository, 'run-1')).toEqual({
+      status: 'failed',
+      failure: {
+        code: 'runtime_protocol_violation',
+        message: 'Duplicate model_call.tool_call fact for toolCallId tool-call-1.',
+      },
+    });
+  });
+
+  it('fails when the same toolCallId appears across model-call groups', () => {
+    const repository = repositoryWithRun();
+    saveEvents(repository, [
+      ...toolRoundEvents('first', 1, 'shared-tool-call'),
+      event('second-call', 4, 'model_call.tool_call', {
+        modelCallId: 'model-call-second',
+        toolCallId: 'shared-tool-call',
+        toolName: 'read_file',
+        input: { round: 'second' },
+      }),
+      event('second-completed', 5, 'model_call.completed', {
+        modelCallId: 'model-call-second',
+        finishReason: 'tool_calls',
+      }),
+    ]);
+
+    expect(getRunTranscript(repository, 'run-1')).toEqual({
+      status: 'failed',
+      failure: {
+        code: 'runtime_protocol_violation',
+        message: 'Duplicate model_call.tool_call fact for toolCallId shared-tool-call across model calls.',
+      },
+    });
+  });
+
   it('returns missing_model_call_completion for a tool-call group without completion', () => {
     const repository = repositoryWithRun();
     repository.saveRuntimeEvent(event('call', 1, 'model_call.tool_call', {
@@ -273,6 +380,33 @@ function sampleRun(): AgentRun {
 
 function saveEvents(repository: ReturnType<typeof createInMemoryAgentRunRepository>, events: RuntimeEvent[]): void {
   events.forEach((runtimeEvent) => repository.saveRuntimeEvent(runtimeEvent));
+}
+
+function toolRoundEvents(
+  id: string,
+  startingSequence: number,
+  toolCallId = `tool-call-${id}`,
+): RuntimeEvent[] {
+  return [
+    event(`${id}-call`, startingSequence, 'model_call.tool_call', {
+      modelCallId: `model-call-${id}`,
+      toolCallId,
+      toolName: 'read_file',
+      input: { round: id },
+    }),
+    event(`${id}-completed`, startingSequence + 1, 'model_call.completed', {
+      modelCallId: `model-call-${id}`,
+      finishReason: 'tool_calls',
+      content: [{ type: 'text', text: `${id} round` }],
+    }),
+    event(`${id}-result`, startingSequence + 2, 'tool_result.created', {
+      toolResultId: `tool-result-${id}`,
+      toolCallId,
+      toolName: 'read_file',
+      kind: 'success',
+      content: [{ type: 'text', text: `${id} result` }],
+    }),
+  ];
 }
 
 function event(
