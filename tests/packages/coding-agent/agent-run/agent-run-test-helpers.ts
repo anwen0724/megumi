@@ -55,7 +55,9 @@ export function createInMemoryAgentRunRepository(): AgentRunRepository {
         .filter((event) => event.runId === runId)
         .sort((left, right) => {
           const sequenceOrder = left.sequence - right.sequence;
-          return sequenceOrder === 0 ? left.createdAt.localeCompare(right.createdAt) : sequenceOrder;
+          return sequenceOrder
+            || left.createdAt.localeCompare(right.createdAt)
+            || left.eventId.localeCompare(right.eventId);
         });
     },
     nextRuntimeEventSequence(runId) {

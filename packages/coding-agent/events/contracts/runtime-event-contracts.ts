@@ -1,4 +1,5 @@
 ﻿import type { JsonValue } from '../../shared-json';
+import type { ContentBlock } from '@megumi/ai';
 import type { RuntimeError } from './runtime-error-contracts';
 import type { RuntimeContext } from './runtime-context-contracts';
 import type {
@@ -383,7 +384,7 @@ export interface ModelCallTextDeltaPayload {
 export interface ModelCallCompletedPayload {
   modelCallId: string;
   finishReason: 'stop' | 'tool_calls' | 'cancelled' | 'failed' | string;
-  content?: string;
+  content?: ContentBlock[];
 }
 
 export interface ModelCallToolCallPayload {
@@ -511,16 +512,18 @@ export interface ToolCallFailedPayload {
   error: RuntimeError;
 }
 
-export interface AgentRunToolResultCreatedPayload {
+export interface ToolResultCreatedPayload {
   toolResultId: string;
   toolCallId: string;
   toolExecutionId?: string;
   toolName: string;
   kind: 'success' | 'failed' | 'policy_denied' | 'user_rejected';
-  summary?: string;
+  content: ContentBlock[];
 }
 
-export interface ToolResultCreatedPayload {
+export type AgentRunToolResultCreatedPayload = ToolResultCreatedPayload;
+
+export interface CanonicalToolResultCreatedPayload {
   toolResultId: string;
   toolCallId: string;
   toolExecutionId?: string;
@@ -971,8 +974,8 @@ export type RuntimeEventPayloadByType = {
   'tool.call.resolved': ToolCallResolvedPayload;
   'tool.call.resolution_failed': ToolCallResolutionFailedPayload;
   'tool.input.validation_failed': ToolInputValidationFailedPayload;
-  'tool_result.created': AgentRunToolResultCreatedPayload;
-  'tool.result.created': ToolResultCreatedPayload;
+  'tool_result.created': ToolResultCreatedPayload;
+  'tool.result.created': CanonicalToolResultCreatedPayload;
   'tool.registry.sources.ensured': ToolRegistrySourcesEnsuredPayload;
   'tool.registry.snapshot.created': ToolRegistrySnapshotCreatedPayload;
   'tool.registry.entry.resolved': ToolRegistryEntryResolvedPayload;

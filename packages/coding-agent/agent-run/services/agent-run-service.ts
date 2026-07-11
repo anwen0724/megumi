@@ -61,6 +61,8 @@ import {
 } from '../repositories/agent-run-repository';
 import { createNoopAgentRunTraceLogger } from './agent-run-trace-logger';
 
+export { getRunTranscript } from '../core/run-model-transcript';
+
 export type CreateAgentRunServiceOptions = {
   repository?: AgentRunRepository;
   database?: MegumiDatabase;
@@ -510,7 +512,7 @@ class DefaultAgentRunService implements AgentRunService {
           toolExecutionId: approval.subject.tool_call_id,
           toolName: approval.subject.tool_name,
           kind: 'user_rejected',
-          summary: 'Tool call was rejected by approval decision.',
+          content: [{ type: 'text', text: 'Tool call was rejected by approval decision.' }],
         },
       });
     } else {
@@ -546,9 +548,10 @@ class DefaultAgentRunService implements AgentRunService {
           toolExecutionId: toolFact.tool_call_id,
           toolName: toolFact.tool_name,
           kind: toolFact.status === 'completed' ? 'success' : 'failed',
-          ...(toolFact.content || toolFact.observation?.summary
-            ? { summary: toolFact.content ?? toolFact.observation?.summary }
-            : {}),
+          content: [{
+            type: 'text',
+            text: toolFact.content ?? toolFact.observation?.summary ?? `${toolFact.tool_name} ${toolFact.status}`,
+          }],
         },
       });
       if (toolResult.type === 'succeeded') {
@@ -1399,9 +1402,10 @@ function emitToolResultRuntimeEvent(
           : toolResult.status === 'cancelled'
             ? 'user_rejected'
             : 'failed',
-      ...(toolResult.content || toolResult.observation?.summary
-        ? { summary: toolResult.content ?? toolResult.observation?.summary }
-        : {}),
+      content: [{
+        type: 'text',
+        text: toolResult.content ?? toolResult.observation?.summary ?? `${toolResult.tool_name} ${toolResult.status}`,
+      }],
     },
   });
 }

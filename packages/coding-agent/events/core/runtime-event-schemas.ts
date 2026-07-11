@@ -1,4 +1,5 @@
 ﻿import { z } from 'zod';
+import { ContentBlockListSchema } from '@megumi/ai';
 import { JsonObjectSchema, JsonValueSchema } from '../../shared-json';
 import { RuntimeContextSchema } from '../contracts/runtime-context-contracts';
 import { RuntimeErrorSchema } from '../contracts/runtime-error-contracts';
@@ -363,7 +364,7 @@ const ModelCallCompletedPayloadSchema = z
   .object({
     modelCallId: z.string().min(1),
     finishReason: z.string().min(1),
-    content: z.string().optional(),
+    content: ContentBlockListSchema.optional(),
   })
   .strict();
 
@@ -545,7 +546,7 @@ const AgentRunToolResultCreatedPayloadSchema = z
     toolExecutionId: z.string().min(1).optional(),
     toolName: z.string().min(1),
     kind: z.enum(['success', 'failed', 'policy_denied', 'user_rejected']),
-    summary: z.string().optional(),
+    content: ContentBlockListSchema,
   })
   .strict();
 

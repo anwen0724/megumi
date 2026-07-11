@@ -61,6 +61,13 @@ describe('Agent Run message flow', () => {
         modelId: 'deepseek-chat',
       },
     });
+    expect(events.find((event) => event.eventType === 'model_call.completed')).toMatchObject({
+      payload: {
+        modelCallId: 'model-call-1',
+        finishReason: 'stop',
+        content: [{ type: 'text', text: 'assistant reply' }],
+      },
+    });
     expect(events.map((event) => String(event.eventType))).not.toContain('error.raised');
     expect(events.map((event) => String(event.eventType))).not.toContain(['tool', 'execution'].join('_') + '.started');
     expect(events.map((event) => String(event.eventType))).not.toContain(['tool', 'execution'].join('_') + '.completed');
@@ -248,6 +255,15 @@ describe('Agent Run message flow', () => {
     expect(deps.session_service.saveAssistantMessage).toHaveBeenCalledWith(expect.objectContaining({
       content_text: 'Final answer.',
     }));
+    expect(events.find((event) => event.eventType === 'tool_result.created')).toMatchObject({
+      payload: {
+        toolResultId: 'tool-result:provider-tool-call-1',
+        toolCallId: 'provider-tool-call-1',
+        toolName: 'read_file',
+        kind: 'success',
+        content: [{ type: 'text', text: 'tool ok' }],
+      },
+    });
   });
 
   it('maps thinking and model retry events into standard RuntimeEvents', async () => {

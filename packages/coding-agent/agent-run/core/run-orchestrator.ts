@@ -684,7 +684,7 @@ function emitModelCallRuntimeEvent(
       payload: {
         modelCallId: event.model_call_id,
         finishReason: event.finish_reason ?? 'stop',
-        ...(event.content ? { content: event.content } : {}),
+        ...(event.content ? { content: [{ type: 'text' as const, text: event.content }] } : {}),
       },
     });
     return;
@@ -774,9 +774,10 @@ function emitToolResult(
           : toolResult.status === 'cancelled'
             ? 'user_rejected'
             : 'failed',
-      ...(toolResult.content || toolResult.observation?.summary
-        ? { summary: toolResult.content ?? toolResult.observation?.summary }
-        : {}),
+      content: [{
+        type: 'text',
+        text: toolResult.content ?? toolResult.observation?.summary ?? `${toolResult.tool_name} ${toolResult.status}`,
+      }],
     },
   });
 }
