@@ -1,3 +1,6 @@
+/*
+ * Defines validated model input context independently from provider transport.
+ */
 import { z } from 'zod';
 import {
     ConversationMessageSchema,

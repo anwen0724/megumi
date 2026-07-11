@@ -1,3 +1,6 @@
+/*
+ * Defines the model-facing tool declarations available for an AI call.
+ */
 import { z } from 'zod';
 import {
     JsonObjectSchema,
