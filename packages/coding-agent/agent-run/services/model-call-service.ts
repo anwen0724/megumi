@@ -2,20 +2,33 @@
  * Model Call Service public factory.
  * It executes one provider-neutral model call through the packages/ai client.
  */
-import type { AiCallRequest, AiClient, AssistantStreamEvent } from '@megumi/ai';
+import type {
+  AiCallRequest,
+  AiClient,
+  AssistantStreamEvent,
+  RequestTokenCounter,
+} from '@megumi/ai';
 import type {
   CancelModelCallRequest,
   CancelModelCallResult,
+  CountPromptRequest,
+  CountPromptResult,
   ModelCallEvent,
   ModelCallFailure,
   ModelCallRequest,
   ModelCallResult,
   ModelCallService,
 } from '../contracts/model-call-contracts';
-import { mapModelCallToAiRequest } from '../adapters/ai-client-adapter';
+import {
+  mapModelCallToAiRequest,
+  mapPromptToAiRequest,
+  PromptMaterializationError,
+  UnsupportedModelContentError,
+} from '../adapters/ai-client-adapter';
 
 export type CreateModelCallServiceOptions = {
   ai_client?: AiClient;
+  request_token_counter?: RequestTokenCounter;
   ids?: {
     model_call_id(): string;
   };
@@ -46,6 +59,44 @@ class DefaultModelCallService implements ModelCallService {
     };
   }
 
+  async countPrompt(request: CountPromptRequest): Promise<CountPromptResult> {
+    let aiRequest: AiCallRequest;
+    try {
+      aiRequest = mapPromptToAiRequest(request);
+    } catch (error) {
+      return { status: 'failed', failure: modelCallMappingFailure(error) };
+    }
+
+    if (!this.options.request_token_counter) {
+      return {
+        status: 'failed',
+        failure: {
+          code: 'model_call_failed',
+          message: 'Model Call Service requires a request token counter.',
+          retryable: false,
+        },
+      };
+    }
+
+    try {
+      const count = await this.options.request_token_counter.count(aiRequest);
+      return {
+        status: 'counted',
+        input_tokens: count.inputTokens,
+        accuracy: count.accuracy,
+      };
+    } catch (error) {
+      return {
+        status: 'failed',
+        failure: {
+          code: 'model_call_failed',
+          message: error instanceof Error ? error.message : 'Request token counting failed.',
+          retryable: false,
+        },
+      };
+    }
+  }
+
   modelCall(request: ModelCallRequest): ModelCallResult {
     if (!this.options.ai_client) {
       return {
@@ -60,11 +111,16 @@ class DefaultModelCallService implements ModelCallService {
 
     const modelCallId = this.ids.model_call_id();
     const controller = new AbortController();
+    let aiRequest: AiCallRequest;
+    try {
+      aiRequest = mapModelCallToAiRequest({
+        ...request,
+        signal: request.signal ?? controller.signal,
+      });
+    } catch (error) {
+      return { status: 'failed', failure: modelCallMappingFailure(error) };
+    }
     this.activeCalls.set(modelCallId, controller);
-    const aiRequest = mapModelCallToAiRequest({
-      ...request,
-      signal: request.signal ?? controller.signal,
-    });
 
     return {
       status: 'started',
@@ -239,6 +295,32 @@ class DefaultModelCallService implements ModelCallService {
       };
     }
   }
+}
+
+function modelCallMappingFailure(error: unknown): ModelCallFailure {
+  if (error instanceof UnsupportedModelContentError) {
+    return {
+      code: 'unsupported_content',
+      message: error.message,
+      retryable: false,
+      details: { contentType: error.contentType },
+    };
+  }
+
+  if (error instanceof PromptMaterializationError) {
+    return {
+      code: 'model_call_failed',
+      message: error.message,
+      retryable: false,
+      details: { reason: error.reason },
+    };
+  }
+
+  return {
+    code: 'internal_error',
+    message: error instanceof Error ? error.message : 'Prompt materialization failed.',
+    retryable: false,
+  };
 }
 
 function mapAssistantStreamEvent(

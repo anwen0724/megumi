@@ -81,6 +81,7 @@ export function createOpenAICompatibleProtocolAdapter(
 ): ProtocolAdapter {
     return createProtocolAdapter({
         protocol: 'openai-compatible',
+        materialize: materializeOpenAICompatibleRequest,
         stream: (request) =>
             AssistantEventStream.from(streamOpenAICompatible(options, request)),
     });
@@ -560,7 +561,7 @@ async function postChatCompletion(
         method: 'POST',
         headers,
         signal: request.signal,
-        body: JSON.stringify(buildOpenAICompatibleRequestBody(request)),
+        body: JSON.stringify(materializeOpenAICompatibleRequest(request)),
     });
 }
 
@@ -587,7 +588,7 @@ function credentialHeaders(
     return headers;
 }
 
-function buildOpenAICompatibleRequestBody(request: ProtocolAdapterRequest) {
+function materializeOpenAICompatibleRequest(request: ProtocolAdapterRequest) {
     const messages = [];
 
     if (request.context.systemPrompt) {
@@ -598,6 +599,20 @@ function buildOpenAICompatibleRequestBody(request: ProtocolAdapterRequest) {
     }
 
     for (const message of request.context.messages) {
+        if (message.role === 'context') {
+            // Reference facts stay at ordinary user-message authority and never
+            // inherit the system instruction channel.
+            messages.push({
+                role: 'user',
+                content: JSON.stringify({
+                    type: 'reference_context',
+                    kind: message.kind,
+                    content: message.content,
+                }),
+            });
+            continue;
+        }
+
         if (message.role === 'user') {
             messages.push({
                 role: 'user',

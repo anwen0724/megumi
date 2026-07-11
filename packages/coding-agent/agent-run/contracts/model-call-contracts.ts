@@ -114,9 +114,19 @@ export type ModelCallEvent =
       created_at: string;
     };
 
-export type ModelCallFailure = AgentRunFailure & {
-  code: 'model_call_failed' | 'context_failed' | 'internal_error';
+export type ModelCallFailure = Omit<AgentRunFailure, 'code'> & {
+  code: 'model_call_failed' | 'context_failed' | 'internal_error' | 'unsupported_content';
 };
+
+export type CountPromptRequest = {
+  prompt: Prompt;
+  model_config: ModelCallConfig;
+  tool_set: ToolSet;
+};
+
+export type CountPromptResult =
+  | { status: 'counted'; input_tokens: number; accuracy: 'exact' | 'estimated' }
+  | { status: 'failed'; failure: ModelCallFailure };
 
 export type ModelCallResult =
   | { status: 'started'; model_call_id: string; events: AsyncIterable<ModelCallEvent> }
@@ -132,6 +142,7 @@ export type CancelModelCallResult =
   | { status: 'not_cancellable'; model_call_id: string };
 
 export type ModelCallService = {
+  countPrompt(request: CountPromptRequest): Promise<CountPromptResult>;
   modelCall(request: ModelCallRequest): Promise<ModelCallResult> | ModelCallResult;
   cancelModelCall(request: CancelModelCallRequest): Promise<CancelModelCallResult> | CancelModelCallResult;
 };

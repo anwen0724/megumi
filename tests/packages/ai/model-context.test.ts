@@ -5,11 +5,26 @@
 import { describe, expect, it } from 'vitest';
 import {
   ConversationItemListSchema,
+  ModelContextSchema,
   type ContentBlock,
   type ConversationItem,
 } from '@megumi/ai';
 
 describe('provider-neutral conversation items', () => {
+  it('preserves distinct low-authority reference message kinds', () => {
+    const context = {
+      systemPrompt: 'System instructions',
+      messages: [
+        { role: 'context', kind: 'skill_catalog', content: [{ skillId: 's1' }] },
+        { role: 'context', kind: 'compaction_summary', content: 'Earlier facts' },
+        { role: 'context', kind: 'memory_recall', content: [{ type: 'text', text: 'Recall' }] },
+        { role: 'user', content: 'Current user' },
+      ],
+    } as const;
+
+    expect(ModelContextSchema.parse(context)).toEqual(context);
+  });
+
   it('round-trips tool calls and results paired by tool call ID', () => {
     const content: ContentBlock[] = [
       { type: 'text', text: 'result' },

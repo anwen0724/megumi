@@ -17,6 +17,8 @@ export * from './messages/conversation-message';
 
 export * from './tools/tool-set';
 
+export * from './tokenization/request-token-counter';
+
 export * from './streaming/assistant-stream-event';
 export * from './streaming/assistant-event-stream';
 

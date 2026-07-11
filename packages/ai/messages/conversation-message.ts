@@ -1,5 +1,5 @@
 /*
- * Provider-neutral conversation items and legacy provider response messages.
+ * Provider-neutral conversation/context inputs and legacy provider responses.
  */
 import { z } from 'zod';
 import { ProviderErrorSchema, type ProviderError } from '../core/provider-error';
@@ -97,6 +97,28 @@ export interface ToolResultMessage {
     content: string;
 }
 
+export const ContextMessageKindSchema = z.enum([
+    'skill_catalog',
+    'compaction_summary',
+    'memory_recall',
+]);
+
+export type ContextMessageKind = z.infer<typeof ContextMessageKindSchema>;
+
+export const ContextMessageSchema = z
+    .object({
+        role: z.literal('context'),
+        kind: ContextMessageKindSchema,
+        content: JsonValueSchema,
+    })
+    .strict();
+
+export interface ContextMessage {
+    role: 'context';
+    kind: ContextMessageKind;
+    content: JsonValue;
+}
+
 export const AssistantMessageSchema = z
     .object({
         role: z.literal('assistant'),
@@ -119,12 +141,14 @@ export const ConversationMessageSchema = z.discriminatedUnion('role', [
     UserMessageSchema,
     AssistantMessageSchema,
     ToolResultMessageSchema,
+    ContextMessageSchema,
 ]);
 
 export type ConversationMessage =
     | UserMessage
     | AssistantMessage
-    | ToolResultMessage;
+    | ToolResultMessage
+    | ContextMessage;
 
 export type Message = ConversationMessage;
 
