@@ -16,6 +16,10 @@ describe('InstructionService', () => {
     expect(PublicInstructions).not.toHaveProperty('InstructionServiceImpl');
   });
 
+  it('does not expose fixed system instruction storage from the public module', () => {
+    expect(PublicInstructions).not.toHaveProperty('DEFAULT_CODING_AGENT_SYSTEM_INSTRUCTIONS');
+  });
+
   it('does not allow composition callers to override fixed system instructions', () => {
     const root = nativeTestRoot();
     const service = composeCodingAgentInstructions({

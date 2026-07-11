@@ -12,12 +12,12 @@ export interface InstructionFileSystem {
   readDirectory(directoryPath: string): Promise<readonly string[]>;
 }
 
-export const DEFAULT_CODING_AGENT_SYSTEM_INSTRUCTIONS: readonly SystemInstruction[] = [
-  {
+const FIXED_CODING_AGENT_SYSTEM_INSTRUCTIONS: readonly SystemInstruction[] = Object.freeze([
+  Object.freeze({
     instructionId: 'megumi.coding-agent.identity',
     content: 'You are Megumi, a coding agent. Use the provided session context, project instructions, runtime facts, tool results, and memory facts to continue the user\'s coding task.',
-  },
-];
+  }),
+]);
 
 export function composeCodingAgentInstructions(options: {
   megumiHomePath: string;
@@ -25,7 +25,7 @@ export function composeCodingAgentInstructions(options: {
 }): InstructionService {
   return new InstructionServiceImpl({
     megumiHomePath: options.megumiHomePath,
-    systemInstructions: DEFAULT_CODING_AGENT_SYSTEM_INSTRUCTIONS,
+    systemInstructions: FIXED_CODING_AGENT_SYSTEM_INSTRUCTIONS,
     readFile: (filePath) => options.fileSystem.readFile(filePath),
     readDirectory: (directoryPath) => options.fileSystem.readDirectory(directoryPath),
   });
