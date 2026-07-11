@@ -116,7 +116,16 @@ describe('SessionService', () => {
 
     expect(result).toMatchObject({
       status: 'saved',
-      message: { message_id: 'M1', role: 'user' },
+      message: {
+        message: { message_id: 'M1', role: 'user' },
+        attachments: [{
+          attachment_id: 'A1',
+          message_id: 'M1',
+          session_id: 'S1',
+          source_type: 'local_file',
+          source_value: 'C:/tmp/error.png',
+        }],
+      },
       entry: { session_id: 'S1', entry_type: 'message', message_id: 'M1' },
     });
     expect(service.getActivePath({ session_id: 'S1' })).toMatchObject({

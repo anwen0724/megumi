@@ -136,7 +136,7 @@ export type SaveUserMessageRequest = {
 };
 
 export type SaveUserMessageResult =
-  | { status: 'saved'; message: SessionMessage; entry: SessionEntry }
+  | { status: 'saved'; message: SessionMessageWithAttachments; entry: SessionEntry }
   | { status: 'failed'; failure: RuntimeError };
 
 export type SaveAssistantMessageRequest = {
@@ -170,6 +170,7 @@ export type GetActivePathResult =
 
 export type GetActiveHistoryRequest = {
   session_id: string;
+  through_entry_id?: string | null;
 };
 
 export type GetActiveHistoryResult =
