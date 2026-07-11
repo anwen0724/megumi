@@ -22,11 +22,10 @@ export const DEFAULT_CODING_AGENT_SYSTEM_INSTRUCTIONS: readonly SystemInstructio
 export function composeCodingAgentInstructions(options: {
   megumiHomePath: string;
   fileSystem: InstructionFileSystem;
-  systemInstructions?: readonly SystemInstruction[];
 }): InstructionService {
   return new InstructionServiceImpl({
     megumiHomePath: options.megumiHomePath,
-    systemInstructions: options.systemInstructions ?? DEFAULT_CODING_AGENT_SYSTEM_INSTRUCTIONS,
+    systemInstructions: DEFAULT_CODING_AGENT_SYSTEM_INSTRUCTIONS,
     readFile: (filePath) => options.fileSystem.readFile(filePath),
     readDirectory: (directoryPath) => options.fileSystem.readDirectory(directoryPath),
   });

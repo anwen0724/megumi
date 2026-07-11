@@ -5,15 +5,36 @@
  */
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import * as PublicInstructions from '@megumi/coding-agent/instructions';
 import {
   composeCodingAgentInstructions,
   type InstructionFileSystem,
 } from '@megumi/coding-agent/instructions';
 
 describe('InstructionService', () => {
-  it('returns the fixed Megumi coding-agent system instruction by default', () => {
+  it('does not expose its implementation class from the public module', () => {
+    expect(PublicInstructions).not.toHaveProperty('InstructionServiceImpl');
+  });
+
+  it('does not allow composition callers to override fixed system instructions', () => {
+    const root = nativeTestRoot();
     const service = composeCodingAgentInstructions({
-      megumiHomePath: 'C:\\Users\\megumi\\.megumi',
+      megumiHomePath: path.join(root, 'home', '.megumi'),
+      fileSystem: createFileSystem(new Map()),
+      // @ts-expect-error Fixed product instructions are not a composition input.
+      systemInstructions: [{ instructionId: 'caller.override', content: 'Caller override.' }],
+    });
+
+    expect(service.getSystemInstructions()).toEqual([{
+      instructionId: 'megumi.coding-agent.identity',
+      content: 'You are Megumi, a coding agent. Use the provided session context, project instructions, runtime facts, tool results, and memory facts to continue the user\'s coding task.',
+    }]);
+  });
+
+  it('returns the fixed Megumi coding-agent system instruction by default', () => {
+    const root = nativeTestRoot();
+    const service = composeCodingAgentInstructions({
+      megumiHomePath: path.join(root, 'home', '.megumi'),
       fileSystem: createFileSystem(new Map()),
     });
 
@@ -24,9 +45,10 @@ describe('InstructionService', () => {
   });
 
   it('returns user and workspace AGENTS.md sources from far to near without merging content', async () => {
-    const megumiHomePath = 'C:\\Users\\megumi\\.megumi';
-    const workspaceRoot = 'C:\\repo\\project';
-    const workingDirectory = 'C:\\repo\\project\\packages\\app';
+    const root = nativeTestRoot();
+    const megumiHomePath = path.join(root, 'home', '.megumi');
+    const workspaceRoot = path.join(root, 'project');
+    const workingDirectory = path.join(workspaceRoot, 'packages', 'app');
     const files = new Map<string, string>([
       [path.join(megumiHomePath, 'AGENTS.md'), 'user instructions\nwith all details'],
       [path.join(workspaceRoot, 'AGENTS.md'), 'project instructions'],
@@ -37,7 +59,6 @@ describe('InstructionService', () => {
     const service = composeCodingAgentInstructions({
       megumiHomePath,
       fileSystem,
-      systemInstructions: [{ instructionId: 'megumi.identity', content: 'You are Megumi.' }],
     });
 
     const result = await service.getEffectiveAgentInstructions({ workspaceRoot, workingDirectory });
@@ -71,11 +92,57 @@ describe('InstructionService', () => {
     });
     expect(fileSystem.readDirectory).toHaveBeenCalledTimes(4);
     expect(fileSystem.readFile).toHaveBeenCalledTimes(4);
-    expect(service.getSystemInstructions()).toEqual([
-      { instructionId: 'megumi.identity', content: 'You are Megumi.' },
-    ]);
+  });
+
+  it('rejects a working directory outside the workspace root without reading files', async () => {
+    const root = nativeTestRoot();
+    const fileSystem = createFileSystem(new Map());
+    const service = composeCodingAgentInstructions({
+      megumiHomePath: path.join(root, 'home', '.megumi'),
+      fileSystem,
+    });
+
+    await expect(service.getEffectiveAgentInstructions({
+      workspaceRoot: path.join(root, 'workspace'),
+      workingDirectory: path.join(root, 'outside'),
+    })).resolves.toEqual({
+      status: 'failed',
+      message: 'The working directory must be within the workspace root.',
+    });
+    expect(fileSystem.readDirectory).not.toHaveBeenCalled();
+    expect(fileSystem.readFile).not.toHaveBeenCalled();
+  });
+
+  it('discovers the workspace root once when it is also the working directory', async () => {
+    const root = nativeTestRoot();
+    const megumiHomePath = path.join(root, 'home', '.megumi');
+    const workspaceRoot = path.join(root, 'workspace');
+    const workspaceInstructionsPath = path.join(workspaceRoot, 'AGENTS.md');
+    const fileSystem = createFileSystem(new Map([
+      [workspaceInstructionsPath, 'workspace-only instructions'],
+    ]));
+    const service = composeCodingAgentInstructions({ megumiHomePath, fileSystem });
+
+    await expect(service.getEffectiveAgentInstructions({
+      workspaceRoot,
+      workingDirectory: workspaceRoot,
+    })).resolves.toEqual({
+      status: 'ok',
+      instructions: {
+        sources: [{
+          sourceId: `agents:${workspaceInstructionsPath}`,
+          sourcePath: workspaceInstructionsPath,
+          content: 'workspace-only instructions',
+        }],
+      },
+    });
+    expect(fileSystem.readDirectory).toHaveBeenCalledTimes(2);
   });
 });
+
+function nativeTestRoot(): string {
+  return path.join(path.parse(process.cwd()).root, 'megumi-instruction-service-tests');
+}
 
 function createFileSystem(files: ReadonlyMap<string, string>): InstructionFileSystem {
   return {
