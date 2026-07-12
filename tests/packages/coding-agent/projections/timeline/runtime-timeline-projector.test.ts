@@ -47,9 +47,10 @@ describe('runtime timeline projection', () => {
     }, 5));
     messages = reduceRuntimeTimelineEvent(messages, event('run.completed', {
       assistantMessageId: 'message:assistant:1',
-    }, 6));
+    }, 6, { messageId: 'message:assistant:1' }));
 
     const assistant = messages.find((message) => message.role === 'assistant');
+    expect(assistant?.messageId).toBe('message:assistant:1');
     expect(assistant?.blocks).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: 'process_disclosure', status: 'completed' }),
       expect.objectContaining({ kind: 'answer_text', text: '你好，我在。', status: 'completed' }),
@@ -194,9 +195,9 @@ describe('runtime timeline projection', () => {
     }, 9));
     messages = reduceRuntimeTimelineEvent(messages, event('context.compaction.completed', {
       compactionId: 'compaction:1',
-      triggerReason: 'auto_threshold',
+      triggerReason: 'automatic',
       tokensBefore: 240000,
-      firstKeptSourceRef: { source_type: 'message', source_id: 'message:1' },
+      firstKeptSourceRef: { sourceId: 'message:1', sourceKind: 'session_message' },
       summarizedSourceCount: 12,
     }, 10));
     messages = reduceRuntimeTimelineEvent(messages, event('run.interrupted', {
@@ -253,12 +254,43 @@ describe('runtime timeline projection', () => {
   it('does not project session-scoped compaction into an assistant message', () => {
     const messages = reduceRuntimeTimelineEvent([], event('context.compaction.completed', {
       compactionId: 'compaction:session',
-      triggerReason: 'auto_threshold',
+      triggerReason: 'automatic',
       tokensBefore: 240000,
-      firstKeptSourceRef: { source_type: 'message', source_id: 'message:1' },
+      firstKeptSourceRef: { sourceId: 'message:1', sourceKind: 'session_message' },
       summarizedSourceCount: 12,
     }, 1, { runId: undefined }));
 
     expect(messages).toEqual([]);
+  });
+
+  it('updates one compaction disclosure item from running to failed', () => {
+    let messages = reduceRuntimeTimelineEvent([], event('context.compaction.started', {
+      compactionId: 'compaction:failed-1',
+      triggerReason: 'automatic',
+      tokensBefore: 240000,
+      firstKeptSourceRef: { sourceId: 'message:1', sourceKind: 'session_message' },
+      summarizedSourceCount: 12,
+    }, 1));
+    messages = reduceRuntimeTimelineEvent(messages, event('context.compaction.failed', {
+      compactionId: 'compaction:failed-1',
+      triggerReason: 'automatic',
+      tokensBefore: 240000,
+      error: {
+        code: 'context_budget_exceeded',
+        message: 'Summary generation failed.',
+        severity: 'error',
+        retryable: true,
+        source: 'core',
+      },
+    }, 2));
+
+    const assistant = messages.find((message) => message.role === 'assistant');
+    const process = assistant?.blocks.find((block) => block.kind === 'process_disclosure');
+    const compactions = process?.items.filter((item) => item.kind === 'compaction_activity');
+    expect(compactions).toHaveLength(1);
+    expect(compactions?.[0]).toMatchObject({
+      status: 'failed',
+      label: '上下文压缩失败：Summary generation failed.',
+    });
   });
 });

@@ -125,7 +125,7 @@ describe('agent run runtime event schemas', () => {
     })).success).toBe(false);
   });
 
-  it('accepts session-scoped context compaction events without run ids', () => {
+  it('accepts Session compaction events with optional causative run ids', () => {
     expect(RuntimeEventSchema.safeParse(event('context.compaction.started', {
       compactionId: 'compaction:1',
       triggerReason: 'automatic',
@@ -153,6 +153,14 @@ describe('agent run runtime event schemas', () => {
         source: 'core',
       },
     }, { runId: undefined })).success).toBe(true);
+
+    expect(RuntimeEventSchema.safeParse(event('context.compaction.started', {
+      compactionId: 'compaction:automatic-1',
+      triggerReason: 'automatic',
+      tokensBefore: 240000,
+      firstKeptSourceRef: { sourceId: 'message:1', sourceKind: 'message' },
+      summarizedSourceCount: 12,
+    }, { runId: 'run:1' })).success).toBe(true);
 
     expect(RuntimeEventSchema.safeParse(event('context.compaction.started', {
       compactionId: 'compaction:1',

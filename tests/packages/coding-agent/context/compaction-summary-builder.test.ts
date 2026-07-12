@@ -97,19 +97,17 @@ function turn(id: string): ConversationTurn {
       runId: `run-${id}`,
       userEntryId: `entry-user-${id}`,
       userMessageId: `message-user-${id}`,
-      assistantEntryId: `entry-assistant-${id}`,
-      assistantMessageId: `message-assistant-${id}`,
+      lastEntryId: `entry-assistant-${id}`,
+      responseMessageRefs: [{ entryId: `entry-assistant-${id}`, messageId: `message-assistant-${id}` }],
     },
     userMessage: {
       type: 'user_message',
       content: [{ type: 'text', text: `User ${id}` }],
     },
-    runStatus: 'completed',
-    modelSteps: [{ modelCallId: `model-${id}`, assistantContent: [], toolCalls: [{
-      toolCallId: `call-${id}`, toolName: 'lookup', arguments: { id },
-      result: { status: 'success', content: [{ type: 'text', text: `Result ${id}` }] },
-    }] }],
-    finalAssistantMessage: { type: 'assistant_message', content: [{ type: 'text', text: `Assistant ${id}` }] },
-    diagnostics: [],
+    items: [
+      { type: 'tool_call', toolCallId: `call-${id}`, toolName: 'lookup', arguments: { id } },
+      { type: 'tool_result', toolCallId: `call-${id}`, toolName: 'lookup', status: 'success', content: [{ type: 'text', text: `Result ${id}` }] },
+      { type: 'assistant_message', content: [{ type: 'text', text: `Assistant ${id}` }] },
+    ],
   };
 }

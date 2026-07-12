@@ -32,7 +32,6 @@ describe('ChatHost product semantics', () => {
       branchService: createSessionBranchService(),
       workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
       sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
-      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [], getHistoricalRun: (runId) => ({ status: 'not_found', runId }) },
       contextService: unavailableContextService,
     });
 
@@ -96,7 +95,6 @@ describe('ChatHost product semantics', () => {
         })),
       },
       sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
-      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [], getHistoricalRun: (runId) => ({ status: 'not_found', runId }) },
       contextService: unavailableContextService,
     });
 
@@ -107,17 +105,17 @@ describe('ChatHost product semantics', () => {
   });
 
   it('returns Session owner failures from listMessages without throwing', async () => {
-    const host = createHost(vi.fn(), vi.fn(), {
-      listMessages: vi.fn(() => ({
+    const getActiveConversationHistory = vi.fn(() => ({
         status: 'failed' as const,
         failure: { code: 'session_not_found', message: 'Session was not found.' },
-      })),
-    });
+      }));
+    const host = createHost(vi.fn(), vi.fn(), { getActiveConversationHistory });
 
     await expect(host.listMessages({ sessionId: 'session:missing' })).resolves.toEqual({
       status: 'failed',
       failure: { code: 'session_not_found', message: 'Session was not found.' },
     });
+    expect(getActiveConversationHistory).toHaveBeenCalledWith({ session_id: 'session:missing' });
   });
 
   it('does not assign session title or permission defaults for send requests', async () => {
@@ -299,7 +297,6 @@ describe('ChatHost product semantics', () => {
       branchService: createSessionBranchService(),
       workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
       sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
-      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [], getHistoricalRun: (runId) => ({ status: 'not_found', runId }) },
       contextService: unavailableContextService,
     });
 
@@ -435,7 +432,6 @@ describe('ChatHost product semantics', () => {
       branchService: createSessionBranchService(),
       workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
       sessionTimelineQuery: { listSessionTimeline },
-      agentRunQueries: { listRunsBySession, listRuntimeEventsByRun, getHistoricalRun: (runId) => ({ status: 'not_found', runId }) },
       contextService: unavailableContextService,
     });
 
@@ -445,26 +441,16 @@ describe('ChatHost product semantics', () => {
     })).resolves.toEqual({
       messages: [message],
       diagnostics: [],
-      runs: [
-        {
-          runId: 'run-a',
-          sessionId: 'session-1',
-          status: 'completed',
-          createdAt: '2026-07-10T01:00:01.000Z',
-          completedAt: '2026-07-10T01:00:02.000Z',
-        },
-      ],
-      runtimeEvents: eventsByRun['run-a'],
+      runs: [],
+      runtimeEvents: [],
     });
 
     expect(listSessionTimeline).toHaveBeenCalledWith({
       workspace_id: 'project-1',
       session_id: 'session-1',
     });
-    expect(listRunsBySession).toHaveBeenCalledWith('session-1');
-    expect(listRuntimeEventsByRun).toHaveBeenCalledTimes(1);
-    expect(listRuntimeEventsByRun).toHaveBeenCalledWith('run-a');
-    expect(listRuntimeEventsByRun).not.toHaveBeenCalledWith('run-b');
+    expect(listRunsBySession).not.toHaveBeenCalled();
+    expect(listRuntimeEventsByRun).not.toHaveBeenCalled();
   });
 });
 
@@ -485,7 +471,6 @@ function createHost(
     branchService,
     workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
     sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
-    agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [], getHistoricalRun: (runId) => ({ status: 'not_found', runId }) },
     contextService: unavailableContextService,
   });
 }

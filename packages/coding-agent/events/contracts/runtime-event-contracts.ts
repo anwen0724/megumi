@@ -334,6 +334,7 @@ export interface ContextCompactionCompletedPayload extends ContextCompactionStar
 }
 
 export interface ContextCompactionFailedPayload {
+  compactionId?: string;
   triggerReason: SessionCompactionTriggerReason;
   tokensBefore: number;
   error: RuntimeError;

@@ -29,17 +29,6 @@ function createTestRepository() {
       '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z'
     )
   `).run();
-  database.prepare(`
-    INSERT INTO agent_runs (
-      run_id, workspace_id, session_id, provider_id, model_id,
-      trigger_type, trigger_user_message_id, trigger_command_name,
-      status, created_at, started_at, completed_at, failure_json
-    ) VALUES (
-      'run:one', 'workspace:one', 'session:one', 'provider:test', 'model:test',
-      'user_input', NULL, NULL,
-      'running', '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z', NULL, NULL
-    )
-  `).run();
   return new WorkspaceChangeRepository(database);
 }
 

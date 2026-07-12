@@ -36,7 +36,6 @@ export type AgentRunFailure = {
     | 'tool_call_failed'
     | 'approval_failed'
     | 'cancel_failed'
-    | 'recovery_failed'
     | 'loop_limit_exceeded'
     | 'runtime_protocol_violation'
     | 'runtime_interrupted'
@@ -61,23 +60,25 @@ export type AgentRun = {
   failure?: AgentRunFailure;
 };
 
-export type AgentRunStep = {
-  step_id: string;
+export type ModelCallStep = {
+  type: 'model_call';
   run_id: string;
-  type: 'model_call' | 'tool_call' | 'approval_wait' | 'context_compaction';
-  status: 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
+  model_call_id: string;
+  status: 'running' | 'completed' | 'failed' | 'cancelled';
   started_at: string;
   completed_at?: string;
   failure?: AgentRunFailure;
 };
 
-export type AgentRunToolCall = {
+export type ToolCallStep = {
+  type: 'tool_call';
   tool_call_id: string;
   run_id: string;
-  step_id?: string;
+  source_model_call_id: string;
   call_order: number;
   tool_name: string;
   input: unknown;
+  arguments_text: string;
   status:
     | 'requested'
     | 'waiting_for_approval'
@@ -91,6 +92,8 @@ export type AgentRunToolCall = {
   completed_at?: string;
   failure?: AgentRunFailure;
 };
+
+export type RunStep = ModelCallStep | ToolCallStep;
 
 export type AgentRunApprovalSubject =
   | {
@@ -183,14 +186,6 @@ export type ResumeRunAfterApprovalResult =
   | { status: 'not_waiting'; run: AgentRun }
   | { status: 'failed'; failure: AgentRunFailure; events?: RuntimeEvent[] };
 
-export type CleanupInterruptedRunsRequest = {
-  reason: 'runtime_started' | 'runtime_recovered';
-};
-
-export type CleanupInterruptedRunsResult =
-  | { status: 'completed'; cleaned_run_ids: string[]; events: RuntimeEvent[] }
-  | { status: 'failed'; failure: AgentRunFailure; events?: RuntimeEvent[] };
-
 export type AgentRunCommandInput = CommandAgentRunInput;
 export type AgentRunModelConfig = ProviderRuntimeConfig;
 export type { ApprovalDecision, ApprovalScope, PermissionMode };
@@ -201,7 +196,4 @@ export type AgentRunService = {
   resumeRunAfterApproval(
     request: ResumeRunAfterApprovalRequest,
   ): Promise<ResumeRunAfterApprovalResult> | ResumeRunAfterApprovalResult;
-  cleanupInterruptedRuns(
-    request: CleanupInterruptedRunsRequest,
-  ): Promise<CleanupInterruptedRunsResult> | CleanupInterruptedRunsResult;
 };

@@ -32,10 +32,12 @@ import {
   type RecoveryActivityStatus,
   type RetryActivityItem,
   type RetryActivityStatus,
+  type SessionCompactionActivityBlock,
   type TextFormat,
   type ThinkingItem,
   type ThinkingItemStatus,
   type TimelineAssistantMessage,
+  type TimelineActivityMessage,
   type TimelineBlock,
   type TimelineMessage,
   type TimelineMessageRole,
@@ -143,6 +145,7 @@ const TimelineMessageBaseShape = {
   createdAt: TimelineIsoDateTimeSchema,
   updatedAt: TimelineIsoDateTimeSchema.optional(),
   turnOrder: z.number().int().nonnegative().optional(),
+  historyOrder: z.number().int().nonnegative().optional(),
 } satisfies z.ZodRawShape;
 
 const OptionalTextSchema = z.string().optional();
@@ -376,10 +379,29 @@ export const TimelineSeparatorMessageSchema = z
   })
   .strict() satisfies z.ZodType<TimelineSeparatorMessage>;
 
+export const SessionCompactionActivityBlockSchema = z
+  .object({
+    ...TimelineBlockBaseShape,
+    kind: z.literal('session_compaction_activity'),
+    activityId: z.string().min(1),
+    status: z.enum(['running', 'completed', 'failed', 'skipped']),
+    label: z.string().min(1),
+  })
+  .strict() satisfies z.ZodType<SessionCompactionActivityBlock>;
+
+export const TimelineActivityMessageSchema = z
+  .object({
+    ...TimelineMessageBaseShape,
+    role: z.literal('activity'),
+    blocks: z.tuple([SessionCompactionActivityBlockSchema]),
+  })
+  .strict() satisfies z.ZodType<TimelineActivityMessage>;
+
 export const TimelineMessageSchema = z.union([
   TimelineUserMessageSchema,
   TimelineAssistantMessageSchema,
   TimelineSeparatorMessageSchema,
+  TimelineActivityMessageSchema,
 ]) satisfies z.ZodType<TimelineMessage>;
 
 export type TimelineMessageFromSchema = z.infer<typeof TimelineMessageSchema>;

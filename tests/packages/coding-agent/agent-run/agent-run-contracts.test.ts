@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type {
   AgentRun,
-  AgentRunToolCall,
+  ToolCallStep,
+  RunStep,
   CancelRunResult,
-  CleanupInterruptedRunsResult,
   ResumeRunAfterApprovalResult,
   StartRunRequest,
   StartRunResult,
@@ -47,11 +47,9 @@ describe('agent-run public contracts', () => {
       'not_waiting',
       'failed',
     ];
-    const cleanupStatuses: CleanupInterruptedRunsResult['status'][] = ['completed', 'failed'];
 
     expect(cancelStatuses).toContain('not_cancellable');
     expect(resumeStatuses).toContain('not_waiting');
-    expect(cleanupStatuses).toEqual(['completed', 'failed']);
   });
 
   it('defines persisted run and tool runtime shapes', () => {
@@ -67,15 +65,27 @@ describe('agent-run public contracts', () => {
     const toolCall = {
       tool_call_id: 'tool-call-1',
       run_id: run.run_id,
+      type: 'tool_call',
+      source_model_call_id: 'model-call-1',
       call_order: 0,
       tool_name: 'read_file',
       input: { path: 'README.md' },
+      arguments_text: '{"path":"README.md"}',
       status: 'requested',
       created_at: run.created_at,
-    } satisfies AgentRunToolCall;
+    } satisfies ToolCallStep;
 
     expect(run.status).toBe('queued');
     expect(toolCall.call_order).toBe(0);
+    const steps: RunStep[] = [{
+      type: 'model_call',
+      run_id: run.run_id,
+      model_call_id: 'model-call-1',
+      status: 'running',
+      started_at: run.created_at,
+    }, toolCall];
+    expect(steps.map((step) => step.type)).toEqual(['model_call', 'tool_call']);
+    expect(steps.every((step) => !('step_id' in step))).toBe(true);
   });
 
   it('defines run-level ToolSet', () => {

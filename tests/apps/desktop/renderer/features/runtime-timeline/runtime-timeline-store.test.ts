@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { RuntimeEvent } from '@megumi/coding-agent/events';
-import type { TimelineAssistantMessage } from '@megumi/coding-agent/projections/timeline';
+import type { TimelineAssistantMessage, TimelineMessage } from '@megumi/coding-agent/projections/timeline';
 import { useRuntimeTimelineStore } from '@megumi/desktop/renderer/features/runtime-timeline';
 
 function runtimeEvent(
@@ -204,13 +204,107 @@ describe('runtime timeline store', () => {
     const session = useRuntimeTimelineStore.getState().sessions['project-1:session-1'];
 
     expect(session?.messages.map((message) =>
-      message.role === 'separator' ? `separator:${message.messageId}` : `${message.role}:${message.runId}`,
+      message.role === 'separator' || message.role === 'activity'
+        ? `${message.role}:${message.messageId}`
+        : `${message.role}:${message.runId}`,
     )).toEqual([
       'user:run-old',
       'assistant:run-old',
       'user:run-new',
       'assistant:run-new',
     ]);
+  });
+
+  it('uses committed active-path order when timestamps are equal', () => {
+    const message = (messageId: string, historyOrder: number): TimelineMessage => ({
+      messageId,
+      role: 'user',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: messageId,
+      createdAt: '2026-05-17T00:00:00.000Z',
+      historyOrder,
+      blocks: [{
+        blockId: `text:${messageId}`,
+        kind: 'user_text',
+        text: messageId,
+        format: 'plain',
+      }],
+    });
+    useRuntimeTimelineStore.getState().hydrateCommittedMessages('project-1', 'session-1', [
+      message('run-z', 0),
+      message('run-a', 1),
+    ]);
+
+    expect(useRuntimeTimelineStore.getState().sessions['project-1:session-1']?.messages.map((item) => item.messageId))
+      .toEqual(['run-z', 'run-a']);
+  });
+
+  it('preserves pre-tool assistant text when hydrating with a committed final answer', () => {
+    const store = useRuntimeTimelineStore.getState();
+    const committedAssistant: TimelineAssistantMessage = {
+      messageId: 'message:assistant:1',
+      role: 'assistant',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      createdAt: '2026-05-17T00:00:00.000Z',
+      updatedAt: '2026-05-17T00:00:08.000Z',
+      blocks: [{
+        blockId: 'answer:run-1',
+        kind: 'answer_text',
+        runId: 'run-1',
+        textId: 'text:committed',
+        status: 'completed',
+        text: 'Committed final answer.',
+        format: 'markdown',
+      }],
+    };
+
+    store.hydrateSessionTimeline('project-1', 'session-1', [committedAssistant], [
+      runtimeEvent('run.started', 1, { runKind: 'agent' }),
+      runtimeEvent('model_call.started', 2, {
+        modelCallId: 'model-call-1',
+        providerId: 'DeepSeek',
+        modelId: 'deepseek-v4-flash',
+      }),
+      runtimeEvent('model_call.text_delta', 3, {
+        modelCallId: 'model-call-1',
+        delta: 'I will inspect the workspace first.',
+      }),
+      runtimeEvent('model_call.tool_call', 4, {
+        modelCallId: 'model-call-1',
+        toolCallId: 'tool-call-1',
+        toolName: 'list_directory',
+        input: { path: '.' },
+      }),
+      runtimeEvent('model_call.started', 5, {
+        modelCallId: 'model-call-2',
+        providerId: 'DeepSeek',
+        modelId: 'deepseek-v4-flash',
+      }),
+      runtimeEvent('model_call.text_delta', 6, {
+        modelCallId: 'model-call-2',
+        delta: 'Runtime final answer.',
+      }),
+      runtimeEvent('run.completed', 7, {
+        assistantMessageId: 'message:assistant:1',
+      }, { messageId: 'message:assistant:1' }),
+    ]);
+
+    const session = useRuntimeTimelineStore.getState().sessions['project-1:session-1'];
+    const assistant = session?.messages.find((message): message is TimelineAssistantMessage =>
+      message.role === 'assistant' && message.runId === 'run-1',
+    );
+    const process = assistant?.blocks.find((block) => block.kind === 'process_disclosure');
+    const answers = assistant?.blocks.filter((block) => block.kind === 'answer_text') ?? [];
+
+    expect(JSON.stringify(process)).toContain('I will inspect the workspace first.');
+    expect(answers).toHaveLength(1);
+    expect(answers[0]).toMatchObject({
+      status: 'completed',
+      text: 'Committed final answer.',
+    });
   });
 
   it('keeps committed answer text authoritative while replaying runtime process events', () => {

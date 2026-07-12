@@ -31,11 +31,6 @@ function createHost(getSessionUsageSnapshot: (request: { sessionId: string }) =>
       sessionTimelineQuery: {
         listSessionTimeline: vi.fn() as never,
       },
-      agentRunQueries: {
-        listRunsBySession: () => [],
-        listRuntimeEventsByRun: () => [],
-        getHistoricalRun: (runId) => ({ status: 'not_found', runId }),
-      },
       contextService,
     }),
     contextService,

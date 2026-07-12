@@ -10,7 +10,6 @@ function fixture() {
   const count = vi.fn();
   const dependencies = {
     sessionService: { getActiveHistory: vi.fn(), saveCompactionSummary: vi.fn() },
-    runHistoryQuery: { getHistoricalRun: vi.fn() },
     instructionScopeResolver: { resolve: vi.fn() },
     instructionService: { getSystemInstructions: vi.fn(), getEffectiveAgentInstructions: vi.fn() },
     skillService: { getSkillCatalog: vi.fn() },

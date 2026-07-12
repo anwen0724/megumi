@@ -103,7 +103,7 @@ describe('SessionService', () => {
     const result = await service.saveUserMessage({
       message_id: 'M1',
       session_id: 'S1',
-      content_text: '看图',
+      content: [{ type: 'text', text: '看图' }],
       attachments: [{
         attachment_id: 'A1',
         type: 'image',
@@ -117,7 +117,10 @@ describe('SessionService', () => {
     expect(result).toMatchObject({
       status: 'saved',
       message: {
-        message: { message_id: 'M1', role: 'user' },
+        message: {
+          message_id: 'M1',
+          conversation: { role: 'user', content: [{ type: 'text', text: '看图' }] },
+        },
         attachments: [{
           attachment_id: 'A1',
           message_id: 'M1',
@@ -143,7 +146,7 @@ describe('SessionService', () => {
     await service.saveUserMessage({
       message_id: 'M1',
       session_id: 'S1',
-      content_text: 'hello',
+      content: [{ type: 'text', text: 'hello' }],
       created_at: '2026-07-04T00:01:00.000Z',
     });
 
@@ -151,22 +154,47 @@ describe('SessionService', () => {
       message_id: 'M2',
       session_id: 'S1',
       run_id: 'R1',
-      content_text: 'reply',
+      content: [{ type: 'text', text: 'reply' }],
       completed_at: '2026-07-04T00:02:00.000Z',
     })).toMatchObject({
       status: 'saved',
-      message: { role: 'assistant', content_text: 'reply' },
+      message: { conversation: { role: 'assistant', content: [{ type: 'text', text: 'reply' }] } },
       entry: { message_id: 'M2' },
+    });
+  });
+
+  it('rejects a response append when another branch changed the active entry', async () => {
+    const { service, workspaceId } = createService();
+    await service.createSession({ workspace_id: workspaceId, title: 'Session' });
+    const first = await service.saveUserMessage({
+      message_id: 'M1', session_id: 'S1', content: [{ type: 'text', text: 'first' }],
+      created_at: '2026-07-04T00:01:00.000Z',
+    });
+    expect(first.status).toBe('saved');
+    if (first.status !== 'saved') return;
+    await service.saveUserMessage({
+      message_id: 'M2', session_id: 'S1', content: [{ type: 'text', text: 'new branch head' }],
+      created_at: '2026-07-04T00:02:00.000Z',
+    });
+
+    expect(service.saveAssistantMessage({
+      message_id: 'A1', session_id: 'S1', run_id: 'R1',
+      parent_entry_id: first.entry.entry_id,
+      content: [{ type: 'text', text: 'stale response' }],
+      completed_at: '2026-07-04T00:03:00.000Z',
+    })).toMatchObject({ status: 'failed', failure: { code: 'active_entry_changed' } });
+    expect(service.listMessages({ session_id: 'S1' })).toMatchObject({
+      status: 'ok', messages: [{ message: { message_id: 'M1' } }, { message: { message_id: 'M2' } }],
     });
   });
 
   it('lists all messages or active path messages only', async () => {
     const { service, workspaceId } = createService();
     await service.createSession({ workspace_id: workspaceId, title: 'Session' });
-    const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', content_text: 'm1', created_at: '2026-07-04T00:01:00.000Z' });
-    await service.saveAssistantMessage({ message_id: 'M2', session_id: 'S1', run_id: 'R1', content_text: 'm2', completed_at: '2026-07-04T00:02:00.000Z' });
+    const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', content: [{ type: 'text', text: 'm1' }], created_at: '2026-07-04T00:01:00.000Z' });
+    await service.saveAssistantMessage({ message_id: 'M2', session_id: 'S1', run_id: 'R1', content: [{ type: 'text', text: 'm2' }], completed_at: '2026-07-04T00:02:00.000Z' });
     await service.switchActiveEntry({ session_id: 'S1', active_entry_id: m1.status === 'saved' ? m1.entry.entry_id : undefined, updated_at: '2026-07-04T00:03:00.000Z' });
-    await service.saveUserMessage({ message_id: 'M3', session_id: 'S1', content_text: 'm3', created_at: '2026-07-04T00:04:00.000Z' });
+    await service.saveUserMessage({ message_id: 'M3', session_id: 'S1', content: [{ type: 'text', text: 'm3' }], created_at: '2026-07-04T00:04:00.000Z' });
 
     expect(service.listMessages({ session_id: 'S1' })).toMatchObject({
       status: 'ok',
@@ -188,9 +216,9 @@ describe('SessionService', () => {
   it('returns active history with compaction summaries and messages', async () => {
     const { service, workspaceId } = createService();
     await service.createSession({ workspace_id: workspaceId, title: 'Session' });
-    const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', content_text: 'm1', created_at: '2026-07-04T00:01:00.000Z' });
+    const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', content: [{ type: 'text', text: 'm1' }], created_at: '2026-07-04T00:01:00.000Z' });
     const firstEntryId = m1.status === 'saved' ? m1.entry.entry_id : 'missing';
-    await service.saveUserMessage({ message_id: 'M2', session_id: 'S1', content_text: 'm2', created_at: '2026-07-04T00:02:00.000Z' });
+    await service.saveUserMessage({ message_id: 'M2', session_id: 'S1', content: [{ type: 'text', text: 'm2' }], created_at: '2026-07-04T00:02:00.000Z' });
     await service.saveCompactionSummary({
       compaction_id: 'C1',
       session_id: 'S1',
@@ -211,12 +239,12 @@ describe('SessionService', () => {
   it('rejects a compaction when the active head changed after Context loaded history', async () => {
     const { repository, service, workspaceId } = createService();
     await service.createSession({ workspace_id: workspaceId, title: 'Session' });
-    const first = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', content_text: 'm1', created_at: '2026-07-04T00:01:00.000Z' });
-    const second = await service.saveUserMessage({ message_id: 'M2', session_id: 'S1', content_text: 'm2', created_at: '2026-07-04T00:02:00.000Z' });
+    const first = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', content: [{ type: 'text', text: 'm1' }], created_at: '2026-07-04T00:01:00.000Z' });
+    const second = await service.saveUserMessage({ message_id: 'M2', session_id: 'S1', content: [{ type: 'text', text: 'm2' }], created_at: '2026-07-04T00:02:00.000Z' });
     const firstEntryId = first.status === 'saved' ? first.entry.entry_id : 'missing';
     const expectedHead = second.status === 'saved' ? second.entry.entry_id : 'missing';
 
-    await service.saveUserMessage({ message_id: 'M3', session_id: 'S1', content_text: 'new branch head', created_at: '2026-07-04T00:03:00.000Z' });
+    await service.saveUserMessage({ message_id: 'M3', session_id: 'S1', content: [{ type: 'text', text: 'new branch head' }], created_at: '2026-07-04T00:03:00.000Z' });
 
     expect(service.saveCompactionSummary({
       compaction_id: 'C-stale',

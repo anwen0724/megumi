@@ -7,16 +7,16 @@ import type { RawUserInputAttachment } from '../../coding-agent/input';
 
 import type {
   AgentRun,
-  AgentRunQueries,
   AgentRunService,
   StartRunResult,
 } from '../../coding-agent/agent-run';
 
-import type {
-  Session,
-  SessionBranchService,
-  SessionMessageWithAttachments,
-  SessionService,
+import {
+  sessionConversationText,
+  type Session,
+  type SessionBranchService,
+  type SessionMessageWithAttachments,
+  type SessionService,
 } from '../../coding-agent/session';
 
 import type { CommandService } from '../../coding-agent/commands';
@@ -54,7 +54,7 @@ export const SessionCreatePayloadSchema = z.object({
 export const SessionListPayloadSchema = z.object({}).strict();
 export const SessionMessageListPayloadSchema = z.object({ sessionId: z.string().min(1) }).strict();
 export const SessionTimelineListPayloadSchema = z.object({
-  projectId: z.string().min(1), sessionId: z.string().min(1),
+  projectId: z.string().min(1), sessionId: z.string().min(1), runId: z.string().min(1).optional(),
 }).strict();
 export const SessionHydrationGetPayloadSchema = z.object({
   projectId: z.string().min(1), sessionId: z.string().min(1),
@@ -214,7 +214,6 @@ export function createChatHost(options: {
   workspaceService: Pick<WorkspaceService, 'listWorkspaces'>;
   branchService: SessionBranchHostPort;
   sessionTimelineQuery: SessionTimelineQuery;
-  agentRunQueries: AgentRunQueries;
   contextService: ChatContextUsagePort;
 }): ChatHost {
   return {
@@ -243,9 +242,8 @@ export function createChatHost(options: {
     },
 
     async listMessages(request) {
-      const result = options.sessionService.listMessages({
+      const result = options.sessionService.getActiveConversationHistory({
         session_id: request.sessionId,
-        active_path_only: true,
       });
       if (result.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(result.failure) };
@@ -257,6 +255,7 @@ export function createChatHost(options: {
       return options.sessionTimelineQuery.listSessionTimeline({
         workspace_id: request.projectId,
         session_id: request.sessionId,
+        ...(request.runId ? { run_id: request.runId } : {}),
       });
     },
 
@@ -354,12 +353,12 @@ export function createChatHost(options: {
       return { suggestions: toHostCommandSuggestions(await options.commandService.getCommandSuggestions(request)) };
     },
 
-    async listRuns(request) {
-      return { runs: options.agentRunQueries.listRunsBySession(request.sessionId).map(toChatRunUiDto) };
+    async listRuns(_request) {
+      return { runs: [] };
     },
 
-    async listRunEvents(request) {
-      return { events: options.agentRunQueries.listRuntimeEventsByRun(request.runId) };
+    async listRunEvents(_request) {
+      return { events: [] };
     },
 
     async getSessionHydration(request) {
@@ -367,15 +366,11 @@ export function createChatHost(options: {
         workspace_id: request.projectId,
         session_id: request.sessionId,
       });
-      const activeRunIds = extractRunIdsFromTimelineMessages(timeline.messages);
-      const runs = options.agentRunQueries
-        .listRunsBySession(request.sessionId)
-        .filter((run) => activeRunIds.has(run.run_id));
       return {
         messages: timeline.messages,
         diagnostics: timeline.diagnostics,
-        runs: runs.map(toChatRunUiDto),
-        runtimeEvents: runs.flatMap((run) => options.agentRunQueries.listRuntimeEventsByRun(run.run_id)),
+        runs: [],
+        runtimeEvents: [],
       };
     },
 
@@ -385,16 +380,6 @@ export function createChatHost(options: {
       }));
     },
   };
-}
-
-function extractRunIdsFromTimelineMessages(messages: TimelineMessage[]): Set<string> {
-  const runIds = new Set<string>();
-  for (const message of messages) {
-    if ((message.role === 'assistant' || message.role === 'user') && message.runId) {
-      runIds.add(message.runId);
-    }
-  }
-  return runIds;
 }
 
 function mapSessionUsageSnapshot(result: GetSessionUsageSnapshotResult): ChatGetContextUsageUiResult {
@@ -543,6 +528,7 @@ export type ChatListMessagesUiResult =
 export interface ChatListTimelineUiRequest {
   projectId: string;
   sessionId: string;
+  runId?: string;
 }
 export interface ChatListTimelineUiResult {
   messages: TimelineMessage[];
@@ -743,8 +729,8 @@ export function toChatMessageUiDto(item: SessionMessageWithAttachments): ChatSes
     id: message.message_id,
     sessionId: message.session_id,
     ...(message.run_id ? { runId: message.run_id } : {}),
-    role: message.role,
-    text: message.content_text,
+    role: message.conversation.role === 'assistant' ? 'assistant' : 'user',
+    text: sessionConversationText(message.conversation),
     createdAt: message.created_at,
   };
 }

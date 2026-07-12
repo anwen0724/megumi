@@ -27,17 +27,6 @@ function createTestDatabase() {
     created_at: '2026-05-16T00:00:00.000Z',
     updated_at: '2026-05-16T00:00:00.000Z',
   });
-  database.prepare(`
-    INSERT INTO agent_runs (
-      run_id, workspace_id, session_id, provider_id, model_id, trigger_type,
-      trigger_user_message_id, trigger_command_name, status, created_at,
-      started_at, completed_at, failure_json
-    ) VALUES (
-      'run:1', 'workspace:default', 'session:1', 'deepseek', 'deepseek-chat',
-      'command', NULL, 'plan', 'completed', '2026-05-16T00:00:00.000Z',
-      '2026-05-16T00:00:00.000Z', '2026-05-16T00:00:00.000Z', NULL
-    )
-  `).run();
   return database;
 }
 

@@ -1,6 +1,6 @@
 /*
  * Implements SkillService by composing package discovery, availability state,
- * usage records, resource reads, and script execution request preparation.
+ * resource reads, and script execution request preparation.
  */
 
 import type { Skill } from '../domain/model/skill';
@@ -41,7 +41,6 @@ export type CreateSkillServiceOptions = {
   clock?: { now(): string };
   ids?: {
     skillAvailabilityId(): string;
-    skillUsageRecordId(): string;
   };
 };
 
@@ -99,15 +98,6 @@ export class SkillServiceImpl implements SkillService {
       if (!skill.available) {
         return { status: 'unavailable', skillId: request.skillId };
       }
-      this.options.repository.saveUsageRecord({
-        skillUsageRecordId: this.options.ids?.skillUsageRecordId() ?? `skill-usage-record:${crypto.randomUUID()}`,
-        skillId: skill.skillId,
-        sessionId: request.sessionId,
-        ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}),
-        ...(request.runId ? { runId: request.runId } : {}),
-        trigger: request.trigger,
-        createdAt: this.now(),
-      });
       return {
         status: 'ok',
         activatedSkill: {

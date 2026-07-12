@@ -4,6 +4,7 @@
  */
 import type { PermissionDecision, PermissionMode, PermissionService } from '../../permissions';
 import type { SessionService } from '../../session';
+import type { AssistantContentBlock } from '@megumi/ai';
 import type { SettingsService } from '../../settings';
 import type { ToolExecutionService } from '../../tools';
 import type { WorkspacePathPolicyService } from '../../workspace';
@@ -20,7 +21,7 @@ import type {
   AgentRun,
   AgentRunApprovalRequest,
   AgentRunFailure,
-  AgentRunToolCall,
+  ToolCallStep,
 } from '../contracts/agent-run-contracts';
 import type { AgentRunTraceLogger } from '../contracts/agent-run-trace-contracts';
 import type {
@@ -35,12 +36,12 @@ import {
   type ModelRequestedToolCall,
 } from './tool-call-orchestrator';
 import type { RunToolSetBuilder } from './tool-set-builder';
-import type { AgentRunRepository } from '../repositories/agent-run-repository';
 import type { AgentRunRuntimeEventFactory } from './agent-run-runtime-events';
+import type { ActiveRunStore } from './active-run-store';
 
 export type RunOrchestratorDependencies = {
-  repository: AgentRunRepository;
-  session_service: Pick<SessionService, 'saveAssistantMessage'>;
+  active_run_store: Pick<ActiveRunStore, 'getRun' | 'saveRun' | 'createApprovalRequest' | 'upsertStep'>;
+  session_service: Pick<SessionService, 'saveAssistantMessage' | 'saveToolResultMessage'>;
   settings_service: Pick<SettingsService, 'resolvePermissionSettings'>;
   context_service: Pick<ContextService, 'prepareModelCall' | 'recordCompletedRunUsage'>;
   model_call_service: ModelCallService;
@@ -56,6 +57,7 @@ export type RunOrchestratorDependencies = {
   on_model_call_started?: (input: { run_id: string; model_call_id: string }) => void;
   ids: {
     assistant_message_id(): string;
+    tool_result_message_id(): string;
     approval_request_id(): string;
   };
   clock: { now(): string };
@@ -90,6 +92,7 @@ export type RunApprovalContinuation = {
   pending_approval_ids: string[];
   original_approval_policy_by_approval_id: Record<string, Extract<PermissionDecision, { type: 'requires_approval' }>>;
   deferred_tool_calls: ModelRequestedToolCall[];
+  deferred_call_order_offset: number;
   current_turn: CurrentConversationTurn;
   activated_skills: ActivatedSkillInstruction[];
   model_context: ContextCapacity;
@@ -134,6 +137,7 @@ export async function runAgentModelToolLoop(
       activatedSkills: request.activated_skills,
       tools,
       modelContext: request.model_context,
+      onCompactionProgress: (progress) => emitContextCompactionProgress(dependencies, run, progress),
       ...(request.signal ? { signal: request.signal } : {}),
     });
     if (preparation.status === 'failed') {
@@ -168,6 +172,14 @@ export async function runAgentModelToolLoop(
       run_id: run.run_id,
       model_call_id: modelCall.model_call_id,
     });
+    const modelCallStartedAt = dependencies.clock.now();
+    dependencies.active_run_store.upsertStep({
+      type: 'model_call',
+      run_id: run.run_id,
+      model_call_id: modelCall.model_call_id,
+      status: 'running',
+      started_at: modelCallStartedAt,
+    });
     dependencies.event_sink.emit({
       eventType: 'model_call.started',
       run,
@@ -188,31 +200,85 @@ export async function runAgentModelToolLoop(
 
     const modelEvents = await collectModelCallEvents(dependencies, run, modelCall.events);
     lastProviderInputTokens = modelEvents.provider_input_tokens;
+    const latestRun = dependencies.active_run_store.getRun(run.run_id);
+    if (latestRun?.status === 'cancelled') {
+      if (modelEvents.assistant_content.length > 0) {
+        dependencies.session_service.saveAssistantMessage({
+          message_id: dependencies.ids.assistant_message_id(),
+          session_id: run.session_id,
+          run_id: run.run_id,
+          parent_entry_id: currentTurn.lastEntryId ?? currentTurn.userEntry.entryId,
+          content: modelEvents.assistant_content,
+          stop_reason: 'cancelled',
+          completed_at: dependencies.clock.now(),
+        });
+      }
+      return {
+        status: 'failed',
+        run: latestRun,
+        failure: { code: 'cancel_failed', message: 'Agent Run was cancelled.' },
+      };
+    }
     if (modelEvents.failure) {
+      if (modelEvents.assistant_content.length > 0) {
+        const partial = dependencies.session_service.saveAssistantMessage({
+          message_id: dependencies.ids.assistant_message_id(),
+          session_id: run.session_id,
+          run_id: run.run_id,
+          parent_entry_id: currentTurn.lastEntryId ?? currentTurn.userEntry.entryId,
+          content: modelEvents.assistant_content,
+          stop_reason: modelEvents.stop_reason ?? (request.signal?.aborted ? 'cancelled' : 'failed'),
+          completed_at: dependencies.clock.now(),
+        });
+        if (partial.status === 'failed') {
+          return failRun(dependencies, run, {
+            code: 'session_failed',
+            message: partial.failure.message,
+          }, { model_calls: modelCalls, tool_rounds: toolRounds });
+        }
+      }
+      dependencies.active_run_store.upsertStep({
+        type: 'model_call',
+        run_id: run.run_id,
+        model_call_id: modelCall.model_call_id,
+        status: 'failed',
+        started_at: modelCallStartedAt,
+        completed_at: dependencies.clock.now(),
+        failure: modelEvents.failure,
+      });
       return failRun(dependencies, run, modelEvents.failure, {
         model_calls: modelCalls,
         tool_rounds: toolRounds,
       });
     }
+    dependencies.active_run_store.upsertStep({
+      type: 'model_call',
+      run_id: run.run_id,
+      model_call_id: modelCall.model_call_id,
+      status: 'completed',
+      started_at: modelCallStartedAt,
+      completed_at: dependencies.clock.now(),
+    });
+
+    const assistant = dependencies.session_service.saveAssistantMessage({
+      message_id: dependencies.ids.assistant_message_id(),
+      session_id: run.session_id,
+      run_id: run.run_id,
+      parent_entry_id: currentTurn.lastEntryId ?? currentTurn.userEntry.entryId,
+      content: modelEvents.assistant_content,
+      ...(modelEvents.stop_reason ? { stop_reason: modelEvents.stop_reason } : {}),
+      completed_at: dependencies.clock.now(),
+    });
+    if (assistant.status === 'failed') {
+      return failRun(dependencies, run, {
+        code: 'session_failed',
+        message: assistant.failure.message,
+      }, { model_calls: modelCalls, tool_rounds: toolRounds });
+    }
+    currentTurn = { ...currentTurn, lastEntryId: assistant.entry.entry_id };
 
     if (modelEvents.tool_calls.length === 0) {
-      const assistant = dependencies.session_service.saveAssistantMessage({
-        message_id: dependencies.ids.assistant_message_id(),
-        session_id: run.session_id,
-        run_id: run.run_id,
-        content_text: modelEvents.content,
-        completed_at: dependencies.clock.now(),
-      });
-      if (assistant.status === 'failed') {
-        return failRun(dependencies, run, {
-          code: 'session_failed',
-          message: assistant.failure.message,
-        }, {
-          model_calls: modelCalls,
-          tool_rounds: toolRounds,
-        });
-      }
-      run = dependencies.repository.saveRun(transitionAgentRunStatus({
+      run = dependencies.active_run_store.saveRun(transitionAgentRunStatus({
         run,
         to: 'completed',
         changed_at: dependencies.clock.now(),
@@ -249,11 +315,17 @@ export async function runAgentModelToolLoop(
           code: 'snapshot_write_failed',
         });
       }
-      await dependencies.memory_service?.captureCompletedRun({
-        run_id: run.run_id,
-        session_id: run.session_id,
-        workspace_id: run.workspace_id,
-      });
+      try {
+        await dependencies.memory_service?.captureCompletedRun({
+          run_id: run.run_id,
+          session_id: run.session_id,
+          workspace_id: run.workspace_id,
+        });
+      } catch {
+        traceRun(dependencies, run, 'trace.memory.capture_failed', {
+          reason: 'post_run_capture_failed',
+        });
+      }
       return { status: 'completed', run };
     }
 
@@ -332,6 +404,11 @@ export async function runAgentModelToolLoop(
       ...(dependencies.workspace_path_policy_service ? { workspace_path_policy_service: dependencies.workspace_path_policy_service } : {}),
       clock: dependencies.clock,
       ids: { approval_request_id: dependencies.ids.approval_request_id },
+      on_step_transition: (step) => {
+        if (dependencies.active_run_store.getRun(step.run_id)?.status !== 'cancelled') {
+          dependencies.active_run_store.upsertStep(step);
+        }
+      },
       signal: request.signal,
     });
 
@@ -340,6 +417,26 @@ export async function runAgentModelToolLoop(
     }
     for (const toolResult of toolGroup.tool_result_facts) {
       emitToolResult(dependencies, run, toolResult);
+      const persisted = dependencies.session_service.saveToolResultMessage({
+        message_id: dependencies.ids.tool_result_message_id(),
+        session_id: run.session_id,
+        run_id: run.run_id,
+        parent_entry_id: currentTurn.lastEntryId ?? currentTurn.userEntry.entryId,
+        tool_call_id: toolResult.tool_call_id,
+        tool_name: toolResult.tool_name,
+        status: toolResult.status === 'completed' ? 'success' : 'failure',
+        content: [{
+          type: 'text',
+          text: toolResult.content ?? toolResult.observation?.summary ?? `${toolResult.tool_name} ${toolResult.status}`,
+        }],
+        completed_at: toolResult.created_at,
+      });
+      if (persisted.status === 'failed') {
+        return failRun(dependencies, run, {
+          code: 'session_failed', message: persisted.failure.message,
+        }, { model_calls: modelCalls, tool_rounds: toolRounds });
+      }
+      currentTurn = { ...currentTurn, lastEntryId: persisted.entry.entry_id };
       appendedItems.push(toolResultToConversationItem(toolResult));
     }
     if (toolGroup.tool_result_facts.length > 0) {
@@ -349,9 +446,17 @@ export async function runAgentModelToolLoop(
       });
     }
     currentTurn = { ...currentTurn, runItems: [...currentTurn.runItems, ...appendedItems] };
+    const afterToolGroup = dependencies.active_run_store.getRun(run.run_id);
+    if (afterToolGroup?.status === 'cancelled') {
+      return {
+        status: 'failed',
+        run: afterToolGroup,
+        failure: { code: 'cancel_failed', message: 'Agent Run was cancelled.' },
+      };
+    }
     for (const pendingApproval of toolGroup.pending_approvals) {
       const approval = pendingApproval.approval_request;
-      dependencies.repository.createApprovalRequest(approval);
+      dependencies.active_run_store.createApprovalRequest(approval);
       dependencies.event_sink.emit({
         eventType: 'approval.requested',
         run,
@@ -362,7 +467,7 @@ export async function runAgentModelToolLoop(
     }
 
     if (toolGroup.pending_approvals.length > 0) {
-      run = dependencies.repository.saveRun(transitionAgentRunStatus({
+      run = dependencies.active_run_store.saveRun(transitionAgentRunStatus({
         run,
         to: 'waiting_for_approval',
         changed_at: dependencies.clock.now(),
@@ -391,6 +496,7 @@ export async function runAgentModelToolLoop(
             ]),
           ),
           deferred_tool_calls: toolGroup.deferred_tool_calls,
+          deferred_call_order_offset: toolGroup.deferred_call_order_offset,
           current_turn: currentTurn,
           activated_skills: request.activated_skills,
           model_context: request.model_context,
@@ -403,6 +509,51 @@ export async function runAgentModelToolLoop(
 
     traceLoopCounters(dependencies, run, modelCalls, toolRounds, currentTurn.runItems.length);
   }
+}
+
+function emitContextCompactionProgress(
+  dependencies: RunOrchestratorDependencies,
+  run: AgentRun,
+  progress: import('../../context').ContextCompactionProgress,
+): void {
+  if (progress.status === 'failed') {
+    dependencies.event_sink.emit({
+      eventType: 'context.compaction.failed',
+      run,
+      payload: {
+        compactionId: progress.compactionId,
+        triggerReason: 'automatic',
+        tokensBefore: progress.tokensBefore,
+        ...(progress.previousCompactionId ? { previousCompactionId: progress.previousCompactionId } : {}),
+        error: {
+          code: 'context_budget_exceeded',
+          message: progress.message,
+          severity: 'error',
+          retryable: true,
+          source: 'core',
+        },
+      },
+    });
+    return;
+  }
+
+  dependencies.event_sink.emit({
+    eventType: progress.status === 'started'
+      ? 'context.compaction.started'
+      : 'context.compaction.completed',
+    run,
+    payload: {
+      compactionId: progress.compactionId,
+      triggerReason: 'automatic',
+      tokensBefore: progress.tokensBefore,
+      firstKeptSourceRef: {
+        ...(progress.firstKeptSourceId ? { sourceId: progress.firstKeptSourceId } : {}),
+        sourceKind: 'session_message',
+      },
+      summarizedSourceCount: progress.summarizedSourceCount,
+      ...(progress.previousCompactionId ? { previousCompactionId: progress.previousCompactionId } : {}),
+    },
+  });
 }
 
 function toolResultToConversationItem(toolResult: ToolResultRuntimeFact): CurrentConversationTurn['runItems'][number] {
@@ -440,14 +591,19 @@ async function collectModelCallEvents(
   events: AsyncIterable<ModelCallEvent>,
 ): Promise<{
   content: string;
+  assistant_content: AssistantContentBlock[];
   tool_calls: ModelRequestedToolCall[];
+  stop_reason?: string;
   provider_input_tokens?: number;
   failure?: AgentRunFailure;
 }> {
   const textDeltas: string[] = [];
+  const thinkingDeltas: string[] = [];
+  const assistantContent: AssistantContentBlock[] = [];
   const toolCalls: ModelRequestedToolCall[] = [];
   let completedContent: string | undefined;
   let providerInputTokens: number | undefined;
+  let stopReason: string | undefined;
   const runtimeEventState: ModelCallRuntimeEventState = {};
 
   for await (const event of events) {
@@ -465,7 +621,22 @@ async function collectModelCallEvents(
     if (event.type === 'text_delta') {
       textDeltas.push(event.delta);
     }
+    if (event.type === 'thinking_delta') {
+      thinkingDeltas.push(event.delta);
+    }
+    if (event.type === 'thinking_completed' && thinkingDeltas.length > 0) {
+      assistantContent.push({ type: 'thinking', thinking: thinkingDeltas.join('') });
+      thinkingDeltas.length = 0;
+    }
     if (event.type === 'tool_call') {
+      if (textDeltas.length > 0) {
+        assistantContent.push({ type: 'text', text: textDeltas.join('') });
+        textDeltas.length = 0;
+      }
+      assistantContent.push({
+        type: 'toolCall', id: event.tool_call_id, name: event.tool_name,
+        argumentsText: event.arguments_text,
+      });
       toolCalls.push({
         model_call_id: event.model_call_id,
         tool_call_id: event.tool_call_id,
@@ -476,18 +647,46 @@ async function collectModelCallEvents(
     }
     if (event.type === 'completed') {
       completedContent = event.content;
+      stopReason = event.finish_reason;
       providerInputTokens = event.usage?.input_tokens;
     }
     if (event.type === 'failed') {
-      return { content: '', tool_calls: [], failure: event.failure };
+      flushAssistantText(assistantContent, textDeltas, completedContent);
+      return {
+        content: completedContent ?? textDeltas.join(''),
+        assistant_content: assistantContent,
+        tool_calls: toolCalls,
+        ...(stopReason ? { stop_reason: stopReason } : {}),
+        failure: event.failure,
+      };
     }
   }
 
+  flushAssistantText(assistantContent, textDeltas, completedContent);
   return {
-    content: completedContent ?? textDeltas.join(''),
+    content: completedContent ?? assistantContent.flatMap((block) => block.type === 'text' ? [block.text] : []).join(''),
+    assistant_content: assistantContent,
     tool_calls: toolCalls,
+    ...(stopReason ? { stop_reason: stopReason } : {}),
     ...(providerInputTokens !== undefined ? { provider_input_tokens: providerInputTokens } : {}),
   };
+}
+
+function flushAssistantText(
+  content: AssistantContentBlock[],
+  textDeltas: string[],
+  completedContent?: string,
+): void {
+  const streamed = textDeltas.join('');
+  const text = completedContent ?? streamed;
+  if (text && !content.some((block) => block.type === 'text' && block.text === text)) {
+    const firstToolCall = content.findIndex((block) => block.type === 'toolCall');
+    if (firstToolCall >= 0) content.splice(firstToolCall, 0, { type: 'text', text });
+    else content.push({ type: 'text', text });
+  } else if (streamed && !content.some((block) => block.type === 'text' && block.text === streamed)) {
+    content.push({ type: 'text', text: streamed });
+  }
+  textDeltas.length = 0;
 }
 
 function emitModelCallRuntimeEvent(
@@ -627,7 +826,7 @@ type ModelCallRuntimeEventState = {
 function emitToolCallTerminalEvent(
   dependencies: RunOrchestratorDependencies,
   run: AgentRun,
-  toolCall: AgentRunToolCall,
+  toolCall: ToolCallStep,
 ): void {
   if (toolCall.status === 'completed') {
     dependencies.event_sink.emit({
@@ -696,7 +895,7 @@ function failRun(
   failure: AgentRunFailure,
   counters?: { model_calls: number; tool_rounds: number },
 ): RunOrchestratorResult {
-  const failedRun = dependencies.repository.saveRun(transitionAgentRunStatus({
+  const failedRun = dependencies.active_run_store.saveRun(transitionAgentRunStatus({
     run,
     to: 'failed',
     changed_at: dependencies.clock.now(),

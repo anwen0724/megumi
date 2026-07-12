@@ -7,7 +7,7 @@ type ToolCallId = string;
 type ToolExecutionId = string;
 type ToolResultId = string;
 
-export const TIMELINE_MESSAGE_ROLES = ['user', 'assistant', 'separator'] as const;
+export const TIMELINE_MESSAGE_ROLES = ['user', 'assistant', 'separator', 'activity'] as const;
 export type TimelineMessageRole = (typeof TIMELINE_MESSAGE_ROLES)[number];
 
 export const TEXT_FORMATS = ['plain', 'markdown'] as const;
@@ -26,6 +26,7 @@ export const PROCESS_DISCLOSURE_STATUSES = [
   'completed',
   'failed',
   'cancelled',
+  'incomplete',
 ] as const;
 export type ProcessDisclosureStatus = (typeof PROCESS_DISCLOSURE_STATUSES)[number];
 
@@ -49,6 +50,7 @@ export const ASSISTANT_TEXT_ITEM_STATUSES = [
 export type AssistantTextItemStatus = (typeof ASSISTANT_TEXT_ITEM_STATUSES)[number];
 
 export const TOOL_ACTIVITY_STATUSES = [
+  'requested',
   'running',
   'succeeded',
   'failed',
@@ -68,7 +70,7 @@ export type ApprovalActivityStatus = (typeof APPROVAL_ACTIVITY_STATUSES)[number]
 export const BRANCH_SEPARATOR_BLOCK_KINDS = ['branch_separator'] as const;
 export type BranchSeparatorBlockKind = (typeof BRANCH_SEPARATOR_BLOCK_KINDS)[number];
 
-export const COMPACTION_ACTIVITY_STATUSES = ['completed', 'skipped', 'boundary_unresolved'] as const;
+export const COMPACTION_ACTIVITY_STATUSES = ['running', 'completed', 'failed'] as const;
 export type CompactionActivityStatus = (typeof COMPACTION_ACTIVITY_STATUSES)[number];
 
 export const RETRY_ACTIVITY_STATUSES = [
@@ -96,6 +98,7 @@ export interface TimelineMessageBase {
   createdAt: string;
   updatedAt?: string;
   turnOrder?: number;
+  historyOrder?: number;
 }
 
 export interface TimelineBlockBase {
@@ -138,6 +141,20 @@ export interface BranchSeparatorBlock extends TimelineBlockBase {
 export interface TimelineSeparatorMessage extends TimelineMessageBase {
   role: 'separator';
   blocks: [BranchSeparatorBlock];
+}
+
+export type SessionCompactionActivityStatus = 'running' | 'completed' | 'failed' | 'skipped';
+
+export interface SessionCompactionActivityBlock extends TimelineBlockBase {
+  kind: 'session_compaction_activity';
+  activityId: string;
+  status: SessionCompactionActivityStatus;
+  label: string;
+}
+
+export interface TimelineActivityMessage extends TimelineMessageBase {
+  role: 'activity';
+  blocks: [SessionCompactionActivityBlock];
 }
 
 export interface ProcessDisclosureItemBase {
@@ -259,8 +276,8 @@ export interface TimelineAssistantMessage extends TimelineMessageBase {
   workspaceChangeFooter?: WorkspaceChangeFooterFact;
 }
 
-export type TimelineMessage = TimelineUserMessage | TimelineAssistantMessage | TimelineSeparatorMessage;
-export type TimelineBlock = UserTimelineBlock | AssistantTimelineBlock | BranchSeparatorBlock;
+export type TimelineMessage = TimelineUserMessage | TimelineAssistantMessage | TimelineSeparatorMessage | TimelineActivityMessage;
+export type TimelineBlock = UserTimelineBlock | AssistantTimelineBlock | BranchSeparatorBlock | SessionCompactionActivityBlock;
 
 
 

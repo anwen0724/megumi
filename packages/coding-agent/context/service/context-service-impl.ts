@@ -1,8 +1,7 @@
 /*
  * Orchestrates Context v2 from owner-provided history, instructions, skills,
- * historical Runs, model seams, and a synchronous completed-Run usage cache.
+ * Session semantic history, model seams, and a synchronous completed-Run usage cache.
  */
-import type { GetHistoricalRunResult, HistoricalRun } from '../../agent-run';
 import type { InstructionService } from '../../instructions';
 import type { SessionHistoryItem, SessionService } from '../../session';
 import type { SkillService } from '../../skills';
@@ -21,6 +20,7 @@ import type {
   CompactSessionRequest,
   CompactSessionResult,
   ContextFailure,
+  ContextCompactionProgress,
   GetSessionUsageSnapshotRequest,
   GetSessionUsageSnapshotResult,
   PrepareModelCallRequest,
@@ -37,7 +37,6 @@ export type InstructionScopeResolver = {
 
 export type ContextServiceDependencies = {
   sessionService: Pick<SessionService, 'getActiveHistory' | 'saveCompactionSummary'>;
-  runHistoryQuery: { getHistoricalRun(runId: string): GetHistoricalRunResult };
   instructionScopeResolver: InstructionScopeResolver;
   instructionService: InstructionService;
   skillService: Pick<SkillService, 'getSkillCatalog'>;
@@ -122,7 +121,13 @@ export class ContextServiceImpl implements ContextService {
     let compactionId: string | undefined;
 
     if (usage.usedRatio >= this.policy.compactionThresholdRatio) {
-      const compacted = await this.compactInternal({ facts, usageBefore: usage, modelContext: request.modelContext, signal: request.signal });
+      const compacted = await this.compactInternal({
+        facts,
+        usageBefore: usage,
+        modelContext: request.modelContext,
+        onProgress: request.onCompactionProgress,
+        signal: request.signal,
+      });
       if (compacted.status === 'failed') return compacted;
       if (compacted.status === 'compacted') {
         facts = compacted.facts;
@@ -214,18 +219,7 @@ export class ContextServiceImpl implements ContextService {
     if (input.signal?.aborted) return failed(cancelled());
     if (historyResult.status === 'failed') return failed(ownerFailure('session_history_failed', 'Session history could not be loaded.', 'session', historyResult.failure));
 
-    const historicalRuns = new Map<string, HistoricalRun>();
-    for (const runId of historicalRunIds(historyResult.history)) {
-      const result = this.dependencies.runHistoryQuery.getHistoricalRun(runId);
-      if (input.signal?.aborted) return failed(cancelled());
-      if (result.status === 'failed') {
-        const code = result.failure.code;
-        const message = result.failure.message;
-        return failed(ownerFailure('historical_run_failed', message, 'agent_run', { code, message }));
-      }
-      if (result.status === 'found') historicalRuns.set(runId, result.historicalRun);
-    }
-    const turns = buildConversationTurns({ history: historyResult.history, historicalRunsByRunId: historicalRuns });
+    const turns = buildConversationTurns({ history: historyResult.history });
 
     const scope = this.dependencies.instructionScopeResolver.resolve({ workspaceId: input.workspaceId });
     if (input.signal?.aborted) return failed(cancelled());
@@ -243,7 +237,7 @@ export class ContextServiceImpl implements ContextService {
       status: 'loaded',
       facts: {
         sessionId: input.sessionId,
-        expectedActiveEntryId: input.currentTurn?.userEntry.entryId
+        expectedActiveEntryId: input.currentTurn?.lastEntryId ?? input.currentTurn?.userEntry.entryId
           ?? historyResult.history.at(-1)?.entry.entry_id
           ?? null,
         historicalTurns: turns.turns,
@@ -281,7 +275,13 @@ export class ContextServiceImpl implements ContextService {
     }
   }
 
-  private async compactInternal(input: { facts: BuildFacts; usageBefore: ContextUsage; modelContext: ContextCapacity; signal?: AbortSignal }): Promise<
+  private async compactInternal(input: {
+    facts: BuildFacts;
+    usageBefore: ContextUsage;
+    modelContext: ContextCapacity;
+    onProgress?: (progress: ContextCompactionProgress) => void;
+    signal?: AbortSignal;
+  }): Promise<
     | { status: 'compacted'; compactionId: string; usageAfter: ContextUsage; facts: BuildFacts }
     | { status: 'nothing_to_compact'; reason: 'no_historical_turns' | 'no_older_turns' | 'summary_not_reducing' }
     | { status: 'failed'; failure: ContextFailure }
@@ -295,24 +295,52 @@ export class ContextServiceImpl implements ContextService {
     if (input.signal?.aborted) return failed(cancelled());
 
     const compactionId = this.ids.compactionId();
+    const progressBase = {
+      compactionId,
+      tokensBefore: input.usageBefore.usedTokens,
+      summarizedSourceCount: plan.plan.turns.length,
+      ...(plan.plan.firstKeptEntryId ? { firstKeptSourceId: plan.plan.firstKeptEntryId } : {}),
+      ...(input.facts.compactionSummary ? { previousCompactionId: input.facts.compactionSummary.compactionId } : {}),
+    };
+    reportCompactionProgress(input.onProgress, { status: 'started', ...progressBase });
+    const compactionFailure = (failure: ContextFailure) => {
+      reportCompactionProgress(input.onProgress, {
+        status: 'failed',
+        compactionId,
+        tokensBefore: input.usageBefore.usedTokens,
+        code: failure.code,
+        message: failure.message,
+        ...(input.facts.compactionSummary ? { previousCompactionId: input.facts.compactionSummary.compactionId } : {}),
+      });
+      return failed(failure);
+    };
     const summaryRequest = buildCompactionSummaryRequest({ previousSummary: input.facts.compactionSummary?.content, turns: plan.plan.turns });
     const summaryPrompt = summaryPromptFrom(summaryRequest.systemPrompt, summaryRequest.input);
     const generated = await this.dependencies.summaryModelCall.complete({ prompt: summaryPrompt, modelContext: input.modelContext, sessionId: input.facts.sessionId, compactionId, ...(input.signal ? { signal: input.signal } : {}) });
-    if (input.signal?.aborted) return failed(cancelled());
-    if (generated.status === 'failed') return failed({ ...generated.failure, code: 'compaction_failed' });
+    if (input.signal?.aborted) return compactionFailure(cancelled());
+    if (generated.status === 'failed') return compactionFailure({ ...generated.failure, code: 'compaction_failed' });
     if (generated.content.trim().length === 0) {
-      return failed({ code: 'compaction_failed', message: 'Compaction summary model returned empty content.', retryable: true, cause: { owner: 'ai' } });
+      return compactionFailure({ code: 'compaction_failed', message: 'Compaction summary model returned empty content.', retryable: true, cause: { owner: 'ai' } });
     }
     const retainedTurns = input.facts.historicalTurns.slice(plan.plan.turns.length);
     const compactedFacts: BuildFacts = { ...input.facts, historicalTurns: retainedTurns, compactionSummary: { compactionId, content: generated.content } };
     const projected = await this.countUsage(this.buildPrompt(compactedFacts).prompt, input.modelContext, input.signal);
-    if (projected.status === 'failed') return projected;
+    if (projected.status === 'failed') return compactionFailure(projected.failure);
     const reduction = validateCompactionReduction({
       usageBeforeInputTokens: input.usageBefore.usedTokens,
       usageAfterInputTokens: projected.usage.usedTokens,
     });
-    if (reduction.status === 'nothing_to_compact') return reduction;
-    if (input.signal?.aborted) return failed(cancelled());
+    if (reduction.status === 'nothing_to_compact') {
+      reportCompactionProgress(input.onProgress, {
+        status: 'failed',
+        compactionId,
+        tokensBefore: input.usageBefore.usedTokens,
+        code: reduction.reason,
+        message: 'Generated summary did not reduce Context usage.',
+      });
+      return reduction;
+    }
+    if (input.signal?.aborted) return compactionFailure(cancelled());
 
     const saved = this.dependencies.sessionService.saveCompactionSummary({
       compaction_id: compactionId,
@@ -324,8 +352,9 @@ export class ContextServiceImpl implements ContextService {
       created_at: this.clock.now(),
       append_to_active_path: true,
     });
-    if (saved.status === 'failed') return failed(ownerFailure('compaction_persist_failed', saved.failure.message, 'session', saved.failure));
-    if (input.signal?.aborted) return failed(cancelled());
+    if (saved.status === 'failed') return compactionFailure(ownerFailure('compaction_persist_failed', saved.failure.message, 'session', saved.failure));
+    if (input.signal?.aborted) return compactionFailure(cancelled());
+    reportCompactionProgress(input.onProgress, { status: 'completed', ...progressBase });
     return { status: 'compacted', compactionId, usageAfter: projected.usage, facts: compactedFacts };
   }
 
@@ -343,11 +372,6 @@ export class ContextServiceImpl implements ContextService {
       if (this.sessionOperationTails.get(sessionId) === tail) this.sessionOperationTails.delete(sessionId);
     }
   }
-}
-
-function historicalRunIds(history: SessionHistoryItem[]): string[] {
-  const afterSummary = historyAfterSummary(history);
-  return [...new Set(afterSummary.flatMap((item) => item.type === 'message' && item.message.role === 'user' && item.message.run_id ? [item.message.run_id] : []))];
 }
 
 function historyAfterSummary(history: SessionHistoryItem[]): SessionHistoryItem[] {
@@ -415,3 +439,13 @@ function windowExceeded(usage: ContextUsage): ContextFailure {
 function cancelled(): ContextFailure { return { code: 'cancelled', message: 'Context preparation was cancelled.', retryable: true }; }
 function failed<T extends ContextFailure>(failure: T): { status: 'failed'; failure: T } { return { status: 'failed', failure }; }
 function messageOf(error: unknown): string { return error instanceof Error ? error.message : 'Context operation failed.'; }
+function reportCompactionProgress(
+  reporter: ((progress: ContextCompactionProgress) => void) | undefined,
+  progress: ContextCompactionProgress,
+): void {
+  try {
+    reporter?.(progress);
+  } catch {
+    // UI/observability progress cannot affect Context business execution.
+  }
+}

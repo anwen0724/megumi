@@ -63,8 +63,7 @@ describe('SessionRepository', () => {
     repository.insertMessage({
       message_id: 'M1',
       session_id: 'S1',
-      role: 'user',
-      content_text: '看图',
+      conversation: { role: 'user', content: [{ type: 'text', text: '看图' }] },
       created_at: '2026-07-04T00:01:00.000Z',
       completed_at: '2026-07-04T00:01:00.000Z',
     });
@@ -92,7 +91,11 @@ describe('SessionRepository', () => {
       updated_at: '2026-07-04T00:01:00.000Z',
     });
 
-    expect(repository.listMessagesBySessionId('S1')).toHaveLength(1);
+    expect(repository.listMessagesBySessionId('S1')).toEqual([
+      expect.objectContaining({
+        conversation: { role: 'user', content: [{ type: 'text', text: '看图' }] },
+      }),
+    ]);
     expect(repository.listAttachmentsByMessageIds(['M1'])).toHaveLength(1);
     expect(repository.findSessionById('S1')?.active_entry_id).toBe('E1');
   });

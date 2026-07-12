@@ -1,15 +1,11 @@
-﻿import { afterEach, describe, expect, it } from 'vitest';
-
+/* Verifies Memory persists durable records while workflow attempts remain process-local. */
+// @vitest-environment node
+import { afterEach, describe, expect, it } from 'vitest';
 import { createDatabase, type MegumiDatabase } from '@megumi/coding-agent/persistence/connection';
 import { MemoryRepository } from '@megumi/coding-agent/persistence/repos/memory.repo';
-import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
-import type {
-  MemoryMarkdownMirror,
-  MemoryRecallRequest,
-  MemoryRecallResult,
-  MemoryRecord,
-  MemorySourceRef,
-} from '@megumi/coding-agent/memory/legacy-contracts/memory-contracts';
+import type { MemoryRecallTrace } from '@megumi/coding-agent/persistence/repos/memory.repo';
+import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema';
+import type { MemoryMarkdownMirror, MemoryRecord } from '@megumi/coding-agent/memory/legacy-contracts/memory-contracts';
 
 const now = '2026-06-12T00:00:00.000Z';
 let database: MegumiDatabase | undefined;
@@ -19,255 +15,76 @@ afterEach(() => {
   database = undefined;
 });
 
-function createRepository(): MemoryRepository {
-  database = createDatabase(':memory:');
-  applyCodingAgentDatabaseMigrations(database);
-  seedLifecycle(database);
-  return new MemoryRepository(database);
-}
-
 describe('MemoryRepository', () => {
-  it('writes accepted memory into memory_records with source and evidence JSON', () => {
+  it('round-trips durable Memory and Markdown mirror facts', () => {
     const repo = createRepository();
     const memory = memoryRecord();
+    const mirror: MemoryMarkdownMirror = {
+      mirrorId: 'mirror:1', scope: 'project', projectId: 'workspace:1',
+      filePath: 'C:/repo/.megumi/memory.md', status: 'dirty',
+      lastImportedAt: now, lastExportedAt: now, contentHash: 'hash:1',
+      lastError: null, metadata: { source: 'test' },
+    };
 
     expect(repo.saveMemory(memory)).toEqual(memory);
     expect(repo.getMemory(memory.memoryId)).toEqual(memory);
-    expect(repo.listMemories({
-      scope: 'project',
-      projectId: 'workspace:1',
-      status: 'active',
-      kind: 'decision',
-    })).toEqual([memory]);
-    expect(repo.findActiveMemoryByDedupeKey({
-      scope: 'project',
-      projectId: 'workspace:1',
-      kind: 'decision',
-      dedupeKey: memory.dedupeKey,
-    })).toEqual(memory);
-
-    const row = currentDb().prepare('SELECT source_json, evidence_json FROM memory_records WHERE memory_id = ?')
-      .get(memory.memoryId) as { source_json: string; evidence_json: string };
-    expect(JSON.parse(row.source_json)).toEqual({ source: 'capture' });
-    expect(JSON.parse(row.evidence_json)).toEqual(memory.evidence);
+    repo.saveMarkdownMirror(mirror);
+    expect(repo.getMarkdownMirror(mirror.mirrorId)).toEqual(mirror);
   });
 
-  it('records recall request and results as one memory_recall_traces row', () => {
-    const repo = createRepository();
-    const trace = {
-      recallTraceId: 'memory-recall:1',
-      runId: 'run:1',
-      sessionId: 'session:1',
-      projectId: 'workspace:1',
-      queryText: 'How should tests be written?',
-      request: recallRequest(),
-      results: [recallResult()],
-      createdAt: now,
-      metadata: { source: 'test' },
-    };
-
-    expect(repo.recordRecallTrace(trace)).toEqual({
-      ...trace,
-      selectedCount: 1,
-    });
-    expect(repo.getRecallTrace('memory-recall:1')).toEqual({
-      ...trace,
-      selectedCount: 1,
-    });
-
-    const row = currentDb().prepare('SELECT selected_count, request_json, results_json FROM memory_recall_traces WHERE recall_trace_id = ?')
-      .get('memory-recall:1') as { selected_count: number; request_json: string; results_json: string };
-    expect(row.selected_count).toBe(1);
-    expect(JSON.parse(row.request_json)).toEqual(recallRequest());
-    expect(JSON.parse(row.results_json)).toEqual([recallResult()]);
-  });
-
-  it('records automatic capture attempts in memory_capture_attempts', () => {
+  it('keeps recall and capture workflow state in process memory only', () => {
     const repo = createRepository();
     const attempt = {
-      captureAttemptId: 'memory-capture:1',
-      runId: 'run:1',
-      workspaceId: 'workspace:1',
-      sessionId: 'session:1',
-      status: 'captured',
-      triggerKind: 'run_completed',
-      extractedCount: 1,
-      createdMemoryIds: ['memory:1'],
-      rawOutput: { candidates: 1 },
-      createdAt: now,
-      completedAt: now,
-      metadata: { signal: 'confirmed_decision' },
+      captureAttemptId: 'capture:1', runId: 'run:1', workspaceId: 'workspace:1',
+      sessionId: 'session:1', status: 'captured', triggerKind: 'run_completed',
+      extractedCount: 1, createdMemoryIds: ['memory:1'], createdAt: now,
+      completedAt: now, metadata: {},
+    };
+    const trace: MemoryRecallTrace = {
+      recallTraceId: 'recall:1', runId: 'run:1', sessionId: 'session:1',
+      projectId: 'workspace:1', queryText: 'testing', createdAt: now,
+      request: {
+        recallRequestId: 'recall:1', runId: 'run:1', sessionId: 'session:1',
+        projectId: 'workspace:1', queryText: 'testing', requestedScopes: ['project'],
+        requestedKinds: ['decision'], maxResults: 8, createdAt: now, metadata: {},
+      },
+      results: [], metadata: {},
     };
 
     expect(repo.recordCaptureAttempt(attempt)).toEqual(attempt);
-    expect(repo.getCaptureAttempt('memory-capture:1')).toEqual(attempt);
-    expect(repo.listCaptureAttempts({ triggerKind: 'run_completed', status: 'captured' })).toEqual([attempt]);
-
-    const row = currentDb().prepare('SELECT created_memory_ids_json, raw_output_json FROM memory_capture_attempts WHERE capture_attempt_id = ?')
-      .get('memory-capture:1') as { created_memory_ids_json: string; raw_output_json: string };
-    expect(JSON.parse(row.created_memory_ids_json)).toEqual(['memory:1']);
-    expect(JSON.parse(row.raw_output_json)).toEqual({ candidates: 1 });
-  });
-
-  it('round-trips markdown mirror state through memory_markdown_mirrors', () => {
-    const repo = createRepository();
-    const mirror: MemoryMarkdownMirror = {
-      mirrorId: 'mirror:1',
-      scope: 'project',
-      projectId: 'workspace:1',
-      filePath: 'C:/repo/.megumi/memory/projects/project-1/memory.md',
-      status: 'dirty',
-      lastImportedAt: now,
-      lastExportedAt: now,
-      contentHash: 'hash:1',
-      lastError: null,
-      metadata: { source: 'test' },
-    };
-
-    repo.saveMarkdownMirror(mirror);
-
-    expect(repo.getMarkdownMirror(mirror.mirrorId)).toEqual(mirror);
-    expect(repo.listMarkdownMirrors({ scope: 'project', projectId: 'workspace:1', status: 'dirty' })).toEqual([mirror]);
-  });
-
-  it('keeps source refs on memory metadata and does not expose candidate/access/audit persistence APIs', () => {
-    const repo = createRepository();
-    const memory = repo.saveMemory(memoryRecord());
-    const ref: MemorySourceRef = {
-      sourceRefId: 'memory-source:1',
-      ownerId: memory.memoryId,
-      ownerKind: 'memory',
-      kind: 'message',
-      refId: 'message:1',
-      label: 'safe source',
-      excerptPreview: 'safe preview',
-      createdAt: now,
-    };
-
-    expect(repo.saveSourceRef(ref)).toEqual(ref);
-    expect(repo.listSourceRefsByOwner(memory.memoryId, 'memory')).toEqual([ref]);
-
-    const publicNames = Object.getOwnPropertyNames(MemoryRepository.prototype);
-    expect(publicNames).not.toEqual(expect.arrayContaining([
-      'saveCandidate',
-      'getCandidate',
-      'listCandidates',
-      'saveAccessLog',
-      'listAccessLogs',
-      'saveAuditLog',
-      'listAuditLogs',
-      'saveRecallRequest',
-      'saveRecallResult',
-      'listRecallResultsByRequest',
-    ]));
+    expect(repo.getCaptureAttempt('capture:1')).toEqual(attempt);
+    expect(repo.recordRecallTrace(trace)).toMatchObject({ recallTraceId: 'recall:1', selectedCount: 0 });
+    expect(repo.getRecallTrace('recall:1')).toMatchObject({ recallTraceId: 'recall:1' });
+    expect(tableExists('memory_capture_attempts')).toBe(false);
+    expect(tableExists('memory_recall_traces')).toBe(false);
   });
 });
 
-function currentDb(): MegumiDatabase {
-  if (!database) {
-    throw new Error('Test database is not initialized.');
-  }
-  return database;
-}
-
-function memoryRecord(overrides: Partial<MemoryRecord> = {}): MemoryRecord {
-  return {
-    memoryId: 'memory:1',
-    scope: 'project',
-    projectId: 'workspace:1',
-    kind: 'decision',
-    status: 'active',
-    content: 'Use Vitest for unit tests.',
-    summary: 'Testing framework decision',
-    normalizedText: 'use vitest for unit tests',
-    dedupeKey: 'project:workspace:1:decision:use-vitest',
-    source: 'capture',
-    sourceRunId: 'run:1',
-    sourceSessionId: 'session:1',
-    sourceMessageId: 'message:1',
-    sourceToolCallId: 'tool-call:1',
-    evidence: [{
-      kind: 'message',
-      runId: 'run:1',
-      sessionId: 'session:1',
-      messageId: 'message:1',
-      metadata: {},
-    }],
-    supersededById: null,
-    createdAt: now,
-    updatedAt: now,
-    lastUsedAt: now,
-    useCount: 2,
-    deletedAt: null,
-    metadata: { source: 'test' },
-    ...overrides,
-  };
-}
-
-function recallRequest(overrides: Partial<MemoryRecallRequest> = {}): MemoryRecallRequest {
-  return {
-    recallRequestId: 'memory-recall:1',
-    runId: 'run:1',
-    sessionId: 'session:1',
-    projectId: 'workspace:1',
-    queryText: 'How should tests be written?',
-    requestedScopes: ['user', 'project'],
-    requestedKinds: ['decision'],
-    maxResults: 8,
-    createdAt: now,
-    metadata: { source: 'test' },
-    ...overrides,
-  };
-}
-
-function recallResult(overrides: Partial<MemoryRecallResult> = {}): MemoryRecallResult {
-  return {
-    recallResultId: 'memory-recall-result:1',
-    recallRequestId: 'memory-recall:1',
-    memoryId: 'memory:1',
-    score: 0.82,
-    rank: 1,
-    selectedForContext: true,
-    reason: 'query_match',
-    createdAt: now,
-    metadata: {},
-    ...overrides,
-  };
-}
-
-function seedLifecycle(db: MegumiDatabase): void {
-  db.exec(`
+function createRepository(): MemoryRepository {
+  database = createDatabase(':memory:');
+  applyCodingAgentDatabaseMigrations(database);
+  database.exec(`
     INSERT INTO workspaces (
-      workspace_id, name, root_path, root_path_key, status,
-      created_at, updated_at, last_opened_at
-    ) VALUES (
-      'workspace:1', 'Workspace 1', '/workspace-1', '/workspace-1', 'available',
-      '${now}', '${now}', '${now}'
-    );
-
+      workspace_id, name, root_path, root_path_key, status, created_at, updated_at, last_opened_at
+    ) VALUES ('workspace:1', 'Workspace', '/workspace', '/workspace', 'available', '${now}', '${now}', '${now}');
     INSERT INTO sessions (
-      session_id, workspace_id, title, status, active_entry_id,
-      created_at, updated_at, archived_at
-    ) VALUES (
-      'session:1', 'workspace:1', 'Memory session', 'active', NULL,
-      '${now}', '${now}', NULL
-    );
-
-    INSERT INTO agent_runs (
-      run_id, workspace_id, session_id, provider_id, model_id, trigger_type,
-      trigger_user_message_id, trigger_command_name, status, created_at,
-      started_at, completed_at, failure_json
-    ) VALUES (
-      'run:1', 'workspace:1', 'session:1', 'deepseek', 'deepseek-chat',
-      'user_input', NULL, NULL, 'running', '${now}', '${now}', NULL, NULL
-    );
-
-    INSERT INTO session_messages (
-      message_id, session_id, run_id, role, content_text,
-      created_at, completed_at
-    ) VALUES (
-      'message:1', 'session:1', 'run:1', 'user',
-      'Remember the test decision.', '${now}', '${now}'
-    );
+      session_id, workspace_id, title, status, active_entry_id, created_at, updated_at, archived_at
+    ) VALUES ('session:1', 'workspace:1', 'Session', 'active', NULL, '${now}', '${now}', NULL);
   `);
+  return new MemoryRepository(database);
+}
+
+function memoryRecord(): MemoryRecord {
+  return {
+    memoryId: 'memory:1', scope: 'project', projectId: 'workspace:1', kind: 'decision', status: 'active',
+    content: 'Use Vitest.', summary: 'Testing decision', normalizedText: 'use vitest',
+    dedupeKey: 'project:decision:vitest', source: 'capture', sourceRunId: 'run:1',
+    sourceSessionId: 'session:1', evidence: [], supersededById: null,
+    createdAt: now, updatedAt: now, lastUsedAt: now, useCount: 1, deletedAt: null,
+    metadata: { source: 'test' },
+  };
+}
+
+function tableExists(table: string): boolean {
+  return Boolean(database?.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`).get(table));
 }

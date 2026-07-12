@@ -1,88 +1,14 @@
 import { vi } from 'vitest';
-import type { AgentRun, AgentRunApprovalRequest } from '@megumi/coding-agent/agent-run';
-import type { AgentRunRepository } from '@megumi/coding-agent/agent-run/repositories/agent-run-repository';
+import { ActiveRunStore } from '@megumi/coding-agent/agent-run/core/active-run-store';
 import type { RuntimeEvent } from '@megumi/coding-agent/events';
 import type { RegisteredTool, ToolExecutionResult } from '@megumi/coding-agent/tools';
 
-export function createInMemoryAgentRunRepository(): AgentRunRepository {
-  const runs = new Map<string, AgentRun>();
-  const approvals = new Map<string, AgentRunApprovalRequest>();
-  const runtimeEvents = new Map<string, RuntimeEvent>();
-
-  return {
-    createRun(run) {
-      runs.set(run.run_id, run);
-      return run;
-    },
-    getRun(runId) {
-      return runs.get(runId);
-    },
-    saveRun(run) {
-      runs.set(run.run_id, run);
-      return run;
-    },
-    listRunsBySession(sessionId) {
-      return [...runs.values()].filter((run) => run.session_id === sessionId);
-    },
-    listInterruptedRuns() {
-      return [...runs.values()].filter((run) => (
-        run.status === 'running'
-        || run.status === 'waiting_for_approval'
-        || run.status === 'cancelling'
-      ));
-    },
-    createApprovalRequest(request) {
-      approvals.set(request.approval_request_id, request);
-      return request;
-    },
-    getApprovalRequest(approvalRequestId) {
-      return approvals.get(approvalRequestId);
-    },
-    saveApprovalRequest(request) {
-      approvals.set(request.approval_request_id, request);
-      return request;
-    },
-    listPendingApprovalRequestsByRun(runId) {
-      return [...approvals.values()]
-        .filter((approval) => approval.run_id === runId && approval.status === 'pending');
-    },
-    saveRuntimeEvent(event) {
-      runtimeEvents.set(event.eventId, event);
-      return event;
-    },
-    listRuntimeEventsByRun(runId) {
-      return [...runtimeEvents.values()]
-        .filter((event) => event.runId === runId)
-        .sort((left, right) => {
-          const sequenceOrder = left.sequence - right.sequence;
-          return sequenceOrder
-            || left.createdAt.localeCompare(right.createdAt)
-            || left.eventId.localeCompare(right.eventId);
-        });
-    },
-    listRuntimeEventsByRunStrict(runId) {
-      return [...runtimeEvents.values()]
-        .filter((event) => event.runId === runId)
-        .sort((left, right) => {
-          const sequenceOrder = left.sequence - right.sequence;
-          return sequenceOrder
-            || left.createdAt.localeCompare(right.createdAt)
-            || left.eventId.localeCompare(right.eventId);
-        });
-    },
-    readRuntimeEventsByRun(runId) {
-      return { events: this.listRuntimeEventsByRunStrict(runId), diagnostics: [] };
-    },
-    nextRuntimeEventSequence(runId) {
-      return Math.max(0, ...[...runtimeEvents.values()]
-        .filter((event) => event.runId === runId)
-        .map((event) => event.sequence)) + 1;
-    },
-  };
+export function createInMemoryAgentRunRepository(): ActiveRunStore {
+  return new ActiveRunStore();
 }
 
 export function createMessageFlowDependencies(input: {
-  repository?: AgentRunRepository;
+  repository?: ActiveRunStore;
   modelEvents?: Array<Record<string, unknown>>;
   commandResult?: unknown;
   max_model_calls?: number;
@@ -91,7 +17,7 @@ export function createMessageFlowDependencies(input: {
   const repository = input.repository ?? createInMemoryAgentRunRepository();
   const tool = registeredTool('read_file', 'parallel');
   return {
-    repository,
+    active_run_store: repository,
     input_service: {
       processUserInput: vi.fn(async (request) => ({
         status: 'ok' as const,
@@ -133,8 +59,7 @@ export function createMessageFlowDependencies(input: {
             message_id: 'message-1',
             session_id: 'session-1',
             run_id: 'run-1',
-            role: 'user' as const,
-            content_text: 'hello',
+            conversation: { role: 'user' as const, content: [{ type: 'text' as const, text: 'hello' }] },
             created_at: '2026-01-01T00:00:00.000Z',
           },
           attachments: [{
@@ -161,8 +86,7 @@ export function createMessageFlowDependencies(input: {
           message_id: 'assistant-message-1',
           session_id: 'session-1',
           run_id: 'run-1',
-          role: 'assistant' as const,
-          content_text: 'assistant reply',
+          conversation: { role: 'assistant' as const, content: [{ type: 'text' as const, text: 'assistant reply' }] },
           created_at: '2026-01-01T00:00:00.000Z',
           completed_at: '2026-01-01T00:00:00.000Z',
         },
@@ -172,6 +96,30 @@ export function createMessageFlowDependencies(input: {
           entry_type: 'message' as const,
           message_id: 'assistant-message-1',
           created_at: '2026-01-01T00:00:00.000Z',
+        },
+      })),
+      saveToolResultMessage: vi.fn((request) => ({
+        status: 'saved' as const,
+        message: {
+          message_id: request.message_id,
+          session_id: request.session_id,
+          run_id: request.run_id,
+          conversation: {
+            role: 'toolResult' as const,
+            toolCallId: request.tool_call_id,
+            toolName: request.tool_name,
+            status: request.status,
+            content: request.content,
+          },
+          created_at: request.completed_at,
+          completed_at: request.completed_at,
+        },
+        entry: {
+          entry_id: `entry:${request.message_id}`,
+          session_id: request.session_id,
+          entry_type: 'message' as const,
+          message_id: request.message_id,
+          created_at: request.completed_at,
         },
       })),
     },
@@ -270,6 +218,7 @@ export function createMessageFlowDependencies(input: {
       session_id: () => 'session-1',
       user_message_id: () => 'message-1',
       assistant_message_id: () => 'assistant-message-1',
+      tool_result_message_id: () => `tool-result-message-${Math.random()}`,
       approval_request_id: () => 'approval-1',
       event_id: (() => {
         let index = 0;

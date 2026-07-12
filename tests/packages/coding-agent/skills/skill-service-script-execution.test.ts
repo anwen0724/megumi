@@ -94,7 +94,6 @@ function createService(repository: SkillRepository, rootPath: string): SkillServ
     clock: { now: () => '2026-07-09T00:00:00.000Z' },
     ids: {
       skillAvailabilityId: () => 'skill-availability:generated',
-      skillUsageRecordId: () => 'skill-usage-record:generated',
     },
   });
 }

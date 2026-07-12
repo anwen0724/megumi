@@ -1,5 +1,5 @@
 ﻿import { memo, type ReactNode } from 'react';
-import { Copy, GitBranch } from 'lucide-react';
+import { Archive, Check, Copy, GitBranch, LoaderCircle, TriangleAlert } from 'lucide-react';
 import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/product/runtime-timeline';
 import { IconButton, RecoverableErrorBoundary } from '../../../shared/ui';
 import { TimelineMessageBlocks } from './TimelineMessageBlocks';
@@ -40,6 +40,27 @@ function TimelineMessageComponent({
         <span className="h-px flex-1 bg-[var(--color-border)]" />
         <span>{message.blocks[0].label}</span>
         <span className="h-px flex-1 bg-[var(--color-border)]" />
+      </div>
+    );
+  }
+
+  if (message.role === 'activity') {
+    const activity = message.blocks[0];
+    const Icon = activity.status === 'running'
+      ? LoaderCircle
+      : activity.status === 'failed'
+        ? TriangleAlert
+        : activity.status === 'completed'
+          ? Check
+          : Archive;
+    return (
+      <div
+        role="status"
+        aria-label={activity.label}
+        className="flex items-center gap-2 py-1 text-sm text-[var(--color-text-muted)]"
+      >
+        <Icon size={15} aria-hidden="true" className={activity.status === 'running' ? 'animate-spin' : undefined} />
+        <span>{activity.label}</span>
       </div>
     );
   }

@@ -12,6 +12,8 @@ import type {
   CreateSessionResult,
   GetActiveHistoryRequest,
   GetActiveHistoryResult,
+  GetActiveConversationHistoryRequest,
+  GetActiveConversationHistoryResult,
   GetActivePathRequest,
   GetActivePathResult,
   GetSessionRequest,
@@ -26,6 +28,8 @@ import type {
   SaveCompactionSummaryResult,
   SaveUserMessageRequest,
   SaveUserMessageResult,
+  SaveToolResultMessageRequest,
+  SaveToolResultMessageResult,
   SessionEntry,
   SessionHistoryItem,
   SessionMessageAttachment,
@@ -34,7 +38,7 @@ import type {
   SwitchActiveEntryRequest,
   SwitchActiveEntryResult,
 } from '../contracts/session-contracts';
-import { buildActivePath, validateSessionEntry } from '../core/session-path';
+import { buildActiveConversationPath, buildActivePath, validateSessionEntry } from '../core/session-path';
 import type { SessionRepository } from '../repositories/session-repository';
 
 export type CreateSessionServiceOptions = {
@@ -119,8 +123,7 @@ class DefaultSessionService implements SessionService {
           message_id: request.message_id,
           session_id: request.session_id,
           ...(request.run_id ? { run_id: request.run_id } : {}),
-          role: 'user',
-          content_text: request.content_text,
+          conversation: { role: 'user', content: request.content },
           created_at: request.created_at,
           completed_at: request.created_at,
         });
@@ -161,19 +164,28 @@ class DefaultSessionService implements SessionService {
             failure: { code: 'session_not_found', message: `Session ${request.session_id} was not found` },
           };
         }
+        if (request.parent_entry_id && session.active_entry_id !== request.parent_entry_id) {
+          return {
+            status: 'failed',
+            failure: { code: 'active_entry_changed', message: 'Session active entry changed before Assistant message append' },
+          };
+        }
         const message = this.options.repository.insertMessage({
           message_id: request.message_id,
           session_id: request.session_id,
           run_id: request.run_id,
-          role: 'assistant',
-          content_text: request.content_text,
+          conversation: {
+            role: 'assistant',
+            content: request.content,
+            ...(request.stop_reason ? { stopReason: request.stop_reason } : {}),
+          },
           created_at: request.completed_at,
           completed_at: request.completed_at,
         });
         const entry = this.options.repository.insertEntry({
           entry_id: this.entryId({ kind: 'message', source_id: request.message_id }),
           session_id: request.session_id,
-          parent_entry_id: session.active_entry_id,
+          parent_entry_id: request.parent_entry_id ?? session.active_entry_id,
           entry_type: 'message',
           message_id: request.message_id,
           created_at: request.completed_at,
@@ -241,6 +253,100 @@ class DefaultSessionService implements SessionService {
         }
       }
       return { status: 'ok', history };
+    } catch (error) {
+      return failed(error);
+    }
+  }
+
+  saveToolResultMessage(request: SaveToolResultMessageRequest): SaveToolResultMessageResult {
+    try {
+      return this.options.repository.runInTransaction<SaveToolResultMessageResult>(() => {
+        const session = this.options.repository.findSessionById(request.session_id);
+        if (!session) {
+          return {
+            status: 'failed',
+            failure: { code: 'session_not_found', message: `Session ${request.session_id} was not found` },
+          };
+        }
+        if (request.parent_entry_id && session.active_entry_id !== request.parent_entry_id) {
+          return {
+            status: 'failed',
+            failure: { code: 'active_entry_changed', message: 'Session active entry changed before Tool Result append' },
+          };
+        }
+        const message = this.options.repository.insertMessage({
+          message_id: request.message_id,
+          session_id: request.session_id,
+          run_id: request.run_id,
+          conversation: {
+            role: 'toolResult',
+            toolCallId: request.tool_call_id,
+            toolName: request.tool_name,
+            status: request.status,
+            content: request.content,
+          },
+          created_at: request.completed_at,
+          completed_at: request.completed_at,
+        });
+        const entry = this.options.repository.insertEntry({
+          entry_id: this.entryId({ kind: 'message', source_id: request.message_id }),
+          session_id: request.session_id,
+          parent_entry_id: request.parent_entry_id ?? session.active_entry_id,
+          entry_type: 'message',
+          message_id: request.message_id,
+          created_at: request.completed_at,
+        });
+        this.options.repository.updateActiveEntry({
+          session_id: request.session_id,
+          active_entry_id: entry.entry_id,
+          updated_at: request.completed_at,
+        });
+        return { status: 'saved', message, entry };
+      });
+    } catch (error) {
+      return failed(error);
+    }
+  }
+
+  getActiveConversationHistory(request: GetActiveConversationHistoryRequest): GetActiveConversationHistoryResult {
+    try {
+      const session = this.options.repository.findSessionById(request.session_id);
+      if (!session) {
+        return {
+          status: 'failed',
+          failure: { code: 'session_not_found', message: `Session ${request.session_id} was not found` },
+        };
+      }
+      const entries = this.options.repository.listEntriesBySessionId(request.session_id);
+      const compactionIds = entries.flatMap((entry) => entry.compaction_id ? [entry.compaction_id] : []);
+      const path = buildActiveConversationPath({
+        session_id: request.session_id,
+        active_entry_id: session.active_entry_id,
+        entries,
+        compactions: this.options.repository.listCompactionSummariesByIds(compactionIds),
+      });
+      const activePathOrderByMessageId = new Map<string, number>();
+      for (const [activePathOrder, entry] of path.entries()) {
+        if (entry.message_id) activePathOrderByMessageId.set(entry.message_id, activePathOrder);
+      }
+      const messageIds = [...activePathOrderByMessageId.keys()];
+      const persistedMessages = request.run_id
+        ? this.options.repository.listMessagesByRunId(request.session_id, request.run_id)
+        : this.options.repository.listMessagesByIds(messageIds);
+      const messagesById = new Map(
+        persistedMessages.map((message) => [message.message_id, message]),
+      );
+      const orderedMessages = messageIds.flatMap((messageId) => {
+        const message = messagesById.get(messageId);
+        return message ? [message] : [];
+      });
+      return {
+        status: 'ok',
+        messages: this.attachmentsForMessages(orderedMessages).map((item) => ({
+          ...item,
+          active_path_order: activePathOrderByMessageId.get(item.message.message_id),
+        })),
+      };
     } catch (error) {
       return failed(error);
     }

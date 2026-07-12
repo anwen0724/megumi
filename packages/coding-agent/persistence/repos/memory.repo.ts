@@ -1,4 +1,7 @@
-﻿// Persists memory records, recall traces, capture attempts, and markdown mirrors in the redesigned memory tables.
+/*
+ * Persists durable memory records and markdown mirrors.
+ * Recall traces and capture attempts are process-local workflow state, not database facts.
+ */
 import type { JsonObject } from '../../memory/legacy-contracts/memory-json';
 import {
   MemoryMarkdownMirrorSchema,
@@ -41,22 +44,6 @@ interface MemoryRecordRow {
   metadata_json: string | null;
 }
 
-interface CaptureAttemptRow {
-  capture_attempt_id: string;
-  run_id: string | null;
-  workspace_id: string | null;
-  session_id: string | null;
-  status: string;
-  trigger_kind: string;
-  extracted_count: number;
-  created_memory_ids_json: string | null;
-  raw_output_json: string | null;
-  error_json: string | null;
-  created_at: string;
-  completed_at: string | null;
-  metadata_json: string | null;
-}
-
 interface MarkdownMirrorRow {
   mirror_id: string;
   memory_id: string;
@@ -68,19 +55,6 @@ interface MarkdownMirrorRow {
   last_error: string | null;
   created_at: string;
   updated_at: string;
-  metadata_json: string | null;
-}
-
-interface RecallTraceRow {
-  recall_trace_id: string;
-  run_id: string;
-  workspace_id: string | null;
-  session_id: string | null;
-  query_text: string;
-  selected_count: number;
-  request_json: string;
-  results_json: string;
-  created_at: string;
   metadata_json: string | null;
 }
 
@@ -124,6 +98,9 @@ export interface MemoryRecallTrace {
 }
 
 export class MemoryRepository {
+  private readonly captureAttempts = new Map<string, MemoryCaptureAttempt>();
+  private readonly recallTraces = new Map<string, MemoryRecallTrace>();
+
   constructor(private readonly database: MegumiDatabase) {}
 
   saveMemory(memory: MemoryRecord): MemoryRecord {
@@ -259,108 +236,35 @@ export class MemoryRepository {
     if (request.runId !== trace.runId) {
       throw new Error(`Memory recall trace ${trace.recallTraceId} runId does not match request runId`);
     }
-    const workspaceId = workspaceIdForMemory(this.database, trace.projectId ?? request.projectId ?? null);
-    const sessionId = existingSessionId(this.database, trace.sessionId ?? request.sessionId);
-    const runId = requireExistingRun(this.database, trace.runId);
-    this.database.prepare(`
-      INSERT INTO memory_recall_traces (
-        recall_trace_id, run_id, model_call_id, workspace_id, session_id, query_text,
-        selected_count, request_json, results_json, created_at, metadata_json
-      ) VALUES (
-        @recall_trace_id, @run_id, NULL, @workspace_id, @session_id, @query_text,
-        @selected_count, @request_json, @results_json, @created_at, @metadata_json
-      )
-      ON CONFLICT(recall_trace_id) DO UPDATE SET
-        workspace_id = excluded.workspace_id,
-        session_id = excluded.session_id,
-        query_text = excluded.query_text,
-        selected_count = excluded.selected_count,
-        request_json = excluded.request_json,
-        results_json = excluded.results_json,
-        metadata_json = excluded.metadata_json
-    `).run({
-      recall_trace_id: trace.recallTraceId,
-      run_id: runId,
-      workspace_id: workspaceId,
-      session_id: sessionId,
-      query_text: trace.queryText,
-      selected_count: trace.selectedCount ?? results.filter((item) => item.selectedForContext).length,
-      request_json: stringifyJson(request),
-      results_json: stringifyJson(results),
-      created_at: trace.createdAt,
-      metadata_json: stringifyJson(trace.metadata ?? {}),
-    });
-    return {
+    const normalized = {
       ...trace,
       request,
       results,
       selectedCount: trace.selectedCount ?? results.filter((item) => item.selectedForContext).length,
+      metadata: trace.metadata ?? {},
     };
+    this.recallTraces.set(trace.recallTraceId, normalized);
+    return normalized;
   }
 
   getRecallTrace(recallTraceId: string): MemoryRecallTrace | undefined {
-    const row = this.database.prepare('SELECT * FROM memory_recall_traces WHERE recall_trace_id = ?')
-      .get(recallTraceId) as RecallTraceRow | undefined;
-    return row ? fromRecallTraceRow(row) : undefined;
+    return this.recallTraces.get(recallTraceId);
   }
 
   recordCaptureAttempt(attempt: MemoryCaptureAttempt): MemoryCaptureAttempt {
-    const workspaceId = workspaceIdForMemory(this.database, attempt.workspaceId ?? null);
-    const sessionId = existingSessionId(this.database, attempt.sessionId);
-    const runId = existingRunId(this.database, attempt.runId);
-    this.database.prepare(`
-      INSERT INTO memory_capture_attempts (
-        capture_attempt_id, run_id, workspace_id, session_id, status, trigger_kind,
-        extracted_count, created_memory_ids_json, raw_output_json, error_json,
-        created_at, completed_at, metadata_json
-      ) VALUES (
-        @capture_attempt_id, @run_id, @workspace_id, @session_id, @status, @trigger_kind,
-        @extracted_count, @created_memory_ids_json, @raw_output_json, @error_json,
-        @created_at, @completed_at, @metadata_json
-      )
-      ON CONFLICT(capture_attempt_id) DO UPDATE SET
-        run_id = excluded.run_id,
-        workspace_id = excluded.workspace_id,
-        session_id = excluded.session_id,
-        status = excluded.status,
-        trigger_kind = excluded.trigger_kind,
-        extracted_count = excluded.extracted_count,
-        created_memory_ids_json = excluded.created_memory_ids_json,
-        raw_output_json = excluded.raw_output_json,
-        error_json = excluded.error_json,
-        completed_at = excluded.completed_at,
-        metadata_json = excluded.metadata_json
-    `).run({
-      capture_attempt_id: attempt.captureAttemptId,
-      run_id: runId,
-      workspace_id: workspaceId,
-      session_id: sessionId,
-      status: attempt.status,
-      trigger_kind: attempt.triggerKind,
-      extracted_count: attempt.extractedCount ?? 0,
-      created_memory_ids_json: stringifyJson(attempt.createdMemoryIds ?? []),
-      raw_output_json: attempt.rawOutput === undefined ? null : stringifyJson(attempt.rawOutput),
-      error_json: attempt.error === undefined ? null : stringifyJson(attempt.error),
-      created_at: attempt.createdAt,
-      completed_at: attempt.completedAt ?? null,
-      metadata_json: stringifyJson(attempt.metadata ?? {}),
-    });
-    return {
+    const normalized = {
       ...attempt,
-      runId,
-      workspaceId,
-      sessionId,
       extractedCount: attempt.extractedCount ?? 0,
       createdMemoryIds: attempt.createdMemoryIds ?? [],
       completedAt: attempt.completedAt ?? null,
       metadata: attempt.metadata ?? {},
     };
+    this.captureAttempts.set(attempt.captureAttemptId, normalized);
+    return normalized;
   }
 
   getCaptureAttempt(captureAttemptId: string): MemoryCaptureAttempt | undefined {
-    const row = this.database.prepare('SELECT * FROM memory_capture_attempts WHERE capture_attempt_id = ?')
-      .get(captureAttemptId) as CaptureAttemptRow | undefined;
-    return row ? fromCaptureAttemptRow(row) : undefined;
+    return this.captureAttempts.get(captureAttemptId);
   }
 
   listCaptureAttempts(filter: {
@@ -371,23 +275,15 @@ export class MemoryRepository {
     triggerKind?: string;
     limit?: number;
   } = {}): MemoryCaptureAttempt[] {
-    return (this.database.prepare(`
-      SELECT * FROM memory_capture_attempts
-      WHERE (@workspace_id IS NULL OR workspace_id = @workspace_id)
-        AND (@session_id IS NULL OR session_id = @session_id)
-        AND (@run_id IS NULL OR run_id = @run_id)
-        AND (@status IS NULL OR status = @status)
-        AND (@trigger_kind IS NULL OR trigger_kind = @trigger_kind)
-      ORDER BY created_at DESC, capture_attempt_id DESC
-      LIMIT @limit_count
-    `).all({
-      workspace_id: filter.workspaceId ?? null,
-      session_id: filter.sessionId ?? null,
-      run_id: filter.runId ?? null,
-      status: filter.status ?? null,
-      trigger_kind: filter.triggerKind ?? null,
-      limit_count: filter.limit ?? 1000,
-    }) as CaptureAttemptRow[]).map(fromCaptureAttemptRow);
+    return [...this.captureAttempts.values()]
+      .filter((item) => filter.workspaceId === undefined || item.workspaceId === filter.workspaceId)
+      .filter((item) => filter.sessionId === undefined || item.sessionId === filter.sessionId)
+      .filter((item) => filter.runId === undefined || item.runId === filter.runId)
+      .filter((item) => filter.status === undefined || item.status === filter.status)
+      .filter((item) => filter.triggerKind === undefined || item.triggerKind === filter.triggerKind)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt)
+        || right.captureAttemptId.localeCompare(left.captureAttemptId))
+      .slice(0, filter.limit ?? 1000);
   }
 
   saveMarkdownMirror(mirror: MemoryMarkdownMirror): void {
@@ -467,8 +363,12 @@ export class MemoryRepository {
         sourceRef,
         'sourceRefId',
       );
-      this.database.prepare('UPDATE memory_capture_attempts SET metadata_json = ? WHERE capture_attempt_id = ?')
-        .run(stringifyJson({ ...metadata, sourceRefs }), sourceRef.ownerId);
+      if (attempt) {
+        this.captureAttempts.set(sourceRef.ownerId, {
+          ...attempt,
+          metadata: { ...metadata, sourceRefs },
+        });
+      }
     }
     return sourceRef;
   }
@@ -539,42 +439,6 @@ function fromMemoryRecordRow(row: MemoryRecordRow): MemoryRecord {
   });
 }
 
-function fromRecallTraceRow(row: RecallTraceRow): MemoryRecallTrace {
-  const request = MemoryRecallRequestSchema.parse(parseJson(row.request_json));
-  const results = (parseJson<MemoryRecallResult[]>(row.results_json) ?? [])
-    .map((result) => MemoryRecallResultSchema.parse(result));
-  return {
-    recallTraceId: row.recall_trace_id,
-    runId: row.run_id,
-    sessionId: row.session_id,
-    projectId: row.workspace_id,
-    queryText: row.query_text,
-    request,
-    results,
-    selectedCount: row.selected_count,
-    createdAt: row.created_at,
-    metadata: parseJson<JsonObject>(row.metadata_json) ?? {},
-  };
-}
-
-function fromCaptureAttemptRow(row: CaptureAttemptRow): MemoryCaptureAttempt {
-  return {
-    captureAttemptId: row.capture_attempt_id,
-    runId: row.run_id,
-    workspaceId: row.workspace_id,
-    sessionId: row.session_id,
-    status: row.status,
-    triggerKind: row.trigger_kind,
-    extractedCount: row.extracted_count,
-    createdMemoryIds: parseJson<string[]>(row.created_memory_ids_json) ?? [],
-    rawOutput: parseJson(row.raw_output_json),
-    error: parseJson(row.error_json),
-    createdAt: row.created_at,
-    completedAt: row.completed_at,
-    metadata: parseJson<JsonObject>(row.metadata_json) ?? {},
-  };
-}
-
 function fromMarkdownMirrorRow(row: MarkdownMirrorRow): MemoryMarkdownMirror {
   const metadata = parseJson<MarkdownMirrorMetadata>(row.metadata_json);
   return metadata?.mirror ?? MemoryMarkdownMirrorSchema.parse({
@@ -597,23 +461,6 @@ function existingSessionId(database: MegumiDatabase, sessionId: string | null | 
   const row = database.prepare('SELECT session_id FROM sessions WHERE session_id = ?')
     .get(sessionId) as { session_id: string } | undefined;
   return row?.session_id ?? null;
-}
-
-function existingRunId(database: MegumiDatabase, runId: string | null | undefined): string | null {
-  if (!runId) {
-    return null;
-  }
-  const row = database.prepare('SELECT run_id FROM agent_runs WHERE run_id = ?')
-    .get(runId) as { run_id: string } | undefined;
-  return row?.run_id ?? null;
-}
-
-function requireExistingRun(database: MegumiDatabase, runId: string): string {
-  const existing = existingRunId(database, runId);
-  if (!existing) {
-    throw new Error(`Memory recall trace requires an existing agent run: ${runId}`);
-  }
-  return existing;
 }
 
 function workspaceIdForMemory(database: MegumiDatabase, workspaceId: string | null | undefined): string | null {

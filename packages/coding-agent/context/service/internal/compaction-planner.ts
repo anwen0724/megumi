@@ -72,7 +72,7 @@ function plannedPrefix(
     status: 'planned',
     plan: {
       turns,
-      coveredUntilEntryId: lastCoveredTurn.source.assistantEntryId ?? lastCoveredTurn.source.userEntryId,
+      coveredUntilEntryId: lastCoveredTurn.source.lastEntryId,
       ...(firstKeptEntryId ? { firstKeptEntryId } : {}),
     },
   };

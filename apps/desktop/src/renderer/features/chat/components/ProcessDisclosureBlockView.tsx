@@ -29,11 +29,12 @@ function processLabel(block: ProcessDisclosureBlock): string {
   if (block.status === 'running') return '正在处理';
   if (block.status === 'completed') return '已处理';
   if (block.status === 'failed') return '处理失败';
-  return '已取消';
+  if (block.status === 'cancelled') return '已取消';
+  return '处理未完整结束';
 }
 
 function defaultProcessExpanded(status: ProcessDisclosureBlock['status']): boolean {
-  return status === 'running' || status === 'failed' || status === 'cancelled';
+  return status === 'running' || status === 'failed' || status === 'cancelled' || status === 'incomplete';
 }
 
 function toolTarget(item: ToolActivityItem): string {
@@ -43,6 +44,7 @@ function toolTarget(item: ToolActivityItem): string {
 function toolLabel(item: ToolActivityItem): string {
   const target = toolTarget(item);
   const labels = toolActionLabels(item.toolName);
+  if (item.status === 'requested') return `已请求 ${target}`;
   if (item.status === 'running') return `${labels.running} ${target}`;
   if (item.status === 'succeeded') return `${labels.succeeded} ${target}`;
   if (item.status === 'failed') return `${labels.failed} ${target}`;

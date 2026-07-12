@@ -17,7 +17,6 @@ import type {
 export type ContextFailure = {
   code:
     | 'session_history_failed'
-    | 'historical_run_failed'
     | 'instruction_load_failed'
     | 'skill_catalog_failed'
     | 'active_context_failed'
@@ -31,10 +30,28 @@ export type ContextFailure = {
   message: string;
   retryable: boolean;
   cause?: {
-    owner: 'session' | 'agent_run' | 'instructions' | 'skills' | 'tools' | 'ai';
+    owner: 'session' | 'instructions' | 'skills' | 'tools' | 'ai';
     code?: string;
   };
 };
+
+export type ContextCompactionProgress =
+  | {
+      status: 'started' | 'completed';
+      compactionId: string;
+      tokensBefore: number;
+      summarizedSourceCount: number;
+      firstKeptSourceId?: string;
+      previousCompactionId?: string;
+    }
+  | {
+      status: 'failed';
+      compactionId: string;
+      tokensBefore: number;
+      code: string;
+      message: string;
+      previousCompactionId?: string;
+    };
 
 export type PrepareModelCallRequest = {
   sessionId: string;
@@ -44,6 +61,7 @@ export type PrepareModelCallRequest = {
   memoryRecall?: MemoryContextInput;
   tools: ToolSetEntry[];
   modelContext: ContextCapacity;
+  onCompactionProgress?: (progress: ContextCompactionProgress) => void;
   signal?: AbortSignal;
 };
 

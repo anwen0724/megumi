@@ -15,7 +15,6 @@ import type {
   Skill,
   SkillAvailability,
   SkillService,
-  SkillUsageRecord,
 } from '@megumi/coding-agent/skills';
 import { SkillRepository } from '@megumi/coding-agent/skills';
 import { SkillServiceImpl } from '@megumi/coding-agent/skills/service/skill-service-impl';
@@ -59,13 +58,6 @@ describe('Skill module public contracts', () => {
       available: true,
       createdAt: '2026-07-09T00:00:00.000Z',
       updatedAt: '2026-07-09T00:00:00.000Z',
-    };
-    const usage: SkillUsageRecord = {
-      skillUsageRecordId: 'skill-usage-record:1',
-      skillId: skill.skillId,
-      sessionId: 'session:1',
-      trigger: 'command',
-      createdAt: '2026-07-09T00:00:00.000Z',
     };
     const catalog: GetSkillCatalogResponse = {
       status: 'ok',
@@ -131,7 +123,6 @@ describe('Skill module public contracts', () => {
     };
 
     expect(availability.available).toBe(true);
-    expect(usage.trigger).toBe('command');
     expect(catalog.status).toBe('ok');
     expect(activationResponse.status).toBe('ok');
     expect(commandRequest.argumentsInput).toBe('--watch');
@@ -150,7 +141,7 @@ describe('SkillServiceImpl', () => {
   beforeEach(() => {
     database = createDatabase(':memory:');
     applyCodingAgentDatabaseMigrations(database);
-    seedWorkspaceSessionAndRun(database);
+    seedWorkspaceAndSession(database);
     repository = new SkillRepository(database);
     tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-skill-service-'));
     writeSkill(tempRoot, 'checks', {
@@ -207,7 +198,7 @@ describe('SkillServiceImpl', () => {
     });
   });
 
-  it('activates available skills, records usage, and returns only activated content', async () => {
+  it('activates available skills and returns only activated content', async () => {
     const service = createService(repository, tempRoot);
 
     const response = await service.activateSkill({
@@ -228,7 +219,6 @@ describe('SkillServiceImpl', () => {
       },
     });
     expect(response).not.toHaveProperty('skillUsageRecordId');
-    expect(repository.listUsageRecordsBySession('session:1')).toHaveLength(1);
   });
 
   it('rejects unavailable activation and reads only allowed resources', async () => {
@@ -296,7 +286,6 @@ function createService(repository: SkillRepository, rootPath: string): SkillServ
     clock: { now: () => '2026-07-09T00:00:00.000Z' },
     ids: {
       skillAvailabilityId: () => 'skill-availability:generated',
-      skillUsageRecordId: () => 'skill-usage-record:generated',
     },
   });
 }
@@ -325,7 +314,7 @@ function writeSkill(root: string, packageName: string, input: {
   }
 }
 
-function seedWorkspaceSessionAndRun(database: MegumiDatabase): void {
+function seedWorkspaceAndSession(database: MegumiDatabase): void {
   database.prepare(`
     INSERT INTO workspaces (
       workspace_id, name, root_path, root_path_key, status,
@@ -342,17 +331,6 @@ function seedWorkspaceSessionAndRun(database: MegumiDatabase): void {
     ) VALUES (
       'session:1', 'workspace:1', 'Session', 'active', NULL,
       '2026-07-09T00:00:00.000Z', '2026-07-09T00:00:00.000Z', NULL
-    )
-  `).run();
-  database.prepare(`
-    INSERT INTO agent_runs (
-      run_id, workspace_id, session_id, provider_id, model_id,
-      trigger_type, trigger_user_message_id, trigger_command_name, status,
-      created_at, started_at, completed_at, failure_json
-    ) VALUES (
-      'run:1', 'workspace:1', 'session:1', 'openai', 'gpt-test',
-      'command', NULL, 'skill', 'completed',
-      '2026-07-09T00:00:00.000Z', NULL, NULL, NULL
     )
   `).run();
 }

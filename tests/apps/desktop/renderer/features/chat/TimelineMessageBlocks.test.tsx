@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   TimelineAssistantMessage,
+  TimelineActivityMessage,
   TimelineSeparatorMessage,
   TimelineUserMessage,
 } from '@megumi/coding-agent/projections/timeline';
@@ -180,6 +181,29 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(document.querySelector('[data-workspace-open-file-row="true"]')).toBeInTheDocument();
     expect(document.querySelector('[data-workspace-change-file-row="true"]')).toBeInTheDocument();
     expect(screen.getByText('app.ts')).toBeInTheDocument();
+  });
+
+  it('renders a Session compaction activity as an independent Timeline row', () => {
+    const activity: TimelineActivityMessage = {
+      messageId: 'session-compaction:request-1',
+      role: 'activity',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      createdAt,
+      blocks: [{
+        blockId: 'session-compaction-activity:request-1',
+        kind: 'session_compaction_activity',
+        activityId: 'request-1',
+        status: 'running',
+        label: '正在压缩上下文',
+      }],
+    };
+
+    render(<TimelineMessage message={activity} />);
+
+    expect(screen.getByRole('status', { name: '正在压缩上下文' })).toBeInTheDocument();
+    expect(screen.getByText('正在压缩上下文')).toBeInTheDocument();
+    expect(screen.queryByText('Megumi')).not.toBeInTheDocument();
   });
 
   it('renders user messages as a lightweight right aligned card with the time below', () => {

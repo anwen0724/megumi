@@ -1,75 +1,83 @@
-/* Verifies tolerant construction of factual historical Turns. */
+/* Verifies Session-message-only construction of factual historical Turns. */
 import { describe, expect, it } from 'vitest';
-import type { HistoricalRun } from '@megumi/coding-agent/agent-run';
-import type { SessionHistoryItem } from '@megumi/coding-agent/session';
+import type { SessionConversationMessage, SessionHistoryItem } from '@megumi/coding-agent/session';
 import { buildConversationTurns } from '@megumi/coding-agent/context/service/internal/conversation-turn-builder';
 
 describe('buildConversationTurns', () => {
-  it('preserves completed, cancelled, and completed Runs in Session order', () => {
-    const history = [
-      ...messages('run-1', true),
-      ...messages('run-2', false),
-      ...messages('run-3', true),
+  it('groups complete semantic messages by run_id without a Run history query', () => {
+    const history: SessionHistoryItem[] = [
+      message('EU1', 'U1', 'R1', { role: 'user', content: text('read it') }),
+      message('EA1', 'A1', 'R1', {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'checking' },
+          { type: 'toolCall', id: 'T1', name: 'read_file', argumentsText: '{"path":"README.md"}' },
+        ],
+      }),
+      message('ET1', 'TR1', 'R1', {
+        role: 'toolResult', toolCallId: 'T1', toolName: 'read_file', status: 'success', content: text('content'),
+      }),
+      message('EA2', 'A2', 'R1', { role: 'assistant', content: text('done') }),
+      message('EU2', 'U2', 'R2', { role: 'user', content: text('cancel now') }),
     ];
-    const runs = new Map<string, HistoricalRun>([
-      ['run-1', historicalRun('run-1', 'completed')],
-      ['run-2', historicalRun('run-2', 'cancelled', false)],
-      ['run-3', historicalRun('run-3', 'completed')],
-    ]);
 
-    const result = buildConversationTurns({ history, historicalRunsByRunId: runs });
-    expect(result.turns.map((turn) => ({ runId: turn.source.runId, status: turn.runStatus }))).toEqual([
-      { runId: 'run-1', status: 'completed' },
-      { runId: 'run-2', status: 'cancelled' },
-      { runId: 'run-3', status: 'completed' },
-    ]);
-    expect(result.turns[1].source.assistantMessageId).toBeUndefined();
-    expect(result.turns[1].modelSteps[0].toolCalls[0].result).toBeUndefined();
+    const result = buildConversationTurns({ history });
+
+    expect(result.turns.map((turn) => turn.source.runId)).toEqual(['R1', 'R2']);
+    expect(result.turns[0]).toMatchObject({
+      source: {
+        userEntryId: 'EU1', lastEntryId: 'EA2',
+        responseMessageRefs: [{ entryId: 'EA1' }, { entryId: 'ET1' }, { entryId: 'EA2' }],
+      },
+      items: [
+        { type: 'assistant_message', content: text('checking') },
+        { type: 'tool_call', toolCallId: 'T1', arguments: { path: 'README.md' } },
+        { type: 'tool_result', toolCallId: 'T1', status: 'success', content: text('content') },
+        { type: 'assistant_message', content: text('done') },
+      ],
+    });
+    expect(result.turns[1]).toMatchObject({ source: { lastEntryId: 'EU2' }, items: [] });
   });
 
-  it('keeps the User Message when its Agent Run record is unavailable', () => {
+  it('keeps an incomplete tool request as ordinary historical content', () => {
     const result = buildConversationTurns({
-      history: messages('missing', false),
-      historicalRunsByRunId: new Map(),
+      history: [
+        message('EU', 'U', 'R', { role: 'user', content: text('write') }),
+        message('EA', 'A', 'R', {
+          role: 'assistant',
+          content: [{ type: 'toolCall', id: 'T', name: 'write_file', argumentsText: '{bad-json' }],
+          stopReason: 'cancelled',
+        }),
+      ],
     });
-    expect(result.turns).toMatchObject([{
-      source: { runId: 'missing' },
-      modelSteps: [],
-      diagnostics: [{ code: 'historical_run_not_found' }],
+
+    expect(result.turns[0].items).toEqual([{
+      type: 'assistant_message',
+      content: [{
+        type: 'json',
+        value: {
+          historicalRunId: 'R',
+          incompleteToolCalls: [{ id: 'T', name: 'write_file', argumentsText: '{bad-json' }],
+        },
+      }],
     }]);
   });
 });
 
-function historicalRun(runId: string, runStatus: HistoricalRun['runStatus'], withResult = true): HistoricalRun {
+function message(
+  entryId: string,
+  messageId: string,
+  runId: string,
+  conversation: SessionConversationMessage,
+): Extract<SessionHistoryItem, { type: 'message' }> {
   return {
-    runId,
-    runStatus,
-    modelSteps: [{
-      modelCallId: `model-${runId}`,
-      assistantContent: [{ type: 'text', text: `Working ${runId}` }],
-      toolCalls: [{
-        toolCallId: `call-${runId}`,
-        toolName: 'read_file',
-        arguments: { path: 'README.md' },
-        ...(withResult ? { result: { status: 'success' as const, content: [{ type: 'text' as const, text: 'content' }] } } : {}),
-      }],
-    }],
-    diagnostics: [],
+    type: 'message',
+    entry: { entry_id: entryId, session_id: 'S1', entry_type: 'message', message_id: messageId, created_at: 'now' },
+    message: { message_id: messageId, session_id: 'S1', run_id: runId, conversation, created_at: 'now' },
+    attachments: [],
   };
 }
 
-function messages(runId: string, withAssistant: boolean): SessionHistoryItem[] {
-  const user: SessionHistoryItem = {
-    type: 'message',
-    entry: { entry_id: `EU-${runId}`, session_id: 'S1', entry_type: 'message', message_id: `MU-${runId}`, created_at: 'now' },
-    message: { message_id: `MU-${runId}`, session_id: 'S1', run_id: runId, role: 'user', content_text: `User ${runId}`, created_at: 'now' },
-    attachments: [],
-  };
-  if (!withAssistant) return [user];
-  return [user, {
-    type: 'message',
-    entry: { entry_id: `EA-${runId}`, session_id: 'S1', entry_type: 'message', message_id: `MA-${runId}`, created_at: 'now' },
-    message: { message_id: `MA-${runId}`, session_id: 'S1', run_id: runId, role: 'assistant', content_text: `Assistant ${runId}`, created_at: 'now' },
-    attachments: [],
-  }];
+function text(value: string) {
+  return [{ type: 'text' as const, text: value }];
 }

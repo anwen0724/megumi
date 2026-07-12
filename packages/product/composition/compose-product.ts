@@ -69,7 +69,6 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
       workspaceService: runtime.workspaceService,
       branchService: runtime.sessionBranchService,
       sessionTimelineQuery: runtime.sessionTimelineQuery,
-      agentRunQueries: runtime.agentRunQueries,
       contextService: runtime.contextRuntime.contextService,
     }),
     skill: createSkillHost(runtime.skillService),
