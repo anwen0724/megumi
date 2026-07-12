@@ -54,7 +54,18 @@ export interface RuntimeTimelineStoreState {
   addPendingUserMessage(
     projectId: string,
     sessionId: string,
-    input: { clientMessageId: string; text: string; createdAt: string; runId?: string },
+    input: { clientMessageId: string; messageId?: string; text: string; createdAt: string; runId?: string },
+  ): void;
+  upsertSessionCompactionActivity(
+    projectId: string,
+    sessionId: string,
+    input: { activityId: string; status: 'running' | 'completed' | 'failed' | 'skipped'; label: string; createdAt: string },
+  ): void;
+  reconcileCommittedRunMessages(
+    projectId: string,
+    sessionId: string,
+    runId: string,
+    messages: TimelineMessage[],
   ): void;
   hydrateCommittedMessages(projectId: string, sessionId: string, messages: TimelineMessage[]): void;
   hydrateSessionTimeline(projectId: string, sessionId: string, messages: TimelineMessage[], events: RuntimeEvent[]): void;
@@ -117,6 +128,10 @@ function messageIdentity(message: TimelineMessage): string {
     return `separator:${message.messageId}`;
   }
 
+  if (message.role === 'activity') {
+    return `activity:${message.messageId}`;
+  }
+
   if (message.runId) {
     return `user-run:${message.sessionId}:${message.runId}`;
   }
@@ -152,12 +167,45 @@ function compareTimelineMessages(left: TimelineMessage, right: TimelineMessage):
   return String(left.messageId).localeCompare(String(right.messageId));
 }
 
+function upsertSessionCompactionActivity(
+  current: TimelineMessage[],
+  input: {
+    projectId: string;
+    sessionId: string;
+    activityId: string;
+    status: 'running' | 'completed' | 'failed' | 'skipped';
+    label: string;
+    createdAt: string;
+  },
+): TimelineMessage[] {
+  const messageId = `session-compaction:${input.activityId}`;
+  const next: TimelineMessage = {
+    messageId,
+    role: 'activity',
+    projectId: input.projectId,
+    sessionId: input.sessionId,
+    createdAt: input.createdAt,
+    updatedAt: new Date().toISOString(),
+    blocks: [{
+      blockId: `session-compaction-activity:${input.activityId}`,
+      kind: 'session_compaction_activity',
+      activityId: input.activityId,
+      status: input.status,
+      label: input.label,
+      createdAt: input.createdAt,
+      updatedAt: new Date().toISOString(),
+    }],
+  };
+  return [...current.filter((message) => message.messageId !== messageId), next].sort(compareTimelineMessages);
+}
+
 function upsertPendingUserMessage(
   current: TimelineMessage[],
   input: {
     projectId: string;
     sessionId: string;
     clientMessageId: string;
+    messageId?: string;
     text: string;
     createdAt: string;
     runId?: string;
@@ -194,6 +242,7 @@ function upsertPendingUserMessage(
 
       return {
         ...existing,
+        messageId: input.messageId ?? existing.messageId,
         projectId: input.projectId,
         sessionId: input.sessionId,
         clientMessageId: input.clientMessageId,
@@ -205,7 +254,7 @@ function upsertPendingUserMessage(
   }
 
   const message: TimelineUserMessage = {
-    messageId: input.clientMessageId,
+    messageId: input.messageId ?? input.clientMessageId,
     role: 'user',
     projectId: input.projectId,
     sessionId: input.sessionId,
@@ -273,6 +322,7 @@ function mergeCommittedMessages(
   current: TimelineMessage[],
   committed: TimelineMessage[],
   streamsById: Record<string, RuntimeTimelineState>,
+  options: { preserveRuntimeOnly?: boolean } = {},
 ): TimelineMessage[] {
   const byIdentity = new Map<string, TimelineMessage>();
 
@@ -288,7 +338,11 @@ function mergeCommittedMessages(
       continue;
     }
 
-    if (isLiveStreamingMessage(message, streamsById) || isActiveRunMessage(message, streamsById)) {
+    if (
+      options.preserveRuntimeOnly ||
+      isLiveStreamingMessage(message, streamsById) ||
+      isActiveRunMessage(message, streamsById)
+    ) {
       byIdentity.set(identity, message);
     }
   }
@@ -413,6 +467,51 @@ export const useRuntimeTimelineStore = create<RuntimeTimelineStoreState>((set, g
         };
       });
     },
+    upsertSessionCompactionActivity: (projectId, sessionId, input) => {
+      set((state) => {
+        const key = runtimeTimelineSessionKey(projectId, sessionId);
+        const session = state.sessions[key] ?? emptySession(projectId, sessionId);
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: {
+              ...session,
+              messages: upsertSessionCompactionActivity(session.messages, { projectId, sessionId, ...input }),
+            },
+          },
+        };
+      });
+    },
+    reconcileCommittedRunMessages: (projectId, sessionId, runId, messages) => {
+      set((state) => {
+        const key = runtimeTimelineSessionKey(projectId, sessionId);
+        const session = state.sessions[key] ?? emptySession(projectId, sessionId);
+        const currentRunMessages = session.messages.filter((message) =>
+          (message.role === 'user' || message.role === 'assistant') && message.runId === runId
+        );
+        const otherMessages = session.messages.filter((message) =>
+          !((message.role === 'user' || message.role === 'assistant') && message.runId === runId)
+        );
+        const committedRunMessages = messages.filter((message) =>
+          (message.role === 'user' || message.role === 'assistant') && message.runId === runId
+        );
+        if (committedRunMessages.length === 0) {
+          return state;
+        }
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: {
+              ...session,
+              messages: [
+                ...otherMessages,
+                ...mergeCommittedMessages(currentRunMessages, committedRunMessages, session.streamsById),
+              ].sort(compareTimelineMessages),
+            },
+          },
+        };
+      });
+    },
     hydrateCommittedMessages: (projectId, sessionId, messages) => {
       set((state) => {
         const key = runtimeTimelineSessionKey(projectId, sessionId);
@@ -434,17 +533,22 @@ export const useRuntimeTimelineStore = create<RuntimeTimelineStoreState>((set, g
     hydrateSessionTimeline: (projectId, sessionId, messages, events) => {
       set((state) => {
         const key = runtimeTimelineSessionKey(projectId, sessionId);
-        const baseSession: RuntimeTimelineSessionState = {
-          ...emptySession(projectId, sessionId),
-          messages: mergeCommittedMessages([], messages, {}),
-        };
-        const hydratedSession = events.reduce(
+        const runtimeSession = events.reduce(
           (session, event) => projectRuntimeEvent(session, {
             ...event,
             sessionId: event.sessionId ?? sessionId,
           }),
-          baseSession,
+          emptySession(projectId, sessionId),
         );
+        const hydratedSession: RuntimeTimelineSessionState = {
+          ...runtimeSession,
+          messages: mergeCommittedMessages(
+            runtimeSession.messages,
+            messages,
+            runtimeSession.streamsById,
+            { preserveRuntimeOnly: true },
+          ),
+        };
 
         return {
           sessions: {

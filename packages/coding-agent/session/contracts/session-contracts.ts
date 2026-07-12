@@ -177,6 +177,15 @@ export type GetActiveHistoryResult =
   | { status: 'ok'; history: SessionHistoryItem[] }
   | { status: 'failed'; failure: RuntimeError };
 
+export type GetActiveConversationHistoryRequest = {
+  session_id: string;
+  run_id?: string;
+};
+
+export type GetActiveConversationHistoryResult =
+  | { status: 'ok'; messages: SessionMessageWithAttachments[] }
+  | { status: 'failed'; failure: RuntimeError };
+
 export type AppendSessionEntryRequest = {
   entry_id: string;
   session_id: string;
@@ -226,6 +235,7 @@ export type SessionService = {
   listMessages(request: ListMessagesRequest): ListMessagesResult;
   getActivePath(request: GetActivePathRequest): GetActivePathResult;
   getActiveHistory(request: GetActiveHistoryRequest): GetActiveHistoryResult;
+  getActiveConversationHistory(request: GetActiveConversationHistoryRequest): GetActiveConversationHistoryResult;
   appendSessionEntry(request: AppendSessionEntryRequest): AppendSessionEntryResult;
   switchActiveEntry(request: SwitchActiveEntryRequest): SwitchActiveEntryResult;
   saveCompactionSummary(request: SaveCompactionSummaryRequest): SaveCompactionSummaryResult;

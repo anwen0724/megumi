@@ -98,6 +98,55 @@ describe('useSessionTimeline', () => {
           }),
         },
         session: {
+          timeline: {
+            list: vi.fn().mockResolvedValue({
+              ok: true,
+              data: {
+                messages: [{
+                  messageId: 'message-user-1',
+                  role: 'user',
+                  projectId: 'project-1',
+                  sessionId: 'session-1',
+                  runId: 'run-1',
+                  createdAt,
+                  blocks: [{
+                    blockId: 'user-text:message-user-1',
+                    kind: 'user_text',
+                    text: '你好',
+                    format: 'plain',
+                  }],
+                }, {
+                  messageId: 'message-assistant-1',
+                  role: 'assistant',
+                  projectId: 'project-1',
+                  sessionId: 'session-1',
+                  runId: 'run-1',
+                  createdAt,
+                  workspaceChangeFooter: {
+                    runId: 'run-1',
+                    sessionId: 'session-1',
+                    updatedAt: createdAt,
+                    changeSets: [{
+                      changeSetId: 'change-set-1',
+                      changedFileCount: 1,
+                      files: [{ changedFileId: 'file-1', workspacePath: 'README.md', changeKind: 'modified' }],
+                    }],
+                  },
+                  blocks: [{
+                    blockId: 'answer:message-assistant-1',
+                    kind: 'answer_text',
+                    runId: 'run-1',
+                    textId: 'text:message-assistant-1',
+                    status: 'completed',
+                    text: '你好，我是 Megumi。',
+                    format: 'markdown',
+                    createdAt,
+                  }],
+                }],
+                diagnostics: [],
+              },
+            }),
+          },
           message: {
             send: vi.fn().mockResolvedValue({
               ok: true,
@@ -170,7 +219,8 @@ describe('useSessionTimeline', () => {
       }));
       runtimeEventCallback?.(runtimeEvent('run.completed', 4, {
         assistantMessageId: 'message-assistant-1',
-      }));
+      }, { messageId: 'message-assistant-1' }));
+      await Promise.resolve();
     });
 
     const session = useRuntimeTimelineStore.getState().sessions['project-1:session-1'];
@@ -178,17 +228,111 @@ describe('useSessionTimeline', () => {
       message.role === 'assistant' && message.runId === 'run-1',
     );
     const answer = assistant?.blocks.find((block) => block.kind === 'answer_text');
+    const user = session?.messages.find((message) => message.role === 'user' && message.runId === 'run-1');
 
     expect(answer).toMatchObject({
       kind: 'answer_text',
       status: 'completed',
       text: '你好，我是 Megumi。',
     });
+    expect(user?.messageId).toBe('message-user-1');
+    expect(assistant?.messageId).toBe('message-assistant-1');
+    expect(assistant?.workspaceChangeFooter).toMatchObject({
+      changeSets: [{ files: [{ workspacePath: 'README.md' }] }],
+    });
     expect(useChatUiStore.getState().sessionStates['session-1']).toMatchObject({
       agentStatus: 'idle',
       lastError: null,
     });
-    expect(hydrateSessionTimeline).toHaveBeenCalledWith('session-1');
+    expect(hydrateSessionTimeline).not.toHaveBeenCalled();
+    expect(window.megumi.session.timeline.list).toHaveBeenCalledWith(expect.objectContaining({
+      payload: {
+        projectId: 'project-1',
+        sessionId: 'session-1',
+        runId: 'run-1',
+      },
+    }));
+  });
+
+  it('shows compaction progress and completion as one Session Timeline activity', async () => {
+    let resolveSend!: (value: {
+      ok: true;
+      data: {
+        type: 'completed';
+        requestId: string;
+        message: string;
+        session: {
+          id: string;
+          projectId: string;
+          title: string;
+          status: 'active';
+          createdAt: string;
+          updatedAt: string;
+        };
+      };
+      meta: {
+        requestId: string;
+        channel: 'session:message:send';
+        handledAt: string;
+        durationMs: number;
+      };
+    }) => void;
+    const pendingSend = new Promise<Parameters<typeof resolveSend>[0]>((resolve) => {
+      resolveSend = resolve;
+    });
+    vi.mocked(window.megumi.session.message.send).mockReturnValueOnce(pendingSend);
+    const { result } = renderHook(() => useSessionTimeline());
+    let sendPromise!: Promise<boolean>;
+
+    act(() => {
+      sendPromise = result.current.sendSessionMessage({
+        message: '/compact',
+        providerId: 'deepseek',
+        model: 'deepseek-chat',
+        permissionMode: 'default',
+      });
+    });
+
+    expect(useRuntimeTimelineStore.getState().sessions['project-1:session-1']?.messages).toEqual([
+      expect.objectContaining({
+        role: 'activity',
+        blocks: [expect.objectContaining({ status: 'running', label: '正在压缩上下文' })],
+      }),
+    ]);
+
+    await act(async () => {
+      resolveSend({
+        ok: true,
+        data: {
+          type: 'completed',
+          requestId: 'request-compact-1',
+          message: 'Context compacted.',
+          session: {
+            id: 'session-1',
+            projectId: 'project-1',
+            title: 'Session',
+            status: 'active',
+            createdAt,
+            updatedAt: createdAt,
+          },
+        },
+        meta: {
+          requestId: 'request-compact-1',
+          channel: 'session:message:send',
+          handledAt: createdAt,
+          durationMs: 1,
+        },
+      });
+      await sendPromise;
+    });
+
+    expect(useRuntimeTimelineStore.getState().sessions['project-1:session-1']?.messages).toEqual([
+      expect.objectContaining({
+        role: 'activity',
+        blocks: [expect.objectContaining({ status: 'completed', label: '已完成压缩' })],
+      }),
+    ]);
+    expect(useToastStore.getState().toasts).toEqual([]);
   });
 
   it('cancels a hydrated active run from the run store', async () => {

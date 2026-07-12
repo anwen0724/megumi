@@ -74,6 +74,10 @@ export function TimelineMessageBlocks({ message }: TimelineMessageBlocksProps) {
     );
   }
 
+  if (message.role === 'activity') {
+    return null;
+  }
+
   return (
     <div className="min-w-0 space-y-4">
       {message.blocks.map((block) => {

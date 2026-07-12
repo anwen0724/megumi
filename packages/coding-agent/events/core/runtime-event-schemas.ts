@@ -312,6 +312,7 @@ const ContextCompactionCompletedPayloadSchema = ContextCompactionStartedPayloadS
 
 const ContextCompactionFailedPayloadSchema = z
   .object({
+    compactionId: z.string().min(1).max(128).optional(),
     triggerReason: SessionCompactionTriggerReasonSchema,
     tokensBefore: z.number().int().nonnegative(),
     previousCompactionId: z.string().min(1).max(128).optional(),
@@ -1110,6 +1111,20 @@ function sessionScopedEventSchema<TType extends RuntimeEventType, TPayloadSchema
   }).strict();
 }
 
+function sessionActivityEventSchema<TType extends RuntimeEventType, TPayloadSchema extends z.ZodTypeAny>(
+  eventType: TType,
+  payload: TPayloadSchema,
+) {
+  // A Session activity may optionally carry the Agent Run that caused it.
+  // Manual activities remain Session-scoped; automatic activities can then be
+  // projected inside the causative Run without changing their Session owner.
+  return RuntimeEventBaseSchema.extend({
+    sessionId: z.string().min(1),
+    eventType: z.literal(eventType),
+    payload,
+  }).strict();
+}
+
 export const SessionCreatedEventSchema = sessionEventSchema('session.created', SessionCreatedPayloadSchema);
 export const SessionUpdatedEventSchema = sessionEventSchema('session.updated', SessionUpdatedPayloadSchema);
 export const SessionActiveLeafChangedEventSchema = sessionScopedEventSchema(
@@ -1158,15 +1173,15 @@ export const ContextEffectiveUpdatedEventSchema = eventSchema(
   'context.effective.updated',
   ContextEffectiveUpdatedPayloadSchema,
 );
-export const ContextCompactionStartedEventSchema = sessionScopedEventSchema(
+export const ContextCompactionStartedEventSchema = sessionActivityEventSchema(
   'context.compaction.started',
   ContextCompactionStartedPayloadSchema,
 );
-export const ContextCompactionCompletedEventSchema = sessionScopedEventSchema(
+export const ContextCompactionCompletedEventSchema = sessionActivityEventSchema(
   'context.compaction.completed',
   ContextCompactionCompletedPayloadSchema,
 );
-export const ContextCompactionFailedEventSchema = sessionScopedEventSchema(
+export const ContextCompactionFailedEventSchema = sessionActivityEventSchema(
   'context.compaction.failed',
   ContextCompactionFailedPayloadSchema,
 );

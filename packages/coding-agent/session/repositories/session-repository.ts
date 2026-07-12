@@ -83,6 +83,14 @@ export class SessionRepository {
     `).all(sessionId) as SessionMessageRow[]).map(fromMessageRow);
   }
 
+  listMessagesByRunId(sessionId: string, runId: string): SessionMessage[] {
+    return (this.database.prepare(`
+      SELECT * FROM session_messages
+      WHERE session_id = ? AND run_id = ?
+      ORDER BY created_at ASC, message_id ASC
+    `).all(sessionId, runId) as SessionMessageRow[]).map(fromMessageRow);
+  }
+
   listMessagesByIds(messageIds: string[]): SessionMessage[] {
     if (messageIds.length === 0) {
       return [];

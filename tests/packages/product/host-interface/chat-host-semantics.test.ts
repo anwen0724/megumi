@@ -107,17 +107,17 @@ describe('ChatHost product semantics', () => {
   });
 
   it('returns Session owner failures from listMessages without throwing', async () => {
-    const host = createHost(vi.fn(), vi.fn(), {
-      listMessages: vi.fn(() => ({
+    const getActiveConversationHistory = vi.fn(() => ({
         status: 'failed' as const,
         failure: { code: 'session_not_found', message: 'Session was not found.' },
-      })),
-    });
+      }));
+    const host = createHost(vi.fn(), vi.fn(), { getActiveConversationHistory });
 
     await expect(host.listMessages({ sessionId: 'session:missing' })).resolves.toEqual({
       status: 'failed',
       failure: { code: 'session_not_found', message: 'Session was not found.' },
     });
+    expect(getActiveConversationHistory).toHaveBeenCalledWith({ session_id: 'session:missing' });
   });
 
   it('does not assign session title or permission defaults for send requests', async () => {

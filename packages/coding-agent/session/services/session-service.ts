@@ -12,6 +12,8 @@ import type {
   CreateSessionResult,
   GetActiveHistoryRequest,
   GetActiveHistoryResult,
+  GetActiveConversationHistoryRequest,
+  GetActiveConversationHistoryResult,
   GetActivePathRequest,
   GetActivePathResult,
   GetSessionRequest,
@@ -34,7 +36,7 @@ import type {
   SwitchActiveEntryRequest,
   SwitchActiveEntryResult,
 } from '../contracts/session-contracts';
-import { buildActivePath, validateSessionEntry } from '../core/session-path';
+import { buildActiveConversationPath, buildActivePath, validateSessionEntry } from '../core/session-path';
 import type { SessionRepository } from '../repositories/session-repository';
 
 export type CreateSessionServiceOptions = {
@@ -241,6 +243,42 @@ class DefaultSessionService implements SessionService {
         }
       }
       return { status: 'ok', history };
+    } catch (error) {
+      return failed(error);
+    }
+  }
+
+  getActiveConversationHistory(request: GetActiveConversationHistoryRequest): GetActiveConversationHistoryResult {
+    try {
+      const session = this.options.repository.findSessionById(request.session_id);
+      if (!session) {
+        return {
+          status: 'failed',
+          failure: { code: 'session_not_found', message: `Session ${request.session_id} was not found` },
+        };
+      }
+      const entries = this.options.repository.listEntriesBySessionId(request.session_id);
+      const compactionIds = entries.flatMap((entry) => entry.compaction_id ? [entry.compaction_id] : []);
+      const path = buildActiveConversationPath({
+        session_id: request.session_id,
+        active_entry_id: session.active_entry_id,
+        entries,
+        compactions: this.options.repository.listCompactionSummariesByIds(compactionIds),
+      });
+      const messageIds = path.flatMap((entry) => entry.message_id ? [entry.message_id] : []);
+      const persistedMessages = request.run_id
+        ? this.options.repository.listMessagesByRunId(request.session_id, request.run_id)
+        : this.options.repository.listMessagesByIds(messageIds);
+      const messagesById = new Map(
+        persistedMessages.map((message) => [message.message_id, message]),
+      );
+      return {
+        status: 'ok',
+        messages: this.attachmentsForMessages(messageIds.flatMap((messageId) => {
+          const message = messagesById.get(messageId);
+          return message ? [message] : [];
+        })),
+      };
     } catch (error) {
       return failed(error);
     }

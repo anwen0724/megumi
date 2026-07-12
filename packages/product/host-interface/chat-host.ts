@@ -54,7 +54,7 @@ export const SessionCreatePayloadSchema = z.object({
 export const SessionListPayloadSchema = z.object({}).strict();
 export const SessionMessageListPayloadSchema = z.object({ sessionId: z.string().min(1) }).strict();
 export const SessionTimelineListPayloadSchema = z.object({
-  projectId: z.string().min(1), sessionId: z.string().min(1),
+  projectId: z.string().min(1), sessionId: z.string().min(1), runId: z.string().min(1).optional(),
 }).strict();
 export const SessionHydrationGetPayloadSchema = z.object({
   projectId: z.string().min(1), sessionId: z.string().min(1),
@@ -243,9 +243,8 @@ export function createChatHost(options: {
     },
 
     async listMessages(request) {
-      const result = options.sessionService.listMessages({
+      const result = options.sessionService.getActiveConversationHistory({
         session_id: request.sessionId,
-        active_path_only: true,
       });
       if (result.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(result.failure) };
@@ -257,6 +256,7 @@ export function createChatHost(options: {
       return options.sessionTimelineQuery.listSessionTimeline({
         workspace_id: request.projectId,
         session_id: request.sessionId,
+        ...(request.runId ? { run_id: request.runId } : {}),
       });
     },
 
@@ -543,6 +543,7 @@ export type ChatListMessagesUiResult =
 export interface ChatListTimelineUiRequest {
   projectId: string;
   sessionId: string;
+  runId?: string;
 }
 export interface ChatListTimelineUiResult {
   messages: TimelineMessage[];

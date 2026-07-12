@@ -220,7 +220,11 @@ export function reduceRuntimeTimelineEvent(
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
     const item = ensureCompactionItem(process, payload.compactionId ?? event.eventId, event.createdAt);
-    item.status = event.eventType === 'context.compaction.completed' ? 'completed' : 'boundary_unresolved';
+    item.status = event.eventType === 'context.compaction.completed'
+      ? 'completed'
+      : event.eventType === 'context.compaction.failed'
+        ? 'failed'
+        : 'running';
     item.label = compactionLabel(event.eventType, payload.error?.message);
     item.updatedAt = event.createdAt;
     process.updatedAt = event.createdAt;
@@ -273,7 +277,9 @@ export function reduceRuntimeTimelineEvent(
   }
 
   if (event.eventType === 'run.completed') {
+    const payload = event.payload as { assistantMessageId?: string };
     const assistant = ensureAssistantMessage(nextMessages, event);
+    assistant.messageId = event.messageId ?? payload.assistantMessageId ?? assistant.messageId;
     const process = ensureProcessBlock(assistant, event);
     const answer = assistant.blocks.find((block): block is AnswerTextBlock => block.kind === 'answer_text');
     process.status = 'completed';
@@ -484,8 +490,8 @@ function ensureCompactionItem(process: ProcessDisclosureBlock, compactionId: str
     itemId: `compaction:${compactionId}`,
     kind: 'compaction_activity',
     compactionId,
-    status: 'boundary_unresolved',
-    label: 'Compacting context',
+    status: 'running',
+    label: '正在压缩上下文',
     createdAt,
     updatedAt: createdAt,
   };
@@ -538,9 +544,9 @@ function approvalStatusFromDecision(decision: string | undefined): ApprovalActiv
 }
 
 function compactionLabel(eventType: RuntimeEvent['eventType'], failureMessage: string | undefined): string {
-  if (eventType === 'context.compaction.completed') return 'Compacted context';
-  if (eventType === 'context.compaction.failed') return failureMessage ? `Context compaction failed: ${failureMessage}` : 'Context compaction failed';
-  return 'Compacting context';
+  if (eventType === 'context.compaction.completed') return '已完成压缩';
+  if (eventType === 'context.compaction.failed') return failureMessage ? `上下文压缩失败：${failureMessage}` : '上下文压缩失败';
+  return '正在压缩上下文';
 }
 
 function retryStatusFromEvent(eventType: RuntimeEvent['eventType']): RetryActivityItem['status'] {

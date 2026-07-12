@@ -107,10 +107,18 @@ describe('ContextServiceImpl compaction', () => {
 
   it('attempts automatic compaction once, persists only a reducing summary, and rebuilds usage', async () => {
     const { deps, service } = fixture([80, 30, 30]);
-    const result = await service.prepareModelCall(request);
+    const onCompactionProgress = vi.fn();
+    const result = await service.prepareModelCall({ ...request, onCompactionProgress });
     expect(deps.summaryModelCall.complete).toHaveBeenCalledTimes(1);
     expect(deps.sessionService.saveCompactionSummary).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ status: 'ready', prepared: { usage: { usedTokens: 30 }, compaction: { compactionId: 'C1' } } });
+    expect(onCompactionProgress.mock.calls.map(([progress]) => progress.status)).toEqual(['started', 'completed']);
+    expect(onCompactionProgress).toHaveBeenLastCalledWith(expect.objectContaining({
+      status: 'completed',
+      compactionId: 'C1',
+      tokensBefore: 80,
+      summarizedSourceCount: 1,
+    }));
   });
 
   it('discards a non-reducing summary below the window and fails above the hard window', async () => {

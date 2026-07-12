@@ -2,7 +2,7 @@
  * Implements pure Session active path rules. It never reads or writes the
  * database and is not exported from the Session public entrypoint.
  */
-import type { SessionEntry } from '../contracts/session-contracts';
+import type { SessionCompactionSummary, SessionEntry } from '../contracts/session-contracts';
 
 export type BuildActivePathInput = {
   session_id: string;
@@ -32,6 +32,51 @@ export function buildActivePath(input: BuildActivePathInput): SessionEntry[] {
     }
     if (entry.session_id !== input.session_id) {
       throw new Error(`Active path entry ${entry.entry_id} does not belong to session ${input.session_id}`);
+    }
+
+    path.unshift(entry);
+    currentId = entry.parent_entry_id;
+  }
+
+  return path;
+}
+
+export type BuildActiveConversationPathInput = BuildActivePathInput & {
+  compactions: SessionCompactionSummary[];
+};
+
+export function buildActiveConversationPath(input: BuildActiveConversationPathInput): SessionEntry[] {
+  if (!input.active_entry_id) {
+    return [];
+  }
+
+  const entriesById = new Map(input.entries.map((entry) => [entry.entry_id, entry]));
+  const compactionsById = new Map(input.compactions.map((compaction) => [compaction.compaction_id, compaction]));
+  const path: SessionEntry[] = [];
+  const seen = new Set<string>();
+  let currentId: string | undefined = input.active_entry_id;
+
+  while (currentId) {
+    if (seen.has(currentId)) {
+      throw new Error(`Cycle detected in session conversation path for ${input.session_id}: ${currentId}`);
+    }
+    seen.add(currentId);
+
+    const entry = entriesById.get(currentId);
+    if (!entry) {
+      throw new Error(`Conversation path entry ${currentId} was not found in session ${input.session_id}`);
+    }
+    if (entry.session_id !== input.session_id) {
+      throw new Error(`Conversation path entry ${entry.entry_id} does not belong to session ${input.session_id}`);
+    }
+
+    if (entry.entry_type === 'compaction') {
+      const compaction = entry.compaction_id ? compactionsById.get(entry.compaction_id) : undefined;
+      if (!compaction) {
+        throw new Error(`Compaction ${entry.compaction_id ?? 'unknown'} was not found in session ${input.session_id}`);
+      }
+      currentId = compaction.covered_until_entry_id;
+      continue;
     }
 
     path.unshift(entry);

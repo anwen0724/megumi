@@ -9,6 +9,7 @@ import type { TimelineMessage } from './timeline-message-blocks';
 export interface SessionTimelineQueryRequest {
   workspace_id: string;
   session_id: string;
+  run_id?: string;
 }
 
 export interface SessionTimelineQueryResult {
@@ -21,23 +22,26 @@ export interface SessionTimelineQuery {
 }
 
 export function createSessionTimelineQuery(input: {
-  sessionService: Pick<SessionService, 'listMessages'>;
+  sessionService: Pick<SessionService, 'getActiveConversationHistory'>;
   workspaceChangeFooterProjector?: Pick<WorkspaceChangeFooterProjectorService, 'projectRunFooter'>;
 }): SessionTimelineQuery {
   return {
     listSessionTimeline(request) {
-      const result = input.sessionService.listMessages({
+      const result = input.sessionService.getActiveConversationHistory({
         session_id: request.session_id,
-        active_path_only: true,
+        ...(request.run_id ? { run_id: request.run_id } : {}),
       });
       if (result.status === 'failed') {
         return { messages: [], diagnostics: [] };
       }
 
+      const messages = request.run_id
+        ? result.messages.filter((item) => item.message.run_id === request.run_id)
+        : result.messages;
       return {
         messages: projectSessionTimelineMessages({
           projectId: request.workspace_id,
-          messages: result.messages,
+          messages,
           workspaceChangeFooterProjector: input.workspaceChangeFooterProjector,
         }),
         diagnostics: [],

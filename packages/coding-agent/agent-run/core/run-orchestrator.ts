@@ -134,6 +134,7 @@ export async function runAgentModelToolLoop(
       activatedSkills: request.activated_skills,
       tools,
       modelContext: request.model_context,
+      onCompactionProgress: (progress) => emitContextCompactionProgress(dependencies, run, progress),
       ...(request.signal ? { signal: request.signal } : {}),
     });
     if (preparation.status === 'failed') {
@@ -403,6 +404,51 @@ export async function runAgentModelToolLoop(
 
     traceLoopCounters(dependencies, run, modelCalls, toolRounds, currentTurn.runItems.length);
   }
+}
+
+function emitContextCompactionProgress(
+  dependencies: RunOrchestratorDependencies,
+  run: AgentRun,
+  progress: import('../../context').ContextCompactionProgress,
+): void {
+  if (progress.status === 'failed') {
+    dependencies.event_sink.emit({
+      eventType: 'context.compaction.failed',
+      run,
+      payload: {
+        compactionId: progress.compactionId,
+        triggerReason: 'automatic',
+        tokensBefore: progress.tokensBefore,
+        ...(progress.previousCompactionId ? { previousCompactionId: progress.previousCompactionId } : {}),
+        error: {
+          code: 'context_budget_exceeded',
+          message: progress.message,
+          severity: 'error',
+          retryable: true,
+          source: 'core',
+        },
+      },
+    });
+    return;
+  }
+
+  dependencies.event_sink.emit({
+    eventType: progress.status === 'started'
+      ? 'context.compaction.started'
+      : 'context.compaction.completed',
+    run,
+    payload: {
+      compactionId: progress.compactionId,
+      triggerReason: 'automatic',
+      tokensBefore: progress.tokensBefore,
+      firstKeptSourceRef: {
+        ...(progress.firstKeptSourceId ? { sourceId: progress.firstKeptSourceId } : {}),
+        sourceKind: 'session_message',
+      },
+      summarizedSourceCount: progress.summarizedSourceCount,
+      ...(progress.previousCompactionId ? { previousCompactionId: progress.previousCompactionId } : {}),
+    },
+  });
 }
 
 function toolResultToConversationItem(toolResult: ToolResultRuntimeFact): CurrentConversationTurn['runItems'][number] {

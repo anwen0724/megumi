@@ -14,6 +14,24 @@ describe('Agent Run message flow', () => {
   it('starts one run, builds prompts, saves assistant output, captures memory, and publishes events', async () => {
     const repository = createInMemoryAgentRunRepository();
     const deps = createMessageFlowDependencies({ repository });
+    const prepareModelCall = deps.context_service.prepareModelCall.getMockImplementation();
+    deps.context_service.prepareModelCall.mockImplementation(async (request) => {
+      request.onCompactionProgress?.({
+        status: 'started',
+        compactionId: 'compaction-1',
+        tokensBefore: 204_900,
+        summarizedSourceCount: 12,
+        firstKeptSourceId: 'entry-recent-1',
+      });
+      request.onCompactionProgress?.({
+        status: 'completed',
+        compactionId: 'compaction-1',
+        tokensBefore: 204_900,
+        summarizedSourceCount: 12,
+        firstKeptSourceId: 'entry-recent-1',
+      });
+      return prepareModelCall!(request);
+    });
     const service = createAgentRunService(deps as unknown as CreateAgentRunServiceOptions);
 
     const result = await service.startRun({
@@ -68,8 +86,19 @@ describe('Agent Run message flow', () => {
       'run.started',
       'model_call.started',
       'model_call.completed',
+      'context.compaction.started',
+      'context.compaction.completed',
       'run.completed',
     ]));
+    expect(events.find((event) => event.eventType === 'context.compaction.completed')).toMatchObject({
+      runId: result.run.run_id,
+      sessionId: 'session-1',
+      payload: {
+        compactionId: 'compaction-1',
+        tokensBefore: 204_900,
+        summarizedSourceCount: 12,
+      },
+    });
     expect(events.find((event) => event.eventType === 'run.started')).toMatchObject({
       payload: {
         runKind: 'agent',
@@ -473,7 +502,9 @@ async function* asyncEvents<T>(events: T[]): AsyncIterable<T> {
 
 function expectRuntimeEventsSchemaValid(events: unknown[]): void {
   for (const event of events) {
-    expect(RuntimeEventSchema.safeParse(event).success).toBe(true);
+    const parsed = RuntimeEventSchema.safeParse(event);
+    expect(parsed.success, parsed.success ? undefined : JSON.stringify({ event, issues: parsed.error.issues }, null, 2))
+      .toBe(true);
   }
 }
 

@@ -12,7 +12,6 @@ import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-req
 import { showToast } from '../../../shared/ui';
 import type { ComposerSubmitPayload } from '../components/Composer';
 import { localSessionFromPersistedSession } from '../../session-history/session-history-mappers';
-import { useSessionHistoryHydration } from '../../session-history/use-session-history-hydration';
 
 // Coordinates chat timeline submission, optimistic user messages, and runtime
 // event routing for the active session. It forwards typed context hints only.
@@ -33,6 +32,10 @@ function createId(prefix: string): string {
   }
 
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function isCompactCommandInput(message: string): boolean {
+  return /^\/compact(?:\s|$)/i.test(message.trim());
 }
 
 interface SessionMessageTarget {
@@ -119,6 +122,33 @@ function isTerminalRunEvent(event: RuntimeEvent): boolean {
     event.eventType === 'run.cancelled';
 }
 
+async function reconcileCompletedRunTimeline(event: RuntimeEvent, projectId: string, sessionId: string): Promise<void> {
+  if (event.eventType !== 'run.completed' || !event.runId) {
+    return;
+  }
+  try {
+    const result = await window.megumi.session.timeline.list(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.sessionTimelineList, {
+        projectId,
+        sessionId,
+        runId: event.runId,
+      }),
+    );
+    if (!result.ok) {
+      return;
+    }
+    useRuntimeTimelineStore.getState().reconcileCommittedRunMessages(
+      projectId,
+      sessionId,
+      event.runId,
+      result.data.messages,
+    );
+  } catch {
+    // Live Runtime Events already contain the completed answer. A failed
+    // reconciliation must not turn a successful Agent Run into a UI failure.
+  }
+}
+
 function failSessionMessageSend(message: string, sessionId?: string | null) {
   const current = useChatUiStore.getState();
   current.setAgentStatus('error', sessionId);
@@ -160,7 +190,6 @@ export function useSessionTimeline() {
   const runSessionIdRef = useRef<string | null>(null);
   const lastPayloadRef = useRef<ComposerSubmitPayload | null>(null);
   const processedEventIdsByRunRef = useRef<Map<string, Set<string>>>(new Map());
-  const { hydrateSessionTimeline } = useSessionHistoryHydration();
 
   const updateBranchDraft = useCallback((draft: BranchDraftState | null) => {
     branchDraftRef.current = draft;
@@ -228,8 +257,11 @@ export function useSessionTimeline() {
         dispatchRuntimeEvent(event, { sessionId: runSessionIdRef.current });
         if (isTerminalRunEvent(event)) {
           const terminalSessionId = runSessionIdRef.current ?? event.sessionId ?? null;
-          if (terminalSessionId) {
-            void hydrateSessionTimeline(terminalSessionId);
+          const terminalProjectId = terminalSessionId
+            ? useSessionStore.getState().sessions.find((session) => session.id === terminalSessionId)?.projectId
+            : undefined;
+          if (terminalSessionId && terminalProjectId) {
+            void reconcileCompletedRunTimeline(event, terminalProjectId, terminalSessionId);
           }
           activeRunIdRef.current = null;
           activeTraceIdRef.current = null;
@@ -237,7 +269,7 @@ export function useSessionTimeline() {
         }
       }
     });
-  }, [hydrateSessionTimeline]);
+  }, []);
 
   const sendSessionMessage = useCallback(async (payload: ComposerSubmitPayload): Promise<boolean> => {
     lastPayloadRef.current = payload;
@@ -280,14 +312,39 @@ export function useSessionTimeline() {
     state.setAgentStatus('sending', target.sessionId ?? null);
     state.setLastError(null, target.sessionId ?? null);
 
-    const result = await window.megumi.session.message.send(request);
+    const isCompactionCommand = isCompactCommandInput(payload.message);
+    const updateCompactionActivity = (status: 'running' | 'completed' | 'failed' | 'skipped', label: string) => {
+      if (isCompactionCommand && target.sessionId) {
+        useRuntimeTimelineStore.getState().upsertSessionCompactionActivity(target.projectId, target.sessionId, {
+          activityId: requestId,
+          status,
+          label,
+          createdAt,
+        });
+      }
+    };
+    updateCompactionActivity('running', '正在压缩上下文');
+
+    let result: Awaited<ReturnType<typeof window.megumi.session.message.send>>;
+    try {
+      result = await window.megumi.session.message.send(request);
+    } catch (error) {
+      updateCompactionActivity('failed', '上下文压缩失败');
+      failSessionMessageSend(
+        error instanceof Error ? error.message : 'The message could not be sent.',
+        target.sessionId ?? null,
+      );
+      return false;
+    }
 
     if (!result.ok) {
+      updateCompactionActivity('failed', '上下文压缩失败');
       failSessionMessageSend(result.data.message, target.sessionId ?? null);
       return false;
     }
 
     if (result.data.type === 'error') {
+      updateCompactionActivity('failed', '上下文压缩失败');
       failSessionMessageSend(result.data.message, result.data.session?.id ?? target.sessionId ?? null);
       return false;
     }
@@ -307,6 +364,10 @@ export function useSessionTimeline() {
     if (result.data.type !== 'agent_run') {
       activeRunIdRef.current = null;
       useChatUiStore.getState().setAgentStatus('idle', runSessionId);
+      if (isCompactionCommand && result.data.type === 'completed') {
+        const skipped = result.data.message?.startsWith('Context compaction skipped:') ?? false;
+        updateCompactionActivity(skipped ? 'skipped' : 'completed', skipped ? '无需压缩上下文' : '已完成压缩');
+      }
       return true;
     }
 
@@ -314,6 +375,7 @@ export function useSessionTimeline() {
     useChatUiStore.getState().setAgentStatus('sending', runSessionId);
     useRuntimeTimelineStore.getState().addPendingUserMessage(target.projectId, runSessionId, {
       clientMessageId,
+      messageId: result.data.userMessageId,
       text: payload.message,
       createdAt,
       runId: result.data.run.runId,

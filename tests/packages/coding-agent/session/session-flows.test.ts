@@ -155,4 +155,66 @@ describe('session service flows', () => {
       expect(activeHistory.history.map((item) => item.type)).toEqual(['compaction', 'message']);
     }
   });
+
+  it('expands compaction boundaries when reading the active conversation for UI', () => {
+    const { service, workspaceId } = createHarness();
+    service.createSession({ workspace_id: workspaceId, title: 'Session' });
+    const m1 = service.saveUserMessage({ message_id: 'M1', session_id: 'S1', run_id: 'R1', content_text: 'm1', created_at: '2026-07-04T00:01:00.000Z' });
+    const m2 = service.saveAssistantMessage({ message_id: 'M2', session_id: 'S1', run_id: 'R1', content_text: 'm2', completed_at: '2026-07-04T00:02:00.000Z' });
+    const m3 = service.saveUserMessage({ message_id: 'M3', session_id: 'S1', run_id: 'R2', content_text: 'm3', created_at: '2026-07-04T00:03:00.000Z' });
+    service.saveAssistantMessage({ message_id: 'M4', session_id: 'S1', run_id: 'R2', content_text: 'm4', completed_at: '2026-07-04T00:04:00.000Z' });
+    service.saveCompactionSummary({
+      compaction_id: 'C1',
+      session_id: 'S1',
+      summary_text: 'm1 and m2 summary',
+      covered_until_entry_id: m2.status === 'saved' ? m2.entry.entry_id : 'missing',
+      first_kept_entry_id: m3.status === 'saved' ? m3.entry.entry_id : undefined,
+      created_at: '2026-07-04T00:05:00.000Z',
+      append_to_active_path: true,
+    });
+
+    const conversation = service.getActiveConversationHistory({ session_id: 'S1' });
+
+    expect(conversation.status).toBe('ok');
+    if (conversation.status === 'ok') {
+      expect(conversation.messages.map((item) => item.message.message_id)).toEqual(['M1', 'M2', 'M3', 'M4']);
+    }
+    expect(m1.status).toBe('saved');
+  });
+
+  it('expands nested rolling compactions without duplicating conversation messages', () => {
+    const { service, workspaceId } = createHarness();
+    service.createSession({ workspace_id: workspaceId, title: 'Session' });
+    const m1 = service.saveUserMessage({ message_id: 'M1', session_id: 'S1', run_id: 'R1', content_text: 'm1', created_at: '2026-07-04T00:01:00.000Z' });
+    const m2 = service.saveAssistantMessage({ message_id: 'M2', session_id: 'S1', run_id: 'R1', content_text: 'm2', completed_at: '2026-07-04T00:02:00.000Z' });
+    const m3 = service.saveUserMessage({ message_id: 'M3', session_id: 'S1', run_id: 'R2', content_text: 'm3', created_at: '2026-07-04T00:03:00.000Z' });
+    const m4 = service.saveAssistantMessage({ message_id: 'M4', session_id: 'S1', run_id: 'R2', content_text: 'm4', completed_at: '2026-07-04T00:04:00.000Z' });
+    const m5 = service.saveUserMessage({ message_id: 'M5', session_id: 'S1', run_id: 'R3', content_text: 'm5', created_at: '2026-07-04T00:05:00.000Z' });
+    service.saveAssistantMessage({ message_id: 'M6', session_id: 'S1', run_id: 'R3', content_text: 'm6', completed_at: '2026-07-04T00:06:00.000Z' });
+    service.saveCompactionSummary({
+      compaction_id: 'C1', session_id: 'S1', summary_text: 'first summary',
+      covered_until_entry_id: m2.status === 'saved' ? m2.entry.entry_id : 'missing',
+      first_kept_entry_id: m3.status === 'saved' ? m3.entry.entry_id : undefined,
+      created_at: '2026-07-04T00:07:00.000Z', append_to_active_path: true,
+    });
+    service.saveCompactionSummary({
+      compaction_id: 'C2', session_id: 'S1', summary_text: 'replacement summary',
+      covered_until_entry_id: m4.status === 'saved' ? m4.entry.entry_id : 'missing',
+      first_kept_entry_id: m5.status === 'saved' ? m5.entry.entry_id : undefined,
+      created_at: '2026-07-04T00:08:00.000Z', append_to_active_path: true,
+    });
+
+    const conversation = service.getActiveConversationHistory({ session_id: 'S1' });
+
+    expect(conversation.status).toBe('ok');
+    if (conversation.status === 'ok') {
+      expect(conversation.messages.map((item) => item.message.message_id)).toEqual(['M1', 'M2', 'M3', 'M4', 'M5', 'M6']);
+    }
+    const completedRun = service.getActiveConversationHistory({ session_id: 'S1', run_id: 'R3' });
+    expect(completedRun.status).toBe('ok');
+    if (completedRun.status === 'ok') {
+      expect(completedRun.messages.map((item) => item.message.message_id)).toEqual(['M5', 'M6']);
+    }
+    expect(m1.status).toBe('saved');
+  });
 });

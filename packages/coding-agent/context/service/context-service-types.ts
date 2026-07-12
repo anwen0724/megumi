@@ -36,6 +36,24 @@ export type ContextFailure = {
   };
 };
 
+export type ContextCompactionProgress =
+  | {
+      status: 'started' | 'completed';
+      compactionId: string;
+      tokensBefore: number;
+      summarizedSourceCount: number;
+      firstKeptSourceId?: string;
+      previousCompactionId?: string;
+    }
+  | {
+      status: 'failed';
+      compactionId: string;
+      tokensBefore: number;
+      code: string;
+      message: string;
+      previousCompactionId?: string;
+    };
+
 export type PrepareModelCallRequest = {
   sessionId: string;
   workspaceId: string;
@@ -44,6 +62,7 @@ export type PrepareModelCallRequest = {
   memoryRecall?: MemoryContextInput;
   tools: ToolSetEntry[];
   modelContext: ContextCapacity;
+  onCompactionProgress?: (progress: ContextCompactionProgress) => void;
   signal?: AbortSignal;
 };
 

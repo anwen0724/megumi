@@ -60,7 +60,7 @@ describe('projectSessionTimelineMessages', () => {
 
 describe('createSessionTimelineQuery', () => {
   it('loads the active Session path and returns a Timeline projection', () => {
-    const listMessages = vi.fn(() => ({
+    const getActiveConversationHistory = vi.fn(() => ({
       status: 'ok' as const,
       messages: [sessionMessage({
         message_id: 'user-message-1',
@@ -69,7 +69,7 @@ describe('createSessionTimelineQuery', () => {
       })],
     }));
     const query = createSessionTimelineQuery({
-      sessionService: { listMessages },
+      sessionService: { getActiveConversationHistory },
     });
 
     const result = query.listSessionTimeline({
@@ -77,9 +77,8 @@ describe('createSessionTimelineQuery', () => {
       session_id: 'session-1',
     });
 
-    expect(listMessages).toHaveBeenCalledWith({
+    expect(getActiveConversationHistory).toHaveBeenCalledWith({
       session_id: 'session-1',
-      active_path_only: true,
     });
     expect(result).toMatchObject({
       diagnostics: [],
@@ -89,6 +88,35 @@ describe('createSessionTimelineQuery', () => {
         sessionId: 'session-1',
         role: 'user',
       }],
+    });
+  });
+
+  it('projects only the requested completed Run for terminal reconciliation', () => {
+    const getActiveConversationHistory = vi.fn(() => ({
+      status: 'ok' as const,
+      messages: [
+        sessionMessage({ message_id: 'assistant-message-1', role: 'assistant', run_id: 'run-1' }),
+        sessionMessage({ message_id: 'assistant-message-2', role: 'assistant', run_id: 'run-2' }),
+      ],
+    }));
+    const projectRunFooter = vi.fn(() => undefined);
+    const query = createSessionTimelineQuery({
+      sessionService: { getActiveConversationHistory },
+      workspaceChangeFooterProjector: { projectRunFooter },
+    });
+
+    const result = query.listSessionTimeline({
+      workspace_id: 'workspace-1',
+      session_id: 'session-1',
+      run_id: 'run-2',
+    });
+
+    expect(result.messages.map((message) => message.role === 'assistant' ? message.runId : undefined)).toEqual(['run-2']);
+    expect(projectRunFooter).toHaveBeenCalledTimes(1);
+    expect(projectRunFooter).toHaveBeenCalledWith('run-2');
+    expect(getActiveConversationHistory).toHaveBeenCalledWith({
+      session_id: 'session-1',
+      run_id: 'run-2',
     });
   });
 });

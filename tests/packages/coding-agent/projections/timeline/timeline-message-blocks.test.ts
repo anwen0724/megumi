@@ -25,10 +25,11 @@ const messageBase = {
 } as const;
 
 describe('timeline message and block contracts', () => {
-  it('supports user assistant and branch separator timeline records', () => {
-    expect(TIMELINE_MESSAGE_ROLES).toEqual(['user', 'assistant', 'separator']);
+  it('supports user assistant branch separator and session activity timeline records', () => {
+    expect(TIMELINE_MESSAGE_ROLES).toEqual(['user', 'assistant', 'separator', 'activity']);
     expect(TimelineMessageRoleSchema.parse('user')).toBe('user');
     expect(TimelineMessageRoleSchema.parse('assistant')).toBe('assistant');
+    expect(TimelineMessageRoleSchema.parse('activity')).toBe('activity');
     expect(TimelineMessageRoleSchema.parse('separator')).toBe('separator');
     expect(() => TimelineMessageRoleSchema.parse('system')).toThrow();
     expect(() => TimelineMessageRoleSchema.parse('tool')).toThrow();
