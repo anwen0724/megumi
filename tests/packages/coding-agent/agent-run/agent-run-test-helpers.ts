@@ -172,6 +172,30 @@ export function createMessageFlowDependencies(input: {
           created_at: '2026-01-01T00:00:00.000Z',
         },
       })),
+      saveToolResultMessage: vi.fn((request) => ({
+        status: 'saved' as const,
+        message: {
+          message_id: request.message_id,
+          session_id: request.session_id,
+          run_id: request.run_id,
+          conversation: {
+            role: 'toolResult' as const,
+            toolCallId: request.tool_call_id,
+            toolName: request.tool_name,
+            status: request.status,
+            content: request.content,
+          },
+          created_at: request.completed_at,
+          completed_at: request.completed_at,
+        },
+        entry: {
+          entry_id: `entry:${request.message_id}`,
+          session_id: request.session_id,
+          entry_type: 'message' as const,
+          message_id: request.message_id,
+          created_at: request.completed_at,
+        },
+      })),
     },
     settings_service: {
       resolveProviderRuntimeConfig: vi.fn(() => ({
@@ -268,6 +292,7 @@ export function createMessageFlowDependencies(input: {
       session_id: () => 'session-1',
       user_message_id: () => 'message-1',
       assistant_message_id: () => 'assistant-message-1',
+      tool_result_message_id: () => `tool-result-message-${Math.random()}`,
       approval_request_id: () => 'approval-1',
       event_id: (() => {
         let index = 0;

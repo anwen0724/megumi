@@ -84,7 +84,7 @@ export type CreateAgentRunServiceOptions = {
     request: StartRunRequest;
     session_id: string;
   }) => CommandExecutionContext | undefined;
-  session_service: Pick<SessionService, 'createSession' | 'getSession' | 'saveUserMessage' | 'saveAssistantMessage'>;
+  session_service: Pick<SessionService, 'createSession' | 'getSession' | 'saveUserMessage' | 'saveAssistantMessage' | 'saveToolResultMessage'>;
   branch_service?: Pick<SessionBranchService, 'consumeBranchDraft'>;
   settings_service: Pick<SettingsService, 'resolveProviderRuntimeConfig' | 'resolvePermissionSettings'>;
   context_service: Parameters<typeof runAgentModelToolLoop>[0]['context_service'];
@@ -116,6 +116,7 @@ type AgentRunServiceIds = {
   run_id(): string;
   user_message_id(): string;
   assistant_message_id(): string;
+  tool_result_message_id(): string;
   approval_request_id(): string;
   event_id(): string;
 };
@@ -152,6 +153,7 @@ class DefaultAgentRunService implements AgentRunService {
       run_id: options.ids?.run_id ?? (() => `run:${crypto.randomUUID()}`),
       user_message_id: options.ids?.user_message_id ?? (() => `message:${crypto.randomUUID()}`),
       assistant_message_id: options.ids?.assistant_message_id ?? (() => `message:${crypto.randomUUID()}`),
+      tool_result_message_id: options.ids?.tool_result_message_id ?? (() => `message:${crypto.randomUUID()}`),
       approval_request_id: options.ids?.approval_request_id ?? (() => `approval:${crypto.randomUUID()}`),
       event_id: options.ids?.event_id ?? (() => `event:${crypto.randomUUID()}`),
     };
@@ -489,6 +491,10 @@ class DefaultAgentRunService implements AgentRunService {
     let currentTurn = continuation.current_turn;
     if (flow.status === 'denied') {
       currentTurn = { ...currentTurn, runItems: [...currentTurn.runItems, toolResultToConversationItem(flow.tool_result)] };
+      const savedToolResult = this.saveToolResultMessage(resumedRun, flow.tool_result);
+      if (savedToolResult.status === 'failed') {
+        return { status: 'failed', failure: savedToolResult.failure, events: [] };
+      }
       eventSink.emit({
         eventType: 'tool_result.created',
         run: resumedRun,
@@ -522,6 +528,10 @@ class DefaultAgentRunService implements AgentRunService {
         created_at: this.clock.now(),
       });
       currentTurn = { ...currentTurn, runItems: [...currentTurn.runItems, toolResultToConversationItem(toolFact)] };
+      const savedToolResult = this.saveToolResultMessage(resumedRun, toolFact);
+      if (savedToolResult.status === 'failed') {
+        return { status: 'failed', failure: savedToolResult.failure, events: [] };
+      }
       eventSink.emit({
         eventType: 'tool_result.created',
         run: resumedRun,
@@ -714,6 +724,27 @@ class DefaultAgentRunService implements AgentRunService {
     };
   }
 
+  private saveToolResultMessage(run: AgentRun, toolResult: ToolResultRuntimeFact):
+    | { status: 'saved' }
+    | { status: 'failed'; failure: AgentRunFailure } {
+    const result = this.options.session_service.saveToolResultMessage({
+      message_id: this.ids.tool_result_message_id(),
+      session_id: run.session_id,
+      run_id: run.run_id,
+      tool_call_id: toolResult.tool_call_id,
+      tool_name: toolResult.tool_name,
+      status: toolResult.status === 'completed' ? 'success' : 'failure',
+      content: [{
+        type: 'text',
+        text: toolResult.content ?? toolResult.observation?.summary ?? `${toolResult.tool_name} ${toolResult.status}`,
+      }],
+      completed_at: toolResult.created_at,
+    });
+    return result.status === 'saved'
+      ? { status: 'saved' }
+      : { status: 'failed', failure: { code: 'session_failed', message: result.failure.message } };
+  }
+
   private nextRuntimeEventSequence(runId: string | undefined): number {
     if (!runId) {
       return 1;
@@ -903,6 +934,7 @@ class DefaultAgentRunService implements AgentRunService {
         },
         ids: {
           assistant_message_id: this.ids.assistant_message_id,
+          tool_result_message_id: this.ids.tool_result_message_id,
           approval_request_id: this.ids.approval_request_id,
         },
         clock: this.clock,

@@ -418,6 +418,21 @@ describe('Agent Run message flow', () => {
     expect(deps.session_service.saveAssistantMessage).toHaveBeenCalledWith(expect.objectContaining({
       content: [{ type: 'text', text: 'Final answer.' }],
     }));
+    expect(deps.session_service.saveAssistantMessage).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      content: [
+        { type: 'text', text: 'I need to read the file.' },
+        {
+          type: 'toolCall', id: 'provider-tool-call-1', name: 'read_file',
+          argumentsText: '{"path":"README.md"}',
+        },
+      ],
+      stop_reason: 'tool_calls',
+    }));
+    expect(deps.session_service.saveToolResultMessage).toHaveBeenCalledWith(expect.objectContaining({
+      tool_call_id: 'provider-tool-call-1',
+      status: 'success',
+      content: [{ type: 'text', text: 'tool ok' }],
+    }));
     expect(events.find((event) => event.eventType === 'tool_result.created')).toMatchObject({
       payload: {
         toolResultId: 'tool-result:provider-tool-call-1',

@@ -4,6 +4,7 @@
  */
 import type { PermissionDecision, PermissionMode, PermissionService } from '../../permissions';
 import type { SessionService } from '../../session';
+import type { AssistantContentBlock } from '@megumi/ai';
 import type { SettingsService } from '../../settings';
 import type { ToolExecutionService } from '../../tools';
 import type { WorkspacePathPolicyService } from '../../workspace';
@@ -42,7 +43,7 @@ import type { ActiveRunStore } from './active-run-store';
 export type RunOrchestratorDependencies = {
   repository: AgentRunRepository;
   active_run_store?: Pick<ActiveRunStore, 'upsertStep'>;
-  session_service: Pick<SessionService, 'saveAssistantMessage'>;
+  session_service: Pick<SessionService, 'saveAssistantMessage' | 'saveToolResultMessage'>;
   settings_service: Pick<SettingsService, 'resolvePermissionSettings'>;
   context_service: Pick<ContextService, 'prepareModelCall' | 'recordCompletedRunUsage'>;
   model_call_service: ModelCallService;
@@ -58,6 +59,7 @@ export type RunOrchestratorDependencies = {
   on_model_call_started?: (input: { run_id: string; model_call_id: string }) => void;
   ids: {
     assistant_message_id(): string;
+    tool_result_message_id(): string;
     approval_request_id(): string;
   };
   clock: { now(): string };
@@ -200,6 +202,16 @@ export async function runAgentModelToolLoop(
     const modelEvents = await collectModelCallEvents(dependencies, run, modelCall.events);
     lastProviderInputTokens = modelEvents.provider_input_tokens;
     if (modelEvents.failure) {
+      if (modelEvents.assistant_content.length > 0) {
+        dependencies.session_service.saveAssistantMessage({
+          message_id: dependencies.ids.assistant_message_id(),
+          session_id: run.session_id,
+          run_id: run.run_id,
+          content: modelEvents.assistant_content,
+          ...(modelEvents.stop_reason ? { stop_reason: modelEvents.stop_reason } : {}),
+          completed_at: dependencies.clock.now(),
+        });
+      }
       dependencies.active_run_store?.upsertStep({
         type: 'model_call',
         run_id: run.run_id,
@@ -223,23 +235,22 @@ export async function runAgentModelToolLoop(
       completed_at: dependencies.clock.now(),
     });
 
+    const assistant = dependencies.session_service.saveAssistantMessage({
+      message_id: dependencies.ids.assistant_message_id(),
+      session_id: run.session_id,
+      run_id: run.run_id,
+      content: modelEvents.assistant_content,
+      ...(modelEvents.stop_reason ? { stop_reason: modelEvents.stop_reason } : {}),
+      completed_at: dependencies.clock.now(),
+    });
+    if (assistant.status === 'failed') {
+      return failRun(dependencies, run, {
+        code: 'session_failed',
+        message: assistant.failure.message,
+      }, { model_calls: modelCalls, tool_rounds: toolRounds });
+    }
+
     if (modelEvents.tool_calls.length === 0) {
-      const assistant = dependencies.session_service.saveAssistantMessage({
-        message_id: dependencies.ids.assistant_message_id(),
-        session_id: run.session_id,
-        run_id: run.run_id,
-        content: [{ type: 'text', text: modelEvents.content }],
-        completed_at: dependencies.clock.now(),
-      });
-      if (assistant.status === 'failed') {
-        return failRun(dependencies, run, {
-          code: 'session_failed',
-          message: assistant.failure.message,
-        }, {
-          model_calls: modelCalls,
-          tool_rounds: toolRounds,
-        });
-      }
       run = dependencies.repository.saveRun(transitionAgentRunStatus({
         run,
         to: 'completed',
@@ -371,6 +382,24 @@ export async function runAgentModelToolLoop(
     }
     for (const toolResult of toolGroup.tool_result_facts) {
       emitToolResult(dependencies, run, toolResult);
+      const persisted = dependencies.session_service.saveToolResultMessage({
+        message_id: dependencies.ids.tool_result_message_id(),
+        session_id: run.session_id,
+        run_id: run.run_id,
+        tool_call_id: toolResult.tool_call_id,
+        tool_name: toolResult.tool_name,
+        status: toolResult.status === 'completed' ? 'success' : 'failure',
+        content: [{
+          type: 'text',
+          text: toolResult.content ?? toolResult.observation?.summary ?? `${toolResult.tool_name} ${toolResult.status}`,
+        }],
+        completed_at: toolResult.created_at,
+      });
+      if (persisted.status === 'failed') {
+        return failRun(dependencies, run, {
+          code: 'session_failed', message: persisted.failure.message,
+        }, { model_calls: modelCalls, tool_rounds: toolRounds });
+      }
       appendedItems.push(toolResultToConversationItem(toolResult));
     }
     if (toolGroup.tool_result_facts.length > 0) {
@@ -516,14 +545,19 @@ async function collectModelCallEvents(
   events: AsyncIterable<ModelCallEvent>,
 ): Promise<{
   content: string;
+  assistant_content: AssistantContentBlock[];
   tool_calls: ModelRequestedToolCall[];
+  stop_reason?: string;
   provider_input_tokens?: number;
   failure?: AgentRunFailure;
 }> {
   const textDeltas: string[] = [];
+  const thinkingDeltas: string[] = [];
+  const assistantContent: AssistantContentBlock[] = [];
   const toolCalls: ModelRequestedToolCall[] = [];
   let completedContent: string | undefined;
   let providerInputTokens: number | undefined;
+  let stopReason: string | undefined;
   const runtimeEventState: ModelCallRuntimeEventState = {};
 
   for await (const event of events) {
@@ -541,7 +575,22 @@ async function collectModelCallEvents(
     if (event.type === 'text_delta') {
       textDeltas.push(event.delta);
     }
+    if (event.type === 'thinking_delta') {
+      thinkingDeltas.push(event.delta);
+    }
+    if (event.type === 'thinking_completed' && thinkingDeltas.length > 0) {
+      assistantContent.push({ type: 'thinking', thinking: thinkingDeltas.join('') });
+      thinkingDeltas.length = 0;
+    }
     if (event.type === 'tool_call') {
+      if (textDeltas.length > 0) {
+        assistantContent.push({ type: 'text', text: textDeltas.join('') });
+        textDeltas.length = 0;
+      }
+      assistantContent.push({
+        type: 'toolCall', id: event.tool_call_id, name: event.tool_name,
+        argumentsText: event.arguments_text,
+      });
       toolCalls.push({
         model_call_id: event.model_call_id,
         tool_call_id: event.tool_call_id,
@@ -552,18 +601,46 @@ async function collectModelCallEvents(
     }
     if (event.type === 'completed') {
       completedContent = event.content;
+      stopReason = event.finish_reason;
       providerInputTokens = event.usage?.input_tokens;
     }
     if (event.type === 'failed') {
-      return { content: '', tool_calls: [], failure: event.failure };
+      flushAssistantText(assistantContent, textDeltas, completedContent);
+      return {
+        content: completedContent ?? textDeltas.join(''),
+        assistant_content: assistantContent,
+        tool_calls: toolCalls,
+        ...(stopReason ? { stop_reason: stopReason } : {}),
+        failure: event.failure,
+      };
     }
   }
 
+  flushAssistantText(assistantContent, textDeltas, completedContent);
   return {
-    content: completedContent ?? textDeltas.join(''),
+    content: completedContent ?? assistantContent.flatMap((block) => block.type === 'text' ? [block.text] : []).join(''),
+    assistant_content: assistantContent,
     tool_calls: toolCalls,
+    ...(stopReason ? { stop_reason: stopReason } : {}),
     ...(providerInputTokens !== undefined ? { provider_input_tokens: providerInputTokens } : {}),
   };
+}
+
+function flushAssistantText(
+  content: AssistantContentBlock[],
+  textDeltas: string[],
+  completedContent?: string,
+): void {
+  const streamed = textDeltas.join('');
+  const text = completedContent ?? streamed;
+  if (text && !content.some((block) => block.type === 'text' && block.text === text)) {
+    const firstToolCall = content.findIndex((block) => block.type === 'toolCall');
+    if (firstToolCall >= 0) content.splice(firstToolCall, 0, { type: 'text', text });
+    else content.push({ type: 'text', text });
+  } else if (streamed && !content.some((block) => block.type === 'text' && block.text === streamed)) {
+    content.push({ type: 'text', text: streamed });
+  }
+  textDeltas.length = 0;
 }
 
 function emitModelCallRuntimeEvent(
