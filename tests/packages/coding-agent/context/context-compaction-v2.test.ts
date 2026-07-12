@@ -54,12 +54,12 @@ const currentTurn = { runId: 'R-current', userEntry: { entryId: 'EC', parentEntr
 const request = { sessionId: 'S1', workspaceId: 'W1', currentTurn, activatedSkills: [], tools: [], modelContext };
 
 describe('ContextServiceImpl compaction', () => {
-  it('defaults to retaining ten completed Turns and summarizes every older Turn', async () => {
-    const retainedOnly = fixture([80], { historyCount: 10, useDefaultPolicy: true });
+  it('defaults to retaining three completed Turns and summarizes every older Turn', async () => {
+    const retainedOnly = fixture([80], { historyCount: 3, useDefaultPolicy: true });
     expect(await retainedOnly.service.prepareModelCall(request)).toMatchObject({ status: 'ready' });
     expect(retainedOnly.deps.summaryModelCall.complete).not.toHaveBeenCalled();
 
-    const withOlderHistory = fixture([80, 30, 30], { historyCount: 11, useDefaultPolicy: true });
+    const withOlderHistory = fixture([80, 30, 30], { historyCount: 4, useDefaultPolicy: true });
     expect(await withOlderHistory.service.prepareModelCall(request)).toMatchObject({ status: 'ready' });
     expect(withOlderHistory.deps.summaryModelCall.complete).toHaveBeenCalledTimes(1);
     expect(withOlderHistory.deps.sessionService.saveCompactionSummary).toHaveBeenCalledWith(expect.objectContaining({
@@ -71,9 +71,9 @@ describe('ContextServiceImpl compaction', () => {
     expect(JSON.stringify(summaryRequest.prompt)).not.toContain('old-2');
   });
 
-  it('replaces the rolling Summary with the old Summary plus only Turns older than the retained ten', async () => {
+  it('replaces the rolling Summary with the old Summary plus only Turns older than the retained three', async () => {
     const { deps, service } = fixture([80, 30, 30], {
-      history: historyWithSummary(11),
+      history: historyWithSummary(4),
       useDefaultPolicy: true,
     });
 
@@ -89,13 +89,13 @@ describe('ContextServiceImpl compaction', () => {
     }));
   });
 
-  it('uses the default ten-Turn retention for manual compaction', async () => {
-    const retainedOnly = fixture([80], { historyCount: 10, useDefaultPolicy: true });
+  it('uses the default three-Turn retention for manual compaction', async () => {
+    const retainedOnly = fixture([80], { historyCount: 3, useDefaultPolicy: true });
     await expect(retainedOnly.service.compactSession({ sessionId: 'S1', workspaceId: 'W1', modelContext }))
       .resolves.toEqual({ status: 'nothing_to_compact', reason: 'no_older_turns' });
     expect(retainedOnly.deps.summaryModelCall.complete).not.toHaveBeenCalled();
 
-    const withOlderHistory = fixture([80, 30], { historyCount: 11, useDefaultPolicy: true });
+    const withOlderHistory = fixture([80, 30], { historyCount: 4, useDefaultPolicy: true });
     await expect(withOlderHistory.service.compactSession({ sessionId: 'S1', workspaceId: 'W1', modelContext }))
       .resolves.toMatchObject({ status: 'compacted' });
     expect(withOlderHistory.deps.summaryModelCall.complete).toHaveBeenCalledTimes(1);

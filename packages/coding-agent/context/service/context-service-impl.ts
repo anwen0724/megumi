@@ -84,7 +84,7 @@ export class ContextServiceImpl implements ContextService {
   constructor(private readonly dependencies: ContextServiceDependencies) {
     this.policy = {
       compactionThresholdRatio: dependencies.policy?.compactionThresholdRatio ?? 0.8,
-      keepRecentTurns: dependencies.policy?.keepRecentTurns ?? 10,
+      keepRecentTurns: dependencies.policy?.keepRecentTurns ?? 3,
     };
     calculateContextUsage({ inputTokens: 0, capacity: { providerId: 'validation', modelId: 'validation', contextWindowTokens: 1 }, policy: this.policy });
     this.clock = dependencies.clock ?? { now: () => new Date().toISOString() };
