@@ -177,7 +177,7 @@ describe('runtime event dispatcher', () => {
       toolExecutionId: 'tool-execution-1',
       toolName: 'edit_file',
       kind: 'user_rejected',
-      summary: 'User denied the requested tool call.',
+      content: [{ type: 'text', text: 'User denied the requested tool call.' }],
     }));
 
     const storedToolCall = useToolCallStore.getState().toolCallsById['tool-execution-1'];

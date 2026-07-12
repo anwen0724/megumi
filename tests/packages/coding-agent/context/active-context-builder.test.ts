@@ -45,7 +45,6 @@ describe('buildActiveContext', () => {
       activatedSkills: [{
         skillId: 'skill-active',
         name: 'Active Skill',
-        description: 'Activation description',
         content: 'Activated instruction',
       }],
       compactionSummary: { compactionId: 'compaction-1', content: 'Earlier summary' },

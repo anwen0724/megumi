@@ -50,6 +50,14 @@ function setLastErrorForSession(sessionId: string | null, lastError: string | nu
   useChatUiStore.getState().setLastError(lastError, sessionId);
 }
 
+function toolResultPreview(payload: AgentRunToolResultCreatedPayload): unknown {
+  if (payload.content.length === 1 && payload.content[0]?.type === 'text') {
+    return payload.content[0].text;
+  }
+
+  return payload.content;
+}
+
 function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): void {
   const store = useToolCallStore.getState();
 
@@ -137,7 +145,7 @@ function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): vo
     store.upsertToolCall({
       ...current,
       status,
-      resultPreview: payload.summary,
+      resultPreview: toolResultPreview(payload),
       completedAt: event.createdAt,
     });
   }
