@@ -20,6 +20,7 @@ export type ConversationTurn = {
 
 export type CurrentConversationTurn = {
   runId: string;
+  lastEntryId?: string;
   userEntry: {
     entryId: string;
     parentEntryId?: string;

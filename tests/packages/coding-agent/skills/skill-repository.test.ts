@@ -11,7 +11,7 @@ describe('SkillRepository', () => {
   beforeEach(() => {
     database = createDatabase(':memory:');
     applyCodingAgentDatabaseMigrations(database);
-    seedWorkspaceSessionAndRun(database);
+    seedWorkspaceAndSession(database);
     repository = new SkillRepository(database);
   });
 
@@ -91,34 +91,9 @@ describe('SkillRepository', () => {
     ]);
   });
 
-  it('saves usage records as append-only facts without storing activated content', () => {
-    repository.saveUsageRecord({
-      skillUsageRecordId: 'skill-usage-record:1',
-      skillId: 'checks:test',
-      workspaceId: 'workspace:1',
-      sessionId: 'session:1',
-      runId: 'run:1',
-      trigger: 'command',
-      createdAt: '2026-07-09T00:00:00.000Z',
-    });
-    repository.saveUsageRecord({
-      skillUsageRecordId: 'skill-usage-record:2',
-      skillId: 'checks:test',
-      workspaceId: 'workspace:1',
-      sessionId: 'session:1',
-      runId: 'run:1',
-      trigger: 'model_tool',
-      createdAt: '2026-07-09T00:01:00.000Z',
-    });
-
-    const records = repository.listUsageRecordsBySession('session:1');
-    expect(records).toHaveLength(2);
-    expect(records.map((record) => record.trigger)).toEqual(['command', 'model_tool']);
-    expect(Object.keys(records[0] ?? {})).not.toContain('content');
-  });
 });
 
-function seedWorkspaceSessionAndRun(database: MegumiDatabase): void {
+function seedWorkspaceAndSession(database: MegumiDatabase): void {
   database.prepare(`
     INSERT INTO workspaces (
       workspace_id, name, root_path, root_path_key, status,
@@ -135,17 +110,6 @@ function seedWorkspaceSessionAndRun(database: MegumiDatabase): void {
     ) VALUES (
       'session:1', 'workspace:1', 'Session', 'active', NULL,
       '2026-07-09T00:00:00.000Z', '2026-07-09T00:00:00.000Z', NULL
-    )
-  `).run();
-  database.prepare(`
-    INSERT INTO agent_runs (
-      run_id, workspace_id, session_id, provider_id, model_id,
-      trigger_type, trigger_user_message_id, trigger_command_name, status,
-      created_at, started_at, completed_at, failure_json
-    ) VALUES (
-      'run:1', 'workspace:1', 'session:1', 'openai', 'gpt-test',
-      'command', NULL, 'skill', 'completed',
-      '2026-07-09T00:00:00.000Z', NULL, NULL, NULL
     )
   `).run();
 }

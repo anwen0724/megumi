@@ -190,6 +190,7 @@ export type SaveAssistantMessageRequest = {
   message_id: string;
   session_id: string;
   run_id: string;
+  parent_entry_id?: string;
   content: AssistantContentBlock[];
   stop_reason?: string;
   completed_at: string;
@@ -203,6 +204,7 @@ export type SaveToolResultMessageRequest = {
   message_id: string;
   session_id: string;
   run_id: string;
+  parent_entry_id?: string;
   tool_call_id: string;
   tool_name: string;
   status: 'success' | 'failure';

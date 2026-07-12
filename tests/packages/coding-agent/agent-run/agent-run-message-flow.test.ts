@@ -58,8 +58,9 @@ describe('Agent Run message flow', () => {
     expect(deps.tool_registry_service.listAvailableTools).toHaveBeenCalledTimes(1);
     expect(deps.context_service.prepareModelCall).toHaveBeenCalledTimes(1);
     expect(deps.context_service.prepareModelCall).toHaveBeenCalledWith(expect.objectContaining({
-      currentTurn: {
+      currentTurn: expect.objectContaining({
         runId: result.run.run_id,
+        lastEntryId: 'entry-message-1',
         userEntry: { entryId: 'entry-message-1' },
         userMessage: {
           type: 'user_message',
@@ -69,7 +70,7 @@ describe('Agent Run message flow', () => {
           ],
         },
         runItems: [],
-      },
+      }),
     }));
     expect(JSON.stringify(deps.context_service.prepareModelCall.mock.calls[0]?.[0].currentTurn))
       .not.toContain('README.md');
@@ -300,6 +301,84 @@ describe('Agent Run message flow', () => {
       expect.objectContaining({ type: 'tool_call', source_model_call_id: 'model-call-1', call_order: 0, status: 'waiting_for_approval' }),
     ]);
     expect(deps.context_service.recordCompletedRunUsage).not.toHaveBeenCalled();
+  });
+
+  it('persists approved and deferred Tool Results while preserving Step order across approval barriers', async () => {
+    const repository = createInMemoryAgentRunRepository();
+    const toolCalls = ['call-1', 'call-2', 'call-3'].map((tool_call_id) => ({
+      type: 'tool_call' as const,
+      model_call_id: 'model-call-1',
+      tool_call_id,
+      tool_name: 'read_file',
+      input: { path: `${tool_call_id}.md` },
+      arguments_text: JSON.stringify({ path: `${tool_call_id}.md` }),
+      created_at: '2026-01-01T00:00:00.000Z',
+    }));
+    const deps = createMessageFlowDependencies({
+      repository,
+      modelEvents: [
+        { type: 'started', model_call_id: 'model-call-1', created_at: '2026-01-01T00:00:00.000Z' },
+        ...toolCalls,
+        { type: 'completed', model_call_id: 'model-call-1', content: '', finish_reason: 'tool_calls', created_at: '2026-01-01T00:00:00.000Z' },
+      ],
+    });
+    let evaluation = 0;
+    let approvalId = 0;
+    const service = createAgentRunService({
+      ...deps,
+      ids: {
+        ...deps.ids,
+        approval_request_id: () => `approval-${approvalId += 1}`,
+      },
+      permission_service: {
+        evaluateToolExecution: vi.fn(() => {
+          evaluation += 1;
+          return {
+            status: 'ok' as const,
+            decision: evaluation === 2
+              ? { type: 'allow' as const, reason: 'allowed', execution_class: 'read_only' as const }
+              : {
+                  type: 'requires_approval' as const,
+                  reason: 'needs approval',
+                  execution_class: 'read_only' as const,
+                  approval: { allowed_scopes: ['once' as const], default_scope: 'once' as const },
+                },
+          };
+        }),
+        validateApprovalDecision: vi.fn(async () => ({ status: 'valid' as const })),
+        applyApprovalDecision: vi.fn(async () => ({ status: 'applied' as const })),
+      },
+    } as unknown as CreateAgentRunServiceOptions);
+
+    const started = await service.startRun(runRequest());
+    expect(started.status).toBe('started');
+    if (started.status !== 'started') return;
+    await collectEvents(started.events);
+
+    const resumed = await service.resumeRunAfterApproval({
+      approval_request_id: 'approval-1',
+      decision: {
+        approval_request_id: 'approval-1', decision: 'approved', scope: 'once', decided_by: 'user',
+      },
+    });
+    expect(resumed.status).toBe('resumed');
+    if (resumed.status !== 'resumed') return;
+    await collectEvents(resumed.events);
+
+    expect(repository.getRun(started.run.run_id)?.status).toBe('waiting_for_approval');
+    expect(repository.listSteps(started.run.run_id)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'tool_call', tool_call_id: 'call-1', call_order: 0, status: 'completed' }),
+      expect.objectContaining({ type: 'tool_call', tool_call_id: 'call-2', call_order: 1, status: 'completed' }),
+      expect.objectContaining({ type: 'tool_call', tool_call_id: 'call-3', call_order: 2, status: 'waiting_for_approval' }),
+    ]));
+    expect(deps.session_service.saveToolResultMessage).toHaveBeenCalledTimes(2);
+    const firstSaved = deps.session_service.saveToolResultMessage.mock.calls[0]![0];
+    const secondSaved = deps.session_service.saveToolResultMessage.mock.calls[1]![0];
+    expect(firstSaved.tool_call_id).toBe('call-1');
+    expect(secondSaved).toMatchObject({
+      tool_call_id: 'call-2',
+      parent_entry_id: `entry:${firstSaved.message_id}`,
+    });
   });
 
   it('keeps a successful run completed when snapshot recording fails', async () => {

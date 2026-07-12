@@ -137,7 +137,9 @@ describe('createSessionTimelineQuery', () => {
     const getActiveConversationHistory = vi.fn(() => ({
       status: 'ok' as const,
       messages: [
+        sessionMessage({ message_id: 'user-message-1', conversation: { role: 'user', content: [{ type: 'text', text: 'first' }] }, run_id: 'run-1' }),
         sessionMessage({ message_id: 'assistant-message-1', conversation: { role: 'assistant', content: [{ type: 'text', text: 'one' }] }, run_id: 'run-1' }),
+        sessionMessage({ message_id: 'user-message-2', conversation: { role: 'user', content: [{ type: 'text', text: 'second' }] }, run_id: 'run-2' }),
         sessionMessage({ message_id: 'assistant-message-2', conversation: { role: 'assistant', content: [{ type: 'text', text: 'two' }] }, run_id: 'run-2' }),
       ],
     }));
@@ -154,11 +156,46 @@ describe('createSessionTimelineQuery', () => {
     });
 
     expect(result.messages.map((message) => message.role === 'assistant' ? message.runId : undefined)).toEqual(['run-2']);
+    expect(result.messages[0]?.historyOrder).toBe(3);
     expect(projectRunFooter).toHaveBeenCalledTimes(1);
     expect(projectRunFooter).toHaveBeenCalledWith('run-2');
     expect(getActiveConversationHistory).toHaveBeenCalledWith({
       session_id: 'session-1',
-      run_id: 'run-2',
+    });
+  });
+
+  it('projects only canonical partial states and preserves active-path order', () => {
+    const messages = projectSessionTimelineMessages({
+      projectId: 'workspace-1',
+      messages: [
+        sessionMessage({ message_id: 'U2', run_id: 'run-z', conversation: { role: 'user', content: [{ type: 'text', text: 'second' }] } }),
+        sessionMessage({
+          message_id: 'A2', run_id: 'run-z',
+          conversation: {
+            role: 'assistant', stopReason: 'cancelled',
+            content: [
+              { type: 'text', text: 'partial' },
+              { type: 'toolCall', id: 'T2', name: 'read_file', argumentsText: '{}' },
+            ],
+          },
+        }),
+        sessionMessage({ message_id: 'U1', run_id: 'run-a', conversation: { role: 'user', content: [{ type: 'text', text: 'first branch fact' }] } }),
+      ],
+    });
+
+    expect(messages.map((message) => [message.messageId, message.historyOrder])).toEqual([
+      ['U2', 0], ['A2', 1], ['U1', 2],
+    ]);
+    expect(messages[1]).toMatchObject({
+      blocks: [
+        {
+          kind: 'process_disclosure', status: 'cancelled',
+          items: [
+            { kind: 'assistant_text', status: 'completed', text: 'partial' },
+            { kind: 'tool_activity', toolCallId: 'T2', status: 'requested' },
+          ],
+        },
+      ],
     });
   });
 });

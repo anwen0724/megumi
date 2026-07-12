@@ -155,6 +155,12 @@ function messageTurnOrder(message: TimelineMessage): number {
 }
 
 function compareTimelineMessages(left: TimelineMessage, right: TimelineMessage): number {
+  if (left.historyOrder !== undefined && right.historyOrder === undefined) return -1;
+  if (left.historyOrder === undefined && right.historyOrder !== undefined) return 1;
+  if (left.historyOrder !== undefined && right.historyOrder !== undefined) {
+    const historyOrder = left.historyOrder - right.historyOrder;
+    if (historyOrder !== 0) return historyOrder;
+  }
   const createdOrder = left.createdAt.localeCompare(right.createdAt);
   if (createdOrder !== 0) return createdOrder;
 

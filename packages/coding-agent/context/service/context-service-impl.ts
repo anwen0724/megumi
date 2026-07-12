@@ -237,7 +237,7 @@ export class ContextServiceImpl implements ContextService {
       status: 'loaded',
       facts: {
         sessionId: input.sessionId,
-        expectedActiveEntryId: input.currentTurn?.userEntry.entryId
+        expectedActiveEntryId: input.currentTurn?.lastEntryId ?? input.currentTurn?.userEntry.entryId
           ?? historyResult.history.at(-1)?.entry.entry_id
           ?? null,
         historicalTurns: turns.turns,

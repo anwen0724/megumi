@@ -34,18 +34,18 @@ export function createSessionTimelineQuery(input: {
     listSessionTimeline(request) {
       const result = input.sessionService.getActiveConversationHistory({
         session_id: request.session_id,
-        ...(request.run_id ? { run_id: request.run_id } : {}),
       });
       if (result.status === 'failed') return { messages: [], diagnostics: [] };
-      const messages = request.run_id
-        ? result.messages.filter((item) => item.message.run_id === request.run_id)
-        : result.messages;
+      const projected = projectSessionTimelineMessages({
+        projectId: request.workspace_id,
+        messages: result.messages,
+        ...(request.run_id ? { requestedRunId: request.run_id } : {}),
+        workspaceChangeFooterProjector: input.workspaceChangeFooterProjector,
+      });
       return {
-        messages: projectSessionTimelineMessages({
-          projectId: request.workspace_id,
-          messages,
-          workspaceChangeFooterProjector: input.workspaceChangeFooterProjector,
-        }),
+        messages: request.run_id
+          ? projected.filter((message) => message.role === 'assistant' && message.runId === request.run_id)
+          : projected,
         diagnostics: [],
       };
     },
@@ -55,6 +55,7 @@ export function createSessionTimelineQuery(input: {
 export function projectSessionTimelineMessages(input: {
   projectId: string;
   messages: SessionMessageWithAttachments[];
+  requestedRunId?: string;
   workspaceChangeFooterProjector?: Pick<WorkspaceChangeFooterProjectorService, 'projectRunFooter'>;
 }): TimelineMessage[] {
   const responseGroups = groupResponsesByRun(input.messages);
@@ -63,7 +64,7 @@ export function projectSessionTimelineMessages(input: {
 
   for (const item of input.messages) {
     if (item.message.conversation.role === 'user') {
-      timeline.push(projectUserMessage(input.projectId, item));
+      timeline.push(projectUserMessage(input.projectId, item, timeline.length));
       continue;
     }
     const runId = item.message.run_id;
@@ -75,7 +76,10 @@ export function projectSessionTimelineMessages(input: {
         input.projectId,
         runId,
         group,
-        input.workspaceChangeFooterProjector?.projectRunFooter(runId),
+        timeline.length,
+        !input.requestedRunId || input.requestedRunId === runId
+          ? input.workspaceChangeFooterProjector?.projectRunFooter(runId)
+          : undefined,
       ));
     }
   }
@@ -93,7 +97,7 @@ function groupResponsesByRun(messages: SessionMessageWithAttachments[]): Map<str
   return groups;
 }
 
-function projectUserMessage(projectId: string, item: SessionMessageWithAttachments): TimelineUserMessage {
+function projectUserMessage(projectId: string, item: SessionMessageWithAttachments, historyOrder: number): TimelineUserMessage {
   const { message } = item;
   const blocks: TimelineUserMessage['blocks'] = [{
     blockId: `user-text:${message.message_id}`,
@@ -119,6 +123,7 @@ function projectUserMessage(projectId: string, item: SessionMessageWithAttachmen
     ...(message.run_id ? { runId: message.run_id } : {}),
     createdAt: message.created_at,
     ...(message.completed_at ? { updatedAt: message.completed_at } : {}),
+    historyOrder,
     blocks,
   };
 }
@@ -127,6 +132,7 @@ function projectAssistantRun(
   projectId: string,
   runId: string,
   messages: SessionMessageWithAttachments[],
+  historyOrder: number,
   workspaceChangeFooter: TimelineAssistantMessage['workspaceChangeFooter'],
 ): TimelineAssistantMessage {
   const assistantMessages = messages.filter((item) => item.message.conversation.role === 'assistant');
@@ -145,7 +151,7 @@ function projectAssistantRun(
       blockId: `process:${runId}`,
       kind: 'process_disclosure',
       runId,
-      status: 'completed',
+      status: processStatus(messages),
       startedAt: messages[0]!.message.created_at,
       endedAt: last.message.completed_at ?? last.message.created_at,
       items: processItems,
@@ -160,7 +166,10 @@ function projectAssistantRun(
       status: finalAssistant.message.conversation.role === 'assistant'
         && finalAssistant.message.conversation.stopReason?.includes('cancel')
         ? 'cancelled_partial'
-        : 'completed',
+        : finalAssistant.message.conversation.role === 'assistant'
+          && finalAssistant.message.conversation.stopReason?.includes('fail')
+          ? 'failed'
+          : 'completed',
       text: sessionConversationText(finalAssistant.message.conversation),
       format: 'markdown',
       createdAt: finalAssistant.message.created_at,
@@ -181,6 +190,7 @@ function projectAssistantRun(
     runId,
     createdAt: messages[0]!.message.created_at,
     updatedAt: last.message.completed_at ?? last.message.created_at,
+    historyOrder,
     ...(workspaceChangeFooter ? { workspaceChangeFooter } : {}),
     blocks,
   };
@@ -224,11 +234,26 @@ function projectProcessItems(
             toolResultId: `tool-result:${block.id}`,
             resultSummary: sessionConversationText(result),
             status: result.status === 'success' ? 'succeeded' as const : 'failed' as const,
-          } : { status: 'failed' as const }),
+          } : { status: 'requested' as const }),
           createdAt: item.message.created_at,
         });
       }
     }
   }
   return items;
+}
+
+function processStatus(messages: SessionMessageWithAttachments[]): 'completed' | 'failed' | 'cancelled' | 'incomplete' {
+  const assistantMessages = messages.flatMap((item) => (
+    item.message.conversation.role === 'assistant' ? [item.message.conversation] : []
+  ));
+  if (assistantMessages.some((message) => message.stopReason?.includes('cancel'))) return 'cancelled';
+  if (assistantMessages.some((message) => message.stopReason?.includes('fail'))) return 'failed';
+  const resultIds = new Set(messages.flatMap((item) => (
+    item.message.conversation.role === 'toolResult' ? [item.message.conversation.toolCallId] : []
+  )));
+  const hasIncompleteToolCall = assistantMessages.some((message) => message.content.some((block) => (
+    block.type === 'toolCall' && !resultIds.has(block.id)
+  )));
+  return hasIncompleteToolCall ? 'incomplete' : 'completed';
 }

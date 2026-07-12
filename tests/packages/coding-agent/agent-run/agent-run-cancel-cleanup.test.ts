@@ -8,11 +8,17 @@ describe('process-local Agent Run cancellation', () => {
   it('cancels an active Run and releases its runtime state', async () => {
     const activeRuns = new ActiveRunStore();
     const deps = createMessageFlowDependencies({ repository: activeRuns });
+    let finishEvents!: () => void;
+    const eventsFinished = new Promise<void>((resolve) => { finishEvents = resolve; });
     deps.model_call_service.modelCall = vi.fn(() => ({
       status: 'started' as const,
       model_call_id: 'M1',
-      events: neverEndingEvents(),
+      events: eventsUntilCancelled(eventsFinished),
     }));
+    deps.model_call_service.cancelModelCall.mockImplementation(() => {
+      finishEvents();
+      return { status: 'not_found', model_call_id: 'M1' };
+    });
     const service = createAgentRunService(deps as unknown as CreateAgentRunServiceOptions);
     const started = await service.startRun({
       request_id: 'REQ', workspace_id: 'workspace-1',
@@ -27,7 +33,7 @@ describe('process-local Agent Run cancellation', () => {
     const cancelled = await service.cancelRun({ run_id: started.run.run_id });
 
     expect(cancelled).toMatchObject({ status: 'cancelled', run: { status: 'cancelled' } });
-    expect(activeRuns.getRun(started.run.run_id)).toBeUndefined();
+    await vi.waitFor(() => expect(activeRuns.getRun(started.run.run_id)).toBeUndefined());
     expect(deps.model_call_service.cancelModelCall).toHaveBeenCalled();
   });
 
@@ -45,7 +51,7 @@ describe('process-local Agent Run cancellation', () => {
   });
 });
 
-async function* neverEndingEvents() {
+async function* eventsUntilCancelled(done: Promise<void>) {
   yield { type: 'started' as const, model_call_id: 'M1', created_at: 'now' };
-  await new Promise(() => undefined);
+  await done;
 }

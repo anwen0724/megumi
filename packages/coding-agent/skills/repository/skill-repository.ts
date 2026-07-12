@@ -1,10 +1,9 @@
 /*
- * Skill-owned repository for availability and usage record persistence.
+ * Skill-owned repository for durable availability persistence.
  */
 
 import type { MegumiDatabase } from '../../persistence/connection';
 import type { SkillAvailability } from '../domain/entity/skill-availability';
-import type { SkillUsageRecord } from '../domain/entity/skill-usage-record';
 
 type SkillAvailabilityRow = {
   skill_availability_id: string;
@@ -13,16 +12,6 @@ type SkillAvailabilityRow = {
   available: number;
   created_at: string;
   updated_at: string;
-};
-
-type SkillUsageRecordRow = {
-  skill_usage_record_id: string;
-  skill_id: string;
-  workspace_id: string | null;
-  session_id: string;
-  run_id: string | null;
-  trigger_kind: SkillUsageRecord['trigger'];
-  created_at: string;
 };
 
 export class SkillRepository {
@@ -99,37 +88,6 @@ export class SkillRepository {
     return rows.map(availabilityFromRow);
   }
 
-  saveUsageRecord(record: SkillUsageRecord): SkillUsageRecord {
-    this.database.prepare(`
-      INSERT INTO skill_usage_record (
-        skill_usage_record_id,
-        skill_id,
-        workspace_id,
-        session_id,
-        run_id,
-        trigger_kind,
-        created_at
-      ) VALUES (
-        @skill_usage_record_id,
-        @skill_id,
-        @workspace_id,
-        @session_id,
-        @run_id,
-        @trigger_kind,
-        @created_at
-      )
-    `).run(rowFromUsageRecord(record));
-    return record;
-  }
-
-  listUsageRecordsBySession(sessionId: string): SkillUsageRecord[] {
-    return (this.database.prepare(`
-      SELECT * FROM skill_usage_record
-      WHERE session_id = ?
-      ORDER BY created_at ASC, skill_usage_record_id ASC
-    `).all(sessionId) as SkillUsageRecordRow[]).map(usageRecordFromRow);
-  }
-
   private findAvailabilityById(skillAvailabilityId: string): SkillAvailability | undefined {
     const row = this.database.prepare(`
       SELECT * FROM skill_availability
@@ -158,29 +116,5 @@ function availabilityFromRow(row: SkillAvailabilityRow): SkillAvailability {
     available: row.available === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-  };
-}
-
-function rowFromUsageRecord(record: SkillUsageRecord): SkillUsageRecordRow {
-  return {
-    skill_usage_record_id: record.skillUsageRecordId,
-    skill_id: record.skillId,
-    workspace_id: record.workspaceId ?? null,
-    session_id: record.sessionId,
-    run_id: record.runId ?? null,
-    trigger_kind: record.trigger,
-    created_at: record.createdAt,
-  };
-}
-
-function usageRecordFromRow(row: SkillUsageRecordRow): SkillUsageRecord {
-  return {
-    skillUsageRecordId: row.skill_usage_record_id,
-    skillId: row.skill_id,
-    ...(row.workspace_id ? { workspaceId: row.workspace_id } : {}),
-    sessionId: row.session_id,
-    ...(row.run_id ? { runId: row.run_id } : {}),
-    trigger: row.trigger_kind,
-    createdAt: row.created_at,
   };
 }

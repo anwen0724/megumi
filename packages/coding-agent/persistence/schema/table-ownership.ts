@@ -29,16 +29,6 @@ export const persistenceTableOwnership = {
       'session_compactions',
     ],
   },
-  agentRun: {
-    module: 'agent-run',
-    repository: 'AgentRunRepository',
-    modulePath: 'packages/coding-agent/agent-run',
-    tables: [
-      'agent_runs',
-      'agent_run_approval_requests',
-      'agent_run_runtime_events',
-    ],
-  },
   workspaceChange: {
     module: 'workspace',
     repository: 'WorkspaceChangeRepository',
@@ -54,7 +44,6 @@ export const persistenceTableOwnership = {
     modulePath: 'packages/coding-agent/skills',
     tables: [
       'skill_availability',
-      'skill_usage_record',
     ],
   },
   memory: {
@@ -63,8 +52,6 @@ export const persistenceTableOwnership = {
     tables: [
       'memory_records',
       'memory_markdown_mirrors',
-      'memory_recall_traces',
-      'memory_capture_attempts',
     ],
   },
   artifact: {

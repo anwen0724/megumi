@@ -26,6 +26,7 @@ export const PROCESS_DISCLOSURE_STATUSES = [
   'completed',
   'failed',
   'cancelled',
+  'incomplete',
 ] as const;
 export type ProcessDisclosureStatus = (typeof PROCESS_DISCLOSURE_STATUSES)[number];
 
@@ -49,6 +50,7 @@ export const ASSISTANT_TEXT_ITEM_STATUSES = [
 export type AssistantTextItemStatus = (typeof ASSISTANT_TEXT_ITEM_STATUSES)[number];
 
 export const TOOL_ACTIVITY_STATUSES = [
+  'requested',
   'running',
   'succeeded',
   'failed',
@@ -96,6 +98,7 @@ export interface TimelineMessageBase {
   createdAt: string;
   updatedAt?: string;
   turnOrder?: number;
+  historyOrder?: number;
 }
 
 export interface TimelineBlockBase {

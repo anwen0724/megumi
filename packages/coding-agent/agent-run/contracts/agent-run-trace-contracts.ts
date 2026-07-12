@@ -19,6 +19,7 @@ export type AgentRunTraceEventType =
   | 'trace.model_call.messages_appended'
   | 'trace.loop.counters'
   | 'trace.context.snapshot_failed'
+  | 'trace.memory.capture_failed'
   | 'trace.runtime_event.persistence_failed';
 
 export type AgentRunTraceRecord = {

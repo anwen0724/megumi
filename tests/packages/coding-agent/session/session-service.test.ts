@@ -163,6 +163,31 @@ describe('SessionService', () => {
     });
   });
 
+  it('rejects a response append when another branch changed the active entry', async () => {
+    const { service, workspaceId } = createService();
+    await service.createSession({ workspace_id: workspaceId, title: 'Session' });
+    const first = await service.saveUserMessage({
+      message_id: 'M1', session_id: 'S1', content: [{ type: 'text', text: 'first' }],
+      created_at: '2026-07-04T00:01:00.000Z',
+    });
+    expect(first.status).toBe('saved');
+    if (first.status !== 'saved') return;
+    await service.saveUserMessage({
+      message_id: 'M2', session_id: 'S1', content: [{ type: 'text', text: 'new branch head' }],
+      created_at: '2026-07-04T00:02:00.000Z',
+    });
+
+    expect(service.saveAssistantMessage({
+      message_id: 'A1', session_id: 'S1', run_id: 'R1',
+      parent_entry_id: first.entry.entry_id,
+      content: [{ type: 'text', text: 'stale response' }],
+      completed_at: '2026-07-04T00:03:00.000Z',
+    })).toMatchObject({ status: 'failed', failure: { code: 'active_entry_changed' } });
+    expect(service.listMessages({ session_id: 'S1' })).toMatchObject({
+      status: 'ok', messages: [{ message: { message_id: 'M1' } }, { message: { message_id: 'M2' } }],
+    });
+  });
+
   it('lists all messages or active path messages only', async () => {
     const { service, workspaceId } = createService();
     await service.createSession({ workspace_id: workspaceId, title: 'Session' });

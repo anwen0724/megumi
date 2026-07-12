@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type {
   AgentRun,
-  AgentRunToolCall,
+  ToolCallStep,
   RunStep,
   CancelRunResult,
   ResumeRunAfterApprovalResult,
@@ -73,7 +73,7 @@ describe('agent-run public contracts', () => {
       arguments_text: '{"path":"README.md"}',
       status: 'requested',
       created_at: run.created_at,
-    } satisfies AgentRunToolCall;
+    } satisfies ToolCallStep;
 
     expect(run.status).toBe('queued');
     expect(toolCall.call_order).toBe(0);

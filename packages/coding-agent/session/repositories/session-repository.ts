@@ -61,10 +61,10 @@ export class SessionRepository {
   insertMessage(message: SessionMessage): SessionMessage {
     this.database.prepare(`
       INSERT INTO session_messages (
-        message_id, session_id, run_id, role, content_text, message_json,
+        message_id, session_id, run_id, role, message_json,
         created_at, completed_at
       ) VALUES (
-        @message_id, @session_id, @run_id, @role, @content_text, @message_json,
+        @message_id, @session_id, @run_id, @role, @message_json,
         @created_at, @completed_at
       )
     `).run(toMessageRow(message));
@@ -245,7 +245,6 @@ type SessionMessageRow = {
   session_id: string;
   run_id: Nullable<string>;
   role: SessionMessage['conversation']['role'];
-  content_text: string;
   message_json: string;
   created_at: string;
   completed_at: Nullable<string>;
@@ -314,7 +313,6 @@ function toMessageRow(message: SessionMessage): SessionMessageRow {
     session_id: message.session_id,
     run_id: message.run_id ?? null,
     role: message.conversation.role,
-    content_text: deriveLegacyText(message.conversation),
     message_json: JSON.stringify(message.conversation),
     created_at: message.created_at,
     completed_at: message.completed_at ?? null,
@@ -334,17 +332,6 @@ function fromMessageRow(row: SessionMessageRow): SessionMessage {
     created_at: row.created_at,
     ...(row.completed_at ? { completed_at: row.completed_at } : {}),
   };
-}
-
-function deriveLegacyText(message: SessionMessage['conversation']): string {
-  if (message.role === 'toolResult') {
-    return message.content.flatMap((block) => block.type === 'text' ? [block.text] : []).join('');
-  }
-  return message.content.flatMap((block) => {
-    if (block.type === 'text') return [block.text];
-    if (block.type === 'thinking') return [block.thinking];
-    return [];
-  }).join('');
 }
 
 function toAttachmentRow(attachment: SessionMessageAttachment): SessionMessageAttachmentRow {

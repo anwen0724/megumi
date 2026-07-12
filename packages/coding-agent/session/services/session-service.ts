@@ -164,6 +164,12 @@ class DefaultSessionService implements SessionService {
             failure: { code: 'session_not_found', message: `Session ${request.session_id} was not found` },
           };
         }
+        if (request.parent_entry_id && session.active_entry_id !== request.parent_entry_id) {
+          return {
+            status: 'failed',
+            failure: { code: 'active_entry_changed', message: 'Session active entry changed before Assistant message append' },
+          };
+        }
         const message = this.options.repository.insertMessage({
           message_id: request.message_id,
           session_id: request.session_id,
@@ -179,7 +185,7 @@ class DefaultSessionService implements SessionService {
         const entry = this.options.repository.insertEntry({
           entry_id: this.entryId({ kind: 'message', source_id: request.message_id }),
           session_id: request.session_id,
-          parent_entry_id: session.active_entry_id,
+          parent_entry_id: request.parent_entry_id ?? session.active_entry_id,
           entry_type: 'message',
           message_id: request.message_id,
           created_at: request.completed_at,
@@ -262,6 +268,12 @@ class DefaultSessionService implements SessionService {
             failure: { code: 'session_not_found', message: `Session ${request.session_id} was not found` },
           };
         }
+        if (request.parent_entry_id && session.active_entry_id !== request.parent_entry_id) {
+          return {
+            status: 'failed',
+            failure: { code: 'active_entry_changed', message: 'Session active entry changed before Tool Result append' },
+          };
+        }
         const message = this.options.repository.insertMessage({
           message_id: request.message_id,
           session_id: request.session_id,
@@ -279,7 +291,7 @@ class DefaultSessionService implements SessionService {
         const entry = this.options.repository.insertEntry({
           entry_id: this.entryId({ kind: 'message', source_id: request.message_id }),
           session_id: request.session_id,
-          parent_entry_id: session.active_entry_id,
+          parent_entry_id: request.parent_entry_id ?? session.active_entry_id,
           entry_type: 'message',
           message_id: request.message_id,
           created_at: request.completed_at,

@@ -4,7 +4,6 @@
 
 export * from './domain/model/skill';
 export * from './domain/entity/skill-availability';
-export * from './domain/entity/skill-usage-record';
 export * from './domain/dto/command/skill-command-request';
 export * from './domain/dto/command/skill-command-response';
 export * from './domain/dto/context/skill-context-request';

@@ -8,9 +8,8 @@ type JsonValue = JsonObject | JsonArray | string | number | boolean | null;
 
 const jsonText = (name: string) => text(name, { mode: 'json' }).$type<JsonValue>();
 
-// Cyclic SQLite foreign keys are declared in the initial SQL migration.
-// Keeping those cycles out of inline Drizzle references avoids TypeScript
-// self-initializer inference failures while preserving runtime constraints.
+// Explicit AnySQLiteColumn return types allow the Artifact/version cycle to
+// remain visible in the schema source without TypeScript self-inference.
 
 export const workspaces = sqliteTable('workspaces', {
   workspaceId: text('workspace_id').primaryKey(),
@@ -60,7 +59,6 @@ export const sessionMessages = sqliteTable('session_messages', {
   sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
   runId: text('run_id'),
   role: text('role').notNull(),
-  contentText: text('content_text').notNull(),
   messageJson: jsonText('message_json').notNull(),
   createdAt: text('created_at').notNull(),
   completedAt: text('completed_at'),
@@ -95,60 +93,11 @@ export const sessionCompactions = sqliteTable('session_compactions', {
   index('idx_session_compactions_session_created').on(table.sessionId, table.createdAt),
 ]);
 
-export const agentRuns = sqliteTable('agent_runs', {
-  runId: text('run_id').primaryKey(),
-  workspaceId: text('workspace_id').notNull().references(() => workspaces.workspaceId),
-  sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
-  providerId: text('provider_id').notNull(),
-  modelId: text('model_id').notNull(),
-  triggerType: text('trigger_type').notNull(),
-  triggerUserMessageId: text('trigger_user_message_id').references(() => sessionMessages.messageId, { onDelete: 'set null' }),
-  triggerCommandName: text('trigger_command_name'),
-  status: text('status').notNull(),
-  createdAt: text('created_at').notNull(),
-  startedAt: text('started_at'),
-  completedAt: text('completed_at'),
-  failureJson: jsonText('failure_json'),
-}, (table) => [
-  index('idx_agent_runs_session_created').on(table.sessionId, table.createdAt),
-  index('idx_agent_runs_workspace_created').on(table.workspaceId, table.createdAt),
-  index('idx_agent_runs_status').on(table.status),
-  index('idx_agent_runs_trigger_user_message').on(table.triggerUserMessageId),
-]);
-
-export const agentRunApprovalRequests = sqliteTable('agent_run_approval_requests', {
-  approvalRequestId: text('approval_request_id').primaryKey(),
-  runId: text('run_id').notNull().references(() => agentRuns.runId, { onDelete: 'cascade' }),
-  subjectJson: jsonText('subject_json').notNull(),
-  status: text('status').notNull(),
-  createdAt: text('created_at').notNull(),
-  decidedAt: text('decided_at'),
-  decisionJson: jsonText('decision_json'),
-}, (table) => [
-  index('idx_agent_run_approval_requests_run_status').on(table.runId, table.status),
-]);
-
-export const agentRunRuntimeEvents = sqliteTable('agent_run_runtime_events', {
-  eventId: text('event_id').primaryKey(),
-  runId: text('run_id').notNull().references(() => agentRuns.runId, { onDelete: 'cascade' }),
-  sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
-  eventType: text('event_type').notNull(),
-  sequence: integer('sequence').notNull(),
-  createdAt: text('created_at').notNull(),
-  source: text('source').notNull(),
-  visibility: text('visibility').notNull(),
-  persist: text('persist').notNull(),
-  payloadJson: jsonText('payload_json').notNull(),
-}, (table) => [
-  index('idx_agent_run_runtime_events_run_sequence').on(table.runId, table.sequence),
-  index('idx_agent_run_runtime_events_session_created').on(table.sessionId, table.createdAt),
-]);
-
 export const workspaceChanges = sqliteTable('workspace_changes', {
   changeSetId: text('change_set_id').primaryKey(),
   workspaceId: text('workspace_id').notNull().references(() => workspaces.workspaceId),
   sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
-  runId: text('run_id').notNull().references(() => agentRuns.runId, { onDelete: 'cascade' }),
+  runId: text('run_id').notNull(),
   status: text('status').notNull(),
   changedFileCount: integer('changed_file_count').notNull(),
   createdAt: text('created_at').notNull(),
@@ -178,19 +127,6 @@ export const skillAvailability = sqliteTable('skill_availability', {
   updatedAt: text('updated_at').notNull(),
 }, (table) => [
   uniqueIndex('idx_skill_availability_skill_workspace').on(table.skillId, table.workspaceId),
-]);
-
-export const skillUsageRecord = sqliteTable('skill_usage_record', {
-  skillUsageRecordId: text('skill_usage_record_id').primaryKey(),
-  skillId: text('skill_id').notNull(),
-  workspaceId: text('workspace_id'),
-  sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
-  runId: text('run_id').references(() => agentRuns.runId, { onDelete: 'set null' }),
-  triggerKind: text('trigger_kind').notNull(),
-  createdAt: text('created_at').notNull(),
-}, (table) => [
-  index('idx_skill_usage_record_session_created').on(table.sessionId, table.createdAt),
-  index('idx_skill_usage_record_run_created').on(table.runId, table.createdAt),
 ]);
 
 export const memoryRecords = sqliteTable('memory_records', {
@@ -243,11 +179,14 @@ export const artifacts = sqliteTable('artifacts', {
   artifactId: text('artifact_id').primaryKey(),
   workspaceId: text('workspace_id').references(() => workspaces.workspaceId, { onDelete: 'set null' }),
   sessionId: text('session_id').references(() => sessions.sessionId, { onDelete: 'set null' }),
-  runId: text('run_id').references(() => agentRuns.runId, { onDelete: 'set null' }),
+  runId: text('run_id'),
   kind: text('kind').notNull(),
   title: text('title').notNull(),
   status: text('status').notNull(),
-  currentVersionId: text('current_version_id'),
+  currentVersionId: text('current_version_id').references(
+    (): AnySQLiteColumn => artifactVersions.artifactVersionId,
+    { onDelete: 'set null' },
+  ),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
   deletedAt: text('deleted_at'),
@@ -269,7 +208,7 @@ export const artifactVersions = sqliteTable('artifact_versions', {
   sizeBytes: integer('size_bytes'),
   sha256: text('sha256'),
   textPreview: text('text_preview'),
-  createdByRunId: text('created_by_run_id').references(() => agentRuns.runId, { onDelete: 'set null' }),
+  createdByRunId: text('created_by_run_id'),
   createdAt: text('created_at').notNull(),
   metadataJson: jsonText('metadata_json'),
 }, (table) => [
@@ -287,38 +226,4 @@ export const artifactSourceRefs = sqliteTable('artifact_source_refs', {
   metadataJson: jsonText('metadata_json'),
 }, (table) => [
   index('idx_artifact_source_refs_artifact').on(table.artifactId),
-]);
-
-export const memoryRecallTraces = sqliteTable('memory_recall_traces', {
-  recallTraceId: text('recall_trace_id').primaryKey(),
-  runId: text('run_id').notNull().references(() => agentRuns.runId, { onDelete: 'cascade' }),
-  modelCallId: text('model_call_id'),
-  workspaceId: text('workspace_id').references(() => workspaces.workspaceId, { onDelete: 'set null' }),
-  sessionId: text('session_id').references(() => sessions.sessionId, { onDelete: 'set null' }),
-  queryText: text('query_text').notNull(),
-  selectedCount: integer('selected_count').notNull(),
-  requestJson: jsonText('request_json').notNull(),
-  resultsJson: jsonText('results_json').notNull(),
-  createdAt: text('created_at').notNull(),
-  metadataJson: jsonText('metadata_json'),
-}, (table) => [
-  index('idx_memory_recall_traces_run').on(table.runId),
-]);
-
-export const memoryCaptureAttempts = sqliteTable('memory_capture_attempts', {
-  captureAttemptId: text('capture_attempt_id').primaryKey(),
-  runId: text('run_id').references(() => agentRuns.runId, { onDelete: 'set null' }),
-  workspaceId: text('workspace_id').references(() => workspaces.workspaceId, { onDelete: 'set null' }),
-  sessionId: text('session_id').references(() => sessions.sessionId, { onDelete: 'set null' }),
-  status: text('status').notNull(),
-  triggerKind: text('trigger_kind').notNull(),
-  extractedCount: integer('extracted_count').notNull(),
-  createdMemoryIdsJson: jsonText('created_memory_ids_json'),
-  rawOutputJson: jsonText('raw_output_json'),
-  errorJson: jsonText('error_json'),
-  createdAt: text('created_at').notNull(),
-  completedAt: text('completed_at'),
-  metadataJson: jsonText('metadata_json'),
-}, (table) => [
-  index('idx_memory_capture_attempts_run').on(table.runId),
 ]);

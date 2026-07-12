@@ -36,7 +36,6 @@ export type AgentRunFailure = {
     | 'tool_call_failed'
     | 'approval_failed'
     | 'cancel_failed'
-    | 'recovery_failed'
     | 'loop_limit_exceeded'
     | 'runtime_protocol_violation'
     | 'runtime_interrupted'
@@ -95,9 +94,6 @@ export type ToolCallStep = {
 };
 
 export type RunStep = ModelCallStep | ToolCallStep;
-
-/** @deprecated Use ToolCallStep; retained only while orchestration call sites migrate. */
-export type AgentRunToolCall = ToolCallStep;
 
 export type AgentRunApprovalSubject =
   | {

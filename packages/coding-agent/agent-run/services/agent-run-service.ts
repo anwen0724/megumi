@@ -26,7 +26,7 @@ import type {
   AgentRun,
   AgentRunApprovalRequest,
   AgentRunFailure,
-  AgentRunToolCall,
+  ToolCallStep,
   AgentRunService,
   CancelRunRequest,
   CancelRunResult,
@@ -338,6 +338,7 @@ class DefaultAgentRunService implements AgentRunService {
       return { status: 'not_cancellable', run, reason: 'already_terminal' };
     }
     const queue = createAgentRunEventQueue((event) => this.options.event_publisher?.publish(event));
+    const wasWaitingForApproval = run.status === 'waiting_for_approval';
     const eventSink = this.createEventSink(queue, run);
     const cancelling = this.activeRuns.saveRun(transitionAgentRunStatus({
       run,
@@ -364,6 +365,17 @@ class DefaultAgentRunService implements AgentRunService {
         decided_at: this.clock.now(),
       });
     }
+    for (const step of this.activeRuns.listSteps(run.run_id)) {
+      if (step.status === 'completed' || step.status === 'failed' || step.status === 'cancelled'
+        || (step.type === 'tool_call' && step.status === 'denied')) {
+        continue;
+      }
+      this.activeRuns.saveStep({
+        ...step,
+        status: 'cancelled',
+        completed_at: this.clock.now(),
+      });
+    }
     const cancelled = this.activeRuns.saveRun(transitionAgentRunStatus({
       run: cancelling,
       to: 'cancelled',
@@ -376,10 +388,15 @@ class DefaultAgentRunService implements AgentRunService {
         reason: 'user_cancelled',
       },
     });
-    this.activeRunAbortControllers.delete(run.run_id);
     queue.close();
     const events = queue.snapshot();
-    this.activeRuns.release(run.run_id);
+    for (const [approvalId, continuation] of this.approvalContinuations) {
+      if (continuation.run_id === run.run_id) this.approvalContinuations.delete(approvalId);
+    }
+    if (wasWaitingForApproval) {
+      this.activeRunAbortControllers.delete(run.run_id);
+      this.activeRuns.release(run.run_id);
+    }
     return { status: 'cancelled', run: cancelled, events };
   }
 
@@ -461,6 +478,17 @@ class DefaultAgentRunService implements AgentRunService {
     const resumedRun = flow.run.status !== run.status
       ? this.activeRuns.saveRun(flow.run)
       : flow.run;
+    const approvalStep = this.activeRuns.listSteps(run.run_id).find((step) => (
+      step.type === 'tool_call' && step.tool_call_id === approval.subject.tool_call_id
+    ));
+    if (!approvalStep || approvalStep.type !== 'tool_call') {
+      return this.failApprovalResume(resumedRun, {
+        code: 'runtime_protocol_violation',
+        message: `Tool Call Step was not found for approval: ${approval.subject.tool_call_id}`,
+      }, queue, continuation);
+    }
+    const controller = new AbortController();
+    this.activeRunAbortControllers.set(run.run_id, controller);
     eventSink.emit({
       eventType: 'approval.resolved',
       run,
@@ -474,11 +502,19 @@ class DefaultAgentRunService implements AgentRunService {
 
     let currentTurn = continuation.current_turn;
     if (flow.status === 'denied') {
+      this.activeRuns.saveStep({
+        ...approvalStep,
+        status: 'denied',
+        completed_at: this.clock.now(),
+      });
       currentTurn = { ...currentTurn, runItems: [...currentTurn.runItems, toolResultToConversationItem(flow.tool_result)] };
-      const savedToolResult = this.saveToolResultMessage(resumedRun, flow.tool_result);
+      const savedToolResult = this.saveToolResultMessage(
+        resumedRun, flow.tool_result, currentTurn.lastEntryId ?? currentTurn.userEntry.entryId,
+      );
       if (savedToolResult.status === 'failed') {
-        return { status: 'failed', failure: savedToolResult.failure, events: [] };
+        return this.failApprovalResume(resumedRun, savedToolResult.failure, queue, continuation);
       }
+      currentTurn = { ...currentTurn, lastEntryId: savedToolResult.entry_id };
       eventSink.emit({
         eventType: 'tool_result.created',
         run: resumedRun,
@@ -492,9 +528,10 @@ class DefaultAgentRunService implements AgentRunService {
         },
       });
     } else {
+      this.activeRuns.saveStep({ ...approvalStep, status: 'executing' });
       const workspaceRoot = this.resolveWorkspaceRoot(run.workspace_id);
       if (workspaceRoot.status === 'failed') {
-        return { status: 'failed', failure: workspaceRoot.failure, events: [] };
+        return this.failApprovalResume(resumedRun, workspaceRoot.failure, queue, continuation);
       }
       const toolResult = await this.resolveToolExecutionService({
         run_id: run.run_id,
@@ -504,7 +541,15 @@ class DefaultAgentRunService implements AgentRunService {
       }).executeTool({
         toolName: approval.subject.tool_name,
         input: approval.subject.input,
+        options: { signal: controller.signal },
       });
+      const afterExecution = this.activeRuns.getRun(run.run_id);
+      if (!afterExecution || afterExecution.status === 'cancelled') {
+        this.activeRunAbortControllers.delete(run.run_id);
+        queue.close();
+        if (afterExecution) this.activeRuns.release(run.run_id);
+        return { status: 'not_waiting', run: afterExecution ?? resumedRun };
+      }
       const toolFact = toolResultRuntimeFactFromExecution({
         tool_call_id: approval.subject.tool_call_id,
         tool_name: approval.subject.tool_name,
@@ -512,10 +557,21 @@ class DefaultAgentRunService implements AgentRunService {
         created_at: this.clock.now(),
       });
       currentTurn = { ...currentTurn, runItems: [...currentTurn.runItems, toolResultToConversationItem(toolFact)] };
-      const savedToolResult = this.saveToolResultMessage(resumedRun, toolFact);
+      this.activeRuns.saveStep({
+        ...approvalStep,
+        status: toolResult.type === 'succeeded' ? 'completed' : 'failed',
+        completed_at: this.clock.now(),
+        ...(toolResult.type === 'failed' ? {
+          failure: { code: 'tool_call_failed', message: toolResult.error.message },
+        } : {}),
+      });
+      const savedToolResult = this.saveToolResultMessage(
+        resumedRun, toolFact, currentTurn.lastEntryId ?? currentTurn.userEntry.entryId,
+      );
       if (savedToolResult.status === 'failed') {
-        return { status: 'failed', failure: savedToolResult.failure, events: [] };
+        return this.failApprovalResume(resumedRun, savedToolResult.failure, queue, continuation);
       }
+      currentTurn = { ...currentTurn, lastEntryId: savedToolResult.entry_id };
       eventSink.emit({
         eventType: 'tool_result.created',
         run: resumedRun,
@@ -562,6 +618,7 @@ class DefaultAgentRunService implements AgentRunService {
     }
 
     if (flow.continuation === 'waiting_for_other_approval') {
+      this.activeRunAbortControllers.delete(run.run_id);
       this.approvalContinuations.delete(request.approval_request_id);
       const pendingApprovalIds = this.activeRuns
         .listPendingApprovalRequestsByRun(run.run_id)
@@ -590,20 +647,18 @@ class DefaultAgentRunService implements AgentRunService {
       continuation,
       current_turn: currentTurn,
       eventSink,
-      signal: undefined,
+      signal: controller.signal,
     });
     currentTurn = deferred.current_turn;
     if (deferred.status === 'waiting_for_approval') {
+      this.activeRunAbortControllers.delete(run.run_id);
       queue.close();
       return { status: 'resumed', run: deferred.run, events: queue.events() };
     }
     if (deferred.status === 'failed') {
-      queue.close();
-      return { status: 'failed', failure: deferred.failure, events: [] };
+      return this.failApprovalResume(resumedRun, deferred.failure, queue, continuation);
     }
 
-    const controller = new AbortController();
-    this.activeRunAbortControllers.set(run.run_id, controller);
     void this.executeRunLoop({
       queue,
       eventSink,
@@ -640,13 +695,14 @@ class DefaultAgentRunService implements AgentRunService {
     };
   }
 
-  private saveToolResultMessage(run: AgentRun, toolResult: ToolResultRuntimeFact):
-    | { status: 'saved' }
+  private saveToolResultMessage(run: AgentRun, toolResult: ToolResultRuntimeFact, parentEntryId: string):
+    | { status: 'saved'; entry_id: string }
     | { status: 'failed'; failure: AgentRunFailure } {
     const result = this.options.session_service.saveToolResultMessage({
       message_id: this.ids.tool_result_message_id(),
       session_id: run.session_id,
       run_id: run.run_id,
+      parent_entry_id: parentEntryId,
       tool_call_id: toolResult.tool_call_id,
       tool_name: toolResult.tool_name,
       status: toolResult.status === 'completed' ? 'success' : 'failure',
@@ -657,8 +713,34 @@ class DefaultAgentRunService implements AgentRunService {
       completed_at: toolResult.created_at,
     });
     return result.status === 'saved'
-      ? { status: 'saved' }
+      ? { status: 'saved', entry_id: result.entry.entry_id }
       : { status: 'failed', failure: { code: 'session_failed', message: result.failure.message } };
+  }
+
+  private failApprovalResume(
+    run: AgentRun,
+    failure: AgentRunFailure,
+    queue: RuntimeEventQueue,
+    continuation: RunApprovalContinuation,
+  ): Extract<ResumeRunAfterApprovalResult, { status: 'failed' }> {
+    const latest = this.activeRuns.getRun(run.run_id);
+    if (latest && latest.status !== 'completed' && latest.status !== 'failed' && latest.status !== 'cancelled') {
+      this.activeRuns.saveRun(transitionAgentRunStatus({
+        run: latest,
+        to: 'failed',
+        changed_at: this.clock.now(),
+        failure,
+      }));
+    }
+    this.activeRunAbortControllers.get(run.run_id)?.abort();
+    this.activeRunAbortControllers.delete(run.run_id);
+    this.activeModelCallByRun.delete(run.run_id);
+    for (const approvalId of continuation.pending_approval_ids) {
+      this.approvalContinuations.delete(approvalId);
+    }
+    queue.close();
+    this.activeRuns.release(run.run_id);
+    return { status: 'failed', failure, events: [] };
   }
 
   private nextRuntimeEventSequence(runId: string | undefined): number {
@@ -722,6 +804,7 @@ class DefaultAgentRunService implements AgentRunService {
       },
       tools,
       tool_calls: input.continuation.deferred_tool_calls,
+      call_order_offset: input.continuation.deferred_call_order_offset,
       registered_tools_by_name: registeredTools,
       permission_service: this.options.permission_service,
       tool_execution_service: this.resolveToolExecutionService({
@@ -734,8 +817,20 @@ class DefaultAgentRunService implements AgentRunService {
       ...(this.options.workspace_path_policy_service ? { workspace_path_policy_service: this.options.workspace_path_policy_service } : {}),
       clock: this.clock,
       ids: { approval_request_id: this.ids.approval_request_id },
+      on_step_transition: (step) => {
+        if (this.activeRuns.getRun(step.run_id)?.status !== 'cancelled') {
+          this.activeRuns.upsertStep(step);
+        }
+      },
       ...(input.signal ? { signal: input.signal } : {}),
     });
+    if (this.activeRuns.getRun(input.run.run_id)?.status === 'cancelled') {
+      return {
+        status: 'failed',
+        failure: { code: 'cancel_failed', message: 'Agent Run was cancelled during deferred tool execution.' },
+        current_turn: input.current_turn,
+      };
+    }
 
     let currentTurn = input.current_turn;
     for (const toolCall of toolGroup.tool_calls) {
@@ -743,6 +838,13 @@ class DefaultAgentRunService implements AgentRunService {
     }
     for (const toolResult of toolGroup.tool_result_facts) {
       emitToolResultRuntimeEvent(input.eventSink, input.run, toolResult);
+      const persisted = this.saveToolResultMessage(
+        input.run, toolResult, currentTurn.lastEntryId ?? currentTurn.userEntry.entryId,
+      );
+      if (persisted.status === 'failed') {
+        return { status: 'failed', failure: persisted.failure, current_turn: currentTurn };
+      }
+      currentTurn = { ...currentTurn, lastEntryId: persisted.entry_id };
       currentTurn = { ...currentTurn, runItems: [...currentTurn.runItems, toolResultToConversationItem(toolResult)] };
     }
 
@@ -773,6 +875,7 @@ class DefaultAgentRunService implements AgentRunService {
           ]),
         ),
         deferred_tool_calls: toolGroup.deferred_tool_calls,
+        deferred_call_order_offset: toolGroup.deferred_call_order_offset,
         current_turn: currentTurn,
       };
       for (const approvalId of nextContinuation.pending_approval_ids) {
@@ -845,6 +948,10 @@ class DefaultAgentRunService implements AgentRunService {
         signal: input.signal,
       });
 
+      if (this.activeRuns.getRun(input.run.run_id)?.status === 'cancelled') {
+        return;
+      }
+
       this.activeModelCallByRun.delete(input.run.run_id);
       if (result.status === 'waiting_for_approval') {
         retainForApproval = true;
@@ -856,7 +963,10 @@ class DefaultAgentRunService implements AgentRunService {
       this.activeRunAbortControllers.delete(input.run.run_id);
     } catch (error) {
       const latest = this.activeRuns.getRun(input.run.run_id) ?? input.run;
-      if (latest.status !== 'completed' && latest.status !== 'failed' && latest.status !== 'cancelled') {
+      if (latest.status === 'cancelled') {
+        return;
+      }
+      if (latest.status !== 'completed' && latest.status !== 'failed') {
         this.activeRuns.saveRun(transitionAgentRunStatus({
           run: latest,
           to: 'failed',
@@ -894,6 +1004,8 @@ class DefaultAgentRunService implements AgentRunService {
         },
       });
     } finally {
+      this.activeRunAbortControllers.delete(input.run.run_id);
+      this.activeModelCallByRun.delete(input.run.run_id);
       if (!retainForApproval) this.activeRuns.release(input.run.run_id);
       queueMicrotask(() => input.queue.close());
     }
@@ -1235,7 +1347,7 @@ function emitToolResultRuntimeEvent(
 function emitToolCallTerminalEvent(
   eventSink: AgentRunRuntimeEventFactory,
   run: AgentRun,
-  toolCall: AgentRunToolCall,
+  toolCall: ToolCallStep,
 ): void {
   if (toolCall.status === 'completed') {
     eventSink.emit({
@@ -1358,6 +1470,7 @@ function currentTurnFromSavedUserMessage(
 ): CurrentConversationTurn {
   return {
     runId,
+    lastEntryId: entry.entry_id,
     userEntry: {
       entryId: entry.entry_id,
       ...(entry.parent_entry_id ? { parentEntryId: entry.parent_entry_id } : {}),

@@ -13,7 +13,7 @@ import type {
 import type { RegisteredTool, ToolExecutionResult } from '../../tools';
 import type { ToolSet } from '@megumi/ai';
 import type { WorkspacePathPolicyService } from '../../workspace';
-import type { AgentRunApprovalRequest, AgentRunToolCall } from '../contracts/agent-run-contracts';
+import type { AgentRunApprovalRequest, ToolCallStep } from '../contracts/agent-run-contracts';
 import type { AgentRunTraceLogger } from '../contracts/agent-run-trace-contracts';
 import type { ToolResultRuntimeFact } from '../contracts/model-call-contracts';
 
@@ -38,6 +38,7 @@ export type AgentRunToolCallRequest = {
   };
   tools: ToolSet;
   tool_calls: ModelRequestedToolCall[];
+  call_order_offset?: number;
   registered_tools_by_name: Map<string, RegisteredTool>;
   permission_service: {
     evaluateToolExecution(request: {
@@ -80,14 +81,15 @@ export type AgentRunToolCallRequest = {
     approval_request_id(): string;
   };
   signal?: AbortSignal;
-  on_step_transition?: (step: AgentRunToolCall) => void;
+  on_step_transition?: (step: ToolCallStep) => void;
 };
 
 export type AgentRunToolCallResult = {
-  tool_calls: AgentRunToolCall[];
+  tool_calls: ToolCallStep[];
   tool_result_facts: ToolResultRuntimeFact[];
   pending_approvals: AgentRunPendingApproval[];
   deferred_tool_calls: ModelRequestedToolCall[];
+  deferred_call_order_offset: number;
   next_model_prompt_ready: boolean;
 };
 
@@ -97,7 +99,7 @@ export type AgentRunPendingApproval = {
 };
 
 type ToolCallPlan = {
-  call: AgentRunToolCall;
+  call: ToolCallStep;
   requested: ModelRequestedToolCall;
   registered_tool?: RegisteredTool;
   decision?: PermissionDecision;
@@ -109,6 +111,8 @@ export async function orchestrateToolCallGroup(
   const plans: ToolCallPlan[] = [];
   const toolResults: ToolResultRuntimeFact[] = [];
   const pendingApprovals: AgentRunPendingApproval[] = [];
+  let deferredToolCalls: ModelRequestedToolCall[] = [];
+  let deferredCallOrderOffset = request.call_order_offset ?? 0;
 
   for (const [index, requested] of request.tool_calls.entries()) {
     const toolCall = createToolCall(request, requested, index);
@@ -222,7 +226,9 @@ export async function orchestrateToolCallGroup(
         approval_request: approval,
         permission_decision: permission.decision,
       });
-      continue;
+      deferredToolCalls = request.tool_calls.slice(index + 1);
+      deferredCallOrderOffset = (request.call_order_offset ?? 0) + index + 1;
+      break;
     }
 
     plans.push({
@@ -233,11 +239,9 @@ export async function orchestrateToolCallGroup(
     });
   }
 
-  const firstApprovalOrder = plans.find((plan) => plan.call.status === 'waiting_for_approval')?.call.call_order;
   const executablePlans = plans.filter((plan) => (
     plan.call.status === 'requested'
     && plan.registered_tool
-    && (firstApprovalOrder === undefined || plan.call.call_order < firstApprovalOrder)
   ));
   if (executablePlans.length > 0) {
     const executed = await executeWindows(request, executablePlans);
@@ -246,18 +250,18 @@ export async function orchestrateToolCallGroup(
     }
     toolResults.push(...executed.tool_result_facts);
   }
-  const lastApprovalOrder = plans
-    .filter((plan) => plan.call.status === 'waiting_for_approval')
-    .at(-1)?.call.call_order;
-  const deferredToolCalls = lastApprovalOrder === undefined
-    ? []
-    : request.tool_calls.slice(lastApprovalOrder + 1);
+  const callOrderById = new Map(plans.map((plan) => [plan.call.tool_call_id, plan.call.call_order]));
+  toolResults.sort((left, right) => (
+    (callOrderById.get(left.tool_call_id) ?? Number.MAX_SAFE_INTEGER)
+      - (callOrderById.get(right.tool_call_id) ?? Number.MAX_SAFE_INTEGER)
+  ));
 
   return {
     tool_calls: plans.map((plan) => plan.call),
     tool_result_facts: toolResults,
     pending_approvals: pendingApprovals,
     deferred_tool_calls: deferredToolCalls,
+    deferred_call_order_offset: deferredCallOrderOffset,
     next_model_prompt_ready: pendingApprovals.length === 0,
   };
 }
@@ -317,8 +321,8 @@ async function executeWindows(
         },
       });
       const completedAt = request.clock.now();
-      const status: AgentRunToolCall['status'] = result.type === 'succeeded' ? 'completed' : 'failed';
-      const completedCall: AgentRunToolCall = {
+      const status: ToolCallStep['status'] = result.type === 'succeeded' ? 'completed' : 'failed';
+      const completedCall: ToolCallStep = {
         ...plan.call,
         status,
         completed_at: completedAt,
@@ -364,13 +368,13 @@ function createToolCall(
   request: AgentRunToolCallRequest,
   toolCall: ModelRequestedToolCall,
   callOrder: number,
-): AgentRunToolCall {
+): ToolCallStep {
   return {
     type: 'tool_call',
     tool_call_id: toolCall.tool_call_id,
     run_id: request.run_id,
     source_model_call_id: toolCall.model_call_id,
-    call_order: callOrder,
+    call_order: (request.call_order_offset ?? 0) + callOrder,
     tool_name: toolCall.tool_name,
     input: toolCall.input,
     arguments_text: toolCall.arguments_text,

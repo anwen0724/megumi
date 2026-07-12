@@ -5,6 +5,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { createDatabase, type MegumiDatabase } from '../connection';
 import { resolvePersistenceMigrationsFolder } from './migration-paths';
+import { prepareLegacySessionHistoryBackfill } from './legacy-session-history-backfill';
 
 export interface MigrateCodingAgentDatabaseInput {
   sqliteDirectory: string;
@@ -55,6 +56,7 @@ export function migrateCodingAgentDatabase(input: MigrateCodingAgentDatabaseInpu
   });
   const database = createDatabase(sqliteFile);
   try {
+    prepareLegacySessionHistoryBackfill(database);
     applyCodingAgentDatabaseMigrations(database, migrationsFolder);
   } catch (error) {
     database.close();

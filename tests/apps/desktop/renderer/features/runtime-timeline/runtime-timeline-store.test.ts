@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { RuntimeEvent } from '@megumi/coding-agent/events';
-import type { TimelineAssistantMessage } from '@megumi/coding-agent/projections/timeline';
+import type { TimelineAssistantMessage, TimelineMessage } from '@megumi/coding-agent/projections/timeline';
 import { useRuntimeTimelineStore } from '@megumi/desktop/renderer/features/runtime-timeline';
 
 function runtimeEvent(
@@ -213,6 +213,31 @@ describe('runtime timeline store', () => {
       'user:run-new',
       'assistant:run-new',
     ]);
+  });
+
+  it('uses committed active-path order when timestamps are equal', () => {
+    const message = (messageId: string, historyOrder: number): TimelineMessage => ({
+      messageId,
+      role: 'user',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: messageId,
+      createdAt: '2026-05-17T00:00:00.000Z',
+      historyOrder,
+      blocks: [{
+        blockId: `text:${messageId}`,
+        kind: 'user_text',
+        text: messageId,
+        format: 'plain',
+      }],
+    });
+    useRuntimeTimelineStore.getState().hydrateCommittedMessages('project-1', 'session-1', [
+      message('run-z', 0),
+      message('run-a', 1),
+    ]);
+
+    expect(useRuntimeTimelineStore.getState().sessions['project-1:session-1']?.messages.map((item) => item.messageId))
+      .toEqual(['run-z', 'run-a']);
   });
 
   it('preserves pre-tool assistant text when hydrating with a committed final answer', () => {

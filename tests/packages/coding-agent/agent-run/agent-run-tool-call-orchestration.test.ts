@@ -193,6 +193,59 @@ describe('Agent Run tool-call orchestration', () => {
     ]);
     expect(result.next_model_prompt_ready).toBe(false);
   });
+
+  it('defers every call after the first approval barrier', async () => {
+    const evaluate = vi.fn((request) => permissionResult(
+      request.tool_name === 'run_command'
+        ? {
+            type: 'requires_approval' as const,
+            reason: 'needs approval',
+            execution_class: 'process_execution' as const,
+            approval: { allowed_scopes: ['once' as const], default_scope: 'once' as const },
+          }
+        : allowDecision(),
+    ));
+    const result = await orchestrateToolCallGroup({
+      ...baseInput(),
+      tool_calls: [
+        toolCall('call-1', 'run_command'),
+        toolCall('call-2', 'read_file'),
+        toolCall('call-3', 'run_command'),
+      ],
+      registered_tools_by_name: new Map([
+        ['run_command', registeredTool('run_command', 'serial')],
+        ['read_file', registeredTool('read_file', 'parallel')],
+      ]),
+      permission_service: { evaluateToolExecution: evaluate },
+      tool_execution_service: { executeTool: vi.fn() },
+    });
+
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    expect(result.pending_approvals).toHaveLength(1);
+    expect(result.deferred_tool_calls.map((call) => call.tool_call_id)).toEqual(['call-2', 'call-3']);
+    expect(result.deferred_call_order_offset).toBe(1);
+  });
+
+  it('keeps terminal results and deferred call orders in original model order', async () => {
+    const first = await orchestrateToolCallGroup({
+      ...baseInput(),
+      tool_calls: [toolCall('call-1', 'read_file'), toolCall('call-2', 'unknown_tool')],
+      registered_tools_by_name: new Map([['read_file', registeredTool('read_file', 'parallel')]]),
+      permission_service: { evaluateToolExecution: vi.fn(() => permissionResult(allowDecision())) },
+      tool_execution_service: { executeTool: vi.fn(async () => succeededToolResult('read_file')) },
+    });
+    expect(first.tool_result_facts.map((result) => result.tool_call_id)).toEqual(['call-1', 'call-2']);
+
+    const deferred = await orchestrateToolCallGroup({
+      ...baseInput(),
+      call_order_offset: 1,
+      tool_calls: [toolCall('call-2', 'read_file'), toolCall('call-3', 'read_file')],
+      registered_tools_by_name: new Map([['read_file', registeredTool('read_file', 'parallel')]]),
+      permission_service: { evaluateToolExecution: vi.fn(() => permissionResult(allowDecision())) },
+      tool_execution_service: { executeTool: vi.fn(async () => succeededToolResult('read_file')) },
+    });
+    expect(deferred.tool_calls.map((call) => call.call_order)).toEqual([1, 2]);
+  });
 });
 
 function baseInput(): Omit<AgentRunToolCallRequest, 'tool_calls' | 'registered_tools_by_name' | 'permission_service' | 'tool_execution_service'> {

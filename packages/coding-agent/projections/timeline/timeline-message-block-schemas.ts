@@ -145,6 +145,7 @@ const TimelineMessageBaseShape = {
   createdAt: TimelineIsoDateTimeSchema,
   updatedAt: TimelineIsoDateTimeSchema.optional(),
   turnOrder: z.number().int().nonnegative().optional(),
+  historyOrder: z.number().int().nonnegative().optional(),
 } satisfies z.ZodRawShape;
 
 const OptionalTextSchema = z.string().optional();

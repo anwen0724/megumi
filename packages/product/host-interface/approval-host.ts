@@ -25,7 +25,7 @@ const JsonValueSchema: z.ZodType<unknown> = z.lazy(() => z.union([
 const AgentRunFailureSchema = z.object({
   code: z.enum([
     'input_failed', 'command_failed', 'session_failed', 'context_failed', 'model_call_failed', 'tool_call_failed',
-    'approval_failed', 'cancel_failed', 'recovery_failed', 'loop_limit_exceeded', 'runtime_protocol_violation',
+    'approval_failed', 'cancel_failed', 'loop_limit_exceeded', 'runtime_protocol_violation',
     'runtime_interrupted', 'internal_error',
   ]),
   message: z.string(), retryable: z.boolean().optional(), details: z.record(z.string(), JsonValueSchema).optional(),
