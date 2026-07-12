@@ -54,7 +54,7 @@ export type ContextServiceDependencies = {
   observability?: {
     recordPreparedCall(input: { preparationId: string; sourceRefs: ContextSourceRef[]; usage: ContextUsage }): void;
   };
-  policy?: { compactionThresholdRatio?: number };
+  policy?: Partial<ContextPolicy>;
   clock?: { now(): string };
   ids?: { preparationId(): string; compactionId(): string };
 };
@@ -82,7 +82,10 @@ export class ContextServiceImpl implements ContextService {
   private readonly sessionOperationTails = new Map<string, Promise<void>>();
 
   constructor(private readonly dependencies: ContextServiceDependencies) {
-    this.policy = { compactionThresholdRatio: dependencies.policy?.compactionThresholdRatio ?? 0.8 };
+    this.policy = {
+      compactionThresholdRatio: dependencies.policy?.compactionThresholdRatio ?? 0.8,
+      keepRecentTurns: dependencies.policy?.keepRecentTurns ?? 10,
+    };
     calculateContextUsage({ inputTokens: 0, capacity: { providerId: 'validation', modelId: 'validation', contextWindowTokens: 1 }, policy: this.policy });
     this.clock = dependencies.clock ?? { now: () => new Date().toISOString() };
     this.ids = dependencies.ids ?? {
@@ -280,28 +283,12 @@ export class ContextServiceImpl implements ContextService {
 
   private async compactInternal(input: { facts: BuildFacts; usageBefore: ContextUsage; modelContext: ContextCapacity; signal?: AbortSignal }): Promise<
     | { status: 'compacted'; compactionId: string; usageAfter: ContextUsage; facts: BuildFacts }
-    | { status: 'nothing_to_compact'; reason: 'no_complete_turns' | 'no_reducible_prefix' | 'summary_not_reducing' }
+    | { status: 'nothing_to_compact'; reason: 'no_complete_turns' | 'no_older_turns' | 'summary_not_reducing' }
     | { status: 'failed'; failure: ContextFailure }
   > {
-    const withoutHistory = { ...input.facts, historicalTurns: [], compactionSummary: undefined };
-    const nonCompressible = await this.countUsage(this.buildPrompt(withoutHistory).prompt, input.modelContext, input.signal);
-    if (nonCompressible.status === 'failed') return nonCompressible;
-    const summaryOnly = input.facts.compactionSummary
-      ? await this.countUsage(this.buildPrompt({ ...withoutHistory, compactionSummary: input.facts.compactionSummary }).prompt, input.modelContext, input.signal)
-      : { status: 'counted' as const, usage: calculateContextUsage({ inputTokens: 0, capacity: input.modelContext, policy: this.policy }) };
-    if (summaryOnly.status === 'failed') return summaryOnly;
-    const turnCounts: number[] = [];
-    for (const turn of input.facts.historicalTurns) {
-      const counted = await this.countUsage(this.buildPrompt({ ...withoutHistory, historicalTurns: [turn] }).prompt, input.modelContext, input.signal);
-      if (counted.status === 'failed') return counted;
-      turnCounts.push(Math.max(0, counted.usage.usedTokens - nonCompressible.usage.usedTokens));
-    }
     const plan = planCompaction({
-      previousSummaryInputTokens: Math.max(0, summaryOnly.usage.usedTokens - nonCompressible.usage.usedTokens),
-      nonCompressibleInputTokens: nonCompressible.usage.usedTokens,
       historicalTurns: input.facts.historicalTurns,
-      historicalTurnInputTokens: turnCounts,
-      thresholdInputTokens: Math.floor(input.modelContext.contextWindowTokens * this.policy.compactionThresholdRatio),
+      keepRecentTurns: this.policy.keepRecentTurns,
       ...(input.facts.currentTurn ? { currentTurn: input.facts.currentTurn } : {}),
     });
     if (plan.status === 'nothing_to_compact') return plan;
@@ -320,7 +307,10 @@ export class ContextServiceImpl implements ContextService {
     const compactedFacts: BuildFacts = { ...input.facts, historicalTurns: retainedTurns, compactionSummary: { compactionId, content: generated.content } };
     const projected = await this.countUsage(this.buildPrompt(compactedFacts).prompt, input.modelContext, input.signal);
     if (projected.status === 'failed') return projected;
-    const reduction = validateCompactionReduction({ usageBeforeInputTokens: input.usageBefore.usedTokens, usageAfterInputTokens: projected.usage.usedTokens, thresholdInputTokens: Math.floor(input.modelContext.contextWindowTokens * this.policy.compactionThresholdRatio) });
+    const reduction = validateCompactionReduction({
+      usageBeforeInputTokens: input.usageBefore.usedTokens,
+      usageAfterInputTokens: projected.usage.usedTokens,
+    });
     if (reduction.status === 'nothing_to_compact') return reduction;
     if (input.signal?.aborted) return failed(cancelled());
 

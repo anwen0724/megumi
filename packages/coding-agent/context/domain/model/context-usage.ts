@@ -9,6 +9,7 @@ export type ContextCapacity = {
 
 export type ContextPolicy = {
   compactionThresholdRatio: number;
+  keepRecentTurns: number;
 };
 
 export type ContextUsage = {

@@ -9,6 +9,7 @@ import type {
   CompactSessionRequest,
   CompactSessionResult,
   ContextCapacity,
+  ContextPolicy,
   ContextService,
   ContextSourceRef,
   ContextUsage,
@@ -69,6 +70,10 @@ describe('Context v2 public domain', () => {
       providerId: string;
       modelId: string;
       contextWindowTokens: number;
+    }>();
+    expectTypeOf<ContextPolicy>().toEqualTypeOf<{
+      compactionThresholdRatio: number;
+      keepRecentTurns: number;
     }>();
     expectTypeOf<ContextUsage>().toEqualTypeOf<{
       usedTokens: number;

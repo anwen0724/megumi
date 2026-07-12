@@ -67,7 +67,7 @@ export type CompactSessionResult =
     }
   | {
       status: 'nothing_to_compact';
-      reason: 'no_complete_turns' | 'no_reducible_prefix' | 'summary_not_reducing';
+      reason: 'no_complete_turns' | 'no_older_turns' | 'summary_not_reducing';
     }
   | { status: 'failed'; failure: ContextFailure };
 

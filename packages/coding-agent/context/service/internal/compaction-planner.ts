@@ -1,5 +1,5 @@
 /*
- * Plans one rolling compaction attempt from measured complete-Turn prompt usage.
+ * Plans rolling compaction by retaining a fixed number of recent complete Turns.
  */
 import type {
   ConversationTurn,
@@ -13,11 +13,8 @@ export type CompactionPlan = {
 };
 
 export type PlanCompactionRequest = {
-  previousSummaryInputTokens: number;
-  nonCompressibleInputTokens: number;
   historicalTurns: ConversationTurn[];
-  historicalTurnInputTokens: number[];
-  thresholdInputTokens: number;
+  keepRecentTurns: number;
   currentTurn?: CurrentConversationTurn;
 };
 
@@ -25,47 +22,26 @@ export type PlanCompactionResult =
   | { status: 'planned'; plan: CompactionPlan }
   | {
       status: 'nothing_to_compact';
-      reason: 'no_complete_turns' | 'no_reducible_prefix';
+      reason: 'no_complete_turns' | 'no_older_turns';
     };
 
 export function planCompaction(request: PlanCompactionRequest): PlanCompactionResult {
-  validateRequest(request);
+  validateKeepRecentTurns(request.keepRecentTurns);
   if (request.historicalTurns.length === 0) {
     return { status: 'nothing_to_compact', reason: 'no_complete_turns' };
   }
 
-  const historicalInputTokens = sum(request.historicalTurnInputTokens);
-  const usageBeforeInputTokens = request.nonCompressibleInputTokens
-    + request.previousSummaryInputTokens
-    + historicalInputTokens;
-  let retainedTurnInputTokens = historicalInputTokens;
-  let largestReduciblePrefixLength = 0;
-
-  for (let index = 0; index < request.historicalTurns.length; index += 1) {
-    retainedTurnInputTokens -= request.historicalTurnInputTokens[index];
-    // The active prior Summary remains in every planning projection. The
-    // generated replacement is validated against actual complete usage later;
-    // planning does not invent a fixed compression ratio for unknown output.
-    const projectedInputTokens = request.nonCompressibleInputTokens
-      + request.previousSummaryInputTokens
-      + retainedTurnInputTokens;
-
-    if (projectedInputTokens >= usageBeforeInputTokens) continue;
-    largestReduciblePrefixLength = index + 1;
-    if (projectedInputTokens < request.thresholdInputTokens) {
-      return plannedPrefix(request, index + 1);
-    }
+  const prefixLength = request.historicalTurns.length - request.keepRecentTurns;
+  if (prefixLength <= 0) {
+    return { status: 'nothing_to_compact', reason: 'no_older_turns' };
   }
 
-  return largestReduciblePrefixLength > 0
-    ? plannedPrefix(request, largestReduciblePrefixLength)
-    : { status: 'nothing_to_compact', reason: 'no_reducible_prefix' };
+  return plannedPrefix(request, prefixLength);
 }
 
 export type ValidateCompactionReductionRequest = {
   usageBeforeInputTokens: number;
   usageAfterInputTokens: number;
-  thresholdInputTokens: number;
 };
 
 export type ValidateCompactionReductionResult =
@@ -77,7 +53,6 @@ export function validateCompactionReduction(
 ): ValidateCompactionReductionResult {
   validateTokenCount(request.usageBeforeInputTokens, 'usageBeforeInputTokens');
   validateTokenCount(request.usageAfterInputTokens, 'usageAfterInputTokens');
-  validateTokenCount(request.thresholdInputTokens, 'thresholdInputTokens');
 
   return request.usageAfterInputTokens < request.usageBeforeInputTokens
     ? { status: 'valid' }
@@ -103,26 +78,14 @@ function plannedPrefix(
   };
 }
 
-function validateRequest(request: PlanCompactionRequest): void {
-  validateTokenCount(request.previousSummaryInputTokens, 'previousSummaryInputTokens');
-  validateTokenCount(request.nonCompressibleInputTokens, 'nonCompressibleInputTokens');
-  validateTokenCount(request.thresholdInputTokens, 'thresholdInputTokens');
-
-  if (request.historicalTurnInputTokens.length !== request.historicalTurns.length) {
-    throw new RangeError('Compaction usage arrays must align with historicalTurns.');
+function validateKeepRecentTurns(value: number): void {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new RangeError('keepRecentTurns must be a nonnegative integer.');
   }
-
-  request.historicalTurnInputTokens.forEach((tokens, index) => {
-    validateTokenCount(tokens, `historicalTurnInputTokens[${index}]`);
-  });
 }
 
 function validateTokenCount(value: number, name: string): void {
   if (!Number.isInteger(value) || value < 0) {
     throw new RangeError(`${name} must be a nonnegative integer.`);
   }
-}
-
-function sum(values: number[]): number {
-  return values.reduce((total, value) => total + value, 0);
 }

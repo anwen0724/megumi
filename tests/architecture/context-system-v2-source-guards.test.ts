@@ -132,6 +132,13 @@ describe('Context system v2 source guards', () => {
     expect(contextSource).not.toMatch(/ContextUsageSubscription|\.subscribe\(|\.unsubscribe\(/);
   });
 
+  it('uses fixed recent-Turn retention instead of threshold-seeking prefix estimates', () => {
+    const contextSource = readTree('packages/coding-agent/context');
+
+    expect(contextSource).toContain('keepRecentTurns');
+    expect(contextSource).not.toMatch(/previousSummaryInputTokens|nonCompressibleInputTokens|historicalTurnInputTokens|thresholdInputTokens/);
+  });
+
   it('keeps Prompt.tools as the only model-facing tool input', () => {
     const agentRunSource = readTree('packages/coding-agent/agent-run');
 

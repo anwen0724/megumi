@@ -12,84 +12,53 @@ import {
 } from '@megumi/coding-agent/context/service/internal/compaction-planner';
 
 describe('planCompaction', () => {
-  it('selects the smallest earliest continuous prefix expected to reach the threshold', () => {
-    const turns = [turn('1'), turn('2'), turn('3')];
+  it('keeps the ten most recent completed Turns and compacts every older Turn', () => {
+    const turns = Array.from({ length: 25 }, (_, index) => turn(String(index + 1)));
 
     const result = planCompaction({
-      previousSummaryInputTokens: 50,
-      nonCompressibleInputTokens: 500,
       historicalTurns: turns,
-      historicalTurnInputTokens: [200, 250, 300],
-      thresholdInputTokens: 1_050,
-      currentTurn: currentTurn('current', 'entry-assistant-3'),
+      keepRecentTurns: 10,
+      currentTurn: currentTurn('current', 'entry-assistant-25'),
     });
 
     expect(result).toEqual({
       status: 'planned',
       plan: {
-        turns: turns.slice(0, 2),
-        coveredUntilEntryId: 'entry-assistant-2',
-        firstKeptEntryId: 'entry-user-3',
+        turns: turns.slice(0, 15),
+        coveredUntilEntryId: 'entry-assistant-15',
+        firstKeptEntryId: 'entry-user-16',
       },
     });
   });
 
-  it('keeps the Current Turn outside the selected prefix and uses it as the kept boundary', () => {
-    const current = currentTurn('current', 'entry-assistant-2');
+  it('does not count the Current Turn among ten retained completed Turns', () => {
+    const turns = Array.from({ length: 11 }, (_, index) => turn(String(index + 1)));
+    const current = currentTurn('current', 'entry-assistant-11');
     const result = planCompaction({
-      previousSummaryInputTokens: 0,
-      nonCompressibleInputTokens: 700,
-      historicalTurns: [turn('1'), turn('2')],
-      historicalTurnInputTokens: [200, 200],
-      thresholdInputTokens: 800,
+      historicalTurns: turns,
+      keepRecentTurns: 10,
       currentTurn: current,
     });
 
     expect(result.status).toBe('planned');
     if (result.status !== 'planned') throw new Error('Expected a plan.');
-    expect(result.plan.turns.map(({ source }) => source.runId)).toEqual(['run-1', 'run-2']);
+    expect(result.plan.turns.map(({ source }) => source.runId)).toEqual(['run-1']);
     expect(result.plan.turns).not.toContain(current);
-    expect(result.plan.firstKeptEntryId).toBe('entry-user-current');
-  });
-
-  it('falls back once to the largest reducible prefix when no candidate reaches threshold', () => {
-    const turns = [turn('1'), turn('2'), turn('3')];
-
-    const result = planCompaction({
-      previousSummaryInputTokens: 100,
-      nonCompressibleInputTokens: 900,
-      historicalTurns: turns,
-      historicalTurnInputTokens: [100, 100, 100],
-      thresholdInputTokens: 800,
-    });
-
-    expect(result).toEqual({
-      status: 'planned',
-      plan: {
-        turns,
-        coveredUntilEntryId: 'entry-assistant-3',
-      },
-    });
+    expect(result.plan.firstKeptEntryId).toBe('entry-user-2');
   });
 
   it('returns no_complete_turns without producing a plan', () => {
     expect(planCompaction({
-      previousSummaryInputTokens: 50,
-      nonCompressibleInputTokens: 900,
       historicalTurns: [],
-      historicalTurnInputTokens: [],
-      thresholdInputTokens: 800,
+      keepRecentTurns: 10,
     })).toEqual({ status: 'nothing_to_compact', reason: 'no_complete_turns' });
   });
 
-  it('returns no_reducible_prefix when every replacement projection is non-reducing', () => {
+  it('returns no_older_turns when all completed Turns fit within retention', () => {
     expect(planCompaction({
-      previousSummaryInputTokens: 100,
-      nonCompressibleInputTokens: 700,
-      historicalTurns: [turn('1'), turn('2')],
-      historicalTurnInputTokens: [0, 0],
-      thresholdInputTokens: 750,
-    })).toEqual({ status: 'nothing_to_compact', reason: 'no_reducible_prefix' });
+      historicalTurns: Array.from({ length: 10 }, (_, index) => turn(String(index + 1))),
+      keepRecentTurns: 10,
+    })).toEqual({ status: 'nothing_to_compact', reason: 'no_older_turns' });
   });
 });
 
@@ -98,7 +67,6 @@ describe('validateCompactionReduction', () => {
     expect(validateCompactionReduction({
       usageBeforeInputTokens: 1_000,
       usageAfterInputTokens: 900,
-      thresholdInputTokens: 800,
     })).toEqual({ status: 'valid' });
   });
 
@@ -108,7 +76,6 @@ describe('validateCompactionReduction', () => {
       expect(validateCompactionReduction({
         usageBeforeInputTokens: 1_000,
         usageAfterInputTokens,
-        thresholdInputTokens: 800,
       })).toEqual({ status: 'nothing_to_compact', reason: 'summary_not_reducing' });
     },
   );
