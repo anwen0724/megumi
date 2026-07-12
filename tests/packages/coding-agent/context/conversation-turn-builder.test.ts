@@ -62,14 +62,14 @@ function messages(runId: string, withAssistant: boolean): SessionHistoryItem[] {
   const user: SessionHistoryItem = {
     type: 'message',
     entry: { entry_id: `EU-${runId}`, session_id: 'S1', entry_type: 'message', message_id: `MU-${runId}`, created_at: 'now' },
-    message: { message_id: `MU-${runId}`, session_id: 'S1', run_id: runId, role: 'user', content_text: `User ${runId}`, created_at: 'now' },
+    message: { message_id: `MU-${runId}`, session_id: 'S1', run_id: runId, conversation: { role: 'user', content: [{ type: 'text', text: `User ${runId}` }] }, created_at: 'now' },
     attachments: [],
   };
   if (!withAssistant) return [user];
   return [user, {
     type: 'message',
     entry: { entry_id: `EA-${runId}`, session_id: 'S1', entry_type: 'message', message_id: `MA-${runId}`, created_at: 'now' },
-    message: { message_id: `MA-${runId}`, session_id: 'S1', run_id: runId, role: 'assistant', content_text: `Assistant ${runId}`, created_at: 'now' },
+    message: { message_id: `MA-${runId}`, session_id: 'S1', run_id: runId, conversation: { role: 'assistant', content: [{ type: 'text', text: `Assistant ${runId}` }] }, created_at: 'now' },
     attachments: [],
   }];
 }

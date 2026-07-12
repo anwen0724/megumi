@@ -201,7 +201,7 @@ export async function runAgentModelToolLoop(
         message_id: dependencies.ids.assistant_message_id(),
         session_id: run.session_id,
         run_id: run.run_id,
-        content_text: modelEvents.content,
+        content: [{ type: 'text', text: modelEvents.content }],
         completed_at: dependencies.clock.now(),
       });
       if (assistant.status === 'failed') {

@@ -137,7 +137,7 @@ describe('composeCodingAgentRuntime trace wiring', () => {
       message_id: 'message-1',
       session_id: sessionId,
       run_id: 'run-waiting',
-      content_text: 'write hello world',
+      content: [{ type: 'text', text: 'write hello world' }],
       created_at: '2026-07-08T00:00:00.000Z',
     });
     firstRuntime.dispose();

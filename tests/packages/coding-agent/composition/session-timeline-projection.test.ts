@@ -33,9 +33,8 @@ describe('projectSessionTimelineMessages', () => {
       projectId: 'workspace-1',
       messages: [sessionMessage({
         message_id: 'assistant-message-1',
-        role: 'assistant',
+        conversation: { role: 'assistant', content: [{ type: 'text', text: '文件写好了。' }] },
         run_id: 'run-1',
-        content_text: '文件写好了。',
       })],
       workspaceChangeFooterProjector: footerProjector,
     });
@@ -64,8 +63,7 @@ describe('createSessionTimelineQuery', () => {
       status: 'ok' as const,
       messages: [sessionMessage({
         message_id: 'user-message-1',
-        role: 'user',
-        content_text: 'hello',
+        conversation: { role: 'user', content: [{ type: 'text', text: 'hello' }] },
       })],
     }));
     const query = createSessionTimelineQuery({
@@ -95,8 +93,8 @@ describe('createSessionTimelineQuery', () => {
     const getActiveConversationHistory = vi.fn(() => ({
       status: 'ok' as const,
       messages: [
-        sessionMessage({ message_id: 'assistant-message-1', role: 'assistant', run_id: 'run-1' }),
-        sessionMessage({ message_id: 'assistant-message-2', role: 'assistant', run_id: 'run-2' }),
+        sessionMessage({ message_id: 'assistant-message-1', conversation: { role: 'assistant', content: [{ type: 'text', text: 'one' }] }, run_id: 'run-1' }),
+        sessionMessage({ message_id: 'assistant-message-2', conversation: { role: 'assistant', content: [{ type: 'text', text: 'two' }] }, run_id: 'run-2' }),
       ],
     }));
     const projectRunFooter = vi.fn(() => undefined);
@@ -184,8 +182,7 @@ function sessionMessage(
       message_id: 'message-1',
       session_id: 'session-1',
       run_id: 'run-1',
-      role: 'assistant',
-      content_text: 'ok',
+      conversation: { role: 'assistant', content: [{ type: 'text', text: 'ok' }] },
       created_at: '2026-07-09T11:13:00.000Z',
       completed_at: '2026-07-09T11:13:01.000Z',
       ...overrides,

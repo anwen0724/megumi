@@ -28,6 +28,8 @@ import type {
   SaveCompactionSummaryResult,
   SaveUserMessageRequest,
   SaveUserMessageResult,
+  SaveToolResultMessageRequest,
+  SaveToolResultMessageResult,
   SessionEntry,
   SessionHistoryItem,
   SessionMessageAttachment,
@@ -121,8 +123,7 @@ class DefaultSessionService implements SessionService {
           message_id: request.message_id,
           session_id: request.session_id,
           ...(request.run_id ? { run_id: request.run_id } : {}),
-          role: 'user',
-          content_text: request.content_text,
+          conversation: { role: 'user', content: request.content },
           created_at: request.created_at,
           completed_at: request.created_at,
         });
@@ -167,8 +168,11 @@ class DefaultSessionService implements SessionService {
           message_id: request.message_id,
           session_id: request.session_id,
           run_id: request.run_id,
-          role: 'assistant',
-          content_text: request.content_text,
+          conversation: {
+            role: 'assistant',
+            content: request.content,
+            ...(request.stop_reason ? { stopReason: request.stop_reason } : {}),
+          },
           created_at: request.completed_at,
           completed_at: request.completed_at,
         });
@@ -243,6 +247,50 @@ class DefaultSessionService implements SessionService {
         }
       }
       return { status: 'ok', history };
+    } catch (error) {
+      return failed(error);
+    }
+  }
+
+  saveToolResultMessage(request: SaveToolResultMessageRequest): SaveToolResultMessageResult {
+    try {
+      return this.options.repository.runInTransaction<SaveToolResultMessageResult>(() => {
+        const session = this.options.repository.findSessionById(request.session_id);
+        if (!session) {
+          return {
+            status: 'failed',
+            failure: { code: 'session_not_found', message: `Session ${request.session_id} was not found` },
+          };
+        }
+        const message = this.options.repository.insertMessage({
+          message_id: request.message_id,
+          session_id: request.session_id,
+          run_id: request.run_id,
+          conversation: {
+            role: 'toolResult',
+            toolCallId: request.tool_call_id,
+            toolName: request.tool_name,
+            status: request.status,
+            content: request.content,
+          },
+          created_at: request.completed_at,
+          completed_at: request.completed_at,
+        });
+        const entry = this.options.repository.insertEntry({
+          entry_id: this.entryId({ kind: 'message', source_id: request.message_id }),
+          session_id: request.session_id,
+          parent_entry_id: session.active_entry_id,
+          entry_type: 'message',
+          message_id: request.message_id,
+          created_at: request.completed_at,
+        });
+        this.options.repository.updateActiveEntry({
+          session_id: request.session_id,
+          active_entry_id: entry.entry_id,
+          updated_at: request.completed_at,
+        });
+        return { status: 'saved', message, entry };
+      });
     } catch (error) {
       return failed(error);
     }

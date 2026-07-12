@@ -12,11 +12,12 @@ import type {
   StartRunResult,
 } from '../../coding-agent/agent-run';
 
-import type {
-  Session,
-  SessionBranchService,
-  SessionMessageWithAttachments,
-  SessionService,
+import {
+  sessionConversationText,
+  type Session,
+  type SessionBranchService,
+  type SessionMessageWithAttachments,
+  type SessionService,
 } from '../../coding-agent/session';
 
 import type { CommandService } from '../../coding-agent/commands';
@@ -744,8 +745,8 @@ export function toChatMessageUiDto(item: SessionMessageWithAttachments): ChatSes
     id: message.message_id,
     sessionId: message.session_id,
     ...(message.run_id ? { runId: message.run_id } : {}),
-    role: message.role,
-    text: message.content_text,
+    role: message.conversation.role === 'assistant' ? 'assistant' : 'user',
+    text: sessionConversationText(message.conversation),
     createdAt: message.created_at,
   };
 }

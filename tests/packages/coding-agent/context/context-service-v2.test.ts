@@ -17,8 +17,8 @@ const currentTurn = {
 
 function history(): SessionHistoryItem[] {
   return [
-    { type: 'message', entry: { entry_id: 'E-user', session_id: 'S1', entry_type: 'message', message_id: 'M-user', created_at: 'now' }, message: { message_id: 'M-user', session_id: 'S1', run_id: 'R-old', role: 'user', content_text: 'before', created_at: 'now' }, attachments: [] },
-    { type: 'message', entry: { entry_id: 'E-assistant', session_id: 'S1', parent_entry_id: 'E-user', entry_type: 'message', message_id: 'M-assistant', created_at: 'now' }, message: { message_id: 'M-assistant', session_id: 'S1', run_id: 'R-old', role: 'assistant', content_text: 'done', created_at: 'now' }, attachments: [] },
+    { type: 'message', entry: { entry_id: 'E-user', session_id: 'S1', entry_type: 'message', message_id: 'M-user', created_at: 'now' }, message: { message_id: 'M-user', session_id: 'S1', run_id: 'R-old', conversation: { role: 'user', content: [{ type: 'text', text: 'before' }] }, created_at: 'now' }, attachments: [] },
+    { type: 'message', entry: { entry_id: 'E-assistant', session_id: 'S1', parent_entry_id: 'E-user', entry_type: 'message', message_id: 'M-assistant', created_at: 'now' }, message: { message_id: 'M-assistant', session_id: 'S1', run_id: 'R-old', conversation: { role: 'assistant', content: [{ type: 'text', text: 'done' }] }, created_at: 'now' }, attachments: [] },
   ];
 }
 

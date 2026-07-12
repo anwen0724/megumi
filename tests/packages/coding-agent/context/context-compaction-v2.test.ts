@@ -13,8 +13,8 @@ function completeHistory(turnCount = 1): SessionHistoryItem[] {
     const userEntryId = `EU-${number}`;
     const assistantEntryId = `EA-${number}`;
     return [
-      { type: 'message' as const, entry: { entry_id: userEntryId, session_id: 'S1', ...(index > 0 ? { parent_entry_id: `EA-${index}` } : {}), entry_type: 'message' as const, message_id: `MU-${number}`, created_at: 'now' }, message: { message_id: `MU-${number}`, session_id: 'S1', run_id: runId, role: 'user' as const, content_text: `old-${number}`, created_at: 'now' }, attachments: [] },
-      { type: 'message' as const, entry: { entry_id: assistantEntryId, session_id: 'S1', parent_entry_id: userEntryId, entry_type: 'message' as const, message_id: `MA-${number}`, created_at: 'now' }, message: { message_id: `MA-${number}`, session_id: 'S1', run_id: runId, role: 'assistant' as const, content_text: `answer-${number}`, created_at: 'now' }, attachments: [] },
+      { type: 'message' as const, entry: { entry_id: userEntryId, session_id: 'S1', ...(index > 0 ? { parent_entry_id: `EA-${index}` } : {}), entry_type: 'message' as const, message_id: `MU-${number}`, created_at: 'now' }, message: { message_id: `MU-${number}`, session_id: 'S1', run_id: runId, conversation: { role: 'user' as const, content: [{ type: 'text' as const, text: `old-${number}` }] }, created_at: 'now' }, attachments: [] },
+      { type: 'message' as const, entry: { entry_id: assistantEntryId, session_id: 'S1', parent_entry_id: userEntryId, entry_type: 'message' as const, message_id: `MA-${number}`, created_at: 'now' }, message: { message_id: `MA-${number}`, session_id: 'S1', run_id: runId, conversation: { role: 'assistant' as const, content: [{ type: 'text' as const, text: `answer-${number}` }] }, created_at: 'now' }, attachments: [] },
     ];
   }).flat();
 }

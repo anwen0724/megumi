@@ -10,6 +10,7 @@ import type {
   SessionMessage,
   SessionMessageAttachment,
 } from '../contracts/session-contracts';
+import { SessionConversationMessageSchema } from '../contracts/session-contracts';
 
 type Nullable<T> = T | null;
 
@@ -60,10 +61,10 @@ export class SessionRepository {
   insertMessage(message: SessionMessage): SessionMessage {
     this.database.prepare(`
       INSERT INTO session_messages (
-        message_id, session_id, run_id, role, content_text,
+        message_id, session_id, run_id, role, content_text, message_json,
         created_at, completed_at
       ) VALUES (
-        @message_id, @session_id, @run_id, @role, @content_text,
+        @message_id, @session_id, @run_id, @role, @content_text, @message_json,
         @created_at, @completed_at
       )
     `).run(toMessageRow(message));
@@ -243,8 +244,9 @@ type SessionMessageRow = {
   message_id: string;
   session_id: string;
   run_id: Nullable<string>;
-  role: SessionMessage['role'];
+  role: SessionMessage['conversation']['role'];
   content_text: string;
+  message_json: string;
   created_at: string;
   completed_at: Nullable<string>;
 };
@@ -311,23 +313,38 @@ function toMessageRow(message: SessionMessage): SessionMessageRow {
     message_id: message.message_id,
     session_id: message.session_id,
     run_id: message.run_id ?? null,
-    role: message.role,
-    content_text: message.content_text,
+    role: message.conversation.role,
+    content_text: deriveLegacyText(message.conversation),
+    message_json: JSON.stringify(message.conversation),
     created_at: message.created_at,
     completed_at: message.completed_at ?? null,
   };
 }
 
 function fromMessageRow(row: SessionMessageRow): SessionMessage {
+  const conversation = SessionConversationMessageSchema.parse(JSON.parse(row.message_json));
+  if (conversation.role !== row.role) {
+    throw new Error(`Session message ${row.message_id} role does not match message_json.`);
+  }
   return {
     message_id: row.message_id,
     session_id: row.session_id,
     ...(row.run_id ? { run_id: row.run_id } : {}),
-    role: row.role,
-    content_text: row.content_text,
+    conversation,
     created_at: row.created_at,
     ...(row.completed_at ? { completed_at: row.completed_at } : {}),
   };
+}
+
+function deriveLegacyText(message: SessionMessage['conversation']): string {
+  if (message.role === 'toolResult') {
+    return message.content.flatMap((block) => block.type === 'text' ? [block.text] : []).join('');
+  }
+  return message.content.flatMap((block) => {
+    if (block.type === 'text') return [block.text];
+    if (block.type === 'thinking') return [block.thinking];
+    return [];
+  }).join('');
 }
 
 function toAttachmentRow(attachment: SessionMessageAttachment): SessionMessageAttachmentRow {

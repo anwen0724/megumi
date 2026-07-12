@@ -61,6 +61,7 @@ export const sessionMessages = sqliteTable('session_messages', {
   runId: text('run_id'),
   role: text('role').notNull(),
   contentText: text('content_text').notNull(),
+  messageJson: jsonText('message_json').notNull(),
   createdAt: text('created_at').notNull(),
   completedAt: text('completed_at'),
 }, (table) => [

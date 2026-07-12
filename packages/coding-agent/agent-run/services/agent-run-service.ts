@@ -203,7 +203,7 @@ class DefaultAgentRunService implements AgentRunService {
       message_id: userMessageId,
       session_id: sessionId,
       run_id: runId,
-      content_text: textForRun(parsedInput, commandRoute.command_result),
+      content: [{ type: 'text', text: textForRun(parsedInput, commandRoute.command_result) }],
       attachments: parsedInput.attachments,
       ...(branchParent.parent_entry_id ? { parent_entry_id: branchParent.parent_entry_id } : {}),
       created_at: this.clock.now(),
@@ -1430,7 +1430,7 @@ function currentTurnFromSavedUserMessage(
     userMessage: {
       type: 'user_message',
       content: [
-        { type: 'text', text: saved.message.content_text },
+        ...(saved.message.conversation.role === 'user' ? saved.message.conversation.content : []),
         ...saved.attachments.map((attachment) => attachment.type === 'image'
           ? {
               type: 'image' as const,

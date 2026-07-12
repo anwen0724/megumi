@@ -3,6 +3,14 @@
  * session-owned business facts and the Session Service API.
  */
 
+import { z } from 'zod';
+import {
+  AssistantContentBlockSchema,
+  ContentBlockListSchema,
+  type AssistantContentBlock,
+  type ContentBlock,
+} from '@megumi/ai';
+
 type RuntimeError = {
   code: string;
   message: string;
@@ -20,12 +28,51 @@ export type Session = {
   archived_at?: string;
 };
 
+export const SessionUserConversationMessageSchema = z.object({
+  role: z.literal('user'),
+  content: ContentBlockListSchema,
+}).strict();
+
+export const SessionAssistantConversationMessageSchema = z.object({
+  role: z.literal('assistant'),
+  content: z.array(AssistantContentBlockSchema),
+  stopReason: z.string().min(1).optional(),
+}).strict();
+
+export const SessionToolResultConversationMessageSchema = z.object({
+  role: z.literal('toolResult'),
+  toolCallId: z.string().min(1),
+  toolName: z.string().min(1),
+  status: z.enum(['success', 'failure']),
+  content: ContentBlockListSchema,
+}).strict();
+
+export const SessionConversationMessageSchema = z.discriminatedUnion('role', [
+  SessionUserConversationMessageSchema,
+  SessionAssistantConversationMessageSchema,
+  SessionToolResultConversationMessageSchema,
+]);
+
+export type SessionConversationMessage =
+  | { role: 'user'; content: ContentBlock[] }
+  | { role: 'assistant'; content: AssistantContentBlock[]; stopReason?: string }
+  | {
+      role: 'toolResult';
+      toolCallId: string;
+      toolName: string;
+      status: 'success' | 'failure';
+      content: ContentBlock[];
+    };
+
+export function sessionConversationText(message: SessionConversationMessage): string {
+  return message.content.flatMap((block) => block.type === 'text' ? [block.text] : []).join('');
+}
+
 export type SessionMessage = {
   message_id: string;
   session_id: string;
   run_id?: string;
-  role: 'user' | 'assistant';
-  content_text: string;
+  conversation: SessionConversationMessage;
   created_at: string;
   completed_at?: string;
 };
@@ -129,7 +176,7 @@ export type SaveUserMessageRequest = {
   message_id: string;
   session_id: string;
   run_id?: string;
-  content_text: string;
+  content: ContentBlock[];
   attachments?: SessionMessageAttachmentInput[];
   parent_entry_id?: string;
   created_at: string;
@@ -143,11 +190,27 @@ export type SaveAssistantMessageRequest = {
   message_id: string;
   session_id: string;
   run_id: string;
-  content_text: string;
+  content: AssistantContentBlock[];
+  stop_reason?: string;
   completed_at: string;
 };
 
 export type SaveAssistantMessageResult =
+  | { status: 'saved'; message: SessionMessage; entry: SessionEntry }
+  | { status: 'failed'; failure: RuntimeError };
+
+export type SaveToolResultMessageRequest = {
+  message_id: string;
+  session_id: string;
+  run_id: string;
+  tool_call_id: string;
+  tool_name: string;
+  status: 'success' | 'failure';
+  content: ContentBlock[];
+  completed_at: string;
+};
+
+export type SaveToolResultMessageResult =
   | { status: 'saved'; message: SessionMessage; entry: SessionEntry }
   | { status: 'failed'; failure: RuntimeError };
 
@@ -232,6 +295,7 @@ export type SessionService = {
   archiveSession(request: ArchiveSessionRequest): ArchiveSessionResult;
   saveUserMessage(request: SaveUserMessageRequest): SaveUserMessageResult;
   saveAssistantMessage(request: SaveAssistantMessageRequest): SaveAssistantMessageResult;
+  saveToolResultMessage(request: SaveToolResultMessageRequest): SaveToolResultMessageResult;
   listMessages(request: ListMessagesRequest): ListMessagesResult;
   getActivePath(request: GetActivePathRequest): GetActivePathResult;
   getActiveHistory(request: GetActiveHistoryRequest): GetActiveHistoryResult;

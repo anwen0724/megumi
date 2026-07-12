@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SessionConversationMessageSchema } from '@megumi/coding-agent/session';
 import type {
   CreateSessionRequest,
   GetActiveHistoryResult,
@@ -32,19 +33,50 @@ describe('session contracts v2', () => {
     expect('metadata_json' in session).toBe(false);
   });
 
-  it('models completed user and assistant messages without message status or blocks', () => {
+  it('models complete provider-neutral conversation messages without runtime metadata', () => {
     const message: SessionMessage = {
       message_id: 'message:1',
       session_id: 'session:1',
-      role: 'user',
-      content_text: 'hello',
+      conversation: { role: 'user', content: [{ type: 'text', text: 'hello' }] },
       created_at: '2026-07-04T00:00:00.000Z',
       completed_at: '2026-07-04T00:00:00.000Z',
     };
 
-    expect(message.role).toBe('user');
+    expect(message.conversation.role).toBe('user');
     expect('status' in message).toBe(false);
     expect(['blocks', 'json'].join('_') in message).toBe(false);
+  });
+
+  it('accepts semantic assistant and tool-result messages and rejects provider/runtime fields', () => {
+    expect(SessionConversationMessageSchema.parse({
+      role: 'assistant',
+      content: [
+        { type: 'thinking', thinking: 'inspect first' },
+        { type: 'text', text: 'Checking.' },
+        { type: 'toolCall', id: 'T1', name: 'read_file', argumentsText: '{"path":"a.ts"}' },
+      ],
+      stopReason: 'tool_use',
+    })).toMatchObject({ role: 'assistant', stopReason: 'tool_use' });
+    expect(SessionConversationMessageSchema.parse({
+      role: 'toolResult',
+      toolCallId: 'T1',
+      toolName: 'read_file',
+      status: 'success',
+      content: [{ type: 'text', text: 'source' }],
+    })).toMatchObject({ role: 'toolResult', toolCallId: 'T1' });
+
+    for (const forbidden of [
+      { usage: { input_tokens: 1 } },
+      { error: { code: 'provider_error' } },
+      { sequence: 2 },
+      { requestId: 'request:1' },
+    ]) {
+      expect(SessionConversationMessageSchema.safeParse({
+        role: 'assistant',
+        content: [{ type: 'text', text: 'reply' }],
+        ...forbidden,
+      }).success).toBe(false);
+    }
   });
 
   it('models user message attachment references', () => {

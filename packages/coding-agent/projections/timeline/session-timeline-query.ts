@@ -2,7 +2,7 @@
  * Projects the active Session path into the stable Timeline model consumed by
  * product hosts. Session storage and Workspace footer facts remain hidden.
  */
-import type { SessionMessageWithAttachments, SessionService } from '../../session';
+import { sessionConversationText, type SessionMessageWithAttachments, type SessionService } from '../../session';
 import type { WorkspaceChangeFooterProjectorService } from '../workspace/workspace-change-footer-projector';
 import type { TimelineMessage } from './timeline-message-blocks';
 
@@ -58,7 +58,7 @@ export function projectSessionTimelineMessages(input: {
   return input.messages.map((item): TimelineMessage => {
     const message = item.message;
     const createdAt = message.created_at;
-    if (message.role === 'assistant') {
+    if (message.conversation.role === 'assistant' || message.conversation.role === 'toolResult') {
       const runId = message.run_id ?? `run:${message.message_id}`;
       const workspaceChangeFooter = input.workspaceChangeFooterProjector?.projectRunFooter(runId);
       return {
@@ -76,7 +76,7 @@ export function projectSessionTimelineMessages(input: {
           runId,
           textId: `text:${message.message_id}`,
           status: 'completed',
-          text: message.content_text,
+          text: sessionConversationText(message.conversation),
           format: 'markdown',
           createdAt,
           ...(message.completed_at ? { updatedAt: message.completed_at } : {}),
@@ -95,7 +95,7 @@ export function projectSessionTimelineMessages(input: {
       blocks: [{
         blockId: `user-text:${message.message_id}`,
         kind: 'user_text',
-        text: message.content_text,
+        text: sessionConversationText(message.conversation),
         format: 'plain',
         createdAt,
         ...(message.completed_at ? { updatedAt: message.completed_at } : {}),

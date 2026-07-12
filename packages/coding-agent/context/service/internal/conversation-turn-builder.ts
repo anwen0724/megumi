@@ -3,7 +3,7 @@
  */
 import type { ContentBlock } from '@megumi/ai';
 import type { HistoricalRun } from '../../../agent-run';
-import type { SessionHistoryItem, SessionMessageAttachment } from '../../../session';
+import { sessionConversationText, type SessionHistoryItem, type SessionMessageAttachment } from '../../../session';
 import type { ConversationTurn } from '../../domain/model/conversation-turn';
 
 export type BuildConversationTurnsRequest = {
@@ -22,14 +22,14 @@ export function buildConversationTurns(request: BuildConversationTurnsRequest): 
 
   for (let index = 0; index < messages.length;) {
     const user = messages[index]!;
-    if (user.message.role !== 'user' || !user.message.run_id) {
+    if (user.message.conversation.role !== 'user' || !user.message.run_id) {
       index += 1;
       continue;
     }
     const runId = user.message.run_id;
     const historicalRun = request.historicalRunsByRunId.get(runId);
     const possibleAssistant = messages[index + 1];
-    const assistant = possibleAssistant?.message.role === 'assistant' && possibleAssistant.message.run_id === runId
+    const assistant = possibleAssistant?.message.conversation.role === 'assistant' && possibleAssistant.message.run_id === runId
       ? possibleAssistant
       : undefined;
 
@@ -44,12 +44,14 @@ export function buildConversationTurns(request: BuildConversationTurnsRequest): 
         } : {}),
       },
       ...(historicalRun ? { runStatus: historicalRun.runStatus } : {}),
-      userMessage: { type: 'user_message', content: messageContent(user.message.content_text, user.attachments) },
+      userMessage: { type: 'user_message', content: messageContent(user.message.conversation.content, user.attachments) },
       modelSteps: historicalRun?.modelSteps ?? [],
       ...(assistant ? {
         finalAssistantMessage: {
           type: 'assistant_message',
-          content: [{ type: 'text', text: assistant.message.content_text }],
+          content: assistant.message.conversation.role === 'assistant'
+            ? assistant.message.conversation.content.filter((block) => block.type === 'text')
+            : [{ type: 'text', text: sessionConversationText(assistant.message.conversation) }],
         },
       } : {}),
       ...(historicalRun?.finalOutcome ? { finalOutcome: historicalRun.finalOutcome } : {}),
@@ -63,8 +65,8 @@ export function buildConversationTurns(request: BuildConversationTurnsRequest): 
   return { status: 'built', turns };
 }
 
-function messageContent(text: string, attachments: SessionMessageAttachment[]): ContentBlock[] {
-  return [{ type: 'text', text }, ...attachments.map(attachmentContent)];
+function messageContent(content: ContentBlock[], attachments: SessionMessageAttachment[]): ContentBlock[] {
+  return [...content, ...attachments.map(attachmentContent)];
 }
 
 function historyAfterEffectiveCompaction(history: SessionHistoryItem[]): SessionHistoryItem[] {

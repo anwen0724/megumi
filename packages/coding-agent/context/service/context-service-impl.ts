@@ -389,7 +389,7 @@ export class ContextServiceImpl implements ContextService {
 
 function historicalRunIds(history: SessionHistoryItem[]): string[] {
   const afterSummary = historyAfterSummary(history);
-  return [...new Set(afterSummary.flatMap((item) => item.type === 'message' && item.message.role === 'user' && item.message.run_id ? [item.message.run_id] : []))];
+  return [...new Set(afterSummary.flatMap((item) => item.type === 'message' && item.message.conversation.role === 'user' && item.message.run_id ? [item.message.run_id] : []))];
 }
 
 function historyAfterSummary(history: SessionHistoryItem[]): SessionHistoryItem[] {
