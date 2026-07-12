@@ -63,14 +63,14 @@ describe('Composer', () => {
       <TestComposer
         onSubmit={() => undefined}
         contextUsage={{
-          status: 'ok',
+          status: 'available',
           usage: {
             usedTokens: 222_000,
             totalTokens: 258_000,
             remainingTokens: 36_000,
             usedPercent: 86,
             autoCompactPercent: 80,
-            shouldAutoCompact: true,
+            accuracy: 'provider_reported',
           },
         }}
       />,
@@ -82,16 +82,17 @@ describe('Composer', () => {
     expect(screen.getByLabelText('Context usage')).toHaveAttribute('aria-valuenow', '86');
   });
 
-  it('shows a calculating context usage state while background usage is not calculated yet', () => {
+  it('shows not available when the active session has no completed-run snapshot', () => {
     render(
       <TestComposer
         onSubmit={() => undefined}
-        contextUsage={{ status: 'not_available', reason: 'not_calculated' }}
+        contextUsage={{ status: 'not_available' }}
       />,
     );
 
-    expect(screen.getByText('Calculating usage...')).toBeInTheDocument();
-    expect(screen.queryByText('Usage not available')).not.toBeInTheDocument();
+    expect(screen.getByText('Usage not available')).toBeInTheDocument();
+    expect(screen.queryByText('Calculating usage...')).not.toBeInTheDocument();
+    expect(screen.queryByText('Context usage will update shortly.')).not.toBeInTheDocument();
   });
 
   it('submits trimmed text with selected permission mode and model then clears the input', async () => {

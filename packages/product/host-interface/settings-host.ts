@@ -32,10 +32,6 @@ export const SettingsUpdatePayloadSchema = z.object({
   theme: z.enum(['megumi-warm', 'neutral-light', 'graphite-dark', 'sage-mist', 'midnight-blue']).optional(),
   setup: z.object({ completed: z.boolean().optional() }).strict().optional(),
   memory: z.object({ enabled: z.boolean().optional() }).strict().optional(),
-  compaction: z.object({
-    enabled: z.boolean().optional(), reserveTokens: z.number().int().nonnegative().optional(),
-    keepRecentTokens: z.number().int().nonnegative().optional(),
-  }).strict().optional(),
   providers: z.record(z.string(), ProviderSettingsUiPatchSchema).optional(),
 }).strict();
 export const SettingsCompleteSetupPayloadSchema = z.object({
@@ -75,9 +71,6 @@ const SettingsUiResolvedSchema = z.object({
   theme: z.enum(['megumi-warm', 'neutral-light', 'graphite-dark', 'sage-mist', 'midnight-blue']),
   setup: z.object({ completed: z.boolean(), completedAt: z.string().datetime().optional() }).strict(),
   memory: z.object({ enabled: z.boolean() }).strict(),
-  compaction: z.object({
-    enabled: z.boolean(), reserveTokens: z.number().int().nonnegative(), keepRecentTokens: z.number().int().nonnegative(),
-  }).strict(),
   providers: z.record(z.string(), ProviderSettingsUiDtoSchema),
 }).strict();
 const ProviderPublicStatusUiDtoSchema = z.object({
@@ -247,11 +240,6 @@ export type SettingsUiRaw = {
   memory?: {
     enabled?: boolean;
   };
-  compaction?: {
-    enabled?: boolean;
-    reserveTokens?: number;
-    keepRecentTokens?: number;
-  };
   providers?: Record<string, ProviderSettingsUiPatch>;
 };
 
@@ -273,11 +261,6 @@ export type SettingsUiResolved = {
   };
   memory: {
     enabled: boolean;
-  };
-  compaction: {
-    enabled: boolean;
-    reserveTokens: number;
-    keepRecentTokens: number;
   };
   providers: Record<string, ProviderSettingsUiDto>;
 };
@@ -401,13 +384,6 @@ export function toSettingsRawPatch(patch: SettingsUiRaw): SettingsRaw {
       },
     } : {}),
     ...(patch.memory ? { memory: patch.memory } : {}),
-    ...(patch.compaction ? {
-      compaction: {
-        ...(patch.compaction.enabled !== undefined ? { enabled: patch.compaction.enabled } : {}),
-        ...(patch.compaction.reserveTokens !== undefined ? { reserve_tokens: patch.compaction.reserveTokens } : {}),
-        ...(patch.compaction.keepRecentTokens !== undefined ? { keep_recent_tokens: patch.compaction.keepRecentTokens } : {}),
-      },
-    } : {}),
     ...(patch.providers ? {
       providers: Object.fromEntries(Object.entries(patch.providers).map(([providerId, provider]) => [
         providerId,
@@ -433,11 +409,6 @@ export function toSettingsUiResolved(settings: SettingsResolved): SettingsUiReso
       ...(settings.setup.completed_at ? { completedAt: settings.setup.completed_at } : {}),
     },
     memory: settings.memory,
-    compaction: {
-      enabled: settings.compaction.enabled,
-      reserveTokens: settings.compaction.reserve_tokens,
-      keepRecentTokens: settings.compaction.keep_recent_tokens,
-    },
     providers: Object.fromEntries(Object.entries(settings.providers).map(([providerId, provider]) => [
       providerId,
       {

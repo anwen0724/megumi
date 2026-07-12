@@ -52,8 +52,6 @@ function createContextUsageRequest(): RuntimeIpcRequest<SessionContextUsageGetPa
     requestId: 'request-context-usage-1',
     payload: {
       sessionId: 'session-1',
-      projectId: 'workspace-1',
-      modelId: 'deepseek-chat',
     },
     meta: {
       channel: IPC_CHANNELS.chat.sessionContextUsageGet,
@@ -167,14 +165,14 @@ describe('registerChatHandlers', () => {
   it('routes session context usage requests through the chat host controller', async () => {
     const { handlers, ipcMain } = createIpcMain();
     const getContextUsage = vi.fn().mockResolvedValue({
-      status: 'ok',
+      status: 'available',
       usage: {
         usedTokens: 10,
         totalTokens: 100,
         remainingTokens: 90,
         usedPercent: 10,
         autoCompactPercent: 80,
-        shouldAutoCompact: false,
+        accuracy: 'estimated',
       },
     });
     const service = {
@@ -199,7 +197,7 @@ describe('registerChatHandlers', () => {
     expect(response).toMatchObject({
       ok: true,
       data: {
-        status: 'ok',
+        status: 'available',
         usage: {
           usedTokens: 10,
           totalTokens: 100,
@@ -209,8 +207,6 @@ describe('registerChatHandlers', () => {
     });
     expect(getContextUsage).toHaveBeenCalledWith({
       sessionId: 'session-1',
-      projectId: 'workspace-1',
-      modelId: 'deepseek-chat',
     });
   });
 
@@ -220,7 +216,7 @@ describe('registerChatHandlers', () => {
       host: {
         chat: {
           getContextUsage: vi.fn().mockResolvedValue({
-            status: 'ok',
+            status: 'available',
             usage: { usedTokens: 'invalid' },
           }),
         },

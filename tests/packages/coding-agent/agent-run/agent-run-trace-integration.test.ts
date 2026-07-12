@@ -34,7 +34,7 @@ describe('Agent Run trace integration', () => {
 
     expect(records.map((record) => record.event_type)).toEqual(expect.arrayContaining([
       'run.started',
-      'trace.tool_set.created',
+      'trace.tools.created',
       'trace.prompt.built',
       'trace.model_call.request_payload',
       'trace.model_call.event_received',

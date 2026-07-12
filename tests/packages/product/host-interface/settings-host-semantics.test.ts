@@ -93,7 +93,6 @@ function resolvedSettings() {
     theme: 'midnight-blue' as const,
     setup: { completed: true, completed_at: '2026-07-10T00:00:00.000Z' },
     memory: { enabled: false },
-    compaction: { enabled: true, reserve_tokens: 16384, keep_recent_tokens: 20000 },
     providers: {},
     permissions: { allow: [], ask: [], deny: [] },
   };

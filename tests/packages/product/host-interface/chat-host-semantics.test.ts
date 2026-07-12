@@ -28,7 +28,7 @@ describe('ChatHost product semantics', () => {
       branchService: createSessionBranchService(),
       workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
       sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
-      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [] },
+      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [], getRunTranscript: (runId) => ({ status: 'not_found', runId }) },
     });
 
     await expect(host.createSession({
@@ -91,7 +91,7 @@ describe('ChatHost product semantics', () => {
         })),
       },
       sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
-      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [] },
+      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [], getRunTranscript: (runId) => ({ status: 'not_found', runId }) },
     });
 
     await expect(host.listSessions()).resolves.toEqual({
@@ -293,7 +293,7 @@ describe('ChatHost product semantics', () => {
       branchService: createSessionBranchService(),
       workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
       sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
-      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [] },
+      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [], getRunTranscript: (runId) => ({ status: 'not_found', runId }) },
     });
 
     await expect(host.cancelUserInput({ runId: 'run:1' })).resolves.toMatchObject({
@@ -428,7 +428,7 @@ describe('ChatHost product semantics', () => {
       branchService: createSessionBranchService(),
       workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
       sessionTimelineQuery: { listSessionTimeline },
-      agentRunQueries: { listRunsBySession, listRuntimeEventsByRun },
+      agentRunQueries: { listRunsBySession, listRuntimeEventsByRun, getRunTranscript: (runId) => ({ status: 'not_found', runId }) },
     });
 
     await expect(host.getSessionHydration({
@@ -477,7 +477,7 @@ function createHost(
     branchService,
     workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
     sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
-    agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [] },
+    agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [], getRunTranscript: (runId) => ({ status: 'not_found', runId }) },
   });
 }
 

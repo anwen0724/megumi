@@ -266,6 +266,6 @@ describe('Product Host runtime schemas', () => {
     expect(SettingsUpdatePayloadSchema.safeParse({
       theme: 'midnight-blue',
       compaction: { enabled: true, reserveTokens: 16_384 },
-    }).success).toBe(true);
+    }).success).toBe(false);
   });
 });

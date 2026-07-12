@@ -7,7 +7,7 @@ export type AgentRunTraceEventType =
   | 'run.started'
   | 'run.completed'
   | 'run.failed'
-  | 'trace.tool_set.created'
+  | 'trace.tools.created'
   | 'trace.prompt.built'
   | 'trace.model_call.request_payload'
   | 'trace.model_call.event_received'

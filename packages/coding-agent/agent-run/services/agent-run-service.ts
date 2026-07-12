@@ -129,7 +129,7 @@ export function createAgentRunService(options: CreateAgentRunServiceOptions): Ag
 
 class DefaultAgentRunService implements AgentRunService {
   private readonly repository: AgentRunRepository;
-  private readonly toolSetBuilder: RunToolSetBuilder;
+  private readonly toolsBuilder: RunToolSetBuilder;
   private readonly ids: AgentRunServiceIds;
   private readonly clock: { now(): string };
   private readonly limits: AgentRunLoopLimits;
@@ -143,7 +143,7 @@ class DefaultAgentRunService implements AgentRunService {
       throw new Error('Agent Run Service requires a repository or database.');
     }
     this.repository = options.repository ?? createAgentRunRepository({ database: options.database! });
-    this.toolSetBuilder = createRunToolSetBuilder({ tool_registry_service: options.tool_registry_service });
+    this.toolsBuilder = createRunToolSetBuilder({ tool_registry_service: options.tool_registry_service });
     this.ids = {
       run_id: options.ids?.run_id ?? (() => `run:${crypto.randomUUID()}`),
       user_message_id: options.ids?.user_message_id ?? (() => `message:${crypto.randomUUID()}`),
@@ -771,10 +771,10 @@ class DefaultAgentRunService implements AgentRunService {
       };
     }
 
-    const toolSet = this.toolSetBuilder.getToolSet({ run_id: input.run.run_id });
+    const tools = this.toolsBuilder.getToolSet({ run_id: input.run.run_id });
     const registeredTools = new Map(
-      toolSet.flatMap((item) => {
-        const tool = this.toolSetBuilder.getRegisteredTool(input.run.run_id, item.name);
+      tools.flatMap((item) => {
+        const tool = this.toolsBuilder.getRegisteredTool(input.run.run_id, item.name);
         return tool ? [[item.name, tool] as const] : [];
       }),
     );
@@ -789,7 +789,7 @@ class DefaultAgentRunService implements AgentRunService {
         process_execution_enabled: true,
         network_enabled: true,
       },
-      tool_set: toolSet,
+      tools,
       tool_calls: input.continuation.deferred_tool_calls,
       registered_tools_by_name: registeredTools,
       permission_service: this.options.permission_service,
@@ -880,7 +880,7 @@ class DefaultAgentRunService implements AgentRunService {
         settings_service: this.options.settings_service,
         context_service: this.options.context_service,
         model_call_service: this.options.model_call_service,
-        tool_set_builder: this.toolSetBuilder,
+        tools_builder: this.toolsBuilder,
         tool_execution_service: this.resolveToolExecutionService({
           run_id: input.run.run_id,
           session_id: input.run.session_id,

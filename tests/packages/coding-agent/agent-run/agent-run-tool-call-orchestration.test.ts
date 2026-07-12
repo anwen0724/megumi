@@ -207,7 +207,7 @@ function baseInput(): Omit<AgentRunToolCallRequest, 'tool_calls' | 'registered_t
       process_execution_enabled: true,
       network_enabled: true,
     },
-    tool_set: [
+    tools: [
       { name: 'read_file', description: 'Read file', inputSchema: { type: 'object' } },
       { name: 'list_files', description: 'List files', inputSchema: { type: 'object' } },
       { name: 'run_command', description: 'Run command', inputSchema: { type: 'object' } },

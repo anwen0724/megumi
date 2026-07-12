@@ -79,7 +79,7 @@ describe('agent-run public contracts', () => {
   });
 
   it('defines run-level ToolSet', () => {
-    const toolSet = [
+    const tools = [
         {
           name: 'read_file',
           description: 'Read a file',
@@ -87,6 +87,6 @@ describe('agent-run public contracts', () => {
         },
       ] satisfies ToolSet;
 
-    expect(toolSet[0]?.name).toBe('read_file');
+    expect(tools[0]?.name).toBe('read_file');
   });
 });

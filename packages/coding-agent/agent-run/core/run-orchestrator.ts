@@ -44,7 +44,7 @@ export type RunOrchestratorDependencies = {
   settings_service: Pick<SettingsService, 'resolvePermissionSettings'>;
   context_service: Pick<ContextService, 'prepareModelCall' | 'recordCompletedRunUsage'>;
   model_call_service: ModelCallService;
-  tool_set_builder: RunToolSetBuilder;
+  tools_builder: RunToolSetBuilder;
   tool_execution_service: Pick<ToolExecutionService, 'executeTool'>;
   permission_service: Pick<PermissionService, 'evaluateToolExecution'>;
   workspace_path_policy_service?: Pick<WorkspacePathPolicyService, 'classifyPath'>;
@@ -102,10 +102,10 @@ export async function runAgentModelToolLoop(
   dependencies: RunOrchestratorDependencies,
   request: RunOrchestratorRequest,
 ): Promise<RunOrchestratorResult> {
-  const toolSet = dependencies.tool_set_builder.getToolSet({ run_id: request.run.run_id });
-  traceRun(dependencies, request.run, 'trace.tool_set.created', {
-    tool_count: toolSet.length,
-    tools: toolSet,
+  const tools = dependencies.tools_builder.getToolSet({ run_id: request.run.run_id });
+  traceRun(dependencies, request.run, 'trace.tools.created', {
+    tool_count: tools.length,
+    tools,
   });
   let run = request.run;
   let modelCalls = 0;
@@ -132,7 +132,7 @@ export async function runAgentModelToolLoop(
       workspaceId: run.workspace_id,
       currentTurn,
       activatedSkills: request.activated_skills,
-      tools: toolSet,
+      tools,
       modelContext: request.model_context,
       ...(request.signal ? { signal: request.signal } : {}),
     });
@@ -280,8 +280,8 @@ export async function runAgentModelToolLoop(
     }
 
     const registeredTools = new Map(
-      toolSet.flatMap((item) => {
-        const tool = dependencies.tool_set_builder.getRegisteredTool(run.run_id, item.name);
+      tools.flatMap((item) => {
+        const tool = dependencies.tools_builder.getRegisteredTool(run.run_id, item.name);
         return tool ? [[item.name, tool] as const] : [];
       }),
     );
@@ -322,7 +322,7 @@ export async function runAgentModelToolLoop(
         process_execution_enabled: true,
         network_enabled: true,
       },
-      tool_set: toolSet,
+      tools,
       tool_calls: modelEvents.tool_calls,
       registered_tools_by_name: registeredTools,
       permission_service: dependencies.permission_service,

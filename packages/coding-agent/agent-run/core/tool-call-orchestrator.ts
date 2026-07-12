@@ -36,7 +36,7 @@ export type AgentRunToolCallRequest = {
     process_execution_enabled: boolean;
     network_enabled: boolean;
   };
-  tool_set: ToolSet;
+  tools: ToolSet;
   tool_calls: ModelRequestedToolCall[];
   registered_tools_by_name: Map<string, RegisteredTool>;
   permission_service: {
@@ -370,7 +370,7 @@ function resolveRegisteredTool(
   request: AgentRunToolCallRequest,
   toolName: string,
 ): RegisteredTool | undefined {
-  if (!request.tool_set.some((item) => item.name === toolName)) {
+  if (!request.tools.some((item) => item.name === toolName)) {
     return undefined;
   }
   return request.registered_tools_by_name.get(toolName);

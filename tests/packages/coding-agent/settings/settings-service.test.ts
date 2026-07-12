@@ -45,6 +45,24 @@ describe('Settings Service', () => {
       status: 'ok',
       settings: DEFAULT_SETTINGS,
     });
+    expect(DEFAULT_SETTINGS).not.toHaveProperty('compaction');
+  });
+
+  it('rejects removed user-facing compaction settings', () => {
+    const service = createSettingsService({ file_store: new MemorySettingsFileStore() });
+
+    expect(service.updateSettings({
+      patch: {
+        compaction: {
+          enabled: true,
+          reserve_tokens: 16_384,
+          keep_recent_tokens: 20_000,
+        },
+      },
+    } as never)).toMatchObject({
+      status: 'failed',
+      failure: { code: 'settings_patch_invalid' },
+    });
   });
 
   it('updates settings by writing sparse raw settings', () => {

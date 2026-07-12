@@ -39,22 +39,12 @@ export const MemorySettingsRawSchema = z
   .strict();
 export type MemorySettingsRaw = z.infer<typeof MemorySettingsRawSchema>;
 
-export const CompactionSettingsRawSchema = z
-  .object({
-    enabled: z.boolean().optional(),
-    reserve_tokens: z.number().int().positive().optional(),
-    keep_recent_tokens: z.number().int().positive().optional(),
-  })
-  .strict();
-export type CompactionSettingsRaw = z.infer<typeof CompactionSettingsRawSchema>;
-
 export const SettingsRawSchema = z
   .object({
     language: SettingsLanguageSchema.optional(),
     theme: SettingsThemeNameSchema.optional(),
     setup: SetupSettingsRawSchema.optional(),
     memory: MemorySettingsRawSchema.optional(),
-    compaction: CompactionSettingsRawSchema.optional(),
     providers: z.record(z.string().min(1), ProviderSettingsRawSchema).optional(),
     permissions: PermissionRulesRawSchema.optional(),
   })
@@ -76,22 +66,12 @@ export const MemorySettingsResolvedSchema = z
   .strict();
 export type MemorySettingsResolved = z.infer<typeof MemorySettingsResolvedSchema>;
 
-export const CompactionSettingsResolvedSchema = z
-  .object({
-    enabled: z.boolean(),
-    reserve_tokens: z.number().int().positive(),
-    keep_recent_tokens: z.number().int().positive(),
-  })
-  .strict();
-export type CompactionSettingsResolved = z.infer<typeof CompactionSettingsResolvedSchema>;
-
 export const SettingsResolvedSchema = z
   .object({
     language: SettingsLanguageSchema,
     theme: SettingsThemeNameSchema,
     setup: SetupSettingsResolvedSchema,
     memory: MemorySettingsResolvedSchema,
-    compaction: CompactionSettingsResolvedSchema,
     providers: z.record(z.string().min(1), ProviderSettingsResolvedSchema),
     permissions: PermissionRulesResolvedSchema,
   })
@@ -106,11 +86,6 @@ export const DEFAULT_SETTINGS = SettingsResolvedSchema.parse({
   },
   memory: {
     enabled: false,
-  },
-  compaction: {
-    enabled: true,
-    reserve_tokens: 16384,
-    keep_recent_tokens: 20000,
   },
   providers: {},
   permissions: {

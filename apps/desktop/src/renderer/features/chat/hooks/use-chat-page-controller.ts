@@ -47,8 +47,6 @@ function canShowBranchAction(
   return !isActiveTimelineAssistantMessage(message);
 }
 
-const CONTEXT_USAGE_SYNC_REFRESH_DELAY_MS = 500;
-
 export function useChatPageController() {
   const rawAgentStatus = useChatUiStore((state) => state.agentStatus);
   const activeSessionId = useSessionStore((state) => state.activeSessionId);
@@ -148,7 +146,6 @@ export function useChatPageController() {
 
   useEffect(() => {
     let cancelled = false;
-    let followUpSyncRefreshTimer: number | undefined;
 
     async function loadContextUsage() {
       if (!effectiveActiveSessionId || !effectiveProjectId) {
@@ -156,17 +153,10 @@ export function useChatPageController() {
         return;
       }
 
-      const requestContextUsage = (refresh: 'background' | 'sync') =>
-        window.megumi.session.contextUsage.get(createRendererRuntimeIpcRequest(
-          IPC_CHANNELS.chat.sessionContextUsageGet,
-          {
-            sessionId: effectiveActiveSessionId,
-            projectId: effectiveProjectId,
-            refresh,
-          },
-        ));
-
-      const result = await requestContextUsage('background');
+      const result = await window.megumi.session.contextUsage.get(createRendererRuntimeIpcRequest(
+        IPC_CHANNELS.chat.sessionContextUsageGet,
+        { sessionId: effectiveActiveSessionId },
+      ));
       if (cancelled) {
         return;
       }
@@ -175,35 +165,6 @@ export function useChatPageController() {
         failure: { code: result.data.code, message: result.data.message },
       };
       setContextUsage(nextContextUsage);
-
-      if (nextContextUsage.status !== 'not_available' || nextContextUsage.reason !== 'not_calculated') {
-        return;
-      }
-
-      followUpSyncRefreshTimer = window.setTimeout(() => {
-        if (cancelled) {
-          return;
-        }
-
-        void requestContextUsage('sync')
-          .then((syncResult) => {
-            if (cancelled) {
-              return;
-            }
-            setContextUsage(syncResult.ok ? syncResult.data : {
-              status: 'failed' as const,
-              failure: { code: syncResult.data.code, message: syncResult.data.message },
-            });
-          })
-          .catch(() => {
-            if (!cancelled) {
-              setContextUsage({
-                status: 'failed',
-                failure: { code: 'context_usage_load_failed', message: 'Context usage could not be loaded.' },
-              });
-            }
-          });
-      }, CONTEXT_USAGE_SYNC_REFRESH_DELAY_MS);
     }
 
     if (agentStatus === 'idle' || agentStatus === 'error') {
@@ -219,9 +180,6 @@ export function useChatPageController() {
 
     return () => {
       cancelled = true;
-      if (followUpSyncRefreshTimer !== undefined) {
-        window.clearTimeout(followUpSyncRefreshTimer);
-      }
     };
   }, [agentStatus, effectiveActiveSessionId, effectiveProjectId]);
 

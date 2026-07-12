@@ -20,11 +20,7 @@ import type {
 } from '../../coding-agent/session';
 
 import type { CommandService } from '../../coding-agent/commands';
-import type {
-  ContextUsageWindow,
-  GetCurrentContextUsageResult,
-  SessionContextUsage,
-} from '../../coding-agent/context';
+import type { ContextService, GetSessionUsageSnapshotResult } from '../../coding-agent/context';
 import type { SessionTimelineQuery } from '../../coding-agent/projections/timeline';
 import type { WorkspaceService } from '../../coding-agent/workspace';
 
@@ -64,8 +60,7 @@ export const SessionHydrationGetPayloadSchema = z.object({
   projectId: z.string().min(1), sessionId: z.string().min(1),
 }).strict();
 export const SessionContextUsageGetPayloadSchema = z.object({
-  sessionId: z.string().min(1), projectId: z.string().min(1).optional(), modelId: z.string().min(1).optional(),
-  refresh: z.enum(['sync', 'background']).optional(),
+  sessionId: z.string().min(1),
 }).strict();
 export const SessionMessageSendPayloadSchema = z.object({
   sessionId: z.string().min(1).optional(), projectId: z.string().min(1), text: z.string(),
@@ -194,13 +189,14 @@ export const ChatListRunsUiResultSchema = z.object({ runs: z.array(ChatRunUiDtoS
 export const ChatListRunEventsUiResultSchema = z.object({ events: z.array(RuntimeEventSchema) }).strict();
 export const ChatGetContextUsageUiResultSchema = z.discriminatedUnion('status', [
   z.object({
-    status: z.literal('ok'),
+    status: z.literal('available'),
     usage: z.object({
       usedTokens: z.number().nonnegative(), totalTokens: z.number().nonnegative(), remainingTokens: z.number().nonnegative(),
-      usedPercent: z.number().nonnegative(), autoCompactPercent: z.number().nonnegative(), shouldAutoCompact: z.boolean(),
+      usedPercent: z.number().nonnegative(), autoCompactPercent: z.number().nonnegative(),
+      accuracy: z.enum(['provider_reported', 'estimated']),
     }).strict(),
   }).strict(),
-  z.object({ status: z.literal('not_available'), reason: z.enum(['not_started', 'not_calculated']) }).strict(),
+  z.object({ status: z.literal('not_available') }).strict(),
   z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
 ]);
 
@@ -209,14 +205,7 @@ export interface SessionBranchHostPort {
   cancelBranchDraft: SessionBranchService['cancelBranchDraft'];
 }
 
-export interface ChatContextUsageMonitorPort {
-  refreshAndGetSessionUsage(request: {
-    session_id: string;
-    workspace_id?: string;
-    model_config: ContextUsageWindow;
-    reason: string;
-  }): Promise<GetCurrentContextUsageResult> | GetCurrentContextUsageResult;
-}
+export type ChatContextUsagePort = Pick<ContextService, 'getSessionUsageSnapshot'>;
 
 export function createChatHost(options: {
   agentRunService: Pick<AgentRunService, 'startRun' | 'cancelRun'>;
@@ -226,8 +215,7 @@ export function createChatHost(options: {
   branchService: SessionBranchHostPort;
   sessionTimelineQuery: SessionTimelineQuery;
   agentRunQueries: AgentRunQueries;
-  contextUsageMonitor?: ChatContextUsageMonitorPort;
-  contextUsageWindowProvider?: (request: { sessionId: string; projectId?: string; modelId?: string }) => ContextUsageWindow;
+  contextService?: ChatContextUsagePort;
 }): ChatHost {
   return {
     async createSession(request) {
@@ -392,25 +380,12 @@ export function createChatHost(options: {
     },
 
     async getContextUsage(request) {
-      if (!options.contextUsageMonitor || !options.contextUsageWindowProvider) {
-        return { status: 'not_available', reason: 'not_started' };
+      if (!options.contextService) {
+        return { status: 'not_available' };
       }
-
-      const refreshRequest = {
-        session_id: request.sessionId,
-        ...(request.projectId ? { workspace_id: request.projectId } : {}),
-        model_config: options.contextUsageWindowProvider(request),
-        reason: 'host_context_usage_requested',
-      };
-
-      if (request.refresh === 'background') {
-        void Promise.resolve(options.contextUsageMonitor.refreshAndGetSessionUsage(refreshRequest))
-          .catch(() => undefined);
-
-        return { status: 'not_available', reason: 'not_calculated' };
-      }
-
-      return mapCurrentContextUsage(await options.contextUsageMonitor.refreshAndGetSessionUsage(refreshRequest));
+      return mapSessionUsageSnapshot(options.contextService.getSessionUsageSnapshot({
+        sessionId: request.sessionId,
+      }));
     },
   };
 }
@@ -425,25 +400,24 @@ function extractRunIdsFromTimelineMessages(messages: TimelineMessage[]): Set<str
   return runIds;
 }
 
-function mapCurrentContextUsage(current: GetCurrentContextUsageResult): ChatGetContextUsageUiResult {
-  if (current.status === 'ok') {
-    return { status: 'ok', usage: toChatContextUsageUiDto(current.usage) };
+function mapSessionUsageSnapshot(result: GetSessionUsageSnapshotResult): ChatGetContextUsageUiResult {
+  if (result.status === 'available') {
+    return {
+      status: 'available',
+      usage: {
+        usedTokens: result.snapshot.usage.usedTokens,
+        totalTokens: result.snapshot.usage.contextWindowTokens,
+        remainingTokens: result.snapshot.usage.remainingTokens,
+        usedPercent: Math.round(result.snapshot.usage.usedRatio * 100),
+        autoCompactPercent: Math.round(result.snapshot.usage.compactionThresholdRatio * 100),
+        accuracy: result.snapshot.accuracy,
+      },
+    };
   }
-  if (current.status === 'failed') {
-    return { status: 'failed', failure: toHostFailure(current.failure) };
+  if (result.status === 'failed') {
+    return { status: 'failed', failure: toHostFailure(result.failure) };
   }
-  return current;
-}
-
-function toChatContextUsageUiDto(usage: SessionContextUsage) {
-  return {
-    usedTokens: usage.used_tokens,
-    totalTokens: usage.context_window_tokens,
-    remainingTokens: usage.remaining_tokens,
-    usedPercent: Math.round(usage.used_ratio * 100),
-    autoCompactPercent: Math.round(usage.auto_compaction_threshold_ratio * 100),
-    shouldAutoCompact: usage.should_auto_compact,
-  };
+  return { status: 'not_available' };
 }
 
 function mapStartRunResult(
@@ -734,9 +708,6 @@ export interface ChatListRunEventsUiResult {
 
 export interface ChatGetContextUsageUiRequest {
   sessionId: string;
-  projectId?: string;
-  modelId?: string;
-  refresh?: 'sync' | 'background';
 }
 
 export type ChatContextUsageUiDto = {
@@ -745,12 +716,12 @@ export type ChatContextUsageUiDto = {
   remainingTokens: number;
   usedPercent: number;
   autoCompactPercent: number;
-  shouldAutoCompact: boolean;
+  accuracy: 'provider_reported' | 'estimated';
 };
 
 export type ChatGetContextUsageUiResult =
-  | { status: 'ok'; usage: ChatContextUsageUiDto }
-  | { status: 'not_available'; reason: 'not_started' | 'not_calculated' }
+  | { status: 'available'; usage: ChatContextUsageUiDto }
+  | { status: 'not_available' }
   | { status: 'failed'; failure: ChatHostFailure };
 
 /*

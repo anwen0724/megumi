@@ -34,11 +34,11 @@ describe('run-level Tool Set builder', () => {
       tool_registry_service: { listAvailableTools },
     });
 
-    const toolSet = builder.getToolSet({
+    const tools = builder.getToolSet({
       run_id: 'run-1',
     });
 
-    expect(toolSet.map((item) => item.name)).toEqual(['read_file']);
+    expect(tools.map((item) => item.name)).toEqual(['read_file']);
     expect(listAvailableTools).toHaveBeenCalledTimes(1);
   });
 });
