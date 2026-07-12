@@ -8,6 +8,8 @@ export * from './contracts/model-call-contracts';
 export * from './contracts/agent-run-trace-contracts';
 export { createAgentRunService, getHistoricalRun } from './services/agent-run-service';
 export type { CreateAgentRunServiceOptions } from './services/agent-run-service';
+export { ActiveRunStore } from './core/active-run-store';
+export type { ActiveRunRecord } from './core/active-run-store';
 export { createModelCallService } from './services/model-call-service';
 export type { CreateModelCallServiceOptions } from './services/model-call-service';
 export {

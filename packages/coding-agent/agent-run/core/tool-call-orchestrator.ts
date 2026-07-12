@@ -18,7 +18,7 @@ import type { AgentRunTraceLogger } from '../contracts/agent-run-trace-contracts
 import type { ToolResultRuntimeFact } from '../contracts/model-call-contracts';
 
 export type ModelRequestedToolCall = {
-  model_call_id?: string;
+  model_call_id: string;
   tool_call_id: string;
   tool_name: string;
   input: unknown;
@@ -80,6 +80,7 @@ export type AgentRunToolCallRequest = {
     approval_request_id(): string;
   };
   signal?: AbortSignal;
+  on_step_transition?: (step: AgentRunToolCall) => void;
 };
 
 export type AgentRunToolCallResult = {
@@ -111,10 +112,13 @@ export async function orchestrateToolCallGroup(
 
   for (const [index, requested] of request.tool_calls.entries()) {
     const toolCall = createToolCall(request, requested, index);
+    request.on_step_transition?.(toolCall);
     const registeredTool = resolveRegisteredTool(request, requested.tool_name);
 
     if (!registeredTool) {
-      plans.push({ call: { ...toolCall, status: 'failed', completed_at: request.clock.now() }, requested });
+      const failedCall = { ...toolCall, status: 'failed' as const, completed_at: request.clock.now() };
+      request.on_step_transition?.(failedCall);
+      plans.push({ call: failedCall, requested });
       toolResults.push(failedToolResult(requested, 'Unknown or unavailable tool.', request.clock.now()));
       request.trace_logger?.record({
         trace_id: request.run_id,
@@ -149,7 +153,9 @@ export async function orchestrateToolCallGroup(
     });
 
     if (permission.status === 'failed') {
-      plans.push({ call: { ...toolCall, status: 'failed', completed_at: request.clock.now() }, requested, registered_tool: registeredTool });
+      const failedCall = { ...toolCall, status: 'failed' as const, completed_at: request.clock.now() };
+      request.on_step_transition?.(failedCall);
+      plans.push({ call: failedCall, requested, registered_tool: registeredTool });
       toolResults.push(failedToolResult(requested, permission.failure.message, request.clock.now()));
       continue;
     }
@@ -170,8 +176,10 @@ export async function orchestrateToolCallGroup(
     });
 
     if (permission.decision.type === 'deny') {
+      const deniedCall = { ...toolCall, status: 'denied' as const, completed_at: request.clock.now() };
+      request.on_step_transition?.(deniedCall);
       plans.push({
-        call: { ...toolCall, status: 'denied', completed_at: request.clock.now() },
+        call: deniedCall,
         requested,
         registered_tool: registeredTool,
         decision: permission.decision,
@@ -198,12 +206,14 @@ export async function orchestrateToolCallGroup(
 
     if (permission.decision.type === 'requires_approval') {
       const approval = createPendingApproval(request, requested, registeredTool, permission.decision);
+      const waitingCall = {
+        ...toolCall,
+        status: 'waiting_for_approval' as const,
+        approval_request_id: approval.approval_request_id,
+      };
+      request.on_step_transition?.(waitingCall);
       plans.push({
-        call: {
-          ...toolCall,
-          status: 'waiting_for_approval',
-          approval_request_id: approval.approval_request_id,
-        },
+        call: waitingCall,
         requested,
         registered_tool: registeredTool,
         decision: permission.decision,
@@ -272,6 +282,7 @@ async function executeWindows(
       : [current];
 
     const executions = await Promise.all(window.map(async (plan) => {
+      request.on_step_transition?.({ ...plan.call, status: 'executing' });
       request.trace_logger?.record({
         trace_id: request.run_id,
         event_type: 'trace.tool_execution.request',
@@ -307,21 +318,20 @@ async function executeWindows(
       });
       const completedAt = request.clock.now();
       const status: AgentRunToolCall['status'] = result.type === 'succeeded' ? 'completed' : 'failed';
+      const completedCall: AgentRunToolCall = {
+        ...plan.call,
+        status,
+        completed_at: completedAt,
+        ...(result.type === 'failed' ? {
+          failure: { code: 'tool_call_failed', message: result.error.message },
+        } : {}),
+      };
+      request.on_step_transition?.(completedCall);
       return {
         original: plan,
         next: {
           ...plan,
-          call: {
-            ...plan.call,
-            status,
-            completed_at: completedAt,
-            ...(result.type === 'failed' ? {
-              failure: {
-                code: 'tool_call_failed' as const,
-                message: result.error.message,
-              },
-            } : {}),
-          },
+          call: completedCall,
         },
         tool_result: toolResultFromExecutionResult(plan.requested, result, completedAt),
       };
@@ -356,11 +366,14 @@ function createToolCall(
   callOrder: number,
 ): AgentRunToolCall {
   return {
+    type: 'tool_call',
     tool_call_id: toolCall.tool_call_id,
     run_id: request.run_id,
+    source_model_call_id: toolCall.model_call_id,
     call_order: callOrder,
     tool_name: toolCall.tool_name,
     input: toolCall.input,
+    arguments_text: toolCall.arguments_text,
     status: 'requested',
     created_at: request.clock.now(),
   };

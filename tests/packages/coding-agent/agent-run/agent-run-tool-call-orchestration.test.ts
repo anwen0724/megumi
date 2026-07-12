@@ -228,6 +228,7 @@ function baseInput(): Omit<AgentRunToolCallRequest, 'tool_calls' | 'registered_t
 
 function toolCall(tool_call_id: string, tool_name: string): AgentRunToolCallRequest['tool_calls'][number] {
   return {
+    model_call_id: 'model-call-1',
     tool_call_id,
     tool_name,
     input: { path: 'README.md' },
