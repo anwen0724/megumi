@@ -61,7 +61,6 @@ export function buildCompactionSummaryRequest(
 
 function renderTurn(turn: ConversationTurn): string {
   return JSON.stringify({
-    source: turn.source,
     conversation: [turn.userMessage, ...turn.responseItems],
   });
 }

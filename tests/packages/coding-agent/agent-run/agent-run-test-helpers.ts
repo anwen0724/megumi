@@ -60,6 +60,16 @@ export function createInMemoryAgentRunRepository(): AgentRunRepository {
             || left.eventId.localeCompare(right.eventId);
         });
     },
+    listRuntimeEventsByRunStrict(runId) {
+      return [...runtimeEvents.values()]
+        .filter((event) => event.runId === runId)
+        .sort((left, right) => {
+          const sequenceOrder = left.sequence - right.sequence;
+          return sequenceOrder
+            || left.createdAt.localeCompare(right.createdAt)
+            || left.eventId.localeCompare(right.eventId);
+        });
+    },
     nextRuntimeEventSequence(runId) {
       return Math.max(0, ...[...runtimeEvents.values()]
         .filter((event) => event.runId === runId)

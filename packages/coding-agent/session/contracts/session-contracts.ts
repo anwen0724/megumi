@@ -207,6 +207,7 @@ export type SaveCompactionSummaryRequest = {
   summary_text: string;
   covered_until_entry_id: string;
   first_kept_entry_id?: string;
+  expected_active_entry_id?: string | null;
   created_at: string;
   append_to_active_path?: boolean;
 };

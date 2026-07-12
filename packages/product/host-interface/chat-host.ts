@@ -191,7 +191,7 @@ export const ChatGetContextUsageUiResultSchema = z.discriminatedUnion('status', 
   z.object({
     status: z.literal('available'),
     usage: z.object({
-      usedTokens: z.number().nonnegative(), totalTokens: z.number().nonnegative(), remainingTokens: z.number().nonnegative(),
+      usedTokens: z.number().nonnegative(), totalTokens: z.number().nonnegative(), remainingTokens: z.number(),
       usedPercent: z.number().nonnegative(), autoCompactPercent: z.number().nonnegative(),
       accuracy: z.enum(['provider_reported', 'estimated']),
     }).strict(),
@@ -215,7 +215,7 @@ export function createChatHost(options: {
   branchService: SessionBranchHostPort;
   sessionTimelineQuery: SessionTimelineQuery;
   agentRunQueries: AgentRunQueries;
-  contextService?: ChatContextUsagePort;
+  contextService: ChatContextUsagePort;
 }): ChatHost {
   return {
     async createSession(request) {
@@ -380,9 +380,6 @@ export function createChatHost(options: {
     },
 
     async getContextUsage(request) {
-      if (!options.contextService) {
-        return { status: 'not_available' };
-      }
       return mapSessionUsageSnapshot(options.contextService.getSessionUsageSnapshot({
         sessionId: request.sessionId,
       }));

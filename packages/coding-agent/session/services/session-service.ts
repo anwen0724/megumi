@@ -294,6 +294,15 @@ class DefaultSessionService implements SessionService {
             failure: { code: 'session_not_found', message: `Session ${request.session_id} was not found` },
           };
         }
+        if (
+          Object.prototype.hasOwnProperty.call(request, 'expected_active_entry_id')
+          && session.active_entry_id !== (request.expected_active_entry_id ?? undefined)
+        ) {
+          return {
+            status: 'failed',
+            failure: { code: 'active_entry_changed', message: 'Session active entry changed while compaction was being prepared' },
+          };
+        }
         const coveredEntry = this.options.repository.findEntryById(request.covered_until_entry_id);
         if (!coveredEntry || coveredEntry.session_id !== request.session_id) {
           return {

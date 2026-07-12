@@ -5,6 +5,7 @@
 import type { ModelCallConfig, ModelCallFailure, ModelCallService } from '../../agent-run';
 import type { ContextCapacity, SessionUsageSnapshot } from '../domain/model/context-usage';
 import type { ContextFailure } from '../service/context-service-types';
+import type { ContextService } from '../service/context-service';
 import {
   ContextServiceImpl,
   type ContextServiceDependencies,
@@ -26,7 +27,7 @@ export type ComposeCodingAgentContextInput = Omit<
 };
 
 export function composeCodingAgentContext(input: ComposeCodingAgentContextInput): {
-  contextService: ContextServiceImpl;
+  contextService: ContextService;
 } {
   const cache = input.usageSnapshotCache ?? new Map<string, SessionUsageSnapshot>();
   const resolveModelConfig = (capacity: ContextCapacity) => input.modelRuntimeConfigResolver.resolve({

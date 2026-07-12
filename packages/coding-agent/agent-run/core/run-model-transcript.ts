@@ -13,9 +13,12 @@ import type {
   GetRunTranscriptResult,
   RunModelTranscriptItem,
 } from '../contracts/agent-run-query-contracts';
-import type { AgentRunRepository } from '../repositories/agent-run-repository';
+import {
+  RuntimeEventIntegrityError,
+  type AgentRunRepository,
+} from '../repositories/agent-run-repository';
 
-type TranscriptRepository = Pick<AgentRunRepository, 'getRun' | 'listRuntimeEventsByRun'>;
+type TranscriptRepository = Pick<AgentRunRepository, 'getRun' | 'listRuntimeEventsByRunStrict'>;
 
 type ModelCallGroup = {
   completion?: ModelCallCompletedPayload;
@@ -36,9 +39,12 @@ export function getRunTranscript(
       return { status: 'not_found', runId };
     }
 
-    const events = [...repository.listRuntimeEventsByRun(runId)].sort(compareRuntimeEvents);
+    const events = [...repository.listRuntimeEventsByRunStrict(runId)].sort(compareRuntimeEvents);
     return projectTranscript(runId, events);
   } catch (error) {
+    if (error instanceof RuntimeEventIntegrityError) {
+      return runtimeProtocolFailure(error.message);
+    }
     return {
       status: 'failed',
       failure: {
@@ -61,7 +67,7 @@ function projectTranscript(runId: string, events: RuntimeEvent[]): GetRunTranscr
       const payload = event.payload as ModelCallCompletedPayload;
       const group = getOrCreateModelCall(modelCalls, payload.modelCallId);
       if (group.completion) {
-        protocolFailure = duplicateFactFailure(
+        protocolFailure = runtimeProtocolFailure(
           `Duplicate model_call.completed fact for modelCallId ${payload.modelCallId}.`,
         );
         return;
@@ -73,7 +79,7 @@ function projectTranscript(runId: string, events: RuntimeEvent[]): GetRunTranscr
       const payload = event.payload as ModelCallToolCallPayload;
       const existingModelCallId = modelCallIdByToolCallId.get(payload.toolCallId);
       if (existingModelCallId) {
-        protocolFailure = duplicateFactFailure(existingModelCallId === payload.modelCallId
+        protocolFailure = runtimeProtocolFailure(existingModelCallId === payload.modelCallId
           ? `Duplicate model_call.tool_call fact for toolCallId ${payload.toolCallId}.`
           : `Duplicate model_call.tool_call fact for toolCallId ${payload.toolCallId} across model calls.`);
         return;
@@ -168,7 +174,7 @@ function incomplete(
   return { status: 'incomplete', runId, reason, toolCallId };
 }
 
-function duplicateFactFailure(message: string): GetRunTranscriptResult {
+function runtimeProtocolFailure(message: string): GetRunTranscriptResult {
   return {
     status: 'failed',
     failure: { code: 'runtime_protocol_violation', message },

@@ -61,6 +61,7 @@ export type ContextServiceDependencies = {
 
 type BuildFacts = {
   sessionId: string;
+  expectedActiveEntryId: string | null;
   historicalTurns: ConversationTurn[];
   systemInstructions: ReturnType<InstructionService['getSystemInstructions']>;
   agentInstructions: { sources: Array<{ sourceId: string; sourcePath: string; content: string }> };
@@ -78,6 +79,7 @@ export class ContextServiceImpl implements ContextService {
   private readonly policy: ContextPolicy;
   private readonly clock: { now(): string };
   private readonly ids: { preparationId(): string; compactionId(): string };
+  private readonly sessionOperationTails = new Map<string, Promise<void>>();
 
   constructor(private readonly dependencies: ContextServiceDependencies) {
     this.policy = { compactionThresholdRatio: dependencies.policy?.compactionThresholdRatio ?? 0.8 };
@@ -90,6 +92,10 @@ export class ContextServiceImpl implements ContextService {
   }
 
   async prepareModelCall(request: PrepareModelCallRequest): Promise<PrepareModelCallResult> {
+    return this.withSessionOperation(request.sessionId, () => this.prepareModelCallExclusive(request));
+  }
+
+  private async prepareModelCallExclusive(request: PrepareModelCallRequest): Promise<PrepareModelCallResult> {
     if (request.signal?.aborted) return failed(cancelled());
     const loaded = await this.loadFacts({
       sessionId: request.sessionId,
@@ -99,12 +105,14 @@ export class ContextServiceImpl implements ContextService {
       activatedSkills: request.activatedSkills,
       memoryRecall: request.memoryRecall,
       tools: request.tools,
+      signal: request.signal,
     });
     if (loaded.status === 'failed') return loaded;
+    if (request.signal?.aborted) return failed(cancelled());
 
     let facts = loaded.facts;
     let built = this.buildPrompt(facts);
-    let usageResult = await this.countUsage(built.prompt, request.modelContext);
+    let usageResult = await this.countUsage(built.prompt, request.modelContext, request.signal);
     if (usageResult.status === 'failed') return usageResult;
     let usage = usageResult.usage;
     let compactionId: string | undefined;
@@ -118,12 +126,13 @@ export class ContextServiceImpl implements ContextService {
         // A saved Summary is now an owner fact. Rebuild and recount rather than
         // returning the pre-persistence validation projection.
         built = this.buildPrompt(facts);
-        usageResult = await this.countUsage(built.prompt, request.modelContext);
+        usageResult = await this.countUsage(built.prompt, request.modelContext, request.signal);
         if (usageResult.status === 'failed') return usageResult;
         usage = usageResult.usage;
       }
     }
 
+    if (request.signal?.aborted) return failed(cancelled());
     if (usage.usedTokens >= usage.contextWindowTokens) return failed(windowExceeded(usage));
     const preparationId = this.ids.preparationId();
     try {
@@ -144,11 +153,16 @@ export class ContextServiceImpl implements ContextService {
   }
 
   async compactSession(request: CompactSessionRequest): Promise<CompactSessionResult> {
+    return this.withSessionOperation(request.sessionId, () => this.compactSessionExclusive(request));
+  }
+
+  private async compactSessionExclusive(request: CompactSessionRequest): Promise<CompactSessionResult> {
     if (request.signal?.aborted) return failed(cancelled());
-    const loaded = await this.loadFacts({ sessionId: request.sessionId, workspaceId: request.workspaceId, tools: [], activatedSkills: [] });
+    const loaded = await this.loadFacts({ sessionId: request.sessionId, workspaceId: request.workspaceId, tools: [], activatedSkills: [], signal: request.signal });
     if (loaded.status === 'failed') return loaded;
+    if (request.signal?.aborted) return failed(cancelled());
     const built = this.buildPrompt(loaded.facts);
-    const before = await this.countUsage(built.prompt, request.modelContext);
+    const before = await this.countUsage(built.prompt, request.modelContext, request.signal);
     if (before.status === 'failed') return before;
     const compacted = await this.compactInternal({ facts: loaded.facts, usageBefore: before.usage, modelContext: request.modelContext, signal: request.signal });
     if (compacted.status !== 'compacted') return compacted;
@@ -187,16 +201,19 @@ export class ContextServiceImpl implements ContextService {
     activatedSkills: PrepareModelCallRequest['activatedSkills'];
     memoryRecall?: PrepareModelCallRequest['memoryRecall'];
     tools: PrepareModelCallRequest['tools'];
+    signal?: AbortSignal;
   }): Promise<{ status: 'loaded'; facts: BuildFacts } | { status: 'failed'; failure: ContextFailure }> {
     const historyResult = this.dependencies.sessionService.getActiveHistory({
       session_id: input.sessionId,
       ...(input.throughEntryId !== undefined ? { through_entry_id: input.throughEntryId } : {}),
     });
+    if (input.signal?.aborted) return failed(cancelled());
     if (historyResult.status === 'failed') return failed(ownerFailure('session_history_failed', 'Session history could not be loaded.', 'session', historyResult.failure));
 
     const transcripts = new Map();
     for (const runId of historicalRunIds(historyResult.history)) {
       const result = this.dependencies.runTranscriptQuery.getRunTranscript(runId);
+      if (input.signal?.aborted) return failed(cancelled());
       if (result.status !== 'found') {
         const code = result.status === 'failed' ? result.failure.code : result.status;
         const message = result.status === 'failed' ? result.failure.message : `Historical run ${runId} transcript is ${result.status}.`;
@@ -208,17 +225,24 @@ export class ContextServiceImpl implements ContextService {
     if (turns.status === 'failed') return failed(ownerFailure('active_context_failed', turns.failure.message, 'session', turns.failure));
 
     const scope = this.dependencies.instructionScopeResolver.resolve({ workspaceId: input.workspaceId });
+    if (input.signal?.aborted) return failed(cancelled());
     if (scope.status === 'failed') return failed(ownerFailure('instruction_load_failed', scope.failure.message, 'instructions', scope.failure));
     const systemInstructions = this.dependencies.instructionService.getSystemInstructions();
+    if (input.signal?.aborted) return failed(cancelled());
     const agentInstructions = await this.dependencies.instructionService.getEffectiveAgentInstructions({ workspaceRoot: scope.workspaceRoot, workingDirectory: scope.workingDirectory });
+    if (input.signal?.aborted) return failed(cancelled());
     if (agentInstructions.status === 'failed') return failed(ownerFailure('instruction_load_failed', agentInstructions.message, 'instructions', { code: 'instruction_load_failed', message: agentInstructions.message }));
     const catalog = await this.dependencies.skillService.getSkillCatalog({ workspaceId: input.workspaceId });
+    if (input.signal?.aborted) return failed(cancelled());
     if (catalog.status === 'failed') return failed(ownerFailure('skill_catalog_failed', catalog.message, 'skills', { code: 'skill_catalog_failed', message: catalog.message }));
 
     return {
       status: 'loaded',
       facts: {
         sessionId: input.sessionId,
+        expectedActiveEntryId: input.currentTurn?.userEntry.entryId
+          ?? historyResult.history.at(-1)?.entry.entry_id
+          ?? null,
         historicalTurns: turns.turns,
         systemInstructions,
         agentInstructions: agentInstructions.instructions,
@@ -243,8 +267,9 @@ export class ContextServiceImpl implements ContextService {
     };
   }
 
-  private async countUsage(prompt: Prompt, capacity: ContextCapacity): Promise<{ status: 'counted'; usage: ContextUsage } | { status: 'failed'; failure: ContextFailure }> {
+  private async countUsage(prompt: Prompt, capacity: ContextCapacity, signal?: AbortSignal): Promise<{ status: 'counted'; usage: ContextUsage } | { status: 'failed'; failure: ContextFailure }> {
     const result = await this.dependencies.promptTokenCounter.count({ prompt, modelContext: capacity });
+    if (signal?.aborted) return failed(cancelled());
     if (result.status === 'failed') return failed(result.failure);
     try {
       return { status: 'counted', usage: calculateContextUsage({ inputTokens: result.inputTokens, capacity, policy: this.policy }) };
@@ -259,15 +284,15 @@ export class ContextServiceImpl implements ContextService {
     | { status: 'failed'; failure: ContextFailure }
   > {
     const withoutHistory = { ...input.facts, historicalTurns: [], compactionSummary: undefined };
-    const nonCompressible = await this.countUsage(this.buildPrompt(withoutHistory).prompt, input.modelContext);
+    const nonCompressible = await this.countUsage(this.buildPrompt(withoutHistory).prompt, input.modelContext, input.signal);
     if (nonCompressible.status === 'failed') return nonCompressible;
     const summaryOnly = input.facts.compactionSummary
-      ? await this.countUsage(this.buildPrompt({ ...withoutHistory, compactionSummary: input.facts.compactionSummary }).prompt, input.modelContext)
+      ? await this.countUsage(this.buildPrompt({ ...withoutHistory, compactionSummary: input.facts.compactionSummary }).prompt, input.modelContext, input.signal)
       : { status: 'counted' as const, usage: calculateContextUsage({ inputTokens: 0, capacity: input.modelContext, policy: this.policy }) };
     if (summaryOnly.status === 'failed') return summaryOnly;
     const turnCounts: number[] = [];
     for (const turn of input.facts.historicalTurns) {
-      const counted = await this.countUsage(this.buildPrompt({ ...withoutHistory, historicalTurns: [turn] }).prompt, input.modelContext);
+      const counted = await this.countUsage(this.buildPrompt({ ...withoutHistory, historicalTurns: [turn] }).prompt, input.modelContext, input.signal);
       if (counted.status === 'failed') return counted;
       turnCounts.push(Math.max(0, counted.usage.usedTokens - nonCompressible.usage.usedTokens));
     }
@@ -286,13 +311,18 @@ export class ContextServiceImpl implements ContextService {
     const summaryRequest = buildCompactionSummaryRequest({ previousSummary: input.facts.compactionSummary?.content, turns: plan.plan.turns });
     const summaryPrompt = summaryPromptFrom(summaryRequest.systemPrompt, summaryRequest.input);
     const generated = await this.dependencies.summaryModelCall.complete({ prompt: summaryPrompt, modelContext: input.modelContext, sessionId: input.facts.sessionId, compactionId, ...(input.signal ? { signal: input.signal } : {}) });
+    if (input.signal?.aborted) return failed(cancelled());
     if (generated.status === 'failed') return failed({ ...generated.failure, code: 'compaction_failed' });
+    if (generated.content.trim().length === 0) {
+      return failed({ code: 'compaction_failed', message: 'Compaction summary model returned empty content.', retryable: true, cause: { owner: 'ai' } });
+    }
     const retainedTurns = input.facts.historicalTurns.slice(plan.plan.turns.length);
     const compactedFacts: BuildFacts = { ...input.facts, historicalTurns: retainedTurns, compactionSummary: { compactionId, content: generated.content } };
-    const projected = await this.countUsage(this.buildPrompt(compactedFacts).prompt, input.modelContext);
+    const projected = await this.countUsage(this.buildPrompt(compactedFacts).prompt, input.modelContext, input.signal);
     if (projected.status === 'failed') return projected;
     const reduction = validateCompactionReduction({ usageBeforeInputTokens: input.usageBefore.usedTokens, usageAfterInputTokens: projected.usage.usedTokens, thresholdInputTokens: Math.floor(input.modelContext.contextWindowTokens * this.policy.compactionThresholdRatio) });
     if (reduction.status === 'nothing_to_compact') return reduction;
+    if (input.signal?.aborted) return failed(cancelled());
 
     const saved = this.dependencies.sessionService.saveCompactionSummary({
       compaction_id: compactionId,
@@ -300,11 +330,28 @@ export class ContextServiceImpl implements ContextService {
       summary_text: generated.content,
       covered_until_entry_id: plan.plan.coveredUntilEntryId,
       ...(plan.plan.firstKeptEntryId ? { first_kept_entry_id: plan.plan.firstKeptEntryId } : {}),
+      expected_active_entry_id: input.facts.expectedActiveEntryId,
       created_at: this.clock.now(),
       append_to_active_path: true,
     });
     if (saved.status === 'failed') return failed(ownerFailure('compaction_persist_failed', saved.failure.message, 'session', saved.failure));
+    if (input.signal?.aborted) return failed(cancelled());
     return { status: 'compacted', compactionId, usageAfter: projected.usage, facts: compactedFacts };
+  }
+
+  private async withSessionOperation<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.sessionOperationTails.get(sessionId) ?? Promise.resolve();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const tail = previous.catch(() => undefined).then(() => gate);
+    this.sessionOperationTails.set(sessionId, tail);
+    await previous.catch(() => undefined);
+    try {
+      return await operation();
+    } finally {
+      release();
+      if (this.sessionOperationTails.get(sessionId) === tail) this.sessionOperationTails.delete(sessionId);
+    }
   }
 }
 

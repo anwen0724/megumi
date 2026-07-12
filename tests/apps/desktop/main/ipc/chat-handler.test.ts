@@ -167,10 +167,10 @@ describe('registerChatHandlers', () => {
     const getContextUsage = vi.fn().mockResolvedValue({
       status: 'available',
       usage: {
-        usedTokens: 10,
+        usedTokens: 110,
         totalTokens: 100,
-        remainingTokens: 90,
-        usedPercent: 10,
+        remainingTokens: -10,
+        usedPercent: 110,
         autoCompactPercent: 80,
         accuracy: 'estimated',
       },
@@ -199,9 +199,10 @@ describe('registerChatHandlers', () => {
       data: {
         status: 'available',
         usage: {
-          usedTokens: 10,
+          usedTokens: 110,
           totalTokens: 100,
-          usedPercent: 10,
+          remainingTokens: -10,
+          usedPercent: 110,
         },
       },
     });

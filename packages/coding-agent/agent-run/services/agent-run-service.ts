@@ -1440,7 +1440,7 @@ function currentTurnFromSavedUserMessage(
             }
           : {
               type: 'file' as const,
-              fileId: attachment.source_value,
+              fileId: attachment.attachment_id,
               ...(attachment.name ? { name: attachment.name } : {}),
               ...(attachment.mime_type ? { mediaType: attachment.mime_type } : {}),
             }),

@@ -344,7 +344,7 @@ describe('getRunTranscript', () => {
       getRun(): AgentRun {
         return sampleRun();
       },
-      listRuntimeEventsByRun(): RuntimeEvent[] {
+      listRuntimeEventsByRunStrict(): RuntimeEvent[] {
         throw new Error('database unavailable');
       },
     };

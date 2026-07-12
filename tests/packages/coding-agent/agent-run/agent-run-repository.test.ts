@@ -234,6 +234,36 @@ describe('AgentRunRepository', () => {
     });
   });
 
+  it('fails transcript projection when a persisted canonical event is schema-invalid', () => {
+    withDatabase((database) => {
+      seedWorkspaceAndSession(database);
+      const repository = createAgentRunRepository({ database });
+      repository.createRun(sampleRun({ status: 'completed' }));
+      const insert = database.prepare(`
+        INSERT INTO agent_run_runtime_events (
+          event_id, run_id, session_id, event_type, sequence, created_at, source, visibility, persist, payload_json
+        ) VALUES (?, 'run-1', 'session-1', ?, ?, ?, 'core', 'system', 'required', ?)
+      `);
+      insert.run('event-invalid-call', 'model_call.tool_call', 1, '2026-01-01T00:00:01.000Z', JSON.stringify({
+        modelCallId: 'model-call-1',
+        toolName: 'read_file',
+        input: { path: 'README.md' },
+      }));
+      insert.run('event-completed', 'model_call.completed', 2, '2026-01-01T00:00:02.000Z', JSON.stringify({
+        modelCallId: 'model-call-1',
+        finishReason: 'tool_calls',
+      }));
+
+      expect(getRunTranscript(repository, 'run-1')).toEqual({
+        status: 'failed',
+        failure: {
+          code: 'runtime_protocol_violation',
+          message: 'Persisted runtime event event-invalid-call failed schema validation.',
+        },
+      });
+    });
+  });
+
   it('keeps Agent Run business persistence out of legacy persistence repos', () => {
     expect(() => require('@megumi/coding-agent/persistence/repos/agent-run.repo')).toThrow();
   });

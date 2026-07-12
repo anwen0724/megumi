@@ -86,13 +86,17 @@ describe('Context system v2 source guards', () => {
 
   it('exports only the stable public surface', () => {
     const publicIndex = read('packages/coding-agent/context/index.ts');
+    const composition = read('packages/coding-agent/context/config/compose-coding-agent-context.ts');
 
     expect(publicIndex).not.toContain('/internal/');
+    expect(publicIndex).not.toContain('context-service-impl');
     expect(publicIndex).not.toContain('UsageMonitor');
     expect(publicIndex).not.toContain('signalBus');
     expect(publicIndex).not.toContain('./contracts/');
     expect(publicIndex).not.toContain('./core/');
     expect(publicIndex).not.toContain('./services/');
+    expect(composition).toMatch(/contextService:\s*ContextService[;\n]/);
+    expect(composition).not.toMatch(/contextService:\s*ContextServiceImpl/);
   });
 
   it('does not create repository or ports layers', () => {

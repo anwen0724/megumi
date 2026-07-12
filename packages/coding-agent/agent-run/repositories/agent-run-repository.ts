@@ -17,9 +17,19 @@ export type AgentRunRepository = {
   saveApprovalRequest(request: AgentRunApprovalRequest): AgentRunApprovalRequest;
   listPendingApprovalRequestsByRun(runId: string): AgentRunApprovalRequest[];
   saveRuntimeEvent(event: RuntimeEvent): RuntimeEvent;
+  /** Diagnostic/UI read: invalid persisted rows are omitted and must not drive canonical projections. */
   listRuntimeEventsByRun(runId: string): RuntimeEvent[];
+  /** Canonical read: throws RuntimeEventIntegrityError instead of hiding an invalid persisted row. */
+  listRuntimeEventsByRunStrict(runId: string): RuntimeEvent[];
   nextRuntimeEventSequence(runId: string): number;
 };
+
+export class RuntimeEventIntegrityError extends Error {
+  constructor(readonly eventId: string) {
+    super(`Persisted runtime event ${eventId} failed schema validation.`);
+    this.name = 'RuntimeEventIntegrityError';
+  }
+}
 
 export type CreateAgentRunRepositoryOptions = {
   database: MegumiDatabase;
@@ -246,20 +256,17 @@ class SqliteAgentRunRepository implements AgentRunRepository {
   }
 
   listRuntimeEventsByRun(runId: string): RuntimeEvent[] {
-    const rows = this.database.prepare(`
-      SELECT * FROM agent_run_runtime_events
-      WHERE run_id = ?
-      ORDER BY sequence ASC, created_at ASC, event_id ASC
-    `).all(runId) as AgentRunRuntimeEventRow[];
-
-    return rows.flatMap((row) => {
+    return this.listRuntimeEventRows(runId).flatMap((row) => {
       try {
-        const parsed = RuntimeEventSchema.safeParse(runtimeEventFromRow(row));
-        return parsed.success ? [parsed.data as RuntimeEvent] : [];
+        return [runtimeEventFromValidatedRow(row)];
       } catch {
         return [];
       }
     });
+  }
+
+  listRuntimeEventsByRunStrict(runId: string): RuntimeEvent[] {
+    return this.listRuntimeEventRows(runId).map(runtimeEventFromValidatedRow);
   }
 
   nextRuntimeEventSequence(runId: string): number {
@@ -269,6 +276,14 @@ class SqliteAgentRunRepository implements AgentRunRepository {
       WHERE run_id = ?
     `).get(runId) as { max_sequence: number | null } | undefined;
     return (row?.max_sequence ?? 0) + 1;
+  }
+
+  private listRuntimeEventRows(runId: string): AgentRunRuntimeEventRow[] {
+    return this.database.prepare(`
+      SELECT * FROM agent_run_runtime_events
+      WHERE run_id = ?
+      ORDER BY sequence ASC, created_at ASC, event_id ASC
+    `).all(runId) as AgentRunRuntimeEventRow[];
   }
 }
 
@@ -372,6 +387,16 @@ function runtimeEventFromRow(row: AgentRunRuntimeEventRow): RuntimeEvent {
     persist: row.persist as RuntimeEvent['persist'],
     payload: parseJson<RuntimeEvent['payload']>(row.payload_json),
   };
+}
+
+function runtimeEventFromValidatedRow(row: AgentRunRuntimeEventRow): RuntimeEvent {
+  try {
+    const parsed = RuntimeEventSchema.safeParse(runtimeEventFromRow(row));
+    if (parsed.success) return parsed.data as RuntimeEvent;
+  } catch {
+    // The integrity error below deliberately excludes the persisted payload.
+  }
+  throw new RuntimeEventIntegrityError(row.event_id);
 }
 
 function parseJson<T>(json: string): T {

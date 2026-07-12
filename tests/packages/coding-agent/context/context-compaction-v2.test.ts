@@ -60,13 +60,85 @@ describe('ContextServiceImpl compaction', () => {
     expect(generated.deps.sessionService.saveCompactionSummary).not.toHaveBeenCalled();
 
     const persisted = fixture([80, 5, 10, 30]);
-    persisted.deps.sessionService.saveCompactionSummary = vi.fn(() => ({ status: 'failed' as const, failure: { code: 'write_failed', message: 'no write' } }));
-    expect(await persisted.service.prepareModelCall(request)).toMatchObject({ status: 'failed', failure: { code: 'compaction_persist_failed' } });
+    persisted.deps.sessionService.saveCompactionSummary = vi.fn(() => ({ status: 'failed' as const, failure: { code: 'active_entry_changed', message: 'stale head' } }));
+    expect(await persisted.service.prepareModelCall(request)).toMatchObject({
+      status: 'failed',
+      failure: { code: 'compaction_persist_failed', cause: { owner: 'session', code: 'active_entry_changed' } },
+    });
   });
 
   it('manual compact uses the same internals without a fake current turn', async () => {
     const { deps, service } = fixture([80, 0, 10, 25]);
     expect(await service.compactSession({ sessionId: 'S1', workspaceId: 'W1', modelContext })).toMatchObject({ status: 'compacted', usageBefore: { usedTokens: 80 }, usageAfter: { usedTokens: 25 } });
     expect(deps.promptTokenCounter.count).toHaveBeenCalledWith(expect.objectContaining({ prompt: expect.objectContaining({ conversation: expect.not.arrayContaining([expect.objectContaining({ type: 'user_message', content: [] })]) }) }));
+  });
+
+  it.each([
+    ['automatic', '   '],
+    ['manual', '\n\t'],
+  ] as const)('rejects an empty %s compaction summary without persisting it', async (mode, content) => {
+    const { deps, service } = fixture(mode === 'automatic' ? [80, 5, 10] : [80, 0, 10]);
+    deps.summaryModelCall.complete = vi.fn(async () => ({ status: 'completed' as const, content }));
+
+    const result = mode === 'automatic'
+      ? await service.prepareModelCall(request)
+      : await service.compactSession({ sessionId: 'S1', workspaceId: 'W1', modelContext });
+
+    expect(result).toMatchObject({ status: 'failed', failure: { code: 'compaction_failed' } });
+    expect(deps.sessionService.saveCompactionSummary).not.toHaveBeenCalled();
+  });
+
+  it('passes the loaded active head to Session when persisting a compaction', async () => {
+    const { deps, service } = fixture([80, 5, 10, 30]);
+
+    await service.prepareModelCall(request);
+
+    expect(deps.sessionService.saveCompactionSummary).toHaveBeenCalledWith(expect.objectContaining({
+      expected_active_entry_id: 'EC',
+    }));
+  });
+
+  it('does not persist when cancellation arrives after an owner count or summary await', async () => {
+    const countController = new AbortController();
+    const afterCount = fixture([80, 5, 10]);
+    afterCount.deps.promptTokenCounter.count = vi.fn(async () => {
+      countController.abort();
+      return { status: 'counted' as const, inputTokens: 80, accuracy: 'estimated' as const };
+    });
+    expect(await afterCount.service.prepareModelCall({ ...request, signal: countController.signal })).toMatchObject({
+      status: 'failed', failure: { code: 'cancelled' },
+    });
+    expect(afterCount.deps.summaryModelCall.complete).not.toHaveBeenCalled();
+
+    const summaryController = new AbortController();
+    const afterSummary = fixture([80, 5, 10, 30]);
+    afterSummary.deps.summaryModelCall.complete = vi.fn(async () => {
+      summaryController.abort();
+      return { status: 'completed' as const, content: 'short' };
+    });
+    expect(await afterSummary.service.prepareModelCall({ ...request, signal: summaryController.signal })).toMatchObject({
+      status: 'failed', failure: { code: 'cancelled' },
+    });
+    expect(afterSummary.deps.sessionService.saveCompactionSummary).not.toHaveBeenCalled();
+  });
+
+  it('serializes compaction work for the same session within one ContextService', async () => {
+    let releaseFirst!: () => void;
+    const firstSummary = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const { deps, service } = fixture([80, 0, 10, 25, 80, 0, 10, 25]);
+    deps.summaryModelCall.complete = vi.fn()
+      .mockImplementationOnce(async () => {
+        await firstSummary;
+        return { status: 'completed' as const, content: 'first' };
+      })
+      .mockResolvedValueOnce({ status: 'completed' as const, content: 'second' });
+
+    const first = service.compactSession({ sessionId: 'S1', workspaceId: 'W1', modelContext });
+    const second = service.compactSession({ sessionId: 'S1', workspaceId: 'W1', modelContext });
+    await vi.waitFor(() => expect(deps.summaryModelCall.complete).toHaveBeenCalledTimes(1));
+    releaseFirst();
+
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+    expect(deps.summaryModelCall.complete).toHaveBeenCalledTimes(2);
   });
 });

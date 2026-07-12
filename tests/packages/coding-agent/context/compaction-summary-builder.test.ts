@@ -78,6 +78,17 @@ describe('buildCompactionSummaryRequest', () => {
     );
     expect(request.input.endsWith('\n</conversation_turns>')).toBe(true);
   });
+
+  it('omits Context-owned turn source identifiers from the model input', () => {
+    const request = buildCompactionSummaryRequest({ turns: [turn('private')] });
+
+    expect(request.input).not.toContain('"source"');
+    expect(request.input).not.toContain('run-private');
+    expect(request.input).not.toContain('entry-user-private');
+    expect(request.input).not.toContain('message-assistant-private');
+    expect(request.input).toContain('User private');
+    expect(request.input).toContain('Assistant private');
+  });
 });
 
 function turn(id: string): ConversationTurn {

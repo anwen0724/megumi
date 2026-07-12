@@ -1,5 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
-import { createChatHost } from '@megumi/product/host-interface/chat-host';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
+import {
+  ChatGetContextUsageUiResultSchema,
+  createChatHost,
+  type ChatContextUsagePort,
+} from '@megumi/product/host-interface/chat-host';
 import type { GetSessionUsageSnapshotResult } from '@megumi/coding-agent/context';
 
 function createHost(getSessionUsageSnapshot: (request: { sessionId: string }) => GetSessionUsageSnapshotResult) {
@@ -60,6 +64,11 @@ function available(accuracy: 'provider_reported' | 'estimated'): GetSessionUsage
 }
 
 describe('ChatHost context usage', () => {
+  it('requires the Context owner snapshot port', () => {
+    expectTypeOf<Parameters<typeof createChatHost>[0]['contextService']>()
+      .toEqualTypeOf<ChatContextUsagePort>();
+  });
+
   it.each(['provider_reported', 'estimated'] as const)(
     'mechanically projects an available %s snapshot',
     async (accuracy) => {
@@ -93,6 +102,41 @@ describe('ChatHost context usage', () => {
     });
     expect(contextService.getSessionUsageSnapshot).toHaveBeenCalledTimes(1);
     expect(contextService.refreshAndGetSessionUsage).not.toHaveBeenCalled();
+  });
+
+  it('keeps an above-window completed snapshot valid across the Host schema', async () => {
+    const { host } = createHost(() => ({
+      status: 'available',
+      snapshot: {
+        sessionId: 'session:1',
+        runId: 'run:over-window',
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-flash',
+        usage: {
+          usedTokens: 110,
+          contextWindowTokens: 100,
+          remainingTokens: -10,
+          usedRatio: 1.1,
+          compactionThresholdRatio: 0.8,
+        },
+        accuracy: 'provider_reported',
+        calculatedAt: '2026-07-12T00:00:00.000Z',
+      },
+    }));
+
+    const result = await host.getContextUsage({ sessionId: 'session:1' });
+
+    expect(ChatGetContextUsageUiResultSchema.parse(result)).toEqual({
+      status: 'available',
+      usage: {
+        usedTokens: 110,
+        totalTokens: 100,
+        remainingTokens: -10,
+        usedPercent: 110,
+        autoCompactPercent: 80,
+        accuracy: 'provider_reported',
+      },
+    });
   });
 
   it('preserves Context owner failure details', async () => {

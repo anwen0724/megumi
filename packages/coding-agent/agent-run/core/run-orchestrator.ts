@@ -149,7 +149,7 @@ export async function runAgentModelToolLoop(
     lastPrepared = preparation.prepared;
     traceRun(dependencies, run, 'trace.prompt.built', {
       model_call_index: modelCalls,
-      prompt: lastPrepared.prompt,
+      ...preparedModelCallTraceMetadata(lastPrepared),
     });
 
     const modelCall = await dependencies.model_call_service.modelCall({
@@ -178,9 +178,10 @@ export async function runAgentModelToolLoop(
       },
     });
     traceRun(dependencies, run, 'trace.model_call.request_payload', {
-      owner: { type: 'agent_run', run_id: run.run_id },
-      model_config: request.model_config,
-      prompt: lastPrepared.prompt,
+      owner_type: 'agent_run',
+      provider_id: request.model_config.provider_id,
+      model_id: request.model_config.model_id,
+      ...preparedModelCallTraceMetadata(lastPrepared),
     }, {
       model_call_id: modelCall.model_call_id,
     });
@@ -802,4 +803,28 @@ function traceLoopCounters(
     max_tool_rounds: dependencies.limits.max_tool_rounds,
     runtime_facts_count: runtimeFactsCount,
   });
+}
+
+function preparedModelCallTraceMetadata(prepared: PreparedModelCall): Record<string, unknown> {
+  return {
+    preparation_id: prepared.preparationId,
+    usage: { ...prepared.usage },
+    source_count: prepared.sourceRefs.length,
+    source_type_counts: countBy(prepared.sourceRefs.map((source) => source.sourceType)),
+    system_instruction_count: prepared.prompt.instructions.system.length,
+    agent_instruction_count: prepared.prompt.instructions.agentInstructions.sources.length,
+    activated_skill_count: prepared.prompt.instructions.activatedSkills.length,
+    skill_catalog_count: prepared.prompt.referenceContext.skillCatalog.length,
+    memory_item_count: prepared.prompt.referenceContext.memoryRecall?.items.length ?? 0,
+    conversation_item_count: prepared.prompt.conversation.length,
+    conversation_item_type_counts: countBy(prepared.prompt.conversation.map((item) => item.type)),
+    tool_count: prepared.prompt.tools.length,
+  };
+}
+
+function countBy(values: readonly string[]): Record<string, number> {
+  return values.reduce<Record<string, number>>((counts, value) => {
+    counts[value] = (counts[value] ?? 0) + 1;
+    return counts;
+  }, {});
 }

@@ -47,12 +47,14 @@ describe('Agent Run message flow', () => {
           type: 'user_message',
           content: [
             { type: 'text', text: 'hello' },
-            { type: 'file', fileId: 'README.md' },
+            { type: 'file', fileId: 'attachment-1' },
           ],
         },
         runItems: [],
       },
     }));
+    expect(JSON.stringify(deps.context_service.prepareModelCall.mock.calls[0]?.[0].currentTurn))
+      .not.toContain('README.md');
     expect(deps.session_service.saveAssistantMessage).toHaveBeenCalledWith(expect.objectContaining({
       run_id: result.run.run_id,
       session_id: 'session-1',
