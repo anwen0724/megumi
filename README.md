@@ -12,8 +12,6 @@ Megumi is built for developers who want an agentic coding workflow without givin
 
 ![Megumi startup screen](./assets/screenshots/startup-screen.png)
 
-![Megumi chat timeline](./assets/screenshots/chat-timeline.png)
-
 ## Why Megumi
 
 Megumi brings a Codex-style coding agent workflow into a local desktop app.
@@ -25,8 +23,8 @@ Megumi is designed around a few principles:
 - Local workspaces are first-class.
 - You choose the model provider.
 - Agent actions are visible as they happen.
-- File writes and command execution go through approval.
-- Sessions, settings, runtime data, and logs stay local by default.
+- File writes and command execution go through permission policy and approval when required.
+- Sessions, settings, product data, and logs stay local by default.
 - Workspace changes produced by the agent are tracked in the conversation.
 
 ## What It Does
@@ -39,7 +37,7 @@ Megumi is designed to support the core work of a coding agent:
 - Use tools: search files, inspect code, edit the workspace, run commands, execute tests, and collect diagnostics.
 - Debug systematically: read errors, reproduce failures, trace root causes, apply targeted fixes, and verify the result.
 - Review work: summarize changes, identify risks, surface missing tests, and help prepare code for review.
-- Manage context: carry project instructions, session history, tool results, workspace state, and long-running task context across an agent run.
+- Manage context: build each model call from project instructions, active session history, current-run tool results, rolling summaries, and the selected tool set.
 - Operate with approval: ask before sensitive file writes, command execution, or other high-impact actions.
 
 ## Install
@@ -66,7 +64,7 @@ In Settings, add a provider with:
 - API key
 - model IDs
 
-Megumi currently targets OpenAI-compatible provider APIs.
+Megumi currently supports OpenAI-compatible and Anthropic protocol adapters.
 
 Provider settings are stored locally under the Megumi home directory.
 
@@ -78,7 +76,7 @@ Megumi stores local app data under:
 ~/.megumi
 ```
 
-This includes local settings, sessions, runtime database files, logs, and provider configuration.
+This includes local settings, sessions, business database files, logs, and provider configuration.
 
 Workspace operations happen on your local machine. Prompts and relevant workspace context are sent only to the model provider you configure.
 
@@ -119,6 +117,7 @@ npm run package
 ```text
 apps/desktop          Electron desktop app
 packages/coding-agent Core coding agent runtime
+packages/product      Product host interface and composition
 packages/ai           Model provider protocol layer
 tests                 Vitest test suite
 ```

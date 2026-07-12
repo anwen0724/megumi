@@ -12,8 +12,6 @@ Megumi 面向希望使用 agentic coding 工作流、同时保留本地工作区
 
 ![Megumi 启动页面](./assets/screenshots/startup-screen.png)
 
-![Megumi 会话时间线](./assets/screenshots/chat-timeline.png)
-
 ## 为什么是 Megumi
 
 Megumi 把 Codex 风格的 Coding Agent 工作流放进一个本地桌面应用里。
@@ -25,8 +23,8 @@ Megumi 的设计原则：
 - 本地工作区是一等公民。
 - 模型供应商由你自己选择。
 - Agent 的动作会在运行过程中可见。
-- 文件写入和命令执行需要经过审批。
-- 会话、设置、运行时数据和日志默认保存在本地。
+- 文件写入和命令执行会经过权限策略，并在需要时请求审批。
+- 会话、设置、产品数据和日志默认保存在本地。
 - Agent run 产生的工作区文件改动会在对话中追踪。
 
 ## 它能做什么
@@ -39,7 +37,7 @@ Megumi 设计用于支持 Coding Agent 的核心开发工作：
 - 使用工具：搜索文件、检查代码、编辑工作区、运行命令、执行测试并收集诊断信息。
 - 系统化调试：阅读错误、复现失败、追踪根因、应用有针对性的修复，并验证结果。
 - 审查工作：总结改动、识别风险、指出缺失测试，并帮助准备代码审查。
-- 管理上下文：在一次 agent run 中携带项目指令、会话历史、工具结果、工作区状态和长任务上下文。
+- 管理上下文：为每次模型调用组合项目指令、当前会话历史、本次 run 的工具结果、滚动摘要和选定工具集合。
 - 审批后执行：在敏感文件写入、命令执行或其它高影响操作前请求确认。
 
 ## 安装
@@ -66,7 +64,7 @@ Megumi 使用用户自己配置的模型供应商。
 - API key
 - model IDs
 
-Megumi 当前主要面向 OpenAI-compatible provider APIs。
+Megumi 当前支持 OpenAI-compatible 和 Anthropic 协议适配器。
 
 Provider settings 会保存在本地 Megumi home 目录下。
 
@@ -78,7 +76,7 @@ Megumi 的本地应用数据保存在：
 ~/.megumi
 ```
 
-其中包括本地设置、会话、运行时数据库文件、日志和 provider 配置。
+其中包括本地设置、会话、业务数据库文件、日志和 provider 配置。
 
 工作区操作发生在你的本机。Prompt 和相关工作区上下文只会发送给你配置的模型供应商。
 
@@ -119,6 +117,7 @@ npm run package
 ```text
 apps/desktop          Electron desktop app
 packages/coding-agent Core coding agent runtime
+packages/product      Product host interface and composition
 packages/ai           Model provider protocol layer
 tests                 Vitest test suite
 ```
