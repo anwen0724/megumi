@@ -4,7 +4,6 @@ import type {
   AgentRunToolCall,
   RunStep,
   CancelRunResult,
-  CleanupInterruptedRunsResult,
   ResumeRunAfterApprovalResult,
   StartRunRequest,
   StartRunResult,
@@ -48,11 +47,9 @@ describe('agent-run public contracts', () => {
       'not_waiting',
       'failed',
     ];
-    const cleanupStatuses: CleanupInterruptedRunsResult['status'][] = ['completed', 'failed'];
 
     expect(cancelStatuses).toContain('not_cancellable');
     expect(resumeStatuses).toContain('not_waiting');
-    expect(cleanupStatuses).toEqual(['completed', 'failed']);
   });
 
   it('defines persisted run and tool runtime shapes', () => {

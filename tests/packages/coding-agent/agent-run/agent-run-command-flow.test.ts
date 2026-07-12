@@ -30,7 +30,7 @@ describe('Agent Run command flow', () => {
       interaction: { kind: 'status_panel' },
     });
     expect(deps.session_service.saveUserMessage).not.toHaveBeenCalled();
-    expect(repository.listInterruptedRuns()).toEqual([]);
+    expect(repository.listRuns()).toEqual([]);
   });
 
   it('returns completed and failed command results without starting ordinary runs', async () => {

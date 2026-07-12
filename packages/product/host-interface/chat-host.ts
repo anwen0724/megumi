@@ -7,7 +7,6 @@ import type { RawUserInputAttachment } from '../../coding-agent/input';
 
 import type {
   AgentRun,
-  AgentRunQueries,
   AgentRunService,
   StartRunResult,
 } from '../../coding-agent/agent-run';
@@ -215,7 +214,6 @@ export function createChatHost(options: {
   workspaceService: Pick<WorkspaceService, 'listWorkspaces'>;
   branchService: SessionBranchHostPort;
   sessionTimelineQuery: SessionTimelineQuery;
-  agentRunQueries: AgentRunQueries;
   contextService: ChatContextUsagePort;
 }): ChatHost {
   return {
@@ -355,12 +353,12 @@ export function createChatHost(options: {
       return { suggestions: toHostCommandSuggestions(await options.commandService.getCommandSuggestions(request)) };
     },
 
-    async listRuns(request) {
-      return { runs: options.agentRunQueries.listRunsBySession(request.sessionId).map(toChatRunUiDto) };
+    async listRuns(_request) {
+      return { runs: [] };
     },
 
-    async listRunEvents(request) {
-      return { events: options.agentRunQueries.listRuntimeEventsByRun(request.runId) };
+    async listRunEvents(_request) {
+      return { events: [] };
     },
 
     async getSessionHydration(request) {
@@ -368,15 +366,11 @@ export function createChatHost(options: {
         workspace_id: request.projectId,
         session_id: request.sessionId,
       });
-      const activeRunIds = extractRunIdsFromTimelineMessages(timeline.messages);
-      const runs = options.agentRunQueries
-        .listRunsBySession(request.sessionId)
-        .filter((run) => activeRunIds.has(run.run_id));
       return {
         messages: timeline.messages,
         diagnostics: timeline.diagnostics,
-        runs: runs.map(toChatRunUiDto),
-        runtimeEvents: runs.flatMap((run) => options.agentRunQueries.listRuntimeEventsByRun(run.run_id)),
+        runs: [],
+        runtimeEvents: [],
       };
     },
 
@@ -386,16 +380,6 @@ export function createChatHost(options: {
       }));
     },
   };
-}
-
-function extractRunIdsFromTimelineMessages(messages: TimelineMessage[]): Set<string> {
-  const runIds = new Set<string>();
-  for (const message of messages) {
-    if ((message.role === 'assistant' || message.role === 'user') && message.runId) {
-      runIds.add(message.runId);
-    }
-  }
-  return runIds;
 }
 
 function mapSessionUsageSnapshot(result: GetSessionUsageSnapshotResult): ChatGetContextUsageUiResult {

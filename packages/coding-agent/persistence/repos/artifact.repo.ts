@@ -65,7 +65,7 @@ export class ArtifactRepository {
 
   saveArtifact(artifact: Artifact): Artifact {
     const sessionId = metadataSessionId(artifact.metadata);
-    const workspaceId = artifact.producingRunId ? workspaceIdForRun(this.database, artifact.producingRunId) : null;
+    const workspaceId = sessionId ? workspaceIdForSession(this.database, sessionId) : null;
     const currentVersionId = artifact.currentVersionId && artifactVersionExists(this.database, artifact.currentVersionId)
       ? artifact.currentVersionId
       : null;
@@ -314,10 +314,10 @@ function metadataSessionId(metadata: JsonObject | undefined): string | null {
   return typeof value === 'string' ? value : null;
 }
 
-function workspaceIdForRun(database: MegumiDatabase, runId: string): string | null {
+function workspaceIdForSession(database: MegumiDatabase, sessionId: string): string | null {
   const row = database
-    .prepare('SELECT workspace_id FROM agent_runs WHERE run_id = ?')
-    .get(runId) as { workspace_id: string } | undefined;
+    .prepare('SELECT workspace_id FROM sessions WHERE session_id = ?')
+    .get(sessionId) as { workspace_id: string } | undefined;
   return row?.workspace_id ?? null;
 }
 

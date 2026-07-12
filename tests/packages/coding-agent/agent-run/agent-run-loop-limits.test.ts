@@ -54,9 +54,8 @@ describe('Agent Run loop limits', () => {
     const events = await collectEvents(result.events);
     expectRuntimeEventsSchemaValid(events);
     expect(modelCallCount).toBe(9);
-    expect(repository.getRun(result.run.run_id)).toMatchObject({
-      status: 'completed',
-    });
+    expect(events.map((event) => event.eventType)).toContain('run.completed');
+    expect(repository.getRun(result.run.run_id)).toBeUndefined();
   });
 
   it('fails the run when maxModelCalls is exceeded', async () => {
@@ -82,12 +81,7 @@ describe('Agent Run loop limits', () => {
 
     const events = await collectEvents(result.events);
     expectRuntimeEventsSchemaValid(events);
-    expect(repository.getRun(result.run.run_id)).toMatchObject({
-      status: 'failed',
-      failure: {
-        code: 'loop_limit_exceeded',
-      },
-    });
+    expect(repository.getRun(result.run.run_id)).toBeUndefined();
     expect(events.map((event) => event.eventType)).toContain('run.failed');
   });
 
@@ -115,12 +109,7 @@ describe('Agent Run loop limits', () => {
 
     const events = await collectEvents(result.events);
     expectRuntimeEventsSchemaValid(events);
-    expect(repository.getRun(result.run.run_id)).toMatchObject({
-      status: 'failed',
-      failure: {
-        code: 'loop_limit_exceeded',
-      },
-    });
+    expect(repository.getRun(result.run.run_id)).toBeUndefined();
   });
 });
 

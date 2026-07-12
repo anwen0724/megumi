@@ -9,12 +9,10 @@ import {
   createAgentRunService,
   createAgentRunTraceFileLogger,
   createModelCallService,
-  getHistoricalRun,
-  type AgentRunQueries,
   type AgentRunService,
   type ModelCallService,
 } from '../agent-run';
-import { createAgentRunRepository, type AgentRunRepository } from '../agent-run/repositories/agent-run-repository';
+import { ActiveRunStore } from '../agent-run/core/active-run-store';
 import { createCommandService, type CommandService, type SkillCommandDescriptor } from '../commands';
 import { createInputService, type InputService } from '../input';
 import { createSessionBranchService, createSessionService, type SessionBranchService, type SessionService } from '../session';
@@ -131,7 +129,6 @@ export interface CodingAgentRuntime {
   artifactService: ArtifactService;
   planArtifactService: PlanArtifactService;
   contextRuntime: ReturnType<typeof composeCodingAgentContext>;
-  agentRunQueries: AgentRunQueries;
   sessionTimelineQuery: SessionTimelineQuery;
   modelContextProvider: ModelContextProvider;
   dispose(): void;
@@ -160,14 +157,6 @@ type LegacyModelCallProviderForTests = {
   cancelModelCall?(request: unknown): boolean;
 };
 
-export function createAgentRunQueries(repository: AgentRunRepository): AgentRunQueries {
-  return {
-    listRunsBySession: (sessionId) => repository.listRunsBySession(sessionId),
-    listRuntimeEventsByRun: (runId) => repository.listRuntimeEventsByRun(runId),
-    getHistoricalRun: (runId) => getHistoricalRun(repository, runId),
-  };
-}
-
 export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOptions): CodingAgentRuntime {
   const persistence = composeCodingAgentPersistence({
     sqlitePath: options.homePaths.sqlitePath,
@@ -177,7 +166,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   const workspaceRepository = new WorkspaceRepository(persistence.database);
   const workspaceChangeRepository = new WorkspaceChangeRepository(persistence.database);
   const sessionRepository = new SessionV2Repository(persistence.database);
-  const agentRunRepository = createAgentRunRepository({ database: persistence.database });
+  const activeRunStore = new ActiveRunStore();
   const sessionService = createSessionService({ repository: sessionRepository });
   const sessionBranchService = createSessionBranchService({
     entries: {
@@ -230,7 +219,6 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     options.workspaceChangeFooterProjector,
     workspaceChangeService,
   );
-  const agentRunQueries = createAgentRunQueries(agentRunRepository);
   const sessionTimelineQuery = createSessionTimelineQuery({
     sessionService,
     workspaceChangeFooterProjector,
@@ -311,7 +299,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     planArtifactCompatibility,
   });
   const agentRunService = createAgentRunService({
-    database: persistence.database,
+    active_run_store: activeRunStore,
     input_service: inputService,
     command_service: commandService,
     command_execution_context_provider: ({ request, session_id }) => ({
@@ -367,22 +355,12 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
       publish(event) {
         finalizeWorkspaceChangesForTerminalRunEvent({
           event,
-          agentRuns: agentRunRepository,
+          activeRuns: activeRunStore,
           workspaceChanges: workspaceChangeService,
         });
       },
     },
   });
-  const cleanupResult = agentRunService.cleanupInterruptedRuns({ reason: 'runtime_started' });
-  void Promise.resolve(cleanupResult).then((result) => {
-    if (result.status === 'failed') {
-      options.runtimeLogger.warn('agent_run.cleanup_failed', {
-        code: result.failure.code,
-        message: result.failure.message,
-      });
-    }
-  });
-
   return {
     agentRunService,
     modelCallService,
@@ -400,7 +378,6 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     artifactService,
     planArtifactService,
     contextRuntime,
-    agentRunQueries,
     sessionTimelineQuery,
     modelContextProvider,
     dispose: () => persistence.database.close(),
@@ -541,14 +518,14 @@ function stringPayload(event: RuntimeEvent, key: string): string | undefined {
 
 export function finalizeWorkspaceChangesForTerminalRunEvent(input: {
   event: RuntimeEvent;
-  agentRuns: Pick<AgentRunRepository, 'getRun'>;
+  activeRuns: Pick<ActiveRunStore, 'getRun'>;
   workspaceChanges: Pick<WorkspaceChangeService, 'finalizeChangeSet'>;
 }): void {
   if (!isTerminalRunEvent(input.event) || !input.event.runId) {
     return;
   }
 
-  const run = input.agentRuns.getRun(input.event.runId);
+  const run = input.activeRuns.getRun(input.event.runId);
   if (!run) {
     return;
   }

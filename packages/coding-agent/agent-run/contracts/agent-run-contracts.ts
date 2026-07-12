@@ -190,14 +190,6 @@ export type ResumeRunAfterApprovalResult =
   | { status: 'not_waiting'; run: AgentRun }
   | { status: 'failed'; failure: AgentRunFailure; events?: RuntimeEvent[] };
 
-export type CleanupInterruptedRunsRequest = {
-  reason: 'runtime_started' | 'runtime_recovered';
-};
-
-export type CleanupInterruptedRunsResult =
-  | { status: 'completed'; cleaned_run_ids: string[]; events: RuntimeEvent[] }
-  | { status: 'failed'; failure: AgentRunFailure; events?: RuntimeEvent[] };
-
 export type AgentRunCommandInput = CommandAgentRunInput;
 export type AgentRunModelConfig = ProviderRuntimeConfig;
 export type { ApprovalDecision, ApprovalScope, PermissionMode };
@@ -208,7 +200,4 @@ export type AgentRunService = {
   resumeRunAfterApproval(
     request: ResumeRunAfterApprovalRequest,
   ): Promise<ResumeRunAfterApprovalResult> | ResumeRunAfterApprovalResult;
-  cleanupInterruptedRuns(
-    request: CleanupInterruptedRunsRequest,
-  ): Promise<CleanupInterruptedRunsResult> | CleanupInterruptedRunsResult;
 };

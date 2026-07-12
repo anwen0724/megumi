@@ -181,7 +181,7 @@ describe('finalizeWorkspaceChangesForTerminalRunEvent', () => {
 
     finalizeWorkspaceChangesForTerminalRunEvent({
       event: runtimeEvent('run.completed'),
-      agentRuns: {
+      activeRuns: {
         getRun: vi.fn(() => agentRun({
           run_id: 'run-1',
           workspace_id: 'workspace-1',
@@ -204,7 +204,7 @@ describe('finalizeWorkspaceChangesForTerminalRunEvent', () => {
 
     finalizeWorkspaceChangesForTerminalRunEvent({
       event: runtimeEvent('model_call.text_delta'),
-      agentRuns: {
+      activeRuns: {
         getRun: vi.fn(() => agentRun({
           run_id: 'run-1',
           workspace_id: 'workspace-1',

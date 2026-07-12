@@ -22,7 +22,6 @@ import type {
   CurrentConversationTurn,
 } from '../../context';
 import type { RuntimeError, RuntimeEvent } from '../../events';
-import type { MegumiDatabase } from '../../persistence/connection';
 import type {
   AgentRun,
   AgentRunApprovalRequest,
@@ -31,8 +30,6 @@ import type {
   AgentRunService,
   CancelRunRequest,
   CancelRunResult,
-  CleanupInterruptedRunsRequest,
-  CleanupInterruptedRunsResult,
   ResumeRunAfterApprovalRequest,
   ResumeRunAfterApprovalResult,
   StartRunRequest,
@@ -57,24 +54,15 @@ import {
   createRunToolSetBuilder,
   type RunToolSetBuilder,
 } from '../core/tool-set-builder';
-import { cleanupInterruptedRuns as cleanupInterruptedRunsCore } from '../core/run-recovery';
 import { resumeApprovalFlow } from '../core/approval-flow';
 import {
   createAgentRunRuntimeEvent,
   type AgentRunRuntimeEventFactory,
 } from '../core/agent-run-runtime-events';
 import { ActiveRunStore } from '../core/active-run-store';
-import {
-  createAgentRunRepository,
-  type AgentRunRepository,
-} from '../repositories/agent-run-repository';
 import { createNoopAgentRunTraceLogger } from './agent-run-trace-logger';
 
-export { getHistoricalRun } from '../core/historical-run-query';
-
 export type CreateAgentRunServiceOptions = {
-  repository?: AgentRunRepository;
-  database?: MegumiDatabase;
   active_run_store?: ActiveRunStore;
   input_service: Pick<InputService, 'processUserInput'>;
   command_service: {
@@ -131,7 +119,6 @@ export function createAgentRunService(options: CreateAgentRunServiceOptions): Ag
 }
 
 class DefaultAgentRunService implements AgentRunService {
-  private readonly repository: AgentRunRepository;
   private readonly activeRuns: ActiveRunStore;
   private readonly toolsBuilder: RunToolSetBuilder;
   private readonly ids: AgentRunServiceIds;
@@ -143,10 +130,6 @@ class DefaultAgentRunService implements AgentRunService {
   private readonly approvalContinuations = new Map<string, RunApprovalContinuation>();
 
   constructor(private readonly options: CreateAgentRunServiceOptions) {
-    if (!options.repository && !options.database) {
-      throw new Error('Agent Run Service requires a repository or database.');
-    }
-    this.repository = options.repository ?? createAgentRunRepository({ database: options.database! });
     this.activeRuns = options.active_run_store ?? new ActiveRunStore();
     this.toolsBuilder = createRunToolSetBuilder({ tool_registry_service: options.tool_registry_service });
     this.ids = {
@@ -245,7 +228,7 @@ class DefaultAgentRunService implements AgentRunService {
       };
     }
 
-    let run = this.repository.createRun({
+    let run = this.activeRuns.createRun({
       run_id: runId,
       workspace_id: request.workspace_id,
       session_id: sessionId,
@@ -254,12 +237,11 @@ class DefaultAgentRunService implements AgentRunService {
       status: 'queued',
       created_at: this.clock.now(),
     });
-    run = this.repository.saveRun(transitionAgentRunStatus({
+    run = this.activeRuns.saveRun(transitionAgentRunStatus({
       run,
       to: 'running',
       changed_at: this.clock.now(),
     }));
-    this.activeRuns.createRun(run);
     const queue = createAgentRunEventQueue((event) => this.options.event_publisher?.publish(event));
     const eventSink = this.createEventSink(queue, run);
     const commandSkills = await this.resolveCommandSkills({
@@ -269,7 +251,7 @@ class DefaultAgentRunService implements AgentRunService {
       run_id: run.run_id,
     });
     if (commandSkills.status === 'failed') {
-      const failedRun = this.repository.saveRun(transitionAgentRunStatus({
+      const failedRun = this.activeRuns.saveRun(transitionAgentRunStatus({
         run,
         to: 'failed',
         changed_at: this.clock.now(),
@@ -350,14 +332,14 @@ class DefaultAgentRunService implements AgentRunService {
   }
 
   cancelRun(request: CancelRunRequest): CancelRunResult {
-    const run = this.repository.getRun(request.run_id);
+    const run = this.activeRuns.getRun(request.run_id);
     if (!run) return { status: 'not_found', run_id: request.run_id };
     if (run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled') {
       return { status: 'not_cancellable', run, reason: 'already_terminal' };
     }
     const queue = createAgentRunEventQueue((event) => this.options.event_publisher?.publish(event));
     const eventSink = this.createEventSink(queue, run);
-    const cancelling = this.repository.saveRun(transitionAgentRunStatus({
+    const cancelling = this.activeRuns.saveRun(transitionAgentRunStatus({
       run,
       to: 'cancelling',
       changed_at: this.clock.now(),
@@ -375,14 +357,14 @@ class DefaultAgentRunService implements AgentRunService {
       void this.options.model_call_service.cancelModelCall({ model_call_id: activeModelCallId });
       this.activeModelCallByRun.delete(run.run_id);
     }
-    for (const approval of this.repository.listPendingApprovalRequestsByRun(run.run_id)) {
-      this.repository.saveApprovalRequest({
+    for (const approval of this.activeRuns.listPendingApprovalRequestsByRun(run.run_id)) {
+      this.activeRuns.saveApprovalRequest({
         ...approval,
         status: 'cancelled',
         decided_at: this.clock.now(),
       });
     }
-    const cancelled = this.repository.saveRun(transitionAgentRunStatus({
+    const cancelled = this.activeRuns.saveRun(transitionAgentRunStatus({
       run: cancelling,
       to: 'cancelled',
       changed_at: this.clock.now(),
@@ -396,13 +378,15 @@ class DefaultAgentRunService implements AgentRunService {
     });
     this.activeRunAbortControllers.delete(run.run_id);
     queue.close();
-    return { status: 'cancelled', run: cancelled, events: queue.snapshot() };
+    const events = queue.snapshot();
+    this.activeRuns.release(run.run_id);
+    return { status: 'cancelled', run: cancelled, events };
   }
 
   async resumeRunAfterApproval(request: ResumeRunAfterApprovalRequest): Promise<ResumeRunAfterApprovalResult> {
-    const approval = this.repository.getApprovalRequest(request.approval_request_id);
+    const approval = this.activeRuns.getApprovalRequest(request.approval_request_id);
     if (!approval) return { status: 'not_found', approval_request_id: request.approval_request_id };
-    const run = this.repository.getRun(approval.run_id);
+    const run = this.activeRuns.getRun(approval.run_id);
     if (!run) {
       return {
         status: 'failed',
@@ -456,7 +440,7 @@ class DefaultAgentRunService implements AgentRunService {
     const flow = await resumeApprovalFlow({
       run,
       approval_request: approval,
-      pending_approval_requests_after_decision: this.repository.listPendingApprovalRequestsByRun(run.run_id),
+      pending_approval_requests_after_decision: this.activeRuns.listPendingApprovalRequestsByRun(run.run_id),
       original_permission_decision: originalPermissionDecision,
       decision,
       session_id: run.session_id,
@@ -473,9 +457,9 @@ class DefaultAgentRunService implements AgentRunService {
       return { status: 'failed', failure: flow.failure, events: [] };
     }
 
-    const decidedApproval = this.repository.saveApprovalRequest(flow.approval_request);
+    const decidedApproval = this.activeRuns.saveApprovalRequest(flow.approval_request);
     const resumedRun = flow.run.status !== run.status
-      ? this.repository.saveRun(flow.run)
+      ? this.activeRuns.saveRun(flow.run)
       : flow.run;
     eventSink.emit({
       eventType: 'approval.resolved',
@@ -579,10 +563,10 @@ class DefaultAgentRunService implements AgentRunService {
 
     if (flow.continuation === 'waiting_for_other_approval') {
       this.approvalContinuations.delete(request.approval_request_id);
-      const pendingApprovalIds = this.repository
+      const pendingApprovalIds = this.activeRuns
         .listPendingApprovalRequestsByRun(run.run_id)
         .map((approvalRequest) => approvalRequest.approval_request_id);
-      for (const pending of this.repository.listPendingApprovalRequestsByRun(run.run_id)) {
+      for (const pending of this.activeRuns.listPendingApprovalRequestsByRun(run.run_id)) {
         this.approvalContinuations.set(pending.approval_request_id, {
           ...continuation,
           pending_approval_ids: pendingApprovalIds,
@@ -635,73 +619,6 @@ class DefaultAgentRunService implements AgentRunService {
     return { status: 'resumed', run: deferred.run, events: queue.events() };
   }
 
-  cleanupInterruptedRuns(_request: CleanupInterruptedRunsRequest): CleanupInterruptedRunsResult {
-    const queue = createAgentRunEventQueue((event) => this.options.event_publisher?.publish(event));
-    const result = cleanupInterruptedRunsCore({
-      repository: this.repository,
-      cleaned_at: this.clock.now(),
-    });
-    for (const runId of result.cleaned_run_ids) {
-      this.activeRunAbortControllers.get(runId)?.abort();
-      this.activeRunAbortControllers.delete(runId);
-      this.activeModelCallByRun.delete(runId);
-      for (const [approvalId, continuation] of this.approvalContinuations.entries()) {
-        if (continuation.run_id === runId) {
-          this.approvalContinuations.delete(approvalId);
-        }
-      }
-    }
-    const eventSink = this.createEventSink(queue);
-    for (const cleaned of result.cleaned_runs) {
-      if (cleaned.previous_status === 'running') {
-        eventSink.emit({
-          eventType: 'run.failed',
-          run: cleaned.run,
-          payload: {
-            error: agentRunFailureToRuntimeError(cleaned.run.failure ?? {
-              code: 'runtime_interrupted',
-              message: 'Runtime interrupted before the Agent Run reached a terminal state.',
-              retryable: false,
-            }),
-          },
-        });
-        continue;
-      }
-
-      for (const approval of cleaned.cancelled_approvals) {
-        eventSink.emit({
-          eventType: 'approval.resolved',
-          run: cleaned.run,
-          payload: {
-            approvalRequestId: approval.approval_request_id,
-            decision: 'cancelled',
-            scope: approval.requested_scope ?? 'once',
-            decidedAt: approval.decided_at ?? this.clock.now(),
-          },
-        });
-      }
-
-      if (cleaned.previous_status === 'waiting_for_approval' || cleaned.previous_status === 'cancelling') {
-        eventSink.emit({
-          eventType: 'run.cancelled',
-          run: cleaned.run,
-          payload: {
-            reason: 'runtime_started_cleanup',
-            error: {
-              code: 'runtime_cancelled',
-              message: 'Runtime restarted before the Agent Run reached a terminal state.',
-              severity: 'warning',
-              retryable: false,
-              source: 'core',
-            },
-          },
-        });
-      }
-    }
-    queue.close();
-    return { status: 'completed', cleaned_run_ids: result.cleaned_run_ids, events: queue.snapshot() };
-  }
-
   private createEventSink(
     queue: RuntimeEventQueue,
     run?: Pick<AgentRun, 'run_id' | 'session_id'>,
@@ -717,7 +634,6 @@ class DefaultAgentRunService implements AgentRunService {
             ...runtimeEvent,
           },
         });
-        this.persistRuntimeEvent(event);
         queue.emit(event);
         return event;
       },
@@ -749,28 +665,7 @@ class DefaultAgentRunService implements AgentRunService {
     if (!runId) {
       return 1;
     }
-    return this.repository.nextRuntimeEventSequence(runId);
-  }
-
-  private persistRuntimeEvent(event: RuntimeEvent): void {
-    if (!event.runId || event.persist === 'transient') {
-      return;
-    }
-    try {
-      this.repository.saveRuntimeEvent(event);
-    } catch (error) {
-      this.traceLogger.record({
-        trace_id: event.runId,
-        event_type: 'trace.runtime_event.persistence_failed',
-        run_id: event.runId,
-        session_id: event.sessionId,
-        payload: {
-          event_id: event.eventId,
-          event_type: event.eventType,
-          error: error instanceof Error ? error.message : String(error),
-        },
-      });
-    }
+    return this.activeRuns.nextRuntimeEventSequence(runId);
   }
 
   private async continueDeferredToolCallGroup(input: {
@@ -853,7 +748,7 @@ class DefaultAgentRunService implements AgentRunService {
 
     if (toolGroup.pending_approvals.length > 0) {
       for (const pendingApproval of toolGroup.pending_approvals) {
-        this.repository.createApprovalRequest(pendingApproval.approval_request);
+        this.activeRuns.createApprovalRequest(pendingApproval.approval_request);
         input.eventSink.emit({
           eventType: 'approval.requested',
           run: input.run,
@@ -862,7 +757,7 @@ class DefaultAgentRunService implements AgentRunService {
           },
         });
       }
-      const waitingRun = this.repository.saveRun(transitionAgentRunStatus({
+      const waitingRun = this.activeRuns.saveRun(transitionAgentRunStatus({
         run: input.run,
         to: 'waiting_for_approval',
         changed_at: this.clock.now(),
@@ -909,9 +804,9 @@ class DefaultAgentRunService implements AgentRunService {
     workspace_root?: string;
     signal: AbortSignal;
   }): Promise<void> {
+    let retainForApproval = false;
     try {
       const result = await runAgentModelToolLoop({
-        repository: this.repository,
         active_run_store: this.activeRuns,
         session_service: this.options.session_service,
         settings_service: this.options.settings_service,
@@ -952,6 +847,7 @@ class DefaultAgentRunService implements AgentRunService {
 
       this.activeModelCallByRun.delete(input.run.run_id);
       if (result.status === 'waiting_for_approval') {
+        retainForApproval = true;
         for (const approvalId of result.continuation.pending_approval_ids) {
           this.approvalContinuations.set(approvalId, result.continuation);
         }
@@ -959,9 +855,9 @@ class DefaultAgentRunService implements AgentRunService {
       }
       this.activeRunAbortControllers.delete(input.run.run_id);
     } catch (error) {
-      const latest = this.repository.getRun(input.run.run_id) ?? input.run;
+      const latest = this.activeRuns.getRun(input.run.run_id) ?? input.run;
       if (latest.status !== 'completed' && latest.status !== 'failed' && latest.status !== 'cancelled') {
-        this.repository.saveRun(transitionAgentRunStatus({
+        this.activeRuns.saveRun(transitionAgentRunStatus({
           run: latest,
           to: 'failed',
           changed_at: this.clock.now(),
@@ -998,6 +894,7 @@ class DefaultAgentRunService implements AgentRunService {
         },
       });
     } finally {
+      if (!retainForApproval) this.activeRuns.release(input.run.run_id);
       queueMicrotask(() => input.queue.close());
     }
   }

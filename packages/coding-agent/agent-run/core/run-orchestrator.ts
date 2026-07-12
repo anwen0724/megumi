@@ -36,13 +36,11 @@ import {
   type ModelRequestedToolCall,
 } from './tool-call-orchestrator';
 import type { RunToolSetBuilder } from './tool-set-builder';
-import type { AgentRunRepository } from '../repositories/agent-run-repository';
 import type { AgentRunRuntimeEventFactory } from './agent-run-runtime-events';
 import type { ActiveRunStore } from './active-run-store';
 
 export type RunOrchestratorDependencies = {
-  repository: AgentRunRepository;
-  active_run_store?: Pick<ActiveRunStore, 'upsertStep'>;
+  active_run_store: Pick<ActiveRunStore, 'saveRun' | 'createApprovalRequest' | 'upsertStep'>;
   session_service: Pick<SessionService, 'saveAssistantMessage' | 'saveToolResultMessage'>;
   settings_service: Pick<SettingsService, 'resolvePermissionSettings'>;
   context_service: Pick<ContextService, 'prepareModelCall' | 'recordCompletedRunUsage'>;
@@ -174,7 +172,7 @@ export async function runAgentModelToolLoop(
       model_call_id: modelCall.model_call_id,
     });
     const modelCallStartedAt = dependencies.clock.now();
-    dependencies.active_run_store?.upsertStep({
+    dependencies.active_run_store.upsertStep({
       type: 'model_call',
       run_id: run.run_id,
       model_call_id: modelCall.model_call_id,
@@ -212,7 +210,7 @@ export async function runAgentModelToolLoop(
           completed_at: dependencies.clock.now(),
         });
       }
-      dependencies.active_run_store?.upsertStep({
+      dependencies.active_run_store.upsertStep({
         type: 'model_call',
         run_id: run.run_id,
         model_call_id: modelCall.model_call_id,
@@ -226,7 +224,7 @@ export async function runAgentModelToolLoop(
         tool_rounds: toolRounds,
       });
     }
-    dependencies.active_run_store?.upsertStep({
+    dependencies.active_run_store.upsertStep({
       type: 'model_call',
       run_id: run.run_id,
       model_call_id: modelCall.model_call_id,
@@ -251,7 +249,7 @@ export async function runAgentModelToolLoop(
     }
 
     if (modelEvents.tool_calls.length === 0) {
-      run = dependencies.repository.saveRun(transitionAgentRunStatus({
+      run = dependencies.active_run_store.saveRun(transitionAgentRunStatus({
         run,
         to: 'completed',
         changed_at: dependencies.clock.now(),
@@ -371,9 +369,7 @@ export async function runAgentModelToolLoop(
       ...(dependencies.workspace_path_policy_service ? { workspace_path_policy_service: dependencies.workspace_path_policy_service } : {}),
       clock: dependencies.clock,
       ids: { approval_request_id: dependencies.ids.approval_request_id },
-      ...(dependencies.active_run_store ? {
-        on_step_transition: (step) => dependencies.active_run_store!.upsertStep(step),
-      } : {}),
+      on_step_transition: (step) => dependencies.active_run_store.upsertStep(step),
       signal: request.signal,
     });
 
@@ -411,7 +407,7 @@ export async function runAgentModelToolLoop(
     currentTurn = { ...currentTurn, runItems: [...currentTurn.runItems, ...appendedItems] };
     for (const pendingApproval of toolGroup.pending_approvals) {
       const approval = pendingApproval.approval_request;
-      dependencies.repository.createApprovalRequest(approval);
+      dependencies.active_run_store.createApprovalRequest(approval);
       dependencies.event_sink.emit({
         eventType: 'approval.requested',
         run,
@@ -422,7 +418,7 @@ export async function runAgentModelToolLoop(
     }
 
     if (toolGroup.pending_approvals.length > 0) {
-      run = dependencies.repository.saveRun(transitionAgentRunStatus({
+      run = dependencies.active_run_store.saveRun(transitionAgentRunStatus({
         run,
         to: 'waiting_for_approval',
         changed_at: dependencies.clock.now(),
@@ -849,7 +845,7 @@ function failRun(
   failure: AgentRunFailure,
   counters?: { model_calls: number; tool_rounds: number },
 ): RunOrchestratorResult {
-  const failedRun = dependencies.repository.saveRun(transitionAgentRunStatus({
+  const failedRun = dependencies.active_run_store.saveRun(transitionAgentRunStatus({
     run,
     to: 'failed',
     changed_at: dependencies.clock.now(),

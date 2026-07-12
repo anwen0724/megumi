@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createAgentRunService,
-  ActiveRunStore,
   type CreateAgentRunServiceOptions,
 } from '@megumi/coding-agent/agent-run';
 import {
@@ -14,8 +13,7 @@ import { RuntimeEventSchema } from '@megumi/coding-agent/events';
 describe('Agent Run message flow', () => {
   it('starts one run, builds prompts, saves assistant output, captures memory, and publishes events', async () => {
     const repository = createInMemoryAgentRunRepository();
-    const activeRunStore = new ActiveRunStore();
-    const deps = { ...createMessageFlowDependencies({ repository }), active_run_store: activeRunStore };
+    const deps = createMessageFlowDependencies({ repository });
     const prepareModelCall = deps.context_service.prepareModelCall.getMockImplementation();
     deps.context_service.prepareModelCall.mockImplementation(async (request) => {
       request.onCompactionProgress?.({
@@ -118,10 +116,7 @@ describe('Agent Run message flow', () => {
     expect(events.map((event) => String(event.eventType))).not.toContain('error.raised');
     expect(events.map((event) => String(event.eventType))).not.toContain(['tool', 'execution'].join('_') + '.started');
     expect(events.map((event) => String(event.eventType))).not.toContain(['tool', 'execution'].join('_') + '.completed');
-    expect(repository.getRun(result.run.run_id)?.status).toBe('completed');
-    expect(activeRunStore.listSteps(result.run.run_id)).toEqual([
-      expect.objectContaining({ type: 'model_call', model_call_id: 'model-call-1', status: 'completed' }),
-    ]);
+    expect(repository.getRun(result.run.run_id)).toBeUndefined();
     expect(deps.context_service.recordCompletedRunUsage.mock.calls[0]?.[0])
       .not.toHaveProperty('providerInputTokens');
   });
@@ -256,7 +251,7 @@ describe('Agent Run message flow', () => {
     if (result.status !== 'started') return;
     await collectEvents(result.events);
 
-    expect(repository.getRun(result.run.run_id)?.status).toBe('failed');
+    expect(repository.getRun(result.run.run_id)).toBeUndefined();
     expect(deps.context_service.recordCompletedRunUsage).not.toHaveBeenCalled();
   });
 
@@ -300,6 +295,10 @@ describe('Agent Run message flow', () => {
     await collectEvents(result.events);
 
     expect(repository.getRun(result.run.run_id)?.status).toBe('waiting_for_approval');
+    expect(repository.listSteps(result.run.run_id)).toEqual([
+      expect.objectContaining({ type: 'model_call', model_call_id: 'model-call-1', status: 'completed' }),
+      expect.objectContaining({ type: 'tool_call', source_model_call_id: 'model-call-1', call_order: 0, status: 'waiting_for_approval' }),
+    ]);
     expect(deps.context_service.recordCompletedRunUsage).not.toHaveBeenCalled();
   });
 
@@ -324,7 +323,7 @@ describe('Agent Run message flow', () => {
     if (result.status !== 'started') return;
     await collectEvents(result.events);
 
-    expect(repository.getRun(result.run.run_id)?.status).toBe('completed');
+    expect(repository.getRun(result.run.run_id)).toBeUndefined();
     expect(record).toHaveBeenCalledWith(expect.objectContaining({
       event_type: 'trace.context.snapshot_failed',
       payload: expect.objectContaining({ code: 'usage_snapshot_invalid' }),

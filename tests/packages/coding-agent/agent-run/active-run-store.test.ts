@@ -1,6 +1,7 @@
 /* Verifies that Active Run state is process-local and supports parallel ToolCall Steps. */
 import { describe, expect, it } from 'vitest';
-import { ActiveRunStore, type AgentRun, type ToolCallStep } from '@megumi/coding-agent/agent-run';
+import type { AgentRun, ToolCallStep } from '@megumi/coding-agent/agent-run';
+import { ActiveRunStore } from '@megumi/coding-agent/agent-run/core/active-run-store';
 
 describe('ActiveRunStore', () => {
   it('owns lifecycle, parallel steps, approvals, and terminal release in memory', () => {

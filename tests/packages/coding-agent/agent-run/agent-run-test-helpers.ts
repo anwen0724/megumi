@@ -1,88 +1,14 @@
 import { vi } from 'vitest';
-import type { AgentRun, AgentRunApprovalRequest } from '@megumi/coding-agent/agent-run';
-import type { AgentRunRepository } from '@megumi/coding-agent/agent-run/repositories/agent-run-repository';
+import { ActiveRunStore } from '@megumi/coding-agent/agent-run/core/active-run-store';
 import type { RuntimeEvent } from '@megumi/coding-agent/events';
 import type { RegisteredTool, ToolExecutionResult } from '@megumi/coding-agent/tools';
 
-export function createInMemoryAgentRunRepository(): AgentRunRepository {
-  const runs = new Map<string, AgentRun>();
-  const approvals = new Map<string, AgentRunApprovalRequest>();
-  const runtimeEvents = new Map<string, RuntimeEvent>();
-
-  return {
-    createRun(run) {
-      runs.set(run.run_id, run);
-      return run;
-    },
-    getRun(runId) {
-      return runs.get(runId);
-    },
-    saveRun(run) {
-      runs.set(run.run_id, run);
-      return run;
-    },
-    listRunsBySession(sessionId) {
-      return [...runs.values()].filter((run) => run.session_id === sessionId);
-    },
-    listInterruptedRuns() {
-      return [...runs.values()].filter((run) => (
-        run.status === 'running'
-        || run.status === 'waiting_for_approval'
-        || run.status === 'cancelling'
-      ));
-    },
-    createApprovalRequest(request) {
-      approvals.set(request.approval_request_id, request);
-      return request;
-    },
-    getApprovalRequest(approvalRequestId) {
-      return approvals.get(approvalRequestId);
-    },
-    saveApprovalRequest(request) {
-      approvals.set(request.approval_request_id, request);
-      return request;
-    },
-    listPendingApprovalRequestsByRun(runId) {
-      return [...approvals.values()]
-        .filter((approval) => approval.run_id === runId && approval.status === 'pending');
-    },
-    saveRuntimeEvent(event) {
-      runtimeEvents.set(event.eventId, event);
-      return event;
-    },
-    listRuntimeEventsByRun(runId) {
-      return [...runtimeEvents.values()]
-        .filter((event) => event.runId === runId)
-        .sort((left, right) => {
-          const sequenceOrder = left.sequence - right.sequence;
-          return sequenceOrder
-            || left.createdAt.localeCompare(right.createdAt)
-            || left.eventId.localeCompare(right.eventId);
-        });
-    },
-    listRuntimeEventsByRunStrict(runId) {
-      return [...runtimeEvents.values()]
-        .filter((event) => event.runId === runId)
-        .sort((left, right) => {
-          const sequenceOrder = left.sequence - right.sequence;
-          return sequenceOrder
-            || left.createdAt.localeCompare(right.createdAt)
-            || left.eventId.localeCompare(right.eventId);
-        });
-    },
-    readRuntimeEventsByRun(runId) {
-      return { events: this.listRuntimeEventsByRunStrict(runId), diagnostics: [] };
-    },
-    nextRuntimeEventSequence(runId) {
-      return Math.max(0, ...[...runtimeEvents.values()]
-        .filter((event) => event.runId === runId)
-        .map((event) => event.sequence)) + 1;
-    },
-  };
+export function createInMemoryAgentRunRepository(): ActiveRunStore {
+  return new ActiveRunStore();
 }
 
 export function createMessageFlowDependencies(input: {
-  repository?: AgentRunRepository;
+  repository?: ActiveRunStore;
   modelEvents?: Array<Record<string, unknown>>;
   commandResult?: unknown;
   max_model_calls?: number;
@@ -91,7 +17,7 @@ export function createMessageFlowDependencies(input: {
   const repository = input.repository ?? createInMemoryAgentRunRepository();
   const tool = registeredTool('read_file', 'parallel');
   return {
-    repository,
+    active_run_store: repository,
     input_service: {
       processUserInput: vi.fn(async (request) => ({
         status: 'ok' as const,
