@@ -13,7 +13,6 @@ function settingsResult(setupCompleted: boolean) {
         theme: 'midnight-blue',
         setup: { completed: setupCompleted },
         memory: { enabled: false },
-        compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
         providers: {},
         permissions: {},
       },

@@ -116,7 +116,16 @@ describe('SessionService', () => {
 
     expect(result).toMatchObject({
       status: 'saved',
-      message: { message_id: 'M1', role: 'user' },
+      message: {
+        message: { message_id: 'M1', role: 'user' },
+        attachments: [{
+          attachment_id: 'A1',
+          message_id: 'M1',
+          session_id: 'S1',
+          source_type: 'local_file',
+          source_value: 'C:/tmp/error.png',
+        }],
+      },
       entry: { session_id: 'S1', entry_type: 'message', message_id: 'M1' },
     });
     expect(service.getActivePath({ session_id: 'S1' })).toMatchObject({
@@ -197,6 +206,31 @@ describe('SessionService', () => {
     if (result.status === 'ok') {
       expect(result.history.some((item) => item.type === 'compaction')).toBe(true);
     }
+  });
+
+  it('rejects a compaction when the active head changed after Context loaded history', async () => {
+    const { repository, service, workspaceId } = createService();
+    await service.createSession({ workspace_id: workspaceId, title: 'Session' });
+    const first = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', content_text: 'm1', created_at: '2026-07-04T00:01:00.000Z' });
+    const second = await service.saveUserMessage({ message_id: 'M2', session_id: 'S1', content_text: 'm2', created_at: '2026-07-04T00:02:00.000Z' });
+    const firstEntryId = first.status === 'saved' ? first.entry.entry_id : 'missing';
+    const expectedHead = second.status === 'saved' ? second.entry.entry_id : 'missing';
+
+    await service.saveUserMessage({ message_id: 'M3', session_id: 'S1', content_text: 'new branch head', created_at: '2026-07-04T00:03:00.000Z' });
+
+    expect(service.saveCompactionSummary({
+      compaction_id: 'C-stale',
+      session_id: 'S1',
+      summary_text: 'must not persist',
+      covered_until_entry_id: firstEntryId,
+      expected_active_entry_id: expectedHead,
+      created_at: '2026-07-04T00:04:00.000Z',
+      append_to_active_path: true,
+    })).toMatchObject({
+      status: 'failed',
+      failure: { code: 'active_entry_changed' },
+    });
+    expect(repository.findCompactionSummaryById('C-stale')).toBeUndefined();
   });
 
   it('returns empty active path for a new session', async () => {

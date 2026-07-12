@@ -32,6 +32,7 @@ export type AgentRunFailure = {
     | 'session_failed'
     | 'context_failed'
     | 'model_call_failed'
+    | 'unsupported_content'
     | 'tool_call_failed'
     | 'approval_failed'
     | 'cancel_failed'

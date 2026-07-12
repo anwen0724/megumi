@@ -40,17 +40,27 @@ function readRawSettings(settingsPath: string): SettingsRaw {
 
   try {
     const parsed = JSON.parse(text) as unknown;
-    const target = SettingsRawSchema.safeParse(parsed);
+    const compatible = withoutObsoleteCompaction(parsed);
+    const target = SettingsRawSchema.safeParse(compatible);
     if (target.success) {
       return target.data;
     }
-    return appRawToSettingsRaw(AppSettingsRawSchema.parse(parsed));
+    return appRawToSettingsRaw(AppSettingsRawSchema.parse(compatible));
   } catch (error) {
     throw new LocalSettingsJsonParseError(
       `Megumi settings could not be parsed: ${error instanceof Error ? error.message : 'Unknown error.'}`,
       settingsPath,
     );
   }
+}
+
+function withoutObsoleteCompaction(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return value;
+  }
+
+  const { compaction: _obsoleteCompaction, ...settings } = value as Record<string, unknown>;
+  return settings;
 }
 
 function writeRawSettings(settingsPath: string, next: SettingsRaw): void {
@@ -69,13 +79,6 @@ function appRawToSettingsRaw(raw: AppSettingsRaw): SettingsRaw {
       },
     } : {}),
     ...(raw.memory ? { memory: raw.memory } : {}),
-    ...(raw.compaction ? {
-      compaction: {
-        ...(raw.compaction.enabled !== undefined ? { enabled: raw.compaction.enabled } : {}),
-        ...(raw.compaction.reserveTokens !== undefined ? { reserve_tokens: raw.compaction.reserveTokens } : {}),
-        ...(raw.compaction.keepRecentTokens !== undefined ? { keep_recent_tokens: raw.compaction.keepRecentTokens } : {}),
-      },
-    } : {}),
     ...(raw.providers ? {
       providers: Object.fromEntries(Object.entries(raw.providers).map(([providerId, provider]) => [
         providerId,
@@ -97,14 +100,6 @@ const LegacyAppSetupSettingsRawSchema = z
   .object({
     completed: z.boolean().optional(),
     completedAt: z.string().datetime().optional(),
-  })
-  .strict();
-
-const LegacyAppCompactionSettingsRawSchema = z
-  .object({
-    enabled: z.boolean().optional(),
-    reserveTokens: z.number().int().positive().optional(),
-    keepRecentTokens: z.number().int().positive().optional(),
   })
   .strict();
 
@@ -132,7 +127,6 @@ const AppSettingsRawSchema = z
     ]).optional(),
     setup: LegacyAppSetupSettingsRawSchema.optional(),
     memory: z.object({ enabled: z.boolean().optional() }).strict().optional(),
-    compaction: LegacyAppCompactionSettingsRawSchema.optional(),
     providers: z.record(z.string().min(1), LegacyAppProviderSettingsRawSchema).optional(),
   })
   .strict();

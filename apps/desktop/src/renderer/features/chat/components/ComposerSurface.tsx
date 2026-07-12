@@ -237,8 +237,7 @@ function CommandCompletionChip({ completion }: { completion: ComposerCommandComp
 }
 
 function ContextUsageIndicator({ contextUsage }: { contextUsage?: ChatGetContextUsageUiResult }) {
-  const usage = contextUsage?.status === 'ok' ? contextUsage.usage : null;
-  const usageCalculating = contextUsage?.status === 'not_available' && contextUsage.reason === 'not_calculated';
+  const usage = contextUsage?.status === 'available' ? contextUsage.usage : null;
   const usagePercent = usage?.usedPercent ?? 0;
   const usageProgress = Math.max(0, Math.min(100, usagePercent));
 
@@ -286,11 +285,6 @@ function ContextUsageIndicator({ contextUsage }: { contextUsage?: ChatGetContext
           <>
             <div className="mt-1 text-[var(--color-text)]">{usage.usedPercent}% used</div>
             <div className="mt-1">Used {formatTokenCount(usage.usedTokens)} tokens of {formatTokenCount(usage.totalTokens)}</div>
-          </>
-        ) : usageCalculating ? (
-          <>
-            <div className="mt-1 text-[var(--color-text)]">Calculating usage...</div>
-            <div className="mt-1">Context usage will update shortly.</div>
           </>
         ) : (
           <>

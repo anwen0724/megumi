@@ -7,6 +7,7 @@ import {
 } from '@megumi/coding-agent/agent-run/repositories/agent-run-repository';
 import type { AgentRun, AgentRunApprovalRequest } from '@megumi/coding-agent/agent-run';
 import type { RuntimeEvent } from '@megumi/coding-agent/events';
+import { getRunTranscript } from '@megumi/coding-agent/agent-run';
 
 describe('AgentRunRepository', () => {
   it('persists AgentRun with architecture-owned fields only', () => {
@@ -175,6 +176,91 @@ describe('AgentRunRepository', () => {
         'persist',
         'payload_json',
       ]);
+    });
+  });
+
+  it('normalizes legacy persisted transcript payloads without dropping events', () => {
+    withDatabase((database) => {
+      seedWorkspaceAndSession(database);
+      const repository = createAgentRunRepository({ database });
+      repository.createRun(sampleRun({ status: 'completed' }));
+      const insert = database.prepare(`
+        INSERT INTO agent_run_runtime_events (
+          event_id, run_id, session_id, event_type, sequence, created_at, source, visibility, persist, payload_json
+        ) VALUES (?, 'run-1', 'session-1', ?, ?, ?, 'core', 'system', 'required', ?)
+      `);
+      insert.run('event-call', 'model_call.tool_call', 1, '2026-01-01T00:00:01.000Z', JSON.stringify({
+        modelCallId: 'model-call-1',
+        toolCallId: 'tool-call-1',
+        toolName: 'read_file',
+        input: { path: 'README.md' },
+      }));
+      insert.run('event-completed', 'model_call.completed', 2, '2026-01-01T00:00:02.000Z', JSON.stringify({
+        modelCallId: 'model-call-1',
+        finishReason: 'tool_calls',
+        content: 'I will read it.',
+      }));
+      insert.run('event-result', 'tool_result.created', 3, '2026-01-01T00:00:03.000Z', JSON.stringify({
+        toolResultId: 'tool-result-1',
+        toolCallId: 'tool-call-1',
+        toolName: 'read_file',
+        kind: 'success',
+        summary: 'legacy contents',
+      }));
+
+      expect(repository.listRuntimeEventsByRun('run-1')).toHaveLength(3);
+      expect(getRunTranscript(repository, 'run-1')).toEqual({
+        status: 'found',
+        transcript: {
+          runId: 'run-1',
+          items: [
+            { type: 'assistant_message', content: [{ type: 'text', text: 'I will read it.' }] },
+            {
+              type: 'tool_call',
+              toolCallId: 'tool-call-1',
+              toolName: 'read_file',
+              arguments: { path: 'README.md' },
+            },
+            {
+              type: 'tool_result',
+              toolCallId: 'tool-call-1',
+              toolName: 'read_file',
+              status: 'success',
+              content: [{ type: 'text', text: 'legacy contents' }],
+            },
+          ],
+        },
+      });
+    });
+  });
+
+  it('fails transcript projection when a persisted canonical event is schema-invalid', () => {
+    withDatabase((database) => {
+      seedWorkspaceAndSession(database);
+      const repository = createAgentRunRepository({ database });
+      repository.createRun(sampleRun({ status: 'completed' }));
+      const insert = database.prepare(`
+        INSERT INTO agent_run_runtime_events (
+          event_id, run_id, session_id, event_type, sequence, created_at, source, visibility, persist, payload_json
+        ) VALUES (?, 'run-1', 'session-1', ?, ?, ?, 'core', 'system', 'required', ?)
+      `);
+      insert.run('event-invalid-call', 'model_call.tool_call', 1, '2026-01-01T00:00:01.000Z', JSON.stringify({
+        modelCallId: 'model-call-1',
+        toolName: 'read_file',
+        input: { path: 'README.md' },
+      }));
+      insert.run('event-completed', 'model_call.completed', 2, '2026-01-01T00:00:02.000Z', JSON.stringify({
+        modelCallId: 'model-call-1',
+        finishReason: 'tool_calls',
+      }));
+
+      expect(getRunTranscript(repository, 'run-1')).toEqual({
+        status: 'failed',
+        failure: {
+          code: 'runtime_protocol_violation',
+          message: 'Persisted runtime event event-invalid-call failed schema validation.',
+        },
+      });
     });
   });
 

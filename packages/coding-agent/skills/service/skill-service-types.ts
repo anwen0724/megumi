@@ -5,6 +5,9 @@
 import type { Skill, SkillScript } from '../domain/model/skill';
 import type { SkillAvailability } from '../domain/entity/skill-availability';
 import type { SkillScriptExecutionRequest } from '../domain/dto/tool/skill-tool-response';
+import type { SkillCatalogItem } from '../domain/dto/context/skill-context-response';
+
+export type { SkillCatalogItem } from '../domain/dto/context/skill-context-response';
 
 export type ListSkillsRequest = { workspaceId?: string };
 export type ListSkillsResponse =
@@ -30,7 +33,6 @@ export type DisableSkillResponse =
   | { status: 'failed'; message: string };
 
 export type GetSkillCatalogRequest = { workspaceId?: string };
-export type SkillCatalogItem = { skillId: string; name: string; description: string };
 export type GetSkillCatalogResponse =
   | { status: 'ok'; skills: SkillCatalogItem[] }
   | { status: 'failed'; message: string };

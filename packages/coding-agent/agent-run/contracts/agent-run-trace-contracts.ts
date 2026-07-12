@@ -7,7 +7,7 @@ export type AgentRunTraceEventType =
   | 'run.started'
   | 'run.completed'
   | 'run.failed'
-  | 'trace.tool_set.created'
+  | 'trace.tools.created'
   | 'trace.prompt.built'
   | 'trace.model_call.request_payload'
   | 'trace.model_call.event_received'
@@ -18,6 +18,7 @@ export type AgentRunTraceEventType =
   | 'trace.continuation.runtime_sources'
   | 'trace.model_call.messages_appended'
   | 'trace.loop.counters'
+  | 'trace.context.snapshot_failed'
   | 'trace.runtime_event.persistence_failed';
 
 export type AgentRunTraceRecord = {

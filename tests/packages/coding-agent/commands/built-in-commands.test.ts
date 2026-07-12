@@ -43,10 +43,15 @@ describe('built_in_commands', () => {
     });
   });
 
-  it('runs compact through ContextCompactionService when command execution context has a session', async () => {
+  it('runs compact through ContextService with explicit model capacity', async () => {
     const compact = built_in_commands.find((command) => command.name === 'compact');
-    const contextCompaction = {
-      compact: vi.fn(async () => ({ status: 'completed' as const })),
+    const contextService = {
+      compactSession: vi.fn(async () => ({
+        status: 'compacted' as const,
+        compactionId: 'compact-1',
+        usageBefore: { usedTokens: 900, contextWindowTokens: 1000, remainingTokens: 100, usedRatio: 0.9, compactionThresholdRatio: 0.8 },
+        usageAfter: { usedTokens: 400, contextWindowTokens: 1000, remainingTokens: 600, usedRatio: 0.4, compactionThresholdRatio: 0.8 },
+      })),
     };
 
     const result = await compact!.execute({
@@ -59,15 +64,16 @@ describe('built_in_commands', () => {
         session_id: 'session:1',
         workspace_id: 'workspace:1',
         services: {
-          context_compaction: contextCompaction,
+          context: contextService,
         },
+        model_context: { providerId: 'p', modelId: 'm', contextWindowTokens: 1000 },
       },
     });
 
-    expect(contextCompaction.compact).toHaveBeenCalledWith({
-      session_id: 'session:1',
-      workspace_id: 'workspace:1',
-      trigger: { kind: 'manual', requested_by: 'command' },
+    expect(contextService.compactSession).toHaveBeenCalledWith({
+      sessionId: 'session:1',
+      workspaceId: 'workspace:1',
+      modelContext: { providerId: 'p', modelId: 'm', contextWindowTokens: 1000 },
     });
     expect(result).toMatchObject({ type: 'completed' });
   });

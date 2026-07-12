@@ -70,8 +70,7 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
       branchService: runtime.sessionBranchService,
       sessionTimelineQuery: runtime.sessionTimelineQuery,
       agentRunQueries: runtime.agentRunQueries,
-      contextUsageMonitor: runtime.contextRuntime.contextUsageMonitor,
-      contextUsageWindowProvider: runtime.contextUsageWindowProvider,
+      contextService: runtime.contextRuntime.contextService,
     }),
     skill: createSkillHost(runtime.skillService),
     workspace: createWorkspaceHost({

@@ -1,4 +1,5 @@
 ﻿import { z } from 'zod';
+import { ContentBlockListSchema } from '@megumi/ai';
 import { JsonObjectSchema, JsonValueSchema } from '../../shared-json';
 import { RuntimeContextSchema } from '../contracts/runtime-context-contracts';
 import { RuntimeErrorSchema } from '../contracts/runtime-error-contracts';
@@ -359,13 +360,27 @@ const ModelCallTextDeltaPayloadSchema = z
   })
   .strict();
 
-const ModelCallCompletedPayloadSchema = z
+const StructuredModelCallCompletedPayloadSchema = z
   .object({
     modelCallId: z.string().min(1),
     finishReason: z.string().min(1),
-    content: z.string().optional(),
+    content: ContentBlockListSchema.optional(),
   })
   .strict();
+
+const LegacyModelCallCompletedPayloadSchema = z
+  .object({
+    modelCallId: z.string().min(1),
+    finishReason: z.string().min(1),
+    content: z.string(),
+  })
+  .strict();
+
+const ModelCallCompletedPayloadSchema = z
+  .union([StructuredModelCallCompletedPayloadSchema, LegacyModelCallCompletedPayloadSchema])
+  .transform((payload) => typeof payload.content === 'string'
+    ? { ...payload, content: [{ type: 'text' as const, text: payload.content }] }
+    : payload);
 
 const ModelCallToolCallPayloadSchema = z
   .object({
@@ -538,7 +553,18 @@ const AgentRunToolCallFailedPayloadSchema = z
   })
   .strict();
 
-const AgentRunToolResultCreatedPayloadSchema = z
+const StructuredAgentRunToolResultCreatedPayloadSchema = z
+  .object({
+    toolResultId: z.string().min(1),
+    toolCallId: z.string().min(1),
+    toolExecutionId: z.string().min(1).optional(),
+    toolName: z.string().min(1),
+    kind: z.enum(['success', 'failed', 'policy_denied', 'user_rejected']),
+    content: ContentBlockListSchema,
+  })
+  .strict();
+
+const LegacyAgentRunToolResultCreatedPayloadSchema = z
   .object({
     toolResultId: z.string().min(1),
     toolCallId: z.string().min(1),
@@ -548,6 +574,22 @@ const AgentRunToolResultCreatedPayloadSchema = z
     summary: z.string().optional(),
   })
   .strict();
+
+const AgentRunToolResultCreatedPayloadSchema = z
+  .union([
+    StructuredAgentRunToolResultCreatedPayloadSchema,
+    LegacyAgentRunToolResultCreatedPayloadSchema,
+  ])
+  .transform((payload) => 'content' in payload
+    ? payload
+    : {
+        toolResultId: payload.toolResultId,
+        toolCallId: payload.toolCallId,
+        ...(payload.toolExecutionId ? { toolExecutionId: payload.toolExecutionId } : {}),
+        toolName: payload.toolName,
+        kind: payload.kind,
+        content: [{ type: 'text' as const, text: payload.summary ?? '' }],
+      });
 
 const ToolResultCreatedPayloadSchema = z
   .object({

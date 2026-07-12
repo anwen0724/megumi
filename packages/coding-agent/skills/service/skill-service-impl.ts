@@ -4,6 +4,7 @@
  */
 
 import type { Skill } from '../domain/model/skill';
+import type { SkillCatalogItem } from '../domain/dto/context/skill-context-response';
 import type { SkillRepository } from '../repository/skill-repository';
 import type { SkillService } from './skill-service';
 import type {
@@ -78,7 +79,7 @@ export class SkillServiceImpl implements SkillService {
         status: 'ok',
         skills: this.loadSkills(request)
           .filter((skill) => skill.available)
-          .map((skill) => ({
+          .map((skill): SkillCatalogItem => ({
             skillId: skill.skillId,
             name: skill.name,
             description: skill.description,

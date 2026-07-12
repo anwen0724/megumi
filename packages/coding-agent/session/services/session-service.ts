@@ -126,6 +126,7 @@ class DefaultSessionService implements SessionService {
         });
         const attachments = toSavedAttachments(request);
         this.options.repository.insertMessageAttachments(attachments);
+        const persistedAttachments = this.options.repository.listAttachmentsByMessageIds([message.message_id]);
         const entry = this.options.repository.insertEntry({
           entry_id: this.entryId({ kind: 'message', source_id: request.message_id }),
           session_id: request.session_id,
@@ -139,7 +140,11 @@ class DefaultSessionService implements SessionService {
           active_entry_id: entry.entry_id,
           updated_at: request.created_at,
         });
-        return { status: 'saved', message, entry };
+        return {
+          status: 'saved',
+          message: { message, attachments: persistedAttachments },
+          entry,
+        };
       });
     } catch (error) {
       return failed(error);
@@ -209,7 +214,7 @@ class DefaultSessionService implements SessionService {
 
   getActiveHistory(request: GetActiveHistoryRequest): GetActiveHistoryResult {
     try {
-      const activePath = this.activePath(request.session_id);
+      const activePath = this.activePath(request.session_id, request.through_entry_id);
       if (activePath.status === 'failed') {
         return activePath;
       }
@@ -289,6 +294,15 @@ class DefaultSessionService implements SessionService {
             failure: { code: 'session_not_found', message: `Session ${request.session_id} was not found` },
           };
         }
+        if (
+          Object.prototype.hasOwnProperty.call(request, 'expected_active_entry_id')
+          && session.active_entry_id !== (request.expected_active_entry_id ?? undefined)
+        ) {
+          return {
+            status: 'failed',
+            failure: { code: 'active_entry_changed', message: 'Session active entry changed while compaction was being prepared' },
+          };
+        }
         const coveredEntry = this.options.repository.findEntryById(request.covered_until_entry_id);
         if (!coveredEntry || coveredEntry.session_id !== request.session_id) {
           return {
@@ -351,7 +365,7 @@ class DefaultSessionService implements SessionService {
     }
   }
 
-  private activePath(sessionId: string): GetActivePathResult {
+  private activePath(sessionId: string, throughEntryId?: string | null): GetActivePathResult {
     const session = this.options.repository.findSessionById(sessionId);
     if (!session) {
       return {
@@ -359,12 +373,27 @@ class DefaultSessionService implements SessionService {
         failure: { code: 'session_not_found', message: `Session ${sessionId} was not found` },
       };
     }
+    if (throughEntryId === null) {
+      return { status: 'ok', entries: [] };
+    }
+    if (throughEntryId !== undefined) {
+      const throughEntry = this.options.repository.findEntryById(throughEntryId);
+      if (!throughEntry || throughEntry.session_id !== sessionId) {
+        return {
+          status: 'failed',
+          failure: {
+            code: 'invalid_through_entry',
+            message: 'through_entry_id must belong to the session',
+          },
+        };
+      }
+    }
     return {
       status: 'ok',
       entries: buildActivePath({
-      session_id: sessionId,
-      active_entry_id: session.active_entry_id,
-      entries: this.options.repository.listEntriesBySessionId(sessionId),
+        session_id: sessionId,
+        active_entry_id: throughEntryId ?? session.active_entry_id,
+        entries: this.options.repository.listEntriesBySessionId(sessionId),
       }),
     };
   }

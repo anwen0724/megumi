@@ -18,7 +18,6 @@ describe('ThemeSelector', () => {
               settings: {
                 theme: 'megumi-warm',
                 memory: { enabled: false },
-                compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
               },
             },
             meta: {},
@@ -29,7 +28,6 @@ describe('ThemeSelector', () => {
               settings: {
                 theme: 'graphite-dark',
                 memory: { enabled: false },
-                compaction: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
               },
             },
             meta: {},

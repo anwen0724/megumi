@@ -52,7 +52,7 @@ function request(overrides: Partial<ProtocolAdapterRequest> = {}): ProtocolAdapt
         { role: 'user', content: 'Read package.json.' },
       ],
     },
-    toolSet: [
+    tools: [
       {
         name: 'read_file',
         description: 'Read a workspace file.',
@@ -215,7 +215,7 @@ describe('pure OpenAI-compatible provider adapter', () => {
     const aiClient = createOpenAICompatibleTestClient(fetch);
 
     const message = await aiClient.complete(request({
-      toolSet: undefined,
+      tools: undefined,
       structuredOutput: {
         name: 'memory_extraction_candidates',
         schema: {

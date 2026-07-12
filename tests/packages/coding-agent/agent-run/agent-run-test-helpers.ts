@@ -55,7 +55,19 @@ export function createInMemoryAgentRunRepository(): AgentRunRepository {
         .filter((event) => event.runId === runId)
         .sort((left, right) => {
           const sequenceOrder = left.sequence - right.sequence;
-          return sequenceOrder === 0 ? left.createdAt.localeCompare(right.createdAt) : sequenceOrder;
+          return sequenceOrder
+            || left.createdAt.localeCompare(right.createdAt)
+            || left.eventId.localeCompare(right.eventId);
+        });
+    },
+    listRuntimeEventsByRunStrict(runId) {
+      return [...runtimeEvents.values()]
+        .filter((event) => event.runId === runId)
+        .sort((left, right) => {
+          const sequenceOrder = left.sequence - right.sequence;
+          return sequenceOrder
+            || left.createdAt.localeCompare(right.createdAt)
+            || left.eventId.localeCompare(right.eventId);
         });
     },
     nextRuntimeEventSequence(runId) {
@@ -114,12 +126,23 @@ export function createMessageFlowDependencies(input: {
       saveUserMessage: vi.fn(() => ({
         status: 'saved' as const,
         message: {
-          message_id: 'message-1',
-          session_id: 'session-1',
-          role: 'user' as const,
-          content_text: 'hello',
-          created_at: '2026-01-01T00:00:00.000Z',
-          completed_at: '2026-01-01T00:00:00.000Z',
+          message: {
+            message_id: 'message-1',
+            session_id: 'session-1',
+            run_id: 'run-1',
+            role: 'user' as const,
+            content_text: 'hello',
+            created_at: '2026-01-01T00:00:00.000Z',
+          },
+          attachments: [{
+            attachment_id: 'attachment-1',
+            message_id: 'message-1',
+            session_id: 'session-1',
+            type: 'file' as const,
+            source_type: 'local_file' as const,
+            source_value: 'README.md',
+            created_at: '2026-01-01T00:00:00.000Z',
+          }],
         },
         entry: {
           entry_id: 'entry-message-1',
@@ -166,23 +189,27 @@ export function createMessageFlowDependencies(input: {
       })),
     },
     context_service: {
-      getSessionContext: vi.fn(async () => ({
-        status: 'ok' as const,
-        session_context: {
-          session_id: 'session-1',
-          workspace_id: 'workspace-1',
-          sources: [],
+      prepareModelCall: vi.fn(async (request) => ({
+        status: 'ready' as const,
+        prepared: {
+          preparationId: 'preparation-1',
+          prompt: {
+            instructions: { system: [], agentInstructions: { sources: [] }, activatedSkills: request.activatedSkills },
+            referenceContext: { skillCatalog: [] },
+            conversation: [request.currentTurn.userMessage, ...request.currentTurn.runItems],
+            tools: request.tools,
+          },
+          usage: {
+            usedTokens: 100,
+            contextWindowTokens: 256_000,
+            remainingTokens: 255_900,
+            usedRatio: 100 / 256_000,
+            compactionThresholdRatio: 0.8,
+          },
+          sourceRefs: [],
         },
       })),
-      buildPrompt: vi.fn(() => ({
-        status: 'ok' as const,
-        prompt: {
-          prompt_id: 'prompt-1',
-          purpose: 'agent_response' as const,
-          messages: [{ role: 'user' as const, content: 'hello' }],
-          source_refs: [],
-        },
-      })),
+      recordCompletedRunUsage: vi.fn((_request: unknown) => ({ status: 'recorded' as const, snapshot: {} })),
     },
     model_call_service: {
       modelCall: vi.fn(() => ({
@@ -197,6 +224,11 @@ export function createMessageFlowDependencies(input: {
       })),
       cancelModelCall: vi.fn(() => ({ status: 'not_found' as const, model_call_id: 'model-call-1' })),
     },
+    model_context_provider: vi.fn(({ providerId, modelId }) => ({
+      providerId,
+      modelId,
+      contextWindowTokens: 256_000,
+    })),
     tool_registry_service: {
       listAvailableTools: vi.fn(() => ({ tools: [tool] })),
     },

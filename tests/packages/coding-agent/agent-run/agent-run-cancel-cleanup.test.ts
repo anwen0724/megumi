@@ -63,13 +63,15 @@ describe('agent-run interrupted cleanup', () => {
     const repository = createInMemoryAgentRunRepository();
     repository.createRun(sampleRun({ status: 'waiting_for_approval' }));
     repository.createApprovalRequest(sampleApprovalRequest());
-    const service = createAgentRunService(createMessageFlowDependencies({ repository }) as unknown as CreateAgentRunServiceOptions);
+    const dependencies = createMessageFlowDependencies({ repository });
+    const service = createAgentRunService(dependencies as unknown as CreateAgentRunServiceOptions);
 
     const result = await service.cancelRun({ run_id: 'run-1' });
 
     expect(result.status).toBe('cancelled');
     expect(repository.getRun('run-1')?.status).toBe('cancelled');
     expect(repository.getApprovalRequest('approval-1')?.status).toBe('cancelled');
+    expect(dependencies.context_service.recordCompletedRunUsage).not.toHaveBeenCalled();
   });
 
   it('cleanupInterruptedRuns returns and persists replayable runtime events', async () => {

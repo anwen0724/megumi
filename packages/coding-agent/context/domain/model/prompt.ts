@@ -1,0 +1,86 @@
+/*
+ * Defines the provider-neutral prompt, its semantic partitions, and preparation trace.
+ */
+import type { ContentBlock, ConversationItem, ToolSetEntry } from '@megumi/ai';
+import type { SkillCatalogItem } from '../../../skills/domain/dto/context/skill-context-response';
+import type { CompactionResultRef } from './compaction';
+import type { ContextUsage } from './context-usage';
+
+export type SystemInstruction = {
+  instructionId: string;
+  content: string;
+};
+
+export type AgentInstructionSource = {
+  sourceId: string;
+  sourcePath: string;
+  content: string;
+};
+
+export type EffectiveAgentInstructions = {
+  sources: AgentInstructionSource[];
+};
+
+export type ActivatedSkillInstruction = {
+  skillId: string;
+  name: string;
+  content: string;
+};
+
+export type PromptInstructions = {
+  system: SystemInstruction[];
+  agentInstructions: EffectiveAgentInstructions;
+  activatedSkills: ActivatedSkillInstruction[];
+};
+
+export type VisibleCompactionSummary = {
+  compactionId: string;
+  content: string;
+};
+
+export type MemoryReferenceItem = {
+  memoryId: string;
+  content: ContentBlock[];
+};
+
+export type MemoryContextInput = {
+  recallId: string;
+  items: MemoryReferenceItem[];
+};
+
+export type PromptReferenceContext = {
+  skillCatalog: SkillCatalogItem[];
+  compactionSummary?: VisibleCompactionSummary;
+  memoryRecall?: MemoryContextInput;
+};
+
+export type Prompt = {
+  instructions: PromptInstructions;
+  referenceContext: PromptReferenceContext;
+  conversation: ConversationItem[];
+  tools: ToolSetEntry[];
+};
+
+export type ContextSourceRef = {
+  sourceType:
+    | 'system_instruction'
+    | 'agent_instruction'
+    | 'skill_catalog'
+    | 'activated_skill'
+    | 'compaction_summary'
+    | 'session_message'
+    | 'agent_run_transcript'
+    | 'current_run_item'
+    | 'memory'
+    | 'tool_definition'
+    | 'tool_result';
+  sourceId: string;
+};
+
+export type PreparedModelCall = {
+  preparationId: string;
+  prompt: Prompt;
+  usage: ContextUsage;
+  sourceRefs: ContextSourceRef[];
+  compaction?: CompactionResultRef;
+};

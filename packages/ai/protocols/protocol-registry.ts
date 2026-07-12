@@ -1,4 +1,5 @@
 import { ProtocolRegistryError } from '../core/provider-error';
+import { type AiCallRequest } from '../client/ai-call-request';
 import { type ProtocolAdapter } from './protocol-adapter';
 
 export class ProtocolRegistry {
@@ -28,5 +29,9 @@ export class ProtocolRegistry {
         }
 
         return adapter;
+    }
+
+    materialize(request: AiCallRequest): unknown {
+        return this.get(request.model.protocol).materialize?.(request);
     }
 }

@@ -4,6 +4,7 @@ import { type ProtocolAdapterRequest } from './protocol-adapter-request';
 export interface ProtocolAdapter {
     readonly protocol: string;
 
+    materialize?(request: ProtocolAdapterRequest): unknown;
     stream(request: ProtocolAdapterRequest): AssistantEventStream;
 }
 

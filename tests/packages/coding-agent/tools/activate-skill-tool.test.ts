@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ContextService } from '@megumi/coding-agent/context';
 import {
   ToolExecutionService,
   ToolRegistryService,
-  type ToolRuntimeSource,
 } from '@megumi/coding-agent/tools';
 import { createBuiltInToolAdapter, type WorkspaceFileAccess } from '@megumi/coding-agent/tools/adapters/built-in-tools';
 
@@ -116,39 +114,6 @@ describe('activate_skill built-in tool', () => {
     expect(result.type === 'succeeded' ? result.runtimeSources : undefined).toBeUndefined();
   });
 
-  it('lets context render tool-produced runtime source as activated skill content', () => {
-    const runtimeSources: ToolRuntimeSource[] = [{
-      source_id: 'skill:checks:test',
-      source_kind: 'skill',
-      text: 'Run project checks now.',
-      persisted: false,
-      metadata: { origin_module: 'skills', skillId: 'checks:test' },
-    }];
-    const contextService = new ContextService({
-      repository: {
-        listMessagesBySession: () => [],
-        listSessionCompactionsBySession: () => [],
-        listRuntimeFactsBySession: () => [],
-        listToolResultsBySession: () => [],
-      },
-      promptResources: { system_prompt: 'You are Megumi' },
-      ids: { promptId: () => 'prompt:1' },
-    });
-
-    const prompt = contextService.buildPrompt({
-      session_context: { session_id: 'session:1', sources: [] },
-      purpose: 'agent_response',
-      runtime_sources: runtimeSources.map((source) => ({
-        source_id: source.source_id,
-        source_kind: 'skill',
-        text: source.text,
-        persisted: source.persisted,
-        metadata: source.metadata,
-      })),
-    });
-
-    expect(prompt.status === 'ok' ? prompt.prompt.messages[0]?.content : '').toContain('Run project checks now.');
-  });
 });
 
 function fakeWorkspaceFileAccess(): WorkspaceFileAccess {

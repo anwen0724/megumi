@@ -41,8 +41,49 @@ describe('agent run runtime event schemas', () => {
     expect(RuntimeEventSchema.safeParse(event('model_call.completed', {
       modelCallId: 'model-call:1',
       finishReason: 'stop',
-      content: 'done',
+      content: [{ type: 'text', text: 'done' }],
     })).success).toBe(true);
+  });
+
+  it('normalizes legacy transcript payloads to structured content', () => {
+    const legacyCompletion = RuntimeEventSchema.parse(event('model_call.completed', {
+      modelCallId: 'model-call:1',
+      finishReason: 'tool_calls',
+      content: 'I will inspect it.',
+    }));
+    const legacyResult = RuntimeEventSchema.parse(event('tool_result.created', {
+      toolResultId: 'tool-result:1',
+      toolCallId: 'tool-call:1',
+      toolName: 'read_file',
+      kind: 'success',
+      summary: 'file contents',
+    }));
+    const legacyResultWithoutSummary = RuntimeEventSchema.parse(event('tool_result.created', {
+      toolResultId: 'tool-result:2',
+      toolCallId: 'tool-call:2',
+      toolName: 'read_file',
+      kind: 'failed',
+    }));
+
+    expect(legacyCompletion.payload).toEqual({
+      modelCallId: 'model-call:1',
+      finishReason: 'tool_calls',
+      content: [{ type: 'text', text: 'I will inspect it.' }],
+    });
+    expect(legacyResult.payload).toEqual({
+      toolResultId: 'tool-result:1',
+      toolCallId: 'tool-call:1',
+      toolName: 'read_file',
+      kind: 'success',
+      content: [{ type: 'text', text: 'file contents' }],
+    });
+    expect(legacyResultWithoutSummary.payload).toEqual({
+      toolResultId: 'tool-result:2',
+      toolCallId: 'tool-call:2',
+      toolName: 'read_file',
+      kind: 'failed',
+      content: [{ type: 'text', text: '' }],
+    });
   });
 
   it('accepts tool call and tool result events', () => {
@@ -59,7 +100,7 @@ describe('agent run runtime event schemas', () => {
       toolExecutionId: 'tool-execution:1',
       toolName: 'list_directory',
       kind: 'success',
-      summary: 'Read directory.',
+      content: [{ type: 'text', text: 'Read directory.' }],
     })).success).toBe(true);
 
     expect(RuntimeEventSchema.safeParse(event('tool_result.created', {
@@ -68,7 +109,7 @@ describe('agent run runtime event schemas', () => {
       toolExecutionId: 'tool-call-1',
       toolName: 'read_file',
       kind: 'failed',
-      summary: 'Tool execution failed.',
+      content: [{ type: 'text', text: 'Tool execution failed.' }],
     })).success).toBe(true);
   });
 
@@ -80,7 +121,7 @@ describe('agent run runtime event schemas', () => {
     expect(RuntimeEventSchema.safeParse(event('tool_result.created', {
       toolResultId: 'tool-result:1',
       kind: 'success',
-      summary: 'Read directory.',
+      content: [{ type: 'text', text: 'Read directory.' }],
     })).success).toBe(false);
   });
 

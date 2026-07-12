@@ -2,12 +2,14 @@
  * Composes the Coding Agent runtime exposed to Product Composition.
  * Host-facing adaptation is owned by packages/product.
  */
+import { readFile, readdir } from 'node:fs/promises';
 import { ArtifactContentStore } from '../artifacts/artifact-content-store';
 import { ArtifactService, PlanArtifactCompatibilityService, PlanArtifactService } from '../artifacts';
 import {
   createAgentRunService,
   createAgentRunTraceFileLogger,
   createModelCallService,
+  getRunTranscript,
   type AgentRunQueries,
   type AgentRunService,
   type ModelCallService,
@@ -23,7 +25,8 @@ import {
   composeCodingAgentToolExecutionService,
   composeCodingAgentToolRegistryService,
 } from './compose-coding-agent-tool-runtime';
-import { composeCodingAgentContext } from './compose-coding-agent-context';
+import { composeCodingAgentContext, type ContextCapacity } from '../context';
+import { composeCodingAgentInstructions } from '../instructions';
 import { composeCodingAgentSkills, type Skill, type SkillService } from '../skills';
 import {
   createSettingsService,
@@ -52,6 +55,7 @@ import {
   createAiClient,
   createAnthropicProtocolAdapter,
   createOpenAICompatibleProtocolAdapter,
+  createRequestTokenCounter,
   ProtocolRegistry,
   AssistantEventStream,
   type AiClient,
@@ -102,7 +106,7 @@ export interface ComposeCodingAgentRuntimeOptions {
   runtimeLogger: RuntimeLogger;
   aiClient?: AiClient;
   modelCallProviderService?: LegacyModelCallProviderForTests;
-  summaryModelCallPort?: Parameters<typeof composeCodingAgentContext>[0]['summaryModelCallPort'];
+  modelContextProvider?: ModelContextProvider;
   appSettingsProvider?: unknown;
   memorySettingsProvider?: MemorySettingsPort;
   workspaceChangeFooterProjector?: unknown;
@@ -129,8 +133,21 @@ export interface CodingAgentRuntime {
   contextRuntime: ReturnType<typeof composeCodingAgentContext>;
   agentRunQueries: AgentRunQueries;
   sessionTimelineQuery: SessionTimelineQuery;
-  contextUsageWindowProvider(request: { modelId?: string }): ReturnType<typeof createContextUsageWindow>;
+  modelContextProvider: ModelContextProvider;
   dispose(): void;
+}
+
+export type ModelContextProvider = (selection: {
+  providerId: string;
+  modelId: string;
+}) => ContextCapacity;
+
+export function createCompatibilityModelContextProvider(): ModelContextProvider {
+  return ({ providerId, modelId }) => ({
+    providerId,
+    modelId,
+    contextWindowTokens: 256_000,
+  });
 }
 
 type LegacyModelCallProviderForTests = {
@@ -142,6 +159,14 @@ type LegacyModelCallProviderForTests = {
   completeModelCall?(request: unknown): Promise<{ ok: true; text: string } | { ok: false; error: unknown }>;
   cancelModelCall?(request: unknown): boolean;
 };
+
+export function createAgentRunQueries(repository: AgentRunRepository): AgentRunQueries {
+  return {
+    listRunsBySession: (sessionId) => repository.listRunsBySession(sessionId),
+    listRuntimeEventsByRun: (runId) => repository.listRuntimeEventsByRun(runId),
+    getRunTranscript: (runId) => getRunTranscript(repository, runId),
+  };
+}
 
 export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOptions): CodingAgentRuntime {
   const persistence = composeCodingAgentPersistence({
@@ -205,10 +230,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     options.workspaceChangeFooterProjector,
     workspaceChangeService,
   );
-  const agentRunQueries: AgentRunQueries = {
-    listRunsBySession: (sessionId) => agentRunRepository.listRunsBySession(sessionId),
-    listRuntimeEventsByRun: (runId) => agentRunRepository.listRuntimeEventsByRun(runId),
-  };
+  const agentRunQueries = createAgentRunQueries(agentRunRepository);
   const sessionTimelineQuery = createSessionTimelineQuery({
     sessionService,
     workspaceChangeFooterProjector,
@@ -234,28 +256,45 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
       error: error instanceof Error ? error.message : String(error),
     }),
   });
+  const protocolRegistry = createProtocolRegistry();
   const modelCallService = createModelCallService({
     ai_client: options.aiClient
       ?? (options.modelCallProviderService ? aiClientFromLegacyProvider(options.modelCallProviderService) : undefined)
-      ?? createAiClientForConfiguredProviders(settingsService),
+      ?? createAiClient({ registry: protocolRegistry }),
+    request_token_counter: createRequestTokenCounter(protocolRegistry),
   });
+  const instructionService = composeCodingAgentInstructions({
+    megumiHomePath: options.homePaths.homePath,
+    fileSystem: {
+      readFile: (filePath) => readFile(filePath, 'utf8'),
+      readDirectory: (directoryPath) => readdir(directoryPath),
+    },
+  });
+  const modelContextProvider = options.modelContextProvider ?? createCompatibilityModelContextProvider();
   const contextRuntime = composeCodingAgentContext({
     sessionService,
-    runtimeEventRepository: {
-      listRuntimeEventsByRun: (runId) => agentRunRepository.listRuntimeEventsByRun(runId).map((event) => ({
-        eventId: event.eventId,
-        eventType: event.eventType,
-        createdAt: event.createdAt,
-        payload: payloadRecord(event.payload),
-      })),
+    runTranscriptQuery: agentRunQueries,
+    instructionScopeResolver: {
+      resolve({ workspaceId }) {
+        const workspace = workspaceService.getWorkspace({ workspace_id: workspaceId });
+        return workspace.status === 'found'
+          ? { status: 'resolved', workspaceRoot: workspace.workspace.root_path, workingDirectory: workspace.workspace.root_path }
+          : { status: 'failed', failure: { code: 'workspace_not_found', message: `Workspace ${workspaceId} was not found.` } };
+      },
     },
-    summaryModelCallPort: options.summaryModelCallPort ?? createContextSummaryModelCallPort({
-      modelCallService,
-      settingsService,
-    }),
-    modelConfigProvider: () => createContextUsageWindow({}),
-    skillSource: {
-      getSkillCatalog: (request) => skillRuntime.skillService.getSkillCatalog(request),
+    instructionService,
+    skillService: skillRuntime.skillService,
+    modelCallService,
+    modelRuntimeConfigResolver: {
+      resolve({ providerId, modelId }) {
+        const resolved = agentRunSettingsService.resolveProviderRuntimeConfig({
+          provider_id: providerId,
+          model_id: modelId,
+        });
+        return resolved.status === 'ok'
+          ? { status: 'resolved', modelConfig: resolved.config }
+          : { status: 'failed', failure: resolved.failure };
+      },
     },
   });
   const artifactContentStore = new ArtifactContentStore({
@@ -280,13 +319,18 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
       session_id,
       workspace_id: request.workspace_id,
       services: {
-        context_compaction: contextRuntime.contextCompactionService,
+        context: contextRuntime.contextService,
       },
+      model_context: modelContextProvider({
+        providerId: request.model_selection.provider_id,
+        modelId: request.model_selection.model_id,
+      }),
     }),
     session_service: sessionService,
     branch_service: sessionBranchService,
     settings_service: agentRunSettingsService,
     context_service: contextRuntime.contextService,
+    model_context_provider: modelContextProvider,
     model_call_service: modelCallService,
     skill_service: skillRuntime.skillService,
     tool_registry_service: toolRegistry,
@@ -320,10 +364,6 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     trace_logger: agentRunTraceLogger,
     workspace_service: workspaceService,
     workspace_path_policy_service: workspacePathPolicyService,
-    context_usage_signal_bus: contextRuntime.contextUsageSignalBus,
-    context_usage_monitor: contextRuntime.contextUsageMonitor,
-    context_usage_window_provider: ({ model_id }) => createContextUsageWindow({ modelId: model_id }),
-    context_compaction_service: contextRuntime.contextCompactionService,
     event_publisher: {
       publish(event) {
         finalizeWorkspaceChangesForTerminalRunEvent({
@@ -363,7 +403,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     contextRuntime,
     agentRunQueries,
     sessionTimelineQuery,
-    contextUsageWindowProvider: ({ modelId }) => createContextUsageWindow({ modelId }),
+    modelContextProvider,
     dispose: () => persistence.database.close(),
   };
 }
@@ -383,20 +423,11 @@ function commandNameFromSkillName(skillName: string): string {
   return segments.at(-1) ?? skillName;
 }
 
-function createContextUsageWindow({ modelId }: { modelId?: string }) {
-  return {
-    model_id: modelId ?? 'configured-model',
-    context_window_tokens: 256_000,
-  };
-}
-
-function createAiClientForConfiguredProviders(settingsService: SettingsService): AiClient {
-  return createAiClient({
-    registry: new ProtocolRegistry([
-      createOpenAICompatibleProtocolAdapter({ fetch }),
-      createAnthropicProtocolAdapter({ fetch }),
-    ]),
-  });
+function createProtocolRegistry(): ProtocolRegistry {
+  return new ProtocolRegistry([
+    createOpenAICompatibleProtocolAdapter({ fetch }),
+    createAnthropicProtocolAdapter({ fetch }),
+  ]);
 }
 
 function createModelConfigSettingsFacade(settingsService: SettingsService): Pick<SettingsService, 'resolveProviderRuntimeConfig' | 'resolvePermissionSettings'> {
@@ -509,79 +540,6 @@ function stringPayload(event: RuntimeEvent, key: string): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-function createContextSummaryModelCallPort(input: {
-  modelCallService: ModelCallService;
-  settingsService: Pick<SettingsService, 'listAvailableModels' | 'resolveProviderRuntimeConfig'>;
-}): Parameters<typeof composeCodingAgentContext>[0]['summaryModelCallPort'] {
-  return {
-    async completePrompt(request) {
-      const selected = input.settingsService.listAvailableModels();
-      if (selected.status === 'failed') {
-        return { status: 'failed', failure: selected.failure };
-      }
-      const model = selected.models[0];
-      if (!model) {
-        return {
-          status: 'failed',
-          failure: {
-            code: 'context_compaction_model_unavailable',
-            message: 'No enabled model is available for context compaction.',
-          },
-        };
-      }
-      const config = input.settingsService.resolveProviderRuntimeConfig({
-        provider_id: model.provider_id,
-        model_id: model.model_id,
-      });
-      if (config.status === 'failed') {
-        return { status: 'failed', failure: config.failure };
-      }
-
-      const result = await input.modelCallService.modelCall({
-        owner: {
-          type: 'context_compaction',
-          session_id: request.session_id,
-        },
-        prompt: request.prompt,
-        model_config: config.config,
-      });
-      if (result.status === 'failed') {
-        return { status: 'failed', failure: result.failure };
-      }
-
-      const deltas: string[] = [];
-      for await (const event of result.events) {
-        if (event.type === 'text_delta') {
-          deltas.push(event.delta);
-        }
-        if (event.type === 'completed') {
-          return {
-            status: 'ok',
-            text: event.content || deltas.join(''),
-            metadata: {
-              model_call_id: event.model_call_id,
-              provider_id: model.provider_id,
-              model_id: model.model_id,
-            },
-          };
-        }
-        if (event.type === 'failed') {
-          return { status: 'failed', failure: event.failure };
-        }
-      }
-
-      return {
-        status: 'ok',
-        text: deltas.join(''),
-        metadata: {
-          provider_id: model.provider_id,
-          model_id: model.model_id,
-        },
-      };
-    },
-  };
-}
-
 export function finalizeWorkspaceChangesForTerminalRunEvent(input: {
   event: RuntimeEvent;
   agentRuns: Pick<AgentRunRepository, 'getRun'>;
@@ -630,9 +588,6 @@ function isTerminalRunEvent(event: RuntimeEvent): boolean {
     event.eventType === 'run.cancelled';
 }
 
-function payloadRecord(payload: object): Record<string, unknown> {
-  return payload && !Array.isArray(payload) ? payload as Record<string, unknown> : {};
-}
 
 function createInMemoryPlanArtifactRepository() {
   const plans = new Map<string, ImplementationPlanArtifactRecord>();

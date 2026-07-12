@@ -1,10 +1,14 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { afterEach, describe, expect, it } from 'vitest';
-import { composeCodingAgentPersistence, composeCodingAgentRuntime } from '@megumi/coding-agent/composition';
+import {
+  composeCodingAgentPersistence,
+  composeCodingAgentRuntime,
+  createCompatibilityModelContextProvider,
+} from '@megumi/coding-agent/composition';
 import { createAgentRunRepository } from '@megumi/coding-agent/agent-run/repositories/agent-run-repository';
 import type { SettingsRaw } from '@megumi/coding-agent/settings';
 import { AssistantEventStream, type AiClient, type AssistantStreamEvent } from '@megumi/ai';
@@ -17,6 +21,21 @@ afterEach(async () => {
 });
 
 describe('composeCodingAgentRuntime trace wiring', () => {
+  it('keeps compatibility capacity outside Context and preserves selection identity', async () => {
+    const provider = createCompatibilityModelContextProvider();
+    expect(provider({ providerId: 'provider-1', modelId: 'model-1' })).toEqual({
+      providerId: 'provider-1',
+      modelId: 'model-1',
+      contextWindowTokens: 256_000,
+    });
+
+    const contextRoot = join(process.cwd(), 'packages', 'coding-agent', 'context');
+    const files = (await readdir(contextRoot, { recursive: true }))
+      .filter((file) => file.endsWith('.ts'));
+    const sources = await Promise.all(files.map((file) => readFile(join(contextRoot, file), 'utf8')));
+    expect(sources.join('\n')).not.toContain('createCompatibilityModelContextProvider');
+  });
+
   it('writes Agent Run trace JSONL to the Megumi Home logs directory', async () => {
     const home = await createHome();
     const runtime = composeCodingAgentRuntime({
@@ -77,6 +96,10 @@ describe('composeCodingAgentRuntime trace wiring', () => {
           'model_call.started',
           'run.completed',
         ]));
+      expect(secondRuntime.agentRunQueries.getRunTranscript(runId)).toEqual({
+        status: 'found',
+        transcript: { runId, items: [] },
+      });
     } finally {
       secondRuntime.dispose();
     }
@@ -221,9 +244,8 @@ describe('composeCodingAgentRuntime trace wiring', () => {
       const events = await collectEvents(run.events);
       expect(events.map((event) => event.eventType)).toContain('model_call.started');
 
-      expect(capturedPrompts.join('\n')).toContain('Active Skill Instructions');
       expect(capturedPrompts.join('\n')).toContain('Always inspect the diff before making claims.');
-      expect(capturedPrompts.join('\n')).toContain('skillId: qa:review');
+      expect(capturedPrompts.join('\n')).toContain('"skillId":"qa:review"');
     } finally {
       runtime.dispose();
     }

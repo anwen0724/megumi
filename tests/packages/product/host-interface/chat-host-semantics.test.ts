@@ -5,6 +5,10 @@ import type { RuntimeEvent } from '@megumi/coding-agent/events';
 import type { TimelineMessage } from '@megumi/coding-agent/projections/timeline';
 import { createSessionBranchService, type SessionService } from '@megumi/coding-agent/session';
 
+const unavailableContextService = {
+  getSessionUsageSnapshot: () => ({ status: 'not_available' as const }),
+};
+
 describe('ChatHost product semantics', () => {
   it('delegates explicit session creation request to the Session owner', async () => {
     const createSession = vi.fn(() => ({
@@ -28,7 +32,8 @@ describe('ChatHost product semantics', () => {
       branchService: createSessionBranchService(),
       workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
       sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
-      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [] },
+      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [], getRunTranscript: (runId) => ({ status: 'not_found', runId }) },
+      contextService: unavailableContextService,
     });
 
     await expect(host.createSession({
@@ -91,7 +96,8 @@ describe('ChatHost product semantics', () => {
         })),
       },
       sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
-      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [] },
+      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [], getRunTranscript: (runId) => ({ status: 'not_found', runId }) },
+      contextService: unavailableContextService,
     });
 
     await expect(host.listSessions()).resolves.toEqual({
@@ -293,7 +299,8 @@ describe('ChatHost product semantics', () => {
       branchService: createSessionBranchService(),
       workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
       sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
-      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [] },
+      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [], getRunTranscript: (runId) => ({ status: 'not_found', runId }) },
+      contextService: unavailableContextService,
     });
 
     await expect(host.cancelUserInput({ runId: 'run:1' })).resolves.toMatchObject({
@@ -428,7 +435,8 @@ describe('ChatHost product semantics', () => {
       branchService: createSessionBranchService(),
       workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
       sessionTimelineQuery: { listSessionTimeline },
-      agentRunQueries: { listRunsBySession, listRuntimeEventsByRun },
+      agentRunQueries: { listRunsBySession, listRuntimeEventsByRun, getRunTranscript: (runId) => ({ status: 'not_found', runId }) },
+      contextService: unavailableContextService,
     });
 
     await expect(host.getSessionHydration({
@@ -477,7 +485,8 @@ function createHost(
     branchService,
     workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
     sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
-    agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [] },
+    agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [], getRunTranscript: (runId) => ({ status: 'not_found', runId }) },
+    contextService: unavailableContextService,
   });
 }
 

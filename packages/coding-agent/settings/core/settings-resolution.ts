@@ -29,12 +29,6 @@ export function resolveSettings(raw: unknown): SettingsResolved {
             ...definedObject(parsed.memory),
           }
         : undefined,
-      compaction: parsed.compaction
-        ? {
-            ...DEFAULT_SETTINGS.compaction,
-            ...definedObject(parsed.compaction),
-          }
-        : undefined,
       providers: parsed.providers
         ? resolveProviderSettings(parsed.providers)
         : undefined,
@@ -66,12 +60,6 @@ export function mergeRawSettings(current: SettingsRaw, patch: SettingsRaw): Sett
         ? {
             ...(currentParsed.memory ?? {}),
             ...definedObject(patchParsed.memory),
-          }
-        : undefined,
-      compaction: patchParsed.compaction
-        ? {
-            ...(currentParsed.compaction ?? {}),
-            ...definedObject(patchParsed.compaction),
           }
         : undefined,
       providers: patchParsed.providers

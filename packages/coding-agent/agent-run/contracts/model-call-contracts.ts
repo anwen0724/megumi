@@ -1,52 +1,21 @@
 /*
  * Stable public contracts for Agent Run model calls.
- * Model Call Service consumes Context prompts and run-level Tool Sets.
+ * Model Call Service consumes one complete Context Prompt per request.
  */
-import type { Prompt, SessionContextSource } from '../../context';
+import type { Prompt } from '../../context';
 import type { ProviderRuntimeConfig } from '../../settings';
 import type { ToolExecutionObservation } from '../../tools';
 import type { AgentRunFailure } from './agent-run-contracts';
 
 export type ModelCallConfig = ProviderRuntimeConfig;
 
-export type ToolSet = {
-  items: ToolSetItem[];
-};
-
-export type ToolSetItem = {
-  name: string;
-  description: string;
-  input_schema: Record<string, unknown>;
-  source_tool_name: string;
-};
-
 export type ModelCallRequest = {
   owner:
     | { type: 'agent_run'; run_id: string }
     | { type: 'context_compaction'; session_id: string; compaction_id?: string };
   prompt: Prompt;
-  model_call_messages?: ModelCallMessage[];
   model_config: ModelCallConfig;
-  tool_set?: ToolSet;
   signal?: AbortSignal;
-};
-
-export type ModelCallMessage =
-  | {
-      role: 'assistant';
-      content?: string;
-      tool_calls: ModelCallToolCall[];
-    }
-  | {
-      role: 'tool_result';
-      tool_call_id: string;
-      content: string;
-    };
-
-export type ModelCallToolCall = {
-  tool_call_id: string;
-  tool_name: string;
-  arguments_text: string;
 };
 
 export type ModelCallEvent =
@@ -114,9 +83,18 @@ export type ModelCallEvent =
       created_at: string;
     };
 
-export type ModelCallFailure = AgentRunFailure & {
-  code: 'model_call_failed' | 'context_failed' | 'internal_error';
+export type ModelCallFailure = Omit<AgentRunFailure, 'code'> & {
+  code: 'model_call_failed' | 'context_failed' | 'internal_error' | 'unsupported_content';
 };
+
+export type CountPromptRequest = {
+  prompt: Prompt;
+  model_config: ModelCallConfig;
+};
+
+export type CountPromptResult =
+  | { status: 'counted'; input_tokens: number; accuracy: 'exact' | 'estimated' }
+  | { status: 'failed'; failure: ModelCallFailure };
 
 export type ModelCallResult =
   | { status: 'started'; model_call_id: string; events: AsyncIterable<ModelCallEvent> }
@@ -132,6 +110,7 @@ export type CancelModelCallResult =
   | { status: 'not_cancellable'; model_call_id: string };
 
 export type ModelCallService = {
+  countPrompt(request: CountPromptRequest): Promise<CountPromptResult>;
   modelCall(request: ModelCallRequest): Promise<ModelCallResult> | ModelCallResult;
   cancelModelCall(request: CancelModelCallRequest): Promise<CancelModelCallResult> | CancelModelCallResult;
 };
@@ -142,6 +121,5 @@ export type ToolResultRuntimeFact = {
   status: 'completed' | 'failed' | 'denied' | 'cancelled';
   observation?: ToolExecutionObservation;
   content?: string;
-  runtime_sources?: SessionContextSource[];
   created_at: string;
 };

@@ -1,5 +1,6 @@
 /*
- * Defines Context module response DTOs for Skill catalog and resources.
+ * Defines the canonical Context-facing Skill catalog and resource DTOs reused
+ * by SkillService method results.
  */
 
 export type SkillCatalogItem = {

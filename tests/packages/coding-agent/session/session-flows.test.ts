@@ -82,6 +82,49 @@ describe('session service flows', () => {
     if (result.status === 'ok') {
       expect(result.messages.map((item) => item.message.message_id)).toEqual(['U1', 'A1', 'U3']);
     }
+
+    expect(service.getActiveHistory({
+      session_id: 'S1',
+      through_entry_id: a1.status === 'saved' ? a1.entry.entry_id : 'missing',
+    })).toMatchObject({
+      status: 'ok',
+      history: [
+        { type: 'message', message: { message_id: 'U1' } },
+        { type: 'message', message: { message_id: 'A1' } },
+      ],
+    });
+    expect(service.getActiveHistory({ session_id: 'S1', through_entry_id: null })).toEqual({
+      status: 'ok',
+      history: [],
+    });
+  });
+
+  it('rejects history through an entry owned by another session', () => {
+    const { repository, service, workspaceId } = createHarness();
+    service.createSession({ workspace_id: workspaceId, title: 'Session' });
+    const otherService = createSessionService({
+      repository,
+      ids: {
+        sessionId: () => 'S2',
+        entryId: ({ kind, source_id }) => `${kind}:${source_id}`,
+      },
+      now: () => '2026-07-04T00:00:00.000Z',
+    });
+    otherService.createSession({ workspace_id: workspaceId, title: 'Other session' });
+    const otherMessage = otherService.saveUserMessage({
+      message_id: 'OTHER',
+      session_id: 'S2',
+      content_text: 'other',
+      created_at: '2026-07-04T00:01:00.000Z',
+    });
+
+    expect(service.getActiveHistory({
+      session_id: 'S1',
+      through_entry_id: otherMessage.status === 'saved' ? otherMessage.entry.entry_id : 'missing',
+    })).toMatchObject({
+      status: 'failed',
+      failure: { code: 'invalid_through_entry' },
+    });
   });
 
   it('uses compaction summary in active history and skips it in active message listing', async () => {

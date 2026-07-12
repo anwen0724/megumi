@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it } from 'vitest';
 import { createDatabase, type MegumiDatabase } from '@megumi/coding-agent/persistence/connection';
 import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
 import type {
@@ -19,8 +19,27 @@ import type {
 } from '@megumi/coding-agent/skills';
 import { SkillRepository } from '@megumi/coding-agent/skills';
 import { SkillServiceImpl } from '@megumi/coding-agent/skills/service/skill-service-impl';
+import type { SkillCatalogItem as ContextSkillCatalogItem } from '@megumi/coding-agent/skills/domain/dto/context/skill-context-response';
+import type {
+  GetSkillCatalogResponse as ServiceSkillCatalogResponse,
+  SkillCatalogItem as ServiceSkillCatalogItem,
+} from '@megumi/coding-agent/skills/service/skill-service-types';
 
 describe('Skill module public contracts', () => {
+  it('uses the Context DTO as the Skill catalog service item type', () => {
+    expectTypeOf<ServiceSkillCatalogItem>().toEqualTypeOf<ContextSkillCatalogItem>();
+    expectTypeOf<Extract<ServiceSkillCatalogResponse, { status: 'ok' }>['skills']>()
+      .toEqualTypeOf<ContextSkillCatalogItem[]>();
+    const serviceTypesSource = fs.readFileSync(
+      path.join(process.cwd(), 'packages/coding-agent/skills/service/skill-service-types.ts'),
+      'utf8',
+    );
+    expect(serviceTypesSource).toMatch(
+      /import type \{ SkillCatalogItem \} from '\.\.\/domain\/dto\/context\/skill-context-response';/,
+    );
+    expect(serviceTypesSource).not.toMatch(/export type SkillCatalogItem\s*=/);
+  });
+
   it('exports Skill model, entities, DTOs, and service method results', async () => {
     const skill: Skill = {
       skillId: 'superpowers:brainstorming',

@@ -79,7 +79,7 @@ describe('useChatPageController', () => {
           contextUsage: {
             get: vi.fn().mockResolvedValue({
               ok: true,
-              data: { status: 'not_available', reason: 'not_calculated' },
+              data: { status: 'not_available' },
             }),
           },
           message: {
@@ -124,7 +124,7 @@ describe('useChatPageController', () => {
     ]);
   });
 
-  it('requests context usage with a background refresh for idle sessions', async () => {
+  it('reads the active session usage snapshot without refresh inputs', async () => {
     useChatUiStore.setState({
       ...useChatUiStore.getState(),
       agentStatus: 'idle',
@@ -136,37 +136,49 @@ describe('useChatPageController', () => {
       expect(window.megumi.session.contextUsage.get).toHaveBeenCalledWith(expect.objectContaining({
         payload: {
           sessionId: 'session-1',
-          projectId: 'project-1',
-          refresh: 'background',
         },
       }));
     });
   });
 
-  it('follows a background context usage calculation with a sync refresh for the active session', async () => {
+  it('reads only the newly selected session cache entry after switching sessions', async () => {
     useChatUiStore.setState({
       ...useChatUiStore.getState(),
       agentStatus: 'idle',
     });
+    useSessionStore.setState({
+      ...useSessionStore.getState(),
+      sessions: [
+        ...useSessionStore.getState().sessions,
+        {
+          id: 'session-2',
+          projectId: 'project-1',
+          title: 'Second session',
+          status: 'active',
+          createdAt,
+          updatedAt: createdAt,
+        },
+      ],
+    });
     vi.mocked(window.megumi.session.contextUsage.get)
       .mockResolvedValueOnce({
         ok: true,
-        data: { status: 'not_available', reason: 'not_calculated' },
-        meta: contextUsageResponseMeta(),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
         data: {
-          status: 'ok',
+          status: 'available',
           usage: {
             usedTokens: 100,
             totalTokens: 1000,
             remainingTokens: 900,
             usedPercent: 10,
             autoCompactPercent: 80,
-            shouldAutoCompact: false,
+            accuracy: 'estimated',
           },
         },
+        meta: contextUsageResponseMeta(),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { status: 'not_available' },
         meta: contextUsageResponseMeta(),
       });
 
@@ -176,36 +188,26 @@ describe('useChatPageController', () => {
       expect(window.megumi.session.contextUsage.get).toHaveBeenCalledWith(expect.objectContaining({
         payload: {
           sessionId: 'session-1',
-          projectId: 'project-1',
-          refresh: 'background',
         },
       }));
     });
 
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 550));
+      useSessionStore.setState({
+        ...useSessionStore.getState(),
+        activeSessionId: 'session-2',
+      });
     });
 
     await waitFor(() => {
       expect(window.megumi.session.contextUsage.get).toHaveBeenCalledWith(expect.objectContaining({
         payload: {
-          sessionId: 'session-1',
-          projectId: 'project-1',
-          refresh: 'sync',
+          sessionId: 'session-2',
         },
       }));
     });
-    expect(result.current.contextUsage).toEqual({
-      status: 'ok',
-      usage: {
-        usedTokens: 100,
-        totalTokens: 1000,
-        remainingTokens: 900,
-        usedPercent: 10,
-        autoCompactPercent: 80,
-        shouldAutoCompact: false,
-      },
-    });
+    expect(result.current.contextUsage).toEqual({ status: 'not_available' });
+    expect(window.megumi.session.contextUsage.get).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -8,7 +8,7 @@ import type {
   StartRunRequest,
   StartRunResult,
 } from '@megumi/coding-agent/agent-run';
-import type { ToolSet } from '@megumi/coding-agent/agent-run';
+import type { ToolSet } from '@megumi/ai';
 
 describe('agent-run public contracts', () => {
   it('defines start run request and result shapes', () => {
@@ -79,17 +79,14 @@ describe('agent-run public contracts', () => {
   });
 
   it('defines run-level ToolSet', () => {
-    const toolSet = {
-      items: [
+    const tools = [
         {
           name: 'read_file',
           description: 'Read a file',
-          input_schema: { type: 'object' },
-          source_tool_name: 'read_file',
+          inputSchema: { type: 'object' },
         },
-      ],
-    } satisfies ToolSet;
+      ] satisfies ToolSet;
 
-    expect(toolSet.items[0]?.name).toBe('read_file');
+    expect(tools[0]?.name).toBe('read_file');
   });
 });

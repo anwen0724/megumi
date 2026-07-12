@@ -90,7 +90,7 @@ describe('Local settings.json storage', () => {
     });
   });
 
-  it('patches nested raw settings without expanding defaults into the file', async () => {
+  it('drops obsolete compaction settings while patching sparse raw settings', async () => {
     const { service, settingsPath } = await createService();
     await writeFile(settingsPath, JSON.stringify({
       compaction: {
@@ -98,7 +98,7 @@ describe('Local settings.json storage', () => {
       },
     }), 'utf8');
 
-    service.updateSettings({
+    const result = service.updateSettings({
       patch: {
         memory: {
           enabled: true,
@@ -106,10 +106,8 @@ describe('Local settings.json storage', () => {
       },
     });
 
+    expect(result.status).toBe('updated');
     expect(JSON.parse(await readFile(settingsPath, 'utf8'))).toEqual({
-      compaction: {
-        reserve_tokens: 32768,
-      },
       memory: {
         enabled: true,
       },
@@ -119,9 +117,6 @@ describe('Local settings.json storage', () => {
       settings: {
         memory: {
           enabled: true,
-        },
-        compaction: {
-          reserve_tokens: 32768,
         },
       },
     });

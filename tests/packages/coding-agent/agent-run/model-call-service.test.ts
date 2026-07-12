@@ -1,5 +1,13 @@
+/*
+ * Verifies shared Prompt materialization and Model Call streaming behavior.
+ */
 import { describe, expect, it, vi } from 'vitest';
-import { AssistantEventStream, type AiCallRequest, type AiClient } from '@megumi/ai';
+import {
+  AssistantEventStream,
+  type AiCallRequest,
+  type AiClient,
+  type RequestTokenCounter,
+} from '@megumi/ai';
 import {
   createModelCallService,
   type ModelCallRequest,
@@ -8,7 +16,7 @@ import {
 import { mapModelCallToAiRequest } from '@megumi/coding-agent/agent-run/adapters/ai-client-adapter';
 
 describe('Model Call Service', () => {
-  it('maps Prompt and run-level ToolSet to packages/ai request', () => {
+  it('maps all four Prompt regions to packages/ai without dropping model-facing content', () => {
     const mapped = mapModelCallToAiRequest(sampleModelCallRequest());
 
     expect(mapped.model).toEqual({
@@ -16,20 +24,252 @@ describe('Model Call Service', () => {
       protocol: 'openai-compatible',
       modelId: 'deepseek-chat',
     });
-    expect(mapped.context.systemPrompt).toBe('System prompt');
+    expect(mapped.context.systemPrompt).toBe(
+      'System instruction\n\nWorkspace instruction\n\nSkill instruction',
+    );
+    expect(mapped.context.systemPrompt).not.toContain('Catalog entry');
+    expect(mapped.context.systemPrompt).not.toContain('Summary reference');
+    expect(mapped.context.systemPrompt).not.toContain('Memory reference');
     expect(mapped.context.messages).toEqual([
+      contextMessage('skill_catalog', [{ skillId: 'catalog-1', description: 'Catalog entry' }]),
+      contextMessage('compaction_summary', 'Summary reference'),
+      { role: 'user', content: 'Earlier question' },
+      { role: 'assistant', content: [{ type: 'text', text: 'Earlier answer' }] },
+      contextMessage('memory_recall', [{ type: 'text', text: 'Memory reference' }]),
       { role: 'user', content: 'Hello' },
-      { role: 'assistant', content: [{ type: 'text', text: 'Hi' }] },
-    ]);
-    expect(mapped.toolSet).toEqual([
       {
-        name: 'read_file',
-        description: 'Read a file',
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'Looking up' },
+          {
+            type: 'toolCall',
+            id: 'call-lookup',
+            name: 'lookup',
+            argumentsText: '{"id":1}',
+          },
+        ],
+      },
+      {
+        role: 'toolResult',
+        toolCallId: 'call-lookup',
+        content: '{"toolName":"lookup","status":"success","content":"{\\"answer\\":42}"}',
+      },
+    ]);
+    expect(mapped.tools).toEqual([
+      {
+        name: 'lookup',
+        description: 'Lookup an item',
         inputSchema: { type: 'object' },
       },
     ]);
     expect('maxRetries' in mapped).toBe(false);
     expect('maxRetryDelayMs' in mapped).toBe(false);
+    expect(mapped).not.toHaveProperty('toolSet');
+  });
+
+  it('combines assistant text and one following tool call into one protocol message', () => {
+    expect(mapConversation([
+      { type: 'user_message', content: [{ type: 'text', text: 'Lookup one' }] },
+      { type: 'assistant_message', content: [{ type: 'text', text: 'Calling lookup' }] },
+      { type: 'tool_call', toolCallId: 'call-1', toolName: 'lookup', arguments: { id: 1 } },
+      {
+        type: 'tool_result',
+        toolCallId: 'call-1',
+        toolName: 'lookup',
+        status: 'success',
+        content: [{ type: 'text', text: 'one' }],
+      },
+    ])).toEqual([
+      { role: 'user', content: 'Lookup one' },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'Calling lookup' },
+          { type: 'toolCall', id: 'call-1', name: 'lookup', argumentsText: '{"id":1}' },
+        ],
+      },
+      {
+        role: 'toolResult',
+        toolCallId: 'call-1',
+        content: '{"toolName":"lookup","status":"success","content":"one"}',
+      },
+    ]);
+  });
+
+  it('keeps text, parallel tool calls, and paired results in provider protocol order', () => {
+    expect(mapConversation([
+      { type: 'user_message', content: [{ type: 'text', text: 'Lookup two' }] },
+      {
+        type: 'assistant_message',
+        content: [
+          { type: 'text', text: 'Calling both' },
+          { type: 'json', value: { plan: 'parallel' } },
+        ],
+      },
+      { type: 'tool_call', toolCallId: 'call-1', toolName: 'lookup', arguments: { id: 1 } },
+      { type: 'tool_call', toolCallId: 'call-2', toolName: 'lookup', arguments: { id: 2 } },
+      {
+        type: 'tool_result',
+        toolCallId: 'call-1',
+        toolName: 'lookup',
+        status: 'success',
+        content: [{ type: 'text', text: 'one' }],
+      },
+      {
+        type: 'tool_result',
+        toolCallId: 'call-2',
+        toolName: 'lookup',
+        status: 'failure',
+        content: [{ type: 'text', text: 'missing' }],
+      },
+    ])).toEqual([
+      { role: 'user', content: 'Lookup two' },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'Calling both' },
+          { type: 'text', text: '{"plan":"parallel"}' },
+          { type: 'toolCall', id: 'call-1', name: 'lookup', argumentsText: '{"id":1}' },
+          { type: 'toolCall', id: 'call-2', name: 'lookup', argumentsText: '{"id":2}' },
+        ],
+      },
+      {
+        role: 'toolResult',
+        toolCallId: 'call-1',
+        content: '{"toolName":"lookup","status":"success","content":"one"}',
+      },
+      {
+        role: 'toolResult',
+        toolCallId: 'call-2',
+        content: '{"toolName":"lookup","status":"failure","content":"missing"}',
+      },
+    ]);
+  });
+
+  it('combines consecutive parallel tool calls without assistant text', () => {
+    expect(mapConversation([
+      { type: 'user_message', content: [{ type: 'text', text: 'Lookup two' }] },
+      { type: 'tool_call', toolCallId: 'call-1', toolName: 'lookup', arguments: { id: 1 } },
+      { type: 'tool_call', toolCallId: 'call-2', toolName: 'lookup', arguments: { id: 2 } },
+    ])).toEqual([
+      { role: 'user', content: 'Lookup two' },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'toolCall', id: 'call-1', name: 'lookup', argumentsText: '{"id":1}' },
+          { type: 'toolCall', id: 'call-2', name: 'lookup', argumentsText: '{"id":2}' },
+        ],
+      },
+    ]);
+  });
+
+  it('uses the same Prompt materialization for counting and the actual model call', async () => {
+    let countedRequest: AiCallRequest | undefined;
+    let streamedRequest: AiCallRequest | undefined;
+    const requestTokenCounter: RequestTokenCounter = {
+      count(request) {
+        countedRequest = request;
+        return { inputTokens: 321, accuracy: 'estimated' };
+      },
+    };
+    const aiClient: AiClient = {
+      stream(request) {
+        streamedRequest = request;
+        return AssistantEventStream.from([{
+          type: 'message_end',
+          message: { role: 'assistant', content: [], stopReason: 'stop' },
+        }]);
+      },
+      complete: vi.fn(),
+    };
+    const service = createModelCallService({
+      ai_client: aiClient,
+      request_token_counter: requestTokenCounter,
+      ids: { model_call_id: () => 'model-call-1' },
+    });
+    const request = sampleModelCallRequest();
+
+    await expect(service.countPrompt({
+      prompt: request.prompt,
+      model_config: request.model_config,
+    })).resolves.toEqual({
+      status: 'counted',
+      input_tokens: 321,
+      accuracy: 'estimated',
+    });
+    const result = await service.modelCall(request);
+    if (result.status !== 'started') throw new Error('expected started model call');
+    await collect(result.events);
+
+    expect(countedRequest).toBeDefined();
+    expect(streamedRequest).toBeDefined();
+    expect(stripRuntimeOnlyFields(streamedRequest!)).toEqual(stripRuntimeOnlyFields(countedRequest!));
+    expect(JSON.stringify(countedRequest)).toContain('System instruction');
+    expect(JSON.stringify(countedRequest)).toContain('Memory reference');
+    expect(JSON.stringify(countedRequest)).toContain('Hello');
+    expect(JSON.stringify(countedRequest)).toContain('lookup');
+  });
+
+  it('reports unsupported image content instead of dropping it while counting', async () => {
+    const counter = { count: vi.fn() };
+    const service = createModelCallService({ request_token_counter: counter });
+    const request = sampleModelCallRequest();
+    request.prompt.conversation = [{
+      type: 'user_message',
+      content: [{ type: 'image', source: { type: 'local_file', path: 'image.png' } }],
+    }];
+
+    const result = await service.countPrompt({
+      prompt: request.prompt,
+      model_config: request.model_config,
+    });
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      failure: { code: 'unsupported_content', retryable: false },
+    });
+    expect(counter.count).not.toHaveBeenCalled();
+  });
+
+  it('fails explicitly when Memory cannot be placed before a current user message', async () => {
+    const counter = { count: vi.fn() };
+    const service = createModelCallService({ request_token_counter: counter });
+    const request = sampleModelCallRequest();
+    request.prompt.conversation = [{
+      type: 'assistant_message',
+      content: [{ type: 'text', text: 'No current user' }],
+    }];
+
+    const result = await service.countPrompt({
+      prompt: request.prompt,
+      model_config: request.model_config,
+    });
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      failure: {
+        code: 'model_call_failed',
+        retryable: false,
+        details: { reason: 'memory_requires_current_user' },
+      },
+    });
+    expect(counter.count).not.toHaveBeenCalled();
+  });
+
+  it('reports unsupported file content instead of starting a model call', () => {
+    const aiClient: AiClient = { stream: vi.fn(), complete: vi.fn() };
+    const service = createModelCallService({ ai_client: aiClient });
+    const request = sampleModelCallRequest();
+    request.prompt.conversation = [{
+      type: 'user_message',
+      content: [{ type: 'file', fileId: 'file-1' }],
+    }];
+
+    expect(service.modelCall(request)).toMatchObject({
+      status: 'failed',
+      failure: { code: 'unsupported_content', retryable: false },
+    });
+    expect(aiClient.stream).not.toHaveBeenCalled();
   });
 
   it('streams model events and supports cancellation by model_call_id', async () => {
@@ -298,32 +538,45 @@ describe('Model Call Service', () => {
     ]);
   });
 
-  it('maps run continuation tool messages into provider protocol messages', () => {
+  it('maps provider-neutral Prompt continuation items into provider protocol messages', () => {
+    const request = sampleModelCallRequest();
     const mapped = mapModelCallToAiRequest({
-      ...sampleModelCallRequest(),
-      model_call_messages: [
-        {
-          role: 'assistant',
-          content: 'I need to read the file.',
-          tool_calls: [
-            {
-              tool_call_id: 'provider-tool-call-1',
-              tool_name: 'read_file',
-              arguments_text: '{"path":"README.md"}',
-            },
-          ],
-        },
-        {
-          role: 'tool_result',
-          tool_call_id: 'provider-tool-call-1',
-          content: 'README content',
-        },
-      ],
+      ...request,
+      prompt: {
+        ...request.prompt,
+        conversation: [
+          ...request.prompt.conversation,
+          { type: 'assistant_message', content: [{ type: 'text', text: 'I need to read the file.' }] },
+          { type: 'tool_call', toolCallId: 'provider-tool-call-1', toolName: 'read_file', arguments: { path: 'README.md' } },
+          { type: 'tool_result', toolCallId: 'provider-tool-call-1', toolName: 'read_file', status: 'success', content: [{ type: 'text', text: 'README content' }] },
+        ],
+      },
     });
 
     expect(mapped.context.messages).toEqual([
+      contextMessage('skill_catalog', [{ skillId: 'catalog-1', description: 'Catalog entry' }]),
+      contextMessage('compaction_summary', 'Summary reference'),
+      { role: 'user', content: 'Earlier question' },
+      { role: 'assistant', content: [{ type: 'text', text: 'Earlier answer' }] },
+      contextMessage('memory_recall', [{ type: 'text', text: 'Memory reference' }]),
       { role: 'user', content: 'Hello' },
-      { role: 'assistant', content: [{ type: 'text', text: 'Hi' }] },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'Looking up' },
+          {
+            type: 'toolCall',
+            id: 'call-lookup',
+            name: 'lookup',
+            argumentsText: '{"id":1}',
+          },
+        ],
+      },
+      {
+        role: 'toolResult',
+        toolCallId: 'call-lookup',
+        content: '{"toolName":"lookup","status":"success","content":"{\\"answer\\":42}"}',
+      },
       {
         role: 'assistant',
         content: [
@@ -339,7 +592,7 @@ describe('Model Call Service', () => {
       {
         role: 'toolResult',
         toolCallId: 'provider-tool-call-1',
-        content: 'README content',
+        content: '{"toolName":"read_file","status":"success","content":"README content"}',
       },
     ]);
   });
@@ -413,14 +666,40 @@ function sampleModelCallRequest(): ModelCallRequest {
   return {
     owner: { type: 'agent_run', run_id: 'run-1' },
     prompt: {
-      prompt_id: 'prompt-1',
-      purpose: 'agent_response',
-      messages: [
-        { role: 'system', content: 'System prompt' },
-        { role: 'user', content: 'Hello' },
-        { role: 'assistant', content: 'Hi' },
+      instructions: {
+        system: [{ instructionId: 'system-1', content: 'System instruction' }],
+        agentInstructions: {
+          sources: [{
+            sourceId: 'agent-1',
+            sourcePath: 'AGENTS.md',
+            content: 'Workspace instruction',
+          }],
+        },
+        activatedSkills: [{ skillId: 'skill-1', name: 'Skill', content: 'Skill instruction' }],
+      },
+      referenceContext: {
+        skillCatalog: [{ skillId: 'catalog-1', name: 'Catalog skill', description: 'Catalog entry' }],
+        compactionSummary: { compactionId: 'compaction-1', content: 'Summary reference' },
+        memoryRecall: {
+          recallId: 'recall-1',
+          items: [{ memoryId: 'memory-1', content: [{ type: 'text', text: 'Memory reference' }] }],
+        },
+      },
+      conversation: [
+        { type: 'user_message', content: [{ type: 'text', text: 'Earlier question' }] },
+        { type: 'assistant_message', content: [{ type: 'text', text: 'Earlier answer' }] },
+        { type: 'user_message', content: [{ type: 'text', text: 'Hello' }] },
+        { type: 'assistant_message', content: [{ type: 'text', text: 'Looking up' }] },
+        { type: 'tool_call', toolCallId: 'call-lookup', toolName: 'lookup', arguments: { id: 1 } },
+        {
+          type: 'tool_result',
+          toolCallId: 'call-lookup',
+          toolName: 'lookup',
+          status: 'success',
+          content: [{ type: 'json', value: { answer: 42 } }],
+        },
       ],
-      source_refs: [],
+      tools: [{ name: 'lookup', description: 'Lookup an item', inputSchema: { type: 'object' } }],
     },
     model_config: {
       provider_id: 'deepseek',
@@ -428,17 +707,23 @@ function sampleModelCallRequest(): ModelCallRequest {
       model_id: 'deepseek-chat',
       api_key: 'sk-test',
     },
-    tool_set: {
-      items: [
-        {
-          name: 'read_file',
-          description: 'Read a file',
-          input_schema: { type: 'object' },
-          source_tool_name: 'read_file',
-        },
-      ],
-    },
   };
+}
+
+function mapConversation(conversation: ModelCallRequest['prompt']['conversation']) {
+  const request = sampleModelCallRequest();
+  request.prompt.referenceContext = { skillCatalog: [] };
+  request.prompt.conversation = conversation;
+  return mapModelCallToAiRequest(request).context.messages;
+}
+
+function contextMessage(kind: 'skill_catalog' | 'compaction_summary' | 'memory_recall', content: unknown) {
+  return { role: 'context', kind, content };
+}
+
+function stripRuntimeOnlyFields(request: AiCallRequest): Omit<AiCallRequest, 'signal'> {
+  const { signal: _signal, ...modelFacingRequest } = request;
+  return modelFacingRequest;
 }
 
 async function collect(events: AsyncIterable<ModelCallEvent>): Promise<ModelCallEvent[]> {

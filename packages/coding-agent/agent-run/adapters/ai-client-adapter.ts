@@ -1,20 +1,48 @@
 /*
- * Converts Agent Run model-call requests into packages/ai client requests.
- * It isolates prompt/tool-set mapping from Model Call Service control flow.
+ * Materializes the complete Context Prompt into the provider-neutral AI request.
+ * Model calling and request counting share this single mapping boundary.
  */
-import type { AiCallRequest, ConversationMessage, ToolSet as AiToolSet } from '@megumi/ai';
-import type { JsonObject } from '../../shared-json';
-import type { PromptMessage } from '../../context';
 import type {
-  ModelCallMessage,
-  ModelCallRequest,
-  ToolSet,
-} from '../contracts/model-call-contracts';
+  AiCallRequest,
+  AssistantContentBlock,
+  ContentBlock,
+  ContextMessage,
+  ConversationItem,
+  ConversationMessage,
+  JsonValue,
+  ToolSet as AiToolSet,
+} from '@megumi/ai';
+import type { Prompt } from '../../context';
+import type { ModelCallRequest, ModelCallConfig } from '../contracts/model-call-contracts';
 
-export function mapModelCallToAiRequest(
-  request: ModelCallRequest,
-): AiCallRequest {
-  const systemPrompt = request.prompt.messages.find((message) => message.role === 'system')?.content;
+export type PromptAiRequestInput = {
+  prompt: Prompt;
+  model_config: ModelCallConfig;
+  signal?: AbortSignal;
+};
+
+export class UnsupportedModelContentError extends Error {
+  readonly contentType: 'image' | 'file';
+
+  constructor(contentType: 'image' | 'file') {
+    super(`Model Call does not support ${contentType} content materialization.`);
+    this.name = 'UnsupportedModelContentError';
+    this.contentType = contentType;
+  }
+}
+
+export class PromptMaterializationError extends Error {
+  readonly reason: 'memory_requires_current_user';
+
+  constructor(reason: 'memory_requires_current_user') {
+    super('Prompt memory recall requires a current user message.');
+    this.name = 'PromptMaterializationError';
+    this.reason = reason;
+  }
+}
+
+export function mapPromptToAiRequest(request: PromptAiRequestInput): AiCallRequest {
+  assertSupportedPromptContent(request.prompt);
 
   return {
     model: {
@@ -24,66 +52,187 @@ export function mapModelCallToAiRequest(
       ...(request.model_config.base_url ? { baseUrl: request.model_config.base_url } : {}),
     },
     context: {
-      ...(systemPrompt ? { systemPrompt } : {}),
-      messages: [
-        ...request.prompt.messages
-          .filter((message) => message.role !== 'system')
-          .map(promptMessageToConversationMessage),
-        ...(request.model_call_messages ?? []).map(modelCallMessageToConversationMessage),
-      ],
+      systemPrompt: materializeInstructions(request.prompt),
+      messages: materializePromptMessages(request.prompt),
     },
-    ...(request.tool_set ? { toolSet: toolSetToAiToolSet(request.tool_set) } : {}),
+    tools: promptToolsToAiToolSet(request.prompt.tools),
     ...(request.signal ? { signal: request.signal } : {}),
     ...(request.model_config.api_key ? {
       credential: { type: 'api_key', value: request.model_config.api_key },
     } : {}),
-    metadata: request.owner.type === 'agent_run'
-      ? { runId: request.owner.run_id }
-      : { sessionId: request.owner.session_id },
   };
 }
 
-function promptMessageToConversationMessage(message: PromptMessage): ConversationMessage {
-  if (message.role === 'assistant') {
-    return {
-      role: 'assistant',
-      content: [{ type: 'text', text: message.content }],
-    };
-  }
-
-  return {
-    role: 'user',
-    content: message.content,
-  };
+export function mapModelCallToAiRequest(request: ModelCallRequest): AiCallRequest {
+  return mapPromptToAiRequest({
+    prompt: request.prompt,
+    model_config: request.model_config,
+    ...(request.signal ? { signal: request.signal } : {}),
+  });
 }
 
-function modelCallMessageToConversationMessage(message: ModelCallMessage): ConversationMessage {
-  if (message.role === 'tool_result') {
-    return {
-      role: 'toolResult',
-      toolCallId: message.tool_call_id,
-      content: message.content,
-    };
-  }
+function materializeInstructions(prompt: Prompt): string {
+  return [
+    ...prompt.instructions.system.map((instruction) => instruction.content),
+    ...prompt.instructions.agentInstructions.sources.map((source) => source.content),
+    ...prompt.instructions.activatedSkills.map((skill) => skill.content),
+  ].join('\n\n');
+}
 
-  return {
-    role: 'assistant',
-    content: [
-      ...(message.content ? [{ type: 'text' as const, text: message.content }] : []),
-      ...message.tool_calls.map((toolCall) => ({
-        type: 'toolCall' as const,
-        id: toolCall.tool_call_id,
-        name: toolCall.tool_name,
-        argumentsText: toolCall.arguments_text,
+function materializePromptMessages(prompt: Prompt): ConversationMessage[] {
+  const references: ContextMessage[] = [];
+
+  if (prompt.referenceContext.skillCatalog.length > 0) {
+    references.push({
+      role: 'context',
+      kind: 'skill_catalog',
+      content: prompt.referenceContext.skillCatalog.map((skill) => ({
+        skillId: skill.skillId,
+        description: skill.description,
       })),
-    ],
+    });
+  }
+
+  if (prompt.referenceContext.compactionSummary) {
+    references.push({
+      role: 'context',
+      kind: 'compaction_summary',
+      content: prompt.referenceContext.compactionSummary.content,
+    });
+  }
+
+  const memory = prompt.referenceContext.memoryRecall;
+  if (!memory) return [...references, ...materializeConversation(prompt.conversation)];
+
+  const currentUserIndex = findLastUserMessageIndex(prompt.conversation);
+  if (currentUserIndex < 0) {
+    throw new PromptMaterializationError('memory_requires_current_user');
+  }
+
+  const memoryMessage: ContextMessage = {
+    role: 'context',
+    kind: 'memory_recall',
+    content: memory.items.flatMap((item) => item.content.map(contentBlockToJson)),
+  };
+
+  // The last user item is the current turn boundary. Memory belongs immediately
+  // before it, while any current-run tool protocol items remain after it.
+  return [
+    ...references,
+    ...materializeConversation(prompt.conversation.slice(0, currentUserIndex)),
+    memoryMessage,
+    ...materializeConversation(prompt.conversation.slice(currentUserIndex)),
+  ];
+}
+
+function findLastUserMessageIndex(conversation: ConversationItem[]): number {
+  for (let index = conversation.length - 1; index >= 0; index -= 1) {
+    if (conversation[index]?.type === 'user_message') return index;
+  }
+  return -1;
+}
+
+function contentBlockToJson(block: ContentBlock): JsonValue {
+  if (block.type === 'text') return { type: 'text' as const, text: block.text };
+  if (block.type === 'json') return { type: 'json' as const, value: block.value };
+  throw new UnsupportedModelContentError(block.type);
+}
+
+function materializeConversation(conversation: ConversationItem[]): ConversationMessage[] {
+  const messages: ConversationMessage[] = [];
+
+  for (let index = 0; index < conversation.length; index += 1) {
+    const item = conversation[index]!;
+
+    if (item.type === 'user_message') {
+      messages.push({ role: 'user', content: materializeContentBlocks(item.content) });
+      continue;
+    }
+
+    if (item.type === 'tool_result') {
+      messages.push(toolResultToMessage(item));
+      continue;
+    }
+
+    const content: AssistantContentBlock[] = item.type === 'assistant_message'
+      ? item.content.map(contentBlockToAssistantText)
+      : [toolCallToContentBlock(item)];
+
+    while (conversation[index + 1]?.type === 'tool_call') {
+      index += 1;
+      content.push(toolCallToContentBlock(
+        conversation[index] as Extract<ConversationItem, { type: 'tool_call' }>,
+      ));
+    }
+
+    messages.push({ role: 'assistant', content });
+  }
+
+  return messages;
+}
+
+function contentBlockToAssistantText(block: ContentBlock): AssistantContentBlock {
+  if (block.type === 'text') return block;
+  if (block.type === 'json') return { type: 'text', text: JSON.stringify(block.value) };
+  throw new UnsupportedModelContentError(block.type);
+}
+
+function toolCallToContentBlock(
+  item: Extract<ConversationItem, { type: 'tool_call' }>,
+): AssistantContentBlock {
+  return {
+    type: 'toolCall',
+    id: item.toolCallId,
+    name: item.toolName,
+    argumentsText: JSON.stringify(item.arguments),
   };
 }
 
-function toolSetToAiToolSet(toolSet: ToolSet): AiToolSet {
-  return toolSet.items.map((item) => ({
-    name: item.name,
-    description: item.description,
-    inputSchema: item.input_schema as JsonObject,
+function toolResultToMessage(
+  item: Extract<ConversationItem, { type: 'tool_result' }>,
+): ConversationMessage {
+  return {
+    role: 'toolResult',
+    toolCallId: item.toolCallId,
+    content: JSON.stringify({
+      toolName: item.toolName,
+      status: item.status,
+      content: materializeContentBlocks(item.content),
+    }),
+  };
+}
+
+function materializeContentBlocks(content: ContentBlock[]): string {
+  return content.map((block) => {
+    if (block.type === 'text') return block.text;
+    if (block.type === 'json') return JSON.stringify(block.value);
+    throw new UnsupportedModelContentError(block.type);
+  }).join('\n');
+}
+
+function assertSupportedPromptContent(prompt: Prompt): void {
+  const blocks = [
+    ...(prompt.referenceContext.memoryRecall?.items.flatMap((item) => item.content) ?? []),
+    ...prompt.conversation.flatMap((item) => (
+      item.type === 'user_message'
+      || item.type === 'assistant_message'
+      || item.type === 'tool_result'
+        ? item.content
+        : []
+    )),
+  ];
+
+  for (const block of blocks) {
+    if (block.type === 'image' || block.type === 'file') {
+      throw new UnsupportedModelContentError(block.type);
+    }
+  }
+}
+
+function promptToolsToAiToolSet(tools: Prompt['tools']): AiToolSet {
+  return tools.map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    inputSchema: tool.inputSchema,
   }));
 }

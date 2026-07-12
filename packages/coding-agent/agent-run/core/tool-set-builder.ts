@@ -2,8 +2,8 @@
  * Builds and caches the stable run-level Tool Set.
  * Agent Run chooses the model-visible set; Tool Registry only supplies available tools.
  */
+import type { ToolSet, ToolSetEntry } from '@megumi/ai';
 import type { RegisteredTool } from '../../tools';
-import type { ToolSet, ToolSetItem } from '../contracts/model-call-contracts';
 
 export type RunToolSetBuilder = {
   getToolSet(request: GetRunToolSetRequest): ToolSet;
@@ -21,7 +21,7 @@ export type CreateRunToolSetBuilderOptions = {
 };
 
 type CachedRunToolSet = {
-  tool_set: ToolSet;
+  tools: ToolSet;
   registered_tools_by_name: Map<string, RegisteredTool>;
 };
 
@@ -37,12 +37,12 @@ class DefaultRunToolSetBuilder implements RunToolSetBuilder {
   getToolSet(request: GetRunToolSetRequest): ToolSet {
     const cached = this.cache.get(request.run_id);
     if (cached) {
-      return cached.tool_set;
+      return cached.tools;
     }
 
     const next = this.createToolSet(request);
     this.cache.set(request.run_id, next);
-    return next.tool_set;
+    return next.tools;
   }
 
   getRegisteredTool(runId: string, toolName: string): RegisteredTool | undefined {
@@ -52,9 +52,7 @@ class DefaultRunToolSetBuilder implements RunToolSetBuilder {
   private createToolSet(request: GetRunToolSetRequest): CachedRunToolSet {
     const registeredTools = this.options.tool_registry_service.listAvailableTools().tools;
     return {
-      tool_set: {
-        items: registeredTools.map(toolSetItemFromRegisteredTool),
-      },
+      tools: registeredTools.map(toolEntryFromRegisteredTool),
       registered_tools_by_name: new Map(
         registeredTools.map((tool) => [tool.registeredToolName, tool]),
       ),
@@ -62,11 +60,10 @@ class DefaultRunToolSetBuilder implements RunToolSetBuilder {
   }
 }
 
-function toolSetItemFromRegisteredTool(tool: RegisteredTool): ToolSetItem {
+function toolEntryFromRegisteredTool(tool: RegisteredTool): ToolSetEntry {
   return {
     name: tool.registeredToolName,
     description: tool.definition.modelFacingDescription ?? tool.definition.description,
-    input_schema: tool.definition.inputSchema,
-    source_tool_name: tool.identity.sourceToolName,
+    inputSchema: tool.definition.inputSchema,
   };
 }
