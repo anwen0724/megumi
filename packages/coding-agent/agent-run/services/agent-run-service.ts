@@ -69,7 +69,7 @@ import {
 } from '../repositories/agent-run-repository';
 import { createNoopAgentRunTraceLogger } from './agent-run-trace-logger';
 
-export { getRunTranscript } from '../core/run-model-transcript';
+export { getHistoricalRun } from '../core/historical-run-query';
 
 export type CreateAgentRunServiceOptions = {
   repository?: AgentRunRepository;

@@ -69,7 +69,7 @@ export type ContextSourceRef = {
     | 'activated_skill'
     | 'compaction_summary'
     | 'session_message'
-    | 'agent_run_transcript'
+    | 'agent_run_history'
     | 'current_run_item'
     | 'memory'
     | 'tool_definition'

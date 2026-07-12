@@ -6,7 +6,7 @@ import { createAgentRunQueries } from '@megumi/coding-agent/composition/compose-
 import { createInMemoryAgentRunRepository } from '../agent-run/agent-run-test-helpers';
 
 describe('Agent Run query composition', () => {
-  it('routes getRunTranscript through the Agent Run owner projection', () => {
+  it('routes getHistoricalRun through the Agent Run owner projection', () => {
     const repository = createInMemoryAgentRunRepository();
     repository.createRun({
       run_id: 'run-1',
@@ -38,9 +38,18 @@ describe('Agent Run query composition', () => {
 
     const queries = createAgentRunQueries(repository);
 
-    expect(queries.getRunTranscript('run-1')).toEqual({
+    expect(queries.getHistoricalRun('run-1')).toEqual({
       status: 'found',
-      transcript: { runId: 'run-1', items: [] },
+      historicalRun: {
+        runId: 'run-1',
+        runStatus: 'completed',
+        modelSteps: [{
+          modelCallId: 'model-call-1',
+          assistantContent: [{ type: 'text', text: 'Session owns this final answer.' }],
+          toolCalls: [],
+        }],
+        diagnostics: [],
+      },
     });
   });
 });

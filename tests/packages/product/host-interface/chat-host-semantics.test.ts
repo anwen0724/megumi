@@ -32,7 +32,7 @@ describe('ChatHost product semantics', () => {
       branchService: createSessionBranchService(),
       workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
       sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
-      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [], getRunTranscript: (runId) => ({ status: 'not_found', runId }) },
+      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [], getHistoricalRun: (runId) => ({ status: 'not_found', runId }) },
       contextService: unavailableContextService,
     });
 
@@ -96,7 +96,7 @@ describe('ChatHost product semantics', () => {
         })),
       },
       sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
-      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [], getRunTranscript: (runId) => ({ status: 'not_found', runId }) },
+      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [], getHistoricalRun: (runId) => ({ status: 'not_found', runId }) },
       contextService: unavailableContextService,
     });
 
@@ -299,7 +299,7 @@ describe('ChatHost product semantics', () => {
       branchService: createSessionBranchService(),
       workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
       sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
-      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [], getRunTranscript: (runId) => ({ status: 'not_found', runId }) },
+      agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [], getHistoricalRun: (runId) => ({ status: 'not_found', runId }) },
       contextService: unavailableContextService,
     });
 
@@ -435,7 +435,7 @@ describe('ChatHost product semantics', () => {
       branchService: createSessionBranchService(),
       workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
       sessionTimelineQuery: { listSessionTimeline },
-      agentRunQueries: { listRunsBySession, listRuntimeEventsByRun, getRunTranscript: (runId) => ({ status: 'not_found', runId }) },
+      agentRunQueries: { listRunsBySession, listRuntimeEventsByRun, getHistoricalRun: (runId) => ({ status: 'not_found', runId }) },
       contextService: unavailableContextService,
     });
 
@@ -485,7 +485,7 @@ function createHost(
     branchService,
     workspaceService: { listWorkspaces: vi.fn(async () => ({ workspaces: [] })) },
     sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
-    agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [], getRunTranscript: (runId) => ({ status: 'not_found', runId }) },
+    agentRunQueries: { listRunsBySession: () => [], listRuntimeEventsByRun: () => [], getHistoricalRun: (runId) => ({ status: 'not_found', runId }) },
     contextService: unavailableContextService,
   });
 }

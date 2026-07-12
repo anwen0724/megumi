@@ -17,7 +17,7 @@ import type {
 export type ContextFailure = {
   code:
     | 'session_history_failed'
-    | 'run_transcript_failed'
+    | 'historical_run_failed'
     | 'instruction_load_failed'
     | 'skill_catalog_failed'
     | 'active_context_failed'
@@ -67,7 +67,7 @@ export type CompactSessionResult =
     }
   | {
       status: 'nothing_to_compact';
-      reason: 'no_complete_turns' | 'no_older_turns' | 'summary_not_reducing';
+      reason: 'no_historical_turns' | 'no_older_turns' | 'summary_not_reducing';
     }
   | { status: 'failed'; failure: ContextFailure };
 

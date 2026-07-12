@@ -6,6 +6,41 @@ import type { ActiveContext } from '@megumi/coding-agent/context';
 import { buildPrompt } from '@megumi/coding-agent/context/service/internal/prompt-builder';
 
 describe('buildPrompt', () => {
+  it('renders a historical Tool Call without Result as ordinary ordered Context', () => {
+    const activeContext = {
+      sessionId: 'session-1',
+      instructions: { system: [], agentInstructions: { sources: [] }, activatedSkills: [] },
+      referenceContext: { skillCatalog: [] },
+      historicalTurns: [{
+        source: { runId: 'run-old', userEntryId: 'EU', userMessageId: 'MU' },
+        runStatus: 'cancelled' as const,
+        userMessage: { type: 'user_message' as const, content: [{ type: 'text' as const, text: 'Create a file' }] },
+        modelSteps: [{ modelCallId: 'model-1', assistantContent: [{ type: 'text' as const, text: 'I will create it.' }], toolCalls: [{ toolCallId: 'call-1', toolName: 'write_file', arguments: { path: 'a.ts' } }] }],
+        finalOutcome: { reason: 'cancelled' },
+        diagnostics: [],
+      }],
+      currentTurn: { runId: 'run-now', userEntry: { entryId: 'EN' }, userMessage: { type: 'user_message' as const, content: [{ type: 'text' as const, text: 'Continue' }] }, runItems: [] },
+      tools: [],
+    };
+
+    expect(buildPrompt(activeContext).conversation).toEqual([
+      activeContext.historicalTurns[0].userMessage,
+      {
+        type: 'context',
+        kind: 'historical_run_state',
+        content: expect.objectContaining({
+          runId: 'run-old',
+          runStatus: 'cancelled',
+          modelStep: expect.objectContaining({
+            assistantContent: [{ type: 'text', text: 'I will create it.' }],
+            toolCalls: [expect.objectContaining({ toolCallId: 'call-1' })],
+          }),
+        }),
+      },
+      activeContext.currentTurn.userMessage,
+    ]);
+  });
+
   it('projects logical regions and preserves historical and current protocol order', () => {
     const activeContext: ActiveContext = {
       sessionId: 'session-1',
@@ -24,17 +59,16 @@ describe('buildPrompt', () => {
           assistantMessageId: 'message-assistant-history',
         },
         userMessage: { type: 'user_message', content: [{ type: 'text', text: 'Historical user' }] },
-        responseItems: [
-          { type: 'tool_call', toolCallId: 'call-1', toolName: 'lookup', arguments: { id: 1 } },
-          {
-            type: 'tool_result',
-            toolCallId: 'call-1',
-            toolName: 'lookup',
-            status: 'success',
-            content: [{ type: 'json', value: { answer: 42 } }],
-          },
-          { type: 'assistant_message', content: [{ type: 'text', text: 'Historical assistant' }] },
+        runStatus: 'completed',
+        modelSteps: [
+          { modelCallId: 'model-1', assistantContent: [], toolCalls: [{
+          toolCallId: 'call-1', toolName: 'lookup', arguments: { id: 1 },
+          result: { status: 'success', content: [{ type: 'json', value: { answer: 42 } }] },
+          }] },
+          { modelCallId: 'model-2', assistantContent: [{ type: 'text', text: 'Historical assistant' }], toolCalls: [] },
         ],
+        finalAssistantMessage: { type: 'assistant_message', content: [{ type: 'text', text: 'Historical assistant' }] },
+        diagnostics: [],
       }],
       currentTurn: {
         runId: 'run-current',
@@ -59,7 +93,9 @@ describe('buildPrompt', () => {
     expect(Object.keys(prompt)).toEqual(['instructions', 'referenceContext', 'conversation', 'tools']);
     expect(prompt.conversation).toEqual([
       activeContext.historicalTurns[0].userMessage,
-      ...activeContext.historicalTurns[0].responseItems,
+      { type: 'tool_call', toolCallId: 'call-1', toolName: 'lookup', arguments: { id: 1 } },
+      { type: 'tool_result', toolCallId: 'call-1', toolName: 'lookup', status: 'success', content: [{ type: 'json', value: { answer: 42 } }] },
+      activeContext.historicalTurns[0].finalAssistantMessage,
       activeContext.currentTurn.userMessage,
       ...activeContext.currentTurn.runItems,
     ]);

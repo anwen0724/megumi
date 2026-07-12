@@ -47,11 +47,11 @@ describe('planCompaction', () => {
     expect(result.plan.firstKeptEntryId).toBe('entry-user-2');
   });
 
-  it('returns no_complete_turns without producing a plan', () => {
+  it('returns no_historical_turns without producing a plan', () => {
     expect(planCompaction({
       historicalTurns: [],
       keepRecentTurns: 10,
-    })).toEqual({ status: 'nothing_to_compact', reason: 'no_complete_turns' });
+    })).toEqual({ status: 'nothing_to_compact', reason: 'no_historical_turns' });
   });
 
   it('returns no_older_turns when all completed Turns fit within retention', () => {
@@ -94,20 +94,13 @@ function turn(id: string): ConversationTurn {
       type: 'user_message',
       content: [{ type: 'text', text: `User ${id}` }],
     },
-    responseItems: [
-      { type: 'tool_call', toolCallId: `call-${id}`, toolName: 'lookup', arguments: { id } },
-      {
-        type: 'tool_result',
-        toolCallId: `call-${id}`,
-        toolName: 'lookup',
-        status: 'success',
-        content: [{ type: 'text', text: `Result ${id}` }],
-      },
-      {
-        type: 'assistant_message',
-        content: [{ type: 'text', text: `Assistant ${id}` }],
-      },
-    ],
+    runStatus: 'completed',
+    modelSteps: [{ modelCallId: `model-${id}`, assistantContent: [], toolCalls: [{
+      toolCallId: `call-${id}`, toolName: 'lookup', arguments: { id },
+      result: { status: 'success', content: [{ type: 'text', text: `Result ${id}` }] },
+    }] }],
+    finalAssistantMessage: { type: 'assistant_message', content: [{ type: 'text', text: `Assistant ${id}` }] },
+    diagnostics: [],
   };
 }
 

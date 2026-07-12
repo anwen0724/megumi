@@ -144,6 +144,11 @@ function materializeConversation(conversation: ConversationItem[]): Conversation
   for (let index = 0; index < conversation.length; index += 1) {
     const item = conversation[index]!;
 
+    if (item.type === 'context') {
+      messages.push({ role: 'context', kind: item.kind, content: item.content });
+      continue;
+    }
+
     if (item.type === 'user_message') {
       messages.push({ role: 'user', content: materializeContentBlocks(item.content) });
       continue;

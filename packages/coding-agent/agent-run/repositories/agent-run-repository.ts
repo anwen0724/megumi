@@ -21,6 +21,10 @@ export type AgentRunRepository = {
   listRuntimeEventsByRun(runId: string): RuntimeEvent[];
   /** Canonical read: throws RuntimeEventIntegrityError instead of hiding an invalid persisted row. */
   listRuntimeEventsByRunStrict(runId: string): RuntimeEvent[];
+  readRuntimeEventsByRun(runId: string): {
+    events: RuntimeEvent[];
+    diagnostics: Array<{ eventId: string; code: 'invalid_persisted_event'; message: string }>;
+  };
   nextRuntimeEventSequence(runId: string): number;
 };
 
@@ -267,6 +271,23 @@ class SqliteAgentRunRepository implements AgentRunRepository {
 
   listRuntimeEventsByRunStrict(runId: string): RuntimeEvent[] {
     return this.listRuntimeEventRows(runId).map(runtimeEventFromValidatedRow);
+  }
+
+  readRuntimeEventsByRun(runId: string) {
+    const events: RuntimeEvent[] = [];
+    const diagnostics: Array<{ eventId: string; code: 'invalid_persisted_event'; message: string }> = [];
+    for (const row of this.listRuntimeEventRows(runId)) {
+      try {
+        events.push(runtimeEventFromValidatedRow(row));
+      } catch (error) {
+        diagnostics.push({
+          eventId: row.event_id,
+          code: 'invalid_persisted_event',
+          message: error instanceof Error ? error.message : `Persisted runtime event ${row.event_id} is invalid.`,
+        });
+      }
+    }
+    return { events, diagnostics };
   }
 
   nextRuntimeEventSequence(runId: string): number {

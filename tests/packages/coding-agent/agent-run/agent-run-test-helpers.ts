@@ -70,6 +70,9 @@ export function createInMemoryAgentRunRepository(): AgentRunRepository {
             || left.eventId.localeCompare(right.eventId);
         });
     },
+    readRuntimeEventsByRun(runId) {
+      return { events: this.listRuntimeEventsByRunStrict(runId), diagnostics: [] };
+    },
     nextRuntimeEventSequence(runId) {
       return Math.max(0, ...[...runtimeEvents.values()]
         .filter((event) => event.runId === runId)

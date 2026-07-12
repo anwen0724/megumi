@@ -12,6 +12,15 @@ import {
     type ContentBlock,
 } from './content-block';
 
+export const ContextMessageKindSchema = z.enum([
+    'skill_catalog',
+    'compaction_summary',
+    'memory_recall',
+    'historical_run_state',
+]);
+
+export type ContextMessageKind = z.infer<typeof ContextMessageKindSchema>;
+
 export const UserConversationItemSchema = z
     .object({
         type: z.literal('user_message'),
@@ -45,11 +54,20 @@ export const ToolResultConversationItemSchema = z
     })
     .strict();
 
+export const ContextConversationItemSchema = z
+    .object({
+        type: z.literal('context'),
+        kind: ContextMessageKindSchema,
+        content: JsonValueSchema,
+    })
+    .strict();
+
 export const ConversationItemSchema = z.discriminatedUnion('type', [
     UserConversationItemSchema,
     AssistantConversationItemSchema,
     ToolCallConversationItemSchema,
     ToolResultConversationItemSchema,
+    ContextConversationItemSchema,
 ]);
 
 export type ConversationItem =
@@ -67,6 +85,11 @@ export type ConversationItem =
         toolName: string;
         status: 'success' | 'failure';
         content: ContentBlock[];
+    }
+    | {
+        type: 'context';
+        kind: ContextMessageKind;
+        content: JsonValue;
     };
 
 export const ConversationItemListSchema = z.array(ConversationItemSchema);
@@ -96,14 +119,6 @@ export interface ToolResultMessage {
     toolCallId: string;
     content: string;
 }
-
-export const ContextMessageKindSchema = z.enum([
-    'skill_catalog',
-    'compaction_summary',
-    'memory_recall',
-]);
-
-export type ContextMessageKind = z.infer<typeof ContextMessageKindSchema>;
 
 export const ContextMessageSchema = z
     .object({

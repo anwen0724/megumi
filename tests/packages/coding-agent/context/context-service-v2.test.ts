@@ -29,7 +29,7 @@ function dependencies(inputTokens: number[] = [50]): ContextServiceDependencies 
       getActiveHistory: vi.fn(() => ({ status: 'ok' as const, history: history() })),
       saveCompactionSummary: vi.fn(() => ({ status: 'saved' as const, compaction: { compaction_id: 'C1', session_id: 'S1', summary_text: 'short', covered_until_entry_id: 'E-assistant', created_at: 'now' } })),
     },
-    runTranscriptQuery: { getRunTranscript: vi.fn(() => ({ status: 'found' as const, transcript: { runId: 'R-old', items: [] } })) },
+    runHistoryQuery: { getHistoricalRun: vi.fn(() => ({ status: 'found' as const, historicalRun: { runId: 'R-old', runStatus: 'completed' as const, modelSteps: [], diagnostics: [] } })) },
     instructionScopeResolver: { resolve: vi.fn(() => ({ status: 'resolved' as const, workspaceRoot: '/workspace', workingDirectory: '/workspace/packages/app' })) },
     instructionService: {
       getSystemInstructions: vi.fn(() => [{ instructionId: 'system', content: 'system' }]),
@@ -95,7 +95,7 @@ describe('composeCodingAgentContext', () => {
     const countPrompt = vi.fn(async () => ({ status: 'counted' as const, input_tokens: 10, accuracy: 'estimated' as const }));
     const context = composeCodingAgentContext({
       sessionService: deps.sessionService,
-      runTranscriptQuery: deps.runTranscriptQuery,
+      runHistoryQuery: deps.runHistoryQuery,
       instructionScopeResolver: deps.instructionScopeResolver,
       instructionService: deps.instructionService,
       skillService: deps.skillService,

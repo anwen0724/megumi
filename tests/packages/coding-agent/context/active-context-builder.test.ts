@@ -16,17 +16,13 @@ describe('buildActiveContext', () => {
         assistantMessageId: 'message-assistant-history',
       },
       userMessage: { type: 'user_message', content: [{ type: 'text', text: 'Earlier input' }] },
-      responseItems: [
-        { type: 'tool_call', toolCallId: 'call-history', toolName: 'read', arguments: { path: 'a' } },
-        {
-          type: 'tool_result',
-          toolCallId: 'call-history',
-          toolName: 'read',
-          status: 'success',
-          content: [{ type: 'text', text: 'result' }],
-        },
-        { type: 'assistant_message', content: [{ type: 'text', text: 'Earlier answer' }] },
-      ],
+      runStatus: 'completed',
+      modelSteps: [{ modelCallId: 'model-history', assistantContent: [], toolCalls: [{
+        toolCallId: 'call-history', toolName: 'read', arguments: { path: 'a' },
+        result: { status: 'success', content: [{ type: 'text', text: 'result' }] },
+      }] }],
+      finalAssistantMessage: { type: 'assistant_message', content: [{ type: 'text', text: 'Earlier answer' }] },
+      diagnostics: [],
     }];
     const currentTurn: CurrentConversationTurn = {
       runId: 'run-current',

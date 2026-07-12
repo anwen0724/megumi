@@ -7,7 +7,7 @@ import {
 } from '@megumi/coding-agent/agent-run/repositories/agent-run-repository';
 import type { AgentRun, AgentRunApprovalRequest } from '@megumi/coding-agent/agent-run';
 import type { RuntimeEvent } from '@megumi/coding-agent/events';
-import { getRunTranscript } from '@megumi/coding-agent/agent-run';
+import { getHistoricalRun } from '@megumi/coding-agent/agent-run';
 
 describe('AgentRunRepository', () => {
   it('persists AgentRun with architecture-owned fields only', () => {
@@ -209,32 +209,31 @@ describe('AgentRunRepository', () => {
       }));
 
       expect(repository.listRuntimeEventsByRun('run-1')).toHaveLength(3);
-      expect(getRunTranscript(repository, 'run-1')).toEqual({
+      expect(getHistoricalRun(repository, 'run-1')).toEqual({
         status: 'found',
-        transcript: {
+        historicalRun: {
           runId: 'run-1',
-          items: [
-            { type: 'assistant_message', content: [{ type: 'text', text: 'I will read it.' }] },
-            {
-              type: 'tool_call',
+          runStatus: 'completed',
+          modelSteps: [{
+            modelCallId: 'model-call-1',
+            assistantContent: [{ type: 'text', text: 'I will read it.' }],
+            toolCalls: [{
               toolCallId: 'tool-call-1',
               toolName: 'read_file',
               arguments: { path: 'README.md' },
-            },
-            {
-              type: 'tool_result',
-              toolCallId: 'tool-call-1',
-              toolName: 'read_file',
-              status: 'success',
-              content: [{ type: 'text', text: 'legacy contents' }],
-            },
-          ],
+              result: {
+                status: 'success',
+                content: [{ type: 'text', text: 'legacy contents' }],
+              },
+            }],
+          }],
+          diagnostics: [],
         },
       });
     });
   });
 
-  it('fails transcript projection when a persisted canonical event is schema-invalid', () => {
+  it('skips an invalid persisted event and reports an internal diagnostic', () => {
     withDatabase((database) => {
       seedWorkspaceAndSession(database);
       const repository = createAgentRunRepository({ database });
@@ -254,11 +253,21 @@ describe('AgentRunRepository', () => {
         finishReason: 'tool_calls',
       }));
 
-      expect(getRunTranscript(repository, 'run-1')).toEqual({
-        status: 'failed',
-        failure: {
-          code: 'runtime_protocol_violation',
-          message: 'Persisted runtime event event-invalid-call failed schema validation.',
+      expect(getHistoricalRun(repository, 'run-1')).toEqual({
+        status: 'found',
+        historicalRun: {
+          runId: 'run-1',
+          runStatus: 'completed',
+          modelSteps: [{
+            modelCallId: 'model-call-1',
+            assistantContent: [],
+            toolCalls: [],
+          }],
+          diagnostics: [{
+            eventId: 'event-invalid-call',
+            code: 'invalid_persisted_event',
+            message: 'Persisted runtime event event-invalid-call failed schema validation.',
+          }],
         },
       });
     });

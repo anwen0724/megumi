@@ -22,13 +22,13 @@ export type PlanCompactionResult =
   | { status: 'planned'; plan: CompactionPlan }
   | {
       status: 'nothing_to_compact';
-      reason: 'no_complete_turns' | 'no_older_turns';
+      reason: 'no_historical_turns' | 'no_older_turns';
     };
 
 export function planCompaction(request: PlanCompactionRequest): PlanCompactionResult {
   validateKeepRecentTurns(request.keepRecentTurns);
   if (request.historicalTurns.length === 0) {
-    return { status: 'nothing_to_compact', reason: 'no_complete_turns' };
+    return { status: 'nothing_to_compact', reason: 'no_historical_turns' };
   }
 
   const prefixLength = request.historicalTurns.length - request.keepRecentTurns;
@@ -72,7 +72,7 @@ function plannedPrefix(
     status: 'planned',
     plan: {
       turns,
-      coveredUntilEntryId: lastCoveredTurn.source.assistantEntryId,
+      coveredUntilEntryId: lastCoveredTurn.source.assistantEntryId ?? lastCoveredTurn.source.userEntryId,
       ...(firstKeptEntryId ? { firstKeptEntryId } : {}),
     },
   };

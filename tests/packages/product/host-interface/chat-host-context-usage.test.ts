@@ -34,7 +34,7 @@ function createHost(getSessionUsageSnapshot: (request: { sessionId: string }) =>
       agentRunQueries: {
         listRunsBySession: () => [],
         listRuntimeEventsByRun: () => [],
-        getRunTranscript: (runId) => ({ status: 'not_found', runId }),
+        getHistoricalRun: (runId) => ({ status: 'not_found', runId }),
       },
       contextService,
     }),

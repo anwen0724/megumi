@@ -1,8 +1,8 @@
 /*
  * Orchestrates Context v2 from owner-provided history, instructions, skills,
- * transcripts, model seams, and a synchronous completed-Run usage cache.
+ * historical Runs, model seams, and a synchronous completed-Run usage cache.
  */
-import type { GetRunTranscriptResult } from '../../agent-run';
+import type { GetHistoricalRunResult, HistoricalRun } from '../../agent-run';
 import type { InstructionService } from '../../instructions';
 import type { SessionHistoryItem, SessionService } from '../../session';
 import type { SkillService } from '../../skills';
@@ -14,6 +14,7 @@ import { buildCompactionSummaryRequest } from './internal/compaction-summary-bui
 import { planCompaction, validateCompactionReduction } from './internal/compaction-planner';
 import { calculateContextUsage, type ContextPromptTokenCounter } from './internal/context-usage-calculator';
 import { buildConversationTurns } from './internal/conversation-turn-builder';
+import { conversationItemsFromTurn } from './internal/conversation-turn-items';
 import { buildPrompt } from './internal/prompt-builder';
 import type { ContextService } from './context-service';
 import type {
@@ -36,7 +37,7 @@ export type InstructionScopeResolver = {
 
 export type ContextServiceDependencies = {
   sessionService: Pick<SessionService, 'getActiveHistory' | 'saveCompactionSummary'>;
-  runTranscriptQuery: { getRunTranscript(runId: string): GetRunTranscriptResult };
+  runHistoryQuery: { getHistoricalRun(runId: string): GetHistoricalRunResult };
   instructionScopeResolver: InstructionScopeResolver;
   instructionService: InstructionService;
   skillService: Pick<SkillService, 'getSkillCatalog'>;
@@ -213,19 +214,18 @@ export class ContextServiceImpl implements ContextService {
     if (input.signal?.aborted) return failed(cancelled());
     if (historyResult.status === 'failed') return failed(ownerFailure('session_history_failed', 'Session history could not be loaded.', 'session', historyResult.failure));
 
-    const transcripts = new Map();
+    const historicalRuns = new Map<string, HistoricalRun>();
     for (const runId of historicalRunIds(historyResult.history)) {
-      const result = this.dependencies.runTranscriptQuery.getRunTranscript(runId);
+      const result = this.dependencies.runHistoryQuery.getHistoricalRun(runId);
       if (input.signal?.aborted) return failed(cancelled());
-      if (result.status !== 'found') {
-        const code = result.status === 'failed' ? result.failure.code : result.status;
-        const message = result.status === 'failed' ? result.failure.message : `Historical run ${runId} transcript is ${result.status}.`;
-        return failed(ownerFailure('run_transcript_failed', message, 'agent_run', { code, message }));
+      if (result.status === 'failed') {
+        const code = result.failure.code;
+        const message = result.failure.message;
+        return failed(ownerFailure('historical_run_failed', message, 'agent_run', { code, message }));
       }
-      transcripts.set(runId, result.transcript);
+      if (result.status === 'found') historicalRuns.set(runId, result.historicalRun);
     }
-    const turns = buildConversationTurns({ history: historyResult.history, transcriptsByRunId: transcripts });
-    if (turns.status === 'failed') return failed(ownerFailure('active_context_failed', turns.failure.message, 'session', turns.failure));
+    const turns = buildConversationTurns({ history: historyResult.history, historicalRunsByRunId: historicalRuns });
 
     const scope = this.dependencies.instructionScopeResolver.resolve({ workspaceId: input.workspaceId });
     if (input.signal?.aborted) return failed(cancelled());
@@ -283,7 +283,7 @@ export class ContextServiceImpl implements ContextService {
 
   private async compactInternal(input: { facts: BuildFacts; usageBefore: ContextUsage; modelContext: ContextCapacity; signal?: AbortSignal }): Promise<
     | { status: 'compacted'; compactionId: string; usageAfter: ContextUsage; facts: BuildFacts }
-    | { status: 'nothing_to_compact'; reason: 'no_complete_turns' | 'no_older_turns' | 'summary_not_reducing' }
+    | { status: 'nothing_to_compact'; reason: 'no_historical_turns' | 'no_older_turns' | 'summary_not_reducing' }
     | { status: 'failed'; failure: ContextFailure }
   > {
     const plan = planCompaction({
@@ -367,7 +367,7 @@ function promptWithoutCurrentTurn(facts: BuildFacts): Prompt {
   return {
     instructions: { system: facts.systemInstructions, agentInstructions: facts.agentInstructions, activatedSkills: facts.activatedSkills },
     referenceContext: { skillCatalog: facts.skillCatalog, ...(facts.compactionSummary ? { compactionSummary: facts.compactionSummary } : {}), ...(facts.memoryRecall ? { memoryRecall: facts.memoryRecall } : {}) },
-    conversation: facts.historicalTurns.flatMap((turn) => [turn.userMessage, ...turn.responseItems]),
+    conversation: facts.historicalTurns.flatMap(conversationItemsFromTurn),
     tools: facts.tools,
   };
 }

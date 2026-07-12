@@ -100,9 +100,13 @@ function buildSourceRefs(activeContext: ActiveContext): ContextSourceRef[] {
   for (const turn of activeContext.historicalTurns) {
     refs.push(
       { sourceType: 'session_message', sourceId: turn.source.userMessageId },
-      { sourceType: 'agent_run_transcript', sourceId: turn.source.runId },
-      ...toolResultRefs(turn.responseItems),
-      { sourceType: 'session_message', sourceId: turn.source.assistantMessageId },
+      { sourceType: 'agent_run_history', sourceId: turn.source.runId },
+      ...turn.modelSteps.flatMap((step) => step.toolCalls.flatMap((toolCall) => (
+        toolCall.result ? [{ sourceType: 'tool_result' as const, sourceId: toolCall.toolCallId }] : []
+      ))),
+      ...(turn.source.assistantMessageId
+        ? [{ sourceType: 'session_message' as const, sourceId: turn.source.assistantMessageId }]
+        : []),
     );
   }
 
@@ -124,12 +128,4 @@ function buildSourceRefs(activeContext: ActiveContext): ContextSourceRef[] {
   })));
 
   return refs;
-}
-
-function toolResultRefs(
-  items: ConversationTurn['responseItems'],
-): ContextSourceRef[] {
-  return items.flatMap((item) => item.type === 'tool_result'
-    ? [{ sourceType: 'tool_result' as const, sourceId: item.toolCallId }]
-    : []);
 }

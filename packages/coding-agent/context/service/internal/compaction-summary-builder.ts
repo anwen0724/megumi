@@ -2,12 +2,13 @@
  * Builds the immutable model request for replacing the active rolling Summary.
  */
 import type { ConversationTurn } from '../../domain/model/conversation-turn';
+import { conversationItemsFromTurn } from './conversation-turn-items';
 
 export const COMPACTION_SUMMARY_SYSTEM_PROMPT = `You are updating the rolling context summary for an ongoing coding-agent session.
 
 Your input contains:
 1. The previous compaction summary, if one exists.
-2. A continuous prefix of completed conversation turns being compacted now.
+2. A continuous prefix of historical conversation turns being compacted now.
 
 Produce one replacement summary that preserves the information required to continue the task correctly.
 
@@ -61,6 +62,6 @@ export function buildCompactionSummaryRequest(
 
 function renderTurn(turn: ConversationTurn): string {
   return JSON.stringify({
-    conversation: [turn.userMessage, ...turn.responseItems],
+    conversation: conversationItemsFromTurn(turn),
   });
 }

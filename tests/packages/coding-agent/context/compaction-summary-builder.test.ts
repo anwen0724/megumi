@@ -12,7 +12,7 @@ const EXPECTED_PROMPT = `You are updating the rolling context summary for an ong
 
 Your input contains:
 1. The previous compaction summary, if one exists.
-2. A continuous prefix of completed conversation turns being compacted now.
+2. A continuous prefix of historical conversation turns being compacted now.
 
 Produce one replacement summary that preserves the information required to continue the task correctly.
 
@@ -104,19 +104,12 @@ function turn(id: string): ConversationTurn {
       type: 'user_message',
       content: [{ type: 'text', text: `User ${id}` }],
     },
-    responseItems: [
-      { type: 'tool_call', toolCallId: `call-${id}`, toolName: 'lookup', arguments: { id } },
-      {
-        type: 'tool_result',
-        toolCallId: `call-${id}`,
-        toolName: 'lookup',
-        status: 'success',
-        content: [{ type: 'text', text: `Result ${id}` }],
-      },
-      {
-        type: 'assistant_message',
-        content: [{ type: 'text', text: `Assistant ${id}` }],
-      },
-    ],
+    runStatus: 'completed',
+    modelSteps: [{ modelCallId: `model-${id}`, assistantContent: [], toolCalls: [{
+      toolCallId: `call-${id}`, toolName: 'lookup', arguments: { id },
+      result: { status: 'success', content: [{ type: 'text', text: `Result ${id}` }] },
+    }] }],
+    finalAssistantMessage: { type: 'assistant_message', content: [{ type: 'text', text: `Assistant ${id}` }] },
+    diagnostics: [],
   };
 }

@@ -96,9 +96,18 @@ describe('composeCodingAgentRuntime trace wiring', () => {
           'model_call.started',
           'run.completed',
         ]));
-      expect(secondRuntime.agentRunQueries.getRunTranscript(runId)).toEqual({
+      expect(secondRuntime.agentRunQueries.getHistoricalRun(runId)).toEqual({
         status: 'found',
-        transcript: { runId, items: [] },
+        historicalRun: {
+          runId,
+          runStatus: 'completed',
+          modelSteps: [{
+            modelCallId: expect.any(String),
+            assistantContent: [{ type: 'text', text: 'ok' }],
+            toolCalls: [],
+          }],
+          diagnostics: [],
+        },
       });
     } finally {
       secondRuntime.dispose();

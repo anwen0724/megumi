@@ -96,6 +96,28 @@ describe('Model Call Service', () => {
     ]);
   });
 
+  it('maps historical run state to low-authority context instead of native tool protocol', () => {
+    const state = {
+      runId: 'run-old',
+      runStatus: 'cancelled',
+      modelStep: {
+        modelCallId: 'model-1',
+        assistantContent: [{ type: 'text', text: 'I will write it.' }],
+        toolCalls: [{ toolCallId: 'call-1', toolName: 'write_file', arguments: { path: 'a.ts' } }],
+      },
+    };
+
+    expect(mapConversation([
+      { type: 'user_message', content: [{ type: 'text', text: 'Create a file' }] },
+      { type: 'context', kind: 'historical_run_state', content: state },
+      { type: 'user_message', content: [{ type: 'text', text: 'Continue' }] },
+    ])).toEqual([
+      { role: 'user', content: 'Create a file' },
+      contextMessage('historical_run_state', state),
+      { role: 'user', content: 'Continue' },
+    ]);
+  });
+
   it('keeps text, parallel tool calls, and paired results in provider protocol order', () => {
     expect(mapConversation([
       { type: 'user_message', content: [{ type: 'text', text: 'Lookup two' }] },
@@ -717,7 +739,7 @@ function mapConversation(conversation: ModelCallRequest['prompt']['conversation'
   return mapModelCallToAiRequest(request).context.messages;
 }
 
-function contextMessage(kind: 'skill_catalog' | 'compaction_summary' | 'memory_recall', content: unknown) {
+function contextMessage(kind: 'skill_catalog' | 'compaction_summary' | 'memory_recall' | 'historical_run_state', content: unknown) {
   return { role: 'context', kind, content };
 }
 

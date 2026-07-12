@@ -9,7 +9,7 @@ import {
   createAgentRunService,
   createAgentRunTraceFileLogger,
   createModelCallService,
-  getRunTranscript,
+  getHistoricalRun,
   type AgentRunQueries,
   type AgentRunService,
   type ModelCallService,
@@ -164,7 +164,7 @@ export function createAgentRunQueries(repository: AgentRunRepository): AgentRunQ
   return {
     listRunsBySession: (sessionId) => repository.listRunsBySession(sessionId),
     listRuntimeEventsByRun: (runId) => repository.listRuntimeEventsByRun(runId),
-    getRunTranscript: (runId) => getRunTranscript(repository, runId),
+    getHistoricalRun: (runId) => getHistoricalRun(repository, runId),
   };
 }
 
@@ -273,7 +273,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   const modelContextProvider = options.modelContextProvider ?? createCompatibilityModelContextProvider();
   const contextRuntime = composeCodingAgentContext({
     sessionService,
-    runTranscriptQuery: agentRunQueries,
+    runHistoryQuery: agentRunQueries,
     instructionScopeResolver: {
       resolve({ workspaceId }) {
         const workspace = workspaceService.getWorkspace({ workspace_id: workspaceId });

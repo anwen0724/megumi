@@ -37,7 +37,7 @@ export function composeCodingAgentContext(input: ComposeCodingAgentContextInput)
 
   const contextService = new ContextServiceImpl({
     sessionService: input.sessionService,
-    runTranscriptQuery: input.runTranscriptQuery,
+    runHistoryQuery: input.runHistoryQuery,
     instructionScopeResolver: input.instructionScopeResolver,
     instructionService: input.instructionService,
     skillService: input.skillService,
