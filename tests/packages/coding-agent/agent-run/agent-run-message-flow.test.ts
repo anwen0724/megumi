@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createAgentRunService,
+  ActiveRunStore,
   type CreateAgentRunServiceOptions,
 } from '@megumi/coding-agent/agent-run';
 import {
@@ -13,7 +14,8 @@ import { RuntimeEventSchema } from '@megumi/coding-agent/events';
 describe('Agent Run message flow', () => {
   it('starts one run, builds prompts, saves assistant output, captures memory, and publishes events', async () => {
     const repository = createInMemoryAgentRunRepository();
-    const deps = createMessageFlowDependencies({ repository });
+    const activeRunStore = new ActiveRunStore();
+    const deps = { ...createMessageFlowDependencies({ repository }), active_run_store: activeRunStore };
     const prepareModelCall = deps.context_service.prepareModelCall.getMockImplementation();
     deps.context_service.prepareModelCall.mockImplementation(async (request) => {
       request.onCompactionProgress?.({
@@ -76,7 +78,7 @@ describe('Agent Run message flow', () => {
     expect(deps.session_service.saveAssistantMessage).toHaveBeenCalledWith(expect.objectContaining({
       run_id: result.run.run_id,
       session_id: 'session-1',
-      content_text: 'assistant reply',
+      content: [{ type: 'text', text: 'assistant reply' }],
     }));
     expect(deps.memory_service.captureCompletedRun).toHaveBeenCalledWith(expect.objectContaining({
       run_id: result.run.run_id,
@@ -117,6 +119,9 @@ describe('Agent Run message flow', () => {
     expect(events.map((event) => String(event.eventType))).not.toContain(['tool', 'execution'].join('_') + '.started');
     expect(events.map((event) => String(event.eventType))).not.toContain(['tool', 'execution'].join('_') + '.completed');
     expect(repository.getRun(result.run.run_id)?.status).toBe('completed');
+    expect(activeRunStore.listSteps(result.run.run_id)).toEqual([
+      expect.objectContaining({ type: 'model_call', model_call_id: 'model-call-1', status: 'completed' }),
+    ]);
     expect(deps.context_service.recordCompletedRunUsage.mock.calls[0]?.[0])
       .not.toHaveProperty('providerInputTokens');
   });
@@ -411,7 +416,7 @@ describe('Agent Run message flow', () => {
     expect(deps.context_service.recordCompletedRunUsage.mock.calls[0]?.[0])
       .not.toHaveProperty('providerInputTokens');
     expect(deps.session_service.saveAssistantMessage).toHaveBeenCalledWith(expect.objectContaining({
-      content_text: 'Final answer.',
+      content: [{ type: 'text', text: 'Final answer.' }],
     }));
     expect(events.find((event) => event.eventType === 'tool_result.created')).toMatchObject({
       payload: {

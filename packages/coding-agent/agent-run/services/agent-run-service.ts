@@ -63,6 +63,7 @@ import {
   createAgentRunRuntimeEvent,
   type AgentRunRuntimeEventFactory,
 } from '../core/agent-run-runtime-events';
+import { ActiveRunStore } from '../core/active-run-store';
 import {
   createAgentRunRepository,
   type AgentRunRepository,
@@ -74,6 +75,7 @@ export { getHistoricalRun } from '../core/historical-run-query';
 export type CreateAgentRunServiceOptions = {
   repository?: AgentRunRepository;
   database?: MegumiDatabase;
+  active_run_store?: ActiveRunStore;
   input_service: Pick<InputService, 'processUserInput'>;
   command_service: {
     handleCommandInput(request: { raw_input: string; execution_context?: CommandExecutionContext }): Promise<CommandExecutionResult>;
@@ -129,6 +131,7 @@ export function createAgentRunService(options: CreateAgentRunServiceOptions): Ag
 
 class DefaultAgentRunService implements AgentRunService {
   private readonly repository: AgentRunRepository;
+  private readonly activeRuns: ActiveRunStore;
   private readonly toolsBuilder: RunToolSetBuilder;
   private readonly ids: AgentRunServiceIds;
   private readonly clock: { now(): string };
@@ -143,6 +146,7 @@ class DefaultAgentRunService implements AgentRunService {
       throw new Error('Agent Run Service requires a repository or database.');
     }
     this.repository = options.repository ?? createAgentRunRepository({ database: options.database! });
+    this.activeRuns = options.active_run_store ?? new ActiveRunStore();
     this.toolsBuilder = createRunToolSetBuilder({ tool_registry_service: options.tool_registry_service });
     this.ids = {
       run_id: options.ids?.run_id ?? (() => `run:${crypto.randomUUID()}`),
@@ -253,6 +257,7 @@ class DefaultAgentRunService implements AgentRunService {
       to: 'running',
       changed_at: this.clock.now(),
     }));
+    this.activeRuns.createRun(run);
     const queue = createAgentRunEventQueue((event) => this.options.event_publisher?.publish(event));
     const eventSink = this.createEventSink(queue, run);
     const commandSkills = await this.resolveCommandSkills({
@@ -876,6 +881,7 @@ class DefaultAgentRunService implements AgentRunService {
     try {
       const result = await runAgentModelToolLoop({
         repository: this.repository,
+        active_run_store: this.activeRuns,
         session_service: this.options.session_service,
         settings_service: this.options.settings_service,
         context_service: this.options.context_service,

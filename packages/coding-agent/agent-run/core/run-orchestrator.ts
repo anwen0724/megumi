@@ -37,9 +37,11 @@ import {
 import type { RunToolSetBuilder } from './tool-set-builder';
 import type { AgentRunRepository } from '../repositories/agent-run-repository';
 import type { AgentRunRuntimeEventFactory } from './agent-run-runtime-events';
+import type { ActiveRunStore } from './active-run-store';
 
 export type RunOrchestratorDependencies = {
   repository: AgentRunRepository;
+  active_run_store?: Pick<ActiveRunStore, 'upsertStep'>;
   session_service: Pick<SessionService, 'saveAssistantMessage'>;
   settings_service: Pick<SettingsService, 'resolvePermissionSettings'>;
   context_service: Pick<ContextService, 'prepareModelCall' | 'recordCompletedRunUsage'>;
@@ -169,6 +171,14 @@ export async function runAgentModelToolLoop(
       run_id: run.run_id,
       model_call_id: modelCall.model_call_id,
     });
+    const modelCallStartedAt = dependencies.clock.now();
+    dependencies.active_run_store?.upsertStep({
+      type: 'model_call',
+      run_id: run.run_id,
+      model_call_id: modelCall.model_call_id,
+      status: 'running',
+      started_at: modelCallStartedAt,
+    });
     dependencies.event_sink.emit({
       eventType: 'model_call.started',
       run,
@@ -190,11 +200,28 @@ export async function runAgentModelToolLoop(
     const modelEvents = await collectModelCallEvents(dependencies, run, modelCall.events);
     lastProviderInputTokens = modelEvents.provider_input_tokens;
     if (modelEvents.failure) {
+      dependencies.active_run_store?.upsertStep({
+        type: 'model_call',
+        run_id: run.run_id,
+        model_call_id: modelCall.model_call_id,
+        status: 'failed',
+        started_at: modelCallStartedAt,
+        completed_at: dependencies.clock.now(),
+        failure: modelEvents.failure,
+      });
       return failRun(dependencies, run, modelEvents.failure, {
         model_calls: modelCalls,
         tool_rounds: toolRounds,
       });
     }
+    dependencies.active_run_store?.upsertStep({
+      type: 'model_call',
+      run_id: run.run_id,
+      model_call_id: modelCall.model_call_id,
+      status: 'completed',
+      started_at: modelCallStartedAt,
+      completed_at: dependencies.clock.now(),
+    });
 
     if (modelEvents.tool_calls.length === 0) {
       const assistant = dependencies.session_service.saveAssistantMessage({
@@ -333,6 +360,9 @@ export async function runAgentModelToolLoop(
       ...(dependencies.workspace_path_policy_service ? { workspace_path_policy_service: dependencies.workspace_path_policy_service } : {}),
       clock: dependencies.clock,
       ids: { approval_request_id: dependencies.ids.approval_request_id },
+      ...(dependencies.active_run_store ? {
+        on_step_transition: (step) => dependencies.active_run_store!.upsertStep(step),
+      } : {}),
       signal: request.signal,
     });
 
