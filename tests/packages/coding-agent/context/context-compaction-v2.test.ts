@@ -37,7 +37,6 @@ function fixture(counts: number[], options: { history?: SessionHistoryItem[]; hi
       getActiveHistory: vi.fn(() => ({ status: 'ok', history: options.history ?? completeHistory(options.historyCount) })),
       saveCompactionSummary: vi.fn(() => ({ status: 'saved', compaction: { compaction_id: 'C1', session_id: 'S1', summary_text: 'short', covered_until_entry_id: 'EA', created_at: 'now' } })),
     },
-    runHistoryQuery: { getHistoricalRun: vi.fn((runId: string) => ({ status: 'found', historicalRun: { runId, runStatus: 'completed', modelSteps: [], diagnostics: [] } })) },
     instructionScopeResolver: { resolve: vi.fn(() => ({ status: 'resolved', workspaceRoot: '/w', workingDirectory: '/w' })) },
     instructionService: { getSystemInstructions: vi.fn(() => []), getEffectiveAgentInstructions: vi.fn(async () => ({ status: 'ok', instructions: { sources: [] } })) },
     skillService: { getSkillCatalog: vi.fn(async () => ({ status: 'ok', skills: [] })) },

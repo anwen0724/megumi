@@ -17,7 +17,6 @@ import type {
 export type ContextFailure = {
   code:
     | 'session_history_failed'
-    | 'historical_run_failed'
     | 'instruction_load_failed'
     | 'skill_catalog_failed'
     | 'active_context_failed'
@@ -31,7 +30,7 @@ export type ContextFailure = {
   message: string;
   retryable: boolean;
   cause?: {
-    owner: 'session' | 'agent_run' | 'instructions' | 'skills' | 'tools' | 'ai';
+    owner: 'session' | 'instructions' | 'skills' | 'tools' | 'ai';
     code?: string;
   };
 };

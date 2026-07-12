@@ -12,12 +12,15 @@ describe('buildPrompt', () => {
       instructions: { system: [], agentInstructions: { sources: [] }, activatedSkills: [] },
       referenceContext: { skillCatalog: [] },
       historicalTurns: [{
-        source: { runId: 'run-old', userEntryId: 'EU', userMessageId: 'MU' },
-        runStatus: 'cancelled' as const,
+        source: { runId: 'run-old', userEntryId: 'EU', userMessageId: 'MU', lastEntryId: 'EA', responseMessageRefs: [] },
         userMessage: { type: 'user_message' as const, content: [{ type: 'text' as const, text: 'Create a file' }] },
-        modelSteps: [{ modelCallId: 'model-1', assistantContent: [{ type: 'text' as const, text: 'I will create it.' }], toolCalls: [{ toolCallId: 'call-1', toolName: 'write_file', arguments: { path: 'a.ts' } }] }],
-        finalOutcome: { reason: 'cancelled' },
-        diagnostics: [],
+        items: [{
+          type: 'assistant_message' as const,
+          content: [
+            { type: 'text' as const, text: 'I will create it.' },
+            { type: 'json' as const, value: { incompleteToolCalls: [{ id: 'call-1', name: 'write_file' }] } },
+          ],
+        }],
       }],
       currentTurn: { runId: 'run-now', userEntry: { entryId: 'EN' }, userMessage: { type: 'user_message' as const, content: [{ type: 'text' as const, text: 'Continue' }] }, runItems: [] },
       tools: [],
@@ -25,18 +28,7 @@ describe('buildPrompt', () => {
 
     expect(buildPrompt(activeContext).conversation).toEqual([
       activeContext.historicalTurns[0].userMessage,
-      {
-        type: 'context',
-        kind: 'historical_run_state',
-        content: expect.objectContaining({
-          runId: 'run-old',
-          runStatus: 'cancelled',
-          modelStep: expect.objectContaining({
-            assistantContent: [{ type: 'text', text: 'I will create it.' }],
-            toolCalls: [expect.objectContaining({ toolCallId: 'call-1' })],
-          }),
-        }),
-      },
+      activeContext.historicalTurns[0].items[0],
       activeContext.currentTurn.userMessage,
     ]);
   });
@@ -55,20 +47,15 @@ describe('buildPrompt', () => {
           runId: 'run-history',
           userEntryId: 'entry-user-history',
           userMessageId: 'message-user-history',
-          assistantEntryId: 'entry-assistant-history',
-          assistantMessageId: 'message-assistant-history',
+          lastEntryId: 'entry-assistant-history',
+          responseMessageRefs: [{ entryId: 'entry-assistant-history', messageId: 'message-assistant-history' }],
         },
         userMessage: { type: 'user_message', content: [{ type: 'text', text: 'Historical user' }] },
-        runStatus: 'completed',
-        modelSteps: [
-          { modelCallId: 'model-1', assistantContent: [], toolCalls: [{
-          toolCallId: 'call-1', toolName: 'lookup', arguments: { id: 1 },
-          result: { status: 'success', content: [{ type: 'json', value: { answer: 42 } }] },
-          }] },
-          { modelCallId: 'model-2', assistantContent: [{ type: 'text', text: 'Historical assistant' }], toolCalls: [] },
+        items: [
+          { type: 'tool_call', toolCallId: 'call-1', toolName: 'lookup', arguments: { id: 1 } },
+          { type: 'tool_result', toolCallId: 'call-1', toolName: 'lookup', status: 'success', content: [{ type: 'json', value: { answer: 42 } }] },
+          { type: 'assistant_message', content: [{ type: 'text', text: 'Historical assistant' }] },
         ],
-        finalAssistantMessage: { type: 'assistant_message', content: [{ type: 'text', text: 'Historical assistant' }] },
-        diagnostics: [],
       }],
       currentTurn: {
         runId: 'run-current',
@@ -95,7 +82,7 @@ describe('buildPrompt', () => {
       activeContext.historicalTurns[0].userMessage,
       { type: 'tool_call', toolCallId: 'call-1', toolName: 'lookup', arguments: { id: 1 } },
       { type: 'tool_result', toolCallId: 'call-1', toolName: 'lookup', status: 'success', content: [{ type: 'json', value: { answer: 42 } }] },
-      activeContext.historicalTurns[0].finalAssistantMessage,
+      activeContext.historicalTurns[0].items[2],
       activeContext.currentTurn.userMessage,
       ...activeContext.currentTurn.runItems,
     ]);

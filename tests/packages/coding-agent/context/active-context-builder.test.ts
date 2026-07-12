@@ -12,17 +12,15 @@ describe('buildActiveContext', () => {
         runId: 'run-history',
         userEntryId: 'entry-user-history',
         userMessageId: 'message-user-history',
-        assistantEntryId: 'entry-assistant-history',
-        assistantMessageId: 'message-assistant-history',
+        lastEntryId: 'entry-assistant-history',
+        responseMessageRefs: [{ entryId: 'entry-assistant-history', messageId: 'message-assistant-history' }],
       },
       userMessage: { type: 'user_message', content: [{ type: 'text', text: 'Earlier input' }] },
-      runStatus: 'completed',
-      modelSteps: [{ modelCallId: 'model-history', assistantContent: [], toolCalls: [{
-        toolCallId: 'call-history', toolName: 'read', arguments: { path: 'a' },
-        result: { status: 'success', content: [{ type: 'text', text: 'result' }] },
-      }] }],
-      finalAssistantMessage: { type: 'assistant_message', content: [{ type: 'text', text: 'Earlier answer' }] },
-      diagnostics: [],
+      items: [
+        { type: 'tool_call', toolCallId: 'call-history', toolName: 'read', arguments: { path: 'a' } },
+        { type: 'tool_result', toolCallId: 'call-history', toolName: 'read', status: 'success', content: [{ type: 'text', text: 'result' }] },
+        { type: 'assistant_message', content: [{ type: 'text', text: 'Earlier answer' }] },
+      ],
     }];
     const currentTurn: CurrentConversationTurn = {
       runId: 'run-current',

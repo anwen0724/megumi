@@ -1,8 +1,7 @@
 /*
  * Orchestrates Context v2 from owner-provided history, instructions, skills,
- * historical Runs, model seams, and a synchronous completed-Run usage cache.
+ * Session semantic history, model seams, and a synchronous completed-Run usage cache.
  */
-import type { GetHistoricalRunResult, HistoricalRun } from '../../agent-run';
 import type { InstructionService } from '../../instructions';
 import type { SessionHistoryItem, SessionService } from '../../session';
 import type { SkillService } from '../../skills';
@@ -38,7 +37,6 @@ export type InstructionScopeResolver = {
 
 export type ContextServiceDependencies = {
   sessionService: Pick<SessionService, 'getActiveHistory' | 'saveCompactionSummary'>;
-  runHistoryQuery: { getHistoricalRun(runId: string): GetHistoricalRunResult };
   instructionScopeResolver: InstructionScopeResolver;
   instructionService: InstructionService;
   skillService: Pick<SkillService, 'getSkillCatalog'>;
@@ -221,18 +219,7 @@ export class ContextServiceImpl implements ContextService {
     if (input.signal?.aborted) return failed(cancelled());
     if (historyResult.status === 'failed') return failed(ownerFailure('session_history_failed', 'Session history could not be loaded.', 'session', historyResult.failure));
 
-    const historicalRuns = new Map<string, HistoricalRun>();
-    for (const runId of historicalRunIds(historyResult.history)) {
-      const result = this.dependencies.runHistoryQuery.getHistoricalRun(runId);
-      if (input.signal?.aborted) return failed(cancelled());
-      if (result.status === 'failed') {
-        const code = result.failure.code;
-        const message = result.failure.message;
-        return failed(ownerFailure('historical_run_failed', message, 'agent_run', { code, message }));
-      }
-      if (result.status === 'found') historicalRuns.set(runId, result.historicalRun);
-    }
-    const turns = buildConversationTurns({ history: historyResult.history, historicalRunsByRunId: historicalRuns });
+    const turns = buildConversationTurns({ history: historyResult.history });
 
     const scope = this.dependencies.instructionScopeResolver.resolve({ workspaceId: input.workspaceId });
     if (input.signal?.aborted) return failed(cancelled());
@@ -385,11 +372,6 @@ export class ContextServiceImpl implements ContextService {
       if (this.sessionOperationTails.get(sessionId) === tail) this.sessionOperationTails.delete(sessionId);
     }
   }
-}
-
-function historicalRunIds(history: SessionHistoryItem[]): string[] {
-  const afterSummary = historyAfterSummary(history);
-  return [...new Set(afterSummary.flatMap((item) => item.type === 'message' && item.message.conversation.role === 'user' && item.message.run_id ? [item.message.run_id] : []))];
 }
 
 function historyAfterSummary(history: SessionHistoryItem[]): SessionHistoryItem[] {

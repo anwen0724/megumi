@@ -273,7 +273,6 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   const modelContextProvider = options.modelContextProvider ?? createCompatibilityModelContextProvider();
   const contextRuntime = composeCodingAgentContext({
     sessionService,
-    runHistoryQuery: agentRunQueries,
     instructionScopeResolver: {
       resolve({ workspaceId }) {
         const workspace = workspaceService.getWorkspace({ workspace_id: workspaceId });
