@@ -34,6 +34,7 @@ export function createSessionTimelineQuery(input: {
     listSessionTimeline(request) {
       const result = input.sessionService.getActiveConversationHistory({
         session_id: request.session_id,
+        ...(request.run_id ? { run_id: request.run_id } : {}),
       });
       if (result.status === 'failed') return { messages: [], diagnostics: [] };
       const projected = projectSessionTimelineMessages({
@@ -64,7 +65,7 @@ export function projectSessionTimelineMessages(input: {
 
   for (const item of input.messages) {
     if (item.message.conversation.role === 'user') {
-      timeline.push(projectUserMessage(input.projectId, item, timeline.length));
+      timeline.push(projectUserMessage(input.projectId, item, item.active_path_order ?? timeline.length));
       continue;
     }
     const runId = item.message.run_id;
@@ -76,7 +77,7 @@ export function projectSessionTimelineMessages(input: {
         input.projectId,
         runId,
         group,
-        timeline.length,
+        item.active_path_order ?? timeline.length,
         !input.requestedRunId || input.requestedRunId === runId
           ? input.workspaceChangeFooterProjector?.projectRunFooter(runId)
           : undefined,

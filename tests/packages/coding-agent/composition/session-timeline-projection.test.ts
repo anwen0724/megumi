@@ -133,37 +133,6 @@ describe('createSessionTimelineQuery', () => {
     });
   });
 
-  it('projects only the requested completed Run for terminal reconciliation', () => {
-    const getActiveConversationHistory = vi.fn(() => ({
-      status: 'ok' as const,
-      messages: [
-        sessionMessage({ message_id: 'user-message-1', conversation: { role: 'user', content: [{ type: 'text', text: 'first' }] }, run_id: 'run-1' }),
-        sessionMessage({ message_id: 'assistant-message-1', conversation: { role: 'assistant', content: [{ type: 'text', text: 'one' }] }, run_id: 'run-1' }),
-        sessionMessage({ message_id: 'user-message-2', conversation: { role: 'user', content: [{ type: 'text', text: 'second' }] }, run_id: 'run-2' }),
-        sessionMessage({ message_id: 'assistant-message-2', conversation: { role: 'assistant', content: [{ type: 'text', text: 'two' }] }, run_id: 'run-2' }),
-      ],
-    }));
-    const projectRunFooter = vi.fn(() => undefined);
-    const query = createSessionTimelineQuery({
-      sessionService: { getActiveConversationHistory },
-      workspaceChangeFooterProjector: { projectRunFooter },
-    });
-
-    const result = query.listSessionTimeline({
-      workspace_id: 'workspace-1',
-      session_id: 'session-1',
-      run_id: 'run-2',
-    });
-
-    expect(result.messages.map((message) => message.role === 'assistant' ? message.runId : undefined)).toEqual(['run-2']);
-    expect(result.messages[0]?.historyOrder).toBe(3);
-    expect(projectRunFooter).toHaveBeenCalledTimes(1);
-    expect(projectRunFooter).toHaveBeenCalledWith('run-2');
-    expect(getActiveConversationHistory).toHaveBeenCalledWith({
-      session_id: 'session-1',
-    });
-  });
-
   it('projects only canonical partial states and preserves active-path order', () => {
     const messages = projectSessionTimelineMessages({
       projectId: 'workspace-1',

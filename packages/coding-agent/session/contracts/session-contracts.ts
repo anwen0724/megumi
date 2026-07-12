@@ -121,6 +121,8 @@ export type SessionCompactionSummary = {
 export type SessionMessageWithAttachments = {
   message: SessionMessage;
   attachments: SessionMessageAttachment[];
+  /** Zero-based position of this message Entry on the current active path. */
+  active_path_order?: number;
 };
 
 export type SessionHistoryItem =

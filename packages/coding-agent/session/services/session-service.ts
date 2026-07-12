@@ -325,18 +325,26 @@ class DefaultSessionService implements SessionService {
         entries,
         compactions: this.options.repository.listCompactionSummariesByIds(compactionIds),
       });
-      const messageIds = path.flatMap((entry) => entry.message_id ? [entry.message_id] : []);
+      const activePathOrderByMessageId = new Map<string, number>();
+      for (const [activePathOrder, entry] of path.entries()) {
+        if (entry.message_id) activePathOrderByMessageId.set(entry.message_id, activePathOrder);
+      }
+      const messageIds = [...activePathOrderByMessageId.keys()];
       const persistedMessages = request.run_id
         ? this.options.repository.listMessagesByRunId(request.session_id, request.run_id)
         : this.options.repository.listMessagesByIds(messageIds);
       const messagesById = new Map(
         persistedMessages.map((message) => [message.message_id, message]),
       );
+      const orderedMessages = messageIds.flatMap((messageId) => {
+        const message = messagesById.get(messageId);
+        return message ? [message] : [];
+      });
       return {
         status: 'ok',
-        messages: this.attachmentsForMessages(messageIds.flatMap((messageId) => {
-          const message = messagesById.get(messageId);
-          return message ? [message] : [];
+        messages: this.attachmentsForMessages(orderedMessages).map((item) => ({
+          ...item,
+          active_path_order: activePathOrderByMessageId.get(item.message.message_id),
         })),
       };
     } catch (error) {
