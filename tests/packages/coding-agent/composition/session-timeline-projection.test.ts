@@ -11,6 +11,50 @@ import type { RuntimeEvent } from '@megumi/coding-agent/events';
 import type { SessionMessageWithAttachments } from '@megumi/coding-agent/session';
 
 describe('projectSessionTimelineMessages', () => {
+  it('hydrates one complete historical assistant Timeline from semantic Session messages', () => {
+    const messages = projectSessionTimelineMessages({
+      projectId: 'workspace-1',
+      messages: [
+        sessionMessage({ message_id: 'U1', conversation: { role: 'user', content: [{ type: 'text', text: 'inspect' }] } }),
+        sessionMessage({
+          message_id: 'A1',
+          conversation: {
+            role: 'assistant',
+            content: [
+              { type: 'thinking', thinking: 'need the file' },
+              { type: 'text', text: 'I will inspect it.' },
+              { type: 'toolCall', id: 'T1', name: 'read_file', argumentsText: '{"path":"README.md"}' },
+            ],
+          },
+        }),
+        sessionMessage({
+          message_id: 'TR1',
+          conversation: {
+            role: 'toolResult', toolCallId: 'T1', toolName: 'read_file', status: 'success',
+            content: [{ type: 'text', text: 'contents' }],
+          },
+        }),
+        sessionMessage({ message_id: 'A2', conversation: { role: 'assistant', content: [{ type: 'text', text: 'Done.' }] } }),
+      ],
+    });
+
+    expect(messages).toHaveLength(2);
+    expect(messages[1]).toMatchObject({
+      messageId: 'A2', role: 'assistant', runId: 'run-1',
+      blocks: [
+        {
+          kind: 'process_disclosure',
+          items: [
+            { kind: 'thinking', text: 'need the file' },
+            { kind: 'assistant_text', text: 'I will inspect it.' },
+            { kind: 'tool_activity', toolCallId: 'T1', status: 'succeeded', resultSummary: 'contents' },
+          ],
+        },
+        { kind: 'answer_text', text: 'Done.' },
+      ],
+    });
+  });
+
   it('attaches workspace change footer facts to assistant timeline messages by run id', () => {
     const footerProjector = {
       projectRunFooter: vi.fn(() => ({

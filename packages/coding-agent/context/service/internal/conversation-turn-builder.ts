@@ -72,7 +72,10 @@ function responseItems(runId: string, messages: MessageHistoryItem[]): Conversat
       } else {
         items.push({
           type: 'assistant_message',
-          content: [{ type: 'json', value: { historicalRunId: runId, unmatchedToolResult: current } }],
+          content: [{
+            type: 'json',
+            value: { historicalRunId: runId, unmatchedToolResult: toJsonValue(current) },
+          }],
         });
       }
       continue;
@@ -111,6 +114,10 @@ function parseArguments(value: string): JsonValue {
   } catch {
     return value;
   }
+}
+
+function toJsonValue(value: unknown): JsonValue {
+  return JSON.parse(JSON.stringify(value)) as JsonValue;
 }
 
 function historyAfterEffectiveCompaction(history: SessionHistoryItem[]): SessionHistoryItem[] {
