@@ -38,7 +38,7 @@ export function getComposerModelOptionsForProviders(providers?: ProviderPublicSt
   }
 
   return providers
-    .filter((provider) => provider.enabled)
+    .filter((provider) => provider.enabled && provider.hasApiKey)
     .flatMap((provider) => provider.modelIds.map((modelId) => ({
       value: modelOptionValue(provider.providerId, String(modelId)),
       modelId: String(modelId),

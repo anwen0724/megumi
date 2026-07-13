@@ -6,6 +6,7 @@ import type { SettingsResolved } from '../contracts/settings-contracts';
 import type {
   AvailableModelOption,
   ProviderPublicStatus,
+  ResolveModelContextSettingsResult,
   ResolveProviderRuntimeConfigRequest,
   ResolveProviderRuntimeConfigResult,
 } from '../contracts/provider-settings-contracts';
@@ -26,7 +27,7 @@ export function listProviderStatuses(
       enabled: provider.enabled,
       protocol: provider.protocol,
       ...(provider.base_url ? { base_url: provider.base_url } : {}),
-      models: provider.models,
+      models: Object.keys(provider.models),
       has_api_key: settingsApiKeyActive || envOverrideActive,
       credential_source: settingsApiKeyActive
         ? 'settings'
@@ -45,7 +46,7 @@ export function listAvailableModels(settings: SettingsResolved): AvailableModelO
       return [];
     }
 
-    return provider.models.map((modelId) => ({
+    return Object.keys(provider.models).map((modelId) => ({
       provider_id: providerId,
       model_id: modelId,
       display_name: modelId,
@@ -67,7 +68,7 @@ export function resolveProviderRuntimeConfig(
     return failed('provider_disabled', 'Provider is disabled.', request);
   }
 
-  if (!provider.models.includes(request.model_id)) {
+  if (!provider.models[request.model_id]) {
     return failed('provider_model_unknown', 'Provider model is not configured.', request);
   }
 
@@ -88,6 +89,31 @@ export function resolveProviderRuntimeConfig(
       ...(provider.base_url ? { base_url: provider.base_url } : {}),
       model_id: request.model_id,
       api_key: apiKey,
+    },
+  };
+}
+
+export function resolveModelContextSettings(
+  settings: SettingsResolved,
+  request: ResolveProviderRuntimeConfigRequest,
+): ResolveModelContextSettingsResult {
+  const provider = settings.providers[request.provider_id];
+  const model = provider?.models[request.model_id];
+  if (!provider || !model) {
+    return {
+      status: 'failed',
+      failure: {
+        code: 'provider_model_unknown',
+        message: 'Provider model is not configured.',
+        details: { provider_id: request.provider_id, model_id: request.model_id },
+      },
+    };
+  }
+  return {
+    status: 'ok' as const,
+    context: {
+      context_window_tokens: model.context_window_tokens,
+      compaction_threshold_ratio: settings.context.compaction_threshold_ratio,
     },
   };
 }

@@ -85,6 +85,21 @@ describe('ContextServiceImpl prepareModelCall', () => {
     expect(await new ContextServiceImpl(deps).prepareModelCall(request())).toMatchObject({ status: 'ready', prepared: { usage: { usedTokens: 90 } } });
     expect(deps.summaryModelCall.complete).not.toHaveBeenCalled();
   });
+
+  it('uses the current Settings-owned compaction threshold for each operation', async () => {
+    const deps = dependencies([50]);
+    deps.policyProvider = {
+      getPolicy: vi.fn(() => ({ compactionThresholdRatio: 0.7 })),
+    };
+
+    const result = await new ContextServiceImpl(deps).prepareModelCall(request());
+
+    expect(result).toMatchObject({
+      status: 'ready',
+      prepared: { usage: { compactionThresholdRatio: 0.7 } },
+    });
+    expect(deps.policyProvider.getPolicy).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('composeCodingAgentContext', () => {

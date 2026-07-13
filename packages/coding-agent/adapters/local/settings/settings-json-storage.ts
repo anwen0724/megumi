@@ -40,7 +40,7 @@ function readRawSettings(settingsPath: string): SettingsRaw {
 
   try {
     const parsed = JSON.parse(text) as unknown;
-    const compatible = withoutObsoleteCompaction(parsed);
+    const compatible = normalizeLegacyProviderModels(withoutObsoleteCompaction(parsed));
     const target = SettingsRawSchema.safeParse(compatible);
     if (target.success) {
       return target.data;
@@ -61,6 +61,29 @@ function withoutObsoleteCompaction(value: unknown): unknown {
 
   const { compaction: _obsoleteCompaction, ...settings } = value as Record<string, unknown>;
   return settings;
+}
+
+function normalizeLegacyProviderModels(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const settings = value as Record<string, unknown>;
+  const providers = settings.providers;
+  if (!providers || typeof providers !== 'object' || Array.isArray(providers)) return value;
+  return {
+    ...settings,
+    providers: Object.fromEntries(Object.entries(providers).map(([providerId, provider]) => {
+      if (!provider || typeof provider !== 'object' || Array.isArray(provider)) return [providerId, provider];
+      const record = provider as Record<string, unknown>;
+      return [
+        providerId,
+        {
+          ...record,
+          ...(Array.isArray(record.models)
+            ? { models: Object.fromEntries(record.models.filter((model): model is string => typeof model === 'string').map((model) => [model, {}])) }
+            : {}),
+        },
+      ];
+    })),
+  };
 }
 
 function writeRawSettings(settingsPath: string, next: SettingsRaw): void {
@@ -87,7 +110,9 @@ function appRawToSettingsRaw(raw: AppSettingsRaw): SettingsRaw {
           ...(provider.protocol ? { protocol: provider.protocol } : {}),
           ...(provider.displayName ? { display_name: provider.displayName } : {}),
           ...(provider.baseUrl ? { base_url: provider.baseUrl } : {}),
-          ...(provider.models ? { models: provider.models } : {}),
+          ...(provider.models
+            ? { models: Object.fromEntries(provider.models.map((modelId) => [modelId, {}])) }
+            : {}),
           ...(provider.apiKey !== undefined ? { api_key: provider.apiKey } : {}),
           ...(provider.apiKeyEnv !== undefined ? { api_key_env: provider.apiKeyEnv } : {}),
         },

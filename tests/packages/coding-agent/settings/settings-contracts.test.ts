@@ -18,7 +18,7 @@ describe('Settings v2 contracts', () => {
     }).getResolvedSettings()).toEqual({ status: 'ok', settings: DEFAULT_SETTINGS });
   });
 
-  it('merges sparse raw settings without expanding defaults', () => {
+  it('merges sparse patches and materializes saved provider defaults', () => {
     const fileStore = memorySettingsFileStore({
       theme: 'midnight-blue',
       providers: {
@@ -49,10 +49,20 @@ describe('Settings v2 contracts', () => {
       memory: {
         enabled: true,
       },
+      context: {
+        compaction_threshold_ratio: 0.8,
+      },
       providers: {
         deepseek: {
           api_key: 'TEST_DEEPSEEK_API_KEY',
           enabled: false,
+          protocol: 'openai-compatible',
+          display_name: 'DeepSeek',
+          base_url: 'https://api.deepseek.com',
+          models: {
+            'deepseek-v4-flash': { context_window_tokens: 1_000_000 },
+            'deepseek-v4-pro': { context_window_tokens: 1_000_000 },
+          },
         },
       },
     });

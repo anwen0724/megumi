@@ -83,7 +83,7 @@ function settingsStorage() {
         enabled: true,
         protocol: 'openai-compatible',
         base_url: 'https://api.example.com/v1',
-        models: ['deepseek-chat'],
+        models: { 'deepseek-chat': {} },
         api_key: 'test-api-key',
       },
     },

@@ -8,7 +8,13 @@ import {
   type SettingsRaw,
   type SettingsResolved,
 } from '../contracts/settings-contracts';
-import type { ProviderSettingsRaw } from '../contracts/provider-settings-contracts';
+import type {
+  ProviderModelSettingsRaw,
+  ProviderSettingsRaw,
+} from '../contracts/provider-settings-contracts';
+import { getAiModelDefinition, getAiProviderDefinition } from '@megumi/ai';
+
+export const DEFAULT_UNKNOWN_MODEL_CONTEXT_WINDOW_TOKENS = 256_000;
 
 export function resolveSettings(raw: unknown): SettingsResolved {
   const parsed = SettingsRawSchema.parse(raw ?? {});
@@ -27,6 +33,12 @@ export function resolveSettings(raw: unknown): SettingsResolved {
         ? {
             ...DEFAULT_SETTINGS.memory,
             ...definedObject(parsed.memory),
+          }
+        : undefined,
+      context: parsed.context
+        ? {
+            ...DEFAULT_SETTINGS.context,
+            ...definedObject(parsed.context),
           }
         : undefined,
       web: parsed.web
@@ -65,6 +77,12 @@ export function mergeRawSettings(current: SettingsRaw, patch: SettingsRaw): Sett
         ? {
             ...(currentParsed.memory ?? {}),
             ...definedObject(patchParsed.memory),
+          }
+        : undefined,
+      context: patchParsed.context
+        ? {
+            ...(currentParsed.context ?? {}),
+            ...definedObject(patchParsed.context),
           }
         : undefined,
       web: patchParsed.web
@@ -114,14 +132,36 @@ function resolveProviderSettings(providers: NonNullable<SettingsRaw['providers']
     Object.entries({
       ...DEFAULT_SETTINGS.providers,
       ...providers,
-    }).map(([providerId]) => [
-      providerId,
-      {
-        ...(DEFAULT_SETTINGS.providers[providerId] ?? defaultProvider(providerId)),
-        ...definedProviderOverride(providers[providerId] ?? {}),
-      },
-    ]),
+    }).map(([providerId]) => [providerId, resolveProvider(providerId, providers[providerId] ?? {})]),
   );
+}
+
+function resolveProvider(providerId: string, raw: ProviderSettingsRaw) {
+  const definition = getAiProviderDefinition(providerId);
+  const models: Record<string, ProviderModelSettingsRaw> = raw.models ?? Object.fromEntries(
+    definition?.models.map((model) => [model.modelId, {}]) ?? [],
+  );
+  return {
+    enabled: raw.enabled ?? true,
+    protocol: raw.protocol ?? definition?.protocol ?? 'openai-compatible',
+    display_name: raw.display_name ?? definition?.displayName ?? providerId,
+    ...(raw.base_url ?? definition?.defaultBaseUrl
+      ? { base_url: raw.base_url ?? definition?.defaultBaseUrl }
+      : {}),
+    models: Object.fromEntries(Object.entries(models).map(([modelId, model]) => {
+      const known = getAiModelDefinition(providerId, modelId);
+      const configured = model.context_window_tokens;
+      return [
+        modelId,
+        {
+          context_window_tokens: known
+            ? Math.min(configured ?? known.contextWindowTokens, known.contextWindowTokens)
+            : configured ?? DEFAULT_UNKNOWN_MODEL_CONTEXT_WINDOW_TOKENS,
+        },
+      ];
+    })),
+    ...definedCredentialSettings(raw),
+  };
 }
 
 function mergeRawProviders(
@@ -155,8 +195,13 @@ function mergeRawProvider(current: ProviderSettingsRaw, patch: ProviderSettingsR
   return merged;
 }
 
-function definedProviderOverride(value: ProviderSettingsRaw) {
+function definedCredentialSettings(value: ProviderSettingsRaw) {
   const defined = definedObject(value);
+  delete defined.enabled;
+  delete defined.protocol;
+  delete defined.display_name;
+  delete defined.base_url;
+  delete defined.models;
   if (defined.api_key === null) {
     delete defined.api_key;
   }
@@ -164,15 +209,6 @@ function definedProviderOverride(value: ProviderSettingsRaw) {
     delete defined.api_key_env;
   }
   return defined;
-}
-
-function defaultProvider(providerId: string) {
-  return {
-    enabled: false,
-    protocol: 'openai-compatible',
-    display_name: providerId,
-    models: [],
-  };
 }
 
 function definedObject<T extends Record<string, unknown>>(value: T): Partial<T> {

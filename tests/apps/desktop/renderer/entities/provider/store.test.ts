@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
-import type { ProviderPublicStatusUiDto } from '@megumi/product/host-interface';
+import type {
+  ProviderCatalogUiDto,
+  ProviderPublicStatusUiDto,
+} from '@megumi/product/host-interface';
 import { useProviderStore } from '@megumi/desktop/renderer/entities/provider/store';
 
 const providers: ProviderPublicStatusUiDto[] = [
@@ -17,6 +20,13 @@ const providers: ProviderPublicStatusUiDto[] = [
     envOverrideActive: false,
   },
 ];
+const catalog: ProviderCatalogUiDto[] = [{
+  providerId: 'DeepSeek',
+  displayName: 'DeepSeek',
+  protocol: 'openai-compatible',
+  defaultBaseUrl: 'https://api.deepseek.com',
+  models: [{ modelId: 'deepseek-v4-flash', displayName: 'DeepSeek V4 Flash', contextWindowTokens: 1_000_000 }],
+}];
 
 function createSuccessMeta(channel: string, requestId = 'ipc-provider-request-1') {
   return {
@@ -32,7 +42,7 @@ function installMegumiMock() {
   const provider = {
     list: vi.fn().mockResolvedValue({
       ok: true,
-      data: { providers },
+      data: { status: 'ok', providers, catalog },
       meta: createSuccessMeta(IPC_CHANNELS.settings.providerList),
     }),
     update: vi.fn().mockResolvedValue({
@@ -78,6 +88,7 @@ describe('useProviderStore', () => {
   beforeEach(() => {
     useProviderStore.setState({
       providers: [],
+      catalog: [],
       status: 'idle',
       error: null,
     });
@@ -103,6 +114,7 @@ describe('useProviderStore', () => {
       }),
     }));
     expect(useProviderStore.getState().providers).toEqual(providers);
+    expect(useProviderStore.getState().catalog).toEqual(catalog);
     expect(useProviderStore.getState().status).toBe('ready');
     expect(JSON.stringify(useProviderStore.getState().providers)).not.toContain('test-api-key-fixture');
   });

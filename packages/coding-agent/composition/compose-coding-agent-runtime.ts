@@ -140,12 +140,23 @@ export type ModelContextProvider = (selection: {
   modelId: string;
 }) => ContextCapacity;
 
-export function createCompatibilityModelContextProvider(): ModelContextProvider {
-  return ({ providerId, modelId }) => ({
-    providerId,
-    modelId,
-    contextWindowTokens: 256_000,
-  });
+export function createSettingsModelContextProvider(
+  settingsService: Pick<SettingsService, 'resolveModelContextSettings'>,
+): ModelContextProvider {
+  return ({ providerId, modelId }) => {
+    const result = settingsService.resolveModelContextSettings({
+      provider_id: providerId,
+      model_id: modelId,
+    });
+    if (result.status === 'failed') {
+      throw new Error(result.failure.message);
+    }
+    return {
+      providerId,
+      modelId,
+      contextWindowTokens: result.context.context_window_tokens,
+    };
+  };
 }
 
 type LegacyModelCallProviderForTests = {
@@ -271,7 +282,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
       readDirectory: (directoryPath) => readdir(directoryPath),
     },
   });
-  const modelContextProvider = options.modelContextProvider ?? createCompatibilityModelContextProvider();
+  const modelContextProvider = options.modelContextProvider ?? createSettingsModelContextProvider(settingsService);
   const contextRuntime = composeCodingAgentContext({
     sessionService,
     instructionScopeResolver: {
@@ -284,6 +295,14 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     },
     instructionService,
     skillService: skillRuntime.skillService,
+    policyProvider: {
+      getPolicy() {
+        const resolved = settingsService.getResolvedSettings();
+        return resolved.status === 'ok'
+          ? { compactionThresholdRatio: resolved.settings.context.compaction_threshold_ratio }
+          : {};
+      },
+    },
     modelCallService,
     modelRuntimeConfigResolver: {
       resolve({ providerId, modelId }) {
@@ -434,7 +453,7 @@ function createModelConfigSettingsFacade(settingsService: SettingsService): Pick
       }
       const resolved = settingsService.getResolvedSettings();
       const provider = resolved.status === 'ok' ? resolved.settings.providers[request.provider_id] : undefined;
-      if (!provider || !provider.enabled || !provider.models.includes(request.model_id)) {
+      if (!provider || !provider.enabled || !provider.models[request.model_id]) {
         return result;
       }
       return {

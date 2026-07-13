@@ -98,7 +98,7 @@ describe('Settings Service', () => {
     });
   });
 
-  it('updates settings by writing sparse raw settings', () => {
+  it('updates settings while materializing the default Context policy', () => {
     const fileStore = new MemorySettingsFileStore();
     const service = createSettingsService({ file_store: fileStore });
 
@@ -111,6 +111,9 @@ describe('Settings Service', () => {
     });
 
     expect(fileStore.raw).toEqual({
+      context: {
+        compaction_threshold_ratio: 0.8,
+      },
       memory: {
         enabled: true,
       },
@@ -138,6 +141,9 @@ describe('Settings Service', () => {
     });
 
     expect(fileStore.raw).toEqual({
+      context: {
+        compaction_threshold_ratio: 0.8,
+      },
       language: 'zh-CN',
       theme: 'midnight-blue',
       setup: {
@@ -174,12 +180,92 @@ describe('Settings Service', () => {
     const deepseek = result.providers.find((provider) => provider.provider_id === 'deepseek');
     expect(deepseek).toMatchObject({
       provider_id: 'deepseek',
-      display_name: 'deepseek',
-      enabled: false,
+      display_name: 'DeepSeek',
+      enabled: true,
       has_api_key: true,
       credential_source: 'settings',
     });
     expect(JSON.stringify(result.providers)).not.toContain('TEST_DEEPSEEK_API_KEY');
+  });
+
+  it('materializes a catalog provider when the user only saves an API key', () => {
+    const fileStore = new MemorySettingsFileStore();
+    const service = createSettingsService({ file_store: fileStore });
+
+    expect(service.setProviderApiKey({
+      provider_id: 'DeepSeek',
+      api_key: 'TEST_DEEPSEEK_API_KEY',
+    })).toMatchObject({ status: 'updated' });
+
+    expect(fileStore.raw).toEqual({
+      context: { compaction_threshold_ratio: 0.8 },
+      providers: {
+        DeepSeek: {
+          enabled: true,
+          protocol: 'openai-compatible',
+          display_name: 'DeepSeek',
+          base_url: 'https://api.deepseek.com',
+          models: {
+            'deepseek-v4-flash': { context_window_tokens: 1_000_000 },
+            'deepseek-v4-pro': { context_window_tokens: 1_000_000 },
+          },
+          api_key: 'TEST_DEEPSEEK_API_KEY',
+        },
+      },
+    });
+  });
+
+  it('uses catalog facts to resolve manually removed provider fields', () => {
+    const fileStore = new MemorySettingsFileStore();
+    fileStore.raw = {
+      providers: {
+        DeepSeek: {
+          enabled: true,
+          api_key: 'TEST_DEEPSEEK_API_KEY',
+        },
+      },
+    };
+    const service = createSettingsService({ file_store: fileStore });
+
+    expect(service.resolveProviderRuntimeConfig({
+      provider_id: 'DeepSeek',
+      model_id: 'deepseek-v4-flash',
+    })).toEqual({
+      status: 'ok',
+      config: {
+        provider_id: 'DeepSeek',
+        protocol: 'openai-compatible',
+        base_url: 'https://api.deepseek.com',
+        model_id: 'deepseek-v4-flash',
+        api_key: 'TEST_DEEPSEEK_API_KEY',
+      },
+    });
+  });
+
+  it('caps a configured Context Window at the catalog model maximum', () => {
+    const fileStore = new MemorySettingsFileStore();
+    fileStore.raw = {
+      context: { compaction_threshold_ratio: 0.7 },
+      providers: {
+        DeepSeek: {
+          models: {
+            'deepseek-v4-flash': { context_window_tokens: 2_000_000 },
+          },
+        },
+      },
+    };
+    const service = createSettingsService({ file_store: fileStore });
+
+    expect(service.resolveModelContextSettings({
+      provider_id: 'DeepSeek',
+      model_id: 'deepseek-v4-flash',
+    })).toEqual({
+      status: 'ok',
+      context: {
+        context_window_tokens: 1_000_000,
+        compaction_threshold_ratio: 0.7,
+      },
+    });
   });
 
   it('deletes configured provider settings', () => {
@@ -189,12 +275,12 @@ describe('Settings Service', () => {
         deepseek: {
           enabled: true,
           base_url: 'https://api.deepseek.com/v1',
-          models: ['deepseek-chat'],
+          models: { 'deepseek-chat': {} },
         },
         local: {
           enabled: true,
           base_url: 'http://localhost:11434/v1',
-          models: ['llama3'],
+          models: { llama3: {} },
         },
       },
     };
@@ -208,7 +294,7 @@ describe('Settings Service', () => {
       local: {
         enabled: true,
         base_url: 'http://localhost:11434/v1',
-        models: ['llama3'],
+        models: { llama3: {} },
       },
     });
   });
@@ -222,7 +308,7 @@ describe('Settings Service', () => {
           protocol: 'openai-compatible',
           display_name: 'Local',
           base_url: 'http://localhost:11434/v1',
-          models: ['llama3', 'qwen3'],
+          models: { llama3: {}, qwen3: {} },
           api_key: 'sk-local',
         },
       },
@@ -255,7 +341,7 @@ describe('Settings Service', () => {
           protocol: 'openai-compatible',
           display_name: 'Local',
           base_url: 'http://localhost:11434/v1',
-          models: ['llama3'],
+          models: { llama3: {} },
           api_key: 'sk-local',
         },
       },
@@ -286,14 +372,14 @@ describe('Settings Service', () => {
           protocol: 'openai-compatible',
           display_name: 'Missing key',
           base_url: 'http://localhost:11434/v1',
-          models: ['llama3'],
+          models: { llama3: {} },
         },
         disabled: {
           enabled: false,
           protocol: 'openai-compatible',
           display_name: 'Disabled',
           base_url: 'http://localhost:11434/v1',
-          models: ['llama3'],
+          models: { llama3: {} },
           api_key: 'TEST_DISABLED_API_KEY',
         },
       },

@@ -6,7 +6,10 @@ import type {
   ProviderDeleteApiKeyPayload,
   ProviderUpdatePayload,
 } from '@megumi/desktop/main/ipc/schemas';
-import type { ProviderPublicStatusUiDto } from '@megumi/product/host-interface';
+import type {
+  ProviderCatalogUiDto,
+  ProviderPublicStatusUiDto,
+} from '@megumi/product/host-interface';
 import {
   createRendererRuntimeIpcRequest,
   getRuntimeIpcErrorMessage,
@@ -39,6 +42,7 @@ export interface ProviderDeleteApiKeyInput {
 
 interface ProviderStoreState {
   providers: ProviderPublicStatusUiDto[];
+  catalog: ProviderCatalogUiDto[];
   status: ProviderStoreStatus;
   error: string | null;
   loadProviders: () => Promise<void>;
@@ -50,6 +54,7 @@ interface ProviderStoreState {
 
 export const useProviderStore = create<ProviderStoreState>((set, get) => ({
   providers: [],
+  catalog: [],
   status: 'idle',
   error: null,
   loadProviders: async () => {
@@ -76,6 +81,7 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
 
     set({
       providers: result.data.providers,
+      catalog: result.data.catalog,
       status: 'ready',
       error: null,
     });

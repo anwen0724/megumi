@@ -104,6 +104,17 @@ const ProviderPublicStatusUiDtoSchema = z.object({
   apiKeyEnv: z.string().optional(),
   apiKeyEnvCustomized: z.boolean().optional(),
 }).strict();
+const ProviderCatalogUiDtoSchema = z.object({
+  providerId: z.string().min(1),
+  displayName: z.string().min(1),
+  protocol: z.enum(['openai-compatible', 'anthropic']),
+  defaultBaseUrl: z.string().url(),
+  models: z.array(z.object({
+    modelId: z.string().min(1),
+    displayName: z.string().min(1),
+    contextWindowTokens: z.number().int().positive(),
+  }).strict()),
+}).strict();
 
 const HostFailureSchema = z.object({
   code: z.string().min(1),
@@ -124,7 +135,11 @@ export const SettingsCompleteSetupUiResultSchema = z.discriminatedUnion('status'
   z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
 ]);
 export const ProviderListUiResultSchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('ok'), providers: z.array(ProviderPublicStatusUiDtoSchema) }).strict(),
+  z.object({
+    status: z.literal('ok'),
+    providers: z.array(ProviderPublicStatusUiDtoSchema),
+    catalog: z.array(ProviderCatalogUiDtoSchema),
+  }).strict(),
   z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
 ]);
 export const EmptyUiResultSchema = z.discriminatedUnion('status', [
@@ -141,6 +156,7 @@ export function createSettingsHost(
     | 'updateSettings'
     | 'completeSetup'
     | 'listProviderSettings'
+    | 'listProviderCatalog'
     | 'updateProviderSettings'
     | 'deleteProviderSettings'
     | 'setProviderApiKey'
@@ -201,7 +217,12 @@ export function createSettingsHost(
       if (result.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(result.failure) };
       }
-      return { status: 'ok', providers: result.providers.map(toProviderPublicStatusUiDto) };
+      const catalog = settingsService.listProviderCatalog();
+      return {
+        status: 'ok',
+        providers: result.providers.map(toProviderPublicStatusUiDto),
+        catalog: catalog.providers.map(toProviderCatalogUiDto),
+      };
     },
     async updateProvider({ providerId, ...input }) {
       const result = settingsService.updateProviderSettings({
@@ -211,7 +232,9 @@ export function createSettingsHost(
           ...(input.protocol !== undefined ? { protocol: input.protocol } : {}),
           ...(input.displayName !== undefined ? { display_name: input.displayName } : {}),
           ...(input.baseUrl !== undefined ? { base_url: input.baseUrl } : {}),
-          ...(input.modelIds !== undefined ? { models: input.modelIds } : {}),
+          ...(input.modelIds !== undefined
+            ? { models: Object.fromEntries(input.modelIds.map((modelId) => [modelId, {}])) }
+            : {}),
           ...(input.apiKeyEnv !== undefined ? { api_key_env: input.apiKeyEnv } : {}),
         },
       });
@@ -336,6 +359,18 @@ export type ProviderPublicStatusUiDto = {
   apiKeyEnvCustomized?: boolean;
 };
 
+export type ProviderCatalogUiDto = {
+  providerId: string;
+  displayName: string;
+  protocol: 'openai-compatible' | 'anthropic';
+  defaultBaseUrl: string;
+  models: Array<{
+    modelId: string;
+    displayName: string;
+    contextWindowTokens: number;
+  }>;
+};
+
 export type HostFailure = {
   code: string;
   message: string;
@@ -378,7 +413,7 @@ export type SettingsUpdateUiResult =
 
 export interface ProviderListUiRequest {}
 export type ProviderListUiResult =
-  | { status: 'ok'; providers: ProviderPublicStatusUiDto[] }
+  | { status: 'ok'; providers: ProviderPublicStatusUiDto[]; catalog: ProviderCatalogUiDto[] }
   | { status: 'failed'; failure: HostFailure };
 
 export interface ProviderUpdateUiRequest {
@@ -450,7 +485,9 @@ export function toSettingsRawPatch(patch: SettingsUiRaw): SettingsRaw {
           ...(provider.protocol !== undefined ? { protocol: provider.protocol } : {}),
           ...(provider.displayName !== undefined ? { display_name: provider.displayName } : {}),
           ...(provider.baseUrl !== undefined ? { base_url: provider.baseUrl } : {}),
-          ...(provider.models !== undefined ? { models: provider.models } : {}),
+          ...(provider.models !== undefined
+            ? { models: Object.fromEntries(provider.models.map((modelId) => [modelId, {}])) }
+            : {}),
           ...(provider.apiKeyEnv !== undefined ? { api_key_env: provider.apiKeyEnv } : {}),
         },
       ])),
@@ -486,7 +523,7 @@ export function toSettingsUiResolved(
         protocol: provider.protocol,
         displayName: provider.display_name,
         ...(provider.base_url ? { baseUrl: provider.base_url } : {}),
-        models: provider.models,
+        models: Object.keys(provider.models),
         ...(provider.api_key_env ? { apiKeyEnv: provider.api_key_env } : {}),
       },
     ])),
@@ -522,12 +559,32 @@ export function toProviderPublicStatusUiDto(provider: {
   };
 }
 
+export function toProviderCatalogUiDto(provider: {
+  providerId: string;
+  displayName: string;
+  protocol: ProviderCatalogUiDto['protocol'];
+  defaultBaseUrl: string;
+  models: Array<{ modelId: string; displayName: string; contextWindowTokens: number }>;
+}): ProviderCatalogUiDto {
+  return {
+    providerId: provider.providerId,
+    displayName: provider.displayName,
+    protocol: provider.protocol,
+    defaultBaseUrl: provider.defaultBaseUrl,
+    models: provider.models.map((model) => ({
+      modelId: model.modelId,
+      displayName: model.displayName,
+      contextWindowTokens: model.contextWindowTokens,
+    })),
+  };
+}
+
 export function toProviderSettingsUiDto(provider: {
   enabled: boolean;
   protocol: ProviderSettingsUiDto['protocol'];
   display_name: string;
   base_url?: string;
-  models: string[];
+  models: Record<string, { context_window_tokens: number }>;
   api_key_env?: string;
 }): ProviderSettingsUiDto {
   return {
@@ -535,7 +592,7 @@ export function toProviderSettingsUiDto(provider: {
     protocol: provider.protocol,
     displayName: provider.display_name,
     ...(provider.base_url ? { baseUrl: provider.base_url } : {}),
-    models: provider.models,
+    models: Object.keys(provider.models),
     ...(provider.api_key_env ? { apiKeyEnv: provider.api_key_env } : {}),
   };
 }

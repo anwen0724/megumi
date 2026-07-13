@@ -4,6 +4,7 @@
  */
 import { z } from 'zod';
 import type { SettingsError } from './settings-contracts';
+import type { AiProviderDefinition } from '@megumi/ai';
 
 export const ProviderIdSchema = z.string().min(1);
 export type ProviderId = z.infer<typeof ProviderIdSchema>;
@@ -11,13 +12,23 @@ export type ProviderId = z.infer<typeof ProviderIdSchema>;
 export const ProviderProtocolSchema = z.enum(['openai-compatible', 'anthropic']);
 export type ProviderProtocol = z.infer<typeof ProviderProtocolSchema>;
 
+export const ProviderModelSettingsRawSchema = z.object({
+  context_window_tokens: z.number().int().positive().optional(),
+}).strict();
+export type ProviderModelSettingsRaw = z.infer<typeof ProviderModelSettingsRawSchema>;
+
+export const ProviderModelSettingsResolvedSchema = z.object({
+  context_window_tokens: z.number().int().positive(),
+}).strict();
+export type ProviderModelSettingsResolved = z.infer<typeof ProviderModelSettingsResolvedSchema>;
+
 export const ProviderSettingsRawSchema = z
   .object({
     enabled: z.boolean().optional(),
     protocol: ProviderProtocolSchema.optional(),
     display_name: z.string().min(1).optional(),
     base_url: z.string().url().optional(),
-    models: z.array(z.string().min(1)).optional(),
+    models: z.record(z.string().min(1), ProviderModelSettingsRawSchema).optional(),
     api_key: z.string().min(1).nullable().optional(),
     api_key_env: z.string().min(1).nullable().optional(),
   })
@@ -30,7 +41,7 @@ export const ProviderSettingsResolvedSchema = z
     protocol: ProviderProtocolSchema,
     display_name: z.string().min(1),
     base_url: z.string().url().optional(),
-    models: z.array(z.string().min(1)),
+    models: z.record(z.string().min(1), ProviderModelSettingsResolvedSchema),
     api_key: z.string().min(1).optional(),
     api_key_env: z.string().min(1).optional(),
   })
@@ -152,5 +163,20 @@ export type ResolveProviderRuntimeConfigRequest = z.infer<typeof ResolveProvider
 
 export type ResolveProviderRuntimeConfigResult =
   | { status: 'ok'; config: ProviderRuntimeConfig }
+  | { status: 'failed'; failure: SettingsError };
+
+export type ListProviderCatalogResult = {
+  status: 'ok';
+  providers: AiProviderDefinition[];
+};
+
+export type ResolveModelContextSettingsResult =
+  | {
+      status: 'ok';
+      context: {
+        context_window_tokens: number;
+        compaction_threshold_ratio: number;
+      };
+    }
   | { status: 'failed'; failure: SettingsError };
 

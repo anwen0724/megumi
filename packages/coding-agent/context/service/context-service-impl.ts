@@ -55,6 +55,7 @@ export type ContextServiceDependencies = {
     recordPreparedCall(input: { preparationId: string; sourceRefs: ContextSourceRef[]; usage: ContextUsage }): void;
   };
   policy?: Partial<ContextPolicy>;
+  policyProvider?: { getPolicy(): Partial<ContextPolicy> };
   clock?: { now(): string };
   ids?: { preparationId(): string; compactionId(): string };
 };
@@ -76,17 +77,17 @@ type BuildFacts = {
 type BuiltPrompt = { prompt: Prompt; sourceRefs: ContextSourceRef[] };
 
 export class ContextServiceImpl implements ContextService {
-  private readonly policy: ContextPolicy;
+  private readonly defaultPolicy: ContextPolicy;
   private readonly clock: { now(): string };
   private readonly ids: { preparationId(): string; compactionId(): string };
   private readonly sessionOperationTails = new Map<string, Promise<void>>();
 
   constructor(private readonly dependencies: ContextServiceDependencies) {
-    this.policy = {
+    this.defaultPolicy = {
       compactionThresholdRatio: dependencies.policy?.compactionThresholdRatio ?? 0.8,
       keepRecentTurns: dependencies.policy?.keepRecentTurns ?? 3,
     };
-    calculateContextUsage({ inputTokens: 0, capacity: { providerId: 'validation', modelId: 'validation', contextWindowTokens: 1 }, policy: this.policy });
+    calculateContextUsage({ inputTokens: 0, capacity: { providerId: 'validation', modelId: 'validation', contextWindowTokens: 1 }, policy: this.defaultPolicy });
     this.clock = dependencies.clock ?? { now: () => new Date().toISOString() };
     this.ids = dependencies.ids ?? {
       preparationId: () => `context-preparation:${crypto.randomUUID()}`,
@@ -100,6 +101,7 @@ export class ContextServiceImpl implements ContextService {
 
   private async prepareModelCallExclusive(request: PrepareModelCallRequest): Promise<PrepareModelCallResult> {
     if (request.signal?.aborted) return failed(cancelled());
+    const policy = this.resolvePolicy();
     const loaded = await this.loadFacts({
       sessionId: request.sessionId,
       workspaceId: request.workspaceId,
@@ -115,16 +117,17 @@ export class ContextServiceImpl implements ContextService {
 
     let facts = loaded.facts;
     let built = this.buildPrompt(facts);
-    let usageResult = await this.countUsage(built.prompt, request.modelContext, request.signal);
+    let usageResult = await this.countUsage(built.prompt, request.modelContext, policy, request.signal);
     if (usageResult.status === 'failed') return usageResult;
     let usage = usageResult.usage;
     let compactionId: string | undefined;
 
-    if (usage.usedRatio >= this.policy.compactionThresholdRatio) {
+    if (usage.usedRatio >= policy.compactionThresholdRatio) {
       const compacted = await this.compactInternal({
         facts,
         usageBefore: usage,
         modelContext: request.modelContext,
+        policy,
         onProgress: request.onCompactionProgress,
         signal: request.signal,
       });
@@ -135,7 +138,7 @@ export class ContextServiceImpl implements ContextService {
         // A saved Summary is now an owner fact. Rebuild and recount rather than
         // returning the pre-persistence validation projection.
         built = this.buildPrompt(facts);
-        usageResult = await this.countUsage(built.prompt, request.modelContext, request.signal);
+        usageResult = await this.countUsage(built.prompt, request.modelContext, policy, request.signal);
         if (usageResult.status === 'failed') return usageResult;
         usage = usageResult.usage;
       }
@@ -167,13 +170,14 @@ export class ContextServiceImpl implements ContextService {
 
   private async compactSessionExclusive(request: CompactSessionRequest): Promise<CompactSessionResult> {
     if (request.signal?.aborted) return failed(cancelled());
+    const policy = this.resolvePolicy();
     const loaded = await this.loadFacts({ sessionId: request.sessionId, workspaceId: request.workspaceId, tools: [], activatedSkills: [], signal: request.signal });
     if (loaded.status === 'failed') return loaded;
     if (request.signal?.aborted) return failed(cancelled());
     const built = this.buildPrompt(loaded.facts);
-    const before = await this.countUsage(built.prompt, request.modelContext, request.signal);
+    const before = await this.countUsage(built.prompt, request.modelContext, policy, request.signal);
     if (before.status === 'failed') return before;
-    const compacted = await this.compactInternal({ facts: loaded.facts, usageBefore: before.usage, modelContext: request.modelContext, signal: request.signal });
+    const compacted = await this.compactInternal({ facts: loaded.facts, usageBefore: before.usage, modelContext: request.modelContext, policy, signal: request.signal });
     if (compacted.status !== 'compacted') return compacted;
     return { status: 'compacted', compactionId: compacted.compactionId, usageBefore: before.usage, usageAfter: compacted.usageAfter };
   }
@@ -183,7 +187,7 @@ export class ContextServiceImpl implements ContextService {
     if (invalid) return failed(invalid);
     const usage = request.providerInputTokens === undefined
       ? request.preCallUsage
-      : calculateContextUsage({ inputTokens: request.providerInputTokens, capacity: request.modelContext, policy: this.policy });
+      : calculateContextUsage({ inputTokens: request.providerInputTokens, capacity: request.modelContext, policy: this.resolvePolicy() });
     const snapshot: SessionUsageSnapshot = {
       sessionId: request.sessionId,
       runId: request.runId,
@@ -264,12 +268,12 @@ export class ContextServiceImpl implements ContextService {
     };
   }
 
-  private async countUsage(prompt: Prompt, capacity: ContextCapacity, signal?: AbortSignal): Promise<{ status: 'counted'; usage: ContextUsage } | { status: 'failed'; failure: ContextFailure }> {
+  private async countUsage(prompt: Prompt, capacity: ContextCapacity, policy: ContextPolicy, signal?: AbortSignal): Promise<{ status: 'counted'; usage: ContextUsage } | { status: 'failed'; failure: ContextFailure }> {
     const result = await this.dependencies.promptTokenCounter.count({ prompt, modelContext: capacity });
     if (signal?.aborted) return failed(cancelled());
     if (result.status === 'failed') return failed(result.failure);
     try {
-      return { status: 'counted', usage: calculateContextUsage({ inputTokens: result.inputTokens, capacity, policy: this.policy }) };
+      return { status: 'counted', usage: calculateContextUsage({ inputTokens: result.inputTokens, capacity, policy }) };
     } catch (error) {
       return failed({ code: 'token_count_failed', message: messageOf(error), retryable: false, cause: { owner: 'ai' } });
     }
@@ -279,6 +283,7 @@ export class ContextServiceImpl implements ContextService {
     facts: BuildFacts;
     usageBefore: ContextUsage;
     modelContext: ContextCapacity;
+    policy: ContextPolicy;
     onProgress?: (progress: ContextCompactionProgress) => void;
     signal?: AbortSignal;
   }): Promise<
@@ -288,7 +293,7 @@ export class ContextServiceImpl implements ContextService {
   > {
     const plan = planCompaction({
       historicalTurns: input.facts.historicalTurns,
-      keepRecentTurns: this.policy.keepRecentTurns,
+      keepRecentTurns: input.policy.keepRecentTurns,
       ...(input.facts.currentTurn ? { currentTurn: input.facts.currentTurn } : {}),
     });
     if (plan.status === 'nothing_to_compact') return plan;
@@ -324,7 +329,7 @@ export class ContextServiceImpl implements ContextService {
     }
     const retainedTurns = input.facts.historicalTurns.slice(plan.plan.turns.length);
     const compactedFacts: BuildFacts = { ...input.facts, historicalTurns: retainedTurns, compactionSummary: { compactionId, content: generated.content } };
-    const projected = await this.countUsage(this.buildPrompt(compactedFacts).prompt, input.modelContext, input.signal);
+    const projected = await this.countUsage(this.buildPrompt(compactedFacts).prompt, input.modelContext, input.policy, input.signal);
     if (projected.status === 'failed') return compactionFailure(projected.failure);
     const reduction = validateCompactionReduction({
       usageBeforeInputTokens: input.usageBefore.usedTokens,
@@ -356,6 +361,21 @@ export class ContextServiceImpl implements ContextService {
     if (input.signal?.aborted) return compactionFailure(cancelled());
     reportCompactionProgress(input.onProgress, { status: 'completed', ...progressBase });
     return { status: 'compacted', compactionId, usageAfter: projected.usage, facts: compactedFacts };
+  }
+
+  private resolvePolicy(): ContextPolicy {
+    const configured = this.dependencies.policyProvider?.getPolicy() ?? {};
+    const policy = {
+      compactionThresholdRatio: configured.compactionThresholdRatio
+        ?? this.defaultPolicy.compactionThresholdRatio,
+      keepRecentTurns: configured.keepRecentTurns ?? this.defaultPolicy.keepRecentTurns,
+    };
+    calculateContextUsage({
+      inputTokens: 0,
+      capacity: { providerId: 'validation', modelId: 'validation', contextWindowTokens: 1 },
+      policy,
+    });
+    return policy;
   }
 
   private async withSessionOperation<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {

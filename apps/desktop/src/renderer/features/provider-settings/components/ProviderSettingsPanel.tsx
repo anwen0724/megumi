@@ -9,7 +9,10 @@ import {
   Server,
   Trash2,
 } from 'lucide-react';
-import type { ProviderPublicStatusUiDto } from '@megumi/product/host-interface';
+import type {
+  ProviderCatalogUiDto,
+  ProviderPublicStatusUiDto,
+} from '@megumi/product/host-interface';
 import { useProviderStore } from '../../../entities/provider';
 import { Badge, Button, IconButton, cx } from '../../../shared/ui';
 
@@ -25,20 +28,11 @@ interface ProviderFormState {
 }
 
 type ProviderListEntry =
-  | { source: 'quick'; providerId: string; displayName: string; protocol: ProviderProtocol; provider?: undefined }
+  | { source: 'quick'; providerId: string; displayName: string; protocol: ProviderProtocol; catalog: ProviderCatalogUiDto; provider?: undefined }
   | { source: 'saved'; providerId: string; displayName: string; protocol: ProviderProtocol; provider: ProviderPublicStatusUiDto }
   | { source: 'draft'; providerId: string; displayName: string; protocol: ProviderProtocol; provider?: undefined };
 
 const newProviderId = '__new_provider__';
-const deepSeekProviderId = 'DeepSeek';
-
-const quickProviders: Array<{ providerId: string; displayName: string; protocol: ProviderProtocol }> = [
-  {
-    providerId: deepSeekProviderId,
-    displayName: 'DeepSeek',
-    protocol: 'openai-compatible',
-  },
-];
 
 function credentialLabel(provider: ProviderPublicStatusUiDto): string {
   if (provider.credentialSource === 'settings') return 'Settings key active';
@@ -57,13 +51,13 @@ function createInitialFormState(provider: ProviderPublicStatusUiDto): ProviderFo
   };
 }
 
-function createQuickProviderFormState(entry: { providerId: string; protocol: ProviderProtocol }): ProviderFormState {
+function createQuickProviderFormState(entry: ProviderCatalogUiDto): ProviderFormState {
   return {
     provider: entry.providerId,
     protocol: entry.protocol,
     enabled: true,
-    baseUrl: '',
-    modelIdsText: '',
+    baseUrl: entry.defaultBaseUrl,
+    modelIdsText: entry.models.map((model) => model.modelId).join('\n'),
     apiKey: '',
   };
 }
@@ -97,6 +91,7 @@ function providerIconClassName(selected: boolean): string {
 
 export function ProviderSettingsPanel() {
   const providers = useProviderStore((state) => state.providers);
+  const catalog = useProviderStore((state) => state.catalog);
   const status = useProviderStore((state) => state.status);
   const error = useProviderStore((state) => state.error);
   const loadProviders = useProviderStore((state) => state.loadProviders);
@@ -104,7 +99,7 @@ export function ProviderSettingsPanel() {
   const deleteProvider = useProviderStore((state) => state.deleteProvider);
   const setApiKey = useProviderStore((state) => state.setApiKey);
   const [query, setQuery] = useState('');
-  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(deepSeekProviderId);
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
   const [forms, setForms] = useState<Record<string, ProviderFormState>>({});
 
   useEffect(() => {
@@ -125,8 +120,10 @@ export function ProviderSettingsPanel() {
 
   const entries = useMemo<ProviderListEntry[]>(() => {
     const usedProviderIds = new Set<string>();
-    const quickEntries = quickProviders.map((quick): ProviderListEntry => {
-      const saved = providers.find((provider) => provider.providerId === quick.providerId);
+    const quickEntries = catalog.map((quick): ProviderListEntry => {
+      const saved = providers.find(
+        (provider) => provider.providerId.toLowerCase() === quick.providerId.toLowerCase(),
+      );
       if (saved) {
         usedProviderIds.add(saved.providerId);
         return {
@@ -142,6 +139,7 @@ export function ProviderSettingsPanel() {
         providerId: quick.providerId,
         displayName: quick.displayName,
         protocol: quick.protocol,
+        catalog: quick,
       };
     });
 
@@ -156,12 +154,12 @@ export function ProviderSettingsPanel() {
       }));
 
     return [...quickEntries, ...savedEntries];
-  }, [providers]);
+  }, [catalog, providers]);
 
   useEffect(() => {
     if (selectedProviderId === newProviderId) return;
     if (selectedProviderId && entries.some((entry) => entry.providerId === selectedProviderId)) return;
-    setSelectedProviderId(entries[0]?.providerId ?? deepSeekProviderId);
+    setSelectedProviderId(entries[0]?.providerId ?? null);
   }, [entries, selectedProviderId]);
 
   const filteredEntries = useMemo(() => {
@@ -177,12 +175,12 @@ export function ProviderSettingsPanel() {
     ? undefined
     : entries.find((entry) => entry.providerId === selectedProviderId);
   const selectedProvider = selectedEntry?.source === 'saved' ? selectedEntry.provider : undefined;
-  const selectedFormKey = selectedProviderId ?? deepSeekProviderId;
+  const selectedFormKey = selectedProviderId ?? newProviderId;
   const selectedForm = forms[selectedFormKey] ?? (
     selectedProvider
       ? createInitialFormState(selectedProvider)
-      : selectedEntry
-        ? createQuickProviderFormState(selectedEntry)
+      : selectedEntry?.source === 'quick'
+        ? createQuickProviderFormState(selectedEntry.catalog)
         : createNewProviderFormState()
   );
   const isCreating = selectedProviderId === newProviderId;
@@ -213,7 +211,9 @@ export function ProviderSettingsPanel() {
       [entry.providerId]: current[entry.providerId] ?? (
         entry.source === 'saved'
           ? createInitialFormState(entry.provider)
-          : createQuickProviderFormState(entry)
+          : entry.source === 'quick'
+            ? createQuickProviderFormState(entry.catalog)
+            : createNewProviderFormState()
       ),
     }));
   }
@@ -227,7 +227,7 @@ export function ProviderSettingsPanel() {
 
     await updateProvider({
       providerId: providerName,
-      displayName: providerName,
+      displayName: selectedEntry?.displayName ?? providerName,
       enabled: selectedForm.enabled,
       protocol: selectedForm.protocol,
       baseUrl: selectedForm.baseUrl.trim() || undefined,
@@ -324,7 +324,11 @@ export function ProviderSettingsPanel() {
                 <ProviderListItem
                   key={`${entry.source}:${entry.providerId}`}
                   entry={entry}
-                  modelCount={entry.source === 'saved' ? entry.provider.modelIds.length : 0}
+                  modelCount={entry.source === 'saved'
+                    ? entry.provider.modelIds.length
+                    : entry.source === 'quick'
+                      ? entry.catalog.models.length
+                      : 0}
                   selected={selectedProviderId === entry.providerId}
                   onClick={() => selectEntry(entry)}
                 />

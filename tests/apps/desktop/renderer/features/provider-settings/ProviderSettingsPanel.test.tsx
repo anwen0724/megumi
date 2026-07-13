@@ -8,6 +8,16 @@ import { ProviderSettingsPanel } from '@megumi/desktop/renderer/features/provide
 describe('ProviderSettingsPanel', () => {
   beforeEach(() => {
     useProviderStore.setState({
+      catalog: [{
+        providerId: 'DeepSeek',
+        displayName: 'DeepSeek',
+        protocol: 'openai-compatible',
+        defaultBaseUrl: 'https://api.deepseek.com',
+        models: [
+          { modelId: 'deepseek-v4-flash', displayName: 'DeepSeek V4 Flash', contextWindowTokens: 1_000_000 },
+          { modelId: 'deepseek-v4-pro', displayName: 'DeepSeek V4 Pro', contextWindowTokens: 1_000_000 },
+        ],
+      }],
       providers: [
         {
           providerId: 'DeepSeek',
@@ -57,6 +67,16 @@ describe('ProviderSettingsPanel', () => {
     expect(screen.queryByLabelText('Display name')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('API Key env')).not.toBeInTheDocument();
     expect(screen.queryByText(/sk-/i)).not.toBeInTheDocument();
+  });
+
+  it('prefills an unsaved provider from the AI Catalog', () => {
+    useProviderStore.setState({ providers: [] });
+
+    render(<ProviderSettingsPanel />);
+
+    expect(screen.getByLabelText('Provider')).toHaveValue('DeepSeek');
+    expect(screen.getByLabelText('Base URL')).toHaveValue('https://api.deepseek.com');
+    expect(screen.getByLabelText('Models')).toHaveValue('deepseek-v4-flash\ndeepseek-v4-pro');
   });
 
   it('updates the selected provider settings from the detail pane', async () => {

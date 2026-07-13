@@ -37,7 +37,7 @@ describe('SettingsHost semantics', () => {
       patch: {
         display_name: '',
         base_url: '',
-        models: [],
+        models: {},
       },
     });
   });
@@ -89,6 +89,43 @@ describe('SettingsHost semantics', () => {
       provider: { displayName: 'DeepSeek' },
     });
   });
+
+  it('projects the Settings-owned provider catalog for the host UI', async () => {
+    const host = createSettingsHost({
+      listProviderSettings: vi.fn(() => ({ status: 'ok' as const, providers: [] })),
+      listProviderCatalog: vi.fn(() => ({
+        status: 'ok' as const,
+        providers: [{
+          providerId: 'DeepSeek',
+          displayName: 'DeepSeek',
+          protocol: 'openai-compatible' as const,
+          defaultBaseUrl: 'https://api.deepseek.com',
+          models: [{
+            modelId: 'deepseek-v4-flash',
+            displayName: 'DeepSeek V4 Flash',
+            contextWindowTokens: 1_000_000,
+            capabilities: { streaming: true, toolCalls: true, thinking: true },
+          }],
+        }],
+      })),
+    } as never);
+
+    await expect(host.listProviders()).resolves.toEqual({
+      status: 'ok',
+      providers: [],
+      catalog: [{
+        providerId: 'DeepSeek',
+        displayName: 'DeepSeek',
+        protocol: 'openai-compatible',
+        defaultBaseUrl: 'https://api.deepseek.com',
+        models: [{
+          modelId: 'deepseek-v4-flash',
+          displayName: 'DeepSeek V4 Flash',
+          contextWindowTokens: 1_000_000,
+        }],
+      }],
+    });
+  });
 });
 
 function resolvedSettings() {
@@ -97,6 +134,7 @@ function resolvedSettings() {
     theme: 'midnight-blue' as const,
     setup: { completed: true, completed_at: '2026-07-10T00:00:00.000Z' },
     memory: { enabled: false },
+    context: { compaction_threshold_ratio: 0.8 },
     web: { search: {} },
     providers: {},
     permissions: { allow: [], ask: [], deny: [] },
@@ -109,6 +147,6 @@ function providerSettings() {
     protocol: 'openai-compatible' as const,
     display_name: 'DeepSeek',
     base_url: 'https://api.deepseek.com',
-    models: ['deepseek-chat'],
+    models: { 'deepseek-v4-flash': { context_window_tokens: 1_000_000 } },
   };
 }

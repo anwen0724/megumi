@@ -50,6 +50,7 @@ export type {
   AppLanguage,
   AppThemeName,
   EmptyUiResult,
+  ProviderCatalogUiDto,
   ProviderListUiResult,
   ProviderPublicStatusUiDto,
   SettingsCompleteSetupUiResult,
