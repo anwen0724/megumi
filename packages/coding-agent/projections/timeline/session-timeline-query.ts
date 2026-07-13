@@ -45,7 +45,10 @@ export function createSessionTimelineQuery(input: {
       });
       return {
         messages: request.run_id
-          ? projected.filter((message) => message.role === 'assistant' && message.runId === request.run_id)
+          ? projected.filter((message) => (
+              (message.role === 'user' || message.role === 'assistant')
+              && message.runId === request.run_id
+            ))
           : projected,
         diagnostics: [],
       };
