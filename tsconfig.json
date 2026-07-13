@@ -19,7 +19,9 @@
       "@megumi/coding-agent": ["packages/coding-agent/index.ts"],
       "@megumi/coding-agent/*": ["packages/coding-agent/*"],
       "@megumi/ai": ["packages/ai/index.ts"],
-      "@megumi/ai/*": ["packages/ai/*"]
+      "@megumi/ai/*": ["packages/ai/*"],
+      "@megumi/observability": ["packages/observability/index.ts"],
+      "@megumi/observability/*": ["packages/observability/*"]
     }
   },
   "include": ["apps/**/*", "packages/**/*", "tests/**/*"],

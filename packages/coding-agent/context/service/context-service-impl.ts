@@ -28,6 +28,7 @@ import type {
   RecordCompletedRunUsageRequest,
   RecordCompletedRunUsageResult,
 } from './context-service-types';
+import type { ObservabilityService } from '@megumi/observability';
 
 export type InstructionScopeResolver = {
   resolve(request: { workspaceId: string }):
@@ -51,9 +52,7 @@ export type ContextServiceDependencies = {
     get(sessionId: string): SessionUsageSnapshot | undefined;
     set(sessionId: string, snapshot: SessionUsageSnapshot): void;
   };
-  observability?: {
-    recordPreparedCall(input: { preparationId: string; sourceRefs: ContextSourceRef[]; usage: ContextUsage }): void;
-  };
+  observability?: ObservabilityService;
   policy?: Partial<ContextPolicy>;
   policyProvider?: { getPolicy(): Partial<ContextPolicy> };
   clock?: { now(): string };
@@ -75,6 +74,18 @@ type BuildFacts = {
 };
 
 type BuiltPrompt = { prompt: Prompt; sourceRefs: ContextSourceRef[] };
+type CompactInternalInput = {
+  facts: BuildFacts;
+  usageBefore: ContextUsage;
+  modelContext: ContextCapacity;
+  policy: ContextPolicy;
+  onProgress?: (progress: ContextCompactionProgress) => void;
+  signal?: AbortSignal;
+};
+type CompactInternalResult =
+  | { status: 'compacted'; compactionId: string; usageAfter: ContextUsage; facts: BuildFacts }
+  | { status: 'nothing_to_compact'; reason: 'no_historical_turns' | 'no_older_turns' | 'summary_not_reducing' }
+  | { status: 'failed'; failure: ContextFailure };
 
 export class ContextServiceImpl implements ContextService {
   private readonly defaultPolicy: ContextPolicy;
@@ -96,7 +107,17 @@ export class ContextServiceImpl implements ContextService {
   }
 
   async prepareModelCall(request: PrepareModelCallRequest): Promise<PrepareModelCallResult> {
-    return this.withSessionOperation(request.sessionId, () => this.prepareModelCallExclusive(request));
+    const span = this.dependencies.observability?.startSpan({ name: 'context.prepare_model_call', correlation: { sessionId: request.sessionId, workspaceId: request.workspaceId } });
+    const operation = async () => {
+      const result = await this.withSessionOperation(request.sessionId, () => this.prepareModelCallExclusive(request));
+      if (span) this.dependencies.observability?.endSpan({ span, status: result.status === 'ready' ? 'ok' : result.failure.code === 'cancelled' ? 'cancelled' : 'error' });
+      if (result.status === 'ready') {
+        this.dependencies.observability?.recordMeasurement({ name: 'context.used_tokens', value: result.prepared.usage.usedTokens, unit: 'token', correlation: { sessionId: request.sessionId } });
+        this.dependencies.observability?.recordMeasurement({ name: 'context.window_tokens', value: result.prepared.usage.contextWindowTokens, unit: 'token', correlation: { sessionId: request.sessionId } });
+      }
+      return result;
+    };
+    return span ? this.dependencies.observability!.runInSpanContext(span, operation) : operation();
   }
 
   private async prepareModelCallExclusive(request: PrepareModelCallRequest): Promise<PrepareModelCallResult> {
@@ -147,11 +168,6 @@ export class ContextServiceImpl implements ContextService {
     if (request.signal?.aborted) return failed(cancelled());
     if (usage.usedTokens >= usage.contextWindowTokens) return failed(windowExceeded(usage));
     const preparationId = this.ids.preparationId();
-    try {
-      this.dependencies.observability?.recordPreparedCall({ preparationId, sourceRefs: built.sourceRefs, usage });
-    } catch {
-      // Observability is never a recovery source and cannot block preparation.
-    }
     return {
       status: 'ready',
       prepared: {
@@ -279,18 +295,25 @@ export class ContextServiceImpl implements ContextService {
     }
   }
 
-  private async compactInternal(input: {
-    facts: BuildFacts;
-    usageBefore: ContextUsage;
-    modelContext: ContextCapacity;
-    policy: ContextPolicy;
-    onProgress?: (progress: ContextCompactionProgress) => void;
-    signal?: AbortSignal;
-  }): Promise<
-    | { status: 'compacted'; compactionId: string; usageAfter: ContextUsage; facts: BuildFacts }
-    | { status: 'nothing_to_compact'; reason: 'no_historical_turns' | 'no_older_turns' | 'summary_not_reducing' }
-    | { status: 'failed'; failure: ContextFailure }
-  > {
+  private async compactInternal(input: CompactInternalInput): Promise<CompactInternalResult> {
+    const observability = this.dependencies.observability;
+    const traced = Boolean(observability?.getCurrentTrace());
+    const span = traced ? observability?.startSpan({ name: 'context.compact', correlation: { sessionId: input.facts.sessionId } }) : undefined;
+    if (!traced) observability?.recordLog({ level: 'info', event: 'context.compaction.started', correlation: { sessionId: input.facts.sessionId }, attributes: { beforeTokens: input.usageBefore.usedTokens, automatic: false } });
+    const operation = async () => {
+      const result = await this.compactInternalCore(input);
+      const status = result.status === 'compacted' ? 'ok' : result.status === 'failed' && result.failure.code === 'cancelled' ? 'cancelled' : result.status === 'failed' ? 'error' : 'ok';
+      if (span) observability?.endSpan({ span, status, attributes: { beforeTokens: input.usageBefore.usedTokens, ...(result.status === 'compacted' ? { afterTokens: result.usageAfter.usedTokens } : {}) } });
+      if (!traced) {
+        observability?.recordLog({ level: result.status === 'failed' ? 'warn' : 'info', event: result.status === 'compacted' ? 'context.compaction.completed' : 'context.compaction.finished', correlation: { sessionId: input.facts.sessionId }, attributes: { status: result.status, automatic: false } });
+        if (result.status === 'compacted') observability?.recordMeasurement({ name: 'context.compaction.after_tokens', value: result.usageAfter.usedTokens, unit: 'token', correlation: { sessionId: input.facts.sessionId } });
+      }
+      return result;
+    };
+    return span ? observability!.runInSpanContext(span, operation) : operation();
+  }
+
+  private async compactInternalCore(input: CompactInternalInput): Promise<CompactInternalResult> {
     const plan = planCompaction({
       historicalTurns: input.facts.historicalTurns,
       keepRecentTurns: input.policy.keepRecentTurns,

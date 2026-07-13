@@ -19,20 +19,25 @@ import type { ProductHostInterface } from '../host-interface/product-host-interf
 import { createSettingsHost } from '../host-interface/settings-host';
 import { createSkillHost } from '../host-interface/skill-host';
 import { createWorkspaceHost, type DirectoryPickerPort, type FileOpenPort } from '../host-interface/workspace-host';
+import { createObservabilityHost, type DiagnosticBundleSavePort } from '../host-interface/observability-host';
 import {
-  createProductRuntimeLogger,
+  createObservabilityRuntimeLogger,
   type RuntimeLogClockPort,
   type RuntimeLogWriterPort,
 } from '../logging';
 import type { RuntimeLogger } from '@megumi/coding-agent/composition';
+import { composeObservability, type ObservabilityStorage } from '@megumi/observability';
 
 export type ComposeProductOptions = Omit<
   ComposeCodingAgentRuntimeOptions,
   'homePaths' | 'runtimeLogger'
 > & {
   home: InitializeMegumiHomeSyncOptions;
-  logWriter: RuntimeLogWriterPort;
+  logWriter?: RuntimeLogWriterPort;
   logClock?: RuntimeLogClockPort;
+  observabilityStorage?: ObservabilityStorage;
+  productEnvironment?: { appVersion: string; platform: string; arch: string };
+  diagnosticBundleSave?: DiagnosticBundleSavePort;
   directoryPicker?: DirectoryPickerPort;
   fileOpen?: FileOpenPort;
 };
@@ -41,16 +46,21 @@ export interface ProductRuntime {
   homePaths: MegumiHomePaths;
   host: ProductHostInterface;
   logger: RuntimeLogger;
+  observability: ReturnType<typeof composeObservability>;
   dispose(): void;
 }
 
 export function composeProduct(options: ComposeProductOptions): ProductRuntime {
   const homePaths = initializeMegumiHomeSync(options.home);
-  const logger = createProductRuntimeLogger({
-    logsPath: homePaths.logsPath,
-    writer: options.logWriter,
-    clock: options.logClock ?? { now: () => new Date() },
+  const observability = composeObservability({
+    directoryPath: `${homePaths.logsPath}/observability`,
+    storage: options.observabilityStorage ?? noopObservabilityStorage,
+    appVersion: options.productEnvironment?.appVersion ?? 'unknown',
+    platform: options.productEnvironment?.platform ?? 'unknown',
+    arch: options.productEnvironment?.arch ?? 'unknown',
+    now: options.logClock?.now,
   });
+  const logger = createObservabilityRuntimeLogger(observability.service);
   const runtime = composeCodingAgentRuntime({
     ...codingAgentOptions(options),
     homePaths: {
@@ -59,6 +69,7 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
       settingsPath: homePaths.settingsPath,
     },
     runtimeLogger: logger,
+    observabilityService: observability.service,
   });
   const artifacts = createArtifactHost(runtime.artifactService);
   const host: ProductHostInterface = {
@@ -82,13 +93,15 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
     approval: createApprovalHost(runtime.agentRunService),
     artifacts,
     plan: createPlanHost(runtime.planArtifactService),
+    observability: createObservabilityHost(observability.queryService, options.diagnosticBundleSave),
   };
 
   return {
     homePaths,
     host,
     logger,
-    dispose: runtime.dispose,
+    observability,
+    dispose: () => { void observability.flush(); runtime.dispose(); },
   };
 }
 
@@ -99,9 +112,22 @@ function codingAgentOptions(
     home: _home,
     logWriter: _logWriter,
     logClock: _logClock,
+    observabilityStorage: _observabilityStorage,
+    productEnvironment: _productEnvironment,
+    diagnosticBundleSave: _diagnosticBundleSave,
     directoryPicker: _directoryPicker,
     fileOpen: _fileOpen,
     ...codingAgent
   } = options;
   return codingAgent;
 }
+
+const noopObservabilityStorage: ObservabilityStorage = {
+  ensureDirectory: async () => undefined,
+  appendText: async () => undefined,
+  readText: async () => '',
+  listFiles: async () => [],
+  stat: async () => undefined,
+  move: async () => undefined,
+  remove: async () => undefined,
+};

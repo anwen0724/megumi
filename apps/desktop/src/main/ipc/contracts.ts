@@ -52,6 +52,9 @@ export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.artifacts.versionCreate,
   IPC_CHANNELS.artifacts.statusUpdate,
   IPC_CHANNELS.artifacts.reference,
+  IPC_CHANNELS.observability.list,
+  IPC_CHANNELS.observability.get,
+  IPC_CHANNELS.observability.bundle,
 ] as const;
 
 export type BusinessIpcChannel = (typeof BUSINESS_IPC_CHANNELS)[number];

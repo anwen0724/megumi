@@ -1,8 +1,8 @@
 // @vitest-environment node
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createProductRuntimeLogger } from '@megumi/product/logging';
+import { noopRuntimeLogger } from '@megumi/product/logging';
 
 const mocks = vi.hoisted(() => {
   const homePath = `${process.cwd().replaceAll('\\', '/')}/.tmp/megumi-runtime-logger-review`;
@@ -249,14 +249,8 @@ describe('main runtime logger composition', () => {
     mocks.registerAppLifecycle.mockClear();
     mocks.createMainWindow.mockClear();
     mocks.composeProduct.mockReset();
-    mocks.composeProduct.mockImplementation((options: {
-      logWriter: { appendText(filePath: string, text: string): void };
-    }) => {
-      const logger = createProductRuntimeLogger({
-        logsPath: mocks.megumiHomePaths.logsPath,
-        writer: options.logWriter,
-        clock: { now: () => new Date('2026-07-10T00:00:00.000Z') },
-      });
+    mocks.composeProduct.mockImplementation(() => {
+      const logger = noopRuntimeLogger;
       return {
         homePaths: mocks.megumiHomePaths,
         logger,
@@ -285,7 +279,7 @@ describe('main runtime logger composition', () => {
     expect(existsSync(join(process.cwd(), 'packages', 'shared', 'run-mode-contracts.ts'))).toBe(false);
   });
 
-  it('wires a Megumi Home JSONL runtime logger into process and IPC registration paths', async () => {
+  it('wires unified Observability storage into process and IPC registration paths', async () => {
     await import('@megumi/desktop/main/index');
 
     const processLogger = mocks.registerRuntimeProcessErrorHandlers.mock.calls[0]?.[0]?.logger;
@@ -303,7 +297,9 @@ describe('main runtime logger composition', () => {
       home: expect.objectContaining({
         resourceLocator: expect.any(Object),
       }),
-      logWriter: expect.objectContaining({ appendText: expect.any(Function) }),
+      observabilityStorage: expect.objectContaining({ appendText: expect.any(Function), readText: expect.any(Function) }),
+      diagnosticBundleSave: expect.objectContaining({ save: expect.any(Function) }),
+      productEnvironment: expect.objectContaining({ platform: expect.any(String), arch: expect.any(String) }),
       directoryPicker: expect.objectContaining({
         chooseDirectory: expect.any(Function),
       }),
@@ -323,15 +319,9 @@ describe('main runtime logger composition', () => {
       settings: { host: mocks.codingAgentHost },
       approval: { host: mocks.codingAgentHost },
       artifact: mocks.codingAgentHost.artifacts,
+      observability: { host: mocks.codingAgentHost },
     });
 
-    processLogger.error('runtime_review_probe', {
-      authorization: 'Bearer TEST_RUNTIME_SECRET',
-    });
-
-    const logText = readFileSync(join(mocks.logsPath, 'runtime.jsonl'), 'utf8');
-    expect(logText).toContain('runtime_review_probe');
-    expect(logText).not.toContain('TEST_RUNTIME_SECRET');
-    expect(logText).not.toContain('Bearer TEST_RUNTIME_SECRET');
+    expect(existsSync(join(mocks.logsPath, 'runtime.jsonl'))).toBe(false);
   });
 });

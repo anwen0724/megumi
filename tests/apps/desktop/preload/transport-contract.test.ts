@@ -15,7 +15,7 @@ describe('Desktop preload transport contract', () => {
       ...tokens(preload, /invokeRuntimeIpc\((IPC_CHANNELS\.[a-zA-Z.]+)/g),
       ...tokens(preload, /ipcRenderer\.invoke\((IPC_CHANNELS\.[a-zA-Z.]+)/g),
     ]);
-    const registered = tokens(handlers, /ipcMain\.handle\((IPC_CHANNELS\.[a-zA-Z.]+)/g);
+    const registered = tokens(handlers, /ipcMain\.handle\(\s*(IPC_CHANNELS\.[a-zA-Z.]+)/g);
     expect([...invoked].sort()).toEqual([...registered].sort());
   });
 });

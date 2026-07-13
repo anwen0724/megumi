@@ -43,6 +43,9 @@ export const ArtifactVersionGetRequestSchema = createRuntimeIpcRequestSchema(IPC
 export const ArtifactVersionCreateRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.artifacts.versionCreate, host.ArtifactVersionCreatePayloadSchema);
 export const ArtifactStatusUpdateRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.artifacts.statusUpdate, host.ArtifactStatusUpdatePayloadSchema);
 export const ArtifactReferenceRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.artifacts.reference, host.ArtifactReferencePayloadSchema);
+export const ObservabilityListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.list, host.ObservabilityListPayloadSchema);
+export const ObservabilityGetRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.get, host.ObservabilityRunPayloadSchema);
+export const ObservabilityBundleRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.bundle, host.ObservabilityRunPayloadSchema);
 
 export type CommandSuggestionsPayload = z.infer<typeof host.CommandSuggestionsPayloadSchema>;
 export type SkillListPayload = z.infer<typeof host.SkillListPayloadSchema>;
@@ -78,3 +81,5 @@ export type ArtifactVersionGetPayload = z.infer<typeof host.ArtifactVersionGetPa
 export type ArtifactVersionCreatePayload = z.infer<typeof host.ArtifactVersionCreatePayloadSchema>;
 export type ArtifactStatusUpdatePayload = z.infer<typeof host.ArtifactStatusUpdatePayloadSchema>;
 export type ArtifactReferencePayload = z.infer<typeof host.ArtifactReferencePayloadSchema>;
+export type ObservabilityListPayload = z.infer<typeof host.ObservabilityListPayloadSchema>;
+export type ObservabilityRunPayload = z.infer<typeof host.ObservabilityRunPayloadSchema>;

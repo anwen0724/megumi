@@ -61,6 +61,7 @@ import {
 } from '../core/agent-run-runtime-events';
 import { ActiveRunStore } from '../core/active-run-store';
 import { createNoopAgentRunTraceLogger } from './agent-run-trace-logger';
+import type { ObservabilityService, SpanHandle, TraceHandle } from '@megumi/observability';
 
 export type CreateAgentRunServiceOptions = {
   active_run_store?: ActiveRunStore;
@@ -95,6 +96,7 @@ export type CreateAgentRunServiceOptions = {
     publish(event: RuntimeEvent): RuntimeEvent | void;
   };
   trace_logger?: AgentRunTraceLogger;
+  observability?: ObservabilityService;
   ids?: Partial<AgentRunServiceIds>;
   clock?: { now(): string };
   limits?: Partial<AgentRunLoopLimits>;
@@ -128,6 +130,8 @@ class DefaultAgentRunService implements AgentRunService {
   private readonly activeRunAbortControllers = new Map<string, AbortController>();
   private readonly activeModelCallByRun = new Map<string, string>();
   private readonly approvalContinuations = new Map<string, RunApprovalContinuation>();
+  private readonly observabilityRuns = new Map<string, { trace: TraceHandle; root: SpanHandle }>();
+  private readonly approvalWaitSpans = new Map<string, { runId: string; span: SpanHandle }>();
 
   constructor(private readonly options: CreateAgentRunServiceOptions) {
     this.activeRuns = options.active_run_store ?? new ActiveRunStore();
@@ -304,7 +308,8 @@ class DefaultAgentRunService implements AgentRunService {
           limits: this.limits,
         },
       });
-      void this.executeRunLoop({
+      const diagnostic = this.startRunObservability(run, request.request_id);
+      const execute = () => this.executeRunLoop({
         queue,
         eventSink,
         run,
@@ -319,6 +324,7 @@ class DefaultAgentRunService implements AgentRunService {
         ...(workspaceRoot.workspace_root ? { workspace_root: workspaceRoot.workspace_root } : {}),
         signal: controller.signal,
       });
+      void (diagnostic ? this.options.observability!.runInSpanContext(diagnostic.root, execute) : execute());
     }, 0);
 
     return {
@@ -359,6 +365,11 @@ class DefaultAgentRunService implements AgentRunService {
       this.activeModelCallByRun.delete(run.run_id);
     }
     for (const approval of this.activeRuns.listPendingApprovalRequestsByRun(run.run_id)) {
+      const waiting = this.approvalWaitSpans.get(approval.approval_request_id);
+      if (waiting && this.options.observability) {
+        this.options.observability.endSpan({ span: waiting.span, status: 'cancelled' });
+        this.approvalWaitSpans.delete(approval.approval_request_id);
+      }
       this.activeRuns.saveApprovalRequest({
         ...approval,
         status: 'cancelled',
@@ -381,6 +392,7 @@ class DefaultAgentRunService implements AgentRunService {
       to: 'cancelled',
       changed_at: this.clock.now(),
     }));
+    this.endRunObservability(run.run_id, 'cancelled');
     eventSink.emit({
       eventType: 'run.cancelled',
       run: cancelled,
@@ -435,6 +447,11 @@ class DefaultAgentRunService implements AgentRunService {
           message: 'Approval continuation is no longer available in this runtime.',
         },
       };
+    }
+    const waitingSpan = this.approvalWaitSpans.get(request.approval_request_id);
+    if (waitingSpan && this.options.observability) {
+      this.options.observability.endSpan({ span: waitingSpan.span, status: 'ok', attributes: { decision: request.decision.decision } });
+      this.approvalWaitSpans.delete(request.approval_request_id);
     }
     const originalPermissionDecision = continuation.original_approval_policy_by_approval_id[request.approval_request_id];
     if (!originalPermissionDecision) {
@@ -533,7 +550,7 @@ class DefaultAgentRunService implements AgentRunService {
       if (workspaceRoot.status === 'failed') {
         return this.failApprovalResume(resumedRun, workspaceRoot.failure, queue, continuation);
       }
-      const toolResult = await this.resolveToolExecutionService({
+      const executeApprovedTool = () => this.resolveToolExecutionService({
         run_id: run.run_id,
         session_id: run.session_id,
         workspace_id: run.workspace_id,
@@ -543,6 +560,10 @@ class DefaultAgentRunService implements AgentRunService {
         input: approval.subject.input,
         options: { signal: controller.signal },
       });
+      const diagnostic = this.observabilityRuns.get(run.run_id);
+      const toolResult = await (diagnostic && this.options.observability
+        ? this.options.observability.runInSpanContext(diagnostic.root, executeApprovedTool)
+        : executeApprovedTool());
       const afterExecution = this.activeRuns.getRun(run.run_id);
       if (!afterExecution || afterExecution.status === 'cancelled') {
         this.activeRunAbortControllers.delete(run.run_id);
@@ -659,7 +680,7 @@ class DefaultAgentRunService implements AgentRunService {
       return this.failApprovalResume(resumedRun, deferred.failure, queue, continuation);
     }
 
-    void this.executeRunLoop({
+    const execute = () => this.executeRunLoop({
       queue,
       eventSink,
       run: deferred.run,
@@ -671,6 +692,8 @@ class DefaultAgentRunService implements AgentRunService {
       ...(continuation.workspace_root ? { workspace_root: continuation.workspace_root } : {}),
       signal: controller.signal,
     });
+    const diagnostic = this.observabilityRuns.get(run.run_id);
+    void (diagnostic ? this.options.observability!.runInSpanContext(diagnostic.root, execute) : execute());
     return { status: 'resumed', run: deferred.run, events: queue.events() };
   }
 
@@ -957,6 +980,10 @@ class DefaultAgentRunService implements AgentRunService {
         retainForApproval = true;
         for (const approvalId of result.continuation.pending_approval_ids) {
           this.approvalContinuations.set(approvalId, result.continuation);
+          if (this.options.observability) {
+            const span = this.options.observability.startSpan({ name: 'approval.wait', correlation: { traceId: input.run.run_id, runId: input.run.run_id, sessionId: input.run.session_id, workspaceId: input.run.workspace_id } });
+            this.approvalWaitSpans.set(approvalId, { runId: input.run.run_id, span });
+          }
         }
         return;
       }
@@ -1004,11 +1031,27 @@ class DefaultAgentRunService implements AgentRunService {
         },
       });
     } finally {
+      if (!retainForApproval) {
+        const latest = this.activeRuns.getRun(input.run.run_id);
+        this.endRunObservability(input.run.run_id, latest?.status === 'completed' ? 'ok' : latest?.status === 'cancelled' ? 'cancelled' : 'error');
+      }
       this.activeRunAbortControllers.delete(input.run.run_id);
       this.activeModelCallByRun.delete(input.run.run_id);
       if (!retainForApproval) this.activeRuns.release(input.run.run_id);
       queueMicrotask(() => input.queue.close());
     }
+  }
+
+  private startRunObservability(run: AgentRun, requestId: string): { trace: TraceHandle; root: SpanHandle } | undefined {
+    if (!this.options.observability) return undefined;
+    const trace = this.options.observability.startTrace({ traceId: run.run_id, name: 'agent_run', runId: run.run_id, sessionId: run.session_id, workspaceId: run.workspace_id, requestId, attributes: { providerId: run.model_selection.provider_id, modelId: run.model_selection.model_id } });
+    const root = this.options.observability.runInTraceContext(trace, () => this.options.observability!.startSpan({ name: 'agent_run' }));
+    const value = { trace, root }; this.observabilityRuns.set(run.run_id, value); return value;
+  }
+
+  private endRunObservability(runId: string, status: 'ok' | 'error' | 'cancelled'): void {
+    const value = this.observabilityRuns.get(runId); if (!value || !this.options.observability) return;
+    this.options.observability.endSpan({ span: value.root, status }); this.options.observability.endTrace({ trace: value.trace, status }); this.observabilityRuns.delete(runId);
   }
 
   private resolveSession(request: StartRunRequest):

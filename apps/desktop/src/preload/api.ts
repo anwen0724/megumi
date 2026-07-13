@@ -43,6 +43,8 @@ import type {
 import { IPC_CHANNELS } from '../main/ipc/channels';
 import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from '../main/ipc/contracts';
 import type { RuntimeIpcError } from '../main/ipc/errors';
+import type { GetRunTraceResult, ListRecentRunTracesResult } from '@megumi/observability';
+import type { ObservabilityExportResult } from '@megumi/product/host-interface';
 import type {
   ApprovalResolvePayload,
   ArtifactGetPayload,
@@ -76,6 +78,8 @@ import type {
   SessionTimelineListPayload,
   WorkspaceFileOpenPayload,
   WorkspaceFilesListPayload,
+  ObservabilityListPayload,
+  ObservabilityRunPayload,
 } from '../main/ipc/schemas';
 
 type BusinessRequest<TPayload, TChannel extends BusinessIpcChannel> = RuntimeIpcRequest<TPayload, TChannel>;
@@ -323,6 +327,11 @@ export const api = {
       ): Promise<RuntimeIpcResult<WorkspaceOpenFileUiResult, typeof IPC_CHANNELS.workspace.filesOpen>> =>
         invokeRuntimeIpc(IPC_CHANNELS.workspace.filesOpen, request),
     },
+  },
+  observability: {
+    list: (request: BusinessRequest<ObservabilityListPayload, typeof IPC_CHANNELS.observability.list>): Promise<RuntimeIpcResult<ListRecentRunTracesResult, typeof IPC_CHANNELS.observability.list>> => invokeRuntimeIpc(IPC_CHANNELS.observability.list, request),
+    get: (request: BusinessRequest<ObservabilityRunPayload, typeof IPC_CHANNELS.observability.get>): Promise<RuntimeIpcResult<GetRunTraceResult, typeof IPC_CHANNELS.observability.get>> => invokeRuntimeIpc(IPC_CHANNELS.observability.get, request),
+    createBundle: (request: BusinessRequest<ObservabilityRunPayload, typeof IPC_CHANNELS.observability.bundle>): Promise<RuntimeIpcResult<ObservabilityExportResult, typeof IPC_CHANNELS.observability.bundle>> => invokeRuntimeIpc(IPC_CHANNELS.observability.bundle, request),
   },
   runtime: {
     onEvent: (callback: (event: RuntimeEvent) => void): (() => void) => {

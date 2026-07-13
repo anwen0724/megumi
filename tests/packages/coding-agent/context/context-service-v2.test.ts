@@ -61,9 +61,8 @@ describe('ContextServiceImpl prepareModelCall', () => {
     expect(deps.promptTokenCounter.count).toHaveBeenCalledTimes(1);
   });
 
-  it('returns owner-aware failures and does not turn observability errors into recovery input', async () => {
+  it('returns owner-aware failures without using diagnostics as recovery input', async () => {
     const deps = dependencies([20]);
-    deps.observability = { recordPreparedCall: vi.fn(() => { throw new Error('log unavailable'); }) };
     expect(await new ContextServiceImpl(deps).prepareModelCall(request())).toMatchObject({ status: 'ready' });
 
     deps.instructionScopeResolver.resolve = vi.fn(() => ({ status: 'failed' as const, failure: { code: 'workspace_missing', message: 'missing' } }));

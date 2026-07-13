@@ -4,6 +4,7 @@
  */
 import path from 'node:path';
 import type { RuntimeLogger } from '../../coding-agent/composition';
+import type { ObservabilityService } from '@megumi/observability';
 import { redactRuntimeValue } from './redaction';
 
 export const PRODUCT_RUNTIME_LOG_FILE_NAME = 'runtime.jsonl';
@@ -28,6 +29,14 @@ export const noopRuntimeLogger: RuntimeLogger = {
   warn: () => undefined,
   error: () => undefined,
 };
+
+export function createObservabilityRuntimeLogger(observability: ObservabilityService): RuntimeLogger {
+  return {
+    info: (event, details) => observability.recordLog({ level: 'info', event, attributes: details }),
+    warn: (event, details) => observability.recordLog({ level: 'warn', event, attributes: details }),
+    error: (event, details) => observability.recordLog({ level: 'error', event, attributes: details }),
+  };
+}
 
 export function createProductRuntimeLogger(options: {
   logsPath: string;

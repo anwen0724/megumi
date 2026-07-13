@@ -58,6 +58,11 @@ export const IPC_CHANNELS = {
     statusUpdate: 'artifacts:status:update',
     reference: 'artifacts:reference',
   },
+  observability: {
+    list: 'observability:list',
+    get: 'observability:get',
+    bundle: 'observability:bundle',
+  },
   runtime: {
     event: 'runtime:event',
   },
@@ -113,6 +118,9 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.artifacts.versionCreate,
   IPC_CHANNELS.artifacts.statusUpdate,
   IPC_CHANNELS.artifacts.reference,
+  IPC_CHANNELS.observability.list,
+  IPC_CHANNELS.observability.get,
+  IPC_CHANNELS.observability.bundle,
   IPC_CHANNELS.runtime.event,
 ] as const;
 
