@@ -2,15 +2,18 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-Megumi 是一个 local-first 的桌面 Coding Agent，用于处理真实代码库中的开发工作。
+**一个面向 Windows 的本地优先桌面 Coding Agent。**
 
-它把 Codex 风格的开发工作流带到桌面应用中：打开本地工作区，配置你自己的模型供应商，让 agent 理解项目、修改代码、运行验证命令，并在可见的会话时间线中跟踪它的工作过程。
+打开真实代码库，接入你自己的模型供应商，让 Megumi 检查文件、修改代码、运行命令并验证结果；整个过程都会显示在可追踪的会话时间线中。
 
-Megumi 面向希望使用 agentic coding 工作流、同时保留本地工作区控制权的开发者。
+[![状态：预览版](https://img.shields.io/badge/状态-预览版-d8a24a)](#项目状态)
+[![平台：Windows](https://img.shields.io/badge/平台-Windows-5f6b7a)](#开发)
+[![许可证：MIT](https://img.shields.io/badge/许可证-MIT-4c7a68)](./LICENSE)
+[![使用 TypeScript 构建](https://img.shields.io/badge/构建-TypeScript-3178c6)](https://www.typescriptlang.org/)
 
-## 界面预览
+**本地优先工作区 · BYOK 模型 · 可见工具执行 · 审批控制 · 会话分支**
 
-![Megumi 启动页面](./assets/screenshots/startup-screen.png)
+![Megumi——本地优先桌面 Coding Agent](./assets/social-preview.png)
 
 ## 为什么是 Megumi
 
@@ -40,17 +43,13 @@ Megumi 设计用于支持 Coding Agent 的核心开发工作：
 - 管理上下文：为每次模型调用组合项目指令、当前会话历史、本次 run 的工具结果、滚动摘要和选定工具集合。
 - 审批后执行：在敏感文件写入、命令执行或其它高影响操作前请求确认。
 
-## 安装
+## 项目状态
 
-Windows 用户可以从 GitHub Releases 下载最新安装包。
+Megumi 正在持续开发，目前处于 Windows 早期预览阶段。公开安装包尚未发布，在此之前可以按照下方步骤从源码启动。
 
-1. 下载最新的 `MegumiSetup.exe`。
-2. 运行安装程序。
-3. 启动 Megumi。
-4. 在 Settings 中配置模型供应商。
-5. 打开一个工作区，开始和 agent 协作。
+当前 Windows 构建尚未签名，因此未来的预览安装包可能触发 Windows SmartScreen 的 “Unknown publisher” 提示。
 
-当前 Windows 构建没有签名，因此 Windows SmartScreen 可能会显示 “Unknown publisher” 警告。
+你可以关注 [GitHub Releases](https://github.com/anwen0724/megumi/releases)，等待第一个公开安装包发布。
 
 ## 配置模型供应商
 
@@ -64,7 +63,7 @@ Megumi 使用用户自己配置的模型供应商。
 - API key
 - model IDs
 
-Megumi 当前支持 OpenAI-compatible 和 Anthropic 协议适配器。
+Megumi 当前通过 OpenAI-compatible Adapter 验证了 DeepSeek V4 Flash 和 DeepSeek V4 Pro，也支持配置自定义 OpenAI-compatible 地址和模型 ID。Anthropic 协议 Adapter 尚未实现。
 
 Provider settings 会保存在本地 Megumi home 目录下。
 

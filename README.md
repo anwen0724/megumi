@@ -2,15 +2,18 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-Megumi is a local-first desktop coding agent for working with real codebases.
+**A local-first desktop coding agent for Windows.**
 
-It brings a Codex-style development workflow into a desktop app: open a local workspace, configure your own model provider, ask the agent to understand the project, make changes, run verification commands, and follow its work in a visible session timeline.
+Open a real codebase, bring your own model provider, and let Megumi inspect files, edit code, run commands, and verify changes while you follow every step in a visible session timeline.
 
-Megumi is built for developers who want an agentic coding workflow without giving up local workspace control.
+[![Status: Preview](https://img.shields.io/badge/status-preview-d8a24a)](#project-status)
+[![Platform: Windows](https://img.shields.io/badge/platform-Windows-5f6b7a)](#development)
+[![License: MIT](https://img.shields.io/badge/license-MIT-4c7a68)](./LICENSE)
+[![Built with TypeScript](https://img.shields.io/badge/built_with-TypeScript-3178c6)](https://www.typescriptlang.org/)
 
-## Preview
+**Local-first workspaces · BYOK models · Visible tool execution · Approval controls · Session branching**
 
-![Megumi startup screen](./assets/screenshots/startup-screen.png)
+![Megumi — local-first desktop coding agent](./assets/social-preview.png)
 
 ## Why Megumi
 
@@ -40,17 +43,13 @@ Megumi is designed to support the core work of a coding agent:
 - Manage context: build each model call from project instructions, active session history, current-run tool results, rolling summaries, and the selected tool set.
 - Operate with approval: ask before sensitive file writes, command execution, or other high-impact actions.
 
-## Install
+## Project Status
 
-Windows users can download the latest installer from GitHub Releases.
+Megumi is under active development and is currently available as an early Windows preview. A public installer has not been released yet; until then, run the project from source using the steps below.
 
-1. Download the latest `MegumiSetup.exe`.
-2. Run the installer.
-3. Start Megumi.
-4. Configure a model provider in Settings.
-5. Open a workspace and start working with the agent.
+The current Windows build is unsigned, so future preview installers may show a Windows SmartScreen "Unknown publisher" warning.
 
-The current Windows build is unsigned, so Windows SmartScreen may show an "Unknown publisher" warning.
+Follow [GitHub Releases](https://github.com/anwen0724/megumi/releases) to be notified when the first installer is published.
 
 ## Configure a Model Provider
 
@@ -64,7 +63,7 @@ In Settings, add a provider with:
 - API key
 - model IDs
 
-Megumi currently supports OpenAI-compatible and Anthropic protocol adapters.
+Megumi currently includes verified catalog entries for DeepSeek V4 Flash and DeepSeek V4 Pro through the OpenAI-compatible adapter. Custom OpenAI-compatible endpoints and model IDs can also be configured. The Anthropic protocol adapter is not implemented yet.
 
 Provider settings are stored locally under the Megumi home directory.
 
