@@ -19,7 +19,7 @@ import type { ProductHostInterface } from '../host-interface/product-host-interf
 import { createSettingsHost } from '../host-interface/settings-host';
 import { createSkillHost } from '../host-interface/skill-host';
 import { createWorkspaceHost, type DirectoryPickerPort, type FileOpenPort } from '../host-interface/workspace-host';
-import { createObservabilityHost } from '../host-interface/observability-host';
+import { createObservabilityHost, type DiagnosticBundleSavePort } from '../host-interface/observability-host';
 import {
   createObservabilityRuntimeLogger,
   type RuntimeLogClockPort,
@@ -37,6 +37,7 @@ export type ComposeProductOptions = Omit<
   logClock?: RuntimeLogClockPort;
   observabilityStorage?: ObservabilityStorage;
   productEnvironment?: { appVersion: string; platform: string; arch: string };
+  diagnosticBundleSave?: DiagnosticBundleSavePort;
   directoryPicker?: DirectoryPickerPort;
   fileOpen?: FileOpenPort;
 };
@@ -92,7 +93,7 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
     approval: createApprovalHost(runtime.agentRunService),
     artifacts,
     plan: createPlanHost(runtime.planArtifactService),
-    observability: createObservabilityHost(observability.queryService),
+    observability: createObservabilityHost(observability.queryService, options.diagnosticBundleSave),
   };
 
   return {
@@ -113,6 +114,7 @@ function codingAgentOptions(
     logClock: _logClock,
     observabilityStorage: _observabilityStorage,
     productEnvironment: _productEnvironment,
+    diagnosticBundleSave: _diagnosticBundleSave,
     directoryPicker: _directoryPicker,
     fileOpen: _fileOpen,
     ...codingAgent

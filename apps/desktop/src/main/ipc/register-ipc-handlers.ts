@@ -24,7 +24,7 @@ export interface RegisterAllHandlersOptions {
   settings?: SettingsHandlersService;
   approval?: ApprovalHandlersService;
   artifact?: ArtifactHandlersService;
-  observability?: { host: Pick<import('@megumi/product/host-interface').ProductHostInterface, 'observability'>; saveBundle?: (bundle: import('@megumi/observability').DiagnosticBundle) => Promise<object> };
+  observability?: { host: Pick<import('@megumi/product/host-interface').ProductHostInterface, 'observability'> };
 }
 
 export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): void {

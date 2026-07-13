@@ -298,6 +298,7 @@ describe('main runtime logger composition', () => {
         resourceLocator: expect.any(Object),
       }),
       observabilityStorage: expect.objectContaining({ appendText: expect.any(Function), readText: expect.any(Function) }),
+      diagnosticBundleSave: expect.objectContaining({ save: expect.any(Function) }),
       productEnvironment: expect.objectContaining({ platform: expect.any(String), arch: expect.any(String) }),
       directoryPicker: expect.objectContaining({
         chooseDirectory: expect.any(Function),
@@ -318,7 +319,7 @@ describe('main runtime logger composition', () => {
       settings: { host: mocks.codingAgentHost },
       approval: { host: mocks.codingAgentHost },
       artifact: mocks.codingAgentHost.artifacts,
-      observability: expect.objectContaining({ host: mocks.codingAgentHost, saveBundle: expect.any(Function) }),
+      observability: { host: mocks.codingAgentHost },
     });
 
     expect(existsSync(join(mocks.logsPath, 'runtime.jsonl'))).toBe(false);

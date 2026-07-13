@@ -25,9 +25,6 @@ const mapError = () => ({
 export function registerObservabilityHandlers(
   service: {
     host: Pick<ProductHostInterface, "observability">;
-    saveBundle?: (
-      bundle: import("@megumi/observability").DiagnosticBundle,
-    ) => Promise<object>;
   },
   options: { logger?: RuntimeLogger; ipcMain?: DesktopIpcMain } = {},
 ) {
@@ -61,14 +58,8 @@ export function registerObservabilityHandlers(
       requestSchema: ObservabilityBundleRequestSchema,
       responseSchema: ObservabilityQueryResultSchema,
       logger: options.logger,
-      handle: async (r) => {
-        const result = await service.host.observability.createDiagnosticBundle(
-          r.payload,
-        );
-        return result.status === "created" && service.saveBundle
-          ? service.saveBundle(result.bundle)
-          : result;
-      },
+      handle: (r) =>
+        service.host.observability.exportDiagnosticBundle(r.payload),
       mapError,
     }),
   );

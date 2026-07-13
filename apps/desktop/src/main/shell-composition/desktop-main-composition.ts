@@ -13,6 +13,7 @@ export function composeDesktopMain() {
     migrationEnvironment: getElectronProductEnvironment(),
     observabilityStorage: electronObservabilityStorageAdapter,
     productEnvironment: { appVersion: process.env.npm_package_version ?? 'unknown', platform: process.platform, arch: process.arch },
+    diagnosticBundleSave: { save: saveDiagnosticBundle },
     directoryPicker: electronDirectoryPickerAdapter,
     fileOpen: electronFileOpenAdapter,
   });
@@ -27,7 +28,7 @@ export function composeDesktopMain() {
     settings: { host: productHost },
     approval: { host: productHost },
     artifact: productHost.artifacts,
-    observability: { host: productHost, saveBundle: saveDiagnosticBundle },
+    observability: { host: productHost },
     dispose: product.dispose,
   };
 }

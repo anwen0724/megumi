@@ -85,7 +85,7 @@ export type {
   PlanHost,
   PlanStatusUpdateData,
 } from './plan-host';
-export type { ObservabilityHost } from './observability-host';
+export type { ObservabilityHost, ObservabilityExportResult, DiagnosticBundleSavePort } from './observability-host';
 export { ObservabilityListPayloadSchema, ObservabilityRunPayloadSchema, ObservabilityQueryResultSchema } from './observability-host';
 export {
   WorkspaceListProjectsPayloadSchema,

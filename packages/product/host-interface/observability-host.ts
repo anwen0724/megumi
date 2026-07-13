@@ -1,6 +1,6 @@
-/* Exposes Observability query use cases without reinterpreting diagnostic facts. */
+/* Exposes Observability queries and coordinates host-owned bundle persistence. */
 import type {
-  CreateDiagnosticBundleResult,
+  DiagnosticBundle,
   GetRunTraceResult,
   ListRecentRunTracesResult,
   ObservabilityQueryService,
@@ -15,28 +15,43 @@ export const ObservabilityRunPayloadSchema = z
 export const ObservabilityQueryResultSchema = z
   .object({ status: z.string() })
   .passthrough();
+export type ObservabilityExportResult =
+  | { status: "saved"; directory: string }
+  | { status: "cancelled" }
+  | { status: "not_found" }
+  | { status: "failed"; message: string };
+export interface DiagnosticBundleSavePort {
+  save(bundle: DiagnosticBundle): Promise<ObservabilityExportResult>;
+}
 export interface ObservabilityHost {
   listRecentRunTraces(payload: {
     limit?: number;
   }): Promise<ListRecentRunTracesResult>;
   getRunTrace(payload: { runId: string }): Promise<GetRunTraceResult>;
-  createDiagnosticBundle(payload: {
+  exportDiagnosticBundle(payload: {
     runId: string;
-  }): Promise<CreateDiagnosticBundleResult>;
+  }): Promise<ObservabilityExportResult>;
 }
 export function createObservabilityHost(
   service: ObservabilityQueryService,
+  savePort?: DiagnosticBundleSavePort,
 ): ObservabilityHost {
   return {
-    listRecentRunTraces: (payload) =>
-      service.listRecentRunTraces(
-        ObservabilityListPayloadSchema.parse(payload),
-      ),
-    getRunTrace: (payload) =>
-      service.getRunTrace(ObservabilityRunPayloadSchema.parse(payload)),
-    createDiagnosticBundle: (payload) =>
-      service.createDiagnosticBundle(
-        ObservabilityRunPayloadSchema.parse(payload),
-      ),
+    listRecentRunTraces: (p) =>
+      service.listRecentRunTraces(ObservabilityListPayloadSchema.parse(p)),
+    getRunTrace: (p) =>
+      service.getRunTrace(ObservabilityRunPayloadSchema.parse(p)),
+    exportDiagnosticBundle: async (p) => {
+      const result = await service.createDiagnosticBundle(
+        ObservabilityRunPayloadSchema.parse(p),
+      );
+      if (result.status !== "created") return result;
+      return savePort
+        ? savePort.save(result.bundle)
+        : {
+            status: "failed",
+            message: "Diagnostic bundle save capability is unavailable.",
+          };
+    },
   };
 }
