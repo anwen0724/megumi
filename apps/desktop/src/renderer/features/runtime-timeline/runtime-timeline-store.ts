@@ -504,6 +504,12 @@ export const useRuntimeTimelineStore = create<RuntimeTimelineStoreState>((set, g
         if (committedRunMessages.length === 0) {
           return state;
         }
+        const completeCommittedRunMessages = committedRunMessages.some((message) => message.role === 'user')
+          ? committedRunMessages
+          : [
+              ...currentRunMessages.filter((message) => message.role === 'user'),
+              ...committedRunMessages,
+            ];
         return {
           sessions: {
             ...state.sessions,
@@ -511,7 +517,7 @@ export const useRuntimeTimelineStore = create<RuntimeTimelineStoreState>((set, g
               ...session,
               messages: [
                 ...otherMessages,
-                ...mergeCommittedMessages(currentRunMessages, committedRunMessages, session.streamsById),
+                ...mergeCommittedMessages(currentRunMessages, completeCommittedRunMessages, session.streamsById),
               ].sort(compareTimelineMessages),
             },
           },

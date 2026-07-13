@@ -58,6 +58,7 @@ export type {
   SettingsGetPayload,
   SettingsGetUiResult,
   SettingsHost,
+  SettingsUiResolved,
   SettingsUpdatePayload,
   SettingsUpdateUiResult,
 } from './settings-host';

@@ -10,13 +10,13 @@ import {
   createFailedToolResult,
   normalizeRawToolResult,
 } from '../core/tool-execution-result';
-import type { BuiltInToolAdapter } from '../adapters/built-in-tools';
+import type { BuiltInToolExecutor } from '../built-in-tools';
 import type { ToolRegistryService } from './tool-registry-service';
 
 export class ToolExecutionService {
   constructor(private readonly input: {
     registryService: Pick<ToolRegistryService, 'getRegisteredTool'>;
-    builtInTools: BuiltInToolAdapter;
+    builtInTools: BuiltInToolExecutor;
   }) {}
 
   async executeTool(request: ExecuteToolRequest): Promise<ToolExecutionResult> {

@@ -4,7 +4,7 @@ import { EventEmitter } from 'node:events';
 import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
-import { createBuiltInToolAdapter } from '@megumi/coding-agent/tools/adapters/built-in-tools';
+import { createBuiltInToolExecutor } from '@megumi/coding-agent/tools/built-in-tools';
 import { createLocalWorkspaceFileAccess } from '@megumi/coding-agent/composition/compose-coding-agent-tool-runtime';
 
 describe('built-in tool adapter file and command execution', () => {
@@ -19,7 +19,7 @@ describe('built-in tool adapter file and command execution', () => {
   });
 
   it('rejects paths outside the project root', async () => {
-    const adapter = createBuiltInToolAdapter({
+    const adapter = createBuiltInToolExecutor({
       workspaceFileAccess: createLocalWorkspaceFileAccess({ projectRoot: tmpDir }),
     });
 
@@ -30,7 +30,7 @@ describe('built-in tool adapter file and command execution', () => {
   });
 
   it('reads, writes, and edits files inside the project root', async () => {
-    const adapter = createBuiltInToolAdapter({
+    const adapter = createBuiltInToolExecutor({
       workspaceFileAccess: createLocalWorkspaceFileAccess({ projectRoot: tmpDir }),
     });
 
@@ -74,7 +74,7 @@ describe('built-in tool adapter file and command execution', () => {
       }, 0);
       return child;
     });
-    const adapter = createBuiltInToolAdapter({
+    const adapter = createBuiltInToolExecutor({
       workspaceFileAccess: createLocalWorkspaceFileAccess({ projectRoot: tmpDir }),
       spawn: spawn as never,
     });

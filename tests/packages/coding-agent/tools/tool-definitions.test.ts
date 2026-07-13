@@ -16,6 +16,8 @@ describe('tool definitions', () => {
       'write_file',
       'run_command',
       'activate_skill',
+      'web_search',
+      'web_fetch',
     ]);
     expect(BUILT_IN_TOOL_DEFINITIONS.map((definition) => definition.name)).toEqual(BUILT_IN_TOOL_NAMES);
   });
@@ -51,6 +53,34 @@ describe('tool definitions', () => {
           additionalProperties: true,
         },
       },
+    });
+  });
+
+  it('classifies web_search as a read-only open-world network tool', () => {
+    const webSearch = listBuiltInToolDefinitions()
+      .find((definition) => definition.name === 'web_search');
+
+    expect(webSearch).toMatchObject({
+      capabilities: ['network_access'],
+      riskLevel: 'medium',
+      sideEffect: 'access_network',
+      executionMode: 'parallel',
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    });
+  });
+
+  it('classifies web_fetch as a read-only open-world network tool', () => {
+    const webFetch = listBuiltInToolDefinitions().find((definition) => definition.name === 'web_fetch');
+    expect(webFetch).toMatchObject({
+      capabilities: ['network_access'],
+      riskLevel: 'medium',
+      sideEffect: 'access_network',
+      executionMode: 'parallel',
+      annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     });
   });
 });

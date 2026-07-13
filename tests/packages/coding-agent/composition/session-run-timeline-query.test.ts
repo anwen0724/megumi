@@ -62,7 +62,10 @@ describe('Session Run Timeline query', () => {
 
     expect(listRunMessages).toHaveBeenCalledWith('session-1', 'run-2');
     expect(listAllPathMessages).not.toHaveBeenCalled();
-    expect(result.messages).toHaveLength(1);
-    expect(result.messages[0]).toMatchObject({ role: 'assistant', runId: 'run-2', historyOrder: 3 });
+    expect(result.messages).toHaveLength(2);
+    expect(result.messages).toEqual([
+      expect.objectContaining({ role: 'user', runId: 'run-2', historyOrder: 2 }),
+      expect.objectContaining({ role: 'assistant', runId: 'run-2', historyOrder: 3 }),
+    ]);
   });
 });

@@ -394,4 +394,38 @@ describe('runtime timeline store', () => {
       error: 'Hydration failed.',
     });
   });
+
+  it('does not remove the visible user message when a completed Run projection is incomplete', () => {
+    const store = useRuntimeTimelineStore.getState();
+    store.addPendingUserMessage('project-1', 'session-1', {
+      clientMessageId: 'client-message-1',
+      messageId: 'user-message-1',
+      text: 'Read this website.',
+      createdAt: '2026-07-13T08:00:00.000Z',
+      runId: 'run-1',
+    });
+    store.dispatch(runtimeEvent('run.started', 1, { runKind: 'agent' }));
+    store.dispatch(runtimeEvent('run.completed', 2, {}));
+
+    store.reconcileCommittedRunMessages('project-1', 'session-1', 'run-1', [{
+      messageId: 'assistant-message-1',
+      role: 'assistant',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      createdAt: '2026-07-13T08:00:01.000Z',
+      blocks: [{
+        blockId: 'answer:assistant-message-1',
+        kind: 'answer_text',
+        runId: 'run-1',
+        textId: 'text:assistant-message-1',
+        status: 'completed',
+        text: 'Done.',
+        format: 'markdown',
+      }],
+    }]);
+
+    expect(useRuntimeTimelineStore.getState().sessions['project-1:session-1']?.messages.map((message) => message.role))
+      .toEqual(['user', 'assistant']);
+  });
 });

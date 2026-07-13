@@ -6,7 +6,7 @@ import {
   ToolRegistryService,
   type RegisteredTool,
 } from '@megumi/coding-agent/tools';
-import { createBuiltInToolAdapter, type WorkspaceFileAccess } from '@megumi/coding-agent/tools/adapters/built-in-tools';
+import { createBuiltInToolExecutor, type WorkspaceFileAccess } from '@megumi/coding-agent/tools/built-in-tools';
 
 describe('ToolExecutionService', () => {
   it('executes registered built-in tools and normalizes their output', async () => {
@@ -119,7 +119,7 @@ describe('ToolExecutionService', () => {
     });
     const service = new ToolExecutionService({
       registryService: new ToolRegistryService(),
-      builtInTools: createBuiltInToolAdapter({
+      builtInTools: createBuiltInToolExecutor({
         workspaceFileAccess: fakeWorkspaceFileAccess(new Map()),
         spawn: spawn as never,
       }),
@@ -157,7 +157,7 @@ describe('ToolExecutionService', () => {
 function createService(files: Map<string, string>): ToolExecutionService {
   return new ToolExecutionService({
     registryService: new ToolRegistryService(),
-    builtInTools: createBuiltInToolAdapter({
+    builtInTools: createBuiltInToolExecutor({
       workspaceFileAccess: fakeWorkspaceFileAccess(files),
     }),
   });

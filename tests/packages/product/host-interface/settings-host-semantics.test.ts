@@ -47,6 +47,10 @@ describe('SettingsHost semantics', () => {
     const host = createSettingsHost({
       updateSettings: vi.fn(() => ({ status: 'updated' as const, settings })),
       completeSetup: vi.fn(() => ({ status: 'completed' as const, settings })),
+      getWebSearchSettings: vi.fn(() => ({
+        status: 'ok' as const,
+        settings: { provider: 'brave' as const, has_api_key: true, credential_source: 'settings' as const },
+      })),
     } as never);
 
     await expect(host.update({ theme: 'midnight-blue' })).resolves.toMatchObject({
@@ -93,6 +97,7 @@ function resolvedSettings() {
     theme: 'midnight-blue' as const,
     setup: { completed: true, completed_at: '2026-07-10T00:00:00.000Z' },
     memory: { enabled: false },
+    web: { search: {} },
     providers: {},
     permissions: { allow: [], ask: [], deny: [] },
   };

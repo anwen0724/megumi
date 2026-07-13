@@ -1,11 +1,12 @@
 import { useEffect, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { ArrowLeft, Bot, BrainCircuit, CheckCircle2, Info, Palette, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Bot, BrainCircuit, CheckCircle2, Globe2, Info, Palette, ShieldCheck } from 'lucide-react';
 import { MemorySettingsPanel } from '../features/memory-settings';
 import { ProviderSettingsPanel } from '../features/provider-settings';
+import { WebSettingsPanel } from '../features/web-settings';
 import { ThemeSelector } from '../shared/theme';
 import { Button, cx } from '../shared/ui';
 
-type SettingsCategory = 'appearance' | 'models' | 'memory' | 'security' | 'about';
+type SettingsCategory = 'appearance' | 'models' | 'web' | 'memory' | 'security' | 'about';
 
 interface SettingsPageProps {
   onDone: () => void;
@@ -23,6 +24,7 @@ interface SettingsCategoryItem {
 const categories: SettingsCategoryItem[] = [
   { id: 'appearance', label: 'Appearance', icon: Palette, description: 'Theme and local display preferences' },
   { id: 'models', label: 'Models', icon: Bot, description: 'Provider and model runtime settings' },
+  { id: 'web', label: 'Web', icon: Globe2, description: 'Search provider and web reading settings' },
   { id: 'memory', label: 'Memory', icon: BrainCircuit, description: 'Global long-term memory runtime settings' },
   { id: 'security', label: 'Security', icon: ShieldCheck, description: 'Local secret and approval posture' },
   { id: 'about', label: 'About', icon: Info, description: 'Megumi desktop runtime information' },
@@ -123,6 +125,8 @@ export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize 
 
               {category === 'models' ? <ProviderSettingsPanel /> : null}
 
+              {category === 'web' ? <WebSettingsPanel /> : null}
+
               {category === 'memory' ? <MemorySettingsPanel /> : null}
 
               {category === 'security' ? (
@@ -130,7 +134,7 @@ export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize 
                   <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
                     <h2 className="text-sm font-semibold text-[var(--color-text)]">Secret storage</h2>
                     <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-                      Provider API keys are encrypted by the Electron main process and are never exposed back to the renderer.
+                      Provider API keys are handled by the Electron main process and are never exposed back to the renderer after saving.
                     </p>
                   </section>
                   <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">

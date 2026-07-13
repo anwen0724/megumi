@@ -19,6 +19,39 @@ class MemorySettingsFileStore {
 }
 
 describe('Settings Service', () => {
+  it('resolves the selected web search provider and credential dynamically', () => {
+    const fileStore = new MemorySettingsFileStore();
+    const service = createSettingsService({ file_store: fileStore, env: { TAVILY_API_KEY: 'env-secret' } });
+    expect(service.resolveWebSearchRuntimeConfig()).toEqual({ status: 'unconfigured' });
+
+    service.updateSettings({ patch: { web: { search: { provider: 'tavily' } } } });
+    expect(service.getWebSearchSettings()).toEqual({
+      status: 'ok',
+      settings: {
+        provider: 'tavily',
+        has_api_key: true,
+        credential_source: 'environment',
+        api_key_env: 'TAVILY_API_KEY',
+      },
+    });
+    expect(service.resolveWebSearchRuntimeConfig()).toEqual({
+      status: 'configured',
+      config: { provider: 'tavily', api_key: 'env-secret' },
+    });
+  });
+
+  it('requires a Base URL for a custom search provider and clears stored keys', () => {
+    const fileStore = new MemorySettingsFileStore();
+    const service = createSettingsService({ file_store: fileStore });
+    service.updateSettings({ patch: { web: { search: { provider: 'custom', api_key: 'secret' } } } });
+    expect(service.resolveWebSearchRuntimeConfig()).toEqual({ status: 'unconfigured' });
+
+    service.updateSettings({ patch: { web: { search: { base_url: 'https://search.example.com/query' } } } });
+    expect(service.resolveWebSearchRuntimeConfig()).toMatchObject({ status: 'configured' });
+    service.updateSettings({ patch: { web: { search: { api_key: null } } } });
+    expect(fileStore.raw.web?.search).not.toHaveProperty('api_key');
+    expect(service.resolveWebSearchRuntimeConfig()).toEqual({ status: 'unconfigured' });
+  });
   it('returns raw settings from the file store', () => {
     const fileStore = new MemorySettingsFileStore();
     fileStore.raw = {

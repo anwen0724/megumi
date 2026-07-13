@@ -11,6 +11,10 @@ import {
   PermissionRulesRawSchema,
   PermissionRulesResolvedSchema,
 } from './permission-settings-contracts';
+import {
+  WebSearchSettingsRawSchema,
+  WebSearchSettingsResolvedSchema,
+} from './web-search-settings-contracts';
 
 export const SettingsThemeNameSchema = z.enum([
   'megumi-warm',
@@ -45,6 +49,7 @@ export const SettingsRawSchema = z
     theme: SettingsThemeNameSchema.optional(),
     setup: SetupSettingsRawSchema.optional(),
     memory: MemorySettingsRawSchema.optional(),
+    web: z.object({ search: WebSearchSettingsRawSchema.optional() }).strict().optional(),
     providers: z.record(z.string().min(1), ProviderSettingsRawSchema).optional(),
     permissions: PermissionRulesRawSchema.optional(),
   })
@@ -72,6 +77,7 @@ export const SettingsResolvedSchema = z
     theme: SettingsThemeNameSchema,
     setup: SetupSettingsResolvedSchema,
     memory: MemorySettingsResolvedSchema,
+    web: z.object({ search: WebSearchSettingsResolvedSchema }).strict(),
     providers: z.record(z.string().min(1), ProviderSettingsResolvedSchema),
     permissions: PermissionRulesResolvedSchema,
   })
@@ -86,6 +92,9 @@ export const DEFAULT_SETTINGS = SettingsResolvedSchema.parse({
   },
   memory: {
     enabled: false,
+  },
+  web: {
+    search: {},
   },
   providers: {},
   permissions: {

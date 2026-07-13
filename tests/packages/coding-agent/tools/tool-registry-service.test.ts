@@ -16,6 +16,7 @@ describe('ToolRegistryService', () => {
       'write_file',
       'run_command',
       'activate_skill',
+      'web_fetch',
     ]);
     for (const tool of result.tools) {
       expect(tool.status).toBe('available');
@@ -44,5 +45,36 @@ describe('ToolRegistryService', () => {
       type: 'not_found',
       toolName: 'missing_tool',
     });
+  });
+
+  it('does not expose web_search when its runtime service is not configured', () => {
+    const service = new ToolRegistryService();
+
+    expect(service.getRegisteredTool({ toolName: 'web_search' })).toEqual({
+      type: 'not_found',
+      toolName: 'web_search',
+    });
+    expect(service.listAvailableTools().tools.some((tool) => (
+      tool.registeredToolName === 'web_search'
+    ))).toBe(false);
+  });
+
+  it('exposes web_search when its runtime service is configured', () => {
+    const service = new ToolRegistryService({ disabledBuiltInTools: [] });
+
+    expect(service.getRegisteredTool({ toolName: 'web_search' })).toMatchObject({
+      type: 'found',
+      tool: { registeredToolName: 'web_search' },
+    });
+  });
+
+  it('reevaluates dynamic web_search availability for each tool set', () => {
+    let enabled = false;
+    const service = new ToolRegistryService({
+      isBuiltInToolAvailable: (toolName) => toolName !== 'web_search' || enabled,
+    });
+    expect(service.getRegisteredTool({ toolName: 'web_search' }).type).toBe('not_found');
+    enabled = true;
+    expect(service.getRegisteredTool({ toolName: 'web_search' }).type).toBe('found');
   });
 });

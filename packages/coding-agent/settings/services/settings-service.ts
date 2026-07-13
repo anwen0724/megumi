@@ -58,6 +58,12 @@ import {
   type ResolvePermissionSettingsRequest,
   type ResolvePermissionSettingsResult,
 } from '../contracts/permission-settings-contracts';
+import {
+  DEFAULT_WEB_SEARCH_API_KEY_ENV,
+  type GetWebSearchSettingsResult,
+  type ResolveWebSearchRuntimeConfigResult,
+  type WebSearchProvider,
+} from '../contracts/web-search-settings-contracts';
 
 type EnvMap = NodeJS.ProcessEnv | Record<string, string | undefined>;
 
@@ -83,6 +89,9 @@ export interface SettingsService {
   resolveProviderRuntimeConfig(
     request: ResolveProviderRuntimeConfigRequest,
   ): ResolveProviderRuntimeConfigResult;
+
+  getWebSearchSettings(): GetWebSearchSettingsResult;
+  resolveWebSearchRuntimeConfig(): ResolveWebSearchRuntimeConfigResult;
 
   resolvePermissionSettings(request: ResolvePermissionSettingsRequest): ResolvePermissionSettingsResult;
   addPermissionRule(request: AddPermissionRuleRequest): AddPermissionRuleResult;
@@ -334,6 +343,41 @@ class DefaultSettingsService implements SettingsService {
     return resolveProviderRuntimeConfigFromSettings(settings, request, this.env);
   }
 
+  getWebSearchSettings(): GetWebSearchSettingsResult {
+    const settings = this.readResolvedSettings();
+    if (isSettingsFailure(settings)) return settings;
+    const search = settings.web.search;
+    const credential = resolveWebSearchCredential(search.provider, search.api_key, search.api_key_env, this.env);
+    return {
+      status: 'ok',
+      settings: {
+        ...(search.provider ? { provider: search.provider } : {}),
+        ...(search.base_url ? { base_url: search.base_url } : {}),
+        has_api_key: Boolean(credential.apiKey),
+        credential_source: credential.source,
+        ...(credential.envName ? { api_key_env: credential.envName } : {}),
+      },
+    };
+  }
+
+  resolveWebSearchRuntimeConfig(): ResolveWebSearchRuntimeConfigResult {
+    const settings = this.readResolvedSettings();
+    if (isSettingsFailure(settings)) return settings;
+    const search = settings.web.search;
+    if (!search.provider) return { status: 'unconfigured' };
+    if (search.provider === 'custom' && !search.base_url) return { status: 'unconfigured' };
+    const credential = resolveWebSearchCredential(search.provider, search.api_key, search.api_key_env, this.env);
+    if (!credential.apiKey) return { status: 'unconfigured' };
+    return {
+      status: 'configured',
+      config: {
+        provider: search.provider,
+        api_key: credential.apiKey,
+        ...(search.base_url ? { base_url: search.base_url } : {}),
+      },
+    };
+  }
+
   resolvePermissionSettings(request: ResolvePermissionSettingsRequest): ResolvePermissionSettingsResult {
     const parsed = ResolvePermissionSettingsRequestSchema.safeParse(request);
     if (!parsed.success) {
@@ -391,6 +435,23 @@ class DefaultSettingsService implements SettingsService {
   private now(): string {
     return this.options.now?.() ?? new Date().toISOString();
   }
+}
+
+function resolveWebSearchCredential(
+  provider: WebSearchProvider | undefined,
+  configuredApiKey: string | undefined,
+  configuredEnvName: string | undefined,
+  env: EnvMap,
+): { apiKey?: string; source: 'settings' | 'environment' | 'missing'; envName?: string } {
+  const apiKey = configuredApiKey?.trim();
+  if (apiKey) return { apiKey, source: 'settings' };
+  const envName = configuredEnvName ?? (provider && provider !== 'custom'
+    ? DEFAULT_WEB_SEARCH_API_KEY_ENV[provider]
+    : undefined);
+  const envApiKey = envName ? env[envName]?.trim() : undefined;
+  return envApiKey
+    ? { apiKey: envApiKey, source: 'environment', envName }
+    : { source: 'missing', ...(envName ? { envName } : {}) };
 }
 
 type SettingsRawSchemaResult = ReturnType<typeof SettingsRawSchema.parse> | { status: 'failed'; failure: SettingsError };

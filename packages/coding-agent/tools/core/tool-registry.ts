@@ -5,7 +5,7 @@ import type {
   ToolRegistration,
   ToolSource,
 } from '../contracts/tool-contracts';
-import { listBuiltInToolDefinitions } from './tool-definitions';
+import { listBuiltInToolDefinitions, type BuiltInToolName } from './tool-definitions';
 
 export const BUILT_IN_TOOL_SOURCE: ToolSource = {
   sourceId: 'built_in',
@@ -22,14 +22,22 @@ export type ToolRegistry = {
   getRegisteredTool(toolName: string): RegisteredTool | undefined;
 };
 
-export function createBuiltInToolRegistrations(): ToolRegistration[] {
-  return listBuiltInToolDefinitions().map((definition) => ({
-    registrationId: `tool-registration-built_in-${definition.name}`,
-    source: { ...BUILT_IN_TOOL_SOURCE },
-    definition,
-    enabled: true,
-    availability: definition.availability,
-  }));
+export function createBuiltInToolRegistrations(input: {
+  disabledToolNames?: readonly BuiltInToolName[];
+} = {}): ToolRegistration[] {
+  const disabledToolNames = new Set<string>(input.disabledToolNames ?? []);
+  return listBuiltInToolDefinitions().map((definition) => {
+    const enabled = !disabledToolNames.has(definition.name);
+    return {
+      registrationId: `tool-registration-built_in-${definition.name}`,
+      source: { ...BUILT_IN_TOOL_SOURCE },
+      definition,
+      enabled,
+      availability: enabled
+        ? definition.availability
+        : { status: 'disabled', reason: 'Required runtime capability is not configured.' },
+    };
+  });
 }
 
 export function createToolRegistry(input: {

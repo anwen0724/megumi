@@ -29,6 +29,11 @@ export function resolveSettings(raw: unknown): SettingsResolved {
             ...definedObject(parsed.memory),
           }
         : undefined,
+      web: parsed.web
+        ? {
+            search: resolveNullableWebSearchSettings(parsed.web.search ?? {}),
+          }
+        : undefined,
       providers: parsed.providers
         ? resolveProviderSettings(parsed.providers)
         : undefined,
@@ -62,6 +67,14 @@ export function mergeRawSettings(current: SettingsRaw, patch: SettingsRaw): Sett
             ...definedObject(patchParsed.memory),
           }
         : undefined,
+      web: patchParsed.web
+        ? {
+            ...(currentParsed.web ?? {}),
+            ...(patchParsed.web.search
+              ? { search: mergeRawWebSearch(currentParsed.web?.search ?? {}, patchParsed.web.search) }
+              : {}),
+          }
+        : undefined,
       providers: patchParsed.providers
         ? mergeRawProviders(currentParsed.providers ?? {}, patchParsed.providers)
         : undefined,
@@ -73,6 +86,27 @@ export function mergeRawSettings(current: SettingsRaw, patch: SettingsRaw): Sett
         : undefined,
     }),
   });
+}
+
+function mergeRawWebSearch(
+  current: NonNullable<NonNullable<SettingsRaw['web']>['search']>,
+  patch: NonNullable<NonNullable<SettingsRaw['web']>['search']>,
+) {
+  const merged = { ...current, ...definedObject(patch) };
+  if (patch.api_key === null) delete merged.api_key;
+  if (patch.api_key_env === null) delete merged.api_key_env;
+  if (patch.base_url === null) delete merged.base_url;
+  return merged;
+}
+
+function resolveNullableWebSearchSettings(
+  value: NonNullable<NonNullable<SettingsRaw['web']>['search']>,
+) {
+  const resolved = definedObject(value);
+  if (resolved.api_key === null) delete resolved.api_key;
+  if (resolved.api_key_env === null) delete resolved.api_key_env;
+  if (resolved.base_url === null) delete resolved.base_url;
+  return resolved;
 }
 
 function resolveProviderSettings(providers: NonNullable<SettingsRaw['providers']>) {
