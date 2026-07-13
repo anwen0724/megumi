@@ -3,6 +3,7 @@
  * and exposes provider runtime and permission settings capabilities to callers.
  */
 import type { RuntimeError } from '../../events';
+import { listAiProviderDefinitions } from '@megumi/ai';
 import {
   mergeRawSettings,
   resolveSettings,
@@ -11,6 +12,7 @@ import {
   listAvailableModels as listAvailableModelsFromSettings,
   listProviderStatuses,
   resolveProviderRuntimeConfig as resolveProviderRuntimeConfigFromSettings,
+  resolveModelContextSettings as resolveModelContextSettingsFromSettings,
 } from '../core/provider-settings-resolution';
 import {
   addPermissionRuleToRawSettings,
@@ -26,6 +28,7 @@ import {
   type GetResolvedSettingsResult,
   type SettingsError,
   type SettingsFileStore,
+  type SettingsRaw,
   type UpdateSettingsRequest,
   type UpdateSettingsResult,
 } from '../contracts/settings-contracts';
@@ -42,9 +45,12 @@ import {
   type GetProviderSettingsRequest,
   type GetProviderSettingsResult,
   type ListAvailableModelsResult,
+  type ListProviderCatalogResult,
   type ListProviderSettingsResult,
   type ResolveProviderRuntimeConfigRequest,
   type ResolveProviderRuntimeConfigResult,
+  type ResolveModelContextSettingsResult,
+  type ProviderSettingsResolved,
   type SetProviderApiKeyRequest,
   type SetProviderApiKeyResult,
   type UpdateProviderSettingsRequest,
@@ -80,6 +86,7 @@ export interface SettingsService {
   completeSetup(request: CompleteSetupRequest): CompleteSetupResult;
 
   listProviderSettings(): ListProviderSettingsResult;
+  listProviderCatalog(): ListProviderCatalogResult;
   listAvailableModels(): ListAvailableModelsResult;
   getProviderSettings(request: GetProviderSettingsRequest): GetProviderSettingsResult;
   updateProviderSettings(request: UpdateProviderSettingsRequest): UpdateProviderSettingsResult;
@@ -89,6 +96,9 @@ export interface SettingsService {
   resolveProviderRuntimeConfig(
     request: ResolveProviderRuntimeConfigRequest,
   ): ResolveProviderRuntimeConfigResult;
+  resolveModelContextSettings(
+    request: ResolveProviderRuntimeConfigRequest,
+  ): ResolveModelContextSettingsResult;
 
   getWebSearchSettings(): GetWebSearchSettingsResult;
   resolveWebSearchRuntimeConfig(): ResolveWebSearchRuntimeConfigResult;
@@ -142,7 +152,8 @@ class DefaultSettingsService implements SettingsService {
     const raw = this.readRawSettings();
     if (isSettingsFailure(raw)) return raw;
 
-    const next = mergeRawSettings(raw, parsed.data.patch);
+    const merged = mergeRawSettings(raw, parsed.data.patch);
+    const next = materializeSettingsForWrite(merged);
     this.options.file_store.writeRawSettings(next);
     return {
       status: 'updated',
@@ -168,14 +179,16 @@ class DefaultSettingsService implements SettingsService {
             ...(parsed.data.provider.protocol ? { protocol: parsed.data.provider.protocol } : {}),
             ...(parsed.data.provider.display_name ? { display_name: parsed.data.provider.display_name } : {}),
             ...(parsed.data.provider.base_url ? { base_url: parsed.data.provider.base_url } : {}),
-            ...(parsed.data.provider.models ? { models: parsed.data.provider.models } : {}),
+            ...(parsed.data.provider.models
+              ? { models: Object.fromEntries(parsed.data.provider.models.map((modelId) => [modelId, {}])) }
+              : {}),
             ...(parsed.data.provider.api_key ? { api_key: parsed.data.provider.api_key } : {}),
             ...(parsed.data.provider.api_key_env !== undefined ? { api_key_env: parsed.data.provider.api_key_env } : {}),
           },
         }
       : undefined;
 
-    const next = mergeRawSettings(raw, {
+    const next = materializeSettingsForWrite(mergeRawSettings(raw, {
       ...(parsed.data.language ? { language: parsed.data.language } : {}),
       ...(parsed.data.theme ? { theme: parsed.data.theme } : {}),
       setup: {
@@ -183,7 +196,7 @@ class DefaultSettingsService implements SettingsService {
         completed_at: this.now(),
       },
       ...(providerPatch ? { providers: providerPatch } : {}),
-    });
+    }));
     this.options.file_store.writeRawSettings(next);
     return {
       status: 'completed',
@@ -198,6 +211,10 @@ class DefaultSettingsService implements SettingsService {
       status: 'ok',
       providers: listProviderStatuses(settings, this.env),
     };
+  }
+
+  listProviderCatalog(): ListProviderCatalogResult {
+    return { status: 'ok', providers: listAiProviderDefinitions() };
   }
 
   listAvailableModels(): ListAvailableModelsResult {
@@ -341,6 +358,14 @@ class DefaultSettingsService implements SettingsService {
     const settings = this.readResolvedSettings();
     if (isSettingsFailure(settings)) return settings;
     return resolveProviderRuntimeConfigFromSettings(settings, request, this.env);
+  }
+
+  resolveModelContextSettings(
+    request: ResolveProviderRuntimeConfigRequest,
+  ): ResolveModelContextSettingsResult {
+    const settings = this.readResolvedSettings();
+    if (isSettingsFailure(settings)) return settings;
+    return resolveModelContextSettingsFromSettings(settings, request);
   }
 
   getWebSearchSettings(): GetWebSearchSettingsResult {
@@ -493,6 +518,34 @@ function isSettingsFailure(value: unknown): value is { status: 'failed'; failure
     && 'status' in value
     && (value as { status: unknown }).status === 'failed',
   );
+}
+
+function materializeSettingsForWrite(raw: SettingsRaw): SettingsRaw {
+  const resolved = resolveSettings(raw);
+  return SettingsRawSchema.parse({
+    ...raw,
+    context: resolved.context,
+    ...(raw.providers
+      ? {
+          providers: Object.fromEntries(Object.keys(raw.providers).map((providerId) => [
+            providerId,
+            providerSettingsForWrite(resolved.providers[providerId]),
+          ])),
+        }
+      : {}),
+  });
+}
+
+function providerSettingsForWrite(provider: ProviderSettingsResolved) {
+  return {
+    enabled: provider.enabled,
+    protocol: provider.protocol,
+    display_name: provider.display_name,
+    ...(provider.base_url ? { base_url: provider.base_url } : {}),
+    models: provider.models,
+    ...(provider.api_key ? { api_key: provider.api_key } : {}),
+    ...(provider.api_key_env ? { api_key_env: provider.api_key_env } : {}),
+  };
 }
 
 function toFailureDetails(error: unknown): Record<string, unknown> {

@@ -5,6 +5,8 @@ export * from './client/ai-client';
 export * from './client/ai-client-options';
 export * from './client/ai-call-request';
 
+export * from './catalog';
+
 export * from './core/ai-model';
 export * from './core/token-usage';
 export * from './core/provider-error';

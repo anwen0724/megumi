@@ -52,7 +52,7 @@ describe('Local settings.json storage', () => {
     });
   });
 
-  it('writes only raw user overrides when updating one setting', async () => {
+  it('writes user settings with the materialized Context policy', async () => {
     const { service, settingsPath } = await createService();
 
     expect(service.updateSettings({ patch: { theme: 'graphite-dark' } })).toMatchObject({
@@ -62,6 +62,7 @@ describe('Local settings.json storage', () => {
       },
     });
     expect(JSON.parse(await readFile(settingsPath, 'utf8'))).toEqual({
+      context: { compaction_threshold_ratio: 0.8 },
       theme: 'graphite-dark',
     });
   });
@@ -81,6 +82,7 @@ describe('Local settings.json storage', () => {
     });
 
     expect(JSON.parse(await readFile(settingsPath, 'utf8'))).toEqual({
+      context: { compaction_threshold_ratio: 0.8 },
       language: 'zh-CN',
       theme: 'sage-mist',
       setup: {
@@ -108,6 +110,7 @@ describe('Local settings.json storage', () => {
 
     expect(result.status).toBe('updated');
     expect(JSON.parse(await readFile(settingsPath, 'utf8'))).toEqual({
+      context: { compaction_threshold_ratio: 0.8 },
       memory: {
         enabled: true,
       },

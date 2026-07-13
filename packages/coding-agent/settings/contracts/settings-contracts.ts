@@ -43,12 +43,18 @@ export const MemorySettingsRawSchema = z
   .strict();
 export type MemorySettingsRaw = z.infer<typeof MemorySettingsRawSchema>;
 
+export const ContextSettingsRawSchema = z.object({
+  compaction_threshold_ratio: z.number().gt(0).lt(1).optional(),
+}).strict();
+export type ContextSettingsRaw = z.infer<typeof ContextSettingsRawSchema>;
+
 export const SettingsRawSchema = z
   .object({
     language: SettingsLanguageSchema.optional(),
     theme: SettingsThemeNameSchema.optional(),
     setup: SetupSettingsRawSchema.optional(),
     memory: MemorySettingsRawSchema.optional(),
+    context: ContextSettingsRawSchema.optional(),
     web: z.object({ search: WebSearchSettingsRawSchema.optional() }).strict().optional(),
     providers: z.record(z.string().min(1), ProviderSettingsRawSchema).optional(),
     permissions: PermissionRulesRawSchema.optional(),
@@ -71,12 +77,18 @@ export const MemorySettingsResolvedSchema = z
   .strict();
 export type MemorySettingsResolved = z.infer<typeof MemorySettingsResolvedSchema>;
 
+export const ContextSettingsResolvedSchema = z.object({
+  compaction_threshold_ratio: z.number().gt(0).lt(1),
+}).strict();
+export type ContextSettingsResolved = z.infer<typeof ContextSettingsResolvedSchema>;
+
 export const SettingsResolvedSchema = z
   .object({
     language: SettingsLanguageSchema,
     theme: SettingsThemeNameSchema,
     setup: SetupSettingsResolvedSchema,
     memory: MemorySettingsResolvedSchema,
+    context: ContextSettingsResolvedSchema,
     web: z.object({ search: WebSearchSettingsResolvedSchema }).strict(),
     providers: z.record(z.string().min(1), ProviderSettingsResolvedSchema),
     permissions: PermissionRulesResolvedSchema,
@@ -92,6 +104,9 @@ export const DEFAULT_SETTINGS = SettingsResolvedSchema.parse({
   },
   memory: {
     enabled: false,
+  },
+  context: {
+    compaction_threshold_ratio: 0.8,
   },
   web: {
     search: {},

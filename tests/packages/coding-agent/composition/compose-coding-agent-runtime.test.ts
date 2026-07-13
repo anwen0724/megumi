@@ -6,9 +6,9 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   composeCodingAgentRuntime,
-  createCompatibilityModelContextProvider,
+  createSettingsModelContextProvider,
 } from '@megumi/coding-agent/composition';
-import type { SettingsRaw } from '@megumi/coding-agent/settings';
+import { createSettingsService, type SettingsRaw } from '@megumi/coding-agent/settings';
 import { AssistantEventStream, type AiClient, type AssistantStreamEvent } from '@megumi/ai';
 import { collectEvents } from '../agent-run/agent-run-test-helpers';
 
@@ -19,11 +19,13 @@ afterEach(async () => {
 });
 
 describe('composeCodingAgentRuntime trace wiring', () => {
-  it('keeps compatibility capacity outside Context and preserves selection identity', async () => {
-    const provider = createCompatibilityModelContextProvider();
-    expect(provider({ providerId: 'provider-1', modelId: 'model-1' })).toEqual({
-      providerId: 'provider-1',
-      modelId: 'model-1',
+  it('reads model capacity through resolved Settings and preserves selection identity', async () => {
+    const provider = createSettingsModelContextProvider(createSettingsService({
+      file_store: settingsStorage(),
+    }));
+    expect(provider({ providerId: 'deepseek', modelId: 'deepseek-chat' })).toEqual({
+      providerId: 'deepseek',
+      modelId: 'deepseek-chat',
       contextWindowTokens: 256_000,
     });
 
@@ -31,7 +33,7 @@ describe('composeCodingAgentRuntime trace wiring', () => {
     const files = (await readdir(contextRoot, { recursive: true }))
       .filter((file) => file.endsWith('.ts'));
     const sources = await Promise.all(files.map((file) => readFile(join(contextRoot, file), 'utf8')));
-    expect(sources.join('\n')).not.toContain('createCompatibilityModelContextProvider');
+    expect(sources.join('\n')).not.toContain('createSettingsModelContextProvider');
   });
 
   it('writes Agent Run trace JSONL to the Megumi Home logs directory', async () => {
@@ -186,7 +188,7 @@ function settingsStorage() {
         enabled: true,
         protocol: 'openai-compatible',
         base_url: 'https://api.example.com/v1',
-        models: ['deepseek-chat'],
+        models: { 'deepseek-chat': {} },
         api_key: 'test-api-key',
       },
     },
