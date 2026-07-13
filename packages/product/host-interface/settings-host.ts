@@ -3,6 +3,7 @@ import type {
   SettingsResolved,
   SettingsService,
   SettingsThemeName,
+  WebSearchPublicSettings,
 } from '../../coding-agent/settings';
 import { z } from 'zod';
 
@@ -32,6 +33,14 @@ export const SettingsUpdatePayloadSchema = z.object({
   theme: z.enum(['megumi-warm', 'neutral-light', 'graphite-dark', 'sage-mist', 'midnight-blue']).optional(),
   setup: z.object({ completed: z.boolean().optional() }).strict().optional(),
   memory: z.object({ enabled: z.boolean().optional() }).strict().optional(),
+  web: z.object({
+    search: z.object({
+      provider: z.enum(['brave', 'tavily', 'exa', 'custom']).optional(),
+      apiKey: z.string().min(1).nullable().optional(),
+      apiKeyEnv: z.string().min(1).nullable().optional(),
+      baseUrl: z.string().url().nullable().optional(),
+    }).strict().optional(),
+  }).strict().optional(),
   providers: z.record(z.string(), ProviderSettingsUiPatchSchema).optional(),
 }).strict();
 export const SettingsCompleteSetupPayloadSchema = z.object({
@@ -71,6 +80,15 @@ const SettingsUiResolvedSchema = z.object({
   theme: z.enum(['megumi-warm', 'neutral-light', 'graphite-dark', 'sage-mist', 'midnight-blue']),
   setup: z.object({ completed: z.boolean(), completedAt: z.string().datetime().optional() }).strict(),
   memory: z.object({ enabled: z.boolean() }).strict(),
+  web: z.object({
+    search: z.object({
+      provider: z.enum(['brave', 'tavily', 'exa', 'custom']).optional(),
+      baseUrl: z.string().url().optional(),
+      hasApiKey: z.boolean(),
+      credentialSource: z.enum(['settings', 'environment', 'missing']),
+      apiKeyEnv: z.string().optional(),
+    }).strict(),
+  }).strict(),
   providers: z.record(z.string(), ProviderSettingsUiDtoSchema),
 }).strict();
 const ProviderPublicStatusUiDtoSchema = z.object({
@@ -119,6 +137,7 @@ export function createSettingsHost(
   settingsService: Pick<
     SettingsService,
     | 'getResolvedSettings'
+    | 'getWebSearchSettings'
     | 'updateSettings'
     | 'completeSetup'
     | 'listProviderSettings'
@@ -134,14 +153,22 @@ export function createSettingsHost(
       if (result.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(result.failure) };
       }
-      return { status: 'ok', settings: toSettingsUiResolved(result.settings) };
+      const webSearch = settingsService.getWebSearchSettings();
+      if (webSearch.status === 'failed') {
+        return { status: 'failed', failure: toHostFailure(webSearch.failure) };
+      }
+      return { status: 'ok', settings: toSettingsUiResolved(result.settings, webSearch.settings) };
     },
     async update(patch) {
       const result = settingsService.updateSettings({ patch: toSettingsRawPatch(patch) });
       if (result.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(result.failure) };
       }
-      return { status: 'updated', settings: toSettingsUiResolved(result.settings) };
+      const webSearch = settingsService.getWebSearchSettings();
+      if (webSearch.status === 'failed') {
+        return { status: 'failed', failure: toHostFailure(webSearch.failure) };
+      }
+      return { status: 'updated', settings: toSettingsUiResolved(result.settings, webSearch.settings) };
     },
     async completeSetup(request) {
       const result = settingsService.completeSetup({
@@ -163,7 +190,11 @@ export function createSettingsHost(
       if (result.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(result.failure) };
       }
-      return { status: 'completed', settings: toSettingsUiResolved(result.settings) };
+      const webSearch = settingsService.getWebSearchSettings();
+      if (webSearch.status === 'failed') {
+        return { status: 'failed', failure: toHostFailure(webSearch.failure) };
+      }
+      return { status: 'completed', settings: toSettingsUiResolved(result.settings, webSearch.settings) };
     },
     async listProviders() {
       const result = settingsService.listProviderSettings();
@@ -240,6 +271,14 @@ export type SettingsUiRaw = {
   memory?: {
     enabled?: boolean;
   };
+  web?: {
+    search?: {
+      provider?: 'brave' | 'tavily' | 'exa' | 'custom';
+      apiKey?: string | null;
+      apiKeyEnv?: string | null;
+      baseUrl?: string | null;
+    };
+  };
   providers?: Record<string, ProviderSettingsUiPatch>;
 };
 
@@ -261,6 +300,15 @@ export type SettingsUiResolved = {
   };
   memory: {
     enabled: boolean;
+  };
+  web: {
+    search: {
+      provider?: 'brave' | 'tavily' | 'exa' | 'custom';
+      baseUrl?: string;
+      hasApiKey: boolean;
+      credentialSource: 'settings' | 'environment' | 'missing';
+      apiKeyEnv?: string;
+    };
   };
   providers: Record<string, ProviderSettingsUiDto>;
 };
@@ -384,6 +432,16 @@ export function toSettingsRawPatch(patch: SettingsUiRaw): SettingsRaw {
       },
     } : {}),
     ...(patch.memory ? { memory: patch.memory } : {}),
+    ...(patch.web?.search ? {
+      web: {
+        search: {
+          ...(patch.web.search.provider ? { provider: patch.web.search.provider } : {}),
+          ...(patch.web.search.apiKey !== undefined ? { api_key: patch.web.search.apiKey } : {}),
+          ...(patch.web.search.apiKeyEnv !== undefined ? { api_key_env: patch.web.search.apiKeyEnv } : {}),
+          ...(patch.web.search.baseUrl !== undefined ? { base_url: patch.web.search.baseUrl } : {}),
+        },
+      },
+    } : {}),
     ...(patch.providers ? {
       providers: Object.fromEntries(Object.entries(patch.providers).map(([providerId, provider]) => [
         providerId,
@@ -400,7 +458,10 @@ export function toSettingsRawPatch(patch: SettingsUiRaw): SettingsRaw {
   };
 }
 
-export function toSettingsUiResolved(settings: SettingsResolved): SettingsUiResolved {
+export function toSettingsUiResolved(
+  settings: SettingsResolved,
+  webSearch: WebSearchPublicSettings = { has_api_key: false, credential_source: 'missing' },
+): SettingsUiResolved {
   return {
     language: settings.language,
     theme: settings.theme,
@@ -409,6 +470,15 @@ export function toSettingsUiResolved(settings: SettingsResolved): SettingsUiReso
       ...(settings.setup.completed_at ? { completedAt: settings.setup.completed_at } : {}),
     },
     memory: settings.memory,
+    web: {
+      search: {
+        ...(webSearch.provider ? { provider: webSearch.provider } : {}),
+        ...(webSearch.base_url ? { baseUrl: webSearch.base_url } : {}),
+        hasApiKey: webSearch.has_api_key,
+        credentialSource: webSearch.credential_source,
+        ...(webSearch.api_key_env ? { apiKeyEnv: webSearch.api_key_env } : {}),
+      },
+    },
     providers: Object.fromEntries(Object.entries(settings.providers).map(([providerId, provider]) => [
       providerId,
       {
@@ -422,6 +492,7 @@ export function toSettingsUiResolved(settings: SettingsResolved): SettingsUiReso
     ])),
   };
 }
+
 
 export function toProviderPublicStatusUiDto(provider: {
   provider_id: string;

@@ -72,6 +72,7 @@ import {
 } from '../projections/workspace/workspace-change-footer-projector';
 import { WorkspaceChangeRepository } from '../workspace/repositories/workspace-change-repository';
 import { WorkspaceRepository } from '../workspace/repositories/workspace-repository';
+import { createWebSearchService } from '../tools/built-in-tools';
 
 type ImplementationPlanArtifactRecord = {
   planArtifactId: string;
@@ -174,12 +175,24 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     },
   });
   const inputService = createInputService();
-  const toolRegistry = composeCodingAgentToolRegistryService();
   const settingsService = resolveSettingsService(options.appSettingsProvider) ?? createSettingsService({
     file_store: options.settingsStorage ?? createLocalSettingsJsonStorage({
       settingsPath: options.homePaths.settingsPath,
     }),
     env: process.env,
+  });
+  const resolveWebSearchConfig = () => {
+    const result = settingsService.resolveWebSearchRuntimeConfig();
+    return result.status === 'configured'
+      ? {
+          provider: result.config.provider,
+          apiKey: result.config.api_key,
+          ...(result.config.base_url ? { baseUrl: result.config.base_url } : {}),
+        }
+      : undefined;
+  };
+  const toolRegistry = composeCodingAgentToolRegistryService({
+    isWebSearchEnabled: () => Boolean(resolveWebSearchConfig()),
   });
   const agentRunSettingsService = options.aiClient || options.modelCallProviderService
     ? createModelConfigSettingsFacade(settingsService)
@@ -322,11 +335,16 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     skill_service: skillRuntime.skillService,
     tool_registry_service: toolRegistry,
     tool_execution_service_factory: ({ run_id, session_id, workspace_id, workspace_root }) => {
+      const webSearchConfig = resolveWebSearchConfig();
+      const runToolRegistry = composeCodingAgentToolRegistryService({
+        webSearchEnabled: Boolean(webSearchConfig),
+      });
       const toolExecutionService = composeCodingAgentToolExecutionService({
         projectRoot: workspace_root ?? process.cwd(),
-        registryService: toolRegistry,
+        registryService: runToolRegistry,
         workspacePathPolicyService,
         skillService: skillRuntime.skillService,
+        ...(webSearchConfig ? { webSearchService: createWebSearchService(webSearchConfig) } : {}),
         runContext: {
           runId: run_id,
           sessionId: session_id,
@@ -601,6 +619,8 @@ function hasSettingsServiceShape(value: unknown): value is SettingsService {
     && typeof value === 'object'
     && 'resolveProviderRuntimeConfig' in value
     && 'resolvePermissionSettings' in value
-    && 'getResolvedSettings' in value,
+    && 'getResolvedSettings' in value
+    && 'getWebSearchSettings' in value
+    && 'resolveWebSearchRuntimeConfig' in value,
   );
 }

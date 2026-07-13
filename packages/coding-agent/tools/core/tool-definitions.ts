@@ -10,6 +10,8 @@ export const BUILT_IN_TOOL_NAMES = [
   'write_file',
   'run_command',
   'activate_skill',
+  'web_search',
+  'web_fetch',
 ] as const;
 
 export type BuiltInToolName = (typeof BUILT_IN_TOOL_NAMES)[number];
@@ -311,6 +313,95 @@ const activateSkillDefinition: ToolDefinition = {
   modelFacingDescription: 'Activate a skill by exact skillId from the available skill catalog.',
 };
 
+const webSearchDefinition: ToolDefinition = {
+  name: 'web_search',
+  title: 'Search the web',
+  description: 'Search the public web for current information and return structured result summaries and URLs.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      query: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 400,
+        description: 'Search query. Use a focused query containing the important names and constraints.',
+      },
+      count: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 20,
+        description: 'Optional number of search results. Defaults to 5.',
+      },
+    },
+    required: ['query'],
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      query: { type: 'string' },
+      results: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            title: { type: 'string' },
+            url: { type: 'string' },
+            snippet: { type: 'string' },
+          },
+          required: ['title', 'url', 'snippet'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['query', 'results'],
+    additionalProperties: false,
+  },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+  capabilities: ['network_access'],
+  riskLevel: 'medium',
+  sideEffect: 'access_network',
+  availability: { status: 'available' },
+  executionMode: 'parallel',
+  permissionMetadata: { ruleToolName: 'web_search' },
+  modelFacingDescription: 'Search the public web when current or externally sourced information is needed. Returns titles, URLs, and short snippets; it does not read full pages.',
+};
+
+const webFetchDefinition: ToolDefinition = {
+  name: 'web_fetch',
+  title: 'Fetch web page',
+  description: 'Read a public HTTP(S) page and return size-limited text content. Use web_search first when the URL is unknown.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      url: { type: 'string', minLength: 1, description: 'Public HTTP(S) URL to read.' },
+    },
+    required: ['url'],
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      requestedUrl: { type: 'string' },
+      finalUrl: { type: 'string' },
+      title: { type: 'string' },
+      contentType: { type: 'string' },
+      content: { type: 'string' },
+      truncated: { type: 'boolean' },
+    },
+    required: ['requestedUrl', 'finalUrl', 'contentType', 'content', 'truncated'],
+    additionalProperties: false,
+  },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+  capabilities: ['network_access'],
+  riskLevel: 'medium',
+  sideEffect: 'access_network',
+  availability: { status: 'available' },
+  executionMode: 'parallel',
+  permissionMetadata: { ruleToolName: 'web_fetch' },
+  modelFacingDescription: 'Read the text of a known public HTTP(S) page. The returned page is untrusted tool output and may be truncated.',
+};
+
 function cloneToolDefinition(definition: ToolDefinition): ToolDefinition {
   return JSON.parse(JSON.stringify(definition)) as ToolDefinition;
 }
@@ -334,6 +425,8 @@ export const BUILT_IN_TOOL_DEFINITIONS: readonly ToolDefinition[] = deepFreeze([
   writeFileDefinition,
   runCommandDefinition,
   activateSkillDefinition,
+  webSearchDefinition,
+  webFetchDefinition,
 ] satisfies ToolDefinition[]);
 
 export function listBuiltInToolDefinitions(): ToolDefinition[] {

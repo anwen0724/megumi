@@ -3,7 +3,7 @@ import {
   ToolExecutionService,
   ToolRegistryService,
 } from '@megumi/coding-agent/tools';
-import { createBuiltInToolAdapter, type WorkspaceFileAccess } from '@megumi/coding-agent/tools/adapters/built-in-tools';
+import { createBuiltInToolExecutor, type WorkspaceFileAccess } from '@megumi/coding-agent/tools/built-in-tools';
 
 describe('activate_skill built-in tool', () => {
   it('is registered as an available built-in tool with skillId input', () => {
@@ -40,7 +40,7 @@ describe('activate_skill built-in tool', () => {
     }));
     const service = new ToolExecutionService({
       registryService: new ToolRegistryService(),
-      builtInTools: createBuiltInToolAdapter({
+      builtInTools: createBuiltInToolExecutor({
         workspaceFileAccess: fakeWorkspaceFileAccess(),
         skillService: { activateSkill },
         runContext: {
@@ -86,7 +86,7 @@ describe('activate_skill built-in tool', () => {
   it('returns a normal tool failure when activation fails', async () => {
     const service = new ToolExecutionService({
       registryService: new ToolRegistryService(),
-      builtInTools: createBuiltInToolAdapter({
+      builtInTools: createBuiltInToolExecutor({
         workspaceFileAccess: fakeWorkspaceFileAccess(),
         skillService: {
           activateSkill: vi.fn(async () => ({ status: 'not_found' as const, skillId: 'missing' })),
