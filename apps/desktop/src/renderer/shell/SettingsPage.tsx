@@ -1,12 +1,13 @@
 import { useEffect, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { ArrowLeft, Bot, BrainCircuit, CheckCircle2, Globe2, Info, Palette, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Activity, Bot, BrainCircuit, CheckCircle2, Globe2, Info, Palette, ShieldCheck } from 'lucide-react';
+import { DiagnosticsPanel } from '../features/observability';
 import { MemorySettingsPanel } from '../features/memory-settings';
 import { ProviderSettingsPanel } from '../features/provider-settings';
 import { WebSettingsPanel } from '../features/web-settings';
 import { ThemeSelector } from '../shared/theme';
 import { Button, cx } from '../shared/ui';
 
-type SettingsCategory = 'appearance' | 'models' | 'web' | 'memory' | 'security' | 'about';
+type SettingsCategory = 'appearance' | 'models' | 'web' | 'memory' | 'diagnostics' | 'security' | 'about';
 
 interface SettingsPageProps {
   onDone: () => void;
@@ -26,6 +27,7 @@ const categories: SettingsCategoryItem[] = [
   { id: 'models', label: 'Models', icon: Bot, description: 'Provider and model runtime settings' },
   { id: 'web', label: 'Web', icon: Globe2, description: 'Search provider and web reading settings' },
   { id: 'memory', label: 'Memory', icon: BrainCircuit, description: 'Global long-term memory runtime settings' },
+  { id: 'diagnostics', label: 'Diagnostics', icon: Activity, description: 'Local Run traces and usage' },
   { id: 'security', label: 'Security', icon: ShieldCheck, description: 'Local secret and approval posture' },
   { id: 'about', label: 'About', icon: Info, description: 'Megumi desktop runtime information' },
 ];
@@ -128,6 +130,8 @@ export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize 
               {category === 'web' ? <WebSettingsPanel /> : null}
 
               {category === 'memory' ? <MemorySettingsPanel /> : null}
+
+              {category === 'diagnostics' ? <DiagnosticsPanel /> : null}
 
               {category === 'security' ? (
                 <div className="space-y-3">

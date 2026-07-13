@@ -13,6 +13,7 @@ export default defineConfig({
       '@megumi/product': path.resolve(__dirname, 'packages/product'),
       '@megumi/coding-agent': path.resolve(__dirname, 'packages/coding-agent'),
       '@megumi/ai': path.resolve(__dirname, 'packages/ai'),
+      '@megumi/observability': path.resolve(__dirname, 'packages/observability'),
     },
   },
 });

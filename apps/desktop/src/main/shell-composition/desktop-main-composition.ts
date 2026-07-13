@@ -3,14 +3,16 @@ import { createElectronMegumiHomeSyncOptions } from '../adapters/electron-home-a
 import { composeProduct } from '@megumi/product/composition';
 import { electronDirectoryPickerAdapter } from '../adapters/electron-directory-picker-adapter';
 import { electronFileOpenAdapter } from '../adapters/electron-file-open-adapter';
-import { electronRuntimeLogWriterAdapter } from '../adapters/electron-runtime-log-writer-adapter';
+import { electronObservabilityStorageAdapter } from '../adapters/electron-observability-storage-adapter';
 import { getElectronProductEnvironment } from '../adapters/electron-product-environment-adapter';
+import { saveDiagnosticBundle } from '../adapters/electron-diagnostic-bundle-save-adapter';
 
 export function composeDesktopMain() {
   const product = composeProduct({
     home: createElectronMegumiHomeSyncOptions(),
     migrationEnvironment: getElectronProductEnvironment(),
-    logWriter: electronRuntimeLogWriterAdapter,
+    observabilityStorage: electronObservabilityStorageAdapter,
+    productEnvironment: { appVersion: process.env.npm_package_version ?? 'unknown', platform: process.platform, arch: process.arch },
     directoryPicker: electronDirectoryPickerAdapter,
     fileOpen: electronFileOpenAdapter,
   });
@@ -25,6 +27,7 @@ export function composeDesktopMain() {
     settings: { host: productHost },
     approval: { host: productHost },
     artifact: productHost.artifacts,
+    observability: { host: productHost, saveBundle: saveDiagnosticBundle },
     dispose: product.dispose,
   };
 }

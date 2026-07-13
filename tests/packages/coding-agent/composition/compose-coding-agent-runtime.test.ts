@@ -36,7 +36,7 @@ describe('composeCodingAgentRuntime trace wiring', () => {
     expect(sources.join('\n')).not.toContain('createSettingsModelContextProvider');
   });
 
-  it('writes Agent Run trace JSONL to the Megumi Home logs directory', async () => {
+  it('does not create the retired Agent Run trace file', async () => {
     const home = await createHome();
     const runtime = composeCodingAgentRuntime({
       homePaths: home.paths,
@@ -48,17 +48,7 @@ describe('composeCodingAgentRuntime trace wiring', () => {
     try {
       await startOneRun(runtime, home.workspaceRoot);
       const logPath = join(home.homePath, 'logs', 'agent-run-trace.jsonl');
-      const records = await waitForTraceEvents(logPath, [
-        'run.started',
-        'trace.prompt.built',
-        'run.completed',
-      ]);
-      expect(records)
-        .toEqual(expect.arrayContaining([
-          expect.objectContaining({ event_type: 'run.started' }),
-          expect.objectContaining({ event_type: 'trace.prompt.built' }),
-          expect.objectContaining({ event_type: 'run.completed' }),
-        ]));
+      expect(existsSync(logPath)).toBe(false);
     } finally {
       runtime.dispose();
     }

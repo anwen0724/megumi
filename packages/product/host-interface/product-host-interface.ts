@@ -9,6 +9,7 @@ import type { ChatHost } from './chat-host';
 import type { SettingsHost } from './settings-host';
 import type { SkillHost } from './skill-host';
 import type { WorkspaceHost } from './workspace-host';
+import type { ObservabilityHost } from './observability-host';
 
 export interface ProductHostInterface {
   workspace: WorkspaceHost;
@@ -18,4 +19,5 @@ export interface ProductHostInterface {
   approval: ApprovalHost;
   artifacts: ArtifactHost;
   plan: PlanHost;
+  observability: ObservabilityHost;
 }

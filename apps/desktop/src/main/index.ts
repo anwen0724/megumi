@@ -27,6 +27,7 @@ if (shouldQuitForSquirrelStartup()) {
       settings: desktopMain.settings,
       approval: desktopMain.approval,
       artifact: desktopMain.artifact,
+      observability: desktopMain.observability,
     }),
     createWindow: () => {
       createMainWindow({

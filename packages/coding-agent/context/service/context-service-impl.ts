@@ -28,6 +28,7 @@ import type {
   RecordCompletedRunUsageRequest,
   RecordCompletedRunUsageResult,
 } from './context-service-types';
+import type { ObservabilityService } from '@megumi/observability';
 
 export type InstructionScopeResolver = {
   resolve(request: { workspaceId: string }):
@@ -51,9 +52,7 @@ export type ContextServiceDependencies = {
     get(sessionId: string): SessionUsageSnapshot | undefined;
     set(sessionId: string, snapshot: SessionUsageSnapshot): void;
   };
-  observability?: {
-    recordPreparedCall(input: { preparationId: string; sourceRefs: ContextSourceRef[]; usage: ContextUsage }): void;
-  };
+  observability?: ObservabilityService;
   policy?: Partial<ContextPolicy>;
   policyProvider?: { getPolicy(): Partial<ContextPolicy> };
   clock?: { now(): string };
@@ -96,7 +95,17 @@ export class ContextServiceImpl implements ContextService {
   }
 
   async prepareModelCall(request: PrepareModelCallRequest): Promise<PrepareModelCallResult> {
-    return this.withSessionOperation(request.sessionId, () => this.prepareModelCallExclusive(request));
+    const span = this.dependencies.observability?.startSpan({ name: 'context.prepare_model_call', correlation: { sessionId: request.sessionId, workspaceId: request.workspaceId } });
+    const operation = async () => {
+      const result = await this.withSessionOperation(request.sessionId, () => this.prepareModelCallExclusive(request));
+      if (span) this.dependencies.observability?.endSpan({ span, status: result.status === 'ready' ? 'ok' : result.failure.code === 'cancelled' ? 'cancelled' : 'error' });
+      if (result.status === 'ready') {
+        this.dependencies.observability?.recordMeasurement({ name: 'context.used_tokens', value: result.prepared.usage.usedTokens, unit: 'token', correlation: { sessionId: request.sessionId } });
+        this.dependencies.observability?.recordMeasurement({ name: 'context.window_tokens', value: result.prepared.usage.contextWindowTokens, unit: 'token', correlation: { sessionId: request.sessionId } });
+      }
+      return result;
+    };
+    return span ? this.dependencies.observability!.runInSpanContext(span, operation) : operation();
   }
 
   private async prepareModelCallExclusive(request: PrepareModelCallRequest): Promise<PrepareModelCallResult> {
@@ -147,11 +156,6 @@ export class ContextServiceImpl implements ContextService {
     if (request.signal?.aborted) return failed(cancelled());
     if (usage.usedTokens >= usage.contextWindowTokens) return failed(windowExceeded(usage));
     const preparationId = this.ids.preparationId();
-    try {
-      this.dependencies.observability?.recordPreparedCall({ preparationId, sourceRefs: built.sourceRefs, usage });
-    } catch {
-      // Observability is never a recovery source and cannot block preparation.
-    }
     return {
       status: 'ready',
       prepared: {

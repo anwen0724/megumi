@@ -7,8 +7,8 @@ import { ArtifactContentStore } from '../artifacts/artifact-content-store';
 import { ArtifactService, PlanArtifactCompatibilityService, PlanArtifactService } from '../artifacts';
 import {
   createAgentRunService,
-  createAgentRunTraceFileLogger,
   createModelCallService,
+  type AgentRunTraceLogger,
   type AgentRunService,
   type ModelCallService,
 } from '../agent-run';
@@ -61,6 +61,7 @@ import {
   type AssistantMessage,
   type AssistantStreamEvent,
 } from '@megumi/ai';
+import type { ObservabilityService, SpanHandle, TraceHandle } from '@megumi/observability';
 import type { RuntimeEvent } from '../events';
 import {
   createSessionTimelineQuery,
@@ -103,6 +104,7 @@ export interface ComposeCodingAgentRuntimeOptions {
   migrationsFolder?: string;
   migrationEnvironment?: Parameters<typeof composeCodingAgentPersistence>[0]['migrationEnvironment'];
   runtimeLogger: RuntimeLogger;
+  observabilityService?: ObservabilityService;
   aiClient?: AiClient;
   modelCallProviderService?: LegacyModelCallProviderForTests;
   modelContextProvider?: ModelContextProvider;
@@ -179,7 +181,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   const workspaceChangeRepository = new WorkspaceChangeRepository(persistence.database);
   const sessionRepository = new SessionV2Repository(persistence.database);
   const activeRunStore = new ActiveRunStore();
-  const sessionService = createSessionService({ repository: sessionRepository });
+  const sessionService = observeSessionService(createSessionService({ repository: sessionRepository }), options.observabilityService);
   const sessionBranchService = createSessionBranchService({
     entries: {
       findMessageEntry: (input) => sessionRepository.findMessageEntry(input),
@@ -262,12 +264,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
       },
     },
   });
-  const agentRunTraceLogger = createAgentRunTraceFileLogger({
-    log_file_path: `${options.homePaths.homePath}/logs/agent-run-trace.jsonl`,
-    on_error: (error) => options.runtimeLogger.warn('agent_run_trace.write_failed', {
-      error: error instanceof Error ? error.message : String(error),
-    }),
-  });
+  const agentRunTraceLogger = createObservabilityAgentRunTraceLogger(options.observabilityService);
   const protocolRegistry = createProtocolRegistry();
   const modelCallService = createModelCallService({
     ai_client: options.aiClient
@@ -304,6 +301,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
       },
     },
     modelCallService,
+    ...(options.observabilityService ? { observability: options.observabilityService } : {}),
     modelRuntimeConfigResolver: {
       resolve({ providerId, modelId }) {
         const resolved = agentRunSettingsService.resolveProviderRuntimeConfig({
@@ -386,6 +384,7 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     },
     permission_service: permissionService,
     trace_logger: agentRunTraceLogger,
+    ...(options.observabilityService ? { observability: options.observabilityService } : {}),
     workspace_service: workspaceService,
     workspace_path_policy_service: workspacePathPolicyService,
     event_publisher: {
@@ -418,6 +417,59 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     sessionTimelineQuery,
     modelContextProvider,
     dispose: () => persistence.database.close(),
+  };
+}
+
+function observeSessionService(service: SessionService, observability?: ObservabilityService): SessionService {
+  if (!observability) return service;
+  const observe = <T extends { status: string }>(role: string, operation: () => T): T => {
+    const span = observability.startSpan({ name: 'session.append_message', attributes: { role } });
+    return observability.runInSpanContext(span, () => {
+      const result = operation();
+      observability.endSpan({ span, status: result.status === 'saved' ? 'ok' : 'error', attributes: { role } });
+      return result;
+    });
+  };
+  return new Proxy(service, {
+    get(target, property, receiver) {
+      if (property === 'saveUserMessage') return (request: Parameters<SessionService['saveUserMessage']>[0]) => observe('user', () => target.saveUserMessage(request));
+      if (property === 'saveAssistantMessage') return (request: Parameters<SessionService['saveAssistantMessage']>[0]) => observe('assistant', () => target.saveAssistantMessage(request));
+      if (property === 'saveToolResultMessage') return (request: Parameters<SessionService['saveToolResultMessage']>[0]) => observe('toolResult', () => target.saveToolResultMessage(request));
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+
+function createObservabilityAgentRunTraceLogger(observability?: ObservabilityService): AgentRunTraceLogger {
+  if (!observability) return { record: () => undefined };
+  const modelSpans = new Map<string, SpanHandle>();
+  const toolSpans = new Map<string, SpanHandle>();
+  return {
+    record(record) {
+      if (record.event_type === 'run.started') {
+        return;
+      }
+      const inTrace = <T>(operation: () => T): T => operation();
+      if (record.event_type === 'run.completed' || record.event_type === 'run.failed') {
+        return;
+      }
+      if (record.event_type === 'trace.prompt.built') {
+        inTrace(() => { const span=observability.startSpan({name:'context.prepare_model_call'}); observability.endSpan({span,status:'ok'}); }); return;
+      }
+      if (record.event_type === 'trace.model_call.request_payload' && record.model_call_id) {
+        const span=inTrace(()=>observability.startSpan({name:'model.call',attributes:{providerId:record.payload.provider_id,modelId:record.payload.model_id}})); modelSpans.set(record.model_call_id,span); return;
+      }
+      if (record.event_type === 'trace.model_call.event_received' && record.model_call_id) {
+        const event=record.payload.event as {type?:string;input_tokens?:number;output_tokens?:number}|undefined;
+        if (event?.input_tokens!==undefined) observability.recordMeasurement({name:'model.input_tokens',value:event.input_tokens,unit:'token'});
+        if (event?.output_tokens!==undefined) observability.recordMeasurement({name:'model.output_tokens',value:event.output_tokens,unit:'token'});
+        if (event?.type==='completed'||event?.type==='failed'||event?.type==='cancelled') { const span=modelSpans.get(record.model_call_id); if(span){observability.endSpan({span,status:event.type==='completed'?'ok':event.type==='cancelled'?'cancelled':'error'});modelSpans.delete(record.model_call_id);} } return;
+      }
+      if (record.event_type === 'trace.tool_call.requested' && record.tool_call_id) { const span=inTrace(()=>observability.startSpan({name:'tool.call',attributes:{toolName:record.payload.tool_name}}));toolSpans.set(record.tool_call_id,span);return; }
+      if (record.event_type === 'trace.tool_execution.result' && record.tool_call_id) { const span=toolSpans.get(record.tool_call_id);if(span){observability.endSpan({span,status:record.payload.status==='completed'?'ok':'error',attributes:{resultBytes:typeof record.payload.output_size==='number'?record.payload.output_size:undefined}});toolSpans.delete(record.tool_call_id);}return; }
+      observability.recordLog({level:record.event_type.includes('failed')?'warn':'info',event:record.event_type,correlation:{traceId:record.trace_id,runId:record.run_id,sessionId:record.session_id,workspaceId:record.workspace_id}});
+    },
   };
 }
 

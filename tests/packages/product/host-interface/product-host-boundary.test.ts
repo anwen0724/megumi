@@ -19,6 +19,7 @@ describe('Product Host Interface boundary', () => {
       'artifact-host.ts',
       'chat-host.ts',
       'index.ts',
+      'observability-host.ts',
       'plan-host.ts',
       'product-host-interface.ts',
       'settings-host.ts',
