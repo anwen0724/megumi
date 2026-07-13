@@ -18,8 +18,11 @@ export interface RunTraceSummary {
   modelId?: string;
   modelCallCount: number;
   toolCallCount: number;
-  inputTokens?: number;
-  outputTokens?: number;
+  contextUsedTokens?: number;
+  contextWindowTokens?: number;
+  contextUsedRatio?: number;
+  providerInputTokens?: number;
+  providerOutputTokens?: number;
 }
 
 export interface RunTraceDetail {

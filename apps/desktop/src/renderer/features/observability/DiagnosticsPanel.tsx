@@ -111,19 +111,27 @@ export function DiagnosticsPanel() {
               <>
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold">Timeline</h3>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-[var(--color-text-muted)]">
-                      {selected.summary.inputTokens ?? "—"} in /{" "}
-                      {selected.summary.outputTokens ?? "—"} out
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => void exportBundle()}
-                    >
-                      Export bundle
-                    </Button>
-                  </div>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => void exportBundle()}
+                  >
+                    Export bundle
+                  </Button>
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <DiagnosticMetric
+                    label="Context capacity"
+                    value={formatContextCapacity(selected.summary)}
+                    detail={formatContextRatio(
+                      selected.summary.contextUsedRatio,
+                    )}
+                  />
+                  <DiagnosticMetric
+                    label="Provider usage"
+                    value={formatProviderUsage(selected.summary)}
+                    detail={`${selected.summary.modelCallCount} model ${selected.summary.modelCallCount === 1 ? "call" : "calls"}`}
+                  />
                 </div>
                 <ol className="mt-3 space-y-2">
                   {selected.spans.map((span) => (
@@ -148,4 +156,57 @@ export function DiagnosticsPanel() {
       )}
     </div>
   );
+}
+
+function DiagnosticMetric({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2.5">
+      <div className="text-[0.68rem] font-medium uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+        {label}
+      </div>
+      <div className="mt-1 text-sm font-medium text-[var(--color-text)]">
+        {value}
+      </div>
+      <div className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+        {detail}
+      </div>
+    </div>
+  );
+}
+
+function formatContextCapacity(summary: RunTraceSummary): string {
+  if (
+    summary.contextUsedTokens === undefined
+    || summary.contextWindowTokens === undefined
+  ) {
+    return "Unavailable";
+  }
+  return `${formatTokens(summary.contextUsedTokens)} / ${formatTokens(summary.contextWindowTokens)}`;
+}
+
+function formatContextRatio(ratio: number | undefined): string {
+  return ratio === undefined
+    ? "Prompt capacity was not recorded"
+    : `${(ratio * 100).toFixed(2)}% of the context window`;
+}
+
+function formatProviderUsage(summary: RunTraceSummary): string {
+  const input = summary.providerInputTokens;
+  const output = summary.providerOutputTokens;
+  if (input === undefined && output === undefined) return "Not reported";
+  const inputLabel = input === undefined ? "—" : formatTokens(input);
+  const outputLabel = output === undefined ? "—" : formatTokens(output);
+  return `${inputLabel} in · ${outputLabel} out`;
+}
+
+function formatTokens(value: number): string {
+  return new Intl.NumberFormat("en-US").format(value);
 }

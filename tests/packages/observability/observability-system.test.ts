@@ -65,6 +65,16 @@ describe("Observability system", () => {
       sessionId: "S1",
     });
     runtime.service.runInTraceContext(trace, () => {
+      runtime.service.recordMeasurement({
+        name: "context.used_tokens",
+        value: 10,
+        unit: "token",
+      });
+      runtime.service.recordMeasurement({
+        name: "context.window_tokens",
+        value: 100,
+        unit: "token",
+      });
       const span = runtime.service.startSpan({
         name: "model.call",
         attributes: { providerId: "p", modelId: "m", prompt: "secret" },
@@ -73,6 +83,13 @@ describe("Observability system", () => {
         runtime.service.recordMeasurement({
           name: "model.input_tokens",
           value: 12,
+          unit: "token",
+        }),
+      );
+      runtime.service.runInSpanContext(span, () =>
+        runtime.service.recordMeasurement({
+          name: "model.output_tokens",
+          value: 3,
           unit: "token",
         }),
       );
@@ -87,7 +104,11 @@ describe("Observability system", () => {
         summary: {
           status: "ok",
           modelCallCount: 1,
-          inputTokens: 12,
+          contextUsedTokens: 10,
+          contextWindowTokens: 100,
+          contextUsedRatio: 0.1,
+          providerInputTokens: 12,
+          providerOutputTokens: 3,
           providerId: "p",
           modelId: "m",
         },

@@ -441,34 +441,123 @@ function observeSessionService(service: SessionService, observability?: Observab
   });
 }
 
-function createObservabilityAgentRunTraceLogger(observability?: ObservabilityService): AgentRunTraceLogger {
+export function createObservabilityAgentRunTraceLogger(
+  observability?: ObservabilityService,
+): AgentRunTraceLogger {
   if (!observability) return { record: () => undefined };
   const modelSpans = new Map<string, SpanHandle>();
   const toolSpans = new Map<string, SpanHandle>();
+
   return {
     record(record) {
-      if (record.event_type === 'run.started') {
+      if (
+        record.event_type === 'run.started'
+        || record.event_type === 'run.completed'
+        || record.event_type === 'run.failed'
+        || record.event_type === 'trace.prompt.built'
+      ) {
+        // ContextService owns the real prompt-preparation span and measurements.
         return;
       }
-      const inTrace = <T>(operation: () => T): T => operation();
-      if (record.event_type === 'run.completed' || record.event_type === 'run.failed') {
-        return;
-      }
-      if (record.event_type === 'trace.prompt.built') {
-        inTrace(() => { const span=observability.startSpan({name:'context.prepare_model_call'}); observability.endSpan({span,status:'ok'}); }); return;
-      }
+
       if (record.event_type === 'trace.model_call.request_payload' && record.model_call_id) {
-        const span=inTrace(()=>observability.startSpan({name:'model.call',attributes:{providerId:record.payload.provider_id,modelId:record.payload.model_id}})); modelSpans.set(record.model_call_id,span); return;
+        const span = observability.startSpan({
+          name: 'model.call',
+          attributes: {
+            providerId: record.payload.provider_id,
+            modelId: record.payload.model_id,
+          },
+        });
+        modelSpans.set(record.model_call_id, span);
+        return;
       }
+
       if (record.event_type === 'trace.model_call.event_received' && record.model_call_id) {
-        const event=record.payload.event as {type?:string;input_tokens?:number;output_tokens?:number}|undefined;
-        if (event?.input_tokens!==undefined) observability.recordMeasurement({name:'model.input_tokens',value:event.input_tokens,unit:'token'});
-        if (event?.output_tokens!==undefined) observability.recordMeasurement({name:'model.output_tokens',value:event.output_tokens,unit:'token'});
-        if (event?.type==='completed'||event?.type==='failed'||event?.type==='cancelled') { const span=modelSpans.get(record.model_call_id); if(span){observability.endSpan({span,status:event.type==='completed'?'ok':event.type==='cancelled'?'cancelled':'error'});modelSpans.delete(record.model_call_id);} } return;
+        const event = record.payload.event as {
+          type?: string;
+          usage?: { input_tokens?: number; output_tokens?: number };
+        } | undefined;
+        const span = modelSpans.get(record.model_call_id);
+        const correlation = span?.context ?? {
+          traceId: record.trace_id,
+          runId: record.run_id,
+          sessionId: record.session_id,
+          workspaceId: record.workspace_id,
+        };
+
+        if (event?.usage?.input_tokens !== undefined) {
+          observability.recordMeasurement({
+            name: 'model.input_tokens',
+            value: event.usage.input_tokens,
+            unit: 'token',
+            correlation,
+          });
+        }
+        if (event?.usage?.output_tokens !== undefined) {
+          observability.recordMeasurement({
+            name: 'model.output_tokens',
+            value: event.usage.output_tokens,
+            unit: 'token',
+            correlation,
+          });
+        }
+
+        if (
+          event?.type === 'completed'
+          || event?.type === 'failed'
+          || event?.type === 'cancelled'
+        ) {
+          if (span) {
+            observability.endSpan({
+              span,
+              status: event.type === 'completed'
+                ? 'ok'
+                : event.type === 'cancelled'
+                  ? 'cancelled'
+                  : 'error',
+            });
+            modelSpans.delete(record.model_call_id);
+          }
+        }
+        return;
       }
-      if (record.event_type === 'trace.tool_call.requested' && record.tool_call_id) { const span=inTrace(()=>observability.startSpan({name:'tool.call',attributes:{toolName:record.payload.tool_name}}));toolSpans.set(record.tool_call_id,span);return; }
-      if (record.event_type === 'trace.tool_execution.result' && record.tool_call_id) { const span=toolSpans.get(record.tool_call_id);if(span){observability.endSpan({span,status:record.payload.status==='completed'?'ok':'error',attributes:{resultBytes:typeof record.payload.output_size==='number'?record.payload.output_size:undefined}});toolSpans.delete(record.tool_call_id);}return; }
-      observability.recordLog({level:record.event_type.includes('failed')?'warn':'info',event:record.event_type,correlation:{traceId:record.trace_id,runId:record.run_id,sessionId:record.session_id,workspaceId:record.workspace_id}});
+
+      if (record.event_type === 'trace.tool_call.requested' && record.tool_call_id) {
+        const span = observability.startSpan({
+          name: 'tool.call',
+          attributes: { toolName: record.payload.tool_name },
+        });
+        toolSpans.set(record.tool_call_id, span);
+        return;
+      }
+
+      if (record.event_type === 'trace.tool_execution.result' && record.tool_call_id) {
+        const span = toolSpans.get(record.tool_call_id);
+        if (span) {
+          observability.endSpan({
+            span,
+            status: record.payload.status === 'completed' ? 'ok' : 'error',
+            attributes: {
+              resultBytes: typeof record.payload.output_size === 'number'
+                ? record.payload.output_size
+                : undefined,
+            },
+          });
+          toolSpans.delete(record.tool_call_id);
+        }
+        return;
+      }
+
+      observability.recordLog({
+        level: record.event_type.includes('failed') ? 'warn' : 'info',
+        event: record.event_type,
+        correlation: {
+          traceId: record.trace_id,
+          runId: record.run_id,
+          sessionId: record.session_id,
+          workspaceId: record.workspace_id,
+        },
+      });
     },
   };
 }

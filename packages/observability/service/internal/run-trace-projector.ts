@@ -40,10 +40,18 @@ export function projectRunTrace(
   if (typeof attrs?.providerId === "string")
     summary.providerId = attrs.providerId;
   if (typeof attrs?.modelId === "string") summary.modelId = attrs.modelId;
-  const input = sum(traceRecords, "model.input_tokens");
-  const output = sum(traceRecords, "model.output_tokens");
-  if (input !== undefined) summary.inputTokens = input;
-  if (output !== undefined) summary.outputTokens = output;
+  const providerInput = sum(traceRecords, "model.input_tokens");
+  const providerOutput = sum(traceRecords, "model.output_tokens");
+  // Capacity describes the latest prepared Prompt; provider usage is a Run total.
+  const contextUsed = lastMeasurement(traceRecords, "context.used_tokens");
+  const contextWindow = lastMeasurement(traceRecords, "context.window_tokens");
+  if (providerInput !== undefined) summary.providerInputTokens = providerInput;
+  if (providerOutput !== undefined) summary.providerOutputTokens = providerOutput;
+  if (contextUsed !== undefined) summary.contextUsedTokens = contextUsed;
+  if (contextWindow !== undefined) summary.contextWindowTokens = contextWindow;
+  if (contextUsed !== undefined && contextWindow !== undefined && contextWindow > 0) {
+    summary.contextUsedRatio = contextUsed / contextWindow;
+  }
   const spanEnds = new Map(
     traceRecords.flatMap((record) =>
       record.type === "span.ended"
@@ -100,4 +108,17 @@ function sum(records: ObservabilityRecord[], name: string): number | undefined {
     r.type === "measurement" && r.name === name ? [r.value] : [],
   );
   return values.length ? values.reduce((a, b) => a + b, 0) : undefined;
+}
+
+function lastMeasurement(
+  records: ObservabilityRecord[],
+  name: string,
+): number | undefined {
+  for (let index = records.length - 1; index >= 0; index -= 1) {
+    const record = records[index];
+    if (record.type === "measurement" && record.name === name) {
+      return record.value;
+    }
+  }
+  return undefined;
 }
