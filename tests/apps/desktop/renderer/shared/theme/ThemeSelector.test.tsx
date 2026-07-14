@@ -49,6 +49,7 @@ describe('ThemeSelector', () => {
     expect(screen.getByRole('radio', { name: /Graphite Dark/ })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /Sage Mist/ })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /Midnight Blue/ })).toBeInTheDocument();
+    expect(screen.queryByText('megumi-warm')).not.toBeInTheDocument();
   });
 
   it('selects a theme directly instead of cycling through a toggle', async () => {

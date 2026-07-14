@@ -112,7 +112,7 @@ describe('ProviderSettingsPanel', () => {
 
     expect(screen.getByLabelText('Provider')).toHaveValue('openai');
     expect(screen.getByLabelText('Base URL')).toHaveValue('https://api.openai.com/v1');
-    expect(screen.getByText('Environment key active')).toBeInTheDocument();
+    expect(screen.getByText('Using an environment variable')).toBeInTheDocument();
   });
 
   it('creates a provider from an empty settings state', async () => {

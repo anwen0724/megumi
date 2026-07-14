@@ -1,9 +1,10 @@
 /* Lazily loads local Run traces when the user opens the Diagnostics settings page. */
 import { useEffect, useState } from "react";
+import { Download, RefreshCw } from "lucide-react";
 import type { RunTraceDetail, RunTraceSummary } from "@megumi/observability";
 import { IPC_CHANNELS } from "../../../main/ipc/channels";
 import { createRendererRuntimeIpcRequest } from "../../shared/ipc/runtime-request";
-import { Button } from "../../shared/ui";
+import { Button, SettingsPageHeader, cx } from "../../shared/ui";
 export function DiagnosticsPanel() {
   const [traces, setTraces] = useState<RunTraceSummary[]>([]);
   const [selected, setSelected] = useState<RunTraceDetail>();
@@ -49,47 +50,55 @@ export function DiagnosticsPanel() {
       );
   };
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-sm font-semibold text-[var(--color-text)]">
-            Run diagnostics
-          </h2>
-          <p className="text-sm text-[var(--color-text-muted)]">
-            Local metadata-only traces for Context, models, tools and session
-            commits.
-          </p>
-        </div>
-        <Button size="sm" variant="secondary" onClick={() => void load()}>
-          Refresh
-        </Button>
-      </div>
+    <div className="space-y-6">
+      <SettingsPageHeader
+        title="Activity & Diagnostics"
+        description="Inspect recent activity, token usage, tool calls, and errors stored locally on this device."
+        action={(
+          <Button size="sm" variant="secondary" onClick={() => void load()}>
+            <RefreshCw size={14} aria-hidden="true" />
+            Refresh
+          </Button>
+        )}
+      />
       {loading ? (
-        <p className="text-sm text-[var(--color-text-muted)]">
-          Loading diagnostics…
-        </p>
+        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-12 text-center text-sm text-[var(--color-text-muted)]">
+          Loading recent activity…
+        </div>
       ) : message ? (
-        <p className="text-sm text-[var(--color-danger)]">{message}</p>
+        <p role="status" className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text-muted)]">
+          {message}
+        </p>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.2fr)]">
-          <div className="space-y-2">
+        <div className="grid min-h-[28rem] overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] lg:grid-cols-[minmax(17rem,0.72fr)_minmax(0,1.28fr)]">
+          <section className="border-b border-[var(--color-border)] p-4 lg:border-b-0 lg:border-r">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-[var(--color-text)]">Recent runs</h2>
+              <span className="text-xs text-[var(--color-text-subtle)]">{traces.length}</span>
+            </div>
             {traces.length === 0 ? (
-              <p className="text-sm text-[var(--color-text-muted)]">
-                No Run traces yet.
+              <p className="rounded-lg border border-dashed border-[var(--color-border)] px-4 py-8 text-center text-sm text-[var(--color-text-muted)]">
+                No activity recorded yet.
               </p>
             ) : (
-              traces.map((trace) => (
+              <div className="space-y-1.5">
+                {traces.map((trace) => (
                 <button
                   key={trace.runId}
                   onClick={() => void inspect(trace.runId)}
-                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-left hover:bg-[var(--color-surface-muted)]"
+                  className={cx(
+                    "relative w-full cursor-pointer rounded-lg border p-3 text-left transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]",
+                    selected?.summary.runId === trace.runId
+                      ? "border-[var(--color-border-strong)] bg-[var(--color-surface-muted)]"
+                      : "border-transparent hover:bg-[var(--color-surface-muted)]",
+                  )}
                 >
                   <div className="flex justify-between gap-3">
-                    <span className="truncate text-sm font-medium">
-                      {trace.runId}
+                    <span className="truncate font-mono text-xs font-medium text-[var(--color-text)]">
+                      {shortRunId(trace.runId)}
                     </span>
-                    <span className="text-xs uppercase text-[var(--color-text-muted)]">
-                      {trace.status}
+                    <span className={cx("text-xs font-medium", statusClassName(trace.status))}>
+                      {formatStatus(trace.status)}
                     </span>
                   </div>
                   <div className="mt-2 text-xs text-[var(--color-text-muted)]">
@@ -99,24 +108,36 @@ export function DiagnosticsPanel() {
                     · {trace.modelCallCount} model · {trace.toolCallCount} tool
                   </div>
                 </button>
-              ))
+                ))}
+              </div>
             )}
-          </div>
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+          </section>
+          <section className="min-w-0 p-5">
             {!selected ? (
-              <p className="text-sm text-[var(--color-text-muted)]">
-                Select a Run to inspect its timeline.
-              </p>
+              <div className="grid min-h-[24rem] place-items-center text-center">
+                <div>
+                  <h2 className="text-sm font-medium text-[var(--color-text)]">Select a run</h2>
+                  <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+                    Choose recent activity to inspect its timing and usage.
+                  </p>
+                </div>
+              </div>
             ) : (
               <>
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold">Timeline</h3>
+                  <div>
+                    <h2 className="text-sm font-semibold text-[var(--color-text)]">Execution timeline</h2>
+                    <p className="mt-1 font-mono text-xs text-[var(--color-text-subtle)]">
+                      {selected.summary.runId}
+                    </p>
+                  </div>
                   <Button
                     size="sm"
                     variant="secondary"
                     onClick={() => void exportBundle()}
                   >
-                    Export bundle
+                    <Download size={14} aria-hidden="true" />
+                    Export diagnostics
                   </Button>
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -133,25 +154,25 @@ export function DiagnosticsPanel() {
                     detail={`${selected.summary.modelCallCount} model ${selected.summary.modelCallCount === 1 ? "call" : "calls"}`}
                   />
                 </div>
-                <ol className="mt-3 space-y-2">
+                <ol className="mt-5 space-y-1">
                   {selected.spans.map((span) => (
                     <li
                       key={span.spanId}
-                      className="flex justify-between border-l-2 border-[var(--color-border)] pl-3 text-sm"
+                      className="flex min-h-10 items-center justify-between gap-4 border-l-2 border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-surface-muted)]"
                     >
-                      <span>{span.name}</span>
-                      <span className="text-[var(--color-text-muted)]">
+                      <span className="text-[var(--color-text)]">{formatSpanName(span.name)}</span>
+                      <span className="shrink-0 font-mono text-xs tabular-nums text-[var(--color-text-muted)]">
                         {span.durationMs === undefined
                           ? "Duration unavailable"
                           : `${Math.round(span.durationMs)} ms`}{" "}
-                        · {span.status}
+                        · {formatStatus(span.status)}
                       </span>
                     </li>
                   ))}
                 </ol>
               </>
             )}
-          </div>
+          </section>
         </div>
       )}
     </div>
@@ -209,4 +230,35 @@ function formatProviderUsage(summary: RunTraceSummary): string {
 
 function formatTokens(value: number): string {
   return new Intl.NumberFormat("en-US").format(value);
+}
+
+function shortRunId(runId: string): string {
+  const value = runId.replace(/^run:/, "");
+  return value.length > 18 ? `${value.slice(0, 18)}…` : value;
+}
+
+function formatSpanName(name: string): string {
+  const names: Record<string, string> = {
+    agent_run: "Overall run",
+    "context.prepare_model_call": "Build context",
+    "context.compact": "Compress context",
+    "model.call": "Generate response",
+    "tool.call": "Run tool",
+    "approval.wait": "Wait for approval",
+    "session.append_message": "Save message",
+  };
+  return names[name] ?? name;
+}
+
+function formatStatus(status: string): string {
+  if (status === "ok") return "Completed";
+  if (status === "error") return "Failed";
+  if (status === "cancelled") return "Cancelled";
+  return "Incomplete";
+}
+
+function statusClassName(status: string): string {
+  if (status === "ok") return "text-[var(--color-success)]";
+  if (status === "error") return "text-[var(--color-danger)]";
+  return "text-[var(--color-text-muted)]";
 }

@@ -5,7 +5,12 @@ import { useEffect, useState, type FormEvent } from 'react';
 import type { SettingsUiResolved } from '@megumi/product/host-interface';
 import { IPC_CHANNELS } from '../../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../../shared/ipc';
-import { Button } from '../../../shared/ui';
+import {
+  Button,
+  SettingsPageHeader,
+  SettingsRow,
+  SettingsSection,
+} from '../../../shared/ui';
 
 type SearchProvider = NonNullable<SettingsUiResolved['web']['search']['provider']>;
 type Status = 'loading' | 'ready' | 'saving' | 'error';
@@ -106,19 +111,26 @@ export function WebSettingsPanel() {
   }
 
   const busy = status === 'loading' || status === 'saving';
-  const fieldClass = 'mt-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-focus)]';
+  const fieldClass = 'h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 text-sm text-[var(--color-text)] outline-none transition focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/20 disabled:cursor-not-allowed disabled:opacity-60';
 
   return (
-    <form onSubmit={(event) => void save(event)} className="space-y-4">
-      <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-        <h2 className="text-sm font-semibold text-[var(--color-text)]">Web search</h2>
-        <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-          Choose a search API. Megumi does not select or bundle a default search provider.
-        </p>
-
-        <label className="mt-4 block text-sm text-[var(--color-text)]">
-          Search provider
+    <div className="space-y-6">
+      <SettingsPageHeader
+        title="Web Access"
+        description="Choose the search service Megumi can use when it needs current information."
+      />
+      <form onSubmit={(event) => void save(event)}>
+        <SettingsSection
+          title="Search"
+          description="Megumi does not select or bundle a default search provider."
+        >
+          <SettingsRow
+            title="Search provider"
+            description="Choose the service used by the web_search tool."
+          >
+            <label className="sr-only" htmlFor="web-search-provider">Search provider</label>
           <select
+            id="web-search-provider"
             aria-label="Search provider"
             className={fieldClass}
             value={provider}
@@ -128,45 +140,67 @@ export function WebSettingsPanel() {
             <option value="">Select provider</option>
             {providers.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
           </select>
-        </label>
+          </SettingsRow>
 
-        {provider === 'custom' ? (
-          <label className="mt-4 block text-sm text-[var(--color-text)]">
-            Base URL
-            <input aria-label="Search Base URL" className={fieldClass} value={baseUrl} disabled={busy}
-              placeholder="https://search.example.com/search" onChange={(event) => setBaseUrl(event.target.value)} />
-          </label>
-        ) : null}
+          {provider === 'custom' ? (
+            <div className="border-t border-[var(--color-border)]">
+              <SettingsRow
+                title="Base URL"
+                description="Enter the endpoint for a custom search service."
+              >
+                <input
+                  aria-label="Search Base URL"
+                  className={fieldClass}
+                  value={baseUrl}
+                  disabled={busy}
+                  placeholder="https://search.example.com/search"
+                  onChange={(event) => setBaseUrl(event.target.value)}
+                />
+              </SettingsRow>
+            </div>
+          ) : null}
 
-        <label className="mt-4 block text-sm text-[var(--color-text)]">
-          API key
-          <input aria-label="Search API key" type="password" className={fieldClass} value={apiKey} disabled={busy}
-            placeholder={saved.hasApiKey ? 'A credential is already configured' : 'Enter API key'}
-            onChange={(event) => setApiKey(event.target.value)} />
-        </label>
+          <div className="border-t border-[var(--color-border)]">
+            <SettingsRow
+              title="API key"
+              description="Stored securely on this device after saving."
+            >
+              <input
+                aria-label="Search API key"
+                type="password"
+                className={fieldClass}
+                value={apiKey}
+                disabled={busy}
+                placeholder={saved.hasApiKey ? 'A credential is already configured' : 'Enter API key'}
+                onChange={(event) => setApiKey(event.target.value)}
+              />
+            </SettingsRow>
+          </div>
 
-        <div className="mt-3 text-sm text-[var(--color-text-muted)]">
-          Credential: {saved.credentialSource === 'settings' ? 'Settings key active'
-            : saved.credentialSource === 'environment' ? `Environment key active${saved.apiKeyEnv ? ` (${saved.apiKeyEnv})` : ''}`
-              : 'Missing key'}
-        </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-border)] bg-[var(--color-surface-muted)] px-5 py-4">
+            <p className="text-sm text-[var(--color-text-muted)]">
+              {saved.credentialSource === 'settings' ? 'API key saved securely on this device'
+                : saved.credentialSource === 'environment' ? `Using environment variable${saved.apiKeyEnv ? ` ${saved.apiKeyEnv}` : ''}`
+                  : 'No API key configured'}
+            </p>
 
-        {error ? <p className="mt-3 text-sm text-[var(--color-danger)]">{error}</p> : null}
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="ghost" disabled={busy || !saved.hasApiKey} onClick={() => void clearKey()}>
+                Clear key
+              </Button>
+              <Button type="submit" variant="primary" disabled={busy}>
+                {status === 'saving' ? 'Saving…' : 'Save'}
+              </Button>
+            </div>
+          </div>
 
-        <div className="mt-4 flex justify-end gap-2 border-t border-[var(--color-border)] pt-3">
-          <Button type="button" variant="ghost" disabled={busy || !saved.hasApiKey} onClick={() => void clearKey()}>
-            Clear key
-          </Button>
-          <Button type="submit" disabled={busy}>{status === 'saving' ? 'Saving…' : 'Save'}</Button>
-        </div>
-      </section>
-
-      <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-        <h2 className="text-sm font-semibold text-[var(--color-text)]">Web page reading</h2>
-        <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-          web_fetch is available without a search API and only reads public HTTP(S) pages through network safety checks.
-        </p>
-      </section>
-    </form>
+          {error ? (
+            <p role="alert" className="border-t border-[var(--color-danger)] bg-[var(--color-danger-soft)] px-5 py-3 text-sm text-[var(--color-danger)]">
+              {error}
+            </p>
+          ) : null}
+        </SettingsSection>
+      </form>
+    </div>
   );
 }

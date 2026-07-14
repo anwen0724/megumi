@@ -5,7 +5,13 @@ import { MemorySettingsPanel } from '../features/memory-settings';
 import { ProviderSettingsPanel } from '../features/provider-settings';
 import { WebSettingsPanel } from '../features/web-settings';
 import { ThemeSelector } from '../shared/theme';
-import { Button, cx } from '../shared/ui';
+import {
+  Button,
+  SettingsPageHeader,
+  SettingsRow,
+  SettingsSection,
+  cx,
+} from '../shared/ui';
 
 type SettingsCategory = 'appearance' | 'models' | 'web' | 'memory' | 'diagnostics' | 'security' | 'about';
 
@@ -22,15 +28,32 @@ interface SettingsCategoryItem {
   description: string;
 }
 
-const categories: SettingsCategoryItem[] = [
-  { id: 'appearance', label: 'Appearance', icon: Palette, description: 'Theme and local display preferences' },
-  { id: 'models', label: 'Models', icon: Bot, description: 'Provider and model runtime settings' },
-  { id: 'web', label: 'Web', icon: Globe2, description: 'Search provider and web reading settings' },
-  { id: 'memory', label: 'Memory', icon: BrainCircuit, description: 'Global long-term memory runtime settings' },
-  { id: 'diagnostics', label: 'Diagnostics', icon: Activity, description: 'Local Run traces and usage' },
-  { id: 'security', label: 'Security', icon: ShieldCheck, description: 'Local secret and approval posture' },
-  { id: 'about', label: 'About', icon: Info, description: 'Megumi desktop runtime information' },
+const categoryGroups: Array<{ label: string; items: SettingsCategoryItem[] }> = [
+  {
+    label: 'Personal',
+    items: [
+      { id: 'appearance', label: 'Appearance', icon: Palette, description: 'Choose how Megumi looks on this device.' },
+      { id: 'memory', label: 'Memory', icon: BrainCircuit, description: 'Control what Megumi may remember across conversations.' },
+    ],
+  },
+  {
+    label: 'AI & Tools',
+    items: [
+      { id: 'models', label: 'Models & Providers', icon: Bot, description: 'Connect providers and choose the models available in chat.' },
+      { id: 'web', label: 'Web Access', icon: Globe2, description: 'Choose the search service Megumi can use.' },
+      { id: 'security', label: 'Privacy & Permissions', icon: ShieldCheck, description: 'Review how keys and restricted tool actions are protected.' },
+    ],
+  },
+  {
+    label: 'Support',
+    items: [
+      { id: 'diagnostics', label: 'Activity & Diagnostics', icon: Activity, description: 'Inspect recent activity, token usage, tool calls, and errors.' },
+      { id: 'about', label: 'About Megumi', icon: Info, description: 'Application and environment information.' },
+    ],
+  },
 ];
+
+const categories = categoryGroups.flatMap((group) => group.items);
 
 function activeCategoryLabel(category: SettingsCategory): SettingsCategoryItem {
   return categories.find((item) => item.id === category) ?? categories[0];
@@ -62,7 +85,7 @@ export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize 
           style={{ gridTemplateColumns: `${sidebarWidth}px minmax(0, 1fr)` }}
           className="grid h-full min-h-0 overflow-hidden"
         >
-          <aside className="relative border-r border-[var(--color-border)] bg-[var(--color-surface-muted)] p-4">
+          <aside className="relative border-r border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-4">
             <div
               role="separator"
               aria-orientation="vertical"
@@ -70,58 +93,88 @@ export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize 
               onPointerDown={onStartSidebarResize}
               className="absolute right-0 top-0 z-10 h-full w-1 cursor-col-resize bg-transparent hover:bg-[var(--color-focus)]/40"
             />
+            <div className="mb-5 px-2">
+              <p className="text-lg font-semibold tracking-[-0.01em] text-[var(--color-text)]">
+                Settings
+              </p>
+              <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+                Customize your Megumi experience
+              </p>
+            </div>
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={onDone}
-              className="mb-3 w-full justify-start"
+              className="mb-5 w-full justify-start"
             >
               <ArrowLeft size={14} aria-hidden="true" />
               Back to chat
             </Button>
-            <nav role="tablist" aria-label="Settings categories" className="space-y-1">
-              {categories.map((item) => {
-                const Icon = item.icon;
-                const selected = category === item.id;
+            <nav role="tablist" aria-label="Settings categories" className="space-y-5">
+              {categoryGroups.map((group) => (
+                <div key={group.label} role="presentation">
+                  <p className="mb-1.5 px-3 text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-[var(--color-text-subtle)]">
+                    {group.label}
+                  </p>
+                  <div className="space-y-1">
+                    {group.items.map((item) => {
+                      const Icon = item.icon;
+                      const selected = category === item.id;
 
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={selected}
-                    onClick={() => setCategory(item.id)}
-                    className={cx(
-                      'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors',
-                      'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
-                      selected
-                        ? 'bg-[var(--color-surface)] text-[var(--color-text)] shadow-sm'
-                        : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]',
-                    )}
-                  >
-                    <Icon size={15} aria-hidden="true" />
-                    {item.label}
-                  </button>
-                );
-              })}
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          role="tab"
+                          aria-selected={selected}
+                          onClick={() => setCategory(item.id)}
+                          className={cx(
+                            'relative flex min-h-10 w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors duration-150',
+                            'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
+                            selected
+                              ? 'bg-[var(--color-surface)] font-medium text-[var(--color-text)] shadow-sm'
+                              : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface)]/70 hover:text-[var(--color-text)]',
+                          )}
+                        >
+                          {selected ? (
+                            <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-[var(--color-accent)]" />
+                          ) : null}
+                          <Icon
+                            size={16}
+                            aria-hidden="true"
+                            className={selected ? 'text-[var(--color-accent)]' : undefined}
+                          />
+                          <span className="truncate">{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </nav>
           </aside>
 
           <section
             role="tabpanel"
             aria-label={activeCategory.label}
-            className="min-w-0 overflow-y-auto px-8 py-6"
+            className="min-w-0 overflow-y-auto px-8 py-8"
           >
-            <div className="mx-auto max-w-4xl">
+            <div className="mx-auto max-w-5xl">
               {category === 'appearance' ? (
-                <div className="space-y-4">
-                  <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-                    <h2 className="text-sm font-semibold text-[var(--color-text)]">Theme</h2>
-                    <div className="mt-3">
+                <div className="space-y-6">
+                  <SettingsPageHeader
+                    title="Appearance"
+                    description={activeCategory.description}
+                  />
+                  <SettingsSection
+                    title="Theme"
+                    description="Select a color theme for the desktop interface."
+                  >
+                    <div className="p-5">
                       <ThemeSelector />
                     </div>
-                  </section>
+                  </SettingsSection>
                 </div>
               ) : null}
 
@@ -134,35 +187,59 @@ export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize 
               {category === 'diagnostics' ? <DiagnosticsPanel /> : null}
 
               {category === 'security' ? (
-                <div className="space-y-3">
-                  <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-                    <h2 className="text-sm font-semibold text-[var(--color-text)]">Secret storage</h2>
-                    <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-                      Provider API keys are handled by the Electron main process and are never exposed back to the renderer after saving.
-                    </p>
-                  </section>
-                  <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-                    <h2 className="text-sm font-semibold text-[var(--color-text)]">Approval policies</h2>
-                    <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-                      Tool approvals are still deferred until the tool runtime phase.
-                    </p>
-                  </section>
+                <div className="space-y-6">
+                  <SettingsPageHeader
+                    title="Privacy & Permissions"
+                    description={activeCategory.description}
+                  />
+                  <SettingsSection title="Current protections">
+                    <SettingsRow
+                      title="API key storage"
+                      description="Saved API keys are encrypted by the operating system and are never shown again after saving."
+                    >
+                      <div className="flex items-center justify-end gap-2 text-sm font-medium text-[var(--color-success)]">
+                        <CheckCircle2 size={16} aria-hidden="true" />
+                        Protected on this device
+                      </div>
+                    </SettingsRow>
+                    <div className="border-t border-[var(--color-border)]">
+                      <SettingsRow
+                        title="Tool approvals"
+                        description="Megumi asks before restricted tool actions according to the active permission mode."
+                      >
+                        <div className="flex items-center justify-end gap-2 text-sm text-[var(--color-text-muted)]">
+                          <ShieldCheck size={16} aria-hidden="true" />
+                          Managed during each conversation
+                        </div>
+                      </SettingsRow>
+                    </div>
+                  </SettingsSection>
                 </div>
               ) : null}
 
               {category === 'about' ? (
-                <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-                  <div className="flex items-start gap-3">
-                    <CheckCircle2 size={18} aria-hidden="true" className="mt-0.5 shrink-0 text-[var(--color-success)]" />
-                    <div>
-                      <h2 className="text-sm font-semibold text-[var(--color-text)]">Megumi</h2>
-                      <p className="mt-1 text-sm text-[var(--color-text)]">AI provider chat runtime integration</p>
-                      <p className="mt-3 text-sm text-[var(--color-text-muted)]">
-                        This build connects the desktop UI to provider-backed streaming chat.
-                      </p>
+                <div className="space-y-6">
+                  <SettingsPageHeader
+                    title="About Megumi"
+                    description={activeCategory.description}
+                  />
+                  <SettingsSection>
+                    <div className="flex items-start gap-4 p-5">
+                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
+                        <CheckCircle2 size={20} aria-hidden="true" />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-semibold text-[var(--color-text)]">Megumi</h2>
+                        <p className="mt-1 text-sm text-[var(--color-text)]">
+                          A local-first coding agent for focused development work.
+                        </p>
+                        <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--color-text-muted)]">
+                          Connect your preferred AI providers, work with project files, and keep control of local data and tool permissions.
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </section>
+                  </SettingsSection>
+                </div>
               ) : null}
             </div>
           </section>

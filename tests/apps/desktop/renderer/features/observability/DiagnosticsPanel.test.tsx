@@ -25,7 +25,17 @@ describe("DiagnosticsPanel", () => {
         status: "found",
         trace: {
           summary,
-          spans: [],
+          spans: [
+            {
+              spanId: "span-1",
+              name: "context.prepare_model_call",
+              status: "ok",
+              startedAt: "2026-07-14T00:00:00.000Z",
+              endedAt: "2026-07-14T00:00:00.010Z",
+              durationMs: 10,
+              attributes: {},
+            },
+          ],
           logs: [],
           measurements: [],
           droppedRecordCount: 0,
@@ -49,6 +59,8 @@ describe("DiagnosticsPanel", () => {
     expect(await screen.findByText("14,335 / 1,000,000")).toBeInTheDocument();
     expect(screen.getByText("1.43% of the context window")).toBeInTheDocument();
     expect(screen.getByText("14,480 in · 620 out")).toBeInTheDocument();
+    expect(screen.getByText("Build context")).toBeInTheDocument();
+    expect(screen.queryByText("context.prepare_model_call")).not.toBeInTheDocument();
   });
 });
 
