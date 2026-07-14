@@ -162,6 +162,11 @@ function failSessionMessageSend(message: string, sessionId?: string | null) {
   const current = useChatUiStore.getState();
   current.setAgentStatus('error', sessionId);
   current.setLastError(message, sessionId);
+  showToast({
+    tone: 'error',
+    title: 'Action failed',
+    message,
+  });
 }
 
 function adoptBackendSession(session: Parameters<typeof localSessionFromPersistedSession>[0]): string {

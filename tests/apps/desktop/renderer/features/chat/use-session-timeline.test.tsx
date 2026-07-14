@@ -254,6 +254,44 @@ describe('useSessionTimeline', () => {
     }));
   });
 
+  it('shows the product failure when a message cannot start a Run', async () => {
+    vi.mocked(window.megumi.session.message.send).mockResolvedValueOnce({
+      ok: true,
+      data: {
+        type: 'error',
+        requestId: 'request-image-1',
+        message: 'The selected image does not match its declared media type.',
+      },
+      meta: {
+        requestId: 'request-image-1',
+        channel: 'session:message:send',
+        handledAt: createdAt,
+        durationMs: 1,
+      },
+    });
+    const { result } = renderHook(() => useSessionTimeline());
+    let sent = true;
+
+    await act(async () => {
+      sent = await result.current.sendSessionMessage({
+        message: 'Can you see this?',
+        providerId: 'deepseek',
+        model: 'deepseek-v4-flash',
+        permissionMode: 'default',
+      });
+    });
+
+    expect(sent).toBe(false);
+    expect(useChatUiStore.getState().lastError).toBe('The selected image does not match its declared media type.');
+    expect(useToastStore.getState().toasts).toEqual([
+      expect.objectContaining({
+        tone: 'error',
+        title: 'Action failed',
+        message: 'The selected image does not match its declared media type.',
+      }),
+    ]);
+  });
+
   it('shows compaction progress and completion as one Session Timeline activity', async () => {
     let resolveSend!: (value: {
       ok: true;
