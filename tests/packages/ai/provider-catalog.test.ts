@@ -19,6 +19,22 @@ describe('AI Provider Catalog', () => {
     });
   });
 
+  it('defines OpenAI with official API defaults and model capacities', () => {
+    expect(getAiProviderDefinition('openai')).toMatchObject({
+      providerId: 'OpenAI',
+      protocol: 'openai-compatible',
+      defaultBaseUrl: 'https://api.openai.com/v1',
+    });
+    expect(getAiModelDefinition('OpenAI', 'gpt-5.6')).toMatchObject({
+      contextWindowTokens: 1_050_000,
+      capabilities: { streaming: true, toolCalls: true, thinking: true },
+    });
+    expect(getAiModelDefinition('OpenAI', 'gpt-5.5')).toMatchObject({
+      contextWindowTokens: 1_050_000,
+      capabilities: { streaming: true, toolCalls: true, thinking: true },
+    });
+  });
+
   it('returns copies instead of exposing mutable catalog state', () => {
     const first = listAiProviderDefinitions();
     first[0].models.length = 0;

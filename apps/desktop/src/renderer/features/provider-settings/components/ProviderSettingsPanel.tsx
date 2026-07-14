@@ -40,12 +40,6 @@ type ProviderListEntry =
 
 const newProviderId = '__new_provider__';
 
-function credentialLabel(provider: ProviderPublicStatusUiDto): string {
-  if (provider.credentialSource === 'settings') return 'Saved securely on this device';
-  if (provider.credentialSource === 'environment') return 'Using an environment variable';
-  return 'Missing key';
-}
-
 function createInitialFormState(provider: ProviderPublicStatusUiDto): ProviderFormState {
   return {
     provider: provider.providerId,
@@ -363,9 +357,6 @@ export function ProviderSettingsPanel() {
                         {selectedForm.enabled ? 'Enabled' : 'Disabled'}
                       </Badge>
                     </div>
-                    {selectedProvider ? (
-                      <p className="mt-1 text-xs text-[var(--color-text-muted)]">{credentialLabel(selectedProvider)}</p>
-                    ) : null}
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
@@ -519,6 +510,9 @@ function ProviderListItem({
         selected
           ? 'bg-[var(--color-surface-elevated)] text-[var(--color-text)] shadow-sm'
           : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-elevated)]/70 hover:text-[var(--color-text)]',
+        entry.source === 'quick'
+          ? selected ? 'opacity-75' : 'opacity-55 hover:opacity-80'
+          : undefined,
       )}
     >
       {selected ? <span className="absolute inset-y-0 left-0 w-0.5 rounded-full bg-[var(--color-accent)]" /> : null}

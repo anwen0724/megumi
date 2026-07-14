@@ -118,6 +118,33 @@ describe('ChatHost product semantics', () => {
     expect(getActiveConversationHistory).toHaveBeenCalledWith({ session_id: 'session:missing' });
   });
 
+  it('loads user messages for a set of diagnostic Run IDs', async () => {
+    const listUserMessagesByRunIds = vi.fn(() => ({
+      status: 'ok' as const,
+      messages: [{
+        message_id: 'message:1',
+        session_id: 'session:1',
+        run_id: 'run:1',
+        conversation: {
+          role: 'user' as const,
+          content: [{ type: 'text' as const, text: 'Inspect this run' }],
+        },
+        created_at: '2026-07-14T00:00:00.000Z',
+      }],
+    }));
+    const host = createHost(vi.fn(), vi.fn(), { listUserMessagesByRunIds });
+
+    await expect(host.listMessages({
+      runIds: ['run:1'],
+    })).resolves.toMatchObject({
+      status: 'ok',
+      messages: [{ runId: 'run:1', role: 'user', text: 'Inspect this run' }],
+    });
+    expect(listUserMessagesByRunIds).toHaveBeenCalledWith({
+      run_ids: ['run:1'],
+    });
+  });
+
   it('does not assign session title or permission defaults for send requests', async () => {
     const startRun = vi.fn(async () => ({
       status: 'completed',

@@ -96,9 +96,9 @@ export function RightSidebar({ open, onClose }: RightSidebarProps) {
     >
       <div
         data-testid="right-sidebar-header"
-        className="flex min-h-16 items-start justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3"
+        className="flex min-h-16 items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3"
       >
-        <div className="flex min-w-0 items-start gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           {isDetailView ? (
             <IconButton label="Back to Project" onClick={() => setActiveView('workspace')} size="sm" variant="ghost">
               <ChevronLeft size={16} aria-hidden="true" />

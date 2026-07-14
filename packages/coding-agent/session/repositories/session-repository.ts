@@ -92,6 +92,18 @@ export class SessionRepository {
     `).all(sessionId, runId) as SessionMessageRow[]).map(fromMessageRow);
   }
 
+  listUserMessagesByRunIds(runIds: string[]): SessionMessage[] {
+    if (runIds.length === 0) {
+      return [];
+    }
+    const placeholders = runIds.map(() => '?').join(', ');
+    return (this.database.prepare(`
+      SELECT * FROM session_messages
+      WHERE run_id IN (${placeholders}) AND role = 'user'
+      ORDER BY created_at ASC, message_id ASC
+    `).all(...runIds) as SessionMessageRow[]).map(fromMessageRow);
+  }
+
   listMessagesByIds(messageIds: string[]): SessionMessage[] {
     if (messageIds.length === 0) {
       return [];

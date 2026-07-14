@@ -44,6 +44,44 @@ const PROVIDERS = AiProviderDefinitionSchema.array().parse([
       },
     ],
   },
+  {
+    providerId: 'OpenAI',
+    displayName: 'OpenAI',
+    protocol: 'openai-compatible',
+    defaultBaseUrl: 'https://api.openai.com/v1',
+    models: [
+      {
+        modelId: 'gpt-5.6',
+        displayName: 'GPT-5.6',
+        contextWindowTokens: 1_050_000,
+        capabilities: { streaming: true, toolCalls: true, thinking: true },
+      },
+      {
+        modelId: 'gpt-5.6-terra',
+        displayName: 'GPT-5.6 Terra',
+        contextWindowTokens: 1_050_000,
+        capabilities: { streaming: true, toolCalls: true, thinking: true },
+      },
+      {
+        modelId: 'gpt-5.6-luna',
+        displayName: 'GPT-5.6 Luna',
+        contextWindowTokens: 1_050_000,
+        capabilities: { streaming: true, toolCalls: true, thinking: true },
+      },
+      {
+        modelId: 'gpt-5.5',
+        displayName: 'GPT-5.5',
+        contextWindowTokens: 1_050_000,
+        capabilities: { streaming: true, toolCalls: true, thinking: true },
+      },
+      {
+        modelId: 'gpt-5.5-pro',
+        displayName: 'GPT-5.5 Pro',
+        contextWindowTokens: 1_050_000,
+        capabilities: { streaming: true, toolCalls: true, thinking: true },
+      },
+    ],
+  },
 ] satisfies AiProviderDefinition[]);
 
 export function listAiProviderDefinitions(): AiProviderDefinition[] {

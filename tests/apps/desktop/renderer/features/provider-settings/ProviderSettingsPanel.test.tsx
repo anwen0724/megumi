@@ -17,6 +17,18 @@ describe('ProviderSettingsPanel', () => {
           { modelId: 'deepseek-v4-flash', displayName: 'DeepSeek V4 Flash', contextWindowTokens: 1_000_000 },
           { modelId: 'deepseek-v4-pro', displayName: 'DeepSeek V4 Pro', contextWindowTokens: 1_000_000 },
         ],
+      }, {
+        providerId: 'OpenAI',
+        displayName: 'OpenAI',
+        protocol: 'openai-compatible',
+        defaultBaseUrl: 'https://api.openai.com/v1',
+        models: [
+          { modelId: 'gpt-5.6', displayName: 'GPT-5.6', contextWindowTokens: 1_050_000 },
+          { modelId: 'gpt-5.6-terra', displayName: 'GPT-5.6 Terra', contextWindowTokens: 1_050_000 },
+          { modelId: 'gpt-5.6-luna', displayName: 'GPT-5.6 Luna', contextWindowTokens: 1_050_000 },
+          { modelId: 'gpt-5.5', displayName: 'GPT-5.5', contextWindowTokens: 1_050_000 },
+          { modelId: 'gpt-5.5-pro', displayName: 'GPT-5.5 Pro', contextWindowTokens: 1_050_000 },
+        ],
       }],
       providers: [
         {
@@ -63,7 +75,7 @@ describe('ProviderSettingsPanel', () => {
     expect(screen.getByRole('heading', { name: 'Providers' })).toBeInTheDocument();
     expect(screen.getAllByText('DeepSeek').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /OpenAI/ })).toBeInTheDocument();
-    expect(screen.getByText('Missing key')).toBeInTheDocument();
+    expect(screen.queryByText('Missing key')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Display name')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('API Key env')).not.toBeInTheDocument();
     expect(screen.queryByText(/sk-/i)).not.toBeInTheDocument();
@@ -77,6 +89,8 @@ describe('ProviderSettingsPanel', () => {
     expect(screen.getByLabelText('Provider')).toHaveValue('DeepSeek');
     expect(screen.getByLabelText('Base URL')).toHaveValue('https://api.deepseek.com');
     expect(screen.getByLabelText('Models')).toHaveValue('deepseek-v4-flash\ndeepseek-v4-pro');
+    expect(screen.getByRole('button', { name: /DeepSeek/ })).toHaveClass('opacity-75');
+    expect(screen.getByRole('button', { name: /OpenAI/ })).toHaveClass('opacity-55');
   });
 
   it('updates the selected provider settings from the detail pane', async () => {
@@ -112,7 +126,7 @@ describe('ProviderSettingsPanel', () => {
 
     expect(screen.getByLabelText('Provider')).toHaveValue('openai');
     expect(screen.getByLabelText('Base URL')).toHaveValue('https://api.openai.com/v1');
-    expect(screen.getByText('Using an environment variable')).toBeInTheDocument();
+    expect(screen.queryByText('Using an environment variable')).not.toBeInTheDocument();
   });
 
   it('creates a provider from an empty settings state', async () => {

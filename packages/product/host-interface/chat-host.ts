@@ -52,7 +52,10 @@ export const SessionCreatePayloadSchema = z.object({
   projectId: z.string().min(1), title: z.string().min(1).optional(),
 }).strict();
 export const SessionListPayloadSchema = z.object({}).strict();
-export const SessionMessageListPayloadSchema = z.object({ sessionId: z.string().min(1) }).strict();
+export const SessionMessageListPayloadSchema = z.union([
+  z.object({ sessionId: z.string().min(1) }).strict(),
+  z.object({ runIds: z.array(z.string().min(1)).min(1).max(200) }).strict(),
+]);
 export const SessionTimelineListPayloadSchema = z.object({
   projectId: z.string().min(1), sessionId: z.string().min(1), runId: z.string().min(1).optional(),
 }).strict();
@@ -144,7 +147,7 @@ export const ChatListMessagesUiResultSchema = z.discriminatedUnion('status', [
     status: z.literal('ok'),
     messages: z.array(z.object({
       id: z.string().min(1), sessionId: z.string().min(1), runId: z.string().min(1).optional(),
-      role: z.enum(['user', 'assistant']), text: z.string(), createdAt: z.string().datetime(),
+      role: z.enum(['user', 'assistant', 'toolResult']), text: z.string(), createdAt: z.string().datetime(),
     }).strict()),
   }).strict(),
   z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
@@ -242,8 +245,23 @@ export function createChatHost(options: {
     },
 
     async listMessages(request) {
+      if ('runIds' in request) {
+        const result = options.sessionService.listUserMessagesByRunIds({
+          run_ids: request.runIds,
+        });
+        if (result.status === 'failed') {
+          return { status: 'failed', failure: toHostFailure(result.failure) };
+        }
+        return {
+          status: 'ok',
+          messages: result.messages.map((message) => toChatMessageUiDto({
+            message,
+            attachments: [],
+          })),
+        };
+      }
       const result = options.sessionService.getActiveConversationHistory({
-        session_id: request.sessionId,
+          session_id: request.sessionId,
       });
       if (result.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(result.failure) };
@@ -487,7 +505,7 @@ export interface ChatSessionMessageUiDto {
   id: string;
   sessionId: string;
   runId?: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'toolResult';
   text: string;
   createdAt: string;
 }
@@ -518,9 +536,9 @@ export type ChatListSessionsUiResult =
   | { status: 'ok'; sessions: ChatSessionUiDto[] }
   | { status: 'failed'; failure: ChatHostFailure };
 
-export interface ChatListMessagesUiRequest {
-  sessionId: string;
-}
+export type ChatListMessagesUiRequest =
+  | { sessionId: string }
+  | { runIds: string[] };
 export type ChatListMessagesUiResult =
   | { status: 'ok'; messages: ChatSessionMessageUiDto[] }
   | { status: 'failed'; failure: ChatHostFailure };
@@ -729,7 +747,7 @@ export function toChatMessageUiDto(item: SessionMessageWithAttachments): ChatSes
     id: message.message_id,
     sessionId: message.session_id,
     ...(message.run_id ? { runId: message.run_id } : {}),
-    role: message.conversation.role === 'assistant' ? 'assistant' : 'user',
+    role: message.conversation.role,
     text: sessionConversationText(message.conversation),
     createdAt: message.created_at,
   };

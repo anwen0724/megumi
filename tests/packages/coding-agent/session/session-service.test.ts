@@ -213,6 +213,34 @@ describe('SessionService', () => {
     });
   });
 
+  it('lists only user messages for requested Run IDs', async () => {
+    const { service, workspaceId } = createService();
+    await service.createSession({ workspace_id: workspaceId, title: 'Session' });
+    await service.saveUserMessage({
+      message_id: 'M1', session_id: 'S1', run_id: 'R1',
+      content: [{ type: 'text', text: 'first input' }],
+      created_at: '2026-07-04T00:01:00.000Z',
+    });
+    await service.saveAssistantMessage({
+      message_id: 'M2', session_id: 'S1', run_id: 'R1',
+      content: [{ type: 'text', text: 'reply' }],
+      completed_at: '2026-07-04T00:02:00.000Z',
+    });
+    await service.saveUserMessage({
+      message_id: 'M3', session_id: 'S1', run_id: 'R2',
+      content: [{ type: 'text', text: 'second input' }],
+      created_at: '2026-07-04T00:03:00.000Z',
+    });
+
+    expect(service.listUserMessagesByRunIds({ run_ids: ['R1', 'R2'] })).toMatchObject({
+      status: 'ok',
+      messages: [
+        { message_id: 'M1', run_id: 'R1', conversation: { role: 'user' } },
+        { message_id: 'M3', run_id: 'R2', conversation: { role: 'user' } },
+      ],
+    });
+  });
+
   it('returns active history with compaction summaries and messages', async () => {
     const { service, workspaceId } = createService();
     await service.createSession({ workspace_id: workspaceId, title: 'Session' });

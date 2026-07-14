@@ -227,6 +227,14 @@ export type ListMessagesResult =
   | { status: 'ok'; messages: SessionMessageWithAttachments[] }
   | { status: 'failed'; failure: RuntimeError };
 
+export type ListUserMessagesByRunIdsRequest = {
+  run_ids: string[];
+};
+
+export type ListUserMessagesByRunIdsResult =
+  | { status: 'ok'; messages: SessionMessage[] }
+  | { status: 'failed'; failure: RuntimeError };
+
 export type GetActivePathRequest = {
   session_id: string;
 };
@@ -301,6 +309,7 @@ export type SessionService = {
   saveAssistantMessage(request: SaveAssistantMessageRequest): SaveAssistantMessageResult;
   saveToolResultMessage(request: SaveToolResultMessageRequest): SaveToolResultMessageResult;
   listMessages(request: ListMessagesRequest): ListMessagesResult;
+  listUserMessagesByRunIds(request: ListUserMessagesByRunIdsRequest): ListUserMessagesByRunIdsResult;
   getActivePath(request: GetActivePathRequest): GetActivePathResult;
   getActiveHistory(request: GetActiveHistoryRequest): GetActiveHistoryResult;
   getActiveConversationHistory(request: GetActiveConversationHistoryRequest): GetActiveConversationHistoryResult;

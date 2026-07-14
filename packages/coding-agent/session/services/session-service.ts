@@ -22,6 +22,8 @@ import type {
   ListMessagesResult,
   ListSessionsRequest,
   ListSessionsResult,
+  ListUserMessagesByRunIdsRequest,
+  ListUserMessagesByRunIdsResult,
   SaveAssistantMessageRequest,
   SaveAssistantMessageResult,
   SaveCompactionSummaryRequest,
@@ -211,6 +213,19 @@ class DefaultSessionService implements SessionService {
         return messages;
       }
       return { status: 'ok', messages: this.attachmentsForMessages(messages.messages) };
+    } catch (error) {
+      return failed(error);
+    }
+  }
+
+  listUserMessagesByRunIds(
+    request: ListUserMessagesByRunIdsRequest,
+  ): ListUserMessagesByRunIdsResult {
+    try {
+      return {
+        status: 'ok',
+        messages: this.options.repository.listUserMessagesByRunIds(request.run_ids),
+      };
     } catch (error) {
       return failed(error);
     }
