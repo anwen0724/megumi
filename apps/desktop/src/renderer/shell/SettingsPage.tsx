@@ -97,9 +97,6 @@ export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize 
               <p className="text-lg font-semibold tracking-[-0.01em] text-[var(--color-text)]">
                 Settings
               </p>
-              <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
-                Customize your Megumi experience
-              </p>
             </div>
             <Button
               type="button"
