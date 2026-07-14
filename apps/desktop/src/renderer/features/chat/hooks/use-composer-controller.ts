@@ -79,14 +79,12 @@ export function useComposerController({
   const trimmedValue = value.trim();
   const inputLocked = false;
   const sendLocked = status === 'sending' || status === 'running' || status === 'waiting-approval';
-  const imageModelCompatible = selectedImages.length === 0 || selectedModelOption?.imageInput !== false;
-  const imageInputError = selectedImages.length > 0 && !imageModelCompatible
-    ? 'The selected model does not support image input.'
+  const imageInputNotice = selectedImages.length > 0 && selectedModelOption?.imageInput === false
+    ? 'This model will receive attachment metadata, but not the image content.'
     : undefined;
   const canSend = (trimmedValue.length > 0 || selectedImages.length > 0 || selectedCommandCompletion !== null)
-    && !sendLocked && modelOptions.length > 0 && imageModelCompatible;
-  const canAttachImages = selectedModelOption?.imageInput !== false
-    && selectedImages.length < maxImageCount
+    && !sendLocked && modelOptions.length > 0;
+  const canAttachImages = selectedImages.length < maxImageCount
     && !sendLocked
     && selectedCommandCompletion === null;
   const showStop = status === 'sending' || status === 'running' || status === 'waiting-approval';
@@ -223,14 +221,6 @@ export function useComposerController({
 
   async function pasteImage() {
     if (!onPasteImage || sendLocked || selectedCommandCompletion) return;
-    if (selectedModelOption?.imageInput === false) {
-      showToast({
-        tone: 'warning',
-        title: 'Image input is unavailable',
-        message: 'The selected model does not support image input.',
-      });
-      return;
-    }
     if (selectedImages.length >= maxImageCount) {
       showImageLimitToast();
       return;
@@ -344,7 +334,7 @@ export function useComposerController({
     contextUsage,
     selectedImages,
     canAttachImages,
-    imageInputError,
+    imageInputNotice,
     onValueChange: handleValueChange,
     onCommandSuggestionChoose: chooseCommandSuggestion,
     onPermissionModeChange: setPermissionMode,

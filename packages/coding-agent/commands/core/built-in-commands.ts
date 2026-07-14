@@ -18,6 +18,7 @@ export const built_in_commands: CommandDefinition[] = [
           sessionId: executionContext.session_id,
           workspaceId: executionContext.workspace_id,
           modelContext: executionContext.model_context,
+          imageInputSupport: executionContext.image_input_support ?? 'unknown',
         });
 
         if (result.status === 'failed') {

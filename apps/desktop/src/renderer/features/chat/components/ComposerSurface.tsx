@@ -38,7 +38,7 @@ export interface ComposerSurfaceProps {
   contextUsage?: ChatGetContextUsageUiResult;
   selectedImages: ComposerDraftImage[];
   canAttachImages: boolean;
-  imageInputError?: string;
+  imageInputNotice?: string;
   onValueChange: (value: string) => void;
   onCommandSuggestionChoose: (item: CommandSuggestionItem) => void;
   onPermissionModeChange: (permissionMode: ComposerPermissionMode) => void;
@@ -75,7 +75,7 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
   contextUsage,
   selectedImages,
   canAttachImages,
-  imageInputError,
+  imageInputNotice,
   onValueChange,
   onCommandSuggestionChoose,
   onPermissionModeChange,
@@ -124,8 +124,8 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
               ))}
             </div>
           ) : null}
-          {imageInputError ? (
-            <p role="alert" className="mb-2 text-xs text-[var(--color-danger)]">{imageInputError}</p>
+          {imageInputNotice ? (
+            <p role="status" className="mb-2 text-xs text-[var(--color-warning)]">{imageInputNotice}</p>
           ) : null}
           <label htmlFor="megumi-composer" className="sr-only">
             Message Megumi

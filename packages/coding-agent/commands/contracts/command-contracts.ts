@@ -38,6 +38,7 @@ export type CommandExecutionContext = {
   session_id: string;
   workspace_id?: string;
   model_context?: import('../../context').ContextCapacity;
+  image_input_support?: import('@megumi/ai').AiModelSupportLevel;
   services?: {
     context?: Pick<import('../../context').ContextService, 'compactSession'>;
   };

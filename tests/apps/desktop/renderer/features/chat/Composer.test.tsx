@@ -39,6 +39,16 @@ const deepseekOnlyProviders = defaultProviders.map((provider) => ({
   enabled: provider.providerId === 'deepseek',
 }));
 
+const textOnlyProviders = defaultProviders.map((provider) => ({
+  ...provider,
+  modelCapabilities: Object.fromEntries(
+    Object.entries(provider.modelCapabilities ?? {}).map(([modelId, capabilities]) => [
+      modelId,
+      { ...capabilities, imageInput: false as const },
+    ]),
+  ),
+}));
+
 function TestComposer(props: ComposerProps) {
   return (
     <Composer
@@ -210,6 +220,35 @@ describe('Composer', () => {
     expect(onChooseContext).not.toHaveBeenCalled();
     expect(onAttachFiles).toHaveBeenCalledTimes(1);
     expect(await screen.findByAltText('image.png')).toBeInTheDocument();
+  });
+
+  it('allows image attachments for a text-only model and explains the model-facing degradation', async () => {
+    const onSubmit = vi.fn();
+    render(
+      <TestComposer
+        providers={textOnlyProviders}
+        onSubmit={onSubmit}
+        onSelectImages={async () => [{
+          draftAttachmentId: 'draft-text-only',
+          name: 'diagram.png',
+          declaredMimeType: 'image/png',
+          referenceId: 'ref-text-only',
+          previewDataUrl: 'data:image/png;base64,AQID',
+        }]}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Attach images' })).toBeEnabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Attach images' }));
+
+    expect(await screen.findByAltText('diagram.png')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'This model will receive attachment metadata, but not the image content.',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      attachments: [expect.objectContaining({ name: 'diagram.png' })],
+    }));
   });
 
   it('imports a pasted clipboard image without blocking native text paste', async () => {

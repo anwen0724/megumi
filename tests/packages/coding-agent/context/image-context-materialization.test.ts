@@ -40,6 +40,7 @@ function dependencies(
 const request = {
   sessionId: 'S1', workspaceId: 'W1', activatedSkills: [], tools: [],
   modelContext: { providerId: 'p', modelId: 'm', contextWindowTokens: 100 },
+  imageInputSupport: true as const,
   currentTurn: {
     runId: 'R-current', userEntry: { entryId: 'E-current', parentEntryId: 'E-answer' },
     userMessage: { type: 'user_message' as const, content: [{ type: 'image' as const, source: { type: 'host_reference' as const, referenceId: 'A-current' } }] },
@@ -58,6 +59,22 @@ describe('Context image materialization', () => {
       { type: 'image', source: { type: 'base64', mediaType: 'image/png', data: 'AQ==' } },
       { type: 'image', source: { type: 'base64', mediaType: 'image/png', data: 'Ag==' } },
     ]);
+  });
+
+  it('replaces every image with a model-visible text marker when image input is unsupported', async () => {
+    const deps = dependencies();
+    const result = await new ContextServiceImpl(deps).prepareModelCall({
+      ...request,
+      imageInputSupport: false,
+    });
+
+    expect(result.status).toBe('ready');
+    if (result.status !== 'ready') return;
+    expect(JSON.stringify(result.prepared.prompt.conversation)).not.toContain('"type":"image"');
+    expect(JSON.stringify(result.prepared.prompt.conversation)).toContain(
+      '[An image was attached, but the selected model cannot view image content.]',
+    );
+    expect(deps.sessionService.readAttachmentContent).not.toHaveBeenCalled();
   });
 
   it('materializes images in the compaction summary model request', async () => {

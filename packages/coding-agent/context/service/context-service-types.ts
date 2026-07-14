@@ -1,7 +1,7 @@
 /*
  * Defines request and result types for the four ContextService business operations.
  */
-import type { ToolSetEntry } from '@megumi/ai';
+import type { AiModelSupportLevel, ToolSetEntry } from '@megumi/ai';
 import type { CurrentConversationTurn } from '../domain/model/conversation-turn';
 import type {
   ContextCapacity,
@@ -62,6 +62,7 @@ export type PrepareModelCallRequest = {
   memoryRecall?: MemoryContextInput;
   tools: ToolSetEntry[];
   modelContext: ContextCapacity;
+  imageInputSupport: AiModelSupportLevel;
   onCompactionProgress?: (progress: ContextCompactionProgress) => void;
   signal?: AbortSignal;
 };
@@ -74,6 +75,7 @@ export type CompactSessionRequest = {
   sessionId: string;
   workspaceId: string;
   modelContext: ContextCapacity;
+  imageInputSupport: AiModelSupportLevel;
   signal?: AbortSignal;
 };
 

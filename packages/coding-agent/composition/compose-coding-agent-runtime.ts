@@ -356,17 +356,26 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
     active_run_store: activeRunStore,
     input_service: inputService,
     command_service: commandService,
-    command_execution_context_provider: ({ request, session_id }) => ({
-      session_id,
-      workspace_id: request.workspace_id,
-      services: {
-        context: contextRuntime.contextService,
-      },
-      model_context: modelContextProvider({
-        providerId: request.model_selection.provider_id,
-        modelId: request.model_selection.model_id,
-      }),
-    }),
+    command_execution_context_provider: ({ request, session_id }) => {
+      const providerConfig = agentRunSettingsService.resolveProviderRuntimeConfig({
+        provider_id: request.model_selection.provider_id,
+        model_id: request.model_selection.model_id,
+      });
+      return {
+        session_id,
+        workspace_id: request.workspace_id,
+        services: {
+          context: contextRuntime.contextService,
+        },
+        model_context: modelContextProvider({
+          providerId: request.model_selection.provider_id,
+          modelId: request.model_selection.model_id,
+        }),
+        image_input_support: providerConfig.status === 'ok'
+          ? providerConfig.config.capabilities.imageInput
+          : 'unknown',
+      };
+    },
     session_service: sessionService,
     branch_service: sessionBranchService,
     settings_service: agentRunSettingsService,

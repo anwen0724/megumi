@@ -198,15 +198,6 @@ class DefaultAgentRunService implements AgentRunService {
         session,
       };
     }
-    if (parsedInput.attachments.length > 0 && modelConfig.config.capabilities.imageInput === false) {
-      return {
-        ...failedStart(request, {
-          code: 'model_call_failed',
-          message: 'The selected model does not support image input.',
-        }),
-        session,
-      };
-    }
     const branchParent = this.consumeBranchDraftForRun(request, session);
     if (branchParent.status === 'failed') {
       return {

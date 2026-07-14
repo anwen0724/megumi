@@ -51,7 +51,7 @@ function fixture(counts: number[], options: { history?: SessionHistoryItem[]; hi
 
 const modelContext = { providerId: 'p', modelId: 'm', contextWindowTokens: 100 };
 const currentTurn = { runId: 'R-current', userEntry: { entryId: 'EC', parentEntryId: 'EA' }, userMessage: { type: 'user_message' as const, content: [{ type: 'text' as const, text: 'now' }] }, runItems: [] };
-const request = { sessionId: 'S1', workspaceId: 'W1', currentTurn, activatedSkills: [], tools: [], modelContext };
+const request = { sessionId: 'S1', workspaceId: 'W1', currentTurn, activatedSkills: [], tools: [], modelContext, imageInputSupport: true as const };
 
 describe('ContextServiceImpl compaction', () => {
   it('defaults to retaining three completed Turns and summarizes every older Turn', async () => {
@@ -91,12 +91,12 @@ describe('ContextServiceImpl compaction', () => {
 
   it('uses the default three-Turn retention for manual compaction', async () => {
     const retainedOnly = fixture([80], { historyCount: 3, useDefaultPolicy: true });
-    await expect(retainedOnly.service.compactSession({ sessionId: 'S1', workspaceId: 'W1', modelContext }))
+    await expect(retainedOnly.service.compactSession({ sessionId: 'S1', workspaceId: 'W1', modelContext, imageInputSupport: true }))
       .resolves.toEqual({ status: 'nothing_to_compact', reason: 'no_older_turns' });
     expect(retainedOnly.deps.summaryModelCall.complete).not.toHaveBeenCalled();
 
     const withOlderHistory = fixture([80, 30], { historyCount: 4, useDefaultPolicy: true });
-    await expect(withOlderHistory.service.compactSession({ sessionId: 'S1', workspaceId: 'W1', modelContext }))
+    await expect(withOlderHistory.service.compactSession({ sessionId: 'S1', workspaceId: 'W1', modelContext, imageInputSupport: true }))
       .resolves.toMatchObject({ status: 'compacted' });
     expect(withOlderHistory.deps.summaryModelCall.complete).toHaveBeenCalledTimes(1);
     expect(withOlderHistory.deps.sessionService.saveCompactionSummary).toHaveBeenCalledWith(expect.objectContaining({
@@ -146,7 +146,7 @@ describe('ContextServiceImpl compaction', () => {
 
   it('manual compact uses the same internals without a fake current turn', async () => {
     const { deps, service } = fixture([80, 25]);
-    expect(await service.compactSession({ sessionId: 'S1', workspaceId: 'W1', modelContext })).toMatchObject({ status: 'compacted', usageBefore: { usedTokens: 80 }, usageAfter: { usedTokens: 25 } });
+    expect(await service.compactSession({ sessionId: 'S1', workspaceId: 'W1', modelContext, imageInputSupport: true })).toMatchObject({ status: 'compacted', usageBefore: { usedTokens: 80 }, usageAfter: { usedTokens: 25 } });
     expect(deps.promptTokenCounter.count).toHaveBeenCalledWith(expect.objectContaining({ prompt: expect.objectContaining({ conversation: expect.not.arrayContaining([expect.objectContaining({ type: 'user_message', content: [] })]) }) }));
   });
 
@@ -159,7 +159,7 @@ describe('ContextServiceImpl compaction', () => {
 
     const result = mode === 'automatic'
       ? await service.prepareModelCall(request)
-      : await service.compactSession({ sessionId: 'S1', workspaceId: 'W1', modelContext });
+      : await service.compactSession({ sessionId: 'S1', workspaceId: 'W1', modelContext, imageInputSupport: true });
 
     expect(result).toMatchObject({ status: 'failed', failure: { code: 'compaction_failed' } });
     expect(deps.sessionService.saveCompactionSummary).not.toHaveBeenCalled();
@@ -210,8 +210,8 @@ describe('ContextServiceImpl compaction', () => {
       })
       .mockResolvedValueOnce({ status: 'completed' as const, content: 'second' });
 
-    const first = service.compactSession({ sessionId: 'S1', workspaceId: 'W1', modelContext });
-    const second = service.compactSession({ sessionId: 'S1', workspaceId: 'W1', modelContext });
+    const first = service.compactSession({ sessionId: 'S1', workspaceId: 'W1', modelContext, imageInputSupport: true });
+    const second = service.compactSession({ sessionId: 'S1', workspaceId: 'W1', modelContext, imageInputSupport: true });
     await vi.waitFor(() => expect(deps.summaryModelCall.complete).toHaveBeenCalledTimes(1));
     releaseFirst();
 

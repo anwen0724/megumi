@@ -137,6 +137,7 @@ export async function runAgentModelToolLoop(
       activatedSkills: request.activated_skills,
       tools,
       modelContext: request.model_context,
+      imageInputSupport: request.model_config.capabilities.imageInput,
       onCompactionProgress: (progress) => emitContextCompactionProgress(dependencies, run, progress),
       ...(request.signal ? { signal: request.signal } : {}),
     });

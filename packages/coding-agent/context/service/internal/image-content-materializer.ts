@@ -1,5 +1,5 @@
 /* Resolves Session-owned image references into complete model-facing Base64 blocks. */
-import { encodeBase64, type ContentBlock } from '@megumi/ai';
+import { encodeBase64, type AiModelSupportLevel, type ContentBlock } from '@megumi/ai';
 import type { SessionService } from '../../../session';
 import type { Prompt } from '../../domain/model/prompt';
 import type { ContextFailure } from '../context-service-types';
@@ -9,11 +9,18 @@ type AttachmentReader = Pick<SessionService, 'readAttachmentContent'>;
 export async function materializePromptImages(input: {
   prompt: Prompt;
   sessionService: AttachmentReader;
+  imageInputSupport: AiModelSupportLevel;
 }): Promise<{ status: 'materialized'; prompt: Prompt } | { status: 'failed'; failure: ContextFailure }> {
   try {
     const materializeBlocks = async (blocks: ContentBlock[]): Promise<ContentBlock[]> => Promise.all(
       blocks.map(async (block) => {
         if (block.type !== 'image' || block.source.type !== 'host_reference') return block;
+        if (input.imageInputSupport === false) {
+          return {
+            type: 'text' as const,
+            text: '[An image was attached, but the selected model cannot view image content.]',
+          };
+        }
         const read = await input.sessionService.readAttachmentContent({ attachment_id: block.source.referenceId });
         if (read.status === 'failed') {
           throw new AttachmentMaterializationError(read.failure.code, read.failure.message);

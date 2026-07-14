@@ -45,7 +45,7 @@ function dependencies(inputTokens: number[] = [50]): ContextServiceDependencies 
 }
 
 function request() {
-  return { sessionId: 'S1', workspaceId: 'W1', currentTurn, activatedSkills: [], tools: [], modelContext: capacity };
+  return { sessionId: 'S1', workspaceId: 'W1', currentTurn, activatedSkills: [], tools: [], modelContext: capacity, imageInputSupport: true as const };
 }
 
 describe('ContextServiceImpl prepareModelCall', () => {

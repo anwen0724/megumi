@@ -1,10 +1,10 @@
-/* Verifies image capability rejection before Session persistence or Run creation. */
+/* Verifies Agent Run preserves image facts while Context owns model-specific degradation. */
 import { describe, expect, it } from 'vitest';
 import { createAgentRunService, type CreateAgentRunServiceOptions } from '@megumi/coding-agent/agent-run';
 import { createInMemoryAgentRunRepository, createMessageFlowDependencies } from './agent-run-test-helpers';
 
 describe('Agent Run image capability', () => {
-  it('rejects an image input before saving the message when the resolved model cannot see images', async () => {
+  it('saves and starts an image input when Context will hide image content from the model', async () => {
     const repository = createInMemoryAgentRunRepository();
     const dependencies = createMessageFlowDependencies({ repository });
     dependencies.settings_service.resolveProviderRuntimeConfig.mockReturnValue({
@@ -43,14 +43,14 @@ describe('Agent Run image capability', () => {
     });
 
     expect(result).toMatchObject({
-      status: 'failed',
-      failure: {
-        code: 'model_call_failed',
-        message: 'The selected model does not support image input.',
+      status: 'started',
+      user_message: {
+        message: { message_id: 'message-1' },
+        attachments: [{ attachment_id: 'attachment-1' }],
       },
     });
-    expect(dependencies.session_service.saveUserMessage).not.toHaveBeenCalled();
-    expect(repository.listRuns()).toEqual([]);
+    expect(dependencies.session_service.saveUserMessage).toHaveBeenCalledTimes(1);
+    expect(repository.listRuns()).toHaveLength(1);
   });
 
   it('allows unknown image capability to reach the provider and returns the canonical saved user message', async () => {
