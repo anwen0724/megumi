@@ -10,6 +10,7 @@ import type { ApprovalCardResolvePayload } from '../../../entities/approval';
 import { ApprovalStack } from '../components/ApprovalStack';
 import { BranchDraftStack, type ComposerBranchDraftView } from '../components/BranchDraftStack';
 import { ComposerSurface } from '../components/ComposerSurface';
+import type { ChatComposerDraft } from '../../../entities/chat-ui/store';
 import type { ComposerDraftImage, ComposerStatus, ComposerSubmitPayload } from '../components/composer-types';
 import { useComposerController } from '../hooks/use-composer-controller';
 import { ComposerOverlayLayer } from './ComposerOverlayLayer';
@@ -23,12 +24,16 @@ interface ComposerDockProps {
   providers?: ProviderPublicStatusUiDto[];
   contextUsage?: ChatGetContextUsageUiResult;
   imageInputCapabilities?: ChatImageInputCapabilitiesUiResult;
+  initialValue?: string;
+  initialImages?: ComposerDraftImage[];
   onApprovalResolve: (payload: ApprovalCardResolvePayload) => void;
   onSubmit: (payload: ComposerSubmitPayload) => boolean | void | Promise<boolean | void>;
   onStop: () => void;
   onHeightChange?: (height: number) => void;
   getCommandSuggestions?: (request: { draft_input: string }) => CommandSuggestionResult | Promise<CommandSuggestionResult>;
   onSelectImages?: () => Promise<ComposerDraftImage[]>;
+  onPasteImage?: () => Promise<ComposerDraftImage[]>;
+  onDraftChange?: (draft: ChatComposerDraft) => void;
 }
 
 export function ComposerDock({
@@ -38,12 +43,16 @@ export function ComposerDock({
   providers,
   contextUsage,
   imageInputCapabilities,
+  initialValue,
+  initialImages,
   onApprovalResolve,
   onSubmit,
   onStop,
   onHeightChange,
   getCommandSuggestions,
   onSelectImages,
+  onPasteImage,
+  onDraftChange,
 }: ComposerDockProps) {
   const composerSurfaceRef = useRef<HTMLFormElement | null>(null);
   const { composerSurfaceProps } = useComposerController({
@@ -51,11 +60,15 @@ export function ComposerDock({
     providers,
     contextUsage,
     imageInputCapabilities,
+    initialValue,
+    initialImages,
     seedTextKey: null,
     seedText: null,
     onSubmit,
     onStop,
     onSelectImages,
+    onPasteImage,
+    onDraftChange,
     onChooseContext: () => undefined,
     getCommandSuggestions,
   });

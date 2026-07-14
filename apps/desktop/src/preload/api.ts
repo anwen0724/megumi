@@ -85,6 +85,7 @@ import type {
   ObservabilityRunPayload,
   ImageInputCapabilitiesPayload,
   ImageInputSelectPayload,
+  ImageInputClipboardReadPayload,
   AttachmentImageReadPayload,
 } from '../main/ipc/schemas';
 
@@ -264,6 +265,10 @@ export const api = {
         request: BusinessRequest<ImageInputSelectPayload, typeof IPC_CHANNELS.chat.imageInputSelect>,
       ): Promise<RuntimeIpcResult<ChatSelectImagesUiResult, typeof IPC_CHANNELS.chat.imageInputSelect>> =>
         invokeRuntimeIpc(IPC_CHANNELS.chat.imageInputSelect, request),
+      readClipboard: (
+        request: BusinessRequest<ImageInputClipboardReadPayload, typeof IPC_CHANNELS.chat.imageInputClipboardRead>,
+      ): Promise<RuntimeIpcResult<ChatSelectImagesUiResult, typeof IPC_CHANNELS.chat.imageInputClipboardRead>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.chat.imageInputClipboardRead, request),
       readAttachment: (
         request: BusinessRequest<AttachmentImageReadPayload, typeof IPC_CHANNELS.chat.attachmentImageRead>,
       ): Promise<RuntimeIpcResult<ChatReadAttachmentImageUiResult, typeof IPC_CHANNELS.chat.attachmentImageRead>> =>

@@ -43,6 +43,7 @@ import {
   SessionTimelineListRequestSchema,
   ImageInputCapabilitiesGetRequestSchema,
   ImageInputSelectRequestSchema,
+  ImageInputClipboardReadRequestSchema,
   AttachmentImageReadRequestSchema,
   type CommandSuggestionsPayload,
   type RunEventsListPayload,
@@ -160,6 +161,15 @@ export function registerChatHandlers(
     responseSchema: ChatSelectImagesUiResultSchema,
     logger: options.logger,
     handle: () => service.host.chat.selectImages(),
+    mapError: mapChatIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.chat.imageInputClipboardRead, createIpcRequestHandler({
+    channel: IPC_CHANNELS.chat.imageInputClipboardRead,
+    requestSchema: ImageInputClipboardReadRequestSchema,
+    responseSchema: ChatSelectImagesUiResultSchema,
+    logger: options.logger,
+    handle: () => service.host.chat.readClipboardImage(),
     mapError: mapChatIpcError,
   }));
 

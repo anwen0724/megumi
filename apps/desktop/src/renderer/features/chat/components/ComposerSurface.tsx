@@ -1,4 +1,4 @@
-import { forwardRef, type FormEvent, type KeyboardEvent, type RefObject } from 'react';
+import { forwardRef, type ClipboardEvent, type FormEvent, type KeyboardEvent, type RefObject } from 'react';
 import {
   Bot,
   Brain,
@@ -48,6 +48,7 @@ export interface ComposerSurfaceProps {
   onStop?: () => void;
   onChooseContext?: () => void;
   onAttachFiles?: () => void;
+  onPasteImage?: () => void;
   onRemoveImage: (draftAttachmentId: string) => void;
 }
 
@@ -83,10 +84,18 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
   onSubmit,
   onStop,
   onAttachFiles,
+  onPasteImage,
   onRemoveImage,
 }, ref) {
   function handleAttachFiles() {
     onAttachFiles?.();
+  }
+
+  function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const hasImage = Array.from(event.clipboardData.items).some(
+      (item) => item.kind === 'file' && item.type.startsWith('image/'),
+    );
+    if (hasImage) onPasteImage?.();
   }
 
   return (
@@ -132,6 +141,7 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
               disabled={inputLocked}
               onChange={(event) => onValueChange(event.target.value)}
               onKeyDown={onKeyDown}
+              onPaste={handlePaste}
               placeholder={selectedCommandCompletion ? 'Add arguments...' : 'Ask Megumi anything...'}
               rows={selectedCommandCompletion ? 1 : 2}
               className={[

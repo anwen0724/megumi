@@ -1,12 +1,24 @@
-/* Provides the Desktop file picker and transient file-reference reader for image input. */
-import { dialog } from 'electron';
+/* Provides Desktop image selection, clipboard import, and transient reference reads. */
+import { clipboard, dialog } from 'electron';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { ImagePickerPort } from '@megumi/product/host-interface';
 import type { ProductInputFileReader } from '@megumi/product/composition';
 
-const selectedPaths = new Map<string, string>();
+type TransientImageSource =
+  | { type: 'file'; filePath: string }
+  | { type: 'bytes'; bytes: Uint8Array };
+
+const selectedSources = new Map<string, TransientImageSource>();
 const TRANSIENT_REFERENCE_TTL_MS = 10 * 60 * 1000;
+
+function registerTransientSource(source: TransientImageSource): string {
+  const referenceId = `desktop-image:${crypto.randomUUID()}`;
+  selectedSources.set(referenceId, source);
+  const expiry = setTimeout(() => selectedSources.delete(referenceId), TRANSIENT_REFERENCE_TTL_MS);
+  expiry.unref();
+  return referenceId;
+}
 
 export const electronImagePickerAdapter: ImagePickerPort = {
   async selectImages() {
@@ -16,10 +28,7 @@ export const electronImagePickerAdapter: ImagePickerPort = {
     });
     if (result.canceled) return { status: 'cancelled' };
     const images = await Promise.all(result.filePaths.map(async (filePath) => {
-      const referenceId = `desktop-image:${crypto.randomUUID()}`;
-      selectedPaths.set(referenceId, filePath);
-      const expiry = setTimeout(() => selectedPaths.delete(referenceId), TRANSIENT_REFERENCE_TTL_MS);
-      expiry.unref();
+      const referenceId = registerTransientSource({ type: 'file', filePath });
       const bytes = await readFile(filePath);
       const declaredMimeType = mediaTypeForPath(filePath);
       return {
@@ -34,15 +43,36 @@ export const electronImagePickerAdapter: ImagePickerPort = {
     }));
     return { status: 'selected', images };
   },
+
+  async readClipboardImage() {
+    const image = clipboard.readImage();
+    if (image.isEmpty()) return { status: 'cancelled' };
+
+    const bytes = new Uint8Array(image.toPNG());
+    const referenceId = registerTransientSource({ type: 'bytes', bytes });
+    return {
+      status: 'selected',
+      images: [{
+        draftAttachmentId: `draft:${crypto.randomUUID()}`,
+        name: 'clipboard-image.png',
+        declaredMimeType: 'image/png',
+        referenceId,
+        previewDataUrl: image.toDataURL(),
+      }],
+    };
+  },
 };
 
 export const electronInputFileReader: ProductInputFileReader = {
   async readFile(source) {
     if (source.type !== 'host_file_reference') throw new Error('Desktop Input only accepts host file references.');
-    const filePath = selectedPaths.get(source.reference_id);
-    if (!filePath) throw new Error('Image selection reference is unavailable.');
-    selectedPaths.delete(source.reference_id);
-    return new Uint8Array(await readFile(filePath));
+    const selectedSource = selectedSources.get(source.reference_id);
+    if (!selectedSource) throw new Error('Image selection reference is unavailable.');
+    if (selectedSource.type === 'bytes') return new Uint8Array(selectedSource.bytes);
+
+    const bytes = new Uint8Array(await readFile(selectedSource.filePath));
+    selectedSources.set(source.reference_id, { type: 'bytes', bytes });
+    return new Uint8Array(bytes);
   },
 };
 

@@ -3,6 +3,7 @@ import type { ChatImageInputCapabilitiesUiResult, CommandSuggestionResult } from
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import { useProviderStore } from '../../../entities/provider/store';
 import { useProjectStore } from '../../../entities/project/store';
+import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
 import { createBranchDraftViewInput } from '../branch-draft-preview';
 import { useTimelineAutoScroll } from '../hooks/use-timeline-auto-scroll';
@@ -20,6 +21,8 @@ export function ChatPage() {
   const providers = useProviderStore((state) => state.providers);
   const providerStatus = useProviderStore((state) => state.status);
   const loadProviders = useProviderStore((state) => state.loadProviders);
+  const composerDraft = useChatUiStore((state) => state.composerDraft);
+  const setComposerDraft = useChatUiStore((state) => state.setComposerDraft);
   const [composerHeight, setComposerHeight] = useState(FALLBACK_COMPOSER_SPACER_HEIGHT);
   const [imageInputCapabilities, setImageInputCapabilities] = useState<ChatImageInputCapabilitiesUiResult>();
   const effectiveComposerDockHeight = composerHeight > 0 ? composerHeight : FALLBACK_COMPOSER_SPACER_HEIGHT;
@@ -51,6 +54,20 @@ export function ChatPage() {
     }
     if (result.data.status === 'failed') {
       showToast({ tone: 'error', title: 'Images could not be selected', message: result.data.failure.message });
+      return [];
+    }
+    return result.data.status === 'selected' ? result.data.images : [];
+  }, []);
+  const pasteImage = useCallback(async (): Promise<ComposerDraftImage[]> => {
+    const result = await window.megumi.session.imageInput.readClipboard(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.imageInputClipboardRead, {}),
+    );
+    if (!result.ok) {
+      showToast({ tone: 'error', title: 'Image could not be pasted', message: result.data.message });
+      return [];
+    }
+    if (result.data.status === 'failed') {
+      showToast({ tone: 'error', title: 'Image could not be pasted', message: result.data.failure.message });
       return [];
     }
     return result.data.status === 'selected' ? result.data.images : [];
@@ -155,6 +172,8 @@ export function ChatPage() {
             providers={providers}
             contextUsage={controller.contextUsage}
             imageInputCapabilities={imageInputCapabilities}
+            initialValue={composerDraft.text}
+            initialImages={composerDraft.images}
             onApprovalResolve={(payload) => {
               void controller.resolveApproval(payload);
             }}
@@ -163,6 +182,8 @@ export function ChatPage() {
             onHeightChange={setComposerHeight}
             getCommandSuggestions={getCommandSuggestions}
             onSelectImages={selectImages}
+            onPasteImage={pasteImage}
+            onDraftChange={setComposerDraft}
           />
         </>
       ) : (
@@ -200,11 +221,15 @@ export function ChatPage() {
                 providers={providers}
                 contextUsage={controller.contextUsage}
                 imageInputCapabilities={imageInputCapabilities}
+                initialValue={composerDraft.text}
+                initialImages={composerDraft.images}
                 seedTextKey={null}
                 seedText={null}
                 onSubmit={controller.handleSubmit}
                 onStop={controller.handleStop}
                 onSelectImages={selectImages}
+                onPasteImage={pasteImage}
+                onDraftChange={setComposerDraft}
                 onChooseContext={() => undefined}
                 getCommandSuggestions={getCommandSuggestions}
               />

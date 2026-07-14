@@ -47,6 +47,7 @@ function resolveSubmitMessage(rawValue: string, completion: SelectedCommandCompl
 export function useComposerController({
   status = 'idle',
   initialValue = '',
+  initialImages = [],
   providers,
   contextUsage,
   imageInputCapabilities,
@@ -56,6 +57,8 @@ export function useComposerController({
   onStop,
   onChooseContext,
   onSelectImages,
+  onPasteImage,
+  onDraftChange,
   getCommandSuggestions,
 }: ComposerProps) {
   const permissionModeId = useId();
@@ -66,7 +69,7 @@ export function useComposerController({
   const [selectedCommandSuggestionIndex, setSelectedCommandSuggestionIndex] = useState(0);
   const [permissionMode, setPermissionMode] = useState<ComposerPermissionMode>(DEFAULT_COMPOSER_PERMISSION_MODE);
   const [model, setModel] = useState<ComposerModel>(DEFAULT_COMPOSER_MODEL);
-  const [selectedImages, setSelectedImages] = useState<ComposerDraftImage[]>([]);
+  const [selectedImages, setSelectedImages] = useState<ComposerDraftImage[]>(initialImages);
   const modelOptions = useMemo(
     () => getComposerModelOptionsForProviders(providers),
     [providers],
@@ -104,6 +107,10 @@ export function useComposerController({
       setSelectedCommandCompletion(null);
     }
   }, [seedTextKey, seedText]);
+
+  useEffect(() => {
+    onDraftChange?.({ text: value, images: selectedImages });
+  }, [onDraftChange, selectedImages, value]);
 
   useEffect(() => {
     if (modelOptions.length === 0) {
@@ -186,6 +193,7 @@ export function useComposerController({
       attachments: selectedImages,
     }));
     if (succeeded === false) return;
+    onDraftChange?.({ text: '', images: [] });
     setValue('');
     setSelectedCommandCompletion(null);
     setSelectedImages([]);
@@ -210,15 +218,40 @@ export function useComposerController({
   async function selectImages() {
     if (!canAttachImages || !onSelectImages) return;
     const images = await onSelectImages();
-    const remaining = Math.max(0, maxImageCount - selectedImages.length);
-    if (images.length > remaining) {
+    appendImages(images);
+  }
+
+  async function pasteImage() {
+    if (!onPasteImage || sendLocked || selectedCommandCompletion) return;
+    if (selectedModelOption?.imageInput !== true) {
       showToast({
         tone: 'warning',
-        title: 'Image limit reached',
-        message: `You can attach up to ${maxImageCount} images.`,
+        title: 'Image input is unavailable',
+        message: 'The selected model does not support image input.',
       });
+      return;
+    }
+    if (selectedImages.length >= maxImageCount) {
+      showImageLimitToast();
+      return;
+    }
+    appendImages(await onPasteImage());
+  }
+
+  function appendImages(images: ComposerDraftImage[]) {
+    const remaining = Math.max(0, maxImageCount - selectedImages.length);
+    if (images.length > remaining) {
+      showImageLimitToast();
     }
     setSelectedImages((current) => [...current, ...images.slice(0, remaining)]);
+  }
+
+  function showImageLimitToast() {
+    showToast({
+      tone: 'warning',
+      title: 'Image limit reached',
+      message: `You can attach up to ${maxImageCount} images.`,
+    });
   }
 
   function removeImage(draftAttachmentId: string) {
@@ -321,6 +354,7 @@ export function useComposerController({
     onStop,
     onChooseContext,
     onAttachFiles: () => { void selectImages(); },
+    onPasteImage: () => { void pasteImage(); },
     onRemoveImage: removeImage,
   };
 

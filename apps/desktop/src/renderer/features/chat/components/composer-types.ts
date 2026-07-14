@@ -7,16 +7,11 @@ import type {
 } from '@megumi/product/host-interface';
 import type { CommandSuggestionResult } from '@megumi/product/host-interface';
 import type { ComposerModel, ComposerPermissionMode } from './composer-options';
+import type { ChatComposerDraft, ChatComposerDraftImage } from '../../../entities/chat-ui/store';
 
 export type ComposerStatus = 'idle' | 'sending' | 'running' | 'waiting-approval' | 'error';
 
-export type ComposerDraftImage = {
-  draftAttachmentId: string;
-  name: string;
-  declaredMimeType?: string;
-  referenceId: string;
-  previewDataUrl: string;
-};
+export type ComposerDraftImage = ChatComposerDraftImage;
 
 export interface ComposerSubmitPayload {
   message: string;
@@ -30,6 +25,7 @@ export interface ComposerSubmitPayload {
 export interface ComposerProps {
   status?: ComposerStatus;
   initialValue?: string;
+  initialImages?: ComposerDraftImage[];
   providers?: ProviderPublicStatusUiDto[];
   contextUsage?: ChatGetContextUsageUiResult;
   imageInputCapabilities?: ChatImageInputCapabilitiesUiResult;
@@ -39,5 +35,7 @@ export interface ComposerProps {
   onStop?: () => void;
   onChooseContext?: () => void;
   onSelectImages?: () => Promise<ComposerDraftImage[]>;
+  onPasteImage?: () => Promise<ComposerDraftImage[]>;
+  onDraftChange?: (draft: ChatComposerDraft) => void;
   getCommandSuggestions?: (request: { draft_input: string }) => CommandSuggestionResult | Promise<CommandSuggestionResult>;
 }

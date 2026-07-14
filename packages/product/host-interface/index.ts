@@ -123,6 +123,7 @@ export {
   RunEventsListPayloadSchema,
   ImageInputCapabilitiesPayloadSchema,
   ImageInputSelectPayloadSchema,
+  ImageInputClipboardReadPayloadSchema,
   AttachmentImageReadPayloadSchema,
   ChatImageInputCapabilitiesUiResultSchema,
   ChatSelectImagesUiResultSchema,

@@ -5,6 +5,7 @@ import { createChatHost } from '@megumi/product/host-interface/chat-host';
 
 function createHost(input: {
   selectImages?: () => Promise<{ status: 'cancelled' }>;
+  readClipboardImage?: () => Promise<{ status: 'cancelled' }>;
   readAttachmentContent?: (request: { attachment_id: string }) => Promise<unknown>;
 } = {}) {
   const readAttachmentContent = vi.fn(input.readAttachmentContent ?? (async () => ({
@@ -27,7 +28,12 @@ function createHost(input: {
       },
       sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
       contextService: { getSessionUsageSnapshot: vi.fn() },
-      ...(input.selectImages ? { imagePicker: { selectImages: input.selectImages } } : {}),
+      ...(input.selectImages || input.readClipboardImage ? {
+        imagePicker: {
+          selectImages: input.selectImages ?? (async () => ({ status: 'cancelled' as const })),
+          readClipboardImage: input.readClipboardImage ?? (async () => ({ status: 'cancelled' as const })),
+        },
+      } : {}),
     }),
     readAttachmentContent,
   };
@@ -51,6 +57,14 @@ describe('ChatHost image input', () => {
 
     await expect(host.selectImages()).resolves.toEqual({ status: 'cancelled' });
     expect(selectImages).toHaveBeenCalledTimes(1);
+  });
+
+  it('delegates clipboard image reads to the injected host capability', async () => {
+    const readClipboardImage = vi.fn(async () => ({ status: 'cancelled' as const }));
+    const { host } = createHost({ readClipboardImage });
+
+    await expect(host.readClipboardImage()).resolves.toEqual({ status: 'cancelled' });
+    expect(readClipboardImage).toHaveBeenCalledTimes(1);
   });
 
   it('projects Session-owned bytes without exposing a managed path', async () => {

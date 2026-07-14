@@ -32,6 +32,7 @@ export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.chat.sessionContextUsageGet,
   IPC_CHANNELS.chat.imageInputCapabilitiesGet,
   IPC_CHANNELS.chat.imageInputSelect,
+  IPC_CHANNELS.chat.imageInputClipboardRead,
   IPC_CHANNELS.chat.attachmentImageRead,
   IPC_CHANNELS.chat.branchDraftCreate,
   IPC_CHANNELS.chat.branchDraftCancel,

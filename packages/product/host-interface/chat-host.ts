@@ -45,6 +45,7 @@ export interface ChatHost {
   getContextUsage(request: ChatGetContextUsageUiRequest): Promise<ChatGetContextUsageUiResult>;
   getInputCapabilities(): ChatImageInputCapabilitiesUiResult;
   selectImages(): Promise<ChatSelectImagesUiResult>;
+  readClipboardImage(): Promise<ChatSelectImagesUiResult>;
   readAttachmentImage(request: ChatReadAttachmentImageUiRequest): Promise<ChatReadAttachmentImageUiResult>;
 }
 
@@ -94,6 +95,7 @@ export const RunListBySessionPayloadSchema = z.object({ sessionId: z.string().mi
 export const RunEventsListPayloadSchema = z.object({ runId: z.string().min(1) }).strict();
 export const ImageInputCapabilitiesPayloadSchema = z.object({}).strict();
 export const ImageInputSelectPayloadSchema = z.object({}).strict();
+export const ImageInputClipboardReadPayloadSchema = z.object({}).strict();
 export const AttachmentImageReadPayloadSchema = z.object({ attachmentId: z.string().min(1) }).strict();
 
 const HostFailureSchema = z.object({
@@ -258,6 +260,10 @@ export type ImagePickerPort = {
     | { status: 'selected'; images: SelectedImageUiDto[] }
     | { status: 'cancelled' }
   >;
+  readClipboardImage(): Promise<
+    | { status: 'selected'; images: SelectedImageUiDto[] }
+    | { status: 'cancelled' }
+  >;
 };
 
 export function createChatHost(options: {
@@ -383,6 +389,23 @@ export function createChatHost(options: {
         return await options.imagePicker.selectImages();
       } catch {
         return { status: 'failed', failure: { code: 'image_picker_failed', message: 'Images could not be selected.' } };
+      }
+    },
+
+    async readClipboardImage() {
+      if (!options.imagePicker) {
+        return { status: 'failed', failure: { code: 'clipboard_image_unavailable', message: 'Clipboard image input is unavailable.' } };
+      }
+      try {
+        return await options.imagePicker.readClipboardImage();
+      } catch (error) {
+        return {
+          status: 'failed',
+          failure: {
+            code: 'clipboard_image_failed',
+            message: error instanceof Error ? error.message : 'The clipboard image could not be read.',
+          },
+        };
       }
     },
 

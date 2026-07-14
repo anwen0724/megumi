@@ -1,5 +1,5 @@
 ﻿// @vitest-environment jsdom
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { Composer } from '@megumi/desktop/renderer/features/chat/components/Composer';
@@ -207,6 +207,75 @@ describe('Composer', () => {
     expect(onChooseContext).not.toHaveBeenCalled();
     expect(onAttachFiles).toHaveBeenCalledTimes(1);
     expect(await screen.findByAltText('image.png')).toBeInTheDocument();
+  });
+
+  it('imports a pasted clipboard image without blocking native text paste', async () => {
+    const onPasteImage = vi.fn(async () => [{
+      draftAttachmentId: 'draft-paste',
+      name: 'clipboard-image.png',
+      declaredMimeType: 'image/png',
+      referenceId: 'ref-paste',
+      previewDataUrl: 'data:image/png;base64,AQID',
+    }]);
+    render(<TestComposer onSubmit={() => undefined} onPasteImage={onPasteImage} />);
+    const input = screen.getByLabelText('Message Megumi');
+
+    const pasteResult = fireEvent.paste(input, {
+      clipboardData: {
+        items: [
+          { kind: 'string', type: 'text/plain' },
+          { kind: 'file', type: 'image/png' },
+        ],
+      },
+    });
+
+    expect(pasteResult).toBe(true);
+    expect(onPasteImage).toHaveBeenCalledTimes(1);
+    expect(await screen.findByAltText('clipboard-image.png')).toBeInTheDocument();
+  });
+
+  it('restores the complete in-memory draft after the composer remounts', async () => {
+    let draft = { text: '', images: [] as Array<{
+      draftAttachmentId: string;
+      name: string;
+      declaredMimeType?: string;
+      referenceId: string;
+      previewDataUrl: string;
+    }> };
+    const onDraftChange = vi.fn((nextDraft: typeof draft) => {
+      draft = nextDraft;
+    });
+    const selectedImage = {
+      draftAttachmentId: 'draft-restored',
+      name: 'restored.png',
+      declaredMimeType: 'image/png',
+      referenceId: 'ref-restored',
+      previewDataUrl: 'data:image/png;base64,AQID',
+    };
+    const first = render(
+      <TestComposer
+        onSubmit={() => undefined}
+        onSelectImages={async () => [selectedImage]}
+        onDraftChange={onDraftChange}
+      />,
+    );
+
+    await userEvent.type(screen.getByLabelText('Message Megumi'), 'Keep this draft');
+    await userEvent.click(screen.getByRole('button', { name: 'Attach images' }));
+    await waitFor(() => expect(draft).toEqual({ text: 'Keep this draft', images: [selectedImage] }));
+    first.unmount();
+
+    render(
+      <TestComposer
+        initialValue={draft.text}
+        initialImages={draft.images}
+        onSubmit={() => undefined}
+        onDraftChange={onDraftChange}
+      />,
+    );
+
+    expect(screen.getByLabelText('Message Megumi')).toHaveValue('Keep this draft');
+    expect(screen.getByAltText('restored.png')).toBeInTheDocument();
   });
 
   it('renders a compact toolbar with attachment and context usage on the left, then permission mode, model, and Send on the right', () => {
