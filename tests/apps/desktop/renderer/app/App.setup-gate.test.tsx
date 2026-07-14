@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '@megumi/desktop/renderer/app/App';
 import { useSetupWizardStore } from '@megumi/desktop/renderer/features/setup-wizard';
+import { useProviderStore } from '@megumi/desktop/renderer/entities/provider';
 
 function settingsResult(setupCompleted: boolean) {
   return {
@@ -34,7 +35,7 @@ function installMegumiMock(setupCompleted: boolean) {
         update: vi.fn(),
       },
       provider: {
-        list: vi.fn().mockResolvedValue({ ok: true, data: { providers: [] } }),
+        list: vi.fn().mockResolvedValue({ ok: true, data: { status: 'ok', providers: [], catalog: [] } }),
         update: vi.fn(),
         setApiKey: vi.fn(),
         deleteApiKey: vi.fn(),
@@ -67,6 +68,7 @@ describe('App setup gate', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     useSetupWizardStore.setState(useSetupWizardStore.getInitialState(), true);
+    useProviderStore.setState(useProviderStore.getInitialState(), true);
   });
 
   it('shows setup wizard before setup is completed', async () => {

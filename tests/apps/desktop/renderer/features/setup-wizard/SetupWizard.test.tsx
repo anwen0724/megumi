@@ -1,101 +1,124 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SetupWizard, useSetupWizardStore } from '@megumi/desktop/renderer/features/setup-wizard';
+import { useProviderStore } from '@megumi/desktop/renderer/entities/provider';
 import { useThemeStore } from '@megumi/desktop/renderer/shared/theme';
+
+const catalog = [
+  {
+    providerId: 'DeepSeek',
+    displayName: 'DeepSeek',
+    protocol: 'openai-compatible' as const,
+    defaultBaseUrl: 'https://api.deepseek.com',
+    models: [
+      {
+        modelId: 'deepseek-v4-flash',
+        displayName: 'DeepSeek V4 Flash',
+        contextWindowTokens: 1_000_000,
+        capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: false },
+      },
+    ],
+  },
+  {
+    providerId: 'OpenAI',
+    displayName: 'OpenAI',
+    protocol: 'openai-compatible' as const,
+    defaultBaseUrl: 'https://api.openai.com/v1',
+    models: [
+      {
+        modelId: 'gpt-5.6',
+        displayName: 'GPT-5.6',
+        contextWindowTokens: 1_050_000,
+        capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true },
+      },
+    ],
+  },
+];
 
 describe('SetupWizard', () => {
   beforeEach(() => {
     useSetupWizardStore.setState(useSetupWizardStore.getInitialState(), true);
     useThemeStore.setState(useThemeStore.getInitialState(), true);
+    useProviderStore.setState({
+      ...useProviderStore.getInitialState(),
+      status: 'ready',
+      catalog,
+      loadProviders: vi.fn().mockResolvedValue(undefined),
+    }, true);
   });
 
-  it('walks through setup and submits selected settings', async () => {
+  it('uses the catalog to complete a usable first-run setup', async () => {
     const user = userEvent.setup();
     const completeSetup = vi.fn().mockResolvedValue(undefined);
     useSetupWizardStore.setState({ status: 'ready', setupCompleted: false, completeSetup });
 
     render(<SetupWizard />);
 
-    expect(screen.getByRole('heading', { name: 'Set up Megumi' })).toBeInTheDocument();
-
-    await user.selectOptions(screen.getByLabelText('Language'), 'en-US');
-    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('heading', { name: 'Make Megumi yours' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /English/ })).toHaveAttribute('aria-pressed', 'true');
 
     await user.click(screen.getByRole('radio', { name: 'Graphite Dark' }));
-    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
 
-    await user.selectOptions(screen.getByLabelText('Provider'), 'openai');
-    expect(screen.getByLabelText('Base URL')).toHaveValue('');
-    expect(screen.getByLabelText('Model IDs')).toHaveValue('');
-    await user.clear(screen.getByLabelText('Base URL'));
-    await user.type(screen.getByLabelText('Base URL'), 'https://api.openai.com/v1');
-    await user.clear(screen.getByLabelText('Model IDs'));
-    await user.type(screen.getByLabelText('Model IDs'), 'gpt-5.5');
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-
+    await user.click(screen.getByRole('button', { name: /OpenAI/ }));
     await user.type(screen.getByLabelText('API key'), 'TEST_API_KEY_VALUE');
-    await user.click(screen.getByRole('button', { name: 'Finish setup' }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
 
-    expect(completeSetup).toHaveBeenCalledWith(expect.objectContaining({
+    expect(screen.getByText('GPT-5.6')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Start using Megumi' }));
+
+    expect(completeSetup).toHaveBeenCalledWith({
       language: 'en-US',
       theme: 'graphite-dark',
-      providerId: 'openai',
+      providerId: 'OpenAI',
       baseUrl: 'https://api.openai.com/v1',
-      modelIds: ['gpt-5.5'],
+      modelIds: ['gpt-5.6'],
       apiKey: 'TEST_API_KEY_VALUE',
-    }));
+    });
   });
 
-  it('allows skipping provider configuration', async () => {
+  it('allows provider configuration to be deferred', async () => {
     const user = userEvent.setup();
     const completeSetup = vi.fn().mockResolvedValue(undefined);
     useSetupWizardStore.setState({ status: 'ready', setupCompleted: false, completeSetup });
 
     render(<SetupWizard />);
 
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(screen.getByLabelText('Configure provider later'));
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(screen.getByRole('button', { name: 'Finish setup' }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Set up later' }));
 
-    expect(completeSetup).toHaveBeenCalledWith(expect.objectContaining({
+    expect(screen.getByText('Not configured')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Start using Megumi' }));
+
+    expect(completeSetup).toHaveBeenCalledWith({
+      language: 'en-US',
+      theme: 'midnight-blue',
+      modelIds: [],
       skipProvider: true,
-    }));
-    expect(completeSetup.mock.calls[0][0]).not.toHaveProperty('providerId');
+    });
   });
 
-  it('previews theme changes immediately without persisting setup', async () => {
+  it('previews theme changes immediately', async () => {
     const user = userEvent.setup();
     useSetupWizardStore.setState({ status: 'ready', setupCompleted: false });
 
     render(<SetupWizard />);
-
-    await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.click(screen.getByRole('radio', { name: 'Sage Mist' }));
 
     expect(useThemeStore.getState().theme).toBe('sage-mist');
   });
 
-  it('offers third-party provider setup without prefilled endpoint values', async () => {
+  it('exposes the catalog base URL only as an advanced override', async () => {
     const user = userEvent.setup();
     useSetupWizardStore.setState({ status: 'ready', setupCompleted: false });
 
     render(<SetupWizard />);
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(screen.queryByLabelText('Base URL')).not.toBeVisible();
 
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-
-    expect(screen.getByRole('option', { name: 'Third-party compatible' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Provider')).toHaveValue('');
-    expect(screen.getByLabelText('Base URL')).toHaveValue('');
-    expect(screen.getByLabelText('Model IDs')).toHaveValue('');
-
-    await user.selectOptions(screen.getByLabelText('Provider'), 'custom');
-
-    expect(screen.getByLabelText('Base URL')).toHaveValue('');
-    expect(screen.getByLabelText('Model IDs')).toHaveValue('');
+    await user.click(screen.getByText('Advanced settings'));
+    expect(screen.getByLabelText('Base URL')).toHaveValue('https://api.deepseek.com');
   });
 });
