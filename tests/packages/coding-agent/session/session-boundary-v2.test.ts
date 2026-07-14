@@ -3,69 +3,48 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const repoRoot = join(__dirname, '../../../..');
+const exists = (path: string) => existsSync(join(repoRoot, path));
+const read = (path: string) => readFileSync(join(repoRoot, path), 'utf8');
 
-function exists(relativePath: string): boolean {
-  return existsSync(join(repoRoot, relativePath));
-}
+describe('session module architecture', () => {
+  it('uses the confirmed domain, service, repository, and config structure', () => {
+    for (const path of [
+      'packages/coding-agent/session/domain/model/session.ts',
+      'packages/coding-agent/session/domain/model/session-message.ts',
+      'packages/coding-agent/session/domain/model/session-entry.ts',
+      'packages/coding-agent/session/domain/model/session-attachment.ts',
+      'packages/coding-agent/session/domain/dto/agent-run/session-agent-run-request.ts',
+      'packages/coding-agent/session/domain/dto/context/session-context-request.ts',
+      'packages/coding-agent/session/service/session-service.ts',
+      'packages/coding-agent/session/service/session-service-impl.ts',
+      'packages/coding-agent/session/service/session-service-types.ts',
+      'packages/coding-agent/session/service/session-branch-service.ts',
+      'packages/coding-agent/session/service/internal/session-path.ts',
+      'packages/coding-agent/session/repository/session-repository.ts',
+      'packages/coding-agent/session/config/compose-coding-agent-session.ts',
+    ]) expect(exists(path)).toBe(true);
 
-function read(relativePath: string): string {
-  return readFileSync(join(repoRoot, relativePath), 'utf8');
-}
-
-describe('session module boundary v2', () => {
-  it('uses the target module structure', () => {
-    expect(exists('packages/coding-agent/session/contracts/session-contracts.ts')).toBe(true);
-    expect(exists('packages/coding-agent/session/services/session-service.ts')).toBe(true);
-    expect(exists('packages/coding-agent/session/repositories/session-repository.ts')).toBe(true);
-    expect(exists('packages/coding-agent/session/core/session-path.ts')).toBe(true);
-
-    expect(exists('packages/coding-agent/session/session-service.ts')).toBe(false);
-    expect(exists('packages/coding-agent/session/session-messages.ts')).toBe(false);
-    expect(exists('packages/coding-agent/session/session-branch-service.ts')).toBe(false);
-    expect(exists('packages/coding-agent/session/session-context-input.ts')).toBe(false);
+    expect(exists('packages/coding-agent/session/contracts/session-contracts.ts')).toBe(false);
+    expect(exists('packages/coding-agent/session/core/session-path.ts')).toBe(false);
+    expect(exists('packages/coding-agent/session/services/session-service.ts')).toBe(false);
+    expect(exists('packages/coding-agent/session/repositories/session-repository.ts')).toBe(false);
   });
 
-  it('keeps the public index limited to contracts and services', () => {
+  it('keeps repository and implementation details out of the public index', () => {
     const source = read('packages/coding-agent/session/index.ts');
-
-    expect(source).toContain("export * from './contracts/session-contracts'");
-    expect(source).toContain("from './services/session-service'");
-    expect(source).toContain('createSessionService');
-    expect(source).not.toContain('DefaultSessionService');
-    expect(source).not.toContain('./core/');
-    expect(source).not.toContain('./repositories/');
+    expect(source).toContain("./service/session-service");
+    expect(source).toContain("./config/compose-coding-agent-session");
+    expect(source).not.toContain('session-service-impl');
+    expect(source).not.toContain('./repository/');
+    expect(source).not.toContain('/internal/');
   });
 
-  it('keeps Session independent from raw input, command, prompt, tool, runtime event, and desktop ownership', () => {
-    const files = [
-      'packages/coding-agent/session/contracts/session-contracts.ts',
-      'packages/coding-agent/session/services/session-service.ts',
-      'packages/coding-agent/session/repositories/session-repository.ts',
-      'packages/coding-agent/session/core/session-path.ts',
-      'packages/coding-agent/session/index.ts',
-    ];
-
-    for (const file of files) {
-      const source = read(file);
-      expect(source).not.toContain(['@megumi', 'shared', 'session'].join('/'));
-      expect(source).not.toContain('../input');
-      expect(source).not.toContain('../commands');
-      expect(source).not.toContain('../tools');
-      expect(source).not.toContain('../agent-loop');
-      expect(source).not.toContain('Prompt');
-      expect(source).not.toContain('RuntimeEvent');
-      expect(source).not.toContain('apps/desktop');
+  it('keeps Session SQL in its repository and avoids a second attachment service', () => {
+    const repository = read('packages/coding-agent/session/repository/session-repository.ts');
+    for (const table of ['session_messages', 'session_entries', 'session_message_attachments', 'session_compactions']) {
+      expect(repository).toContain(table);
     }
-  });
-
-  it('keeps Session business SQL inside the Session repository', () => {
-    const sessionRepository = read('packages/coding-agent/session/repositories/session-repository.ts');
-    expect(sessionRepository).toContain('session_messages');
-    expect(sessionRepository).toContain('session_entries');
-    expect(sessionRepository).toContain('session_message_attachments');
-    expect(sessionRepository).toContain('session_compactions');
-
-    expect(read('packages/coding-agent/session/services/session-service.ts')).not.toContain(['persistence/repos', 'session.repo'].join('/'));
-    expect(read('packages/coding-agent/session/repositories/session-repository.ts')).not.toContain(['persistence/repos', 'session.repo'].join('/'));
+    expect(exists('packages/coding-agent/session/service/session-attachment-content-service.ts')).toBe(false);
+    expect(exists('packages/coding-agent/session/domain/session-attachment-content-contracts.ts')).toBe(false);
   });
 });

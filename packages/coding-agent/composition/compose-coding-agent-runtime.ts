@@ -16,7 +16,7 @@ import { ActiveRunStore } from '../agent-run/core/active-run-store';
 import { createCommandService, type CommandService, type SkillCommandDescriptor } from '../commands';
 import { createInputService, type InputService } from '../input';
 import { createSessionBranchService, createSessionService, type SessionBranchService, type SessionService } from '../session';
-import { SessionRepository as SessionV2Repository } from '../session/repositories/session-repository';
+import { SessionRepository as SessionV2Repository } from '../session/repository/session-repository';
 import type { RuntimeLogger } from './runtime-logger';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
 import {

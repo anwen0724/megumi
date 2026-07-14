@@ -32,25 +32,17 @@ import type {
   SaveUserMessageResult,
   SaveToolResultMessageRequest,
   SaveToolResultMessageResult,
-  SessionEntry,
-  SessionHistoryItem,
-  SessionMessageAttachment,
-  SessionMessageWithAttachments,
   SessionService,
   SwitchActiveEntryRequest,
   SwitchActiveEntryResult,
-} from '../contracts/session-contracts';
-import { buildActiveConversationPath, buildActivePath, validateSessionEntry } from '../core/session-path';
-import type { SessionRepository } from '../repositories/session-repository';
+} from './session-service';
+import type { SessionEntry, SessionHistoryItem } from '../domain/model/session-entry';
+import type { SessionMessageAttachment } from '../domain/model/session-attachment';
+import type { SessionMessageWithAttachments } from '../domain/model/session-message';
+import { buildActiveConversationPath, buildActivePath, validateSessionEntry } from './internal/session-path';
+import type { SessionRepository } from '../repository/session-repository';
 
-export type CreateSessionServiceOptions = {
-  repository: SessionRepository;
-  ids?: {
-    sessionId?: () => string;
-    entryId(input: { kind: 'message' | 'compaction'; source_id: string }): string;
-  };
-  now?: () => string;
-};
+export type CreateSessionServiceOptions = import('./session-service-types').SessionServiceDependencies;
 
 export function createSessionService(options: CreateSessionServiceOptions): SessionService {
   return new DefaultSessionService(options);

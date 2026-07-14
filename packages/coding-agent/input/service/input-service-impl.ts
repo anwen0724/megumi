@@ -3,12 +3,12 @@
  * input classification. It intentionally does not call Command Service.
  */
 import type {
-  InputService,
   ProcessUserInputRequest,
   ProcessUserInputResult,
-} from '../contracts/input-contracts';
-import { normalizeRawInputText } from '../core/raw-input-normalizer';
-import { parseUserInput } from '../core/user-input-parser';
+} from '../domain/dto/agent-run/input-agent-run-request';
+import type { InputService } from './input-service';
+import { normalizeRawInputText } from './internal/raw-input-normalizer';
+import { parseUserInput } from './internal/user-input-classifier';
 
 export function createInputService(): InputService {
   return {

@@ -1,6 +1,7 @@
-/*
- * Public Input module entrypoint. It exposes only stable contracts and the
- * Input Service creation function, never core implementation files.
- */
-export * from './contracts/input-contracts';
-export { createInputService } from './services/input-service';
+/* Public Input module entrypoint. */
+export * from './domain/model/user-input';
+export * from './domain/dto/agent-run/input-agent-run-request';
+export * from './domain/dto/agent-run/input-agent-run-response';
+export * from './service/input-service';
+export * from './service/input-service-types';
+export { createInputService } from './config/compose-coding-agent-input';

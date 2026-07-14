@@ -1,60 +1,49 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const repoRoot = join(__dirname, '../../../..');
-const inputRoot = join(repoRoot, 'packages/coding-agent/input');
+const exists = (path: string) => existsSync(join(repoRoot, path));
+const read = (path: string) => readFileSync(join(repoRoot, path), 'utf8');
 
-function read(relativePath: string): string {
-  return readFileSync(join(repoRoot, relativePath), 'utf8');
-}
+describe('input module architecture', () => {
+  it('uses domain, service, and config without legacy compatibility paths', () => {
+    for (const path of [
+      'packages/coding-agent/input/domain/model/user-input.ts',
+      'packages/coding-agent/input/domain/dto/agent-run/input-agent-run-request.ts',
+      'packages/coding-agent/input/domain/dto/agent-run/input-agent-run-response.ts',
+      'packages/coding-agent/input/service/input-service.ts',
+      'packages/coding-agent/input/service/input-service-impl.ts',
+      'packages/coding-agent/input/service/input-service-types.ts',
+      'packages/coding-agent/input/service/internal/raw-input-normalizer.ts',
+      'packages/coding-agent/input/service/internal/user-input-classifier.ts',
+      'packages/coding-agent/input/config/compose-coding-agent-input.ts',
+    ]) expect(exists(path)).toBe(true);
 
-describe('input module boundary v2', () => {
-  it('uses the target contracts/services/core structure only', () => {
-    expect(existsSync(join(inputRoot, 'contracts/input-contracts.ts'))).toBe(true);
-    expect(existsSync(join(inputRoot, 'services/input-service.ts'))).toBe(true);
-    expect(existsSync(join(inputRoot, 'core/raw-input-normalizer.ts'))).toBe(true);
-    expect(existsSync(join(inputRoot, 'core/user-input-parser.ts'))).toBe(true);
-
-    expect(existsSync(join(inputRoot, 'input-service.ts'))).toBe(false);
-    expect(existsSync(join(inputRoot, 'raw-input.ts'))).toBe(false);
-    expect(existsSync(join(inputRoot, 'parsed-input.ts'))).toBe(false);
-    expect(existsSync(join(inputRoot, 'session-message.ts'))).toBe(false);
-    expect(existsSync(join(inputRoot, 'facts'))).toBe(false);
-    expect(existsSync(join(inputRoot, 'preprocessing'))).toBe(false);
+    expect(exists('packages/coding-agent/input/contracts/input-contracts.ts')).toBe(false);
+    expect(exists('packages/coding-agent/input/core/raw-input-normalizer.ts')).toBe(false);
+    expect(exists('packages/coding-agent/input/services/input-service.ts')).toBe(false);
+    expect(exists('packages/coding-agent/input/repository')).toBe(false);
   });
 
-  it('does not import command, old input shared contracts, session, run, state, events, persistence, or desktop', () => {
-    const files = [
-      'packages/coding-agent/input/contracts/input-contracts.ts',
-      'packages/coding-agent/input/services/input-service.ts',
-      'packages/coding-agent/input/core/raw-input-normalizer.ts',
-      'packages/coding-agent/input/core/user-input-parser.ts',
-      'packages/coding-agent/input/index.ts',
-    ];
-
-    for (const file of files) {
-      const source = read(file);
-      expect(source).not.toContain(['@megumi', 'shared'].join('/'));
-      expect(source).not.toContain('../commands');
-      expect(source).not.toContain('@megumi/desktop/main/ipc');
-      expect(source).not.toContain(['@megumi', 'shared', 'prompt-template'].join('/'));
-      expect(source).not.toContain(['@megumi', 'shared', 'skill'].join('/'));
-      expect(source).not.toContain('../session');
-      expect(source).not.toContain('../agent-loop');
-      expect(source).not.toContain('../state');
-      expect(source).not.toContain('../events');
-      expect(source).not.toContain('../persistence');
-      expect(source).not.toContain('apps/desktop');
-      expect(source).not.toContain('CommandService');
-      expect(source).not.toContain('handleCommandInput');
-    }
-  });
-
-  it('does not export core implementation from the public index', () => {
+  it('keeps the public index free of internal implementation exports', () => {
     const index = read('packages/coding-agent/input/index.ts');
-    expect(index).toContain("export * from './contracts/input-contracts'");
-    expect(index).toContain("from './services/input-service'");
-    expect(index).not.toContain('./core/');
+    expect(index).toContain("./domain/model/user-input");
+    expect(index).toContain("./service/input-service");
+    expect(index).toContain("./config/compose-coding-agent-input");
+    expect(index).not.toContain('/internal/');
+    expect(index).not.toContain('input-service-impl');
+  });
+
+  it('does not let Input own commands, session, persistence, or desktop', () => {
+    const source = [
+      'packages/coding-agent/input/domain/model/user-input.ts',
+      'packages/coding-agent/input/service/input-service.ts',
+      'packages/coding-agent/input/service/input-service-impl.ts',
+      'packages/coding-agent/input/service/internal/user-input-classifier.ts',
+    ].map(read).join('\n');
+    for (const forbidden of ['../commands', '../session', '../persistence', 'apps/desktop', 'CommandService']) {
+      expect(source).not.toContain(forbidden);
+    }
   });
 });

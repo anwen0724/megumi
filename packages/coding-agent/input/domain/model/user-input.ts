@@ -1,7 +1,4 @@
-/*
- * Defines the stable Input module contracts for normalizing and classifying
- * submitted user input before later orchestration decides what to run.
- */
+/* Defines raw and processed user-input facts owned by the Input module. */
 
 export type RawUserInput = {
   text: string;
@@ -30,20 +27,8 @@ export type ParsedUserInput =
       attachments: RawUserInputAttachment[];
     };
 
-export type ProcessUserInputRequest = {
-  user_input: RawUserInput;
-};
-
-export type ProcessUserInputResult =
-  | { status: 'ok'; parsed_user_input: ParsedUserInput }
-  | { status: 'failed'; failure: InputFailure };
-
 export type InputFailure = {
   code: 'input_processing_failed';
   message: string;
   details?: Record<string, unknown>;
-};
-
-export type InputService = {
-  processUserInput(request: ProcessUserInputRequest): Promise<ProcessUserInputResult>;
 };

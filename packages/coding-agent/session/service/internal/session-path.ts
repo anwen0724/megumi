@@ -2,7 +2,7 @@
  * Implements pure Session active path rules. It never reads or writes the
  * database and is not exported from the Session public entrypoint.
  */
-import type { SessionCompactionSummary, SessionEntry } from '../contracts/session-contracts';
+import type { SessionCompactionSummary, SessionEntry } from '../../domain/model/session-entry';
 
 export type BuildActivePathInput = {
   session_id: string;

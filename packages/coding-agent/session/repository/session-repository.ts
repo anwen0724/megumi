@@ -5,12 +5,11 @@
 import type { MegumiDatabase } from '../../persistence/connection';
 import type {
   Session,
-  SessionCompactionSummary,
-  SessionEntry,
-  SessionMessage,
-  SessionMessageAttachment,
-} from '../contracts/session-contracts';
-import { SessionConversationMessageSchema } from '../contracts/session-contracts';
+} from '../domain/model/session';
+import type { SessionCompactionSummary, SessionEntry } from '../domain/model/session-entry';
+import type { SessionMessageAttachment } from '../domain/model/session-attachment';
+import type { SessionMessage } from '../domain/model/session-message';
+import { SessionConversationMessageSchema } from '../domain/model/session-message';
 
 type Nullable<T> = T | null;
 

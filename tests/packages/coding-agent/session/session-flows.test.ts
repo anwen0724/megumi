@@ -3,7 +3,7 @@ import { createSessionService } from '@megumi/coding-agent/session';
 import { createDatabase } from '@megumi/coding-agent/persistence/connection';
 import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
 import { WorkspaceRepository } from '@megumi/coding-agent/workspace/repositories/workspace-repository';
-import { SessionRepository } from '@megumi/coding-agent/session/repositories/session-repository';
+import { SessionRepository } from '@megumi/coding-agent/session/repository/session-repository';
 
 function createTestDatabase() {
   const database = createDatabase(':memory:');

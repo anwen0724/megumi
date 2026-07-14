@@ -5,7 +5,7 @@
 import type {
   ParsedUserInput,
   RawUserInputAttachment,
-} from '../contracts/input-contracts';
+} from '../../domain/model/user-input';
 
 export type ParseUserInputRequest = {
   normalized_text: string;

@@ -2,7 +2,7 @@
 
 import { createDatabase } from '@megumi/coding-agent/persistence/connection';
 import { ArtifactRepository } from '@megumi/coding-agent/persistence/repos/artifact.repo';
-import { SessionRepository } from '@megumi/coding-agent/session/repositories/session-repository';
+import { SessionRepository } from '@megumi/coding-agent/session/repository/session-repository';
 import { applyCodingAgentDatabaseMigrations } from '@megumi/coding-agent/persistence/schema/migrate';
 import type { Artifact, ArtifactVersion } from '@megumi/coding-agent/artifacts/legacy-contracts/artifact-contracts';
 

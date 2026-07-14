@@ -2,11 +2,15 @@
  * Public entrypoint for the Coding Agent Session module.
  */
 
-export * from './contracts/session-contracts';
-export * from './contracts/session-branch-contracts';
-export {
-  createSessionService,
-} from './services/session-service';
-export {
-  createSessionBranchService,
-} from './services/session-branch-service';
+export * from './domain/model/session';
+export * from './domain/model/session-message';
+export * from './domain/model/session-entry';
+export * from './domain/model/session-attachment';
+export * from './domain/dto/agent-run/session-agent-run-request';
+export * from './domain/dto/agent-run/session-agent-run-response';
+export * from './domain/dto/context/session-context-request';
+export * from './domain/dto/context/session-context-response';
+export * from './service/session-service';
+export * from './service/session-service-types';
+export * from './service/session-branch-service';
+export { createSessionService } from './config/compose-coding-agent-session';
