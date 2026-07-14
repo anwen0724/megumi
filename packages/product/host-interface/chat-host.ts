@@ -1,6 +1,12 @@
 import { RuntimeEventSchema, type RuntimeContext, type RuntimeEvent } from '../../coding-agent/events';
 
-import { TimelineMessageSchema, type TimelineMessage } from '../../coding-agent/projections/timeline';
+import {
+  TimelineMessageSchema,
+  TimelineUserMessageSchema,
+  projectSessionTimelineUserMessage,
+  type TimelineMessage,
+  type TimelineUserMessage,
+} from '../../coding-agent/projections/timeline';
 import { z } from 'zod';
 import { encodeBase64 } from '@megumi/ai';
 
@@ -143,6 +149,7 @@ const ChatRunUiDtoSchema = z.object({
 export const ChatSendUserInputUiPayloadSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('agent_run'), session: ChatSessionUiDtoSchema, requestId: z.string(), userMessageId: z.string(),
+    userMessage: TimelineUserMessageSchema,
     run: ChatRunUiDtoSchema,
   }).strict(),
   z.object({
@@ -543,6 +550,7 @@ function mapStartRunResult(
       session: toChatSessionUiDto(result.session),
       requestId: result.request_id,
       userMessageId: result.user_message_id,
+      userMessage: projectSessionTimelineUserMessage(result.session.workspace_id, result.user_message),
       run: toChatRunUiDto(result.run),
       events: result.events,
     };
@@ -711,6 +719,7 @@ export type ChatSendUserInputUiPayload =
       session: ChatSessionUiDto;
       requestId: string;
       userMessageId: string;
+      userMessage: TimelineUserMessage;
       run: ChatRunUiDto;
     }
   | {

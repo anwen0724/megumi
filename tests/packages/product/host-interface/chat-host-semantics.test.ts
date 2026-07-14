@@ -208,6 +208,16 @@ describe('ChatHost product semantics', () => {
         updated_at: '2026-07-10T00:00:00.000Z',
       },
       user_message_id: 'message:1',
+      user_message: {
+        message: {
+          message_id: 'message:1',
+          session_id: 'session:owner',
+          run_id: 'run:1',
+          conversation: { role: 'user' as const, content: [{ type: 'text' as const, text: 'hello' }] },
+          created_at: '2026-07-10T00:00:01.000Z',
+        },
+        attachments: [],
+      },
       run: {
         run_id: 'run:1',
         workspace_id: 'workspace:1',
@@ -234,6 +244,11 @@ describe('ChatHost product semantics', () => {
       session: {
         id: 'session:owner',
         title: 'Owner Session',
+      },
+      userMessage: {
+        messageId: 'message:1',
+        role: 'user',
+        runId: 'run:1',
       },
     });
     expect(getSession).not.toHaveBeenCalled();

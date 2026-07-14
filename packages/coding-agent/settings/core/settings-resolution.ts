@@ -12,7 +12,11 @@ import type {
   ProviderModelSettingsRaw,
   ProviderSettingsRaw,
 } from '../contracts/provider-settings-contracts';
-import { getAiModelDefinition, getAiProviderDefinition } from '@megumi/ai';
+import {
+  getAiModelDefinition,
+  getAiProviderDefinition,
+  UNKNOWN_AI_MODEL_CAPABILITIES,
+} from '@megumi/ai';
 
 export const DEFAULT_UNKNOWN_MODEL_CONTEXT_WINDOW_TOKENS = 256_000;
 
@@ -154,11 +158,12 @@ function resolveProvider(providerId: string, raw: ProviderSettingsRaw) {
       return [
         modelId,
         {
+          display_name: model.display_name ?? known?.displayName ?? modelId,
           context_window_tokens: known
             ? Math.min(configured ?? known.contextWindowTokens, known.contextWindowTokens)
             : configured ?? DEFAULT_UNKNOWN_MODEL_CONTEXT_WINDOW_TOKENS,
           capabilities: {
-            ...(known?.capabilities ?? {}),
+            ...(known?.capabilities ?? UNKNOWN_AI_MODEL_CAPABILITIES),
             ...(model.capabilities ?? {}),
           },
         },

@@ -79,13 +79,13 @@ export function useComposerController({
   const trimmedValue = value.trim();
   const inputLocked = false;
   const sendLocked = status === 'sending' || status === 'running' || status === 'waiting-approval';
-  const imageModelCompatible = selectedImages.length === 0 || selectedModelOption?.imageInput === true;
+  const imageModelCompatible = selectedImages.length === 0 || selectedModelOption?.imageInput !== false;
   const imageInputError = selectedImages.length > 0 && !imageModelCompatible
     ? 'The selected model does not support image input.'
     : undefined;
   const canSend = (trimmedValue.length > 0 || selectedImages.length > 0 || selectedCommandCompletion !== null)
     && !sendLocked && modelOptions.length > 0 && imageModelCompatible;
-  const canAttachImages = selectedModelOption?.imageInput === true
+  const canAttachImages = selectedModelOption?.imageInput !== false
     && selectedImages.length < maxImageCount
     && !sendLocked
     && selectedCommandCompletion === null;
@@ -223,7 +223,7 @@ export function useComposerController({
 
   async function pasteImage() {
     if (!onPasteImage || sendLocked || selectedCommandCompletion) return;
-    if (selectedModelOption?.imageInput !== true) {
+    if (selectedModelOption?.imageInput === false) {
       showToast({
         tone: 'warning',
         title: 'Image input is unavailable',

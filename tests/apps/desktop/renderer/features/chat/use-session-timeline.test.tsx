@@ -161,6 +161,20 @@ describe('useSessionTimeline', () => {
                   updatedAt: createdAt,
                 },
                 userMessageId: 'message-user-1',
+                userMessage: {
+                  messageId: 'message-user-1',
+                  role: 'user',
+                  projectId: 'project-1',
+                  sessionId: 'session-1',
+                  runId: 'run-1',
+                  createdAt,
+                  blocks: [{
+                    blockId: 'user-text:message-user-1',
+                    kind: 'user_text',
+                    text: 'hello',
+                    format: 'plain',
+                  }],
+                },
                 run: {
                   runId: 'run-1',
                   sessionId: 'session-1',

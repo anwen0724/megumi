@@ -43,6 +43,14 @@ function zodToJsonSchema(schema: z.ZodTypeAny): SettingsJsonSchemaObject {
   if (schema instanceof z.ZodEnum) {
     return { enum: schema.options };
   }
+  if (schema instanceof z.ZodLiteral) {
+    return { const: schema._def.value };
+  }
+  if (schema instanceof z.ZodUnion) {
+    return {
+      anyOf: schema._def.options.map((option: z.ZodTypeAny) => zodToJsonSchema(option)),
+    };
+  }
   if (schema instanceof z.ZodArray) {
     return {
       type: 'array',

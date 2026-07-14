@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useProviderStore } from '@megumi/desktop/renderer/entities/provider/store';
 import { ProviderSettingsPanel } from '@megumi/desktop/renderer/features/provider-settings';
+
+const capabilities = { streaming: true, toolCalls: true, thinking: true, imageInput: true } as const;
 
 describe('ProviderSettingsPanel', () => {
   beforeEach(() => {
@@ -14,8 +16,8 @@ describe('ProviderSettingsPanel', () => {
         protocol: 'openai-compatible',
         defaultBaseUrl: 'https://api.deepseek.com',
         models: [
-          { modelId: 'deepseek-v4-flash', displayName: 'DeepSeek V4 Flash', contextWindowTokens: 1_000_000 },
-          { modelId: 'deepseek-v4-pro', displayName: 'DeepSeek V4 Pro', contextWindowTokens: 1_000_000 },
+          { modelId: 'deepseek-v4-flash', displayName: 'DeepSeek V4 Flash', contextWindowTokens: 1_000_000, capabilities },
+          { modelId: 'deepseek-v4-pro', displayName: 'DeepSeek V4 Pro', contextWindowTokens: 1_000_000, capabilities },
         ],
       }, {
         providerId: 'OpenAI',
@@ -23,11 +25,11 @@ describe('ProviderSettingsPanel', () => {
         protocol: 'openai-compatible',
         defaultBaseUrl: 'https://api.openai.com/v1',
         models: [
-          { modelId: 'gpt-5.6', displayName: 'GPT-5.6', contextWindowTokens: 1_050_000 },
-          { modelId: 'gpt-5.6-terra', displayName: 'GPT-5.6 Terra', contextWindowTokens: 1_050_000 },
-          { modelId: 'gpt-5.6-luna', displayName: 'GPT-5.6 Luna', contextWindowTokens: 1_050_000 },
-          { modelId: 'gpt-5.5', displayName: 'GPT-5.5', contextWindowTokens: 1_050_000 },
-          { modelId: 'gpt-5.5-pro', displayName: 'GPT-5.5 Pro', contextWindowTokens: 1_050_000 },
+          { modelId: 'gpt-5.6', displayName: 'GPT-5.6', contextWindowTokens: 1_050_000, capabilities },
+          { modelId: 'gpt-5.6-terra', displayName: 'GPT-5.6 Terra', contextWindowTokens: 1_050_000, capabilities },
+          { modelId: 'gpt-5.6-luna', displayName: 'GPT-5.6 Luna', contextWindowTokens: 1_050_000, capabilities },
+          { modelId: 'gpt-5.5', displayName: 'GPT-5.5', contextWindowTokens: 1_050_000, capabilities },
+          { modelId: 'gpt-5.5-pro', displayName: 'GPT-5.5 Pro', contextWindowTokens: 1_050_000, capabilities },
         ],
       }],
       providers: [
@@ -38,6 +40,7 @@ describe('ProviderSettingsPanel', () => {
           enabled: true,
           baseUrl: 'https://api.deepseek.com',
           modelIds: ['deepseek-v4-flash'],
+          apiKey: 'sk-existing-key',
           hasApiKey: false,
           credentialSource: 'missing',
           envOverrideActive: false,
@@ -68,17 +71,19 @@ describe('ProviderSettingsPanel', () => {
     });
   });
 
-  it('renders a two-pane provider configuration surface without plaintext keys', () => {
+  it('renders a two-pane provider configuration surface with compact model rows', () => {
     render(<ProviderSettingsPanel />);
 
     expect(screen.getByRole('heading', { name: 'Models' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Providers' })).toBeInTheDocument();
     expect(screen.getAllByText('DeepSeek').length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: /OpenAI/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^OpenAI/ })).toBeInTheDocument();
     expect(screen.queryByText('Missing key')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Display name')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('API Key env')).not.toBeInTheDocument();
-    expect(screen.queryByText(/sk-/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit DeepSeek V4 Flash' })).toBeInTheDocument();
+    expect(screen.queryByText('deepseek-v4-flash')).not.toBeInTheDocument();
+    expect(screen.queryByText('Models configured here appear in the chat composer model picker.')).not.toBeInTheDocument();
   });
 
   it('prefills an unsaved provider from the AI Catalog', () => {
@@ -88,9 +93,10 @@ describe('ProviderSettingsPanel', () => {
 
     expect(screen.getByLabelText('Provider')).toHaveValue('DeepSeek');
     expect(screen.getByLabelText('Base URL')).toHaveValue('https://api.deepseek.com');
-    expect(screen.getByLabelText('Models')).toHaveValue('deepseek-v4-flash\ndeepseek-v4-pro');
-    expect(screen.getByRole('button', { name: /DeepSeek/ })).toHaveClass('opacity-75');
-    expect(screen.getByRole('button', { name: /OpenAI/ })).toHaveClass('opacity-55');
+    expect(screen.getByRole('button', { name: 'Edit DeepSeek V4 Flash' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit DeepSeek V4 Pro' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^DeepSeek/ })).toHaveClass('opacity-75');
+    expect(screen.getByRole('button', { name: /^OpenAI/ })).toHaveClass('opacity-55');
   });
 
   it('updates the selected provider settings from the detail pane', async () => {
@@ -102,8 +108,13 @@ describe('ProviderSettingsPanel', () => {
 
     await user.clear(screen.getByLabelText('Base URL'));
     await user.type(screen.getByLabelText('Base URL'), 'https://proxy.local/deepseek');
-    await user.clear(screen.getByLabelText('Models'));
-    await user.type(screen.getByLabelText('Models'), 'deepseek-v4-flash{enter}deepseek-v4-pro');
+    await user.click(screen.getByRole('button', { name: 'Edit DeepSeek V4 Flash' }));
+    await user.click(screen.getByRole('button', { name: 'Open context window presets' }));
+    const presets = screen.getByRole('listbox', { name: 'Context window presets' });
+    expect(within(presets).getAllByRole('option')).toHaveLength(5);
+    await user.click(within(presets).getByRole('option', { name: /128K/ }));
+    expect(screen.getByLabelText('Context window')).toHaveValue(131072);
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Done' }));
     await user.selectOptions(screen.getByLabelText('Protocol'), 'anthropic');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
@@ -113,8 +124,35 @@ describe('ProviderSettingsPanel', () => {
       enabled: true,
       protocol: 'anthropic',
       baseUrl: 'https://proxy.local/deepseek',
-      modelIds: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+      models: [{
+        modelId: 'deepseek-v4-flash',
+        displayName: 'DeepSeek V4 Flash',
+        contextWindowTokens: 131072,
+      }],
     });
+  });
+
+  it('saves the image input switch as the only exposed capability override', async () => {
+    const user = userEvent.setup();
+    const updateProvider = vi.fn();
+    useProviderStore.setState({ updateProvider });
+
+    render(<ProviderSettingsPanel />);
+
+    await user.click(screen.getByRole('button', { name: 'Edit DeepSeek V4 Flash' }));
+    await user.click(screen.getByRole('switch', { name: 'Image input' }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Done' }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(updateProvider).toHaveBeenCalledWith(expect.objectContaining({
+      providerId: 'DeepSeek',
+      models: [{
+        modelId: 'deepseek-v4-flash',
+        displayName: 'DeepSeek V4 Flash',
+        contextWindowTokens: 1_000_000,
+        imageInput: false,
+      }],
+    }));
   });
 
   it('selects providers from the left list', async () => {
@@ -122,7 +160,7 @@ describe('ProviderSettingsPanel', () => {
 
     render(<ProviderSettingsPanel />);
 
-    await user.click(screen.getByRole('button', { name: /OpenAI/ }));
+    await user.click(screen.getByRole('button', { name: /^OpenAI/ }));
 
     expect(screen.getByLabelText('Provider')).toHaveValue('openai');
     expect(screen.getByLabelText('Base URL')).toHaveValue('https://api.openai.com/v1');
@@ -143,7 +181,13 @@ describe('ProviderSettingsPanel', () => {
     await user.type(screen.getByLabelText('Provider'), 'Local Proxy');
     await user.selectOptions(screen.getByLabelText('Protocol'), 'anthropic');
     await user.type(screen.getByLabelText('Base URL'), 'https://api.deepseek.com/v1');
-    await user.type(screen.getByLabelText('Models'), 'deepseek-chat{enter}deepseek-reasoner');
+    await user.click(screen.getByRole('button', { name: 'Add model' }));
+    expect(screen.queryByRole('switch', { name: 'Image input' })).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText('Model ID'), 'deepseek-chat');
+    await user.type(screen.getByLabelText('Display name'), 'DeepSeek Chat');
+    await user.clear(screen.getByLabelText('Context window'));
+    await user.type(screen.getByLabelText('Context window'), '200000');
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add' }));
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(updateProvider).toHaveBeenCalledWith({
@@ -152,11 +196,15 @@ describe('ProviderSettingsPanel', () => {
       enabled: true,
       protocol: 'anthropic',
       baseUrl: 'https://api.deepseek.com/v1',
-      modelIds: ['deepseek-chat', 'deepseek-reasoner'],
+      models: [{
+        modelId: 'deepseek-chat',
+        displayName: 'DeepSeek Chat',
+        contextWindowTokens: 200000,
+      }],
     });
   });
 
-  it('saves API keys through the main Save action without keeping the typed key visible', async () => {
+  it('reveals and updates the locally stored API key', async () => {
     const user = userEvent.setup();
     const updateProvider = vi.fn();
     const setApiKey = vi.fn();
@@ -164,12 +212,17 @@ describe('ProviderSettingsPanel', () => {
 
     render(<ProviderSettingsPanel />);
 
+    expect(screen.getByLabelText('API Key')).toHaveAttribute('type', 'password');
+    await user.click(screen.getByRole('button', { name: 'Show API key' }));
+    expect(screen.getByLabelText('API Key')).toHaveAttribute('type', 'text');
+    expect(screen.getByLabelText('API Key')).toHaveValue('sk-existing-key');
+    await user.clear(screen.getByLabelText('API Key'));
     await user.type(screen.getByLabelText('API Key'), 'sk-new-key');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(updateProvider).toHaveBeenCalledWith(expect.objectContaining({ providerId: 'DeepSeek' }));
     expect(setApiKey).toHaveBeenCalledWith({ providerId: 'DeepSeek', apiKey: 'sk-new-key' });
-    await waitFor(() => expect(screen.getByLabelText('API Key')).toHaveValue(''));
+    expect(screen.getByLabelText('API Key')).toHaveValue('sk-new-key');
   });
 
   it('deletes the selected provider configuration', async () => {
@@ -191,7 +244,7 @@ describe('ProviderSettingsPanel', () => {
 
     await user.type(screen.getByLabelText('Search providers'), 'open');
 
-    expect(screen.getByRole('button', { name: /OpenAI/ })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /DeepSeek/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^OpenAI/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^DeepSeek\s/ })).not.toBeInTheDocument();
   });
 });

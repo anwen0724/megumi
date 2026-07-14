@@ -527,6 +527,11 @@ export const useRuntimeTimelineStore = create<RuntimeTimelineStoreState>((set, g
               ...currentRunMessages.filter((message) => message.role === 'user'),
               ...committedRunMessages,
             ];
+        if (!completeCommittedRunMessages.some((message) => message.role === 'assistant')) {
+          completeCommittedRunMessages.push(
+            ...currentRunMessages.filter((message) => message.role === 'assistant'),
+          );
+        }
         return {
           sessions: {
             ...state.sessions,

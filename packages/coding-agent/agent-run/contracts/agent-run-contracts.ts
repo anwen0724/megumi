@@ -7,7 +7,7 @@ import type { RawUserInput } from '../../input';
 import type { ApprovalDecision, ApprovalScope, PermissionMode } from '../../permissions';
 import type { ProviderRuntimeConfig } from '../../settings';
 import type { RuntimeEvent } from '../../events';
-import type { Session } from '../../session';
+import type { Session, SessionMessageWithAttachments } from '../../session';
 
 export type AgentRunModelSelection = {
   provider_id: string;
@@ -141,6 +141,7 @@ export type StartRunResult =
       run: AgentRun;
       session: Session;
       user_message_id: string;
+      user_message: SessionMessageWithAttachments;
       events: AsyncIterable<RuntimeEvent>;
     }
   | {

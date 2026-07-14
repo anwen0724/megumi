@@ -298,15 +298,23 @@ export function reduceRuntimeTimelineEvent(
     const process = ensureProcessBlock(assistant, event);
     if (event.eventType === 'run.failed') {
       const payload = event.payload as { error?: { code?: string; message?: string; retryable?: boolean } };
+      const errorMessage = payload.error?.message ?? 'Run failed.';
       process.items.push({
         itemId: `error:${event.eventId}`,
         kind: 'error_activity',
         errorCode: payload.error?.code,
-        errorMessage: payload.error?.message ?? 'Run failed.',
+        errorMessage,
         recoverable: payload.error?.retryable,
         createdAt: event.createdAt,
         updatedAt: event.createdAt,
       });
+      const existingAnswer = assistant.blocks.find(
+        (block): block is AnswerTextBlock => block.kind === 'answer_text',
+      );
+      const answer = existingAnswer ?? ensureAnswerBlock(assistant, event, event.runId);
+      if (!answer.text.trim()) answer.text = errorMessage;
+      answer.status = 'failed';
+      answer.updatedAt = event.createdAt;
     } else {
       const payload = event.payload as { reason?: string; error?: { message?: string } };
       process.items.push({

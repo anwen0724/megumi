@@ -58,9 +58,23 @@ export const SettingsCompleteSetupPayloadSchema = z.object({
   }).strict().optional(),
 }).strict();
 export const ProviderListPayloadSchema = z.object({}).strict();
+const ModelSupportLevelUiSchema = z.union([z.boolean(), z.literal('unknown')]);
+const ModelCapabilitiesUiSchema = z.object({
+  streaming: ModelSupportLevelUiSchema.optional(),
+  toolCalls: ModelSupportLevelUiSchema.optional(),
+  thinking: ModelSupportLevelUiSchema.optional(),
+  imageInput: ModelSupportLevelUiSchema.optional(),
+}).strict();
 export const ProviderUpdatePayloadSchema = z.object({
   providerId: z.string().min(1), enabled: z.boolean().optional(), protocol: z.enum(['openai-compatible', 'anthropic']).optional(),
   displayName: z.string().optional(), baseUrl: z.string().optional(), modelIds: z.array(z.string()).optional(),
+  modelCapabilities: z.record(z.string(), ModelCapabilitiesUiSchema).optional(),
+  models: z.array(z.object({
+    modelId: z.string().min(1),
+    displayName: z.string().min(1).optional(),
+    contextWindowTokens: z.number().int().positive().optional(),
+    imageInput: ModelSupportLevelUiSchema.optional(),
+  }).strict()).optional(),
   apiKeyEnv: z.string().nullable().optional(),
 }).strict();
 export const ProviderDeletePayloadSchema = z.object({ providerId: z.string().min(1) }).strict();
@@ -98,7 +112,15 @@ const ProviderPublicStatusUiDtoSchema = z.object({
   protocol: z.enum(['openai-compatible', 'anthropic']),
   baseUrl: z.string().optional(),
   modelIds: z.array(z.string()),
-  modelCapabilities: z.record(z.string(), z.object({ imageInput: z.boolean().optional() }).passthrough()).optional(),
+  modelSettings: z.record(z.string(), z.object({
+    displayName: z.string().min(1),
+    contextWindowTokens: z.number().int().positive(),
+    capabilities: ModelCapabilitiesUiSchema.required(),
+    capabilityOverrides: ModelCapabilitiesUiSchema,
+  }).strict()).optional(),
+  modelCapabilities: z.record(z.string(), ModelCapabilitiesUiSchema.required()).optional(),
+  modelCapabilityOverrides: z.record(z.string(), ModelCapabilitiesUiSchema).optional(),
+  apiKey: z.string().min(1).optional(),
   hasApiKey: z.boolean(),
   credentialSource: z.enum(['settings', 'environment', 'missing']),
   envOverrideActive: z.boolean(),
@@ -114,7 +136,7 @@ const ProviderCatalogUiDtoSchema = z.object({
     modelId: z.string().min(1),
     displayName: z.string().min(1),
     contextWindowTokens: z.number().int().positive(),
-    capabilities: z.object({ imageInput: z.boolean().optional() }).passthrough().optional(),
+    capabilities: ModelCapabilitiesUiSchema.required(),
   }).strict()),
 }).strict();
 
@@ -227,6 +249,19 @@ export function createSettingsHost(
       };
     },
     async updateProvider({ providerId, ...input }) {
+      const modelPatch = input.models !== undefined
+        ? Object.fromEntries(input.models.map((model) => [model.modelId, {
+            ...(model.displayName ? { display_name: model.displayName } : {}),
+            ...(model.contextWindowTokens ? { context_window_tokens: model.contextWindowTokens } : {}),
+            ...(model.imageInput !== undefined ? { capabilities: { imageInput: model.imageInput } } : {}),
+          }]))
+        : input.modelIds !== undefined
+          ? Object.fromEntries(input.modelIds.map((modelId) => [modelId, {
+              ...((input.modelCapabilities?.[modelId] && Object.keys(input.modelCapabilities[modelId]).length > 0)
+                ? { capabilities: input.modelCapabilities[modelId] }
+                : {}),
+            }]))
+          : undefined;
       const result = settingsService.updateProviderSettings({
         provider_id: providerId,
         patch: {
@@ -234,9 +269,7 @@ export function createSettingsHost(
           ...(input.protocol !== undefined ? { protocol: input.protocol } : {}),
           ...(input.displayName !== undefined ? { display_name: input.displayName } : {}),
           ...(input.baseUrl !== undefined ? { base_url: input.baseUrl } : {}),
-          ...(input.modelIds !== undefined
-            ? { models: Object.fromEntries(input.modelIds.map((modelId) => [modelId, {}])) }
-            : {}),
+          ...(modelPatch !== undefined ? { models: modelPatch } : {}),
           ...(input.apiKeyEnv !== undefined ? { api_key_env: input.apiKeyEnv } : {}),
         },
       });
@@ -354,7 +387,10 @@ export type ProviderPublicStatusUiDto = {
   protocol: 'openai-compatible' | 'anthropic';
   baseUrl?: string;
   modelIds: string[];
-  modelCapabilities?: Record<string, { imageInput?: boolean }>;
+  modelSettings?: Record<string, ProviderModelSettingsUiDto>;
+  modelCapabilities?: Record<string, ModelCapabilitiesUiDto>;
+  modelCapabilityOverrides?: Record<string, Partial<ModelCapabilitiesUiDto>>;
+  apiKey?: string;
   hasApiKey: boolean;
   credentialSource: 'settings' | 'environment' | 'missing';
   envOverrideActive: boolean;
@@ -371,7 +407,7 @@ export type ProviderCatalogUiDto = {
     modelId: string;
     displayName: string;
     contextWindowTokens: number;
-    capabilities?: { imageInput?: boolean };
+    capabilities: ModelCapabilitiesUiDto;
   }>;
 };
 
@@ -388,6 +424,21 @@ export type ProviderSettingsUiPatch = {
   baseUrl?: string;
   models?: string[];
   apiKeyEnv?: string | null;
+};
+
+export type ModelSupportLevelUi = boolean | 'unknown';
+export type ModelCapabilitiesUiDto = {
+  streaming: ModelSupportLevelUi;
+  toolCalls: ModelSupportLevelUi;
+  thinking: ModelSupportLevelUi;
+  imageInput: ModelSupportLevelUi;
+};
+
+export type ProviderModelSettingsUiDto = {
+  displayName: string;
+  contextWindowTokens: number;
+  capabilities: ModelCapabilitiesUiDto;
+  capabilityOverrides: Partial<ModelCapabilitiesUiDto>;
 };
 
 export type SettingsCompleteSetupUiRequest = {
@@ -427,6 +478,13 @@ export interface ProviderUpdateUiRequest {
   displayName?: string;
   baseUrl?: string;
   modelIds?: string[];
+  modelCapabilities?: Record<string, Partial<ModelCapabilitiesUiDto>>;
+  models?: Array<{
+    modelId: string;
+    displayName?: string;
+    contextWindowTokens?: number;
+    imageInput?: ModelSupportLevelUi;
+  }>;
   apiKeyEnv?: string | null;
 }
 
@@ -542,7 +600,14 @@ export function toProviderPublicStatusUiDto(provider: {
   protocol: ProviderPublicStatusUiDto['protocol'];
   base_url?: string;
   models: string[];
-  model_capabilities: Record<string, { imageInput?: boolean }>;
+  model_settings: Record<string, {
+    display_name: string;
+    context_window_tokens: number;
+    capabilities: ModelCapabilitiesUiDto;
+  }>;
+  model_capabilities: Record<string, ModelCapabilitiesUiDto>;
+  model_capability_overrides: Record<string, Partial<ModelCapabilitiesUiDto>>;
+  api_key?: string;
   has_api_key: boolean;
   credential_source: ProviderPublicStatusUiDto['credentialSource'];
   env_override_active: boolean;
@@ -556,7 +621,18 @@ export function toProviderPublicStatusUiDto(provider: {
     protocol: provider.protocol,
     ...(provider.base_url ? { baseUrl: provider.base_url } : {}),
     modelIds: provider.models,
+    modelSettings: Object.fromEntries(Object.entries(provider.model_settings).map(([modelId, model]) => [
+      modelId,
+      {
+        displayName: model.display_name,
+        contextWindowTokens: model.context_window_tokens,
+        capabilities: model.capabilities,
+        capabilityOverrides: provider.model_capability_overrides[modelId] ?? {},
+      },
+    ])),
     modelCapabilities: provider.model_capabilities,
+    modelCapabilityOverrides: provider.model_capability_overrides,
+    ...(provider.api_key ? { apiKey: provider.api_key } : {}),
     hasApiKey: provider.has_api_key,
     credentialSource: provider.credential_source,
     envOverrideActive: provider.env_override_active,
@@ -570,7 +646,7 @@ export function toProviderCatalogUiDto(provider: {
   displayName: string;
   protocol: ProviderCatalogUiDto['protocol'];
   defaultBaseUrl: string;
-  models: Array<{ modelId: string; displayName: string; contextWindowTokens: number; capabilities?: { imageInput?: boolean } }>;
+  models: Array<{ modelId: string; displayName: string; contextWindowTokens: number; capabilities: ModelCapabilitiesUiDto }>;
 }): ProviderCatalogUiDto {
   return {
     providerId: provider.providerId,
@@ -581,7 +657,7 @@ export function toProviderCatalogUiDto(provider: {
       modelId: model.modelId,
       displayName: model.displayName,
       contextWindowTokens: model.contextWindowTokens,
-      ...(model.capabilities ? { capabilities: model.capabilities } : {}),
+      capabilities: model.capabilities,
     })),
   };
 }

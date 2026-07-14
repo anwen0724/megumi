@@ -7,6 +7,7 @@ import type {
   ProviderUpdatePayload,
 } from '@megumi/desktop/main/ipc/schemas';
 import type {
+  ModelCapabilitiesUiDto,
   ProviderCatalogUiDto,
   ProviderPublicStatusUiDto,
 } from '@megumi/product/host-interface';
@@ -24,6 +25,13 @@ export interface ProviderUpdateInput {
   displayName?: string;
   baseUrl?: string;
   modelIds?: string[];
+  modelCapabilities?: Record<string, Partial<ModelCapabilitiesUiDto>>;
+  models?: Array<{
+    modelId: string;
+    displayName?: string;
+    contextWindowTokens?: number;
+    imageInput?: boolean | 'unknown';
+  }>;
   apiKeyEnv?: string | null;
 }
 

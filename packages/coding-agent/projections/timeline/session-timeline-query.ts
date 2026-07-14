@@ -68,7 +68,11 @@ export function projectSessionTimelineMessages(input: {
 
   for (const item of input.messages) {
     if (item.message.conversation.role === 'user') {
-      timeline.push(projectUserMessage(input.projectId, item, item.active_path_order ?? timeline.length));
+      timeline.push(projectSessionTimelineUserMessage(
+        input.projectId,
+        item,
+        item.active_path_order ?? timeline.length,
+      ));
       continue;
     }
     const runId = item.message.run_id;
@@ -101,7 +105,11 @@ function groupResponsesByRun(messages: SessionMessageWithAttachments[]): Map<str
   return groups;
 }
 
-function projectUserMessage(projectId: string, item: SessionMessageWithAttachments, historyOrder: number): TimelineUserMessage {
+export function projectSessionTimelineUserMessage(
+  projectId: string,
+  item: SessionMessageWithAttachments,
+  historyOrder?: number,
+): TimelineUserMessage {
   const { message } = item;
   const blocks: TimelineUserMessage['blocks'] = [{
     blockId: `user-text:${message.message_id}`,
@@ -127,7 +135,7 @@ function projectUserMessage(projectId: string, item: SessionMessageWithAttachmen
     ...(message.run_id ? { runId: message.run_id } : {}),
     createdAt: message.created_at,
     ...(message.completed_at ? { updatedAt: message.completed_at } : {}),
-    historyOrder,
+    ...(historyOrder !== undefined ? { historyOrder } : {}),
     blocks,
   };
 }

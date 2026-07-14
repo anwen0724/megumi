@@ -131,8 +131,8 @@ function isTerminalRunEvent(event: RuntimeEvent): boolean {
     event.eventType === 'run.cancelled';
 }
 
-async function reconcileCompletedRunTimeline(event: RuntimeEvent, projectId: string, sessionId: string): Promise<void> {
-  if (event.eventType !== 'run.completed' || !event.runId) {
+async function reconcileTerminalRunTimeline(event: RuntimeEvent, projectId: string, sessionId: string): Promise<void> {
+  if (!isTerminalRunEvent(event) || !event.runId) {
     return;
   }
   try {
@@ -275,7 +275,7 @@ export function useSessionTimeline() {
             ? useSessionStore.getState().sessions.find((session) => session.id === terminalSessionId)?.projectId
             : undefined;
           if (terminalSessionId && terminalProjectId) {
-            void reconcileCompletedRunTimeline(event, terminalProjectId, terminalSessionId);
+            void reconcileTerminalRunTimeline(event, terminalProjectId, terminalSessionId);
           }
           activeRunIdRef.current = null;
           activeTraceIdRef.current = null;
@@ -387,20 +387,12 @@ export function useSessionTimeline() {
 
     activeRunIdRef.current = result.data.run.runId;
     useChatUiStore.getState().setAgentStatus('sending', runSessionId);
-    useRuntimeTimelineStore.getState().addPendingUserMessage(target.projectId, runSessionId, {
-      clientMessageId,
-      messageId: result.data.userMessageId,
-      text: payload.message,
-      ...(payload.attachments ? {
-        attachments: payload.attachments.map((attachment) => ({
-          draftAttachmentId: attachment.draftAttachmentId,
-          name: attachment.name,
-          ...(attachment.declaredMimeType ? { declaredMimeType: attachment.declaredMimeType } : {}),
-        })),
-      } : {}),
-      createdAt,
-      runId: result.data.run.runId,
-    });
+    useRuntimeTimelineStore.getState().reconcileCommittedRunMessages(
+      target.projectId,
+      runSessionId,
+      result.data.run.runId,
+      [{ ...result.data.userMessage, clientMessageId }],
+    );
 
     if (isSameBranchDraft(branchDraftRef.current, branchDraftForSend)) {
       updateBranchDraft(null);

@@ -33,7 +33,8 @@ export function createSessionAttachmentFileStore(input: {
   return {
     async write(request) {
       const extension = extensionFor(request.mediaType);
-      const referenceId = `${request.attachmentId}/original.${extension}`;
+      const storageKey = storageKeyForAttachmentId(request.attachmentId);
+      const referenceId = `${storageKey}/original.${extension}`;
       const finalPath = resolveReference(referenceId);
       const directoryPath = path.dirname(finalPath);
       const temporaryPath = `${finalPath}.tmp-${crypto.randomUUID()}`;
@@ -54,6 +55,16 @@ export function createSessionAttachmentFileStore(input: {
       return input.fileSystem.removeFile(resolveReference(referenceId));
     },
   };
+}
+
+function storageKeyForAttachmentId(attachmentId: string): string {
+  const storageKey = attachmentId.startsWith('attachment:')
+    ? attachmentId.slice('attachment:'.length)
+    : attachmentId;
+  if (!storageKey || storageKey === '.' || storageKey === '..' || !/^[A-Za-z0-9._-]+$/.test(storageKey)) {
+    throw new Error('Attachment ID cannot be mapped to a managed storage path.');
+  }
+  return storageKey;
 }
 
 function extensionFor(mediaType: SupportedSessionImageMediaType): 'png' | 'jpg' | 'webp' {

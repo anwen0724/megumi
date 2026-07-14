@@ -121,6 +121,20 @@ describe('registerChatHandlers', () => {
                 updatedAt: '2026-05-17T00:00:00.000Z',
               },
               userMessageId: 'message-user-1',
+              userMessage: {
+                messageId: 'message-user-1',
+                role: 'user',
+                projectId: 'workspace-1',
+                sessionId: 'session-1',
+                runId: 'run-1',
+                createdAt: '2026-05-17T00:00:00.000Z',
+                blocks: [{
+                  blockId: 'user-text:message-user-1',
+                  kind: 'user_text',
+                  text: 'hello',
+                  format: 'plain',
+                }],
+              },
               run: {
                 runId: 'run-1',
                 sessionId: 'session-1',

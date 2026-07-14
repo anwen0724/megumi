@@ -162,7 +162,7 @@ describe('Settings Service', () => {
     });
   });
 
-  it('lists provider settings without leaking plaintext API keys', () => {
+  it('lists provider settings with the locally configured API key for the settings UI', () => {
     const fileStore = new MemorySettingsFileStore();
     fileStore.raw = {
       providers: {
@@ -183,9 +183,9 @@ describe('Settings Service', () => {
       display_name: 'DeepSeek',
       enabled: true,
       has_api_key: true,
+      api_key: 'TEST_DEEPSEEK_API_KEY',
       credential_source: 'settings',
     });
-    expect(JSON.stringify(result.providers)).not.toContain('TEST_DEEPSEEK_API_KEY');
   });
 
   it('materializes a catalog provider when the user only saves an API key', () => {
@@ -208,16 +208,56 @@ describe('Settings Service', () => {
           models: {
             'deepseek-v4-flash': {
               context_window_tokens: 1_000_000,
-              capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true },
             },
             'deepseek-v4-pro': {
               context_window_tokens: 1_000_000,
-              capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true },
             },
           },
           api_key: 'TEST_DEEPSEEK_API_KEY',
         },
       },
+    });
+  });
+
+  it('keeps model capability overrides sparse while resolving a complete effective capability set', () => {
+    const fileStore = new MemorySettingsFileStore();
+    const service = createSettingsService({ file_store: fileStore });
+    service.setProviderApiKey({ provider_id: 'DeepSeek', api_key: 'TEST_DEEPSEEK_API_KEY' });
+
+    expect(service.updateProviderSettings({
+      provider_id: 'DeepSeek',
+      patch: {
+        models: {
+          'deepseek-v4-flash': { capabilities: { imageInput: true, thinking: 'unknown' } },
+        },
+      },
+    })).toMatchObject({ status: 'updated' });
+
+    expect(fileStore.raw.providers?.DeepSeek?.models?.['deepseek-v4-flash']).toEqual({
+      context_window_tokens: 1_000_000,
+      capabilities: { imageInput: true, thinking: 'unknown' },
+    });
+    expect(service.resolveProviderRuntimeConfig({
+      provider_id: 'DeepSeek',
+      model_id: 'deepseek-v4-flash',
+    })).toMatchObject({
+      status: 'ok',
+      config: {
+        capabilities: {
+          streaming: true,
+          toolCalls: true,
+          thinking: 'unknown',
+          imageInput: true,
+        },
+      },
+    });
+    expect(service.listProviderSettings()).toMatchObject({
+      status: 'ok',
+      providers: [{
+        model_capability_overrides: {
+          'deepseek-v4-flash': { imageInput: true, thinking: 'unknown' },
+        },
+      }],
     });
   });
 
@@ -244,7 +284,7 @@ describe('Settings Service', () => {
         base_url: 'https://api.deepseek.com',
         model_id: 'deepseek-v4-flash',
         api_key: 'TEST_DEEPSEEK_API_KEY',
-        capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true },
+        capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: false },
       },
     });
   });
@@ -315,7 +355,7 @@ describe('Settings Service', () => {
           protocol: 'openai-compatible',
           display_name: 'Local',
           base_url: 'http://localhost:11434/v1',
-          models: { llama3: {}, qwen3: {} },
+          models: { llama3: { display_name: 'Llama 3 Local' }, qwen3: {} },
           api_key: 'sk-local',
         },
       },
@@ -328,14 +368,14 @@ describe('Settings Service', () => {
         {
           provider_id: 'local',
           model_id: 'llama3',
-          display_name: 'llama3',
-          capabilities: {},
+          display_name: 'Llama 3 Local',
+          capabilities: { streaming: 'unknown', toolCalls: 'unknown', thinking: 'unknown', imageInput: 'unknown' },
         },
         {
           provider_id: 'local',
           model_id: 'qwen3',
           display_name: 'qwen3',
-          capabilities: {},
+          capabilities: { streaming: 'unknown', toolCalls: 'unknown', thinking: 'unknown', imageInput: 'unknown' },
         },
       ]),
     });
@@ -368,7 +408,7 @@ describe('Settings Service', () => {
         base_url: 'http://localhost:11434/v1',
         model_id: 'llama3',
         api_key: 'sk-local',
-        capabilities: {},
+        capabilities: { streaming: 'unknown', toolCalls: 'unknown', thinking: 'unknown', imageInput: 'unknown' },
       },
     });
   });

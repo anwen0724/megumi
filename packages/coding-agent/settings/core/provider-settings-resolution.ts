@@ -6,6 +6,7 @@ import type { SettingsResolved } from '../contracts/settings-contracts';
 import type {
   AvailableModelOption,
   ProviderPublicStatus,
+  ProviderSettingsRaw,
   ResolveModelContextSettingsResult,
   ResolveProviderRuntimeConfigRequest,
   ResolveProviderRuntimeConfigResult,
@@ -16,10 +17,12 @@ type EnvMap = NodeJS.ProcessEnv | Record<string, string | undefined>;
 export function listProviderStatuses(
   settings: SettingsResolved,
   env: EnvMap = {},
+  rawProviders: Record<string, ProviderSettingsRaw> = {},
 ): ProviderPublicStatus[] {
   return Object.entries(settings.providers).map(([providerId, provider]) => {
     const settingsApiKeyActive = Boolean(provider.api_key?.trim());
     const envOverrideActive = Boolean(provider.api_key_env && env[provider.api_key_env]?.trim());
+    const apiKey = resolveApiKey(provider.api_key, provider.api_key_env, env);
 
     return {
       provider_id: providerId,
@@ -28,10 +31,18 @@ export function listProviderStatuses(
       protocol: provider.protocol,
       ...(provider.base_url ? { base_url: provider.base_url } : {}),
       models: Object.keys(provider.models),
+      model_settings: provider.models,
       model_capabilities: Object.fromEntries(
         Object.entries(provider.models).map(([modelId, model]) => [modelId, model.capabilities]),
       ),
+      model_capability_overrides: Object.fromEntries(
+        Object.keys(provider.models).map((modelId) => [
+          modelId,
+          rawProviders[providerId]?.models?.[modelId]?.capabilities ?? {},
+        ]),
+      ),
       has_api_key: settingsApiKeyActive || envOverrideActive,
+      ...(apiKey ? { api_key: apiKey } : {}),
       credential_source: settingsApiKeyActive
         ? 'settings'
         : envOverrideActive
@@ -52,7 +63,7 @@ export function listAvailableModels(settings: SettingsResolved): AvailableModelO
     return Object.keys(provider.models).map((modelId) => ({
       provider_id: providerId,
       model_id: modelId,
-      display_name: modelId,
+      display_name: provider.models[modelId]!.display_name,
       capabilities: provider.models[modelId]!.capabilities,
     }));
   });

@@ -105,7 +105,7 @@ describe('ContextServiceImpl prepareModelCall', () => {
 describe('composeCodingAgentContext', () => {
   it('resolves provider runtime config outside Context before counting the complete Prompt', async () => {
     const deps = dependencies();
-    const resolve = vi.fn(() => ({ status: 'resolved' as const, modelConfig: { provider_id: 'openai', protocol: 'openai-compatible' as const, model_id: 'gpt', capabilities: { imageInput: true } } }));
+    const resolve = vi.fn(() => ({ status: 'resolved' as const, modelConfig: { provider_id: 'openai', protocol: 'openai-compatible' as const, model_id: 'gpt', capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true } } }));
     const countPrompt = vi.fn(async () => ({ status: 'counted' as const, input_tokens: 10, accuracy: 'estimated' as const }));
     const context = composeCodingAgentContext({
       sessionService: deps.sessionService,

@@ -1,5 +1,5 @@
 import type { PermissionMode } from '@megumi/product/host-interface';
-import type { ProviderPublicStatusUiDto } from '@megumi/product/host-interface';
+import type { ModelSupportLevelUi, ProviderPublicStatusUiDto } from '@megumi/product/host-interface';
 
 export type ComposerPermissionMode = PermissionMode;
 export type ComposerModel = string;
@@ -15,7 +15,7 @@ interface ComposerOption<TValue extends string> {
 export interface ComposerModelOption extends ComposerOption<ComposerModel> {
   providerId: string;
   modelId: string;
-  imageInput: boolean;
+  imageInput: ModelSupportLevelUi;
 }
 
 export const COMPOSER_PERMISSION_MODE_OPTIONS: ComposerOption<ComposerPermissionMode>[] = [
@@ -44,7 +44,7 @@ export function getComposerModelOptionsForProviders(providers?: ProviderPublicSt
       value: modelOptionValue(provider.providerId, String(modelId)),
       modelId: String(modelId),
       providerId: provider.providerId,
-      imageInput: provider.modelCapabilities?.[modelId]?.imageInput === true,
+      imageInput: provider.modelCapabilities?.[modelId]?.imageInput ?? 'unknown',
       label: String(modelId),
     })));
 }

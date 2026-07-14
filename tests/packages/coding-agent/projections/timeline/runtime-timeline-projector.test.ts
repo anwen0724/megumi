@@ -239,6 +239,7 @@ describe('runtime timeline projection', () => {
 
     const assistant = messages.find((message) => message.role === 'assistant');
     const process = assistant?.blocks.find((block) => block.kind === 'process_disclosure');
+    const answer = assistant?.blocks.find((block) => block.kind === 'answer_text');
 
     expect(process?.items.map((item) => item.kind)).toEqual(expect.arrayContaining([
       'thinking',
@@ -249,6 +250,10 @@ describe('runtime timeline projection', () => {
       'error_activity',
       'cancelled_activity',
     ]));
+    expect(answer).toMatchObject({
+      status: 'failed',
+      text: 'Model call failed.',
+    });
   });
 
   it('does not project session-scoped compaction into an assistant message', () => {

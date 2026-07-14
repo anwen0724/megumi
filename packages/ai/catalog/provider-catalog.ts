@@ -4,13 +4,13 @@
  * package never reads Settings or owns configured provider instances.
  */
 import { z } from 'zod';
-import { AiModelCapabilitiesSchema, AiProtocolSchema } from '../core/ai-model';
+import { AiModelResolvedCapabilitiesSchema, AiProtocolSchema } from '../core/ai-model';
 
 export const AiModelDefinitionSchema = z.object({
   modelId: z.string().min(1),
   displayName: z.string().min(1),
   contextWindowTokens: z.number().int().positive(),
-  capabilities: AiModelCapabilitiesSchema,
+  capabilities: AiModelResolvedCapabilitiesSchema,
 }).strict();
 export type AiModelDefinition = z.infer<typeof AiModelDefinitionSchema>;
 
@@ -34,13 +34,13 @@ const PROVIDERS = AiProviderDefinitionSchema.array().parse([
         modelId: 'deepseek-v4-flash',
         displayName: 'DeepSeek V4 Flash',
         contextWindowTokens: 1_000_000,
-        capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true },
+        capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: false },
       },
       {
         modelId: 'deepseek-v4-pro',
         displayName: 'DeepSeek V4 Pro',
         contextWindowTokens: 1_000_000,
-        capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true },
+        capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: false },
       },
     ],
   },

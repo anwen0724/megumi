@@ -198,7 +198,7 @@ class DefaultAgentRunService implements AgentRunService {
         session,
       };
     }
-    if (parsedInput.attachments.length > 0 && modelConfig.config.capabilities.imageInput !== true) {
+    if (parsedInput.attachments.length > 0 && modelConfig.config.capabilities.imageInput === false) {
       return {
         ...failedStart(request, {
           code: 'model_call_failed',
@@ -347,6 +347,7 @@ class DefaultAgentRunService implements AgentRunService {
       run,
       session,
       user_message_id: userMessageId,
+      user_message: userMessage.message,
       events: queue.events(),
     };
   }

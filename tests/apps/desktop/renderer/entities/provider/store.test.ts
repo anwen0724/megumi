@@ -25,7 +25,10 @@ const catalog: ProviderCatalogUiDto[] = [{
   displayName: 'DeepSeek',
   protocol: 'openai-compatible',
   defaultBaseUrl: 'https://api.deepseek.com',
-  models: [{ modelId: 'deepseek-v4-flash', displayName: 'DeepSeek V4 Flash', contextWindowTokens: 1_000_000 }],
+  models: [{
+    modelId: 'deepseek-v4-flash', displayName: 'DeepSeek V4 Flash', contextWindowTokens: 1_000_000,
+    capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: false },
+  }],
 }];
 
 function createSuccessMeta(channel: string, requestId = 'ipc-provider-request-1') {

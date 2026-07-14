@@ -729,7 +729,7 @@ function sampleModelCallRequest(): ModelCallRequest {
       provider_id: 'deepseek',
       protocol: 'openai-compatible',
       model_id: 'deepseek-chat',
-      capabilities: { imageInput: true },
+      capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true },
       api_key: 'sk-test',
     },
   };

@@ -62,11 +62,9 @@ describe('Settings v2 contracts', () => {
           models: {
             'deepseek-v4-flash': {
               context_window_tokens: 1_000_000,
-              capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true },
             },
             'deepseek-v4-pro': {
               context_window_tokens: 1_000_000,
-              capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true },
             },
           },
         },

@@ -47,6 +47,7 @@ import {
   type ListAvailableModelsResult,
   type ListProviderCatalogResult,
   type ListProviderSettingsResult,
+  type ProviderSettingsRaw,
   type ResolveProviderRuntimeConfigRequest,
   type ResolveProviderRuntimeConfigResult,
   type ResolveModelContextSettingsResult,
@@ -207,9 +208,11 @@ class DefaultSettingsService implements SettingsService {
   listProviderSettings(): ListProviderSettingsResult {
     const settings = this.readResolvedSettings();
     if (isSettingsFailure(settings)) return settings;
+    const raw = this.readRawSettings();
+    if (isSettingsFailure(raw)) return raw;
     return {
       status: 'ok',
-      providers: listProviderStatuses(settings, this.env),
+      providers: listProviderStatuses(settings, this.env, raw.providers),
     };
   }
 
@@ -529,20 +532,31 @@ function materializeSettingsForWrite(raw: SettingsRaw): SettingsRaw {
       ? {
           providers: Object.fromEntries(Object.keys(raw.providers).map((providerId) => [
             providerId,
-            providerSettingsForWrite(resolved.providers[providerId]),
+            providerSettingsForWrite(resolved.providers[providerId], raw.providers?.[providerId]),
           ])),
         }
       : {}),
   });
 }
 
-function providerSettingsForWrite(provider: ProviderSettingsResolved) {
+function providerSettingsForWrite(provider: ProviderSettingsResolved, raw?: ProviderSettingsRaw) {
   return {
     enabled: provider.enabled,
     protocol: provider.protocol,
     display_name: provider.display_name,
     ...(provider.base_url ? { base_url: provider.base_url } : {}),
-    models: provider.models,
+    models: Object.fromEntries(Object.entries(provider.models).map(([modelId, model]) => [
+      modelId,
+      {
+        ...(raw?.models?.[modelId]?.display_name
+          ? { display_name: raw.models[modelId].display_name }
+          : {}),
+        context_window_tokens: model.context_window_tokens,
+        ...(raw?.models?.[modelId]?.capabilities
+          ? { capabilities: raw.models[modelId].capabilities }
+          : {}),
+      },
+    ])),
     ...(provider.api_key ? { api_key: provider.api_key } : {}),
     ...(provider.api_key_env ? { api_key_env: provider.api_key_env } : {}),
   };

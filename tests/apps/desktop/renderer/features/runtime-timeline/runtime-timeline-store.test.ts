@@ -429,6 +429,45 @@ describe('runtime timeline store', () => {
       .toEqual(['user', 'assistant']);
   });
 
+  it('keeps the visible runtime failure when terminal Session reconciliation only returns the user message', () => {
+    const store = useRuntimeTimelineStore.getState();
+    store.dispatch(runtimeEvent('run.started', 1, { runKind: 'agent' }));
+    store.dispatch(runtimeEvent('run.failed', 2, {
+      error: {
+        code: 'model_call_failed',
+        message: 'Provider request failed.',
+        severity: 'error',
+        retryable: false,
+        source: 'provider',
+      },
+    }));
+
+    store.reconcileCommittedRunMessages('project-1', 'session-1', 'run-1', [{
+      messageId: 'user-message-1',
+      role: 'user',
+      projectId: 'project-1',
+      sessionId: 'session-1',
+      runId: 'run-1',
+      createdAt: '2026-07-13T08:00:00.000Z',
+      blocks: [{
+        blockId: 'user-text:user-message-1',
+        kind: 'user_text',
+        text: 'Describe the image.',
+        format: 'plain',
+      }],
+    }]);
+
+    const assistant = useRuntimeTimelineStore.getState().sessions['project-1:session-1']?.messages
+      .find((message) => message.role === 'assistant');
+    expect(assistant?.blocks.find((block) => block.kind === 'answer_text')).toMatchObject({
+      status: 'failed',
+      text: 'Provider request failed.',
+    });
+    expect(assistant?.blocks.find((block) => block.kind === 'process_disclosure')).toMatchObject({
+      status: 'failed',
+    });
+  });
+
   it('shows an image-only pending input before the canonical Session message is committed', () => {
     const store = useRuntimeTimelineStore.getState();
     store.addPendingUserMessage('project-1', 'session-1', {

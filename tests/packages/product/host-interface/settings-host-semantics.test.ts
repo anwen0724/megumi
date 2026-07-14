@@ -42,6 +42,63 @@ describe('SettingsHost semantics', () => {
     });
   });
 
+  it('maps sparse model capability overrides without inventing defaults', async () => {
+    const updateProviderSettings = vi.fn(() => ({
+      status: 'updated' as const,
+      provider: providerSettings(),
+    }));
+    const host = createSettingsHost({ updateProviderSettings } as never);
+
+    await host.updateProvider({
+      providerId: 'provider:1',
+      modelIds: ['model:known', 'model:custom'],
+      modelCapabilities: {
+        'model:known': { imageInput: false },
+      },
+    });
+
+    expect(updateProviderSettings).toHaveBeenCalledWith({
+      provider_id: 'provider:1',
+      patch: {
+        models: {
+          'model:known': { capabilities: { imageInput: false } },
+          'model:custom': {},
+        },
+      },
+    });
+  });
+
+  it('maps model editor fields into Settings-owned model configuration', async () => {
+    const updateProviderSettings = vi.fn(() => ({
+      status: 'updated' as const,
+      provider: providerSettings(),
+    }));
+    const host = createSettingsHost({ updateProviderSettings } as never);
+
+    await host.updateProvider({
+      providerId: 'provider:1',
+      models: [{
+        modelId: 'model:1',
+        displayName: 'Model One',
+        contextWindowTokens: 131_072,
+        imageInput: true,
+      }],
+    });
+
+    expect(updateProviderSettings).toHaveBeenCalledWith({
+      provider_id: 'provider:1',
+      patch: {
+        models: {
+          'model:1': {
+            display_name: 'Model One',
+            context_window_tokens: 131_072,
+            capabilities: { imageInput: true },
+          },
+        },
+      },
+    });
+  });
+
   it('preserves Settings owner success statuses while projecting settings DTOs', async () => {
     const settings = resolvedSettings();
     const host = createSettingsHost({
@@ -104,7 +161,7 @@ describe('SettingsHost semantics', () => {
             modelId: 'deepseek-v4-flash',
             displayName: 'DeepSeek V4 Flash',
             contextWindowTokens: 1_000_000,
-            capabilities: { streaming: true, toolCalls: true, thinking: true },
+            capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: false },
           }],
         }],
       })),
@@ -122,7 +179,7 @@ describe('SettingsHost semantics', () => {
           modelId: 'deepseek-v4-flash',
           displayName: 'DeepSeek V4 Flash',
           contextWindowTokens: 1_000_000,
-          capabilities: { streaming: true, toolCalls: true, thinking: true },
+          capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: false },
         }],
       }],
     });
