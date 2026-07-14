@@ -13,8 +13,8 @@ export function createMainWindow({
   dirname,
 }: CreateMainWindowOptions): BrowserWindow {
   const mainWindow = new BrowserWindow({
-    width: 1600,
-    height: 1100,
+    width: 1400,
+    height: 1000,
     minWidth: 1024,
     minHeight: 680,
     frame: false,

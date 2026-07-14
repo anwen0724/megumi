@@ -38,6 +38,8 @@ describe('WebSettingsPanel', () => {
       web: { search: { provider: 'custom', baseUrl: 'https://search.example.com/query', apiKey: 'secret' } },
     });
     expect(screen.getByLabelText('Search API key')).toHaveValue('');
+    expect(screen.queryByText('Page access')).not.toBeInTheDocument();
+    expect(screen.queryByText('Web page reading')).not.toBeInTheDocument();
   });
 });
 

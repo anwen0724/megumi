@@ -14,7 +14,13 @@ import type {
   ProviderPublicStatusUiDto,
 } from '@megumi/product/host-interface';
 import { useProviderStore } from '../../../entities/provider';
-import { Badge, Button, IconButton, cx } from '../../../shared/ui';
+import {
+  Badge,
+  Button,
+  IconButton,
+  SettingsPageHeader,
+  cx,
+} from '../../../shared/ui';
 
 type ProviderProtocol = 'openai-compatible' | 'anthropic';
 
@@ -35,8 +41,8 @@ type ProviderListEntry =
 const newProviderId = '__new_provider__';
 
 function credentialLabel(provider: ProviderPublicStatusUiDto): string {
-  if (provider.credentialSource === 'settings') return 'Settings key active';
-  if (provider.credentialSource === 'environment') return 'Environment key active';
+  if (provider.credentialSource === 'settings') return 'Saved securely on this device';
+  if (provider.credentialSource === 'environment') return 'Using an environment variable';
   return 'Missing key';
 }
 
@@ -262,12 +268,10 @@ export function ProviderSettingsPanel() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold tracking-normal text-[var(--color-text)]">Models</h2>
-        <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-          Configure custom model providers and model IDs.
-        </p>
-      </div>
+      <SettingsPageHeader
+        title="Models & Providers"
+        description="Connect AI providers and choose which models are available in chat."
+      />
 
       {error ? (
         <p className="rounded-md border border-[var(--color-danger)] bg-[var(--color-danger-soft)] px-3 py-2 text-sm text-[var(--color-danger)]">
@@ -275,10 +279,10 @@ export function ProviderSettingsPanel() {
         </p>
       ) : null}
 
-      <div className="grid min-h-[28rem] grid-cols-[minmax(17rem,0.9fr)_minmax(26rem,1.55fr)] gap-3">
-        <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]/80 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
+      <div className="grid min-h-[28rem] gap-4 lg:grid-cols-[minmax(15rem,0.8fr)_minmax(24rem,1.55fr)]">
+        <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="text-base font-semibold text-[var(--color-text)]">Providers</h3>
+            <h2 className="text-base font-semibold text-[var(--color-text)]">Providers</h2>
             <Button
               type="button"
               size="sm"
@@ -291,7 +295,7 @@ export function ProviderSettingsPanel() {
             </Button>
           </div>
 
-          <label className="mt-4 flex h-10 items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-app-bg)]/60 px-3 text-sm text-[var(--color-text-muted)]">
+          <label className="mt-4 flex h-10 items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 text-sm text-[var(--color-text-muted)] focus-within:border-[var(--color-focus)] focus-within:ring-2 focus-within:ring-[var(--color-focus)]/20">
             <Search size={16} aria-hidden="true" />
             <input
               aria-label="Search providers"
@@ -300,11 +304,9 @@ export function ProviderSettingsPanel() {
               placeholder="Search providers..."
               className="min-w-0 flex-1 bg-transparent text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-subtle)]"
             />
-            <span className="text-xs text-[var(--color-text-subtle)]">⌘ K</span>
           </label>
 
-          <div className="mt-5">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-accent)]">API</p>
+          <div className="mt-4">
             <div className="space-y-2">
               {isCreating ? (
                 <ProviderListItem
@@ -343,7 +345,7 @@ export function ProviderSettingsPanel() {
           </div>
         </section>
 
-        <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]/80 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
+        <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
           {selectedEntry || isCreating ? (
             <>
               <div className="flex items-start justify-between gap-4">
@@ -353,9 +355,9 @@ export function ProviderSettingsPanel() {
                   </div>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="truncate text-lg font-semibold text-[var(--color-text)]">
+                      <h2 className="truncate text-lg font-semibold text-[var(--color-text)]">
                         {selectedForm.provider || 'New provider'}
-                      </h3>
+                      </h2>
                       <Badge variant={selectedForm.enabled ? 'success' : 'neutral'}>
                         <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-current" />
                         {selectedForm.enabled ? 'Enabled' : 'Disabled'}
@@ -399,70 +401,80 @@ export function ProviderSettingsPanel() {
                 </div>
               </div>
 
-              <form id="provider-settings-form" className="mt-5 space-y-3" onSubmit={(event) => void handleSettingsSubmit(event)}>
-                <FieldRow label="Provider">
-                  <input
-                    aria-label="Provider"
-                    value={selectedForm.provider}
-                    onChange={(event) => updateForm({ provider: event.target.value })}
-                    className={fieldClassName}
-                    placeholder="Enter provider name"
-                    disabled={selectedEntry?.source === 'quick' || selectedEntry?.source === 'saved'}
-                  />
-                </FieldRow>
-
-                <FieldRow label="Protocol">
-                  <div className="relative">
-                    <select
-                      aria-label="Protocol"
-                      value={selectedForm.protocol}
-                      onChange={(event) => updateForm({ protocol: event.target.value as ProviderProtocol })}
-                      className={cx(fieldClassName, 'appearance-none pr-10')}
-                    >
-                      <option value="openai-compatible">OpenAI Compatible</option>
-                      <option value="anthropic">Anthropic</option>
-                    </select>
-                    <ChevronDown
-                      size={16}
-                      aria-hidden="true"
-                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]"
+              <form
+                id="provider-settings-form"
+                className="mt-5 overflow-hidden rounded-lg border border-[var(--color-border)]"
+                onSubmit={(event) => void handleSettingsSubmit(event)}
+              >
+                <FormGroup title="Connection">
+                  <FieldRow label="Provider">
+                    <input
+                      aria-label="Provider"
+                      value={selectedForm.provider}
+                      onChange={(event) => updateForm({ provider: event.target.value })}
+                      className={fieldClassName}
+                      placeholder="Enter provider name"
+                      disabled={selectedEntry?.source === 'quick' || selectedEntry?.source === 'saved'}
                     />
-                  </div>
-                </FieldRow>
+                  </FieldRow>
 
-                <FieldRow label="Base URL">
-                  <input
-                    aria-label="Base URL"
-                    value={selectedForm.baseUrl}
-                    onChange={(event) => updateForm({ baseUrl: event.target.value })}
-                    className={fieldClassName}
-                    placeholder="Enter provider API base URL"
-                  />
-                </FieldRow>
+                  <FieldRow label="Protocol">
+                    <div className="relative">
+                      <select
+                        aria-label="Protocol"
+                        value={selectedForm.protocol}
+                        onChange={(event) => updateForm({ protocol: event.target.value as ProviderProtocol })}
+                        className={cx(fieldClassName, 'appearance-none pr-10')}
+                      >
+                        <option value="openai-compatible">OpenAI Compatible</option>
+                        <option value="anthropic">Anthropic</option>
+                      </select>
+                      <ChevronDown
+                        size={16}
+                        aria-hidden="true"
+                        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]"
+                      />
+                    </div>
+                  </FieldRow>
 
-                <FieldRow label="API Key">
-                  <input
-                    aria-label="API Key"
-                    type="password"
-                    value={selectedForm.apiKey}
-                    onChange={(event) => updateForm({ apiKey: event.target.value })}
-                    className={fieldClassName}
-                    placeholder={selectedProvider?.hasApiKey || selectedProvider?.envOverrideActive ? 'API key already saved' : 'Paste API key'}
-                  />
-                </FieldRow>
+                  <FieldRow label="Base URL">
+                    <input
+                      aria-label="Base URL"
+                      value={selectedForm.baseUrl}
+                      onChange={(event) => updateForm({ baseUrl: event.target.value })}
+                      className={fieldClassName}
+                      placeholder="Enter provider API base URL"
+                    />
+                  </FieldRow>
+                </FormGroup>
 
-                <FieldRow label="Models" alignTop>
-                  <textarea
-                    aria-label="Models"
-                    value={selectedForm.modelIdsText}
-                    onChange={(event) => updateForm({ modelIdsText: event.target.value })}
-                    className={cx(fieldClassName, 'min-h-28 resize-y py-2 leading-6')}
-                    placeholder="Enter one model per line"
-                  />
-                  <p className="mt-2 text-xs text-[var(--color-text-muted)]">
-                    Models configured here appear in the chat composer model picker.
-                  </p>
-                </FieldRow>
+                <FormGroup title="Authentication" bordered>
+                  <FieldRow label="API Key">
+                    <input
+                      aria-label="API Key"
+                      type="password"
+                      value={selectedForm.apiKey}
+                      onChange={(event) => updateForm({ apiKey: event.target.value })}
+                      className={fieldClassName}
+                      placeholder={selectedProvider?.hasApiKey || selectedProvider?.envOverrideActive ? 'API key already saved' : 'Paste API key'}
+                    />
+                  </FieldRow>
+                </FormGroup>
+
+                <FormGroup title="Models" bordered>
+                  <FieldRow label="Models" alignTop>
+                    <textarea
+                      aria-label="Models"
+                      value={selectedForm.modelIdsText}
+                      onChange={(event) => updateForm({ modelIdsText: event.target.value })}
+                      className={cx(fieldClassName, 'min-h-28 resize-y py-2 leading-6')}
+                      placeholder="Enter one model per line"
+                    />
+                    <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+                      Models configured here appear in the chat composer model picker.
+                    </p>
+                  </FieldRow>
+                </FormGroup>
               </form>
             </>
           ) : (
@@ -538,5 +550,24 @@ function FieldRow({
       <span className="pt-0.5 text-sm font-medium text-[var(--color-text-muted)]">{label}</span>
       <span>{children}</span>
     </div>
+  );
+}
+
+function FormGroup({
+  title,
+  bordered = false,
+  children,
+}: {
+  title: string;
+  bordered?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <section className={cx('space-y-3 p-4', bordered ? 'border-t border-[var(--color-border)]' : undefined)}>
+      <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-subtle)]">
+        {title}
+      </h3>
+      {children}
+    </section>
   );
 }

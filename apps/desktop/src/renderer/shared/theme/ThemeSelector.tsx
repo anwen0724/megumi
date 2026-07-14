@@ -9,7 +9,7 @@ export function ThemeSelector() {
   const persistTheme = useThemeStore((state) => state.persistTheme);
 
   return (
-    <div role="radiogroup" aria-label="Theme" className="grid gap-2 sm:grid-cols-2">
+    <div role="radiogroup" aria-label="Theme" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {themeNames.map((themeName) => {
         const definition = themeDefinitions[themeName];
         const selected = currentTheme === themeName;
@@ -24,30 +24,34 @@ export function ThemeSelector() {
             type="button"
             role="radio"
             aria-checked={selected}
+            aria-label={`${definition.label}${selected ? ', current' : ''}`}
             onClick={() => void persistTheme(themeName)}
             className={cx(
-              'flex min-h-16 items-center gap-3 rounded-md border px-3 py-2 text-left transition',
+              'group flex min-h-24 cursor-pointer flex-col items-stretch overflow-hidden rounded-xl border text-left transition-colors duration-150',
               'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
               selected
-                ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text)]'
-                : 'border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-[var(--color-text)] hover:border-[var(--color-border-strong)]',
+                ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-text)] ring-1 ring-[var(--color-accent)]/20'
+                : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-muted)]',
             )}
           >
             <span
               aria-hidden="true"
-              className="grid h-8 w-8 shrink-0 grid-cols-2 overflow-hidden rounded-md border"
+              className="grid h-12 w-full grid-cols-[1.4fr_1fr_0.65fr] overflow-hidden border-b"
               style={swatchStyle}
             >
               <span style={{ background: definition.variables['--color-surface'] }} />
               <span style={{ background: definition.variables['--color-surface-muted'] }} />
               <span style={{ background: definition.variables['--color-accent'] }} />
-              <span style={{ background: definition.variables['--color-success'] }} />
             </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium">{definition.label}</span>
-              <span className="block truncate text-xs text-[var(--color-text-muted)]">{themeName}</span>
+            <span className="flex min-w-0 items-center gap-2 px-3 py-2.5">
+              <span className="block min-w-0 flex-1 truncate text-sm font-medium">{definition.label}</span>
+              {selected ? (
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--color-accent)]">
+                  <Check size={14} aria-hidden="true" />
+                  Current
+                </span>
+              ) : null}
             </span>
-            {selected ? <Check size={16} aria-hidden="true" className="shrink-0 text-[var(--color-accent)]" /> : null}
           </button>
         );
       })}

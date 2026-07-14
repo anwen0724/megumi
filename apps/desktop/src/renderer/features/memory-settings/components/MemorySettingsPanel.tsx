@@ -3,7 +3,12 @@
 import { useEffect, useState } from 'react';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../../shared/ipc';
-import { Button, cx } from '../../../shared/ui';
+import {
+  SettingsPageHeader,
+  SettingsRow,
+  SettingsSection,
+  cx,
+} from '../../../shared/ui';
 
 type MemorySettingsStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';
 
@@ -83,58 +88,52 @@ export function MemorySettingsPanel() {
   const busy = status === 'loading' || status === 'saving';
 
   return (
-    <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-[var(--color-text)]">Long-term memory</h2>
-          <p className="mt-1 max-w-2xl text-sm text-[var(--color-text-muted)]">
-            Controls automatic memory capture, Markdown sync, and recall injection across all projects.
+    <div className="space-y-6">
+      <SettingsPageHeader
+        title="Memory"
+        description="Control whether Megumi may remember useful information across conversations."
+      />
+      <SettingsSection title="Memory preferences">
+        <SettingsRow
+          title="Conversation memory"
+          description="Remember useful project context and preferences so future conversations can continue with less repetition."
+        >
+          <div className="flex items-center justify-end gap-3">
+            <span className="text-sm text-[var(--color-text-muted)]">
+              {status === 'loading' ? 'Loading…' : enabled ? 'On' : 'Off'}
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-label="Conversation memory"
+              aria-checked={enabled}
+              disabled={busy}
+              onClick={() => void updateAutoCaptureEnabled(!enabled)}
+              className={cx(
+                'relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border transition-colors duration-150',
+                'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
+                enabled
+                  ? 'border-[var(--color-accent)] bg-[var(--color-accent)]'
+                  : 'border-[var(--color-border-strong)] bg-[var(--color-surface-muted)]',
+                busy ? 'cursor-wait opacity-60' : undefined,
+              )}
+            >
+              <span
+                aria-hidden="true"
+                className={cx(
+                  'h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-150',
+                  enabled ? 'translate-x-6' : 'translate-x-1',
+                )}
+              />
+            </button>
+          </div>
+        </SettingsRow>
+        {error ? (
+          <p role="alert" className="border-t border-[var(--color-danger)] bg-[var(--color-danger-soft)] px-5 py-3 text-sm text-[var(--color-danger)]">
+            {error}
           </p>
-        </div>
-        <button
-          type="button"
-          role="switch"
-          aria-label="Long-term memory"
-          aria-checked={enabled}
-          disabled={busy}
-          onClick={() => void updateAutoCaptureEnabled(!enabled)}
-          className={cx(
-            'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors',
-            'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
-            enabled
-              ? 'border-[var(--color-accent)] bg-[var(--color-accent)]'
-              : 'border-[var(--color-border-strong)] bg-[var(--color-surface-muted)]',
-            busy ? 'cursor-wait opacity-70' : 'cursor-pointer',
-          )}
-        >
-          <span
-            aria-hidden="true"
-            className={cx(
-              'h-4 w-4 rounded-full bg-white shadow-sm transition-transform',
-              enabled ? 'translate-x-5' : 'translate-x-1',
-            )}
-          />
-        </button>
-      </div>
-
-      <div className="mt-4 flex items-center justify-between gap-3 border-t border-[var(--color-border)] pt-3">
-        <p className="text-sm text-[var(--color-text)]">
-          {enabled ? 'Memory runtime is enabled.' : 'Memory runtime is paused.'}
-        </p>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={busy}
-          onClick={() => void updateAutoCaptureEnabled(!enabled)}
-        >
-          {enabled ? 'Disable' : 'Enable'}
-        </Button>
-      </div>
-
-      {error ? (
-        <p className="mt-3 text-sm text-[var(--color-danger)]">{error}</p>
-      ) : null}
-    </section>
+        ) : null}
+      </SettingsSection>
+    </div>
   );
 }

@@ -3,6 +3,7 @@ export { Button } from './Button';
 export { IconButton } from './IconButton';
 export { Panel, PanelHeader, PanelTitle } from './Panel';
 export { RecoverableErrorBoundary } from './RecoverableErrorBoundary';
+export { SettingsPageHeader, SettingsRow, SettingsSection } from './SettingsLayout';
 export { Tabs } from './Tabs';
 export { TextField } from './TextField';
 export { ToastViewport } from './ToastViewport';
