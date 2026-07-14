@@ -54,7 +54,14 @@ export interface RuntimeTimelineStoreState {
   addPendingUserMessage(
     projectId: string,
     sessionId: string,
-    input: { clientMessageId: string; messageId?: string; text: string; createdAt: string; runId?: string },
+    input: {
+      clientMessageId: string;
+      messageId?: string;
+      text: string;
+      attachments?: Array<{ draftAttachmentId: string; name: string; declaredMimeType?: string }>;
+      createdAt: string;
+      runId?: string;
+    },
   ): void;
   upsertSessionCompactionActivity(
     projectId: string,
@@ -213,6 +220,7 @@ function upsertPendingUserMessage(
     clientMessageId: string;
     messageId?: string;
     text: string;
+    attachments?: Array<{ draftAttachmentId: string; name: string; declaredMimeType?: string }>;
     createdAt: string;
     runId?: string;
   },
@@ -226,7 +234,7 @@ function upsertPendingUserMessage(
         (Boolean(input.runId) && message.runId === input.runId)
       ),
   );
-  const block = {
+  const textBlock = {
     blockId: `user-text:${input.clientMessageId}`,
     kind: 'user_text' as const,
     createdAt: input.createdAt,
@@ -234,17 +242,26 @@ function upsertPendingUserMessage(
     text: input.text,
     format: 'plain' as const,
   };
+  const attachmentBlocks = (input.attachments ?? []).map((attachment) => ({
+    blockId: `user-attachment:${attachment.draftAttachmentId}`,
+    kind: 'user_attachment' as const,
+    createdAt: input.createdAt,
+    updatedAt: input.createdAt,
+    attachmentId: attachment.draftAttachmentId,
+    name: attachment.name,
+    ...(attachment.declaredMimeType ? { mediaType: attachment.declaredMimeType } : {}),
+    source: 'local_file' as const,
+  }));
+  const nextBlocks = [
+    ...(input.text ? [textBlock] : []),
+    ...attachmentBlocks,
+  ];
 
   if (existing) {
     return current.map((message) => {
       if (message !== existing) {
         return message;
       }
-
-      const blockIndex = existing.blocks.findIndex((candidate) => candidate.kind === 'user_text');
-      const blocks = blockIndex === -1
-        ? [...existing.blocks, block]
-        : existing.blocks.map((candidate, index) => index === blockIndex ? block : candidate);
 
       return {
         ...existing,
@@ -254,7 +271,7 @@ function upsertPendingUserMessage(
         clientMessageId: input.clientMessageId,
         ...(input.runId ? { runId: input.runId } : {}),
         updatedAt: input.createdAt,
-        blocks,
+        blocks: nextBlocks,
       };
     });
   }
@@ -269,7 +286,7 @@ function upsertPendingUserMessage(
     ...(input.runId ? { runId: input.runId } : {}),
     createdAt: input.createdAt,
     updatedAt: input.createdAt,
-    blocks: [block],
+    blocks: nextBlocks,
   };
 
   return [...current, message].sort(compareTimelineMessages);

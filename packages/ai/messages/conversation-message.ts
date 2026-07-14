@@ -7,6 +7,7 @@ import { TokenUsageSchema, type TokenUsage } from '../core/token-usage';
 import { JsonValueSchema, type JsonValue } from '../core/json';
 import {
     AssistantContentBlockSchema,
+    ContentBlockSchema,
     ContentBlockListSchema,
     type AssistantContentBlock,
     type ContentBlock,
@@ -97,13 +98,13 @@ export const ConversationItemListSchema = z.array(ConversationItemSchema);
 export const UserMessageSchema = z
     .object({
         role: z.literal('user'),
-        content: z.string(),
+        content: z.array(ContentBlockSchema),
     })
     .strict();
 
 export interface UserMessage {
     role: 'user';
-    content: string;
+    content: ContentBlock[];
 }
 
 export const ToolResultMessageSchema = z

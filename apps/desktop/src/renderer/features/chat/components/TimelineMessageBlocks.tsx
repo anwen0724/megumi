@@ -7,13 +7,33 @@
 import { TimelineMarkdown } from './TimelineMarkdown';
 import { ProcessDisclosureBlockView } from './ProcessDisclosureBlockView';
 import { RecoverableErrorBoundary } from '../../../shared/ui';
+import { useEffect, useState } from 'react';
+import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
+import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
 
 function UserBlockView({ block }: { block: UserTimelineBlock }) {
   if (block.kind === 'user_attachment') {
-    return <span>{block.name}</span>;
+    return <TimelineImageAttachment attachmentId={block.attachmentId} name={block.name} />;
   }
 
   return <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{block.text}</p>;
+}
+
+function TimelineImageAttachment({ attachmentId, name }: { attachmentId: string; name: string }) {
+  const [dataUrl, setDataUrl] = useState<string>();
+  useEffect(() => {
+    let active = true;
+    const reader = window.megumi?.session?.imageInput?.readAttachment;
+    if (!reader) return () => { active = false; };
+    void reader(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.attachmentImageRead, { attachmentId }),
+    ).then((result) => {
+      if (active && result.ok && result.data.status === 'ok') setDataUrl(result.data.dataUrl);
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [attachmentId]);
+  if (!dataUrl) return <span className="text-xs text-[var(--color-text-muted)]">{name}</span>;
+  return <img src={dataUrl} alt={name} className="max-h-80 max-w-full rounded-xl border border-[var(--color-border)] object-contain" />;
 }
 
 function AnswerTextBlockView({ block }: { block: AnswerTextBlock }) {

@@ -19,7 +19,7 @@ describe('provider-neutral content blocks', () => {
       },
       {
         type: 'image',
-        source: { type: 'local_file', path: 'C:/tmp/image.png' },
+        source: { type: 'base64', mediaType: 'image/png', data: 'aW1hZ2U=' },
       },
       {
         type: 'file',

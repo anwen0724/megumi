@@ -131,9 +131,7 @@ function attachmentContent(attachment: SessionMessageAttachment): ContentBlock {
   if (attachment.type === 'image') {
     return {
       type: 'image',
-      source: attachment.source_type === 'local_file'
-        ? { type: 'local_file', path: attachment.source_value }
-        : { type: 'host_reference', referenceId: attachment.source_value },
+      source: { type: 'host_reference', referenceId: attachment.attachment_id },
     };
   }
   return {

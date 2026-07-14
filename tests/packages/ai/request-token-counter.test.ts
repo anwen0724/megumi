@@ -62,7 +62,7 @@ describe('RequestTokenCounter', () => {
     expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toEqual(materialized);
   });
 
-  it('falls back to the complete canonical request when a protocol has no materializer', async () => {
+  it('counts the materialized Anthropic request without starting a stream', async () => {
     const adapter = createAnthropicProtocolAdapter();
     const stream = vi.spyOn(adapter, 'stream');
     const registry = new ProtocolRegistry([adapter]);
@@ -73,9 +73,10 @@ describe('RequestTokenCounter', () => {
     };
 
     const counted = await counter.count(request);
+    const materialized = adapter.materialize!(request);
 
     expect(counted).toEqual({
-      inputTokens: new TextEncoder().encode(JSON.stringify(request)).byteLength,
+      inputTokens: new TextEncoder().encode(JSON.stringify(materialized)).byteLength,
       accuracy: 'estimated',
     });
     expect(stream).not.toHaveBeenCalled();
@@ -103,7 +104,7 @@ function completeRequest(): AiCallRequest {
           kind: 'memory_recall',
           content: [{ type: 'text', text: 'Memory' }],
         },
-        { role: 'user', content: 'Conversation' },
+        { role: 'user', content: [{ type: 'text', text: 'Conversation' }] },
       ],
     },
     tools: [{

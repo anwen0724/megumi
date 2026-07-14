@@ -614,9 +614,30 @@ function materializeOpenAICompatibleRequest(request: ProtocolAdapterRequest) {
         }
 
         if (message.role === 'user') {
+            const hasImage = message.content.some((block) => block.type === 'image');
             messages.push({
                 role: 'user',
-                content: message.content,
+                content: hasImage ? message.content.map((block) => {
+                    if (block.type === 'text') {
+                        return { type: 'text' as const, text: block.text };
+                    }
+                    if (block.type === 'json') {
+                        return { type: 'text' as const, text: JSON.stringify(block.value) };
+                    }
+                    if (block.type === 'image' && block.source.type === 'base64') {
+                        return {
+                            type: 'image_url' as const,
+                            image_url: {
+                                url: `data:${block.source.mediaType};base64,${block.source.data}`,
+                            },
+                        };
+                    }
+                    throw new Error(`Unsupported OpenAI-compatible user content block: ${block.type}`);
+                }) : message.content.map((block) => block.type === 'text'
+                    ? block.text
+                    : block.type === 'json'
+                        ? JSON.stringify(block.value)
+                        : '').join('\n'),
             });
             continue;
         }

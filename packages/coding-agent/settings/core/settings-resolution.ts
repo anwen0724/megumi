@@ -157,6 +157,10 @@ function resolveProvider(providerId: string, raw: ProviderSettingsRaw) {
           context_window_tokens: known
             ? Math.min(configured ?? known.contextWindowTokens, known.contextWindowTokens)
             : configured ?? DEFAULT_UNKNOWN_MODEL_CONTEXT_WINDOW_TOKENS,
+          capabilities: {
+            ...(known?.capabilities ?? {}),
+            ...(model.capabilities ?? {}),
+          },
         },
       ];
     })),

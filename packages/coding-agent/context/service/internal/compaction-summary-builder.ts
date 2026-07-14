@@ -62,6 +62,23 @@ export function buildCompactionSummaryRequest(
 
 function renderTurn(turn: ConversationTurn): string {
   return JSON.stringify({
-    conversation: conversationItemsFromTurn(turn),
+    conversation: conversationItemsFromTurn(turn).map((item) => {
+      if (item.type !== 'user_message' && item.type !== 'assistant_message' && item.type !== 'tool_result') {
+        return item;
+      }
+
+      return {
+        ...item,
+        content: item.content.map((block) => {
+          if (block.type === 'image') {
+            return { type: 'text' as const, text: '[Image attachment included as structured content below]' };
+          }
+          if (block.type === 'file') {
+            return { type: 'text' as const, text: `[File attachment: ${block.name ?? block.fileId}]` };
+          }
+          return block;
+        }),
+      };
+    }),
   });
 }

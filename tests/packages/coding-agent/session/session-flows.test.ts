@@ -44,13 +44,13 @@ describe('session service flows', () => {
   it('creates a branch by switching active entry and saving a new message', async () => {
     const { service, workspaceId } = createHarness();
     service.createSession({ workspace_id: workspaceId, title: 'Session' });
-    const m1 = service.saveUserMessage({ message_id: 'M1', session_id: 'S1', content: text('m1'), created_at: '2026-07-04T00:01:00.000Z' });
+    const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', content: text('m1'), created_at: '2026-07-04T00:01:00.000Z' });
     service.saveAssistantMessage({ message_id: 'M2', session_id: 'S1', run_id: 'R1', content: text('m2'), completed_at: '2026-07-04T00:02:00.000Z' });
-    service.saveUserMessage({ message_id: 'M3', session_id: 'S1', content: text('m3'), created_at: '2026-07-04T00:03:00.000Z' });
+    await service.saveUserMessage({ message_id: 'M3', session_id: 'S1', content: text('m3'), created_at: '2026-07-04T00:03:00.000Z' });
 
     const branchPoint = m1.status === 'saved' ? m1.entry.entry_id : undefined;
     service.switchActiveEntry({ session_id: 'S1', active_entry_id: branchPoint, updated_at: '2026-07-04T00:04:00.000Z' });
-    service.saveUserMessage({ message_id: 'M4', session_id: 'S1', content: text('m4'), created_at: '2026-07-04T00:05:00.000Z' });
+    await service.saveUserMessage({ message_id: 'M4', session_id: 'S1', content: text('m4'), created_at: '2026-07-04T00:05:00.000Z' });
 
     const result = service.listMessages({ session_id: 'S1', active_path_only: true });
 
@@ -63,12 +63,12 @@ describe('session service flows', () => {
   it('creates a branch by saving the next user message under an explicit parent entry', async () => {
     const { service, workspaceId } = createHarness();
     service.createSession({ workspace_id: workspaceId, title: 'Session' });
-    service.saveUserMessage({ message_id: 'U1', session_id: 'S1', content: text('u1'), created_at: '2026-07-04T00:01:00.000Z' });
+    await service.saveUserMessage({ message_id: 'U1', session_id: 'S1', content: text('u1'), created_at: '2026-07-04T00:01:00.000Z' });
     const a1 = service.saveAssistantMessage({ message_id: 'A1', session_id: 'S1', run_id: 'R1', content: text('a1'), completed_at: '2026-07-04T00:02:00.000Z' });
-    service.saveUserMessage({ message_id: 'U2', session_id: 'S1', content: text('u2'), created_at: '2026-07-04T00:03:00.000Z' });
+    await service.saveUserMessage({ message_id: 'U2', session_id: 'S1', content: text('u2'), created_at: '2026-07-04T00:03:00.000Z' });
     service.saveAssistantMessage({ message_id: 'A2', session_id: 'S1', run_id: 'R2', content: text('a2'), completed_at: '2026-07-04T00:04:00.000Z' });
 
-    service.saveUserMessage({
+    await service.saveUserMessage({
       message_id: 'U3',
       session_id: 'S1',
       content: text('u3'),
@@ -99,7 +99,7 @@ describe('session service flows', () => {
     });
   });
 
-  it('rejects history through an entry owned by another session', () => {
+  it('rejects history through an entry owned by another session', async () => {
     const { repository, service, workspaceId } = createHarness();
     service.createSession({ workspace_id: workspaceId, title: 'Session' });
     const otherService = createSessionService({
@@ -111,7 +111,7 @@ describe('session service flows', () => {
       now: () => '2026-07-04T00:00:00.000Z',
     });
     otherService.createSession({ workspace_id: workspaceId, title: 'Other session' });
-    const otherMessage = otherService.saveUserMessage({
+    const otherMessage = await otherService.saveUserMessage({
       message_id: 'OTHER',
       session_id: 'S2',
       content: text('other'),
@@ -130,7 +130,7 @@ describe('session service flows', () => {
   it('uses compaction summary in active history and skips it in active message listing', async () => {
     const { service, workspaceId } = createHarness();
     service.createSession({ workspace_id: workspaceId, title: 'Session' });
-    const m1 = service.saveUserMessage({ message_id: 'M1', session_id: 'S1', content: text('m1'), created_at: '2026-07-04T00:01:00.000Z' });
+    const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', content: text('m1'), created_at: '2026-07-04T00:01:00.000Z' });
     const m2 = service.saveAssistantMessage({ message_id: 'M2', session_id: 'S1', run_id: 'R1', content: text('m2'), completed_at: '2026-07-04T00:02:00.000Z' });
     const firstKeptEntryId = m2.status === 'saved' ? m2.entry.entry_id : undefined;
     service.saveCompactionSummary({
@@ -156,12 +156,12 @@ describe('session service flows', () => {
     }
   });
 
-  it('expands compaction boundaries when reading the active conversation for UI', () => {
+  it('expands compaction boundaries when reading the active conversation for UI', async () => {
     const { service, workspaceId } = createHarness();
     service.createSession({ workspace_id: workspaceId, title: 'Session' });
-    const m1 = service.saveUserMessage({ message_id: 'M1', session_id: 'S1', run_id: 'R1', content: text('m1'), created_at: '2026-07-04T00:01:00.000Z' });
+    const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', run_id: 'R1', content: text('m1'), created_at: '2026-07-04T00:01:00.000Z' });
     const m2 = service.saveAssistantMessage({ message_id: 'M2', session_id: 'S1', run_id: 'R1', content: text('m2'), completed_at: '2026-07-04T00:02:00.000Z' });
-    const m3 = service.saveUserMessage({ message_id: 'M3', session_id: 'S1', run_id: 'R2', content: text('m3'), created_at: '2026-07-04T00:03:00.000Z' });
+    const m3 = await service.saveUserMessage({ message_id: 'M3', session_id: 'S1', run_id: 'R2', content: text('m3'), created_at: '2026-07-04T00:03:00.000Z' });
     service.saveAssistantMessage({ message_id: 'M4', session_id: 'S1', run_id: 'R2', content: text('m4'), completed_at: '2026-07-04T00:04:00.000Z' });
     service.saveCompactionSummary({
       compaction_id: 'C1',
@@ -182,14 +182,14 @@ describe('session service flows', () => {
     expect(m1.status).toBe('saved');
   });
 
-  it('expands nested rolling compactions without duplicating conversation messages', () => {
+  it('expands nested rolling compactions without duplicating conversation messages', async () => {
     const { service, workspaceId } = createHarness();
     service.createSession({ workspace_id: workspaceId, title: 'Session' });
-    const m1 = service.saveUserMessage({ message_id: 'M1', session_id: 'S1', run_id: 'R1', content: text('m1'), created_at: '2026-07-04T00:01:00.000Z' });
+    const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', run_id: 'R1', content: text('m1'), created_at: '2026-07-04T00:01:00.000Z' });
     const m2 = service.saveAssistantMessage({ message_id: 'M2', session_id: 'S1', run_id: 'R1', content: text('m2'), completed_at: '2026-07-04T00:02:00.000Z' });
-    const m3 = service.saveUserMessage({ message_id: 'M3', session_id: 'S1', run_id: 'R2', content: text('m3'), created_at: '2026-07-04T00:03:00.000Z' });
+    const m3 = await service.saveUserMessage({ message_id: 'M3', session_id: 'S1', run_id: 'R2', content: text('m3'), created_at: '2026-07-04T00:03:00.000Z' });
     const m4 = service.saveAssistantMessage({ message_id: 'M4', session_id: 'S1', run_id: 'R2', content: text('m4'), completed_at: '2026-07-04T00:04:00.000Z' });
-    const m5 = service.saveUserMessage({ message_id: 'M5', session_id: 'S1', run_id: 'R3', content: text('m5'), created_at: '2026-07-04T00:05:00.000Z' });
+    const m5 = await service.saveUserMessage({ message_id: 'M5', session_id: 'S1', run_id: 'R3', content: text('m5'), created_at: '2026-07-04T00:05:00.000Z' });
     service.saveAssistantMessage({ message_id: 'M6', session_id: 'S1', run_id: 'R3', content: text('m6'), completed_at: '2026-07-04T00:06:00.000Z' });
     service.saveCompactionSummary({
       compaction_id: 'C1', session_id: 'S1', summary_text: 'first summary',

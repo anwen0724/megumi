@@ -8,8 +8,9 @@ import {
   type ComposerModel,
   type ComposerPermissionMode,
 } from '../components/composer-options';
-import type { ComposerProps, ComposerSubmitPayload } from '../components/composer-types';
+import type { ComposerDraftImage, ComposerProps, ComposerSubmitPayload } from '../components/composer-types';
 import type { ComposerSurfaceProps } from '../components/ComposerSurface';
+import { showToast } from '../../../shared/ui';
 
 const COMPOSER_TEXTAREA_COMPACT_HEIGHT = 56;
 const COMPOSER_TEXTAREA_MAX_HEIGHT = 160;
@@ -24,12 +25,14 @@ function createComposerSubmitPayload(input: {
   permissionMode: ComposerPermissionMode;
   providerId: string;
   model: ComposerModel;
+  attachments: ComposerDraftImage[];
 }): ComposerSubmitPayload {
   return {
     message: input.message,
     permissionMode: input.permissionMode,
     providerId: input.providerId,
     model: input.model,
+    ...(input.attachments.length > 0 ? { attachments: input.attachments } : {}),
   };
 }
 
@@ -46,12 +49,13 @@ export function useComposerController({
   initialValue = '',
   providers,
   contextUsage,
+  imageInputCapabilities,
   seedTextKey = null,
   seedText = null,
   onSubmit,
   onStop,
   onChooseContext,
-  onAttachFiles,
+  onSelectImages,
   getCommandSuggestions,
 }: ComposerProps) {
   const permissionModeId = useId();
@@ -62,15 +66,26 @@ export function useComposerController({
   const [selectedCommandSuggestionIndex, setSelectedCommandSuggestionIndex] = useState(0);
   const [permissionMode, setPermissionMode] = useState<ComposerPermissionMode>(DEFAULT_COMPOSER_PERMISSION_MODE);
   const [model, setModel] = useState<ComposerModel>(DEFAULT_COMPOSER_MODEL);
+  const [selectedImages, setSelectedImages] = useState<ComposerDraftImage[]>([]);
   const modelOptions = useMemo(
     () => getComposerModelOptionsForProviders(providers),
     [providers],
   );
   const selectedModelOption = modelOptions.find((option) => option.value === model);
+  const maxImageCount = imageInputCapabilities?.maxImageCount ?? 0;
   const trimmedValue = value.trim();
   const inputLocked = false;
   const sendLocked = status === 'sending' || status === 'running' || status === 'waiting-approval';
-  const canSend = (trimmedValue.length > 0 || selectedCommandCompletion !== null) && !sendLocked && modelOptions.length > 0;
+  const imageModelCompatible = selectedImages.length === 0 || selectedModelOption?.imageInput === true;
+  const imageInputError = selectedImages.length > 0 && !imageModelCompatible
+    ? 'The selected model does not support image input.'
+    : undefined;
+  const canSend = (trimmedValue.length > 0 || selectedImages.length > 0 || selectedCommandCompletion !== null)
+    && !sendLocked && modelOptions.length > 0 && imageModelCompatible;
+  const canAttachImages = selectedModelOption?.imageInput === true
+    && selectedImages.length < maxImageCount
+    && !sendLocked
+    && selectedCommandCompletion === null;
   const showStop = status === 'sending' || status === 'running' || status === 'waiting-approval';
   const canStop = showStop && Boolean(onStop);
   const [commandSuggestions, setCommandSuggestions] = useState<CommandSuggestionResult>({ type: 'inactive' });
@@ -159,23 +174,26 @@ export function useComposerController({
     ));
   }, [visibleCommandSuggestionItems.length]);
 
-  function submitDraft() {
+  async function submitDraft() {
     if (!canSend) return;
     if (!selectedModelOption) return;
 
-    onSubmit(createComposerSubmitPayload({
+    const succeeded = await onSubmit(createComposerSubmitPayload({
       message: resolveSubmitMessage(value, selectedCommandCompletion),
       permissionMode,
       providerId: selectedModelOption.providerId,
       model: selectedModelOption.modelId,
+      attachments: selectedImages,
     }));
+    if (succeeded === false) return;
     setValue('');
     setSelectedCommandCompletion(null);
+    setSelectedImages([]);
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    submitDraft();
+    void submitDraft();
   }
 
   function insertNewlineAtCursor(textarea: HTMLTextAreaElement) {
@@ -187,6 +205,24 @@ export function useComposerController({
 
   function handleValueChange(nextValue: string) {
     setValue(nextValue);
+  }
+
+  async function selectImages() {
+    if (!canAttachImages || !onSelectImages) return;
+    const images = await onSelectImages();
+    const remaining = Math.max(0, maxImageCount - selectedImages.length);
+    if (images.length > remaining) {
+      showToast({
+        tone: 'warning',
+        title: 'Image limit reached',
+        message: `You can attach up to ${maxImageCount} images.`,
+      });
+    }
+    setSelectedImages((current) => [...current, ...images.slice(0, remaining)]);
+  }
+
+  function removeImage(draftAttachmentId: string) {
+    setSelectedImages((current) => current.filter((image) => image.draftAttachmentId !== draftAttachmentId));
   }
 
   function applyCommandSuggestion(item: CommandSuggestionItem) {
@@ -249,7 +285,7 @@ export function useComposerController({
     }
 
     event.preventDefault();
-    submitDraft();
+    void submitDraft();
   }
 
   function chooseCommandSuggestion(item: CommandSuggestionItem) {
@@ -273,6 +309,9 @@ export function useComposerController({
     selectedCommandSuggestionIndex,
     selectedCommandCompletion,
     contextUsage,
+    selectedImages,
+    canAttachImages,
+    imageInputError,
     onValueChange: handleValueChange,
     onCommandSuggestionChoose: chooseCommandSuggestion,
     onPermissionModeChange: setPermissionMode,
@@ -281,7 +320,8 @@ export function useComposerController({
     onSubmit: handleSubmit,
     onStop,
     onChooseContext,
-    onAttachFiles,
+    onAttachFiles: () => { void selectImages(); },
+    onRemoveImage: removeImage,
   };
 
   return {

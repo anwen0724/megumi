@@ -1,5 +1,5 @@
 ﻿import { useCallback, useEffect, useState, type CSSProperties } from 'react';
-import type { CommandSuggestionResult } from '@megumi/product/host-interface';
+import type { ChatImageInputCapabilitiesUiResult, CommandSuggestionResult } from '@megumi/product/host-interface';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import { useProviderStore } from '../../../entities/provider/store';
 import { useProjectStore } from '../../../entities/project/store';
@@ -10,6 +10,8 @@ import { useChatPageController } from '../hooks/use-chat-page-controller';
 import { ChatViewport } from '../layout/ChatViewport';
 import { ComposerDock } from '../layout/ComposerDock';
 import { Composer } from '../components/Composer';
+import type { ComposerDraftImage } from '../components/composer-types';
+import { showToast } from '../../../shared/ui';
 
 const FALLBACK_COMPOSER_SPACER_HEIGHT = 188;
 
@@ -19,6 +21,7 @@ export function ChatPage() {
   const providerStatus = useProviderStore((state) => state.status);
   const loadProviders = useProviderStore((state) => state.loadProviders);
   const [composerHeight, setComposerHeight] = useState(FALLBACK_COMPOSER_SPACER_HEIGHT);
+  const [imageInputCapabilities, setImageInputCapabilities] = useState<ChatImageInputCapabilitiesUiResult>();
   const effectiveComposerDockHeight = composerHeight > 0 ? composerHeight : FALLBACK_COMPOSER_SPACER_HEIGHT;
   const bottomSpacerHeight = Math.max(effectiveComposerDockHeight + 24, FALLBACK_COMPOSER_SPACER_HEIGHT);
   const getCommandSuggestions = useCallback(async (
@@ -38,6 +41,20 @@ export function ChatPage() {
       return { type: 'inactive' };
     }
   }, [controller.currentProjectId]);
+  const selectImages = useCallback(async (): Promise<ComposerDraftImage[]> => {
+    const result = await window.megumi.session.imageInput.select(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.imageInputSelect, {}),
+    );
+    if (!result.ok) {
+      showToast({ tone: 'error', title: 'Images could not be selected', message: result.data.message });
+      return [];
+    }
+    if (result.data.status === 'failed') {
+      showToast({ tone: 'error', title: 'Images could not be selected', message: result.data.failure.message });
+      return [];
+    }
+    return result.data.status === 'selected' ? result.data.images : [];
+  }, []);
   const timelineScroll = useTimelineAutoScroll({
     sessionKey: controller.activeRuntimeTimelineSessionKey,
     updateKey: `${controller.timelineUpdateKey}:${bottomSpacerHeight}`,
@@ -65,6 +82,23 @@ export function ChatPage() {
       void loadProviders().catch(() => undefined);
     }
   }, [loadProviders, providerStatus]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const capabilities = window.megumi.session.imageInput?.capabilities;
+    if (!capabilities) return undefined;
+    void capabilities(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.imageInputCapabilitiesGet, {}),
+    ).then((result) => {
+      if (!cancelled && result.ok) {
+        setImageInputCapabilities(result.data);
+      }
+    }).catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div
@@ -120,6 +154,7 @@ export function ChatPage() {
             pendingApprovals={controller.pendingApprovals}
             providers={providers}
             contextUsage={controller.contextUsage}
+            imageInputCapabilities={imageInputCapabilities}
             onApprovalResolve={(payload) => {
               void controller.resolveApproval(payload);
             }}
@@ -127,6 +162,7 @@ export function ChatPage() {
             onStop={controller.handleStop}
             onHeightChange={setComposerHeight}
             getCommandSuggestions={getCommandSuggestions}
+            onSelectImages={selectImages}
           />
         </>
       ) : (
@@ -163,11 +199,12 @@ export function ChatPage() {
                 status={controller.composerStatus}
                 providers={providers}
                 contextUsage={controller.contextUsage}
+                imageInputCapabilities={imageInputCapabilities}
                 seedTextKey={null}
                 seedText={null}
                 onSubmit={controller.handleSubmit}
                 onStop={controller.handleStop}
-                onAttachFiles={() => undefined}
+                onSelectImages={selectImages}
                 onChooseContext={() => undefined}
                 getCommandSuggestions={getCommandSuggestions}
               />

@@ -15,6 +15,9 @@ import type {
   ChatListSessionsUiResult,
   ChatListTimelineUiResult,
   ChatSendUserInputUiPayload,
+  ChatImageInputCapabilitiesUiResult,
+  ChatSelectImagesUiResult,
+  ChatReadAttachmentImageUiResult,
   EmptyUiResult,
   ProviderListUiResult,
   SettingsData,
@@ -80,6 +83,9 @@ import type {
   WorkspaceFilesListPayload,
   ObservabilityListPayload,
   ObservabilityRunPayload,
+  ImageInputCapabilitiesPayload,
+  ImageInputSelectPayload,
+  AttachmentImageReadPayload,
 } from '../main/ipc/schemas';
 
 type BusinessRequest<TPayload, TChannel extends BusinessIpcChannel> = RuntimeIpcRequest<TPayload, TChannel>;
@@ -248,6 +254,20 @@ export const api = {
         request: BusinessRequest<SessionContextUsageGetPayload, typeof IPC_CHANNELS.chat.sessionContextUsageGet>,
       ): Promise<RuntimeIpcResult<ChatGetContextUsageUiResult, typeof IPC_CHANNELS.chat.sessionContextUsageGet>> =>
         invokeRuntimeIpc(IPC_CHANNELS.chat.sessionContextUsageGet, request),
+    },
+    imageInput: {
+      capabilities: (
+        request: BusinessRequest<ImageInputCapabilitiesPayload, typeof IPC_CHANNELS.chat.imageInputCapabilitiesGet>,
+      ): Promise<RuntimeIpcResult<ChatImageInputCapabilitiesUiResult, typeof IPC_CHANNELS.chat.imageInputCapabilitiesGet>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.chat.imageInputCapabilitiesGet, request),
+      select: (
+        request: BusinessRequest<ImageInputSelectPayload, typeof IPC_CHANNELS.chat.imageInputSelect>,
+      ): Promise<RuntimeIpcResult<ChatSelectImagesUiResult, typeof IPC_CHANNELS.chat.imageInputSelect>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.chat.imageInputSelect, request),
+      readAttachment: (
+        request: BusinessRequest<AttachmentImageReadPayload, typeof IPC_CHANNELS.chat.attachmentImageRead>,
+      ): Promise<RuntimeIpcResult<ChatReadAttachmentImageUiResult, typeof IPC_CHANNELS.chat.attachmentImageRead>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.chat.attachmentImageRead, request),
     },
   },
   run: {

@@ -122,6 +122,7 @@ describe('SettingsHost semantics', () => {
           modelId: 'deepseek-v4-flash',
           displayName: 'DeepSeek V4 Flash',
           contextWindowTokens: 1_000_000,
+          capabilities: { streaming: true, toolCalls: true, thinking: true },
         }],
       }],
     });

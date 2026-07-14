@@ -144,6 +144,7 @@ async function createHome(): Promise<{
       homePath,
       sqlitePath: join(homePath, 'sqlite'),
       settingsPath: join(homePath, 'settings.json'),
+      attachmentsPath: join(homePath, 'attachments'),
     },
   };
 }

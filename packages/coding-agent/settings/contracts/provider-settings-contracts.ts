@@ -4,7 +4,7 @@
  */
 import { z } from 'zod';
 import type { SettingsError } from './settings-contracts';
-import type { AiProviderDefinition } from '@megumi/ai';
+import { AiModelCapabilitiesSchema, type AiProviderDefinition } from '@megumi/ai';
 
 export const ProviderIdSchema = z.string().min(1);
 export type ProviderId = z.infer<typeof ProviderIdSchema>;
@@ -14,11 +14,13 @@ export type ProviderProtocol = z.infer<typeof ProviderProtocolSchema>;
 
 export const ProviderModelSettingsRawSchema = z.object({
   context_window_tokens: z.number().int().positive().optional(),
+  capabilities: AiModelCapabilitiesSchema.optional(),
 }).strict();
 export type ProviderModelSettingsRaw = z.infer<typeof ProviderModelSettingsRawSchema>;
 
 export const ProviderModelSettingsResolvedSchema = z.object({
   context_window_tokens: z.number().int().positive(),
+  capabilities: AiModelCapabilitiesSchema,
 }).strict();
 export type ProviderModelSettingsResolved = z.infer<typeof ProviderModelSettingsResolvedSchema>;
 
@@ -59,6 +61,7 @@ export const ProviderPublicStatusSchema = z
     protocol: ProviderProtocolSchema,
     base_url: z.string().url().optional(),
     models: z.array(z.string().min(1)),
+    model_capabilities: z.record(z.string().min(1), AiModelCapabilitiesSchema),
     has_api_key: z.boolean(),
     credential_source: ProviderCredentialSourceSchema,
     env_override_active: z.boolean(),
@@ -73,6 +76,7 @@ export const AvailableModelOptionSchema = z
     provider_id: ProviderIdSchema,
     model_id: z.string().min(1),
     display_name: z.string().min(1),
+    capabilities: AiModelCapabilitiesSchema,
   })
   .strict();
 export type AvailableModelOption = z.infer<typeof AvailableModelOptionSchema>;
@@ -83,6 +87,7 @@ export const ProviderRuntimeConfigSchema = z
     protocol: ProviderProtocolSchema,
     base_url: z.string().url().optional(),
     model_id: z.string().min(1),
+    capabilities: AiModelCapabilitiesSchema,
     api_key: z.string().min(1).optional(),
   })
   .strict();

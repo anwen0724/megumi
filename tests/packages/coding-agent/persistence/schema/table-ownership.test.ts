@@ -81,7 +81,7 @@ describe('persistence table ownership', () => {
       'after_hash',
     ];
     const files = [
-      'packages/coding-agent/session/repositories/session-repository.ts',
+      'packages/coding-agent/session/repository/session-repository.ts',
       'packages/coding-agent/workspace/repositories/workspace-repository.ts',
       'packages/coding-agent/workspace/repositories/workspace-change-repository.ts',
       'packages/coding-agent/persistence/schema/table-list.ts',

@@ -135,6 +135,9 @@ function findLastUserMessageIndex(conversation: ConversationItem[]): number {
 function contentBlockToJson(block: ContentBlock): JsonValue {
   if (block.type === 'text') return { type: 'text' as const, text: block.text };
   if (block.type === 'json') return { type: 'json' as const, value: block.value };
+  if (block.type === 'image' && block.source.type === 'base64') {
+    return { type: 'image', source: block.source };
+  }
   throw new UnsupportedModelContentError(block.type);
 }
 
@@ -202,17 +205,21 @@ function toolResultToMessage(
     content: JSON.stringify({
       toolName: item.toolName,
       status: item.status,
-      content: materializeContentBlocks(item.content),
+      content: item.content.map((block) => {
+        if (block.type === 'text') return block.text;
+        if (block.type === 'json') return JSON.stringify(block.value);
+        throw new UnsupportedModelContentError(block.type);
+      }).join('\n'),
     }),
   };
 }
 
-function materializeContentBlocks(content: ContentBlock[]): string {
+function materializeContentBlocks(content: ContentBlock[]): ContentBlock[] {
   return content.map((block) => {
-    if (block.type === 'text') return block.text;
-    if (block.type === 'json') return JSON.stringify(block.value);
+    if (block.type === 'text' || block.type === 'json') return block;
+    if (block.type === 'image' && block.source.type === 'base64') return block;
     throw new UnsupportedModelContentError(block.type);
-  }).join('\n');
+  });
 }
 
 function assertSupportedPromptContent(prompt: Prompt): void {
@@ -228,7 +235,7 @@ function assertSupportedPromptContent(prompt: Prompt): void {
   ];
 
   for (const block of blocks) {
-    if (block.type === 'image' || block.type === 'file') {
+    if (block.type === 'file' || (block.type === 'image' && block.source.type !== 'base64')) {
       throw new UnsupportedModelContentError(block.type);
     }
   }

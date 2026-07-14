@@ -8,7 +8,7 @@ import type {
   SessionEntry,
   SessionMessage,
   SessionMessageAttachment,
-  SessionMessageAttachmentInput,
+  SessionImageImport,
   SessionService,
 } from '@megumi/coding-agent/session';
 
@@ -79,28 +79,27 @@ describe('session contracts v2', () => {
     }
   });
 
-  it('models user message attachment references', () => {
-    const input: SessionMessageAttachmentInput = {
-      attachment_id: 'attachment:1',
-      type: 'image',
+  it('models transient image imports separately from canonical attachment facts', () => {
+    const input: SessionImageImport = {
       name: 'error.png',
-      mime_type: 'image/png',
-      source: { type: 'local_file', path: 'C:/tmp/error.png' },
+      media_type: 'image/png',
+      byte_length: 8,
+      bytes: new Uint8Array(8),
     };
     const saved: SessionMessageAttachment = {
-      attachment_id: input.attachment_id,
+      attachment_id: 'attachment:1',
       message_id: 'message:1',
       session_id: 'session:1',
-      type: input.type,
+      type: 'image',
       name: input.name,
-      mime_type: input.mime_type,
-      source_type: 'local_file',
-      source_value: 'C:/tmp/error.png',
+      mime_type: input.media_type,
+      source_type: 'host_reference',
+      source_value: 'attachment:1/original.png',
       created_at: '2026-07-04T00:00:00.000Z',
     };
 
-    expect(saved.source_type).toBe('local_file');
-    expect(saved.source_value).toBe('C:/tmp/error.png');
+    expect(saved.source_type).toBe('host_reference');
+    expect(input).not.toHaveProperty('attachment_id');
   });
 
   it('models active path entries as message or compaction only', () => {

@@ -54,6 +54,7 @@ export interface MegumiHomePaths {
   logsPath: string;
   cachePath: string;
   tmpPath: string;
+  attachmentsPath: string;
 }
 
 export interface ResolveMegumiHomePathOptions {
@@ -98,6 +99,7 @@ export function buildMegumiHomePaths(homePath: string): MegumiHomePaths {
     logsPath: path.join(resolvedHomePath, 'logs'),
     cachePath: path.join(resolvedHomePath, 'cache'),
     tmpPath: path.join(resolvedHomePath, 'tmp'),
+    attachmentsPath: path.join(resolvedHomePath, 'attachments'),
   };
 }
 
@@ -158,6 +160,7 @@ export function createMegumiHomeReadme(): string {
     '- `logs/` for application logs.',
     '- `cache/` for regenerable cache data.',
     '- `tmp/` for temporary files.',
+    '- `attachments/` for Session-owned managed image copies.',
     '',
     'Credential priority:',
     '',
@@ -190,6 +193,7 @@ function homeDirectories(paths: MegumiHomePaths): string[] {
     paths.logsPath,
     paths.cachePath,
     paths.tmpPath,
+    paths.attachmentsPath,
   ];
 }
 

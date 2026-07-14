@@ -34,6 +34,7 @@ function fixture(counts: number[], options: { history?: SessionHistoryItem[]; hi
   const queue = [...counts];
   const deps = {
     sessionService: {
+      readAttachmentContent: vi.fn(async () => ({ status: 'failed' as const, failure: { code: 'attachment_not_found', message: 'not found' } })),
       getActiveHistory: vi.fn(() => ({ status: 'ok', history: options.history ?? completeHistory(options.historyCount) })),
       saveCompactionSummary: vi.fn(() => ({ status: 'saved', compaction: { compaction_id: 'C1', session_id: 'S1', summary_text: 'short', covered_until_entry_id: 'EA', created_at: 'now' } })),
     },

@@ -206,8 +206,14 @@ describe('Settings Service', () => {
           display_name: 'DeepSeek',
           base_url: 'https://api.deepseek.com',
           models: {
-            'deepseek-v4-flash': { context_window_tokens: 1_000_000 },
-            'deepseek-v4-pro': { context_window_tokens: 1_000_000 },
+            'deepseek-v4-flash': {
+              context_window_tokens: 1_000_000,
+              capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true },
+            },
+            'deepseek-v4-pro': {
+              context_window_tokens: 1_000_000,
+              capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true },
+            },
           },
           api_key: 'TEST_DEEPSEEK_API_KEY',
         },
@@ -238,6 +244,7 @@ describe('Settings Service', () => {
         base_url: 'https://api.deepseek.com',
         model_id: 'deepseek-v4-flash',
         api_key: 'TEST_DEEPSEEK_API_KEY',
+        capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true },
       },
     });
   });
@@ -322,11 +329,13 @@ describe('Settings Service', () => {
           provider_id: 'local',
           model_id: 'llama3',
           display_name: 'llama3',
+          capabilities: {},
         },
         {
           provider_id: 'local',
           model_id: 'qwen3',
           display_name: 'qwen3',
+          capabilities: {},
         },
       ]),
     });
@@ -359,6 +368,7 @@ describe('Settings Service', () => {
         base_url: 'http://localhost:11434/v1',
         model_id: 'llama3',
         api_key: 'sk-local',
+        capabilities: {},
       },
     });
   });

@@ -83,6 +83,7 @@ describe('Megumi Home', () => {
       systemSkillsPath: path.join(path.resolve('D:/megumi-home'), 'skills', '.system'),
       settingsPath: path.join(path.resolve('D:/megumi-home'), 'settings.json'),
       sqlitePath: path.join(path.resolve('D:/megumi-home'), 'sqlite'),
+      attachmentsPath: path.join(path.resolve('D:/megumi-home'), 'attachments'),
     });
   });
 
@@ -105,6 +106,7 @@ describe('Megumi Home', () => {
       paths.logsPath,
       paths.cachePath,
       paths.tmpPath,
+      paths.attachmentsPath,
     ]));
     expect(fileSystem.jsonFiles.has(paths.settingsPath)).toBe(false);
     expect(fileSystem.jsonFiles.get(paths.versionPath)).toEqual({

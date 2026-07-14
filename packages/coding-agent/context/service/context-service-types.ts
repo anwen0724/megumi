@@ -26,6 +26,7 @@ export type ContextFailure = {
     | 'compaction_persist_failed'
     | 'context_window_exceeded'
     | 'prompt_build_failed'
+    | 'image_materialization_failed'
     | 'cancelled';
   message: string;
   retryable: boolean;

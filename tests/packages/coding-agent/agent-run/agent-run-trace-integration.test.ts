@@ -85,6 +85,12 @@ describe('Agent Run trace integration', () => {
         base_url: 'https://api.deepseek.com',
         model_id: 'deepseek-chat',
         api_key: secrets.apiKey,
+        capabilities: {
+          streaming: true,
+          toolCalls: true,
+          thinking: false,
+          imageInput: true,
+        },
       },
     }));
     Object.assign(deps.context_service, { prepareModelCall: vi.fn(async (request) => ({

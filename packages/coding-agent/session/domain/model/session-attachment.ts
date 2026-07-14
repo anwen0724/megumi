@@ -11,12 +11,16 @@ export type SessionMessageAttachment = {
   created_at: string;
 };
 
-export type SessionMessageAttachmentInput = {
-  attachment_id: string;
-  type: 'image' | 'file';
-  name?: string;
-  mime_type?: string;
-  source:
-    | { type: 'local_file'; path: string }
-    | { type: 'host_reference'; reference_id: string };
+export type SupportedSessionImageMediaType = 'image/png' | 'image/jpeg' | 'image/webp';
+
+export type SessionImageImport = {
+  name: string;
+  media_type: SupportedSessionImageMediaType;
+  byte_length: number;
+  bytes: Uint8Array;
+};
+
+export type SessionAttachmentContent = {
+  bytes: Uint8Array;
+  media_type: SupportedSessionImageMediaType;
 };

@@ -2,6 +2,7 @@
 import type { Session, SessionRuntimeError } from '../domain/model/session';
 import type { SessionEntry } from '../domain/model/session-entry';
 import type { SessionMessage, SessionMessageWithAttachments } from '../domain/model/session-message';
+import type { SessionAttachmentContent } from '../domain/model/session-attachment';
 import type {
   SaveAssistantMessageRequest,
   SaveToolResultMessageRequest,
@@ -47,7 +48,7 @@ export type SessionService = {
   getSession(request: GetSessionRequest): GetSessionResult;
   listSessions(request: ListSessionsRequest): ListSessionsResult;
   archiveSession(request: ArchiveSessionRequest): ArchiveSessionResult;
-  saveUserMessage(request: SaveUserMessageRequest): SaveUserMessageResult;
+  saveUserMessage(request: SaveUserMessageRequest): Promise<SaveUserMessageResult>;
   saveAssistantMessage(request: SaveAssistantMessageRequest): SaveAssistantMessageResult;
   saveToolResultMessage(request: SaveToolResultMessageRequest): SaveToolResultMessageResult;
   listMessages(request: ListMessagesRequest): ListMessagesResult;
@@ -58,6 +59,10 @@ export type SessionService = {
   appendSessionEntry(request: AppendSessionEntryRequest): AppendSessionEntryResult;
   switchActiveEntry(request: SwitchActiveEntryRequest): SwitchActiveEntryResult;
   saveCompactionSummary(request: SaveCompactionSummaryRequest): SaveCompactionSummaryResult;
+  readAttachmentContent(request: { attachment_id: string }): Promise<
+    | { status: 'ok'; content: SessionAttachmentContent }
+    | { status: 'failed'; failure: SessionRuntimeError }
+  >;
 };
 
 export type {

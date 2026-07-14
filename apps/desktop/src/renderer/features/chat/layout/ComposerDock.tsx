@@ -1,12 +1,16 @@
 import { useLayoutEffect, useRef } from 'react';
 import type { ApprovalRequest } from '../../../entities/approval/store';
-import type { ChatGetContextUsageUiResult, ProviderPublicStatusUiDto } from '@megumi/product/host-interface';
+import type {
+  ChatGetContextUsageUiResult,
+  ChatImageInputCapabilitiesUiResult,
+  ProviderPublicStatusUiDto,
+} from '@megumi/product/host-interface';
 import type { CommandSuggestionResult } from '@megumi/product/host-interface';
 import type { ApprovalCardResolvePayload } from '../../../entities/approval';
 import { ApprovalStack } from '../components/ApprovalStack';
 import { BranchDraftStack, type ComposerBranchDraftView } from '../components/BranchDraftStack';
 import { ComposerSurface } from '../components/ComposerSurface';
-import type { ComposerStatus, ComposerSubmitPayload } from '../components/composer-types';
+import type { ComposerDraftImage, ComposerStatus, ComposerSubmitPayload } from '../components/composer-types';
 import { useComposerController } from '../hooks/use-composer-controller';
 import { ComposerOverlayLayer } from './ComposerOverlayLayer';
 
@@ -18,11 +22,13 @@ interface ComposerDockProps {
   pendingApprovals: ApprovalRequest[];
   providers?: ProviderPublicStatusUiDto[];
   contextUsage?: ChatGetContextUsageUiResult;
+  imageInputCapabilities?: ChatImageInputCapabilitiesUiResult;
   onApprovalResolve: (payload: ApprovalCardResolvePayload) => void;
-  onSubmit: (payload: ComposerSubmitPayload) => void;
+  onSubmit: (payload: ComposerSubmitPayload) => boolean | void | Promise<boolean | void>;
   onStop: () => void;
   onHeightChange?: (height: number) => void;
   getCommandSuggestions?: (request: { draft_input: string }) => CommandSuggestionResult | Promise<CommandSuggestionResult>;
+  onSelectImages?: () => Promise<ComposerDraftImage[]>;
 }
 
 export function ComposerDock({
@@ -31,22 +37,25 @@ export function ComposerDock({
   pendingApprovals,
   providers,
   contextUsage,
+  imageInputCapabilities,
   onApprovalResolve,
   onSubmit,
   onStop,
   onHeightChange,
   getCommandSuggestions,
+  onSelectImages,
 }: ComposerDockProps) {
   const composerSurfaceRef = useRef<HTMLFormElement | null>(null);
   const { composerSurfaceProps } = useComposerController({
     status,
     providers,
     contextUsage,
+    imageInputCapabilities,
     seedTextKey: null,
     seedText: null,
     onSubmit,
     onStop,
-    onAttachFiles: () => undefined,
+    onSelectImages,
     onChooseContext: () => undefined,
     getCommandSuggestions,
   });

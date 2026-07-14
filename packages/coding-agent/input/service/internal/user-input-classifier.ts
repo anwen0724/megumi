@@ -2,18 +2,17 @@
  * Classifies normalized submitted user input without parsing or executing
  * command semantics owned by the Command module.
  */
-import type {
-  ParsedUserInput,
-  RawUserInputAttachment,
-} from '../../domain/model/user-input';
+import type { ParsedUserInput } from '../../domain/model/user-input';
+import type { ProcessedInputImage } from '../../domain/model/image-input';
 
 export type ParseUserInputRequest = {
   normalized_text: string;
-  attachments: RawUserInputAttachment[];
+  attachments: ProcessedInputImage[];
 };
 
 export function parseUserInput(request: ParseUserInputRequest): ParsedUserInput {
   const type = isCommandShapedInput(request.normalized_text) ? 'command' : 'message';
+  if (type === 'command') return { type, text: request.normalized_text, attachments: [] };
   return {
     type,
     text: request.normalized_text,

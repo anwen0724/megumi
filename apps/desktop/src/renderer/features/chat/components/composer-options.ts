@@ -15,6 +15,7 @@ interface ComposerOption<TValue extends string> {
 export interface ComposerModelOption extends ComposerOption<ComposerModel> {
   providerId: string;
   modelId: string;
+  imageInput: boolean;
 }
 
 export const COMPOSER_PERMISSION_MODE_OPTIONS: ComposerOption<ComposerPermissionMode>[] = [
@@ -43,6 +44,7 @@ export function getComposerModelOptionsForProviders(providers?: ProviderPublicSt
       value: modelOptionValue(provider.providerId, String(modelId)),
       modelId: String(modelId),
       providerId: provider.providerId,
+      imageInput: provider.modelCapabilities?.[modelId]?.imageInput === true,
       label: String(modelId),
     })));
 }

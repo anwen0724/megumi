@@ -5,6 +5,7 @@ export const AiModelCapabilitiesSchema = z
         streaming: z.boolean().optional(),
         toolCalls: z.boolean().optional(),
         thinking: z.boolean().optional(),
+        imageInput: z.boolean().optional(),
     })
     .strict();
 

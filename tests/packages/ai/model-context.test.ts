@@ -18,7 +18,7 @@ describe('provider-neutral conversation items', () => {
         { role: 'context', kind: 'skill_catalog', content: [{ skillId: 's1' }] },
         { role: 'context', kind: 'compaction_summary', content: 'Earlier facts' },
         { role: 'context', kind: 'memory_recall', content: [{ type: 'text', text: 'Recall' }] },
-        { role: 'user', content: 'Current user' },
+        { role: 'user', content: [{ type: 'text', text: 'Current user' }] },
       ],
     } as const;
 

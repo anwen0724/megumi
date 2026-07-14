@@ -15,6 +15,8 @@ import {
 } from '@megumi/coding-agent/agent-run';
 import { mapModelCallToAiRequest } from '@megumi/coding-agent/agent-run/adapters/ai-client-adapter';
 
+const userMessage = (text: string) => ({ role: 'user' as const, content: [{ type: 'text' as const, text }] });
+
 describe('Model Call Service', () => {
   it('maps all four Prompt regions to packages/ai without dropping model-facing content', () => {
     const mapped = mapModelCallToAiRequest(sampleModelCallRequest());
@@ -33,10 +35,10 @@ describe('Model Call Service', () => {
     expect(mapped.context.messages).toEqual([
       contextMessage('skill_catalog', [{ skillId: 'catalog-1', description: 'Catalog entry' }]),
       contextMessage('compaction_summary', 'Summary reference'),
-      { role: 'user', content: 'Earlier question' },
+      userMessage('Earlier question'),
       { role: 'assistant', content: [{ type: 'text', text: 'Earlier answer' }] },
       contextMessage('memory_recall', [{ type: 'text', text: 'Memory reference' }]),
-      { role: 'user', content: 'Hello' },
+      userMessage('Hello'),
       {
         role: 'assistant',
         content: [
@@ -80,7 +82,7 @@ describe('Model Call Service', () => {
         content: [{ type: 'text', text: 'one' }],
       },
     ])).toEqual([
-      { role: 'user', content: 'Lookup one' },
+      userMessage('Lookup one'),
       {
         role: 'assistant',
         content: [
@@ -112,9 +114,9 @@ describe('Model Call Service', () => {
       { type: 'context', kind: 'historical_run_state', content: state },
       { type: 'user_message', content: [{ type: 'text', text: 'Continue' }] },
     ])).toEqual([
-      { role: 'user', content: 'Create a file' },
+      userMessage('Create a file'),
       contextMessage('historical_run_state', state),
-      { role: 'user', content: 'Continue' },
+      userMessage('Continue'),
     ]);
   });
 
@@ -145,7 +147,7 @@ describe('Model Call Service', () => {
         content: [{ type: 'text', text: 'missing' }],
       },
     ])).toEqual([
-      { role: 'user', content: 'Lookup two' },
+      userMessage('Lookup two'),
       {
         role: 'assistant',
         content: [
@@ -174,7 +176,7 @@ describe('Model Call Service', () => {
       { type: 'tool_call', toolCallId: 'call-1', toolName: 'lookup', arguments: { id: 1 } },
       { type: 'tool_call', toolCallId: 'call-2', toolName: 'lookup', arguments: { id: 2 } },
     ])).toEqual([
-      { role: 'user', content: 'Lookup two' },
+      userMessage('Lookup two'),
       {
         role: 'assistant',
         content: [
@@ -238,7 +240,7 @@ describe('Model Call Service', () => {
     const request = sampleModelCallRequest();
     request.prompt.conversation = [{
       type: 'user_message',
-      content: [{ type: 'image', source: { type: 'local_file', path: 'image.png' } }],
+      content: [{ type: 'image', source: { type: 'host_reference', referenceId: 'attachment-1' } }],
     }];
 
     const result = await service.countPrompt({
@@ -578,10 +580,10 @@ describe('Model Call Service', () => {
     expect(mapped.context.messages).toEqual([
       contextMessage('skill_catalog', [{ skillId: 'catalog-1', description: 'Catalog entry' }]),
       contextMessage('compaction_summary', 'Summary reference'),
-      { role: 'user', content: 'Earlier question' },
+      userMessage('Earlier question'),
       { role: 'assistant', content: [{ type: 'text', text: 'Earlier answer' }] },
       contextMessage('memory_recall', [{ type: 'text', text: 'Memory reference' }]),
-      { role: 'user', content: 'Hello' },
+      userMessage('Hello'),
       {
         role: 'assistant',
         content: [
@@ -727,6 +729,7 @@ function sampleModelCallRequest(): ModelCallRequest {
       provider_id: 'deepseek',
       protocol: 'openai-compatible',
       model_id: 'deepseek-chat',
+      capabilities: { imageInput: true },
       api_key: 'sk-test',
     },
   };

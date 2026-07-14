@@ -86,6 +86,15 @@ function createSessionMessageSendPayload(
     projectId: target.projectId,
     ...(branchMarkerId ? { branchMarkerId } : {}),
     text: payload.message,
+    ...((payload.attachments?.length ?? 0) > 0 ? {
+      attachments: payload.attachments!.map((attachment) => ({
+        draftAttachmentId: attachment.draftAttachmentId,
+        type: 'image' as const,
+        name: attachment.name,
+        ...(attachment.declaredMimeType ? { declaredMimeType: attachment.declaredMimeType } : {}),
+        source: { type: 'host_file_reference' as const, referenceId: attachment.referenceId },
+      })),
+    } : {}),
     clientMessageId: finalClientMessageId,
     modelSelection: {
       provider_id: payload.providerId,
@@ -377,6 +386,13 @@ export function useSessionTimeline() {
       clientMessageId,
       messageId: result.data.userMessageId,
       text: payload.message,
+      ...(payload.attachments ? {
+        attachments: payload.attachments.map((attachment) => ({
+          draftAttachmentId: attachment.draftAttachmentId,
+          name: attachment.name,
+          ...(attachment.declaredMimeType ? { declaredMimeType: attachment.declaredMimeType } : {}),
+        })),
+      } : {}),
       createdAt,
       runId: result.data.run.runId,
     });

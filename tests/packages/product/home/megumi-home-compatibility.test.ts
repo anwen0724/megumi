@@ -103,6 +103,7 @@ describe('Megumi Home foundation', () => {
     expect(fileSystem.directories).toEqual(
       new Set([
         paths.homePath,
+        paths.attachmentsPath,
         paths.skillsPath,
         paths.systemSkillsPath,
         paths.sqlitePath,
@@ -175,8 +176,7 @@ describe('Megumi Home foundation', () => {
             properties: {
               base_url: { type: 'string' },
               models: {
-                type: 'array',
-                items: { type: 'string', minLength: 1 },
+                type: 'object',
               },
               api_key_env: {
                 type: ['string', 'null'],

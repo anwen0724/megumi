@@ -185,32 +185,6 @@ class DefaultAgentRunService implements AgentRunService {
     const runId = this.ids.run_id();
     const userMessageId = this.ids.user_message_id();
     const parsedInput = commandRoute.parsed_user_input ?? input.parsed_user_input;
-    const branchParent = this.consumeBranchDraftForRun(request, session);
-    if (branchParent.status === 'failed') {
-      return {
-        ...failedStart(request, branchParent.failure),
-        session,
-      };
-    }
-    const userMessage = this.options.session_service.saveUserMessage({
-      message_id: userMessageId,
-      session_id: sessionId,
-      run_id: runId,
-      content: [{ type: 'text', text: textForRun(parsedInput, commandRoute.command_result) }],
-      attachments: parsedInput.attachments,
-      ...(branchParent.parent_entry_id ? { parent_entry_id: branchParent.parent_entry_id } : {}),
-      created_at: this.clock.now(),
-    });
-    if (userMessage.status === 'failed') {
-      return {
-        ...failedStart(request, {
-          code: 'session_failed',
-          message: userMessage.failure.message,
-        }),
-        session,
-      };
-    }
-
     const modelConfig = this.options.settings_service.resolveProviderRuntimeConfig({
       provider_id: request.model_selection.provider_id,
       model_id: request.model_selection.model_id,
@@ -224,6 +198,46 @@ class DefaultAgentRunService implements AgentRunService {
         session,
       };
     }
+    if (parsedInput.attachments.length > 0 && modelConfig.config.capabilities.imageInput !== true) {
+      return {
+        ...failedStart(request, {
+          code: 'model_call_failed',
+          message: 'The selected model does not support image input.',
+        }),
+        session,
+      };
+    }
+    const branchParent = this.consumeBranchDraftForRun(request, session);
+    if (branchParent.status === 'failed') {
+      return {
+        ...failedStart(request, branchParent.failure),
+        session,
+      };
+    }
+    const userMessage = await this.options.session_service.saveUserMessage({
+      message_id: userMessageId,
+      session_id: sessionId,
+      run_id: runId,
+      content: [{ type: 'text', text: textForRun(parsedInput, commandRoute.command_result) }],
+      attachments: parsedInput.attachments.map((image) => ({
+        name: image.name,
+        media_type: image.media_type,
+        byte_length: image.byte_length,
+        bytes: image.bytes,
+      })),
+      ...(branchParent.parent_entry_id ? { parent_entry_id: branchParent.parent_entry_id } : {}),
+      created_at: this.clock.now(),
+    });
+    if (userMessage.status === 'failed') {
+      return {
+        ...failedStart(request, {
+          code: 'session_failed',
+          message: userMessage.failure.message,
+        }),
+        session,
+      };
+    }
+
     const workspaceRoot = this.resolveWorkspaceRoot(request.workspace_id);
     if (workspaceRoot.status === 'failed') {
       return {
@@ -1525,9 +1539,7 @@ function currentTurnFromSavedUserMessage(
         ...saved.attachments.map((attachment) => attachment.type === 'image'
           ? {
               type: 'image' as const,
-              source: attachment.source_type === 'local_file'
-                ? { type: 'local_file' as const, path: attachment.source_value }
-                : { type: 'host_reference' as const, referenceId: attachment.source_value },
+              source: { type: 'host_reference' as const, referenceId: attachment.attachment_id },
             }
           : {
               type: 'file' as const,

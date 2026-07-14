@@ -26,6 +26,8 @@ function createService() {
   applyCodingAgentDatabaseMigrations(database);
   const workspaceId = seedWorkspace(database);
   const repository = new SessionRepository(database);
+  const managedFiles = new Map<string, Uint8Array>();
+  let attachmentSequence = 0;
   return {
     database,
     repository,
@@ -35,9 +37,24 @@ function createService() {
       ids: {
         sessionId: () => 'S1',
         entryId: ({ kind, source_id }) => `${kind}:${source_id}`,
+        attachmentId: () => `A${++attachmentSequence}`,
       },
       now: () => '2026-07-04T00:00:00.000Z',
+      attachmentFileStore: {
+        async write(input) {
+          const referenceId = `${input.attachmentId}/original.png`;
+          managedFiles.set(referenceId, input.bytes);
+          return { referenceId };
+        },
+        async read(referenceId) {
+          const bytes = managedFiles.get(referenceId);
+          if (!bytes) throw new Error('missing');
+          return bytes;
+        },
+        async delete(referenceId) { managedFiles.delete(referenceId); },
+      },
     }),
+    managedFiles,
   };
 }
 
@@ -105,11 +122,10 @@ describe('SessionService', () => {
       session_id: 'S1',
       content: [{ type: 'text', text: '看图' }],
       attachments: [{
-        attachment_id: 'A1',
-        type: 'image',
         name: 'error.png',
-        mime_type: 'image/png',
-        source: { type: 'local_file', path: 'C:/tmp/error.png' },
+        media_type: 'image/png',
+        byte_length: 8,
+        bytes: new Uint8Array(8),
       }],
       created_at: '2026-07-04T00:01:00.000Z',
     });
@@ -125,8 +141,8 @@ describe('SessionService', () => {
           attachment_id: 'A1',
           message_id: 'M1',
           session_id: 'S1',
-          source_type: 'local_file',
-          source_value: 'C:/tmp/error.png',
+          source_type: 'host_reference',
+          source_value: 'A1/original.png',
         }],
       },
       entry: { session_id: 'S1', entry_type: 'message', message_id: 'M1' },
@@ -211,6 +227,29 @@ describe('SessionService', () => {
         { message: { message_id: 'M3' } },
       ],
     });
+  });
+
+  it('reads canonical image bytes through Session and compensates files when persistence fails', async () => {
+    const { service, workspaceId, managedFiles } = createService();
+    service.createSession({ workspace_id: workspaceId, title: 'Session' });
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const saved = await service.saveUserMessage({
+      message_id: 'M-image', session_id: 'S1', content: [],
+      attachments: [{ name: 'image.png', media_type: 'image/png', byte_length: bytes.byteLength, bytes }],
+      created_at: '2026-07-04T00:01:00.000Z',
+    });
+    expect(saved.status).toBe('saved');
+    expect(await service.readAttachmentContent({ attachment_id: 'A1' })).toEqual({
+      status: 'ok', content: { bytes, media_type: 'image/png' },
+    });
+
+    const failed = await service.saveUserMessage({
+      message_id: 'M-missing', session_id: 'missing', content: [],
+      attachments: [{ name: 'orphan.png', media_type: 'image/png', byte_length: bytes.byteLength, bytes }],
+      created_at: '2026-07-04T00:02:00.000Z',
+    });
+    expect(failed).toMatchObject({ status: 'failed', failure: { code: 'session_not_found' } });
+    expect([...managedFiles.keys()]).toEqual(['A1/original.png']);
   });
 
   it('lists only user messages for requested Run IDs', async () => {

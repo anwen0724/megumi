@@ -5,30 +5,33 @@ export type RawUserInput = {
   attachments?: RawUserInputAttachment[];
 };
 
-export type RawUserInputAttachment = {
-  attachment_id: string;
-  type: 'image' | 'file';
-  name?: string;
-  mime_type?: string;
-  source:
-    | { type: 'local_file'; path: string }
-    | { type: 'host_reference'; reference_id: string };
-};
+import type { ProcessedInputImage, RawUserInputImage } from './image-input';
+
+export type RawUserInputAttachment = RawUserInputImage;
 
 export type ParsedUserInput =
   | {
       type: 'message';
       text: string;
-      attachments: RawUserInputAttachment[];
+      attachments: ProcessedInputImage[];
     }
   | {
       type: 'command';
       text: string;
-      attachments: RawUserInputAttachment[];
+      attachments: [];
     };
 
 export type InputFailure = {
-  code: 'input_processing_failed';
+  code:
+    | 'input_processing_failed'
+    | 'input_empty'
+    | 'image_count_exceeded'
+    | 'image_too_large'
+    | 'image_total_size_exceeded'
+    | 'image_format_unsupported'
+    | 'image_mime_mismatch'
+    | 'image_read_failed'
+    | 'command_image_unsupported';
   message: string;
   details?: Record<string, unknown>;
 };

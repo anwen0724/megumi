@@ -28,6 +28,9 @@ export function listProviderStatuses(
       protocol: provider.protocol,
       ...(provider.base_url ? { base_url: provider.base_url } : {}),
       models: Object.keys(provider.models),
+      model_capabilities: Object.fromEntries(
+        Object.entries(provider.models).map(([modelId, model]) => [modelId, model.capabilities]),
+      ),
       has_api_key: settingsApiKeyActive || envOverrideActive,
       credential_source: settingsApiKeyActive
         ? 'settings'
@@ -50,6 +53,7 @@ export function listAvailableModels(settings: SettingsResolved): AvailableModelO
       provider_id: providerId,
       model_id: modelId,
       display_name: modelId,
+      capabilities: provider.models[modelId]!.capabilities,
     }));
   });
 }
@@ -88,6 +92,7 @@ export function resolveProviderRuntimeConfig(
       protocol: provider.protocol,
       ...(provider.base_url ? { base_url: provider.base_url } : {}),
       model_id: request.model_id,
+      capabilities: provider.models[request.model_id]!.capabilities,
       api_key: apiKey,
     },
   };

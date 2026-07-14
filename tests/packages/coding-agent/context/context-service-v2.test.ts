@@ -26,6 +26,7 @@ function dependencies(inputTokens: number[] = [50]): ContextServiceDependencies 
   const counts = [...inputTokens];
   return {
     sessionService: {
+      readAttachmentContent: vi.fn(async () => ({ status: 'failed' as const, failure: { code: 'attachment_not_found', message: 'not found' } })),
       getActiveHistory: vi.fn(() => ({ status: 'ok' as const, history: history() })),
       saveCompactionSummary: vi.fn(() => ({ status: 'saved' as const, compaction: { compaction_id: 'C1', session_id: 'S1', summary_text: 'short', covered_until_entry_id: 'E-assistant', created_at: 'now' } })),
     },
@@ -104,7 +105,7 @@ describe('ContextServiceImpl prepareModelCall', () => {
 describe('composeCodingAgentContext', () => {
   it('resolves provider runtime config outside Context before counting the complete Prompt', async () => {
     const deps = dependencies();
-    const resolve = vi.fn(() => ({ status: 'resolved' as const, modelConfig: { provider_id: 'openai', protocol: 'openai-compatible' as const, model_id: 'gpt' } }));
+    const resolve = vi.fn(() => ({ status: 'resolved' as const, modelConfig: { provider_id: 'openai', protocol: 'openai-compatible' as const, model_id: 'gpt', capabilities: { imageInput: true } } }));
     const countPrompt = vi.fn(async () => ({ status: 'counted' as const, input_tokens: 10, accuracy: 'estimated' as const }));
     const context = composeCodingAgentContext({
       sessionService: deps.sessionService,

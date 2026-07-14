@@ -38,7 +38,7 @@ describe('pure AI contracts', () => {
     expect(ModelContextSchema.parse({
       systemPrompt: 'You are Megumi.',
       messages: [
-        { role: 'user', content: 'Read package.json.' },
+        { role: 'user', content: [{ type: 'text', text: 'Read package.json.' }] },
         {
           role: 'assistant',
           content: [
@@ -51,7 +51,7 @@ describe('pure AI contracts', () => {
     })).toMatchObject({
       systemPrompt: 'You are Megumi.',
       messages: [
-        { role: 'user', content: 'Read package.json.' },
+        { role: 'user', content: [{ type: 'text', text: 'Read package.json.' }] },
         {
           role: 'assistant',
           content: [

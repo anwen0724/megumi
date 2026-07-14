@@ -15,6 +15,7 @@ import { calculateContextUsage, type ContextPromptTokenCounter } from './interna
 import { buildConversationTurns } from './internal/conversation-turn-builder';
 import { conversationItemsFromTurn } from './internal/conversation-turn-items';
 import { buildPrompt } from './internal/prompt-builder';
+import { materializePromptImages } from './internal/image-content-materializer';
 import type { ContextService } from './context-service';
 import type {
   CompactSessionRequest,
@@ -37,7 +38,7 @@ export type InstructionScopeResolver = {
 };
 
 export type ContextServiceDependencies = {
-  sessionService: Pick<SessionService, 'getActiveHistory' | 'saveCompactionSummary'>;
+  sessionService: Pick<SessionService, 'getActiveHistory' | 'saveCompactionSummary' | 'readAttachmentContent'>;
   instructionScopeResolver: InstructionScopeResolver;
   instructionService: InstructionService;
   skillService: Pick<SkillService, 'getSkillCatalog'>;
@@ -138,6 +139,9 @@ export class ContextServiceImpl implements ContextService {
 
     let facts = loaded.facts;
     let built = this.buildPrompt(facts);
+    const materialized = await this.materializeBuiltPrompt(built);
+    if (materialized.status === 'failed') return materialized;
+    built = materialized.built;
     let usageResult = await this.countUsage(built.prompt, request.modelContext, policy, request.signal);
     if (usageResult.status === 'failed') return usageResult;
     let usage = usageResult.usage;
@@ -159,6 +163,9 @@ export class ContextServiceImpl implements ContextService {
         // A saved Summary is now an owner fact. Rebuild and recount rather than
         // returning the pre-persistence validation projection.
         built = this.buildPrompt(facts);
+        const rematerialized = await this.materializeBuiltPrompt(built);
+        if (rematerialized.status === 'failed') return rematerialized;
+        built = rematerialized.built;
         usageResult = await this.countUsage(built.prompt, request.modelContext, policy, request.signal);
         if (usageResult.status === 'failed') return usageResult;
         usage = usageResult.usage;
@@ -190,7 +197,10 @@ export class ContextServiceImpl implements ContextService {
     const loaded = await this.loadFacts({ sessionId: request.sessionId, workspaceId: request.workspaceId, tools: [], activatedSkills: [], signal: request.signal });
     if (loaded.status === 'failed') return loaded;
     if (request.signal?.aborted) return failed(cancelled());
-    const built = this.buildPrompt(loaded.facts);
+    const rawBuilt = this.buildPrompt(loaded.facts);
+    const materialized = await this.materializeBuiltPrompt(rawBuilt);
+    if (materialized.status === 'failed') return materialized;
+    const built = materialized.built;
     const before = await this.countUsage(built.prompt, request.modelContext, policy, request.signal);
     if (before.status === 'failed') return before;
     const compacted = await this.compactInternal({ facts: loaded.facts, usageBefore: before.usage, modelContext: request.modelContext, policy, signal: request.signal });
@@ -284,6 +294,17 @@ export class ContextServiceImpl implements ContextService {
     };
   }
 
+  private async materializeBuiltPrompt(
+    built: BuiltPrompt,
+  ): Promise<{ status: 'materialized'; built: BuiltPrompt } | { status: 'failed'; failure: ContextFailure }> {
+    const result = await materializePromptImages({
+      prompt: built.prompt,
+      sessionService: this.dependencies.sessionService,
+    });
+    if (result.status === 'failed') return result;
+    return { status: 'materialized', built: { ...built, prompt: result.prompt } };
+  }
+
   private async countUsage(prompt: Prompt, capacity: ContextCapacity, policy: ContextPolicy, signal?: AbortSignal): Promise<{ status: 'counted'; usage: ContextUsage } | { status: 'failed'; failure: ContextFailure }> {
     const result = await this.dependencies.promptTokenCounter.count({ prompt, modelContext: capacity });
     if (signal?.aborted) return failed(cancelled());
@@ -343,8 +364,10 @@ export class ContextServiceImpl implements ContextService {
       return failed(failure);
     };
     const summaryRequest = buildCompactionSummaryRequest({ previousSummary: input.facts.compactionSummary?.content, turns: plan.plan.turns });
-    const summaryPrompt = summaryPromptFrom(summaryRequest.systemPrompt, summaryRequest.input);
-    const generated = await this.dependencies.summaryModelCall.complete({ prompt: summaryPrompt, modelContext: input.modelContext, sessionId: input.facts.sessionId, compactionId, ...(input.signal ? { signal: input.signal } : {}) });
+    const summaryPrompt = summaryPromptFrom(summaryRequest.systemPrompt, summaryRequest.input, plan.plan.turns);
+    const materializedSummary = await materializePromptImages({ prompt: summaryPrompt, sessionService: this.dependencies.sessionService });
+    if (materializedSummary.status === 'failed') return compactionFailure(materializedSummary.failure);
+    const generated = await this.dependencies.summaryModelCall.complete({ prompt: materializedSummary.prompt, modelContext: input.modelContext, sessionId: input.facts.sessionId, compactionId, ...(input.signal ? { signal: input.signal } : {}) });
     if (input.signal?.aborted) return compactionFailure(cancelled());
     if (generated.status === 'failed') return compactionFailure({ ...generated.failure, code: 'compaction_failed' });
     if (generated.content.trim().length === 0) {
@@ -352,7 +375,9 @@ export class ContextServiceImpl implements ContextService {
     }
     const retainedTurns = input.facts.historicalTurns.slice(plan.plan.turns.length);
     const compactedFacts: BuildFacts = { ...input.facts, historicalTurns: retainedTurns, compactionSummary: { compactionId, content: generated.content } };
-    const projected = await this.countUsage(this.buildPrompt(compactedFacts).prompt, input.modelContext, input.policy, input.signal);
+    const projectedBuilt = await this.materializeBuiltPrompt(this.buildPrompt(compactedFacts));
+    if (projectedBuilt.status === 'failed') return compactionFailure(projectedBuilt.failure);
+    const projected = await this.countUsage(projectedBuilt.built.prompt, input.modelContext, input.policy, input.signal);
     if (projected.status === 'failed') return compactionFailure(projected.failure);
     const reduction = validateCompactionReduction({
       usageBeforeInputTokens: input.usageBefore.usedTokens,
@@ -449,11 +474,14 @@ function sourceRefsWithoutCurrentTurn(facts: BuildFacts): ContextSourceRef[] {
   ];
 }
 
-function summaryPromptFrom(systemPrompt: string, input: string): Prompt {
+function summaryPromptFrom(systemPrompt: string, input: string, turns: ConversationTurn[]): Prompt {
   return {
     instructions: { system: [{ instructionId: 'context:compaction-summary', content: systemPrompt }], agentInstructions: { sources: [] }, activatedSkills: [] },
     referenceContext: { skillCatalog: [] },
-    conversation: [{ type: 'user_message', content: [{ type: 'text', text: input }] }],
+    conversation: [
+      { type: 'user_message', content: [{ type: 'text', text: input }] },
+      ...turns.flatMap(conversationItemsFromTurn),
+    ],
     tools: [],
   };
 }

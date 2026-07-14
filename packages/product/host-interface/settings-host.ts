@@ -98,6 +98,7 @@ const ProviderPublicStatusUiDtoSchema = z.object({
   protocol: z.enum(['openai-compatible', 'anthropic']),
   baseUrl: z.string().optional(),
   modelIds: z.array(z.string()),
+  modelCapabilities: z.record(z.string(), z.object({ imageInput: z.boolean().optional() }).passthrough()).optional(),
   hasApiKey: z.boolean(),
   credentialSource: z.enum(['settings', 'environment', 'missing']),
   envOverrideActive: z.boolean(),
@@ -113,6 +114,7 @@ const ProviderCatalogUiDtoSchema = z.object({
     modelId: z.string().min(1),
     displayName: z.string().min(1),
     contextWindowTokens: z.number().int().positive(),
+    capabilities: z.object({ imageInput: z.boolean().optional() }).passthrough().optional(),
   }).strict()),
 }).strict();
 
@@ -352,6 +354,7 @@ export type ProviderPublicStatusUiDto = {
   protocol: 'openai-compatible' | 'anthropic';
   baseUrl?: string;
   modelIds: string[];
+  modelCapabilities?: Record<string, { imageInput?: boolean }>;
   hasApiKey: boolean;
   credentialSource: 'settings' | 'environment' | 'missing';
   envOverrideActive: boolean;
@@ -368,6 +371,7 @@ export type ProviderCatalogUiDto = {
     modelId: string;
     displayName: string;
     contextWindowTokens: number;
+    capabilities?: { imageInput?: boolean };
   }>;
 };
 
@@ -538,6 +542,7 @@ export function toProviderPublicStatusUiDto(provider: {
   protocol: ProviderPublicStatusUiDto['protocol'];
   base_url?: string;
   models: string[];
+  model_capabilities: Record<string, { imageInput?: boolean }>;
   has_api_key: boolean;
   credential_source: ProviderPublicStatusUiDto['credentialSource'];
   env_override_active: boolean;
@@ -551,6 +556,7 @@ export function toProviderPublicStatusUiDto(provider: {
     protocol: provider.protocol,
     ...(provider.base_url ? { baseUrl: provider.base_url } : {}),
     modelIds: provider.models,
+    modelCapabilities: provider.model_capabilities,
     hasApiKey: provider.has_api_key,
     credentialSource: provider.credential_source,
     envOverrideActive: provider.env_override_active,
@@ -564,7 +570,7 @@ export function toProviderCatalogUiDto(provider: {
   displayName: string;
   protocol: ProviderCatalogUiDto['protocol'];
   defaultBaseUrl: string;
-  models: Array<{ modelId: string; displayName: string; contextWindowTokens: number }>;
+  models: Array<{ modelId: string; displayName: string; contextWindowTokens: number; capabilities?: { imageInput?: boolean } }>;
 }): ProviderCatalogUiDto {
   return {
     providerId: provider.providerId,
@@ -575,6 +581,7 @@ export function toProviderCatalogUiDto(provider: {
       modelId: model.modelId,
       displayName: model.displayName,
       contextWindowTokens: model.contextWindowTokens,
+      ...(model.capabilities ? { capabilities: model.capabilities } : {}),
     })),
   };
 }

@@ -2,8 +2,9 @@ import { RuntimeEventSchema, type RuntimeContext, type RuntimeEvent } from '../.
 
 import { TimelineMessageSchema, type TimelineMessage } from '../../coding-agent/projections/timeline';
 import { z } from 'zod';
+import { encodeBase64 } from '@megumi/ai';
 
-import type { RawUserInputAttachment } from '../../coding-agent/input';
+import { IMAGE_INPUT_POLICY } from '../../coding-agent/input';
 
 import type {
   AgentRun,
@@ -42,6 +43,9 @@ export interface ChatHost {
   listRunEvents(request: ChatListRunEventsUiRequest): Promise<ChatListRunEventsUiResult>;
   getSessionHydration(request: ChatGetSessionHydrationUiRequest): Promise<ChatGetSessionHydrationUiResult>;
   getContextUsage(request: ChatGetContextUsageUiRequest): Promise<ChatGetContextUsageUiResult>;
+  getInputCapabilities(): ChatImageInputCapabilitiesUiResult;
+  selectImages(): Promise<ChatSelectImagesUiResult>;
+  readAttachmentImage(request: ChatReadAttachmentImageUiRequest): Promise<ChatReadAttachmentImageUiResult>;
 }
 
 const IsoDateTimeSchema = z.string().datetime();
@@ -67,6 +71,13 @@ export const SessionContextUsageGetPayloadSchema = z.object({
 }).strict();
 export const SessionMessageSendPayloadSchema = z.object({
   sessionId: z.string().min(1).optional(), projectId: z.string().min(1), text: z.string(),
+  attachments: z.array(z.object({
+    draftAttachmentId: z.string().min(1),
+    type: z.literal('image'),
+    name: z.string().optional(),
+    declaredMimeType: z.string().optional(),
+    source: z.object({ type: z.literal('host_file_reference'), referenceId: z.string().min(1) }).strict(),
+  }).strict()).max(IMAGE_INPUT_POLICY.maxImageCount).optional(),
   branchMarkerId: z.string().min(1).optional(),
   clientMessageId: z.string().min(1).optional(), createdAt: IsoDateTimeSchema.optional(),
   modelSelection: z.object({ provider_id: z.string().min(1), model_id: z.string().min(1) }).strict(),
@@ -81,6 +92,43 @@ export const SessionBranchDraftCancelPayloadSchema = z.object({
 }).strict();
 export const RunListBySessionPayloadSchema = z.object({ sessionId: z.string().min(1) }).strict();
 export const RunEventsListPayloadSchema = z.object({ runId: z.string().min(1) }).strict();
+export const ImageInputCapabilitiesPayloadSchema = z.object({}).strict();
+export const ImageInputSelectPayloadSchema = z.object({}).strict();
+export const AttachmentImageReadPayloadSchema = z.object({ attachmentId: z.string().min(1) }).strict();
+
+const HostFailureSchema = z.object({
+  code: z.string().min(1),
+  message: z.string(),
+  retryable: z.boolean().optional(),
+}).strict();
+
+const SelectedImageUiDtoSchema = z.object({
+  draftAttachmentId: z.string().min(1),
+  name: z.string().min(1),
+  declaredMimeType: z.string().optional(),
+  referenceId: z.string().min(1),
+  previewDataUrl: z.string(),
+}).strict();
+export type SelectedImageUiDto = z.infer<typeof SelectedImageUiDtoSchema>;
+export type ChatImageInputCapabilitiesUiResult = z.infer<typeof ChatImageInputCapabilitiesUiResultSchema>;
+export const ChatImageInputCapabilitiesUiResultSchema = z.object({
+  allowedMediaTypes: z.array(z.string()),
+  maxImageCount: z.number().int().positive(),
+  maxImageBytes: z.number().int().positive(),
+  maxTotalBytes: z.number().int().positive(),
+}).strict();
+export const ChatSelectImagesUiResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('selected'), images: z.array(SelectedImageUiDtoSchema) }).strict(),
+  z.object({ status: z.literal('cancelled') }).strict(),
+  z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
+]);
+export const ChatReadAttachmentImageUiResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('ok'), dataUrl: z.string().min(1) }).strict(),
+  z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
+]);
+export type ChatSelectImagesUiResult = z.infer<typeof ChatSelectImagesUiResultSchema>;
+export type ChatReadAttachmentImageUiRequest = z.infer<typeof AttachmentImageReadPayloadSchema>;
+export type ChatReadAttachmentImageUiResult = z.infer<typeof ChatReadAttachmentImageUiResultSchema>;
 
 const ChatSessionUiDtoSchema = z.object({
   id: z.string().min(1), projectId: z.string().min(1), title: z.string(),
@@ -89,11 +137,6 @@ const ChatSessionUiDtoSchema = z.object({
 const ChatRunUiDtoSchema = z.object({
   runId: z.string().min(1), sessionId: z.string().min(1), status: z.string().min(1),
   createdAt: z.string().datetime(), completedAt: z.string().datetime().optional(),
-}).strict();
-const HostFailureSchema = z.object({
-  code: z.string().min(1),
-  message: z.string(),
-  retryable: z.boolean().optional(),
 }).strict();
 export const ChatSendUserInputUiPayloadSchema = z.discriminatedUnion('type', [
   z.object({
@@ -210,6 +253,13 @@ export interface SessionBranchHostPort {
 
 export type ChatContextUsagePort = Pick<ContextService, 'getSessionUsageSnapshot'>;
 
+export type ImagePickerPort = {
+  selectImages(): Promise<
+    | { status: 'selected'; images: SelectedImageUiDto[] }
+    | { status: 'cancelled' }
+  >;
+};
+
 export function createChatHost(options: {
   agentRunService: Pick<AgentRunService, 'startRun' | 'cancelRun'>;
   commandService: Pick<CommandService, 'getCommandSuggestions'>;
@@ -218,6 +268,7 @@ export function createChatHost(options: {
   branchService: SessionBranchHostPort;
   sessionTimelineQuery: SessionTimelineQuery;
   contextService: ChatContextUsagePort;
+  imagePicker?: ImagePickerPort;
 }): ChatHost {
   return {
     async createSession(request) {
@@ -291,7 +342,18 @@ export function createChatHost(options: {
         ...(request.branchMarkerId ? { branch_marker_id: request.branchMarkerId } : {}),
         user_input: {
           text: request.text,
-          ...(request.attachments ? { attachments: request.attachments } : {}),
+          ...(request.attachments ? {
+            attachments: request.attachments.map((attachment) => ({
+              draft_attachment_id: attachment.draftAttachmentId,
+              type: attachment.type,
+              ...(attachment.name ? { name: attachment.name } : {}),
+              ...(attachment.declaredMimeType ? { declared_mime_type: attachment.declaredMimeType } : {}),
+              source: {
+                type: attachment.source.type,
+                reference_id: attachment.source.referenceId,
+              },
+            })),
+          } : {}),
         },
         model_selection: request.modelSelection,
         ...(request.permissionMode ? { permission_mode: request.permissionMode } : {}),
@@ -301,6 +363,35 @@ export function createChatHost(options: {
       return {
         payload: payload as ChatSendUserInputUiPayload,
         ...(events ? { events } : {}),
+      };
+    },
+
+    getInputCapabilities() {
+      return {
+        allowedMediaTypes: [...IMAGE_INPUT_POLICY.allowedMediaTypes],
+        maxImageCount: IMAGE_INPUT_POLICY.maxImageCount,
+        maxImageBytes: IMAGE_INPUT_POLICY.maxImageBytes,
+        maxTotalBytes: IMAGE_INPUT_POLICY.maxTotalBytes,
+      };
+    },
+
+    async selectImages() {
+      if (!options.imagePicker) {
+        return { status: 'failed', failure: { code: 'image_picker_unavailable', message: 'Image picker is unavailable.' } };
+      }
+      try {
+        return await options.imagePicker.selectImages();
+      } catch {
+        return { status: 'failed', failure: { code: 'image_picker_failed', message: 'Images could not be selected.' } };
+      }
+    },
+
+    async readAttachmentImage(request) {
+      const result = await options.sessionService.readAttachmentContent({ attachment_id: request.attachmentId });
+      if (result.status === 'failed') return { status: 'failed', failure: toHostFailure(result.failure) };
+      return {
+        status: 'ok',
+        dataUrl: `data:${result.content.media_type};base64,${encodeBase64(result.content.bytes)}`,
       };
     },
 
@@ -574,7 +665,13 @@ export interface ChatSendUserInputUiRequest {
   projectPath?: string;
   branchMarkerId?: string;
   text: string;
-  attachments?: RawUserInputAttachment[];
+  attachments?: Array<{
+    draftAttachmentId: string;
+    type: 'image';
+    name?: string;
+    declaredMimeType?: string;
+    source: { type: 'host_file_reference'; referenceId: string };
+  }>;
   clientMessageId?: string;
   createdAt?: string;
   modelSelection: {

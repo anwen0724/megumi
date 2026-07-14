@@ -143,6 +143,11 @@ export class SessionRepository {
     `).all(...messageIds) as SessionMessageAttachmentRow[]).map(fromAttachmentRow);
   }
 
+  findAttachmentById(attachmentId: string): SessionMessageAttachment | undefined {
+    const row = this.database.prepare('SELECT * FROM session_message_attachments WHERE attachment_id = ?').get(attachmentId) as SessionMessageAttachmentRow | undefined;
+    return row ? fromAttachmentRow(row) : undefined;
+  }
+
   insertEntry(entry: SessionEntry): SessionEntry {
     this.database.prepare(`
       INSERT INTO session_entries (

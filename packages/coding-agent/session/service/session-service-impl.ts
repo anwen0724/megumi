@@ -95,9 +95,33 @@ class DefaultSessionService implements SessionService {
     }
   }
 
-  saveUserMessage(request: SaveUserMessageRequest): SaveUserMessageResult {
+  async saveUserMessage(request: SaveUserMessageRequest): Promise<SaveUserMessageResult> {
+    const imported: SessionMessageAttachment[] = [];
     try {
-      return this.options.repository.runInTransaction<SaveUserMessageResult>(() => {
+      for (const image of request.attachments ?? []) {
+        if (!this.options.attachmentFileStore) {
+          return { status: 'failed', failure: { code: 'attachment_store_unavailable', message: 'Managed attachment storage is unavailable.' } };
+        }
+        const attachmentId = this.attachmentId();
+        const stored = await this.options.attachmentFileStore.write({
+          attachmentId,
+          mediaType: image.media_type,
+          bytes: image.bytes,
+        });
+        imported.push({
+          attachment_id: attachmentId,
+          message_id: request.message_id,
+          session_id: request.session_id,
+          type: 'image',
+          name: image.name,
+          mime_type: image.media_type,
+          source_type: 'host_reference',
+          source_value: stored.referenceId,
+          created_at: request.created_at,
+        });
+      }
+
+      const result = this.options.repository.runInTransaction<SaveUserMessageResult>(() => {
         const session = this.options.repository.findSessionById(request.session_id);
         if (!session) {
           return {
@@ -121,9 +145,7 @@ class DefaultSessionService implements SessionService {
           created_at: request.created_at,
           completed_at: request.created_at,
         });
-        const attachments = toSavedAttachments(request);
-        this.options.repository.insertMessageAttachments(attachments);
-        const persistedAttachments = this.options.repository.listAttachmentsByMessageIds([message.message_id]);
+        this.options.repository.insertMessageAttachments(imported);
         const entry = this.options.repository.insertEntry({
           entry_id: this.entryId({ kind: 'message', source_id: request.message_id }),
           session_id: request.session_id,
@@ -139,12 +161,44 @@ class DefaultSessionService implements SessionService {
         });
         return {
           status: 'saved',
-          message: { message, attachments: persistedAttachments },
+          message: { message, attachments: imported },
           entry,
         };
       });
+      if (result.status === 'failed') await this.cleanupImportedAttachments(imported);
+      return result;
     } catch (error) {
+      await this.cleanupImportedAttachments(imported);
       return failed(error);
+    }
+  }
+
+  async readAttachmentContent(request: { attachment_id: string }) {
+    const attachment = this.options.repository.findAttachmentById(request.attachment_id);
+    const mediaType = attachment?.mime_type;
+    if (
+      !attachment
+      || attachment.type !== 'image'
+      || attachment.source_type !== 'host_reference'
+      || !mediaType
+      || !isSupportedImageMediaType(mediaType)
+    ) {
+      return { status: 'failed' as const, failure: { code: 'attachment_not_found', message: 'Session image attachment was not found.' } };
+    }
+    if (!this.options.attachmentFileStore) {
+      return { status: 'failed' as const, failure: { code: 'attachment_store_unavailable', message: 'Managed attachment storage is unavailable.' } };
+    }
+    try {
+      const bytes = await this.options.attachmentFileStore.read(attachment.source_value);
+      return {
+        status: 'ok' as const,
+        content: {
+          bytes,
+          media_type: mediaType,
+        },
+      };
+    } catch {
+      return { status: 'failed' as const, failure: { code: 'attachment_content_missing', message: 'Managed image content is missing.' } };
     }
   }
 
@@ -544,6 +598,17 @@ class DefaultSessionService implements SessionService {
     return this.options.ids?.sessionId?.() ?? `session:${crypto.randomUUID()}`;
   }
 
+  private attachmentId(): string {
+    return this.options.ids?.attachmentId?.() ?? `attachment:${crypto.randomUUID()}`;
+  }
+
+  private async cleanupImportedAttachments(attachments: SessionMessageAttachment[]): Promise<void> {
+    if (!this.options.attachmentFileStore) return;
+    await Promise.all(attachments.map((attachment) => (
+      this.options.attachmentFileStore!.delete(attachment.source_value).catch(() => undefined)
+    )));
+  }
+
   private resolveParentEntryId(input: {
     session_id: string;
     explicit_parent_entry_id?: string;
@@ -568,20 +633,6 @@ class DefaultSessionService implements SessionService {
   }
 }
 
-function toSavedAttachments(request: SaveUserMessageRequest): SessionMessageAttachment[] {
-  return (request.attachments ?? []).map((attachment) => ({
-    attachment_id: attachment.attachment_id,
-    message_id: request.message_id,
-    session_id: request.session_id,
-    type: attachment.type,
-    ...(attachment.name ? { name: attachment.name } : {}),
-    ...(attachment.mime_type ? { mime_type: attachment.mime_type } : {}),
-    source_type: attachment.source.type,
-    source_value: attachment.source.type === 'local_file' ? attachment.source.path : attachment.source.reference_id,
-    created_at: request.created_at,
-  }));
-}
-
 function groupAttachments(attachments: SessionMessageAttachment[]): Map<string, SessionMessageAttachment[]> {
   const grouped = new Map<string, SessionMessageAttachment[]>();
   for (const attachment of attachments) {
@@ -600,4 +651,8 @@ function failed(error: unknown): { status: 'failed'; failure: { code: string; me
       message: error instanceof Error ? error.message : String(error),
     },
   };
+}
+
+function isSupportedImageMediaType(value: string): value is 'image/png' | 'image/jpeg' | 'image/webp' {
+  return value === 'image/png' || value === 'image/jpeg' || value === 'image/webp';
 }

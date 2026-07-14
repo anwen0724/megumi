@@ -13,7 +13,7 @@ import {
 } from '../home';
 import { createApprovalHost } from '../host-interface/approval-host';
 import { createArtifactHost } from '../host-interface/artifact-host';
-import { createChatHost } from '../host-interface/chat-host';
+import { createChatHost, type ImagePickerPort } from '../host-interface/chat-host';
 import { createPlanHost } from '../host-interface/plan-host';
 import type { ProductHostInterface } from '../host-interface/product-host-interface';
 import { createSettingsHost } from '../host-interface/settings-host';
@@ -40,7 +40,12 @@ export type ComposeProductOptions = Omit<
   diagnosticBundleSave?: DiagnosticBundleSavePort;
   directoryPicker?: DirectoryPickerPort;
   fileOpen?: FileOpenPort;
+  imagePicker?: ImagePickerPort;
 };
+
+/** Host capabilities implemented by shells without importing Coding Agent internals. */
+export type ProductInputFileReader = NonNullable<ComposeProductOptions['inputFileReader']>;
+export type ProductSessionAttachmentFileSystem = NonNullable<ComposeProductOptions['sessionAttachmentFileSystem']>;
 
 export interface ProductRuntime {
   homePaths: MegumiHomePaths;
@@ -67,6 +72,7 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
       homePath: homePaths.homePath,
       sqlitePath: homePaths.sqlitePath,
       settingsPath: homePaths.settingsPath,
+      attachmentsPath: homePaths.attachmentsPath,
     },
     runtimeLogger: logger,
     observabilityService: observability.service,
@@ -81,6 +87,7 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
       branchService: runtime.sessionBranchService,
       sessionTimelineQuery: runtime.sessionTimelineQuery,
       contextService: runtime.contextRuntime.contextService,
+      ...(options.imagePicker ? { imagePicker: options.imagePicker } : {}),
     }),
     skill: createSkillHost(runtime.skillService),
     workspace: createWorkspaceHost({
@@ -117,6 +124,7 @@ function codingAgentOptions(
     diagnosticBundleSave: _diagnosticBundleSave,
     directoryPicker: _directoryPicker,
     fileOpen: _fileOpen,
+    imagePicker: _imagePicker,
     ...codingAgent
   } = options;
   return codingAgent;

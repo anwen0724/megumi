@@ -4,14 +4,16 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { Composer } from '@megumi/desktop/renderer/features/chat/components/Composer';
 import type { ComposerProps } from '@megumi/desktop/renderer/features/chat/components/composer-types';
+import type { ProviderPublicStatusUiDto } from '@megumi/product/host-interface';
 
-const defaultProviders = [
+const defaultProviders: ProviderPublicStatusUiDto[] = [
   {
     providerId: 'deepseek' as const,
     displayName: 'DeepSeek',
     protocol: 'openai-compatible' as const,
     enabled: true,
     modelIds: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+    modelCapabilities: { 'deepseek-v4-flash': { imageInput: true }, 'deepseek-v4-pro': { imageInput: true } },
     hasApiKey: true,
     credentialSource: 'settings' as const,
     envOverrideActive: false,
@@ -22,6 +24,7 @@ const defaultProviders = [
     protocol: 'openai-compatible' as const,
     enabled: true,
     modelIds: ['gpt-5.5'],
+    modelCapabilities: { 'gpt-5.5': { imageInput: true } },
     hasApiKey: true,
     credentialSource: 'settings' as const,
     envOverrideActive: false,
@@ -34,7 +37,18 @@ const deepseekOnlyProviders = defaultProviders.map((provider) => ({
 }));
 
 function TestComposer(props: ComposerProps) {
-  return <Composer providers={defaultProviders} {...props} />;
+  return (
+    <Composer
+      providers={defaultProviders}
+      imageInputCapabilities={{
+        allowedMediaTypes: ['image/png', 'image/jpeg', 'image/webp'],
+        maxImageCount: 5,
+        maxImageBytes: 10 * 1024 * 1024,
+        maxTotalBytes: 25 * 1024 * 1024,
+      }}
+      {...props}
+    />
+  );
 }
 
 function setTextareaScrollHeight(textarea: HTMLElement, scrollHeight: number) {
@@ -50,7 +64,7 @@ describe('Composer', () => {
 
     expect(screen.getByLabelText('Permission mode')).toHaveValue('default');
     expect(screen.getByLabelText('Model')).toHaveValue('deepseek:deepseek-v4-flash');
-    expect(screen.getByRole('button', { name: 'Attach files' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Attach images' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Choose context' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Context usage')).toBeInTheDocument();
     expect(screen.getByText('Context window:')).toBeInTheDocument();
@@ -175,7 +189,7 @@ describe('Composer', () => {
     expect(input).toHaveValue('nihao');
   });
 
-  it('opens the file picker and keeps the attachment callback hook', async () => {
+  it('uses the host image picker and previews the selected image', async () => {
     const onChooseContext = vi.fn();
     const onAttachFiles = vi.fn();
 
@@ -183,19 +197,16 @@ describe('Composer', () => {
       <TestComposer
         onSubmit={() => undefined}
         onChooseContext={onChooseContext}
-        onAttachFiles={onAttachFiles}
+        onSelectImages={async () => { onAttachFiles(); return [{ draftAttachmentId: 'draft-1', name: 'image.png', declaredMimeType: 'image/png', referenceId: 'ref-1', previewDataUrl: 'data:image/png;base64,aQ==' }]; }}
       />,
     );
 
-    const fileInput = screen.getByTestId('composer-file-input') as HTMLInputElement;
-    const fileInputClick = vi.spyOn(fileInput, 'click').mockImplementation(() => undefined);
-
-    await userEvent.click(screen.getByRole('button', { name: 'Attach files' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Attach images' }));
 
     expect(screen.queryByRole('button', { name: 'Choose context' })).not.toBeInTheDocument();
     expect(onChooseContext).not.toHaveBeenCalled();
     expect(onAttachFiles).toHaveBeenCalledTimes(1);
-    expect(fileInputClick).toHaveBeenCalledTimes(1);
+    expect(await screen.findByAltText('image.png')).toBeInTheDocument();
   });
 
   it('renders a compact toolbar with attachment and context usage on the left, then permission mode, model, and Send on the right', () => {
@@ -212,7 +223,7 @@ describe('Composer', () => {
     expect(toolbar).toHaveClass('justify-between');
     expect(toolbar).toHaveClass('flex-nowrap');
     expect(screen.queryByRole('button', { name: 'Choose context' })).not.toBeInTheDocument();
-    expect(leftControls?.children[0]).toBe(screen.getByRole('button', { name: 'Attach files' }));
+    expect(leftControls?.children[0]).toBe(screen.getByRole('button', { name: 'Attach images' }));
     expect(leftControls?.children[1]).toContainElement(screen.getByLabelText('Context usage'));
     expect(rightControls).toHaveClass('shrink-0');
     expect(rightControls.children).toHaveLength(3);
@@ -815,5 +826,38 @@ describe('Composer', () => {
       providerId: 'deepseek',
       model: 'deepseek-v4-flash',
     });
+  });
+
+  it('submits an image-only draft and removes the preview after submit', async () => {
+    const onSubmit = vi.fn();
+    render(<TestComposer onSubmit={onSubmit} onSelectImages={async () => [{
+      draftAttachmentId: 'draft-1', name: 'diagram.png', declaredMimeType: 'image/png',
+      referenceId: 'ref-1', previewDataUrl: 'data:image/png;base64,AQID',
+    }]} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Attach images' }));
+    expect(await screen.findByAltText('diagram.png')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
+    expect(onSubmit).toHaveBeenCalledWith({
+      message: '', permissionMode: 'default', providerId: 'deepseek', model: 'deepseek-v4-flash',
+      attachments: [{
+        draftAttachmentId: 'draft-1', name: 'diagram.png', declaredMimeType: 'image/png',
+        referenceId: 'ref-1', previewDataUrl: 'data:image/png;base64,AQID',
+      }],
+    });
+    expect(screen.queryByAltText('diagram.png')).not.toBeInTheDocument();
+  });
+
+  it('keeps the image draft when the host rejects the submit', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(false);
+    render(<TestComposer onSubmit={onSubmit} onSelectImages={async () => [{
+      draftAttachmentId: 'draft-1', name: 'diagram.png', declaredMimeType: 'image/png',
+      referenceId: 'ref-1', previewDataUrl: 'data:image/png;base64,AQID',
+    }]} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Attach images' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    expect(await screen.findByAltText('diagram.png')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeEnabled();
   });
 });

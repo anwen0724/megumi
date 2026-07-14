@@ -132,6 +132,12 @@ export function createMessageFlowDependencies(input: {
           base_url: 'https://api.deepseek.com',
           model_id: 'deepseek-chat',
           api_key: 'test-key',
+          capabilities: {
+            streaming: true,
+            toolCalls: true,
+            thinking: false,
+            imageInput: true,
+          },
         },
       })),
       resolvePermissionSettings: vi.fn(() => ({

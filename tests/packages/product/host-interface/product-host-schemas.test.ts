@@ -154,7 +154,7 @@ describe('Product Host runtime schemas', () => {
   });
 
   it('validates Settings result payloads', () => {
-    expect(ProviderListUiResultSchema.safeParse({ status: 'ok', providers: [] }).success).toBe(true);
+    expect(ProviderListUiResultSchema.safeParse({ status: 'ok', providers: [], catalog: [] }).success).toBe(true);
     expect(ProviderListUiResultSchema.safeParse({
       status: 'failed',
       failure: { code: 'settings_invalid', message: 'invalid' },

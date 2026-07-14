@@ -15,6 +15,9 @@ import {
   ChatListSessionsUiResultSchema,
   ChatListTimelineUiResultSchema,
   ChatSendUserInputUiPayloadSchema,
+  ChatImageInputCapabilitiesUiResultSchema,
+  ChatSelectImagesUiResultSchema,
+  ChatReadAttachmentImageUiResultSchema,
   type ProductHostInterface,
 } from '@megumi/product/host-interface';
 import type { RuntimeEvent } from '@megumi/product/runtime-events';
@@ -38,6 +41,9 @@ import {
   SessionMessageListRequestSchema,
   SessionMessageSendRequestSchema,
   SessionTimelineListRequestSchema,
+  ImageInputCapabilitiesGetRequestSchema,
+  ImageInputSelectRequestSchema,
+  AttachmentImageReadRequestSchema,
   type CommandSuggestionsPayload,
   type RunEventsListPayload,
   type RunListBySessionPayload,
@@ -50,6 +56,7 @@ import {
   type SessionMessageListPayload,
   type SessionMessageSendPayload,
   type SessionTimelineListPayload,
+  type AttachmentImageReadPayload,
 } from '../schemas';
 
 export interface ChatHandlersService {
@@ -135,6 +142,34 @@ export function registerChatHandlers(
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<SessionContextUsageGetPayload, typeof IPC_CHANNELS.chat.sessionContextUsageGet>) =>
       service.host.chat.getContextUsage(request.payload),
+    mapError: mapChatIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.chat.imageInputCapabilitiesGet, createIpcRequestHandler({
+    channel: IPC_CHANNELS.chat.imageInputCapabilitiesGet,
+    requestSchema: ImageInputCapabilitiesGetRequestSchema,
+    responseSchema: ChatImageInputCapabilitiesUiResultSchema,
+    logger: options.logger,
+    handle: () => service.host.chat.getInputCapabilities(),
+    mapError: mapChatIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.chat.imageInputSelect, createIpcRequestHandler({
+    channel: IPC_CHANNELS.chat.imageInputSelect,
+    requestSchema: ImageInputSelectRequestSchema,
+    responseSchema: ChatSelectImagesUiResultSchema,
+    logger: options.logger,
+    handle: () => service.host.chat.selectImages(),
+    mapError: mapChatIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.chat.attachmentImageRead, createIpcRequestHandler({
+    channel: IPC_CHANNELS.chat.attachmentImageRead,
+    requestSchema: AttachmentImageReadRequestSchema,
+    responseSchema: ChatReadAttachmentImageUiResultSchema,
+    logger: options.logger,
+    handle: (request: RuntimeIpcRequest<AttachmentImageReadPayload, typeof IPC_CHANNELS.chat.attachmentImageRead>) =>
+      service.host.chat.readAttachmentImage(request.payload),
     mapError: mapChatIpcError,
   }));
 

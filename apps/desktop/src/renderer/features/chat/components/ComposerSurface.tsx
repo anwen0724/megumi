@@ -1,4 +1,4 @@
-import { forwardRef, useRef, type FormEvent, type KeyboardEvent, type RefObject } from 'react';
+import { forwardRef, type FormEvent, type KeyboardEvent, type RefObject } from 'react';
 import {
   Bot,
   Brain,
@@ -18,6 +18,7 @@ import {
   type ComposerPermissionMode,
 } from './composer-options';
 import { CommandSuggestionPanel } from './CommandSuggestionPanel';
+import type { ComposerDraftImage } from './composer-types';
 
 export interface ComposerSurfaceProps {
   value: string;
@@ -35,6 +36,9 @@ export interface ComposerSurfaceProps {
   selectedCommandSuggestionIndex: number;
   selectedCommandCompletion: ComposerCommandCompletionUi | null;
   contextUsage?: ChatGetContextUsageUiResult;
+  selectedImages: ComposerDraftImage[];
+  canAttachImages: boolean;
+  imageInputError?: string;
   onValueChange: (value: string) => void;
   onCommandSuggestionChoose: (item: CommandSuggestionItem) => void;
   onPermissionModeChange: (permissionMode: ComposerPermissionMode) => void;
@@ -44,6 +48,7 @@ export interface ComposerSurfaceProps {
   onStop?: () => void;
   onChooseContext?: () => void;
   onAttachFiles?: () => void;
+  onRemoveImage: (draftAttachmentId: string) => void;
 }
 
 export type ComposerCommandCompletionUi = {
@@ -67,6 +72,9 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
   selectedCommandSuggestionIndex,
   selectedCommandCompletion,
   contextUsage,
+  selectedImages,
+  canAttachImages,
+  imageInputError,
   onValueChange,
   onCommandSuggestionChoose,
   onPermissionModeChange,
@@ -75,12 +83,10 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
   onSubmit,
   onStop,
   onAttachFiles,
+  onRemoveImage,
 }, ref) {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
   function handleAttachFiles() {
     onAttachFiles?.();
-    fileInputRef.current?.click();
   }
 
   return (
@@ -97,17 +103,21 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
         onChoose={onCommandSuggestionChoose}
         className="absolute bottom-full left-0 right-0 z-50 max-h-[min(22rem,calc(100vh-12rem))]"
       />
-      <input
-        ref={fileInputRef}
-        data-testid="composer-file-input"
-        type="file"
-        multiple
-        tabIndex={-1}
-        aria-hidden="true"
-        className="sr-only"
-      />
       <div className="overflow-visible rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-soft)] transition-shadow duration-150">
         <div data-testid="composer-input-panel" className="px-4 py-3">
+          {selectedImages.length > 0 ? (
+            <div className="mb-3 flex flex-wrap gap-2" aria-label="Selected images">
+              {selectedImages.map((image) => (
+                <div key={image.draftAttachmentId} className="group relative h-16 w-16 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
+                  <img src={image.previewDataUrl} alt={image.name} className="h-full w-full object-cover" />
+                  <button type="button" aria-label={`Remove ${image.name}`} onClick={() => onRemoveImage(image.draftAttachmentId)} className="absolute right-1 top-1 rounded bg-black/65 px-1 text-xs text-white opacity-0 group-hover:opacity-100">×</button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {imageInputError ? (
+            <p role="alert" className="mb-2 text-xs text-[var(--color-danger)]">{imageInputError}</p>
+          ) : null}
           <label htmlFor="megumi-composer" className="sr-only">
             Message Megumi
           </label>
@@ -134,7 +144,7 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
 
         <div data-testid="composer-toolbar" className="flex min-h-12 flex-nowrap items-center justify-between gap-2 px-3 py-2">
           <div className="flex shrink-0 items-center gap-1.5">
-            <IconButton label="Attach files" variant="ghost" size="sm" className="shrink-0" onClick={handleAttachFiles}>
+            <IconButton label="Attach images" variant="ghost" size="sm" className="shrink-0" onClick={handleAttachFiles} disabled={!canAttachImages}>
               <Paperclip size={16} aria-hidden="true" />
             </IconButton>
             <ContextUsageIndicator contextUsage={contextUsage} />

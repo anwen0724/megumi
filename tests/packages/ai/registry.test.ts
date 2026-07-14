@@ -76,7 +76,7 @@ function request(providerId: string, modelId: string, baseUrl: string) {
     },
     context: {
       messages: [
-        { role: 'user' as const, content: 'Hello' },
+        { role: 'user' as const, content: [{ type: 'text' as const, text: 'Hello' }] },
       ],
     },
     credential: { type: 'api_key' as const, value: 'sk-test' },

@@ -184,7 +184,7 @@ export function useChatPageController() {
   }, [agentStatus, effectiveActiveSessionId, effectiveProjectId]);
 
   function handleSubmit(payload: ComposerSubmitPayload) {
-    void sendSessionMessage(payload);
+    return sendSessionMessage(payload);
   }
 
   function handleStop() {

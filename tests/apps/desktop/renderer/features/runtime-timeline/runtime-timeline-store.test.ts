@@ -428,4 +428,29 @@ describe('runtime timeline store', () => {
     expect(useRuntimeTimelineStore.getState().sessions['project-1:session-1']?.messages.map((message) => message.role))
       .toEqual(['user', 'assistant']);
   });
+
+  it('shows an image-only pending input before the canonical Session message is committed', () => {
+    const store = useRuntimeTimelineStore.getState();
+    store.addPendingUserMessage('project-1', 'session-1', {
+      clientMessageId: 'client-message-image',
+      text: '',
+      attachments: [{
+        draftAttachmentId: 'draft-image-1',
+        name: 'diagram.png',
+        declaredMimeType: 'image/png',
+      }],
+      createdAt: '2026-07-13T08:00:00.000Z',
+    });
+
+    const [message] = useRuntimeTimelineStore.getState().sessions['project-1:session-1']?.messages ?? [];
+    expect(message).toMatchObject({
+      role: 'user',
+      blocks: [{
+        kind: 'user_attachment',
+        attachmentId: 'draft-image-1',
+        name: 'diagram.png',
+        mediaType: 'image/png',
+      }],
+    });
+  });
 });

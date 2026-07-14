@@ -56,6 +56,7 @@ describe('Context system v2 source guards', () => {
       'service/internal/context-usage-calculator.ts',
       'service/internal/conversation-turn-builder.ts',
       'service/internal/conversation-turn-items.ts',
+      'service/internal/image-content-materializer.ts',
       'service/internal/prompt-builder.ts',
     ]);
     expect(exists('packages/coding-agent/context/domain/model/active-context.ts')).toBe(true);

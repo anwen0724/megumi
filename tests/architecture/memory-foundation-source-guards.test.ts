@@ -59,7 +59,7 @@ describe('memory foundation boundaries', () => {
 
   it('wires memory markdown lifecycle sync through Desktop Main composition', () => {
     const index = read(join(root, 'packages', 'coding-agent', 'composition', 'compose-coding-agent-memory.ts'));
-    const sessionService = read(join(root, 'packages', 'coding-agent', 'session', 'services', 'session-service.ts'));
+    const sessionService = read(join(root, 'packages', 'coding-agent', 'session', 'service', 'session-service.ts'));
 
     expect(index).toContain('syncUserMirrorOnAppStart');
     expect(index).toContain('options.memorySettingsProvider.isMemoryEnabled()');

@@ -14,8 +14,17 @@ import {
 } from '../agent-run';
 import { ActiveRunStore } from '../agent-run/core/active-run-store';
 import { createCommandService, type CommandService, type SkillCommandDescriptor } from '../commands';
-import { createInputService, type InputService } from '../input';
-import { createSessionBranchService, createSessionService, type SessionBranchService, type SessionService } from '../session';
+import { createInputService, type InputFileReader, type InputService } from '../input';
+import {
+  createSessionBranchService,
+  createSessionService,
+  type SessionBranchService,
+  type SessionService,
+} from '../session';
+import {
+  createSessionAttachmentFileStore,
+  type SessionAttachmentFileSystem,
+} from '../session/repository/session-attachment-file-store';
 import { SessionRepository as SessionV2Repository } from '../session/repository/session-repository';
 import type { RuntimeLogger } from './runtime-logger';
 import { composeCodingAgentPersistence } from './compose-coding-agent-persistence';
@@ -97,6 +106,7 @@ export interface CodingAgentHomePaths {
   homePath: string;
   sqlitePath: string;
   settingsPath: string;
+  attachmentsPath: string;
 }
 
 export interface ComposeCodingAgentRuntimeOptions {
@@ -113,6 +123,8 @@ export interface ComposeCodingAgentRuntimeOptions {
   workspaceChangeFooterProjector?: unknown;
   projectFileSystem?: LocalWorkspaceServiceFileSystem;
   settingsStorage?: SettingsFileStore;
+  inputFileReader?: InputFileReader;
+  sessionAttachmentFileSystem?: SessionAttachmentFileSystem;
 }
 
 export interface CodingAgentRuntime {
@@ -181,13 +193,25 @@ export function composeCodingAgentRuntime(options: ComposeCodingAgentRuntimeOpti
   const workspaceChangeRepository = new WorkspaceChangeRepository(persistence.database);
   const sessionRepository = new SessionV2Repository(persistence.database);
   const activeRunStore = new ActiveRunStore();
-  const sessionService = observeSessionService(createSessionService({ repository: sessionRepository }), options.observabilityService);
+  const sessionService = observeSessionService(createSessionService({
+    repository: sessionRepository,
+    ...(options.sessionAttachmentFileSystem ? {
+      attachmentFileStore: createSessionAttachmentFileStore({
+        attachmentsPath: options.homePaths.attachmentsPath,
+        fileSystem: options.sessionAttachmentFileSystem,
+      }),
+    } : {}),
+  }), options.observabilityService);
   const sessionBranchService = createSessionBranchService({
     entries: {
       findMessageEntry: (input) => sessionRepository.findMessageEntry(input),
     },
   });
-  const inputService = createInputService();
+  const inputService = createInputService({
+    fileReader: options.inputFileReader ?? {
+      readFile: async () => { throw new Error('Host image file reading is unavailable.'); },
+    },
+  });
   const settingsService = resolveSettingsService(options.appSettingsProvider) ?? createSettingsService({
     file_store: options.settingsStorage ?? createLocalSettingsJsonStorage({
       settingsPath: options.homePaths.settingsPath,
@@ -430,9 +454,17 @@ function observeSessionService(service: SessionService, observability?: Observab
       return result;
     });
   };
+  const observeAsync = async <T extends { status: string }>(role: string, operation: () => Promise<T>): Promise<T> => {
+    const span = observability.startSpan({ name: 'session.append_message', attributes: { role } });
+    return observability.runInSpanContext(span, async () => {
+      const result = await operation();
+      observability.endSpan({ span, status: result.status === 'saved' ? 'ok' : 'error', attributes: { role } });
+      return result;
+    });
+  };
   return new Proxy(service, {
     get(target, property, receiver) {
-      if (property === 'saveUserMessage') return (request: Parameters<SessionService['saveUserMessage']>[0]) => observe('user', () => target.saveUserMessage(request));
+      if (property === 'saveUserMessage') return (request: Parameters<SessionService['saveUserMessage']>[0]) => observeAsync('user', () => target.saveUserMessage(request));
       if (property === 'saveAssistantMessage') return (request: Parameters<SessionService['saveAssistantMessage']>[0]) => observe('assistant', () => target.saveAssistantMessage(request));
       if (property === 'saveToolResultMessage') return (request: Parameters<SessionService['saveToolResultMessage']>[0]) => observe('toolResult', () => target.saveToolResultMessage(request));
       const value = Reflect.get(target, property, receiver);
@@ -604,6 +636,7 @@ function createModelConfigSettingsFacade(settingsService: SettingsService): Pick
           protocol: provider.protocol,
           ...(provider.base_url ? { base_url: provider.base_url } : {}),
           model_id: request.model_id,
+          capabilities: provider.models[request.model_id]!.capabilities,
         },
       };
     },
