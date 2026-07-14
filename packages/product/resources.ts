@@ -1,4 +1,5 @@
 /* Describes Product-owned resources copied into packaged host artifacts. */
+import fs from 'node:fs';
 import path from 'node:path';
 import { PERSISTENCE_MIGRATIONS_RESOURCE_PATH } from '../coding-agent/persistence/schema';
 
@@ -15,11 +16,12 @@ export function resolveProductSystemSkillsPath(input: {
 }
 
 export function getProductPackagingResources(cwd: string): Array<{ source: string; target: string }> {
+  const systemSkillsPath = path.resolve(cwd, 'packages/coding-agent/skills/built-in-skills');
   return [
-    {
-      source: path.resolve(cwd, 'packages/coding-agent/skills/built-in-skills'),
+    ...(fs.existsSync(systemSkillsPath) ? [{
+      source: systemSkillsPath,
       target: PRODUCT_SYSTEM_SKILLS_RESOURCE_PATH,
-    },
+    }] : []),
     {
       source: path.resolve(cwd, 'packages/coding-agent/persistence/migrations'),
       target: PERSISTENCE_MIGRATIONS_RESOURCE_PATH,
