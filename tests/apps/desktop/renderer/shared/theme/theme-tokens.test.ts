@@ -10,11 +10,10 @@ import {
 describe('theme tokens', () => {
   it('defines the built-in desktop themes', () => {
     expect(themeNames).toEqual(['megumi-warm', 'neutral-light', 'graphite-dark', 'sage-mist', 'midnight-blue']);
-    expect(themeDefinitions['megumi-warm'].label).toBe('Megumi Warm');
-    expect(themeDefinitions['neutral-light'].label).toBe('Neutral Light');
-    expect(themeDefinitions['graphite-dark'].label).toBe('Graphite Dark');
-    expect(themeDefinitions['sage-mist'].label).toBe('Sage Mist');
-    expect(themeDefinitions['midnight-blue'].label).toBe('Midnight Blue');
+    for (const themeName of themeNames) {
+      expect(themeDefinitions[themeName]).toEqual(expect.objectContaining({ name: themeName }));
+      expect(themeDefinitions[themeName]).not.toHaveProperty('label');
+    }
   });
 
   it('provides every semantic variable for every theme', () => {

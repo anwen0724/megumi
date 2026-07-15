@@ -1,17 +1,20 @@
 import type { CSSProperties } from 'react';
 import { Check } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cx } from '../ui';
 import { themeDefinitions, themeNames } from './theme-tokens';
 import { useThemeStore } from './theme-store';
 
 export function ThemeSelector() {
+  const { t } = useTranslation('common');
   const currentTheme = useThemeStore((state) => state.theme);
   const persistTheme = useThemeStore((state) => state.persistTheme);
 
   return (
-    <div role="radiogroup" aria-label="Theme" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+    <div role="radiogroup" aria-label={t('theme.label')} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {themeNames.map((themeName) => {
         const definition = themeDefinitions[themeName];
+        const label = t(`theme.names.${themeName}`);
         const selected = currentTheme === themeName;
         const swatchStyle = {
           background: definition.variables['--color-app-bg'],
@@ -24,7 +27,7 @@ export function ThemeSelector() {
             type="button"
             role="radio"
             aria-checked={selected}
-            aria-label={`${definition.label}${selected ? ', current' : ''}`}
+            aria-label={selected ? t('theme.current', { theme: label }) : label}
             onClick={() => void persistTheme(themeName)}
             className={cx(
               'group flex min-h-24 cursor-pointer flex-col items-stretch overflow-hidden rounded-xl border text-left transition-colors duration-150',
@@ -44,11 +47,11 @@ export function ThemeSelector() {
               <span style={{ background: definition.variables['--color-accent'] }} />
             </span>
             <span className="flex min-w-0 items-center gap-2 px-3 py-2.5">
-              <span className="block min-w-0 flex-1 truncate text-sm font-medium">{definition.label}</span>
+              <span className="block min-w-0 flex-1 truncate text-sm font-medium">{label}</span>
               {selected ? (
                 <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--color-accent)]">
                   <Check size={14} aria-hidden="true" />
-                  Current
+                  {t('actions.current')}
                 </span>
               ) : null}
             </span>

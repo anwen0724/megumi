@@ -1,10 +1,12 @@
 import { useEffect, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Activity, Bot, BrainCircuit, CheckCircle2, Globe2, Info, Palette, ShieldCheck } from 'lucide-react';
 import { DiagnosticsPanel } from '../features/observability';
 import { MemorySettingsPanel } from '../features/memory-settings';
 import { ProviderSettingsPanel } from '../features/provider-settings';
 import { WebSettingsPanel } from '../features/web-settings';
 import { ThemeSelector } from '../shared/theme';
+import { LanguageSelector } from '../shared/i18n';
 import {
   Button,
   SettingsPageHeader,
@@ -60,6 +62,7 @@ function activeCategoryLabel(category: SettingsCategory): SettingsCategoryItem {
 }
 
 export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize }: SettingsPageProps) {
+  const { t } = useTranslation('settings');
   const [category, setCategory] = useState<SettingsCategory>('appearance');
   const activeCategory = activeCategoryLabel(category);
 
@@ -165,8 +168,16 @@ export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize 
                     description={activeCategory.description}
                   />
                   <SettingsSection
-                    title="Theme"
-                    description="Select a color theme for the desktop interface."
+                    title={t('appearance.languageTitle')}
+                    description={t('appearance.languageDescription')}
+                  >
+                    <div className="p-5">
+                      <LanguageSelector />
+                    </div>
+                  </SettingsSection>
+                  <SettingsSection
+                    title={t('appearance.themeTitle')}
+                    description={t('appearance.themeDescription')}
                   >
                     <div className="p-5">
                       <ThemeSelector />

@@ -1,2 +1,53 @@
 /* Defines source-language copy for first-run setup. */
-export const setup = {} as const;
+export const setup = {
+  branding: {
+    subtitle: 'First-run setup',
+    privacy: 'Your provider credentials and preferences stay on this device.',
+  },
+  progressLabel: 'Setup progress',
+  steps: {
+    preferences: { label: 'Appearance', description: 'Language and theme' },
+    provider: { label: 'Provider', description: 'Connect an AI model' },
+    ready: { label: 'Ready', description: 'Review and begin' },
+  },
+  preferences: {
+    eyebrow: 'Welcome',
+    title: 'Make Megumi yours',
+    description: 'Choose how Megumi looks and feels. You can change these preferences later in Settings.',
+    languageHint: 'Choose the language used by the interface.',
+    appearance: 'Appearance',
+  },
+  provider: {
+    eyebrow: 'AI provider',
+    title: 'Connect your model',
+    description: 'Choose a supported provider and enter your API key. Megumi will use the catalog defaults for the connection.',
+    label: 'Provider',
+    loading: 'Loading supported providers…',
+    modelCount_one: '{{count}} available model',
+    modelCount_other: '{{count}} available models',
+    defaultModel: 'Default model',
+    apiKey: 'API key',
+    apiKeyPlaceholder: 'Enter API key',
+    showApiKey: 'Show API key',
+    hideApiKey: 'Hide API key',
+    advanced: 'Advanced settings',
+    baseUrl: 'Base URL',
+    protocol: 'Protocol: {{protocol}}',
+  },
+  ready: {
+    eyebrow: 'All set',
+    title: 'You’re ready to build',
+    description: 'Review your setup, then open Megumi. These settings remain available from the Settings page.',
+    setupComplete: 'Setup complete',
+    changeLater: 'Everything can be changed later.',
+    provider: 'Provider',
+    defaultModel: 'Default model',
+    notConfigured: 'Not configured',
+    configureLater: 'Configure later in Settings',
+  },
+  actions: {
+    setupLater: 'Set up later',
+    saving: 'Saving…',
+    start: 'Start using Megumi',
+  },
+} as const;

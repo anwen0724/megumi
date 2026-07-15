@@ -22,3 +22,4 @@ export {
   rendererError,
 } from './error-localization';
 export type { RendererErrorDescriptor } from './error-localization';
+export { LanguageSelector } from './LanguageSelector';

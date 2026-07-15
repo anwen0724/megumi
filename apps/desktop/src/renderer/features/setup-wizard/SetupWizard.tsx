@@ -3,6 +3,7 @@
  * Catalog-backed provider choices keep onboarding aligned with Settings without duplicating provider facts.
  */
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Bot,
   Check,
@@ -17,24 +18,16 @@ import {
 import type { AppLanguage, ProviderCatalogUiDto } from '@megumi/product/host-interface';
 import { useProviderStore } from '../../entities/provider';
 import { Button, TextField, cx } from '../../shared/ui';
-import { localizeRendererError } from '../../shared/i18n';
+import { applyRendererLanguage, localizeRendererError } from '../../shared/i18n';
 import { themeDefinitions, themeNames, useThemeStore, type ThemeName } from '../../shared/theme';
 import { useSetupWizardStore } from './setup-wizard-store';
 
 type Step = 'preferences' | 'provider' | 'ready';
 
-const steps: Array<{ id: Step; label: string; description: string }> = [
-  { id: 'preferences', label: 'Appearance', description: 'Language and theme' },
-  { id: 'provider', label: 'Provider', description: 'Connect an AI model' },
-  { id: 'ready', label: 'Ready', description: 'Review and begin' },
-];
-
-const languageOptions: Array<{ id: AppLanguage; label: string; detail: string }> = [
-  { id: 'en-US', label: 'English', detail: 'English (United States)' },
-];
-
 export function SetupWizard() {
+  const { t } = useTranslation(['setup', 'common']);
   const status = useSetupWizardStore((state) => state.status);
+  const bootstrapLanguage = useSetupWizardStore((state) => state.language);
   const error = useSetupWizardStore((state) => state.error);
   const completeSetup = useSetupWizardStore((state) => state.completeSetup);
   const catalog = useProviderStore((state) => state.catalog);
@@ -44,8 +37,8 @@ export function SetupWizard() {
   const applyTheme = useThemeStore((state) => state.setTheme);
 
   const [step, setStep] = useState<Step>('preferences');
-  const [language, setLanguage] = useState<AppLanguage>('en-US');
-  const [theme, setTheme] = useState<ThemeName>('midnight-blue');
+  const [language, setLanguage] = useState<AppLanguage>(bootstrapLanguage);
+  const [theme, setTheme] = useState<ThemeName>(() => useThemeStore.getState().theme);
   const [providerId, setProviderId] = useState('');
   const [modelId, setModelId] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
@@ -60,6 +53,15 @@ export function SetupWizard() {
   const selectedModel = selectedProvider?.models.find((model) => model.modelId === modelId);
   const saving = status === 'saving';
   const providerComplete = Boolean(providerId && modelId && apiKey.trim());
+  const steps: Array<{ id: Step; label: string; description: string }> = [
+    { id: 'preferences', label: t('setup:steps.preferences.label'), description: t('setup:steps.preferences.description') },
+    { id: 'provider', label: t('setup:steps.provider.label'), description: t('setup:steps.provider.description') },
+    { id: 'ready', label: t('setup:steps.ready.label'), description: t('setup:steps.ready.description') },
+  ];
+  const languageOptions: Array<{ id: AppLanguage; label: string; detail: string }> = [
+    { id: 'zh-CN', label: t('common:language.chinese'), detail: t('common:language.chineseDetail') },
+    { id: 'en-US', label: t('common:language.english'), detail: t('common:language.englishDetail') },
+  ];
 
   useEffect(() => {
     if (providerStatus === 'idle') {
@@ -82,6 +84,11 @@ export function SetupWizard() {
   function handleThemeChange(nextTheme: ThemeName) {
     setTheme(nextTheme);
     applyTheme(nextTheme);
+  }
+
+  function handleLanguageChange(nextLanguage: AppLanguage) {
+    setLanguage(nextLanguage);
+    void applyRendererLanguage(nextLanguage);
   }
 
   async function handleFinish() {
@@ -114,11 +121,11 @@ export function SetupWizard() {
           </div>
           <div>
             <p className="text-lg font-semibold tracking-tight text-[var(--color-text)]">Megumi</p>
-            <p className="text-xs text-[var(--color-text-muted)]">First-run setup</p>
+            <p className="text-xs text-[var(--color-text-muted)]">{t('setup:branding.subtitle')}</p>
           </div>
         </div>
 
-        <nav className="mt-12 space-y-1" aria-label="Setup progress">
+        <nav className="mt-12 space-y-1" aria-label={t('setup:progressLabel')}>
           {steps.map((item, index) => {
             const currentIndex = steps.findIndex((candidate) => candidate.id === step);
             const complete = index < currentIndex;
@@ -151,7 +158,7 @@ export function SetupWizard() {
         </nav>
 
         <p className="mt-auto text-xs leading-5 text-[var(--color-text-subtle)]">
-          Your provider credentials and preferences stay on this device.
+          {t('setup:branding.privacy')}
         </p>
       </aside>
 
@@ -159,7 +166,7 @@ export function SetupWizard() {
         <div className="mx-auto w-full max-w-3xl px-6 py-10 sm:px-10 lg:py-12">
           <div className="mb-9 lg:hidden">
             <p className="text-sm font-semibold text-[var(--color-text)]">Megumi</p>
-            <div className="mt-4 flex gap-2" aria-label="Setup progress">
+            <div className="mt-4 flex gap-2" aria-label={t('setup:progressLabel')}>
               {steps.map((item) => (
                 <span
                   key={item.id}
@@ -179,7 +186,8 @@ export function SetupWizard() {
               <PreferencesStep
                 language={language}
                 theme={theme}
-                onLanguageChange={setLanguage}
+                onLanguageChange={handleLanguageChange}
+                languageOptions={languageOptions}
                 onThemeChange={handleThemeChange}
               />
             ) : null}
@@ -202,8 +210,8 @@ export function SetupWizard() {
             ) : null}
             {step === 'ready' ? (
               <ReadyStep
-                language={languageOptions.find((option) => option.id === language)?.label ?? 'English'}
-                theme={themeDefinitions[theme].label}
+                language={languageOptions.find((option) => option.id === language)?.label ?? t('common:language.english')}
+                theme={t(`common:theme.names.${theme}`)}
                 provider={skipProvider ? undefined : selectedProvider?.displayName}
                 model={skipProvider ? undefined : selectedModel?.displayName ?? modelId}
               />
@@ -224,13 +232,13 @@ export function SetupWizard() {
                 disabled={saving}
                 onClick={() => setStep(step === 'ready' ? 'provider' : 'preferences')}
               >
-                Back
+                {t('common:actions.back')}
               </Button>
             )}
 
             {step === 'preferences' ? (
               <Button variant="primary" className="h-11 min-w-28" onClick={() => setStep('provider')}>
-                Continue <ChevronRight size={15} aria-hidden="true" />
+                {t('common:actions.continue')} <ChevronRight size={15} aria-hidden="true" />
               </Button>
             ) : null}
 
@@ -245,7 +253,7 @@ export function SetupWizard() {
                     setStep('ready');
                   }}
                 >
-                  Set up later
+                  {t('setup:actions.setupLater')}
                 </Button>
                 <Button
                   variant="primary"
@@ -256,14 +264,14 @@ export function SetupWizard() {
                     setStep('ready');
                   }}
                 >
-                  Continue <ChevronRight size={15} aria-hidden="true" />
+                  {t('common:actions.continue')} <ChevronRight size={15} aria-hidden="true" />
                 </Button>
               </div>
             ) : null}
 
             {step === 'ready' ? (
               <Button variant="primary" className="h-11 min-w-40" disabled={saving} onClick={() => void handleFinish()}>
-                {saving ? 'Saving…' : 'Start using Megumi'}
+                {saving ? t('setup:actions.saving') : t('setup:actions.start')}
               </Button>
             ) : null}
           </div>
@@ -288,25 +296,28 @@ function PreferencesStep({
   theme,
   onLanguageChange,
   onThemeChange,
+  languageOptions,
 }: {
   language: AppLanguage;
   theme: ThemeName;
   onLanguageChange: (language: AppLanguage) => void;
   onThemeChange: (theme: ThemeName) => void;
+  languageOptions: Array<{ id: AppLanguage; label: string; detail: string }>;
 }) {
+  const { t } = useTranslation(['setup', 'common']);
   return (
     <div>
       <StepHeading
-        eyebrow="Welcome"
-        title="Make Megumi yours"
-        description="Choose how Megumi looks and feels. You can change these preferences later in Settings."
+        eyebrow={t('setup:preferences.eyebrow')}
+        title={t('setup:preferences.title')}
+        description={t('setup:preferences.description')}
       />
 
       <div className="space-y-7">
         <div>
           <div className="mb-3 flex items-center gap-2">
-            <span className="text-sm font-semibold text-[var(--color-text)]">Language</span>
-            <span className="text-xs text-[var(--color-text-muted)]">More languages will be available later.</span>
+            <span className="text-sm font-semibold text-[var(--color-text)]">{t('common:language.label')}</span>
+            <span className="text-xs text-[var(--color-text-muted)]">{t('setup:preferences.languageHint')}</span>
           </div>
           <div className="max-w-sm">
             {languageOptions.map((option) => {
@@ -337,11 +348,12 @@ function PreferencesStep({
 
         <div>
           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
-            <Palette size={16} aria-hidden="true" /> Appearance
+            <Palette size={16} aria-hidden="true" /> {t('setup:preferences.appearance')}
           </div>
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
             {themeNames.map((themeName) => {
               const definition = themeDefinitions[themeName];
+              const themeLabel = t(`common:theme.names.${themeName}`);
               const selected = theme === themeName;
               const colors = [
                 definition.variables['--color-app-bg'],
@@ -354,7 +366,7 @@ function PreferencesStep({
                   type="button"
                   role="radio"
                   aria-checked={selected}
-                  aria-label={definition.label}
+                  aria-label={themeLabel}
                   onClick={() => onThemeChange(themeName)}
                   className={cx(
                     'group rounded-lg border p-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]',
@@ -367,7 +379,7 @@ function PreferencesStep({
                     {colors.map((color, index) => <span key={`${color}-${index}`} className="flex-1" style={{ backgroundColor: color }} />)}
                   </span>
                   <span className="mt-2 flex items-center justify-between text-xs font-medium text-[var(--color-text)]">
-                    {definition.label}
+                    {themeLabel}
                     {selected ? <Check size={15} className="text-[var(--color-accent)]" aria-hidden="true" /> : null}
                   </span>
                 </button>
@@ -409,21 +421,22 @@ function ProviderStep({
   onApiKeyChange: (apiKey: string) => void;
   onToggleApiKey: () => void;
 }) {
+  const { t } = useTranslation('setup');
   const provider = catalog.find((candidate) => candidate.providerId === providerId);
   return (
     <div>
       <StepHeading
-        eyebrow="AI provider"
-        title="Connect your model"
-        description="Choose a supported provider and enter your API key. Megumi will use the catalog defaults for the connection."
+        eyebrow={t('provider.eyebrow')}
+        title={t('provider.title')}
+        description={t('provider.description')}
       />
 
       <div className="space-y-6">
         <div>
-          <p className="mb-3 text-sm font-semibold text-[var(--color-text)]">Provider</p>
+          <p className="mb-3 text-sm font-semibold text-[var(--color-text)]">{t('provider.label')}</p>
           {loading ? (
             <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-5 text-sm text-[var(--color-text-muted)]">
-              Loading supported providers…
+              {t('provider.loading')}
             </div>
           ) : null}
           {!loading && !error ? (
@@ -448,7 +461,7 @@ function ProviderStep({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-semibold text-[var(--color-text)]">{candidate.displayName}</span>
-                      <span className="mt-0.5 block text-xs text-[var(--color-text-muted)]">{candidate.models.length} available models</span>
+                      <span className="mt-0.5 block text-xs text-[var(--color-text-muted)]">{t('provider.modelCount', { count: candidate.models.length })}</span>
                     </span>
                     {selected ? <Check size={17} className="text-[var(--color-accent)]" aria-hidden="true" /> : null}
                   </button>
@@ -462,10 +475,10 @@ function ProviderStep({
           <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
             <div className="grid gap-5 sm:grid-cols-2">
               <label className="space-y-1.5 text-xs font-medium text-[var(--color-text-muted)]">
-                Default model
+                {t('provider.defaultModel')}
                 <span className="relative block">
                   <select
-                    aria-label="Default model"
+                    aria-label={t('provider.defaultModel')}
                     value={modelId}
                     onChange={(event) => onModelChange(event.target.value)}
                     className="h-11 w-full appearance-none rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 pr-9 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/20"
@@ -477,7 +490,7 @@ function ProviderStep({
               </label>
 
               <div className="space-y-1.5">
-                <label htmlFor="setup-api-key" className="text-xs font-medium text-[var(--color-text-muted)]">API key</label>
+                <label htmlFor="setup-api-key" className="text-xs font-medium text-[var(--color-text-muted)]">{t('provider.apiKey')}</label>
                 <span className="relative block">
                   <KeyRound size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-subtle)]" aria-hidden="true" />
                   <input
@@ -485,13 +498,13 @@ function ProviderStep({
                     type={showApiKey ? 'text' : 'password'}
                     value={apiKey}
                     onChange={(event) => onApiKeyChange(event.target.value)}
-                    placeholder="Enter API key"
+                    placeholder={t('provider.apiKeyPlaceholder')}
                     autoComplete="off"
                     className="h-11 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] pl-9 pr-12 text-sm text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/20"
                   />
                   <button
                     type="button"
-                    aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+                    aria-label={showApiKey ? t('provider.hideApiKey') : t('provider.showApiKey')}
                     onClick={onToggleApiKey}
                     className="absolute right-1 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-md text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)]"
                   >
@@ -502,10 +515,10 @@ function ProviderStep({
             </div>
 
             <details className="mt-5 border-t border-[var(--color-border)] pt-4">
-              <summary className="cursor-pointer select-none text-xs font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Advanced settings</summary>
+              <summary className="cursor-pointer select-none text-xs font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)]">{t('provider.advanced')}</summary>
               <div className="mt-4">
-                <TextField label="Base URL" value={baseUrl} onChange={(event) => onBaseUrlChange(event.target.value)} />
-                <p className="mt-2 text-xs text-[var(--color-text-subtle)]">Protocol: {provider.protocol}</p>
+                <TextField label={t('provider.baseUrl')} value={baseUrl} onChange={(event) => onBaseUrlChange(event.target.value)} />
+                <p className="mt-2 text-xs text-[var(--color-text-subtle)]">{t('provider.protocol', { protocol: provider.protocol })}</p>
               </div>
             </details>
           </div>
@@ -516,18 +529,19 @@ function ProviderStep({
 }
 
 function ReadyStep({ language, theme, provider, model }: { language: string; theme: string; provider?: string; model?: string }) {
+  const { t } = useTranslation(['setup', 'common']);
   const rows = [
-    { label: 'Language', value: language },
-    { label: 'Appearance', value: theme },
-    { label: 'Provider', value: provider ?? 'Not configured' },
-    { label: 'Default model', value: model ?? 'Configure later in Settings' },
+    { label: t('common:language.label'), value: language },
+    { label: t('setup:preferences.appearance'), value: theme },
+    { label: t('setup:ready.provider'), value: provider ?? t('setup:ready.notConfigured') },
+    { label: t('setup:ready.defaultModel'), value: model ?? t('setup:ready.configureLater') },
   ];
   return (
     <div>
       <StepHeading
-        eyebrow="All set"
-        title="You’re ready to build"
-        description="Review your setup, then open Megumi. These settings remain available from the Settings page."
+        eyebrow={t('setup:ready.eyebrow')}
+        title={t('setup:ready.title')}
+        description={t('setup:ready.description')}
       />
       <div className="max-w-2xl overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
         <div className="flex items-center gap-4 border-b border-[var(--color-border)] bg-[var(--color-accent-soft)] px-5 py-4">
@@ -535,8 +549,8 @@ function ReadyStep({ language, theme, provider, model }: { language: string; the
             <Check size={19} aria-hidden="true" />
           </span>
           <div>
-            <p className="text-sm font-semibold text-[var(--color-text)]">Setup complete</p>
-            <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">Everything can be changed later.</p>
+            <p className="text-sm font-semibold text-[var(--color-text)]">{t('setup:ready.setupComplete')}</p>
+            <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">{t('setup:ready.changeLater')}</p>
           </div>
         </div>
         <dl className="divide-y divide-[var(--color-border)]">

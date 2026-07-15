@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SetupWizard, useSetupWizardStore } from '@megumi/desktop/renderer/features/setup-wizard';
 import { useProviderStore } from '@megumi/desktop/renderer/entities/provider';
 import { useThemeStore } from '@megumi/desktop/renderer/shared/theme';
+import { getRendererLanguage, initializeRendererI18n } from '@megumi/desktop/renderer/shared/i18n';
 
 const catalog = [
   {
@@ -120,5 +121,26 @@ describe('SetupWizard', () => {
 
     await user.click(screen.getByText('Advanced settings'));
     expect(screen.getByLabelText('Base URL')).toHaveValue('https://api.deepseek.com');
+  });
+
+  it('starts from the bootstrap language and previews another language without persisting it', async () => {
+    const update = vi.fn();
+    Object.defineProperty(window, 'megumi', {
+      configurable: true,
+      value: { settings: { update } },
+    });
+    useSetupWizardStore.setState({ status: 'ready', language: 'zh-CN', setupCompleted: false });
+    await initializeRendererI18n('zh-CN');
+
+    render(<SetupWizard />);
+
+    expect(screen.getByRole('heading', { name: '定制你的 Megumi' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /简体中文/ })).toHaveAttribute('aria-pressed', 'true');
+
+    await userEvent.click(screen.getByRole('button', { name: /English/ }));
+
+    expect(getRendererLanguage()).toBe('en-US');
+    expect(screen.getByRole('heading', { name: 'Make Megumi yours' })).toBeInTheDocument();
+    expect(update).not.toHaveBeenCalled();
   });
 });

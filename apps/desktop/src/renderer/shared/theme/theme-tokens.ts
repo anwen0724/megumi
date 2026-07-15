@@ -31,14 +31,12 @@ export type ThemeVariables = Record<SemanticThemeVariable, string>;
 
 export interface ThemeDefinition {
   name: ThemeName;
-  label: string;
   variables: ThemeVariables;
 }
 
 export const themeDefinitions = {
   'megumi-warm': {
     name: 'megumi-warm',
-    label: 'Megumi Warm',
     variables: {
       '--color-app-bg': '#f7f3ea',
       '--color-surface': '#fffaf0',
@@ -66,7 +64,6 @@ export const themeDefinitions = {
   },
   'neutral-light': {
     name: 'neutral-light',
-    label: 'Neutral Light',
     variables: {
       '--color-app-bg': '#f7f7f5',
       '--color-surface': '#ffffff',
@@ -94,7 +91,6 @@ export const themeDefinitions = {
   },
   'graphite-dark': {
     name: 'graphite-dark',
-    label: 'Graphite Dark',
     variables: {
       '--color-app-bg': '#171817',
       '--color-surface': '#20211f',
@@ -122,7 +118,6 @@ export const themeDefinitions = {
   },
   'sage-mist': {
     name: 'sage-mist',
-    label: 'Sage Mist',
     variables: {
       '--color-app-bg': '#edf3ed',
       '--color-surface': '#fbfdf8',
@@ -150,7 +145,6 @@ export const themeDefinitions = {
   },
   'midnight-blue': {
     name: 'midnight-blue',
-    label: 'Midnight Blue',
     variables: {
       '--color-app-bg': '#10151d',
       '--color-surface': '#171d27',
