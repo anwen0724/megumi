@@ -22,14 +22,14 @@ describe('shell display helpers', () => {
     expect(getWorkspaceBasename({ workspaceName: '   ', workspacePath: '   ' })).toBe('Local sessions');
   });
 
-  it('formats recent session update times as compact labels', () => {
+  it('formats recent session update times with the active locale', () => {
     const now = new Date('2026-05-18T12:00:00.000Z');
 
-    expect(formatSessionUpdatedAt('2026-05-18T12:00:00.000Z', now)).toBe('now');
-    expect(formatSessionUpdatedAt('2026-05-18T11:58:00.000Z', now)).toBe('2m');
-    expect(formatSessionUpdatedAt('2026-05-18T10:00:00.000Z', now)).toBe('2h');
-    expect(formatSessionUpdatedAt('2026-05-16T12:00:00.000Z', now)).toBe('2d');
-    expect(formatSessionUpdatedAt('2026-04-27T12:00:00.000Z', now)).toBe('3w');
+    expect(formatSessionUpdatedAt('2026-05-18T12:00:00.000Z', now)).toBe('this minute');
+    expect(formatSessionUpdatedAt('2026-05-18T11:58:00.000Z', now)).toBe('2 minutes ago');
+    expect(formatSessionUpdatedAt('2026-05-18T10:00:00.000Z', now)).toBe('2 hours ago');
+    expect(formatSessionUpdatedAt('2026-05-16T12:00:00.000Z', now)).toBe('2 days ago');
+    expect(formatSessionUpdatedAt('2026-04-27T12:00:00.000Z', now)).toBe('3 weeks ago');
   });
 
   it('returns an empty label for invalid session update times', () => {

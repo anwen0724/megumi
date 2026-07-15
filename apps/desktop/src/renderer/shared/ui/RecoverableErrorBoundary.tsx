@@ -3,6 +3,7 @@
  */
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { showToast } from './toast-store';
+import { rendererI18n } from '../i18n';
 
 interface RecoverableErrorBoundaryProps {
   children: ReactNode;
@@ -25,11 +26,11 @@ export class RecoverableErrorBoundary extends Component<
     return { hasError: true };
   }
 
-  componentDidCatch(error: Error, _info: ErrorInfo): void {
+  componentDidCatch(_error: Error, _info: ErrorInfo): void {
     showToast({
       tone: 'error',
-      title: this.props.title ?? 'Something could not be displayed',
-      message: this.props.message ?? error.message,
+      title: this.props.title ?? rendererI18n.t('errors:render_failed'),
+      message: this.props.message,
     });
   }
 

@@ -29,7 +29,7 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>
     );
     expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong');
-    expect(screen.getByText('Test crash')).toBeTruthy();
+    expect(screen.queryByText('Test crash')).toBeNull();
     expect(screen.getByText('Retry')).toBeTruthy();
   });
 

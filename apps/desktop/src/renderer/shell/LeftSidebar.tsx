@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ChevronLeft,
   ChevronRight,
@@ -66,6 +67,7 @@ export function LeftSidebar({
   onOpenProject,
   onRemoveProject,
 }: LeftSidebarProps) {
+  const { t } = useTranslation('shell');
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(
     () => new Set(projects.map((p) => p.id)),
   );
@@ -149,18 +151,18 @@ export function LeftSidebar({
         data-testid="left-sidebar"
         className="w-14 shrink-0 overflow-hidden border-r border-[var(--color-border)] bg-[var(--color-surface-muted)] transition-[width] duration-200 ease-out"
       >
-        <nav aria-label="Primary project navigation" className="flex h-full flex-col items-center gap-3 py-3">
-          <IconButton label="Expand sidebar" onClick={onToggleCollapsed} size="sm">
+        <nav aria-label={t('navigation.primary')} className="flex h-full flex-col items-center gap-3 py-3">
+          <IconButton label={t('navigation.expandSidebar')} onClick={onToggleCollapsed} size="sm">
             <PanelLeftOpen size={16} aria-hidden="true" />
           </IconButton>
-          <IconButton label="New session" onClick={onCreateSession} size="sm" variant="primary">
+          <IconButton label={t('navigation.newSession')} onClick={onCreateSession} size="sm" variant="primary">
             <MessageSquarePlus size={15} aria-hidden="true" />
           </IconButton>
-          <IconButton label="Task plan" size="sm" variant="ghost">
+          <IconButton label={t('navigation.taskPlan')} size="sm" variant="ghost">
             <ClipboardList size={15} aria-hidden="true" />
           </IconButton>
           <div className="mt-auto">
-            <IconButton label="Settings" onClick={onOpenSettings} size="sm" variant="ghost">
+            <IconButton label={t('navigation.settings')} onClick={onOpenSettings} size="sm" variant="ghost">
               <Settings size={15} aria-hidden="true" />
             </IconButton>
           </div>
@@ -178,22 +180,22 @@ export function LeftSidebar({
       <div
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize chat sidebar"
+        aria-label={t('navigation.resizeSidebar')}
         onPointerDown={onStartResize}
         className="absolute right-0 top-0 z-10 h-full w-1 cursor-col-resize bg-transparent hover:bg-[var(--color-focus)]/40"
       />
       <div className="flex h-12 items-center justify-between px-3">
-        <span className="truncate text-sm font-semibold text-[var(--color-text)]">Chats</span>
-        <IconButton label="Collapse sidebar" onClick={onToggleCollapsed} size="sm">
+        <span className="truncate text-sm font-semibold text-[var(--color-text)]">{t('navigation.chats')}</span>
+        <IconButton label={t('navigation.collapseSidebar')} onClick={onToggleCollapsed} size="sm">
           <ChevronLeft size={16} aria-hidden="true" />
         </IconButton>
       </div>
 
-      <nav aria-label="Primary project navigation" className="flex-1 overflow-y-auto px-3 py-1">
+      <nav aria-label={t('navigation.primary')} className="flex-1 overflow-y-auto px-3 py-1">
         <div className="mb-5 space-y-1">
           <Button onClick={onCreateSession} variant="primary" size="md" className="w-full justify-start">
             <MessageSquarePlus size={15} aria-hidden="true" />
-            New session
+            {t('navigation.newSession')}
           </Button>
 
           <button
@@ -201,19 +203,19 @@ export function LeftSidebar({
             className="flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-sm font-medium text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]"
           >
             <ClipboardList size={15} aria-hidden="true" />
-            Task plan
+            {t('navigation.taskPlan')}
           </button>
         </div>
 
-        <section aria-label="Projects">
+        <section aria-label={t('projects.label')}>
           <div className="mb-1 flex items-center justify-between">
-            <span className="text-xs font-semibold text-[var(--color-text-muted)]">Projects</span>
+            <span className="text-xs font-semibold text-[var(--color-text-muted)]">{t('projects.label')}</span>
             <div ref={menuRef} className="relative">
               <button
                 ref={projectMenuButtonRef}
                 type="button"
-                aria-label="Project actions"
-                title="Project actions"
+                aria-label={t('projects.actions')}
+                title={t('projects.actions')}
                 onClick={toggleProjectMenu}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-transparent bg-transparent text-[var(--color-text-muted)] transition hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -241,7 +243,7 @@ export function LeftSidebar({
                       className="shrink-0 text-[var(--color-text-muted)]"
                       aria-hidden="true"
                     />
-                    Open project
+                    {t('projects.open')}
                   </button>
                   <button
                     type="button"
@@ -251,7 +253,7 @@ export function LeftSidebar({
                     className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-[var(--color-text-muted)] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Plus size={15} className="shrink-0" aria-hidden="true" />
-                    New project
+                    {t('projects.create')}
                   </button>
                   <button
                     type="button"
@@ -264,7 +266,7 @@ export function LeftSidebar({
                     }}
                   >
                     <SlidersHorizontal size={15} className="shrink-0 text-[var(--color-text-muted)]" aria-hidden="true" />
-                    Manage projects
+                    {t('projects.manage')}
                   </button>
                 </div>
               ) : null}
@@ -272,7 +274,7 @@ export function LeftSidebar({
           </div>
 
           {projects.length === 0 ? (
-            <p className="py-2 pl-3 pr-3 text-sm text-[var(--color-text-muted)]">No projects</p>
+            <p className="py-2 pl-3 pr-3 text-sm text-[var(--color-text-muted)]">{t('projects.empty')}</p>
           ) : (
             projects.map((project) => {
               const isExpanded = expandedProjects.has(project.id);
@@ -311,7 +313,7 @@ export function LeftSidebar({
                     <>
                       {project.sessions.length === 0 ? (
                         <p className="py-2 pl-8 pr-3 text-sm text-[var(--color-text-muted)]">
-                          No sessions yet
+                          {t('projects.noSessions')}
                         </p>
                       ) : (
                         <div className="space-y-0.5">
@@ -321,7 +323,7 @@ export function LeftSidebar({
                               type="button"
                               onClick={() => onSelectSession?.(session.id)}
                               aria-current={session.active ? 'page' : undefined}
-                              aria-label={`Open session ${session.title}, updated ${session.meta}`}
+                              aria-label={t('projects.openSession', { title: session.title, updated: session.meta })}
                               title={`${session.title} · ${session.meta}`}
                               className={cx(
                                 'grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-md py-1.5 pl-8 pr-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]',
@@ -343,7 +345,7 @@ export function LeftSidebar({
                           onClick={() => toggleShowAll(project.id)}
                           className="mt-1 rounded-md px-8 py-1.5 text-left text-sm text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
                         >
-                          {showAll ? 'Show fewer sessions' : 'Show more sessions'}
+                          {showAll ? t('projects.showFewer') : t('projects.showMore')}
                         </button>
                       ) : null}
                     </>
@@ -362,7 +364,7 @@ export function LeftSidebar({
           className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
         >
           <Settings size={15} aria-hidden="true" />
-          Settings
+          {t('navigation.settings')}
         </button>
       </div>
 

@@ -1,8 +1,10 @@
 ﻿// Renders the global long-term memory runtime toggle in Settings.
 // This component does not display, edit, or preview individual memory records.
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
-import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../../shared/ipc';
+import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
+import { localizeRendererError, rendererError, type RendererErrorDescriptor } from '../../../shared/i18n';
 import {
   SettingsPageHeader,
   SettingsRow,
@@ -13,9 +15,10 @@ import {
 type MemorySettingsStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';
 
 export function MemorySettingsPanel() {
+  const { t } = useTranslation('settings');
   const [enabled, setEnabled] = useState(false);
   const [status, setStatus] = useState<MemorySettingsStatus>('idle');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<RendererErrorDescriptor | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,12 +30,12 @@ export function MemorySettingsPanel() {
       if (cancelled) return;
       if (!result.ok) {
         setStatus('error');
-        setError(getRuntimeIpcErrorMessage(result));
+        setError(rendererError(result.data.code, result.data.message));
         return;
       }
       if (result.data.status === 'failed') {
         setStatus('error');
-        setError(result.data.failure.message);
+        setError(rendererError(result.data.failure.code, result.data.failure.message));
         return;
       }
       setEnabled(result.data.settings.memory.enabled);
@@ -40,7 +43,7 @@ export function MemorySettingsPanel() {
     }).catch((reason: unknown) => {
       if (cancelled) return;
       setStatus('error');
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setError(rendererError('settings_load_failed', reason instanceof Error ? reason.message : String(reason)));
     });
 
     return () => {
@@ -66,19 +69,19 @@ export function MemorySettingsPanel() {
     } catch (reason) {
       setEnabled(previous);
       setStatus('error');
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setError(rendererError('settings_update_failed', reason instanceof Error ? reason.message : String(reason)));
       return;
     }
     if (!result.ok) {
       setEnabled(previous);
       setStatus('error');
-      setError(getRuntimeIpcErrorMessage(result));
+      setError(rendererError(result.data.code, result.data.message));
       return;
     }
     if (result.data.status === 'failed') {
       setEnabled(previous);
       setStatus('error');
-      setError(result.data.failure.message);
+      setError(rendererError(result.data.failure.code, result.data.failure.message));
       return;
     }
     setEnabled(result.data.settings.memory.enabled);
@@ -90,22 +93,22 @@ export function MemorySettingsPanel() {
   return (
     <div className="space-y-6">
       <SettingsPageHeader
-        title="Memory"
-        description="Control whether Megumi may remember useful information across conversations."
+        title={t('memory.title')}
+        description={t('memory.description')}
       />
-      <SettingsSection title="Memory preferences">
+      <SettingsSection title={t('memory.preferences')}>
         <SettingsRow
-          title="Conversation memory"
-          description="Remember useful project context and preferences so future conversations can continue with less repetition."
+          title={t('memory.conversation')}
+          description={t('memory.conversationDescription')}
         >
           <div className="flex items-center justify-end gap-3">
             <span className="text-sm text-[var(--color-text-muted)]">
-              {status === 'loading' ? 'Loading…' : enabled ? 'On' : 'Off'}
+              {status === 'loading' ? t('memory.loading') : enabled ? t('memory.on') : t('memory.off')}
             </span>
             <button
               type="button"
               role="switch"
-              aria-label="Conversation memory"
+              aria-label={t('memory.conversation')}
               aria-checked={enabled}
               disabled={busy}
               onClick={() => void updateAutoCaptureEnabled(!enabled)}
@@ -130,7 +133,7 @@ export function MemorySettingsPanel() {
         </SettingsRow>
         {error ? (
           <p role="alert" className="border-t border-[var(--color-danger)] bg-[var(--color-danger-soft)] px-5 py-3 text-sm text-[var(--color-danger)]">
-            {error}
+            {localizeRendererError(error)}
           </p>
         ) : null}
       </SettingsSection>

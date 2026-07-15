@@ -3,6 +3,7 @@
  * Provider discovery stays in the left pane; model details are edited in a dialog.
  */
 import { FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Bot,
   ChevronDown,
@@ -30,6 +31,7 @@ import {
   SettingsPageHeader,
   cx,
 } from '../../../shared/ui';
+import { formatNumber, formatTokenCount } from '../../../shared/i18n';
 
 type ProviderProtocol = 'openai-compatible' | 'anthropic';
 
@@ -142,12 +144,11 @@ function providerIconClassName(selected: boolean): string {
 function formatContextWindow(value: string): string {
   const tokens = Number(value);
   if (!Number.isFinite(tokens) || tokens <= 0) return value;
-  if (tokens >= 1_000_000) return `${Number((tokens / 1_000_000).toFixed(2))}M`;
-  if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}K`;
-  return String(tokens);
+  return formatTokenCount(tokens);
 }
 
 export function ProviderSettingsPanel() {
+  const { t } = useTranslation('settings');
   const providers = useProviderStore((state) => state.providers);
   const catalog = useProviderStore((state) => state.catalog);
   const status = useProviderStore((state) => state.status);
@@ -374,8 +375,8 @@ export function ProviderSettingsPanel() {
   return (
     <div className="space-y-6">
       <SettingsPageHeader
-        title="Models & Providers"
-        description="Connect AI providers and choose which models are available in chat."
+        title={t('provider.title')}
+        description={t('provider.description')}
       />
 
       {error ? (
@@ -387,20 +388,20 @@ export function ProviderSettingsPanel() {
       <div className="grid min-h-[28rem] gap-4 lg:grid-cols-[minmax(15rem,0.8fr)_minmax(24rem,1.55fr)]">
         <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-semibold text-[var(--color-text)]">Providers</h2>
+            <h2 className="text-base font-semibold text-[var(--color-text)]">{t('provider.providers')}</h2>
             <Button type="button" size="sm" variant="secondary" onClick={startAddProvider} disabled={isSaving}>
               <Plus size={15} aria-hidden="true" />
-              Add provider
+              {t('provider.add')}
             </Button>
           </div>
 
           <label className="mt-4 flex h-10 items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 text-sm text-[var(--color-text-muted)] focus-within:border-[var(--color-focus)] focus-within:ring-2 focus-within:ring-[var(--color-focus)]/20">
             <Search size={16} aria-hidden="true" />
             <input
-              aria-label="Search providers"
+              aria-label={t('provider.search')}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search providers..."
+              placeholder={t('provider.searchPlaceholder')}
               className="min-w-0 flex-1 bg-transparent text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-subtle)]"
             />
           </label>
@@ -408,7 +409,7 @@ export function ProviderSettingsPanel() {
           <div className="mt-4 space-y-2">
             {isCreating ? (
               <ProviderListItem
-                entry={{ source: 'draft', providerId: newProviderId, displayName: selectedForm.provider || 'New provider', protocol: selectedForm.protocol }}
+                entry={{ source: 'draft', providerId: newProviderId, displayName: selectedForm.provider || t('provider.newProvider'), protocol: selectedForm.protocol }}
                 modelCount={selectedForm.models.length}
                 selected
                 onClick={() => setSelectedProviderId(newProviderId)}
@@ -427,7 +428,7 @@ export function ProviderSettingsPanel() {
 
             {status === 'loading' && providers.length === 0 ? (
               <p className="rounded-md border border-dashed border-[var(--color-border)] px-3 py-6 text-center text-sm text-[var(--color-text-muted)]">
-                Loading providers...
+                {t('provider.loading')}
               </p>
             ) : null}
           </div>
@@ -440,59 +441,59 @@ export function ProviderSettingsPanel() {
                 <div className="flex min-w-0 items-center gap-3">
                   <div className={providerIconClassName(true)}><Bot size={19} aria-hidden="true" /></div>
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <h2 className="truncate text-lg font-semibold text-[var(--color-text)]">{selectedForm.provider || 'New provider'}</h2>
+                    <h2 className="truncate text-lg font-semibold text-[var(--color-text)]">{selectedForm.provider || t('provider.newProvider')}</h2>
                     <Badge variant={selectedForm.enabled ? 'success' : 'neutral'}>
                       <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-current" />
-                      {selectedForm.enabled ? 'Enabled' : 'Disabled'}
+                      {selectedForm.enabled ? t('provider.enabled') : t('provider.disabled')}
                     </Badge>
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <IconButton label="Refresh providers" variant="secondary" size="sm" onClick={() => void loadProviders()} disabled={isSaving}>
+                  <IconButton label={t('provider.refresh')} variant="secondary" size="sm" onClick={() => void loadProviders()} disabled={isSaving}>
                     <RefreshCw size={15} aria-hidden="true" />
                   </IconButton>
                   <Button type="submit" form="provider-settings-form" size="sm" variant="primary" disabled={isSaving}>
-                    <Save size={15} aria-hidden="true" /> Save
+                    <Save size={15} aria-hidden="true" /> {t('provider.save')}
                   </Button>
                   <Button type="button" size="sm" variant="danger" onClick={() => void handleDeleteProvider()} disabled={!selectedProvider || isSaving}>
-                    <Trash2 size={15} aria-hidden="true" /> Delete
+                    <Trash2 size={15} aria-hidden="true" /> {t('provider.delete')}
                   </Button>
                 </div>
               </div>
 
               <form id="provider-settings-form" className="mt-5 overflow-hidden rounded-lg border border-[var(--color-border)]" onSubmit={(event) => void handleSettingsSubmit(event)}>
-                <FormGroup title="Connection">
-                  <FieldRow label="Provider">
-                    <input aria-label="Provider" value={selectedForm.provider} onChange={(event) => updateForm({ provider: event.target.value })} className={fieldClassName} placeholder="Enter provider name" disabled={selectedEntry?.source === 'quick' || selectedEntry?.source === 'saved'} />
+                <FormGroup title={t('provider.connection')}>
+                  <FieldRow label={t('provider.provider')}>
+                    <input aria-label={t('provider.provider')} value={selectedForm.provider} onChange={(event) => updateForm({ provider: event.target.value })} className={fieldClassName} placeholder={t('provider.providerPlaceholder')} disabled={selectedEntry?.source === 'quick' || selectedEntry?.source === 'saved'} />
                   </FieldRow>
-                  <FieldRow label="Protocol">
+                  <FieldRow label={t('provider.protocol')}>
                     <div className="relative">
-                      <select aria-label="Protocol" value={selectedForm.protocol} onChange={(event) => updateForm({ protocol: event.target.value as ProviderProtocol })} className={cx(fieldClassName, 'appearance-none pr-10')}>
+                      <select aria-label={t('provider.protocol')} value={selectedForm.protocol} onChange={(event) => updateForm({ protocol: event.target.value as ProviderProtocol })} className={cx(fieldClassName, 'appearance-none pr-10')}>
                         <option value="openai-compatible">OpenAI Compatible</option>
                         <option value="anthropic">Anthropic</option>
                       </select>
                       <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
                     </div>
                   </FieldRow>
-                  <FieldRow label="Base URL">
-                    <input aria-label="Base URL" value={selectedForm.baseUrl} onChange={(event) => updateForm({ baseUrl: event.target.value })} className={fieldClassName} placeholder="Enter provider API base URL" />
+                  <FieldRow label={t('provider.baseUrl')}>
+                    <input aria-label={t('provider.baseUrl')} value={selectedForm.baseUrl} onChange={(event) => updateForm({ baseUrl: event.target.value })} className={fieldClassName} placeholder={t('provider.baseUrlPlaceholder')} />
                   </FieldRow>
                 </FormGroup>
 
-                <FormGroup title="Authentication" bordered>
-                  <FieldRow label="API Key">
+                <FormGroup title={t('provider.authentication')} bordered>
+                  <FieldRow label={t('provider.apiKey')}>
                     <div className="relative">
                       <input
-                        aria-label="API Key"
+                        aria-label={t('provider.apiKey')}
                         type={showApiKey ? 'text' : 'password'}
                         value={selectedForm.apiKey}
                         onChange={(event) => updateForm({ apiKey: event.target.value, apiKeyDirty: true })}
                         className={cx(fieldClassName, 'pr-11')}
-                        placeholder="Paste API key"
+                        placeholder={t('provider.apiKeyPlaceholder')}
                       />
                       <button
                         type="button"
-                        aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+                        aria-label={showApiKey ? t('provider.hideApiKey') : t('provider.showApiKey')}
                         onClick={() => setShowApiKey((visible) => !visible)}
                         className="absolute right-1.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-elevated)] hover:text-[var(--color-text)]"
                       >
@@ -502,7 +503,7 @@ export function ProviderSettingsPanel() {
                   </FieldRow>
                 </FormGroup>
 
-                <FormGroup title="Models" bordered>
+                <FormGroup title={t('provider.models')} bordered>
                   <div className="overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-app-bg)]/35">
                     {selectedForm.models.map((model, index) => (
                       <div key={model.modelId} className={cx('flex items-center gap-3 px-3 py-2.5', index > 0 ? 'border-t border-[var(--color-border)]' : undefined)}>
@@ -510,20 +511,20 @@ export function ProviderSettingsPanel() {
                           <p className="truncate text-sm font-medium text-[var(--color-text)]">{model.displayName}</p>
                         </div>
                         <span className="rounded bg-[var(--color-surface-muted)] px-2 py-1 text-xs text-[var(--color-text-muted)]">{formatContextWindow(model.contextWindowTokens)}</span>
-                        <IconButton label={`Edit ${model.displayName}`} variant="secondary" size="sm" onClick={() => openModelEditor(model)}>
+                        <IconButton label={t('provider.editNamedModel', { name: model.displayName })} variant="secondary" size="sm" onClick={() => openModelEditor(model)}>
                           <Pencil size={14} aria-hidden="true" />
                         </IconButton>
-                        <IconButton label={`Remove ${model.displayName}`} variant="secondary" size="sm" onClick={() => removeModel(model.modelId)}>
+                        <IconButton label={t('provider.removeNamedModel', { name: model.displayName })} variant="secondary" size="sm" onClick={() => removeModel(model.modelId)}>
                           <X size={14} aria-hidden="true" />
                         </IconButton>
                       </div>
                     ))}
                     {selectedForm.models.length === 0 ? (
-                      <p className="px-3 py-5 text-center text-sm text-[var(--color-text-muted)]">No models configured.</p>
+                      <p className="px-3 py-5 text-center text-sm text-[var(--color-text-muted)]">{t('provider.noModels')}</p>
                     ) : null}
                   </div>
                   <Button type="button" size="sm" variant="secondary" onClick={startAddModel}>
-                    <Plus size={14} aria-hidden="true" /> Add model
+                    <Plus size={14} aria-hidden="true" /> {t('provider.addModel')}
                   </Button>
                 </FormGroup>
               </form>
@@ -532,8 +533,8 @@ export function ProviderSettingsPanel() {
             <div className="grid h-full min-h-[22rem] place-items-center text-center">
               <div>
                 <Server size={24} aria-hidden="true" className="mx-auto text-[var(--color-text-subtle)]" />
-                <p className="mt-3 text-sm font-medium text-[var(--color-text)]">Select or add a provider</p>
-                <p className="mt-1 text-xs text-[var(--color-text-muted)]">Provider settings control which models appear in chat.</p>
+                <p className="mt-3 text-sm font-medium text-[var(--color-text)]">{t('provider.selectPrompt')}</p>
+                <p className="mt-1 text-xs text-[var(--color-text-muted)]">{t('provider.selectDescription')}</p>
               </div>
             </div>
           )}
@@ -564,11 +565,12 @@ function ModelEditorDialog({
   onSave: () => void;
 }) {
   const imageEnabled = editor.model.imageInput === true;
+  const { t } = useTranslation(['settings', 'common']);
   const [contextPresetOpen, setContextPresetOpen] = useState(false);
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4 backdrop-blur-[2px]" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onCancel()}>
       <section role="dialog" aria-modal="true" aria-labelledby="model-editor-title" className="w-full max-w-[27rem] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl">
-        <h2 id="model-editor-title" className="sr-only">{editor.originalModelId ? 'Edit model' : 'Add model'}</h2>
+        <h2 id="model-editor-title" className="sr-only">{editor.originalModelId ? t('settings:provider.editModel') : t('settings:provider.addModel')}</h2>
 
         <div className="space-y-4">
           {editor.originalModelId ? (
@@ -579,20 +581,20 @@ function ModelEditorDialog({
           ) : (
             <label className="block space-y-1.5 text-sm font-medium text-[var(--color-text-subtle)]">
               <span>ID</span>
-              <input aria-label="Model ID" value={editor.model.modelId} onChange={(event) => onChange({ ...editor.model, modelId: event.target.value })} className={compactFieldClassName} />
+              <input aria-label={t('settings:provider.modelId')} value={editor.model.modelId} onChange={(event) => onChange({ ...editor.model, modelId: event.target.value })} className={compactFieldClassName} />
             </label>
           )}
 
           <label className="block space-y-1.5 text-sm font-medium text-[var(--color-text-subtle)]">
-            <span>Display name</span>
-            <input aria-label="Display name" value={editor.model.displayName} onChange={(event) => onChange({ ...editor.model, displayName: event.target.value })} className={compactFieldClassName} />
+            <span>{t('settings:provider.displayName')}</span>
+            <input aria-label={t('settings:provider.displayName')} value={editor.model.displayName} onChange={(event) => onChange({ ...editor.model, displayName: event.target.value })} className={compactFieldClassName} />
           </label>
 
           <label className="block space-y-1.5 text-sm font-medium text-[var(--color-text-subtle)]">
-            <span>Context window</span>
+            <span>{t('settings:provider.contextWindow')}</span>
             <div className="relative flex h-9 rounded-md border border-[var(--color-border)] bg-[var(--color-app-bg)]/65 shadow-sm transition focus-within:border-[var(--color-focus)] focus-within:ring-2 focus-within:ring-[var(--color-focus)]/20">
               <input
-                aria-label="Context window"
+                aria-label={t('settings:provider.contextWindow')}
                 type="number"
                 min={1}
                 step={1}
@@ -602,7 +604,7 @@ function ModelEditorDialog({
               />
               <button
                 type="button"
-                aria-label="Open context window presets"
+                aria-label={t('settings:provider.openContextPresets')}
                 aria-haspopup="listbox"
                 aria-expanded={contextPresetOpen}
                 onClick={() => setContextPresetOpen((open) => !open)}
@@ -611,7 +613,7 @@ function ModelEditorDialog({
                 <ChevronDown size={15} aria-hidden="true" className={cx('transition-transform', contextPresetOpen ? 'rotate-180' : undefined)} />
               </button>
               {contextPresetOpen ? (
-                <div role="listbox" aria-label="Context window presets" className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-10 overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface-elevated)] py-1.5 shadow-xl">
+                <div role="listbox" aria-label={t('settings:provider.contextPresets')} className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-10 overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface-elevated)] py-1.5 shadow-xl">
                   {contextWindowPresets.map((preset) => (
                     <button
                       key={preset.value}
@@ -630,7 +632,7 @@ function ModelEditorDialog({
                       )}
                     >
                       <span className="font-medium">{preset.label}</span>
-                      <span className="font-mono text-xs opacity-75">{preset.value.toLocaleString('en-US')}</span>
+                      <span className="font-mono text-xs opacity-75">{formatNumber(preset.value)}</span>
                     </button>
                   ))}
                 </div>
@@ -640,11 +642,11 @@ function ModelEditorDialog({
 
           {editor.originalModelId ? (
             <div className="flex items-end justify-between border-t border-[var(--color-border)] pt-3">
-              <p className="pb-0.5 text-sm font-medium text-[var(--color-text-subtle)]">Image input</p>
+              <p className="pb-0.5 text-sm font-medium text-[var(--color-text-subtle)]">{t('settings:provider.imageInput')}</p>
               <button
                 type="button"
                 role="switch"
-                aria-label="Image input"
+                aria-label={t('settings:provider.imageInput')}
                 aria-checked={imageEnabled}
                 onClick={() => {
                   const next = !imageEnabled;
@@ -664,8 +666,8 @@ function ModelEditorDialog({
         </div>
 
         <div className="mt-5 flex justify-end gap-2.5">
-          <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
-          <Button type="button" variant="primary" onClick={onSave}>{editor.originalModelId ? 'Done' : 'Add'}</Button>
+          <Button type="button" variant="secondary" onClick={onCancel}>{t('common:actions.cancel')}</Button>
+          <Button type="button" variant="primary" onClick={onSave}>{editor.originalModelId ? t('settings:provider.done') : t('settings:provider.addAction')}</Button>
         </div>
       </section>
     </div>
@@ -676,6 +678,7 @@ const fieldClassName = 'h-9 w-full rounded-md border border-[var(--color-border)
 const compactFieldClassName = 'h-9 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-app-bg)]/65 px-3 text-[15px] text-[var(--color-text)] shadow-sm outline-none transition placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/20';
 
 function ProviderListItem({ entry, modelCount, selected, onClick }: { entry: ProviderListEntry; modelCount: number; selected: boolean; onClick: () => void }) {
+  const { t } = useTranslation('settings');
   const enabled = entry.source !== 'saved' || entry.provider.enabled;
   return (
     <button type="button" onClick={onClick} className={cx(
@@ -688,9 +691,9 @@ function ProviderListItem({ entry, modelCount, selected, onClick }: { entry: Pro
       <span className={providerIconClassName(selected)}><Bot size={18} aria-hidden="true" /></span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold">{entry.displayName}</span>
-        {!enabled ? <span className="mt-0.5 block text-xs text-[var(--color-text-subtle)]">Disabled</span> : null}
+        {!enabled ? <span className="mt-0.5 block text-xs text-[var(--color-text-subtle)]">{t('provider.disabled')}</span> : null}
       </span>
-      <span className="rounded-md bg-[var(--color-accent-soft)] px-2 py-1 text-xs font-medium text-[var(--color-accent)]">{modelCount} {modelCount === 1 ? 'model' : 'models'}</span>
+      <span className="rounded-md bg-[var(--color-accent-soft)] px-2 py-1 text-xs font-medium text-[var(--color-accent)]">{t('provider.modelCount', { count: modelCount })}</span>
     </button>
   );
 }

@@ -1,2 +1,50 @@
 /* Defines source-language copy for the Desktop shell. */
-export const shell = {} as const;
+export const shell = {
+  navigation: {
+    primary: 'Primary project navigation',
+    expandSidebar: 'Expand sidebar',
+    collapseSidebar: 'Collapse sidebar',
+    resizeSidebar: 'Resize chat sidebar',
+    chats: 'Chats',
+    newSession: 'New session',
+    taskPlan: 'Task plan',
+    settings: 'Settings',
+  },
+  projects: {
+    label: 'Projects',
+    actions: 'Project actions',
+    open: 'Open project',
+    create: 'New project',
+    manage: 'Manage projects',
+    empty: 'No projects',
+    noSessions: 'No sessions yet',
+    showMore: 'Show more sessions',
+    showFewer: 'Show fewer sessions',
+    openSession: 'Open session {{title}}, updated {{updated}}',
+    selectedNone: 'No project selected',
+  },
+  projectSidebar: {
+    project: 'Project',
+    files: 'Files',
+    artifacts: 'Artifacts',
+    back: 'Back to Project',
+    close: 'Close project sidebar',
+    openView: 'Open {{title}} project view',
+    filesDescription: 'Browse project files',
+    artifactsDescription: 'Open generated outputs',
+  },
+  projectManager: {
+    title: 'Manage projects',
+    closeOverlay: 'Close project manager overlay',
+    close: 'Close project manager',
+    empty: 'No projects',
+    available: 'Available',
+    missing: 'Missing',
+    lastOpened: 'Last opened: {{date}}',
+    openProject: 'Open {{name}}',
+    removeProject: 'Remove {{name}} from the list',
+  },
+  workspace: {
+    localSessions: 'Local sessions',
+  },
+} as const;

@@ -32,9 +32,9 @@ describe('UI polish source guard', () => {
     const rightPanel = readSource('apps/desktop/src/renderer/shell/RightSidebar.tsx');
 
     expect(rightPanel).toContain("'workspace' | 'files' | 'artifacts'");
-    expect(rightPanel).toContain('aria-label={`Open ${title} project view`}');
-    expect(rightPanel).toContain('title="Files"');
-    expect(rightPanel).toContain('Back to Project');
+    expect(rightPanel).toContain("t('projectSidebar.openView'");
+    expect(rightPanel).toContain("t('projectSidebar.files')");
+    expect(rightPanel).toContain("t('projectSidebar.back')");
     expect(rightPanel).not.toMatch(/ContextPanelTab|MemoryPanelTab|Run dashboard|active path tree|branch tree|tool rail/i);
     expect(rightPanel).not.toMatch(/PanelTitle>\s*Tools|label:\s*['"]Tools['"]|>\s*Tools\s*</);
   });
@@ -53,7 +53,7 @@ describe('UI polish source guard', () => {
     expect(settingsPage).toContain('data-testid="settings-page"');
     expect(settingsPage).toContain('sidebarWidth');
     expect(settingsPage).toContain('gridTemplateColumns');
-    expect(settingsPage).toContain('Resize settings sidebar');
+    expect(settingsPage).toContain("t('resizeSidebar')");
     expect(settingsPage).not.toMatch(new RegExp([
       'role=["\']dialog["\']',
       'aria-modal',

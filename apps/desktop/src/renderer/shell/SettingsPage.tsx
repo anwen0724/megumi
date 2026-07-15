@@ -25,32 +25,30 @@ interface SettingsPageProps {
 
 interface SettingsCategoryItem {
   id: SettingsCategory;
-  label: string;
   icon: typeof Palette;
-  description: string;
 }
 
-const categoryGroups: Array<{ label: string; items: SettingsCategoryItem[] }> = [
+const categoryGroups: Array<{ id: 'personal' | 'aiTools' | 'support'; items: SettingsCategoryItem[] }> = [
   {
-    label: 'Personal',
+    id: 'personal',
     items: [
-      { id: 'appearance', label: 'Appearance', icon: Palette, description: 'Choose how Megumi looks on this device.' },
-      { id: 'memory', label: 'Memory', icon: BrainCircuit, description: 'Control what Megumi may remember across conversations.' },
+      { id: 'appearance', icon: Palette },
+      { id: 'memory', icon: BrainCircuit },
     ],
   },
   {
-    label: 'AI & Tools',
+    id: 'aiTools',
     items: [
-      { id: 'models', label: 'Models & Providers', icon: Bot, description: 'Connect providers and choose the models available in chat.' },
-      { id: 'web', label: 'Web Access', icon: Globe2, description: 'Choose the search service Megumi can use.' },
-      { id: 'security', label: 'Privacy & Permissions', icon: ShieldCheck, description: 'Review how keys and restricted tool actions are protected.' },
+      { id: 'models', icon: Bot },
+      { id: 'web', icon: Globe2 },
+      { id: 'security', icon: ShieldCheck },
     ],
   },
   {
-    label: 'Support',
+    id: 'support',
     items: [
-      { id: 'diagnostics', label: 'Activity & Diagnostics', icon: Activity, description: 'Inspect recent activity, token usage, tool calls, and errors.' },
-      { id: 'about', label: 'About Megumi', icon: Info, description: 'Application and environment information.' },
+      { id: 'diagnostics', icon: Activity },
+      { id: 'about', icon: Info },
     ],
   },
 ];
@@ -92,13 +90,13 @@ export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize 
             <div
               role="separator"
               aria-orientation="vertical"
-              aria-label="Resize settings sidebar"
+              aria-label={t('resizeSidebar')}
               onPointerDown={onStartSidebarResize}
               className="absolute right-0 top-0 z-10 h-full w-1 cursor-col-resize bg-transparent hover:bg-[var(--color-focus)]/40"
             />
             <div className="mb-5 px-2">
               <p className="text-lg font-semibold tracking-[-0.01em] text-[var(--color-text)]">
-                Settings
+                {t('title')}
               </p>
             </div>
             <Button
@@ -109,13 +107,13 @@ export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize 
               className="mb-5 w-full justify-start"
             >
               <ArrowLeft size={14} aria-hidden="true" />
-              Back to chat
+              {t('backToChat')}
             </Button>
-            <nav role="tablist" aria-label="Settings categories" className="space-y-5">
+            <nav role="tablist" aria-label={t('categoriesLabel')} className="space-y-5">
               {categoryGroups.map((group) => (
-                <div key={group.label} role="presentation">
+                <div key={group.id} role="presentation">
                   <p className="mb-1.5 px-3 text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-[var(--color-text-subtle)]">
-                    {group.label}
+                    {t(`groups.${group.id}`)}
                   </p>
                   <div className="space-y-1">
                     {group.items.map((item) => {
@@ -145,7 +143,7 @@ export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize 
                             aria-hidden="true"
                             className={selected ? 'text-[var(--color-accent)]' : undefined}
                           />
-                          <span className="truncate">{item.label}</span>
+                          <span className="truncate">{t(`categories.${item.id}.label`)}</span>
                         </button>
                       );
                     })}
@@ -157,15 +155,15 @@ export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize 
 
           <section
             role="tabpanel"
-            aria-label={activeCategory.label}
+            aria-label={t(`categories.${activeCategory.id}.label`)}
             className="min-w-0 overflow-y-auto px-8 py-8"
           >
             <div className="mx-auto max-w-5xl">
               {category === 'appearance' ? (
                 <div className="space-y-6">
                   <SettingsPageHeader
-                    title="Appearance"
-                    description={activeCategory.description}
+                    title={t('categories.appearance.label')}
+                    description={t('categories.appearance.description')}
                   />
                   <SettingsSection
                     title={t('appearance.languageTitle')}
@@ -197,27 +195,27 @@ export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize 
               {category === 'security' ? (
                 <div className="space-y-6">
                   <SettingsPageHeader
-                    title="Privacy & Permissions"
-                    description={activeCategory.description}
+                    title={t('categories.security.label')}
+                    description={t('categories.security.description')}
                   />
-                  <SettingsSection title="Current protections">
+                  <SettingsSection title={t('security.protections')}>
                     <SettingsRow
-                      title="API key storage"
-                      description="Saved API keys are encrypted by the operating system and are never shown again after saving."
+                      title={t('security.apiKeyStorage')}
+                      description={t('security.apiKeyDescription')}
                     >
                       <div className="flex items-center justify-end gap-2 text-sm font-medium text-[var(--color-success)]">
                         <CheckCircle2 size={16} aria-hidden="true" />
-                        Protected on this device
+                        {t('security.protected')}
                       </div>
                     </SettingsRow>
                     <div className="border-t border-[var(--color-border)]">
                       <SettingsRow
-                        title="Tool approvals"
-                        description="Megumi asks before restricted tool actions according to the active permission mode."
+                        title={t('security.approvals')}
+                        description={t('security.approvalsDescription')}
                       >
                         <div className="flex items-center justify-end gap-2 text-sm text-[var(--color-text-muted)]">
                           <ShieldCheck size={16} aria-hidden="true" />
-                          Managed during each conversation
+                          {t('security.managed')}
                         </div>
                       </SettingsRow>
                     </div>
@@ -228,8 +226,8 @@ export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize 
               {category === 'about' ? (
                 <div className="space-y-6">
                   <SettingsPageHeader
-                    title="About Megumi"
-                    description={activeCategory.description}
+                    title={t('categories.about.label')}
+                    description={t('categories.about.description')}
                   />
                   <SettingsSection>
                     <div className="flex items-start gap-4 p-5">
@@ -239,10 +237,10 @@ export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize 
                       <div>
                         <h2 className="text-base font-semibold text-[var(--color-text)]">Megumi</h2>
                         <p className="mt-1 text-sm text-[var(--color-text)]">
-                          A local-first coding agent for focused development work.
+                          {t('about.tagline')}
                         </p>
                         <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--color-text-muted)]">
-                          Connect your preferred AI providers, work with project files, and keep control of local data and tool permissions.
+                          {t('about.description')}
                         </p>
                       </div>
                     </div>

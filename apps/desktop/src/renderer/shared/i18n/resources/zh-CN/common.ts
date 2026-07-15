@@ -11,9 +11,16 @@ export const common = {
     current: '当前',
     retry: '重试',
     save: '保存',
+    open: '打开',
+    remove: '移除',
+    dismiss: '忽略',
   },
   loading: {
     megumi: '正在加载 Megumi…',
+  },
+  notifications: {
+    label: '通知',
+    dismiss: '关闭通知',
   },
   language: {
     label: '语言',

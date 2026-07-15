@@ -8,9 +8,16 @@ export const common = {
     current: 'Current',
     retry: 'Retry',
     save: 'Save',
+    open: 'Open',
+    remove: 'Remove',
+    dismiss: 'Dismiss',
   },
   loading: {
     megumi: 'Loading Megumi…',
+  },
+  notifications: {
+    label: 'Notifications',
+    dismiss: 'Dismiss notification',
   },
   language: {
     label: 'Language',

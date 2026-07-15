@@ -2,9 +2,11 @@
  * Edits Settings-owned web search provider configuration without exposing stored secrets.
  */
 import { useEffect, useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { SettingsUiResolved } from '@megumi/product/host-interface';
 import { IPC_CHANNELS } from '../../../shared/ipc/channels';
-import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../../shared/ipc';
+import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
+import { localizeRendererError, rendererError, type RendererErrorDescriptor } from '../../../shared/i18n';
 import {
   Button,
   SettingsPageHeader,
@@ -19,24 +21,25 @@ const providers: Array<{ value: SearchProvider; label: string }> = [
   { value: 'brave', label: 'Brave Search' },
   { value: 'tavily', label: 'Tavily' },
   { value: 'exa', label: 'Exa' },
-  { value: 'custom', label: 'Custom (Megumi protocol)' },
+  { value: 'custom', label: '' },
 ];
 
 export function WebSettingsPanel() {
+  const { t } = useTranslation(['settings', 'common']);
   const [saved, setSaved] = useState<SettingsUiResolved['web']['search']>({ hasApiKey: false, credentialSource: 'missing' });
   const [provider, setProvider] = useState<SearchProvider | ''>('');
   const [baseUrl, setBaseUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [status, setStatus] = useState<Status>('loading');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<RendererErrorDescriptor | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     void window.megumi.settings.get(createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {}))
       .then((result) => {
         if (cancelled) return;
-        if (!result.ok) throw new Error(getRuntimeIpcErrorMessage(result));
-        if (result.data.status === 'failed') throw new Error(result.data.failure.message);
+        if (!result.ok) throw rendererError(result.data.code, result.data.message);
+        if (result.data.status === 'failed') throw rendererError(result.data.failure.code, result.data.failure.message);
         const search = result.data.settings.web.search;
         setSaved(search);
         setProvider(search.provider ?? '');
@@ -45,7 +48,7 @@ export function WebSettingsPanel() {
       })
       .catch((reason: unknown) => {
         if (!cancelled) {
-          setError(reason instanceof Error ? reason.message : String(reason));
+          setError(asRendererError(reason, 'settings_load_failed'));
           setStatus('error');
         }
       });
@@ -56,15 +59,15 @@ export function WebSettingsPanel() {
     event.preventDefault();
     setError(null);
     if (!provider) {
-      setError('Select a search provider.');
+      setError(rendererError('web_provider_required'));
       return;
     }
     if (provider === 'custom' && !baseUrl.trim()) {
-      setError('Custom search requires a Base URL.');
+      setError(rendererError('web_base_url_required'));
       return;
     }
     if (!apiKey.trim() && !saved.hasApiKey && provider === saved.provider) {
-      setError('Enter an API key or configure the provider environment variable.');
+      setError(rendererError('web_api_key_required'));
       return;
     }
     setStatus('saving');
@@ -78,8 +81,8 @@ export function WebSettingsPanel() {
           },
         },
       }));
-      if (!result.ok) throw new Error(getRuntimeIpcErrorMessage(result));
-      if (result.data.status === 'failed') throw new Error(result.data.failure.message);
+      if (!result.ok) throw rendererError(result.data.code, result.data.message);
+      if (result.data.status === 'failed') throw rendererError(result.data.failure.code, result.data.failure.message);
       const search = result.data.settings.web.search;
       setSaved(search);
       setProvider(search.provider ?? '');
@@ -87,7 +90,7 @@ export function WebSettingsPanel() {
       setApiKey('');
       setStatus('ready');
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setError(asRendererError(reason, 'settings_update_failed'));
       setStatus('error');
     }
   }
@@ -99,13 +102,13 @@ export function WebSettingsPanel() {
       const result = await window.megumi.settings.update(createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.update, {
         web: { search: { apiKey: null } },
       }));
-      if (!result.ok) throw new Error(getRuntimeIpcErrorMessage(result));
-      if (result.data.status === 'failed') throw new Error(result.data.failure.message);
+      if (!result.ok) throw rendererError(result.data.code, result.data.message);
+      if (result.data.status === 'failed') throw rendererError(result.data.failure.code, result.data.failure.message);
       setSaved(result.data.settings.web.search);
       setApiKey('');
       setStatus('ready');
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setError(asRendererError(reason, 'settings_update_failed'));
       setStatus('error');
     }
   }
@@ -116,40 +119,40 @@ export function WebSettingsPanel() {
   return (
     <div className="space-y-6">
       <SettingsPageHeader
-        title="Web Access"
-        description="Choose the search service Megumi can use when it needs current information."
+        title={t('settings:web.title')}
+        description={t('settings:web.description')}
       />
       <form onSubmit={(event) => void save(event)}>
         <SettingsSection
-          title="Search"
-          description="Megumi does not select or bundle a default search provider."
+          title={t('settings:web.search')}
+          description={t('settings:web.searchDescription')}
         >
           <SettingsRow
-            title="Search provider"
-            description="Choose the service used by the web_search tool."
+            title={t('settings:web.provider')}
+            description={t('settings:web.providerDescription')}
           >
-            <label className="sr-only" htmlFor="web-search-provider">Search provider</label>
+            <label className="sr-only" htmlFor="web-search-provider">{t('settings:web.provider')}</label>
           <select
             id="web-search-provider"
-            aria-label="Search provider"
+            aria-label={t('settings:web.provider')}
             className={fieldClass}
             value={provider}
             disabled={busy}
             onChange={(event) => setProvider(event.target.value as SearchProvider | '')}
           >
-            <option value="">Select provider</option>
-            {providers.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            <option value="">{t('settings:web.selectProvider')}</option>
+            {providers.map((item) => <option key={item.value} value={item.value}>{item.value === 'custom' ? t('settings:web.customProvider') : item.label}</option>)}
           </select>
           </SettingsRow>
 
           {provider === 'custom' ? (
             <div className="border-t border-[var(--color-border)]">
               <SettingsRow
-                title="Base URL"
-                description="Enter the endpoint for a custom search service."
+                title={t('settings:web.baseUrl')}
+                description={t('settings:web.baseUrlDescription')}
               >
                 <input
-                  aria-label="Search Base URL"
+                  aria-label={t('settings:web.searchBaseUrl')}
                   className={fieldClass}
                   value={baseUrl}
                   disabled={busy}
@@ -162,16 +165,16 @@ export function WebSettingsPanel() {
 
           <div className="border-t border-[var(--color-border)]">
             <SettingsRow
-              title="API key"
-              description="Stored securely on this device after saving."
+              title={t('settings:web.apiKey')}
+              description={t('settings:web.apiKeyDescription')}
             >
               <input
-                aria-label="Search API key"
+                aria-label={t('settings:web.searchApiKey')}
                 type="password"
                 className={fieldClass}
                 value={apiKey}
                 disabled={busy}
-                placeholder={saved.hasApiKey ? 'A credential is already configured' : 'Enter API key'}
+                placeholder={saved.hasApiKey ? t('settings:web.configuredCredential') : t('settings:web.enterApiKey')}
                 onChange={(event) => setApiKey(event.target.value)}
               />
             </SettingsRow>
@@ -179,28 +182,35 @@ export function WebSettingsPanel() {
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-border)] bg-[var(--color-surface-muted)] px-5 py-4">
             <p className="text-sm text-[var(--color-text-muted)]">
-              {saved.credentialSource === 'settings' ? 'API key saved securely on this device'
-                : saved.credentialSource === 'environment' ? `Using environment variable${saved.apiKeyEnv ? ` ${saved.apiKeyEnv}` : ''}`
-                  : 'No API key configured'}
+              {saved.credentialSource === 'settings' ? t('settings:web.savedCredential')
+                : saved.credentialSource === 'environment' ? t('settings:web.environmentCredential', { name: saved.apiKeyEnv ?? '' })
+                  : t('settings:web.noCredential')}
             </p>
 
             <div className="flex items-center gap-2">
               <Button type="button" variant="ghost" disabled={busy || !saved.hasApiKey} onClick={() => void clearKey()}>
-                Clear key
+                {t('settings:web.clearKey')}
               </Button>
               <Button type="submit" variant="primary" disabled={busy}>
-                {status === 'saving' ? 'Saving…' : 'Save'}
+                {status === 'saving' ? t('settings:web.saving') : t('common:actions.save')}
               </Button>
             </div>
           </div>
 
           {error ? (
             <p role="alert" className="border-t border-[var(--color-danger)] bg-[var(--color-danger-soft)] px-5 py-3 text-sm text-[var(--color-danger)]">
-              {error}
+              {localizeRendererError(error)}
             </p>
           ) : null}
         </SettingsSection>
       </form>
     </div>
   );
+}
+
+function asRendererError(reason: unknown, fallbackCode: string): RendererErrorDescriptor {
+  if (typeof reason === 'object' && reason !== null && 'code' in reason) {
+    return reason as RendererErrorDescriptor;
+  }
+  return rendererError(fallbackCode, reason instanceof Error ? reason.message : String(reason));
 }

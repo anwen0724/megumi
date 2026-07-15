@@ -3,6 +3,7 @@
  */
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cx } from './class-names';
 import { type ToastMessage, useToastStore } from './toast-store';
 
@@ -14,13 +15,14 @@ const toneClasses: Record<ToastMessage['tone'], string> = {
 };
 
 export function ToastViewport() {
+  const { t } = useTranslation('common');
   const toasts = useToastStore((state) => state.toasts);
   const dismissToast = useToastStore((state) => state.dismissToast);
 
   return (
     <div
       aria-live="polite"
-      aria-label="Notifications"
+      aria-label={t('notifications.label')}
       className="pointer-events-none fixed left-1/2 top-4 z-[100] flex w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 flex-col gap-2"
     >
       {toasts.map((toast) => (
@@ -37,6 +39,7 @@ function ToastItem({
   toast: ToastMessage;
   onDismiss(): void;
 }) {
+  const { t } = useTranslation('common');
   useEffect(() => {
     if (toast.durationMs <= 0) {
       return undefined;
@@ -62,7 +65,7 @@ function ToastItem({
         </div>
         <button
           type="button"
-          aria-label="Dismiss notification"
+          aria-label={t('notifications.dismiss')}
           className="rounded p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)]"
           onClick={onDismiss}
         >

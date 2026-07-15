@@ -58,17 +58,17 @@ describe('ProjectManagerModal', () => {
       />,
     );
 
-    expect(screen.getByRole('dialog', { name: '管理项目' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Manage projects' })).toBeInTheDocument();
     expect(screen.getByText('C:/workspaces/megumi')).toBeInTheDocument();
     expect(screen.getByText('C:/Work/Older')).toBeInTheDocument();
-    expect(screen.getByText('missing')).toBeInTheDocument();
+    expect(screen.getByText('Missing')).toBeInTheDocument();
 
     // Open project action
-    await user.click(screen.getByRole('button', { name: '打开 megumi' }));
+    await user.click(screen.getByRole('button', { name: 'Open megumi' }));
     expect(onOpenProject).toHaveBeenCalledWith('project-1');
 
     // Remove project action
-    await user.click(screen.getByRole('button', { name: '从列表移除 megumi' }));
+    await user.click(screen.getByRole('button', { name: 'Remove megumi from the list' }));
     expect(onRemoveProject).toHaveBeenCalledWith('project-1');
 
     // Close button

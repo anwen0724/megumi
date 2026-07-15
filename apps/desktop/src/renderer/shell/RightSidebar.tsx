@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Archive, ChevronLeft, FolderTree, PanelRightClose } from 'lucide-react';
 import {
   ArtifactsPanelTab,
@@ -23,11 +24,12 @@ interface SidebarToolButtonProps {
 }
 
 function SidebarToolButton({ icon: Icon, title, description, onClick }: SidebarToolButtonProps) {
+  const { t } = useTranslation('shell');
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={`Open ${title} project view`}
+      aria-label={t('projectSidebar.openView', { title })}
       className={cx(
         'flex w-full items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-left transition',
         'hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-elevated)]',
@@ -46,14 +48,15 @@ function SidebarToolButton({ icon: Icon, title, description, onClick }: SidebarT
 }
 
 export function RightSidebar({ open, onClose }: RightSidebarProps) {
+  const { t } = useTranslation('shell');
   const [activeView, setActiveView] = useState<RightSidebarView>('workspace');
   const [mounted, setMounted] = useState(open);
   const [visible, setVisible] = useState(open);
   const currentProject = useProjectStore((state) =>
     state.projects.find((project) => project.id === state.currentProjectId) ?? null
   );
-  const workspacePath = currentProject?.repoPath ?? 'No project selected';
-  const workspaceLabel = currentProject?.name ?? 'No project selected';
+  const workspacePath = currentProject?.repoPath ?? t('projects.selectedNone');
+  const workspaceLabel = currentProject?.name ?? t('projects.selectedNone');
   const isDetailView = activeView !== 'workspace';
 
   useEffect(() => {
@@ -100,15 +103,15 @@ export function RightSidebar({ open, onClose }: RightSidebarProps) {
       >
         <div className="flex min-w-0 items-center gap-2">
           {isDetailView ? (
-            <IconButton label="Back to Project" onClick={() => setActiveView('workspace')} size="sm" variant="ghost">
+            <IconButton label={t('projectSidebar.back')} onClick={() => setActiveView('workspace')} size="sm" variant="ghost">
               <ChevronLeft size={16} aria-hidden="true" />
             </IconButton>
           ) : null}
           <div className="min-w-0">
             <PanelTitle>
-              {activeView === 'workspace' ? 'Project' : null}
-              {activeView === 'files' ? 'Files' : null}
-              {activeView === 'artifacts' ? 'Artifacts' : null}
+              {activeView === 'workspace' ? t('projectSidebar.project') : null}
+              {activeView === 'files' ? t('projectSidebar.files') : null}
+              {activeView === 'artifacts' ? t('projectSidebar.artifacts') : null}
             </PanelTitle>
             {activeView === 'workspace' ? (
               <p className="mt-0.5 truncate text-xs text-[var(--color-text-muted)]" title={workspacePath}>
@@ -117,7 +120,7 @@ export function RightSidebar({ open, onClose }: RightSidebarProps) {
             ) : null}
           </div>
         </div>
-        <IconButton label="Close project sidebar" onClick={onClose} size="sm" variant="ghost">
+        <IconButton label={t('projectSidebar.close')} onClick={onClose} size="sm" variant="ghost">
           <PanelRightClose size={16} aria-hidden="true" />
         </IconButton>
       </div>
@@ -127,14 +130,14 @@ export function RightSidebar({ open, onClose }: RightSidebarProps) {
           <div className="space-y-3">
             <SidebarToolButton
               icon={FolderTree}
-              title="Files"
-              description="Browse project files"
+              title={t('projectSidebar.files')}
+              description={t('projectSidebar.filesDescription')}
               onClick={() => setActiveView('files')}
             />
             <SidebarToolButton
               icon={Archive}
-              title="Artifacts"
-              description="Open generated outputs"
+              title={t('projectSidebar.artifacts')}
+              description={t('projectSidebar.artifactsDescription')}
               onClick={() => setActiveView('artifacts')}
             />
           </div>
