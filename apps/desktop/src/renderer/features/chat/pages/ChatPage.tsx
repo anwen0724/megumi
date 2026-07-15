@@ -13,6 +13,7 @@ import { ComposerDock } from '../layout/ComposerDock';
 import { Composer } from '../components/Composer';
 import type { ComposerDraftImage } from '../components/composer-types';
 import { showToast } from '../../../shared/ui';
+import { rendererI18n } from '../../../shared/i18n';
 
 const FALLBACK_COMPOSER_SPACER_HEIGHT = 188;
 
@@ -49,11 +50,11 @@ export function ChatPage() {
       createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.imageInputSelect, {}),
     );
     if (!result.ok) {
-      showToast({ tone: 'error', title: 'Images could not be selected', message: result.data.message });
+      showToast({ tone: 'error', title: rendererI18n.t('chat:notifications.imageSelectFailed.title'), message: rendererI18n.t('chat:notifications.imageSelectFailed.message') });
       return [];
     }
     if (result.data.status === 'failed') {
-      showToast({ tone: 'error', title: 'Images could not be selected', message: result.data.failure.message });
+      showToast({ tone: 'error', title: rendererI18n.t('chat:notifications.imageSelectFailed.title'), message: rendererI18n.t('chat:notifications.imageSelectFailed.message') });
       return [];
     }
     return result.data.status === 'selected' ? result.data.images : [];
@@ -63,11 +64,11 @@ export function ChatPage() {
       createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.imageInputClipboardRead, {}),
     );
     if (!result.ok) {
-      showToast({ tone: 'error', title: 'Image could not be pasted', message: result.data.message });
+      showToast({ tone: 'error', title: rendererI18n.t('chat:notifications.imagePasteFailed.title'), message: rendererI18n.t('chat:notifications.imagePasteFailed.message') });
       return [];
     }
     if (result.data.status === 'failed') {
-      showToast({ tone: 'error', title: 'Image could not be pasted', message: result.data.failure.message });
+      showToast({ tone: 'error', title: rendererI18n.t('chat:notifications.imagePasteFailed.title'), message: rendererI18n.t('chat:notifications.imagePasteFailed.message') });
       return [];
     }
     return result.data.status === 'selected' ? result.data.images : [];

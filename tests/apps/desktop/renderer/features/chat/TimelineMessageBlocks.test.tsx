@@ -736,7 +736,7 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(screen.queryByText(/Compacted .* Retrying/)).not.toBeInTheDocument();
 
     fireEvent.click(disclosure);
-    expect(screen.getByText('Compacted context')).toBeInTheDocument();
+    expect(screen.getByText('Context compacted')).toBeInTheDocument();
     expect(screen.getByText('Retry attempt 1 failed')).toBeInTheDocument();
     expect(screen.getByText('rate_limited')).toBeInTheDocument();
     expect(screen.getByText('Previous run was interrupted')).toBeInTheDocument();
@@ -833,7 +833,7 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(screen.getByText('Approved Read file')).toBeInTheDocument();
     expect(screen.getByText('Provider failed.')).toBeInTheDocument();
     expect(screen.getByText('user_requested')).toBeInTheDocument();
-    expect(screen.getByText('Compacted context')).toBeInTheDocument();
+    expect(screen.getByText('Context compacted')).toBeInTheDocument();
     expect(screen.getByText('Model call retry 1 completed')).toBeInTheDocument();
     expect(screen.getByText('Run was interrupted')).toBeInTheDocument();
     expect(screen.getByText('Final answer.')).toBeInTheDocument();

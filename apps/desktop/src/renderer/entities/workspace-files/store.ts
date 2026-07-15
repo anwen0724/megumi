@@ -4,8 +4,9 @@ import type { WorkspaceFileEntryUiDto } from '@megumi/product/host-interface';
 import type { WorkspaceFilesListPayload } from '@megumi/desktop/main/ipc/schemas';
 import {
   createRendererRuntimeIpcRequest,
-  getRuntimeIpcErrorMessage,
+  getRendererRuntimeIpcError,
 } from '../../shared/ipc';
+import { rendererError, type RendererErrorDescriptor } from '../../shared/i18n';
 
 export type WorkspaceDirectoryEntry = WorkspaceFileEntryUiDto & {
   kind: WorkspaceFileEntryUiDto['type'];
@@ -17,7 +18,7 @@ export interface WorkspaceFilesStoreState {
   expandedDirectoryPaths: string[];
   selectedPath: string | null;
   loadingDirectories: string[];
-  error: string | null;
+  error: RendererErrorDescriptor | null;
   loadDirectory: (payload: WorkspaceFilesListPayload) => Promise<void>;
   toggleDirectory: (directoryPath: string) => void;
   setSelectedPath: (path: string | null) => void;
@@ -80,7 +81,7 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesStoreState>((set, get
       if (!result.ok) {
         set((state) => ({
           loadingDirectories: state.loadingDirectories.filter((item) => item !== directoryPath),
-          error: getRuntimeIpcErrorMessage(result),
+          error: getRendererRuntimeIpcError(result, 'workspace_files_list_failed'),
         }));
         return;
       }
@@ -88,7 +89,7 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesStoreState>((set, get
       if (result.data.status === 'workspace_not_found') {
         set((state) => ({
           loadingDirectories: state.loadingDirectories.filter((item) => item !== directoryPath),
-          error: 'Workspace was not found.',
+          error: rendererError('workspace_not_found'),
         }));
         return;
       }
@@ -96,7 +97,7 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesStoreState>((set, get
       if (result.data.status === 'path_rejected') {
         set((state) => ({
           loadingDirectories: state.loadingDirectories.filter((item) => item !== directoryPath),
-          error: 'Workspace path was rejected.',
+          error: rendererError('workspace_path_rejected'),
         }));
         return;
       }
@@ -122,7 +123,10 @@ export const useWorkspaceFilesStore = create<WorkspaceFilesStoreState>((set, get
 
       set((state) => ({
         loadingDirectories: state.loadingDirectories.filter((item) => item !== directoryPath),
-        error: error instanceof Error ? error.message : 'Megumi could not list workspace files.',
+        error: rendererError(
+          'workspace_files_list_failed',
+          error instanceof Error ? error.message : undefined,
+        ),
       }));
     }
   },

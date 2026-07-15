@@ -10,6 +10,7 @@ import { useRuntimeTimelineStore } from '../../runtime-timeline';
 import { dispatchRuntimeEvent } from '../../runtime-events/runtime-event-dispatcher';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
 import { showToast } from '../../../shared/ui';
+import { rendererI18n } from '../../../shared/i18n';
 import type { ComposerSubmitPayload } from '../components/Composer';
 import { localSessionFromPersistedSession } from '../../session-history/session-history-mappers';
 
@@ -164,8 +165,8 @@ function failSessionMessageSend(message: string, sessionId?: string | null) {
   current.setLastError(message, sessionId);
   showToast({
     tone: 'error',
-    title: 'Action failed',
-    message,
+    title: rendererI18n.t('chat:notifications.actionFailed.title'),
+    message: rendererI18n.t('chat:notifications.actionFailed.message'),
   });
 }
 
@@ -327,23 +328,23 @@ export function useSessionTimeline() {
     state.setLastError(null, target.sessionId ?? null);
 
     const isCompactionCommand = isCompactCommandInput(payload.message);
-    const updateCompactionActivity = (status: 'running' | 'completed' | 'failed' | 'skipped', label: string) => {
+    const updateCompactionActivity = (status: 'running' | 'completed' | 'failed' | 'skipped') => {
       if (isCompactionCommand && target.sessionId) {
         useRuntimeTimelineStore.getState().upsertSessionCompactionActivity(target.projectId, target.sessionId, {
           activityId: requestId,
           status,
-          label,
+          label: 'context_compaction',
           createdAt,
         });
       }
     };
-    updateCompactionActivity('running', '正在压缩上下文');
+    updateCompactionActivity('running');
 
     let result: Awaited<ReturnType<typeof window.megumi.session.message.send>>;
     try {
       result = await window.megumi.session.message.send(request);
     } catch (error) {
-      updateCompactionActivity('failed', '上下文压缩失败');
+      updateCompactionActivity('failed');
       failSessionMessageSend(
         error instanceof Error ? error.message : 'The message could not be sent.',
         target.sessionId ?? null,
@@ -352,13 +353,13 @@ export function useSessionTimeline() {
     }
 
     if (!result.ok) {
-      updateCompactionActivity('failed', '上下文压缩失败');
+      updateCompactionActivity('failed');
       failSessionMessageSend(result.data.message, target.sessionId ?? null);
       return false;
     }
 
     if (result.data.type === 'error') {
-      updateCompactionActivity('failed', '上下文压缩失败');
+      updateCompactionActivity('failed');
       failSessionMessageSend(result.data.message, result.data.session?.id ?? target.sessionId ?? null);
       return false;
     }
@@ -380,7 +381,7 @@ export function useSessionTimeline() {
       useChatUiStore.getState().setAgentStatus('idle', runSessionId);
       if (isCompactionCommand && result.data.type === 'completed') {
         const skipped = result.data.message?.startsWith('Context compaction skipped:') ?? false;
-        updateCompactionActivity(skipped ? 'skipped' : 'completed', skipped ? '无需压缩上下文' : '已完成压缩');
+        updateCompactionActivity(skipped ? 'skipped' : 'completed');
       }
       return true;
     }
@@ -420,8 +421,8 @@ export function useSessionTimeline() {
     if (!runId) {
       showToast({
         tone: 'warning',
-        title: 'Nothing to stop',
-        message: 'There is no active Agent Run to cancel.',
+        title: rendererI18n.t('chat:notifications.nothingToStop.title'),
+        message: rendererI18n.t('chat:notifications.nothingToStop.message'),
       });
       return;
     }
@@ -438,8 +439,8 @@ export function useSessionTimeline() {
       if (!result?.ok) {
         showToast({
           tone: 'error',
-          title: 'Stop failed',
-          message: result?.data?.message ?? 'The Agent Run could not be cancelled.',
+          title: rendererI18n.t('chat:notifications.stopFailed.title'),
+          message: rendererI18n.t('chat:notifications.stopFailed.message'),
         });
         return;
       }
@@ -447,10 +448,12 @@ export function useSessionTimeline() {
       if (result.data.status !== 'cancelled') {
         showToast({
           tone: result.data.status === 'failed' ? 'error' : 'warning',
-          title: result.data.status === 'failed' ? 'Stop failed' : 'Stop did not apply',
+          title: rendererI18n.t(result.data.status === 'failed'
+            ? 'chat:notifications.stopFailed.title'
+            : 'chat:notifications.stopDidNotApply.title'),
           message: result.data.status === 'failed'
-            ? result.data.failure.message
-            : 'The Agent Run is no longer cancellable.',
+            ? rendererI18n.t('chat:notifications.stopFailed.message')
+            : rendererI18n.t('chat:notifications.stopDidNotApply.message'),
         });
         return;
       }
@@ -463,8 +466,8 @@ export function useSessionTimeline() {
     } catch (error) {
       showToast({
         tone: 'error',
-        title: 'Stop failed',
-        message: error instanceof Error ? error.message : 'The Agent Run could not be cancelled.',
+        title: rendererI18n.t('chat:notifications.stopFailed.title'),
+        message: rendererI18n.t('chat:notifications.stopFailed.message'),
       });
     }
   }, []);

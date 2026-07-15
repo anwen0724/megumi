@@ -13,8 +13,9 @@ import type {
 } from '@megumi/product/host-interface';
 import {
   createRendererRuntimeIpcRequest,
-  getRuntimeIpcErrorMessage,
+  getRendererRuntimeIpcError,
 } from '../../shared/ipc';
+import { rendererError, type RendererErrorDescriptor } from '../../shared/i18n';
 
 export type ProviderStoreStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';
 
@@ -52,7 +53,7 @@ interface ProviderStoreState {
   providers: ProviderPublicStatusUiDto[];
   catalog: ProviderCatalogUiDto[];
   status: ProviderStoreStatus;
-  error: string | null;
+  error: RendererErrorDescriptor | null;
   loadProviders: () => Promise<void>;
   updateProvider: (input: ProviderUpdateInput) => Promise<void>;
   deleteProvider: (input: ProviderDeleteInput) => Promise<void>;
@@ -75,14 +76,14 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
     if (!result.ok) {
       set({
         status: 'error',
-        error: getRuntimeIpcErrorMessage(result),
+        error: getRendererRuntimeIpcError(result, 'provider_load_failed'),
       });
       return;
     }
     if (result.data.status === 'failed') {
       set({
         status: 'error',
-        error: result.data.failure.message,
+        error: rendererError(result.data.failure.code, result.data.failure.message, undefined, 'provider_load_failed'),
       });
       return;
     }
@@ -107,14 +108,14 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
     if (!result.ok) {
       set({
         status: 'error',
-        error: getRuntimeIpcErrorMessage(result),
+        error: getRendererRuntimeIpcError(result, 'provider_update_failed'),
       });
       return;
     }
     if (result.data.status === 'failed') {
       set({
         status: 'error',
-        error: result.data.failure.message,
+        error: rendererError(result.data.failure.code, result.data.failure.message, undefined, 'provider_update_failed'),
       });
       return;
     }
@@ -134,14 +135,14 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
     if (!result.ok) {
       set({
         status: 'error',
-        error: getRuntimeIpcErrorMessage(result),
+        error: getRendererRuntimeIpcError(result, 'provider_delete_failed'),
       });
       return;
     }
     if (result.data.status === 'failed') {
       set({
         status: 'error',
-        error: result.data.failure.message,
+        error: rendererError(result.data.failure.code, result.data.failure.message, undefined, 'provider_delete_failed'),
       });
       return;
     }
@@ -161,14 +162,14 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
     if (!result.ok) {
       set({
         status: 'error',
-        error: getRuntimeIpcErrorMessage(result),
+        error: getRendererRuntimeIpcError(result, 'provider_api_key_update_failed'),
       });
       return;
     }
     if (result.data.status === 'failed') {
       set({
         status: 'error',
-        error: result.data.failure.message,
+        error: rendererError(result.data.failure.code, result.data.failure.message, undefined, 'provider_api_key_update_failed'),
       });
       return;
     }
@@ -188,14 +189,14 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
     if (!result.ok) {
       set({
         status: 'error',
-        error: getRuntimeIpcErrorMessage(result),
+        error: getRendererRuntimeIpcError(result, 'provider_api_key_delete_failed'),
       });
       return;
     }
     if (result.data.status === 'failed') {
       set({
         status: 'error',
-        error: result.data.failure.message,
+        error: rendererError(result.data.failure.code, result.data.failure.message, undefined, 'provider_api_key_delete_failed'),
       });
       return;
     }

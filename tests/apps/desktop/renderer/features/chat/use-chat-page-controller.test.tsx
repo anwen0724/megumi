@@ -119,7 +119,7 @@ describe('useChatPageController', () => {
       expect.objectContaining({
         tone: 'error',
         title: 'Approval failed',
-        message: 'Approval continuation is no longer available in this runtime.',
+        message: 'The approval response could not be saved.',
       }),
     ]);
   });

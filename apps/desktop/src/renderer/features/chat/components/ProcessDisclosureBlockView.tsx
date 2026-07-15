@@ -197,10 +197,11 @@ function CancelledActivityItemView({ item }: { item: CancelledActivityItem }) {
 }
 
 function CompactionActivityItemView({ item }: { item: CompactionActivityItem }) {
+  const { t } = useTranslation('chat');
   return (
     <div className="flex min-w-0 items-start gap-2 text-[var(--color-text-muted)]">
       <ItemIcon item={item} />
-      <span className="min-w-0 break-words [overflow-wrap:anywhere]">{item.label}</span>
+      <span className="min-w-0 break-words [overflow-wrap:anywhere]">{t(`compaction.${item.status}`)}</span>
     </div>
   );
 }

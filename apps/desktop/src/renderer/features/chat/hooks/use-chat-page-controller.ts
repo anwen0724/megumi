@@ -10,6 +10,7 @@ import { useRunStore } from '../../../entities/run/store';
 import { useSessionStore } from '../../../entities/session/store';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
 import { showToast } from '../../../shared/ui';
+import { rendererI18n } from '../../../shared/i18n';
 import { runtimeTimelineSessionKey, useRuntimeTimelineStore } from '../../runtime-timeline';
 import { useSessionTimeline } from './use-session-timeline';
 import type { ComposerStatus, ComposerSubmitPayload } from '../components/Composer';
@@ -249,16 +250,16 @@ export function useChatPageController() {
     if (!result.ok) {
       showToast({
         tone: 'error',
-        title: 'Approval failed',
-        message: result.data.message,
+        title: rendererI18n.t('chat:notifications.approvalFailed.title'),
+        message: rendererI18n.t('chat:notifications.approvalFailed.message'),
       });
       return;
     }
     if (isApprovalResolveFailed(result.data)) {
       showToast({
         tone: 'error',
-        title: 'Approval failed',
-        message: result.data.failure.message,
+        title: rendererI18n.t('chat:notifications.approvalFailed.title'),
+        message: rendererI18n.t('chat:notifications.approvalFailed.message'),
       });
     }
   }

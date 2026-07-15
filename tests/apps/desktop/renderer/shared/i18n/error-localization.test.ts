@@ -26,4 +26,19 @@ describe('renderer error localization', () => {
     await initializeRendererI18n('zh-CN');
     expect(localizeRendererError(error)).toBe('出现了问题，请重试。');
   });
+
+  it('uses an action fallback code while retaining the original technical failure', async () => {
+    const error = rendererError(
+      'config_invalid',
+      'C:\\Users\\user\\.megumi\\settings.json is invalid',
+      undefined,
+      'provider_load_failed',
+    );
+
+    expect(localizeRendererError(error)).toBe('Providers could not be loaded.');
+    expect(error.technicalMessage).toContain('settings.json');
+
+    await initializeRendererI18n('zh-CN');
+    expect(localizeRendererError(error)).toBe('无法加载 Provider。');
+  });
 });

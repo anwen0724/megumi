@@ -1,6 +1,10 @@
 ﻿import { create } from 'zustand';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
-import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../shared/ipc';
+import { createRendererRuntimeIpcRequest, getRendererRuntimeIpcError } from '../../shared/ipc';
+import {
+  rendererError,
+  type RendererErrorDescriptor,
+} from '../../shared/i18n';
 import { projectFromRecord, type Project, type ProjectRecord } from './types';
 import { useSessionStore } from '../../entities/session/store';
 
@@ -8,7 +12,7 @@ interface ProjectState {
   projects: Project[];
   currentProjectId: string | null;
   loading: boolean;
-  error: string | null;
+  error: RendererErrorDescriptor | null;
   getInitialState: () => Pick<ProjectState, 'projects' | 'currentProjectId' | 'loading' | 'error'>;
   mapProjectRecord: (record: ProjectRecord) => Project;
   setProjects: (projects: Project[]) => void;
@@ -71,7 +75,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     );
 
     if (!result.ok) {
-      set({ loading: false, error: getRuntimeIpcErrorMessage(result) });
+      set({ loading: false, error: getRendererRuntimeIpcError(result, 'project_load_failed') });
       return;
     }
 
@@ -94,12 +98,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     );
 
     if (!result.ok) {
-      set({ loading: false, error: getRuntimeIpcErrorMessage(result) });
+      set({ loading: false, error: getRendererRuntimeIpcError(result, 'project_use_failed') });
       return null;
     }
 
     if (result.data.status === 'failed') {
-      set({ loading: false, error: result.data.failure.message });
+      set({ loading: false, error: rendererError(result.data.failure.code, result.data.failure.message, undefined, 'project_use_failed') });
       return null;
     }
 
@@ -126,17 +130,17 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     );
 
     if (!result.ok) {
-      set({ loading: false, error: getRuntimeIpcErrorMessage(result) });
+      set({ loading: false, error: getRendererRuntimeIpcError(result, 'project_open_failed') });
       return null;
     }
 
     if (result.data.status === 'not_found') {
-      set({ loading: false, error: 'Project was not found.' });
+      set({ loading: false, error: rendererError('project_not_found') });
       return null;
     }
 
     if (result.data.status === 'failed') {
-      set({ loading: false, error: result.data.failure.message });
+      set({ loading: false, error: rendererError(result.data.failure.code, result.data.failure.message, undefined, 'project_open_failed') });
       return null;
     }
 
@@ -158,17 +162,17 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     );
 
     if (!result.ok) {
-      set({ loading: false, error: getRuntimeIpcErrorMessage(result) });
+      set({ loading: false, error: getRendererRuntimeIpcError(result, 'project_remove_failed') });
       return false;
     }
 
     if (result.data.status === 'blocked') {
-      set({ loading: false, error: 'Project cannot be removed while product facts still reference it.' });
+      set({ loading: false, error: rendererError('project_remove_blocked') });
       return false;
     }
 
     if (result.data.status === 'failed') {
-      set({ loading: false, error: result.data.failure.message });
+      set({ loading: false, error: rendererError(result.data.failure.code, result.data.failure.message, undefined, 'project_remove_failed') });
       return false;
     }
 

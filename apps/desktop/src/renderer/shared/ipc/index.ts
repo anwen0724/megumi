@@ -8,4 +8,5 @@ export {
   getRuntimeIpcError,
   getRuntimeIpcErrorMessage,
   getRuntimeIpcFailure,
+  getRendererRuntimeIpcError,
 } from './runtime-result';

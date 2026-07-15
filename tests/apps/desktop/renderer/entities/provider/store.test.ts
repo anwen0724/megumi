@@ -229,7 +229,11 @@ describe('useProviderStore', () => {
 
     expect(useProviderStore.getState()).toMatchObject({
       status: 'error',
-      error: 'Megumi settings are invalid. Fix C:\\Users\\anwen\\.megumi\\settings.json and try again.',
+      error: {
+        code: 'config_invalid',
+        fallbackCode: 'provider_load_failed',
+        technicalMessage: 'Megumi settings are invalid. Fix C:\\Users\\anwen\\.megumi\\settings.json and try again.',
+      },
     });
     expect(JSON.stringify(useProviderStore.getState())).not.toContain('stack trace');
     expect(JSON.stringify(useProviderStore.getState())).not.toContain('TEST_API_KEY_VALUE');

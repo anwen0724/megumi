@@ -215,4 +215,20 @@ export const chat = {
   branches: {
     cancel: '取消分支',
   },
+  notifications: {
+    actionFailed: { title: '操作失败', message: '无法完成该操作。' },
+    imageSelectFailed: { title: '无法选择图片', message: '请重新选择图片。' },
+    imagePasteFailed: { title: '无法粘贴图片', message: '请重新复制并粘贴图片。' },
+    imageLimit: { title: '已达到图片上限', message: '最多可以附加 {{count}} 张图片。' },
+    approvalFailed: { title: '审批失败', message: '无法保存审批结果。' },
+    nothingToStop: { title: '没有可停止的运行', message: '当前没有可取消的 Agent Run。' },
+    stopFailed: { title: '停止失败', message: '无法取消 Agent Run。' },
+    stopDidNotApply: { title: '未能停止', message: '该 Agent Run 已无法取消。' },
+  },
+  compaction: {
+    running: '正在压缩上下文',
+    completed: '已完成压缩',
+    failed: '上下文压缩失败',
+    skipped: '无需压缩上下文',
+  },
 } as const satisfies TranslationShape<typeof source>;

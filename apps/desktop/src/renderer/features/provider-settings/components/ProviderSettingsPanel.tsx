@@ -31,7 +31,7 @@ import {
   SettingsPageHeader,
   cx,
 } from '../../../shared/ui';
-import { formatNumber, formatTokenCount } from '../../../shared/i18n';
+import { formatNumber, formatTokenCount, localizeRendererError } from '../../../shared/i18n';
 
 type ProviderProtocol = 'openai-compatible' | 'anthropic';
 
@@ -381,7 +381,7 @@ export function ProviderSettingsPanel() {
 
       {error ? (
         <p className="rounded-md border border-[var(--color-danger)] bg-[var(--color-danger-soft)] px-3 py-2 text-sm text-[var(--color-danger)]">
-          {error}
+          {localizeRendererError(error)}
         </p>
       ) : null}
 

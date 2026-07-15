@@ -301,7 +301,7 @@ describe('useSessionTimeline', () => {
       expect.objectContaining({
         tone: 'error',
         title: 'Action failed',
-        message: 'The selected image does not match its declared media type.',
+        message: 'The action could not be completed.',
       }),
     ]);
   });
@@ -348,7 +348,7 @@ describe('useSessionTimeline', () => {
     expect(useRuntimeTimelineStore.getState().sessions['project-1:session-1']?.messages).toEqual([
       expect.objectContaining({
         role: 'activity',
-        blocks: [expect.objectContaining({ status: 'running', label: '正在压缩上下文' })],
+        blocks: [expect.objectContaining({ status: 'running', label: 'context_compaction' })],
       }),
     ]);
 
@@ -381,7 +381,7 @@ describe('useSessionTimeline', () => {
     expect(useRuntimeTimelineStore.getState().sessions['project-1:session-1']?.messages).toEqual([
       expect.objectContaining({
         role: 'activity',
-        blocks: [expect.objectContaining({ status: 'completed', label: '已完成压缩' })],
+        blocks: [expect.objectContaining({ status: 'completed', label: 'context_compaction' })],
       }),
     ]);
     expect(useToastStore.getState().toasts).toEqual([]);
@@ -452,7 +452,7 @@ describe('useSessionTimeline', () => {
       expect.objectContaining({
         tone: 'error',
         title: 'Stop failed',
-        message: 'Cancel service failed.',
+        message: 'The Agent Run could not be cancelled.',
       }),
     ]);
   });

@@ -211,4 +211,20 @@ export const chat = {
   branches: {
     cancel: 'Cancel branch',
   },
+  notifications: {
+    actionFailed: { title: 'Action failed', message: 'The action could not be completed.' },
+    imageSelectFailed: { title: 'Images could not be selected', message: 'Try selecting the images again.' },
+    imagePasteFailed: { title: 'Image could not be pasted', message: 'Try copying and pasting the image again.' },
+    imageLimit: { title: 'Image limit reached', message: 'You can attach up to {{count}} images.' },
+    approvalFailed: { title: 'Approval failed', message: 'The approval response could not be saved.' },
+    nothingToStop: { title: 'Nothing to stop', message: 'There is no active Agent Run to cancel.' },
+    stopFailed: { title: 'Stop failed', message: 'The Agent Run could not be cancelled.' },
+    stopDidNotApply: { title: 'Stop did not apply', message: 'The Agent Run is no longer cancellable.' },
+  },
+  compaction: {
+    running: 'Compacting context',
+    completed: 'Context compacted',
+    failed: 'Context compaction failed',
+    skipped: 'Context does not need compaction',
+  },
 } as const;

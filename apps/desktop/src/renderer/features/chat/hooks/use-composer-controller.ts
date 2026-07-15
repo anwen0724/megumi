@@ -11,6 +11,7 @@ import {
 import type { ComposerDraftImage, ComposerProps, ComposerSubmitPayload } from '../components/composer-types';
 import type { ComposerSurfaceProps } from '../components/ComposerSurface';
 import { showToast } from '../../../shared/ui';
+import { rendererI18n } from '../../../shared/i18n';
 
 const COMPOSER_TEXTAREA_COMPACT_HEIGHT = 56;
 const COMPOSER_TEXTAREA_MAX_HEIGHT = 160;
@@ -239,8 +240,8 @@ export function useComposerController({
   function showImageLimitToast() {
     showToast({
       tone: 'warning',
-      title: 'Image limit reached',
-      message: `You can attach up to ${maxImageCount} images.`,
+      title: rendererI18n.t('chat:notifications.imageLimit.title'),
+      message: rendererI18n.t('chat:notifications.imageLimit.message', { count: maxImageCount }),
     });
   }
 

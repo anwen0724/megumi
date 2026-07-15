@@ -2,6 +2,7 @@
 import { ChevronRight, FileText, Folder } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '../../../entities/project/store';
+import { localizeRendererError } from '../../../shared/i18n';
 import { useWorkspaceFilesStore, type WorkspaceDirectoryEntry } from '../../../entities/workspace-files';
 import { cx } from '../../../shared/ui';
 
@@ -117,7 +118,7 @@ export function FilesPanelTab() {
   }
 
   if (error) {
-    return <p className="text-sm text-[var(--color-danger)]">{error}</p>;
+    return <p className="text-sm text-[var(--color-danger)]">{localizeRendererError(error)}</p>;
   }
 
   if (rootEntries.length === 0) {

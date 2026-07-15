@@ -195,7 +195,7 @@ export function SetupWizard() {
               <ProviderStep
                 catalog={catalog}
                 loading={providerStatus === 'idle' || providerStatus === 'loading'}
-                error={providerError}
+                error={providerError ? localizeRendererError(providerError) : null}
                 providerId={providerId}
                 modelId={modelId}
                 baseUrl={baseUrl}
@@ -220,7 +220,7 @@ export function SetupWizard() {
 
           {(error || (providerError && step === 'provider')) ? (
             <p className="mt-6 rounded-xl border border-[var(--color-danger)]/60 bg-[var(--color-danger-soft)] px-4 py-3 text-sm text-[var(--color-danger)]">
-              {error ? localizeRendererError(error) : providerError}
+              {error ? localizeRendererError(error) : providerError ? localizeRendererError(providerError) : null}
             </p>
           ) : null}
 

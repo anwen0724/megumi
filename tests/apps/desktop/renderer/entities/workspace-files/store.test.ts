@@ -162,7 +162,7 @@ describe('useWorkspaceFilesStore', () => {
     useWorkspaceFilesStore.getState().toggleDirectory('project-a-apps');
     useWorkspaceFilesStore.getState().setSelectedPath('project-a-apps');
     useWorkspaceFilesStore.setState({
-      error: 'Previous workspace error',
+      error: { code: 'previous_workspace_error' },
       loadingDirectories: ['project-a-apps'],
     });
 
@@ -297,7 +297,11 @@ describe('useWorkspaceFilesStore', () => {
       directoryPath: 'apps',
     });
 
-    expect(useWorkspaceFilesStore.getState().error).toBe('Megumi could not list workspace files.');
+    expect(useWorkspaceFilesStore.getState().error).toEqual({
+      code: 'workspace_files_list_failed',
+      fallbackCode: 'workspace_files_list_failed',
+      technicalMessage: 'Megumi could not list workspace files.',
+    });
     expect(useWorkspaceFilesStore.getState().loadingDirectories).not.toContain('apps');
   });
 });
