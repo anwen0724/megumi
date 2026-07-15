@@ -74,6 +74,7 @@ describe('built_in_commands', () => {
       sessionId: 'session:1',
       workspaceId: 'workspace:1',
       modelContext: { providerId: 'p', modelId: 'm', contextWindowTokens: 1000 },
+      imageInputSupport: 'unknown',
     });
     expect(result).toMatchObject({ type: 'completed' });
   });
