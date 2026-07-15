@@ -11,7 +11,7 @@
 [![许可证：MIT](https://img.shields.io/badge/许可证-MIT-4c7a68)](./LICENSE)
 [![使用 TypeScript 构建](https://img.shields.io/badge/构建-TypeScript-3178c6)](https://www.typescriptlang.org/)
 
-**本地优先工作区 · BYOK 模型 · 可见工具执行 · 审批控制 · 会话分支**
+**本地优先工作区 · BYOK 模型 · 可见工具执行 · 审批控制 · English / 简体中文界面**
 
 ![Megumi——本地优先桌面 Coding Agent](./assets/social-preview.png)
 
@@ -29,6 +29,7 @@ Megumi 的设计原则：
 - 文件写入和命令执行会经过权限策略，并在需要时请求审批。
 - 会话、设置、产品数据和日志默认保存在本地。
 - Agent run 产生的工作区文件改动会在对话中追踪。
+- 桌面界面支持 English 和简体中文切换。
 
 ## 它能做什么
 
@@ -42,14 +43,24 @@ Megumi 设计用于支持 Coding Agent 的核心开发工作：
 - 审查工作：总结改动、识别风险、指出缺失测试，并帮助准备代码审查。
 - 管理上下文：为每次模型调用组合项目指令、当前会话历史、本次 run 的工具结果、滚动摘要和选定工具集合。
 - 审批后执行：在敏感文件写入、命令执行或其它高影响操作前请求确认。
+- 延续历史工作：恢复本地会话历史、切换分支，并在长对话中执行上下文压缩，同时不把纯运行时执行状态持久化为业务事实。
+- 使用图片输入：当所选模型支持图片能力时，可从本地文件或剪贴板附加图片。
+- 诊断运行过程：查看本地 activity、Context 使用量、Provider usage、错误信息和脱敏诊断包。
 
 ## 项目状态
 
-Megumi 正在持续开发，目前处于 Windows 早期预览阶段。公开安装包尚未发布，在此之前可以按照下方步骤从源码启动。
+Megumi 正在持续开发，目前处于 Windows 早期预览阶段。预览安装包通过 [GitHub Releases](https://github.com/anwen0724/megumi/releases) 发布。如果 Releases 中暂时没有安装包，可以按照下方步骤从源码启动。
 
-当前 Windows 构建尚未签名，因此未来的预览安装包可能触发 Windows SmartScreen 的 “Unknown publisher” 提示。
+当前 Windows 构建尚未签名，因此安装时可能触发 Windows SmartScreen 的“Unknown publisher”提示。继续安装前请先核对 Release Notes 和源码。
 
-你可以关注 [GitHub Releases](https://github.com/anwen0724/megumi/releases)，等待第一个公开安装包发布。
+## 在 Windows 上安装
+
+1. 打开 [GitHub Releases](https://github.com/anwen0724/megumi/releases)。
+2. 从最新 Release 下载 `Megumi-<version> Setup.exe`。
+3. 运行安装程序。如果出现 SmartScreen，请先阅读发布者警告，再决定是否继续。
+4. 启动 Megumi，选择语言和主题，添加本地项目，并配置模型供应商。
+
+Megumi 当前以 Windows 为正式目标平台。仓库虽然包含其它平台的 Electron Forge maker，但 macOS 和 Linux 暂未进入受支持的公开发布流程。
 
 ## 配置模型供应商
 
@@ -63,7 +74,7 @@ Megumi 使用用户自己配置的模型供应商。
 - API key
 - model IDs
 
-Megumi 当前通过 OpenAI-compatible Adapter 验证了 DeepSeek V4 Flash 和 DeepSeek V4 Pro，也支持配置自定义 OpenAI-compatible 地址和模型 ID。Anthropic 协议 Adapter 尚未实现。
+Megumi 当前通过 OpenAI-compatible Adapter 提供 DeepSeek 与 OpenAI 模型目录，也支持配置自定义 OpenAI-compatible 地址和模型 ID。Anthropic 协议 Adapter 尚未实现。
 
 Provider settings 会保存在本地 Megumi home 目录下。
 
@@ -81,10 +92,16 @@ Megumi 的本地应用数据保存在：
 
 ## 开发
 
+环境要求：
+
+- Windows 10 或 Windows 11
+- 当前维护中的 Node.js LTS 版本和 npm
+- Git
+
 安装依赖：
 
 ```bash
-npm install
+npm ci
 ```
 
 启动桌面应用：
@@ -105,10 +122,26 @@ npm test
 npx tsc --noEmit
 ```
 
-打包应用：
+生成未安装的应用目录：
 
 ```bash
 npm run package
+```
+
+生成 Windows 安装包：
+
+```bash
+npm run make
+```
+
+Electron Forge 会把构建产物写入 `out/`。Windows 下可分发的 Squirrel 安装程序位于 `out/make/squirrel.windows/x64/`。
+
+发布 Release 前至少运行：
+
+```bash
+npm test
+npx tsc --noEmit
+npm run make
 ```
 
 ## 仓库结构
