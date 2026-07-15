@@ -15,7 +15,7 @@ describe('createBranchDraftViewInput', () => {
       assistant,
     ])).toEqual({
       messageId: 'message-assistant-1',
-      label: 'Branching from this reply',
+      sourceKind: 'reply',
       preview: '我是 Megumi，一个 AI 编程助手！🤖',
     });
   });
@@ -33,7 +33,7 @@ describe('createBranchDraftViewInput', () => {
       assistant,
     ])).toEqual({
       messageId: 'message-assistant-1',
-      label: 'Branching from this input',
+      sourceKind: 'input',
       preview: '解释这个报错',
     });
   });

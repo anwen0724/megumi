@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LeftSidebar } from '@megumi/desktop/renderer/shell/LeftSidebar';
+import { initializeRendererI18n } from '@megumi/desktop/renderer/shared/i18n';
 
 const projects = [
   {
@@ -27,6 +28,16 @@ const defaultProps = {
 };
 
 describe('LeftSidebar', () => {
+  it('renders shell navigation in Simplified Chinese', async () => {
+    await initializeRendererI18n('zh-CN');
+    render(<LeftSidebar {...defaultProps} />);
+
+    expect(screen.getByText('聊天')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '新建会话' })).toBeInTheDocument();
+    expect(screen.getByText('项目')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '设置' })).toBeInTheDocument();
+  });
+
   it('renders simplified navigation with project tree when expanded', () => {
     render(<LeftSidebar {...defaultProps} />);
 

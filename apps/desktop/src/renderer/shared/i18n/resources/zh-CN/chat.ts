@@ -214,6 +214,8 @@ export const chat = {
   },
   branches: {
     cancel: '取消分支',
+    fromReply: '从此回复创建分支',
+    fromInput: '从此输入创建分支',
   },
   notifications: {
     actionFailed: { title: '操作失败', message: '无法完成该操作。' },

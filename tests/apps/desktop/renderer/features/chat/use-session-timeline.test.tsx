@@ -463,7 +463,7 @@ describe('useSessionTimeline', () => {
     await act(async () => {
       await result.current.createBranchDraft({
         messageId: 'message-assistant-1',
-        label: 'Branching from this reply',
+        sourceKind: 'reply',
         preview: '我是 Megumi，一个 AI 编程助手！🤖',
       });
     });
@@ -476,7 +476,7 @@ describe('useSessionTimeline', () => {
     }));
     expect(result.current.branchDraft).toMatchObject({
       branchMarkerId: 'branch-marker-1',
-      label: 'Branching from this reply',
+      sourceKind: 'reply',
       preview: '我是 Megumi，一个 AI 编程助手！🤖',
     });
     expect(result.current.branchDraft).not.toHaveProperty('seedText');
@@ -488,7 +488,7 @@ describe('useSessionTimeline', () => {
     await act(async () => {
       await result.current.createBranchDraft({
         messageId: 'message-assistant-1',
-        label: 'Branching from this reply',
+        sourceKind: 'reply',
         preview: 'assistant reply',
       });
     });

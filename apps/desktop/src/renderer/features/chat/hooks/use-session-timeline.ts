@@ -22,7 +22,7 @@ export interface BranchDraftState {
   projectId: string;
   sessionId: string;
   sourceMessageId: string;
-  label: string;
+  sourceKind: 'reply' | 'input';
   preview: string;
   createdAt: string;
 }
@@ -474,7 +474,7 @@ export function useSessionTimeline() {
 
   const createBranchDraft = useCallback(async (input: {
     messageId: string;
-    label: string;
+    sourceKind: 'reply' | 'input';
     preview: string;
   }) => {
     const sessionState = useSessionStore.getState();
@@ -562,7 +562,7 @@ export function useSessionTimeline() {
     updateBranchDraft({
       ...result.data.branchDraft,
       projectId,
-      label: input.label,
+      sourceKind: input.sourceKind,
       preview: input.preview,
     });
   }, [updateBranchDraft]);

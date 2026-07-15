@@ -210,6 +210,8 @@ export const chat = {
   },
   branches: {
     cancel: 'Cancel branch',
+    fromReply: 'Branching from this reply',
+    fromInput: 'Branching from this input',
   },
   notifications: {
     actionFailed: { title: 'Action failed', message: 'The action could not be completed.' },

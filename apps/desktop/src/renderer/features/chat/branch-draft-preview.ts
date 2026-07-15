@@ -2,7 +2,7 @@ import type { TimelineMessage } from '@megumi/product/runtime-timeline';
 
 export interface BranchDraftViewInput {
   messageId: string;
-  label: string;
+  sourceKind: 'reply' | 'input';
   preview: string;
 }
 
@@ -14,7 +14,7 @@ export function createBranchDraftViewInput(
   if (replyPreview) {
     return {
       messageId: message.messageId,
-      label: 'Branching from this reply',
+      sourceKind: 'reply',
       preview: replyPreview,
     };
   }
@@ -22,7 +22,7 @@ export function createBranchDraftViewInput(
   const sourceInput = findSourceUserInput(message, timelineMessages);
   return {
     messageId: message.messageId,
-    label: 'Branching from this input',
+    sourceKind: 'input',
     preview: sourceInput ? extractMessagePreview(sourceInput) : '',
   };
 }

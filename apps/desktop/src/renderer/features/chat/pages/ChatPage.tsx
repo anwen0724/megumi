@@ -1,5 +1,6 @@
 ﻿import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import type { ChatImageInputCapabilitiesUiResult, CommandSuggestionResult } from '@megumi/product/host-interface';
+import { useTranslation } from 'react-i18next';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import { useProviderStore } from '../../../entities/provider/store';
 import { useProjectStore } from '../../../entities/project/store';
@@ -18,6 +19,7 @@ import { rendererI18n } from '../../../shared/i18n';
 const FALLBACK_COMPOSER_SPACER_HEIGHT = 188;
 
 export function ChatPage() {
+  const { t } = useTranslation('chat');
   const controller = useChatPageController();
   const providers = useProviderStore((state) => state.providers);
   const providerStatus = useProviderStore((state) => state.status);
@@ -88,7 +90,7 @@ export function ChatPage() {
 
   const branchDraft = controller.branchDraft ? {
     key: controller.branchDraft.branchMarkerId,
-    label: controller.branchDraft.label,
+    label: t(controller.branchDraft.sourceKind === 'reply' ? 'branches.fromReply' : 'branches.fromInput'),
     preview: controller.branchDraft.preview,
     onCancel: () => {
       void controller.cancelBranchDraft();

@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { WelcomeChat } from '@megumi/desktop/renderer/features/chat/components/WelcomeChat';
+import { initializeRendererI18n } from '@megumi/desktop/renderer/shared/i18n';
 
 const megumiProject = {
   id: 'project-1',
@@ -36,6 +37,16 @@ function renderWelcomeChat(overrides: Partial<Parameters<typeof WelcomeChat>[0]>
 }
 
 describe('WelcomeChat', () => {
+  it('renders the chat entry surface in Simplified Chinese', async () => {
+    await initializeRendererI18n('zh-CN');
+    renderWelcomeChat({ projectPickerOpen: true });
+
+    expect(screen.getByText('欢迎使用 Megumi')).toBeInTheDocument();
+    expect(screen.getByText('新会话位于')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('搜索项目')).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: '添加项目' })).toBeInTheDocument();
+  });
+
   it('keeps the intro text static and exposes a lightweight highlighted project selector button', () => {
     renderWelcomeChat();
 
