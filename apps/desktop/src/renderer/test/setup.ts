@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
-import { afterEach } from 'vitest';
+import { afterEach, beforeEach } from 'vitest';
+import { initializeRendererI18n } from '../shared/i18n';
 
 // jsdom does not implement scrollIntoView
 if (typeof Element !== 'undefined') {
@@ -11,6 +12,10 @@ if (typeof Element !== 'undefined') {
 if (typeof HTMLElement !== 'undefined') {
   HTMLElement.prototype.scrollTo = () => {};
 }
+
+beforeEach(async () => {
+  await initializeRendererI18n('en-US');
+});
 
 afterEach(() => {
   cleanup();
