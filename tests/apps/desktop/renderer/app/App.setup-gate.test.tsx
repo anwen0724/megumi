@@ -1,27 +1,11 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '@megumi/desktop/renderer/app/App';
 import { useSetupWizardStore } from '@megumi/desktop/renderer/features/setup-wizard';
 import { useProviderStore } from '@megumi/desktop/renderer/entities/provider';
 
-function settingsResult(setupCompleted: boolean) {
-  return {
-    ok: true,
-    data: {
-      settings: {
-        language: 'zh-CN',
-        theme: 'midnight-blue',
-        setup: { completed: setupCompleted },
-        memory: { enabled: false },
-        providers: {},
-        permissions: {},
-      },
-    },
-  };
-}
-
-function installMegumiMock(setupCompleted: boolean) {
+function installMegumiMock() {
   Object.defineProperty(window, 'megumi', {
     configurable: true,
     value: {
@@ -31,7 +15,7 @@ function installMegumiMock(setupCompleted: boolean) {
         close: vi.fn(),
       },
       settings: {
-        get: vi.fn().mockResolvedValue(settingsResult(setupCompleted)),
+        get: vi.fn(),
         update: vi.fn(),
       },
       provider: {
@@ -72,24 +56,24 @@ describe('App setup gate', () => {
   });
 
   it('shows setup wizard before setup is completed', async () => {
-    installMegumiMock(false);
+    installMegumiMock();
+    useSetupWizardStore.getState().applyBootstrapSettings({ language: 'zh-CN', setupCompleted: false });
 
     render(<App />);
 
-    await waitFor(() => {
-      expect(screen.getByTestId('setup-wizard')).toBeInTheDocument();
-    });
+    expect(screen.getByTestId('setup-wizard')).toBeInTheDocument();
     expect(screen.queryByTestId('app-body')).not.toBeInTheDocument();
+    expect(window.megumi.settings.get).not.toHaveBeenCalled();
   });
 
   it('shows main app after setup is completed', async () => {
-    installMegumiMock(true);
+    installMegumiMock();
+    useSetupWizardStore.getState().applyBootstrapSettings({ language: 'en-US', setupCompleted: true });
 
     render(<App />);
 
-    await waitFor(() => {
-      expect(screen.getByTestId('app-body')).toBeInTheDocument();
-    });
+    expect(screen.getByTestId('app-body')).toBeInTheDocument();
     expect(screen.queryByTestId('setup-wizard')).not.toBeInTheDocument();
+    expect(window.megumi.settings.get).not.toHaveBeenCalled();
   });
 });

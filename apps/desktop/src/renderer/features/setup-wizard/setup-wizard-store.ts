@@ -2,7 +2,8 @@
 import { create } from 'zustand';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import type { AppLanguage, AppThemeName } from '@megumi/product/host-interface';
-import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../shared/ipc';
+import { createRendererRuntimeIpcRequest } from '../../shared/ipc';
+import { rendererError, type RendererErrorDescriptor } from '../../shared/i18n';
 
 export type SetupWizardStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';
 
@@ -18,38 +19,26 @@ export interface CompleteSetupInput {
 
 interface SetupWizardState {
   status: SetupWizardStatus;
+  language: AppLanguage;
   setupCompleted: boolean | null;
-  error: string | null;
-  hydrate: () => Promise<void>;
+  error: RendererErrorDescriptor | null;
+  applyBootstrapSettings: (settings: { language: AppLanguage; setupCompleted: boolean }) => void;
+  applyBootstrapFailure: (error: RendererErrorDescriptor) => void;
   completeSetup: (input: CompleteSetupInput) => Promise<void>;
 }
 
 export const useSetupWizardStore = create<SetupWizardState>((set) => ({
   status: 'idle',
+  language: 'en-US',
   setupCompleted: null,
   error: null,
-  hydrate: async () => {
-    set({ status: 'loading', error: null });
-
-    const result = await window.megumi.settings.get(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {}),
-    );
-
-    if (!result.ok) {
-      set({ status: 'error', error: getRuntimeIpcErrorMessage(result), setupCompleted: false });
-      return;
-    }
-    if (result.data.status === 'failed') {
-      set({ status: 'error', error: result.data.failure.message, setupCompleted: false });
-      return;
-    }
-
-    set({
-      status: 'ready',
-      setupCompleted: result.data.settings.setup.completed,
-      error: null,
-    });
-  },
+  applyBootstrapSettings: ({ language, setupCompleted }) => set({
+    status: 'ready',
+    language,
+    setupCompleted,
+    error: null,
+  }),
+  applyBootstrapFailure: (error) => set({ status: 'error', setupCompleted: false, error }),
   completeSetup: async (input) => {
     set({ status: 'saving', error: null });
 
@@ -73,11 +62,14 @@ export const useSetupWizardStore = create<SetupWizardState>((set) => ({
     );
 
     if (!settingsResult.ok) {
-      set({ status: 'error', error: getRuntimeIpcErrorMessage(settingsResult) });
+      set({ status: 'error', error: rendererError(settingsResult.data.code, settingsResult.data.message) });
       return;
     }
     if (settingsResult.data.status === 'failed') {
-      set({ status: 'error', error: settingsResult.data.failure.message });
+      set({
+        status: 'error',
+        error: rendererError(settingsResult.data.failure.code, settingsResult.data.failure.message),
+      });
       return;
     }
 
@@ -85,13 +77,14 @@ export const useSetupWizardStore = create<SetupWizardState>((set) => ({
       set({
         status: 'error',
         setupCompleted: false,
-        error: 'Setup completion was not saved.',
+        error: rendererError('setup_incomplete'),
       });
       return;
     }
 
     set({
       status: 'ready',
+      language: settingsResult.data.settings.language,
       setupCompleted: settingsResult.data.settings.setup.completed,
       error: null,
     });

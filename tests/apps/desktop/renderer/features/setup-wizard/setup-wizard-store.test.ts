@@ -2,7 +2,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSetupWizardStore } from '@megumi/desktop/renderer/features/setup-wizard';
 
-const settingsGet = vi.fn();
 const settingsUpdate = vi.fn();
 const settingsCompleteSetup = vi.fn();
 const providerUpdate = vi.fn();
@@ -13,7 +12,6 @@ function installMegumiMock() {
     configurable: true,
     value: {
       settings: {
-        get: settingsGet,
         update: settingsUpdate,
         completeSetup: settingsCompleteSetup,
       },
@@ -28,7 +26,6 @@ function installMegumiMock() {
 describe('setup wizard store', () => {
   beforeEach(() => {
     installMegumiMock();
-    settingsGet.mockReset();
     settingsUpdate.mockReset();
     settingsCompleteSetup.mockReset();
     providerUpdate.mockReset();
@@ -36,25 +33,15 @@ describe('setup wizard store', () => {
     useSetupWizardStore.setState(useSetupWizardStore.getInitialState(), true);
   });
 
-  it('detects incomplete setup from settings', async () => {
-    settingsGet.mockResolvedValue({
-      ok: true,
-      data: {
-        settings: {
-          language: 'zh-CN',
-          theme: 'midnight-blue',
-          setup: { completed: false },
-          memory: { enabled: false },
-          providers: {},
-          permissions: {},
-        },
-      },
+  it('accepts the bootstrap language and setup projection synchronously', () => {
+    useSetupWizardStore.getState().applyBootstrapSettings({ language: 'zh-CN', setupCompleted: false });
+
+    expect(useSetupWizardStore.getState()).toMatchObject({
+      status: 'ready',
+      language: 'zh-CN',
+      setupCompleted: false,
+      error: null,
     });
-
-    await useSetupWizardStore.getState().hydrate();
-
-    expect(useSetupWizardStore.getState().status).toBe('ready');
-    expect(useSetupWizardStore.getState().setupCompleted).toBe(false);
   });
 
   it('completes setup with one settings update and clears the transient API key from state', async () => {
@@ -161,7 +148,7 @@ describe('setup wizard store', () => {
     expect(useSetupWizardStore.getState()).toMatchObject({
       status: 'error',
       setupCompleted: false,
-      error: 'Setup completion was not saved.',
+      error: { code: 'setup_incomplete' },
     });
   });
 });

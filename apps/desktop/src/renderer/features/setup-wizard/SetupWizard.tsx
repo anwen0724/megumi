@@ -17,6 +17,7 @@ import {
 import type { AppLanguage, ProviderCatalogUiDto } from '@megumi/product/host-interface';
 import { useProviderStore } from '../../entities/provider';
 import { Button, TextField, cx } from '../../shared/ui';
+import { localizeRendererError } from '../../shared/i18n';
 import { themeDefinitions, themeNames, useThemeStore, type ThemeName } from '../../shared/theme';
 import { useSetupWizardStore } from './setup-wizard-store';
 
@@ -211,7 +212,7 @@ export function SetupWizard() {
 
           {(error || (providerError && step === 'provider')) ? (
             <p className="mt-6 rounded-xl border border-[var(--color-danger)]/60 bg-[var(--color-danger-soft)] px-4 py-3 text-sm text-[var(--color-danger)]">
-              {error ?? providerError}
+              {error ? localizeRendererError(error) : providerError}
             </p>
           ) : null}
 
