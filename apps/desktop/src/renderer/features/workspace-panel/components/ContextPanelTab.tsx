@@ -1,19 +1,21 @@
 import { FolderOpen } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '../../../entities/project/store';
 import { Badge, Panel } from '../../../shared/ui';
 
 export function ContextPanelTab() {
+  const { t } = useTranslation('chat');
   const projects = useProjectStore((state) => state.projects);
   const currentProjectId = useProjectStore((state) => state.currentProjectId);
   const loading = useProjectStore((state) => state.loading);
   const currentProject = projects.find((project) => project.id === currentProjectId) ?? null;
 
   if (loading) {
-    return <p className="text-sm text-[var(--color-text-muted)]">Loading context</p>;
+    return <p className="text-sm text-[var(--color-text-muted)]">{t('workspace.loadingContext')}</p>;
   }
 
   if (!currentProject) {
-    return <p className="text-sm text-[var(--color-text-muted)]">No project selected</p>;
+    return <p className="text-sm text-[var(--color-text-muted)]">{t('workspace.noProject')}</p>;
   }
 
   return (
@@ -29,15 +31,15 @@ export function ContextPanelTab() {
               <Badge variant="accent">{currentProject.status}</Badge>
             </div>
             <p className="mt-1 truncate text-xs text-[var(--color-text-muted)]">
-              {currentProject.repoPath ?? 'No repository path'}
+              {currentProject.repoPath ?? t('workspace.noRepositoryPath')}
             </p>
           </div>
         </div>
       </Panel>
 
       <Panel className="p-3">
-        <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Attached context</p>
-        <p className="mt-2 text-sm text-[var(--color-text-muted)]">No files attached yet.</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{t('workspace.attachedContext')}</p>
+        <p className="mt-2 text-sm text-[var(--color-text-muted)]">{t('workspace.noContext')}</p>
       </Panel>
     </div>
   );

@@ -1,8 +1,10 @@
 ﻿import { memo, type ReactNode } from 'react';
 import { Archive, Check, Copy, GitBranch, LoaderCircle, TriangleAlert } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/product/runtime-timeline';
 import { IconButton, RecoverableErrorBoundary } from '../../../shared/ui';
 import { TimelineMessageBlocks } from './TimelineMessageBlocks';
+import { formatTime as formatLocalizedTime } from '../../../shared/i18n';
 
 interface TimelineMessageProps {
   message: CanonicalTimelineMessage;
@@ -11,19 +13,13 @@ interface TimelineMessageProps {
   afterContent?: ReactNode;
 }
 
-function formatTime(timestamp: string): string {
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return '';
-
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
 function TimelineMessageComponent({
   message,
   showBranchAction = false,
   onBranchFromMessage,
   afterContent,
 }: TimelineMessageProps) {
+  const { t } = useTranslation('chat');
   const role = message.role;
   const isUser = role === 'user';
   const isAssistant = role === 'assistant';
@@ -69,7 +65,7 @@ function TimelineMessageComponent({
     return (
       <article
         role="article"
-        aria-label="User message"
+        aria-label={t('timeline.userMessage')}
         className="flex w-full justify-end animate-[megumi-message-in_160ms_ease-out]"
       >
         <div className="relative group flex min-w-0 max-w-3xl flex-col items-end text-right text-sm leading-7 text-[var(--color-text)]">
@@ -83,10 +79,10 @@ function TimelineMessageComponent({
             dateTime={message.createdAt}
             className="mt-1 block text-xs leading-5 text-[var(--color-text-muted)]"
           >
-            {formatTime(message.createdAt)}
+            {formatLocalizedTime(message.createdAt) ?? ''}
           </time>
           {afterContent ? (
-            <RecoverableErrorBoundary title="Message details could not be displayed" resetKey={message.messageId}>
+            <RecoverableErrorBoundary title={t('timeline.detailsFailed')} resetKey={message.messageId}>
               {afterContent}
             </RecoverableErrorBoundary>
           ) : null}
@@ -98,18 +94,18 @@ function TimelineMessageComponent({
   return (
     <article
       role="article"
-      aria-label={isAssistant ? 'Megumi message' : `${role} message`}
+      aria-label={isAssistant ? t('timeline.assistantMessage') : t('timeline.roleMessage', { role })}
       className="flex w-full animate-[megumi-message-in_160ms_ease-out] justify-start"
     >
       <div className="min-w-0 max-w-3xl text-sm leading-7 w-full text-left text-[var(--color-text)]">
         <div className="mb-2 flex items-center gap-2 text-xs text-[var(--color-text-muted)] justify-start">
           <span>{isAssistant ? 'Megumi' : role}</span>
-          <time dateTime={message.createdAt}>{formatTime(message.createdAt)}</time>
+          <time dateTime={message.createdAt}>{formatLocalizedTime(message.createdAt) ?? ''}</time>
         </div>
 
         <TimelineMessageBlocks message={message} />
         {afterContent ? (
-          <RecoverableErrorBoundary title="Message details could not be displayed" resetKey={message.messageId}>
+          <RecoverableErrorBoundary title={t('timeline.detailsFailed')} resetKey={message.messageId}>
             {afterContent}
           </RecoverableErrorBoundary>
         ) : null}
@@ -119,7 +115,7 @@ function TimelineMessageComponent({
             className="mt-3 flex items-center gap-1 text-[var(--color-text-muted)]"
           >
             <IconButton
-              label="Copy reply"
+              label={t('timeline.copyReply')}
               size="sm"
               variant="ghost"
               onClick={() => {
@@ -130,7 +126,7 @@ function TimelineMessageComponent({
             </IconButton>
             {canBranch ? (
               <IconButton
-                label="Branch from this reply"
+                label={t('timeline.branchReply')}
                 size="sm"
                 variant="ghost"
                 onClick={() => onBranchFromMessage?.(message)}

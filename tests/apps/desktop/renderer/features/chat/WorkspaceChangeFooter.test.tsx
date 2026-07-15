@@ -6,7 +6,7 @@ import { WorkspaceChangeFooter } from '@megumi/desktop/renderer/features/chat/co
 import type { WorkspaceChangeFooterFact } from '@megumi/coding-agent/projections/workspace/workspace-change-footer-projector';
 
 describe('WorkspaceChangeFooter', () => {
-  it('renders renderer-owned Chinese copy from structured workspace change facts', async () => {
+  it('renders localized copy from structured workspace change facts', async () => {
     const onOpenFile = vi.fn();
 
     render(
@@ -16,19 +16,19 @@ describe('WorkspaceChangeFooter', () => {
       />,
     );
 
-    expect(screen.getByRole('region', { name: '本轮工作区变更' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Workspace changes for this turn' })).toBeInTheDocument();
     expect(screen.getByText('app.ts')).toBeInTheDocument();
     expect(screen.getAllByText('README.md').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('contentText')).not.toBeInTheDocument();
     expect(screen.queryByText('beforeHash')).not.toBeInTheDocument();
 
-    const openFiles = screen.getByRole('list', { name: '可打开的变更文件' });
+    const openFiles = screen.getByRole('list', { name: 'Changed files that can be opened' });
     const fileList = screen.getByRole('list', { name: 'Changed files' });
     expect(openFiles.compareDocumentPosition(fileList)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(fileList).toHaveClass('divide-y');
-    expect(screen.getByText('已改动 2 个文件')).toBeInTheDocument();
-    expect(screen.getByText('文件改动摘要')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '撤销' })).not.toBeInTheDocument();
+    expect(screen.getByText('2 files changed')).toBeInTheDocument();
+    expect(screen.getByText('File change summary')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
 
     const appRow = within(openFiles).getByText('app.ts').closest('li');
     expect(appRow).not.toBeNull();
@@ -37,7 +37,7 @@ describe('WorkspaceChangeFooter', () => {
     }
     expect(appRow).toHaveAttribute('data-workspace-open-file-row', 'true');
 
-    await userEvent.click(within(appRow).getByRole('button', { name: '打开' }));
+    await userEvent.click(within(appRow).getByRole('button', { name: 'Open' }));
 
     expect(onOpenFile).toHaveBeenCalledWith('src/app.ts');
   });
@@ -56,10 +56,10 @@ describe('WorkspaceChangeFooter', () => {
       />,
     );
 
-    expect(screen.queryByRole('list', { name: '可打开的变更文件' })).not.toBeInTheDocument();
-    expect(screen.getByText('已改动 6 个文件')).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Changed files that can be opened' })).not.toBeInTheDocument();
+    expect(screen.getByText('6 files changed')).toBeInTheDocument();
     expect(screen.getByText('src/file-1.ts')).toBeInTheDocument();
-    expect(screen.getByText('再显示 3 个文件')).toBeInTheDocument();
+    expect(screen.getByText('3 more files')).toBeInTheDocument();
   });
 });
 

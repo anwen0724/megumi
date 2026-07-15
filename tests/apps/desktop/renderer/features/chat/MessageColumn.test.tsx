@@ -17,8 +17,8 @@ describe('MessageColumn', () => {
       />,
     );
 
-    expect(screen.getByRole('region', { name: '本轮工作区变更' })).toBeInTheDocument();
-    expect(screen.getByText('已改动 1 个文件')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Workspace changes for this turn' })).toBeInTheDocument();
+    expect(screen.getByText('1 file changed')).toBeInTheDocument();
     expect(screen.getAllByText('hollow-world.md').length).toBeGreaterThanOrEqual(1);
   });
 

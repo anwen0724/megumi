@@ -13,6 +13,7 @@ export {
 export {
   formatDate,
   formatNumber,
+  formatPercent,
   formatRelativeTime,
   formatTime,
   formatTokenCount,

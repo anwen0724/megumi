@@ -10,6 +10,13 @@ export function formatNumber(value: number, locale?: AppLanguage): string {
   return new Intl.NumberFormat(localeOrCurrent(locale)).format(value);
 }
 
+export function formatPercent(value: number, locale?: AppLanguage): string {
+  return new Intl.NumberFormat(localeOrCurrent(locale), {
+    style: 'percent',
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
 export function formatTokenCount(value: number, locale?: AppLanguage): string {
   const resolved = localeOrCurrent(locale);
   if (Math.abs(value) < 1_000) return formatNumber(value, resolved);

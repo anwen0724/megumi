@@ -105,7 +105,7 @@ describe('Composer', () => {
 
     expect(screen.getByText('Context window:')).toBeInTheDocument();
     expect(screen.getByText('86% used')).toBeInTheDocument();
-    expect(screen.getByText('Used 222k tokens of 258k')).toBeInTheDocument();
+    expect(screen.getByText('Used 222K tokens of 258K')).toBeInTheDocument();
     expect(screen.getByLabelText('Context usage')).toHaveAttribute('aria-valuenow', '86');
   });
 
@@ -824,7 +824,7 @@ describe('Composer', () => {
     const onStop = vi.fn();
     render(<TestComposer status="running" onSubmit={onSubmit} onStop={onStop} />);
 
-    expect(screen.getByPlaceholderText('Ask Megumi anything...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Ask Megumi anything…')).toBeInTheDocument();
     expect(screen.queryByText('Megumi is working')).not.toBeInTheDocument();
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), 'continue');

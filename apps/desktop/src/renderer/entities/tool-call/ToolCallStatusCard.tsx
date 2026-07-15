@@ -1,5 +1,6 @@
 ﻿import { AlertCircle, CheckCircle2, Clock, Loader2, ShieldCheck, XCircle } from 'lucide-react';
 import type { ToolExecution, ToolExecutionStatus } from './store';
+import { useTranslation } from 'react-i18next';
 import { Badge, Panel, cx } from '../../shared/ui';
 
 interface ToolCallStatusCardProps {
@@ -7,47 +8,38 @@ interface ToolCallStatusCardProps {
 }
 
 const statusConfig: Record<ToolExecutionStatus, {
-  label: string;
   badge: 'neutral' | 'accent' | 'success' | 'warning' | 'danger' | 'approval';
   icon: typeof Clock;
 }> = {
   created: {
-    label: 'Created',
     badge: 'neutral',
     icon: Clock,
   },
   awaitingApproval: {
-    label: 'Waiting for approval',
     badge: 'approval',
     icon: ShieldCheck,
   },
   rejected: {
-    label: 'Rejected',
     badge: 'danger',
     icon: XCircle,
   },
   queued: {
-    label: 'Queued',
     badge: 'neutral',
     icon: Clock,
   },
   running: {
-    label: 'Running',
     badge: 'accent',
     icon: Loader2,
   },
   succeeded: {
-    label: 'Succeeded',
     badge: 'success',
     icon: CheckCircle2,
   },
   failed: {
-    label: 'Failed',
     badge: 'danger',
     icon: AlertCircle,
   },
   cancelled: {
-    label: 'Cancelled',
     badge: 'warning',
     icon: XCircle,
   },
@@ -67,11 +59,12 @@ function iconTone(status: ToolExecutionStatus): string {
 }
 
 export function ToolCallStatusCard({ toolCall }: ToolCallStatusCardProps) {
+  const { t } = useTranslation('chat');
   const config = statusConfig[toolCall.status];
   const StatusIcon = config.icon;
   const spinning = toolCall.status === 'running';
   const displayToolName = toolCall.modelVisibleName ?? toolCall.toolName;
-  const inputPreview = readableInputPreview(toolCall.inputPreview);
+  const inputPreview = readableInputPreview(toolCall.inputPreview, t('tools.input'));
 
   return (
     <Panel className="overflow-hidden">
@@ -88,7 +81,7 @@ export function ToolCallStatusCard({ toolCall }: ToolCallStatusCardProps) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="truncate text-sm font-semibold text-[var(--color-text)]">{displayToolName}</h3>
-            <Badge variant={config.badge}>{config.label}</Badge>
+            <Badge variant={config.badge}>{t(`tools.statuses.${toolCall.status}`)}</Badge>
           </div>
 
           <p className="mt-1 text-xs text-[var(--color-text-muted)]">{inputPreview.summary}</p>
@@ -105,7 +98,10 @@ export function ToolCallStatusCard({ toolCall }: ToolCallStatusCardProps) {
 
           {toolCall.policyDecision ? (
             <p className="mt-2 rounded-md bg-[var(--color-surface-muted)] px-2 py-1.5 text-xs text-[var(--color-text-muted)]">
-              Policy: {toolCall.policyDecision.decision} - {toolCall.policyDecision.reason}
+              {t('tools.policy', {
+                decision: toolCall.policyDecision.decision,
+                reason: toolCall.policyDecision.reason ?? '',
+              })}
             </p>
           ) : null}
 
@@ -126,15 +122,15 @@ export function ToolCallStatusCard({ toolCall }: ToolCallStatusCardProps) {
   );
 }
 
-function readableInputPreview(inputPreview: ToolExecution['inputPreview']): {
+function readableInputPreview(inputPreview: ToolExecution['inputPreview'], fallbackSummary: string): {
   summary: string;
   targets: Array<{ kind: string; label: string }>;
 } {
   if (!inputPreview || typeof inputPreview !== 'object' || Array.isArray(inputPreview)) {
-    return { summary: 'Tool input', targets: [] };
+    return { summary: fallbackSummary, targets: [] };
   }
   const preview = inputPreview as Record<string, unknown>;
-  const summary = typeof preview.summary === 'string' ? preview.summary : 'Tool input';
+  const summary = typeof preview.summary === 'string' ? preview.summary : fallbackSummary;
   const targets = Array.isArray(preview.targets)
     ? preview.targets.flatMap((target: unknown) => {
       if (!target || typeof target !== 'object' || Array.isArray(target)) {

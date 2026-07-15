@@ -1,22 +1,8 @@
 ﻿import { useState, useRef, useEffect } from 'react';
 import { useAgentPreferenceStore, type AgentType } from '../store';
+import { useTranslation } from 'react-i18next';
 
 const AGENT_TYPES: AgentType[] = ['analyst', 'architect', 'developer', 'reviewer', 'free'];
-const AGENT_LABELS: Record<AgentType, string> = {
-  analyst: 'Analyst',
-  architect: 'Architect',
-  developer: 'Developer',
-  reviewer: 'Reviewer',
-  free: 'Free',
-};
-const AGENT_DESCRIPTIONS: Record<AgentType, string> = {
-  analyst: 'Explore requirements and evidence',
-  architect: 'Shape structure and tradeoffs',
-  developer: 'Implement code changes',
-  reviewer: 'Review quality and risks',
-  free: 'General assistant mode',
-};
-
 const AGENT_COLORS: Record<AgentType, string> = {
   analyst: 'bg-green-500',
   architect: 'bg-indigo-500',
@@ -26,6 +12,7 @@ const AGENT_COLORS: Record<AgentType, string> = {
 };
 
 export default function AgentSwitcher() {
+  const { t } = useTranslation('chat');
   const activeAgentType = useAgentPreferenceStore((s) => s.activeAgentType);
   const setActiveAgentType = useAgentPreferenceStore((s) => s.setActiveAgentType);
   const [open, setOpen] = useState(false);
@@ -41,11 +28,12 @@ export default function AgentSwitcher() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const activeLabel = AGENT_LABELS[activeAgentType];
+  const activeLabel = t(`agents.options.${activeAgentType}.label`);
 
   return (
     <div ref={ref} className="relative">
       <button
+        aria-label={t('agents.label')}
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors duration-150"
       >
@@ -75,13 +63,13 @@ export default function AgentSwitcher() {
                   }`}
                 >
                   <div className={`w-6 h-6 rounded-full ${AGENT_COLORS[type]} flex items-center justify-center text-white font-bold text-[11px] shrink-0`}>
-                    {AGENT_LABELS[type].slice(0, 1)}
+                    {t(`agents.options.${type}.label`).slice(0, 1)}
                   </div>
                   <div>
                     <div className={`font-medium ${isActive ? 'text-indigo-700' : 'text-gray-900'}`}>
-                      {AGENT_LABELS[type]}
+                      {t(`agents.options.${type}.label`)}
                     </div>
-                    <div className="text-[10px] text-gray-400">{AGENT_DESCRIPTIONS[type]}</div>
+                    <div className="text-[10px] text-gray-400">{t(`agents.options.${type}.description`)}</div>
                   </div>
                 </button>
               );

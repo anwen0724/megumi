@@ -1,4 +1,5 @@
 import { Button } from '../../../shared/ui';
+import { useTranslation } from 'react-i18next';
 
 export interface ComposerBranchDraftView {
   key: string;
@@ -12,6 +13,7 @@ interface BranchDraftStackProps {
 }
 
 export function BranchDraftStack({ branchDraft }: BranchDraftStackProps) {
+  const { t } = useTranslation('chat');
   if (!branchDraft) {
     return null;
   }
@@ -30,10 +32,10 @@ export function BranchDraftStack({ branchDraft }: BranchDraftStackProps) {
         variant="ghost"
         size="sm"
         onClick={branchDraft.onCancel}
-        aria-label="Cancel branch"
+        aria-label={t('branches.cancel')}
         className="shrink-0"
       >
-        Cancel branch
+        {t('branches.cancel')}
       </Button>
     </div>
   );

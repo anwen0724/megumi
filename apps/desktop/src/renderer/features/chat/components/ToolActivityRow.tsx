@@ -1,4 +1,5 @@
 import { CheckCircle2, ChevronRight } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Badge, cx } from '../../../shared/ui';
 
 interface CompletedToolActivity {
@@ -17,17 +18,18 @@ interface ToolActivityRowProps {
 }
 
 export function ToolActivityRow({ activity, expanded, onToggle }: ToolActivityRowProps) {
+  const { t } = useTranslation('chat');
   const preferredArg = activity.args.query ?? activity.args.command ?? activity.args.path ?? activity.args.url;
   const detail = typeof preferredArg === 'string' && preferredArg.trim().length > 0
     ? preferredArg
     : JSON.stringify(activity.args);
 
   return (
-    <section className="space-y-2" aria-label={`Completed tool activity ${activity.name}`}>
+    <section className="space-y-2" aria-label={t('tools.completedActivity', { name: activity.name })}>
       <button
         type="button"
         aria-expanded={expanded}
-        aria-label={`${expanded ? 'Collapse' : 'Expand'} completed tool activity ${activity.name}`}
+        aria-label={t(expanded ? 'tools.collapseCompleted' : 'tools.expandCompleted', { name: activity.name })}
         onClick={onToggle}
         className={cx(
           'flex w-full items-center gap-3 rounded-lg border border-[var(--color-border)]',
@@ -46,9 +48,9 @@ export function ToolActivityRow({ activity, expanded, onToggle }: ToolActivityRo
         />
         <CheckCircle2 size={16} aria-hidden="true" className="shrink-0 text-[var(--color-success)]" />
         <span className="min-w-0 flex-1 truncate text-[var(--color-text)]">
-          Megumi checked workspace context
+          {t('tools.checkedContext')}
         </span>
-        <Badge variant="success">Completed</Badge>
+        <Badge variant="success">{t('tools.completed')}</Badge>
         <span className="shrink-0 text-xs text-[var(--color-text-muted)]">{activity.duration}</span>
       </button>
 
@@ -56,7 +58,7 @@ export function ToolActivityRow({ activity, expanded, onToggle }: ToolActivityRo
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-sm">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="truncate text-sm font-semibold text-[var(--color-text)]">{activity.name}</h3>
-            <Badge variant="success">Completed</Badge>
+            <Badge variant="success">{t('tools.completed')}</Badge>
             <span className="text-xs text-[var(--color-text-muted)]">{activity.duration}</span>
           </div>
           <p className="mt-1 truncate text-xs text-[var(--color-text-muted)]">{detail}</p>

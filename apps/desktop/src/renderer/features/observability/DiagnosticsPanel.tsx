@@ -1,5 +1,6 @@
 /* Joins local Run traces with canonical Project, Session, and user-message facts for diagnostics. */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import {
   CheckCircle2,
   CircleSlash,
@@ -16,12 +17,14 @@ import type {
 import { IPC_CHANNELS } from "../../../main/ipc/channels";
 import { createRendererRuntimeIpcRequest } from "../../shared/ipc/runtime-request";
 import { Button, SettingsPageHeader, cx } from "../../shared/ui";
+import { formatDate, formatNumber, formatPercent, rendererI18n } from "../../shared/i18n";
 
 const ALL_FILTER = "__all__";
 const NO_PROJECT_FILTER = "__no_project__";
 const NO_SESSION_FILTER = "__no_session__";
 
 export function DiagnosticsPanel() {
+  const { t } = useTranslation('settings');
   const [traces, setTraces] = useState<RunTraceSummary[]>([]);
   const [projects, setProjects] = useState<WorkspaceProjectUiDto[]>([]);
   const [sessions, setSessions] = useState<ChatSessionUiDto[]>([]);
@@ -30,7 +33,7 @@ export function DiagnosticsPanel() {
   const [sessionFilter, setSessionFilter] = useState(ALL_FILTER);
   const [selected, setSelected] = useState<RunTraceDetail>();
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<string>();
+  const [message, setMessage] = useState<'unavailable' | 'exported' | 'exportFailed'>();
 
   const load = async () => {
     setLoading(true);
@@ -50,7 +53,7 @@ export function DiagnosticsPanel() {
     ]);
 
     if (!traceResult.ok || traceResult.data.status !== "ok") {
-      setMessage("Diagnostics are unavailable.");
+      setMessage('unavailable');
       setLoading(false);
       return;
     }
@@ -118,46 +121,46 @@ export function DiagnosticsPanel() {
     if (result.ok)
       setMessage(
         result.data.status === "saved"
-          ? "Diagnostic bundle exported."
+          ? 'exported'
           : result.data.status === "cancelled"
             ? undefined
-            : "Diagnostic bundle export failed.",
+            : 'exportFailed',
       );
   };
   return (
     <div className="space-y-6">
       <SettingsPageHeader
-        title="Activity & Diagnostics"
-        description="Inspect recent activity, token usage, tool calls, and errors stored locally on this device."
+        title={t('diagnostics.title')}
+        description={t('diagnostics.description')}
         action={(
           <Button size="sm" variant="secondary" onClick={() => void load()}>
             <RefreshCw size={14} aria-hidden="true" />
-            Refresh
+            {t('diagnostics.refresh')}
           </Button>
         )}
       />
       {loading ? (
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-12 text-center text-sm text-[var(--color-text-muted)]">
-          Loading recent activity…
+          {t('diagnostics.loading')}
         </div>
       ) : message ? (
         <p role="status" className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text-muted)]">
-          {message}
+          {t(`diagnostics.${message}`)}
         </p>
       ) : (
         <div className="grid min-h-[28rem] overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] lg:grid-cols-[minmax(17rem,0.72fr)_minmax(0,1.28fr)]">
           <section className="border-b border-[var(--color-border)] p-4 lg:border-b-0 lg:border-r">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-[var(--color-text)]">Recent runs</h2>
+              <h2 className="text-sm font-semibold text-[var(--color-text)]">{t('diagnostics.recentRuns')}</h2>
               <span className="text-xs text-[var(--color-text-subtle)]">
                 {filteredTraces.length === traces.length
                   ? traces.length
-                  : `${filteredTraces.length} of ${traces.length}`}
+                  : t('diagnostics.filteredCount', { filtered: filteredTraces.length, total: traces.length })}
               </span>
             </div>
             <div className="mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
               <DiagnosticFilter
-                label="Project"
+                label={t('diagnostics.project')}
                 value={projectFilter}
                 onChange={(value) => {
                   setProjectFilter(value);
@@ -165,24 +168,24 @@ export function DiagnosticsPanel() {
                   setSelected(undefined);
                 }}
               >
-                <option value={ALL_FILTER}>All projects</option>
+                <option value={ALL_FILTER}>{t('diagnostics.allProjects')}</option>
                 {projectIds.map((projectId) => (
                   <option key={projectId} value={projectId}>
                     {projectId === NO_PROJECT_FILTER
-                      ? "No project"
-                      : projectNameById.get(projectId) ?? "Unavailable project"}
+                      ? t('diagnostics.noProject')
+                      : projectNameById.get(projectId) ?? t('diagnostics.unavailableProject')}
                   </option>
                 ))}
               </DiagnosticFilter>
               <DiagnosticFilter
-                label="Session"
+                label={t('diagnostics.session')}
                 value={sessionFilter}
                 onChange={(value) => {
                   setSessionFilter(value);
                   setSelected(undefined);
                 }}
               >
-                <option value={ALL_FILTER}>All sessions</option>
+                <option value={ALL_FILTER}>{t('diagnostics.allSessions')}</option>
                 {sessionIds.map((sessionId) => {
                   const session = sessionById.get(sessionId);
                   const projectName = session
@@ -191,10 +194,10 @@ export function DiagnosticsPanel() {
                   return (
                     <option key={sessionId} value={sessionId}>
                       {sessionId === NO_SESSION_FILTER
-                        ? "No session"
+                        ? t('diagnostics.noSession')
                         : projectFilter === ALL_FILTER && projectName
-                          ? `${projectName} / ${session?.title ?? "Unavailable session"}`
-                          : session?.title ?? "Unavailable session"}
+                          ? `${projectName} / ${session?.title ?? t('diagnostics.unavailableSession')}`
+                          : session?.title ?? t('diagnostics.unavailableSession')}
                     </option>
                   );
                 })}
@@ -202,11 +205,11 @@ export function DiagnosticsPanel() {
             </div>
             {traces.length === 0 ? (
               <p className="rounded-lg border border-dashed border-[var(--color-border)] px-4 py-8 text-center text-sm text-[var(--color-text-muted)]">
-                No activity recorded yet.
+                {t('diagnostics.empty')}
               </p>
             ) : filteredTraces.length === 0 ? (
               <p className="rounded-lg border border-dashed border-[var(--color-border)] px-4 py-8 text-center text-sm text-[var(--color-text-muted)]">
-                No runs match these filters.
+                {t('diagnostics.noMatches')}
               </p>
             ) : (
               <div className="space-y-1.5">
@@ -240,9 +243,9 @@ export function DiagnosticsPanel() {
             {!selected ? (
               <div className="grid min-h-[24rem] place-items-center text-center">
                 <div>
-                  <h2 className="text-sm font-medium text-[var(--color-text)]">Select a run</h2>
+                  <h2 className="text-sm font-medium text-[var(--color-text)]">{t('diagnostics.selectRun')}</h2>
                   <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-                    Choose recent activity to inspect its timing and usage.
+                    {t('diagnostics.selectHint')}
                   </p>
                 </div>
               </div>
@@ -269,40 +272,40 @@ export function DiagnosticsPanel() {
                     onClick={() => void exportBundle()}
                   >
                     <Download size={14} aria-hidden="true" />
-                    Export diagnostics
+                    {t('diagnostics.export')}
                   </Button>
                 </div>
                 <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                   <DiagnosticMetric
-                    label="Duration"
+                    label={t('diagnostics.duration')}
                     value={formatDuration(selected.summary.durationMs)}
-                    detail="Total Run time"
+                    detail={t('diagnostics.totalRunTime')}
                   />
                   <DiagnosticMetric
-                    label="Model calls"
-                    value={String(selected.summary.modelCallCount)}
-                    detail="Provider requests"
+                    label={t('diagnostics.modelCalls')}
+                    value={formatNumber(selected.summary.modelCallCount)}
+                    detail={t('diagnostics.providerRequests')}
                   />
                   <DiagnosticMetric
-                    label="Tool calls"
-                    value={String(selected.summary.toolCallCount)}
-                    detail="Tool executions"
+                    label={t('diagnostics.toolCalls')}
+                    value={formatNumber(selected.summary.toolCallCount)}
+                    detail={t('diagnostics.toolExecutions')}
                   />
                   <DiagnosticMetric
-                    label="Context capacity"
+                    label={t('diagnostics.contextCapacity')}
                     value={formatContextCapacity(selected.summary)}
                     detail={formatContextRatio(
                       selected.summary.contextUsedRatio,
                     )}
                   />
                   <DiagnosticMetric
-                    label="Provider usage"
+                    label={t('diagnostics.providerUsage')}
                     value={formatProviderUsage(selected.summary)}
-                    detail={`${selected.summary.modelCallCount} model ${selected.summary.modelCallCount === 1 ? "call" : "calls"}`}
+                    detail={t('diagnostics.modelCallCount', { count: selected.summary.modelCallCount })}
                   />
                 </div>
                 <h3 className="mt-5 text-sm font-semibold text-[var(--color-text)]">
-                  Execution timeline
+                  {t('diagnostics.executionTimeline')}
                 </h3>
                 <ol className="mt-2 space-y-1">
                   {selected.spans.map((span) => (
@@ -313,7 +316,7 @@ export function DiagnosticsPanel() {
                       <span className="text-[var(--color-text)]">{formatSpanName(span.name)}</span>
                       <span className="shrink-0 font-mono text-xs tabular-nums text-[var(--color-text-muted)]">
                         {span.durationMs === undefined
-                          ? "Duration unavailable"
+                          ? t('diagnostics.durationUnavailable')
                           : `${Math.round(span.durationMs)} ms`}{" "}
                         · {formatStatus(span.status)}
                       </span>
@@ -403,28 +406,28 @@ function formatContextCapacity(summary: RunTraceSummary): string {
     summary.contextUsedTokens === undefined
     || summary.contextWindowTokens === undefined
   ) {
-    return "Unavailable";
+    return rendererI18n.t('settings:diagnostics.unavailableValue');
   }
   return `${formatTokens(summary.contextUsedTokens)} / ${formatTokens(summary.contextWindowTokens)}`;
 }
 
 function formatContextRatio(ratio: number | undefined): string {
   return ratio === undefined
-    ? "Prompt capacity was not recorded"
-    : `${(ratio * 100).toFixed(2)}% of the context window`;
+    ? rendererI18n.t('settings:diagnostics.promptNotRecorded')
+    : rendererI18n.t('settings:diagnostics.contextRatio', { percent: formatPercent(ratio) });
 }
 
 function formatProviderUsage(summary: RunTraceSummary): string {
   const input = summary.providerInputTokens;
   const output = summary.providerOutputTokens;
-  if (input === undefined && output === undefined) return "Not reported";
+  if (input === undefined && output === undefined) return rendererI18n.t('settings:diagnostics.notReported');
   const inputLabel = input === undefined ? "—" : formatTokens(input);
   const outputLabel = output === undefined ? "—" : formatTokens(output);
-  return `${inputLabel} in · ${outputLabel} out`;
+  return rendererI18n.t('settings:diagnostics.providerUsageValue', { input: inputLabel, output: outputLabel });
 }
 
 function formatTokens(value: number): string {
-  return new Intl.NumberFormat("en-US").format(value);
+  return formatNumber(value);
 }
 
 async function loadRunInputLabels(
@@ -459,7 +462,7 @@ function summarizeUserInput(value: string): string {
 }
 
 function formatRunFallback(_trace: RunTraceSummary): string {
-  return "User message unavailable";
+  return rendererI18n.t('settings:diagnostics.userMessageUnavailable');
 }
 
 function formatRunSource(
@@ -468,25 +471,25 @@ function formatRunSource(
   sessionById: ReadonlyMap<string, ChatSessionUiDto>,
 ): string {
   const projectName = trace.workspaceId
-    ? projectNameById.get(trace.workspaceId) ?? "Unavailable project"
-    : "No project";
+    ? projectNameById.get(trace.workspaceId) ?? rendererI18n.t('settings:diagnostics.unavailableProject')
+    : rendererI18n.t('settings:diagnostics.noProject');
   const sessionTitle = trace.sessionId
-    ? sessionById.get(trace.sessionId)?.title ?? "Unavailable session"
-    : "No session";
+    ? sessionById.get(trace.sessionId)?.title ?? rendererI18n.t('settings:diagnostics.unavailableSession')
+    : rendererI18n.t('settings:diagnostics.noSession');
   return `${projectName} / ${sessionTitle} · ${formatRunTime(trace.startedAt)}`;
 }
 
 function formatRunTime(value: string): string {
-  return new Intl.DateTimeFormat("en-US", {
+  return formatDate(value, undefined, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(value));
+  }) ?? rendererI18n.t('settings:diagnostics.unavailableValue');
 }
 
 function formatDuration(value: number | undefined): string {
-  if (value === undefined) return "Unavailable";
+  if (value === undefined) return rendererI18n.t('settings:diagnostics.unavailableValue');
   return value >= 1_000
     ? `${(value / 1_000).toFixed(value >= 10_000 ? 1 : 2)} s`
     : `${Math.round(value)} ms`;
@@ -506,22 +509,22 @@ function unique(values: readonly string[]): string[] {
 
 function formatSpanName(name: string): string {
   const names: Record<string, string> = {
-    agent_run: "Overall run",
-    "context.prepare_model_call": "Build context",
-    "context.compact": "Compress context",
-    "model.call": "Generate response",
-    "tool.call": "Run tool",
-    "approval.wait": "Wait for approval",
-    "session.append_message": "Save message",
+    agent_run: rendererI18n.t('settings:diagnostics.spans.agentRun'),
+    "context.prepare_model_call": rendererI18n.t('settings:diagnostics.spans.prepareContext'),
+    "context.compact": rendererI18n.t('settings:diagnostics.spans.compact'),
+    "model.call": rendererI18n.t('settings:diagnostics.spans.modelCall'),
+    "tool.call": rendererI18n.t('settings:diagnostics.spans.toolCall'),
+    "approval.wait": rendererI18n.t('settings:diagnostics.spans.approval'),
+    "session.append_message": rendererI18n.t('settings:diagnostics.spans.saveMessage'),
   };
   return names[name] ?? name;
 }
 
 function formatStatus(status: string): string {
-  if (status === "ok") return "Completed";
-  if (status === "error") return "Failed";
-  if (status === "cancelled") return "Cancelled";
-  return "Incomplete";
+  if (status === "ok") return rendererI18n.t('settings:diagnostics.status.ok');
+  if (status === "error") return rendererI18n.t('settings:diagnostics.status.error');
+  if (status === "cancelled") return rendererI18n.t('settings:diagnostics.status.cancelled');
+  return rendererI18n.t('settings:diagnostics.status.incomplete');
 }
 
 function statusClassName(status: string): string {

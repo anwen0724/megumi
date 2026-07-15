@@ -9,16 +9,15 @@ function model(overrides: Partial<ProcessingDisclosureModel> = {}): ProcessingDi
   return {
     runId: 'run-1',
     status: 'running',
-    statusLabel: '正在处理',
-    durationLabel: '42s',
+    durationSeconds: 42,
     live: true,
     startedAt: '2026-05-18T12:00:00.000Z',
-    currentAction: '正在生成回复...',
+    currentAction: { key: 'processing.projection.preparingReply' },
     completedEntries: [
       {
         id: 'entry-1',
-        label: '已更新有效上下文',
-        detail: '3 个来源',
+        label: { key: 'processing.projection.contextUpdated' },
+        detail: { key: 'processing.projection.sources', values: { count: 3 } },
         createdAt: '2026-05-18T12:00:02.000Z',
         tone: 'success',
       },
@@ -31,17 +30,17 @@ describe('ProcessingDisclosure', () => {
   it('renders running disclosure expanded by default with current action and completed entries', () => {
     render(<ProcessingDisclosure model={model()} />);
 
-    expect(screen.getByRole('button', { name: /Collapse processing disclosure/ })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /Collapse process disclosure/ })).toHaveAttribute(
       'aria-expanded',
       'true',
     );
-    expect(screen.getByText('正在处理')).toBeInTheDocument();
+    expect(screen.getByText('Processing')).toBeInTheDocument();
     expect(screen.getByText('42s')).toBeInTheDocument();
     expect(screen.queryByText('live')).not.toBeInTheDocument();
-    expect(screen.getByText('当前动作')).toBeInTheDocument();
-    expect(screen.getByText('正在生成回复...')).toBeInTheDocument();
-    expect(screen.getByText('已完成')).toBeInTheDocument();
-    expect(screen.getByText('已更新有效上下文')).toBeInTheDocument();
+    expect(screen.getByText('Current action')).toBeInTheDocument();
+    expect(screen.getByText('Preparing the final response…')).toBeInTheDocument();
+    expect(screen.getByText('Completed')).toBeInTheDocument();
+    expect(screen.getByText('Effective context updated')).toBeInTheDocument();
     expect(screen.queryByText(/下一步|思考过程|chain-of-thought/i)).not.toBeInTheDocument();
   });
 
@@ -50,8 +49,7 @@ describe('ProcessingDisclosure', () => {
       <ProcessingDisclosure
         model={model({
           status: 'completed',
-          statusLabel: '已处理',
-          durationLabel: '1m 42s',
+          durationSeconds: 102,
           live: false,
           currentAction: undefined,
           endedAt: '2026-05-18T12:01:42.000Z',
@@ -59,17 +57,17 @@ describe('ProcessingDisclosure', () => {
       />,
     );
 
-    const toggle = screen.getByRole('button', { name: /Expand processing disclosure/ });
+    const toggle = screen.getByRole('button', { name: /Expand process disclosure/ });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByText('已更新有效上下文')).not.toBeInTheDocument();
+    expect(screen.queryByText('Effective context updated')).not.toBeInTheDocument();
 
     await userEvent.click(toggle);
 
-    expect(screen.getByRole('button', { name: /Collapse processing disclosure/ })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /Collapse process disclosure/ })).toHaveAttribute(
       'aria-expanded',
       'true',
     );
-    expect(screen.getByText('已更新有效上下文')).toBeInTheDocument();
+    expect(screen.getByText('Effective context updated')).toBeInTheDocument();
   });
 
   it('renders empty completed work record without claiming future work', () => {
@@ -79,13 +77,12 @@ describe('ProcessingDisclosure', () => {
           completedEntries: [],
           currentAction: undefined,
           status: 'completed',
-          statusLabel: '已处理',
           live: false,
         })}
       />,
     );
 
-    expect(screen.getByRole('button', { name: /Expand processing disclosure/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Expand process disclosure/ })).toBeInTheDocument();
     expect(screen.queryByText('下一步')).not.toBeInTheDocument();
   });
 });

@@ -1,9 +1,11 @@
 import { FileText } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type {
   WorkspaceChangeFooterFact,
   WorkspaceChangeFooterFile,
 } from '@megumi/product/workspace-read-models';
 import { Button } from '../../../shared/ui';
+import { rendererI18n } from '../../../shared/i18n';
 
 interface WorkspaceChangeFooterProps {
   footer: WorkspaceChangeFooterFact;
@@ -14,6 +16,7 @@ export function WorkspaceChangeFooter({
   footer,
   onOpenFile,
 }: WorkspaceChangeFooterProps) {
+  const { t } = useTranslation(['chat', 'common']);
   const files = footer.changeSets.flatMap((changeSet) => changeSet.files);
   const totalChangedFiles = files.length;
   const showOpenFileCards = totalChangedFiles > 0 && totalChangedFiles <= 3;
@@ -22,12 +25,12 @@ export function WorkspaceChangeFooter({
 
   return (
     <section
-      aria-label="本轮工作区变更"
+      aria-label={t('chat:workspace.changes')}
       className="mt-4 space-y-3 text-sm"
     >
       {showOpenFileCards ? (
         <ul
-          aria-label="可打开的变更文件"
+          aria-label={t('chat:workspace.openChangedFiles')}
           className="space-y-2"
         >
           {files.map((file) => (
@@ -44,7 +47,7 @@ export function WorkspaceChangeFooter({
                 className="h-8 shrink-0 px-3 text-xs"
                 onClick={() => onOpenFile(displayPath(file))}
               >
-                打开
+                {t('common:actions.open')}
               </Button>
             </li>
           ))}
@@ -54,15 +57,15 @@ export function WorkspaceChangeFooter({
       <div className="overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface)]">
         <div className="border-b border-[var(--color-border)] px-3 py-3">
           <div className="font-medium leading-6 text-[var(--color-text)]">
-            {`已改动 ${totalChangedFiles} 个文件`}
+            {t('chat:workspace.changedCount', { count: totalChangedFiles })}
           </div>
           <div className="text-xs leading-5 text-[var(--color-text-muted)]">
-            文件改动摘要
+            {t('chat:workspace.changeSummary')}
           </div>
         </div>
 
         <ul
-          aria-label="Changed files"
+          aria-label={t('chat:workspace.changedFiles')}
           className="divide-y divide-[var(--color-border)]"
         >
           {visibleChangedFiles.map((file) => (
@@ -81,7 +84,7 @@ export function WorkspaceChangeFooter({
           ))}
           {hiddenChangedFileCount > 0 ? (
             <li className="px-3 py-2 text-sm leading-5 text-[var(--color-text-muted)]">
-              {`再显示 ${hiddenChangedFileCount} 个文件`}
+              {t('chat:workspace.moreFiles', { count: hiddenChangedFileCount })}
             </li>
           ) : null}
         </ul>
@@ -110,18 +113,18 @@ function FileIdentity({ file }: { file: WorkspaceChangeFooterFile }) {
 
 function changeKindText(file: WorkspaceChangeFooterFile): string {
   if (file.changeKind === 'created') {
-    return '创建';
+    return rendererI18n.t('chat:workspace.created');
   }
 
   if (file.changeKind === 'deleted') {
-    return '删除';
+    return rendererI18n.t('chat:workspace.deleted');
   }
 
   if (file.changeKind === 'modified') {
-    return '编辑';
+    return rendererI18n.t('chat:workspace.modified');
   }
 
-  return '修改';
+  return rendererI18n.t('chat:workspace.changed');
 }
 
 function fileName(workspacePath: string): string {
@@ -132,7 +135,7 @@ function fileKindText(file: WorkspaceChangeFooterFile): string {
   const path = displayPath(file);
   const extension = path.split('.').at(-1);
   const kind = extension && extension !== path ? extension.toUpperCase() : 'FILE';
-  return `文档 · ${kind}`;
+  return rendererI18n.t('chat:workspace.documentKind', { kind });
 }
 
 function displayPath(file: WorkspaceChangeFooterFile): string {

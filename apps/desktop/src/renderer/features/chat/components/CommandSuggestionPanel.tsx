@@ -1,5 +1,6 @@
 // Renders command suggestions supplied by a trusted catalog; this component does not own command discovery.
 import { Package, Terminal } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/product/host-interface';
 
 interface CommandSuggestionPanelProps {
@@ -15,6 +16,7 @@ export function CommandSuggestionPanel({
   onChoose,
   className,
 }: CommandSuggestionPanelProps) {
+  const { t } = useTranslation('chat');
   if (suggestions.type === 'inactive') {
     return null;
   }
@@ -31,7 +33,7 @@ export function CommandSuggestionPanel({
     <div
       data-testid="command-suggestion-panel"
       role="listbox"
-      aria-label="Command suggestions"
+      aria-label={t('commands.suggestions')}
       className={[
         'mb-2 overflow-x-hidden overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-soft)]',
         className,

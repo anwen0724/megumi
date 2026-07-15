@@ -9,28 +9,25 @@ export const DEFAULT_COMPOSER_MODEL: ComposerModel = '';
 
 interface ComposerOption<TValue extends string> {
   value: TValue;
-  label: string;
 }
 
-export interface ComposerModelOption extends ComposerOption<ComposerModel> {
+export interface ComposerModelOption {
+  value: ComposerModel;
+  label: string;
   providerId: string;
   modelId: string;
   imageInput: ModelSupportLevelUi;
 }
 
 export const COMPOSER_PERMISSION_MODE_OPTIONS: ComposerOption<ComposerPermissionMode>[] = [
-  { value: 'default', label: 'Default' },
-  { value: 'accept_edits', label: 'Accept edits' },
-  { value: 'plan', label: 'Plan' },
-  { value: 'auto', label: 'Auto' },
+  { value: 'default' },
+  { value: 'accept_edits' },
+  { value: 'plan' },
+  { value: 'auto' },
 ];
 
 export function getComposerModelLabel(model: string, modelOptions: ComposerModelOption[] = []): string {
   return modelOptions.find((option) => option.value === model)?.label ?? model;
-}
-
-export function getComposerPermissionModeLabel(permissionMode: ComposerPermissionMode): string {
-  return COMPOSER_PERMISSION_MODE_OPTIONS.find((option) => option.value === permissionMode)?.label ?? permissionMode;
 }
 
 export function getComposerModelOptionsForProviders(providers?: ProviderPublicStatusUiDto[]): ComposerModelOption[] {

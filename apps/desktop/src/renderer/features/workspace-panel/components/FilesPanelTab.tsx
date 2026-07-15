@@ -1,5 +1,6 @@
 ﻿import { useEffect } from 'react';
 import { ChevronRight, FileText, Folder } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '../../../entities/project/store';
 import { useWorkspaceFilesStore, type WorkspaceDirectoryEntry } from '../../../entities/workspace-files';
 import { cx } from '../../../shared/ui';
@@ -16,6 +17,7 @@ interface FileRowProps {
 }
 
 function FileRow({ entry, projectId }: FileRowProps) {
+  const { t } = useTranslation('chat');
   const expanded = useWorkspaceFilesStore((state) => state.expandedDirectoryPaths.includes(entry.relativePath));
   const selectedPath = useWorkspaceFilesStore((state) => state.selectedPath);
   const loadedChildEntries = useWorkspaceFilesStore((state) => state.entriesByDirectory[entry.relativePath]);
@@ -70,7 +72,7 @@ function FileRow({ entry, projectId }: FileRowProps) {
           <FileText size={15} aria-hidden="true" className="shrink-0" />
         )}
         <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-        {loading ? <span className="text-xs text-[var(--color-text-muted)]">Loading</span> : null}
+        {loading ? <span className="text-xs text-[var(--color-text-muted)]">{t('workspace.loading')}</span> : null}
       </button>
 
       {entry.kind === 'directory' && expanded && childEntries.length > 0 ? (
@@ -85,6 +87,7 @@ function FileRow({ entry, projectId }: FileRowProps) {
 }
 
 export function FilesPanelTab() {
+  const { t } = useTranslation('chat');
   const project = useProjectStore((state) =>
     state.projects.find((item) => item.id === state.currentProjectId) ?? null
   );
@@ -102,15 +105,15 @@ export function FilesPanelTab() {
   }, [loadDirectory, project?.repoPath, project?.status]);
 
   if (!project) {
-    return <p className="text-sm text-[var(--color-text-muted)]">No project selected</p>;
+    return <p className="text-sm text-[var(--color-text-muted)]">{t('workspace.noProject')}</p>;
   }
 
   if (project.status === 'missing') {
-    return <p className="text-sm text-[var(--color-text-muted)]">Project folder is missing</p>;
+    return <p className="text-sm text-[var(--color-text-muted)]">{t('workspace.missingProject')}</p>;
   }
 
   if (loading && rootEntries.length === 0) {
-    return <p className="text-sm text-[var(--color-text-muted)]">Loading files</p>;
+    return <p className="text-sm text-[var(--color-text-muted)]">{t('workspace.loadingFiles')}</p>;
   }
 
   if (error) {
@@ -118,13 +121,13 @@ export function FilesPanelTab() {
   }
 
   if (rootEntries.length === 0) {
-    return <p className="text-sm text-[var(--color-text-muted)]">No files found</p>;
+    return <p className="text-sm text-[var(--color-text-muted)]">{t('workspace.noFiles')}</p>;
   }
 
   const projectId = project.id;
 
   return (
-    <nav aria-label="Project files">
+    <nav aria-label={t('workspace.files')}>
       <ul className="space-y-1">
         {rootEntries.map((entry) => (
           <FileRow key={entry.relativePath} entry={entry} projectId={projectId} />

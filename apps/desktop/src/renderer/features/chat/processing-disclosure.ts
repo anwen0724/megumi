@@ -3,10 +3,15 @@ import type { RendererRunSummary } from '../../entities/run/store';
 
 export type ProcessingDisclosureStatus = 'running' | 'completed' | 'failed' | 'cancelled';
 
+export interface ProcessingDisclosureText {
+  key: string;
+  values?: Record<string, string | number>;
+}
+
 export interface ProcessingDisclosureEntry {
   id: string;
-  label: string;
-  detail?: string;
+  label: ProcessingDisclosureText;
+  detail?: string | ProcessingDisclosureText;
   createdAt: string;
   tone: 'neutral' | 'success' | 'warning' | 'danger';
 }
@@ -14,12 +19,11 @@ export interface ProcessingDisclosureEntry {
 export interface ProcessingDisclosureModel {
   runId: string;
   status: ProcessingDisclosureStatus;
-  statusLabel: string;
-  durationLabel: string;
+  durationSeconds: number;
   live: boolean;
   startedAt: string;
   endedAt?: string;
-  currentAction?: string;
+  currentAction?: ProcessingDisclosureText;
   completedEntries: ProcessingDisclosureEntry[];
 }
 
@@ -58,8 +62,8 @@ function nestedErrorMessage(event: RuntimeEvent): string | undefined {
   return typeof message === 'string' && message.trim() ? message : undefined;
 }
 
-function stepLabel(event: RuntimeEvent): string {
-  return payloadText(event, 'title') ?? payloadText(event, 'kind') ?? '运行步骤';
+function stepLabel(event: RuntimeEvent): string | undefined {
+  return payloadText(event, 'title') ?? payloadText(event, 'kind');
 }
 
 function statusFromRun(run: RendererRunSummary): ProcessingDisclosureStatus {
@@ -69,45 +73,37 @@ function statusFromRun(run: RendererRunSummary): ProcessingDisclosureStatus {
   return 'running';
 }
 
-function statusLabel(status: ProcessingDisclosureStatus): string {
-  if (status === 'completed') return '已处理';
-  if (status === 'failed') return '处理失败';
-  if (status === 'cancelled') return '已取消';
-  return '正在处理';
-}
-
-export function formatProcessingDuration(startedAt: string, endedAt: string | Date): string {
+export function calculateProcessingDurationSeconds(startedAt: string, endedAt: string | Date): number {
   const started = new Date(startedAt).getTime();
   const ended = endedAt instanceof Date ? endedAt.getTime() : new Date(endedAt).getTime();
 
   if (Number.isNaN(started) || Number.isNaN(ended)) {
-    return '0s';
+    return 0;
   }
 
   const totalSeconds = Math.max(0, Math.floor((ended - started) / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-
-  if (minutes === 0) {
-    return `${seconds}s`;
-  }
-
-  return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
+  return totalSeconds;
 }
 
-function describeCurrentAction(events: RuntimeEvent[]): string | undefined {
+function describeCurrentAction(events: RuntimeEvent[]): ProcessingDisclosureText | undefined {
   for (const event of [...events].reverse()) {
-    if (event.eventType === 'assistant.output.completed') return '正在整理最终回复...';
-    if (event.eventType === 'approval.requested') return `等待审批：${payloadText(event, 'title') ?? '用户确认'}`;
-    if (event.eventType === 'tool_call.started') return `正在执行工具：${payloadText(event, 'toolName') ?? '工具调用'}`;
-    if (event.eventType === 'tool_call.requested') return `正在准备工具：${payloadText(event, 'toolName') ?? '工具调用'}`;
-    if (event.eventType === 'memory.recall.requested') return '正在召回相关记忆...';
-    if (event.eventType === 'context.patch.requested') return '正在准备上下文更新...';
-    if (event.eventType === 'context.effective.updated') return '正在整理上下文...';
-    if (event.eventType === 'step.started' || event.eventType === 'step.created') {
-      return `正在处理步骤：${stepLabel(event)}`;
+    if (event.eventType === 'assistant.output.completed') return { key: 'processing.projection.preparingReply' };
+    if (event.eventType === 'approval.requested') {
+      return { key: 'processing.projection.waitingApproval', values: { subject: payloadText(event, 'title') ?? '' } };
     }
-    if (event.eventType === 'run.cancelling') return '正在取消运行...';
+    if (event.eventType === 'tool_call.started') {
+      return { key: 'processing.projection.runningTool', values: { tool: payloadText(event, 'toolName') ?? '' } };
+    }
+    if (event.eventType === 'tool_call.requested') {
+      return { key: 'processing.projection.preparingTool', values: { tool: payloadText(event, 'toolName') ?? '' } };
+    }
+    if (event.eventType === 'memory.recall.requested') return { key: 'processing.projection.recallingMemory' };
+    if (event.eventType === 'context.patch.requested') return { key: 'processing.projection.preparingContext' };
+    if (event.eventType === 'context.effective.updated') return { key: 'processing.projection.organizingContext' };
+    if (event.eventType === 'step.started' || event.eventType === 'step.created') {
+      return { key: 'processing.projection.processingStep', values: { step: stepLabel(event) ?? '' } };
+    }
+    if (event.eventType === 'run.cancelling') return { key: 'processing.projection.cancelling' };
   }
 
   return undefined;
@@ -117,30 +113,39 @@ function describeCompletedEvent(event: RuntimeEvent): Omit<ProcessingDisclosureE
   if (event.eventType === 'context.effective.updated') {
     const sourceCount = payloadNumber(event, 'sourceCount');
     return {
-      label: '已更新有效上下文',
-      detail: typeof sourceCount === 'number' ? `${sourceCount} 个来源` : undefined,
+      label: { key: 'processing.projection.contextUpdated' },
+      detail: typeof sourceCount === 'number'
+        ? { key: 'processing.projection.sources', values: { count: sourceCount } }
+        : undefined,
       tone: 'success',
     };
   }
 
   if (event.eventType === 'step.completed') {
-    return { label: `已完成步骤：${stepLabel(event)}`, tone: 'success' };
+    return {
+      label: { key: 'processing.projection.stepCompleted', values: { step: stepLabel(event) ?? '' } },
+      tone: 'success',
+    };
   }
 
   if (event.eventType === 'step.failed') {
-    return { label: `步骤失败：${nestedErrorMessage(event) ?? stepLabel(event)}`, tone: 'danger' };
+    return {
+      label: { key: 'processing.projection.stepFailed', values: { step: stepLabel(event) ?? '' } },
+      detail: nestedErrorMessage(event),
+      tone: 'danger',
+    };
   }
 
   if (event.eventType === 'tool_call.completed') {
     return {
-      label: `已完成工具：${payloadText(event, 'toolName') ?? '工具调用'}`,
+      label: { key: 'processing.projection.toolCompleted', values: { tool: payloadText(event, 'toolName') ?? '' } },
       tone: 'success',
     };
   }
 
   if (event.eventType === 'tool_call.failed') {
     return {
-      label: `工具失败：${payloadText(event, 'toolName') ?? '工具调用'}`,
+      label: { key: 'processing.projection.toolFailed', values: { tool: payloadText(event, 'toolName') ?? '' } },
       detail: nestedErrorMessage(event),
       tone: 'danger',
     };
@@ -150,20 +155,20 @@ function describeCompletedEvent(event: RuntimeEvent): Omit<ProcessingDisclosureE
     const kind = payloadText(event, 'kind');
     if (kind === 'policy_denied' || kind === 'user_rejected') {
       return {
-        label: `工具被拒绝：${payloadText(event, 'toolName') ?? '工具调用'}`,
+        label: { key: 'processing.projection.toolDenied', values: { tool: payloadText(event, 'toolName') ?? '' } },
         detail: payloadText(event, 'summary'),
         tone: 'warning',
       };
     }
     if (kind === 'failed') {
       return {
-        label: `工具失败：${payloadText(event, 'toolName') ?? '工具调用'}`,
+        label: { key: 'processing.projection.toolFailed', values: { tool: payloadText(event, 'toolName') ?? '' } },
         detail: payloadText(event, 'summary'),
         tone: 'danger',
       };
     }
     return {
-      label: `已完成工具：${payloadText(event, 'toolName') ?? '工具调用'}`,
+      label: { key: 'processing.projection.toolCompleted', values: { tool: payloadText(event, 'toolName') ?? '' } },
       detail: payloadText(event, 'summary'),
       tone: 'success',
     };
@@ -171,24 +176,27 @@ function describeCompletedEvent(event: RuntimeEvent): Omit<ProcessingDisclosureE
 
   if (event.eventType === 'approval.resolved') {
     return {
-      label: `审批已处理：${payloadText(event, 'decision') ?? 'resolved'}`,
+      label: { key: 'processing.projection.approvalResolved', values: { decision: payloadText(event, 'decision') ?? '' } },
       detail: payloadText(event, 'scope'),
       tone: 'success',
     };
   }
 
   if (event.eventType === 'approval.expired') {
-    return { label: '审批已过期', tone: 'warning' };
+    return { label: { key: 'processing.projection.approvalExpired' }, tone: 'warning' };
   }
 
   if (event.eventType === 'artifact.created') {
-    return { label: `已创建产物：${payloadText(event, 'title') ?? 'Artifact'}`, tone: 'success' };
+    return {
+      label: { key: 'processing.projection.artifactCreated', values: { title: payloadText(event, 'title') ?? 'Artifact' } },
+      tone: 'success',
+    };
   }
 
   if (event.eventType === 'artifact.version.created') {
     const versionNumber = payloadNumber(event, 'versionNumber');
     return {
-      label: '已创建产物版本',
+      label: { key: 'processing.projection.artifactVersionCreated' },
       detail: typeof versionNumber === 'number' ? `v${versionNumber}` : undefined,
       tone: 'success',
     };
@@ -197,42 +205,48 @@ function describeCompletedEvent(event: RuntimeEvent): Omit<ProcessingDisclosureE
   if (event.eventType === 'memory.recall.completed') {
     const selectedCount = payloadNumber(event, 'selectedCount');
     return {
-      label: '已完成记忆召回',
-      detail: typeof selectedCount === 'number' ? `${selectedCount} 条入选` : undefined,
+      label: { key: 'processing.projection.memoryRecalled' },
+      detail: typeof selectedCount === 'number'
+        ? { key: 'processing.projection.memoriesSelected', values: { count: selectedCount } }
+        : undefined,
       tone: 'success',
     };
   }
 
   if (event.eventType === 'checkpoint.created') {
     return {
-      label: '已创建检查点',
+      label: { key: 'processing.projection.checkpointCreated' },
       detail: payloadText(event, 'stateSummary'),
       tone: 'neutral',
     };
   }
 
   if (event.eventType === 'checkpoint.restored') {
-    return { label: '已恢复检查点', tone: 'success' };
+    return { label: { key: 'processing.projection.checkpointRestored' }, tone: 'success' };
   }
 
   if (event.eventType === 'retry.completed') {
-    return { label: '重试已完成', detail: payloadText(event, 'retryKind'), tone: 'success' };
+    return { label: { key: 'processing.projection.retryCompleted' }, detail: payloadText(event, 'retryKind'), tone: 'success' };
   }
 
   if (event.eventType === 'retry.failed') {
-    return { label: `重试失败：${nestedErrorMessage(event) ?? '未知错误'}`, tone: 'danger' };
+    return { label: { key: 'processing.projection.retryFailed' }, detail: nestedErrorMessage(event), tone: 'danger' };
   }
 
   if (event.eventType === 'run.completed') {
-    return { label: '运行已完成', tone: 'success' };
+    return { label: { key: 'processing.projection.runCompleted' }, tone: 'success' };
   }
 
   if (event.eventType === 'run.failed') {
-    return { label: `处理失败：${nestedErrorMessage(event) ?? '未知错误'}`, tone: 'danger' };
+    return { label: { key: 'processing.projection.runFailed' }, detail: nestedErrorMessage(event), tone: 'danger' };
   }
 
   if (event.eventType === 'run.cancelled') {
-    return { label: `已取消：${payloadText(event, 'reason') ?? nestedErrorMessage(event) ?? '用户取消'}`, tone: 'warning' };
+    return {
+      label: { key: 'processing.projection.runCancelled' },
+      detail: payloadText(event, 'reason') ?? nestedErrorMessage(event),
+      tone: 'warning',
+    };
   }
 
   return null;
@@ -264,7 +278,7 @@ export function createProcessingDisclosureModel({
   const status = statusFromRun(run);
   const startedAt = firstEvent.createdAt;
   const endedAt = finalEvent?.createdAt;
-  const durationLabel = formatProcessingDuration(startedAt, endedAt ?? now);
+  const durationSeconds = calculateProcessingDurationSeconds(startedAt, endedAt ?? now);
   const completedEntries = orderedEvents
     .map((event) => {
       const description = describeCompletedEvent(event);
@@ -282,14 +296,13 @@ export function createProcessingDisclosureModel({
     .filter((entry): entry is ProcessingDisclosureEntry => Boolean(entry));
 
   const currentAction = status === 'running'
-    ? describeCurrentAction(orderedEvents) ?? '正在启动运行...'
+    ? describeCurrentAction(orderedEvents) ?? { key: 'processing.projection.starting' }
     : undefined;
 
   return {
     runId: run.runId,
     status,
-    statusLabel: statusLabel(status),
-    durationLabel,
+    durationSeconds,
     live: status === 'running',
     startedAt,
     endedAt,

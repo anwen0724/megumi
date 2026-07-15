@@ -1,4 +1,5 @@
 import { forwardRef, type ClipboardEvent, type FormEvent, type KeyboardEvent, type RefObject } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Bot,
   Brain,
@@ -19,6 +20,7 @@ import {
 } from './composer-options';
 import { CommandSuggestionPanel } from './CommandSuggestionPanel';
 import type { ComposerDraftImage } from './composer-types';
+import { formatTokenCount } from '../../../shared/i18n';
 
 export interface ComposerSurfaceProps {
   value: string;
@@ -51,7 +53,6 @@ export interface ComposerSurfaceProps {
   onPasteImage?: () => void;
   onRemoveImage: (draftAttachmentId: string) => void;
 }
-
 export type ComposerCommandCompletionUi = {
   label: string;
   sourceKind: CommandSuggestionItem['source']['kind'];
@@ -87,6 +88,7 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
   onPasteImage,
   onRemoveImage,
 }, ref) {
+  const { t } = useTranslation('chat');
   function handleAttachFiles() {
     onAttachFiles?.();
   }
@@ -102,7 +104,7 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
     <form
       ref={ref}
       data-testid="composer-surface"
-      aria-label="Message composer"
+      aria-label={t('composer.label')}
       onSubmit={onSubmit}
       className="pointer-events-auto relative mx-auto w-full transition-[width,transform,opacity] duration-200 ease-out"
     >
@@ -115,11 +117,11 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
       <div className="overflow-visible rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-soft)] transition-shadow duration-150">
         <div data-testid="composer-input-panel" className="px-4 py-3">
           {selectedImages.length > 0 ? (
-            <div className="mb-3 flex flex-wrap gap-2" aria-label="Selected images">
+            <div className="mb-3 flex flex-wrap gap-2" aria-label={t('composer.selectedImages')}>
               {selectedImages.map((image) => (
                 <div key={image.draftAttachmentId} className="group relative h-16 w-16 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
                   <img src={image.previewDataUrl} alt={image.name} className="h-full w-full object-cover" />
-                  <button type="button" aria-label={`Remove ${image.name}`} onClick={() => onRemoveImage(image.draftAttachmentId)} className="absolute right-1 top-1 rounded bg-black/65 px-1 text-xs text-white opacity-0 group-hover:opacity-100">×</button>
+                  <button type="button" aria-label={t('composer.removeImage', { name: image.name })} onClick={() => onRemoveImage(image.draftAttachmentId)} className="absolute right-1 top-1 rounded bg-black/65 px-1 text-xs text-white opacity-0 group-hover:opacity-100">×</button>
                 </div>
               ))}
             </div>
@@ -128,7 +130,7 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
             <p role="status" className="mb-2 text-xs text-[var(--color-warning)]">{imageInputNotice}</p>
           ) : null}
           <label htmlFor="megumi-composer" className="sr-only">
-            Message Megumi
+            {t('composer.messageLabel')}
           </label>
           <div className={selectedCommandCompletion ? 'flex items-start gap-2' : ''}>
             {selectedCommandCompletion ? (
@@ -142,7 +144,7 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
               onChange={(event) => onValueChange(event.target.value)}
               onKeyDown={onKeyDown}
               onPaste={handlePaste}
-              placeholder={selectedCommandCompletion ? 'Add arguments...' : 'Ask Megumi anything...'}
+              placeholder={selectedCommandCompletion ? t('composer.argumentsPlaceholder') : t('composer.messagePlaceholder')}
               rows={selectedCommandCompletion ? 1 : 2}
               className={[
                 'max-h-40 w-full resize-none border-0 bg-transparent text-sm leading-5 text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-subtle)] disabled:cursor-not-allowed disabled:opacity-70',
@@ -154,7 +156,7 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
 
         <div data-testid="composer-toolbar" className="flex min-h-12 flex-nowrap items-center justify-between gap-2 px-3 py-2">
           <div className="flex shrink-0 items-center gap-1.5">
-            <IconButton label="Attach images" variant="ghost" size="sm" className="shrink-0" onClick={handleAttachFiles} disabled={!canAttachImages}>
+            <IconButton label={t('composer.attachImages')} variant="ghost" size="sm" className="shrink-0" onClick={handleAttachFiles} disabled={!canAttachImages}>
               <Paperclip size={16} aria-hidden="true" />
             </IconButton>
             <ContextUsageIndicator contextUsage={contextUsage} />
@@ -163,12 +165,12 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
           <div data-testid="composer-actions" className="flex min-w-0 shrink-0 items-center justify-end gap-2">
             <div className="flex h-8 shrink-0 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-muted)]">
               <label htmlFor={permissionModeId} className="sr-only">
-                Permission mode
+                {t('composer.permissionMode')}
               </label>
               <Bot size={14} aria-hidden="true" />
               <select
                 id={permissionModeId}
-                aria-label="Permission mode"
+                aria-label={t('composer.permissionMode')}
                 value={permissionMode}
                 disabled={inputLocked}
                 onChange={(event) => onPermissionModeChange(event.target.value as ComposerPermissionMode)}
@@ -180,7 +182,7 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
                     value={option.value}
                     className="bg-[var(--color-surface-elevated)] text-[var(--color-text)]"
                   >
-                    {option.label}
+                    {t(`composer.permissionModes.${option.value}`)}
                   </option>
                 ))}
               </select>
@@ -188,12 +190,12 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
 
             <div className="flex h-8 max-w-44 min-w-0 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-muted)]">
               <label htmlFor={modelId} className="sr-only">
-                Model
+                {t('composer.model')}
               </label>
               <Brain size={14} aria-hidden="true" />
               <select
                 id={modelId}
-                aria-label="Model"
+                aria-label={t('composer.model')}
                 value={model}
                 disabled={inputLocked}
                 onChange={(event) => onModelChange(event.target.value as ComposerModel)}
@@ -214,7 +216,7 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
             {showStop ? (
               <IconButton
                 type="button"
-                label="Stop current run"
+                label={t('composer.stop')}
                 variant="primary"
                 size="sm"
                 onClick={onStop}
@@ -226,7 +228,7 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
             ) : (
               <IconButton
                 type="submit"
-                label="Send message"
+                label={t('composer.send')}
                 variant="primary"
                 size="sm"
                 className="shrink-0"
@@ -257,13 +259,14 @@ function CommandCompletionChip({ completion }: { completion: ComposerCommandComp
 }
 
 function ContextUsageIndicator({ contextUsage }: { contextUsage?: ChatGetContextUsageUiResult }) {
+  const { t } = useTranslation('chat');
   const usage = contextUsage?.status === 'available' ? contextUsage.usage : null;
   const usagePercent = usage?.usedPercent ?? 0;
   const usageProgress = Math.max(0, Math.min(100, usagePercent));
 
   return (
     <div
-      aria-label="Context usage"
+      aria-label={t('composer.contextUsage')}
       role="meter"
       aria-valuemin={0}
       aria-valuemax={100}
@@ -300,26 +303,19 @@ function ContextUsageIndicator({ contextUsage }: { contextUsage?: ChatGetContext
         role="tooltip"
         className="pointer-events-none absolute bottom-9 left-1/2 z-20 w-44 -translate-x-1/2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-2 text-center text-xs text-[var(--color-text-muted)] opacity-0 shadow-[var(--shadow-soft)] transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
       >
-        <div>Context window:</div>
+        <div>{t('composer.contextWindow')}</div>
         {usage ? (
           <>
-            <div className="mt-1 text-[var(--color-text)]">{usage.usedPercent}% used</div>
-            <div className="mt-1">Used {formatTokenCount(usage.usedTokens)} tokens of {formatTokenCount(usage.totalTokens)}</div>
+            <div className="mt-1 text-[var(--color-text)]">{t('composer.usedPercent', { percent: usage.usedPercent })}</div>
+            <div className="mt-1">{t('composer.tokenUsage', { used: formatTokenCount(usage.usedTokens), total: formatTokenCount(usage.totalTokens) })}</div>
           </>
         ) : (
           <>
-            <div className="mt-1 text-[var(--color-text)]">Usage not available</div>
-            <div className="mt-1">Open a session or run the agent to calculate usage.</div>
+            <div className="mt-1 text-[var(--color-text)]">{t('composer.usageUnavailable')}</div>
+            <div className="mt-1">{t('composer.usageHint')}</div>
           </>
         )}
       </div>
     </div>
   );
-}
-
-function formatTokenCount(tokens: number): string {
-  if (tokens >= 1000) {
-    return `${Math.round(tokens / 1000)}k`;
-  }
-  return String(tokens);
 }

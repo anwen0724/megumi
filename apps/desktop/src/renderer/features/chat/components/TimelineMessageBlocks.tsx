@@ -10,6 +10,7 @@ import { RecoverableErrorBoundary } from '../../../shared/ui';
 import { useEffect, useState } from 'react';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
 import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
+import { useTranslation } from 'react-i18next';
 
 function UserBlockView({ block }: { block: UserTimelineBlock }) {
   if (block.kind === 'user_attachment') {
@@ -37,14 +38,15 @@ function TimelineImageAttachment({ attachmentId, name }: { attachmentId: string;
 }
 
 function AnswerTextBlockView({ block }: { block: AnswerTextBlock }) {
+  const { t } = useTranslation('chat');
   return (
     <div className="min-w-0 space-y-2 text-sm leading-7 text-[var(--color-text)]">
       <TimelineMarkdown text={block.text} />
       {block.status === 'failed' ? (
-        <p className="text-xs text-[var(--color-text-muted)]">（回复中断）</p>
+        <p className="text-xs text-[var(--color-text-muted)]">{t('timeline.responseInterrupted')}</p>
       ) : null}
       {block.status === 'cancelled_partial' ? (
-        <p className="text-xs text-[var(--color-text-muted)]">（已取消，以上为部分回复）</p>
+        <p className="text-xs text-[var(--color-text-muted)]">{t('timeline.responseCancelled')}</p>
       ) : null}
     </div>
   );
@@ -67,13 +69,14 @@ interface TimelineMessageBlocksProps {
 }
 
 export function TimelineMessageBlocks({ message }: TimelineMessageBlocksProps) {
+  const { t } = useTranslation('chat');
   if (message.role === 'user') {
     return (
       <>
         {message.blocks.map((block) => (
           <RecoverableErrorBoundary
             key={block.blockId}
-            title="Message block could not be displayed"
+            title={t('timeline.blockFailed')}
             resetKey={block.blockId}
           >
             <UserBlockView block={block} />
@@ -86,7 +89,7 @@ export function TimelineMessageBlocks({ message }: TimelineMessageBlocksProps) {
   if (message.role === 'separator') {
     return (
       <RecoverableErrorBoundary
-        title="Message separator could not be displayed"
+        title={t('timeline.separatorFailed')}
         resetKey={message.messageId}
       >
         <BranchSeparatorBlockView block={message.blocks[0]} />
@@ -105,7 +108,7 @@ export function TimelineMessageBlocks({ message }: TimelineMessageBlocksProps) {
           return (
             <RecoverableErrorBoundary
               key={block.blockId}
-              title="Process details could not be displayed"
+              title={t('timeline.processFailed')}
               resetKey={blockResetKey(block)}
             >
               <ProcessDisclosureBlockView block={block} />
@@ -117,7 +120,7 @@ export function TimelineMessageBlocks({ message }: TimelineMessageBlocksProps) {
           return (
             <RecoverableErrorBoundary
               key={block.blockId}
-              title="Assistant response could not be displayed"
+              title={t('timeline.responseFailed')}
               resetKey={blockResetKey(block)}
             >
               <AnswerTextBlockView block={block} />

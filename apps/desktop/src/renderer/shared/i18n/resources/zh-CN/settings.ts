@@ -117,4 +117,14 @@ export const settings = {
     modelCount_one: '{{count}} 个模型',
     modelCount_other: '{{count}} 个模型',
   },
+  diagnostics: {
+    title: '活动与诊断', description: '检查保存在此设备上的最近活动、token 用量、工具调用和错误。',
+    refresh: '刷新', loading: '正在加载最近活动…', unavailable: '诊断信息不可用。', exported: '诊断包已导出。', exportFailed: '诊断包导出失败。',
+    recentRuns: '最近运行', filteredCount: '{{filtered}} / {{total}}', project: '项目', session: '会话', allProjects: '所有项目', allSessions: '所有会话', noProject: '无项目', noSession: '无会话', unavailableProject: '项目不可用', unavailableSession: '会话不可用',
+    empty: '暂无活动记录。', noMatches: '没有符合筛选条件的运行。', selectRun: '选择一次运行', selectHint: '选择最近活动以检查耗时和用量。', export: '导出诊断',
+    duration: '耗时', totalRunTime: 'Run 总耗时', modelCalls: '模型调用', providerRequests: 'Provider 请求', toolCalls: '工具调用', toolExecutions: '工具执行', contextCapacity: '上下文容量', providerUsage: 'Provider 用量', executionTimeline: '执行时间线', durationUnavailable: '耗时不可用',
+    unavailableValue: '不可用', promptNotRecorded: '未记录 Prompt 容量', contextRatio: '占上下文窗口 {{percent}}', notReported: '未报告', providerUsageValue: '输入 {{input}} · 输出 {{output}}', userMessageUnavailable: '用户消息不可用', modelCallCount_one: '{{count}} 次模型调用', modelCallCount_other: '{{count}} 次模型调用',
+    status: { ok: '已完成', error: '失败', cancelled: '已取消', incomplete: '未完成' },
+    spans: { agentRun: '完整运行', prepareContext: '构建上下文', compact: '压缩上下文', modelCall: '生成回复', toolCall: '运行工具', approval: '等待审批', saveMessage: '保存消息' },
+  },
 } as const satisfies TranslationShape<typeof source>;

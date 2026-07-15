@@ -4,7 +4,6 @@ export type { ComposerStatus, ComposerSubmitPayload } from './components/Compose
 export {
   COMPOSER_PERMISSION_MODE_OPTIONS,
   getComposerModelLabel,
-  getComposerPermissionModeLabel,
   getComposerModelOptionsForProviders,
 } from './components/composer-options';
 export type { ComposerModel, ComposerPermissionMode } from './components/composer-options';

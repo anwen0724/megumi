@@ -114,4 +114,14 @@ export const settings = {
     modelCount_one: '{{count}} model',
     modelCount_other: '{{count}} models',
   },
+  diagnostics: {
+    title: 'Activity & Diagnostics', description: 'Inspect recent activity, token usage, tool calls, and errors stored locally on this device.',
+    refresh: 'Refresh', loading: 'Loading recent activity…', unavailable: 'Diagnostics are unavailable.', exported: 'Diagnostic bundle exported.', exportFailed: 'Diagnostic bundle export failed.',
+    recentRuns: 'Recent runs', filteredCount: '{{filtered}} of {{total}}', project: 'Project', session: 'Session', allProjects: 'All projects', allSessions: 'All sessions', noProject: 'No project', noSession: 'No session', unavailableProject: 'Unavailable project', unavailableSession: 'Unavailable session',
+    empty: 'No activity recorded yet.', noMatches: 'No runs match these filters.', selectRun: 'Select a run', selectHint: 'Choose recent activity to inspect its timing and usage.', export: 'Export diagnostics',
+    duration: 'Duration', totalRunTime: 'Total Run time', modelCalls: 'Model calls', providerRequests: 'Provider requests', toolCalls: 'Tool calls', toolExecutions: 'Tool executions', contextCapacity: 'Context capacity', providerUsage: 'Provider usage', executionTimeline: 'Execution timeline', durationUnavailable: 'Duration unavailable',
+    unavailableValue: 'Unavailable', promptNotRecorded: 'Prompt capacity was not recorded', contextRatio: '{{percent}} of the context window', notReported: 'Not reported', providerUsageValue: '{{input}} in · {{output}} out', userMessageUnavailable: 'User message unavailable', modelCallCount_one: '{{count}} model call', modelCallCount_other: '{{count}} model calls',
+    status: { ok: 'Completed', error: 'Failed', cancelled: 'Cancelled', incomplete: 'Incomplete' },
+    spans: { agentRun: 'Overall run', prepareContext: 'Build context', compact: 'Compress context', modelCall: 'Generate response', toolCall: 'Run tool', approval: 'Wait for approval', saveMessage: 'Save message' },
+  },
 } as const;

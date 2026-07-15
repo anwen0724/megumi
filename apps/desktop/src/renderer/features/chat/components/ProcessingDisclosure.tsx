@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, ChevronRight, CircleDot, XCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cx } from '../../../shared/ui';
-import type { ProcessingDisclosureEntry, ProcessingDisclosureModel } from '../processing-disclosure';
+import type {
+  ProcessingDisclosureEntry,
+  ProcessingDisclosureModel,
+  ProcessingDisclosureText,
+} from '../processing-disclosure';
 
 interface ProcessingDisclosureProps {
   model: ProcessingDisclosureModel;
@@ -18,7 +23,23 @@ function isTerminal(status: ProcessingDisclosureModel['status']): boolean {
   return status === 'completed' || status === 'failed' || status === 'cancelled';
 }
 
+function formatDuration(seconds: number, t: ReturnType<typeof useTranslation<'chat'>>['t']): string {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (minutes === 0) return t('processing.durationSeconds', { count: remainingSeconds });
+  if (remainingSeconds === 0) return t('processing.durationMinutes', { count: minutes });
+  return t('processing.durationMinutesSeconds', { minutes, seconds: remainingSeconds });
+}
+
+function translateText(
+  text: ProcessingDisclosureText,
+  t: ReturnType<typeof useTranslation<'chat'>>['t'],
+): string {
+  return String(t(text.key as never, text.values as never));
+}
+
 export function ProcessingDisclosure({ model }: ProcessingDisclosureProps) {
+  const { t } = useTranslation('chat');
   const [expanded, setExpanded] = useState(() => !isTerminal(model.status));
 
   useEffect(() => {
@@ -26,10 +47,12 @@ export function ProcessingDisclosure({ model }: ProcessingDisclosureProps) {
   }, [model.runId, model.status]);
 
   const terminal = isTerminal(model.status);
-  const toggleLabel = `${expanded ? 'Collapse' : 'Expand'} processing disclosure`;
+  const toggleLabel = t(expanded ? 'processing.collapse' : 'processing.expand', {
+    item: t('processing.processDisclosure'),
+  });
 
   return (
-    <section aria-label="Agent processing disclosure" className="space-y-2">
+    <section aria-label={t('processing.label')} className="space-y-2">
       <button
         type="button"
         aria-expanded={expanded}
@@ -46,8 +69,8 @@ export function ProcessingDisclosure({ model }: ProcessingDisclosureProps) {
           aria-hidden="true"
           className={cx('shrink-0 transition-transform', expanded ? 'rotate-90' : undefined)}
         />
-        <span className="font-medium text-[var(--color-text-muted)]">{model.statusLabel}</span>
-        <span>{model.durationLabel}</span>
+        <span className="font-medium text-[var(--color-text-muted)]">{t(`processing.status.${model.status}`)}</span>
+        <span>{formatDuration(model.durationSeconds, t)}</span>
       </button>
 
       {expanded ? (
@@ -55,18 +78,18 @@ export function ProcessingDisclosure({ model }: ProcessingDisclosureProps) {
           {model.currentAction ? (
             <div>
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
-                当前动作
+                {t('processing.currentAction')}
               </p>
               <div className="flex items-center gap-2 text-[var(--color-text)]">
                 <CircleDot size={14} aria-hidden="true" className="text-[var(--color-accent)]" />
-                <span>{model.currentAction}</span>
+                <span>{translateText(model.currentAction, t)}</span>
               </div>
             </div>
           ) : null}
 
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
-              已完成
+              {t('processing.completedEntries')}
             </p>
             {model.completedEntries.length > 0 ? (
               <ul className="space-y-2">
@@ -82,9 +105,11 @@ export function ProcessingDisclosure({ model }: ProcessingDisclosureProps) {
                       />
                     )}
                     <span className="min-w-0">
-                      <span className="block text-[var(--color-text)]">{entry.label}</span>
+                      <span className="block text-[var(--color-text)]">{translateText(entry.label, t)}</span>
                       {entry.detail ? (
-                        <span className="block text-xs text-[var(--color-text-muted)]">{entry.detail}</span>
+                        <span className="block text-xs text-[var(--color-text-muted)]">
+                          {typeof entry.detail === 'string' ? entry.detail : translateText(entry.detail, t)}
+                        </span>
                       ) : null}
                     </span>
                   </li>
@@ -92,7 +117,7 @@ export function ProcessingDisclosure({ model }: ProcessingDisclosureProps) {
               </ul>
             ) : (
               <p className="text-[var(--color-text-muted)]">
-                {terminal ? '没有可展示的工作记录。' : '正在等待第一条运行记录。'}
+                {t(terminal ? 'processing.noRecords' : 'processing.waitingFirst')}
               </p>
             )}
           </div>

@@ -177,7 +177,7 @@ describe('TimelineMessage canonical block rendering', () => {
       />}
     />);
 
-    expect(screen.getByLabelText('本轮工作区变更')).toBeInTheDocument();
+    expect(screen.getByLabelText('Workspace changes for this turn')).toBeInTheDocument();
     expect(document.querySelector('[data-workspace-open-file-row="true"]')).toBeInTheDocument();
     expect(document.querySelector('[data-workspace-change-file-row="true"]')).toBeInTheDocument();
     expect(screen.getByText('app.ts')).toBeInTheDocument();
@@ -265,10 +265,10 @@ describe('TimelineMessage canonical block rendering', () => {
     const disclosure = within(article).getByRole('button', { name: /Expand process disclosure/ });
     const articleText = article.textContent ?? '';
 
-    expect(disclosure).toHaveTextContent('已处理');
+    expect(disclosure).toHaveTextContent('Processed');
     expect(disclosure).not.toHaveTextContent('live');
     expect(disclosure).toHaveAttribute('aria-expanded', 'false');
-    expect(articleText.indexOf('已处理')).toBeLessThan(articleText.indexOf('你好！我是'));
+    expect(articleText.indexOf('Processed')).toBeLessThan(articleText.indexOf('你好！我是'));
     expect(article).not.toHaveTextContent('Answer started');
     expect(article).not.toHaveTextContent('model.step.completed');
     expect(article).not.toHaveTextContent('TOOL CALLS');
@@ -298,7 +298,7 @@ describe('TimelineMessage canonical block rendering', () => {
     })} />);
 
     let thinkingToggle = screen.getByRole('button', { name: /Collapse thinking item/ });
-    expect(thinkingToggle).toHaveTextContent('正在思考');
+    expect(thinkingToggle).toHaveTextContent('Thinking');
     expect(thinkingToggle).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('The user is asking about identity.')).toBeInTheDocument();
 
@@ -328,7 +328,7 @@ describe('TimelineMessage canonical block rendering', () => {
     fireEvent.click(screen.getByRole('button', { name: /Expand process disclosure/ }));
 
     thinkingToggle = screen.getByRole('button', { name: /Expand thinking item/ });
-    expect(thinkingToggle).toHaveTextContent('思考完成');
+    expect(thinkingToggle).toHaveTextContent('Thinking complete');
     expect(thinkingToggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByText('The user is asking about identity.')).not.toBeInTheDocument();
 
@@ -496,7 +496,7 @@ describe('TimelineMessage canonical block rendering', () => {
       ],
     })} />);
 
-    expect(screen.getByText('已完成 hello')).toBeInTheDocument();
+    expect(screen.getByText('Completed hello')).toBeInTheDocument();
     expect(screen.queryByText('external_test:demo:echo')).not.toBeInTheDocument();
   });
 
@@ -576,13 +576,13 @@ describe('TimelineMessage canonical block rendering', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Expand process disclosure/ }));
 
-    expect(screen.getByText('已查看 工作区目录')).toBeInTheDocument();
-    expect(screen.getByText('已读取 Claude自我介绍.md')).toBeInTheDocument();
-    expect(screen.getByText('已查找 **/*.md')).toBeInTheDocument();
-    expect(screen.getByText('已搜索 Spring Boot')).toBeInTheDocument();
-    expect(screen.getByText('已编辑 README.md')).toBeInTheDocument();
-    expect(screen.getByText('已写入 notes.md')).toBeInTheDocument();
-    expect(screen.getByText('已执行命令 npm test')).toBeInTheDocument();
+    expect(screen.getByText('Viewed 工作区目录')).toBeInTheDocument();
+    expect(screen.getByText('Read Claude自我介绍.md')).toBeInTheDocument();
+    expect(screen.getByText('Found **/*.md')).toBeInTheDocument();
+    expect(screen.getByText('Searched Spring Boot')).toBeInTheDocument();
+    expect(screen.getByText('Edited README.md')).toBeInTheDocument();
+    expect(screen.getByText('Wrote notes.md')).toBeInTheDocument();
+    expect(screen.getByText('Ran command npm test')).toBeInTheDocument();
     expect(screen.queryByText(/"entries"/)).not.toBeInTheDocument();
     expect(screen.queryByText('# Claude 自我介绍')).not.toBeInTheDocument();
   });
@@ -685,10 +685,10 @@ describe('TimelineMessage canonical block rendering', () => {
     })} />);
 
     for (const label of [
-      '已拒绝读取 C:/secret.txt',
-      '已拒绝 run_command rm -rf',
-      '审批已过期 run_command npm test',
-      '审批已取消 run_command npm install',
+      'Declined to read C:/secret.txt',
+      'Declined run_command rm -rf',
+      'Approval expired: run_command npm test',
+      'Approval cancelled: run_command npm install',
     ]) {
       const row = screen.getByText(label).closest('div');
       expect(row?.querySelector('svg')?.getAttribute('class')).not.toContain('text-[var(--color-success)]');
@@ -731,7 +731,7 @@ describe('TimelineMessage canonical block rendering', () => {
     })} />);
 
     const disclosure = screen.getByRole('button', { name: /Expand process disclosure/ });
-    expect(disclosure).toHaveTextContent('已处理');
+    expect(disclosure).toHaveTextContent('Processed');
     expect(disclosure).not.toHaveTextContent('Compacted context');
     expect(screen.queryByText(/Compacted .* Retrying/)).not.toBeInTheDocument();
 
@@ -828,9 +828,9 @@ describe('TimelineMessage canonical block rendering', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Expand process disclosure/ }));
 
-    expect(screen.getByText('思考完成')).toBeInTheDocument();
-    expect(screen.getByText('已读取 README.md')).toBeInTheDocument();
-    expect(screen.getByText('已批准 Read file')).toBeInTheDocument();
+    expect(screen.getByText('Thinking complete')).toBeInTheDocument();
+    expect(screen.getByText('Read README.md')).toBeInTheDocument();
+    expect(screen.getByText('Approved Read file')).toBeInTheDocument();
     expect(screen.getByText('Provider failed.')).toBeInTheDocument();
     expect(screen.getByText('user_requested')).toBeInTheDocument();
     expect(screen.getByText('Compacted context')).toBeInTheDocument();

@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, ChevronRight, CircleDot, CircleSlash, Clock3, XCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type {
   ApprovalActivityItem,
   AssistantTextItem,
@@ -13,6 +14,7 @@ import type {
   ThinkingItem,
   ToolActivityItem,
 } from '@megumi/product/runtime-timeline';
+import { rendererI18n } from '../../../shared/i18n';
 import { cx } from '../../../shared/ui';
 import { TimelineMarkdown } from './TimelineMarkdown';
 
@@ -26,11 +28,7 @@ function formatDuration(start?: string, end?: string): string {
 }
 
 function processLabel(block: ProcessDisclosureBlock): string {
-  if (block.status === 'running') return '正在处理';
-  if (block.status === 'completed') return '已处理';
-  if (block.status === 'failed') return '处理失败';
-  if (block.status === 'cancelled') return '已取消';
-  return '处理未完整结束';
+  return rendererI18n.t(`chat:processing.status.${block.status}`);
 }
 
 function defaultProcessExpanded(status: ProcessDisclosureBlock['status']): boolean {
@@ -43,51 +41,26 @@ function toolTarget(item: ToolActivityItem): string {
 
 function toolLabel(item: ToolActivityItem): string {
   const target = toolTarget(item);
-  const labels = toolActionLabels(item.toolName);
-  if (item.status === 'requested') return `已请求 ${target}`;
-  if (item.status === 'running') return `${labels.running} ${target}`;
-  if (item.status === 'succeeded') return `${labels.succeeded} ${target}`;
-  if (item.status === 'failed') return `${labels.failed} ${target}`;
-  return `${labels.denied} ${target}`;
+  const action = toolAction(item.toolName);
+  if (item.status !== 'requested' && action) {
+    return rendererI18n.t(`chat:processing.tool.actions.${action}.${item.status}`, { target });
+  }
+  return rendererI18n.t(`chat:processing.tool.${item.status}`, { target });
 }
 
-function toolActionLabels(toolName: string): {
-  running: string;
-  succeeded: string;
-  failed: string;
-  denied: string;
-} {
-  if (toolName === 'list_directory') {
-    return { running: '正在查看', succeeded: '已查看', failed: '查看失败', denied: '已拒绝查看' };
-  }
-  if (toolName === 'read_file') {
-    return { running: '正在读取', succeeded: '已读取', failed: '读取失败', denied: '已拒绝读取' };
-  }
-  if (toolName === 'glob') {
-    return { running: '正在查找', succeeded: '已查找', failed: '查找失败', denied: '已拒绝查找' };
-  }
-  if (toolName === 'search_text') {
-    return { running: '正在搜索', succeeded: '已搜索', failed: '搜索失败', denied: '已拒绝搜索' };
-  }
-  if (toolName === 'edit_file') {
-    return { running: '正在编辑', succeeded: '已编辑', failed: '编辑失败', denied: '已拒绝编辑' };
-  }
-  if (toolName === 'write_file') {
-    return { running: '正在写入', succeeded: '已写入', failed: '写入失败', denied: '已拒绝写入' };
-  }
-  if (toolName === 'run_command') {
-    return { running: '正在执行命令', succeeded: '已执行命令', failed: '命令执行失败', denied: '已拒绝执行命令' };
-  }
-  return { running: '正在执行', succeeded: '已完成', failed: '执行失败', denied: '已拒绝执行' };
+function toolAction(toolName: string): 'listDirectory' | 'readFile' | 'glob' | 'searchText' | 'editFile' | 'writeFile' | 'runCommand' | undefined {
+  if (toolName === 'list_directory') return 'listDirectory';
+  if (toolName === 'read_file') return 'readFile';
+  if (toolName === 'glob') return 'glob';
+  if (toolName === 'search_text') return 'searchText';
+  if (toolName === 'edit_file') return 'editFile';
+  if (toolName === 'write_file') return 'writeFile';
+  if (toolName === 'run_command') return 'runCommand';
+  return undefined;
 }
 
 function approvalLabel(item: ApprovalActivityItem): string {
-  const subject = item.title;
-  if (item.status === 'pending') return `等待审批：${subject}`;
-  if (item.status === 'approved') return `已批准 ${subject}`;
-  if (item.status === 'rejected') return `已拒绝 ${subject}`;
-  if (item.status === 'expired') return `审批已过期 ${subject}`;
-  return `审批已取消 ${subject}`;
+  return rendererI18n.t(`chat:processing.approval.${item.status}`, { subject: item.title });
 }
 
 function ItemIcon({ item }: { item: ProcessDisclosureItem }) {
@@ -131,9 +104,10 @@ function ItemIcon({ item }: { item: ProcessDisclosureItem }) {
 }
 
 function ThinkingItemView({ item }: { item: ThinkingItem }) {
+  const { t } = useTranslation('chat');
   const defaultExpanded = item.status === 'streaming';
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const label = item.status === 'streaming' ? '正在思考' : '思考完成';
+  const label = t(`processing.thinking.${item.status}`);
 
   useEffect(() => {
     setExpanded(defaultExpanded);
@@ -144,7 +118,9 @@ function ThinkingItemView({ item }: { item: ThinkingItem }) {
       <button
         type="button"
         aria-expanded={expanded}
-        aria-label={`${expanded ? 'Collapse' : 'Expand'} thinking item`}
+        aria-label={t(expanded ? 'processing.collapse' : 'processing.expand', {
+          item: t('processing.thinkingItem'),
+        })}
         onClick={() => setExpanded((value) => !value)}
         className="flex items-center gap-2 text-left text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
       >
@@ -211,10 +187,11 @@ function ErrorActivityItemView({ item }: { item: ErrorActivityItem }) {
 }
 
 function CancelledActivityItemView({ item }: { item: CancelledActivityItem }) {
+  const { t } = useTranslation('chat');
   return (
     <div className="flex min-w-0 items-start gap-2 text-[var(--color-text-muted)]">
       <ItemIcon item={item} />
-      <span className="min-w-0 break-words [overflow-wrap:anywhere]">{item.reason ?? '已取消本次运行。'}</span>
+      <span className="min-w-0 break-words [overflow-wrap:anywhere]">{item.reason ?? t('processing.cancelledDefault')}</span>
     </div>
   );
 }
@@ -271,6 +248,7 @@ interface ProcessDisclosureBlockViewProps {
 }
 
 export function ProcessDisclosureBlockView({ block }: ProcessDisclosureBlockViewProps) {
+  const { t } = useTranslation('chat');
   const defaultExpanded = useMemo(() => defaultProcessExpanded(block.status), [block.status]);
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -281,11 +259,13 @@ export function ProcessDisclosureBlockView({ block }: ProcessDisclosureBlockView
   const duration = formatDuration(block.startedAt, block.endedAt);
 
   return (
-    <section aria-label="Process disclosure" className="min-w-0 space-y-2">
+    <section aria-label={t('processing.processLabel')} className="min-w-0 space-y-2">
       <button
         type="button"
         aria-expanded={expanded}
-        aria-label={`${expanded ? 'Collapse' : 'Expand'} process disclosure`}
+        aria-label={t(expanded ? 'processing.collapse' : 'processing.expand', {
+          item: t('processing.processDisclosure'),
+        })}
         onClick={() => setExpanded((value) => !value)}
         className={cx(
           'flex w-full items-center gap-2 border-b border-[var(--color-border)] px-1 py-2 text-left',
@@ -304,7 +284,7 @@ export function ProcessDisclosureBlockView({ block }: ProcessDisclosureBlockView
             block.items.map((item) => <ProcessItemView key={item.itemId} item={item} />)
           ) : (
             <p className="text-[var(--color-text-muted)]">
-              {block.status === 'running' ? '正在等待第一条运行记录。' : '没有可展示的工作记录。'}
+              {t(block.status === 'running' ? 'processing.waitingFirst' : 'processing.noRecords')}
             </p>
           )}
         </div>

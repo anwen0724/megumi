@@ -4,7 +4,7 @@ import type { RuntimeEvent } from '@megumi/coding-agent/events';
 import type { RendererRunSummary } from '@megumi/desktop/renderer/entities/run/store';
 import {
   createProcessingDisclosureModel,
-  formatProcessingDuration,
+  calculateProcessingDurationSeconds,
 } from '@megumi/desktop/renderer/features/chat/processing-disclosure';
 
 function runtimeEvent(
@@ -40,8 +40,8 @@ function runSummary(status: RendererRunSummary['status']): RendererRunSummary {
 
 describe('processing disclosure projection', () => {
   it('formats short and minute-level durations', () => {
-    expect(formatProcessingDuration('2026-05-18T12:00:00.000Z', '2026-05-18T12:00:42.000Z')).toBe('42s');
-    expect(formatProcessingDuration('2026-05-18T12:00:00.000Z', '2026-05-18T12:01:42.000Z')).toBe('1m 42s');
+    expect(calculateProcessingDurationSeconds('2026-05-18T12:00:00.000Z', '2026-05-18T12:00:42.000Z')).toBe(42);
+    expect(calculateProcessingDurationSeconds('2026-05-18T12:00:00.000Z', '2026-05-18T12:01:42.000Z')).toBe(102);
   });
 
   it('creates a running model with a current action and completed factual entries', () => {
@@ -59,15 +59,14 @@ describe('processing disclosure projection', () => {
     expect(model!).toMatchObject({
       runId: 'run-1',
       status: 'running',
-      statusLabel: '正在处理',
-      durationLabel: '41s',
+      durationSeconds: 41,
       live: true,
     });
     expect(model!.currentAction).toBeDefined();
     expect(model!.completedEntries.map((entry) => entry.id)).not.toContain('event-4');
     expect(model!.completedEntries.map((entry) => entry.label)).toEqual([
-      '已更新有效上下文',
-      '已完成步骤：读取当前上下文',
+      { key: 'processing.projection.contextUpdated' },
+      { key: 'processing.projection.stepCompleted', values: { step: '读取当前上下文' } },
     ]);
   });
 
@@ -82,8 +81,7 @@ describe('processing disclosure projection', () => {
 
     expect(model).toMatchObject({
       status: 'running',
-      statusLabel: '正在处理',
-      currentAction: '正在启动运行...',
+      currentAction: { key: 'processing.projection.starting' },
       completedEntries: [],
     });
   });
@@ -111,14 +109,13 @@ describe('processing disclosure projection', () => {
 
     expect(model!).toMatchObject({
       status: 'completed',
-      statusLabel: '已处理',
       live: false,
       currentAction: undefined,
     });
     expect(model!.completedEntries.map((entry) => entry.label)).toEqual([
-      '已完成工具：workspace.read',
-      '已创建产物：UI 调整说明',
-      '运行已完成',
+      { key: 'processing.projection.toolCompleted', values: { tool: 'workspace.read' } },
+      { key: 'processing.projection.artifactCreated', values: { title: 'UI 调整说明' } },
+      { key: 'processing.projection.runCompleted' },
     ]);
     expect(JSON.stringify(model!)).not.toMatch(/下一步|next step|思考过程|chain-of-thought/i);
   });
@@ -151,16 +148,20 @@ describe('processing disclosure projection', () => {
 
     expect(failed!).toMatchObject({
       status: 'failed',
-      statusLabel: '处理失败',
       currentAction: undefined,
     });
-    expect(failed!.completedEntries.at(-1)?.label).toBe('处理失败：Provider failed.');
+    expect(failed!.completedEntries.at(-1)).toMatchObject({
+      label: { key: 'processing.projection.runFailed' },
+      detail: 'Provider failed.',
+    });
     expect(cancelled!).toMatchObject({
       status: 'cancelled',
-      statusLabel: '已取消',
       currentAction: undefined,
     });
-    expect(cancelled!.completedEntries.at(-1)?.label).toBe('已取消：User stopped the run.');
+    expect(cancelled!.completedEntries.at(-1)).toMatchObject({
+      label: { key: 'processing.projection.runCancelled' },
+      detail: 'User stopped the run.',
+    });
   });
 });
 
