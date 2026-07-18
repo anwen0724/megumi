@@ -74,11 +74,11 @@ describe('migration compatibility removal', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps Coding Agent database schema and migrations in the product core', () => {
-    expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/schema/drizzle-schema.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(root, 'packages/coding-agent/persistence/schema/migrate.ts'))).toBe(true);
+  it('keeps Agent database schema and migrations in the product core', () => {
+    expect(fs.existsSync(path.join(root, 'packages/agent/persistence/schema/drizzle-schema.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/agent/persistence/schema/migrate.ts'))).toBe(true);
 
-    const oldMigrationPath = path.join(root, 'packages/coding-agent/persistence/schema/migrations.ts');
+    const oldMigrationPath = path.join(root, 'packages/agent/persistence/schema/migrations.ts');
     if (fs.existsSync(oldMigrationPath)) {
       expect(fs.readFileSync(oldMigrationPath, 'utf8')).not.toContain('export function migrateDatabase');
     }

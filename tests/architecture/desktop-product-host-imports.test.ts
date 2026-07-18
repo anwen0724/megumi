@@ -8,7 +8,7 @@ const root = process.cwd();
 describe('Desktop Product Host imports', () => {
   it('keeps Desktop behind Product public entries', () => {
     const source = readTree('apps/desktop/src');
-    expect(source).not.toContain('@megumi/coding-agent');
+    expect(source).not.toContain('@megumi/agent');
     expect(source).not.toMatch(/packages[\\/]product[\\/](?!host-interface|logging|composition|home)/);
   });
 
@@ -24,9 +24,9 @@ describe('Desktop Product Host imports', () => {
     expect(readTree('apps/desktop/src/renderer')).not.toContain('replacement_input');
   });
 
-  it('prevents Coding Agent from depending back on Product', () => {
-    expect(readTree('packages/coding-agent')).not.toContain('@megumi/product');
-    expect(readTree('packages/coding-agent')).not.toMatch(/from ['"]\.\.\/\.\.\/product/);
+  it('prevents Agent from depending back on Product', () => {
+    expect(readTree('packages/agent')).not.toContain('@megumi/product');
+    expect(readTree('packages/agent')).not.toMatch(/from ['"]\.\.\/\.\.\/product/);
   });
 });
 

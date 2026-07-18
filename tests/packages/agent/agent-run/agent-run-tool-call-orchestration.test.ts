@@ -1,0 +1,349 @@
+import { describe, expect, it, vi } from 'vitest';
+import type { AgentRunTraceRecordInput } from '@megumi/agent/agent-run';
+import type { RegisteredTool, ToolExecutionResult } from '@megumi/agent/tools';
+import type { EvaluateToolExecutionResult, PermissionDecision } from '@megumi/agent/permissions';
+import {
+  orchestrateToolCallGroup,
+  type AgentRunToolCallRequest,
+} from '@megumi/agent/agent-run/core/tool-call-orchestrator';
+
+describe('Agent Run tool-call orchestration', () => {
+  it('validates tools, resolves permission facts, and executes parallel windows concurrently', async () => {
+    const order: string[] = [];
+    const traceRecords: AgentRunTraceRecordInput[] = [];
+    const result = await orchestrateToolCallGroup({
+      ...baseInput(),
+      trace_logger: { record: (record) => traceRecords.push(record) },
+      tool_calls: [
+        toolCall('call-1', 'read_file'),
+        toolCall('call-2', 'list_files'),
+      ],
+      registered_tools_by_name: new Map([
+        ['read_file', registeredTool('read_file', 'parallel')],
+        ['list_files', registeredTool('list_files', 'parallel')],
+      ]),
+      permission_service: {
+        evaluateToolExecution: vi.fn(() => ({
+          ...permissionResult(allowDecision()),
+        })),
+      },
+      tool_execution_service: {
+        executeTool: vi.fn(async (request) => {
+          order.push(`start:${request.toolName}`);
+          await Promise.resolve();
+          order.push(`end:${request.toolName}`);
+          return succeededToolResult(request.toolName);
+        }),
+      },
+    });
+
+    expect(result.tool_calls.map((call) => [call.tool_call_id, call.call_order])).toEqual([
+      ['call-1', 0],
+      ['call-2', 1],
+    ]);
+    expect(result.tool_result_facts.map((toolResult) => toolResult.status)).toEqual(['completed', 'completed']);
+    expect(order).toEqual(['start:read_file', 'start:list_files', 'end:read_file', 'end:list_files']);
+    expect(result.next_model_prompt_ready).toBe(true);
+    expect(traceRecords.map((record) => record.event_type)).toEqual(expect.arrayContaining([
+      'trace.tool_call.executable',
+      'trace.tool_execution.request',
+      'trace.tool_execution.result',
+    ]));
+  });
+
+  it('uses serial execution mode as an execution window barrier', async () => {
+    const order: string[] = [];
+    await orchestrateToolCallGroup({
+      ...baseInput(),
+      tool_calls: [
+        toolCall('call-1', 'read_file'),
+        toolCall('call-2', 'run_command'),
+        toolCall('call-3', 'list_files'),
+      ],
+      registered_tools_by_name: new Map([
+        ['read_file', registeredTool('read_file', 'parallel')],
+        ['run_command', registeredTool('run_command', 'serial')],
+        ['list_files', registeredTool('list_files', 'parallel')],
+      ]),
+      permission_service: {
+        evaluateToolExecution: vi.fn(() => ({
+          ...permissionResult(allowDecision()),
+        })),
+      },
+      tool_execution_service: {
+        executeTool: vi.fn(async (request) => {
+          order.push(request.toolName);
+          return succeededToolResult(request.toolName);
+        }),
+      },
+    });
+
+    expect(order).toEqual(['read_file', 'run_command', 'list_files']);
+  });
+
+  it('does not execute unknown or denied tools and turns them into run context facts', async () => {
+    const executeTool = vi.fn();
+    const traceRecords: AgentRunTraceRecordInput[] = [];
+    const result = await orchestrateToolCallGroup({
+      ...baseInput(),
+      trace_logger: { record: (record) => traceRecords.push(record) },
+      tool_calls: [
+        toolCall('call-1', 'unknown_tool'),
+        toolCall('call-2', 'run_command'),
+      ],
+      registered_tools_by_name: new Map([
+        ['run_command', registeredTool('run_command', 'serial')],
+      ]),
+      permission_service: {
+        evaluateToolExecution: vi.fn(() => permissionResult({
+          type: 'deny',
+          reason: 'denied',
+          execution_class: 'process_execution',
+          denial_code: 'policy_denied',
+        })),
+      },
+      tool_execution_service: { executeTool },
+    });
+
+    expect(executeTool).not.toHaveBeenCalled();
+    expect(result.tool_result_facts.map((toolResult) => toolResult.status)).toEqual(['failed', 'denied']);
+    expect(result.next_model_prompt_ready).toBe(true);
+    expect(traceRecords).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        event_type: 'trace.tool_execution.result',
+        payload: expect.objectContaining({ result_type: 'failed' }),
+      }),
+      expect.objectContaining({
+        event_type: 'trace.tool_execution.result',
+        payload: expect.objectContaining({ result_type: 'denied' }),
+      }),
+    ]));
+  });
+
+  it('creates pending approvals and stops before the next model call', async () => {
+    const executeTool = vi.fn();
+    const result = await orchestrateToolCallGroup({
+      ...baseInput(),
+      tool_calls: [toolCall('call-1', 'run_command')],
+      registered_tools_by_name: new Map([
+        ['run_command', registeredTool('run_command', 'serial')],
+      ]),
+      permission_service: {
+        evaluateToolExecution: vi.fn(() => permissionResult({
+          type: 'requires_approval',
+          reason: 'needs approval',
+          execution_class: 'process_execution',
+          approval: { allowed_scopes: ['once', 'session'], default_scope: 'once' },
+        })),
+      },
+      tool_execution_service: { executeTool },
+    });
+
+    expect(executeTool).not.toHaveBeenCalled();
+    expect(result.pending_approvals).toHaveLength(1);
+    expect(result.pending_approvals[0]?.approval_request).toMatchObject({
+      requested_scope: 'once',
+      summary: 'run_command requires approval.',
+      preview: {
+        action: 'run_command README.md',
+        targets: [{ kind: 'file', label: 'README.md' }],
+      },
+    });
+    expect(result.next_model_prompt_ready).toBe(false);
+    expect(result.tool_calls[0]?.status).toBe('waiting_for_approval');
+  });
+
+  it('executes allowed tools before an approval barrier and defers tools after it', async () => {
+    const executeTool = vi.fn(async (request) => succeededToolResult(request.toolName));
+    const result = await orchestrateToolCallGroup({
+      ...baseInput(),
+      tool_calls: [
+        toolCall('call-1', 'read_file'),
+        toolCall('call-2', 'run_command'),
+        toolCall('call-3', 'list_files'),
+      ],
+      registered_tools_by_name: new Map([
+        ['read_file', registeredTool('read_file', 'parallel')],
+        ['run_command', registeredTool('run_command', 'serial')],
+        ['list_files', registeredTool('list_files', 'parallel')],
+      ]),
+      permission_service: {
+        evaluateToolExecution: vi.fn((request) => permissionResult(
+          request.tool_name === 'run_command'
+            ? {
+                type: 'requires_approval',
+                reason: 'needs approval',
+                execution_class: 'process_execution',
+                approval: { allowed_scopes: ['once', 'session'], default_scope: 'once' },
+              }
+            : allowDecision(),
+        )),
+      },
+      tool_execution_service: { executeTool },
+    });
+
+    expect(executeTool).toHaveBeenCalledTimes(1);
+    expect(executeTool).toHaveBeenCalledWith(expect.objectContaining({ toolName: 'read_file' }));
+    expect(result.pending_approvals).toHaveLength(1);
+    expect(result.deferred_tool_calls).toEqual([
+      expect.objectContaining({ tool_call_id: 'call-3', tool_name: 'list_files' }),
+    ]);
+    expect(result.tool_result_facts).toEqual([
+      expect.objectContaining({ tool_call_id: 'call-1', status: 'completed' }),
+    ]);
+    expect(result.next_model_prompt_ready).toBe(false);
+  });
+
+  it('defers every call after the first approval barrier', async () => {
+    const evaluate = vi.fn((request) => permissionResult(
+      request.tool_name === 'run_command'
+        ? {
+            type: 'requires_approval' as const,
+            reason: 'needs approval',
+            execution_class: 'process_execution' as const,
+            approval: { allowed_scopes: ['once' as const], default_scope: 'once' as const },
+          }
+        : allowDecision(),
+    ));
+    const result = await orchestrateToolCallGroup({
+      ...baseInput(),
+      tool_calls: [
+        toolCall('call-1', 'run_command'),
+        toolCall('call-2', 'read_file'),
+        toolCall('call-3', 'run_command'),
+      ],
+      registered_tools_by_name: new Map([
+        ['run_command', registeredTool('run_command', 'serial')],
+        ['read_file', registeredTool('read_file', 'parallel')],
+      ]),
+      permission_service: { evaluateToolExecution: evaluate },
+      tool_execution_service: { executeTool: vi.fn() },
+    });
+
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    expect(result.pending_approvals).toHaveLength(1);
+    expect(result.deferred_tool_calls.map((call) => call.tool_call_id)).toEqual(['call-2', 'call-3']);
+    expect(result.deferred_call_order_offset).toBe(1);
+  });
+
+  it('keeps terminal results and deferred call orders in original model order', async () => {
+    const first = await orchestrateToolCallGroup({
+      ...baseInput(),
+      tool_calls: [toolCall('call-1', 'read_file'), toolCall('call-2', 'unknown_tool')],
+      registered_tools_by_name: new Map([['read_file', registeredTool('read_file', 'parallel')]]),
+      permission_service: { evaluateToolExecution: vi.fn(() => permissionResult(allowDecision())) },
+      tool_execution_service: { executeTool: vi.fn(async () => succeededToolResult('read_file')) },
+    });
+    expect(first.tool_result_facts.map((result) => result.tool_call_id)).toEqual(['call-1', 'call-2']);
+
+    const deferred = await orchestrateToolCallGroup({
+      ...baseInput(),
+      call_order_offset: 1,
+      tool_calls: [toolCall('call-2', 'read_file'), toolCall('call-3', 'read_file')],
+      registered_tools_by_name: new Map([['read_file', registeredTool('read_file', 'parallel')]]),
+      permission_service: { evaluateToolExecution: vi.fn(() => permissionResult(allowDecision())) },
+      tool_execution_service: { executeTool: vi.fn(async () => succeededToolResult('read_file')) },
+    });
+    expect(deferred.tool_calls.map((call) => call.call_order)).toEqual([1, 2]);
+  });
+});
+
+function baseInput(): Omit<AgentRunToolCallRequest, 'tool_calls' | 'registered_tools_by_name' | 'permission_service' | 'tool_execution_service'> {
+  return {
+    run_id: 'run-1',
+    workspace_id: 'workspace-1',
+    workspace_root: 'C:/workspace',
+    permission_mode: 'default',
+    permission_settings: { allow: [], ask: [], deny: [] },
+    runtime_capability_policy: {
+      custom_tools_enabled: true,
+      process_execution_enabled: true,
+      network_enabled: true,
+    },
+    tools: [
+      { name: 'read_file', description: 'Read file', inputSchema: { type: 'object' } },
+      { name: 'list_files', description: 'List files', inputSchema: { type: 'object' } },
+      { name: 'run_command', description: 'Run command', inputSchema: { type: 'object' } },
+    ],
+    workspace_path_policy_service: {
+      classifyPath: vi.fn(() => ({
+        absolute_path: 'C:/workspace/README.md',
+        workspace_path: 'README.md',
+        inside_workspace: true,
+        protected: false,
+        sensitive: false,
+      })),
+    },
+    clock: { now: () => '2026-01-01T00:00:00.000Z' },
+    ids: { approval_request_id: () => 'approval-1' },
+  };
+}
+
+function toolCall(tool_call_id: string, tool_name: string): AgentRunToolCallRequest['tool_calls'][number] {
+  return {
+    model_call_id: 'model-call-1',
+    tool_call_id,
+    tool_name,
+    input: { path: 'README.md' },
+    arguments_text: '{"path":"README.md"}',
+  };
+}
+
+function allowDecision(): PermissionDecision {
+  return {
+    type: 'allow',
+    reason: 'allowed',
+    execution_class: 'read_only',
+  };
+}
+
+function permissionResult(decision: PermissionDecision): EvaluateToolExecutionResult {
+  return {
+    status: 'ok',
+    decision,
+  };
+}
+
+function registeredTool(name: string, executionMode: 'parallel' | 'serial'): RegisteredTool {
+  return {
+    identity: { sourceId: 'built-in', namespace: 'built-in', sourceToolName: name },
+    registeredToolName: name,
+    source: {
+      sourceId: 'built-in',
+      sourceKind: 'built_in',
+      namespace: 'built-in',
+      displayName: 'Built in',
+      configured: true,
+      enabled: true,
+      availabilityStatus: 'available',
+    },
+    status: 'available',
+    definition: {
+      name,
+      description: name,
+      inputSchema: { type: 'object' },
+      capabilities: name === 'run_command' ? ['command_run'] : ['project_read'],
+      riskLevel: name === 'run_command' ? 'high' : 'low',
+      sideEffect: name === 'run_command' ? 'execute_command' : 'none',
+      availability: { status: 'available' },
+      executionMode,
+    },
+  };
+}
+
+function succeededToolResult(toolName: string): ToolExecutionResult {
+  return {
+    type: 'succeeded',
+    toolName,
+    rawResult: { outputKind: 'text', content: `${toolName} ok` },
+    normalizedResult: {
+      kind: 'text',
+      content: `${toolName} ok`,
+      isError: false,
+      truncated: false,
+    },
+    toolExecutionObservation: {
+      summary: `${toolName} ok`,
+    },
+  };
+}

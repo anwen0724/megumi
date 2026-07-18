@@ -13,7 +13,7 @@ function readFiles(dir: string): string[] {
 
 describe('legacy contract boundaries', () => {
   it('keeps memory legacy contracts inside memory and persistence mapping', () => {
-    const offenders = readFiles(path.join(root, 'packages/coding-agent'))
+    const offenders = readFiles(path.join(root, 'packages/agent'))
       .filter((file) => file.endsWith('.ts'))
       .filter((file) => !file.includes(`${path.sep}memory${path.sep}`))
       .filter((file) => !file.endsWith(`${path.sep}persistence${path.sep}repos${path.sep}memory.repo.ts`))
@@ -23,7 +23,7 @@ describe('legacy contract boundaries', () => {
   });
 
   it('keeps artifact legacy contracts inside artifacts and persistence mapping', () => {
-    const offenders = readFiles(path.join(root, 'packages/coding-agent'))
+    const offenders = readFiles(path.join(root, 'packages/agent'))
       .filter((file) => file.endsWith('.ts'))
       .filter((file) => !file.includes(`${path.sep}artifacts${path.sep}`))
       .filter((file) => !file.endsWith(`${path.sep}persistence${path.sep}repos${path.sep}artifact.repo.ts`))

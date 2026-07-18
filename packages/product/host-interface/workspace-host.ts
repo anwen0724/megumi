@@ -2,11 +2,11 @@ import type {
   Workspace,
   WorkspaceFilesService,
   WorkspaceService,
-} from '../../coding-agent/workspace';
+} from '../../agent/workspace';
 import { z } from 'zod';
 
 /*
- * Implements WorkspaceHost over the Coding Agent Workspace module and host ports.
+ * Implements WorkspaceHost over the Agent Workspace module and host ports.
  */
 
 export interface DirectoryPickerResult {

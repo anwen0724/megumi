@@ -2,7 +2,7 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-**一个面向 Windows 的本地优先桌面 Coding Agent。**
+**一个面向 Windows 的个人桌面 Agent。**
 
 打开真实代码库，接入你自己的模型供应商，让 Megumi 检查文件、修改代码、运行命令并验证结果；整个过程都会显示在可追踪的会话时间线中。
 
@@ -11,13 +11,13 @@
 [![许可证：MIT](https://img.shields.io/badge/许可证-MIT-4c7a68)](./LICENSE)
 [![使用 TypeScript 构建](https://img.shields.io/badge/构建-TypeScript-3178c6)](https://www.typescriptlang.org/)
 
-**本地优先工作区 · BYOK 模型 · 可见工具执行 · 审批控制 · English / 简体中文界面**
+**本地工作区 · BYOK 模型 · 可见工具执行 · 审批控制 · English / 简体中文界面**
 
-![Megumi——本地优先桌面 Coding Agent](./assets/social-preview.png)
+![Megumi——个人桌面 Agent](./assets/social-preview.png)
 
 ## 为什么是 Megumi
 
-Megumi 把 Codex 风格的 Coding Agent 工作流放进一个本地桌面应用里。
+Megumi 是一个在本地桌面应用中与你协作的个人 Agent。
 
 你不需要在聊天窗口、终端、编辑器和文件浏览器之间来回切换，而是可以在一个可见会话中和 agent 协作：让它理解代码库、检查相关文件、修改代码、运行验证命令，并解释发生了什么。
 
@@ -33,7 +33,7 @@ Megumi 的设计原则：
 
 ## 它能做什么
 
-Megumi 设计用于支持 Coding Agent 的核心开发工作：
+当前预览版提供以下能力：
 
 - 理解代码库：探索项目结构、读取相关文件、追踪实现路径，并解释系统如何组合在一起。
 - 规划改动：拆解工程任务，分析取舍，并在编辑前提出实现步骤。
@@ -148,7 +148,7 @@ npm run make
 
 ```text
 apps/desktop          Electron desktop app
-packages/coding-agent Core coding agent runtime
+packages/agent        Core agent runtime
 packages/product      Product host interface and composition
 packages/ai           Model provider protocol layer
 tests                 Vitest test suite

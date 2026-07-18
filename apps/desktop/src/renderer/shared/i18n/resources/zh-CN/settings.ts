@@ -37,7 +37,7 @@ export const settings = {
     managed: '在每个会话中管理',
   },
   about: {
-    tagline: '专注于开发工作的本地优先 Coding Agent。',
+    tagline: '与你一起完成真实任务的个人 Agent。',
     description: '连接你偏好的 AI Provider，处理项目文件，并保持对本地数据和工具权限的控制。',
   },
   memory: {

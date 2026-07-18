@@ -1,11 +1,11 @@
 /*
- * Composes the complete Megumi product from Product Home, Coding Agent runtime,
+ * Composes the complete Megumi product from Product Home, Agent runtime,
  * Host interfaces, and host-provided capability adapters.
  */
 import {
-  composeCodingAgentRuntime,
-  type ComposeCodingAgentRuntimeOptions,
-} from '@megumi/coding-agent/composition';
+  composeAgentRuntime,
+  type ComposeAgentRuntimeOptions,
+} from '@megumi/agent/composition';
 import {
   initializeMegumiHomeSync,
   type InitializeMegumiHomeSyncOptions,
@@ -25,11 +25,11 @@ import {
   type RuntimeLogClockPort,
   type RuntimeLogWriterPort,
 } from '../logging';
-import type { RuntimeLogger } from '@megumi/coding-agent/composition';
+import type { RuntimeLogger } from '@megumi/agent/composition';
 import { composeObservability, type ObservabilityStorage } from '@megumi/observability';
 
 export type ComposeProductOptions = Omit<
-  ComposeCodingAgentRuntimeOptions,
+  ComposeAgentRuntimeOptions,
   'homePaths' | 'runtimeLogger'
 > & {
   home: InitializeMegumiHomeSyncOptions;
@@ -43,7 +43,7 @@ export type ComposeProductOptions = Omit<
   imagePicker?: ImagePickerPort;
 };
 
-/** Host capabilities implemented by shells without importing Coding Agent internals. */
+/** Host capabilities implemented by shells without importing Agent internals. */
 export type ProductInputFileReader = NonNullable<ComposeProductOptions['inputFileReader']>;
 export type ProductSessionAttachmentFileSystem = NonNullable<ComposeProductOptions['sessionAttachmentFileSystem']>;
 
@@ -66,8 +66,8 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
     now: options.logClock?.now,
   });
   const logger = createObservabilityRuntimeLogger(observability.service);
-  const runtime = composeCodingAgentRuntime({
-    ...codingAgentOptions(options),
+  const runtime = composeAgentRuntime({
+    ...agentOptions(options),
     homePaths: {
       homePath: homePaths.homePath,
       sqlitePath: homePaths.sqlitePath,
@@ -112,9 +112,9 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
   };
 }
 
-function codingAgentOptions(
+function agentOptions(
   options: ComposeProductOptions,
-): Omit<ComposeCodingAgentRuntimeOptions, 'homePaths' | 'runtimeLogger'> {
+): Omit<ComposeAgentRuntimeOptions, 'homePaths' | 'runtimeLogger'> {
   const {
     home: _home,
     logWriter: _logWriter,
@@ -125,9 +125,9 @@ function codingAgentOptions(
     directoryPicker: _directoryPicker,
     fileOpen: _fileOpen,
     imagePicker: _imagePicker,
-    ...codingAgent
+    ...agent
   } = options;
-  return codingAgent;
+  return agent;
 }
 
 const noopObservabilityStorage: ObservabilityStorage = {

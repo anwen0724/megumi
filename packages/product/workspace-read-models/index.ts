@@ -2,4 +2,4 @@
  * Public Product workspace read-model entrypoint.
  */
 
-export type * from '../../coding-agent/projections/workspace/workspace-change-footer-projector';
+export type * from '../../agent/projections/workspace/workspace-change-footer-projector';

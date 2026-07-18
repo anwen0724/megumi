@@ -1,4 +1,4 @@
-import { RuntimeEventSchema, type RuntimeContext, type RuntimeEvent } from '../../coding-agent/events';
+import { RuntimeEventSchema, type RuntimeContext, type RuntimeEvent } from '../../agent/events';
 
 import {
   TimelineMessageSchema,
@@ -6,17 +6,17 @@ import {
   projectSessionTimelineUserMessage,
   type TimelineMessage,
   type TimelineUserMessage,
-} from '../../coding-agent/projections/timeline';
+} from '../../agent/projections/timeline';
 import { z } from 'zod';
 import { encodeBase64 } from '@megumi/ai';
 
-import { IMAGE_INPUT_POLICY } from '../../coding-agent/input';
+import { IMAGE_INPUT_POLICY } from '../../agent/input';
 
 import type {
   AgentRun,
   AgentRunService,
   StartRunResult,
-} from '../../coding-agent/agent-run';
+} from '../../agent/agent-run';
 
 import {
   sessionConversationText,
@@ -24,15 +24,15 @@ import {
   type SessionBranchService,
   type SessionMessageWithAttachments,
   type SessionService,
-} from '../../coding-agent/session';
+} from '../../agent/session';
 
-import type { CommandService } from '../../coding-agent/commands';
-import type { ContextService, GetSessionUsageSnapshotResult } from '../../coding-agent/context';
-import type { SessionTimelineQuery } from '../../coding-agent/projections/timeline';
-import type { WorkspaceService } from '../../coding-agent/workspace';
+import type { CommandService } from '../../agent/commands';
+import type { ContextService, GetSessionUsageSnapshotResult } from '../../agent/context';
+import type { SessionTimelineQuery } from '../../agent/projections/timeline';
+import type { WorkspaceService } from '../../agent/workspace';
 
 /*
- * Implements the ChatHost interface by orchestrating Coding Agent public modules.
+ * Implements the ChatHost interface by orchestrating Agent public modules.
  */
 
 export interface ChatHost {
@@ -543,7 +543,7 @@ function mapSessionUsageSnapshot(result: GetSessionUsageSnapshotResult): ChatGet
 
 function mapStartRunResult(
   result: StartRunResult,
-): ChatSendUserInputUiPayload & { events?: AsyncIterable<import('../../coding-agent/events').RuntimeEvent> } {
+): ChatSendUserInputUiPayload & { events?: AsyncIterable<import('../../agent/events').RuntimeEvent> } {
   if (result.status === 'started') {
     return {
       type: 'agent_run',

@@ -33,8 +33,8 @@ function listFiles(relativePath: string): string[] {
 
 describe('Context system v2 source guards', () => {
   it('provides the target domain and service contract files', () => {
-    expect(listFiles('packages/coding-agent/context')).toEqual([
-      'config/compose-coding-agent-context.ts',
+    expect(listFiles('packages/agent/context')).toEqual([
+      'config/compose-agent-context.ts',
       'domain/dto/agent-run/context-agent-run-request.ts',
       'domain/dto/agent-run/context-agent-run-response.ts',
       'domain/dto/command/context-command-request.ts',
@@ -59,21 +59,21 @@ describe('Context system v2 source guards', () => {
       'service/internal/image-content-materializer.ts',
       'service/internal/prompt-builder.ts',
     ]);
-    expect(exists('packages/coding-agent/context/domain/model/active-context.ts')).toBe(true);
-    expect(exists('packages/coding-agent/context/domain/model/prompt.ts')).toBe(true);
-    expect(exists('packages/coding-agent/context/domain/model/conversation-turn.ts')).toBe(true);
-    expect(exists('packages/coding-agent/context/domain/model/context-usage.ts')).toBe(true);
-    expect(exists('packages/coding-agent/context/domain/model/compaction.ts')).toBe(true);
-    expect(exists('packages/coding-agent/context/service/context-service.ts')).toBe(true);
-    expect(exists('packages/coding-agent/context/service/context-service-types.ts')).toBe(true);
-    expect(exists('packages/coding-agent/context/service/context-service-impl.ts')).toBe(true);
-    expect(exists('packages/coding-agent/context/config/compose-coding-agent-context.ts')).toBe(true);
-    expect(exists('packages/coding-agent/context/domain/dto/agent-run/context-agent-run-request.ts')).toBe(true);
-    expect(exists('packages/coding-agent/context/domain/dto/agent-run/context-agent-run-response.ts')).toBe(true);
-    expect(exists('packages/coding-agent/context/domain/dto/command/context-command-request.ts')).toBe(true);
-    expect(exists('packages/coding-agent/context/domain/dto/command/context-command-response.ts')).toBe(true);
-    expect(exists('packages/coding-agent/context/domain/dto/ui/context-ui-request.ts')).toBe(true);
-    expect(exists('packages/coding-agent/context/domain/dto/ui/context-ui-response.ts')).toBe(true);
+    expect(exists('packages/agent/context/domain/model/active-context.ts')).toBe(true);
+    expect(exists('packages/agent/context/domain/model/prompt.ts')).toBe(true);
+    expect(exists('packages/agent/context/domain/model/conversation-turn.ts')).toBe(true);
+    expect(exists('packages/agent/context/domain/model/context-usage.ts')).toBe(true);
+    expect(exists('packages/agent/context/domain/model/compaction.ts')).toBe(true);
+    expect(exists('packages/agent/context/service/context-service.ts')).toBe(true);
+    expect(exists('packages/agent/context/service/context-service-types.ts')).toBe(true);
+    expect(exists('packages/agent/context/service/context-service-impl.ts')).toBe(true);
+    expect(exists('packages/agent/context/config/compose-agent-context.ts')).toBe(true);
+    expect(exists('packages/agent/context/domain/dto/agent-run/context-agent-run-request.ts')).toBe(true);
+    expect(exists('packages/agent/context/domain/dto/agent-run/context-agent-run-response.ts')).toBe(true);
+    expect(exists('packages/agent/context/domain/dto/command/context-command-request.ts')).toBe(true);
+    expect(exists('packages/agent/context/domain/dto/command/context-command-response.ts')).toBe(true);
+    expect(exists('packages/agent/context/domain/dto/ui/context-ui-request.ts')).toBe(true);
+    expect(exists('packages/agent/context/domain/dto/ui/context-ui-response.ts')).toBe(true);
     for (const internalFile of [
       'active-context-builder.ts',
       'conversation-turn-builder.ts',
@@ -82,13 +82,13 @@ describe('Context system v2 source guards', () => {
       'compaction-planner.ts',
       'compaction-summary-builder.ts',
     ]) {
-      expect(exists(`packages/coding-agent/context/service/internal/${internalFile}`)).toBe(true);
+      expect(exists(`packages/agent/context/service/internal/${internalFile}`)).toBe(true);
     }
   });
 
   it('exports only the stable public surface', () => {
-    const publicIndex = read('packages/coding-agent/context/index.ts');
-    const composition = read('packages/coding-agent/context/config/compose-coding-agent-context.ts');
+    const publicIndex = read('packages/agent/context/index.ts');
+    const composition = read('packages/agent/context/config/compose-agent-context.ts');
 
     expect(publicIndex).not.toContain('/internal/');
     expect(publicIndex).not.toContain('context-service-impl');
@@ -102,20 +102,20 @@ describe('Context system v2 source guards', () => {
   });
 
   it('does not create repository or ports layers', () => {
-    expect(exists('packages/coding-agent/context/repository')).toBe(false);
-    expect(exists('packages/coding-agent/context/ports')).toBe(false);
+    expect(exists('packages/agent/context/repository')).toBe(false);
+    expect(exists('packages/agent/context/ports')).toBe(false);
   });
 
   it('removes the legacy Context layers and composition surfaces', () => {
-    expect(exists('packages/coding-agent/context/contracts')).toBe(false);
-    expect(exists('packages/coding-agent/context/core')).toBe(false);
-    expect(exists('packages/coding-agent/context/services')).toBe(false);
-    expect(exists('packages/coding-agent/composition/context-repository.ts')).toBe(false);
-    expect(exists('packages/coding-agent/composition/compose-coding-agent-context.ts')).toBe(false);
+    expect(exists('packages/agent/context/contracts')).toBe(false);
+    expect(exists('packages/agent/context/core')).toBe(false);
+    expect(exists('packages/agent/context/services')).toBe(false);
+    expect(exists('packages/agent/composition/context-repository.ts')).toBe(false);
+    expect(exists('packages/agent/composition/compose-agent-context.ts')).toBe(false);
   });
 
   it('keeps Context independent of settings, providers, hosts, persistence, and repositories', () => {
-    const contextSource = readTree('packages/coding-agent/context');
+    const contextSource = readTree('packages/agent/context');
 
     expect(contextSource).not.toMatch(/from ['"][^'"]*settings/i);
     expect(contextSource).not.toMatch(/from ['"][^'"]*provider/i);
@@ -127,7 +127,7 @@ describe('Context system v2 source guards', () => {
   });
 
   it('has no usage monitor, signal, or subscription implementation', () => {
-    const contextSource = readTree('packages/coding-agent/context');
+    const contextSource = readTree('packages/agent/context');
 
     expect(contextSource).not.toMatch(/ContextUsageMonitor|contextUsageSignalBus|ContextUsageSignal/);
     expect(contextSource).not.toMatch(/subscribeContextUsage|unsubscribeContextUsage/);
@@ -135,14 +135,14 @@ describe('Context system v2 source guards', () => {
   });
 
   it('uses fixed recent-Turn retention instead of threshold-seeking prefix estimates', () => {
-    const contextSource = readTree('packages/coding-agent/context');
+    const contextSource = readTree('packages/agent/context');
 
     expect(contextSource).toContain('keepRecentTurns');
     expect(contextSource).not.toMatch(/previousSummaryInputTokens|nonCompressibleInputTokens|historicalTurnInputTokens|thresholdInputTokens/);
   });
 
   it('keeps Prompt.tools as the only model-facing tool input', () => {
-    const agentRunSource = readTree('packages/coding-agent/agent-run');
+    const agentRunSource = readTree('packages/agent/agent-run');
 
     expect(agentRunSource).not.toMatch(/model_call_messages|tool_set|toolSet/);
   });

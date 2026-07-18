@@ -1,6 +1,6 @@
 /* Verifies that ChatHost only projects image-owner capabilities and attachment content. */
 import { describe, expect, it, vi } from 'vitest';
-import { IMAGE_INPUT_POLICY } from '@megumi/coding-agent/input';
+import { IMAGE_INPUT_POLICY } from '@megumi/agent/input';
 import { createChatHost } from '@megumi/product/host-interface/chat-host';
 
 function createHost(input: {

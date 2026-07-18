@@ -30,7 +30,7 @@ describe('Desktop Main shell composition', () => {
     expect(desktopComposition).toContain('settings: { host: productHost }');
     expect(desktopComposition).toContain('approval: { host: productHost }');
     expect(desktopComposition).toContain('artifact: productHost.artifacts');
-    expect(desktopComposition).not.toContain('composeCodingAgentRuntime');
+    expect(desktopComposition).not.toContain('composeAgentRuntime');
     expect(desktopComposition).not.toContain('runHandlers:');
     expect(desktopComposition).not.toContain('runContextService:');
     expect(desktopComposition).not.toContain('toolService:');

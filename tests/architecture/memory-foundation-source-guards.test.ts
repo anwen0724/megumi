@@ -37,8 +37,8 @@ function offenders(files: string[], pattern: RegExp): string[] {
 }
 
 describe('memory foundation boundaries', () => {
-  it('keeps packages/coding-agent/memory platform independent', () => {
-    const files = productionFilesUnder('packages', 'coding-agent', 'memory');
+  it('keeps packages/agent/memory platform independent', () => {
+    const files = productionFilesUnder('packages', 'agent', 'memory');
     expect(offenders(files, /from ['"](electron|node:fs|fs|node:path|path)['"]|@megumi\/(db|ai)(\/|['"]|$)|packages\/(db|ai)|apps\/desktop|session-run|provider adapter|providers\//i)).toEqual([]);
   });
 
@@ -58,8 +58,8 @@ describe('memory foundation boundaries', () => {
   });
 
   it('wires memory markdown lifecycle sync through Desktop Main composition', () => {
-    const index = read(join(root, 'packages', 'coding-agent', 'composition', 'compose-coding-agent-memory.ts'));
-    const sessionService = read(join(root, 'packages', 'coding-agent', 'session', 'service', 'session-service.ts'));
+    const index = read(join(root, 'packages', 'agent', 'composition', 'compose-agent-memory.ts'));
+    const sessionService = read(join(root, 'packages', 'agent', 'session', 'service', 'session-service.ts'));
 
     expect(index).toContain('syncUserMirrorOnAppStart');
     expect(index).toContain('options.memorySettingsProvider.isMemoryEnabled()');
@@ -73,15 +73,15 @@ describe('memory foundation boundaries', () => {
 
   it('keeps internal memory extraction client behind model-step provider boundary', () => {
     const files = [
-      join(root, 'packages', 'coding-agent', 'memory', 'memory-extraction-model-client.ts'),
+      join(root, 'packages', 'agent', 'memory', 'memory-extraction-model-client.ts'),
     ];
     expect(offenders(files, /MemoryRepository|better-sqlite3|memory-markdown-sync|memory-runtime-capture|packages\/ai\/providers|@megumi\/ai\/providers|openai-compatible/)).toEqual([]);
   });
 
   it('uses structured model output for memory extraction before text JSON fallback', () => {
-    const extraction = read(join(root, 'packages', 'coding-agent', 'memory', 'extraction.ts'));
-    const client = read(join(root, 'packages', 'coding-agent', 'memory', 'memory-extraction-model-client.ts'));
-    const capture = read(join(root, 'packages', 'coding-agent', 'memory', 'memory-runtime-capture.ts'));
+    const extraction = read(join(root, 'packages', 'agent', 'memory', 'extraction.ts'));
+    const client = read(join(root, 'packages', 'agent', 'memory', 'memory-extraction-model-client.ts'));
+    const capture = read(join(root, 'packages', 'agent', 'memory', 'memory-runtime-capture.ts'));
 
     expect(extraction).toContain('MEMORY_EXTRACTION_OUTPUT_JSON_SCHEMA');
     expect(client).toContain('structuredOutput:');
@@ -108,18 +108,18 @@ describe('memory foundation boundaries', () => {
     expect(offenders(files, /memory-runtime-capture\.service|memory-markdown-sync\.service|memory-diagnostic-writer\.service|memory-runtime-file-system|memory-runtime-paths/)).toEqual([]);
   });
 
-  it('keeps packages/coding-agent/memory on deterministic recall without vector search', () => {
-    const files = productionFilesUnder('packages', 'coding-agent', 'memory');
+  it('keeps packages/agent/memory on deterministic recall without vector search', () => {
+    const files = productionFilesUnder('packages', 'agent', 'memory');
     expect(offenders(files, /\bembedding\b|\bvector\b|cosineSimilarity|\bann\b|faiss/i)).toEqual([]);
   });
 
-  it('keeps packages/coding-agent/memory free from runtime file IO operations', () => {
-    const files = productionFilesUnder('packages', 'coding-agent', 'memory');
+  it('keeps packages/agent/memory free from runtime file IO operations', () => {
+    const files = productionFilesUnder('packages', 'agent', 'memory');
     expect(offenders(files, /\b(readFile|writeFile|appendFile|rename|watch)\b/)).toEqual([]);
   });
 
-  it('keeps coding-agent memory helpers free from Host and persistence dependencies', () => {
-    const files = productionFilesUnder('packages', 'coding-agent', 'memory');
+  it('keeps agent memory helpers free from Host and persistence dependencies', () => {
+    const files = productionFilesUnder('packages', 'agent', 'memory');
     expect(offenders(files, /MemoryRepository|@megumi\/db|from ['"]electron['"]|from ['"]node:fs['"]|from ['"]fs['"]|apps\//)).toEqual([]);
   });
 
@@ -130,7 +130,7 @@ describe('memory foundation boundaries', () => {
 
   it('does not implement out-of-scope memory capabilities in 08 foundation', () => {
     const files = [
-      ...productionFilesUnder('packages', 'coding-agent', 'memory'),
+      ...productionFilesUnder('packages', 'agent', 'memory'),
       ...productionFilesUnder('apps', 'desktop', 'src', 'main', 'services'),
       ...productionFilesUnder('apps', 'desktop', 'src', 'renderer', 'entities', 'memory'),
     ];
@@ -140,8 +140,8 @@ describe('memory foundation boundaries', () => {
   it('does not expose raw sensitive memory content through events logs or renderer state', () => {
     const files = [
       ...productionFilesUnder('packages', 'shared'),
-      ...productionFilesUnder('packages', 'coding-agent', 'memory'),
-      ...productionFilesUnder('packages', 'coding-agent'),
+      ...productionFilesUnder('packages', 'agent', 'memory'),
+      ...productionFilesUnder('packages', 'agent'),
       ...productionFilesUnder('packages', 'core'),
       ...productionFilesUnder('apps', 'desktop', 'src', 'main'),
       ...productionFilesUnder('apps', 'desktop', 'src', 'renderer', 'entities', 'memory'),

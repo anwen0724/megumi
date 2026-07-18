@@ -1,10 +1,10 @@
-import type { RuntimeEvent } from '../../coding-agent/events';
+import type { RuntimeEvent } from '../../agent/events';
 
 import type {
   AgentRun,
   AgentRunFailure,
   AgentRunService,
-} from '../../coding-agent/agent-run';
+} from '../../agent/agent-run';
 import { z } from 'zod';
 
 /*

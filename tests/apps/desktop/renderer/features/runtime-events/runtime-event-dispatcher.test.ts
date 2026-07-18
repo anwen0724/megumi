@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useApprovalStore } from '@megumi/desktop/renderer/entities/approval';
 import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
@@ -7,7 +7,7 @@ import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store
 import { useToolCallStore } from '@megumi/desktop/renderer/entities/tool-call';
 import { dispatchRuntimeEvent } from '@megumi/desktop/renderer/features/runtime-events/runtime-event-dispatcher';
 import { useRuntimeTimelineStore } from '@megumi/desktop/renderer/features/runtime-timeline';
-import type { RuntimeEvent } from '@megumi/coding-agent/events';
+import type { RuntimeEvent } from '@megumi/agent/events';
 
 function runtimeEvent(
   eventType: RuntimeEvent['eventType'],

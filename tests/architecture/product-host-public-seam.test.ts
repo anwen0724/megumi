@@ -5,11 +5,11 @@ import { join } from 'node:path';
 const root = process.cwd();
 
 describe('Product Host public seam', () => {
-  it('does not wildcard re-export Coding Agent internals from the Host barrel', () => {
+  it('does not wildcard re-export Agent internals from the Host barrel', () => {
     const source = readFileSync(join(root, 'packages/product/host-interface/index.ts'), 'utf8');
 
-    expect(source).not.toContain("export type * from '../../coding-agent/");
-    expect(source).not.toContain("export * from '../../coding-agent/");
+    expect(source).not.toContain("export type * from '../../agent/");
+    expect(source).not.toContain("export * from '../../agent/");
     expect(source).not.toContain('reduceRuntimeTimelineEvent');
     expect(source).not.toContain('createRuntimeContext as buildRuntimeContext');
     expect(source).not.toContain('normalizeRuntimeError as normalizeHostRuntimeError');

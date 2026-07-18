@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import fs from 'fs';
 import path from 'path';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -244,6 +244,6 @@ describe('Megumi Home foundation', () => {
 
     expect(source).not.toContain('process.cwd()');
     expect(source).not.toContain('built-in-skills');
-    expect(source).not.toContain('packages/coding-agent');
+    expect(source).not.toContain('packages/agent');
   });
 });

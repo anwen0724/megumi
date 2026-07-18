@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -23,7 +23,7 @@ const RUNTIME_EVENT_BROADCASTER_FILE = ['runtime', 'event', 'broadcaster'].join(
 
 describe('Agent Run RuntimeEvent source boundary', () => {
   it('does not normalize internal event names into RuntimeEvent at service boundary', () => {
-    const service = readSource('packages/coding-agent/agent-run/services/agent-run-service.ts');
+    const service = readSource('packages/agent/agent-run/services/agent-run-service.ts');
 
     expect(service).not.toContain(NORMALIZE_RUNTIME_EVENT_PAYLOAD);
     expect(service).not.toContain(NORMALIZED_RUNTIME_EVENT_PAYLOAD);
@@ -35,8 +35,8 @@ describe('Agent Run RuntimeEvent source boundary', () => {
   });
 
   it('does not emit agent-run runtime events using dynamic internal event names', () => {
-    const orchestrator = readSource('packages/coding-agent/agent-run/core/run-orchestrator.ts');
-    const service = readSource('packages/coding-agent/agent-run/services/agent-run-service.ts');
+    const orchestrator = readSource('packages/agent/agent-run/core/run-orchestrator.ts');
+    const service = readSource('packages/agent/agent-run/services/agent-run-service.ts');
 
     expect(orchestrator).not.toContain('event_sink.emit(`model_call.${event.type}`');
     expect(orchestrator).not.toContain(TOOL_EXECUTION_PREFIX);
@@ -49,7 +49,7 @@ describe('Agent Run RuntimeEvent source boundary', () => {
 
   it('does not restore the deleted ChatStream protocol or bridge', () => {
     const productionFiles = [
-      'packages/coding-agent/projections/timeline/runtime-timeline-projection.ts',
+      'packages/agent/projections/timeline/runtime-timeline-projection.ts',
       'apps/desktop/src/main/ipc/handlers/chat.handler.ts',
       'apps/desktop/src/main/shell-composition/desktop-main-composition.ts',
       'apps/desktop/src/renderer/features/runtime-events/runtime-event-dispatcher.ts',
@@ -68,7 +68,7 @@ describe('Agent Run RuntimeEvent source boundary', () => {
 
   it('does not use a second runtime event UI live path', () => {
     const productionFiles = [
-      'packages/coding-agent/composition/compose-coding-agent-runtime.ts',
+      'packages/agent/composition/compose-agent-runtime.ts',
       'apps/desktop/src/main/shell-composition/desktop-main-composition.ts',
       'apps/desktop/src/main/index.ts',
     ];

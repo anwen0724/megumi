@@ -3,7 +3,7 @@
  * Consumers provide only append and clock capabilities.
  */
 import path from 'node:path';
-import type { RuntimeLogger } from '../../coding-agent/composition';
+import type { RuntimeLogger } from '../../agent/composition';
 import type { ObservabilityService } from '@megumi/observability';
 import { redactRuntimeValue } from './redaction';
 

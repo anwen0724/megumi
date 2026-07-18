@@ -35,7 +35,7 @@ function displayPath(path: string): string {
 describe('Desktop i18n architecture boundaries', () => {
   it('keeps Desktop localization dependencies out of product core, main, and preload', () => {
     const forbiddenOwners = sourceFiles([
-      'packages/coding-agent',
+      'packages/agent',
       'packages/product',
       'packages/ai',
       'apps/desktop/src/main',

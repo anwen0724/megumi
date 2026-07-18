@@ -7,7 +7,7 @@ import { noopRuntimeLogger } from '@megumi/product/logging';
 const mocks = vi.hoisted(() => {
   const homePath = `${process.cwd().replaceAll('\\', '/')}/.tmp/megumi-runtime-logger-review`;
   const logsPath = `${homePath}/logs`;
-  const codingAgentHost = {
+  const agentHost = {
     input: {
       send: vi.fn(),
       cancel: vi.fn(),
@@ -84,9 +84,9 @@ const mocks = vi.hoisted(() => {
       isDestroyed: vi.fn(() => false),
       webContents: { send: vi.fn() },
     })),
-    createDatabase: vi.fn(() => ({ databaseId: 'coding-agent-database' })),
+    createDatabase: vi.fn(() => ({ databaseId: 'agent-database' })),
     migrateDatabase: vi.fn(),
-    codingAgentHost,
+    agentHost,
     composeProduct: vi.fn(),
     ArtifactRepository: vi.fn(function ArtifactRepository(
       this: { database?: unknown },
@@ -206,7 +206,7 @@ vi.mock('@megumi/desktop/main/app/create-window', () => ({
   createMainWindow: mocks.createMainWindow,
 }));
 
-vi.mock('@megumi/coding-agent/workspace', () => ({
+vi.mock('@megumi/agent/workspace', () => ({
   createWorkspaceChangeFooterProjectorService: vi.fn(() => ({ projectRunFooter: vi.fn() })),
   isWorkspaceChangeFooterProjectorPort: vi.fn(() => false),
 }));
@@ -215,12 +215,12 @@ vi.mock('@megumi/product/composition', () => ({
   composeProduct: mocks.composeProduct,
 }));
 
-vi.mock('@megumi/coding-agent/artifacts', () => ({
+vi.mock('@megumi/agent/artifacts', () => ({
   ArtifactService: mocks.ArtifactService,
   PlanArtifactCompatibilityService: mocks.PlanArtifactCompatibilityService,
 }));
 
-vi.mock('@megumi/coding-agent/memory', () => ({
+vi.mock('@megumi/agent/memory', () => ({
   createMemoryService: mocks.createMemoryService,
   MemoryRecallRuntimeService: mocks.MemoryRecallRuntimeService,
   MemoryRuntimeCaptureService: mocks.MemoryRuntimeCaptureService,
@@ -254,8 +254,8 @@ describe('main runtime logger composition', () => {
       return {
         homePaths: mocks.megumiHomePaths,
         logger,
-        host: mocks.codingAgentHost,
-        dispose: mocks.codingAgentHost.dispose,
+        host: mocks.agentHost,
+        dispose: mocks.agentHost.dispose,
       };
     });
     mocks.ArtifactRepository.mockClear();
@@ -283,7 +283,7 @@ describe('main runtime logger composition', () => {
     await import('@megumi/desktop/main/index');
 
     const processLogger = mocks.registerRuntimeProcessErrorHandlers.mock.calls[0]?.[0]?.logger;
-    const projectService = mocks.codingAgentHost.workspace;
+    const projectService = mocks.agentHost.workspace;
     expect(processLogger).toEqual(expect.objectContaining({
       error: expect.any(Function),
       warn: expect.any(Function),
@@ -313,13 +313,13 @@ describe('main runtime logger composition', () => {
     }));
     expect(mocks.registerAllHandlers).toHaveBeenCalledWith({
       logger: processLogger,
-      workspace: { host: mocks.codingAgentHost },
-      chat: { host: mocks.codingAgentHost },
-      skill: { host: mocks.codingAgentHost },
-      settings: { host: mocks.codingAgentHost },
-      approval: { host: mocks.codingAgentHost },
-      artifact: mocks.codingAgentHost.artifacts,
-      observability: { host: mocks.codingAgentHost },
+      workspace: { host: mocks.agentHost },
+      chat: { host: mocks.agentHost },
+      skill: { host: mocks.agentHost },
+      settings: { host: mocks.agentHost },
+      approval: { host: mocks.agentHost },
+      artifact: mocks.agentHost.artifacts,
+      observability: { host: mocks.agentHost },
     });
 
     expect(existsSync(join(mocks.logsPath, 'runtime.jsonl'))).toBe(false);

@@ -6,7 +6,7 @@ import fs from 'fs-extra';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AssistantEventStream, type AiClient, type AssistantStreamEvent } from '@megumi/ai';
 import { composeProduct } from '@megumi/product/composition';
-import type { SettingsRaw } from '@megumi/coding-agent/settings';
+import type { SettingsRaw } from '@megumi/agent/settings';
 
 const tempDirectories: string[] = [];
 

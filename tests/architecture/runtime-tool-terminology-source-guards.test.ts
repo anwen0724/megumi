@@ -61,7 +61,7 @@ function isAllowedLegacyArchiveLine(file: string, line: string): boolean {
   if (file === 'packages/ai/protocols/anthropic/anthropic-protocol-adapter.ts') {
     return line.includes('tool_use_id') || line.includes("type: 'tool_use'");
   }
-  if (file !== 'packages/db/schema/migrations.ts' && file !== 'packages/coding-agent/persistence/migrations/0000_database_foundation_redesign.sql') {
+  if (file !== 'packages/db/schema/migrations.ts' && file !== 'packages/agent/persistence/migrations/0000_database_foundation_redesign.sql') {
     return false;
   }
 

@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
@@ -6,7 +6,7 @@ import type {
   TimelineActivityMessage,
   TimelineSeparatorMessage,
   TimelineUserMessage,
-} from '@megumi/coding-agent/projections/timeline';
+} from '@megumi/agent/projections/timeline';
 import { TimelineMessage } from '@megumi/desktop/renderer/features/chat/components/TimelineMessage';
 import { WorkspaceChangeFooter } from '@megumi/desktop/renderer/features/chat/components/WorkspaceChangeFooter';
 import { ToastViewport, useToastStore } from '@megumi/desktop/renderer/shared/ui';

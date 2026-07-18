@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -8,7 +8,7 @@ describe('pure AI package boundary', () => {
     const violations = listTypeScriptFiles(join(process.cwd(), 'packages/ai')).flatMap((path) => {
       const source = readFileSync(path, 'utf8');
       const forbidden = [
-        '@megumi/coding-agent/events',
+        '@megumi/agent/events',
         'RuntimeEvent',
         'RuntimeError',
         'ModelStepRuntimeRequest',

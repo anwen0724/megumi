@@ -1,8 +1,8 @@
-import type { Skill, SkillService } from '../../coding-agent/skills';
+import type { Skill, SkillService } from '../../agent/skills';
 import { z } from 'zod';
 
 /*
- * Implements SkillHost by mapping host requests to the Coding Agent Skill module.
+ * Implements SkillHost by mapping host requests to the Agent Skill module.
  */
 
 export interface SkillHost {

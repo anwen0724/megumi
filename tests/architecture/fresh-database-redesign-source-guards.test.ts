@@ -7,8 +7,8 @@ import { describe, expect, it } from 'vitest';
 const root = process.cwd();
 
 const checkedFiles = [
-  'packages/coding-agent/persistence/schema/migrate.ts',
-  'packages/coding-agent/persistence/migrations/0000_database_foundation_redesign.sql',
+  'packages/agent/persistence/schema/migrate.ts',
+  'packages/agent/persistence/migrations/0000_database_foundation_redesign.sql',
 ];
 
 describe('database foundation source guards', () => {
@@ -30,7 +30,7 @@ describe('database foundation source guards', () => {
   });
 
   it('uses Drizzle runtime migrations as the only schema upgrade mechanism', () => {
-    const migrateSource = read('packages/coding-agent/persistence/schema/migrate.ts');
+    const migrateSource = read('packages/agent/persistence/schema/migrate.ts');
 
     expect(migrateSource).toContain('drizzle-orm/better-sqlite3/migrator');
     expect(migrateSource).toContain('migrate(drizzle(database)');

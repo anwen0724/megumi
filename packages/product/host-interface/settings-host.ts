@@ -4,11 +4,11 @@ import type {
   SettingsService,
   SettingsThemeName,
   WebSearchPublicSettings,
-} from '../../coding-agent/settings';
+} from '../../agent/settings';
 import { z } from 'zod';
 
 /*
- * Implements the SettingsHost interface over the Coding Agent Settings module.
+ * Implements the SettingsHost interface over the Agent Settings module.
  */
 
 export interface SettingsHost {

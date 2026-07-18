@@ -1,8 +1,8 @@
 /*
- * Implements ArtifactHost over the Coding Agent Artifact module.
+ * Implements ArtifactHost over the Agent Artifact module.
  */
-import type { ArtifactServicePort } from '../../coding-agent/artifacts';
-import type { JsonObject } from '../../coding-agent/artifacts/legacy-contracts/artifact-json';
+import type { ArtifactServicePort } from '../../agent/artifacts';
+import type { JsonObject } from '../../agent/artifacts/legacy-contracts/artifact-json';
 import { z } from 'zod';
 
 const JsonValueSchema: z.ZodType<unknown> = z.lazy(() => z.union([

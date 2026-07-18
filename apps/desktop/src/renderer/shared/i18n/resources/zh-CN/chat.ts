@@ -175,16 +175,6 @@ export const chat = {
       failed: '失败', deleted: '已删除',
     },
   },
-  agents: {
-    label: 'Agent 模式',
-    options: {
-      analyst: { label: '分析', description: '探索需求与证据' },
-      architect: { label: '架构', description: '设计结构并权衡取舍' },
-      developer: { label: '开发', description: '实现代码变更' },
-      reviewer: { label: '审查', description: '检查质量与风险' },
-      free: { label: '自由', description: '通用 Assistant 模式' },
-    },
-  },
   workspace: {
     changes: '本轮工作区变更',
     openChangedFiles: '可打开的变更文件',

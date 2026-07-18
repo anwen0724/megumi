@@ -1,4 +1,4 @@
-// Guards the final Coding Agent persistence package structure after DB redesign.
+// Guards the final Agent persistence package structure after DB redesign.
 // @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
@@ -39,7 +39,7 @@ const oldRepositoryImports = [
 
 describe('persistence target structure source guards', () => {
   it('keeps only the spec-aligned persistence package children', () => {
-    const actual = fs.readdirSync(path.join(root, 'packages/coding-agent/persistence'))
+    const actual = fs.readdirSync(path.join(root, 'packages/agent/persistence'))
       .filter((name) => !name.endsWith('.map'))
       .sort();
 
@@ -47,7 +47,7 @@ describe('persistence target structure source guards', () => {
   });
 
   it('keeps only the temporary legacy repositories for modules not yet rebuilt', () => {
-    const actual = fs.readdirSync(path.join(root, 'packages/coding-agent/persistence/repos'))
+    const actual = fs.readdirSync(path.join(root, 'packages/agent/persistence/repos'))
       .filter((name) => name.endsWith('.ts'))
       .sort();
 
@@ -55,7 +55,7 @@ describe('persistence target structure source guards', () => {
   });
 
   it('does not import deleted table-shaped repositories from production code', () => {
-    const matches = sourceFiles(path.join(root, 'packages/coding-agent'))
+    const matches = sourceFiles(path.join(root, 'packages/agent'))
       .filter((file) => !file.includes('/persistence/repos/'))
       .flatMap((file) => {
         const source = fs.readFileSync(file, 'utf8');

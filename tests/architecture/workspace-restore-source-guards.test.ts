@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const repoRoot = process.cwd();
-const workspaceRoot = 'packages/coding-agent/workspace';
+const workspaceRoot = 'packages/agent/workspace';
 
 describe('workspace restore source guards', () => {
   it('keeps restore and snapshot capabilities out of the Workspace module', () => {
@@ -26,7 +26,7 @@ describe('workspace restore source guards', () => {
   });
 
   it('keeps Workspace change service focused on changed-file facts', () => {
-    const source = read('packages/coding-agent/workspace/services/workspace-change-service.ts');
+    const source = read('packages/agent/workspace/services/workspace-change-service.ts');
 
     expect(source).toContain('trackToolExecution');
     expect(source).toContain('insertOrUpdateChangedFile');

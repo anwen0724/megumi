@@ -110,7 +110,7 @@ function containsDeletedTableReference(source: string, table: string): boolean {
 
 describe('persistence code realignment source guards', () => {
   it('does not expose old table-shaped repository classes or ports in production source', () => {
-    const violations = productionFiles('packages/coding-agent').flatMap((file) => {
+    const violations = productionFiles('packages/agent').flatMap((file) => {
       const source = fs.readFileSync(path.join(root, file), 'utf8');
       return forbiddenProductionStrings
         .filter((forbidden) => source.includes(forbidden))
@@ -121,7 +121,7 @@ describe('persistence code realignment source guards', () => {
   });
 
   it('does not reference deleted product tables in production source', () => {
-    const violations = productionFiles('packages/coding-agent').flatMap((file) => {
+    const violations = productionFiles('packages/agent').flatMap((file) => {
       if (isAllowedDeletedTableReferenceFile(file)) {
         return [];
       }
@@ -137,7 +137,7 @@ describe('persistence code realignment source guards', () => {
 
   it('keeps persistence composition on database infrastructure and temporary legacy repositories only', () => {
     const source = fs.readFileSync(
-      path.join(root, 'packages/coding-agent/composition/compose-coding-agent-persistence.ts'),
+      path.join(root, 'packages/agent/composition/compose-agent-persistence.ts'),
       'utf8',
     );
 
@@ -192,5 +192,5 @@ function productionFiles(relativeDirectory: string): string[] {
 }
 
 function isAllowedDeletedTableReferenceFile(file: string): boolean {
-  return file === 'packages/coding-agent/persistence/migrations/0000_database_foundation_redesign.sql';
+  return file === 'packages/agent/persistence/migrations/0000_database_foundation_redesign.sql';
 }

@@ -1,9 +1,9 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkspaceChangeFooter } from '@megumi/desktop/renderer/features/chat/components/WorkspaceChangeFooter';
-import type { WorkspaceChangeFooterFact } from '@megumi/coding-agent/projections/workspace/workspace-change-footer-projector';
+import type { WorkspaceChangeFooterFact } from '@megumi/agent/projections/workspace/workspace-change-footer-projector';
 
 describe('WorkspaceChangeFooter', () => {
   it('renders localized copy from structured workspace change facts', async () => {

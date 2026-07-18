@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { TimelineAssistantMessage, TimelineUserMessage } from '@megumi/coding-agent/projections/timeline';
+import type { TimelineAssistantMessage, TimelineUserMessage } from '@megumi/agent/projections/timeline';
 import { createBranchDraftViewInput } from '@megumi/desktop/renderer/features/chat/branch-draft-preview';
 
 describe('createBranchDraftViewInput', () => {

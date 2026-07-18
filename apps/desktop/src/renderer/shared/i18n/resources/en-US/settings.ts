@@ -34,7 +34,7 @@ export const settings = {
     managed: 'Managed during each conversation',
   },
   about: {
-    tagline: 'A local-first coding agent for focused development work.',
+    tagline: 'A personal agent that works with you on real tasks.',
     description: 'Connect your preferred AI providers, work with project files, and keep control of local data and tool permissions.',
   },
   memory: {

@@ -2,7 +2,7 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-**A local-first desktop coding agent for Windows.**
+**A personal desktop agent for Windows.**
 
 Open a real codebase, bring your own model provider, and let Megumi inspect files, edit code, run commands, and verify changes while you follow every step in a visible session timeline.
 
@@ -11,13 +11,13 @@ Open a real codebase, bring your own model provider, and let Megumi inspect file
 [![License: MIT](https://img.shields.io/badge/license-MIT-4c7a68)](./LICENSE)
 [![Built with TypeScript](https://img.shields.io/badge/built_with-TypeScript-3178c6)](https://www.typescriptlang.org/)
 
-**Local-first workspaces · BYOK models · Visible tool execution · Approval controls · English / 简体中文 UI**
+**Local workspaces · BYOK models · Visible tool execution · Approval controls · English / 简体中文 UI**
 
-![Megumi — local-first desktop coding agent](./assets/social-preview.png)
+![Megumi — personal desktop agent](./assets/social-preview.png)
 
 ## Why Megumi
 
-Megumi brings a Codex-style coding agent workflow into a local desktop app.
+Megumi is a personal agent that works with you in a local desktop app.
 
 Instead of switching between a chat window, terminal, editor, and file browser, you can work with an agent in one visible session: ask it to understand a codebase, inspect relevant files, make changes, run verification commands, and explain what happened.
 
@@ -33,7 +33,7 @@ Megumi is designed around a few principles:
 
 ## What It Does
 
-Megumi is designed to support the core work of a coding agent:
+The current preview provides these capabilities:
 
 - Understand codebases: explore project structure, read relevant files, trace implementation paths, and explain how systems fit together.
 - Plan changes: break down engineering tasks, reason about tradeoffs, and propose implementation steps before editing.
@@ -148,7 +148,7 @@ npm run make
 
 ```text
 apps/desktop          Electron desktop app
-packages/coding-agent Core coding agent runtime
+packages/agent Core agent runtime
 packages/product      Product host interface and composition
 packages/ai           Model provider protocol layer
 tests                 Vitest test suite

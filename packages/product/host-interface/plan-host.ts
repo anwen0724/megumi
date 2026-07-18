@@ -1,11 +1,11 @@
 /*
- * Implements PlanHost over the Coding Agent Plan Artifact module.
+ * Implements PlanHost over the Agent Plan Artifact module.
  */
-import type { PlanArtifactServicePort } from '../../coding-agent/artifacts';
+import type { PlanArtifactServicePort } from '../../agent/artifacts';
 import {
   ImplementationPlanArtifactRecordSchema,
   ImplementationPlanArtifactStatusSchema,
-} from '../../coding-agent/artifacts/legacy-contracts/plan-artifact-contracts';
+} from '../../agent/artifacts/legacy-contracts/plan-artifact-contracts';
 import { z } from 'zod';
 
 export const PlanByRunGetDataSchema = z.object({

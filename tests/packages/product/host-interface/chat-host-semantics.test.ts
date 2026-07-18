@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createChatHost } from '@megumi/product/host-interface/chat-host';
-import type { AgentRun } from '@megumi/coding-agent/agent-run';
-import type { RuntimeEvent } from '@megumi/coding-agent/events';
-import type { TimelineMessage } from '@megumi/coding-agent/projections/timeline';
-import { createSessionBranchService, type SessionService } from '@megumi/coding-agent/session';
+import type { AgentRun } from '@megumi/agent/agent-run';
+import type { RuntimeEvent } from '@megumi/agent/events';
+import type { TimelineMessage } from '@megumi/agent/projections/timeline';
+import { createSessionBranchService, type SessionService } from '@megumi/agent/session';
 
 const unavailableContextService = {
   getSessionUsageSnapshot: () => ({ status: 'not_available' as const }),

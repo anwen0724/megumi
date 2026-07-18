@@ -11,7 +11,7 @@ export {
   createRuntimeContext as buildRuntimeContext,
   createRuntimeDebugId as generateRuntimeDebugId,
   createRuntimeTraceId as generateRuntimeTraceId,
-} from '../../coding-agent/events';
-export type { RuntimeContext, RuntimeEvent } from '../../coding-agent/events';
-export type * from '../../coding-agent/events';
-export { normalizeRuntimeError as normalizeHostRuntimeError } from '../../coding-agent/runtime-error';
+} from '../../agent/events';
+export type { RuntimeContext, RuntimeEvent } from '../../agent/events';
+export type * from '../../agent/events';
+export { normalizeRuntimeError as normalizeHostRuntimeError } from '../../agent/runtime-error';

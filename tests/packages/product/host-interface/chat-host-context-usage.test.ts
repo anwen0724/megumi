@@ -4,7 +4,7 @@ import {
   createChatHost,
   type ChatContextUsagePort,
 } from '@megumi/product/host-interface/chat-host';
-import type { GetSessionUsageSnapshotResult } from '@megumi/coding-agent/context';
+import type { GetSessionUsageSnapshotResult } from '@megumi/agent/context';
 
 function createHost(getSessionUsageSnapshot: (request: { sessionId: string }) => GetSessionUsageSnapshotResult) {
   const contextService = {

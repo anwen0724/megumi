@@ -171,16 +171,6 @@ export const chat = {
       failed: 'Failed', deleted: 'Deleted',
     },
   },
-  agents: {
-    label: 'Agent mode',
-    options: {
-      analyst: { label: 'Analyst', description: 'Explore requirements and evidence' },
-      architect: { label: 'Architect', description: 'Shape structure and tradeoffs' },
-      developer: { label: 'Developer', description: 'Implement code changes' },
-      reviewer: { label: 'Reviewer', description: 'Review quality and risks' },
-      free: { label: 'Free', description: 'General assistant mode' },
-    },
-  },
   workspace: {
     changes: 'Workspace changes for this turn',
     openChangedFiles: 'Changed files that can be opened',

@@ -3,7 +3,7 @@
  * system skill seed installation.
  */
 import path from 'node:path';
-import { createSettingsJsonSchema } from '../../coding-agent/settings';
+import { createSettingsJsonSchema } from '../../agent/settings';
 
 export const MEGUMI_HOME_VERSION = 1;
 export const MEGUMI_HOME_MIGRATION_ID = 'megumi-home-v1';

@@ -5,10 +5,10 @@
 export {
   TimelineMessageSchema,
   reduceRuntimeTimelineEvent,
-} from '../../coding-agent/projections/timeline';
+} from '../../agent/projections/timeline';
 export type {
   AnswerTextBlock,
   ProcessDisclosureBlock,
   TimelineMessage,
-} from '../../coding-agent/projections/timeline';
-export type * from '../../coding-agent/projections/timeline';
+} from '../../agent/projections/timeline';
+export type * from '../../agent/projections/timeline';

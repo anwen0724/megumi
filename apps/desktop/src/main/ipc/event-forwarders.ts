@@ -1,5 +1,5 @@
 /*
- * Forwards Coding Agent runtime events to renderer windows.
+ * Forwards Agent runtime events to renderer windows.
  */
 import {
   RuntimeEventSchema,

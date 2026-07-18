@@ -9,7 +9,7 @@ describe('Product and Desktop final boundaries', () => {
   it('removes legacy owner and shadow-service directories', () => {
     for (const relativePath of [
       'packages/home',
-      'packages/coding-agent/host-interface',
+      'packages/agent/host-interface',
       'apps/desktop/src/main/services',
       'apps/desktop/src/main/shell',
       'tests/apps/desktop/main/services',
@@ -27,9 +27,9 @@ describe('Product and Desktop final boundaries', () => {
     expect(desktop).not.toContain('replacement_input');
   });
 
-  it('keeps Product imports on Coding Agent public module entries', () => {
+  it('keeps Product imports on Agent public module entries', () => {
     const product = readTree('packages/product');
-    expect(product).not.toMatch(/coding-agent\/(core|repositories|services|domain)\//);
+    expect(product).not.toMatch(/agent\/(core|repositories|services|domain)\//);
   });
 });
 
