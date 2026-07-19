@@ -23,8 +23,14 @@ function TimelineMessageComponent({
   const role = message.role;
   const isUser = role === 'user';
   const isAssistant = role === 'assistant';
-  const canBranch = isAssistant && showBranchAction;
-  const canShowAssistantActions = isAssistant;
+  const hasActionableReply = isAssistant && message.blocks.some((block) => (
+    block.kind === 'answer_text'
+    && ['completed', 'failed', 'cancelled'].includes(block.status)
+    && typeof block.text === 'string'
+    && Boolean(block.text.trim())
+  ));
+  const canBranch = hasActionableReply && showBranchAction;
+  const canShowAssistantActions = hasActionableReply;
 
   if (message.role === 'separator') {
     return (

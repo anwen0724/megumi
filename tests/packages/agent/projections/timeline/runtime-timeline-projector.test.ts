@@ -251,8 +251,8 @@ describe('runtime timeline projection', () => {
       'cancelled_activity',
     ]));
     expect(answer).toMatchObject({
-      status: 'failed',
-      text: 'Model call failed.',
+      status: 'cancelled',
+      text: '',
     });
   });
 

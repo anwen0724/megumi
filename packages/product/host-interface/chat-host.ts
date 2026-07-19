@@ -19,7 +19,7 @@ import type {
 } from '../../agent/agent-run';
 
 import {
-  sessionConversationText,
+  sessionMessageText,
   type Session,
   type SessionBranchService,
   type SessionMessageWithAttachments,
@@ -876,8 +876,12 @@ export function toChatMessageUiDto(item: SessionMessageWithAttachments): ChatSes
     id: message.message_id,
     sessionId: message.session_id,
     ...(message.run_id ? { runId: message.run_id } : {}),
-    role: message.conversation.role,
-    text: sessionConversationText(message.conversation),
+    role: message.message_kind === 'user_message'
+      ? 'user'
+      : message.message_kind === 'tool_result'
+        ? 'toolResult'
+        : 'assistant',
+    text: sessionMessageText(message),
     createdAt: message.created_at,
   };
 }

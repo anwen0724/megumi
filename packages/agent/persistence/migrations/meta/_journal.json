@@ -29,6 +29,13 @@
       "when": 1783872000000,
       "tag": "0003_finalize_business_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1784457600000,
+      "tag": "0004_agent_final_reply_messages",
+      "breakpoints": true
     }
   ]
 }

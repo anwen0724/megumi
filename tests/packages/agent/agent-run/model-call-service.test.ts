@@ -386,6 +386,38 @@ describe('Model Call Service', () => {
     });
   });
 
+  it('surfaces a malformed Work Tool Call instead of silently treating text as final', async () => {
+    const aiClient: AiClient = {
+      stream() {
+        return AssistantEventStream.from([
+          { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'I will do it' } },
+          {
+            type: 'content_block_end',
+            index: 1,
+            block: { type: 'toolCall', id: 'call-1', name: '', argumentsText: '{}' },
+          },
+        ]);
+      },
+      complete: vi.fn(),
+    };
+    const service = createModelCallService({
+      ai_client: aiClient,
+      ids: { model_call_id: () => 'model-call-1' },
+    });
+    const result = await service.modelCall(sampleModelCallRequest());
+    expect(result.status).toBe('started');
+    if (result.status !== 'started') return;
+
+    expect(await collect(result.events)).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'failed',
+        failure: expect.objectContaining({
+          details: { reason: 'malformed_work_tool_call' },
+        }),
+      }),
+    ]));
+  });
+
   it('yields text deltas before the provider stream closes', async () => {
     const providerStream = new AssistantEventStream();
     const aiClient: AiClient = {

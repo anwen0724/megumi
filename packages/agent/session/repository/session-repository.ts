@@ -8,8 +8,14 @@ import type {
 } from '../domain/model/session';
 import type { SessionCompactionSummary, SessionEntry } from '../domain/model/session-entry';
 import type { SessionMessageAttachment } from '../domain/model/session-attachment';
-import type { SessionMessage } from '../domain/model/session-message';
-import { SessionConversationMessageSchema } from '../domain/model/session-message';
+import type { SessionMessage, SessionMessageKind } from '../domain/model/session-message';
+import {
+  SessionAssistantReplyMessageSchema,
+  SessionAssistantReplyPayloadSchema,
+  SessionModelResponsePayloadSchema,
+  SessionToolResultPayloadSchema,
+  SessionUserMessagePayloadSchema,
+} from '../domain/model/session-message';
 
 type Nullable<T> = T | null;
 
@@ -60,10 +66,10 @@ export class SessionRepository {
   insertMessage(message: SessionMessage): SessionMessage {
     this.database.prepare(`
       INSERT INTO session_messages (
-        message_id, session_id, run_id, role, message_json,
+        message_id, session_id, run_id, message_kind, message_json,
         created_at, completed_at
       ) VALUES (
-        @message_id, @session_id, @run_id, @role, @message_json,
+        @message_id, @session_id, @run_id, @message_kind, @message_json,
         @created_at, @completed_at
       )
     `).run(toMessageRow(message));
@@ -91,6 +97,15 @@ export class SessionRepository {
     `).all(sessionId, runId) as SessionMessageRow[]).map(fromMessageRow);
   }
 
+  findAssistantReplyByRunId(sessionId: string, runId: string): SessionMessage | undefined {
+    const row = this.database.prepare(`
+      SELECT * FROM session_messages
+      WHERE session_id = ? AND run_id = ? AND message_kind = 'assistant_reply'
+      LIMIT 1
+    `).get(sessionId, runId) as SessionMessageRow | undefined;
+    return row ? fromMessageRow(row) : undefined;
+  }
+
   listUserMessagesByRunIds(runIds: string[]): SessionMessage[] {
     if (runIds.length === 0) {
       return [];
@@ -98,7 +113,7 @@ export class SessionRepository {
     const placeholders = runIds.map(() => '?').join(', ');
     return (this.database.prepare(`
       SELECT * FROM session_messages
-      WHERE run_id IN (${placeholders}) AND role = 'user'
+      WHERE run_id IN (${placeholders}) AND message_kind = 'user_message'
       ORDER BY created_at ASC, message_id ASC
     `).all(...runIds) as SessionMessageRow[]).map(fromMessageRow);
   }
@@ -260,7 +275,7 @@ type SessionMessageRow = {
   message_id: string;
   session_id: string;
   run_id: Nullable<string>;
-  role: SessionMessage['conversation']['role'];
+  message_kind: SessionMessageKind;
   message_json: string;
   created_at: string;
   completed_at: Nullable<string>;
@@ -328,26 +343,71 @@ function toMessageRow(message: SessionMessage): SessionMessageRow {
     message_id: message.message_id,
     session_id: message.session_id,
     run_id: message.run_id ?? null,
-    role: message.conversation.role,
-    message_json: JSON.stringify(message.conversation),
+    message_kind: message.message_kind,
+    message_json: JSON.stringify(toMessagePayload(message)),
     created_at: message.created_at,
     completed_at: message.completed_at ?? null,
   };
 }
 
 function fromMessageRow(row: SessionMessageRow): SessionMessage {
-  const conversation = SessionConversationMessageSchema.parse(JSON.parse(row.message_json));
-  if (conversation.role !== row.role) {
-    throw new Error(`Session message ${row.message_id} role does not match message_json.`);
-  }
-  return {
+  const base = {
     message_id: row.message_id,
     session_id: row.session_id,
     ...(row.run_id ? { run_id: row.run_id } : {}),
-    conversation,
     created_at: row.created_at,
     ...(row.completed_at ? { completed_at: row.completed_at } : {}),
   };
+  const payload = JSON.parse(row.message_json) as unknown;
+  if (row.message_kind === 'user_message') {
+    return { ...base, message_kind: row.message_kind, ...SessionUserMessagePayloadSchema.parse(payload) };
+  }
+  if (row.message_kind === 'model_response') {
+    return { ...base, message_kind: row.message_kind, ...SessionModelResponsePayloadSchema.parse(payload) };
+  }
+  if (row.message_kind === 'tool_result') {
+    return { ...base, message_kind: row.message_kind, ...SessionToolResultPayloadSchema.parse(payload) };
+  }
+  if (row.message_kind === 'assistant_reply') {
+    return SessionAssistantReplyMessageSchema.parse({
+      ...base,
+      message_kind: row.message_kind,
+      ...SessionAssistantReplyPayloadSchema.parse(payload),
+    });
+  }
+  throw new Error(`Session message ${row.message_id} has unsupported message_kind.`);
+}
+
+function toMessagePayload(message: SessionMessage): Record<string, unknown> {
+  if (message.message_kind === 'user_message') {
+    return SessionUserMessagePayloadSchema.parse({
+      content: message.content,
+      ...(message.legacy_provenance ? { legacy_provenance: message.legacy_provenance } : {}),
+    });
+  }
+  if (message.message_kind === 'model_response') {
+    return SessionModelResponsePayloadSchema.parse({
+      content: message.content,
+      outcome_status: message.outcome_status,
+      ...(message.reason_code ? { reason_code: message.reason_code } : {}),
+      ...(message.stop_reason ? { stop_reason: message.stop_reason } : {}),
+      ...(message.legacy_provenance ? { legacy_provenance: message.legacy_provenance } : {}),
+    });
+  }
+  if (message.message_kind === 'tool_result') {
+    return SessionToolResultPayloadSchema.parse({
+      tool_call_id: message.tool_call_id,
+      tool_name: message.tool_name,
+      status: message.status,
+      content: message.content,
+      ...(message.legacy_provenance ? { legacy_provenance: message.legacy_provenance } : {}),
+    });
+  }
+  return SessionAssistantReplyPayloadSchema.parse({
+    status: message.status,
+    content: message.content,
+    ...(message.reason_code ? { reason_code: message.reason_code } : {}),
+  });
 }
 
 function toAttachmentRow(attachment: SessionMessageAttachment): SessionMessageAttachmentRow {

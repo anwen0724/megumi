@@ -3,7 +3,7 @@
  * It coordinates Context, Model Call, Tool Set, Permissions, and Session services.
  */
 import type { PermissionDecision, PermissionMode, PermissionService } from '../../permissions';
-import type { SessionService } from '../../session';
+import { hasUserVisibleAssistantContent, type SessionService } from '../../session';
 import type { AssistantContentBlock } from '@megumi/ai';
 import type { SettingsService } from '../../settings';
 import type { ToolExecutionService } from '../../tools';
@@ -38,10 +38,14 @@ import {
 import type { RunToolSetBuilder } from './tool-set-builder';
 import type { AgentRunRuntimeEventFactory } from './agent-run-runtime-events';
 import type { ActiveRunStore } from './active-run-store';
+import { assistantReplyReasonForFailure, commitTerminalReply } from './terminal-reply';
 
 export type RunOrchestratorDependencies = {
-  active_run_store: Pick<ActiveRunStore, 'getRun' | 'saveRun' | 'createApprovalRequest' | 'upsertStep'>;
-  session_service: Pick<SessionService, 'saveAssistantMessage' | 'saveToolResultMessage'>;
+  active_run_store: Pick<ActiveRunStore,
+    'getRun' | 'saveRun' | 'createApprovalRequest' | 'upsertStep'
+    | 'getActiveModelResponse' | 'setActiveModelResponse' | 'updateActiveModelResponse'
+    | 'clearActiveModelResponse' | 'getLastEntryId' | 'setLastEntryId'>;
+  session_service: Pick<SessionService, 'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'>;
   settings_service: Pick<SettingsService, 'resolvePermissionSettings'>;
   context_service: Pick<ContextService, 'prepareModelCall' | 'recordCompletedRunUsage'>;
   model_call_service: ModelCallService;
@@ -119,6 +123,7 @@ export async function runAgentModelToolLoop(
   };
   let lastPrepared: PreparedModelCall | undefined;
   let lastProviderInputTokens: number | undefined;
+  let protocolRepairs = 0;
 
   while (true) {
     if (modelCalls >= dependencies.limits.max_model_calls) {
@@ -173,6 +178,15 @@ export async function runAgentModelToolLoop(
       run_id: run.run_id,
       model_call_id: modelCall.model_call_id,
     });
+    const responseMessageId = dependencies.ids.assistant_message_id();
+    dependencies.active_run_store.setActiveModelResponse({
+      run_id: run.run_id,
+      model_call_id: modelCall.model_call_id,
+      message_id: responseMessageId,
+      parent_entry_id: currentTurn.lastEntryId ?? currentTurn.userEntry.entryId,
+      content: [],
+      has_pending_work_tool_call: false,
+    });
     const modelCallStartedAt = dependencies.clock.now();
     dependencies.active_run_store.upsertStep({
       type: 'model_call',
@@ -184,6 +198,7 @@ export async function runAgentModelToolLoop(
     dependencies.event_sink.emit({
       eventType: 'model_call.started',
       run,
+      messageId: responseMessageId,
       payload: {
         modelCallId: modelCall.model_call_id,
         providerId: run.model_selection.provider_id,
@@ -203,17 +218,6 @@ export async function runAgentModelToolLoop(
     lastProviderInputTokens = modelEvents.provider_input_tokens;
     const latestRun = dependencies.active_run_store.getRun(run.run_id);
     if (latestRun?.status === 'cancelled') {
-      if (modelEvents.assistant_content.length > 0) {
-        dependencies.session_service.saveAssistantMessage({
-          message_id: dependencies.ids.assistant_message_id(),
-          session_id: run.session_id,
-          run_id: run.run_id,
-          parent_entry_id: currentTurn.lastEntryId ?? currentTurn.userEntry.entryId,
-          content: modelEvents.assistant_content,
-          stop_reason: 'cancelled',
-          completed_at: dependencies.clock.now(),
-        });
-      }
       return {
         status: 'failed',
         run: latestRun,
@@ -221,23 +225,6 @@ export async function runAgentModelToolLoop(
       };
     }
     if (modelEvents.failure) {
-      if (modelEvents.assistant_content.length > 0) {
-        const partial = dependencies.session_service.saveAssistantMessage({
-          message_id: dependencies.ids.assistant_message_id(),
-          session_id: run.session_id,
-          run_id: run.run_id,
-          parent_entry_id: currentTurn.lastEntryId ?? currentTurn.userEntry.entryId,
-          content: modelEvents.assistant_content,
-          stop_reason: modelEvents.stop_reason ?? (request.signal?.aborted ? 'cancelled' : 'failed'),
-          completed_at: dependencies.clock.now(),
-        });
-        if (partial.status === 'failed') {
-          return failRun(dependencies, run, {
-            code: 'session_failed',
-            message: partial.failure.message,
-          }, { model_calls: modelCalls, tool_rounds: toolRounds });
-        }
-      }
       dependencies.active_run_store.upsertStep({
         type: 'model_call',
         run_id: run.run_id,
@@ -247,6 +234,12 @@ export async function runAgentModelToolLoop(
         completed_at: dependencies.clock.now(),
         failure: modelEvents.failure,
       });
+      if (modelEvents.failure.details?.reason === 'malformed_work_tool_call' && protocolRepairs < 1) {
+        protocolRepairs += 1;
+        dependencies.active_run_store.clearActiveModelResponse(run.run_id);
+        currentTurn = appendProtocolRepair(currentTurn);
+        continue;
+      }
       return failRun(dependencies, run, modelEvents.failure, {
         model_calls: modelCalls,
         tool_rounds: toolRounds,
@@ -261,24 +254,32 @@ export async function runAgentModelToolLoop(
       completed_at: dependencies.clock.now(),
     });
 
-    const assistant = dependencies.session_service.saveAssistantMessage({
-      message_id: dependencies.ids.assistant_message_id(),
-      session_id: run.session_id,
-      run_id: run.run_id,
-      parent_entry_id: currentTurn.lastEntryId ?? currentTurn.userEntry.entryId,
-      content: modelEvents.assistant_content,
-      ...(modelEvents.stop_reason ? { stop_reason: modelEvents.stop_reason } : {}),
-      completed_at: dependencies.clock.now(),
-    });
-    if (assistant.status === 'failed') {
+    if (shouldRepairModelResponse(modelEvents)) {
+      if (protocolRepairs < 1) {
+        protocolRepairs += 1;
+        dependencies.active_run_store.clearActiveModelResponse(run.run_id);
+        currentTurn = appendProtocolRepair(currentTurn);
+        continue;
+      }
       return failRun(dependencies, run, {
-        code: 'session_failed',
-        message: assistant.failure.message,
+        code: 'runtime_protocol_violation',
+        message: 'Model response did not produce a valid final reply or actionable tool call.',
       }, { model_calls: modelCalls, tool_rounds: toolRounds });
     }
-    currentTurn = { ...currentTurn, lastEntryId: assistant.entry.entry_id };
 
     if (modelEvents.tool_calls.length === 0) {
+      const reply = commitTerminalReply({
+        dependencies,
+        run,
+        status: 'completed',
+        reason_code: 'normal_completion',
+      });
+      if (reply.status === 'failed') {
+        return failRunWithoutTerminalEvent(dependencies, run, {
+          code: 'session_failed',
+          message: reply.message,
+        });
+      }
       run = dependencies.active_run_store.saveRun(transitionAgentRunStatus({
         run,
         to: 'completed',
@@ -287,13 +288,13 @@ export async function runAgentModelToolLoop(
       dependencies.event_sink.emit({
         eventType: 'run.completed',
         run,
-        messageId: assistant.message.message_id,
+        messageId: reply.message_id,
         payload: {
-          assistantMessageId: assistant.message.message_id,
+          assistantMessageId: reply.message_id,
         },
       });
       traceRun(dependencies, run, 'run.completed', {
-        assistant_message_id: assistant.message.message_id,
+        assistant_message_id: reply.message_id,
         content_preview: modelEvents.content,
         model_calls: modelCalls,
         tool_rounds: toolRounds,
@@ -329,6 +330,26 @@ export async function runAgentModelToolLoop(
       }
       return { status: 'completed', run };
     }
+
+    const response = dependencies.session_service.saveModelResponse({
+      message_id: responseMessageId,
+      session_id: run.session_id,
+      run_id: run.run_id,
+      parent_entry_id: currentTurn.lastEntryId ?? currentTurn.userEntry.entryId,
+      content: modelEvents.assistant_content,
+      outcome_status: 'completed',
+      ...(modelEvents.stop_reason ? { stop_reason: modelEvents.stop_reason } : {}),
+      completed_at: dependencies.clock.now(),
+    });
+    if (response.status === 'failed') {
+      return failRun(dependencies, run, {
+        code: 'session_failed',
+        message: response.failure.message,
+      }, { model_calls: modelCalls, tool_rounds: toolRounds });
+    }
+    dependencies.active_run_store.setLastEntryId(run.run_id, response.entry.entry_id);
+    dependencies.active_run_store.clearActiveModelResponse(run.run_id);
+    currentTurn = { ...currentTurn, lastEntryId: response.entry.entry_id };
 
     if (toolRounds >= dependencies.limits.max_tool_rounds) {
       traceLoopCounters(dependencies, run, modelCalls, toolRounds, currentTurn.runItems.length);
@@ -438,6 +459,7 @@ export async function runAgentModelToolLoop(
         }, { model_calls: modelCalls, tool_rounds: toolRounds });
       }
       currentTurn = { ...currentTurn, lastEntryId: persisted.entry.entry_id };
+      dependencies.active_run_store.setLastEntryId(run.run_id, persisted.entry.entry_id);
       appendedItems.push(toolResultToConversationItem(toolResult));
     }
     if (toolGroup.tool_result_facts.length > 0) {
@@ -596,6 +618,7 @@ async function collectModelCallEvents(
   tool_calls: ModelRequestedToolCall[];
   stop_reason?: string;
   provider_input_tokens?: number;
+  completed_event_received: boolean;
   failure?: AgentRunFailure;
 }> {
   const textDeltas: string[] = [];
@@ -605,6 +628,7 @@ async function collectModelCallEvents(
   let completedContent: string | undefined;
   let providerInputTokens: number | undefined;
   let stopReason: string | undefined;
+  let completedEventReceived = false;
   const runtimeEventState: ModelCallRuntimeEventState = {};
 
   for await (const event of events) {
@@ -647,20 +671,32 @@ async function collectModelCallEvents(
       });
     }
     if (event.type === 'completed') {
+      completedEventReceived = true;
       completedContent = event.content;
       stopReason = event.finish_reason;
       providerInputTokens = event.usage?.input_tokens;
     }
     if (event.type === 'failed') {
       flushAssistantText(assistantContent, textDeltas, completedContent);
+      const hasPendingWorkToolIntent = toolCalls.length > 0
+        || event.failure.details?.reason === 'malformed_work_tool_call';
+      dependencies.active_run_store.updateActiveModelResponse(run.run_id, {
+        content: [...assistantContent],
+        has_pending_work_tool_call: hasPendingWorkToolIntent,
+      });
       return {
         content: completedContent ?? textDeltas.join(''),
         assistant_content: assistantContent,
         tool_calls: toolCalls,
+        completed_event_received: completedEventReceived,
         ...(stopReason ? { stop_reason: stopReason } : {}),
         failure: event.failure,
       };
     }
+    dependencies.active_run_store.updateActiveModelResponse(run.run_id, {
+      content: activeDraftContent(assistantContent, textDeltas, thinkingDeltas, completedContent),
+      has_pending_work_tool_call: toolCalls.length > 0,
+    });
   }
 
   flushAssistantText(assistantContent, textDeltas, completedContent);
@@ -668,8 +704,66 @@ async function collectModelCallEvents(
     content: completedContent ?? assistantContent.flatMap((block) => block.type === 'text' ? [block.text] : []).join(''),
     assistant_content: assistantContent,
     tool_calls: toolCalls,
+    completed_event_received: completedEventReceived,
     ...(stopReason ? { stop_reason: stopReason } : {}),
     ...(providerInputTokens !== undefined ? { provider_input_tokens: providerInputTokens } : {}),
+  };
+}
+
+function activeDraftContent(
+  committed: AssistantContentBlock[],
+  textDeltas: string[],
+  thinkingDeltas: string[],
+  completedContent?: string,
+): AssistantContentBlock[] {
+  const content = [...committed];
+  if (thinkingDeltas.length > 0) {
+    content.push({ type: 'thinking', thinking: thinkingDeltas.join('') });
+  }
+  const text = completedContent ?? textDeltas.join('');
+  if (text && !content.some((block) => block.type === 'text' && block.text === text)) {
+    const firstToolCall = content.findIndex((block) => block.type === 'toolCall');
+    if (firstToolCall >= 0) content.splice(firstToolCall, 0, { type: 'text', text });
+    else content.push({ type: 'text', text });
+  }
+  return content;
+}
+
+function shouldRepairModelResponse(response: {
+  assistant_content: AssistantContentBlock[];
+  tool_calls: ModelRequestedToolCall[];
+  stop_reason?: string;
+  completed_event_received: boolean;
+}): boolean {
+  if (!response.completed_event_received) return true;
+  const finishReason = response.stop_reason?.toLowerCase();
+  if (finishReason && [
+    'length',
+    'max_tokens',
+    'incomplete',
+    'cancelled',
+    'canceled',
+    'aborted',
+    'error',
+    'content_filter',
+  ].includes(finishReason)) {
+    return true;
+  }
+  return response.tool_calls.length === 0
+    && !hasUserVisibleAssistantContent(response.assistant_content);
+}
+
+function appendProtocolRepair(currentTurn: CurrentConversationTurn): CurrentConversationTurn {
+  return {
+    ...currentTurn,
+    runItems: [...currentTurn.runItems, {
+      type: 'context',
+      kind: 'historical_run_state',
+      content: {
+        status: 'protocol_repair',
+        instruction: 'Return one user-visible final response, or issue a valid Work Tool Call.',
+      },
+    }],
   };
 }
 
@@ -696,6 +790,7 @@ function emitModelCallRuntimeEvent(
   event: ModelCallEvent,
   state: ModelCallRuntimeEventState,
 ): void {
+  const messageId = dependencies.active_run_store.getActiveModelResponse(run.run_id)?.message_id;
   if (event.type === 'started') {
     return;
   }
@@ -718,6 +813,7 @@ function emitModelCallRuntimeEvent(
     dependencies.event_sink.emit({
       eventType: 'model_call.text_delta',
       run,
+      ...(messageId ? { messageId } : {}),
       payload: {
         modelCallId: event.model_call_id,
         delta: event.delta,
@@ -730,6 +826,7 @@ function emitModelCallRuntimeEvent(
     dependencies.event_sink.emit({
       eventType: 'model.thinking.started',
       run,
+      ...(messageId ? { messageId } : {}),
       payload: {
         modelStepId: event.model_call_id,
       },
@@ -741,6 +838,7 @@ function emitModelCallRuntimeEvent(
     dependencies.event_sink.emit({
       eventType: 'model.thinking.delta',
       run,
+      ...(messageId ? { messageId } : {}),
       payload: {
         modelStepId: event.model_call_id,
         delta: event.delta,
@@ -753,6 +851,7 @@ function emitModelCallRuntimeEvent(
     dependencies.event_sink.emit({
       eventType: 'model.thinking.completed',
       run,
+      ...(messageId ? { messageId } : {}),
       payload: {
         modelStepId: event.model_call_id,
       },
@@ -764,6 +863,7 @@ function emitModelCallRuntimeEvent(
     dependencies.event_sink.emit({
       eventType: 'model_call.tool_call',
       run,
+      ...(messageId ? { messageId } : {}),
       payload: {
         modelCallId: event.model_call_id,
         toolCallId: event.tool_call_id,
@@ -789,6 +889,7 @@ function emitModelCallRuntimeEvent(
     dependencies.event_sink.emit({
       eventType: 'model_call.completed',
       run,
+      ...(messageId ? { messageId } : {}),
       payload: {
         modelCallId: event.model_call_id,
         finishReason: event.finish_reason ?? 'stop',
@@ -813,6 +914,7 @@ function emitModelCallRuntimeEvent(
   dependencies.event_sink.emit({
     eventType: 'model_call.completed',
     run,
+    ...(messageId ? { messageId } : {}),
     payload: {
       modelCallId: event.model_call_id,
       finishReason: 'failed',
@@ -896,6 +998,18 @@ function failRun(
   failure: AgentRunFailure,
   counters?: { model_calls: number; tool_rounds: number },
 ): RunOrchestratorResult {
+  const reply = commitTerminalReply({
+    dependencies,
+    run,
+    status: 'failed',
+    reason_code: assistantReplyReasonForFailure(failure),
+  });
+  if (reply.status === 'failed') {
+    return failRunWithoutTerminalEvent(dependencies, run, {
+      code: 'session_failed',
+      message: reply.message,
+    });
+  }
   const failedRun = dependencies.active_run_store.saveRun(transitionAgentRunStatus({
     run,
     to: 'failed',
@@ -905,6 +1019,7 @@ function failRun(
   dependencies.event_sink.emit({
     eventType: 'run.failed',
     run: failedRun,
+    messageId: reply.message_id,
     payload: {
       error: agentRunFailureToRuntimeError(failure),
     },
@@ -912,6 +1027,24 @@ function failRun(
   traceRun(dependencies, failedRun, 'run.failed', {
     failure,
     ...(counters ? counters : {}),
+  });
+  return { status: 'failed', run: failedRun, failure };
+}
+
+function failRunWithoutTerminalEvent(
+  dependencies: RunOrchestratorDependencies,
+  run: AgentRun,
+  failure: AgentRunFailure,
+): RunOrchestratorResult {
+  const failedRun = dependencies.active_run_store.saveRun(transitionAgentRunStatus({
+    run,
+    to: 'failed',
+    changed_at: dependencies.clock.now(),
+    failure,
+  }));
+  traceRun(dependencies, failedRun, 'run.failed', {
+    failure,
+    terminal_reply_commit_failed: true,
   });
   return { status: 'failed', run: failedRun, failure };
 }

@@ -37,25 +37,25 @@ describe('legacy Session history backfill', () => {
           SELECT parent.entry_id, parent.parent_entry_id, parent.message_id, child.depth + 1
           FROM session_entries parent JOIN active_path child ON parent.entry_id = child.parent_entry_id
         )
-        SELECT message.message_id, message.run_id, message.role, message.message_json
+        SELECT message.message_id, message.run_id, message.message_kind, message.message_json
         FROM active_path path JOIN session_messages message ON message.message_id = path.message_id
         ORDER BY path.depth DESC
-      `).all() as Array<{ message_id: string; run_id: string; role: string; message_json: string }>;
-      expect(messages.map((message) => message.role)).toEqual([
-        'user', 'assistant', 'toolResult', 'toolResult', 'assistant',
+      `).all() as Array<{ message_id: string; run_id: string; message_kind: string; message_json: string }>;
+      expect(messages.map((message) => message.message_kind)).toEqual([
+        'user_message', 'model_response', 'tool_result', 'tool_result', 'model_response',
       ]);
       expect(messages.every((message) => message.run_id === 'run:1')).toBe(true);
       expect(messages.slice(1, 4).map((message) => JSON.parse(message.message_json))).toMatchObject([
-        { role: 'assistant', content: [
+        { outcome_status: 'incomplete', content: [
           { type: 'text', text: 'Checking.' },
           { type: 'toolCall', id: 'tool:1', name: 'read_file' },
           { type: 'toolCall', id: 'tool:2', name: 'search_text' },
         ] },
-        { role: 'toolResult', toolCallId: 'tool:1', status: 'success' },
-        { role: 'toolResult', toolCallId: 'tool:2', status: 'failure' },
+        { tool_call_id: 'tool:1', status: 'success' },
+        { tool_call_id: 'tool:2', status: 'failure' },
       ]);
       expect(JSON.parse(messages.at(-1)!.message_json)).toMatchObject({
-        role: 'assistant',
+        outcome_status: 'incomplete',
         content: [
           { type: 'thinking', thinking: 'Need summarize.' },
           { type: 'text', text: 'Done.' },
@@ -133,17 +133,17 @@ describe('legacy Session history backfill', () => {
     });
     try {
       const active = migrated.database.prepare(`
-        SELECT message.role, message.message_json
+        SELECT message.message_kind, message.message_json
         FROM sessions session
         JOIN session_entries entry ON entry.entry_id = session.active_entry_id
         JOIN session_messages message ON message.message_id = entry.message_id
         WHERE session.session_id = 'session:1'
-      `).get() as { role: string; message_json: string };
-      expect(active.role).toBe('assistant');
+      `).get() as { message_kind: string; message_json: string };
+      expect(active.message_kind).toBe('model_response');
       expect(JSON.parse(active.message_json)).toMatchObject({
-        role: 'assistant',
         content: [{ type: 'text', text: 'Partial answer' }],
-        stopReason: 'cancelled',
+        outcome_status: 'incomplete',
+        stop_reason: 'cancelled',
       });
     } finally {
       migrated.database.close();
@@ -207,11 +207,11 @@ describe('legacy Session history backfill', () => {
         JOIN session_messages message ON message.message_id = path.message_id
         ORDER BY path.depth DESC
       `).all() as Array<{ message_json: string }>;
-      const conversations = path.map((row) => JSON.parse(row.message_json) as { role: string; toolCallId?: string });
+      const conversations = path.map((row) => JSON.parse(row.message_json) as { tool_call_id?: string; outcome_status?: string });
       expect(conversations).toEqual(expect.arrayContaining([
-        expect.objectContaining({ role: 'toolResult', toolCallId: 'tool:2' }),
+        expect.objectContaining({ tool_call_id: 'tool:2' }),
       ]));
-      expect(conversations.at(-1)).toMatchObject({ role: 'assistant' });
+      expect(conversations.at(-1)).toMatchObject({ outcome_status: 'incomplete' });
     } finally {
       migrated.database.close();
     }

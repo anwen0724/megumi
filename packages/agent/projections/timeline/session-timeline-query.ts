@@ -1,15 +1,24 @@
 /*
- * Projects Session-owned semantic messages into historical Timeline DTOs.
- * Runtime Events remain a separate source used only while a Run is live.
+ * Projects explicit Session semantic message variants into historical
+ * Timeline DTOs. Runtime Events remain the source only while a Run is live.
  */
-import { sessionConversationText, type SessionMessageWithAttachments, type SessionService } from '../../session';
+import {
+  isLegacySessionMessage,
+  sessionMessageText,
+  type SessionAssistantReplyMessage,
+  type SessionMessageWithAttachments,
+  type SessionService,
+} from '../../session';
 import type { WorkspaceChangeFooterProjectorService } from '../workspace/workspace-change-footer-projector';
 import type {
+  AnswerTextStatus,
   ProcessDisclosureItem,
   TimelineAssistantMessage,
   TimelineMessage,
   TimelineUserMessage,
 } from './timeline-message-blocks';
+
+type AssistantReplyItem = SessionMessageWithAttachments & { message: SessionAssistantReplyMessage };
 
 export interface SessionTimelineQueryRequest {
   workspace_id: string;
@@ -28,6 +37,7 @@ export interface SessionTimelineQuery {
 
 export function createSessionTimelineQuery(input: {
   sessionService: Pick<SessionService, 'getActiveConversationHistory'>;
+  isRunLive?: (runId: string) => boolean;
   workspaceChangeFooterProjector?: Pick<WorkspaceChangeFooterProjectorService, 'projectRunFooter'>;
 }): SessionTimelineQuery {
   return {
@@ -41,6 +51,7 @@ export function createSessionTimelineQuery(input: {
         projectId: request.workspace_id,
         messages: result.messages,
         ...(request.run_id ? { requestedRunId: request.run_id } : {}),
+        ...(input.isRunLive ? { isRunLive: input.isRunLive } : {}),
         workspaceChangeFooterProjector: input.workspaceChangeFooterProjector,
       });
       return {
@@ -60,36 +71,32 @@ export function projectSessionTimelineMessages(input: {
   projectId: string;
   messages: SessionMessageWithAttachments[];
   requestedRunId?: string;
+  isRunLive?: (runId: string) => boolean;
   workspaceChangeFooterProjector?: Pick<WorkspaceChangeFooterProjectorService, 'projectRunFooter'>;
 }): TimelineMessage[] {
   const responseGroups = groupResponsesByRun(input.messages);
-  const emittedRuns = new Set<string>();
   const timeline: TimelineMessage[] = [];
 
   for (const item of input.messages) {
-    if (item.message.conversation.role === 'user') {
-      timeline.push(projectSessionTimelineUserMessage(
-        input.projectId,
-        item,
-        item.active_path_order ?? timeline.length,
-      ));
-      continue;
-    }
+    if (item.message.message_kind !== 'user_message') continue;
+    timeline.push(projectSessionTimelineUserMessage(
+      input.projectId,
+      item,
+      item.active_path_order ?? timeline.length,
+    ));
     const runId = item.message.run_id;
-    if (!runId || emittedRuns.has(runId)) continue;
-    emittedRuns.add(runId);
-    const group = responseGroups.get(runId);
-    if (group?.length) {
-      timeline.push(projectAssistantRun(
-        input.projectId,
-        runId,
-        group,
-        item.active_path_order ?? timeline.length,
-        !input.requestedRunId || input.requestedRunId === runId
-          ? input.workspaceChangeFooterProjector?.projectRunFooter(runId)
-          : undefined,
-      ));
-    }
+    if (!runId || input.isRunLive?.(runId)) continue;
+    const group = responseGroups.get(runId) ?? [];
+    timeline.push(projectAssistantRun(
+      input.projectId,
+      runId,
+      item,
+      group,
+      group[0]?.active_path_order ?? (item.active_path_order ?? timeline.length) + 1,
+      !input.requestedRunId || input.requestedRunId === runId
+        ? input.workspaceChangeFooterProjector?.projectRunFooter(runId)
+        : undefined,
+    ));
   }
   return timeline;
 }
@@ -97,7 +104,7 @@ export function projectSessionTimelineMessages(input: {
 function groupResponsesByRun(messages: SessionMessageWithAttachments[]): Map<string, SessionMessageWithAttachments[]> {
   const groups = new Map<string, SessionMessageWithAttachments[]>();
   for (const item of messages) {
-    if (item.message.conversation.role === 'user' || !item.message.run_id) continue;
+    if (item.message.message_kind === 'user_message' || !item.message.run_id) continue;
     const group = groups.get(item.message.run_id) ?? [];
     group.push(item);
     groups.set(item.message.run_id, group);
@@ -114,7 +121,7 @@ export function projectSessionTimelineUserMessage(
   const blocks: TimelineUserMessage['blocks'] = [{
     blockId: `user-text:${message.message_id}`,
     kind: 'user_text',
-    text: sessionConversationText(message.conversation),
+    text: sessionMessageText(message),
     format: 'plain',
     createdAt: message.created_at,
     ...(message.completed_at ? { updatedAt: message.completed_at } : {}),
@@ -143,64 +150,48 @@ export function projectSessionTimelineUserMessage(
 function projectAssistantRun(
   projectId: string,
   runId: string,
+  user: SessionMessageWithAttachments,
   messages: SessionMessageWithAttachments[],
   historyOrder: number,
   workspaceChangeFooter: TimelineAssistantMessage['workspaceChangeFooter'],
 ): TimelineAssistantMessage {
-  const assistantMessages = messages.filter((item) => item.message.conversation.role === 'assistant');
-  const finalAssistant = [...assistantMessages].reverse().find((item) => {
-    const conversation = item.message.conversation;
-    return conversation.role === 'assistant'
-      && conversation.content.some((block) => block.type === 'text')
-      && !conversation.content.some((block) => block.type === 'toolCall');
-  });
-  const processItems = projectProcessItems(runId, messages, finalAssistant?.message.message_id);
-  const last = messages.at(-1)!;
-  const messageId = finalAssistant?.message.message_id ?? last.message.message_id;
+  const reply = messages.find((item): item is AssistantReplyItem =>
+    item.message.message_kind === 'assistant_reply');
+  const legacyAnswer = !reply ? findLegacyAnswer(messages) : undefined;
+  const answerMessage = reply ?? legacyAnswer;
+  const processItems = projectProcessItems(runId, messages, answerMessage?.message.message_id);
+  const last = messages.at(-1) ?? user;
+  const messageId = answerMessage?.message.message_id ?? `assistant:${runId}`;
   const blocks: TimelineAssistantMessage['blocks'] = [];
   if (processItems.length > 0) {
     blocks.push({
       blockId: `process:${runId}`,
       kind: 'process_disclosure',
       runId,
-      status: processStatus(messages),
-      startedAt: messages[0]!.message.created_at,
+      status: processStatus(messages, reply?.message),
+      startedAt: messages[0]?.message.created_at ?? user.message.created_at,
       endedAt: last.message.completed_at ?? last.message.created_at,
       items: processItems,
     });
   }
-  if (finalAssistant) {
-    blocks.push({
-      blockId: `answer:${finalAssistant.message.message_id}`,
-      kind: 'answer_text',
-      runId,
-      textId: `text:${finalAssistant.message.message_id}`,
-      status: finalAssistant.message.conversation.role === 'assistant'
-        && finalAssistant.message.conversation.stopReason?.includes('cancel')
-        ? 'cancelled_partial'
-        : finalAssistant.message.conversation.role === 'assistant'
-          && finalAssistant.message.conversation.stopReason?.includes('fail')
-          ? 'failed'
-          : 'completed',
-      text: sessionConversationText(finalAssistant.message.conversation),
-      format: 'markdown',
-      createdAt: finalAssistant.message.created_at,
-      ...(finalAssistant.message.completed_at ? { updatedAt: finalAssistant.message.completed_at } : {}),
-    });
-  }
-  if (blocks.length === 0) {
-    blocks.push({
-      blockId: `process:${runId}`,
-      kind: 'process_disclosure', runId, status: 'completed', items: [],
-    });
-  }
+  blocks.push({
+    blockId: `answer:${messageId}`,
+    kind: 'answer_text',
+    runId,
+    textId: `text:${messageId}`,
+    status: answerStatus(reply?.message, legacyAnswer),
+    text: answerMessage ? sessionMessageText(answerMessage.message) : '',
+    format: 'markdown',
+    createdAt: answerMessage?.message.created_at ?? last.message.created_at,
+    ...(answerMessage?.message.completed_at ? { updatedAt: answerMessage.message.completed_at } : {}),
+  });
   return {
     messageId,
     role: 'assistant',
     projectId,
-    sessionId: last.message.session_id,
+    sessionId: user.message.session_id,
     runId,
-    createdAt: messages[0]!.message.created_at,
+    createdAt: messages[0]?.message.created_at ?? user.message.created_at,
     updatedAt: last.message.completed_at ?? last.message.created_at,
     historyOrder,
     ...(workspaceChangeFooter ? { workspaceChangeFooter } : {}),
@@ -208,46 +199,73 @@ function projectAssistantRun(
   };
 }
 
+function findLegacyAnswer(messages: SessionMessageWithAttachments[]): SessionMessageWithAttachments | undefined {
+  return [...messages].reverse().find(({ message }) =>
+    message.message_kind === 'model_response'
+    && isLegacySessionMessage(message)
+    && message.content.some((block) => block.type === 'text' && block.text.trim())
+    && !message.content.some((block) => block.type === 'toolCall'));
+}
+
+function answerStatus(
+  reply: SessionAssistantReplyMessage | undefined,
+  legacyAnswer: SessionMessageWithAttachments | undefined,
+): AnswerTextStatus {
+  if (reply) return reply.status;
+  return legacyAnswer ? 'legacy_unknown' : 'interrupted';
+}
+
 function projectProcessItems(
   runId: string,
   messages: SessionMessageWithAttachments[],
-  finalAssistantMessageId?: string,
+  answerMessageId?: string,
 ): ProcessDisclosureItem[] {
-  const toolResults = new Map(messages.flatMap((item) => {
-    const message = item.message.conversation;
-    return message.role === 'toolResult' ? [[message.toolCallId, message] as const] : [];
-  }));
+  const toolResults = new Map(messages.flatMap(({ message }) =>
+    message.message_kind === 'tool_result' ? [[message.tool_call_id, message] as const] : []));
   const items: ProcessDisclosureItem[] = [];
   for (const [messageIndex, item] of messages.entries()) {
-    const message = item.message.conversation;
-    if (message.role !== 'assistant') continue;
+    const message = item.message;
+    if (message.message_kind !== 'model_response' && message.message_kind !== 'assistant_reply') continue;
     for (const [blockIndex, block] of message.content.entries()) {
       if (block.type === 'thinking') {
         items.push({
-          itemId: `thinking:${item.message.message_id}:${blockIndex}`,
-          kind: 'thinking', thinkingId: `thinking:${runId}:${messageIndex}:${blockIndex}`,
-          status: 'completed', text: block.thinking, format: 'markdown',
-          createdAt: item.message.created_at,
+          itemId: `thinking:${message.message_id}:${blockIndex}`,
+          kind: 'thinking',
+          thinkingId: `thinking:${runId}:${messageIndex}:${blockIndex}`,
+          status: 'completed',
+          text: block.thinking,
+          format: 'markdown',
+          createdAt: message.created_at,
         });
-      } else if (block.type === 'text' && item.message.message_id !== finalAssistantMessageId) {
+      } else if (
+        message.message_kind === 'model_response' &&
+        block.type === 'text' &&
+        message.message_id !== answerMessageId
+      ) {
         items.push({
-          itemId: `assistant-text:${item.message.message_id}:${blockIndex}`,
-          kind: 'assistant_text', textId: `text:${item.message.message_id}:${blockIndex}`,
-          phase: 'prelude', status: 'completed', text: block.text, format: 'markdown',
-          createdAt: item.message.created_at,
+          itemId: `assistant-text:${message.message_id}:${blockIndex}`,
+          kind: 'assistant_text',
+          textId: `text:${message.message_id}:${blockIndex}`,
+          phase: 'prelude',
+          status: 'completed',
+          text: block.text,
+          format: 'markdown',
+          createdAt: message.created_at,
         });
-      } else if (block.type === 'toolCall') {
+      } else if (message.message_kind === 'model_response' && block.type === 'toolCall') {
         const result = toolResults.get(block.id);
         items.push({
           itemId: `tool:${block.id}`,
-          kind: 'tool_activity', toolCallId: block.id, toolName: block.name,
+          kind: 'tool_activity',
+          toolCallId: block.id,
+          toolName: block.name,
           inputSummary: block.argumentsText,
           ...(result ? {
             toolResultId: `tool-result:${block.id}`,
-            resultSummary: sessionConversationText(result),
+            resultSummary: sessionMessageText(result),
             status: result.status === 'success' ? 'succeeded' as const : 'failed' as const,
           } : { status: 'requested' as const }),
-          createdAt: item.message.created_at,
+          createdAt: message.created_at,
         });
       }
     }
@@ -255,17 +273,18 @@ function projectProcessItems(
   return items;
 }
 
-function processStatus(messages: SessionMessageWithAttachments[]): 'completed' | 'failed' | 'cancelled' | 'incomplete' {
-  const assistantMessages = messages.flatMap((item) => (
-    item.message.conversation.role === 'assistant' ? [item.message.conversation] : []
-  ));
-  if (assistantMessages.some((message) => message.stopReason?.includes('cancel'))) return 'cancelled';
-  if (assistantMessages.some((message) => message.stopReason?.includes('fail'))) return 'failed';
-  const resultIds = new Set(messages.flatMap((item) => (
-    item.message.conversation.role === 'toolResult' ? [item.message.conversation.toolCallId] : []
-  )));
-  const hasIncompleteToolCall = assistantMessages.some((message) => message.content.some((block) => (
-    block.type === 'toolCall' && !resultIds.has(block.id)
-  )));
+function processStatus(
+  messages: SessionMessageWithAttachments[],
+  reply?: SessionAssistantReplyMessage,
+): 'completed' | 'failed' | 'cancelled' | 'incomplete' {
+  if (reply?.status === 'failed') return 'failed';
+  if (reply?.status === 'cancelled') return 'cancelled';
+  const resultIds = new Set(messages.flatMap(({ message }) =>
+    message.message_kind === 'tool_result' ? [message.tool_call_id] : []));
+  const modelResponses = messages.flatMap(({ message }) =>
+    message.message_kind === 'model_response' ? [message] : []);
+  if (modelResponses.some((message) => message.outcome_status === 'failed')) return 'failed';
+  const hasIncompleteToolCall = modelResponses.some((message) => message.content.some((block) =>
+    block.type === 'toolCall' && !resultIds.has(block.id)));
   return hasIncompleteToolCall ? 'incomplete' : 'completed';
 }

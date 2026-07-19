@@ -209,6 +209,13 @@ describe('Agent Run trace integration', () => {
                 arguments_text: '{"path":"README.md"}',
                 created_at: '2026-01-01T00:00:00.000Z',
               },
+              {
+                type: 'completed',
+                model_call_id: 'model-call-1',
+                content: '',
+                finish_reason: 'tool_calls',
+                created_at: '2026-01-01T00:00:00.000Z',
+              },
             ])
           : asyncEvents<ModelCallEvent>([
               { type: 'started', model_call_id: 'model-call-2', created_at: '2026-01-01T00:00:00.000Z' },
@@ -268,6 +275,13 @@ describe('Agent Run trace integration', () => {
           tool_name: 'read_file',
           input: { path: 'README.md' },
           arguments_text: '{"path":"README.md"}',
+          created_at: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          type: 'completed',
+          model_call_id: 'model-call-1',
+          content: '',
+          finish_reason: 'tool_calls',
           created_at: '2026-01-01T00:00:00.000Z',
         },
       ],

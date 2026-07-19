@@ -105,13 +105,12 @@ function ItemIcon({ item }: { item: ProcessDisclosureItem }) {
 
 function ThinkingItemView({ item }: { item: ThinkingItem }) {
   const { t } = useTranslation('chat');
-  const defaultExpanded = item.status === 'streaming';
-  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [expanded, setExpanded] = useState(true);
   const label = t(`processing.thinking.${item.status}`);
 
   useEffect(() => {
-    setExpanded(defaultExpanded);
-  }, [item.itemId, defaultExpanded]);
+    setExpanded(true);
+  }, [item.itemId]);
 
   return (
     <div>

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { SessionConversationMessageSchema } from '@megumi/agent/session';
+import {
+  SessionAssistantReplyPayloadSchema,
+  SessionMessageSchema,
+  SessionModelResponsePayloadSchema,
+} from '@megumi/agent/session';
 import type {
   CreateSessionRequest,
   GetActiveHistoryResult,
@@ -33,50 +37,71 @@ describe('session contracts v2', () => {
     expect('metadata_json' in session).toBe(false);
   });
 
-  it('models complete provider-neutral conversation messages without runtime metadata', () => {
+  it('models Session variants with one discriminator and no conversation wrapper', () => {
     const message: SessionMessage = {
       message_id: 'message:1',
       session_id: 'session:1',
-      conversation: { role: 'user', content: [{ type: 'text', text: 'hello' }] },
+      message_kind: 'user_message',
+      content: [{ type: 'text', text: 'hello' }],
       created_at: '2026-07-04T00:00:00.000Z',
       completed_at: '2026-07-04T00:00:00.000Z',
     };
 
-    expect(message.conversation.role).toBe('user');
-    expect('status' in message).toBe(false);
-    expect(['blocks', 'json'].join('_') in message).toBe(false);
+    expect(SessionMessageSchema.parse(message)).toEqual(message);
+    expect(message.message_kind).toBe('user_message');
+    expect('conversation' in message).toBe(false);
+    expect('role' in message).toBe(false);
   });
 
-  it('accepts semantic assistant and tool-result messages and rejects provider/runtime fields', () => {
-    expect(SessionConversationMessageSchema.parse({
-      role: 'assistant',
+  it('accepts Model Response and Assistant Reply payloads without duplicate discriminators', () => {
+    expect(SessionModelResponsePayloadSchema.parse({
       content: [
         { type: 'thinking', thinking: 'inspect first' },
         { type: 'text', text: 'Checking.' },
         { type: 'toolCall', id: 'T1', name: 'read_file', argumentsText: '{"path":"a.ts"}' },
       ],
-      stopReason: 'tool_use',
-    })).toMatchObject({ role: 'assistant', stopReason: 'tool_use' });
-    expect(SessionConversationMessageSchema.parse({
-      role: 'toolResult',
-      toolCallId: 'T1',
-      toolName: 'read_file',
-      status: 'success',
-      content: [{ type: 'text', text: 'source' }],
-    })).toMatchObject({ role: 'toolResult', toolCallId: 'T1' });
+      outcome_status: 'completed',
+      stop_reason: 'tool_use',
+    })).toMatchObject({ outcome_status: 'completed', stop_reason: 'tool_use' });
+
+    expect(SessionAssistantReplyPayloadSchema.parse({
+      status: 'completed',
+      content: [{ type: 'text', text: 'Done.' }],
+      reason_code: 'normal_completion',
+    })).toMatchObject({ status: 'completed' });
 
     for (const forbidden of [
       { usage: { input_tokens: 1 } },
       { error: { code: 'provider_error' } },
       { sequence: 2 },
       { requestId: 'request:1' },
+      { role: 'assistant' },
+      { kind: 'assistant_reply' },
+      { replyToMessageId: 'message:user' },
+      { providerId: 'provider:1' },
     ]) {
-      expect(SessionConversationMessageSchema.safeParse({
-        role: 'assistant',
+      expect(SessionAssistantReplyPayloadSchema.safeParse({
+        status: 'completed',
         content: [{ type: 'text', text: 'reply' }],
         ...forbidden,
       }).success).toBe(false);
     }
+  });
+
+  it('rejects completed replies without visible text and every reply containing Work Tool Calls', () => {
+    expect(SessionAssistantReplyPayloadSchema.safeParse({
+      status: 'completed',
+      content: [{ type: 'thinking', thinking: 'still working' }],
+    }).success).toBe(false);
+    expect(SessionAssistantReplyPayloadSchema.safeParse({
+      status: 'failed',
+      content: [{ type: 'toolCall', id: 'T1', name: 'read_file', argumentsText: '{}' }],
+    }).success).toBe(false);
+    expect(SessionAssistantReplyPayloadSchema.safeParse({
+      status: 'cancelled',
+      content: [],
+      reason_code: 'user_cancelled',
+    }).success).toBe(true);
   });
 
   it('models transient image imports separately from canonical attachment facts', () => {

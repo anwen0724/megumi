@@ -256,6 +256,9 @@ class DefaultModelCallService implements ModelCallService {
           if (mapped) {
             yield mapped;
             emittedToolCallIds.add(mapped.tool_call_id);
+          } else {
+            yield { type: 'attempt_failed', failure: malformedWorkToolCallFailure() };
+            return;
           }
           toolCalls.delete(event.index);
           continue;
@@ -270,7 +273,14 @@ class DefaultModelCallService implements ModelCallService {
             if (mapped) {
               yield mapped;
               emittedToolCallIds.add(mapped.tool_call_id);
+            } else {
+              yield { type: 'attempt_failed', failure: malformedWorkToolCallFailure() };
+              return;
             }
+          }
+          if (toolCalls.size > 0) {
+            yield { type: 'attempt_failed', failure: malformedWorkToolCallFailure() };
+            return;
           }
         }
 
@@ -399,6 +409,15 @@ function toolCallEventFromContentBlock(
     input: parseToolInput(argumentsText),
     arguments_text: argumentsText,
     created_at: createdAt,
+  };
+}
+
+function malformedWorkToolCallFailure(): ModelCallFailure {
+  return {
+    code: 'model_call_failed',
+    message: 'Model emitted a malformed Work Tool Call.',
+    retryable: false,
+    details: { reason: 'malformed_work_tool_call' },
   };
 }
 

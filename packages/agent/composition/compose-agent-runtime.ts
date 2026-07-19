@@ -271,6 +271,10 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
   );
   const sessionTimelineQuery = createSessionTimelineQuery({
     sessionService,
+    isRunLive: (runId) => {
+      const active = activeRunStore.getRun(runId);
+      return Boolean(active && !['completed', 'failed', 'cancelled'].includes(active.status));
+    },
     workspaceChangeFooterProjector,
   });
   const workspaceFilesService = createWorkspaceFilesService({
@@ -306,6 +310,10 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
   const modelContextProvider = options.modelContextProvider ?? createSettingsModelContextProvider(settingsService);
   const contextRuntime = composeAgentContext({
     sessionService,
+    isRunLive: (runId) => {
+      const active = activeRunStore.getRun(runId);
+      return Boolean(active && !['completed', 'failed', 'cancelled'].includes(active.status));
+    },
     instructionScopeResolver: {
       resolve({ workspaceId }) {
         const workspace = workspaceService.getWorkspace({ workspace_id: workspaceId });
@@ -474,7 +482,8 @@ function observeSessionService(service: SessionService, observability?: Observab
   return new Proxy(service, {
     get(target, property, receiver) {
       if (property === 'saveUserMessage') return (request: Parameters<SessionService['saveUserMessage']>[0]) => observeAsync('user', () => target.saveUserMessage(request));
-      if (property === 'saveAssistantMessage') return (request: Parameters<SessionService['saveAssistantMessage']>[0]) => observe('assistant', () => target.saveAssistantMessage(request));
+      if (property === 'saveModelResponse') return (request: Parameters<SessionService['saveModelResponse']>[0]) => observe('model_response', () => target.saveModelResponse(request));
+      if (property === 'saveAssistantReply') return (request: Parameters<SessionService['saveAssistantReply']>[0]) => observe('assistant_reply', () => target.saveAssistantReply(request));
       if (property === 'saveToolResultMessage') return (request: Parameters<SessionService['saveToolResultMessage']>[0]) => observe('toolResult', () => target.saveToolResultMessage(request));
       const value = Reflect.get(target, property, receiver);
       return typeof value === 'function' ? value.bind(target) : value;

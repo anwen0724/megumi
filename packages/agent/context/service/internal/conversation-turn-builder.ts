@@ -1,12 +1,20 @@
 /*
- * Builds historical Turns directly from Session-owned semantic messages on
- * the active Entry path. It never reads or infers persisted Run state.
+ * Builds provider-neutral historical Turns from explicit Session message
+ * variants. Only live-run lookup is process-local; all other facts come from
+ * the active Session Entry path.
  */
-import type { ContentBlock, ConversationItem, JsonValue } from '@megumi/ai';
-import type { SessionHistoryItem, SessionMessageAttachment } from '../../../session';
+import type { ContentBlock, JsonValue } from '@megumi/ai';
+import {
+  isLegacySessionMessage,
+  type SessionHistoryItem,
+  type SessionMessageAttachment,
+} from '../../../session';
 import type { ConversationTurn } from '../../domain/model/conversation-turn';
 
-export type BuildConversationTurnsRequest = { history: SessionHistoryItem[] };
+export type BuildConversationTurnsRequest = {
+  history: SessionHistoryItem[];
+  isRunLive?: (runId: string) => boolean;
+};
 export type BuildConversationTurnsResult = { status: 'built'; turns: ConversationTurn[] };
 type MessageHistoryItem = Extract<SessionHistoryItem, { type: 'message' }>;
 
@@ -17,7 +25,7 @@ export function buildConversationTurns(request: BuildConversationTurnsRequest): 
 
   for (let index = 0; index < messages.length;) {
     const user = messages[index]!;
-    if (user.message.conversation.role !== 'user' || !user.message.run_id) {
+    if (user.message.message_kind !== 'user_message' || !user.message.run_id) {
       index += 1;
       continue;
     }
@@ -41,71 +49,110 @@ export function buildConversationTurns(request: BuildConversationTurnsRequest): 
       },
       userMessage: {
         type: 'user_message',
-        content: [...user.message.conversation.content, ...user.attachments.map(attachmentContent)],
+        content: [...user.message.content, ...user.attachments.map(attachmentContent)],
       },
-      items: responseItems(runId, responses),
+      items: responseItems(runId, user, responses, request.isRunLive),
     });
   }
   return { status: 'built', turns };
 }
 
-function responseItems(runId: string, messages: MessageHistoryItem[]): ConversationTurn['items'] {
+function responseItems(
+  runId: string,
+  user: MessageHistoryItem,
+  messages: MessageHistoryItem[],
+  isRunLive?: (runId: string) => boolean,
+): ConversationTurn['items'] {
   const items: ConversationTurn['items'] = [];
-  const resultIds = new Set(messages.flatMap((item) => {
-    const message = item.message.conversation;
-    return message.role === 'toolResult' ? [message.toolCallId] : [];
-  }));
-  const nativeCallIds = new Set(messages.flatMap((item) => {
-    const message = item.message.conversation;
-    if (message.role !== 'assistant') return [];
-    const calls = message.content.filter((block): block is Extract<typeof block, { type: 'toolCall' }> => block.type === 'toolCall');
-    return calls.length > 0 && calls.every((call) => resultIds.has(call.id)) ? calls.map((call) => call.id) : [];
-  }));
-  for (let index = 0; index < messages.length; index += 1) {
-    const current = messages[index]!.message.conversation;
-    if (current.role === 'toolResult') {
-      if (nativeCallIds.has(current.toolCallId)) {
-        items.push({
-          type: 'tool_result', toolCallId: current.toolCallId, toolName: current.toolName,
-          status: current.status, content: current.content,
-        });
-      } else {
-        items.push({
-          type: 'assistant_message',
-          content: [{
-            type: 'json',
-            value: { historicalRunId: runId, unmatchedToolResult: toJsonValue(current) },
-          }],
-        });
-      }
-      continue;
-    }
-    if (current.role !== 'assistant') continue;
-    const visible = current.content.filter((block): block is Extract<typeof block, { type: 'text' }> => block.type === 'text');
-    if (visible.length > 0) items.push({ type: 'assistant_message', content: visible });
-    const calls = current.content.filter((block): block is Extract<typeof block, { type: 'toolCall' }> => block.type === 'toolCall');
-    if (calls.length === 0) continue;
-    if (calls.every((call) => nativeCallIds.has(call.id))) {
-      items.push(...calls.map((call) => ({
+  const resultIds = new Set(messages.flatMap(({ message }) =>
+    message.message_kind === 'tool_result' ? [message.tool_call_id] : []));
+  const callIds = new Set(messages.flatMap(({ message }) =>
+    message.message_kind === 'model_response'
+      ? message.content.flatMap((block) => block.type === 'toolCall' ? [block.id] : [])
+      : []));
+  let hasReply = false;
+  let hasLegacyFact = isLegacySessionMessage(user.message);
+
+  for (const { message } of messages) {
+    hasLegacyFact ||= isLegacySessionMessage(message);
+    if (message.message_kind === 'model_response') {
+      appendAssistantText(items, message.content);
+      const calls = message.content.filter((block): block is Extract<typeof block, { type: 'toolCall' }> => block.type === 'toolCall');
+      const completedCalls = calls.filter((call) => resultIds.has(call.id));
+      items.push(...completedCalls.map((call) => ({
         type: 'tool_call' as const,
         toolCallId: call.id,
         toolName: call.name,
         arguments: parseArguments(call.argumentsText),
       })));
-    } else {
-      items.push({
-        type: 'assistant_message',
-        content: [{
-          type: 'json',
-          value: {
-            historicalRunId: runId,
-            incompleteToolCalls: calls.map((call) => ({ id: call.id, name: call.name, argumentsText: call.argumentsText })),
-          },
-        }],
-      });
+      const pendingCalls = calls.filter((call) => !resultIds.has(call.id));
+      if (pendingCalls.length > 0 || message.outcome_status !== 'completed') {
+        items.push(runState({
+          status: message.outcome_status,
+          reasonCode: message.reason_code,
+          stopReason: message.stop_reason,
+          pendingWorkToolCalls: pendingCalls.map((call) => ({ id: call.id, name: call.name })),
+        }));
+      }
+      continue;
+    }
+    if (message.message_kind === 'tool_result') {
+      if (callIds.has(message.tool_call_id)) {
+        items.push({
+          type: 'tool_result',
+          toolCallId: message.tool_call_id,
+          toolName: message.tool_name,
+          status: message.status,
+          content: message.content,
+        });
+      } else {
+        items.push(runState({
+          status: 'incomplete',
+          reasonCode: 'orphaned_tool_result',
+          toolCallId: message.tool_call_id,
+          toolName: message.tool_name,
+        }));
+      }
+      continue;
+    }
+    if (message.message_kind === 'assistant_reply') {
+      hasReply = true;
+      appendAssistantText(items, message.content);
+      if (message.status !== 'completed') {
+        items.push(runState({
+          status: message.status,
+          reasonCode: message.reason_code,
+          partial: hasVisibleText(message.content),
+        }));
+      }
     }
   }
+
+  if (!hasReply && !isRunLive?.(runId)) {
+    items.push(runState({ status: hasLegacyFact ? 'legacy_unknown' : 'interrupted' }));
+  }
   return items;
+}
+
+function appendAssistantText(
+  items: ConversationTurn['items'],
+  content: Array<{ type: string; text?: string }>,
+): void {
+  const visible = content.flatMap((block) =>
+    block.type === 'text' && block.text ? [{ type: 'text' as const, text: block.text }] : []);
+  if (visible.length > 0) items.push({ type: 'assistant_message', content: visible });
+}
+
+function hasVisibleText(content: Array<{ type: string; text?: string }>): boolean {
+  return content.some((block) => block.type === 'text' && Boolean(block.text?.trim()));
+}
+
+function runState(content: Record<string, JsonValue | undefined>): ConversationTurn['items'][number] {
+  return {
+    type: 'context',
+    kind: 'historical_run_state',
+    content: Object.fromEntries(Object.entries(content).filter(([, value]) => value !== undefined)) as JsonValue,
+  };
 }
 
 function parseArguments(value: string): JsonValue {
@@ -114,10 +161,6 @@ function parseArguments(value: string): JsonValue {
   } catch {
     return value;
   }
-}
-
-function toJsonValue(value: unknown): JsonValue {
-  return JSON.parse(JSON.stringify(value)) as JsonValue;
 }
 
 function historyAfterEffectiveCompaction(history: SessionHistoryItem[]): SessionHistoryItem[] {
@@ -135,7 +178,8 @@ function attachmentContent(attachment: SessionMessageAttachment): ContentBlock {
     };
   }
   return {
-    type: 'file', fileId: attachment.attachment_id,
+    type: 'file',
+    fileId: attachment.attachment_id,
     ...(attachment.name ? { name: attachment.name } : {}),
     ...(attachment.mime_type ? { mediaType: attachment.mime_type } : {}),
   };

@@ -125,10 +125,8 @@ describe('ChatHost product semantics', () => {
         message_id: 'message:1',
         session_id: 'session:1',
         run_id: 'run:1',
-        conversation: {
-          role: 'user' as const,
-          content: [{ type: 'text' as const, text: 'Inspect this run' }],
-        },
+        message_kind: 'user_message' as const,
+        content: [{ type: 'text' as const, text: 'Inspect this run' }],
         created_at: '2026-07-14T00:00:00.000Z',
       }],
     }));
@@ -213,7 +211,8 @@ describe('ChatHost product semantics', () => {
           message_id: 'message:1',
           session_id: 'session:owner',
           run_id: 'run:1',
-          conversation: { role: 'user' as const, content: [{ type: 'text' as const, text: 'hello' }] },
+          message_kind: 'user_message' as const,
+          content: [{ type: 'text' as const, text: 'hello' }],
           created_at: '2026-07-10T00:00:01.000Z',
         },
         attachments: [],

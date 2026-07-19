@@ -53,6 +53,7 @@ export const chat = {
     copyReply: '复制回复',
     branchReply: '从此回复创建分支',
     responseInterrupted: '（回复中断）',
+    responseLegacyUnknown: '（历史回复状态未知）',
     responseCancelled: '（已取消，以上为部分回复）',
   },
   processing: {

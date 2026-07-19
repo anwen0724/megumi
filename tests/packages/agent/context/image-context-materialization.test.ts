@@ -11,8 +11,8 @@ const imageAttachment = {
 
 function history(): SessionHistoryItem[] {
   return [
-    { type: 'message', entry: { entry_id: 'E-user', session_id: 'S1', entry_type: 'message', message_id: 'M-user', created_at: '2026-07-14T00:00:00.000Z' }, message: { message_id: 'M-user', session_id: 'S1', run_id: 'R-old', conversation: { role: 'user', content: [{ type: 'text', text: 'Earlier image' }] }, created_at: '2026-07-14T00:00:00.000Z' }, attachments: [imageAttachment] },
-    { type: 'message', entry: { entry_id: 'E-answer', session_id: 'S1', parent_entry_id: 'E-user', entry_type: 'message', message_id: 'M-answer', created_at: '2026-07-14T00:00:01.000Z' }, message: { message_id: 'M-answer', session_id: 'S1', run_id: 'R-old', conversation: { role: 'assistant', content: [{ type: 'text', text: 'Earlier answer' }] }, created_at: '2026-07-14T00:00:01.000Z' }, attachments: [] },
+    { type: 'message', entry: { entry_id: 'E-user', session_id: 'S1', entry_type: 'message', message_id: 'M-user', created_at: '2026-07-14T00:00:00.000Z' }, message: { message_id: 'M-user', session_id: 'S1', run_id: 'R-old', message_kind: 'user_message', content: [{ type: 'text', text: 'Earlier image' }], created_at: '2026-07-14T00:00:00.000Z' }, attachments: [imageAttachment] },
+    { type: 'message', entry: { entry_id: 'E-answer', session_id: 'S1', parent_entry_id: 'E-user', entry_type: 'message', message_id: 'M-answer', created_at: '2026-07-14T00:00:01.000Z' }, message: { message_id: 'M-answer', session_id: 'S1', run_id: 'R-old', message_kind: 'assistant_reply', status: 'completed', reason_code: 'normal_completion', content: [{ type: 'text', text: 'Earlier answer' }], created_at: '2026-07-14T00:00:01.000Z', completed_at: '2026-07-14T00:00:01.000Z' }, attachments: [] },
   ];
 }
 

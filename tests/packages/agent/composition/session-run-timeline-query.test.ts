@@ -39,16 +39,18 @@ describe('Session Run Timeline query', () => {
       message_id: 'U1', session_id: 'session-1', run_id: 'run-1',
       content: [{ type: 'text', text: 'first' }], created_at: '2026-07-12T00:00:01.000Z',
     });
-    service.saveAssistantMessage({
+    service.saveAssistantReply({
       message_id: 'A1', session_id: 'session-1', run_id: 'run-1', parent_entry_id: 'message:U1',
+      status: 'completed', reason_code: 'normal_completion',
       content: [{ type: 'text', text: 'one' }], completed_at: '2026-07-12T00:00:02.000Z',
     });
     service.saveUserMessage({
       message_id: 'U2', session_id: 'session-1', run_id: 'run-2', parent_entry_id: 'message:A1',
       content: [{ type: 'text', text: 'second' }], created_at: '2026-07-12T00:00:03.000Z',
     });
-    service.saveAssistantMessage({
+    service.saveAssistantReply({
       message_id: 'A2', session_id: 'session-1', run_id: 'run-2', parent_entry_id: 'message:U2',
+      status: 'completed', reason_code: 'normal_completion',
       content: [{ type: 'text', text: 'two' }], completed_at: '2026-07-12T00:00:04.000Z',
     });
 

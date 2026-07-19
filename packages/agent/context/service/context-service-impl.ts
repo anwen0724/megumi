@@ -53,6 +53,7 @@ export type ContextServiceDependencies = {
     get(sessionId: string): SessionUsageSnapshot | undefined;
     set(sessionId: string, snapshot: SessionUsageSnapshot): void;
   };
+  isRunLive?: (runId: string) => boolean;
   observability?: ObservabilityService;
   policy?: Partial<ContextPolicy>;
   policyProvider?: { getPolicy(): Partial<ContextPolicy> };
@@ -251,7 +252,10 @@ export class ContextServiceImpl implements ContextService {
     if (input.signal?.aborted) return failed(cancelled());
     if (historyResult.status === 'failed') return failed(ownerFailure('session_history_failed', 'Session history could not be loaded.', 'session', historyResult.failure));
 
-    const turns = buildConversationTurns({ history: historyResult.history });
+    const turns = buildConversationTurns({
+      history: historyResult.history,
+      ...(this.dependencies.isRunLive ? { isRunLive: this.dependencies.isRunLive } : {}),
+    });
 
     const scope = this.dependencies.instructionScopeResolver.resolve({ workspaceId: input.workspaceId });
     if (input.signal?.aborted) return failed(cancelled());

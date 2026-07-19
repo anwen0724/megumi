@@ -7,7 +7,11 @@ export type SaveUserMessageResult =
   | { status: 'saved'; message: SessionMessageWithAttachments; entry: SessionEntry }
   | { status: 'failed'; failure: SessionRuntimeError };
 
-export type SaveAssistantMessageResult =
+export type SaveModelResponseResult =
+  | { status: 'saved'; message: SessionMessage; entry: SessionEntry }
+  | { status: 'failed'; failure: SessionRuntimeError };
+
+export type SaveAssistantReplyResult =
   | { status: 'saved'; message: SessionMessage; entry: SessionEntry }
   | { status: 'failed'; failure: SessionRuntimeError };
 

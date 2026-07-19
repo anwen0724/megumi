@@ -60,6 +60,7 @@ import {
   type AgentRunRuntimeEventFactory,
 } from '../core/agent-run-runtime-events';
 import { ActiveRunStore } from '../core/active-run-store';
+import { assistantReplyReasonForFailure, commitTerminalReply } from '../core/terminal-reply';
 import { createNoopAgentRunTraceLogger } from './agent-run-trace-logger';
 import type { ObservabilityService, SpanHandle, TraceHandle } from '@megumi/observability';
 
@@ -73,7 +74,9 @@ export type CreateAgentRunServiceOptions = {
     request: StartRunRequest;
     session_id: string;
   }) => CommandExecutionContext | undefined;
-  session_service: Pick<SessionService, 'createSession' | 'getSession' | 'saveUserMessage' | 'saveAssistantMessage' | 'saveToolResultMessage'>;
+  session_service: Pick<SessionService,
+    'createSession' | 'getSession' | 'saveUserMessage'
+    | 'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'>;
   branch_service?: Pick<SessionBranchService, 'consumeBranchDraft'>;
   settings_service: Pick<SettingsService, 'resolveProviderRuntimeConfig' | 'resolvePermissionSettings'>;
   context_service: Parameters<typeof runAgentModelToolLoop>[0]['context_service'];
@@ -205,6 +208,13 @@ class DefaultAgentRunService implements AgentRunService {
         session,
       };
     }
+    const workspaceRoot = this.resolveWorkspaceRoot(request.workspace_id);
+    if (workspaceRoot.status === 'failed') {
+      return {
+        ...failedStart(request, workspaceRoot.failure),
+        session,
+      };
+    }
     const userMessage = await this.options.session_service.saveUserMessage({
       message_id: userMessageId,
       session_id: sessionId,
@@ -229,14 +239,6 @@ class DefaultAgentRunService implements AgentRunService {
       };
     }
 
-    const workspaceRoot = this.resolveWorkspaceRoot(request.workspace_id);
-    if (workspaceRoot.status === 'failed') {
-      return {
-        ...failedStart(request, workspaceRoot.failure),
-        session,
-      };
-    }
-
     let run = this.activeRuns.createRun({
       run_id: runId,
       workspace_id: request.workspace_id,
@@ -251,6 +253,7 @@ class DefaultAgentRunService implements AgentRunService {
       to: 'running',
       changed_at: this.clock.now(),
     }));
+    this.activeRuns.initializeExecution(run.run_id, userMessage.entry.entry_id);
     const queue = createAgentRunEventQueue((event) => this.options.event_publisher?.publish(event));
     const eventSink = this.createEventSink(queue, run);
     const commandSkills = await this.resolveCommandSkills({
@@ -260,25 +263,42 @@ class DefaultAgentRunService implements AgentRunService {
       run_id: run.run_id,
     });
     if (commandSkills.status === 'failed') {
+      const terminalReply = commitTerminalReply({
+        dependencies: {
+          active_run_store: this.activeRuns,
+          session_service: this.options.session_service,
+          ids: this.ids,
+          clock: this.clock,
+        },
+        run,
+        status: 'failed',
+        reason_code: 'internal_error',
+      });
+      const failure = terminalReply.status === 'failed'
+        ? { code: 'session_failed' as const, message: terminalReply.message }
+        : commandSkills.failure;
       const failedRun = this.activeRuns.saveRun(transitionAgentRunStatus({
         run,
         to: 'failed',
         changed_at: this.clock.now(),
-        failure: commandSkills.failure,
+        failure,
       }));
-      eventSink.emit({
-        eventType: 'run.failed',
-        run: failedRun,
-        payload: {
-          error: agentRunFailureToRuntimeError(commandSkills.failure),
-        },
-      });
+      if (terminalReply.status === 'committed') {
+        eventSink.emit({
+          eventType: 'run.failed',
+          run: failedRun,
+          messageId: terminalReply.message_id,
+          payload: {
+            error: agentRunFailureToRuntimeError(failure),
+          },
+        });
+      }
       queue.close();
       return {
         status: 'failed',
         request_id: request.request_id,
         session,
-        failure: commandSkills.failure,
+        failure,
         events: queue.snapshot(),
       };
     }
@@ -393,6 +413,32 @@ class DefaultAgentRunService implements AgentRunService {
         completed_at: this.clock.now(),
       });
     }
+    const terminalReply = commitTerminalReply({
+      dependencies: {
+        active_run_store: this.activeRuns,
+        session_service: this.options.session_service,
+        ids: this.ids,
+        clock: this.clock,
+      },
+      run,
+      status: 'cancelled',
+      reason_code: 'user_cancelled',
+    });
+    if (terminalReply.status === 'failed') {
+      const failure: AgentRunFailure = {
+        code: 'session_failed',
+        message: terminalReply.message,
+      };
+      const failed = this.activeRuns.saveRun(transitionAgentRunStatus({
+        run: cancelling,
+        to: 'failed',
+        changed_at: this.clock.now(),
+        failure,
+      }));
+      this.endRunObservability(run.run_id, 'error');
+      queue.close();
+      return { status: 'failed', failure, events: queue.snapshot() };
+    }
     const cancelled = this.activeRuns.saveRun(transitionAgentRunStatus({
       run: cancelling,
       to: 'cancelled',
@@ -402,6 +448,7 @@ class DefaultAgentRunService implements AgentRunService {
     eventSink.emit({
       eventType: 'run.cancelled',
       run: cancelled,
+      messageId: terminalReply.message_id,
       payload: {
         reason: 'user_cancelled',
       },
@@ -741,9 +788,11 @@ class DefaultAgentRunService implements AgentRunService {
       }],
       completed_at: toolResult.created_at,
     });
-    return result.status === 'saved'
-      ? { status: 'saved', entry_id: result.entry.entry_id }
-      : { status: 'failed', failure: { code: 'session_failed', message: result.failure.message } };
+    if (result.status === 'saved') {
+      this.activeRuns.setLastEntryId(run.run_id, result.entry.entry_id);
+      return { status: 'saved', entry_id: result.entry.entry_id };
+    }
+    return { status: 'failed', failure: { code: 'session_failed', message: result.failure.message } };
   }
 
   private failApprovalResume(
@@ -754,12 +803,34 @@ class DefaultAgentRunService implements AgentRunService {
   ): Extract<ResumeRunAfterApprovalResult, { status: 'failed' }> {
     const latest = this.activeRuns.getRun(run.run_id);
     if (latest && latest.status !== 'completed' && latest.status !== 'failed' && latest.status !== 'cancelled') {
-      this.activeRuns.saveRun(transitionAgentRunStatus({
+      const terminalReply = commitTerminalReply({
+        dependencies: {
+          active_run_store: this.activeRuns,
+          session_service: this.options.session_service,
+          ids: this.ids,
+          clock: this.clock,
+        },
+        run: latest,
+        status: 'failed',
+        reason_code: assistantReplyReasonForFailure(failure),
+      });
+      const terminalFailure = terminalReply.status === 'failed'
+        ? { code: 'session_failed' as const, message: terminalReply.message }
+        : failure;
+      const failedRun = this.activeRuns.saveRun(transitionAgentRunStatus({
         run: latest,
         to: 'failed',
         changed_at: this.clock.now(),
-        failure,
+        failure: terminalFailure,
       }));
+      if (terminalReply.status === 'committed') {
+        this.createEventSink(queue, failedRun).emit({
+          eventType: 'run.failed',
+          run: failedRun,
+          messageId: terminalReply.message_id,
+          payload: { error: agentRunFailureToRuntimeError(terminalFailure) },
+        });
+      }
     }
     this.activeRunAbortControllers.get(run.run_id)?.abort();
     this.activeRunAbortControllers.delete(run.run_id);
@@ -767,9 +838,10 @@ class DefaultAgentRunService implements AgentRunService {
     for (const approvalId of continuation.pending_approval_ids) {
       this.approvalContinuations.delete(approvalId);
     }
+    const events = queue.snapshot();
     queue.close();
     this.activeRuns.release(run.run_id);
-    return { status: 'failed', failure, events: [] };
+    return { status: 'failed', failure, events };
   }
 
   private nextRuntimeEventSequence(runId: string | undefined): number {
@@ -1000,29 +1072,38 @@ class DefaultAgentRunService implements AgentRunService {
         return;
       }
       if (latest.status !== 'completed' && latest.status !== 'failed') {
+        const failure: AgentRunFailure = {
+          code: 'internal_error',
+          message: error instanceof Error ? error.message : 'Agent Run failed unexpectedly.',
+        };
+        const terminalReply = commitTerminalReply({
+          dependencies: {
+            active_run_store: this.activeRuns,
+            session_service: this.options.session_service,
+            ids: this.ids,
+            clock: this.clock,
+          },
+          run: latest,
+          status: 'failed',
+          reason_code: 'internal_error',
+        });
         this.activeRuns.saveRun(transitionAgentRunStatus({
           run: latest,
           to: 'failed',
           changed_at: this.clock.now(),
-          failure: {
-            code: 'internal_error',
-            message: error instanceof Error ? error.message : 'Agent Run failed unexpectedly.',
-          },
+          failure,
         }));
+        if (terminalReply.status === 'committed') {
+          input.eventSink.emit({
+            eventType: 'run.failed',
+            run: input.run,
+            messageId: terminalReply.message_id,
+            payload: {
+              error: agentRunFailureToRuntimeError(failure),
+            },
+          });
+        }
       }
-      input.eventSink.emit({
-        eventType: 'run.failed',
-        run: input.run,
-        payload: {
-          error: {
-            code: 'runtime_unknown',
-            message: error instanceof Error ? error.message : 'Agent Run failed unexpectedly.',
-            severity: 'error',
-            retryable: false,
-            source: 'core',
-          },
-        },
-      });
       this.traceLogger.record({
         trace_id: input.run.run_id,
         event_type: 'run.failed',
@@ -1077,6 +1158,7 @@ class DefaultAgentRunService implements AgentRunService {
 
     const created = this.options.session_service.createSession({
       workspace_id: request.workspace_id,
+      initial_user_text: request.user_input.text,
       ...(request.session.title ? { title: request.session.title } : {}),
     });
     if (created.status === 'created') return { status: 'ok', session: created.session };
@@ -1527,7 +1609,7 @@ function currentTurnFromSavedUserMessage(
     userMessage: {
       type: 'user_message',
       content: [
-        ...(saved.message.conversation.role === 'user' ? saved.message.conversation.content : []),
+        ...(saved.message.message_kind === 'user_message' ? saved.message.content : []),
         ...saved.attachments.map((attachment) => attachment.type === 'image'
           ? {
               type: 'image' as const,
