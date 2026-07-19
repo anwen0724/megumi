@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 import { PlanArtifactService } from '@megumi/agent/artifacts';
 
 function createRepository() {
@@ -38,8 +38,8 @@ describe('PlanArtifactService', () => {
     expect(service.createPlanRecordForRun({
       runId: 'run:1',
       goal: 'Write a plan',
-      permissionModeState: {
-        permissionMode: 'plan',
+      executionIntentState: {
+        executionIntent: 'plan',
         source: 'user',
       },
       createdAt: '2026-06-11T00:00:00.000Z',
@@ -52,8 +52,8 @@ describe('PlanArtifactService', () => {
     expect(service.createPlanRecordForRun({
       runId: 'run:2',
       goal: 'Do work',
-      permissionModeState: {
-        permissionMode: 'default',
+      executionIntentState: {
+        executionIntent: 'default',
         source: 'user',
       },
       createdAt: '2026-06-11T00:00:01.000Z',
@@ -73,8 +73,8 @@ describe('PlanArtifactService', () => {
     service.createPlanRecordForRun({
       runId: 'run:1',
       goal: 'Write a plan',
-      permissionModeState: {
-        permissionMode: 'plan',
+      executionIntentState: {
+        executionIntent: 'plan',
         source: 'user',
       },
       createdAt: '2026-06-11T00:00:00.000Z',

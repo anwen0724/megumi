@@ -15,6 +15,12 @@ describe('ActiveRunStore', () => {
     store.createApprovalRequest({
       approval_request_id: 'A1', run_id: run.run_id,
       subject: { type: 'tool_call', tool_call_id: 'T1', tool_name: 'read_file', input: {} },
+      options: [{
+        option_id: 'once:T1', scope: 'once',
+        display: { label: 'Once', description: 'Allow this call.' },
+        effect: { type: 'current_tool_call' },
+      }],
+      default_option_id: 'once:T1',
       status: 'pending', created_at: '2026-07-12T00:00:00.000Z',
     });
     expect(store.listPendingApprovalRequestsByRun(run.run_id)).toHaveLength(1);
@@ -25,6 +31,28 @@ describe('ActiveRunStore', () => {
     expect(store.getRun(run.run_id)).toBeUndefined();
     expect(store.listPendingApprovalRequestsByRun(run.run_id)).toEqual([]);
     expect(new ActiveRunStore().getRun(run.run_id)).toBeUndefined();
+  });
+
+  it('claims an approval request only once until the claimant releases it', () => {
+    const store = new ActiveRunStore();
+    const run = sampleRun();
+    store.createRun(run);
+    store.createApprovalRequest({
+      approval_request_id: 'A1', run_id: run.run_id,
+      subject: { type: 'tool_call', tool_call_id: 'T1', tool_name: 'read_file', input: {} },
+      options: [{
+        option_id: 'once:T1', scope: 'once',
+        display: { label: 'Once', description: 'Allow this call.' },
+        effect: { type: 'current_tool_call' },
+      }],
+      default_option_id: 'once:T1',
+      status: 'pending', created_at: '2026-07-12T00:00:00.000Z',
+    });
+
+    expect(store.claimApprovalRequest('A1')).toBe('claimed');
+    expect(store.claimApprovalRequest('A1')).toBe('already_claimed');
+    store.releaseApprovalClaim('A1');
+    expect(store.claimApprovalRequest('A1')).toBe('claimed');
   });
 });
 

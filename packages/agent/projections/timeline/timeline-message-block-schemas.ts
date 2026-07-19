@@ -1,7 +1,6 @@
 ﻿import { z } from 'zod';
 import {
   ANSWER_TEXT_STATUSES,
-  APPROVAL_ACTIVITY_STATUSES,
   ASSISTANT_TEXT_ITEM_STATUSES,
   BRANCH_SEPARATOR_BLOCK_KINDS,
   COMPACTION_ACTIVITY_STATUSES,
@@ -15,8 +14,6 @@ import {
   USER_ATTACHMENT_SOURCES,
   type AnswerTextBlock,
   type AnswerTextStatus,
-  type ApprovalActivityItem,
-  type ApprovalActivityStatus,
   type AssistantTextItem,
   type AssistantTextItemStatus,
   type BranchSeparatorBlock,
@@ -80,10 +77,6 @@ const TOOL_ACTIVITY_STATUS_VALUES = [...TOOL_ACTIVITY_STATUSES] as [
   ToolActivityStatus,
   ...ToolActivityStatus[],
 ];
-const APPROVAL_ACTIVITY_STATUS_VALUES = [...APPROVAL_ACTIVITY_STATUSES] as [
-  ApprovalActivityStatus,
-  ...ApprovalActivityStatus[],
-];
 const BRANCH_SEPARATOR_BLOCK_KIND_VALUES = [...BRANCH_SEPARATOR_BLOCK_KINDS] as [
   BranchSeparatorBlockKind,
   ...BranchSeparatorBlockKind[],
@@ -109,7 +102,6 @@ export const AnswerTextStatusSchema = z.enum(ANSWER_TEXT_STATUS_VALUES);
 export const ThinkingItemStatusSchema = z.enum(THINKING_ITEM_STATUS_VALUES);
 export const AssistantTextItemStatusSchema = z.enum(ASSISTANT_TEXT_ITEM_STATUS_VALUES);
 export const ToolActivityStatusSchema = z.enum(TOOL_ACTIVITY_STATUS_VALUES);
-export const ApprovalActivityStatusSchema = z.enum(APPROVAL_ACTIVITY_STATUS_VALUES);
 export const BranchSeparatorBlockKindSchema = z.enum(BRANCH_SEPARATOR_BLOCK_KIND_VALUES);
 export const CompactionActivityStatusSchema = z.enum(COMPACTION_ACTIVITY_STATUS_VALUES);
 export const RetryActivityStatusSchema = z.enum(RETRY_ACTIVITY_STATUS_VALUES);
@@ -221,23 +213,24 @@ export const ToolActivityItemSchema = z
     inputSummary: OptionalTextSchema,
     resultSummary: OptionalTextSchema,
     status: ToolActivityStatusSchema,
+    approval: z.object({
+      approvalRequestId: z.string().min(1),
+      defaultOptionId: z.string().min(1),
+      summary: OptionalTextSchema,
+      options: z.array(z.object({
+        optionId: z.string().min(1),
+        scope: z.enum(['once', 'session']),
+        label: z.string().min(1),
+        description: z.string().min(1),
+      }).strict()).min(1).max(2),
+    }).strict().optional(),
+    error: z.object({
+      code: z.string().min(1),
+      message: z.string().min(1),
+      details: z.record(z.string(), z.unknown()).optional(),
+    }).strict().optional(),
   })
   .strict() satisfies z.ZodType<ToolActivityItem>;
-
-export const ApprovalActivityItemSchema = z
-  .object({
-    ...ProcessDisclosureItemBaseShape,
-    kind: z.literal('approval_activity'),
-    approvalId: z.string().min(1),
-    toolCallId: z.string().min(1).optional(),
-    toolExecutionId: z.string().min(1).optional(),
-    scope: z.string().min(1),
-    status: ApprovalActivityStatusSchema,
-    title: z.string().min(1),
-    description: OptionalTextSchema,
-    subjectSummary: OptionalTextSchema,
-  })
-  .strict() satisfies z.ZodType<ApprovalActivityItem>;
 
 export const ErrorActivityItemSchema = z
   .object({
@@ -292,7 +285,6 @@ export const ProcessDisclosureItemSchema = z.discriminatedUnion('kind', [
   ThinkingItemSchema,
   AssistantTextItemSchema,
   ToolActivityItemSchema,
-  ApprovalActivityItemSchema,
   ErrorActivityItemSchema,
   CancelledActivityItemSchema,
   CompactionActivityItemSchema,

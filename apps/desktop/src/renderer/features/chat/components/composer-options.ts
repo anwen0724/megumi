@@ -4,7 +4,7 @@ import type { ModelSupportLevelUi, ProviderPublicStatusUiDto } from '@megumi/pro
 export type ComposerPermissionMode = PermissionMode;
 export type ComposerModel = string;
 
-export const DEFAULT_COMPOSER_PERMISSION_MODE: ComposerPermissionMode = 'default';
+export const DEFAULT_COMPOSER_PERMISSION_MODE: ComposerPermissionMode = 'ask';
 export const DEFAULT_COMPOSER_MODEL: ComposerModel = '';
 
 interface ComposerOption<TValue extends string> {
@@ -20,10 +20,9 @@ export interface ComposerModelOption {
 }
 
 export const COMPOSER_PERMISSION_MODE_OPTIONS: ComposerOption<ComposerPermissionMode>[] = [
-  { value: 'default' },
-  { value: 'accept_edits' },
-  { value: 'plan' },
+  { value: 'ask' },
   { value: 'auto' },
+  { value: 'full_access' },
 ];
 
 export function getComposerModelLabel(model: string, modelOptions: ComposerModelOption[] = []): string {

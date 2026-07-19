@@ -3,7 +3,6 @@ import { type FormEvent, type KeyboardEvent, useEffect, useId, useLayoutEffect, 
 import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/product/host-interface';
 import {
   DEFAULT_COMPOSER_MODEL,
-  DEFAULT_COMPOSER_PERMISSION_MODE,
   getComposerModelOptionsForProviders,
   type ComposerModel,
   type ComposerPermissionMode,
@@ -12,6 +11,7 @@ import type { ComposerDraftImage, ComposerProps, ComposerSubmitPayload } from '.
 import type { ComposerSurfaceProps } from '../components/ComposerSurface';
 import { showToast } from '../../../shared/ui';
 import { rendererI18n } from '../../../shared/i18n';
+import { usePermissionModeStore } from '../../../entities/permission-mode';
 
 const COMPOSER_TEXTAREA_COMPACT_HEIGHT = 56;
 const COMPOSER_TEXTAREA_MAX_HEIGHT = 160;
@@ -68,7 +68,8 @@ export function useComposerController({
   const [value, setValue] = useState(initialValue);
   const [selectedCommandCompletion, setSelectedCommandCompletion] = useState<SelectedCommandCompletion | null>(null);
   const [selectedCommandSuggestionIndex, setSelectedCommandSuggestionIndex] = useState(0);
-  const [permissionMode, setPermissionMode] = useState<ComposerPermissionMode>(DEFAULT_COMPOSER_PERMISSION_MODE);
+  const permissionMode = usePermissionModeStore((state) => state.mode);
+  const persistPermissionMode = usePermissionModeStore((state) => state.persistMode);
   const [model, setModel] = useState<ComposerModel>(DEFAULT_COMPOSER_MODEL);
   const [selectedImages, setSelectedImages] = useState<ComposerDraftImage[]>(initialImages);
   const valueRef = useRef(value);
@@ -374,7 +375,7 @@ export function useComposerController({
     imageInputNotice,
     onValueChange: handleValueChange,
     onCommandSuggestionChoose: chooseCommandSuggestion,
-    onPermissionModeChange: setPermissionMode,
+    onPermissionModeChange: (mode) => { void persistPermissionMode(mode); },
     onModelChange: setModel,
     onKeyDown: handleComposerKeyDown,
     onSubmit: handleSubmit,

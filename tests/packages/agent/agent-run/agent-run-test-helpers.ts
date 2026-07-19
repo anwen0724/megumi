@@ -221,10 +221,17 @@ export function createMessageFlowDependencies(input: {
       })),
     },
     permission_service: {
-      evaluateToolExecution: vi.fn(() => ({
+      evaluateToolCall: vi.fn(async () => ({
         status: 'ok' as const,
-        decision: { type: 'allow' as const, reason: 'allowed', execution_class: 'read_only' as const },
+        operations: [],
+        decision: {
+          type: 'allow' as const,
+          operations: [],
+          safety_assessment: 'safe' as const,
+          reason: 'allowed',
+        },
       })),
+      applyApprovalDecision: vi.fn(async () => ({ status: 'applied' as const, effect: { type: 'none' as const } })),
     },
     workspace_path_policy_service: {
       classifyPath: vi.fn(() => ({

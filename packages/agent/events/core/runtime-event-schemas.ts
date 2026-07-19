@@ -554,43 +554,21 @@ const AgentRunToolCallFailedPayloadSchema = z
   })
   .strict();
 
-const StructuredAgentRunToolResultCreatedPayloadSchema = z
-  .object({
-    toolResultId: z.string().min(1),
-    toolCallId: z.string().min(1),
-    toolExecutionId: z.string().min(1).optional(),
-    toolName: z.string().min(1),
-    kind: z.enum(['success', 'failed', 'policy_denied', 'user_rejected']),
-    content: ContentBlockListSchema,
-  })
-  .strict();
-
-const LegacyAgentRunToolResultCreatedPayloadSchema = z
-  .object({
-    toolResultId: z.string().min(1),
-    toolCallId: z.string().min(1),
-    toolExecutionId: z.string().min(1).optional(),
-    toolName: z.string().min(1),
-    kind: z.enum(['success', 'failed', 'policy_denied', 'user_rejected']),
-    summary: z.string().optional(),
-  })
-  .strict();
-
 const AgentRunToolResultCreatedPayloadSchema = z
-  .union([
-    StructuredAgentRunToolResultCreatedPayloadSchema,
-    LegacyAgentRunToolResultCreatedPayloadSchema,
-  ])
-  .transform((payload) => 'content' in payload
-    ? payload
-    : {
-        toolResultId: payload.toolResultId,
-        toolCallId: payload.toolCallId,
-        ...(payload.toolExecutionId ? { toolExecutionId: payload.toolExecutionId } : {}),
-        toolName: payload.toolName,
-        kind: payload.kind,
-        content: [{ type: 'text' as const, text: payload.summary ?? '' }],
-      });
+  .object({
+    toolResultId: z.string().min(1),
+    toolCallId: z.string().min(1),
+    toolExecutionId: z.string().min(1).optional(),
+    toolName: z.string().min(1),
+    kind: z.enum(['success', 'failure', 'permission_denied', 'user_rejected', 'cancelled']),
+    content: ContentBlockListSchema,
+    error: z.object({
+      code: z.string().min(1),
+      message: z.string().min(1),
+      details: JsonObjectSchema.optional(),
+    }).strict().optional(),
+  })
+  .strict();
 
 const ToolResultCreatedPayloadSchema = z
   .object({
@@ -912,8 +890,10 @@ const ApprovalRequestedPayloadSchema = z
 const ApprovalResolvedPayloadSchema = z
   .object({
     approvalRequestId: z.string().min(1),
+    toolCallId: z.string().min(1),
     decision: z.enum(['approved', 'denied', 'expired', 'cancelled']),
-    scope: z.enum(APPROVAL_SCOPE_VALUES),
+    optionId: z.string().min(1).optional(),
+    scope: z.enum(APPROVAL_SCOPE_VALUES).optional(),
     decidedAt: RuntimeEventIsoDateTimeSchema,
   })
   .strict();

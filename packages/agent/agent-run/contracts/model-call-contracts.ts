@@ -5,6 +5,7 @@
 import type { Prompt } from '../../context';
 import type { ProviderRuntimeConfig } from '../../settings';
 import type { ToolExecutionObservation } from '../../tools';
+import type { JsonObject } from '../../shared-json';
 import type { AgentRunFailure } from './agent-run-contracts';
 
 export type ModelCallConfig = ProviderRuntimeConfig;
@@ -118,7 +119,8 @@ export type ModelCallService = {
 export type ToolResultRuntimeFact = {
   tool_call_id: string;
   tool_name: string;
-  status: 'completed' | 'failed' | 'denied' | 'cancelled';
+  status: 'success' | 'failure' | 'permission_denied' | 'user_rejected' | 'cancelled';
+  error?: { code: string; message: string; details?: JsonObject };
   observation?: ToolExecutionObservation;
   content?: string;
   created_at: string;

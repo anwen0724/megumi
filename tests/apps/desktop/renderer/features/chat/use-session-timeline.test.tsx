@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RuntimeEvent } from '@megumi/agent/events';
@@ -218,7 +218,7 @@ describe('useSessionTimeline', () => {
         message: '你好',
         providerId: 'deepseek',
         model: 'deepseek-chat',
-        permissionMode: 'default',
+        permissionMode: 'ask',
       });
     });
 
@@ -291,7 +291,7 @@ describe('useSessionTimeline', () => {
         message: 'Can you see this?',
         providerId: 'deepseek',
         model: 'deepseek-v4-flash',
-        permissionMode: 'default',
+        permissionMode: 'ask',
       });
     });
 
@@ -341,7 +341,7 @@ describe('useSessionTimeline', () => {
         message: '/compact',
         providerId: 'deepseek',
         model: 'deepseek-chat',
-        permissionMode: 'default',
+        permissionMode: 'ask',
       });
     });
 
@@ -497,7 +497,7 @@ describe('useSessionTimeline', () => {
         message: 'continue here',
         providerId: 'deepseek',
         model: 'deepseek-chat',
-        permissionMode: 'default',
+        permissionMode: 'ask',
       });
     });
 

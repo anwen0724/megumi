@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+﻿import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -39,7 +39,7 @@ describe('Agent Run trace integration', () => {
       session: { type: 'existing', session_id: 'session-1' },
       user_input: { text: 'hello' },
       model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
-      permission_mode: 'default',
+      permission_mode: 'ask',
     });
 
     expect(result.status).toBe('started');

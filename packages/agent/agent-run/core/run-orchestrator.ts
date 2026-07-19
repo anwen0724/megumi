@@ -51,7 +51,7 @@ export type RunOrchestratorDependencies = {
   model_call_service: ModelCallService;
   tools_builder: RunToolSetBuilder;
   tool_execution_service: Pick<ToolExecutionService, 'executeTool'>;
-  permission_service: Pick<PermissionService, 'evaluateToolExecution'>;
+  permission_service: Pick<PermissionService, 'evaluateToolCall'>;
   workspace_path_policy_service?: Pick<WorkspacePathPolicyService, 'classifyPath'>;
   memory_service?: {
     captureCompletedRun(request: { run_id: string; session_id: string; workspace_id: string }): Promise<unknown> | unknown;
@@ -408,15 +408,11 @@ export async function runAgentModelToolLoop(
     })));
     const toolGroup = await orchestrateToolCallGroup({
       run_id: run.run_id,
+      session_id: run.session_id,
       workspace_id: run.workspace_id,
       ...(request.workspace_root ? { workspace_root: request.workspace_root } : {}),
       permission_mode: request.permission_mode,
       permission_settings: permissionSettings.permission_settings,
-      runtime_capability_policy: {
-        custom_tools_enabled: true,
-        process_execution_enabled: true,
-        network_enabled: true,
-      },
       tools,
       tool_calls: modelEvents.tool_calls,
       registered_tools_by_name: registeredTools,
@@ -446,7 +442,8 @@ export async function runAgentModelToolLoop(
         parent_entry_id: currentTurn.lastEntryId ?? currentTurn.userEntry.entryId,
         tool_call_id: toolResult.tool_call_id,
         tool_name: toolResult.tool_name,
-        status: toolResult.status === 'completed' ? 'success' : 'failure',
+        status: toolResult.status,
+        ...(toolResult.error ? { error: toolResult.error } : {}),
         content: [{
           type: 'text',
           text: toolResult.content ?? toolResult.observation?.summary ?? `${toolResult.tool_name} ${toolResult.status}`,
@@ -584,7 +581,7 @@ function toolResultToConversationItem(toolResult: ToolResultRuntimeFact): Curren
     type: 'tool_result',
     toolCallId: toolResult.tool_call_id,
     toolName: toolResult.tool_name,
-    status: toolResult.status === 'completed' ? 'success' : 'failure',
+    status: toolResult.status === 'success' ? 'success' : 'failure',
     content: [{ type: 'text', text: toolResult.content ?? toolResult.observation?.summary ?? `${toolResult.tool_name} ${toolResult.status}` }],
   };
 }
@@ -598,7 +595,8 @@ function approvalRequestToRuntimePayload(request: AgentRunApprovalRequest): Reco
     toolName: request.subject.tool_name,
     title: request.subject.tool_name,
     summary: request.summary ?? `${request.subject.tool_name} requires approval.`,
-    requestedScope: request.requested_scope ?? 'once',
+    options: request.options,
+    defaultOptionId: request.default_option_id,
     preview: request.preview ?? {
       action: request.subject.tool_name,
       targets: [],
@@ -977,17 +975,12 @@ function emitToolResult(
       toolCallId: toolResult.tool_call_id,
       toolExecutionId: toolResult.tool_call_id,
       toolName: toolResult.tool_name,
-      kind: toolResult.status === 'completed'
-        ? 'success'
-        : toolResult.status === 'denied'
-          ? 'policy_denied'
-          : toolResult.status === 'cancelled'
-            ? 'user_rejected'
-            : 'failed',
+      kind: toolResult.status,
       content: [{
         type: 'text',
         text: toolResult.content ?? toolResult.observation?.summary ?? `${toolResult.tool_name} ${toolResult.status}`,
       }],
+      ...(toolResult.error ? { error: toolResult.error } : {}),
     },
   });
 }

@@ -165,21 +165,18 @@ export function ChatPage() {
                 onOpenWorkspaceChangedFile: (projectPath) => {
                   void controller.openWorkspaceChangedFile(projectPath);
                 },
+                onApprovalResolve: controller.resolveApproval,
               }}
             />
           </div>
           <ComposerDock
             status={controller.composerStatus}
             branchDraft={branchDraft}
-            pendingApprovals={controller.pendingApprovals}
             providers={providers}
             contextUsage={controller.contextUsage}
             imageInputCapabilities={imageInputCapabilities}
             initialValue={composerDraft.text}
             initialImages={composerDraft.images}
-            onApprovalResolve={(payload) => {
-              void controller.resolveApproval(payload);
-            }}
             onSubmit={controller.handleSubmit}
             onStop={controller.handleStop}
             onHeightChange={setComposerHeight}

@@ -73,7 +73,7 @@ describe('13.02 chat layout contract source guard', () => {
     expect(composerDock).toContain('pb-3');
     expect(composerDock).not.toContain('bg-transparent px-6');
     expect(composerDock).not.toContain('pb-6');
-    expect(composerDock).toContain('<ApprovalStack');
+    expect(composerDock).not.toContain('ApprovalStack');
     expect(composerDock).toContain('<BranchDraftStack');
     expect(composerDock).toContain('<ComposerOverlayLayer');
     expect(composerDock).toContain('<ComposerSurface');

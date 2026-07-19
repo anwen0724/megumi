@@ -28,6 +28,7 @@ export interface ActiveRunRecord {
 export class ActiveRunStore {
   private readonly runs = new Map<string, ActiveRunRecord>();
   private readonly approvals = new Map<string, AgentRunApprovalRequest>();
+  private readonly approvalClaims = new Set<string>();
   private readonly eventSequences = new Map<string, number>();
 
   createRun(run: AgentRun): AgentRun {
@@ -136,7 +137,21 @@ export class ActiveRunStore {
       throw new Error(`Approval request was not found: ${request.approval_request_id}`);
     }
     this.approvals.set(request.approval_request_id, request);
+    if (request.status !== 'pending') this.approvalClaims.delete(request.approval_request_id);
     return request;
+  }
+
+  claimApprovalRequest(approvalRequestId: string): 'claimed' | 'not_found' | 'not_pending' | 'already_claimed' {
+    const approval = this.approvals.get(approvalRequestId);
+    if (!approval) return 'not_found';
+    if (approval.status !== 'pending') return 'not_pending';
+    if (this.approvalClaims.has(approvalRequestId)) return 'already_claimed';
+    this.approvalClaims.add(approvalRequestId);
+    return 'claimed';
+  }
+
+  releaseApprovalClaim(approvalRequestId: string): void {
+    this.approvalClaims.delete(approvalRequestId);
   }
 
   listPendingApprovalRequestsByRun(runId: string): AgentRunApprovalRequest[] {
@@ -157,6 +172,7 @@ export class ActiveRunStore {
     this.eventSequences.delete(runId);
     for (const [approvalId, approval] of this.approvals) {
       if (approval.run_id === runId) this.approvals.delete(approvalId);
+      if (approval.run_id === runId) this.approvalClaims.delete(approvalId);
     }
   }
 

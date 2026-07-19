@@ -10,6 +10,7 @@ import { useThemeStore } from '../shared/theme';
 import { useSetupWizardStore } from '../features/setup-wizard';
 import App from './App';
 import ErrorBoundary from './error-boundary';
+import { usePermissionModeStore } from '../entities/permission-mode';
 
 interface RendererRoot {
   render(children: ReactNode): void;
@@ -26,9 +27,10 @@ export async function bootstrapRenderer(root: RendererRoot): Promise<void> {
     } else if (result.data.status === 'failed') {
       await applyBootstrapFailure(result.data.failure.message);
     } else {
-      const { language, theme, setup } = result.data.settings;
+      const { language, theme, setup, permissions } = result.data.settings;
       await initializeLocaleWithFallback(language);
       useThemeStore.getState().applyBootstrapTheme(theme);
+      usePermissionModeStore.getState().applyBootstrapMode(permissions.mode);
       useSetupWizardStore.getState().applyBootstrapSettings({
         language,
         setupCompleted: setup.completed,

@@ -22,7 +22,7 @@ describe('createApprovalHost', () => {
     const result = await controller.resolve({
       approvalRequestId: 'approval-1',
       decision: 'approved',
-      scope: 'once',
+      optionId: 'once:call-1',
     });
 
     expect(result).toEqual({
@@ -42,7 +42,7 @@ describe('createApprovalHost', () => {
       decision: {
         approval_request_id: 'approval-1',
         decision: 'approved',
-        scope: 'once',
+        option_id: 'once:call-1',
         decided_by: 'user',
       },
     });
@@ -70,7 +70,7 @@ describe('createApprovalHost', () => {
     const result = await controller.resolve({
       approvalRequestId: 'approval-1',
       decision: 'approved',
-      scope: 'session',
+      optionId: 'session:run_command',
     });
 
     expect(result.payload).toMatchObject({
@@ -88,7 +88,7 @@ describe('createApprovalHost', () => {
       decision: {
         approval_request_id: 'approval-1',
         decision: 'approved',
-        scope: 'session',
+        option_id: 'session:run_command',
         decided_by: 'user',
       },
     });
@@ -105,7 +105,7 @@ describe('createApprovalHost', () => {
     await expect(notFound.resolve({
       approvalRequestId: 'approval-missing',
       decision: 'approved',
-      scope: 'once',
+      optionId: 'once:call-1',
     })).resolves.toEqual({
       payload: {
         status: 'not_found',
@@ -132,7 +132,7 @@ describe('createApprovalHost', () => {
     await expect(notWaiting.resolve({
       approvalRequestId: 'approval-1',
       decision: 'approved',
-      scope: 'once',
+      optionId: 'once:call-1',
     })).resolves.toEqual({
       payload: {
         status: 'not_waiting',

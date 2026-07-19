@@ -4,7 +4,6 @@
  */
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useApprovalStore } from '@megumi/desktop/renderer/entities/approval';
 import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
@@ -19,7 +18,6 @@ const createdAt = '2026-07-09T00:00:00.000Z';
 describe('useChatPageController', () => {
   beforeEach(() => {
     useToastStore.getState().clearToasts();
-    useApprovalStore.getState().reset();
     useRuntimeTimelineStore.getState().reset();
     useRunStore.getState().resetRuns();
     useChatUiStore.setState({
@@ -111,7 +109,7 @@ describe('useChatPageController', () => {
       await result.current.resolveApproval({
         approvalRequestId: 'approval-1',
         decision: 'approved',
-        scope: 'once',
+        optionId: 'once:tool-call-1',
       });
     });
 

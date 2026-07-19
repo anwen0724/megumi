@@ -159,18 +159,23 @@ describe('runtime timeline projection', () => {
         toolExecutionId: 'tool-execution:1',
         runId: 'run:1',
         toolName: 'edit_file',
-        capabilities: ['project_write'],
-        riskLevel: 'medium',
-        title: 'Edit file',
         summary: 'Edit README.md',
-        requestedScope: 'once',
+        options: [{
+          option_id: 'once:tool-call:1',
+          scope: 'once',
+          display: { label: 'Once', description: 'Allow this call.' },
+          effect: { type: 'current_tool_call' },
+        }],
+        defaultOptionId: 'once:tool-call:1',
         status: 'pending',
         createdAt: '2026-07-09T00:00:05.000Z',
       },
     }, 5));
     messages = reduceRuntimeTimelineEvent(messages, event('approval.resolved', {
       approvalRequestId: 'approval:1',
+      toolCallId: 'tool-call:1',
       decision: 'approved',
+      optionId: 'once:tool-call:1',
       scope: 'once',
       decidedAt: '2026-07-09T00:00:06.000Z',
     }, 6));
@@ -243,7 +248,7 @@ describe('runtime timeline projection', () => {
 
     expect(process?.items.map((item) => item.kind)).toEqual(expect.arrayContaining([
       'thinking',
-      'approval_activity',
+      'tool_activity',
       'retry_activity',
       'compaction_activity',
       'recovery_activity',

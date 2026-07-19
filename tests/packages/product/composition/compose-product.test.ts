@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -62,7 +62,7 @@ describe('composeProduct', () => {
         sessionId: session.session.id,
         text: 'hello',
         modelSelection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
-        permissionMode: 'default',
+        permissionMode: 'ask',
       });
 
       expect(result.payload.type).toBe('agent_run');

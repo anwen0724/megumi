@@ -1,7 +1,6 @@
 import type { RuntimeEvent } from '../../events';
 import type {
   AnswerTextBlock,
-  ApprovalActivityItem,
   AssistantTextItem,
   CancelledActivityItem,
   CompactionActivityItem,
@@ -14,6 +13,7 @@ import type {
   TimelineMessage,
   ToolActivityItem,
 } from './timeline-message-blocks';
+import { summarizeToolTarget } from './tool-activity-projection';
 
 /*
  * Projects backend RuntimeEvent envelopes into the chat timeline model.
@@ -110,7 +110,7 @@ export function reduceRuntimeTimelineEvent(
     const item = ensureToolItem(process, payload.toolCallId ?? event.eventId, event.createdAt);
     item.toolName = payload.toolName ?? 'unknown_tool';
     item.inputSummary = summarizeToolTarget(item.toolName, payload.input);
-    item.status = 'running';
+    item.status = 'requested';
     item.updatedAt = event.createdAt;
     process.updatedAt = event.createdAt;
     assistant.updatedAt = event.createdAt;
@@ -133,7 +133,7 @@ export function reduceRuntimeTimelineEvent(
   }
 
   if (event.eventType === 'tool_call.completed' || event.eventType === 'tool_call.failed') {
-    const payload = event.payload as { toolCallId?: string; toolExecutionId?: string; toolName?: string; error?: { message?: string } };
+    const payload = event.payload as { toolCallId?: string; toolExecutionId?: string; toolName?: string; error?: { code?: string; message?: string; details?: Record<string, unknown> } };
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
     const item = ensureToolItem(process, payload.toolCallId ?? event.eventId, event.createdAt);
@@ -141,6 +141,10 @@ export function reduceRuntimeTimelineEvent(
     item.toolName = payload.toolName ?? item.toolName;
     item.status = event.eventType === 'tool_call.completed' ? 'succeeded' : 'failed';
     item.resultSummary = payload.error?.message ?? item.resultSummary;
+    item.error = payload.error?.code && payload.error.message
+      ? { code: payload.error.code, message: payload.error.message, ...(payload.error.details ? { details: payload.error.details } : {}) }
+      : item.error;
+    item.approval = undefined;
     item.updatedAt = event.createdAt;
     process.updatedAt = event.createdAt;
     assistant.updatedAt = event.createdAt;
@@ -155,6 +159,8 @@ export function reduceRuntimeTimelineEvent(
       toolName?: string;
       kind?: string;
       summary?: string;
+      content?: Array<{ type?: string; text?: string }>;
+      error?: { code?: string; message?: string; details?: Record<string, unknown> };
     };
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
@@ -162,8 +168,20 @@ export function reduceRuntimeTimelineEvent(
     item.toolExecutionId = payload.toolExecutionId;
     item.toolResultId = payload.toolResultId;
     item.toolName = payload.toolName ?? item.toolName;
-    item.status = payload.kind === 'success' ? 'succeeded' : payload.kind === 'policy_denied' || payload.kind === 'user_rejected' ? 'denied' : 'failed';
-    item.resultSummary = undefined;
+    item.status = payload.kind === 'success'
+      ? 'succeeded'
+      : payload.kind === 'permission_denied' || payload.kind === 'user_rejected'
+        ? 'denied'
+        : payload.kind === 'cancelled'
+          ? 'cancelled'
+          : 'failed';
+    item.resultSummary = payload.kind === 'success'
+      ? undefined
+      : payload.error?.message ?? payload.summary ?? payload.content?.find((block) => block.type === 'text')?.text;
+    item.error = payload.error?.code && payload.error.message
+      ? { code: payload.error.code, message: payload.error.message, ...(payload.error.details ? { details: payload.error.details } : {}) }
+      : undefined;
+    item.approval = undefined;
     item.updatedAt = event.createdAt;
     process.updatedAt = event.createdAt;
     assistant.updatedAt = event.createdAt;
@@ -176,24 +194,32 @@ export function reduceRuntimeTimelineEvent(
         approvalRequestId?: string;
         toolCallId?: string;
         toolExecutionId?: string;
-        requestedScope?: string;
-        title?: string;
+        toolName?: string;
+        options?: Array<{ option_id?: string; scope?: 'once' | 'session'; display?: { label?: string; description?: string } }>;
+        defaultOptionId?: string;
         summary?: string;
-        preview?: { action?: string };
       };
     };
     const approval = payload.approvalRequest;
-    const approvalId = approval?.approvalRequestId ?? event.eventId;
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
-    const item = ensureApprovalItem(process, approvalId, event.createdAt);
-    item.toolCallId = approval?.toolCallId;
+    const item = ensureToolItem(process, approval?.toolCallId ?? event.eventId, event.createdAt);
     item.toolExecutionId = approval?.toolExecutionId;
-    item.scope = approval?.requestedScope ?? item.scope;
-    item.status = 'pending';
-    item.title = approval?.title ?? approval?.preview?.action ?? item.title;
-    item.description = approval?.summary ?? item.description;
-    item.subjectSummary = approval?.summary ?? item.subjectSummary;
+    item.toolName = approval?.toolName ?? item.toolName;
+    item.status = 'awaiting_approval';
+    const options = (approval?.options ?? []).flatMap((option) => (
+      option.option_id && option.scope && option.display?.label && option.display.description
+        ? [{ optionId: option.option_id, scope: option.scope, label: option.display.label, description: option.display.description }]
+        : []
+    ));
+    if (approval?.approvalRequestId && approval.defaultOptionId && options.length > 0) {
+      item.approval = {
+        approvalRequestId: approval.approvalRequestId,
+        defaultOptionId: approval.defaultOptionId,
+        ...(approval.summary ? { summary: approval.summary } : {}),
+        options,
+      };
+    }
     item.updatedAt = event.createdAt;
     process.updatedAt = event.createdAt;
     assistant.updatedAt = event.createdAt;
@@ -201,12 +227,12 @@ export function reduceRuntimeTimelineEvent(
   }
 
   if (event.eventType === 'approval.resolved') {
-    const payload = event.payload as { approvalRequestId?: string; decision?: string; scope?: string };
+    const payload = event.payload as { approvalRequestId?: string; toolCallId?: string; decision?: string };
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
-    const item = ensureApprovalItem(process, payload.approvalRequestId ?? event.eventId, event.createdAt);
-    item.status = approvalStatusFromDecision(payload.decision);
-    item.scope = payload.scope ?? item.scope;
+    const item = ensureToolItem(process, payload.toolCallId ?? event.eventId, event.createdAt);
+    item.status = payload.decision === 'approved' ? 'queued' : 'denied';
+    item.approval = undefined;
     item.updatedAt = event.createdAt;
     process.updatedAt = event.createdAt;
     assistant.updatedAt = event.createdAt;
@@ -445,7 +471,7 @@ function ensureToolItem(process: ProcessDisclosureBlock, toolCallId: string, cre
     kind: 'tool_activity',
     toolCallId,
     toolName: 'unknown_tool',
-    status: 'running',
+    status: 'requested',
     createdAt,
     updatedAt: createdAt,
   };
@@ -465,25 +491,6 @@ function ensureThinkingItem(process: ProcessDisclosureBlock, thinkingId: string,
     status: 'streaming',
     text: '',
     format: 'plain',
-    createdAt,
-    updatedAt: createdAt,
-  };
-  process.items.push(item);
-  return item;
-}
-
-function ensureApprovalItem(process: ProcessDisclosureBlock, approvalId: string, createdAt: string): ApprovalActivityItem {
-  const existing = process.items.find(
-    (item): item is ApprovalActivityItem => item.kind === 'approval_activity' && item.approvalId === approvalId,
-  );
-  if (existing) return existing;
-  const item: ApprovalActivityItem = {
-    itemId: `approval:${approvalId}`,
-    kind: 'approval_activity',
-    approvalId,
-    scope: 'once',
-    status: 'pending',
-    title: 'Approval required',
     createdAt,
     updatedAt: createdAt,
   };
@@ -545,14 +552,6 @@ function ensureRecoveryItem(process: ProcessDisclosureBlock, itemId: string, cre
   return item;
 }
 
-function approvalStatusFromDecision(decision: string | undefined): ApprovalActivityItem['status'] {
-  if (decision === 'approved') return 'approved';
-  if (decision === 'rejected' || decision === 'denied') return 'rejected';
-  if (decision === 'expired') return 'expired';
-  if (decision === 'cancelled') return 'cancelled';
-  return 'approved';
-}
-
 function compactionLabel(eventType: RuntimeEvent['eventType'], failureMessage: string | undefined): string {
   if (eventType === 'context.compaction.completed') return '已完成压缩';
   if (eventType === 'context.compaction.failed') return failureMessage ? `上下文压缩失败：${failureMessage}` : '上下文压缩失败';
@@ -588,28 +587,6 @@ function recoveryLabel(eventType: RuntimeEvent['eventType'], failureMessage: str
   if (eventType === 'run.resume.requested') return 'Run resume requested';
   if (eventType === 'run.resumed') return 'Run resumed';
   return failureMessage ? `Run resume failed: ${failureMessage}` : 'Run resume failed';
-}
-
-function summarizeToolTarget(toolName: string, input: unknown): string | undefined {
-  const data = isRecord(input) ? input : {};
-  if (toolName === 'list_directory') return displayPath(stringField(data, 'path'));
-  if (toolName === 'read_file') return displayPath(stringField(data, 'path'));
-  if (toolName === 'glob') return stringField(data, 'pattern');
-  if (toolName === 'search_text') return stringField(data, 'query');
-  if (toolName === 'edit_file') return displayPath(stringField(data, 'path'));
-  if (toolName === 'write_file') return displayPath(stringField(data, 'path'));
-  if (toolName === 'run_command') return stringField(data, 'command');
-  return undefined;
-}
-
-function displayPath(path: string | undefined): string | undefined {
-  if (!path || path === '.') return '工作区目录';
-  return path;
-}
-
-function stringField(data: Record<string, unknown>, field: string): string | undefined {
-  const value = data[field];
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function isRecord(input: unknown): input is Record<string, unknown> {

@@ -37,7 +37,7 @@ function approvalRequest(): RuntimeIpcRequest<ApprovalResolvePayload, typeof IPC
     payload: {
       approvalRequestId: 'approval-1',
       decision: 'approved',
-      scope: 'once',
+      optionId: 'once:call-1',
     },
     meta: {
       channel: IPC_CHANNELS.approval.resolve,

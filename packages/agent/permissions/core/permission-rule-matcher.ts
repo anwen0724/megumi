@@ -1,76 +1,53 @@
-/*
- * Matches Permissions-owned rule patterns against tool names and stable primary inputs.
- * V1 supports exact values and trailing value wildcards only.
- */
-import type { PermissionRule } from '../contracts/permission-contracts';
+/* Matches structured rules against normalized operations and stable tool identities. */
+import type { PermissionOperation, PermissionRule } from '../contracts/permission-contracts';
 
-export interface PermissionRuleMatchInput {
-  tool_name: string;
-  tool_input: unknown;
-}
-
-export interface PermissionRuleMatchResult {
-  matched: boolean;
-  field?: string;
-  value?: string;
-}
-
-type ParsedPermissionRulePattern = {
-  tool_name: string;
-  field: string;
-  value_pattern: string;
-};
-
-export function matchesPermissionRule(
-  rule: PermissionRule,
-  input: PermissionRuleMatchInput,
-): PermissionRuleMatchResult {
-  const parsed = parsePermissionRulePattern(rule.pattern);
-  if (!parsed || parsed.tool_name !== input.tool_name) {
-    return { matched: false };
+export function matchesPermissionRule(rule: PermissionRule, operation: PermissionOperation): boolean {
+  if (rule.target.kind === 'tool') return sameIdentity(rule.target.tool_identity, operation.context.tool_identity);
+  if (rule.target.action !== operation.action) return false;
+  if (!rule.target.resource) return true;
+  if (!operation.resource || rule.target.resource.type !== operation.resource.type) return false;
+  const matcher = rule.target.resource.matcher;
+  if (matcher.operator === 'any') return true;
+  const id = operation.resource.id;
+  if (!id) return false;
+  if (matcher.operator === 'exact') return normalizeForResource(id, operation.resource.type) === normalizeForResource(matcher.value, operation.resource.type);
+  if (matcher.operator === 'prefix') return prefixMatches(id, matcher.value, operation.resource.type);
+  if (matcher.operator === 'glob') return globToRegExp(normalizeForResource(matcher.value, operation.resource.type)).test(normalizeForResource(id, operation.resource.type));
+  const hostname = typeof operation.resource.attributes?.hostname === 'string'
+    ? operation.resource.attributes.hostname : safeHostname(id);
+  const pattern = matcher.value.toLowerCase().replace(/\.$/, '');
+  if (pattern === '*') return Boolean(hostname);
+  if (pattern.startsWith('*.')) {
+    const suffix = pattern.slice(2);
+    return hostname !== suffix && hostname?.endsWith(`.${suffix}`) === true;
   }
-
-  const value = readStableField(input.tool_input, parsed.field);
-  if (typeof value !== 'string') {
-    return { matched: false, field: parsed.field };
-  }
-
-  return {
-    matched: matchesValue(parsed.value_pattern, value),
-    field: parsed.field,
-    value,
-  };
+  return hostname === pattern;
 }
 
-export function parsePermissionRulePattern(pattern: string): ParsedPermissionRulePattern | undefined {
-  const match = /^tool:([a-z][a-z0-9_]{0,63})\|([a-z][a-z0-9_]{0,63})=(.*)$/.exec(pattern);
-  if (!match) {
-    return undefined;
-  }
-
-  return {
-    tool_name: match[1],
-    field: match[2],
-    value_pattern: normalizeValue(match[3]),
-  };
+function sameIdentity(left: { source_id: string; namespace: string; source_tool_name: string }, right: { source_id: string; namespace: string; source_tool_name: string }): boolean {
+  return left.source_id === right.source_id && left.namespace === right.namespace && left.source_tool_name === right.source_tool_name;
 }
-
-function readStableField(input: unknown, field: string): string | undefined {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) {
-    return undefined;
-  }
-
-  const value = (input as Record<string, unknown>)[field];
-  return typeof value === 'string' ? normalizeValue(value) : undefined;
+function normalize(value: string): string { return value.replace(/\\/g, '/').trim(); }
+function normalizeForResource(value: string, resourceType: string): string {
+  const normalized = normalize(value);
+  return resourceType === 'workspace.path' && (/^[a-z]:\//i.test(normalized) || normalized.startsWith('//'))
+    ? normalized.toLowerCase()
+    : normalized;
 }
-
-function matchesValue(pattern: string, value: string): boolean {
-  if (pattern.endsWith('*')) {
-    return value.startsWith(pattern.slice(0, -1));
-  }
-  return value === pattern;
+function prefixMatches(id: string, value: string, resourceType: string): boolean {
+  const candidate = normalizeForResource(id, resourceType);
+  const prefix = normalizeForResource(value, resourceType).replace(/\/$/, '');
+  if (candidate === prefix) return true;
+  if (resourceType === 'workspace.path') return candidate.startsWith(`${prefix}/`);
+  if (resourceType === 'process.command') return candidate.startsWith(prefix) && /^\s/.test(candidate.slice(prefix.length, prefix.length + 1));
+  return candidate.startsWith(prefix);
 }
-
-function normalizeValue(value: string): string {
-  return value.replace(/\\/g, '/').trim();
+function globToRegExp(pattern: string): RegExp {
+  const source = pattern.split('').map((char, index) => {
+    if (char === '*' && pattern[index + 1] === '*') return index > 0 && pattern[index - 1] === '*' ? '' : '.*';
+    if (char === '*') return '[^/]*';
+    return char.replace(/[|\\{}()[\]^$+?.]/g, '\\$&');
+  }).join('');
+  return new RegExp(`^${source}$`);
 }
+function safeHostname(value: string): string | undefined { try { return new URL(value).hostname.toLowerCase(); } catch { return undefined; } }

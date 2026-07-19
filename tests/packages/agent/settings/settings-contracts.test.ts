@@ -73,20 +73,18 @@ describe('Settings v2 contracts', () => {
   });
 
   it('validates permission rules as Settings-owned contracts', () => {
-    expect(PermissionRuleSchema.parse({
+    const rule = {
       source: 'session',
       source_id: 'session_1',
-      pattern: 'tool:run_command|command=npm test',
-    })).toEqual({
-      source: 'session',
-      source_id: 'session_1',
-      pattern: 'tool:run_command|command=npm test',
-    });
+      target: { kind: 'tool', tool_identity: { source_id: 'built_in', namespace: 'megumi', source_tool_name: 'run_command' } },
+    } as const;
+    expect(PermissionRuleSchema.parse(rule)).toEqual(rule);
 
     expect(() => PermissionRuleSchema.parse({
       source: 'session',
-      pattern: 'tool:run_command|command=npm test',
+      target: rule.target,
     })).toThrow(/source_id/);
+    expect(PermissionRuleSchema.safeParse({ source: 'user', pattern: 'tool:run_command' }).success).toBe(false);
   });
 
   it('requires provider and model ids for runtime config resolution requests', () => {

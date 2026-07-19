@@ -1,7 +1,8 @@
 ﻿// @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { usePermissionModeStore } from '@megumi/desktop/renderer/entities/permission-mode';
 import { Composer } from '@megumi/desktop/renderer/features/chat/components/Composer';
 import type { ComposerProps } from '@megumi/desktop/renderer/features/chat/components/composer-types';
 import type { ProviderPublicStatusUiDto } from '@megumi/product/host-interface';
@@ -72,10 +73,14 @@ function setTextareaScrollHeight(textarea: HTMLElement, scrollHeight: number) {
 }
 
 describe('Composer', () => {
+  beforeEach(() => {
+    usePermissionModeStore.setState({ mode: 'ask' });
+  });
+
   it('renders permission mode, model, context usage, attachment, and disabled send controls', () => {
     render(<TestComposer onSubmit={() => undefined} />);
 
-    expect(screen.getByLabelText('Permission mode')).toHaveValue('default');
+    expect(screen.getByLabelText('Permission mode')).toHaveValue('ask');
     expect(screen.getByLabelText('Model')).toHaveValue('deepseek:deepseek-v4-flash');
     expect(screen.getByRole('button', { name: 'Attach images' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Choose context' })).not.toBeInTheDocument();
@@ -126,21 +131,21 @@ describe('Composer', () => {
     const onSubmit = vi.fn();
     render(<TestComposer onSubmit={onSubmit} />);
 
-    await userEvent.selectOptions(screen.getByLabelText('Permission mode'), 'accept_edits');
+    await userEvent.selectOptions(screen.getByLabelText('Permission mode'), 'auto');
     await userEvent.selectOptions(screen.getByLabelText('Model'), 'deepseek:deepseek-v4-pro');
     await userEvent.type(screen.getByLabelText('Message Megumi'), '  hello Megumi  ');
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
 
     expect(onSubmit).toHaveBeenCalledWith({
       message: 'hello Megumi',
-      permissionMode: 'accept_edits',
+      permissionMode: 'auto',
       providerId: 'deepseek',
       model: 'deepseek-v4-pro',
     });
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('');
   });
 
-  it('offers exactly the first-version permission posture choices', () => {
+  it('offers exactly the Agent Action Permission modes', () => {
     render(<TestComposer onSubmit={() => undefined} />);
 
     expect(
@@ -149,10 +154,9 @@ describe('Composer', () => {
         option.textContent,
       ]),
     ).toEqual([
-      ['default', 'Default'],
-      ['accept_edits', 'Accept edits'],
-      ['plan', 'Plan'],
-      ['auto', 'Auto'],
+      ['ask', 'Ask for approval'],
+      ['auto', 'Approve for me'],
+      ['full_access', 'Full access'],
     ]);
     expect(screen.queryByLabelText('Composer mode')).not.toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Chat' })).not.toBeInTheDocument();
@@ -169,7 +173,7 @@ describe('Composer', () => {
 
     expect(onSubmit).toHaveBeenCalledWith({
       message: 'Send from keyboard',
-      permissionMode: 'default',
+      permissionMode: 'ask',
       providerId: 'deepseek',
       model: 'deepseek-v4-flash',
     });
@@ -701,7 +705,7 @@ describe('Composer', () => {
 
     expect(onSubmit).toHaveBeenCalledWith({
       message: '/review 当前改动',
-      permissionMode: 'default',
+      permissionMode: 'ask',
       providerId: 'deepseek',
       model: 'deepseek-v4-flash',
     });
@@ -720,7 +724,7 @@ describe('Composer', () => {
 
     expect(onSubmit).toHaveBeenCalledWith({
       message: '/unknown abc',
-      permissionMode: 'default',
+      permissionMode: 'ask',
       providerId: 'deepseek',
       model: 'deepseek-v4-flash',
     });
@@ -860,7 +864,7 @@ describe('Composer', () => {
 
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('continue');
     expect(screen.getByLabelText('Model')).toHaveValue('deepseek:deepseek-v4-pro');
-    expect(rightControls).toHaveTextContent('Default');
+    expect(rightControls).toHaveTextContent('Ask for approval');
     expect(rightControls).toHaveTextContent('deepseek-v4-pro');
     expect(rightControls.lastElementChild).toBe(screen.getByRole('button', { name: 'Stop current run' }));
     expect(screen.getByRole('button', { name: 'Stop current run' })).toHaveClass('shrink-0');
@@ -957,7 +961,7 @@ describe('Composer', () => {
 
     expect(onSubmit).toHaveBeenCalledWith({
       message: 'try again normally',
-      permissionMode: 'default',
+      permissionMode: 'ask',
       providerId: 'deepseek',
       model: 'deepseek-v4-flash',
     });
@@ -973,7 +977,7 @@ describe('Composer', () => {
     expect(await screen.findByAltText('diagram.png')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
     expect(onSubmit).toHaveBeenCalledWith({
-      message: '', permissionMode: 'default', providerId: 'deepseek', model: 'deepseek-v4-flash',
+      message: '', permissionMode: 'ask', providerId: 'deepseek', model: 'deepseek-v4-flash',
       attachments: [{
         draftAttachmentId: 'draft-1', name: 'diagram.png', declaredMimeType: 'image/png',
         referenceId: 'ref-1', previewDataUrl: 'data:image/png;base64,AQID',

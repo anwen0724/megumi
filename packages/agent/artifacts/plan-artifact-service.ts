@@ -5,7 +5,7 @@ import type {
 } from './legacy-contracts/plan-artifact-contracts';
 import type {
   ImplementationPlanArtifactRecord,
-  PermissionModeState,
+  ExecutionIntentState,
 } from './legacy-contracts/plan-artifact-contracts';
 
 
@@ -21,7 +21,7 @@ export interface PlanArtifactServicePort {
   createPlanRecordForRun(input: {
     runId: string;
     goal: string;
-    permissionModeState: PermissionModeState;
+    executionIntentState: ExecutionIntentState;
     createdAt: string;
   }): ImplementationPlanArtifactRecord | undefined;
   getPlanByRun(runId: string): ImplementationPlanArtifactRecord | undefined;
@@ -55,10 +55,10 @@ export class PlanArtifactService implements PlanArtifactServicePort {
   createPlanRecordForRun(input: {
     runId: string;
     goal: string;
-    permissionModeState: PermissionModeState;
+    executionIntentState: ExecutionIntentState;
     createdAt: string;
   }): ImplementationPlanArtifactRecord | undefined {
-    if (input.permissionModeState.permissionMode !== 'plan') {
+    if (input.executionIntentState.executionIntent !== 'plan') {
       return undefined;
     }
 
@@ -71,7 +71,7 @@ export class PlanArtifactService implements PlanArtifactServicePort {
       updatedAt: input.createdAt,
       metadata: {
         artifactKind: 'implementation_plan',
-        permissionMode: input.permissionModeState.permissionMode,
+        executionIntent: input.executionIntentState.executionIntent,
       },
     });
 

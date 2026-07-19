@@ -3,7 +3,7 @@ import type { ApprovalResolvePayload } from '@megumi/desktop/main/ipc/schemas';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/product/runtime-timeline';
 import type { ChatGetContextUsageUiResult } from '@megumi/product/host-interface';
-import { type ApprovalCardResolvePayload, useApprovalStore } from '../../../entities/approval';
+import type { ToolApprovalResolvePayload, ToolApprovalResolveResult } from '../components/ProcessDisclosureBlockView';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
 import { useRunStore } from '../../../entities/run/store';
@@ -57,7 +57,6 @@ export function useChatPageController() {
   const projects = useProjectStore((state) => state.projects);
   const activeRunId = useRunStore((state) => state.activeRunId);
   const runs = useRunStore((state) => state.runs);
-  const approvalRequestsById = useApprovalStore((state) => state.approvalRequestsById);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [contextUsage, setContextUsage] = useState<ChatGetContextUsageUiResult | undefined>(undefined);
   const activeSession = sessions.find((session) =>
@@ -107,7 +106,6 @@ export function useChatPageController() {
   const activeRun = activeRunCandidate && !isDraftNewSession && (!activeRunCandidate.sessionId || activeRunCandidate.sessionId === effectiveActiveSessionId)
     ? activeRunCandidate
     : null;
-  const visibleRunId = activeRun?.runId ?? null;
   const userActionsBlocked =
     agentStatus === 'sending' ||
     agentStatus === 'running' ||
@@ -117,13 +115,9 @@ export function useChatPageController() {
     activeRun?.status === 'waiting_for_approval' ||
     activeRun?.status === 'cancelling';
 
-  const pendingApprovals = useMemo(() => (
-    visibleRunId
-      ? Object.values(approvalRequestsById)
-        .filter((request) => request.runId === visibleRunId && request.status === 'pending')
-        .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
-      : []
-  ), [visibleRunId, approvalRequestsById]);
+  const hasPendingApproval = timelineMessages.some((message) => message.role === 'assistant' && message.blocks.some((block) => (
+    block.kind === 'process_disclosure' && block.items.some((item) => item.kind === 'tool_activity' && item.status === 'awaiting_approval')
+  )));
 
   const composerStatus: ComposerStatus = agentStatus;
   const activeEmptyNewSession =
@@ -133,7 +127,7 @@ export function useChatPageController() {
   const canShowNewSessionWelcome = !effectiveActiveSessionId || activeEmptyNewSession;
   const hasTimelineContent =
     timelineMessages.length > 0 ||
-    pendingApprovals.length > 0 ||
+    hasPendingApproval ||
     agentStatus === 'sending' ||
     agentStatus === 'running' ||
     agentStatus === 'error' ||
@@ -142,7 +136,7 @@ export function useChatPageController() {
     Boolean(currentProject) &&
     agentStatus === 'idle' &&
     !activeRun &&
-    pendingApprovals.length === 0 &&
+    !hasPendingApproval &&
     (isDraftNewSession || activeEmptyNewSession);
 
   useEffect(() => {
@@ -238,7 +232,7 @@ export function useChatPageController() {
     }
   }
 
-  async function resolveApproval(payload: ApprovalCardResolvePayload) {
+  async function resolveApproval(payload: ToolApprovalResolvePayload): Promise<ToolApprovalResolveResult> {
     const resolvePayload: ApprovalResolvePayload = {
       ...payload,
     };
@@ -253,7 +247,7 @@ export function useChatPageController() {
         title: rendererI18n.t('chat:notifications.approvalFailed.title'),
         message: rendererI18n.t('chat:notifications.approvalFailed.message'),
       });
-      return;
+      return { status: 'failed', message: result.data.message };
     }
     if (isApprovalResolveFailed(result.data)) {
       showToast({
@@ -261,7 +255,9 @@ export function useChatPageController() {
         title: rendererI18n.t('chat:notifications.approvalFailed.title'),
         message: rendererI18n.t('chat:notifications.approvalFailed.message'),
       });
+      return { status: 'failed', message: result.data.failure.message };
     }
+    return { status: 'accepted' };
   }
 
   return {
@@ -274,7 +270,6 @@ export function useChatPageController() {
     activeRuntimeTimelineSessionKey,
     timelineMessages,
     timelineUpdateKey,
-    pendingApprovals,
     projectPickerOpen,
     composerStatus,
     contextUsage,

@@ -43,7 +43,8 @@ export type SaveToolResultMessageRequest = {
   parent_entry_id?: string;
   tool_call_id: string;
   tool_name: string;
-  status: 'success' | 'failure';
+  status: 'success' | 'failure' | 'permission_denied' | 'user_rejected' | 'cancelled';
+  error?: { code: string; message: string; details?: Record<string, unknown> };
   content: ContentBlock[];
   completed_at: string;
 };

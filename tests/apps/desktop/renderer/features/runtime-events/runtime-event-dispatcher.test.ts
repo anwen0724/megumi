@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useApprovalStore } from '@megumi/desktop/renderer/entities/approval';
 import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
@@ -43,7 +42,6 @@ describe('runtime event dispatcher', () => {
     useRunStore.getState().resetRuns();
     useRuntimeTimelineStore.getState().reset();
     useToolCallStore.getState().reset();
-    useApprovalStore.getState().reset();
     useSessionStore.setState({
       sessions: [],
       activeSessionId: 'session-1',
@@ -187,76 +185,70 @@ describe('runtime event dispatcher', () => {
     });
   });
 
-  it('projects approval events and waiting status into renderer stores', () => {
-    dispatchRuntimeEvent(runtimeEvent('approval.requested', 1, {
+  it('projects approval lifecycle into the existing tool activity', () => {
+    dispatchRuntimeEvent(runtimeEvent('model_call.tool_call', 1, {
+      toolCallId: 'tool-call-1',
+      toolName: 'edit_file',
+      input: { path: 'src/app.ts' },
+    }));
+    dispatchRuntimeEvent(runtimeEvent('approval.requested', 2, {
       approvalRequest: {
         approvalRequestId: 'approval-1',
         toolCallId: 'tool-call-1',
         toolExecutionId: 'tool-execution-1',
         runId: 'run-1',
-        stepId: 'step-1',
         toolName: 'edit_file',
-        capabilities: ['project_write'],
-        riskLevel: 'medium',
-        title: 'Edit file',
         summary: 'Edit src/app.ts',
-        preview: {
-          action: 'Edit file',
-          targets: [{ kind: 'file', label: 'src/app.ts', sensitivity: 'normal' }],
-        },
-        requestedScope: 'once',
+        options: [{
+          option_id: 'once:tool-call-1',
+          scope: 'once',
+          display: { label: 'Once', description: 'Allow this call.' },
+          effect: { type: 'current_tool_call' },
+        }],
+        defaultOptionId: 'once:tool-call-1',
         status: 'pending',
         createdAt: '2026-05-20T00:00:00.000Z',
       },
     }));
-    dispatchRuntimeEvent(runtimeEvent('run.status.changed', 2, {
+    const awaitingSession = useRuntimeTimelineStore.getState().sessions['runtime:session-1'];
+    const awaitingAssistant = awaitingSession?.messages.find((message) => message.role === 'assistant');
+    const awaitingProcess = awaitingAssistant?.blocks.find((block) => block.kind === 'process_disclosure');
+    expect(awaitingProcess).toMatchObject({
+      kind: 'process_disclosure',
+      items: [expect.objectContaining({
+        kind: 'tool_activity',
+        toolCallId: 'tool-call-1',
+        toolName: 'edit_file',
+        status: 'awaiting_approval',
+        approval: expect.objectContaining({ approvalRequestId: 'approval-1' }),
+      })],
+    });
+    dispatchRuntimeEvent(runtimeEvent('run.status.changed', 3, {
       from: 'running',
       to: 'waiting_for_approval',
     }));
-    dispatchRuntimeEvent(runtimeEvent('approval.resolved', 3, {
+    dispatchRuntimeEvent(runtimeEvent('approval.resolved', 4, {
       approvalRequestId: 'approval-1',
+      toolCallId: 'tool-call-1',
       decision: 'approved',
+      optionId: 'once:tool-call-1',
       scope: 'once',
       decidedAt: '2026-05-20T00:00:02.000Z',
     }));
 
-    expect(useApprovalStore.getState().approvalRequestsById['approval-1']).toMatchObject({
-      status: 'approved',
-      resolvedAt: '2026-05-20T00:00:02.000Z',
+    const runtimeSession = useRuntimeTimelineStore.getState().sessions['runtime:session-1'];
+    const assistant = runtimeSession?.messages.find((message) => message.role === 'assistant');
+    const process = assistant?.blocks.find((block) => block.kind === 'process_disclosure');
+    expect(process).toMatchObject({
+      kind: 'process_disclosure',
+      items: [expect.objectContaining({
+        kind: 'tool_activity',
+        toolCallId: 'tool-call-1',
+        status: 'queued',
+        approval: undefined,
+      })],
     });
     expect(useChatUiStore.getState().agentStatus).toBe('running');
-  });
-
-  it('normalizes persisted approval events before storing them for UI rendering', () => {
-    dispatchRuntimeEvent(runtimeEvent('approval.requested', 1, {
-      approvalRequest: {
-        approvalRequestId: 'approval-legacy',
-        toolCallId: 'tool-call-1',
-        toolExecutionId: 'tool-call-1',
-        runId: 'run-1',
-        toolName: 'write_file',
-        title: 'write_file',
-        status: 'pending',
-        createdAt: '2026-05-20T00:00:00.000Z',
-      },
-    }));
-
-    expect(useApprovalStore.getState().approvalRequestsById['approval-legacy']).toMatchObject({
-      approvalRequestId: 'approval-legacy',
-      runId: 'run-1',
-      toolCallId: 'tool-call-1',
-      toolExecutionId: 'tool-call-1',
-      toolName: 'write_file',
-      title: 'write_file',
-      requestedScope: 'once',
-      summary: 'write_file requires approval.',
-      preview: {
-        action: 'write_file',
-        targets: [],
-      },
-      status: 'pending',
-      createdAt: '2026-05-20T00:00:00.000Z',
-    });
   });
 
   it('does not project duplicate tool events twice', () => {

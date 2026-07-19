@@ -35,6 +35,23 @@ export const settings = {
     approvals: '工具审批',
     approvalsDescription: 'Megumi 会根据当前权限模式，在执行受限工具操作前请求确认。',
     managed: '在每个会话中管理',
+    rules: {
+      title: '权限规则',
+      description: '为特定工具、文件、命令或网络目标设置明确的权限行为。',
+      precedence: '显式拒绝、询问和允许规则会先于输入框中选择的权限模式进行判断。',
+      add: '添加规则', effect: '效果', target: '目标类型', scope: '生效范围', operation: '操作', tool: '工具',
+      operationTarget: '操作', toolTarget: '工具', matchType: '匹配方式', matchValue: '匹配值',
+      save: '保存规则', saving: '正在保存…', cancel: '取消', loading: '正在加载权限规则…', empty: '暂无规则', unavailable: '权限设置当前不可用。',
+      deleteNamed: '删除规则 {{name}}', hostnamePlaceholder: '*.example.com', valuePlaceholder: '输入路径、命令或匹配值',
+      effects: { allow: '始终允许', ask: '每次询问', deny: '拒绝' },
+      scopes: { user: '所有工作区', workspace: '当前工作区' },
+      sources: { user: '所有工作区', workspace: '工作区规则', session: '会话授权' },
+      operators: { any: '任意目标', exact: '精确匹配', prefix: '前缀匹配', glob: '模式匹配', hostname: '主机名' },
+      actions: {
+        workspace_read: '读取工作区文件', workspace_write: '修改工作区文件', process_execute: '执行命令',
+        network_search: '搜索网络', network_fetch: '读取网页', agent_context_activate: '激活上下文', external_invoke: '使用外部工具',
+      },
+    },
   },
   about: {
     tagline: '与你一起完成真实任务的个人 Agent。',

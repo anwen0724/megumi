@@ -1,641 +1,191 @@
 // @vitest-environment node
+/* Verifies action resolution, safety policy, rule order, modes, and approval effects. */
 import { describe, expect, it } from 'vitest';
-import {
-  createPermissionService,
-  type ApprovalDecision,
-  type ApprovalRequestFacts,
-  type EvaluateToolExecutionRequest,
-  type PermissionDecision,
-  type PermissionMode,
-  type PermissionRule,
-  type RegisteredToolPermissionFacts,
-  type RuntimeCapabilityPolicy,
-} from '@megumi/agent/permissions';
+import { createPermissionService, type PermissionRule } from '@megumi/agent/permissions';
 
 class FakeSettingsApplyService {
   requests: unknown[] = [];
   failure?: { code: string; message: string };
-
-  async addPermissionRule(request: unknown) {
+  async addPermissionRules(request: unknown) {
     this.requests.push(request);
-    if (this.failure) {
-      return { status: 'failed' as const, failure: this.failure };
-    }
-    return { status: 'saved' as const };
+    return this.failure ? { status: 'failed' as const, failure: this.failure } : { status: 'saved' as const };
   }
 }
 
-describe('Permission Service', () => {
-  describe('evaluateToolExecution', () => {
-    it('denies missing registered tools', async () => {
-      const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
-
-      const result = await service.evaluateToolExecution(baseEvaluateRequest({
-        registered_tool: undefined,
-      }));
-
-      expect(result).toEqual({
-        status: 'ok',
-        decision: expect.objectContaining({
-          type: 'deny',
-          denial_code: 'tool_not_found',
-        }),
-      });
-    });
-
-    it('denies process execution when the runtime capability is disabled', async () => {
-      const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
-
-      const result = await service.evaluateToolExecution(baseEvaluateRequest({
-        registered_tool: registeredTool({
-          capabilities: ['command_run'],
-          risk_level: 'high',
-          side_effect: 'process_execution',
-        }),
-        runtime_capability_policy: {
-          custom_tools_enabled: true,
-          process_execution_enabled: false,
-          network_enabled: true,
-        },
-      }));
-
-      expect(result.status).toBe('ok');
-      if (result.status === 'ok') {
-        expect(result.decision).toMatchObject({
-          type: 'deny',
-          denial_code: 'capability_disabled',
-          execution_class: 'process_execution',
-        });
-      }
-    });
-
-    it('treats skill script run_command inputs as process execution', async () => {
-      const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
-
-      const result = await service.evaluateToolExecution(baseEvaluateRequest({
-        tool_name: 'run_command',
-        tool_input: {
-          command: 'C:\\skills\\checks\\scripts\\check.ps1 --watch',
-          metadata: {
-            source: 'skill',
-            skillId: 'checks:test',
-            scriptName: 'check',
-          },
-        },
-        registered_tool: registeredTool({
-          capabilities: ['command_run'],
-          risk_level: 'medium',
-          side_effect: 'process_execution',
-        }),
-      }));
-
-      expect(result.status).toBe('ok');
-      if (result.status === 'ok') {
-        expect(result.decision).toMatchObject({
-          type: 'requires_approval',
-          execution_class: 'process_execution',
-        });
-      }
-    });
-
-    it('denies workspace paths outside the workspace', async () => {
-      const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
-
-      const result = await service.evaluateToolExecution(baseEvaluateRequest({
-        registered_tool: registeredTool({
-          registered_tool_name: 'write_file',
-          source_tool_name: 'write_file',
-          capabilities: ['project_write'],
-          risk_level: 'medium',
-          side_effect: 'project_file_operation',
-        }),
-        workspace_path: {
-          inside_workspace: false,
-          protected: false,
-          sensitive: false,
-        },
-      }));
-
-      expect(result.status).toBe('ok');
-      if (result.status === 'ok') {
-        expect(result.decision).toMatchObject({
-          type: 'deny',
-          denial_code: 'outside_workspace',
-        });
-      }
-    });
-
-    it('requires approval for workspace mutations under the conservative baseline without allow rules', async () => {
-      const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
-
-      const result = await service.evaluateToolExecution(baseEvaluateRequest({
-        tool_name: 'write_file',
-        tool_input: { path: 'src/index.ts', content: 'export {};' },
-        registered_tool: registeredTool({
-          registered_tool_name: 'write_file',
-          source_tool_name: 'write_file',
-          capabilities: ['project_write'],
-          risk_level: 'medium',
-          side_effect: 'project_file_operation',
-        }),
-        workspace_path: {
-          inside_workspace: true,
-          protected: false,
-          sensitive: false,
-          workspace_path: 'src/index.ts',
-        },
-      }));
-
-      expect(result.status).toBe('ok');
-      if (result.status === 'ok') {
-        expect(result.decision).toMatchObject({
-          type: 'requires_approval',
-          approval: {
-            allowed_scopes: ['once', 'session'],
-            default_scope: 'once',
-          },
-        });
-      }
-    });
-
-    it('allows tool execution when settings allow an exact command pattern', async () => {
-      const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
-
-      const result = await service.evaluateToolExecution(baseEvaluateRequest({
-        permission_settings: settings({
-          allow: [{ source: 'user', pattern: 'tool:run_command|command=npm test' }],
-        }),
-      }));
-
-      expect(result.status).toBe('ok');
-      if (result.status === 'ok') {
-        expect(result.decision).toMatchObject({ type: 'allow' });
-      }
-    });
-
-    it('allows tool execution when settings allow a trailing wildcard command pattern', async () => {
-      const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
-
-      const result = await service.evaluateToolExecution(baseEvaluateRequest({
-        permission_settings: settings({
-          allow: [{ source: 'user', pattern: 'tool:run_command|command=npm*' }],
-        }),
-      }));
-
-      expect(result.status).toBe('ok');
-      if (result.status === 'ok') {
-        expect(result.decision).toMatchObject({ type: 'allow' });
-      }
-    });
-
-    it('denies tool execution when settings deny a matching destructive command pattern', async () => {
-      const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
-
-      const result = await service.evaluateToolExecution(baseEvaluateRequest({
-        tool_input: { command: 'rm -rf node_modules' },
-        permission_settings: settings({
-          deny: [{ source: 'user', pattern: 'tool:run_command|command=rm -rf*' }],
-        }),
-      }));
-
-      expect(result.status).toBe('ok');
-      if (result.status === 'ok') {
-        expect(result.decision).toMatchObject({
-          type: 'deny',
-          denial_code: 'rule_denied',
-        });
-      }
-    });
-
-    it('treats missing permission settings as empty rule lists', async () => {
-      const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
-
-      const result = await service.evaluateToolExecution(baseEvaluateRequest({
-        permission_settings: undefined,
-      }));
-
-      expect(result.status).toBe('ok');
-      if (result.status === 'ok') {
-        expect(result.decision.type).toBe('requires_approval');
-      }
-    });
-
-    it('allows activate_skill as a low-risk built-in runtime context tool', async () => {
-      const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
-
-      const result = await service.evaluateToolExecution(baseEvaluateRequest({
-        tool_name: 'activate_skill',
-        tool_input: { skillId: 'superpowers:brainstorming' },
-        registered_tool: registeredTool({
-          registered_tool_name: 'activate_skill',
-          source_tool_name: 'activate_skill',
-          capabilities: ['project_read'],
-          risk_level: 'low',
-          side_effect: 'none',
-        }),
-      }));
-
-      expect(result.status).toBe('ok');
-      if (result.status === 'ok') {
-        expect(result.decision).toMatchObject({
-          type: 'allow',
-          execution_class: 'read_only',
-        });
-      }
-    });
-
-    it('treats missing workspace path facts as no workspace path restriction', async () => {
-      const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
-
-      const result = await service.evaluateToolExecution(baseEvaluateRequest({
-        tool_name: 'write_file',
-        tool_input: { path: 'src/index.ts', content: 'export {};' },
-        registered_tool: registeredTool({
-          registered_tool_name: 'write_file',
-          source_tool_name: 'write_file',
-          capabilities: ['project_write'],
-          risk_level: 'medium',
-          side_effect: 'project_file_operation',
-        }),
-        workspace_path: undefined,
-      }));
-
-      expect(result.status).toBe('ok');
-      if (result.status === 'ok') {
-        expect(result.decision.type).toBe('requires_approval');
-      }
-    });
-
-    it('uses the same conservative V1 baseline for all permission modes', async () => {
-      const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
-      const modes: PermissionMode[] = ['default', 'accept_edits', 'plan', 'auto'];
-
-      for (const permission_mode of modes) {
-        const result = await service.evaluateToolExecution(baseEvaluateRequest({
-          permission_mode,
-          tool_name: 'write_file',
-          tool_input: { path: 'src/index.ts', content: 'export {};' },
-          registered_tool: registeredTool({
-            registered_tool_name: 'write_file',
-            source_tool_name: 'write_file',
-            capabilities: ['project_write'],
-            risk_level: 'medium',
-            side_effect: 'project_file_operation',
-          }),
-        }));
-
-        expect(result.status).toBe('ok');
-        if (result.status === 'ok') {
-          expect(result.decision.type).toBe('requires_approval');
-        }
-      }
-    });
-  });
-
-  describe('validateApprovalDecision', () => {
-    it('accepts pending matching approvals for runs waiting on approval', async () => {
-      const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
-
-      const result = await service.validateApprovalDecision({
-        approval_request: approvalRequest(),
-        original_permission_decision: requiresApprovalDecision(),
-        decision: approvalDecision(),
-        current_run_status: 'waiting_for_approval',
-        validated_at: '2026-07-05T00:00:00.000Z',
-      });
-
-      expect(result).toEqual({ status: 'accepted' });
-    });
-
-    it('rejects non-pending approval requests', async () => {
-      const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
-
-      const result = await service.validateApprovalDecision({
-        approval_request: approvalRequest({ status: 'approved' }),
-        original_permission_decision: requiresApprovalDecision(),
-        decision: approvalDecision(),
-        current_run_status: 'waiting_for_approval',
-        validated_at: '2026-07-05T00:00:00.000Z',
-      });
-
-      expect(result).toMatchObject({
-        status: 'rejected',
-        reason: 'approval_request_not_pending',
-      });
-    });
-
-    it('rejects runs that are no longer waiting for approval', async () => {
-      const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
-
-      const result = await service.validateApprovalDecision({
-        approval_request: approvalRequest(),
-        original_permission_decision: requiresApprovalDecision(),
-        decision: approvalDecision(),
-        current_run_status: 'running',
-        validated_at: '2026-07-05T00:00:00.000Z',
-      });
-
-      expect(result).toMatchObject({
-        status: 'rejected',
-        reason: 'run_not_waiting_for_approval',
-      });
-    });
-
-    it('rejects approval scopes that were not allowed by the request', async () => {
-      const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
-
-      const result = await service.validateApprovalDecision({
-        approval_request: approvalRequest({ allowed_scopes: ['once'] }),
-        original_permission_decision: requiresApprovalDecision(),
-        decision: approvalDecision({ scope: 'session' }),
-        current_run_status: 'waiting_for_approval',
-        validated_at: '2026-07-05T00:00:00.000Z',
-      });
-
-      expect(result).toMatchObject({
-        status: 'rejected',
-        reason: 'approval_scope_not_allowed',
-      });
-    });
-
-    it('rejects attempts to approve an original deny decision', async () => {
-      const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
-
-      const result = await service.validateApprovalDecision({
-        approval_request: approvalRequest(),
-        original_permission_decision: {
-          type: 'deny',
-          reason: 'Destructive command denied.',
-          execution_class: 'process_execution',
-          denial_code: 'destructive_command',
-        },
-        decision: approvalDecision(),
-        current_run_status: 'waiting_for_approval',
-        validated_at: '2026-07-05T00:00:00.000Z',
-      });
-
-      expect(result).toMatchObject({
-        status: 'rejected',
-        reason: 'decision_not_allowed',
-      });
-    });
-  });
-
-  describe('applyApprovalDecision', () => {
-    it('does not write settings for denied decisions', async () => {
-      const settingsService = new FakeSettingsApplyService();
-      const service = createPermissionService({ settings_service: settingsService });
-
-      const result = await service.applyApprovalDecision({
-        session_id: 'session_1',
-        approval_request: approvalRequest(),
-        original_permission_decision: requiresApprovalDecision(),
-        decision: approvalDecision({ decision: 'denied', scope: 'once' }),
-        applied_at: '2026-07-05T00:00:01.000Z',
-      });
-
-      expect(result).toEqual({
-        status: 'applied',
-        permission_state_change: { type: 'none' },
-      });
-      expect(settingsService.requests).toEqual([]);
-    });
-
-    it('does not write settings for once scope approvals', async () => {
-      const settingsService = new FakeSettingsApplyService();
-      const service = createPermissionService({ settings_service: settingsService });
-
-      const result = await service.applyApprovalDecision({
-        session_id: 'session_1',
-        approval_request: approvalRequest(),
-        original_permission_decision: requiresApprovalDecision(),
-        decision: approvalDecision({ scope: 'once' }),
-        applied_at: '2026-07-05T00:00:01.000Z',
-      });
-
-      expect(result).toEqual({
-        status: 'applied',
-        permission_state_change: { type: 'none' },
-      });
-      expect(settingsService.requests).toEqual([]);
-    });
-
-    it('writes session command rules through Settings Service for session scope approvals', async () => {
-      const settingsService = new FakeSettingsApplyService();
-      const service = createPermissionService({ settings_service: settingsService });
-
-      const result = await service.applyApprovalDecision({
-        session_id: 'session_1',
-        approval_request: approvalRequest(),
-        original_permission_decision: requiresApprovalDecision(),
-        decision: approvalDecision({ scope: 'session' }),
-        applied_at: '2026-07-05T00:00:01.000Z',
-      });
-
-      expect(result).toEqual({
-        status: 'applied',
-        permission_state_change: {
-          type: 'settings_rule_change',
-          rule: {
-            source: 'session',
-            source_id: 'session_1',
-            pattern: 'tool:run_command|command=npm test',
-          },
-        },
-      });
-      expect(settingsService.requests).toEqual([{
-        rule: {
-          source: 'session',
-          source_id: 'session_1',
-          pattern: 'tool:run_command|command=npm test',
-        },
-        session_id: 'session_1',
-        applied_at: '2026-07-05T00:00:01.000Z',
-      }]);
-    });
-
-    it('writes session path rules for write_file approvals', async () => {
-      const settingsService = new FakeSettingsApplyService();
-      const service = createPermissionService({ settings_service: settingsService });
-
-      const result = await service.applyApprovalDecision({
-        session_id: 'session_1',
-        approval_request: approvalRequest({
-          subject: {
-            type: 'tool_call',
-            tool_call_id: 'tool_call_1',
-            tool_name: 'write_file',
-            input: { path: 'src/index.ts', content: 'export {};' },
-          },
-        }),
-        original_permission_decision: requiresApprovalDecision({
-          execution_class: 'workspace_mutation',
-        }),
-        decision: approvalDecision({ scope: 'session' }),
-        applied_at: '2026-07-05T00:00:01.000Z',
-      });
-
-      expect(result).toMatchObject({
-        status: 'applied',
-        permission_state_change: {
-          type: 'settings_rule_change',
-          rule: {
-            source: 'session',
-            source_id: 'session_1',
-            pattern: 'tool:write_file|path=src/index.ts',
-          },
-        },
-      });
-    });
-
-    it('fails when session scope cannot extract stable primary input', async () => {
-      const settingsService = new FakeSettingsApplyService();
-      const service = createPermissionService({ settings_service: settingsService });
-
-      const result = await service.applyApprovalDecision({
-        session_id: 'session_1',
-        approval_request: approvalRequest({
-          subject: {
-            type: 'tool_call',
-            tool_call_id: 'tool_call_1',
-            tool_name: 'custom_tool',
-            input: { nested: { value: true } },
-          },
-        }),
-        original_permission_decision: requiresApprovalDecision({
-          execution_class: 'custom_tool',
-        }),
-        decision: approvalDecision({ scope: 'session' }),
-        applied_at: '2026-07-05T00:00:01.000Z',
-      });
-
-      expect(result).toMatchObject({
-        status: 'failed',
-        failure: {
-          code: 'stable_permission_rule_unavailable',
-        },
-      });
-      expect(settingsService.requests).toEqual([]);
-    });
-
-    it('returns failed when Settings Service fails to save a session rule', async () => {
-      const settingsService = new FakeSettingsApplyService();
-      settingsService.failure = {
-        code: 'settings_write_failed',
-        message: 'Settings write failed.',
-      };
-      const service = createPermissionService({ settings_service: settingsService });
-
-      const result = await service.applyApprovalDecision({
-        session_id: 'session_1',
-        approval_request: approvalRequest(),
-        original_permission_decision: requiresApprovalDecision(),
-        decision: approvalDecision({ scope: 'session' }),
-        applied_at: '2026-07-05T00:00:01.000Z',
-      });
-
-      expect(result).toEqual({
-        status: 'failed',
-        failure: {
-          code: 'settings_write_failed',
-          message: 'Settings write failed.',
-        },
-      });
-    });
-  });
+const identity = (name: string) => ({
+  registered_tool_name: name, source_id: 'built_in', namespace: 'megumi', source_tool_name: name,
 });
 
-function baseEvaluateRequest(overrides: Partial<EvaluateToolExecutionRequest> = {}): EvaluateToolExecutionRequest {
-  return {
-    run_id: 'run_1',
-    tool_call_id: 'tool_call_1',
-    tool_name: 'run_command',
-    tool_input: { command: 'npm test' },
-    registered_tool: registeredTool(),
-    permission_mode: 'default' as const,
-    permission_settings: settings(),
-    workspace_path: {
-      inside_workspace: true,
-      protected: false,
-      sensitive: false,
-    },
-    runtime_capability_policy: runtimeCapabilityPolicy(),
-    evaluated_at: '2026-07-05T00:00:00.000Z',
-    ...overrides,
-  };
-}
+const baseRequest = (overrides: Record<string, unknown> = {}) => ({
+  run_id: 'run_1', session_id: 'session_1', workspace_id: 'workspace_1', tool_call_id: 'call_1',
+  tool_input: { command: 'npm test' }, registered_tool: identity('run_command'),
+  permission_mode: 'ask' as const,
+  permission_settings: { mode: 'ask' as const, allow: [], ask: [], deny: [] },
+  evaluated_at: '2026-07-19T00:00:00.000Z',
+  ...overrides,
+});
 
-function registeredTool(overrides: Partial<RegisteredToolPermissionFacts> = {}): RegisteredToolPermissionFacts {
-  return {
-    registered_tool_name: 'run_command',
-    source_id: 'built_in',
-    source_tool_name: 'run_command',
-    capabilities: ['command_run'],
-    risk_level: 'high',
-    side_effect: 'process_execution',
-    ...overrides,
-  };
-}
+describe('Permission Service', () => {
+  it('resolves built-ins without trusting ToolDefinition risk metadata', async () => {
+    const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
+    const result = await service.evaluateToolCall(baseRequest({
+      registered_tool: identity('write_file'), tool_input: { path: 'src/a.ts', content: 'x' },
+      workspace_path: { absolute_path: 'C:/work/src/a.ts', workspace_path: 'src/a.ts', inside_workspace: true, protected: false, sensitive: false },
+    }));
+    expect(result).toMatchObject({ status: 'ok', operations: [{ action: 'workspace.write', resource: { type: 'workspace.path', id: 'src/a.ts' } }], decision: { type: 'requires_approval', safety_assessment: 'safe' } });
+  });
 
-function runtimeCapabilityPolicy(overrides: Partial<RuntimeCapabilityPolicy> = {}): RuntimeCapabilityPolicy {
-  return {
-    custom_tools_enabled: true,
-    process_execution_enabled: true,
-    network_enabled: true,
-    ...overrides,
-  };
-}
+  it('treats prohibited as approvable and full access as allowed', async () => {
+    const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
+    const prohibited = { absolute_path: 'C:/outside/a.ts', workspace_path: '../outside/a.ts', inside_workspace: false, protected: false, sensitive: false };
+    expect(await service.evaluateToolCall(baseRequest({ registered_tool: identity('write_file'), tool_input: { path: '../outside/a.ts' }, workspace_path: prohibited, permission_mode: 'auto' })))
+      .toMatchObject({ decision: { type: 'requires_approval', safety_assessment: 'prohibited' } });
+    expect(await service.evaluateToolCall(baseRequest({ registered_tool: identity('write_file'), tool_input: { path: '../outside/a.ts' }, workspace_path: prohibited, permission_mode: 'full_access' })))
+      .toMatchObject({ decision: { type: 'allow', safety_assessment: 'prohibited' } });
+  });
 
-function settings(overrides: Partial<{
-  allow: PermissionRule[];
-  ask: PermissionRule[];
-  deny: PermissionRule[];
-}> = {}) {
-  return {
-    allow: [],
-    ask: [],
-    deny: [],
-    ...overrides,
-  };
-}
+  it('keeps an outside-Workspace path absolute for policy matching and approval display', async () => {
+    const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
+    const result = await service.evaluateToolCall(baseRequest({
+      registered_tool: identity('write_file'),
+      tool_input: { path: '../outside/a.ts' },
+      workspace_path: { absolute_path: 'C:/outside/a.ts', workspace_path: '../outside/a.ts', inside_workspace: false, protected: false, sensitive: false },
+    }));
 
-function approvalRequest(overrides: Partial<ApprovalRequestFacts> = {}): ApprovalRequestFacts {
-  return {
-    approval_request_id: 'approval_1',
-    status: 'pending',
-    subject: {
-      type: 'tool_call',
-      tool_call_id: 'tool_call_1',
-      tool_name: 'run_command',
-      input: { command: 'npm test' },
-    },
-    allowed_scopes: ['once', 'session'],
-    ...overrides,
-  };
-}
+    expect(result).toMatchObject({ operations: [{ resource: { id: 'C:/outside/a.ts' } }] });
+  });
 
-function approvalDecision(overrides: Partial<ApprovalDecision> = {}): ApprovalDecision {
-  return {
-    approval_request_id: 'approval_1',
-    decision: 'approved',
-    scope: 'session',
-    decided_by: 'user',
-    decided_at: '2026-07-05T00:00:00.000Z',
-    ...overrides,
-  };
-}
+  it('uses deny then ask then allow before mode defaults', async () => {
+    const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
+    const toolRule = (source: PermissionRule['source']): PermissionRule => ({ source, ...(source === 'session' ? { source_id: 'session_1' } : {}), target: { kind: 'tool', tool_identity: { source_id: 'built_in', namespace: 'megumi', source_tool_name: 'run_command' } } });
+    const decision = await service.evaluateToolCall(baseRequest({
+      permission_mode: 'full_access',
+      permission_settings: { mode: 'full_access', allow: [toolRule('user')], ask: [toolRule('user')], deny: [toolRule('user')] },
+    }));
+    expect(decision).toMatchObject({ decision: { type: 'deny', denial_code: 'rule_denied' } });
+    const asked = await service.evaluateToolCall(baseRequest({
+      permission_mode: 'full_access',
+      permission_settings: { mode: 'full_access', allow: [toolRule('user')], ask: [toolRule('user')], deny: [] },
+    }));
+    expect(asked).toMatchObject({ decision: { type: 'requires_approval' } });
+  });
 
-type RequiresApprovalDecision = Extract<PermissionDecision, { type: 'requires_approval' }>;
+  it('uses external.invoke for registered tools without a trusted resolver', async () => {
+    const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
+    const result = await service.evaluateToolCall(baseRequest({ registered_tool: { registered_tool_name: 'mcp_calendar', source_id: 'mcp:calendar', namespace: 'calendar', source_tool_name: 'create_event' }, tool_input: {} }));
+    expect(result).toMatchObject({ operations: [{ action: 'external.invoke', resource: { type: 'tool.identity' } }], decision: { type: 'requires_approval', safety_assessment: 'prohibited', options: [{ scope: 'once' }, { scope: 'session' }] } });
+  });
 
-function requiresApprovalDecision(overrides: Partial<RequiresApprovalDecision> = {}): PermissionDecision {
-  return {
-    type: 'requires_approval',
-    reason: 'Process execution requires approval.',
-    execution_class: 'process_execution',
-    approval: {
-      allowed_scopes: ['once', 'session'],
-      default_scope: 'once',
-    },
-    ...overrides,
-  };
-}
+  it('normalizes a web URL for rule matching without producing execution targets', async () => {
+    const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
+    const result = await service.evaluateToolCall(baseRequest({
+      registered_tool: identity('web_fetch'),
+      tool_input: { url: 'https://EXAMPLE.com/docs' },
+      permission_mode: 'auto',
+    }));
+
+    expect(result).toMatchObject({
+      operations: [{
+        action: 'network.fetch',
+        resource: { type: 'network.url', id: 'https://example.com/docs', attributes: { hostname: 'example.com' } },
+      }],
+      decision: { type: 'allow', safety_assessment: 'safe' },
+    });
+    expect(result).not.toHaveProperty('execution_targets');
+  });
+
+  it('does not turn Tool Runtime network analysis into a Permission decision', async () => {
+    const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
+    const result = await service.evaluateToolCall(baseRequest({
+      registered_tool: identity('web_fetch'),
+      tool_input: { url: 'http://127.0.0.1/private' },
+      permission_mode: 'auto',
+    }));
+
+    expect(result).toMatchObject({
+      operations: [{
+        action: 'network.fetch',
+        resource: { type: 'network.url', attributes: { hostname: '127.0.0.1' } },
+      }],
+      decision: { type: 'allow', safety_assessment: 'safe' },
+    });
+  });
+
+  it('lets a Session Tool Grant cover different inputs while explicit ask still overrides it', async () => {
+    const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
+    const sessionGrant: PermissionRule = {
+      source: 'session', source_id: 'session_1',
+      target: { kind: 'tool', tool_identity: { source_id: 'built_in', namespace: 'megumi', source_tool_name: 'run_command' } },
+    };
+    const granted = await service.evaluateToolCall(baseRequest({
+      tool_input: { command: 'npm run build' },
+      permission_settings: { mode: 'ask', allow: [sessionGrant], ask: [], deny: [] },
+    }));
+    expect(granted).toMatchObject({ decision: { type: 'allow' } });
+
+    const asked = await service.evaluateToolCall(baseRequest({
+      tool_input: { command: 'npm run package' },
+      permission_settings: { mode: 'ask', allow: [sessionGrant], ask: [sessionGrant], deny: [] },
+    }));
+    expect(asked).toMatchObject({ decision: { type: 'requires_approval' } });
+  });
+
+  it('allows context activation but does not authorize later tools', async () => {
+    const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
+    const result = await service.evaluateToolCall(baseRequest({ registered_tool: identity('activate_skill'), tool_input: { skillId: 'x' } }));
+    expect(result).toMatchObject({ operations: [{ action: 'agent.context.activate' }], decision: { type: 'allow', safety_assessment: 'safe' } });
+  });
+
+  it('applies once without settings and session by the original immutable option', async () => {
+    const settings = new FakeSettingsApplyService();
+    const service = createPermissionService({ settings_service: settings });
+    const evaluated = await service.evaluateToolCall(baseRequest());
+    if (evaluated.status !== 'ok' || evaluated.decision.type !== 'requires_approval') throw new Error('approval expected');
+    const once = await service.applyApprovalDecision({
+      original_permission_decision: evaluated.decision, session_id: 'session_1', applied_at: '2026-07-19T00:00:01.000Z',
+      decision: { approval_request_id: 'approval_1', decision: 'approved', option_id: evaluated.decision.default_option_id, decided_by: 'user', decided_at: '2026-07-19T00:00:01.000Z' },
+    });
+    expect(once).toEqual({ status: 'applied', effect: { type: 'none' } });
+    expect(settings.requests).toHaveLength(0);
+    const sessionOption = evaluated.decision.options.find((option) => option.scope === 'session');
+    const session = await service.applyApprovalDecision({
+      original_permission_decision: evaluated.decision, session_id: 'session_1', applied_at: '2026-07-19T00:00:02.000Z',
+      decision: { approval_request_id: 'approval_1', decision: 'approved', option_id: sessionOption?.option_id, decided_by: 'user', decided_at: '2026-07-19T00:00:02.000Z' },
+    });
+    expect(session).toMatchObject({ status: 'applied', effect: { type: 'session_tool_grant' } });
+    expect(settings.requests).toHaveLength(1);
+  });
+
+  it('rejects unknown options without writing settings', async () => {
+    const settings = new FakeSettingsApplyService();
+    const service = createPermissionService({ settings_service: settings });
+    const evaluated = await service.evaluateToolCall(baseRequest());
+    if (evaluated.status !== 'ok' || evaluated.decision.type !== 'requires_approval') throw new Error('approval expected');
+    await expect(service.applyApprovalDecision({
+      original_permission_decision: evaluated.decision, session_id: 'session_1', applied_at: '2026-07-19T00:00:02.000Z',
+      decision: { approval_request_id: 'approval_1', decision: 'approved', option_id: 'forged', decided_by: 'user', decided_at: '2026-07-19T00:00:02.000Z' },
+    })).resolves.toMatchObject({ status: 'rejected', reason: 'option_not_found' });
+    expect(settings.requests).toHaveLength(0);
+  });
+
+  it('rejects approval application when the original decision did not require approval', async () => {
+    const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
+    const evaluated = await service.evaluateToolCall(baseRequest({ permission_mode: 'full_access' }));
+    if (evaluated.status !== 'ok') throw new Error('permission evaluation expected');
+    await expect(service.applyApprovalDecision({
+      original_permission_decision: evaluated.decision,
+      session_id: 'session_1', applied_at: '2026-07-19T00:00:02.000Z',
+      decision: { approval_request_id: 'approval_1', decision: 'denied', decided_by: 'user', decided_at: '2026-07-19T00:00:02.000Z' },
+    })).resolves.toMatchObject({ status: 'rejected', reason: 'decision_not_allowed' });
+  });
+
+  it('returns structured failures for invalid runtime requests', async () => {
+    const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
+    expect(await service.evaluateToolCall({ ...baseRequest(), permission_mode: 'custom' } as never))
+      .toMatchObject({ status: 'failed', failure: { code: 'permission_request_invalid' } });
+    await expect(service.applyApprovalDecision({
+      original_permission_decision: { type: 'allow' },
+      decision: { decision: 'approved' },
+    } as never)).resolves.toMatchObject({ status: 'failed', failure: { code: 'approval_request_invalid' } });
+  });
+});

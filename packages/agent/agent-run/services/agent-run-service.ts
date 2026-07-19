@@ -91,7 +91,7 @@ export type CreateAgentRunServiceOptions = {
     workspace_id: string;
     workspace_root?: string;
   }) => Pick<ToolExecutionService, 'executeTool'>;
-  permission_service: Pick<PermissionService, 'evaluateToolExecution' | 'validateApprovalDecision' | 'applyApprovalDecision'>;
+  permission_service: Pick<PermissionService, 'evaluateToolCall' | 'applyApprovalDecision'>;
   workspace_service?: Pick<WorkspaceService, 'getWorkspace'>;
   workspace_path_policy_service?: Pick<WorkspacePathPolicyService, 'classifyPath'>;
   memory_service?: Parameters<typeof runAgentModelToolLoop>[0]['memory_service'];
@@ -329,7 +329,7 @@ class DefaultAgentRunService implements AgentRunService {
           user_message_id: userMessageId,
           model_id: request.model_selection.model_id,
           provider_id: request.model_selection.provider_id,
-          permission_mode: request.permission_mode ?? 'default',
+          permission_mode: request.permission_mode ?? 'ask',
           limits: this.limits,
         },
       });
@@ -345,7 +345,7 @@ class DefaultAgentRunService implements AgentRunService {
           modelId: request.model_selection.model_id,
         }),
         model_config: modelConfig.config,
-        permission_mode: request.permission_mode ?? 'default',
+        permission_mode: request.permission_mode ?? 'ask',
         ...(workspaceRoot.workspace_root ? { workspace_root: workspaceRoot.workspace_root } : {}),
         signal: controller.signal,
       });
@@ -517,6 +517,22 @@ class DefaultAgentRunService implements AgentRunService {
       };
     }
 
+    const claim = this.activeRuns.claimApprovalRequest(request.approval_request_id);
+    if (claim !== 'claimed') {
+      return claim === 'not_found'
+        ? { status: 'not_found', approval_request_id: request.approval_request_id }
+        : {
+            status: 'failed',
+            failure: {
+              code: 'approval_failed',
+              message: claim === 'already_claimed'
+                ? 'Approval decision is already being submitted.'
+                : 'Approval request is no longer pending.',
+              retryable: claim === 'already_claimed',
+            },
+          };
+    }
+
     const queue = createAgentRunEventQueue((event) => this.options.event_publisher?.publish(event));
     const eventSink = this.createEventSink(queue, run);
     const decision = {
@@ -535,12 +551,15 @@ class DefaultAgentRunService implements AgentRunService {
       decided_at: decision.decided_at,
     });
     if (flow.status === 'not_found') {
+      this.activeRuns.releaseApprovalClaim(request.approval_request_id);
       return { status: 'not_found', approval_request_id: flow.approval_request_id };
     }
     if (flow.status === 'not_waiting') {
+      this.activeRuns.releaseApprovalClaim(request.approval_request_id);
       return { status: 'not_waiting', run: flow.run };
     }
     if (flow.status === 'failed') {
+      this.activeRuns.releaseApprovalClaim(request.approval_request_id);
       return { status: 'failed', failure: flow.failure, events: [] };
     }
 
@@ -559,17 +578,24 @@ class DefaultAgentRunService implements AgentRunService {
     }
     const controller = new AbortController();
     this.activeRunAbortControllers.set(run.run_id, controller);
+    const selectedOptionId = decision.decision === 'approved' ? decision.option_id : undefined;
+    const selectedScope = selectedOptionId
+      ? originalPermissionDecision.options.find((option) => option.option_id === selectedOptionId)?.scope
+      : undefined;
     eventSink.emit({
       eventType: 'approval.resolved',
       run,
       payload: {
         approvalRequestId: decidedApproval.approval_request_id,
+        toolCallId: approval.subject.tool_call_id,
         decision: decision.decision,
-        scope: decision.scope,
+        ...(selectedOptionId ? { optionId: selectedOptionId } : {}),
+        ...(selectedScope ? { scope: selectedScope } : {}),
         decidedAt: decision.decided_at,
       },
     });
 
+    const continueAfterAcknowledgement = async () => {
     let currentTurn = continuation.current_turn;
     if (flow.status === 'denied') {
       this.activeRuns.saveStep({
@@ -654,11 +680,12 @@ class DefaultAgentRunService implements AgentRunService {
           toolCallId: toolFact.tool_call_id,
           toolExecutionId: toolFact.tool_call_id,
           toolName: toolFact.tool_name,
-          kind: toolFact.status === 'completed' ? 'success' : 'failed',
+          kind: toolFact.status,
           content: [{
             type: 'text',
             text: toolFact.content ?? toolFact.observation?.summary ?? `${toolFact.tool_name} ${toolFact.status}`,
           }],
+          ...(toolFact.error ? { error: toolFact.error } : {}),
         },
       });
       if (toolResult.type === 'succeeded') {
@@ -747,7 +774,14 @@ class DefaultAgentRunService implements AgentRunService {
     });
     const diagnostic = this.observabilityRuns.get(run.run_id);
     void (diagnostic ? this.options.observability!.runInSpanContext(diagnostic.root, execute) : execute());
-    return { status: 'resumed', run: deferred.run, events: queue.events() };
+    };
+    void continueAfterAcknowledgement().catch((error) => {
+      this.failApprovalResume(resumedRun, {
+        code: 'internal_error',
+        message: error instanceof Error ? error.message : 'Approval continuation failed.',
+      }, queue, continuation);
+    });
+    return { status: 'resumed', run: resumedRun, events: queue.events() };
   }
 
   private createEventSink(
@@ -781,7 +815,8 @@ class DefaultAgentRunService implements AgentRunService {
       parent_entry_id: parentEntryId,
       tool_call_id: toolResult.tool_call_id,
       tool_name: toolResult.tool_name,
-      status: toolResult.status === 'completed' ? 'success' : 'failure',
+      status: toolResult.status,
+      ...(toolResult.error ? { error: toolResult.error } : {}),
       content: [{
         type: 'text',
         text: toolResult.content ?? toolResult.observation?.summary ?? `${toolResult.tool_name} ${toolResult.status}`,
@@ -894,15 +929,11 @@ class DefaultAgentRunService implements AgentRunService {
     );
     const toolGroup = await orchestrateToolCallGroup({
       run_id: input.run.run_id,
+      session_id: input.run.session_id,
       workspace_id: input.run.workspace_id,
       ...(input.continuation.workspace_root ? { workspace_root: input.continuation.workspace_root } : {}),
       permission_mode: input.continuation.permission_mode,
       permission_settings: permissionSettings.permission_settings,
-      runtime_capability_policy: {
-        custom_tools_enabled: true,
-        process_execution_enabled: true,
-        network_enabled: true,
-      },
       tools,
       tool_calls: input.continuation.deferred_tool_calls,
       call_order_offset: input.continuation.deferred_call_order_offset,
@@ -1400,7 +1431,8 @@ function approvalRequestToRuntimePayload(request: AgentRunApprovalRequest): Reco
     toolName: request.subject.tool_name,
     title: request.subject.tool_name,
     summary: request.summary ?? `${request.subject.tool_name} requires approval.`,
-    requestedScope: request.requested_scope ?? 'once',
+    options: request.options,
+    defaultOptionId: request.default_option_id,
     preview: request.preview ?? {
       action: request.subject.tool_name,
       targets: [],
@@ -1460,17 +1492,12 @@ function emitToolResultRuntimeEvent(
       toolCallId: toolResult.tool_call_id,
       toolExecutionId: toolResult.tool_call_id,
       toolName: toolResult.tool_name,
-      kind: toolResult.status === 'completed'
-        ? 'success'
-        : toolResult.status === 'denied'
-          ? 'policy_denied'
-          : toolResult.status === 'cancelled'
-            ? 'user_rejected'
-            : 'failed',
+      kind: toolResult.status,
       content: [{
         type: 'text',
         text: toolResult.content ?? toolResult.observation?.summary ?? `${toolResult.tool_name} ${toolResult.status}`,
       }],
+      ...(toolResult.error ? { error: toolResult.error } : {}),
     },
   });
 }
@@ -1565,7 +1592,7 @@ function toolResultToConversationItem(toolResult: ToolResultRuntimeFact): Curren
     type: 'tool_result',
     toolCallId: toolResult.tool_call_id,
     toolName: toolResult.tool_name,
-    status: toolResult.status === 'completed' ? 'success' : 'failure',
+    status: toolResult.status === 'success' ? 'success' : 'failure',
     content: [{ type: 'text', text: toolResult.content ?? toolResult.observation?.summary ?? `${toolResult.tool_name} ${toolResult.status}` }],
   };
 }
@@ -1579,8 +1606,9 @@ function toolResultRuntimeFactFromExecution(input: {
   return {
     tool_call_id: input.tool_call_id,
     tool_name: input.result.toolName ?? input.tool_name,
-    status: input.result.type === 'succeeded' ? 'completed' : 'failed',
+    status: input.result.type === 'succeeded' ? 'success' : 'failure',
     content: input.result.normalizedResult.content,
+    ...(input.result.type === 'failed' ? { error: input.result.error } : {}),
     ...(input.result.toolExecutionObservation ? { observation: input.result.toolExecutionObservation } : {}),
     created_at: input.created_at,
   };

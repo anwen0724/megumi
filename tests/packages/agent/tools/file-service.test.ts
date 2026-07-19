@@ -5,7 +5,10 @@ import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
 import { createBuiltInToolExecutor } from '@megumi/agent/tools/built-in-tools';
-import { createLocalWorkspaceFileAccess } from '@megumi/agent/composition/compose-agent-tool-runtime';
+import {
+  composeAgentToolExecutionService,
+  createLocalWorkspaceFileAccess,
+} from '@megumi/agent/composition/compose-agent-tool-runtime';
 
 describe('built-in tool adapter file and command execution', () => {
   let tmpDir: string;
@@ -18,15 +21,21 @@ describe('built-in tool adapter file and command execution', () => {
     fs.removeSync(tmpDir);
   });
 
-  it('rejects paths outside the project root', async () => {
-    const adapter = createBuiltInToolExecutor({
-      workspaceFileAccess: createLocalWorkspaceFileAccess({ projectRoot: tmpDir }),
-    });
-
-    await expect(adapter.execute({
-      toolName: 'read_file',
-      input: { path: '../../../etc/passwd' },
-    })).rejects.toThrow(/outside the project/i);
+  it('executes the original path without consuming Permission authorization data', async () => {
+    const outsideFile = path.join(os.tmpdir(), `megumi-tool-input-${Date.now()}.txt`);
+    await fs.writeFile(outsideFile, 'outside content', 'utf8');
+    try {
+      const service = composeAgentToolExecutionService({ projectRoot: tmpDir });
+      await expect(service.executeTool({
+        toolName: 'read_file',
+        input: { path: outsideFile },
+      })).resolves.toMatchObject({
+        type: 'succeeded',
+        normalizedResult: { content: 'outside content' },
+      });
+    } finally {
+      await fs.remove(outsideFile);
+    }
   });
 
   it('reads, writes, and edits files inside the project root', async () => {

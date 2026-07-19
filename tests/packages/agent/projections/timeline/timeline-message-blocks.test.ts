@@ -133,18 +133,6 @@ describe('timeline message and block contracts', () => {
               resultSummary: 'Read 20 lines.',
               status: 'succeeded',
             },
-            {
-              itemId: 'approval:approval-1',
-              kind: 'approval_activity',
-              approvalId: 'approval-1',
-              toolCallId: 'tool-call-1',
-              toolExecutionId: 'tool-execution-1',
-              scope: 'project',
-              status: 'approved',
-              title: 'Run command',
-              description: 'npm test',
-              subjectSummary: 'npm test',
-            },
           ],
         },
         {
@@ -357,18 +345,6 @@ describe('timeline message and block contracts', () => {
           status: 'succeeded',
         },
         {
-          itemId: 'approval:approval-1',
-          kind: 'approval_activity',
-          approvalId: 'approval-1',
-          toolCallId: 'tool-call-1',
-          toolExecutionId: 'tool-execution-1',
-          scope: 'once',
-          status: 'approved',
-          title: 'Read file',
-          description: 'Read README.md',
-          subjectSummary: 'README.md',
-        },
-        {
           itemId: 'error:model-call',
           kind: 'error_activity',
           errorCode: 'model_call_failed',
@@ -408,7 +384,6 @@ describe('timeline message and block contracts', () => {
       'thinking',
       'assistant_text',
       'tool_activity',
-      'approval_activity',
       'error_activity',
       'cancelled_activity',
       'compaction_activity',
@@ -591,31 +566,13 @@ describe('timeline message and block contracts', () => {
     })).toThrow();
   });
 
-  it('rejects legacy toolUseId on process disclosure tool and approval items', () => {
+  it('rejects legacy toolUseId on process disclosure tool items', () => {
     expect(() => ToolActivityItemSchema.parse({
       itemId: 'tool:tool-use-legacy',
       kind: 'tool_activity',
       toolUseId: 'tool-use-legacy',
       toolName: 'read_file',
       status: 'running',
-    })).toThrow();
-
-    expect(() => ProcessDisclosureBlockSchema.parse({
-      blockId: 'process-run-legacy',
-      kind: 'process_disclosure',
-      runId: 'run-legacy',
-      status: 'running',
-      items: [
-        {
-          itemId: 'approval:legacy',
-          kind: 'approval_activity',
-          approvalId: 'approval-legacy',
-          toolUseId: 'tool-use-legacy',
-          scope: 'project',
-          status: 'pending',
-          title: 'Run command',
-        },
-      ],
     })).toThrow();
   });
 });

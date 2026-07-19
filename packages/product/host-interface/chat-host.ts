@@ -88,7 +88,7 @@ export const SessionMessageSendPayloadSchema = z.object({
   branchMarkerId: z.string().min(1).optional(),
   clientMessageId: z.string().min(1).optional(), createdAt: IsoDateTimeSchema.optional(),
   modelSelection: z.object({ provider_id: z.string().min(1), model_id: z.string().min(1) }).strict(),
-  permissionMode: z.enum(['default', 'accept_edits', 'plan', 'auto']).optional(), permissionSource: z.string().optional(),
+  permissionMode: z.enum(['ask', 'auto', 'full_access']).optional(), permissionSource: z.string().optional(),
 }).strict();
 export const SessionMessageCancelPayloadSchema = z.object({ runId: z.string().min(1) }).strict();
 export const SessionBranchDraftCreatePayloadSchema = z.object({
@@ -745,7 +745,7 @@ export interface ChatSendUserInputUiResult {
   events?: AsyncIterable<RuntimeEvent>;
 }
 
-export type PermissionMode = 'default' | 'accept_edits' | 'plan' | 'auto';
+export type PermissionMode = 'ask' | 'auto' | 'full_access';
 
 export interface ChatCancelUserInputUiRequest {
   runId: string;

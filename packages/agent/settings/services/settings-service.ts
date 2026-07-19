@@ -15,7 +15,8 @@ import {
   resolveModelContextSettings as resolveModelContextSettingsFromSettings,
 } from '../core/provider-settings-resolution';
 import {
-  addPermissionRuleToRawSettings,
+  addPermissionRulesToRawSettings,
+  changePermissionRulesInRawSettings,
   resolvePermissionSettingsFromResolvedSettings,
 } from '../core/permission-settings-resolution';
 import {
@@ -58,10 +59,13 @@ import {
   type UpdateProviderSettingsResult,
 } from '../contracts/provider-settings-contracts';
 import {
-  AddPermissionRuleRequestSchema,
+  AddPermissionRulesRequestSchema,
+  ChangePermissionRulesRequestSchema,
   ResolvePermissionSettingsRequestSchema,
-  type AddPermissionRuleRequest,
-  type AddPermissionRuleResult,
+  type AddPermissionRulesRequest,
+  type AddPermissionRulesResult,
+  type ChangePermissionRulesRequest,
+  type ChangePermissionRulesResult,
   type ResolvePermissionSettingsRequest,
   type ResolvePermissionSettingsResult,
 } from '../contracts/permission-settings-contracts';
@@ -105,7 +109,8 @@ export interface SettingsService {
   resolveWebSearchRuntimeConfig(): ResolveWebSearchRuntimeConfigResult;
 
   resolvePermissionSettings(request: ResolvePermissionSettingsRequest): ResolvePermissionSettingsResult;
-  addPermissionRule(request: AddPermissionRuleRequest): AddPermissionRuleResult;
+  addPermissionRules(request: AddPermissionRulesRequest): AddPermissionRulesResult;
+  changePermissionRules(request: ChangePermissionRulesRequest): ChangePermissionRulesResult;
 }
 
 export function createSettingsService(options: SettingsServiceOptions): SettingsService {
@@ -419,8 +424,8 @@ class DefaultSettingsService implements SettingsService {
     return resolvePermissionSettingsFromResolvedSettings(settings, parsed.data);
   }
 
-  addPermissionRule(request: AddPermissionRuleRequest): AddPermissionRuleResult {
-    const parsed = AddPermissionRuleRequestSchema.safeParse(request);
+  addPermissionRules(request: AddPermissionRulesRequest): AddPermissionRulesResult {
+    const parsed = AddPermissionRulesRequestSchema.safeParse(request);
     if (!parsed.success) {
       return failed('permission_rule_invalid', 'Permission rule is invalid.', {
         issues: parsed.error.issues,
@@ -429,17 +434,37 @@ class DefaultSettingsService implements SettingsService {
 
     const raw = this.readRawSettings();
     if (isSettingsFailure(raw)) return raw;
-    const result = addPermissionRuleToRawSettings(raw, parsed.data);
+    const result = addPermissionRulesToRawSettings(raw, parsed.data);
     if (result.status !== 'patch') {
       return result;
     }
 
     const next = mergeRawSettings(raw, result.patch);
-    this.options.file_store.writeRawSettings(next);
-    return {
-      status: 'saved',
-      settings: resolveSettings(next),
-    };
+    try {
+      this.options.file_store.writeRawSettings(next);
+      return {
+        status: 'saved',
+        settings: resolveSettings(next),
+      };
+    } catch (error) {
+      return failed('settings_write_failed', 'Permission rules could not be saved.', toFailureDetails(error));
+    }
+  }
+
+  changePermissionRules(request: ChangePermissionRulesRequest): ChangePermissionRulesResult {
+    const parsed = ChangePermissionRulesRequestSchema.safeParse(request);
+    if (!parsed.success) return failed('permission_rule_invalid', 'Permission rule change is invalid.', { issues: parsed.error.issues });
+    const raw = this.readRawSettings();
+    if (isSettingsFailure(raw)) return raw;
+    const result = changePermissionRulesInRawSettings(raw, parsed.data);
+    if (result.status !== 'patch') return result;
+    const next = mergeRawSettings(raw, result.patch);
+    try {
+      this.options.file_store.writeRawSettings(next);
+      return { status: 'saved', settings: resolveSettings(next) };
+    } catch (error) {
+      return failed('settings_write_failed', 'Permission rules could not be saved.', toFailureDetails(error));
+    }
   }
 
   private readRawSettings(): SettingsRawSchemaResult {

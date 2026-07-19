@@ -8,8 +8,6 @@
   ToolCallRequestedPayload,
   ToolCallStartedPayload,
 } from '@megumi/product/runtime-events';
-import type { ApprovalRequest, ApprovalStatus } from '../../entities/approval/store';
-import { useApprovalStore } from '../../entities/approval';
 import { useChatUiStore, type AgentRunStatus } from '../../entities/chat-ui/store';
 import { useRunStore } from '../../entities/run/store';
 import { useSessionStore } from '../../entities/session/store';
@@ -136,11 +134,13 @@ function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): vo
       return;
     }
 
-    const status = payload.kind === 'failed'
+    const status = payload.kind === 'failure'
       ? 'failed'
-      : payload.kind === 'policy_denied' || payload.kind === 'user_rejected'
+      : payload.kind === 'permission_denied' || payload.kind === 'user_rejected'
         ? 'rejected'
-        : 'succeeded';
+        : payload.kind === 'cancelled'
+          ? 'cancelled'
+          : 'succeeded';
 
     store.upsertToolCall({
       ...current,
@@ -149,70 +149,6 @@ function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): vo
       completedAt: event.createdAt,
     });
   }
-}
-
-function applyApprovalEvent(event: RuntimeEvent, targetSessionId: string | null): void {
-  const store = useApprovalStore.getState();
-
-  if (event.eventType === 'approval.requested') {
-    const request = normalizeApprovalRequest(
-      (event.payload as { approvalRequest?: Partial<ApprovalRequest> }).approvalRequest,
-      event,
-    );
-    if (request) {
-      store.upsertApprovalRequest(request);
-    }
-  }
-
-  if (event.eventType === 'approval.resolved') {
-    const payload = event.payload as {
-      approvalRequestId: string;
-      decision: Exclude<ApprovalStatus, 'pending'>;
-      decidedAt?: string;
-    };
-    store.markResolved(payload.approvalRequestId, payload.decision, payload.decidedAt ?? event.createdAt);
-    setAgentStatusForSession(targetSessionId, 'running');
-  }
-}
-
-function normalizeApprovalRequest(
-  request: Partial<ApprovalRequest> | undefined,
-  event: RuntimeEvent,
-): ApprovalRequest | undefined {
-  if (!request?.approvalRequestId) {
-    return undefined;
-  }
-
-  const toolName = request.toolName ?? request.title ?? 'approval';
-  const title = request.title ?? toolName;
-  const previewAction = request.preview?.action ?? title;
-
-  return {
-    approvalRequestId: request.approvalRequestId,
-    ...(request.permissionDecisionId ? { permissionDecisionId: request.permissionDecisionId } : {}),
-    runId: request.runId ?? event.runId ?? '',
-    ...(request.stepId ? { stepId: request.stepId } : {}),
-    ...(request.toolCallId ? { toolCallId: request.toolCallId } : {}),
-    ...(request.toolExecutionId ? { toolExecutionId: request.toolExecutionId } : {}),
-    ...(request.canonicalToolId ? { canonicalToolId: request.canonicalToolId } : {}),
-    ...(request.sourceId ? { sourceId: request.sourceId } : {}),
-    ...(request.namespace ? { namespace: request.namespace } : {}),
-    ...(request.capabilities ? { capabilities: request.capabilities } : {}),
-    ...(request.sourceToolName ? { sourceToolName: request.sourceToolName } : {}),
-    ...(request.riskLevel ? { riskLevel: request.riskLevel } : {}),
-    title,
-    status: request.status ?? 'pending',
-    requestedScope: request.requestedScope ?? 'once',
-    ...(request.modelVisibleName ? { modelVisibleName: request.modelVisibleName } : {}),
-    toolName,
-    summary: request.summary ?? `${title} requires approval.`,
-    preview: {
-      action: previewAction,
-      targets: Array.isArray(request.preview?.targets) ? request.preview.targets : [],
-    },
-    createdAt: request.createdAt ?? event.createdAt,
-    ...(request.resolvedAt ? { resolvedAt: request.resolvedAt } : {}),
-  };
 }
 
 export function dispatchRuntimeEvent(event: RuntimeEvent, options?: DispatchRuntimeEventOptions): void {
@@ -233,7 +169,7 @@ export function dispatchRuntimeEvent(event: RuntimeEvent, options?: DispatchRunt
     useRuntimeTimelineStore.getState().dispatch(event);
   }
   applyToolEvent(event, targetSessionId);
-  applyApprovalEvent(event, targetSessionId);
+  if (event.eventType === 'approval.resolved') setAgentStatusForSession(targetSessionId, 'running');
 
   if (event.eventType === 'run.started') {
     setAgentStatusForSession(targetSessionId, 'running');

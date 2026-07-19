@@ -177,16 +177,10 @@ function resolveReadablePath(
   absolutePath: string;
   relativePath: string;
 } {
-  const resolved = workspacePathPolicyService.assertOrdinaryPath({
+  const resolved = workspacePathPolicyService.classifyPath({
     workspace_root: projectRoot,
     target_path: targetPath,
   });
-  if (resolved.status === 'rejected' && resolved.reason === 'outside_workspace') {
-    throw new Error(`Project path is outside the project: ${targetPath}`);
-  }
-  if (resolved.status === 'rejected') {
-    throw new Error(`Project path cannot be accessed: ${targetPath}`);
-  }
   return {
     absolutePath: resolved.absolute_path,
     relativePath: resolved.workspace_path || '.',

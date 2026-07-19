@@ -51,6 +51,11 @@ function zodToJsonSchema(schema: z.ZodTypeAny): SettingsJsonSchemaObject {
       anyOf: schema._def.options.map((option: z.ZodTypeAny) => zodToJsonSchema(option)),
     };
   }
+  if (schema instanceof z.ZodDiscriminatedUnion) {
+    return {
+      oneOf: [...schema.options.values()].map((option: z.ZodTypeAny) => zodToJsonSchema(option)),
+    };
+  }
   if (schema instanceof z.ZodArray) {
     return {
       type: 'array',

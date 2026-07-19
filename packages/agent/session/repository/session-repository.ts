@@ -400,6 +400,7 @@ function toMessagePayload(message: SessionMessage): Record<string, unknown> {
       tool_name: message.tool_name,
       status: message.status,
       content: message.content,
+      ...(message.error ? { error: message.error } : {}),
       ...(message.legacy_provenance ? { legacy_provenance: message.legacy_provenance } : {}),
     });
   }

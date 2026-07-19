@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   TimelineAssistantMessage,
@@ -80,15 +80,6 @@ function assistantMessage(overrides: Partial<TimelineAssistantMessage> = {}): Ti
             inputSummary: 'docs/README.md',
             resultSummary: '读取成功',
             status: 'succeeded',
-          },
-          {
-            itemId: 'approval:approval-1',
-            kind: 'approval_activity',
-            approvalId: 'approval-1',
-            scope: 'run',
-            status: 'approved',
-            title: 'run_command npm test',
-            subjectSummary: 'npm test',
           },
         ],
       },
@@ -500,6 +491,57 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(screen.queryByText('external_test:demo:echo')).not.toBeInTheDocument();
   });
 
+  it('submits an inline tool approval once and restores controls when acknowledgement fails', async () => {
+    let finish: ((result: { status: 'failed'; message: string }) => void) | undefined;
+    const onApprovalResolve = vi.fn(() => new Promise<{ status: 'failed'; message: string }>((resolve) => {
+      finish = resolve;
+    }));
+    render(<TimelineMessage onApprovalResolve={onApprovalResolve} message={assistantMessage({
+      blocks: [{
+        blockId: 'process:run-1',
+        kind: 'process_disclosure',
+        runId: 'run-1',
+        status: 'running',
+        startedAt: createdAt,
+        items: [{
+          itemId: 'tool:tool-call-approval',
+          kind: 'tool_activity',
+          toolCallId: 'tool-call-approval',
+          toolExecutionId: 'tool-call-approval',
+          toolName: 'web_fetch',
+          inputSummary: 'https://example.com',
+          status: 'awaiting_approval',
+          approval: {
+            approvalRequestId: 'approval-1',
+            defaultOptionId: 'once:tool-call-approval',
+            summary: 'Allow web fetch?',
+            options: [
+              { optionId: 'once:tool-call-approval', scope: 'once', label: 'Once', description: 'Only this call.' },
+              { optionId: 'session:web-fetch', scope: 'session', label: 'Session', description: 'Use this tool in the session.' },
+            ],
+          },
+        }],
+      }],
+    })} />);
+
+    const approve = screen.getByRole('button', { name: 'Approve' });
+    fireEvent.click(approve);
+    fireEvent.click(approve);
+
+    expect(onApprovalResolve).toHaveBeenCalledTimes(1);
+    expect(onApprovalResolve).toHaveBeenCalledWith({
+      approvalRequestId: 'approval-1',
+      decision: 'approved',
+      optionId: 'once:tool-call-approval',
+    });
+    expect(screen.getByRole('button', { name: 'Submitting…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Deny' })).toBeDisabled();
+
+    finish?.({ status: 'failed', message: 'Settings could not be saved.' });
+    await waitFor(() => expect(screen.getByText('Settings could not be saved.')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
   it('renders built-in tool activity with tool-specific labels and hides raw result summaries', () => {
     render(<TimelineMessage message={assistantMessage({
       blocks: [
@@ -655,30 +697,6 @@ describe('TimelineMessage canonical block rendering', () => {
               inputSummary: 'C:/secret.txt',
               status: 'denied',
             },
-            {
-              itemId: 'approval:approval-rejected',
-              kind: 'approval_activity',
-              approvalId: 'approval-rejected',
-              scope: 'run',
-              status: 'rejected',
-              title: 'run_command rm -rf',
-            },
-            {
-              itemId: 'approval:approval-expired',
-              kind: 'approval_activity',
-              approvalId: 'approval-expired',
-              scope: 'run',
-              status: 'expired',
-              title: 'run_command npm test',
-            },
-            {
-              itemId: 'approval:approval-cancelled',
-              kind: 'approval_activity',
-              approvalId: 'approval-cancelled',
-              scope: 'run',
-              status: 'cancelled',
-              title: 'run_command npm install',
-            },
           ],
         },
       ],
@@ -686,9 +704,6 @@ describe('TimelineMessage canonical block rendering', () => {
 
     for (const label of [
       'Declined to read C:/secret.txt',
-      'Declined run_command rm -rf',
-      'Approval expired: run_command npm test',
-      'Approval cancelled: run_command npm install',
     ]) {
       const row = screen.getByText(label).closest('div');
       expect(row?.querySelector('svg')?.getAttribute('class')).not.toContain('text-[var(--color-success)]');
@@ -771,15 +786,6 @@ describe('TimelineMessage canonical block rendering', () => {
               status: 'succeeded',
             },
             {
-              itemId: 'approval:1',
-              kind: 'approval_activity',
-              approvalId: 'approval-1',
-              scope: 'once',
-              status: 'approved',
-              title: 'Read file',
-              subjectSummary: 'README.md',
-            },
-            {
               itemId: 'error:1',
               kind: 'error_activity',
               errorCode: 'provider_failed',
@@ -830,7 +836,6 @@ describe('TimelineMessage canonical block rendering', () => {
 
     expect(screen.getByText('Thinking complete')).toBeInTheDocument();
     expect(screen.getByText('Read README.md')).toBeInTheDocument();
-    expect(screen.getByText('Approved Read file')).toBeInTheDocument();
     expect(screen.getByText('Provider failed.')).toBeInTheDocument();
     expect(screen.getByText('user_requested')).toBeInTheDocument();
     expect(screen.getByText('Context compacted')).toBeInTheDocument();

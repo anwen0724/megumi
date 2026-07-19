@@ -17,6 +17,7 @@ import type {
   TimelineMessage,
   TimelineUserMessage,
 } from './timeline-message-blocks';
+import { summarizeToolTarget } from './tool-activity-projection';
 
 type AssistantReplyItem = SessionMessageWithAttachments & { message: SessionAssistantReplyMessage };
 
@@ -259,11 +260,18 @@ function projectProcessItems(
           kind: 'tool_activity',
           toolCallId: block.id,
           toolName: block.name,
-          inputSummary: block.argumentsText,
+          inputSummary: summarizeToolTarget(block.name, parseToolArguments(block.argumentsText)),
           ...(result ? {
             toolResultId: `tool-result:${block.id}`,
-            resultSummary: sessionMessageText(result),
-            status: result.status === 'success' ? 'succeeded' as const : 'failed' as const,
+            ...(result.status === 'success' ? {} : { resultSummary: result.error?.message ?? sessionMessageText(result) }),
+            status: result.status === 'success'
+              ? 'succeeded' as const
+              : result.status === 'permission_denied' || result.status === 'user_rejected'
+                ? 'denied' as const
+                : result.status === 'cancelled'
+                  ? 'cancelled' as const
+                  : 'failed' as const,
+            ...(result.error ? { error: result.error } : {}),
           } : { status: 'requested' as const }),
           createdAt: message.created_at,
         });
@@ -287,4 +295,12 @@ function processStatus(
   const hasIncompleteToolCall = modelResponses.some((message) => message.content.some((block) =>
     block.type === 'toolCall' && !resultIds.has(block.id)));
   return hasIncompleteToolCall ? 'incomplete' : 'completed';
+}
+
+function parseToolArguments(argumentsText: string): unknown {
+  try {
+    return JSON.parse(argumentsText);
+  } catch {
+    return undefined;
+  }
 }

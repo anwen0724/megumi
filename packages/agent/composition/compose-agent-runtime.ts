@@ -83,6 +83,7 @@ import {
 import { WorkspaceChangeRepository } from '../workspace/repositories/workspace-change-repository';
 import { WorkspaceRepository } from '../workspace/repositories/workspace-repository';
 import { createWebSearchService } from '../tools/built-in-tools';
+import type { ToolRegistryService } from '../tools/services/tool-registry-service';
 
 type ImplementationPlanArtifactRecord = {
   planArtifactId: string;
@@ -141,6 +142,7 @@ export interface AgentRuntime {
   workspaceChangeService: WorkspaceChangeService;
   workspacePathPolicyService: WorkspacePathPolicyService;
   permissionService: PermissionService;
+  toolRegistryService: ToolRegistryService;
   artifactService: ArtifactService;
   planArtifactService: PlanArtifactService;
   contextRuntime: ReturnType<typeof composeAgentContext>;
@@ -284,11 +286,15 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
   });
   const permissionService = createPermissionService({
     settings_service: {
-      addPermissionRule(request) {
-        return settingsService.addPermissionRule({
-          rule: request.rule,
+      async addPermissionRules(request) {
+        const result = settingsService.addPermissionRules({
+          rules: request.rules,
           session_id: request.session_id,
+          applied_at: request.applied_at,
         });
+        return result.status === 'saved'
+          ? { status: 'saved' as const }
+          : { status: 'failed' as const, failure: result.failure };
       },
     },
   });
@@ -452,6 +458,7 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
     workspaceChangeService,
     workspacePathPolicyService,
     permissionService,
+    toolRegistryService: toolRegistry,
     artifactService,
     planArtifactService,
     contextRuntime,

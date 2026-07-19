@@ -1,4 +1,4 @@
-/* Verifies Agent Run preserves image facts while Context owns model-specific degradation. */
+﻿/* Verifies Agent Run preserves image facts while Context owns model-specific degradation. */
 import { describe, expect, it } from 'vitest';
 import { createAgentRunService, type CreateAgentRunServiceOptions } from '@megumi/agent/agent-run';
 import { createInMemoryAgentRunRepository, createMessageFlowDependencies } from './agent-run-test-helpers';
@@ -39,7 +39,7 @@ describe('Agent Run image capability', () => {
         }],
       },
       model_selection: { provider_id: 'deepseek', model_id: 'text-only' },
-      permission_mode: 'default',
+      permission_mode: 'ask',
     });
 
     expect(result).toMatchObject({

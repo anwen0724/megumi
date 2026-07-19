@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createBuiltInToolExecutor,
+  createWebFetchService,
   isAllowedResolvedAddress,
   isPublicIp,
   type WorkspaceFileAccess,
@@ -50,6 +51,11 @@ describe('web_fetch built-in tool', () => {
     expect(isPublicIp('198.18.0.32')).toBe(false);
     expect(isAllowedResolvedAddress('198.18.0.32', 'hostname')).toBe(true);
     expect(isAllowedResolvedAddress('198.18.0.32', 'literal')).toBe(false);
+  });
+
+  it('keeps private-address rejection inside the Tool Runtime', async () => {
+    await expect(createWebFetchService().fetch({ url: 'http://127.0.0.1/private' }))
+      .rejects.toThrow(/private|local|non-public/);
   });
 });
 

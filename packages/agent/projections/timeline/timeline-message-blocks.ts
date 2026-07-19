@@ -53,21 +53,15 @@ export type AssistantTextItemStatus = (typeof ASSISTANT_TEXT_ITEM_STATUSES)[numb
 
 export const TOOL_ACTIVITY_STATUSES = [
   'requested',
+  'awaiting_approval',
+  'queued',
   'running',
   'succeeded',
   'failed',
   'denied',
-] as const;
-export type ToolActivityStatus = (typeof TOOL_ACTIVITY_STATUSES)[number];
-
-export const APPROVAL_ACTIVITY_STATUSES = [
-  'pending',
-  'approved',
-  'rejected',
-  'expired',
   'cancelled',
 ] as const;
-export type ApprovalActivityStatus = (typeof APPROVAL_ACTIVITY_STATUSES)[number];
+export type ToolActivityStatus = (typeof TOOL_ACTIVITY_STATUSES)[number];
 
 export const BRANCH_SEPARATOR_BLOCK_KINDS = ['branch_separator'] as const;
 export type BranchSeparatorBlockKind = (typeof BRANCH_SEPARATOR_BLOCK_KINDS)[number];
@@ -192,18 +186,18 @@ export interface ToolActivityItem extends ProcessDisclosureItemBase {
   inputSummary?: string;
   resultSummary?: string;
   status: ToolActivityStatus;
-}
-
-export interface ApprovalActivityItem extends ProcessDisclosureItemBase {
-  kind: 'approval_activity';
-  approvalId: string;
-  toolCallId?: ToolCallId | string;
-  toolExecutionId?: ToolExecutionId | string;
-  scope: string;
-  status: ApprovalActivityStatus;
-  title: string;
-  description?: string;
-  subjectSummary?: string;
+  approval?: {
+    approvalRequestId: string;
+    defaultOptionId: string;
+    summary?: string;
+    options: Array<{
+      optionId: string;
+      scope: 'once' | 'session';
+      label: string;
+      description: string;
+    }>;
+  };
+  error?: { code: string; message: string; details?: Record<string, unknown> };
 }
 
 export interface ErrorActivityItem extends ProcessDisclosureItemBase {
@@ -244,7 +238,6 @@ export type ProcessDisclosureItem =
   | ThinkingItem
   | AssistantTextItem
   | ToolActivityItem
-  | ApprovalActivityItem
   | ErrorActivityItem
   | CancelledActivityItem
   | CompactionActivityItem

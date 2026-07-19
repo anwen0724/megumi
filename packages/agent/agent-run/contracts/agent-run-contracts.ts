@@ -4,7 +4,7 @@
  */
 import type { CommandAgentRunInput, HostInteractionRequest } from '../../commands';
 import type { RawUserInput } from '../../input';
-import type { ApprovalDecision, ApprovalScope, PermissionMode } from '../../permissions';
+import type { ApprovalDecision, ApprovalOption, PermissionMode } from '../../permissions';
 import type { ProviderRuntimeConfig } from '../../settings';
 import type { RuntimeEvent } from '../../events';
 import type { Session, SessionMessageWithAttachments } from '../../session';
@@ -14,7 +14,9 @@ export type AgentRunModelSelection = {
   model_id: string;
 };
 
-export type ApprovalDecisionIntent = Omit<ApprovalDecision, 'decided_at'>;
+export type ApprovalDecisionIntent =
+  | Omit<Extract<ApprovalDecision, { decision: 'approved' }>, 'decided_at'>
+  | Omit<Extract<ApprovalDecision, { decision: 'denied' }>, 'decided_at'>;
 
 export type AgentRunStatus =
   | 'queued'
@@ -108,7 +110,8 @@ export type AgentRunApprovalRequest = {
   run_id: string;
   subject: AgentRunApprovalSubject;
   status: 'pending' | 'approved' | 'denied' | 'cancelled';
-  requested_scope?: ApprovalScope;
+  options: ApprovalOption[];
+  default_option_id: string;
   summary?: string;
   preview?: {
     action: string;
@@ -189,7 +192,7 @@ export type ResumeRunAfterApprovalResult =
 
 export type AgentRunCommandInput = CommandAgentRunInput;
 export type AgentRunModelConfig = ProviderRuntimeConfig;
-export type { ApprovalDecision, ApprovalScope, PermissionMode };
+export type { ApprovalDecision, PermissionMode };
 
 export type AgentRunService = {
   startRun(request: StartRunRequest): Promise<StartRunResult>;

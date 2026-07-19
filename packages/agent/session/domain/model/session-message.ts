@@ -58,7 +58,12 @@ export const SessionModelResponsePayloadSchema = z.object({
 export const SessionToolResultPayloadSchema = z.object({
   tool_call_id: z.string().min(1),
   tool_name: z.string().min(1),
-  status: z.enum(['success', 'failure']),
+  status: z.enum(['success', 'failure', 'permission_denied', 'user_rejected', 'cancelled']),
+  error: z.object({
+    code: z.string().min(1),
+    message: z.string().min(1),
+    details: z.record(z.string(), z.unknown()).optional(),
+  }).strict().optional(),
   content: ContentBlockListSchema,
   legacy_provenance: LegacyMessageProvenanceSchema.optional(),
 }).strict();

@@ -102,7 +102,7 @@ function responseItems(
           type: 'tool_result',
           toolCallId: message.tool_call_id,
           toolName: message.tool_name,
-          status: message.status,
+          status: message.status === 'success' ? 'success' : 'failure',
           content: message.content,
         });
       } else {

@@ -184,6 +184,41 @@ describe('SettingsHost semantics', () => {
       }],
     });
   });
+
+  it('projects permission rules and applies UI rule changes through Settings', async () => {
+    const settings = { ...resolvedSettings(), permissions: {
+      mode: 'ask' as const,
+      allow: [{ source: 'user' as const, target: { kind: 'operation' as const, action: 'network.fetch' as const, resource: {
+        type: 'network.url' as const, matcher: { operator: 'hostname' as const, value: 'example.com' },
+      } } }], ask: [], deny: [],
+    } };
+    const changePermissionRules = vi.fn(() => ({ status: 'saved' as const, settings }));
+    const host = createSettingsHost({
+      getResolvedSettings: vi.fn(() => ({ status: 'ok' as const, settings })),
+      getWebSearchSettings: vi.fn(() => ({ status: 'ok' as const, settings: { has_api_key: false, credential_source: 'missing' as const } })),
+      changePermissionRules,
+    } as never, {
+      listAvailableTools: () => [{
+        identity: { sourceId: 'built_in', namespace: 'megumi', sourceToolName: 'read_file' },
+        registeredToolName: 'read_file', definition: { name: 'read_file', title: 'Read file' }, source: { displayName: 'Built-in' },
+      }],
+    });
+
+    await expect(host.get()).resolves.toMatchObject({ status: 'ok', settings: { permissions: {
+      mode: 'ask',
+      rules: [{ effect: 'allow', source: 'user', target: { kind: 'operation', action: 'network.fetch' } }],
+      catalog: { tools: [{ registeredToolName: 'read_file', displayName: 'Read file' }] },
+    } } });
+
+    await host.update({ permissions: { ruleChange: { operation: 'remove', rule: {
+      effect: 'allow', source: 'user', target: { kind: 'operation', action: 'network.fetch', resource: {
+        type: 'network.url', operator: 'hostname', value: 'example.com',
+      } },
+    } } } });
+    expect(changePermissionRules).toHaveBeenCalledWith({
+      operation: 'remove', effect: 'allow', rules: [settings.permissions.allow[0]],
+    });
+  });
 });
 
 function resolvedSettings() {
@@ -195,7 +230,7 @@ function resolvedSettings() {
     context: { compaction_threshold_ratio: 0.8 },
     web: { search: {} },
     providers: {},
-    permissions: { allow: [], ask: [], deny: [] },
+    permissions: { mode: 'ask' as const, allow: [], ask: [], deny: [] },
   };
 }
 

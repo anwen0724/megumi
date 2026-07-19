@@ -1,13 +1,10 @@
 import { useLayoutEffect, useRef } from 'react';
-import type { ApprovalRequest } from '../../../entities/approval/store';
 import type {
   ChatGetContextUsageUiResult,
   ChatImageInputCapabilitiesUiResult,
   ProviderPublicStatusUiDto,
 } from '@megumi/product/host-interface';
 import type { CommandSuggestionResult } from '@megumi/product/host-interface';
-import type { ApprovalCardResolvePayload } from '../../../entities/approval';
-import { ApprovalStack } from '../components/ApprovalStack';
 import { BranchDraftStack, type ComposerBranchDraftView } from '../components/BranchDraftStack';
 import { ComposerSurface } from '../components/ComposerSurface';
 import type { ChatComposerDraft } from '../../../entities/chat-ui/store';
@@ -20,13 +17,11 @@ const COMPOSER_DOCK_BOTTOM_PADDING = 12;
 interface ComposerDockProps {
   status: ComposerStatus;
   branchDraft: ComposerBranchDraftView | null;
-  pendingApprovals: ApprovalRequest[];
   providers?: ProviderPublicStatusUiDto[];
   contextUsage?: ChatGetContextUsageUiResult;
   imageInputCapabilities?: ChatImageInputCapabilitiesUiResult;
   initialValue?: string;
   initialImages?: ComposerDraftImage[];
-  onApprovalResolve: (payload: ApprovalCardResolvePayload) => void;
   onSubmit: (payload: ComposerSubmitPayload) => boolean | void | Promise<boolean | void>;
   onStop: () => void;
   onHeightChange?: (height: number) => void;
@@ -39,13 +34,11 @@ interface ComposerDockProps {
 export function ComposerDock({
   status,
   branchDraft,
-  pendingApprovals,
   providers,
   contextUsage,
   imageInputCapabilities,
   initialValue,
   initialImages,
-  onApprovalResolve,
   onSubmit,
   onStop,
   onHeightChange,
@@ -72,9 +65,7 @@ export function ComposerDock({
     onChooseContext: () => undefined,
     getCommandSuggestions,
   });
-  const hasOverlayContent =
-    pendingApprovals.length > 0 ||
-    Boolean(branchDraft);
+  const hasOverlayContent = Boolean(branchDraft);
 
   useLayoutEffect(() => {
     const element = composerSurfaceRef.current;
@@ -107,7 +98,6 @@ export function ComposerDock({
       >
         {hasOverlayContent ? (
           <ComposerOverlayLayer>
-            <ApprovalStack requests={pendingApprovals} onResolve={onApprovalResolve} />
             <BranchDraftStack branchDraft={branchDraft} />
           </ComposerOverlayLayer>
         ) : null}

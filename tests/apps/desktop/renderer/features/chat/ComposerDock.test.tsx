@@ -1,11 +1,11 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { ComposerDock } from '@megumi/desktop/renderer/features/chat/layout/ComposerDock';
 
 describe('ComposerDock', () => {
-  it('owns approval, branch draft, and composer surfaces outside the timeline log', () => {
+  it('owns branch draft and composer surfaces outside the timeline log', () => {
     render(
       <ComposerDock
         status="idle"
@@ -15,8 +15,6 @@ describe('ComposerDock', () => {
           preview: '我是 Megumi。',
           onCancel: vi.fn(),
         }}
-        pendingApprovals={[]}
-        onApprovalResolve={vi.fn()}
         onSubmit={vi.fn()}
         onStop={vi.fn()}
       />,
@@ -35,8 +33,6 @@ describe('ComposerDock', () => {
       <ComposerDock
         status="idle"
         branchDraft={null}
-        pendingApprovals={[]}
-        onApprovalResolve={vi.fn()}
         onSubmit={vi.fn()}
         onStop={vi.fn()}
       />,
@@ -91,8 +87,6 @@ describe('ComposerDock', () => {
         <ComposerDock
           status="idle"
           branchDraft={null}
-          pendingApprovals={[]}
-          onApprovalResolve={vi.fn()}
           onSubmit={vi.fn()}
           onStop={vi.fn()}
           onHeightChange={onHeightChange}
@@ -112,8 +106,6 @@ describe('ComposerDock', () => {
       <ComposerDock
         status="idle"
         branchDraft={null}
-        pendingApprovals={[]}
-        onApprovalResolve={vi.fn()}
         onSubmit={vi.fn()}
         onStop={vi.fn()}
       />,
@@ -136,8 +128,6 @@ describe('ComposerDock', () => {
       <ComposerDock
         status="idle"
         branchDraft={null}
-        pendingApprovals={[]}
-        onApprovalResolve={vi.fn()}
         onSubmit={vi.fn()}
         onStop={vi.fn()}
         getCommandSuggestions={() => ({

@@ -2,7 +2,6 @@ import { useCallback } from 'react';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import type { ChatRunUiDto } from '@megumi/product/host-interface';
 import type { RuntimeEvent } from '@megumi/product/runtime-events';
-import { useApprovalStore } from '../../entities/approval';
 import { useChatUiStore } from '../../entities/chat-ui/store';
 import { useProjectStore } from '../../entities/project/store';
 import { useRunStore } from '../../entities/run/store';
@@ -31,7 +30,6 @@ function runtimeEventsByRun(runs: ChatRunUiDto[], runtimeEvents: RuntimeEvent[])
 function resetHydratedRunProjection(): void {
   useRunStore.getState().resetRuns();
   useToolCallStore.getState().reset();
-  useApprovalStore.getState().reset();
 }
 
 function activeHydrationTarget(sessionId: string, projectId: string, sessionUpdatedAt?: string): boolean {

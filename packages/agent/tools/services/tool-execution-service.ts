@@ -59,11 +59,11 @@ export class ToolExecutionService {
   }
 }
 
-type ToolInputValidationResult =
+export type ToolInputValidationResult =
   | { ok: true; value: unknown }
   | { ok: false; errorMessage: string };
 
-function validateToolInput(definition: ToolDefinition, input: unknown): ToolInputValidationResult {
+export function validateToolInput(definition: ToolDefinition, input: unknown): ToolInputValidationResult {
   const failure = validateAgainstSchema(input, withDefaultRootObjectType(definition.inputSchema), '$');
   if (failure) {
     return { ok: false, errorMessage: failure };

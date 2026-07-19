@@ -32,6 +32,23 @@ export const settings = {
     approvals: 'Tool approvals',
     approvalsDescription: 'Megumi asks before restricted tool actions according to the active permission mode.',
     managed: 'Managed during each conversation',
+    rules: {
+      title: 'Permission rules',
+      description: 'Set explicit behavior for specific tools, files, commands, and network targets.',
+      precedence: 'Explicit deny, ask, and allow rules are checked before the permission mode selected in the composer.',
+      add: 'Add rule', effect: 'Effect', target: 'Target', scope: 'Scope', operation: 'Operation', tool: 'Tool',
+      operationTarget: 'Operation', toolTarget: 'Tool', matchType: 'Match type', matchValue: 'Match value',
+      save: 'Save rule', saving: 'Saving…', cancel: 'Cancel', loading: 'Loading permission rules…', empty: 'No rules', unavailable: 'Permission settings are unavailable.',
+      deleteNamed: 'Delete rule {{name}}', hostnamePlaceholder: '*.example.com', valuePlaceholder: 'Enter a path, command, or value',
+      effects: { allow: 'Always allow', ask: 'Always ask', deny: 'Deny' },
+      scopes: { user: 'All workspaces', workspace: 'Current workspace' },
+      sources: { user: 'All workspaces', workspace: 'Workspace rule', session: 'Session grant' },
+      operators: { any: 'Any target', exact: 'Exact value', prefix: 'Prefix', glob: 'Pattern', hostname: 'Hostname' },
+      actions: {
+        workspace_read: 'Read workspace files', workspace_write: 'Write workspace files', process_execute: 'Run commands',
+        network_search: 'Search the web', network_fetch: 'Read a web page', agent_context_activate: 'Activate context', external_invoke: 'Use an external tool',
+      },
+    },
   },
   about: {
     tagline: 'A personal agent that works with you on real tasks.',

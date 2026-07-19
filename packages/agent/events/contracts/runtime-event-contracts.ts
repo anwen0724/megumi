@@ -518,8 +518,9 @@ export interface ToolResultCreatedPayload {
   toolCallId: string;
   toolExecutionId?: string;
   toolName: string;
-  kind: 'success' | 'failed' | 'policy_denied' | 'user_rejected';
+  kind: 'success' | 'failure' | 'permission_denied' | 'user_rejected' | 'cancelled';
   content: ContentBlock[];
+  error?: { code: string; message: string; details?: Record<string, JsonValue> };
 }
 
 export type AgentRunToolResultCreatedPayload = ToolResultCreatedPayload;
@@ -790,8 +791,10 @@ export interface ApprovalRequestedPayload {
 
 export interface ApprovalResolvedPayload {
   approvalRequestId: string;
+  toolCallId: string;
   decision: Exclude<ApprovalStatus, 'pending'>;
-  scope: ApprovalScope;
+  optionId?: string;
+  scope?: ApprovalScope;
   decidedAt: string;
 }
 

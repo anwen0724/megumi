@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import {
   createAgentRunService,
   type CreateAgentRunServiceOptions,
@@ -101,6 +101,6 @@ function commandRequest(text: string) {
     session: { type: 'existing' as const, session_id: 'session-1' },
     user_input: { text },
     model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
-    permission_mode: 'default' as const,
+    permission_mode: 'ask' as const,
   };
 }

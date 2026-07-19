@@ -5,6 +5,7 @@ import { DiagnosticsPanel } from '../features/observability';
 import { MemorySettingsPanel } from '../features/memory-settings';
 import { ProviderSettingsPanel } from '../features/provider-settings';
 import { WebSettingsPanel } from '../features/web-settings';
+import { PermissionRulesPanel } from '../features/permission-settings';
 import { ThemeSelector } from '../shared/theme';
 import { LanguageSelector } from '../shared/i18n';
 import {
@@ -208,18 +209,8 @@ export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize 
                         {t('security.protected')}
                       </div>
                     </SettingsRow>
-                    <div className="border-t border-[var(--color-border)]">
-                      <SettingsRow
-                        title={t('security.approvals')}
-                        description={t('security.approvalsDescription')}
-                      >
-                        <div className="flex items-center justify-end gap-2 text-sm text-[var(--color-text-muted)]">
-                          <ShieldCheck size={16} aria-hidden="true" />
-                          {t('security.managed')}
-                        </div>
-                      </SettingsRow>
-                    </div>
                   </SettingsSection>
+                  <PermissionRulesPanel />
                 </div>
               ) : null}
 

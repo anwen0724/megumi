@@ -6,11 +6,9 @@ import type {
   PermissionDecision,
   PermissionMode,
   PermissionSettings,
-  RegisteredToolPermissionFacts,
-  ToolCapability,
-  ToolSideEffect,
+  RegisteredToolFacts,
 } from '../../permissions';
-import type { RegisteredTool, ToolExecutionResult } from '../../tools';
+import { validateToolInput, type RegisteredTool, type ToolExecutionOptions, type ToolExecutionResult } from '../../tools';
 import type { ToolSet } from '@megumi/ai';
 import type { WorkspacePathPolicyService } from '../../workspace';
 import type { AgentRunApprovalRequest, ToolCallStep } from '../contracts/agent-run-contracts';
@@ -27,52 +25,38 @@ export type ModelRequestedToolCall = {
 
 export type AgentRunToolCallRequest = {
   run_id: string;
+  session_id: string;
   workspace_id: string;
   workspace_root?: string;
   permission_mode: PermissionMode;
   permission_settings: PermissionSettings;
-  runtime_capability_policy: {
-    custom_tools_enabled: boolean;
-    process_execution_enabled: boolean;
-    network_enabled: boolean;
-  };
   tools: ToolSet;
   tool_calls: ModelRequestedToolCall[];
   call_order_offset?: number;
   registered_tools_by_name: Map<string, RegisteredTool>;
   permission_service: {
-    evaluateToolExecution(request: {
+    evaluateToolCall(request: {
       run_id: string;
+      session_id: string;
+      workspace_id: string;
       tool_call_id: string;
-      tool_name: string;
       tool_input: unknown;
-      registered_tool?: {
-        registered_tool_name: string;
-        source_id: string;
-        source_tool_name: string;
-        capabilities: Array<'project_read' | 'project_write' | 'command_run' | 'network_access' | 'browser_access' | 'custom'>;
-        risk_level: 'low' | 'medium' | 'high' | 'critical';
-        side_effect: 'none' | 'project_file_operation' | 'process_execution' | 'network' | 'external';
-        permission_metadata?: Record<string, unknown>;
-      };
+      registered_tool: RegisteredToolFacts;
       permission_mode: PermissionMode;
-      permission_settings?: PermissionSettings;
-      runtime_capability_policy: {
-        custom_tools_enabled: boolean;
-        process_execution_enabled: boolean;
-        network_enabled: boolean;
-      };
+      permission_settings: PermissionSettings;
       workspace_path?: {
+        absolute_path: string;
+        workspace_path: string;
         inside_workspace: boolean;
         protected: boolean;
         sensitive: boolean;
-        workspace_path?: string;
       };
       evaluated_at: string;
-    }): { status: 'ok'; decision: PermissionDecision } | { status: 'failed'; failure: { message: string } };
+    }): Promise<{ status: 'ok'; operations: unknown[]; decision: PermissionDecision } | { status: 'failed'; failure: { message: string } }>
+      | { status: 'ok'; operations: unknown[]; decision: PermissionDecision } | { status: 'failed'; failure: { message: string } };
   };
   tool_execution_service: {
-    executeTool(request: { toolName: string; input: unknown; options?: { signal?: AbortSignal } }): Promise<ToolExecutionResult> | ToolExecutionResult;
+    executeTool(request: { toolName: string; input: unknown; options?: ToolExecutionOptions }): Promise<ToolExecutionResult> | ToolExecutionResult;
   };
   trace_logger?: AgentRunTraceLogger;
   workspace_path_policy_service?: Pick<WorkspacePathPolicyService, 'classifyPath'>;
@@ -143,15 +127,29 @@ export async function orchestrateToolCallGroup(
       continue;
     }
 
-    const permission = request.permission_service.evaluateToolExecution({
+    const inputValidation = validateToolInput(registeredTool.definition, requested.input);
+    if (!inputValidation.ok) {
+      const failedCall = { ...toolCall, status: 'failed' as const, completed_at: request.clock.now() };
+      request.on_step_transition?.(failedCall);
+      plans.push({ call: failedCall, requested, registered_tool: registeredTool });
+      toolResults.push(failedToolResult(
+        requested,
+        inputValidation.errorMessage,
+        request.clock.now(),
+        'invalid_tool_input',
+      ));
+      continue;
+    }
+
+    const permission = await request.permission_service.evaluateToolCall({
       run_id: request.run_id,
+      session_id: request.session_id,
+      workspace_id: request.workspace_id,
       tool_call_id: requested.tool_call_id,
-      tool_name: registeredTool.registeredToolName,
       tool_input: requested.input,
       registered_tool: permissionFactsFromRegisteredTool(registeredTool),
       permission_mode: request.permission_mode,
       permission_settings: request.permission_settings,
-      runtime_capability_policy: request.runtime_capability_policy,
       ...(workspacePathFacts(request, requested.input) ? { workspace_path: workspacePathFacts(request, requested.input) } : {}),
       evaluated_at: request.clock.now(),
     });
@@ -410,7 +408,8 @@ function createPendingApproval(
       input: toolCall.input,
     },
     status: 'pending',
-    requested_scope: decision.approval.default_scope,
+    options: decision.options,
+    default_option_id: decision.default_option_id,
     summary: `${registeredTool.registeredToolName} requires approval.`,
     preview,
     created_at: request.clock.now(),
@@ -443,11 +442,13 @@ function failedToolResult(
   toolCall: ModelRequestedToolCall,
   message: string,
   createdAt: string,
+  code = 'tool_execution_failed',
 ): ToolResultRuntimeFact {
   return {
     tool_call_id: toolCall.tool_call_id,
     tool_name: toolCall.tool_name,
-    status: 'failed',
+    status: 'failure',
+    error: { code, message },
     content: message,
     created_at: createdAt,
   };
@@ -461,7 +462,8 @@ function deniedToolResult(
   return {
     tool_call_id: toolCall.tool_call_id,
     tool_name: toolCall.tool_name,
-    status: 'denied',
+    status: 'permission_denied',
+    error: { code: 'permission_denied', message: reason },
     content: reason,
     created_at: createdAt,
   };
@@ -475,8 +477,9 @@ function toolResultFromExecutionResult(
   return {
     tool_call_id: toolCall.tool_call_id,
     tool_name: result.toolName ?? toolCall.tool_name,
-    status: result.type === 'succeeded' ? 'completed' : 'failed',
+    status: result.type === 'succeeded' ? 'success' : 'failure',
     content: result.normalizedResult.content,
+    ...(result.type === 'failed' ? { error: result.error } : {}),
     ...(result.toolExecutionObservation ? { observation: result.toolExecutionObservation } : {}),
     created_at: createdAt,
   };
@@ -506,41 +509,11 @@ function extractTargetPath(input: unknown): string | undefined {
   return undefined;
 }
 
-function permissionFactsFromRegisteredTool(tool: RegisteredTool): RegisteredToolPermissionFacts {
+function permissionFactsFromRegisteredTool(tool: RegisteredTool): RegisteredToolFacts {
   return {
     registered_tool_name: tool.registeredToolName,
     source_id: tool.identity.sourceId,
+    namespace: tool.identity.namespace,
     source_tool_name: tool.identity.sourceToolName,
-    capabilities: tool.definition.capabilities.map(mapCapability),
-    risk_level: tool.definition.riskLevel,
-    side_effect: mapSideEffect(tool.definition.sideEffect),
-    ...(tool.definition.permissionMetadata ? { permission_metadata: tool.definition.permissionMetadata } : {}),
   };
-}
-
-function mapCapability(capability: RegisteredTool['definition']['capabilities'][number]): ToolCapability {
-  if (capability === 'mcp_tool' || capability === 'secret_read' || capability === 'system_integration' || capability === 'external_app') {
-    return 'custom';
-  }
-  return capability;
-}
-
-function mapSideEffect(sideEffect: RegisteredTool['definition']['sideEffect']): ToolSideEffect {
-  switch (sideEffect) {
-    case 'read_external':
-      return 'external';
-    case 'execute_command':
-      return 'process_execution';
-    case 'access_network':
-      return 'network';
-    case 'project_file_operation':
-      return 'project_file_operation';
-    case 'access_secret':
-    case 'modify_external':
-    case 'system_change':
-      return 'external';
-    case 'none':
-    default:
-      return 'none';
-  }
 }

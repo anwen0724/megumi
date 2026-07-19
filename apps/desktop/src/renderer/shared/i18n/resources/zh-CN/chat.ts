@@ -33,11 +33,11 @@ export const chat = {
     send: '发送消息',
     usedPercent: '已使用 {{percent}}%',
     tokenUsage: '已使用 {{used}} / {{total}} token',
+    fullAccessWarning: '不受限制地访问计算机文件和互联网',
     permissionModes: {
-      default: '默认',
-      accept_edits: '接受编辑',
-      plan: '计划',
-      auto: '自动',
+      ask: '请求审批',
+      auto: '自动批准安全操作',
+      full_access: '完全访问',
     },
   },
   timeline: {
@@ -84,10 +84,13 @@ export const chat = {
     },
     tool: {
       requested: '已请求 {{target}}',
+      awaiting_approval: '等待审批：{{target}}',
+      queued: '已批准，等待执行：{{target}}',
       running: '正在执行 {{target}}',
       succeeded: '已完成 {{target}}',
       failed: '执行 {{target}} 失败',
       denied: '已拒绝执行 {{target}}',
+      cancelled: '已取消 {{target}}',
       actions: {
         listDirectory: { running: '正在查看 {{target}}', succeeded: '已查看 {{target}}', failed: '查看 {{target}} 失败', denied: '已拒绝查看 {{target}}' },
         readFile: { running: '正在读取 {{target}}', succeeded: '已读取 {{target}}', failed: '读取 {{target}} 失败', denied: '已拒绝读取 {{target}}' },
@@ -146,6 +149,7 @@ export const chat = {
     },
   },
   approvals: {
+    submitting: '正在提交…',
     blockingControls: '阻塞中的审批操作',
     displayFailed: '审批内容无法显示',
     needed: '需要审批',

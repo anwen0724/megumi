@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import type {
   AgentRun,
   ToolCallStep,
@@ -18,7 +18,7 @@ describe('agent-run public contracts', () => {
       session: { type: 'existing', session_id: 'session-1' },
       user_input: { text: 'hello', attachments: [] },
       model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
-      permission_mode: 'default',
+      permission_mode: 'ask',
     } satisfies StartRunRequest;
 
     expect(request.request_id).toBe('request-1');

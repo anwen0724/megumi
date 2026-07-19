@@ -187,6 +187,11 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
                 ))}
               </select>
             </div>
+            {permissionMode === 'full_access' ? (
+              <span className="max-w-44 text-xs font-medium text-amber-500" role="status">
+                {t('composer.fullAccessWarning')}
+              </span>
+            ) : null}
 
             <div className="flex h-8 max-w-44 min-w-0 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-muted)]">
               <label htmlFor={modelId} className="sr-only">

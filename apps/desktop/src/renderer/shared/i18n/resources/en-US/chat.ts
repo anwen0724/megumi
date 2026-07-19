@@ -29,11 +29,11 @@ export const chat = {
     send: 'Send message',
     usedPercent: '{{percent}}% used',
     tokenUsage: 'Used {{used}} tokens of {{total}}',
+    fullAccessWarning: 'Unrestricted computer and internet access',
     permissionModes: {
-      default: 'Default',
-      accept_edits: 'Accept edits',
-      plan: 'Plan',
-      auto: 'Auto',
+      ask: 'Ask for approval',
+      auto: 'Approve for me',
+      full_access: 'Full access',
     },
   },
   timeline: {
@@ -80,10 +80,13 @@ export const chat = {
     },
     tool: {
       requested: 'Requested {{target}}',
+      awaiting_approval: 'Waiting for approval: {{target}}',
+      queued: 'Approved, queued: {{target}}',
       running: 'Running {{target}}',
       succeeded: 'Completed {{target}}',
       failed: 'Failed to run {{target}}',
       denied: 'Declined to run {{target}}',
+      cancelled: 'Cancelled {{target}}',
       actions: {
         listDirectory: { running: 'Viewing {{target}}', succeeded: 'Viewed {{target}}', failed: 'Failed to view {{target}}', denied: 'Declined to view {{target}}' },
         readFile: { running: 'Reading {{target}}', succeeded: 'Read {{target}}', failed: 'Failed to read {{target}}', denied: 'Declined to read {{target}}' },
@@ -142,6 +145,7 @@ export const chat = {
     },
   },
   approvals: {
+    submitting: 'Submitting…',
     blockingControls: 'Blocking approval controls',
     displayFailed: 'Approval could not be displayed',
     needed: 'Approval needed',

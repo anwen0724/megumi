@@ -45,24 +45,11 @@ describe('agent run runtime event schemas', () => {
     })).success).toBe(true);
   });
 
-  it('normalizes legacy transcript payloads to structured content', () => {
+  it('normalizes legacy model completion content without accepting legacy tool results', () => {
     const legacyCompletion = RuntimeEventSchema.parse(event('model_call.completed', {
       modelCallId: 'model-call:1',
       finishReason: 'tool_calls',
       content: 'I will inspect it.',
-    }));
-    const legacyResult = RuntimeEventSchema.parse(event('tool_result.created', {
-      toolResultId: 'tool-result:1',
-      toolCallId: 'tool-call:1',
-      toolName: 'read_file',
-      kind: 'success',
-      summary: 'file contents',
-    }));
-    const legacyResultWithoutSummary = RuntimeEventSchema.parse(event('tool_result.created', {
-      toolResultId: 'tool-result:2',
-      toolCallId: 'tool-call:2',
-      toolName: 'read_file',
-      kind: 'failed',
     }));
 
     expect(legacyCompletion.payload).toEqual({
@@ -70,20 +57,13 @@ describe('agent run runtime event schemas', () => {
       finishReason: 'tool_calls',
       content: [{ type: 'text', text: 'I will inspect it.' }],
     });
-    expect(legacyResult.payload).toEqual({
+    expect(RuntimeEventSchema.safeParse(event('tool_result.created', {
       toolResultId: 'tool-result:1',
       toolCallId: 'tool-call:1',
       toolName: 'read_file',
       kind: 'success',
-      content: [{ type: 'text', text: 'file contents' }],
-    });
-    expect(legacyResultWithoutSummary.payload).toEqual({
-      toolResultId: 'tool-result:2',
-      toolCallId: 'tool-call:2',
-      toolName: 'read_file',
-      kind: 'failed',
-      content: [{ type: 'text', text: '' }],
-    });
+      summary: 'file contents',
+    })).success).toBe(false);
   });
 
   it('accepts tool call and tool result events', () => {
@@ -108,8 +88,9 @@ describe('agent run runtime event schemas', () => {
       toolCallId: 'tool-call-1',
       toolExecutionId: 'tool-call-1',
       toolName: 'read_file',
-      kind: 'failed',
+      kind: 'failure',
       content: [{ type: 'text', text: 'Tool execution failed.' }],
+      error: { code: 'tool_execution_failed', message: 'Tool execution failed.' },
     })).success).toBe(true);
   });
 

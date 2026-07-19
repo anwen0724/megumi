@@ -8,43 +8,43 @@ type IsoDateTime = string;
 type RunId = string;
 import { JsonObjectSchema } from './artifact-json';
 import {
-  ACTIVE_PERMISSION_MODES,
-  PermissionModeSchema,
-  PermissionModeSnapshotSchema,
-  PermissionModeSelectionSourceSchema,
-  type PermissionMode,
-  type PermissionModeSnapshot,
-  type PermissionModeSelectionSource,
-  isPermissionMode,
-} from './permission-mode-contracts';
+  ARTIFACT_EXECUTION_INTENTS,
+  ArtifactExecutionIntentSchema,
+  ExecutionIntentSnapshotSchema,
+  ExecutionIntentSelectionSourceSchema,
+  type ArtifactExecutionIntent,
+  type ExecutionIntentSnapshot,
+  type ExecutionIntentSelectionSource,
+  isArtifactExecutionIntent,
+} from './execution-intent-contracts';
 import { IsoDateTimeSchema } from './artifact-json';
 
 const IdSchema = z.string().min(1).max(128);
 const OptionalJsonObjectSchema = JsonObjectSchema.optional();
 
 export {
-  ACTIVE_PERMISSION_MODES,
-  PermissionModeSchema,
-  PermissionModeSnapshotSchema,
-  PermissionModeSelectionSourceSchema,
-  isPermissionMode,
+  ARTIFACT_EXECUTION_INTENTS,
+  ArtifactExecutionIntentSchema,
+  ExecutionIntentSnapshotSchema,
+  ExecutionIntentSelectionSourceSchema,
+  isArtifactExecutionIntent,
 };
 
 export type {
-  PermissionMode,
-  PermissionModeSnapshot,
-  PermissionModeSelectionSource,
+  ArtifactExecutionIntent,
+  ExecutionIntentSnapshot,
+  ExecutionIntentSelectionSource,
 };
 
-export interface PermissionModeState {
-  permissionMode: PermissionMode;
-  source?: PermissionModeSelectionSource;
+export interface ExecutionIntentState {
+  executionIntent: ArtifactExecutionIntent;
+  source?: ExecutionIntentSelectionSource;
 }
 
 export interface PermissionSnapshotRecord {
   permissionSnapshotId: string;
   runId: RunId | string;
-  permissionModeState: PermissionModeState;
+  executionIntentState: ExecutionIntentState;
   permissionLabel: string;
   createdAt: IsoDateTime;
   metadata?: JsonObject;
@@ -81,18 +81,18 @@ export interface RunSourcePlanRelation {
   metadata?: JsonObject;
 }
 
-export const PermissionModeStateSchema = z
+export const ExecutionIntentStateSchema = z
   .object({
-    permissionMode: PermissionModeSchema,
-    source: PermissionModeSelectionSourceSchema.optional(),
+    executionIntent: ArtifactExecutionIntentSchema,
+    source: ExecutionIntentSelectionSourceSchema.optional(),
   })
-  .strict() satisfies z.ZodType<PermissionModeState>;
+  .strict() satisfies z.ZodType<ExecutionIntentState>;
 
 export const PermissionSnapshotRecordSchema = z
   .object({
     permissionSnapshotId: IdSchema,
     runId: IdSchema,
-    permissionModeState: PermissionModeStateSchema,
+    executionIntentState: ExecutionIntentStateSchema,
     permissionLabel: z.string().min(1),
     createdAt: IsoDateTimeSchema,
     metadata: OptionalJsonObjectSchema,
@@ -128,13 +128,13 @@ export const RunSourcePlanRelationSchema = z
   })
   .strict() satisfies z.ZodType<RunSourcePlanRelation>;
 
-export function toPermissionModeSnapshot(input: {
-  permissionMode: PermissionMode;
-  source?: PermissionModeSelectionSource;
+export function toExecutionIntentSnapshot(input: {
+  executionIntent: ArtifactExecutionIntent;
+  source?: ExecutionIntentSelectionSource;
   createdAt: string;
-}): PermissionModeSnapshot {
-  return PermissionModeSnapshotSchema.parse({
-    permissionMode: input.permissionMode,
+}): ExecutionIntentSnapshot {
+  return ExecutionIntentSnapshotSchema.parse({
+    executionIntent: input.executionIntent,
     source: input.source ?? 'system',
     createdAt: input.createdAt,
   });

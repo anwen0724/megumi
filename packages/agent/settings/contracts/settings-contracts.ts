@@ -113,6 +113,7 @@ export const DEFAULT_SETTINGS = SettingsResolvedSchema.parse({
   },
   providers: {},
   permissions: {
+    mode: 'ask',
     allow: [],
     ask: [],
     deny: [],

@@ -2,8 +2,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   projectSessionTimelineMessages,
+  reduceRuntimeTimelineEvent,
   type TimelineAssistantMessage,
 } from '@megumi/agent/projections/timeline';
+import type { RuntimeEvent } from '@megumi/agent/events';
 import type {
   SessionMessage,
   SessionMessageWithAttachments,
@@ -122,6 +124,61 @@ describe('Session Timeline projection', () => {
       kind: 'answer_text', status: 'legacy_unknown', text: 'Old answer',
     }));
   });
+
+  it.each([
+    ['success', 'success', 'succeeded'],
+    ['failure', 'failure', 'failed'],
+    ['permission_denied', 'permission_denied', 'denied'],
+    ['user_rejected', 'user_rejected', 'denied'],
+    ['cancelled', 'cancelled', 'cancelled'],
+  ] as const)('projects %s Tool Results to the same live and historical terminal activity', (sessionStatus, eventKind, expectedStatus) => {
+    const error = sessionStatus === 'success'
+      ? undefined
+      : { code: `${sessionStatus}_code`, message: `${sessionStatus} message`, details: { status: 403 } };
+    let live = reduceRuntimeTimelineEvent([], runtimeEvent('model_call.tool_call', {
+      modelCallId: 'M1', toolCallId: 'T1', toolName: 'web_fetch', input: { url: 'https://example.com' },
+    }, 1));
+    live = reduceRuntimeTimelineEvent(live, runtimeEvent('tool_result.created', {
+      toolResultId: 'tool-result:T1', toolCallId: 'T1', toolExecutionId: 'T1', toolName: 'web_fetch',
+      kind: eventKind, content: [{ type: 'text', text: error?.message ?? 'success body' }], ...(error ? { error } : {}),
+    }, 2));
+    const liveAssistant = live.find((message) => message.role === 'assistant') as TimelineAssistantMessage;
+    const liveProcess = liveAssistant.blocks.find((block) => block.kind === 'process_disclosure');
+    const liveTool = liveProcess?.items.find((entry) => entry.kind === 'tool_activity');
+
+    const historical = projectSessionTimelineMessages({
+      projectId: 'P1',
+      messages: [
+        item(user('U1', 'fetch')),
+        item({
+          ...base('M1'), message_kind: 'model_response', outcome_status: 'completed', stop_reason: 'tool_calls',
+          content: [{ type: 'toolCall', id: 'T1', name: 'web_fetch', argumentsText: '{"url":"https://example.com"}' }],
+        }),
+        item({
+          ...base('T1-result'), message_kind: 'tool_result', tool_call_id: 'T1', tool_name: 'web_fetch',
+          status: sessionStatus, content: [{ type: 'text', text: error?.message ?? 'success body' }], ...(error ? { error } : {}),
+        }),
+        item(reply('A1', 'completed', 'Done.')),
+      ],
+    });
+    const historicalAssistant = historical.find((message) => message.role === 'assistant') as TimelineAssistantMessage;
+    const historicalProcess = historicalAssistant.blocks.find((block) => block.kind === 'process_disclosure');
+    const historicalTool = historicalProcess?.items.find((entry) => entry.kind === 'tool_activity');
+
+    expect(liveTool).toMatchObject({
+      kind: 'tool_activity', toolCallId: 'T1', toolName: 'web_fetch', inputSummary: 'https://example.com', status: expectedStatus,
+      ...(error ? { error } : {}),
+    });
+    expect(historicalTool).toEqual(expect.objectContaining({
+      kind: liveTool?.kind,
+      toolCallId: liveTool?.toolCallId,
+      toolName: liveTool?.toolName,
+      inputSummary: liveTool?.inputSummary,
+      status: liveTool?.status,
+      ...(liveTool?.resultSummary ? { resultSummary: liveTool.resultSummary } : {}),
+      ...(error ? { error: liveTool?.error } : {}),
+    }));
+  });
 });
 
 function base(messageId: string) {
@@ -154,4 +211,12 @@ function reply(
 
 function item(message: SessionMessage): SessionMessageWithAttachments {
   return { message, attachments: [] };
+}
+
+function runtimeEvent(eventType: RuntimeEvent['eventType'], payload: RuntimeEvent['payload'], sequence: number): RuntimeEvent {
+  return {
+    eventId: `event-${sequence}`, schemaVersion: 1, eventType,
+    runId: 'R1', sessionId: 'S1', sequence, createdAt: `2026-07-19T00:00:0${sequence}.000Z`,
+    source: 'core', visibility: 'user', persist: 'required', payload,
+  } as RuntimeEvent;
 }

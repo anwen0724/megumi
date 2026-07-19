@@ -2,7 +2,7 @@
  * Agent Run approval wait/resume rules.
  * This file owns approval lifecycle decisions without storing full run continuation state.
  */
-import type { PermissionDecision, PermissionService } from '../../permissions';
+import type { ApprovalOption, PermissionDecision, PermissionService } from '../../permissions';
 import type {
   AgentRun,
   AgentRunApprovalRequest,
@@ -22,6 +22,8 @@ export type CreateApprovalWaitRequest = {
   run: AgentRun;
   approval_request_id: string;
   subject: AgentRunApprovalSubject;
+  options: ApprovalOption[];
+  default_option_id: string;
   repository: ApprovalWaitRepository;
   changed_at: string;
 };
@@ -38,7 +40,7 @@ export type ResumeApprovalFlowRequest = {
   original_permission_decision: PermissionDecision;
   decision: ApprovalDecision;
   session_id: string;
-  permission_service: Pick<PermissionService, 'validateApprovalDecision' | 'applyApprovalDecision'>;
+  permission_service: Pick<PermissionService, 'applyApprovalDecision'>;
   decided_at: string;
 };
 
@@ -73,6 +75,8 @@ export function createApprovalWait(request: CreateApprovalWaitRequest): CreateAp
     run_id: request.run.run_id,
     subject: request.subject,
     status: 'pending',
+    options: request.options,
+    default_option_id: request.default_option_id,
     created_at: request.changed_at,
   });
 
@@ -98,23 +102,17 @@ export async function resumeApprovalFlow(
     return failedApproval('Original permission decision does not require approval.');
   }
 
-  const validation = await request.permission_service.validateApprovalDecision({
-    approval_request: {
-      approval_request_id: request.approval_request.approval_request_id,
-      status: request.approval_request.status,
-      subject: request.approval_request.subject,
-      allowed_scopes: request.original_permission_decision.approval.allowed_scopes,
-    },
+  const application = await request.permission_service.applyApprovalDecision({
+    session_id: request.session_id,
     original_permission_decision: request.original_permission_decision,
     decision: request.decision,
-    current_run_status: request.run.status,
-    validated_at: request.decided_at,
+    applied_at: request.decided_at,
   });
-  if (validation.status === 'failed') {
-    return { status: 'failed', failure: approvalFailure(validation.failure.message) };
+  if (application.status === 'failed') {
+    return { status: 'failed', failure: approvalFailure(application.failure.message) };
   }
-  if (validation.status === 'rejected') {
-    return { status: 'failed', failure: approvalFailure(validation.message) };
+  if (application.status === 'rejected') {
+    return { status: 'failed', failure: approvalFailure(application.message) };
   }
 
   const updatedApproval: AgentRunApprovalRequest = {
@@ -123,21 +121,6 @@ export async function resumeApprovalFlow(
     decided_at: request.decided_at,
     decision: request.decision,
   };
-  const application = await request.permission_service.applyApprovalDecision({
-    session_id: request.session_id,
-    approval_request: {
-      approval_request_id: updatedApproval.approval_request_id,
-      status: updatedApproval.status,
-      subject: updatedApproval.subject,
-      allowed_scopes: request.original_permission_decision.approval.allowed_scopes,
-    },
-    original_permission_decision: request.original_permission_decision,
-    decision: request.decision,
-    applied_at: request.decided_at,
-  });
-  if (application.status === 'failed') {
-    return { status: 'failed', failure: approvalFailure(application.failure.message) };
-  }
 
   const hasOtherPendingApproval = request.pending_approval_requests_after_decision
     .some((approval) => approval.status === 'pending' && approval.approval_request_id !== updatedApproval.approval_request_id);
@@ -177,7 +160,8 @@ function deniedToolResult(
   return {
     tool_call_id: approvalRequest.subject.tool_call_id,
     tool_name: approvalRequest.subject.tool_name,
-    status: 'denied',
+    status: 'user_rejected',
+    error: { code: 'user_rejected', message: reason },
     content: reason,
     created_at: createdAt,
   };

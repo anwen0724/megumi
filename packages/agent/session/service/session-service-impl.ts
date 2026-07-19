@@ -400,6 +400,7 @@ class DefaultSessionService implements SessionService {
           tool_call_id: request.tool_call_id,
           tool_name: request.tool_name,
           status: request.status,
+          ...(request.error ? { error: request.error } : {}),
           content: request.content,
           created_at: request.completed_at,
           completed_at: request.completed_at,

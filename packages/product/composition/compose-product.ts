@@ -27,6 +27,7 @@ import {
 } from '../logging';
 import type { RuntimeLogger } from '@megumi/agent/composition';
 import { composeObservability, type ObservabilityStorage } from '@megumi/observability';
+import { migrateLegacyPermissionSettingsFile } from '../migrations/legacy-permission-settings';
 
 export type ComposeProductOptions = Omit<
   ComposeAgentRuntimeOptions,
@@ -57,6 +58,7 @@ export interface ProductRuntime {
 
 export function composeProduct(options: ComposeProductOptions): ProductRuntime {
   const homePaths = initializeMegumiHomeSync(options.home);
+  migrateLegacyPermissionSettingsFile(homePaths.settingsPath);
   const observability = composeObservability({
     directoryPath: `${homePaths.logsPath}/observability`,
     storage: options.observabilityStorage ?? noopObservabilityStorage,
@@ -96,7 +98,9 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
       ...(options.directoryPicker ? { directoryPicker: options.directoryPicker } : {}),
       ...(options.fileOpen ? { fileOpen: options.fileOpen } : {}),
     }),
-    settings: createSettingsHost(runtime.settingsService),
+    settings: createSettingsHost(runtime.settingsService, {
+      listAvailableTools: () => runtime.toolRegistryService.listAvailableTools().tools,
+    }),
     approval: createApprovalHost(runtime.agentRunService),
     artifacts,
     plan: createPlanHost(runtime.planArtifactService),

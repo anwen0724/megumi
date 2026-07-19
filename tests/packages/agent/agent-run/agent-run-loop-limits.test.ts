@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+﻿import { describe, expect, it, vi } from 'vitest';
 import {
   createAgentRunService,
   type CreateAgentRunServiceOptions,
@@ -45,7 +45,7 @@ describe('Agent Run loop limits', () => {
       session: { type: 'existing', session_id: 'session-1' },
       user_input: { text: 'inspect several files' },
       model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
-      permission_mode: 'default',
+      permission_mode: 'ask',
     });
 
     expect(result.status).toBe('started');
@@ -73,7 +73,7 @@ describe('Agent Run loop limits', () => {
       session: { type: 'existing', session_id: 'session-1' },
       user_input: { text: 'inspect file' },
       model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
-      permission_mode: 'default',
+      permission_mode: 'ask',
     });
 
     expect(result.status).toBe('started');
@@ -101,7 +101,7 @@ describe('Agent Run loop limits', () => {
       session: { type: 'existing', session_id: 'session-1' },
       user_input: { text: 'inspect file' },
       model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
-      permission_mode: 'default',
+      permission_mode: 'ask',
     });
 
     expect(result.status).toBe('started');

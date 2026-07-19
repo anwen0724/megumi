@@ -5,6 +5,12 @@ import type {
   SettingsThemeName,
   WebSearchPublicSettings,
 } from '../../agent/settings';
+import {
+  PERMISSION_RULE_CATALOG,
+  type PermissionActionId,
+  type PermissionResourceType,
+  type PermissionRule,
+} from '../../agent/permissions';
 import { z } from 'zod';
 
 /*
@@ -21,6 +27,32 @@ export interface SettingsHost {
   setProviderApiKey(request: ProviderSetApiKeyUiRequest): Promise<EmptyUiResult>;
   deleteProviderApiKey(request: ProviderDeleteApiKeyUiRequest): Promise<EmptyUiResult>;
 }
+
+const PermissionEffectUiSchema = z.enum(['allow', 'ask', 'deny']);
+const PermissionRuleUiSchema = z.object({
+  effect: PermissionEffectUiSchema,
+  source: z.enum(['user', 'workspace', 'session']),
+  sourceId: z.string().min(1).optional(),
+  target: z.discriminatedUnion('kind', [
+    z.object({
+      kind: z.literal('operation'),
+      action: z.enum(['workspace.read', 'workspace.write', 'process.execute', 'network.search', 'network.fetch', 'agent.context.activate', 'external.invoke']),
+      resource: z.object({
+        type: z.enum(['workspace.path', 'process.command', 'network.public_web', 'network.url', 'tool.identity']),
+        operator: z.enum(['any', 'exact', 'prefix', 'glob', 'hostname']),
+        value: z.string().min(1).optional(),
+      }).strict().optional(),
+    }).strict(),
+    z.object({
+      kind: z.literal('tool'), sourceId: z.string().min(1), namespace: z.string().min(1),
+      sourceToolName: z.string().min(1), displayName: z.string().min(1).optional(),
+    }).strict(),
+  ]),
+  reason: z.string().min(1).optional(),
+}).strict();
+const PermissionRuleChangeUiSchema = z.object({
+  operation: z.enum(['add', 'remove']), rule: PermissionRuleUiSchema,
+}).strict();
 
 const ProviderSettingsUiPatchSchema = z.object({
   enabled: z.boolean().optional(), protocol: z.enum(['openai-compatible', 'anthropic']).optional(),
@@ -42,6 +74,10 @@ export const SettingsUpdatePayloadSchema = z.object({
     }).strict().optional(),
   }).strict().optional(),
   providers: z.record(z.string(), ProviderSettingsUiPatchSchema).optional(),
+  permissions: z.object({
+    mode: z.enum(['ask', 'auto', 'full_access']).optional(),
+    ruleChange: PermissionRuleChangeUiSchema.optional(),
+  }).strict().optional(),
 }).strict();
 export const SettingsCompleteSetupPayloadSchema = z.object({
   language: z.enum(['zh-CN', 'en-US']).optional(),
@@ -104,6 +140,20 @@ const SettingsUiResolvedSchema = z.object({
     }).strict(),
   }).strict(),
   providers: z.record(z.string(), ProviderSettingsUiDtoSchema),
+  permissions: z.object({
+    mode: z.enum(['ask', 'auto', 'full_access']),
+    rules: z.array(PermissionRuleUiSchema),
+    catalog: z.object({
+      operations: z.array(z.object({
+        action: z.string().min(1), resourceType: z.string().min(1).optional(),
+        operators: z.array(z.enum(['any', 'exact', 'prefix', 'glob', 'hostname'])),
+      }).strict()),
+      tools: z.array(z.object({
+        sourceId: z.string().min(1), namespace: z.string().min(1), sourceToolName: z.string().min(1),
+        registeredToolName: z.string().min(1), displayName: z.string().min(1),
+      }).strict()),
+    }).strict(),
+  }).strict(),
 }).strict();
 const ProviderPublicStatusUiDtoSchema = z.object({
   providerId: z.string().min(1),
@@ -185,7 +235,16 @@ export function createSettingsHost(
     | 'deleteProviderSettings'
     | 'setProviderApiKey'
     | 'clearProviderApiKey'
+    | 'changePermissionRules'
   >,
+  permissionOptions: {
+    listAvailableTools?: () => Array<{
+      identity: { sourceId: string; namespace: string; sourceToolName: string };
+      registeredToolName: string;
+      definition: { title?: string; name: string };
+      source: { displayName: string };
+    }>;
+  } = {},
 ): SettingsHost {
   return {
     async get() {
@@ -197,18 +256,32 @@ export function createSettingsHost(
       if (webSearch.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(webSearch.failure) };
       }
-      return { status: 'ok', settings: toSettingsUiResolved(result.settings, webSearch.settings) };
+      return { status: 'ok', settings: toSettingsUiResolved(result.settings, webSearch.settings, permissionOptions) };
     },
     async update(patch) {
-      const result = settingsService.updateSettings({ patch: toSettingsRawPatch(patch) });
+      const rawPatch = toSettingsRawPatch(patch);
+      let result = Object.keys(rawPatch).length > 0
+        ? settingsService.updateSettings({ patch: rawPatch })
+        : settingsService.getResolvedSettings();
       if (result.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(result.failure) };
+      }
+      const ruleChange = patch.permissions?.ruleChange;
+      if (ruleChange) {
+        const rule = fromPermissionRuleUi(ruleChange.rule);
+        const changed = settingsService.changePermissionRules({
+          operation: ruleChange.operation, effect: ruleChange.rule.effect, rules: [rule],
+          ...(rule.source === 'workspace' ? { workspace_id: rule.source_id } : {}),
+          ...(rule.source === 'session' ? { session_id: rule.source_id } : {}),
+        });
+        if (changed.status === 'failed') return { status: 'failed', failure: toHostFailure(changed.failure) };
+        result = { status: 'updated', settings: changed.settings };
       }
       const webSearch = settingsService.getWebSearchSettings();
       if (webSearch.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(webSearch.failure) };
       }
-      return { status: 'updated', settings: toSettingsUiResolved(result.settings, webSearch.settings) };
+      return { status: 'updated', settings: toSettingsUiResolved(result.settings, webSearch.settings, permissionOptions) };
     },
     async completeSetup(request) {
       const result = settingsService.completeSetup({
@@ -234,7 +307,7 @@ export function createSettingsHost(
       if (webSearch.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(webSearch.failure) };
       }
-      return { status: 'completed', settings: toSettingsUiResolved(result.settings, webSearch.settings) };
+      return { status: 'completed', settings: toSettingsUiResolved(result.settings, webSearch.settings, permissionOptions) };
     },
     async listProviders() {
       const result = settingsService.listProviderSettings();
@@ -338,6 +411,7 @@ export type SettingsUiRaw = {
     };
   };
   providers?: Record<string, ProviderSettingsUiPatch>;
+  permissions?: { mode?: 'ask' | 'auto' | 'full_access'; ruleChange?: PermissionRuleChangeUi };
 };
 
 export type SettingsUiThemeName =
@@ -369,6 +443,27 @@ export type SettingsUiResolved = {
     };
   };
   providers: Record<string, ProviderSettingsUiDto>;
+  permissions: {
+    mode: 'ask' | 'auto' | 'full_access';
+    rules: PermissionRuleUiDto[];
+    catalog: PermissionRuleCatalogUiDto;
+  };
+};
+
+export type PermissionRuleEffectUi = 'allow' | 'ask' | 'deny';
+export type PermissionRuleUiDto = {
+  effect: PermissionRuleEffectUi;
+  source: 'user' | 'workspace' | 'session';
+  sourceId?: string;
+  target:
+    | { kind: 'operation'; action: string; resource?: { type: string; operator: 'any' | 'exact' | 'prefix' | 'glob' | 'hostname'; value?: string } }
+    | { kind: 'tool'; sourceId: string; namespace: string; sourceToolName: string; displayName?: string };
+  reason?: string;
+};
+export type PermissionRuleChangeUi = { operation: 'add' | 'remove'; rule: PermissionRuleUiDto };
+export type PermissionRuleCatalogUiDto = {
+  operations: Array<{ action: string; resourceType?: string; operators: Array<'any' | 'exact' | 'prefix' | 'glob' | 'hostname'> }>;
+  tools: Array<{ sourceId: string; namespace: string; sourceToolName: string; registeredToolName: string; displayName: string }>;
 };
 
 export type ProviderSettingsUiDto = {
@@ -554,12 +649,14 @@ export function toSettingsRawPatch(patch: SettingsUiRaw): SettingsRaw {
         },
       ])),
     } : {}),
+    ...(patch.permissions?.mode ? { permissions: { mode: patch.permissions.mode } } : {}),
   };
 }
 
 export function toSettingsUiResolved(
   settings: SettingsResolved,
   webSearch: WebSearchPublicSettings = { has_api_key: false, credential_source: 'missing' },
+  permissionOptions: Parameters<typeof createSettingsHost>[1] = {},
 ): SettingsUiResolved {
   return {
     language: settings.language,
@@ -589,7 +686,66 @@ export function toSettingsUiResolved(
         ...(provider.api_key_env ? { apiKeyEnv: provider.api_key_env } : {}),
       },
     ])),
+    permissions: {
+      mode: settings.permissions.mode,
+      rules: (['allow', 'ask', 'deny'] as const).flatMap((effect) => (
+        settings.permissions[effect].map((rule) => toPermissionRuleUi(effect, rule))
+      )),
+      catalog: {
+        operations: PERMISSION_RULE_CATALOG.map((item) => ({
+          action: item.action,
+          ...('resource_type' in item ? { resourceType: item.resource_type } : {}),
+          operators: [...item.operators],
+        })),
+        tools: (permissionOptions.listAvailableTools?.() ?? []).map((tool) => ({
+          sourceId: tool.identity.sourceId,
+          namespace: tool.identity.namespace,
+          sourceToolName: tool.identity.sourceToolName,
+          registeredToolName: tool.registeredToolName,
+          displayName: tool.definition.title ?? tool.definition.name ?? tool.source.displayName,
+        })),
+      },
+    },
   };
+}
+
+function toPermissionRuleUi(effect: PermissionRuleEffectUi, rule: PermissionRule): PermissionRuleUiDto {
+  return {
+    effect, source: rule.source, ...(rule.source_id ? { sourceId: rule.source_id } : {}),
+    target: rule.target.kind === 'tool'
+      ? {
+          kind: 'tool', sourceId: rule.target.tool_identity.source_id,
+          namespace: rule.target.tool_identity.namespace, sourceToolName: rule.target.tool_identity.source_tool_name,
+        }
+      : {
+          kind: 'operation', action: rule.target.action,
+          ...(rule.target.resource ? { resource: {
+            type: rule.target.resource.type,
+            operator: rule.target.resource.matcher.operator,
+            ...('value' in rule.target.resource.matcher ? { value: rule.target.resource.matcher.value } : {}),
+          } } : {}),
+        },
+    ...(rule.reason ? { reason: rule.reason } : {}),
+  };
+}
+
+function fromPermissionRuleUi(rule: PermissionRuleUiDto): PermissionRule {
+  return {
+    source: rule.source, ...(rule.sourceId ? { source_id: rule.sourceId } : {}),
+    target: rule.target.kind === 'tool'
+      ? { kind: 'tool', tool_identity: {
+          source_id: rule.target.sourceId, namespace: rule.target.namespace, source_tool_name: rule.target.sourceToolName,
+        } }
+      : { kind: 'operation', action: rule.target.action as PermissionActionId,
+          ...(rule.target.resource ? { resource: {
+            type: rule.target.resource.type as PermissionResourceType,
+            matcher: rule.target.resource.operator === 'any'
+              ? { operator: 'any' }
+              : { operator: rule.target.resource.operator, value: rule.target.resource.value ?? '' },
+          } } : {}),
+        },
+    ...(rule.reason ? { reason: rule.reason } : {}),
+  } as PermissionRule;
 }
 
 

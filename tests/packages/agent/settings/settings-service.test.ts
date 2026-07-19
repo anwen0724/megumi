@@ -8,12 +8,14 @@ import {
 
 class MemorySettingsFileStore {
   raw: SettingsRaw = {};
+  writeFailure?: Error;
 
   readRawSettings(): SettingsRaw {
     return this.raw;
   }
 
   writeRawSettings(next: SettingsRaw): void {
+    if (this.writeFailure) throw this.writeFailure;
     this.raw = next;
   }
 }
@@ -475,15 +477,21 @@ describe('Settings Service', () => {
   });
 
   it('filters permission settings by user, workspace, and session sources', () => {
+    const rule = (source: 'user' | 'workspace' | 'session', sourceId?: string, tool = 'run_command') => ({
+      source,
+      ...(sourceId ? { source_id: sourceId } : {}),
+      target: { kind: 'tool' as const, tool_identity: { source_id: 'built_in', namespace: 'megumi', source_tool_name: tool } },
+    });
     const fileStore = new MemorySettingsFileStore();
     fileStore.raw = {
       permissions: {
+        mode: 'auto',
         allow: [
-          { source: 'user', pattern: 'tool:read_file|path=*' },
-          { source: 'workspace', source_id: 'workspace_1', pattern: 'tool:write_file|path=src/index.ts' },
-          { source: 'workspace', source_id: 'workspace_2', pattern: 'tool:write_file|path=src/other.ts' },
-          { source: 'session', source_id: 'session_1', pattern: 'tool:run_command|command=npm test' },
-          { source: 'session', source_id: 'session_2', pattern: 'tool:run_command|command=npm lint' },
+          rule('user', undefined, 'read_file'),
+          rule('workspace', 'workspace_1', 'write_file'),
+          rule('workspace', 'workspace_2', 'write_file'),
+          rule('session', 'session_1'),
+          rule('session', 'session_2'),
         ],
       },
     };
@@ -495,10 +503,11 @@ describe('Settings Service', () => {
     })).toEqual({
       status: 'ok',
       permission_settings: {
+        mode: 'auto',
         allow: [
-          { source: 'user', pattern: 'tool:read_file|path=*' },
-          { source: 'workspace', source_id: 'workspace_1', pattern: 'tool:write_file|path=src/index.ts' },
-          { source: 'session', source_id: 'session_1', pattern: 'tool:run_command|command=npm test' },
+          rule('user', undefined, 'read_file'),
+          rule('workspace', 'workspace_1', 'write_file'),
+          rule('session', 'session_1'),
         ],
         ask: [],
         deny: [],
@@ -506,17 +515,18 @@ describe('Settings Service', () => {
     });
   });
 
-  it('adds session permission rules to sparse raw settings', () => {
+  it('adds and deduplicates a batch of session permission rules atomically', () => {
     const fileStore = new MemorySettingsFileStore();
     const service = createSettingsService({ file_store: fileStore });
+    const rule = {
+      source: 'session' as const,
+      source_id: 'session_1',
+      target: { kind: 'tool' as const, tool_identity: { source_id: 'built_in', namespace: 'megumi', source_tool_name: 'run_command' } },
+    };
 
-    const result = service.addPermissionRule({
+    const result = service.addPermissionRules({
       session_id: 'session_1',
-      rule: {
-        source: 'session',
-        source_id: 'session_1',
-        pattern: 'tool:run_command|command=npm test',
-      },
+      rules: [rule, rule],
     });
 
     expect(result.status).toBe('saved');
@@ -526,7 +536,7 @@ describe('Settings Service', () => {
           {
             source: 'session',
             source_id: 'session_1',
-            pattern: 'tool:run_command|command=npm test',
+            target: { kind: 'tool', tool_identity: { source_id: 'built_in', namespace: 'megumi', source_tool_name: 'run_command' } },
           },
         ],
       },
@@ -536,18 +546,51 @@ describe('Settings Service', () => {
   it('rejects session permission rules when request session id does not match rule source id', () => {
     const service = createSettingsService({ file_store: new MemorySettingsFileStore() });
 
-    expect(service.addPermissionRule({
+    expect(service.addPermissionRules({
       session_id: 'session_1',
-      rule: {
+      rules: [{
         source: 'session',
         source_id: 'session_2',
-        pattern: 'tool:run_command|command=npm test',
-      },
+        target: { kind: 'tool', tool_identity: { source_id: 'built_in', namespace: 'megumi', source_tool_name: 'run_command' } },
+      }],
     })).toMatchObject({
       status: 'failed',
       failure: {
         code: 'permission_session_mismatch',
       },
     });
+  });
+
+  it('adds and removes user and workspace rules in their requested effect groups', () => {
+    const fileStore = new MemorySettingsFileStore();
+    const service = createSettingsService({ file_store: fileStore });
+    const userRule = {
+      source: 'user' as const,
+      target: { kind: 'operation' as const, action: 'network.fetch' as const, resource: {
+        type: 'network.url' as const, matcher: { operator: 'hostname' as const, value: 'example.com' },
+      } },
+    };
+    const workspaceRule = {
+      source: 'workspace' as const, source_id: 'workspace_1',
+      target: { kind: 'operation' as const, action: 'workspace.write' as const, resource: {
+        type: 'workspace.path' as const, matcher: { operator: 'glob' as const, value: 'docs/**' },
+      } },
+    };
+    expect(service.changePermissionRules({ operation: 'add', effect: 'ask', rules: [userRule] }).status).toBe('saved');
+    expect(service.changePermissionRules({ operation: 'add', effect: 'deny', rules: [workspaceRule], workspace_id: 'workspace_1' }).status).toBe('saved');
+    expect(fileStore.raw.permissions).toMatchObject({ ask: [userRule], deny: [workspaceRule] });
+    expect(service.changePermissionRules({ operation: 'remove', effect: 'ask', rules: [userRule] }).status).toBe('saved');
+    expect(fileStore.raw.permissions?.ask).toEqual([]);
+  });
+
+  it('normalizes permission rule write exceptions into retryable settings failures', () => {
+    const fileStore = new MemorySettingsFileStore();
+    fileStore.writeFailure = new Error('disk unavailable');
+    const service = createSettingsService({ file_store: fileStore });
+    const result = service.addPermissionRules({ session_id: 'session_1', rules: [{
+      source: 'session', source_id: 'session_1',
+      target: { kind: 'tool', tool_identity: { source_id: 'built_in', namespace: 'megumi', source_tool_name: 'run_command' } },
+    }] });
+    expect(result).toMatchObject({ status: 'failed', failure: { code: 'settings_write_failed' } });
   });
 });

@@ -4,6 +4,7 @@ import type {
   AgentRun,
   AgentRunFailure,
   AgentRunService,
+  ApprovalDecisionIntent,
 } from '../../agent/agent-run';
 import { z } from 'zod';
 
@@ -15,10 +16,13 @@ export interface ApprovalHost {
   resolve(request: ApprovalResolvePayload): Promise<ApprovalHostInvocation>;
 }
 
-export const ApprovalResolvePayloadSchema = z.object({
-  approvalRequestId: z.string().min(1), decision: z.enum(['approved', 'denied']), scope: z.enum(['once', 'session']),
-  reason: z.string().min(1).optional(),
-}).strict();
+const ApprovalResolveBaseSchema = z.object({
+  approvalRequestId: z.string().min(1), reason: z.string().min(1).optional(),
+});
+export const ApprovalResolvePayloadSchema = z.discriminatedUnion('decision', [
+  ApprovalResolveBaseSchema.extend({ decision: z.literal('approved'), optionId: z.string().min(1) }).strict(),
+  ApprovalResolveBaseSchema.extend({ decision: z.literal('denied') }).strict(),
+]);
 const JsonValueSchema: z.ZodType<unknown> = z.lazy(() => z.union([
   z.string(), z.number(), z.boolean(), z.null(), z.array(JsonValueSchema), z.record(z.string(), JsonValueSchema),
 ]));
@@ -103,12 +107,7 @@ export function createApprovalHost(
  */
 
 
-export interface ApprovalResolvePayload {
-  approvalRequestId: string;
-  decision: 'approved' | 'denied';
-  scope: 'once' | 'session';
-  reason?: string;
-}
+export type ApprovalResolvePayload = z.infer<typeof ApprovalResolvePayloadSchema>;
 
 export interface ApprovalRunUiDto {
   runId: string;
@@ -160,14 +159,15 @@ async function* toAsyncEvents(events: RuntimeEvent[]): AsyncIterable<RuntimeEven
  * Maps approval UI requests into Agent Run approval decisions.
  */
 
-export function toApprovalDecision(payload: ApprovalResolvePayload) {
-  return {
+export function toApprovalDecision(payload: ApprovalResolvePayload): ApprovalDecisionIntent {
+  const common = {
     approval_request_id: payload.approvalRequestId,
-    decision: payload.decision,
-    scope: payload.scope,
     decided_by: 'user' as const,
     ...(payload.reason ? { reason: payload.reason } : {}),
   };
+  return payload.decision === 'approved'
+    ? { ...common, decision: 'approved', option_id: payload.optionId }
+    : { ...common, decision: 'denied' };
 }
 
 function toApprovalRunUiDto(run: AgentRun): ApprovalRunUiDto {
