@@ -41,6 +41,7 @@ import type {
 import type { SessionEntry, SessionHistoryItem } from '../domain/model/session-entry';
 import type { SessionMessageAttachment } from '../domain/model/session-attachment';
 import type { SessionMessageWithAttachments } from '../domain/model/session-message';
+import { deriveInitialSessionTitle } from '../domain/model/session-title';
 import { buildActiveConversationPath, buildActivePath, validateSessionEntry } from './internal/session-path';
 import type { SessionRepository } from '../repository/session-repository';
 
@@ -59,7 +60,7 @@ class DefaultSessionService implements SessionService {
       const session = this.options.repository.insertSession({
         session_id: this.sessionId(),
         workspace_id: request.workspace_id,
-        title: request.title?.trim() || 'New session',
+        title: request.title?.trim() || deriveInitialSessionTitle(request.initial_user_text),
         status: 'active',
         active_entry_id: undefined,
         created_at: createdAt,

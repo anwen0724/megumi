@@ -24,7 +24,11 @@ import type {
   SaveCompactionSummaryResult,
 } from '../domain/dto/context/session-context-response';
 
-export type CreateSessionRequest = { workspace_id: string; title?: string };
+export type CreateSessionRequest = {
+  workspace_id: string;
+  title?: string;
+  initial_user_text?: string;
+};
 export type CreateSessionResult = { status: 'created'; session: Session } | { status: 'failed'; failure: SessionRuntimeError };
 export type GetSessionRequest = { session_id: string };
 export type GetSessionResult = { status: 'found'; session: Session } | { status: 'not_found' } | { status: 'failed'; failure: SessionRuntimeError };

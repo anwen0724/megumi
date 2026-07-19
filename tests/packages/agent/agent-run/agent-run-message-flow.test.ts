@@ -11,6 +11,27 @@ import {
 import { RuntimeEventSchema } from '@megumi/agent/events';
 
 describe('Agent Run message flow', () => {
+  it('passes the first user text to Session when creating a new session', async () => {
+    const deps = createMessageFlowDependencies();
+    const service = createAgentRunService(deps as unknown as CreateAgentRunServiceOptions);
+
+    const result = await service.startRun({
+      request_id: 'request-new-session',
+      workspace_id: 'workspace-1',
+      session: { type: 'new' },
+      user_input: { text: '  help me inspect this workspace  ' },
+      model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
+      permission_mode: 'default',
+    });
+
+    expect(result.status).toBe('started');
+    expect(deps.session_service.createSession).toHaveBeenCalledWith({
+      workspace_id: 'workspace-1',
+      initial_user_text: '  help me inspect this workspace  ',
+    });
+    if (result.status === 'started') await collectEvents(result.events);
+  });
+
   it('starts one run, builds prompts, saves assistant output, captures memory, and publishes events', async () => {
     const repository = createInMemoryAgentRunRepository();
     const deps = createMessageFlowDependencies({ repository });

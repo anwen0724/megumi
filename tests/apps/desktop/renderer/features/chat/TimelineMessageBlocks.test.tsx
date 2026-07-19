@@ -274,7 +274,7 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(article).not.toHaveTextContent('TOOL CALLS');
   });
 
-  it('keeps active thinking expanded and collapses it after completion', () => {
+  it('keeps thinking expanded by default after completion', () => {
     const { rerender } = render(<TimelineMessage message={assistantMessage({
       blocks: [
         {
@@ -327,13 +327,13 @@ describe('TimelineMessage canonical block rendering', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Expand process disclosure/ }));
 
-    thinkingToggle = screen.getByRole('button', { name: /Expand thinking item/ });
+    thinkingToggle = screen.getByRole('button', { name: /Collapse thinking item/ });
     expect(thinkingToggle).toHaveTextContent('Thinking complete');
-    expect(thinkingToggle).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByText('The user is asking about identity.')).not.toBeInTheDocument();
+    expect(thinkingToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('The user is asking about identity.')).toBeInTheDocument();
 
     fireEvent.click(thinkingToggle);
-    expect(screen.getByText('The user is asking about identity.')).toBeInTheDocument();
+    expect(screen.queryByText('The user is asking about identity.')).not.toBeInTheDocument();
   });
 
   it('supports completed process disclosure while the answer is still streaming', () => {

@@ -1158,6 +1158,7 @@ class DefaultAgentRunService implements AgentRunService {
 
     const created = this.options.session_service.createSession({
       workspace_id: request.workspace_id,
+      initial_user_text: request.user_input.text,
       ...(request.session.title ? { title: request.session.title } : {}),
     });
     if (created.status === 'created') return { status: 'ok', session: created.session };

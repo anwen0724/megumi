@@ -225,7 +225,7 @@ function projectProcessItems(
   const items: ProcessDisclosureItem[] = [];
   for (const [messageIndex, item] of messages.entries()) {
     const message = item.message;
-    if (message.message_kind !== 'model_response') continue;
+    if (message.message_kind !== 'model_response' && message.message_kind !== 'assistant_reply') continue;
     for (const [blockIndex, block] of message.content.entries()) {
       if (block.type === 'thinking') {
         items.push({
@@ -237,7 +237,11 @@ function projectProcessItems(
           format: 'markdown',
           createdAt: message.created_at,
         });
-      } else if (block.type === 'text' && message.message_id !== answerMessageId) {
+      } else if (
+        message.message_kind === 'model_response' &&
+        block.type === 'text' &&
+        message.message_id !== answerMessageId
+      ) {
         items.push({
           itemId: `assistant-text:${message.message_id}:${blockIndex}`,
           kind: 'assistant_text',
@@ -248,7 +252,7 @@ function projectProcessItems(
           format: 'markdown',
           createdAt: message.created_at,
         });
-      } else if (block.type === 'toolCall') {
+      } else if (message.message_kind === 'model_response' && block.type === 'toolCall') {
         const result = toolResults.get(block.id);
         items.push({
           itemId: `tool:${block.id}`,

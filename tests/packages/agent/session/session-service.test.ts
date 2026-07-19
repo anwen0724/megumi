@@ -203,6 +203,37 @@ describe('SessionService', () => {
     });
   });
 
+  it('derives the initial title from normalized user text', () => {
+    const { service, workspaceId } = createService();
+
+    const result = service.createSession({
+      workspace_id: workspaceId,
+      initial_user_text: '  帮我\n\t分析这个项目目前的架构边界是否合理，并给出具体建议  ',
+    });
+
+    expect(result).toMatchObject({
+      status: 'created',
+      session: {
+        title: '帮我 分析这个项目目前的架构边界是否合理，并给出...',
+      },
+    });
+  });
+
+  it('prefers an explicit title over the initial user text', () => {
+    const { service, workspaceId } = createService();
+
+    const result = service.createSession({
+      workspace_id: workspaceId,
+      title: '  Architecture review  ',
+      initial_user_text: '这段文字不应该成为标题',
+    });
+
+    expect(result).toMatchObject({
+      status: 'created',
+      session: { title: 'Architecture review' },
+    });
+  });
+
   it('rejects a response append when another branch changed the active entry', async () => {
     const { service, workspaceId } = createService();
     await service.createSession({ workspace_id: workspaceId, title: 'Session' });

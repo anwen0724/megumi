@@ -71,6 +71,12 @@ export function useComposerController({
   const [permissionMode, setPermissionMode] = useState<ComposerPermissionMode>(DEFAULT_COMPOSER_PERMISSION_MODE);
   const [model, setModel] = useState<ComposerModel>(DEFAULT_COMPOSER_MODEL);
   const [selectedImages, setSelectedImages] = useState<ComposerDraftImage[]>(initialImages);
+  const valueRef = useRef(value);
+  const selectedImagesRef = useRef(selectedImages);
+  const selectedCommandCompletionRef = useRef(selectedCommandCompletion);
+  valueRef.current = value;
+  selectedImagesRef.current = selectedImages;
+  selectedCommandCompletionRef.current = selectedCommandCompletion;
   const modelOptions = useMemo(
     () => getComposerModelOptionsForProviders(providers),
     [providers],
@@ -184,18 +190,48 @@ export function useComposerController({
     if (!canSend) return;
     if (!selectedModelOption) return;
 
-    const succeeded = await onSubmit(createComposerSubmitPayload({
+    const submittedDraft = {
+      text: value,
+      images: selectedImages,
+      commandCompletion: selectedCommandCompletion,
+    };
+    const payload = createComposerSubmitPayload({
       message: resolveSubmitMessage(value, selectedCommandCompletion),
       permissionMode,
       providerId: selectedModelOption.providerId,
       model: selectedModelOption.modelId,
       attachments: selectedImages,
-    }));
-    if (succeeded === false) return;
+    });
+
+    // Consume the draft before the asynchronous send can create a Session and
+    // replace the welcome Composer with ComposerDock. Otherwise the new
+    // Composer instance hydrates from the stale submitted draft.
+    valueRef.current = '';
+    selectedImagesRef.current = [];
+    selectedCommandCompletionRef.current = null;
     onDraftChange?.({ text: '', images: [] });
     setValue('');
     setSelectedCommandCompletion(null);
     setSelectedImages([]);
+
+    const succeeded = await onSubmit(payload);
+    if (succeeded !== false) return;
+
+    // A rejected send restores the consumed draft only when the user has not
+    // started composing a replacement while the request was pending.
+    if (
+      valueRef.current.length === 0 &&
+      selectedImagesRef.current.length === 0 &&
+      selectedCommandCompletionRef.current === null
+    ) {
+      valueRef.current = submittedDraft.text;
+      selectedImagesRef.current = submittedDraft.images;
+      selectedCommandCompletionRef.current = submittedDraft.commandCompletion;
+      onDraftChange?.({ text: submittedDraft.text, images: submittedDraft.images });
+      setValue(submittedDraft.text);
+      setSelectedCommandCompletion(submittedDraft.commandCompletion);
+      setSelectedImages(submittedDraft.images);
+    }
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {

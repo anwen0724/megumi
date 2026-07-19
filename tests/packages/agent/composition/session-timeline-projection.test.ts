@@ -50,6 +50,36 @@ describe('Session Timeline projection', () => {
     ]));
   });
 
+  it('projects thinking from a direct Assistant Reply into process disclosure', () => {
+    const messages = [
+      item(user('U1', 'hello')),
+      item({
+        ...base('A1'),
+        message_kind: 'assistant_reply',
+        status: 'completed',
+        reason_code: 'normal_completion',
+        content: [
+          { type: 'thinking', thinking: 'I should answer warmly.' },
+          { type: 'text', text: 'Hello!' },
+        ],
+      }),
+    ];
+
+    const projected = projectSessionTimelineMessages({ projectId: 'P1', messages });
+    const assistant = projected[1] as TimelineAssistantMessage;
+    expect(assistant.blocks).toEqual([
+      expect.objectContaining({
+        kind: 'process_disclosure',
+        items: [expect.objectContaining({
+          kind: 'thinking',
+          text: 'I should answer warmly.',
+          status: 'completed',
+        })],
+      }),
+      expect.objectContaining({ kind: 'answer_text', status: 'completed', text: 'Hello!' }),
+    ]);
+  });
+
   it.each([
     ['failed', 'Partial answer.', 'failed'],
     ['cancelled', '', 'cancelled'],

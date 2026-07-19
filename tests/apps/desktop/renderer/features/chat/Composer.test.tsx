@@ -801,6 +801,30 @@ describe('Composer', () => {
     expect(input).toHaveStyle({ height: '56px', overflowY: 'hidden' });
   });
 
+  it('consumes the shared draft before an asynchronous first send can remount the composer', async () => {
+    let resolveSubmit: ((value: boolean) => void) | undefined;
+    let draft: Parameters<NonNullable<ComposerProps['onDraftChange']>>[0] = { text: '', images: [] };
+    const onDraftChange = vi.fn((nextDraft: typeof draft) => {
+      draft = nextDraft;
+    });
+    const onSubmit = vi.fn(() => new Promise<boolean>((resolve) => {
+      resolveSubmit = resolve;
+    }));
+
+    render(<TestComposer onSubmit={onSubmit} onDraftChange={onDraftChange} />);
+    const input = screen.getByLabelText('Message Megumi');
+    await userEvent.type(input, 'first message');
+    await waitFor(() => expect(draft.text).toBe('first message'));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(input).toHaveValue('');
+    expect(draft).toEqual({ text: '', images: [] });
+
+    resolveSubmit?.(true);
+  });
+
   it('shows sending status, allows drafting the next message, and shows Stop instead of Send', async () => {
     const onSubmit = vi.fn();
     const onStop = vi.fn();
@@ -958,7 +982,7 @@ describe('Composer', () => {
     expect(screen.queryByAltText('diagram.png')).not.toBeInTheDocument();
   });
 
-  it('keeps the image draft when the host rejects the submit', async () => {
+  it('restores the image draft when the host rejects the consumed submit', async () => {
     const onSubmit = vi.fn().mockResolvedValue(false);
     render(<TestComposer onSubmit={onSubmit} onSelectImages={async () => [{
       draftAttachmentId: 'draft-1', name: 'diagram.png', declaredMimeType: 'image/png',
