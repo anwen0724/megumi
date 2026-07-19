@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import type { ChatImageInputCapabilitiesUiResult, CommandSuggestionResult } from '@megumi/product/host-interface';
 import { useTranslation } from 'react-i18next';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
@@ -15,6 +15,7 @@ import { Composer } from '../components/Composer';
 import type { ComposerDraftImage } from '../components/composer-types';
 import { showToast } from '../../../shared/ui';
 import { rendererI18n } from '../../../shared/i18n';
+import { collectPendingApprovalActivities } from '../approval-overlay';
 
 const FALLBACK_COMPOSER_SPACER_HEIGHT = 188;
 
@@ -30,6 +31,10 @@ export function ChatPage() {
   const [imageInputCapabilities, setImageInputCapabilities] = useState<ChatImageInputCapabilitiesUiResult>();
   const effectiveComposerDockHeight = composerHeight > 0 ? composerHeight : FALLBACK_COMPOSER_SPACER_HEIGHT;
   const bottomSpacerHeight = Math.max(effectiveComposerDockHeight + 24, FALLBACK_COMPOSER_SPACER_HEIGHT);
+  const pendingApprovals = useMemo(
+    () => collectPendingApprovalActivities(controller.timelineMessages),
+    [controller.timelineMessages],
+  );
   const getCommandSuggestions = useCallback(async (
     request: { draft_input: string },
   ): Promise<CommandSuggestionResult> => {
@@ -165,13 +170,14 @@ export function ChatPage() {
                 onOpenWorkspaceChangedFile: (projectPath) => {
                   void controller.openWorkspaceChangedFile(projectPath);
                 },
-                onApprovalResolve: controller.resolveApproval,
               }}
             />
           </div>
           <ComposerDock
             status={controller.composerStatus}
             branchDraft={branchDraft}
+            approvalRequests={pendingApprovals}
+            onApprovalResolve={controller.resolveApproval}
             providers={providers}
             contextUsage={controller.contextUsage}
             imageInputCapabilities={imageInputCapabilities}

@@ -14,7 +14,7 @@ import type {
   ToolActivityItem,
 } from '@megumi/product/runtime-timeline';
 import { rendererI18n } from '../../../shared/i18n';
-import { Button, cx } from '../../../shared/ui';
+import { cx } from '../../../shared/ui';
 import { TimelineMarkdown } from './TimelineMarkdown';
 
 function formatDuration(start?: string, end?: string): string {
@@ -140,44 +140,7 @@ function PreludeTextItemView({ item }: { item: AssistantTextItem }) {
   );
 }
 
-export type ToolApprovalResolvePayload =
-  | { approvalRequestId: string; decision: 'approved'; optionId: string }
-  | { approvalRequestId: string; decision: 'denied' };
-
-export type ToolApprovalResolveResult = { status: 'accepted' } | { status: 'failed'; message: string };
-
-function ToolActivityItemView({
-  item,
-  onApprovalResolve,
-}: {
-  item: ToolActivityItem;
-  onApprovalResolve?: (payload: ToolApprovalResolvePayload) => Promise<ToolApprovalResolveResult>;
-}) {
-  const { t } = useTranslation('chat');
-  const [selectedOptionId, setSelectedOptionId] = useState(item.approval?.defaultOptionId ?? '');
-  const [submitting, setSubmitting] = useState(false);
-  const [submissionError, setSubmissionError] = useState<string>();
-
-  useEffect(() => {
-    setSelectedOptionId(item.approval?.defaultOptionId ?? '');
-    setSubmitting(false);
-    setSubmissionError(undefined);
-  }, [item.approval?.approvalRequestId, item.approval?.defaultOptionId]);
-
-  async function resolve(decision: 'approved' | 'denied') {
-    if (!item.approval || !onApprovalResolve || submitting) return;
-    setSubmitting(true);
-    setSubmissionError(undefined);
-    const payload: ToolApprovalResolvePayload = decision === 'approved'
-      ? { approvalRequestId: item.approval.approvalRequestId, decision, optionId: selectedOptionId }
-      : { approvalRequestId: item.approval.approvalRequestId, decision };
-    const result = await onApprovalResolve(payload);
-    if (result.status === 'failed') {
-      setSubmissionError(result.message);
-      setSubmitting(false);
-    }
-  }
-
+function ToolActivityItemView({ item }: { item: ToolActivityItem }) {
   return (
     <div className="flex min-w-0 items-start gap-2" data-testid={`tool-activity-${item.toolCallId}`}>
       <ItemIcon item={item} />
@@ -185,35 +148,6 @@ function ToolActivityItemView({
         <span className="block break-words text-[var(--color-text)] [overflow-wrap:anywhere]">{toolLabel(item)}</span>
         {item.resultSummary && item.status !== 'succeeded' ? <span className="block break-words text-xs text-[var(--color-text-muted)]">{item.resultSummary}</span> : null}
         {item.error ? <span className="block break-words text-xs text-[var(--color-danger)]">{item.error.message}</span> : null}
-        {item.status === 'awaiting_approval' && item.approval ? (
-          <span className="mt-2 block rounded-md border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-3">
-            {item.approval.summary ? <span className="mb-2 block text-xs text-[var(--color-text-muted)]">{item.approval.summary}</span> : null}
-            <span className="block space-y-2">
-              {item.approval.options.map((option) => (
-                <label key={option.optionId} className="flex cursor-pointer items-start gap-2 text-xs">
-                  <input
-                    type="radio"
-                    name={`approval-${item.approval?.approvalRequestId}`}
-                    value={option.optionId}
-                    checked={selectedOptionId === option.optionId}
-                    disabled={submitting}
-                    onChange={() => setSelectedOptionId(option.optionId)}
-                  />
-                  <span><strong>{option.label}</strong><span className="ml-1 text-[var(--color-text-muted)]">{option.description}</span></span>
-                </label>
-              ))}
-            </span>
-            <span className="mt-3 flex items-center gap-2">
-              <Button size="sm" variant="primary" disabled={submitting || !selectedOptionId} onClick={() => { void resolve('approved'); }}>
-                {submitting ? t('approvals.submitting') : t('approvals.approveAction')}
-              </Button>
-              <Button size="sm" variant="secondary" disabled={submitting} onClick={() => { void resolve('denied'); }}>
-                {t('approvals.denyAction')}
-              </Button>
-            </span>
-            {submissionError ? <span className="mt-2 block text-xs text-[var(--color-danger)]">{submissionError}</span> : null}
-          </span>
-        ) : null}
       </span>
     </div>
   );
@@ -271,10 +205,10 @@ function RecoveryActivityItemView({ item }: { item: RecoveryActivityItem }) {
   );
 }
 
-function ProcessItemView({ item, onApprovalResolve }: { item: ProcessDisclosureItem; onApprovalResolve?: ProcessDisclosureBlockViewProps['onApprovalResolve'] }) {
+function ProcessItemView({ item }: { item: ProcessDisclosureItem }) {
   if (item.kind === 'thinking') return <ThinkingItemView item={item} />;
   if (item.kind === 'assistant_text') return <PreludeTextItemView item={item} />;
-  if (item.kind === 'tool_activity') return <ToolActivityItemView item={item} onApprovalResolve={onApprovalResolve} />;
+  if (item.kind === 'tool_activity') return <ToolActivityItemView item={item} />;
   if (item.kind === 'error_activity') return <ErrorActivityItemView item={item} />;
   if (item.kind === 'cancelled_activity') return <CancelledActivityItemView item={item} />;
   if (item.kind === 'compaction_activity') return <CompactionActivityItemView item={item} />;
@@ -285,12 +219,7 @@ function ProcessItemView({ item, onApprovalResolve }: { item: ProcessDisclosureI
   return exhaustive;
 }
 
-interface ProcessDisclosureBlockViewProps {
-  block: ProcessDisclosureBlock;
-  onApprovalResolve?: (payload: ToolApprovalResolvePayload) => Promise<ToolApprovalResolveResult>;
-}
-
-export function ProcessDisclosureBlockView({ block, onApprovalResolve }: ProcessDisclosureBlockViewProps) {
+export function ProcessDisclosureBlockView({ block }: { block: ProcessDisclosureBlock }) {
   const { t } = useTranslation('chat');
   const defaultExpanded = useMemo(() => defaultProcessExpanded(block.status), [block.status]);
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -324,7 +253,7 @@ export function ProcessDisclosureBlockView({ block, onApprovalResolve }: Process
       {expanded ? (
         <div className="min-w-0 space-y-3 border-l border-[var(--color-border)] pl-5 text-sm">
           {block.items.length > 0 ? (
-            block.items.map((item) => <ProcessItemView key={item.itemId} item={item} onApprovalResolve={onApprovalResolve} />)
+            block.items.map((item) => <ProcessItemView key={item.itemId} item={item} />)
           ) : (
             <p className="text-[var(--color-text-muted)]">
               {t(block.status === 'running' ? 'processing.waitingFirst' : 'processing.noRecords')}

@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { TimelineMessage } from '../components/TimelineMessage';
 import { WorkspaceChangeFooter } from '../components/WorkspaceChangeFooter';
 import { BottomSpacer } from './BottomSpacer';
-import type { ToolApprovalResolvePayload, ToolApprovalResolveResult } from '../components/ProcessDisclosureBlockView';
 
 interface MessageColumnProps {
   timelineMessages: CanonicalTimelineMessage[];
@@ -12,7 +11,6 @@ interface MessageColumnProps {
   canShowBranchAction: (message: CanonicalTimelineMessage) => boolean;
   onBranchFromMessage: (message: CanonicalTimelineMessage) => void;
   onOpenWorkspaceChangedFile: (projectPath: string) => void;
-  onApprovalResolve?: (payload: ToolApprovalResolvePayload) => Promise<ToolApprovalResolveResult>;
 }
 export function MessageColumn({
   timelineMessages,
@@ -20,7 +18,6 @@ export function MessageColumn({
   canShowBranchAction,
   onBranchFromMessage,
   onOpenWorkspaceChangedFile,
-  onApprovalResolve,
 }: MessageColumnProps) {
   const { t } = useTranslation('chat');
   const renderAssistantAfterContent = (message: CanonicalTimelineMessage): ReactNode => {
@@ -46,7 +43,6 @@ export function MessageColumn({
             showBranchAction={canShowBranchAction(message)}
             afterContent={message.role === 'assistant' ? renderAssistantAfterContent(message) : null}
             onBranchFromMessage={onBranchFromMessage}
-            onApprovalResolve={onApprovalResolve}
           />
         ))}
         <BottomSpacer height={bottomSpacerHeight} />

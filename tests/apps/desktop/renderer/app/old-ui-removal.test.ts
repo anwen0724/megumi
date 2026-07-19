@@ -20,10 +20,7 @@ const removedVisualFiles = [
   'apps/desktop/src/renderer/entities/tool-call/ToolCallCard.tsx',
   'apps/desktop/src/renderer/entities/tool-call/StreamingText.tsx',
   'apps/desktop/src/renderer/features/approvals/components/ApprovalDialog.tsx',
-  'apps/desktop/src/renderer/features/chat/components/ApprovalStack.tsx',
-  'apps/desktop/src/renderer/entities/approval/ApprovalCard.tsx',
   'apps/desktop/src/renderer/entities/approval/store.ts',
-  'apps/desktop/src/renderer/entities/approval/index.ts',
   'apps/desktop/src/renderer/features/approvals/index.ts',
   'apps/desktop/src/renderer/features/approvals/store.ts',
 ];

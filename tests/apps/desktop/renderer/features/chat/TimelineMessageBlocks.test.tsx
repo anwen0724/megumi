@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   TimelineAssistantMessage,
@@ -491,12 +491,8 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(screen.queryByText('external_test:demo:echo')).not.toBeInTheDocument();
   });
 
-  it('submits an inline tool approval once and restores controls when acknowledgement fails', async () => {
-    let finish: ((result: { status: 'failed'; message: string }) => void) | undefined;
-    const onApprovalResolve = vi.fn(() => new Promise<{ status: 'failed'; message: string }>((resolve) => {
-      finish = resolve;
-    }));
-    render(<TimelineMessage onApprovalResolve={onApprovalResolve} message={assistantMessage({
+  it('keeps awaiting approval in the process disclosure without inline approval controls', () => {
+    render(<TimelineMessage message={assistantMessage({
       blocks: [{
         blockId: 'process:run-1',
         kind: 'process_disclosure',
@@ -524,22 +520,9 @@ describe('TimelineMessage canonical block rendering', () => {
       }],
     })} />);
 
-    const approve = screen.getByRole('button', { name: 'Approve' });
-    fireEvent.click(approve);
-    fireEvent.click(approve);
-
-    expect(onApprovalResolve).toHaveBeenCalledTimes(1);
-    expect(onApprovalResolve).toHaveBeenCalledWith({
-      approvalRequestId: 'approval-1',
-      decision: 'approved',
-      optionId: 'once:tool-call-approval',
-    });
-    expect(screen.getByRole('button', { name: 'Submitting…' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Deny' })).toBeDisabled();
-
-    finish?.({ status: 'failed', message: 'Settings could not be saved.' });
-    await waitFor(() => expect(screen.getByText('Settings could not be saved.')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    expect(screen.getByText('Waiting for approval: https://example.com')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Deny' })).not.toBeInTheDocument();
   });
 
   it('renders built-in tool activity with tool-specific labels and hides raw result summaries', () => {

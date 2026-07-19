@@ -5,7 +5,7 @@
   UserTimelineBlock,
 } from '@megumi/product/runtime-timeline';
 import { TimelineMarkdown } from './TimelineMarkdown';
-import { ProcessDisclosureBlockView, type ToolApprovalResolvePayload, type ToolApprovalResolveResult } from './ProcessDisclosureBlockView';
+import { ProcessDisclosureBlockView } from './ProcessDisclosureBlockView';
 import { RecoverableErrorBoundary } from '../../../shared/ui';
 import { useEffect, useState } from 'react';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
@@ -67,12 +67,7 @@ function blockResetKey(block: { blockId: string; status?: unknown }): string {
   return `${block.blockId}:${String(block.status ?? '')}`;
 }
 
-interface TimelineMessageBlocksProps {
-  message: CanonicalTimelineMessage;
-  onApprovalResolve?: (payload: ToolApprovalResolvePayload) => Promise<ToolApprovalResolveResult>;
-}
-
-export function TimelineMessageBlocks({ message, onApprovalResolve }: TimelineMessageBlocksProps) {
+export function TimelineMessageBlocks({ message }: { message: CanonicalTimelineMessage }) {
   const { t } = useTranslation('chat');
   if (message.role === 'user') {
     return (
@@ -115,7 +110,7 @@ export function TimelineMessageBlocks({ message, onApprovalResolve }: TimelineMe
               title={t('timeline.processFailed')}
               resetKey={blockResetKey(block)}
             >
-              <ProcessDisclosureBlockView block={block} onApprovalResolve={onApprovalResolve} />
+              <ProcessDisclosureBlockView block={block} />
             </RecoverableErrorBoundary>
           );
         }

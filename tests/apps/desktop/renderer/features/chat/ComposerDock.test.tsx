@@ -28,6 +28,31 @@ describe('ComposerDock', () => {
     expect(screen.queryByRole('log', { name: 'Chat timeline' })).not.toBeInTheDocument();
   });
 
+  it('renders the original approval card in the composer overlay', () => {
+    render(
+      <ComposerDock
+        status="running"
+        branchDraft={null}
+        approvalRequests={[{
+          itemId: 'tool:write-1', kind: 'tool_activity', toolCallId: 'write-1', toolName: 'write_file',
+          displayName: 'Write file', inputSummary: '睡前小故事.md', status: 'awaiting_approval',
+          approval: {
+            approvalRequestId: 'approval-1', defaultOptionId: 'once:write-1', summary: 'write_file requires approval.',
+            options: [{ optionId: 'once:write-1', scope: 'once', label: 'Once', description: 'Only this call.' }],
+          },
+        }]}
+        onApprovalResolve={vi.fn().mockResolvedValue({ status: 'accepted' })}
+        onSubmit={vi.fn()}
+        onStop={vi.fn()}
+      />,
+    );
+
+    const overlay = screen.getByTestId('composer-overlay-layer');
+    expect(overlay).toContainElement(screen.getByTestId('approval-stack'));
+    expect(overlay).toContainElement(screen.getByTestId('approval-card-approval-1'));
+    expect(screen.getByText('睡前小故事.md')).toBeInTheDocument();
+  });
+
   it('keeps the dock transparent while aligning its content to the chat column width', () => {
     render(
       <ComposerDock

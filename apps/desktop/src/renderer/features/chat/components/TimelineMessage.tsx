@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/product/runtime-timeline';
 import { IconButton, RecoverableErrorBoundary } from '../../../shared/ui';
 import { TimelineMessageBlocks } from './TimelineMessageBlocks';
-import type { ToolApprovalResolvePayload, ToolApprovalResolveResult } from './ProcessDisclosureBlockView';
 import { formatTime as formatLocalizedTime } from '../../../shared/i18n';
 
 interface TimelineMessageProps {
@@ -12,7 +11,6 @@ interface TimelineMessageProps {
   showBranchAction?: boolean;
   onBranchFromMessage?: (message: CanonicalTimelineMessage) => void;
   afterContent?: ReactNode;
-  onApprovalResolve?: (payload: ToolApprovalResolvePayload) => Promise<ToolApprovalResolveResult>;
 }
 
 function TimelineMessageComponent({
@@ -20,7 +18,6 @@ function TimelineMessageComponent({
   showBranchAction = false,
   onBranchFromMessage,
   afterContent,
-  onApprovalResolve,
 }: TimelineMessageProps) {
   const { t } = useTranslation('chat');
   const role = message.role;
@@ -112,7 +109,7 @@ function TimelineMessageComponent({
           <time dateTime={message.createdAt}>{formatLocalizedTime(message.createdAt) ?? ''}</time>
         </div>
 
-        <TimelineMessageBlocks message={message} onApprovalResolve={onApprovalResolve} />
+        <TimelineMessageBlocks message={message} />
         {afterContent ? (
           <RecoverableErrorBoundary title={t('timeline.detailsFailed')} resetKey={message.messageId}>
             {afterContent}

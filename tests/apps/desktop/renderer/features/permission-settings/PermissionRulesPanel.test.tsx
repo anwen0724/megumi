@@ -5,13 +5,23 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PermissionRulesPanel } from '@megumi/desktop/renderer/features/permission-settings';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project';
+import { useSessionStore } from '@megumi/desktop/renderer/entities/session';
 
 describe('PermissionRulesPanel', () => {
   const get = vi.fn();
   const update = vi.fn();
 
   beforeEach(() => {
-    useProjectStore.setState({ currentProjectId: 'workspace_1' });
+    useProjectStore.setState({
+      currentProjectId: 'workspace_1',
+      projects: [{
+        id: 'workspace_1', projectId: 'workspace_1', name: 'Megumi', repoPath: 'C:/megumi', repoPathKey: 'workspace_1',
+        status: 'available', createdAt: '2026-07-20T00:00:00.000Z', lastOpenedAt: '2026-07-20T00:00:00.000Z',
+      }],
+    });
+    useSessionStore.setState({
+      sessions: [{ id: 'session_1', projectId: 'workspace_1', title: 'Permission design', status: 'active', createdAt: '2026-07-20T00:00:00.000Z', updatedAt: '2026-07-20T00:00:00.000Z' }],
+    });
     get.mockReset().mockResolvedValue(result('ok'));
     update.mockReset().mockResolvedValue(result('updated'));
     Object.defineProperty(window, 'megumi', { configurable: true, value: { settings: { get, update } } });
@@ -22,6 +32,9 @@ describe('PermissionRulesPanel', () => {
     expect(await screen.findByRole('heading', { name: 'Permission rules' })).toBeInTheDocument();
     expect(screen.getByText('example.com')).toBeInTheDocument();
     expect(screen.getByText('Always allow')).toBeInTheDocument();
+    expect(screen.getByText('Workspace rule · Megumi')).toBeInTheDocument();
+    expect(screen.getByText('Session grant · Permission design')).toBeInTheDocument();
+    expect(screen.queryByText(/workspace_1|session_1/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Permission mode')).not.toBeInTheDocument();
   });
 
@@ -60,6 +73,12 @@ function result(status: 'ok' | 'updated') {
       rules: [{
         effect: 'allow', source: 'user',
         target: { kind: 'operation', action: 'network.fetch', resource: { type: 'network.url', operator: 'hostname', value: 'example.com' } },
+      }, {
+        effect: 'ask', source: 'workspace', sourceId: 'workspace_1',
+        target: { kind: 'operation', action: 'workspace.read', resource: { type: 'workspace.path', operator: 'any' } },
+      }, {
+        effect: 'deny', source: 'session', sourceId: 'session_1',
+        target: { kind: 'tool', sourceId: 'built_in', namespace: 'megumi', sourceToolName: 'read_file', displayName: 'Read file' },
       }],
       catalog: {
         operations: [

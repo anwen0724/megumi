@@ -5,6 +5,7 @@ import type { TFunction } from 'i18next';
 import { Plus, ShieldAlert, Trash2 } from 'lucide-react';
 import type { PermissionRuleEffectUi, PermissionRuleUiDto, SettingsUiResolved } from '@megumi/product/host-interface';
 import { useProjectStore } from '../../entities/project';
+import { useSessionStore } from '../../entities/session';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../shared/ipc';
 import { Button, SettingsSection, cx } from '../../shared/ui';
@@ -19,6 +20,8 @@ const EFFECTS: PermissionRuleEffectUi[] = ['allow', 'ask', 'deny'];
 export function PermissionRulesPanel() {
   const { t } = useTranslation('settings');
   const workspaceId = useProjectStore((state) => state.currentProjectId);
+  const projects = useProjectStore((state) => state.projects);
+  const sessions = useSessionStore((state) => state.sessions);
   const [permissions, setPermissions] = useState<PermissionSettings>();
   const [status, setStatus] = useState<'loading' | 'ready' | 'saving' | 'failed'>('loading');
   const [error, setError] = useState<string>();
@@ -205,7 +208,7 @@ export function PermissionRulesPanel() {
                     <div key={`${group}:${index}:${ruleLabel(rule, permissions)}`} className="group flex items-start gap-3 px-4 py-3">
                       <div className="min-w-0 flex-1">
                         <p className="break-words text-sm font-medium text-[var(--color-text)]">{ruleLabel(rule, permissions)}</p>
-                        <p className="mt-1 text-xs text-[var(--color-text-subtle)]">{sourceLabel(rule, t)}</p>
+                        <p className="mt-1 text-xs text-[var(--color-text-subtle)]">{sourceLabel(rule, t, projects, sessions)}</p>
                       </div>
                       <button type="button" disabled={status === 'saving'} aria-label={t('security.rules.deleteNamed', { name: ruleLabel(rule, permissions) })} onClick={() => { void mutate('remove', rule); }} className="rounded-md p-1.5 text-[var(--color-text-subtle)] opacity-70 transition hover:bg-[var(--color-danger)]/10 hover:text-[var(--color-danger)] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] group-hover:opacity-100">
                         <Trash2 size={14} aria-hidden="true" />
@@ -255,10 +258,19 @@ function ruleLabel(rule: PermissionRuleUiDto, permissions?: PermissionSettings):
   return matcher.value ?? rule.target.action;
 }
 
-function sourceLabel(rule: PermissionRuleUiDto, t: TFunction<'settings'>) {
+function sourceLabel(
+  rule: PermissionRuleUiDto,
+  t: TFunction<'settings'>,
+  projects: Array<{ id: string; name: string }>,
+  sessions: Array<{ id: string; title: string }>,
+) {
   if (rule.source === 'user') return t('security.rules.sources.user');
-  if (rule.source === 'workspace') return `${t('security.rules.sources.workspace')} · ${rule.sourceId}`;
-  return `${t('security.rules.sources.session')} · ${rule.sourceId}`;
+  if (rule.source === 'workspace') {
+    const name = projects.find((project) => project.id === rule.sourceId)?.name;
+    return name ? `${t('security.rules.sources.workspace')} · ${name}` : t('security.rules.sources.workspace');
+  }
+  const title = sessions.find((session) => session.id === rule.sourceId)?.title;
+  return title ? `${t('security.rules.sources.session')} · ${title}` : t('security.rules.sources.session');
 }
 
 function valuePlaceholder(operator: string, t: TFunction<'settings'>) {

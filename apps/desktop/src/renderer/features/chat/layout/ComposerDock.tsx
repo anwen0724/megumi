@@ -5,6 +5,9 @@ import type {
   ProviderPublicStatusUiDto,
 } from '@megumi/product/host-interface';
 import type { CommandSuggestionResult } from '@megumi/product/host-interface';
+import type { ToolActivityItem } from '@megumi/product/runtime-timeline';
+import type { ToolApprovalResolvePayload, ToolApprovalResolveResult } from '../../../entities/approval';
+import { ApprovalStack } from '../components/ApprovalStack';
 import { BranchDraftStack, type ComposerBranchDraftView } from '../components/BranchDraftStack';
 import { ComposerSurface } from '../components/ComposerSurface';
 import type { ChatComposerDraft } from '../../../entities/chat-ui/store';
@@ -17,6 +20,8 @@ const COMPOSER_DOCK_BOTTOM_PADDING = 12;
 interface ComposerDockProps {
   status: ComposerStatus;
   branchDraft: ComposerBranchDraftView | null;
+  approvalRequests?: ToolActivityItem[];
+  onApprovalResolve?: (payload: ToolApprovalResolvePayload) => Promise<ToolApprovalResolveResult>;
   providers?: ProviderPublicStatusUiDto[];
   contextUsage?: ChatGetContextUsageUiResult;
   imageInputCapabilities?: ChatImageInputCapabilitiesUiResult;
@@ -34,6 +39,8 @@ interface ComposerDockProps {
 export function ComposerDock({
   status,
   branchDraft,
+  approvalRequests = [],
+  onApprovalResolve,
   providers,
   contextUsage,
   imageInputCapabilities,
@@ -65,7 +72,7 @@ export function ComposerDock({
     onChooseContext: () => undefined,
     getCommandSuggestions,
   });
-  const hasOverlayContent = Boolean(branchDraft);
+  const hasOverlayContent = Boolean(branchDraft) || approvalRequests.length > 0;
 
   useLayoutEffect(() => {
     const element = composerSurfaceRef.current;
@@ -98,6 +105,9 @@ export function ComposerDock({
       >
         {hasOverlayContent ? (
           <ComposerOverlayLayer>
+            {approvalRequests.length > 0 && onApprovalResolve ? (
+              <ApprovalStack requests={approvalRequests} onResolve={onApprovalResolve} />
+            ) : null}
             <BranchDraftStack branchDraft={branchDraft} />
           </ComposerOverlayLayer>
         ) : null}
