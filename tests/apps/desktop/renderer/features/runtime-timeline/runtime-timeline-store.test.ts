@@ -461,7 +461,7 @@ describe('runtime timeline store', () => {
       .find((message) => message.role === 'assistant');
     expect(assistant?.blocks.find((block) => block.kind === 'answer_text')).toMatchObject({
       status: 'failed',
-      text: 'Provider request failed.',
+      text: '',
     });
     expect(assistant?.blocks.find((block) => block.kind === 'process_disclosure')).toMatchObject({
       status: 'failed',

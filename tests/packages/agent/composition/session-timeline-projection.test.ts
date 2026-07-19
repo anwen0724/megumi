@@ -1,278 +1,127 @@
-import { describe, expect, it, vi } from 'vitest';
+/* Verifies historical Timeline projection from explicit Session variants. */
+import { describe, expect, it } from 'vitest';
 import {
-  finalizeWorkspaceChangesForTerminalRunEvent,
-} from '@megumi/agent/composition/compose-agent-runtime';
-import {
-  createSessionTimelineQuery,
   projectSessionTimelineMessages,
+  type TimelineAssistantMessage,
 } from '@megumi/agent/projections/timeline';
-import type { AgentRun } from '@megumi/agent/agent-run';
-import type { RuntimeEvent } from '@megumi/agent/events';
-import type { SessionMessageWithAttachments } from '@megumi/agent/session';
+import type {
+  SessionMessage,
+  SessionMessageWithAttachments,
+  SessionUserMessage,
+} from '@megumi/agent/session';
 
-describe('projectSessionTimelineMessages', () => {
-  it('hydrates one complete historical assistant Timeline from semantic Session messages', () => {
-    const messages = projectSessionTimelineMessages({
-      projectId: 'workspace-1',
-      messages: [
-        sessionMessage({ message_id: 'U1', conversation: { role: 'user', content: [{ type: 'text', text: 'inspect' }] } }),
-        sessionMessage({
-          message_id: 'A1',
-          conversation: {
-            role: 'assistant',
-            content: [
-              { type: 'thinking', thinking: 'need the file' },
-              { type: 'text', text: 'I will inspect it.' },
-              { type: 'toolCall', id: 'T1', name: 'read_file', argumentsText: '{"path":"README.md"}' },
-            ],
-          },
-        }),
-        sessionMessage({
-          message_id: 'TR1',
-          conversation: {
-            role: 'toolResult', toolCallId: 'T1', toolName: 'read_file', status: 'success',
-            content: [{ type: 'text', text: 'contents' }],
-          },
-        }),
-        sessionMessage({ message_id: 'A2', conversation: { role: 'assistant', content: [{ type: 'text', text: 'Done.' }] } }),
-      ],
-    });
+describe('Session Timeline projection', () => {
+  it('keeps text plus Work Tool Call in process and uses only Assistant Reply as answer', () => {
+    const messages = [
+      item(user('U1', 'inspect')),
+      item({
+        ...base('M1'),
+        message_kind: 'model_response',
+        outcome_status: 'completed',
+        stop_reason: 'tool_calls',
+        content: [
+          { type: 'text', text: 'I will inspect it.' },
+          { type: 'toolCall', id: 'T1', name: 'read_file', argumentsText: '{"path":"README.md"}' },
+        ],
+      }),
+      item({
+        ...base('T1-result'),
+        message_kind: 'tool_result',
+        tool_call_id: 'T1',
+        tool_name: 'read_file',
+        status: 'success',
+        content: [{ type: 'text', text: 'contents' }],
+      }),
+      item(reply('A1', 'completed', 'Done.')),
+    ];
 
-    expect(messages).toHaveLength(2);
-    expect(messages[1]).toMatchObject({
-      messageId: 'A2', role: 'assistant', runId: 'run-1',
-      blocks: [
-        {
-          kind: 'process_disclosure',
-          items: [
-            { kind: 'thinking', text: 'need the file' },
-            { kind: 'assistant_text', text: 'I will inspect it.' },
-            { kind: 'tool_activity', toolCallId: 'T1', status: 'succeeded', resultSummary: 'contents' },
-          ],
-        },
-        { kind: 'answer_text', text: 'Done.' },
-      ],
-    });
+    const projected = projectSessionTimelineMessages({ projectId: 'P1', messages });
+    const assistant = projected[1] as TimelineAssistantMessage;
+    expect(assistant.messageId).toBe('A1');
+    expect(assistant.blocks).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'process_disclosure',
+        items: expect.arrayContaining([
+          expect.objectContaining({ kind: 'assistant_text', text: 'I will inspect it.' }),
+          expect.objectContaining({ kind: 'tool_activity', toolCallId: 'T1', status: 'succeeded' }),
+        ]),
+      }),
+      expect.objectContaining({ kind: 'answer_text', status: 'completed', text: 'Done.' }),
+    ]));
   });
 
-  it('attaches workspace change footer facts to assistant timeline messages by run id', () => {
-    const footerProjector = {
-      projectRunFooter: vi.fn(() => ({
-        runId: 'run-1',
-        sessionId: 'session-1',
-        updatedAt: '2026-07-09T11:13:00.000Z',
-        changeSets: [{
-          changeSetId: 'change-set-1',
-          changedFileCount: 1,
-          files: [{
-            changedFileId: 'changed-file-1',
-            workspacePath: 'hollow-world.md',
-            changeKind: 'created',
-          }],
-        }],
-      })),
-    };
-
-    const messages = projectSessionTimelineMessages({
-      projectId: 'workspace-1',
-      messages: [sessionMessage({
-        message_id: 'assistant-message-1',
-        conversation: { role: 'assistant', content: [{ type: 'text', text: '文件写好了。' }] },
-        run_id: 'run-1',
-      })],
-      workspaceChangeFooterProjector: footerProjector,
+  it.each([
+    ['failed', 'Partial answer.', 'failed'],
+    ['cancelled', '', 'cancelled'],
+  ] as const)('renders %s Assistant Reply directly, including an empty reply', (status, text, expected) => {
+    const projected = projectSessionTimelineMessages({
+      projectId: 'P1',
+      messages: [item(user('U1', 'hello')), item(reply('A1', status, text))],
     });
-
-    expect(footerProjector.projectRunFooter).toHaveBeenCalledWith('run-1');
-    expect(messages[0]).toMatchObject({
-      role: 'assistant',
-      runId: 'run-1',
-      workspaceChangeFooter: {
-        runId: 'run-1',
-        changeSets: [{
-          changedFileCount: 1,
-          files: [{
-            workspacePath: 'hollow-world.md',
-            changeKind: 'created',
-          }],
-        }],
-      },
-    });
-  });
-});
-
-describe('createSessionTimelineQuery', () => {
-  it('loads the active Session path and returns a Timeline projection', () => {
-    const getActiveConversationHistory = vi.fn(() => ({
-      status: 'ok' as const,
-      messages: [sessionMessage({
-        message_id: 'user-message-1',
-        conversation: { role: 'user', content: [{ type: 'text', text: 'hello' }] },
-      })],
+    const assistant = projected[1] as TimelineAssistantMessage;
+    expect(assistant.blocks).toContainEqual(expect.objectContaining({
+      kind: 'answer_text', status: expected, text,
     }));
-    const query = createSessionTimelineQuery({
-      sessionService: { getActiveConversationHistory },
-    });
-
-    const result = query.listSessionTimeline({
-      workspace_id: 'workspace-1',
-      session_id: 'session-1',
-    });
-
-    expect(getActiveConversationHistory).toHaveBeenCalledWith({
-      session_id: 'session-1',
-    });
-    expect(result).toMatchObject({
-      diagnostics: [],
-      messages: [{
-        messageId: 'user-message-1',
-        projectId: 'workspace-1',
-        sessionId: 'session-1',
-        role: 'user',
-      }],
-    });
   });
 
-  it('projects only canonical partial states and preserves active-path order', () => {
-    const messages = projectSessionTimelineMessages({
-      projectId: 'workspace-1',
-      messages: [
-        sessionMessage({ message_id: 'U2', run_id: 'run-z', conversation: { role: 'user', content: [{ type: 'text', text: 'second' }] } }),
-        sessionMessage({
-          message_id: 'A2', run_id: 'run-z',
-          conversation: {
-            role: 'assistant', stopReason: 'cancelled',
-            content: [
-              { type: 'text', text: 'partial' },
-              { type: 'toolCall', id: 'T2', name: 'read_file', argumentsText: '{}' },
-            ],
-          },
-        }),
-        sessionMessage({ message_id: 'U1', run_id: 'run-a', conversation: { role: 'user', content: [{ type: 'text', text: 'first branch fact' }] } }),
-      ],
-    });
-
-    expect(messages.map((message) => [message.messageId, message.historyOrder])).toEqual([
-      ['U2', 0], ['A2', 1], ['U1', 2],
-    ]);
-    expect(messages[1]).toMatchObject({
-      blocks: [
-        {
-          kind: 'process_disclosure', status: 'cancelled',
-          items: [
-            { kind: 'assistant_text', status: 'completed', text: 'partial' },
-            { kind: 'tool_activity', toolCallId: 'T2', status: 'requested' },
-          ],
-        },
-      ],
-    });
-  });
-});
-
-describe('finalizeWorkspaceChangesForTerminalRunEvent', () => {
-  it('finalizes the run workspace changes when an Agent Run reaches a terminal event', () => {
-    const finalizeChangeSet = vi.fn(() => ({
-      status: 'finalized' as const,
-      change_set: {
-        change_set_id: 'workspace-change-set-1',
-        workspace_id: 'workspace-1',
-        session_id: 'session-1',
-        run_id: 'run-1',
-        status: 'finalized' as const,
-        changed_file_count: 1,
-        created_at: '2026-07-09T11:13:00.000Z',
-        finalized_at: '2026-07-09T11:13:16.000Z',
-      },
+  it('projects a new reply-less historical Run as interrupted but does not synthesize it while live', () => {
+    const messages = [item(user('U1', 'hello'))];
+    const historical = projectSessionTimelineMessages({ projectId: 'P1', messages });
+    expect((historical[1] as TimelineAssistantMessage).blocks).toContainEqual(expect.objectContaining({
+      kind: 'answer_text', status: 'interrupted', text: '',
     }));
 
-    finalizeWorkspaceChangesForTerminalRunEvent({
-      event: runtimeEvent('run.completed'),
-      activeRuns: {
-        getRun: vi.fn(() => agentRun({
-          run_id: 'run-1',
-          workspace_id: 'workspace-1',
-          session_id: 'session-1',
-        })),
-      },
-      workspaceChanges: { finalizeChangeSet },
-    });
-
-    expect(finalizeChangeSet).toHaveBeenCalledWith({
-      workspace_id: 'workspace-1',
-      session_id: 'session-1',
-      run_id: 'run-1',
-      finalized_at: '2026-07-09T11:13:16.000Z',
-    });
+    const live = projectSessionTimelineMessages({ projectId: 'P1', messages, isRunLive: () => true });
+    expect(live).toHaveLength(1);
   });
 
-  it('ignores non-terminal runtime events', () => {
-    const finalizeChangeSet = vi.fn();
-
-    finalizeWorkspaceChangesForTerminalRunEvent({
-      event: runtimeEvent('model_call.text_delta'),
-      activeRuns: {
-        getRun: vi.fn(() => agentRun({
-          run_id: 'run-1',
-          workspace_id: 'workspace-1',
-          session_id: 'session-1',
-        })),
-      },
-      workspaceChanges: { finalizeChangeSet },
-    });
-
-    expect(finalizeChangeSet).not.toHaveBeenCalled();
+  it('does not claim completion for a migrated legacy response', () => {
+    const messages = [
+      item({ ...user('U1', 'hello'), legacy_provenance: { source: 'pre_final_reply_semantics' } }),
+      item({
+        ...base('M1'),
+        message_kind: 'model_response',
+        outcome_status: 'incomplete',
+        reason_code: 'legacy_unknown',
+        content: [{ type: 'text', text: 'Old answer' }],
+        legacy_provenance: { source: 'pre_final_reply_semantics' },
+      }),
+    ];
+    const projected = projectSessionTimelineMessages({ projectId: 'P1', messages });
+    expect((projected[1] as TimelineAssistantMessage).blocks).toContainEqual(expect.objectContaining({
+      kind: 'answer_text', status: 'legacy_unknown', text: 'Old answer',
+    }));
   });
 });
 
-function sessionMessage(
-  overrides: Partial<SessionMessageWithAttachments['message']>,
-): SessionMessageWithAttachments {
+function base(messageId: string) {
   return {
-    message: {
-      message_id: 'message-1',
-      session_id: 'session-1',
-      run_id: 'run-1',
-      conversation: { role: 'assistant', content: [{ type: 'text', text: 'ok' }] },
-      created_at: '2026-07-09T11:13:00.000Z',
-      completed_at: '2026-07-09T11:13:01.000Z',
-      ...overrides,
-    },
-    attachments: [],
+    message_id: messageId,
+    session_id: 'S1',
+    run_id: 'R1',
+    created_at: '2026-07-19T00:00:00.000Z',
+    completed_at: '2026-07-19T00:00:00.000Z',
   };
 }
 
-function runtimeEvent(eventType: RuntimeEvent['eventType']): RuntimeEvent {
-  return {
-    eventId: `event-${eventType}`,
-    schemaVersion: 1,
-    eventType,
-    runId: 'run-1',
-    sessionId: 'session-1',
-    sequence: 7,
-    createdAt: '2026-07-09T11:13:16.000Z',
-    source: 'core',
-    visibility: 'user',
-    persist: 'required',
-    payload: {},
-  } as RuntimeEvent;
+function user(messageId: string, text: string): SessionUserMessage {
+  return { ...base(messageId), message_kind: 'user_message', content: [{ type: 'text', text }] };
 }
 
-function agentRun(overrides: Partial<AgentRun>): AgentRun {
+function reply(
+  messageId: string,
+  status: 'completed' | 'failed' | 'cancelled',
+  text: string,
+): SessionMessage {
   return {
-    run_id: 'run-1',
-    workspace_id: 'workspace-1',
-    session_id: 'session-1',
-    model_selection: {
-      provider_id: 'deepseek',
-      model_id: 'deepseek-chat',
-    },
-    trigger: {
-      type: 'user_input',
-      user_message_id: 'message-user-1',
-    },
-    status: 'running',
-    created_at: '2026-07-09T11:13:00.000Z',
-    started_at: '2026-07-09T11:13:00.000Z',
-    ...overrides,
+    ...base(messageId),
+    message_kind: 'assistant_reply',
+    status,
+    reason_code: status === 'completed' ? 'normal_completion' : status === 'cancelled' ? 'user_cancelled' : 'internal_error',
+    content: text ? [{ type: 'text', text }] : [],
   };
+}
+
+function item(message: SessionMessage): SessionMessageWithAttachments {
+  return { message, attachments: [] };
 }

@@ -16,6 +16,7 @@ export function createMessageFlowDependencies(input: {
 } = {}) {
   const repository = input.repository ?? createInMemoryAgentRunRepository();
   const tool = registeredTool('read_file', 'parallel');
+  let assistantMessageSequence = 0;
   return {
     active_run_store: repository,
     input_service: {
@@ -59,7 +60,8 @@ export function createMessageFlowDependencies(input: {
             message_id: 'message-1',
             session_id: 'session-1',
             run_id: 'run-1',
-            conversation: { role: 'user' as const, content: [{ type: 'text' as const, text: 'hello' }] },
+            message_kind: 'user_message' as const,
+            content: [{ type: 'text' as const, text: 'hello' }],
             created_at: '2026-01-01T00:00:00.000Z',
           },
           attachments: [{
@@ -80,22 +82,44 @@ export function createMessageFlowDependencies(input: {
           created_at: '2026-01-01T00:00:00.000Z',
         },
       })),
-      saveAssistantMessage: vi.fn(() => ({
+      saveModelResponse: vi.fn((request) => ({
         status: 'saved' as const,
         message: {
-          message_id: 'assistant-message-1',
-          session_id: 'session-1',
-          run_id: 'run-1',
-          conversation: { role: 'assistant' as const, content: [{ type: 'text' as const, text: 'assistant reply' }] },
-          created_at: '2026-01-01T00:00:00.000Z',
-          completed_at: '2026-01-01T00:00:00.000Z',
+          message_id: request.message_id,
+          session_id: request.session_id,
+          run_id: request.run_id,
+          message_kind: 'model_response' as const,
+          content: request.content,
+          outcome_status: request.outcome_status,
+          created_at: request.completed_at,
+          completed_at: request.completed_at,
         },
         entry: {
-          entry_id: 'entry-assistant-message-1',
-          session_id: 'session-1',
+          entry_id: `entry:${request.message_id}`,
+          session_id: request.session_id,
           entry_type: 'message' as const,
-          message_id: 'assistant-message-1',
-          created_at: '2026-01-01T00:00:00.000Z',
+          message_id: request.message_id,
+          created_at: request.completed_at,
+        },
+      })),
+      saveAssistantReply: vi.fn((request) => ({
+        status: 'saved' as const,
+        message: {
+          message_id: request.message_id,
+          session_id: request.session_id,
+          run_id: request.run_id,
+          message_kind: 'assistant_reply' as const,
+          status: request.status,
+          content: request.content,
+          created_at: request.completed_at,
+          completed_at: request.completed_at,
+        },
+        entry: {
+          entry_id: `entry:${request.message_id}`,
+          session_id: request.session_id,
+          entry_type: 'message' as const,
+          message_id: request.message_id,
+          created_at: request.completed_at,
         },
       })),
       saveToolResultMessage: vi.fn((request) => ({
@@ -104,13 +128,11 @@ export function createMessageFlowDependencies(input: {
           message_id: request.message_id,
           session_id: request.session_id,
           run_id: request.run_id,
-          conversation: {
-            role: 'toolResult' as const,
-            toolCallId: request.tool_call_id,
-            toolName: request.tool_name,
-            status: request.status,
-            content: request.content,
-          },
+          message_kind: 'tool_result' as const,
+          tool_call_id: request.tool_call_id,
+          tool_name: request.tool_name,
+          status: request.status,
+          content: request.content,
           created_at: request.completed_at,
           completed_at: request.completed_at,
         },
@@ -223,7 +245,7 @@ export function createMessageFlowDependencies(input: {
       run_id: () => 'run-1',
       session_id: () => 'session-1',
       user_message_id: () => 'message-1',
-      assistant_message_id: () => 'assistant-message-1',
+      assistant_message_id: () => `assistant-message-${++assistantMessageSequence}`,
       tool_result_message_id: () => `tool-result-message-${Math.random()}`,
       approval_request_id: () => 'approval-1',
       event_id: (() => {

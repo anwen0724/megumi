@@ -34,7 +34,9 @@ export const ANSWER_TEXT_STATUSES = [
   'streaming',
   'completed',
   'failed',
-  'cancelled_partial',
+  'cancelled',
+  'interrupted',
+  'legacy_unknown',
 ] as const;
 export type AnswerTextStatus = (typeof ANSWER_TEXT_STATUSES)[number];
 

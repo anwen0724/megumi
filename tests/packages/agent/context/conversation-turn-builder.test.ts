@@ -1,34 +1,31 @@
-/* Verifies Session-message-only construction of factual historical Turns. */
+/* Verifies Context construction from explicit Session message variants. */
 import { describe, expect, it } from 'vitest';
-import type { SessionConversationMessage, SessionHistoryItem } from '@megumi/agent/session';
+import type { SessionHistoryItem, SessionMessage } from '@megumi/agent/session';
 import { buildConversationTurns } from '@megumi/agent/context/service/internal/conversation-turn-builder';
 
 describe('buildConversationTurns', () => {
-  it('groups complete semantic messages by run_id without a Run history query', () => {
+  it('preserves Work Tool history and the final Assistant Reply as different facts', () => {
     const history: SessionHistoryItem[] = [
-      message('EU1', 'U1', 'R1', { role: 'user', content: text('read it') }),
-      message('EA1', 'A1', 'R1', {
-        role: 'assistant',
+      message('EU1', user('U1', 'R1', 'read it')),
+      message('EM1', {
+        ...base('M1', 'R1'), message_kind: 'model_response', outcome_status: 'completed',
         content: [
           { type: 'text', text: 'checking' },
           { type: 'toolCall', id: 'T1', name: 'read_file', argumentsText: '{"path":"README.md"}' },
         ],
       }),
-      message('ET1', 'TR1', 'R1', {
-        role: 'toolResult', toolCallId: 'T1', toolName: 'read_file', status: 'success', content: text('content'),
+      message('ET1', {
+        ...base('TR1', 'R1'), message_kind: 'tool_result', tool_call_id: 'T1',
+        tool_name: 'read_file', status: 'success', content: text('content'),
       }),
-      message('EA2', 'A2', 'R1', { role: 'assistant', content: text('done') }),
-      message('EU2', 'U2', 'R2', { role: 'user', content: text('cancel now') }),
+      message('EA1', reply('A1', 'R1', 'completed', 'done')),
+      message('EU2', user('U2', 'R2', 'old request')),
     ];
 
     const result = buildConversationTurns({ history });
 
-    expect(result.turns.map((turn) => turn.source.runId)).toEqual(['R1', 'R2']);
     expect(result.turns[0]).toMatchObject({
-      source: {
-        userEntryId: 'EU1', lastEntryId: 'EA2',
-        responseMessageRefs: [{ entryId: 'EA1' }, { entryId: 'ET1' }, { entryId: 'EA2' }],
-      },
+      source: { userEntryId: 'EU1', lastEntryId: 'EA1' },
       items: [
         { type: 'assistant_message', content: text('checking') },
         { type: 'tool_call', toolCallId: 'T1', arguments: { path: 'README.md' } },
@@ -36,44 +33,62 @@ describe('buildConversationTurns', () => {
         { type: 'assistant_message', content: text('done') },
       ],
     });
-    expect(result.turns[1]).toMatchObject({ source: { lastEntryId: 'EU2' }, items: [] });
+    expect(result.turns[1].items).toContainEqual(expect.objectContaining({
+      type: 'context', kind: 'historical_run_state', content: { status: 'interrupted' },
+    }));
   });
 
-  it('keeps an incomplete tool request as ordinary historical content', () => {
+  it('does not call a reply-less Run interrupted while it is still live', () => {
+    const result = buildConversationTurns({
+      history: [message('EU', user('U', 'R', 'working'))],
+      isRunLive: () => true,
+    });
+    expect(result.turns[0].items).toEqual([]);
+  });
+
+  it('represents an incomplete Work Tool intent as historical run state, not a fake message', () => {
     const result = buildConversationTurns({
       history: [
-        message('EU', 'U', 'R', { role: 'user', content: text('write') }),
-        message('EA', 'A', 'R', {
-          role: 'assistant',
+        message('EU', user('U', 'R', 'write')),
+        message('EM', {
+          ...base('M', 'R'), message_kind: 'model_response', outcome_status: 'incomplete',
+          reason_code: 'user_cancelled',
           content: [{ type: 'toolCall', id: 'T', name: 'write_file', argumentsText: '{bad-json' }],
-          stopReason: 'cancelled',
         }),
+        message('EA', reply('A', 'R', 'cancelled', '')),
       ],
     });
-
-    expect(result.turns[0].items).toEqual([{
-      type: 'assistant_message',
-      content: [{
-        type: 'json',
-        value: {
-          historicalRunId: 'R',
-          incompleteToolCalls: [{ id: 'T', name: 'write_file', argumentsText: '{bad-json' }],
-        },
-      }],
-    }]);
+    expect(result.turns[0].items).toContainEqual(expect.objectContaining({
+      type: 'context', kind: 'historical_run_state',
+      content: expect.objectContaining({ status: 'incomplete' }),
+    }));
   });
 });
 
+function base(messageId: string, runId: string) {
+  return { message_id: messageId, session_id: 'S1', run_id: runId, created_at: 'now', completed_at: 'now' };
+}
+
+function user(messageId: string, runId: string, value: string): SessionMessage {
+  return { ...base(messageId, runId), message_kind: 'user_message', content: text(value) };
+}
+
+function reply(messageId: string, runId: string, status: 'completed' | 'cancelled', value: string): SessionMessage {
+  return {
+    ...base(messageId, runId), message_kind: 'assistant_reply', status,
+    reason_code: status === 'completed' ? 'normal_completion' : 'user_cancelled',
+    content: value ? text(value) : [],
+  };
+}
+
 function message(
   entryId: string,
-  messageId: string,
-  runId: string,
-  conversation: SessionConversationMessage,
+  value: SessionMessage,
 ): Extract<SessionHistoryItem, { type: 'message' }> {
   return {
     type: 'message',
-    entry: { entry_id: entryId, session_id: 'S1', entry_type: 'message', message_id: messageId, created_at: 'now' },
-    message: { message_id: messageId, session_id: 'S1', run_id: runId, conversation, created_at: 'now' },
+    entry: { entry_id: entryId, session_id: 'S1', entry_type: 'message', message_id: value.message_id, created_at: 'now' },
+    message: value,
     attachments: [],
   };
 }

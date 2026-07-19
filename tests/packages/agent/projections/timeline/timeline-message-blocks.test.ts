@@ -474,7 +474,7 @@ describe('timeline message and block contracts', () => {
           kind: 'answer_text',
           runId: 'run-cancelled',
           textId: 'text-answer-cancelled',
-          status: 'cancelled_partial',
+          status: 'cancelled',
           text: 'Partial answer',
           format: 'markdown',
         },
@@ -482,7 +482,7 @@ describe('timeline message and block contracts', () => {
     });
 
     expect(failed.blocks[1]).toMatchObject({ kind: 'answer_text', status: 'failed' });
-    expect(cancelled.blocks[1]).toMatchObject({ kind: 'answer_text', status: 'cancelled_partial' });
+    expect(cancelled.blocks[1]).toMatchObject({ kind: 'answer_text', status: 'cancelled' });
   });
 
   it('rejects multiple process or answer blocks in one assistant message', () => {

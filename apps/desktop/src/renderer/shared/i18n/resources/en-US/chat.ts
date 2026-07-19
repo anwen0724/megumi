@@ -49,6 +49,7 @@ export const chat = {
     copyReply: 'Copy reply',
     branchReply: 'Branch from this reply',
     responseInterrupted: '(Response interrupted)',
+    responseLegacyUnknown: '(Legacy response status unknown)',
     responseCancelled: '(Cancelled; the response above is partial)',
   },
   processing: {

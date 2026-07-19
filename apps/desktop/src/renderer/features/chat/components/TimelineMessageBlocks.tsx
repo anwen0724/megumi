@@ -42,11 +42,14 @@ function AnswerTextBlockView({ block }: { block: AnswerTextBlock }) {
   return (
     <div className="min-w-0 space-y-2 text-sm leading-7 text-[var(--color-text)]">
       <TimelineMarkdown text={block.text} />
-      {block.status === 'failed' ? (
+      {block.status === 'failed' || block.status === 'interrupted' ? (
         <p className="text-xs text-[var(--color-text-muted)]">{t('timeline.responseInterrupted')}</p>
       ) : null}
-      {block.status === 'cancelled_partial' ? (
+      {block.status === 'cancelled' ? (
         <p className="text-xs text-[var(--color-text-muted)]">{t('timeline.responseCancelled')}</p>
+      ) : null}
+      {block.status === 'legacy_unknown' ? (
+        <p className="text-xs text-[var(--color-text-muted)]">{t('timeline.responseLegacyUnknown')}</p>
       ) : null}
     </div>
   );

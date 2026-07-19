@@ -265,13 +265,7 @@ export function reduceRuntimeTimelineEvent(
   }
 
   if (event.eventType === 'model_call.completed') {
-    const payload = event.payload as { modelCallId?: string; finishReason?: string };
     const assistant = ensureAssistantMessage(nextMessages, event);
-    const answer = findAnswerBlock(assistant, payload.modelCallId ?? event.runId);
-    if (answer && payload.finishReason !== 'tool_calls') {
-      answer.status = payload.finishReason === 'failed' ? 'failed' : 'completed';
-      answer.updatedAt = event.createdAt;
-    }
     assistant.updatedAt = event.createdAt;
     return nextMessages;
   }
@@ -312,7 +306,6 @@ export function reduceRuntimeTimelineEvent(
         (block): block is AnswerTextBlock => block.kind === 'answer_text',
       );
       const answer = existingAnswer ?? ensureAnswerBlock(assistant, event, event.runId);
-      if (!answer.text.trim()) answer.text = errorMessage;
       answer.status = 'failed';
       answer.updatedAt = event.createdAt;
     } else {
@@ -324,6 +317,12 @@ export function reduceRuntimeTimelineEvent(
         createdAt: event.createdAt,
         updatedAt: event.createdAt,
       });
+      const existingAnswer = assistant.blocks.find(
+        (block): block is AnswerTextBlock => block.kind === 'answer_text',
+      );
+      const answer = existingAnswer ?? ensureAnswerBlock(assistant, event, event.runId);
+      answer.status = 'cancelled';
+      answer.updatedAt = event.createdAt;
     }
     process.status = event.eventType === 'run.failed' ? 'failed' : 'cancelled';
     process.endedAt = event.createdAt;
@@ -344,7 +343,10 @@ function ensureAssistantMessage(messages: TimelineMessage[], event: RuntimeEvent
     (message): message is TimelineAssistantMessage =>
       message.role === 'assistant' && message.runId === event.runId,
   );
-  if (existing) return existing;
+  if (existing) {
+    if (event.messageId) existing.messageId = event.messageId;
+    return existing;
+  }
 
   const assistant: TimelineAssistantMessage = {
     messageId: event.messageId ?? `assistant:${event.runId}`,

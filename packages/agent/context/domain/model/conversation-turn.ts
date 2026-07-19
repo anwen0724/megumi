@@ -4,7 +4,7 @@
 import type { ConversationItem } from '@megumi/ai';
 
 type UserMessage = Extract<ConversationItem, { type: 'user_message' }>;
-type ResponseItem = Exclude<ConversationItem, UserMessage | Extract<ConversationItem, { type: 'context' }>>;
+type ResponseItem = Exclude<ConversationItem, UserMessage>;
 
 export type ConversationTurn = {
   source: {

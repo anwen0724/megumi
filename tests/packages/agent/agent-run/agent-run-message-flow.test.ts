@@ -74,7 +74,7 @@ describe('Agent Run message flow', () => {
     }));
     expect(JSON.stringify(deps.context_service.prepareModelCall.mock.calls[0]?.[0].currentTurn))
       .not.toContain('README.md');
-    expect(deps.session_service.saveAssistantMessage).toHaveBeenCalledWith(expect.objectContaining({
+    expect(deps.session_service.saveAssistantReply).toHaveBeenCalledWith(expect.objectContaining({
       run_id: result.run.run_id,
       session_id: 'session-1',
       content: [{ type: 'text', text: 'assistant reply' }],
@@ -493,10 +493,10 @@ describe('Agent Run message flow', () => {
     }));
     expect(deps.context_service.recordCompletedRunUsage.mock.calls[0]?.[0])
       .not.toHaveProperty('providerInputTokens');
-    expect(deps.session_service.saveAssistantMessage).toHaveBeenCalledWith(expect.objectContaining({
+    expect(deps.session_service.saveAssistantReply).toHaveBeenCalledWith(expect.objectContaining({
       content: [{ type: 'text', text: 'Final answer.' }],
     }));
-    expect(deps.session_service.saveAssistantMessage).toHaveBeenNthCalledWith(1, expect.objectContaining({
+    expect(deps.session_service.saveModelResponse).toHaveBeenNthCalledWith(1, expect.objectContaining({
       content: [
         { type: 'text', text: 'I need to read the file.' },
         {

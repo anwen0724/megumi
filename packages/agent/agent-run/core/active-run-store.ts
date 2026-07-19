@@ -7,10 +7,22 @@ import type {
   AgentRunApprovalRequest,
   RunStep,
 } from '../contracts/agent-run-contracts';
+import type { AssistantContentBlock } from '@megumi/ai';
+
+export type ActiveModelResponseDraft = {
+  run_id: string;
+  model_call_id: string;
+  message_id: string;
+  parent_entry_id: string;
+  content: AssistantContentBlock[];
+  has_pending_work_tool_call: boolean;
+};
 
 export interface ActiveRunRecord {
   run: AgentRun;
   steps: RunStep[];
+  last_entry_id?: string;
+  active_model_response?: ActiveModelResponseDraft;
 }
 
 export class ActiveRunStore {
@@ -36,6 +48,47 @@ export class ActiveRunStore {
 
   listRuns(): AgentRun[] {
     return [...this.runs.values()].map((record) => record.run);
+  }
+
+  initializeExecution(runId: string, lastEntryId: string): void {
+    const record = this.requireRun(runId);
+    this.runs.set(runId, { ...record, last_entry_id: lastEntryId });
+  }
+
+  getLastEntryId(runId: string): string | undefined {
+    return this.runs.get(runId)?.last_entry_id;
+  }
+
+  setLastEntryId(runId: string, entryId: string): void {
+    const record = this.requireRun(runId);
+    this.runs.set(runId, { ...record, last_entry_id: entryId });
+  }
+
+  getActiveModelResponse(runId: string): ActiveModelResponseDraft | undefined {
+    return this.runs.get(runId)?.active_model_response;
+  }
+
+  setActiveModelResponse(draft: ActiveModelResponseDraft): void {
+    const record = this.requireRun(draft.run_id);
+    this.runs.set(draft.run_id, { ...record, active_model_response: draft });
+  }
+
+  updateActiveModelResponse(
+    runId: string,
+    update: Partial<Pick<ActiveModelResponseDraft, 'content' | 'has_pending_work_tool_call'>>,
+  ): void {
+    const record = this.requireRun(runId);
+    if (!record.active_model_response) return;
+    this.runs.set(runId, {
+      ...record,
+      active_model_response: { ...record.active_model_response, ...update },
+    });
+  }
+
+  clearActiveModelResponse(runId: string): void {
+    const record = this.requireRun(runId);
+    const { active_model_response: _discarded, ...next } = record;
+    this.runs.set(runId, next);
   }
 
   addStep(step: RunStep): RunStep {
