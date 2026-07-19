@@ -24,8 +24,10 @@ import type {
   ListSessionsResult,
   ListUserMessagesByRunIdsRequest,
   ListUserMessagesByRunIdsResult,
-  SaveAssistantMessageRequest,
-  SaveAssistantMessageResult,
+  SaveAssistantReplyRequest,
+  SaveAssistantReplyResult,
+  SaveModelResponseRequest,
+  SaveModelResponseResult,
   SaveCompactionSummaryRequest,
   SaveCompactionSummaryResult,
   SaveUserMessageRequest,
@@ -141,7 +143,8 @@ class DefaultSessionService implements SessionService {
           message_id: request.message_id,
           session_id: request.session_id,
           ...(request.run_id ? { run_id: request.run_id } : {}),
-          conversation: { role: 'user', content: request.content },
+          message_kind: 'user_message',
+          content: request.content,
           created_at: request.created_at,
           completed_at: request.created_at,
         });
@@ -202,9 +205,9 @@ class DefaultSessionService implements SessionService {
     }
   }
 
-  saveAssistantMessage(request: SaveAssistantMessageRequest): SaveAssistantMessageResult {
+  saveModelResponse(request: SaveModelResponseRequest): SaveModelResponseResult {
     try {
-      return this.options.repository.runInTransaction<SaveAssistantMessageResult>(() => {
+      return this.options.repository.runInTransaction<SaveModelResponseResult>(() => {
         const session = this.options.repository.findSessionById(request.session_id);
         if (!session) {
           return {
@@ -215,18 +218,71 @@ class DefaultSessionService implements SessionService {
         if (request.parent_entry_id && session.active_entry_id !== request.parent_entry_id) {
           return {
             status: 'failed',
-            failure: { code: 'active_entry_changed', message: 'Session active entry changed before Assistant message append' },
+            failure: { code: 'active_entry_changed', message: 'Session active entry changed before Model Response append' },
           };
         }
         const message = this.options.repository.insertMessage({
           message_id: request.message_id,
           session_id: request.session_id,
           run_id: request.run_id,
-          conversation: {
-            role: 'assistant',
-            content: request.content,
-            ...(request.stop_reason ? { stopReason: request.stop_reason } : {}),
-          },
+          message_kind: 'model_response',
+          content: request.content,
+          outcome_status: request.outcome_status,
+          ...(request.reason_code ? { reason_code: request.reason_code } : {}),
+          ...(request.stop_reason ? { stop_reason: request.stop_reason } : {}),
+          created_at: request.completed_at,
+          completed_at: request.completed_at,
+        });
+        const entry = this.options.repository.insertEntry({
+          entry_id: this.entryId({ kind: 'message', source_id: request.message_id }),
+          session_id: request.session_id,
+          parent_entry_id: request.parent_entry_id ?? session.active_entry_id,
+          entry_type: 'message',
+          message_id: request.message_id,
+          created_at: request.completed_at,
+        });
+        this.options.repository.updateActiveEntry({
+          session_id: request.session_id,
+          active_entry_id: entry.entry_id,
+          updated_at: request.completed_at,
+        });
+        return { status: 'saved', message, entry };
+      });
+    } catch (error) {
+      return failed(error);
+    }
+  }
+
+  saveAssistantReply(request: SaveAssistantReplyRequest): SaveAssistantReplyResult {
+    try {
+      return this.options.repository.runInTransaction<SaveAssistantReplyResult>(() => {
+        const session = this.options.repository.findSessionById(request.session_id);
+        if (!session) {
+          return {
+            status: 'failed',
+            failure: { code: 'session_not_found', message: `Session ${request.session_id} was not found` },
+          };
+        }
+        if (request.parent_entry_id && session.active_entry_id !== request.parent_entry_id) {
+          return {
+            status: 'failed',
+            failure: { code: 'active_entry_changed', message: 'Session active entry changed before Assistant Reply append' },
+          };
+        }
+        if (this.options.repository.findAssistantReplyByRunId(request.session_id, request.run_id)) {
+          return {
+            status: 'failed',
+            failure: { code: 'assistant_reply_exists', message: 'Assistant Reply already exists for this Run.' },
+          };
+        }
+        const message = this.options.repository.insertMessage({
+          message_id: request.message_id,
+          session_id: request.session_id,
+          run_id: request.run_id,
+          message_kind: 'assistant_reply',
+          status: request.status,
+          content: request.content,
+          ...(request.reason_code ? { reason_code: request.reason_code } : {}),
           created_at: request.completed_at,
           completed_at: request.completed_at,
         });
@@ -339,13 +395,11 @@ class DefaultSessionService implements SessionService {
           message_id: request.message_id,
           session_id: request.session_id,
           run_id: request.run_id,
-          conversation: {
-            role: 'toolResult',
-            toolCallId: request.tool_call_id,
-            toolName: request.tool_name,
-            status: request.status,
-            content: request.content,
-          },
+          message_kind: 'tool_result',
+          tool_call_id: request.tool_call_id,
+          tool_name: request.tool_name,
+          status: request.status,
+          content: request.content,
           created_at: request.completed_at,
           completed_at: request.completed_at,
         });

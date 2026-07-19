@@ -58,13 +58,16 @@ export const sessionMessages = sqliteTable('session_messages', {
   messageId: text('message_id').primaryKey(),
   sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
   runId: text('run_id'),
-  role: text('role').notNull(),
+  messageKind: text('message_kind').notNull(),
   messageJson: jsonText('message_json').notNull(),
   createdAt: text('created_at').notNull(),
   completedAt: text('completed_at'),
 }, (table) => [
   index('idx_session_messages_session_created').on(table.sessionId, table.createdAt),
   index('idx_session_messages_run').on(table.runId),
+  uniqueIndex('idx_session_messages_assistant_reply_run')
+    .on(table.sessionId, table.runId)
+    .where(sql`${table.messageKind} = 'assistant_reply'`),
 ]);
 
 export const sessionMessageAttachments = sqliteTable('session_message_attachments', {

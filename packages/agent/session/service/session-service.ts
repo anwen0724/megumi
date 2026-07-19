@@ -4,12 +4,14 @@ import type { SessionEntry } from '../domain/model/session-entry';
 import type { SessionMessage, SessionMessageWithAttachments } from '../domain/model/session-message';
 import type { SessionAttachmentContent } from '../domain/model/session-attachment';
 import type {
-  SaveAssistantMessageRequest,
+  SaveAssistantReplyRequest,
+  SaveModelResponseRequest,
   SaveToolResultMessageRequest,
   SaveUserMessageRequest,
 } from '../domain/dto/agent-run/session-agent-run-request';
 import type {
-  SaveAssistantMessageResult,
+  SaveAssistantReplyResult,
+  SaveModelResponseResult,
   SaveToolResultMessageResult,
   SaveUserMessageResult,
 } from '../domain/dto/agent-run/session-agent-run-response';
@@ -49,7 +51,8 @@ export type SessionService = {
   listSessions(request: ListSessionsRequest): ListSessionsResult;
   archiveSession(request: ArchiveSessionRequest): ArchiveSessionResult;
   saveUserMessage(request: SaveUserMessageRequest): Promise<SaveUserMessageResult>;
-  saveAssistantMessage(request: SaveAssistantMessageRequest): SaveAssistantMessageResult;
+  saveModelResponse(request: SaveModelResponseRequest): SaveModelResponseResult;
+  saveAssistantReply(request: SaveAssistantReplyRequest): SaveAssistantReplyResult;
   saveToolResultMessage(request: SaveToolResultMessageRequest): SaveToolResultMessageResult;
   listMessages(request: ListMessagesRequest): ListMessagesResult;
   listUserMessagesByRunIds(request: ListUserMessagesByRunIdsRequest): ListUserMessagesByRunIdsResult;
@@ -66,10 +69,12 @@ export type SessionService = {
 };
 
 export type {
-  SaveAssistantMessageRequest,
+  SaveAssistantReplyRequest,
+  SaveModelResponseRequest,
   SaveToolResultMessageRequest,
   SaveUserMessageRequest,
-  SaveAssistantMessageResult,
+  SaveAssistantReplyResult,
+  SaveModelResponseResult,
   SaveToolResultMessageResult,
   SaveUserMessageResult,
   GetActiveHistoryRequest,

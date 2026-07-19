@@ -135,7 +135,7 @@ describe('SessionService', () => {
       message: {
         message: {
           message_id: 'M1',
-          conversation: { role: 'user', content: [{ type: 'text', text: '看图' }] },
+          message_kind: 'user_message', content: [{ type: 'text', text: '看图' }],
         },
         attachments: [{
           attachment_id: 'A1',
@@ -153,7 +153,7 @@ describe('SessionService', () => {
     });
   });
 
-  it('saves assistant message without attachments and moves active entry', async () => {
+  it('saves Assistant Reply without attachments and moves active entry', async () => {
     const { service, workspaceId } = createService();
     await service.createSession({
       workspace_id: workspaceId,
@@ -166,16 +166,40 @@ describe('SessionService', () => {
       created_at: '2026-07-04T00:01:00.000Z',
     });
 
-    expect(service.saveAssistantMessage({
+    expect(service.saveAssistantReply({
       message_id: 'M2',
       session_id: 'S1',
       run_id: 'R1',
+      status: 'completed',
+      reason_code: 'normal_completion',
       content: [{ type: 'text', text: 'reply' }],
       completed_at: '2026-07-04T00:02:00.000Z',
     })).toMatchObject({
       status: 'saved',
-      message: { conversation: { role: 'assistant', content: [{ type: 'text', text: 'reply' }] } },
+      message: { message_kind: 'assistant_reply', status: 'completed', content: [{ type: 'text', text: 'reply' }] },
       entry: { message_id: 'M2' },
+    });
+  });
+
+  it('allows only one Assistant Reply per Run', async () => {
+    const { service, workspaceId } = createService();
+    await service.createSession({ workspace_id: workspaceId, title: 'Session' });
+    await service.saveUserMessage({
+      message_id: 'M1', session_id: 'S1', run_id: 'R1',
+      content: [{ type: 'text', text: 'hello' }], created_at: '2026-07-04T00:01:00.000Z',
+    });
+    expect(service.saveAssistantReply({
+      message_id: 'A1', session_id: 'S1', run_id: 'R1', status: 'completed',
+      reason_code: 'normal_completion', content: [{ type: 'text', text: 'first' }],
+      completed_at: '2026-07-04T00:02:00.000Z',
+    }).status).toBe('saved');
+
+    expect(service.saveAssistantReply({
+      message_id: 'A2', session_id: 'S1', run_id: 'R1', status: 'failed',
+      reason_code: 'internal_error', content: [],
+      completed_at: '2026-07-04T00:03:00.000Z',
+    })).toMatchObject({
+      status: 'failed', failure: { code: 'assistant_reply_exists' },
     });
   });
 
@@ -193,9 +217,11 @@ describe('SessionService', () => {
       created_at: '2026-07-04T00:02:00.000Z',
     });
 
-    expect(service.saveAssistantMessage({
+    expect(service.saveAssistantReply({
       message_id: 'A1', session_id: 'S1', run_id: 'R1',
       parent_entry_id: first.entry.entry_id,
+      status: 'completed',
+      reason_code: 'normal_completion',
       content: [{ type: 'text', text: 'stale response' }],
       completed_at: '2026-07-04T00:03:00.000Z',
     })).toMatchObject({ status: 'failed', failure: { code: 'active_entry_changed' } });
@@ -208,7 +234,7 @@ describe('SessionService', () => {
     const { service, workspaceId } = createService();
     await service.createSession({ workspace_id: workspaceId, title: 'Session' });
     const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', content: [{ type: 'text', text: 'm1' }], created_at: '2026-07-04T00:01:00.000Z' });
-    await service.saveAssistantMessage({ message_id: 'M2', session_id: 'S1', run_id: 'R1', content: [{ type: 'text', text: 'm2' }], completed_at: '2026-07-04T00:02:00.000Z' });
+    await service.saveAssistantReply({ message_id: 'M2', session_id: 'S1', run_id: 'R1', status: 'completed', reason_code: 'normal_completion', content: [{ type: 'text', text: 'm2' }], completed_at: '2026-07-04T00:02:00.000Z' });
     await service.switchActiveEntry({ session_id: 'S1', active_entry_id: m1.status === 'saved' ? m1.entry.entry_id : undefined, updated_at: '2026-07-04T00:03:00.000Z' });
     await service.saveUserMessage({ message_id: 'M3', session_id: 'S1', content: [{ type: 'text', text: 'm3' }], created_at: '2026-07-04T00:04:00.000Z' });
 
@@ -260,8 +286,9 @@ describe('SessionService', () => {
       content: [{ type: 'text', text: 'first input' }],
       created_at: '2026-07-04T00:01:00.000Z',
     });
-    await service.saveAssistantMessage({
+    await service.saveAssistantReply({
       message_id: 'M2', session_id: 'S1', run_id: 'R1',
+      status: 'completed', reason_code: 'normal_completion',
       content: [{ type: 'text', text: 'reply' }],
       completed_at: '2026-07-04T00:02:00.000Z',
     });
@@ -274,8 +301,8 @@ describe('SessionService', () => {
     expect(service.listUserMessagesByRunIds({ run_ids: ['R1', 'R2'] })).toMatchObject({
       status: 'ok',
       messages: [
-        { message_id: 'M1', run_id: 'R1', conversation: { role: 'user' } },
-        { message_id: 'M3', run_id: 'R2', conversation: { role: 'user' } },
+        { message_id: 'M1', run_id: 'R1', message_kind: 'user_message' },
+        { message_id: 'M3', run_id: 'R2', message_kind: 'user_message' },
       ],
     });
   });

@@ -29,7 +29,7 @@ describe('final Agent database schema', () => {
 
   it('keeps run_id as correlation data without a Run table foreign key', () => {
     expect(columns(database, 'session_messages')).toEqual([
-      'message_id', 'session_id', 'run_id', 'role', 'message_json', 'created_at', 'completed_at',
+      'message_id', 'session_id', 'run_id', 'message_kind', 'message_json', 'created_at', 'completed_at',
     ]);
     expect(columns(database, 'workspace_changes')).toContain('run_id');
     expect(columns(database, 'artifacts')).toContain('run_id');
