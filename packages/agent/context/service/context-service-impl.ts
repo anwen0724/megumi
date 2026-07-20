@@ -4,7 +4,7 @@
  */
 import type { InstructionService } from '../../instructions';
 import type { SessionHistoryItem, SessionService } from '../../session';
-import type { SkillService } from '../../skills';
+import type { SkillCatalogItem, UsedSkillContent } from '@megumi/skills';
 import type { ContextCapacity, ContextPolicy, ContextUsage, SessionUsageSnapshot } from '../domain/model/context-usage';
 import type { ConversationTurn, CurrentConversationTurn } from '../domain/model/conversation-turn';
 import type { ContextSourceRef, Prompt, VisibleCompactionSummary } from '../domain/model/prompt';
@@ -41,7 +41,6 @@ export type ContextServiceDependencies = {
   sessionService: Pick<SessionService, 'getActiveHistory' | 'saveCompactionSummary' | 'readAttachmentContent'>;
   instructionScopeResolver: InstructionScopeResolver;
   instructionService: InstructionService;
-  skillService: Pick<SkillService, 'getSkillCatalog'>;
   promptTokenCounter: ContextPromptTokenCounter;
   summaryModelCall: {
     complete(request: { prompt: Prompt; modelContext: ContextCapacity; sessionId?: string; compactionId?: string; signal?: AbortSignal }): Promise<
@@ -67,8 +66,8 @@ type BuildFacts = {
   historicalTurns: ConversationTurn[];
   systemInstructions: ReturnType<InstructionService['getSystemInstructions']>;
   agentInstructions: { sources: Array<{ sourceId: string; sourcePath: string; content: string }> };
-  skillCatalog: Array<{ skillId: string; name: string; description: string }>;
-  activatedSkills: Array<{ skillId: string; name: string; content: string }>;
+  skillCatalog: SkillCatalogItem[];
+  usedSkills: UsedSkillContent[];
   memoryRecall?: PrepareModelCallRequest['memoryRecall'];
   tools: PrepareModelCallRequest['tools'];
   compactionSummary?: VisibleCompactionSummary;
@@ -131,7 +130,8 @@ export class ContextServiceImpl implements ContextService {
       workspaceId: request.workspaceId,
       throughEntryId: request.currentTurn.userEntry.parentEntryId ?? null,
       currentTurn: request.currentTurn,
-      activatedSkills: request.activatedSkills,
+      skillCatalog: request.skillCatalog,
+      usedSkills: request.usedSkills,
       memoryRecall: request.memoryRecall,
       tools: request.tools,
       signal: request.signal,
@@ -197,7 +197,7 @@ export class ContextServiceImpl implements ContextService {
   private async compactSessionExclusive(request: CompactSessionRequest): Promise<CompactSessionResult> {
     if (request.signal?.aborted) return failed(cancelled());
     const policy = this.resolvePolicy();
-    const loaded = await this.loadFacts({ sessionId: request.sessionId, workspaceId: request.workspaceId, tools: [], activatedSkills: [], signal: request.signal });
+    const loaded = await this.loadFacts({ sessionId: request.sessionId, workspaceId: request.workspaceId, tools: [], skillCatalog: [], usedSkills: [], signal: request.signal });
     if (loaded.status === 'failed') return loaded;
     if (request.signal?.aborted) return failed(cancelled());
     const rawBuilt = this.buildPrompt(loaded.facts);
@@ -240,7 +240,8 @@ export class ContextServiceImpl implements ContextService {
     workspaceId: string;
     throughEntryId?: string | null;
     currentTurn?: CurrentConversationTurn;
-    activatedSkills: PrepareModelCallRequest['activatedSkills'];
+    skillCatalog: PrepareModelCallRequest['skillCatalog'];
+    usedSkills: PrepareModelCallRequest['usedSkills'];
     memoryRecall?: PrepareModelCallRequest['memoryRecall'];
     tools: PrepareModelCallRequest['tools'];
     signal?: AbortSignal;
@@ -265,10 +266,6 @@ export class ContextServiceImpl implements ContextService {
     const agentInstructions = await this.dependencies.instructionService.getEffectiveAgentInstructions({ workspaceRoot: scope.workspaceRoot, workingDirectory: scope.workingDirectory });
     if (input.signal?.aborted) return failed(cancelled());
     if (agentInstructions.status === 'failed') return failed(ownerFailure('instruction_load_failed', agentInstructions.message, 'instructions', { code: 'instruction_load_failed', message: agentInstructions.message }));
-    const catalog = await this.dependencies.skillService.getSkillCatalog({ workspaceId: input.workspaceId });
-    if (input.signal?.aborted) return failed(cancelled());
-    if (catalog.status === 'failed') return failed(ownerFailure('skill_catalog_failed', catalog.message, 'skills', { code: 'skill_catalog_failed', message: catalog.message }));
-
     return {
       status: 'loaded',
       facts: {
@@ -279,8 +276,8 @@ export class ContextServiceImpl implements ContextService {
         historicalTurns: turns.turns,
         systemInstructions,
         agentInstructions: agentInstructions.instructions,
-        skillCatalog: catalog.skills,
-        activatedSkills: input.activatedSkills,
+        skillCatalog: input.skillCatalog,
+        usedSkills: input.usedSkills,
         ...(input.memoryRecall ? { memoryRecall: input.memoryRecall } : {}),
         tools: input.tools,
         ...(effectiveSummary(historyResult.history) ? { compactionSummary: effectiveSummary(historyResult.history) } : {}),
@@ -465,8 +462,9 @@ function effectiveSummary(history: SessionHistoryItem[]): VisibleCompactionSumma
 
 function promptWithoutCurrentTurn(facts: BuildFacts): Prompt {
   return {
-    instructions: { system: facts.systemInstructions, agentInstructions: facts.agentInstructions, activatedSkills: facts.activatedSkills },
+    instructions: { system: facts.systemInstructions, agentInstructions: facts.agentInstructions },
     referenceContext: { skillCatalog: facts.skillCatalog, ...(facts.compactionSummary ? { compactionSummary: facts.compactionSummary } : {}), ...(facts.memoryRecall ? { memoryRecall: facts.memoryRecall } : {}) },
+    runContext: { skills: facts.usedSkills },
     conversation: facts.historicalTurns.flatMap(conversationItemsFromTurn),
     tools: facts.tools,
   };
@@ -476,16 +474,17 @@ function sourceRefsWithoutCurrentTurn(facts: BuildFacts): ContextSourceRef[] {
   return [
     ...facts.systemInstructions.map((item) => ({ sourceType: 'system_instruction' as const, sourceId: item.instructionId })),
     ...facts.agentInstructions.sources.map((item) => ({ sourceType: 'agent_instruction' as const, sourceId: item.sourceId })),
-    ...facts.skillCatalog.map((item) => ({ sourceType: 'skill_catalog' as const, sourceId: item.skillId })),
-    ...facts.activatedSkills.map((item) => ({ sourceType: 'activated_skill' as const, sourceId: item.skillId })),
+    ...facts.skillCatalog.map((item) => ({ sourceType: 'skill_catalog' as const, sourceId: item.skillPath })),
+    ...facts.usedSkills.map((item) => ({ sourceType: 'used_skill' as const, sourceId: item.skillPath })),
     ...(facts.compactionSummary ? [{ sourceType: 'compaction_summary' as const, sourceId: facts.compactionSummary.compactionId }] : []),
   ];
 }
 
 function summaryPromptFrom(systemPrompt: string, input: string, turns: ConversationTurn[]): Prompt {
   return {
-    instructions: { system: [{ instructionId: 'context:compaction-summary', content: systemPrompt }], agentInstructions: { sources: [] }, activatedSkills: [] },
+    instructions: { system: [{ instructionId: 'context:compaction-summary', content: systemPrompt }], agentInstructions: { sources: [] } },
     referenceContext: { skillCatalog: [] },
+    runContext: { skills: [] },
     conversation: [
       { type: 'user_message', content: [{ type: 'text', text: input }] },
       ...turns.flatMap(conversationItemsFromTurn),

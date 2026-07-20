@@ -75,7 +75,6 @@ function materializeInstructions(prompt: Prompt): string {
   return [
     ...prompt.instructions.system.map((instruction) => instruction.content),
     ...prompt.instructions.agentInstructions.sources.map((source) => source.content),
-    ...prompt.instructions.activatedSkills.map((skill) => skill.content),
   ].join('\n\n');
 }
 
@@ -87,8 +86,9 @@ function materializePromptMessages(prompt: Prompt): ConversationMessage[] {
       role: 'context',
       kind: 'skill_catalog',
       content: prompt.referenceContext.skillCatalog.map((skill) => ({
-        skillId: skill.skillId,
+        name: skill.name,
         description: skill.description,
+        skillPath: skill.skillPath,
       })),
     });
   }
@@ -101,8 +101,18 @@ function materializePromptMessages(prompt: Prompt): ConversationMessage[] {
     });
   }
 
+  const skillMessages: ContextMessage[] = prompt.runContext.skills.map((skill) => ({
+    role: 'context',
+    kind: 'skill',
+    content: {
+      name: skill.name,
+      skillPath: skill.skillPath,
+      instructions: skill.content,
+    },
+  }));
+
   const memory = prompt.referenceContext.memoryRecall;
-  if (!memory) return [...references, ...materializeConversation(prompt.conversation)];
+  if (!memory) return [...references, ...materializeConversation(prompt.conversation), ...skillMessages];
 
   const currentUserIndex = findLastUserMessageIndex(prompt.conversation);
   if (currentUserIndex < 0) {
@@ -122,6 +132,7 @@ function materializePromptMessages(prompt: Prompt): ConversationMessage[] {
     ...materializeConversation(prompt.conversation.slice(0, currentUserIndex)),
     memoryMessage,
     ...materializeConversation(prompt.conversation.slice(currentUserIndex)),
+    ...skillMessages,
   ];
 }
 

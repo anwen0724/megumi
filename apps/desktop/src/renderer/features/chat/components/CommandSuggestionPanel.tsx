@@ -137,7 +137,7 @@ function humanizeCommandName(name: string): string {
 
 function suggestionKey(groupId: string, command: CommandSuggestionItem): string {
   const sourceIdentity = command.source.kind === 'skill'
-    ? command.source.skill_id
+    ? command.source.skillPath
     : command.name;
   return `${groupId}:${command.source.kind}:${sourceIdentity}:${command.match.field}:${command.match.value}`;
 }

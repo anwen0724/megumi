@@ -78,6 +78,9 @@ export const SessionContextUsageGetPayloadSchema = z.object({
 }).strict();
 export const SessionMessageSendPayloadSchema = z.object({
   sessionId: z.string().min(1).optional(), projectId: z.string().min(1), text: z.string(),
+  skillSelection: z.object({
+    type: z.literal('skill'), name: z.string().min(1), skillPath: z.string().min(1),
+  }).strict().optional(),
   attachments: z.array(z.object({
     draftAttachmentId: z.string().min(1),
     type: z.literal('image'),
@@ -167,12 +170,13 @@ const HostCommandSuggestionItemSchema = z.object({
   name: z.string(), aliases: z.array(z.string()).optional(), description: z.string(), argument_hint: z.string().optional(),
   source: z.union([
     z.object({ kind: z.literal('built_in') }).strict(),
-    z.object({ kind: z.literal('skill'), skill_id: z.string() }).strict(),
+    z.object({ kind: z.literal('skill'), name: z.string(), skillPath: z.string() }).strict(),
   ]),
   source_badge: z.string().optional(),
   display: z.object({ primary: z.string(), secondary: z.string().optional(), badge: z.string().optional() }).strict().optional(),
   match: z.object({ field: z.enum(['name', 'alias']), value: z.string(), prefix: z.string() }).strict(),
   displayInput: z.string(), submitInput: z.string(),
+  selection: z.object({ type: z.literal('skill'), name: z.string(), skillPath: z.string() }).strict().optional(),
 }).strict();
 
 export const ChatCommandSuggestionsUiResultSchema = z.object({
@@ -368,6 +372,7 @@ export function createChatHost(options: {
             })),
           } : {}),
         },
+        ...(request.skillSelection ? { skill_selection: request.skillSelection } : {}),
         model_selection: request.modelSelection,
         ...(request.permissionMode ? { permission_mode: request.permissionMode } : {}),
       });
@@ -602,6 +607,7 @@ function toHostCommandSuggestions(
         ...item,
         displayInput: `/${item.display?.primary ?? item.name} `,
         submitInput: completion.replacement_input,
+        ...(completion.selection ? { selection: completion.selection } : {}),
       })),
     })),
   };
@@ -696,6 +702,7 @@ export interface ChatSendUserInputUiRequest {
   projectPath?: string;
   branchMarkerId?: string;
   text: string;
+  skillSelection?: { type: 'skill'; name: string; skillPath: string };
   attachments?: Array<{
     draftAttachmentId: string;
     type: 'image';
@@ -812,12 +819,13 @@ export type HostCommandSuggestionItem = {
   aliases?: string[];
   description: string;
   argument_hint?: string;
-  source: { kind: 'built_in' } | { kind: 'skill'; skill_id: string };
+  source: { kind: 'built_in' } | { kind: 'skill'; name: string; skillPath: string };
   source_badge?: string;
   display?: { primary: string; secondary?: string; badge?: string };
   match: { field: 'name' | 'alias'; value: string; prefix: string };
   displayInput: string;
   submitInput: string;
+  selection?: { type: 'skill'; name: string; skillPath: string };
 };
 export type CommandSuggestionItem = HostCommandSuggestionItem;
 export type CommandSuggestionResult = HostCommandSuggestionResult;

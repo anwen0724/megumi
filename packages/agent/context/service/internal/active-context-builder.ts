@@ -3,7 +3,7 @@
  */
 import type { ToolSetEntry } from '@megumi/ai';
 import type { EffectiveAgentInstructions, SystemInstruction } from '../../../instructions';
-import type { SkillCatalogItem } from '../../../skills/domain/dto/context/skill-context-response';
+import type { SkillCatalogItem, UsedSkillContent } from '@megumi/skills';
 import type { ActiveContext } from '../../domain/model/active-context';
 import type {
   ConversationTurn,
@@ -11,7 +11,6 @@ import type {
 } from '../../domain/model/conversation-turn';
 import type {
   ContextSourceRef,
-  ActivatedSkillInstruction,
   MemoryContextInput,
   VisibleCompactionSummary,
 } from '../../domain/model/prompt';
@@ -21,7 +20,7 @@ export type BuildActiveContextRequest = {
   systemInstructions: SystemInstruction[];
   agentInstructions: EffectiveAgentInstructions;
   skillCatalog: SkillCatalogItem[];
-  activatedSkills: ActivatedSkillInstruction[];
+  usedSkills: UsedSkillContent[];
   compactionSummary?: VisibleCompactionSummary;
   memoryRecall?: MemoryContextInput;
   historicalTurns: ConversationTurn[];
@@ -42,11 +41,6 @@ export function buildActiveContext(
     instructions: {
       system: request.systemInstructions,
       agentInstructions: request.agentInstructions,
-      activatedSkills: request.activatedSkills.map(({ skillId, name, content }) => ({
-        skillId,
-        name,
-        content,
-      })),
     },
     referenceContext: {
       skillCatalog: request.skillCatalog,
@@ -54,6 +48,9 @@ export function buildActiveContext(
         ? { compactionSummary: request.compactionSummary }
         : {}),
       ...(request.memoryRecall ? { memoryRecall: request.memoryRecall } : {}),
+    },
+    runContext: {
+      skills: request.usedSkills.map((skill) => ({ ...skill })),
     },
     historicalTurns: request.historicalTurns,
     currentTurn: request.currentTurn,
@@ -76,13 +73,13 @@ function buildSourceRefs(activeContext: ActiveContext): ContextSourceRef[] {
       sourceType: 'agent_instruction' as const,
       sourceId,
     })),
-    ...activeContext.instructions.activatedSkills.map(({ skillId }) => ({
-      sourceType: 'activated_skill' as const,
-      sourceId: skillId,
+    ...activeContext.runContext.skills.map(({ skillPath }) => ({
+      sourceType: 'used_skill' as const,
+      sourceId: skillPath,
     })),
-    ...activeContext.referenceContext.skillCatalog.map(({ skillId }) => ({
+    ...activeContext.referenceContext.skillCatalog.map(({ skillPath }) => ({
       sourceType: 'skill_catalog' as const,
-      sourceId: skillId,
+      sourceId: skillPath,
     })),
   ];
 

@@ -106,12 +106,19 @@ describe('createCommandCatalog', () => {
           name: 'brainstorming',
           display: {
             primary: 'brainstorming',
-            secondary: 'superpowers:brainstorming - Explore intent before implementation',
+            secondary: 'Explore intent before implementation',
             badge: 'System',
           },
           source_badge: 'System',
           match: { field: 'name', value: 'brainstorming', prefix: 'br' },
-          completion: { replacement_input: '/skill superpowers:brainstorming ' },
+          completion: {
+            replacement_input: '',
+            selection: {
+              type: 'skill',
+              name: 'brainstorming',
+              skillPath: 'C:/system/brainstorming/SKILL.md',
+            },
+          },
         }],
       }],
     });
@@ -151,7 +158,7 @@ function testCommand(
 function createSkillSuggestionCommands(): CommandDefinition[] {
   return [{
     name: 'skill',
-    description: 'Use a skill by skillId',
+    description: 'Use a skill by its name',
     source: { kind: 'built_in' },
     async execute({ invocation }) {
       return { type: 'completed', message: invocation.raw_input };
@@ -160,12 +167,16 @@ function createSkillSuggestionCommands(): CommandDefinition[] {
     name: 'brainstorming',
     aliases: ['brainstorm'],
     description: 'Explore intent before implementation',
-    source: { kind: 'skill', skill_id: 'superpowers:brainstorming' },
+    source: {
+      kind: 'skill',
+      name: 'brainstorming',
+      skillPath: 'C:/system/brainstorming/SKILL.md',
+    },
     suggestion: {
       source_badge: 'System',
-      replacement_input: '/skill superpowers:brainstorming ',
+      replacement_input: '',
       primary: 'brainstorming',
-      secondary: 'superpowers:brainstorming - Explore intent before implementation',
+      secondary: 'Explore intent before implementation',
       badge: 'System',
     },
     async execute({ invocation }) {

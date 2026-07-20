@@ -386,16 +386,23 @@ describe('ChatHost product semantics', () => {
         items: [{
           name: 'test',
           description: 'Run checks',
-          source: { kind: 'skill', skill_id: 'checks:test' },
-          display: { primary: 'test', secondary: 'checks:test - Run checks' },
+          source: { kind: 'skill', name: 'test', skillPath: 'C:/skills/test/SKILL.md' },
+          display: { primary: 'test', secondary: 'Run checks' },
           match: { field: 'name', value: 'test', prefix: 'te' },
-          completion: { replacement_input: '/skill checks:test ' },
+          completion: {
+            replacement_input: '',
+            selection: { type: 'skill', name: 'test', skillPath: 'C:/skills/test/SKILL.md' },
+          },
         }],
       }],
     })));
     const result = await host.getCommandSuggestions({ draft_input: '/te' });
     expect(result.suggestions).toMatchObject({
-      groups: [{ items: [{ displayInput: '/test ', submitInput: '/skill checks:test ' }] }],
+      groups: [{ items: [{
+        displayInput: '/test ',
+        submitInput: '',
+        selection: { type: 'skill', name: 'test', skillPath: 'C:/skills/test/SKILL.md' },
+      }] }],
     });
     expect(JSON.stringify(result)).not.toContain('replacement_input');
   });

@@ -27,13 +27,13 @@ describe('Model Call Service', () => {
       modelId: 'deepseek-chat',
     });
     expect(mapped.context.systemPrompt).toBe(
-      'System instruction\n\nWorkspace instruction\n\nSkill instruction',
+      'System instruction\n\nWorkspace instruction',
     );
     expect(mapped.context.systemPrompt).not.toContain('Catalog entry');
     expect(mapped.context.systemPrompt).not.toContain('Summary reference');
     expect(mapped.context.systemPrompt).not.toContain('Memory reference');
     expect(mapped.context.messages).toEqual([
-      contextMessage('skill_catalog', [{ skillId: 'catalog-1', description: 'Catalog entry' }]),
+      contextMessage('skill_catalog', [{ name: 'Catalog skill', description: 'Catalog entry', skillPath: 'C:/catalog/SKILL.md' }]),
       contextMessage('compaction_summary', 'Summary reference'),
       userMessage('Earlier question'),
       { role: 'assistant', content: [{ type: 'text', text: 'Earlier answer' }] },
@@ -56,6 +56,11 @@ describe('Model Call Service', () => {
         toolCallId: 'call-lookup',
         content: '{"toolName":"lookup","status":"success","content":"{\\"answer\\":42}"}',
       },
+      contextMessage('skill', {
+        name: 'Skill',
+        skillPath: 'C:/skill/SKILL.md',
+        instructions: 'Skill instruction',
+      }),
     ]);
     expect(mapped.tools).toEqual([
       {
@@ -610,7 +615,7 @@ describe('Model Call Service', () => {
     });
 
     expect(mapped.context.messages).toEqual([
-      contextMessage('skill_catalog', [{ skillId: 'catalog-1', description: 'Catalog entry' }]),
+      contextMessage('skill_catalog', [{ name: 'Catalog skill', description: 'Catalog entry', skillPath: 'C:/catalog/SKILL.md' }]),
       contextMessage('compaction_summary', 'Summary reference'),
       userMessage('Earlier question'),
       { role: 'assistant', content: [{ type: 'text', text: 'Earlier answer' }] },
@@ -650,6 +655,11 @@ describe('Model Call Service', () => {
         toolCallId: 'provider-tool-call-1',
         content: '{"toolName":"read_file","status":"success","content":"README content"}',
       },
+      contextMessage('skill', {
+        name: 'Skill',
+        skillPath: 'C:/skill/SKILL.md',
+        instructions: 'Skill instruction',
+      }),
     ]);
   });
 
@@ -731,15 +741,21 @@ function sampleModelCallRequest(): ModelCallRequest {
             content: 'Workspace instruction',
           }],
         },
-        activatedSkills: [{ skillId: 'skill-1', name: 'Skill', content: 'Skill instruction' }],
       },
       referenceContext: {
-        skillCatalog: [{ skillId: 'catalog-1', name: 'Catalog skill', description: 'Catalog entry' }],
+        skillCatalog: [{
+          name: 'Catalog skill',
+          description: 'Catalog entry',
+          skillPath: 'C:/catalog/SKILL.md',
+        }],
         compactionSummary: { compactionId: 'compaction-1', content: 'Summary reference' },
         memoryRecall: {
           recallId: 'recall-1',
           items: [{ memoryId: 'memory-1', content: [{ type: 'text', text: 'Memory reference' }] }],
         },
+      },
+      runContext: {
+        skills: [{ name: 'Skill', skillPath: 'C:/skill/SKILL.md', content: 'Skill instruction' }],
       },
       conversation: [
         { type: 'user_message', content: [{ type: 'text', text: 'Earlier question' }] },
@@ -770,11 +786,12 @@ function sampleModelCallRequest(): ModelCallRequest {
 function mapConversation(conversation: ModelCallRequest['prompt']['conversation']) {
   const request = sampleModelCallRequest();
   request.prompt.referenceContext = { skillCatalog: [] };
+  request.prompt.runContext = { skills: [] };
   request.prompt.conversation = conversation;
   return mapModelCallToAiRequest(request).context.messages;
 }
 
-function contextMessage(kind: 'skill_catalog' | 'compaction_summary' | 'memory_recall' | 'historical_run_state', content: unknown) {
+function contextMessage(kind: 'skill_catalog' | 'skill' | 'compaction_summary' | 'memory_recall' | 'historical_run_state', content: unknown) {
   return { role: 'context', kind, content };
 }
 

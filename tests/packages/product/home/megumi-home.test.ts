@@ -118,7 +118,7 @@ describe('Megumi Home', () => {
   });
 
   it('installs built-in skill seeds into the system skill directory without overwriting existing files', async () => {
-    const seedPath = path.resolve('C:/repo/packages/agent/skills/built-in-skills');
+    const seedPath = path.resolve('C:/repo/packages/skills/built-in-skills');
     fileSystem.existingPaths.add(seedPath);
 
     const paths = await initializeMegumiHome({
@@ -140,7 +140,7 @@ describe('Megumi Home', () => {
   });
 
   it('does not infer built-in skill resources from the repository working directory', async () => {
-    const defaultSeedPath = path.resolve(process.cwd(), 'packages', 'agent', 'skills', 'built-in-skills');
+    const defaultSeedPath = path.resolve(process.cwd(), 'packages', 'skills', 'built-in-skills');
     fileSystem.existingPaths.add(defaultSeedPath);
 
     const paths = await initializeMegumiHome({
@@ -161,7 +161,7 @@ describe('Megumi Home', () => {
     const syncJsonFiles = new Map<string, unknown>();
     const syncTextFiles = new Map<string, string>();
     const copiedDirectories: Array<{ sourcePath: string; targetPath: string }> = [];
-    const seedPath = path.resolve('C:/repo/packages/agent/skills/built-in-skills');
+    const seedPath = path.resolve('C:/repo/packages/skills/built-in-skills');
 
     const paths = initializeMegumiHomeSync({
       env: {

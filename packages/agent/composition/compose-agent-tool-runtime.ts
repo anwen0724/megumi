@@ -11,7 +11,7 @@ import {
   type WebFetchService,
   type WorkspaceFileAccess,
 } from '../tools/built-in-tools';
-import type { SkillService } from '../skills';
+import type { SkillService } from '@megumi/skills';
 import type { WorkspacePathPolicyService } from '../workspace';
 import { createWorkspacePathPolicyService } from '../workspace';
 
@@ -43,14 +43,9 @@ export function composeAgentToolExecutionService(input: {
   fileSystem?: LocalWorkspaceFileSystem;
   registryService?: ToolRegistryService;
   workspacePathPolicyService?: WorkspacePathPolicyService;
-  skillService?: Pick<SkillService, 'activateSkill'>;
+  skillService?: Pick<SkillService, 'useSkill'>;
   webSearchService?: WebSearchService;
   webFetchService?: WebFetchService;
-  runContext?: {
-    runId: string;
-    sessionId: string;
-    workspaceId?: string;
-  };
 }): ToolExecutionService {
   const registryService = input.registryService ?? composeAgentToolRegistryService();
   return new ToolExecutionService({
@@ -64,7 +59,6 @@ export function composeAgentToolExecutionService(input: {
       ...(input.skillService ? { skillService: input.skillService } : {}),
       ...(input.webSearchService ? { webSearchService: input.webSearchService } : {}),
       ...(input.webFetchService ? { webFetchService: input.webFetchService } : {}),
-      ...(input.runContext ? { runContext: input.runContext } : {}),
     }),
   });
 }

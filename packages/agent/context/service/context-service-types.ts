@@ -3,13 +3,13 @@
  */
 import type { AiModelSupportLevel, ToolSetEntry } from '@megumi/ai';
 import type { CurrentConversationTurn } from '../domain/model/conversation-turn';
+import type { SkillCatalogItem, UsedSkillContent } from '@megumi/skills';
 import type {
   ContextCapacity,
   ContextUsage,
   SessionUsageSnapshot,
 } from '../domain/model/context-usage';
 import type {
-  ActivatedSkillInstruction,
   MemoryContextInput,
   PreparedModelCall,
 } from '../domain/model/prompt';
@@ -58,7 +58,8 @@ export type PrepareModelCallRequest = {
   sessionId: string;
   workspaceId: string;
   currentTurn: CurrentConversationTurn;
-  activatedSkills: ActivatedSkillInstruction[];
+  skillCatalog: SkillCatalogItem[];
+  usedSkills: UsedSkillContent[];
   memoryRecall?: MemoryContextInput;
   tools: ToolSetEntry[];
   modelContext: ContextCapacity;

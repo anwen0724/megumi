@@ -497,7 +497,7 @@ describe('Composer', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it('shows the selected skill command name while submitting the stable skill command input', async () => {
+  it('shows the selected Skill name and submits task text with an exact Skill selection', async () => {
     const onSubmit = vi.fn();
     render(<TestComposer
       onSubmit={onSubmit}
@@ -511,14 +511,15 @@ describe('Composer', () => {
           items: [{
             name: 'test',
             description: 'Run project checks',
-            source: { kind: 'skill', skill_id: 'checks:test' },
+            source: { kind: 'skill', name: 'test', skillPath: 'C:/user/checks/SKILL.md' },
             display: {
               primary: 'test',
-              secondary: 'checks:test - Run project checks',
-              badge: 'Project',
+              secondary: 'Run project checks',
+              badge: 'User',
             },
             match: { field: 'name', value: 'test', prefix: 'te' },
-            displayInput: '/test ', submitInput: '/skill checks:test ',
+            displayInput: '/test ', submitInput: '',
+            selection: { type: 'skill', name: 'test', skillPath: 'C:/user/checks/SKILL.md' },
           }],
         }],
       })}
@@ -537,7 +538,8 @@ describe('Composer', () => {
     await userEvent.keyboard('{Enter}');
 
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-      message: '/skill checks:test --watch',
+      message: '--watch',
+      skillSelection: { type: 'skill', name: 'test', skillPath: 'C:/user/checks/SKILL.md' },
     }));
   });
 
@@ -589,14 +591,15 @@ describe('Composer', () => {
             items: [{
               name: 'test',
               description: 'Run project checks',
-              source: { kind: 'skill', skill_id: 'checks:test' },
+              source: { kind: 'skill', name: 'test', skillPath: 'C:/user/checks/SKILL.md' },
               display: {
                 primary: 'test',
-                secondary: 'checks:test - Run project checks',
-                badge: 'Project',
+                secondary: 'Run project checks',
+                badge: 'User',
               },
               match: { field: 'name', value: 'test', prefix: draft_input.slice(1) },
-              displayInput: '/test ', submitInput: '/skill checks:test ',
+              displayInput: '/test ', submitInput: '',
+              selection: { type: 'skill', name: 'test', skillPath: 'C:/user/checks/SKILL.md' },
             }],
           }],
         };

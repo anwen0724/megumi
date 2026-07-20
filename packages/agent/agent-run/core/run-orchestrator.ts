@@ -5,11 +5,11 @@
 import type { PermissionDecision, PermissionMode, PermissionService } from '../../permissions';
 import { hasUserVisibleAssistantContent, type SessionService } from '../../session';
 import type { AssistantContentBlock } from '@megumi/ai';
+import type { SkillCatalogItem, UsedSkillContent } from '@megumi/skills';
 import type { SettingsService } from '../../settings';
 import type { ToolExecutionService } from '../../tools';
 import type { WorkspacePathPolicyService } from '../../workspace';
 import type {
-  ActivatedSkillInstruction,
   ContextCapacity,
   ContextService,
   CurrentConversationTurn,
@@ -74,7 +74,8 @@ export type RunOrchestratorDependencies = {
 export type RunOrchestratorRequest = {
   run: AgentRun;
   current_turn: CurrentConversationTurn;
-  activated_skills: ActivatedSkillInstruction[];
+  skill_catalog: SkillCatalogItem[];
+  used_skills: UsedSkillContent[];
   model_context: ContextCapacity;
   model_config: ModelCallConfig;
   permission_mode: PermissionMode;
@@ -98,7 +99,8 @@ export type RunApprovalContinuation = {
   deferred_tool_calls: ModelRequestedToolCall[];
   deferred_call_order_offset: number;
   current_turn: CurrentConversationTurn;
-  activated_skills: ActivatedSkillInstruction[];
+  skill_catalog: SkillCatalogItem[];
+  used_skills: UsedSkillContent[];
   model_context: ContextCapacity;
   model_config: RunOrchestratorRequest['model_config'];
   permission_mode: PermissionMode;
@@ -121,6 +123,7 @@ export async function runAgentModelToolLoop(
     ...request.current_turn,
     runItems: [...request.current_turn.runItems],
   };
+  let usedSkills = request.used_skills.map((skill) => ({ ...skill }));
   let lastPrepared: PreparedModelCall | undefined;
   let lastProviderInputTokens: number | undefined;
   let protocolRepairs = 0;
@@ -139,7 +142,8 @@ export async function runAgentModelToolLoop(
       sessionId: run.session_id,
       workspaceId: run.workspace_id,
       currentTurn,
-      activatedSkills: request.activated_skills,
+      skillCatalog: request.skill_catalog,
+      usedSkills,
       tools,
       modelContext: request.model_context,
       imageInputSupport: request.model_config.capabilities.imageInput,
@@ -466,6 +470,7 @@ export async function runAgentModelToolLoop(
       });
     }
     currentTurn = { ...currentTurn, runItems: [...currentTurn.runItems, ...appendedItems] };
+    usedSkills = mergeUsedSkillSources(usedSkills, toolGroup.tool_result_facts);
     const afterToolGroup = dependencies.active_run_store.getRun(run.run_id);
     if (afterToolGroup?.status === 'cancelled') {
       return {
@@ -518,7 +523,8 @@ export async function runAgentModelToolLoop(
           deferred_tool_calls: toolGroup.deferred_tool_calls,
           deferred_call_order_offset: toolGroup.deferred_call_order_offset,
           current_turn: currentTurn,
-          activated_skills: request.activated_skills,
+          skill_catalog: request.skill_catalog,
+          used_skills: usedSkills,
           model_context: request.model_context,
           model_config: request.model_config,
           permission_mode: request.permission_mode,
@@ -529,6 +535,21 @@ export async function runAgentModelToolLoop(
 
     traceLoopCounters(dependencies, run, modelCalls, toolRounds, currentTurn.runItems.length);
   }
+}
+
+function mergeUsedSkillSources(
+  current: UsedSkillContent[],
+  toolResults: ToolResultRuntimeFact[],
+): UsedSkillContent[] {
+  const byPath = new Map(current.map((skill) => [skill.skillPath, skill]));
+  for (const source of toolResults.flatMap((result) => result.runtimeSources ?? [])) {
+    if (source.source_kind !== 'skill') continue;
+    const name = source.metadata?.name;
+    const skillPath = source.metadata?.skillPath;
+    if (typeof name !== 'string' || typeof skillPath !== 'string') continue;
+    byPath.set(skillPath, { name, skillPath, content: source.text });
+  }
+  return [...byPath.values()];
 }
 
 function emitContextCompactionProgress(
@@ -1139,7 +1160,7 @@ function preparedModelCallTraceMetadata(prepared: PreparedModelCall): Record<str
     source_type_counts: countBy(prepared.sourceRefs.map((source) => source.sourceType)),
     system_instruction_count: prepared.prompt.instructions.system.length,
     agent_instruction_count: prepared.prompt.instructions.agentInstructions.sources.length,
-    activated_skill_count: prepared.prompt.instructions.activatedSkills.length,
+    used_skill_count: prepared.prompt.runContext.skills.length,
     skill_catalog_count: prepared.prompt.referenceContext.skillCatalog.length,
     memory_item_count: prepared.prompt.referenceContext.memoryRecall?.items.length ?? 0,
     conversation_item_count: prepared.prompt.conversation.length,

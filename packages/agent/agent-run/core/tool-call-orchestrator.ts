@@ -481,6 +481,7 @@ function toolResultFromExecutionResult(
     content: result.normalizedResult.content,
     ...(result.type === 'failed' ? { error: result.error } : {}),
     ...(result.toolExecutionObservation ? { observation: result.toolExecutionObservation } : {}),
+    ...(result.type === 'succeeded' && result.runtimeSources ? { runtimeSources: result.runtimeSources } : {}),
     created_at: createdAt,
   };
 }

@@ -16,8 +16,8 @@ describe('createCommandService', () => {
       source: { kind: 'built_in' },
     }, {
       name: 'skill',
-      description: 'Use a skill by skillId',
-      argument_hint: '<skillId> [args]',
+      description: 'Use a skill by its name',
+      argument_hint: '<name> [task]',
       source: { kind: 'built_in' },
     }]);
   });
@@ -54,11 +54,10 @@ describe('createCommandService', () => {
   it('builds skill suggestions from a workspace-aware skill command provider', async () => {
     const listSkillCommands = vi.fn(async () => [
       {
-        skillId: 'superpowers:brainstorming',
-        commandName: 'brainstorming',
-        skillName: 'superpowers:brainstorming',
+        name: 'brainstorming',
+        skillPath: 'C:/system/brainstorming/SKILL.md',
         description: 'Explore intent before implementation',
-        sourceLabel: 'System',
+        sourceLabel: 'System' as const,
       },
     ]);
     const service = createCommandService({
@@ -80,14 +79,15 @@ describe('createCommandService', () => {
         id: 'skills',
         items: [{
           name: 'brainstorming',
-          source: { kind: 'skill', skill_id: 'superpowers:brainstorming' },
+          source: { kind: 'skill', name: 'brainstorming', skillPath: 'C:/system/brainstorming/SKILL.md' },
           display: {
             primary: 'brainstorming',
-            secondary: 'superpowers:brainstorming - Explore intent before implementation',
+            secondary: 'Explore intent before implementation',
             badge: 'System',
           },
           completion: {
-            replacement_input: '/skill superpowers:brainstorming ',
+            replacement_input: '',
+            selection: { type: 'skill', name: 'brainstorming', skillPath: 'C:/system/brainstorming/SKILL.md' },
           },
         }],
       }],

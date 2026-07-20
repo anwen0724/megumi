@@ -19,6 +19,7 @@ const COMPOSER_TEXTAREA_MAX_HEIGHT = 160;
 type SelectedCommandCompletion = Pick<CommandSuggestionItem, 'displayInput' | 'submitInput'> & {
   label: string;
   sourceKind: CommandSuggestionItem['source']['kind'];
+  selection?: NonNullable<CommandSuggestionItem['selection']>;
 };
 
 function createComposerSubmitPayload(input: {
@@ -27,12 +28,14 @@ function createComposerSubmitPayload(input: {
   providerId: string;
   model: ComposerModel;
   attachments: ComposerDraftImage[];
+  skillSelection?: SelectedCommandCompletion['selection'];
 }): ComposerSubmitPayload {
   return {
     message: input.message,
     permissionMode: input.permissionMode,
     providerId: input.providerId,
     model: input.model,
+    ...(input.skillSelection ? { skillSelection: input.skillSelection } : {}),
     ...(input.attachments.length > 0 ? { attachments: input.attachments } : {}),
   };
 }
@@ -42,7 +45,7 @@ function resolveSubmitMessage(rawValue: string, completion: SelectedCommandCompl
     return rawValue.trim();
   }
 
-  return `${completion.submitInput}${rawValue}`.trim();
+  return completion.selection ? rawValue.trim() : `${completion.submitInput}${rawValue}`.trim();
 }
 
 export function useComposerController({
@@ -90,7 +93,11 @@ export function useComposerController({
   const imageInputNotice = selectedImages.length > 0 && selectedModelOption?.imageInput === false
     ? 'This model will receive attachment metadata, but not the image content.'
     : undefined;
-  const canSend = (trimmedValue.length > 0 || selectedImages.length > 0 || selectedCommandCompletion !== null)
+  const canSend = (
+    trimmedValue.length > 0
+    || selectedImages.length > 0
+    || (selectedCommandCompletion !== null && !selectedCommandCompletion.selection)
+  )
     && !sendLocked && modelOptions.length > 0;
   const canAttachImages = selectedImages.length < maxImageCount
     && !sendLocked
@@ -202,6 +209,7 @@ export function useComposerController({
       providerId: selectedModelOption.providerId,
       model: selectedModelOption.modelId,
       attachments: selectedImages,
+      ...(selectedCommandCompletion?.selection ? { skillSelection: selectedCommandCompletion.selection } : {}),
     });
 
     // Consume the draft before the asynchronous send can create a Session and
@@ -293,6 +301,7 @@ export function useComposerController({
       submitInput: item.submitInput,
       label: getCommandChipLabel(item),
       sourceKind: item.source.kind,
+      ...(item.selection ? { selection: item.selection } : {}),
     });
     setSelectedCommandSuggestionIndex(0);
   }

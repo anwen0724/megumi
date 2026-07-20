@@ -91,7 +91,9 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
       contextService: runtime.contextRuntime.contextService,
       ...(options.imagePicker ? { imagePicker: options.imagePicker } : {}),
     }),
-    skill: createSkillHost(runtime.skillService),
+    skill: createSkillHost({
+      resolveSkillService: (request) => runtime.createSkillService(request),
+    }),
     workspace: createWorkspaceHost({
       workspaceService: runtime.workspaceService,
       workspaceFilesService: runtime.workspaceFilesService,

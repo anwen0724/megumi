@@ -5,7 +5,7 @@ import { CommandSuggestionPanel } from '@megumi/desktop/renderer/features/chat/c
 import type { CommandSuggestionResult } from '@megumi/product/host-interface';
 
 describe('CommandSuggestionPanel skill suggestions', () => {
-  it('renders skill command display fields and returns the replacement input on choose', () => {
+  it('renders Skill fields and preserves the exact selected skillPath', () => {
     const onChoose = vi.fn();
     const suggestions: CommandSuggestionResult = {
       type: 'suggestions',
@@ -17,10 +17,10 @@ describe('CommandSuggestionPanel skill suggestions', () => {
         items: [{
           name: 'brainstorming',
           description: 'Explore intent before implementation',
-          source: { kind: 'skill', skill_id: 'superpowers:brainstorming' },
+          source: { kind: 'skill', name: 'brainstorming', skillPath: 'C:/system/brainstorming/SKILL.md' },
           display: {
             primary: 'brainstorming',
-            secondary: 'superpowers:brainstorming - Explore intent before implementation',
+            secondary: 'Explore intent before implementation',
             badge: 'System',
           },
           match: {
@@ -28,8 +28,8 @@ describe('CommandSuggestionPanel skill suggestions', () => {
             value: 'brainstorming',
             prefix: 'bra',
           },
-          displayInput: '/brainstorming ',
-          submitInput: '/skill superpowers:brainstorming ',
+          displayInput: '/brainstorming ', submitInput: '',
+          selection: { type: 'skill', name: 'brainstorming', skillPath: 'C:/system/brainstorming/SKILL.md' },
         }],
       }],
     };
@@ -43,17 +43,18 @@ describe('CommandSuggestionPanel skill suggestions', () => {
     );
 
     expect(screen.getByText('Brainstorming')).toBeInTheDocument();
-    expect(screen.getByText('superpowers:brainstorming - Explore intent before implementation')).toBeInTheDocument();
+    expect(screen.getByText('Explore intent before implementation')).toBeInTheDocument();
     expect(screen.getByText('System')).toBeInTheDocument();
     expect(screen.getByTestId('command-suggestion-icon-skill')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('option', {
-      name: 'Brainstorming superpowers:brainstorming - Explore intent before implementation System',
+      name: 'Brainstorming Explore intent before implementation System',
     }));
 
     expect(onChoose).toHaveBeenCalledWith(expect.objectContaining({
       displayInput: '/brainstorming ',
-      submitInput: '/skill superpowers:brainstorming ',
+      submitInput: '',
+      selection: { type: 'skill', name: 'brainstorming', skillPath: 'C:/system/brainstorming/SKILL.md' },
     }));
   });
 
@@ -81,8 +82,8 @@ describe('CommandSuggestionPanel skill suggestions', () => {
       />,
     );
 
-    expect(screen.getByText('checks:test - Run project checks')).toBeInTheDocument();
-    expect(screen.getByText('qa:test - Run QA checks')).toBeInTheDocument();
+    expect(screen.getByText('Run project checks')).toBeInTheDocument();
+    expect(screen.getByText('Run QA checks')).toBeInTheDocument();
     expect(consoleError).not.toHaveBeenCalledWith(expect.stringContaining('Encountered two children with the same key'));
     consoleError.mockRestore();
   });
@@ -142,17 +143,17 @@ describe('CommandSuggestionPanel skill suggestions', () => {
 });
 
 function createSkillSuggestion(
-  skillId: string,
+  skillPath: string,
   description: string,
 ): Extract<CommandSuggestionResult, { type: 'suggestions' }>['groups'][number]['items'][number] {
   return {
     name: 'test',
     description,
-    source: { kind: 'skill', skill_id: skillId },
+    source: { kind: 'skill', name: 'test', skillPath },
     display: {
       primary: 'test',
-      secondary: `${skillId} - ${description}`,
-      badge: 'Project',
+      secondary: description,
+      badge: 'User',
     },
     match: {
       field: 'name',
@@ -160,6 +161,7 @@ function createSkillSuggestion(
       prefix: 'test',
     },
     displayInput: '/test ',
-    submitInput: `/skill ${skillId} `,
+    submitInput: '',
+    selection: { type: 'skill', name: 'test', skillPath },
   };
 }

@@ -173,8 +173,9 @@ export function createMessageFlowDependencies(input: {
         prepared: {
           preparationId: 'preparation-1',
           prompt: {
-            instructions: { system: [], agentInstructions: { sources: [] }, activatedSkills: request.activatedSkills },
-            referenceContext: { skillCatalog: [] },
+            instructions: { system: [], agentInstructions: { sources: [] } },
+            referenceContext: { skillCatalog: request.skillCatalog },
+            runContext: { skills: request.usedSkills },
             conversation: [request.currentTurn.userMessage, ...request.currentTurn.runItems],
             tools: request.tools,
           },

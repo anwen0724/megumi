@@ -15,6 +15,7 @@ export type ComposerDraftImage = ChatComposerDraftImage;
 
 export interface ComposerSubmitPayload {
   message: string;
+  skillSelection?: { type: 'skill'; name: string; skillPath: string };
   permissionMode: ComposerPermissionMode;
   permissionSource?: PermissionModeSelectionSource;
   providerId: string;

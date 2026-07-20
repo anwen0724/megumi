@@ -3,7 +3,7 @@
  */
 import { describe, expectTypeOf, it } from 'vitest';
 import type { ContentBlock, ConversationItem, ToolSetEntry } from '@megumi/ai';
-import type { SkillCatalogItem } from '@megumi/agent/skills/domain/dto/context/skill-context-response';
+import type { SkillCatalogItem } from '@megumi/skills/domain/dto/context/skill-context-response';
 import type {
   ActiveContext,
   CompactSessionRequest,
@@ -23,6 +23,7 @@ import type {
   Prompt,
   PromptInstructions,
   PromptReferenceContext,
+  PromptRunContext,
   RecordCompletedRunUsageRequest,
   RecordCompletedRunUsageResult,
   SessionUsageSnapshot,
@@ -43,6 +44,7 @@ describe('Context v2 public domain', () => {
       sessionId: string;
       instructions: PromptInstructions;
       referenceContext: PromptReferenceContext;
+      runContext: PromptRunContext;
       historicalTurns: ConversationTurn[];
       currentTurn: CurrentConversationTurn;
       tools: ToolSetEntry[];
@@ -50,6 +52,7 @@ describe('Context v2 public domain', () => {
     expectTypeOf<Prompt>().toEqualTypeOf<{
       instructions: PromptInstructions;
       referenceContext: PromptReferenceContext;
+      runContext: PromptRunContext;
       conversation: ConversationItem[];
       tools: ToolSetEntry[];
     }>();

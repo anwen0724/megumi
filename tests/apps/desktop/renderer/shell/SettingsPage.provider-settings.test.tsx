@@ -49,6 +49,7 @@ describe('SettingsPage provider settings', () => {
     render(<SettingsPage onDone={vi.fn()} />);
 
     expect(screen.getByRole('tab', { name: 'Models & Providers' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Skills' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Web Access' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Privacy & Permissions' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Activity & Diagnostics' })).toBeInTheDocument();

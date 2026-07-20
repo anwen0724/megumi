@@ -50,7 +50,9 @@ export type {
   EnableSkillUiResponse,
   GetSkillDetailUiResponse,
   ListSkillsUiResponse,
+  SkillDetailUiDto,
   SkillHost,
+  SkillListUiItem,
 } from './skill-host';
 export type {
   AppLanguage,

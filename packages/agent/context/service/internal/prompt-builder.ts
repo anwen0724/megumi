@@ -9,6 +9,7 @@ export function buildPrompt(activeContext: ActiveContext): Prompt {
   return {
     instructions: activeContext.instructions,
     referenceContext: activeContext.referenceContext,
+    runContext: activeContext.runContext,
     conversation: [
       ...activeContext.historicalTurns.flatMap(conversationItemsFromTurn),
       activeContext.currentTurn.userMessage,

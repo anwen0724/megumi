@@ -40,7 +40,7 @@ export function resolvePermissionOperations(request: EvaluateToolCallRequest): P
       context,
     }];
   }
-  if (name === 'activate_skill') return [{ action: 'agent.context.activate', context }];
+  if (name === 'use_skill') return [{ action: 'agent.context.activate', context }];
   const stableId = `${request.registered_tool.source_id}/${request.registered_tool.namespace}/${request.registered_tool.source_tool_name}`;
   return [{ action: 'external.invoke', resource: { type: 'tool.identity', id: stableId }, context }];
 }

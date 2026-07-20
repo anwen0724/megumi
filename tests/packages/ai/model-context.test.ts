@@ -15,7 +15,7 @@ describe('provider-neutral conversation items', () => {
     const context = {
       systemPrompt: 'System instructions',
       messages: [
-        { role: 'context', kind: 'skill_catalog', content: [{ skillId: 's1' }] },
+        { role: 'context', kind: 'skill_catalog', content: [{ name: 's1', skillPath: 'C:/skills/s1/SKILL.md' }] },
         { role: 'context', kind: 'compaction_summary', content: 'Earlier facts' },
         { role: 'context', kind: 'memory_recall', content: [{ type: 'text', text: 'Recall' }] },
         { role: 'user', content: [{ type: 'text', text: 'Current user' }] },

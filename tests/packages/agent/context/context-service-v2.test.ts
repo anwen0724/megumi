@@ -35,7 +35,6 @@ function dependencies(inputTokens: number[] = [50]): ContextServiceDependencies 
       getSystemInstructions: vi.fn(() => [{ instructionId: 'system', content: 'system' }]),
       getEffectiveAgentInstructions: vi.fn(async () => ({ status: 'ok' as const, instructions: { sources: [] } })),
     },
-    skillService: { getSkillCatalog: vi.fn(async () => ({ status: 'ok' as const, skills: [] })) },
     promptTokenCounter: { count: vi.fn(async () => ({ status: 'counted' as const, inputTokens: counts.shift() ?? inputTokens.at(-1) ?? 0, accuracy: 'estimated' as const })) },
     summaryModelCall: { complete: vi.fn(async () => ({ status: 'completed' as const, content: 'short' })) },
     usageSnapshotCache: new Map(),
@@ -45,7 +44,7 @@ function dependencies(inputTokens: number[] = [50]): ContextServiceDependencies 
 }
 
 function request() {
-  return { sessionId: 'S1', workspaceId: 'W1', currentTurn, activatedSkills: [], tools: [], modelContext: capacity, imageInputSupport: true as const };
+  return { sessionId: 'S1', workspaceId: 'W1', currentTurn, skillCatalog: [], usedSkills: [], tools: [], modelContext: capacity, imageInputSupport: true as const };
 }
 
 describe('ContextServiceImpl prepareModelCall', () => {
@@ -111,7 +110,6 @@ describe('composeAgentContext', () => {
       sessionService: deps.sessionService,
       instructionScopeResolver: deps.instructionScopeResolver,
       instructionService: deps.instructionService,
-      skillService: deps.skillService,
       modelRuntimeConfigResolver: { resolve },
       modelCallService: { countPrompt, modelCall: vi.fn() },
     });
