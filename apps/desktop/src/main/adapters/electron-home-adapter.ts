@@ -39,5 +39,6 @@ function createElectronMegumiHomeFileSystem(): MegumiHomeSyncFileSystem {
     writeFileSync: (filePath, data) => fs.writeFileSync(filePath, data),
     copyDirectorySync: (sourcePath, targetPath, options) => fs.copySync(sourcePath, targetPath, options),
     removeDirectorySync: (directoryPath) => fs.removeSync(directoryPath),
+    moveDirectorySync: (sourcePath, targetPath) => fs.moveSync(sourcePath, targetPath, { overwrite: false }),
   };
 }

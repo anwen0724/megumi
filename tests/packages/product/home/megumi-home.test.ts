@@ -17,6 +17,8 @@ class MemoryFileSystem implements MegumiHomeFileSystem {
   readonly existingPaths = new Set<string>();
   readonly copiedDirectories: Array<{ sourcePath: string; targetPath: string }> = [];
   readonly removedDirectories: string[] = [];
+  readonly movedDirectories: Array<{ sourcePath: string; targetPath: string }> = [];
+  failCopyDirectory = false;
 
   async ensureDir(directoryPath: string): Promise<void> {
     this.directories.add(directoryPath);
@@ -43,6 +45,9 @@ class MemoryFileSystem implements MegumiHomeFileSystem {
   }
 
   async copyDirectory(sourcePath: string, targetPath: string): Promise<void> {
+    if (this.failCopyDirectory) {
+      throw new Error('copy failed');
+    }
     this.copiedDirectories.push({ sourcePath, targetPath });
     this.existingPaths.add(targetPath);
   }
@@ -51,6 +56,13 @@ class MemoryFileSystem implements MegumiHomeFileSystem {
     this.removedDirectories.push(directoryPath);
     this.existingPaths.delete(directoryPath);
     this.directories.delete(directoryPath);
+  }
+
+  async moveDirectory(sourcePath: string, targetPath: string): Promise<void> {
+    this.movedDirectories.push({ sourcePath, targetPath });
+    this.existingPaths.delete(sourcePath);
+    this.directories.delete(sourcePath);
+    this.existingPaths.add(targetPath);
   }
 }
 
@@ -124,9 +136,11 @@ describe('Megumi Home', () => {
     expect(fileSystem.textFiles.get(paths.readmePath)).toContain('skills/.system');
   });
 
-  it('installs built-in skill seeds into the system skill directory without overwriting existing files', async () => {
+  it('replaces the managed system Skill directory only after the new copy is ready', async () => {
     const seedPath = path.resolve('C:/repo/packages/skills/built-in-skills');
+    const existingSystemSkillsPath = buildMegumiHomePaths(path.resolve('C:/Users/tester', '.megumi')).systemSkillsPath;
     fileSystem.existingPaths.add(seedPath);
+    fileSystem.existingPaths.add(existingSystemSkillsPath);
 
     const paths = await initializeMegumiHome({
       env: {},
@@ -142,9 +156,44 @@ describe('Megumi Home', () => {
 
     expect(fileSystem.copiedDirectories).toEqual([{
       sourcePath: seedPath,
-      targetPath: paths.systemSkillsPath,
+      targetPath: `${paths.systemSkillsPath}.staging`,
     }]);
-    expect(fileSystem.removedDirectories).toEqual([paths.systemSkillsPath]);
+    expect(fileSystem.movedDirectories).toEqual([
+      {
+        sourcePath: paths.systemSkillsPath,
+        targetPath: `${paths.systemSkillsPath}.backup`,
+      },
+      {
+        sourcePath: `${paths.systemSkillsPath}.staging`,
+        targetPath: paths.systemSkillsPath,
+      },
+    ]);
+    expect(fileSystem.removedDirectories).toEqual([`${paths.systemSkillsPath}.backup`]);
+  });
+
+  it('preserves the existing system Skill directory when preparing the replacement fails', async () => {
+    const seedPath = path.resolve('C:/repo/packages/skills/built-in-skills');
+    const existingSystemSkillsPath = buildMegumiHomePaths(path.resolve('C:/Users/tester', '.megumi')).systemSkillsPath;
+    fileSystem.existingPaths.add(seedPath);
+    fileSystem.existingPaths.add(existingSystemSkillsPath);
+    fileSystem.failCopyDirectory = true;
+
+    const initialization = initializeMegumiHome({
+      env: {},
+      homeDirectory: 'C:/Users/tester',
+      fileSystem,
+      clock: {
+        now: () => new Date('2026-05-11T12:00:00.000Z'),
+      },
+      resourceLocator: {
+        resolveBuiltInSystemSkillsPath: () => seedPath,
+      },
+    });
+
+    await expect(initialization).rejects.toThrow('copy failed');
+    const paths = buildMegumiHomePaths(path.resolve('C:/Users/tester', '.megumi'));
+    expect(await fileSystem.pathExists(paths.systemSkillsPath)).toBe(true);
+    expect(fileSystem.movedDirectories).toEqual([]);
   });
 
   it('does not infer built-in skill resources from the repository working directory', async () => {
@@ -169,7 +218,12 @@ describe('Megumi Home', () => {
     const syncJsonFiles = new Map<string, unknown>();
     const syncTextFiles = new Map<string, string>();
     const copiedDirectories: Array<{ sourcePath: string; targetPath: string }> = [];
+    const existingPaths = new Set<string>();
+    const movedDirectories: Array<{ sourcePath: string; targetPath: string }> = [];
     const seedPath = path.resolve('C:/repo/packages/skills/built-in-skills');
+    const existingSystemSkillsPath = buildMegumiHomePaths(path.resolve('D:/megumi-home')).systemSkillsPath;
+    existingPaths.add(seedPath);
+    existingPaths.add(existingSystemSkillsPath);
 
     const paths = initializeMegumiHomeSync({
       env: {
@@ -179,8 +233,9 @@ describe('Megumi Home', () => {
       fileSystem: {
         ensureDirSync: (directoryPath) => {
           syncDirectories.add(directoryPath);
+          existingPaths.add(directoryPath);
         },
-        pathExistsSync: (filePath) => syncJsonFiles.has(filePath) || syncTextFiles.has(filePath) || filePath === seedPath,
+        pathExistsSync: (filePath) => existingPaths.has(filePath) || syncJsonFiles.has(filePath) || syncTextFiles.has(filePath),
         writeJsonSync: (filePath, data) => {
           syncJsonFiles.set(filePath, data);
         },
@@ -189,6 +244,15 @@ describe('Megumi Home', () => {
         },
         copyDirectorySync: (sourcePath, targetPath) => {
           copiedDirectories.push({ sourcePath, targetPath });
+          existingPaths.add(targetPath);
+        },
+        removeDirectorySync: (directoryPath) => {
+          existingPaths.delete(directoryPath);
+        },
+        moveDirectorySync: (sourcePath, targetPath) => {
+          movedDirectories.push({ sourcePath, targetPath });
+          existingPaths.delete(sourcePath);
+          existingPaths.add(targetPath);
         },
       },
       clock: {
@@ -200,11 +264,18 @@ describe('Megumi Home', () => {
     });
 
     expect(paths.homePath).toBe(path.resolve('D:/megumi-home'));
-    expect(syncDirectories.has(paths.systemSkillsPath)).toBe(true);
+    expect(existingPaths.has(paths.systemSkillsPath)).toBe(true);
     expect(syncJsonFiles.get(paths.settingsSchemaPath)).toMatchObject({
       title: 'Megumi settings',
     });
-    expect(copiedDirectories).toEqual([{ sourcePath: seedPath, targetPath: paths.systemSkillsPath }]);
+    expect(copiedDirectories).toEqual([{
+      sourcePath: seedPath,
+      targetPath: `${paths.systemSkillsPath}.staging`,
+    }]);
+    expect(movedDirectories).toEqual([
+      { sourcePath: paths.systemSkillsPath, targetPath: `${paths.systemSkillsPath}.backup` },
+      { sourcePath: `${paths.systemSkillsPath}.staging`, targetPath: paths.systemSkillsPath },
+    ]);
   });
 
   it('exposes the generated settings schema from the product core', () => {

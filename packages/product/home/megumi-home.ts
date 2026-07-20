@@ -27,6 +27,7 @@ export interface MegumiHomeFileSystem {
   writeFile(filePath: string, data: string): Promise<void>;
   copyDirectory?(sourcePath: string, targetPath: string, options?: { overwrite?: boolean; errorOnExist?: boolean }): Promise<void>;
   removeDirectory?(directoryPath: string): Promise<void>;
+  moveDirectory?(sourcePath: string, targetPath: string): Promise<void>;
 }
 
 export interface MegumiHomeSyncFileSystem {
@@ -36,6 +37,7 @@ export interface MegumiHomeSyncFileSystem {
   writeFileSync(filePath: string, data: string): void;
   copyDirectorySync?(sourcePath: string, targetPath: string, options?: { overwrite?: boolean; errorOnExist?: boolean }): void;
   removeDirectorySync?(directoryPath: string): void;
+  moveDirectorySync?(sourcePath: string, targetPath: string): void;
 }
 
 export interface MegumiHomeVersion {
@@ -190,7 +192,6 @@ function homeDirectories(paths: MegumiHomePaths): string[] {
   return [
     paths.homePath,
     paths.skillsPath,
-    paths.systemSkillsPath,
     paths.sqlitePath,
     paths.logsPath,
     paths.cachePath,
@@ -258,18 +259,52 @@ async function installBuiltInSystemSkills(
 ): Promise<void> {
   const resolvedSeedPath = resourceLocator?.resolveBuiltInSystemSkillsPath()?.trim();
 
-  if (!resolvedSeedPath || !fileSystem.copyDirectory || !(await fileSystem.pathExists(resolvedSeedPath))) {
+  if (!resourceLocator) {
+    await fileSystem.ensureDir(paths.systemSkillsPath);
     return;
   }
+  if (!resolvedSeedPath) {
+    throw new Error('Built-in system Skill resource path is unavailable.');
+  }
+  if (!(await fileSystem.pathExists(resolvedSeedPath))) {
+    throw new Error(`Built-in system Skill resources do not exist: ${resolvedSeedPath}`);
+  }
+  if (!fileSystem.copyDirectory || !fileSystem.removeDirectory || !fileSystem.moveDirectory) {
+    throw new Error('Megumi Home filesystem does not support atomic system Skill synchronization.');
+  }
+  const atomicFileSystem = fileSystem as MegumiHomeFileSystem & Required<Pick<
+    MegumiHomeFileSystem,
+    'copyDirectory' | 'removeDirectory' | 'moveDirectory'
+  >>;
 
-  if (fileSystem.removeDirectory && await fileSystem.pathExists(paths.systemSkillsPath)) {
-    await fileSystem.removeDirectory(paths.systemSkillsPath);
+  const stagingPath = `${paths.systemSkillsPath}.staging`;
+  const backupPath = `${paths.systemSkillsPath}.backup`;
+  await prepareSystemSkillSwap(atomicFileSystem, paths.systemSkillsPath, stagingPath, backupPath);
+
+  try {
+    await atomicFileSystem.copyDirectory(path.resolve(resolvedSeedPath), stagingPath, {
+      overwrite: false,
+      errorOnExist: false,
+    });
+    if (!(await fileSystem.pathExists(stagingPath))) {
+      throw new Error('Built-in system Skill staging directory was not created.');
+    }
+  } catch (error) {
+    await removeIfPresent(atomicFileSystem, stagingPath);
+    throw error;
   }
 
-  await fileSystem.copyDirectory(path.resolve(resolvedSeedPath), paths.systemSkillsPath, {
-    overwrite: false,
-    errorOnExist: false,
-  });
+  try {
+    if (await fileSystem.pathExists(paths.systemSkillsPath)) {
+      await atomicFileSystem.moveDirectory(paths.systemSkillsPath, backupPath);
+    }
+    await atomicFileSystem.moveDirectory(stagingPath, paths.systemSkillsPath);
+  } catch (error) {
+    await restoreSystemSkillBackup(atomicFileSystem, paths.systemSkillsPath, stagingPath, backupPath);
+    throw error;
+  }
+
+  await removeIfPresent(atomicFileSystem, backupPath);
 }
 
 function installBuiltInSystemSkillsSync(
@@ -279,16 +314,124 @@ function installBuiltInSystemSkillsSync(
 ): void {
   const resolvedSeedPath = resourceLocator?.resolveBuiltInSystemSkillsPath()?.trim();
 
-  if (!resolvedSeedPath || !fileSystem.copyDirectorySync || !fileSystem.pathExistsSync(resolvedSeedPath)) {
+  if (!resourceLocator) {
+    fileSystem.ensureDirSync(paths.systemSkillsPath);
     return;
   }
+  if (!resolvedSeedPath) {
+    throw new Error('Built-in system Skill resource path is unavailable.');
+  }
+  if (!fileSystem.pathExistsSync(resolvedSeedPath)) {
+    throw new Error(`Built-in system Skill resources do not exist: ${resolvedSeedPath}`);
+  }
+  if (!fileSystem.copyDirectorySync || !fileSystem.removeDirectorySync || !fileSystem.moveDirectorySync) {
+    throw new Error('Megumi Home filesystem does not support atomic system Skill synchronization.');
+  }
+  const atomicFileSystem = fileSystem as MegumiHomeSyncFileSystem & Required<Pick<
+    MegumiHomeSyncFileSystem,
+    'copyDirectorySync' | 'removeDirectorySync' | 'moveDirectorySync'
+  >>;
 
-  if (fileSystem.removeDirectorySync && fileSystem.pathExistsSync(paths.systemSkillsPath)) {
-    fileSystem.removeDirectorySync(paths.systemSkillsPath);
+  const stagingPath = `${paths.systemSkillsPath}.staging`;
+  const backupPath = `${paths.systemSkillsPath}.backup`;
+  prepareSystemSkillSwapSync(atomicFileSystem, paths.systemSkillsPath, stagingPath, backupPath);
+
+  try {
+    atomicFileSystem.copyDirectorySync(path.resolve(resolvedSeedPath), stagingPath, {
+      overwrite: false,
+      errorOnExist: false,
+    });
+    if (!fileSystem.pathExistsSync(stagingPath)) {
+      throw new Error('Built-in system Skill staging directory was not created.');
+    }
+  } catch (error) {
+    removeIfPresentSync(atomicFileSystem, stagingPath);
+    throw error;
   }
 
-  fileSystem.copyDirectorySync(path.resolve(resolvedSeedPath), paths.systemSkillsPath, {
-    overwrite: false,
-    errorOnExist: false,
-  });
+  try {
+    if (fileSystem.pathExistsSync(paths.systemSkillsPath)) {
+      atomicFileSystem.moveDirectorySync(paths.systemSkillsPath, backupPath);
+    }
+    atomicFileSystem.moveDirectorySync(stagingPath, paths.systemSkillsPath);
+  } catch (error) {
+    restoreSystemSkillBackupSync(atomicFileSystem, paths.systemSkillsPath, stagingPath, backupPath);
+    throw error;
+  }
+
+  removeIfPresentSync(atomicFileSystem, backupPath);
+}
+
+async function prepareSystemSkillSwap(
+  fileSystem: Required<Pick<MegumiHomeFileSystem, 'pathExists' | 'removeDirectory' | 'moveDirectory'>>,
+  systemSkillsPath: string,
+  stagingPath: string,
+  backupPath: string,
+): Promise<void> {
+  if (await fileSystem.pathExists(backupPath)) {
+    if (await fileSystem.pathExists(systemSkillsPath)) {
+      await fileSystem.removeDirectory(backupPath);
+    } else {
+      await fileSystem.moveDirectory(backupPath, systemSkillsPath);
+    }
+  }
+  await removeIfPresent(fileSystem, stagingPath);
+}
+
+function prepareSystemSkillSwapSync(
+  fileSystem: Required<Pick<MegumiHomeSyncFileSystem, 'pathExistsSync' | 'removeDirectorySync' | 'moveDirectorySync'>>,
+  systemSkillsPath: string,
+  stagingPath: string,
+  backupPath: string,
+): void {
+  if (fileSystem.pathExistsSync(backupPath)) {
+    if (fileSystem.pathExistsSync(systemSkillsPath)) {
+      fileSystem.removeDirectorySync(backupPath);
+    } else {
+      fileSystem.moveDirectorySync(backupPath, systemSkillsPath);
+    }
+  }
+  removeIfPresentSync(fileSystem, stagingPath);
+}
+
+async function restoreSystemSkillBackup(
+  fileSystem: Required<Pick<MegumiHomeFileSystem, 'pathExists' | 'removeDirectory' | 'moveDirectory'>>,
+  systemSkillsPath: string,
+  stagingPath: string,
+  backupPath: string,
+): Promise<void> {
+  await removeIfPresent(fileSystem, stagingPath);
+  if (!(await fileSystem.pathExists(systemSkillsPath)) && await fileSystem.pathExists(backupPath)) {
+    await fileSystem.moveDirectory(backupPath, systemSkillsPath);
+  }
+}
+
+function restoreSystemSkillBackupSync(
+  fileSystem: Required<Pick<MegumiHomeSyncFileSystem, 'pathExistsSync' | 'removeDirectorySync' | 'moveDirectorySync'>>,
+  systemSkillsPath: string,
+  stagingPath: string,
+  backupPath: string,
+): void {
+  removeIfPresentSync(fileSystem, stagingPath);
+  if (!fileSystem.pathExistsSync(systemSkillsPath) && fileSystem.pathExistsSync(backupPath)) {
+    fileSystem.moveDirectorySync(backupPath, systemSkillsPath);
+  }
+}
+
+async function removeIfPresent(
+  fileSystem: Required<Pick<MegumiHomeFileSystem, 'pathExists' | 'removeDirectory'>>,
+  directoryPath: string,
+): Promise<void> {
+  if (await fileSystem.pathExists(directoryPath)) {
+    await fileSystem.removeDirectory(directoryPath);
+  }
+}
+
+function removeIfPresentSync(
+  fileSystem: Required<Pick<MegumiHomeSyncFileSystem, 'pathExistsSync' | 'removeDirectorySync'>>,
+  directoryPath: string,
+): void {
+  if (fileSystem.pathExistsSync(directoryPath)) {
+    fileSystem.removeDirectorySync(directoryPath);
+  }
 }
