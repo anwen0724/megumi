@@ -1,0 +1,10 @@
+{
+  "profileId": "isolated-command",
+  "name": "Isolated Command",
+  "environmentKind": "controlled",
+  "permissionMode": "ask",
+  "enabledTools": ["run_command"],
+  "networkAccess": "disabled",
+  "isolation": "os_sandbox",
+  "limits": { "wallClockMs": 90000, "maxModelCalls": 6, "maxToolCalls": 8 }
+}

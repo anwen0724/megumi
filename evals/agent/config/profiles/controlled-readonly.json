@@ -1,0 +1,10 @@
+{
+  "profileId": "controlled-readonly",
+  "name": "Controlled Workspace Read",
+  "environmentKind": "controlled",
+  "permissionMode": "auto",
+  "enabledTools": ["read_file", "list_directory", "glob", "search_text"],
+  "networkAccess": "disabled",
+  "isolation": "workspace_only",
+  "limits": { "wallClockMs": 90000, "maxModelCalls": 6, "maxToolCalls": 12 }
+}

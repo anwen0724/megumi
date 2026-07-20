@@ -89,7 +89,14 @@ describe('tool call orchestration', () => {
       tool_execution_service: { executeTool: vi.fn() },
     });
     expect(result.pending_approvals[0]).toMatchObject({
-      approval_request: { options: [{ option_id: 'once:call-1' }], default_option_id: 'once:call-1' },
+      approval_request: {
+        subject: {
+          tool_identity: { source_id: 'built_in', namespace: 'megumi', source_tool_name: 'read_file' },
+        },
+        operations: [expect.objectContaining({ action: 'workspace.read' })],
+        options: [{ option_id: 'once:call-1' }],
+        default_option_id: 'once:call-1',
+      },
     });
     expect(result.pending_approvals[0]).not.toHaveProperty('execution_targets');
     expect(result.deferred_tool_calls).toEqual([]);

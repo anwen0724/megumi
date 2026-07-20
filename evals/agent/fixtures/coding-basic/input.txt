@@ -1,0 +1,1 @@
+Megumi needs a repeatable way to verify whether an Agent actually delivered the requested workspace result.

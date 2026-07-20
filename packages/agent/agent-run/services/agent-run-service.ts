@@ -1453,6 +1453,13 @@ function approvalRequestToRuntimePayload(request: AgentRunApprovalRequest): Reco
     toolCallId: request.subject.tool_call_id,
     toolExecutionId: request.subject.tool_call_id,
     toolName: request.subject.tool_name,
+    ...(request.subject.tool_identity ? {
+      toolIdentity: {
+        sourceId: request.subject.tool_identity.source_id,
+        namespace: request.subject.tool_identity.namespace,
+        sourceToolName: request.subject.tool_identity.source_tool_name,
+      },
+    } : {}),
     title: request.subject.tool_name,
     summary: request.summary ?? `${request.subject.tool_name} requires approval.`,
     options: request.options,
@@ -1461,6 +1468,7 @@ function approvalRequestToRuntimePayload(request: AgentRunApprovalRequest): Reco
       action: request.subject.tool_name,
       targets: [],
     },
+    ...(request.operations ? { operations: request.operations } : {}),
     status: request.status,
     createdAt: request.created_at,
   };

@@ -1,0 +1,6 @@
+{
+  "targetId": "openai-gpt-5-6",
+  "name": "OpenAI GPT-5.6",
+  "providerId": "OpenAI",
+  "modelId": "gpt-5.6"
+}

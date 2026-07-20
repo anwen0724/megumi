@@ -1,0 +1,10 @@
+{
+  "profileId": "controlled-write-approval",
+  "name": "Controlled Write Approval",
+  "environmentKind": "controlled",
+  "permissionMode": "ask",
+  "enabledTools": ["write_file"],
+  "networkAccess": "disabled",
+  "isolation": "workspace_only",
+  "limits": { "wallClockMs": 90000, "maxModelCalls": 6, "maxToolCalls": 8 }
+}

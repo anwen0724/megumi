@@ -5,7 +5,7 @@
 import type { CommandAgentRunInput, HostInteractionRequest } from '../../commands';
 import type { RawUserInput } from '../../input';
 import type { SkillSelection } from '@megumi/skills';
-import type { ApprovalDecision, ApprovalOption, PermissionMode } from '../../permissions';
+import type { ApprovalDecision, ApprovalOption, PermissionMode, PermissionOperation } from '../../permissions';
 import type { ProviderRuntimeConfig } from '../../settings';
 import type { RuntimeEvent } from '../../events';
 import type { Session, SessionMessageWithAttachments } from '../../session';
@@ -104,6 +104,11 @@ export type AgentRunApprovalSubject =
       tool_call_id: string;
       tool_name: string;
       input: unknown;
+      tool_identity?: {
+        source_id: string;
+        namespace: string;
+        source_tool_name: string;
+      };
     };
 
 export type AgentRunApprovalRequest = {
@@ -121,6 +126,7 @@ export type AgentRunApprovalRequest = {
       label: string;
     }>;
   };
+  operations?: PermissionOperation[];
   created_at: string;
   decided_at?: string;
   decision?: ApprovalDecision;

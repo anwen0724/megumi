@@ -1,0 +1,10 @@
+{
+  "profileId": "research-live-isolated",
+  "name": "Research Live Isolated",
+  "environmentKind": "live",
+  "permissionMode": "ask",
+  "enabledTools": ["web_search", "web_fetch"],
+  "networkAccess": "live",
+  "isolation": "os_sandbox",
+  "limits": { "wallClockMs": 180000, "maxModelCalls": 10, "maxToolCalls": 20 }
+}

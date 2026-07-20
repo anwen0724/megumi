@@ -1,0 +1,10 @@
+{
+  "profileId": "controlled-no-tools",
+  "name": "Controlled No Tools",
+  "environmentKind": "controlled",
+  "permissionMode": "ask",
+  "enabledTools": [],
+  "networkAccess": "disabled",
+  "isolation": "workspace_only",
+  "limits": { "wallClockMs": 60000, "maxModelCalls": 4, "maxToolCalls": 1 }
+}

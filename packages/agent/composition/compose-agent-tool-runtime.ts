@@ -30,11 +30,18 @@ export interface LocalWorkspaceFileSystem {
 export function composeAgentToolRegistryService(input: {
   webSearchEnabled?: boolean;
   isWebSearchEnabled?: () => boolean;
+  isBuiltInToolAvailable?: (toolName: string) => boolean;
 } = {}): ToolRegistryService {
   return new ToolRegistryService({
-    ...(input.isWebSearchEnabled
-      ? { isBuiltInToolAvailable: (toolName) => toolName !== 'web_search' || input.isWebSearchEnabled!() }
-      : { disabledBuiltInTools: input.webSearchEnabled ? [] : ['web_search'] }),
+    isBuiltInToolAvailable: (toolName) => {
+      if (input.isBuiltInToolAvailable && !input.isBuiltInToolAvailable(toolName)) {
+        return false;
+      }
+      if (toolName !== 'web_search') {
+        return true;
+      }
+      return input.isWebSearchEnabled ? input.isWebSearchEnabled() : Boolean(input.webSearchEnabled);
+    },
   });
 }
 

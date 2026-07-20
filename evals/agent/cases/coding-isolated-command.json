@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "caseId": "coding-isolated-command",
+  "name": "Isolated Coding Command",
+  "description": "Runs a verification command only when a real execution sandbox is available.",
+  "tags": ["coding", "controlled", "sandbox"],
+  "fixture": { "fixtureId": "coding-basic" },
+  "request": { "text": "Inspect the fixture and run a safe verification command. Report its exact result." },
+  "requirements": { "tools": ["run_command"], "minimumIsolation": "os_sandbox" },
+  "graders": [
+    { "graderId": "verification-command", "type": "tool_activity", "required": true, "config": { "toolName": "run_command", "result": "completed" } },
+    { "graderId": "final-reply", "type": "final_reply", "required": true }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "smoke",
+  "name": "Smoke",
+  "description": "Minimum complete Agent path.",
+  "caseIds": ["smoke-reply"],
+  "executionProfileId": "controlled-no-tools",
+  "policy": { "repetitions": 1, "requiredCaseIds": ["smoke-reply"], "minimumPassRate": 1, "maximumInvalidExecutionRate": 0, "needsReview": "blocks" }
+}

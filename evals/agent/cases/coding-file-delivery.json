@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "caseId": "coding-file-delivery",
+  "name": "Coding File Delivery",
+  "description": "Reads a fixture and creates a verifiable workspace delivery.",
+  "tags": ["coding", "controlled"],
+  "fixture": { "fixtureId": "coding-basic" },
+  "request": { "text": "Read input.txt and create answer.md containing the title 'Evaluation Result' followed by a concise summary of the input. Verify the file before replying." },
+  "requirements": { "tools": ["read_file", "write_file"], "minimumIsolation": "workspace_only" },
+  "graders": [
+    { "graderId": "delivery-file", "type": "file_exists", "required": true, "config": { "path": "answer.md" } },
+    { "graderId": "delivery-content", "type": "file_content", "required": true, "config": { "path": "answer.md", "includes": "Evaluation Result" } },
+    { "graderId": "verification-tool", "type": "tool_activity", "required": true, "config": { "toolName": "read_file", "minimumCalls": 2 } },
+    { "graderId": "final-reply", "type": "final_reply", "required": true },
+    { "graderId": "completion-claim", "type": "completion_claim", "required": true, "config": { "claimPhrases": ["completed", "done", "完成", "已创建"], "blockerPhrases": ["could not", "unable", "无法", "未完成"] } }
+  ]
+}

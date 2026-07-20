@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "coding-isolated-command",
+  "name": "Coding with Isolated Command",
+  "description": "Command-based coding verification that requires a real OS sandbox or stronger isolation.",
+  "caseIds": ["coding-isolated-command"],
+  "executionProfileId": "isolated-command",
+  "policy": { "repetitions": 1, "requiredCaseIds": ["coding-isolated-command"], "minimumPassRate": 1, "maximumInvalidExecutionRate": 0, "needsReview": "blocks" }
+}
