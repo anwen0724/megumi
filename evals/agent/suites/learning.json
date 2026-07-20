@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "learning",
+  "name": "Learning",
+  "description": "Material-grounded middle-school explanation.",
+  "caseIds": ["learning-explanation"],
+  "executionProfileId": "controlled-readonly",
+  "policy": { "repetitions": 1, "requiredCaseIds": ["learning-explanation"], "minimumPassRate": 1, "maximumInvalidExecutionRate": 0, "needsReview": "allowed" }
+}

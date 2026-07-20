@@ -31,6 +31,7 @@ import { composeAgentPersistence } from './compose-agent-persistence';
 import {
   composeAgentToolExecutionService,
   composeAgentToolRegistryService,
+  type LocalWorkspaceFileSystem,
 } from './compose-agent-tool-runtime';
 import { composeAgentContext, type ContextCapacity } from '../context';
 import { composeAgentInstructions } from '../instructions';
@@ -126,6 +127,8 @@ export interface ComposeAgentRuntimeOptions {
   settingsStorage?: SettingsFileStore;
   inputFileReader?: InputFileReader;
   sessionAttachmentFileSystem?: SessionAttachmentFileSystem;
+  isBuiltInToolAvailable?: (toolName: string) => boolean;
+  toolFileSystem?: LocalWorkspaceFileSystem;
 }
 
 export interface AgentRuntime {
@@ -233,6 +236,7 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
   };
   const toolRegistry = composeAgentToolRegistryService({
     isWebSearchEnabled: () => Boolean(resolveWebSearchConfig()),
+    ...(options.isBuiltInToolAvailable ? { isBuiltInToolAvailable: options.isBuiltInToolAvailable } : {}),
   });
   const agentRunSettingsService = options.aiClient || options.modelCallProviderService
     ? createModelConfigSettingsFacade(settingsService)
@@ -410,11 +414,13 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
       const webSearchConfig = resolveWebSearchConfig();
       const runToolRegistry = composeAgentToolRegistryService({
         webSearchEnabled: Boolean(webSearchConfig),
+        ...(options.isBuiltInToolAvailable ? { isBuiltInToolAvailable: options.isBuiltInToolAvailable } : {}),
       });
       const toolExecutionService = composeAgentToolExecutionService({
         projectRoot: workspace_root ?? process.cwd(),
         registryService: runToolRegistry,
         workspacePathPolicyService,
+        ...(options.toolFileSystem ? { fileSystem: options.toolFileSystem } : {}),
         ...(skill_service ? { skillService: skill_service } : {}),
         ...(webSearchConfig ? { webSearchService: createWebSearchService(webSearchConfig) } : {}),
       });

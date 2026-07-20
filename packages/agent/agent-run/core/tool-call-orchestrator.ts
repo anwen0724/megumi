@@ -406,12 +406,18 @@ function createPendingApproval(
       tool_call_id: toolCall.tool_call_id,
       tool_name: registeredTool.registeredToolName,
       input: toolCall.input,
+      tool_identity: {
+        source_id: registeredTool.identity.sourceId,
+        namespace: registeredTool.identity.namespace,
+        source_tool_name: registeredTool.identity.sourceToolName,
+      },
     },
     status: 'pending',
     options: decision.options,
     default_option_id: decision.default_option_id,
     summary: `${registeredTool.registeredToolName} requires approval.`,
     preview,
+    operations: decision.operations,
     created_at: request.clock.now(),
   };
 }

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "caseId": "research-live-sources",
+  "name": "Live Source Synthesis",
+  "description": "Uses live search and source fetching to produce a cited synthesis.",
+  "tags": ["research", "live"],
+  "request": { "text": "Research current guidance on effective spaced practice for middle-school students. Compare at least two sources and state your conclusion with source links." },
+  "requirements": { "tools": ["web_search", "web_fetch"], "networkAccess": "live", "minimumIsolation": "os_sandbox" },
+  "graders": [
+    { "graderId": "search-used", "type": "tool_activity", "required": true, "config": { "toolName": "web_search" } },
+    { "graderId": "fetch-used", "type": "tool_activity", "required": true, "config": { "toolName": "web_fetch" } },
+    { "graderId": "final-reply", "type": "final_reply", "required": true },
+    { "graderId": "research-quality", "type": "human_rubric", "required": false, "config": { "prompt": "Review source quality, cross-checking, citation support, and conclusion accuracy." } }
+  ]
+}

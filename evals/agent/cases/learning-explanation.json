@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "caseId": "learning-explanation",
+  "name": "Learning Explanation",
+  "description": "Uses supplied study material to explain a concept for a middle-school student.",
+  "tags": ["learning", "controlled"],
+  "fixture": { "fixtureId": "learning-basic" },
+  "request": { "text": "Read study-note.md and explain the concept to a middle-school student. Include one simple example and one check-for-understanding question." },
+  "requirements": { "tools": ["read_file"], "minimumIsolation": "workspace_only" },
+  "graders": [
+    { "graderId": "material-read", "type": "tool_activity", "required": true, "config": { "toolName": "read_file" } },
+    { "graderId": "final-reply", "type": "final_reply", "required": true },
+    { "graderId": "teaching-quality", "type": "human_rubric", "required": false, "config": { "prompt": "Review correctness, clarity, example quality, and age appropriateness." } }
+  ]
+}

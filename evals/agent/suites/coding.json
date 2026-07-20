@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "coding",
+  "name": "Coding",
+  "description": "Controlled workspace file delivery and verification.",
+  "caseIds": ["coding-file-delivery"],
+  "executionProfileId": "controlled-files",
+  "policy": { "repetitions": 1, "requiredCaseIds": ["coding-file-delivery"], "minimumPassRate": 1, "maximumInvalidExecutionRate": 0, "needsReview": "blocks" }
+}

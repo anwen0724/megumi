@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "research-live",
+  "name": "Research Live",
+  "description": "Live external-source trend evaluation, not an offline release gate.",
+  "caseIds": ["research-live-sources"],
+  "executionProfileId": "research-live-isolated",
+  "policy": { "repetitions": 1, "requiredCaseIds": [], "minimumPassRate": 1, "maximumInvalidExecutionRate": 0, "needsReview": "allowed" }
+}

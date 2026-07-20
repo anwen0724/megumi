@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "recovery",
+  "name": "Recovery",
+  "description": "Approval denial and accurate recovery behavior.",
+  "caseIds": ["recovery-approval-deny"],
+  "executionProfileId": "controlled-write-approval",
+  "policy": { "repetitions": 1, "requiredCaseIds": ["recovery-approval-deny"], "minimumPassRate": 1, "maximumInvalidExecutionRate": 0, "needsReview": "blocks" }
+}

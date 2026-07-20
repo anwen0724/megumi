@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "caseId": "smoke-reply",
+  "name": "Final Reply Smoke",
+  "description": "Verifies a normal request reaches a persisted final assistant reply.",
+  "tags": ["smoke"],
+  "request": { "text": "Please reply briefly that you are ready to help." },
+  "graders": [
+    { "graderId": "final-reply", "type": "final_reply", "required": true }
+  ]
+}

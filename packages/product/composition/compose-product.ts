@@ -47,6 +47,9 @@ export type ComposeProductOptions = Omit<
 /** Host capabilities implemented by shells without importing Agent internals. */
 export type ProductInputFileReader = NonNullable<ComposeProductOptions['inputFileReader']>;
 export type ProductSessionAttachmentFileSystem = NonNullable<ComposeProductOptions['sessionAttachmentFileSystem']>;
+export type ProductToolFileSystem = NonNullable<ComposeProductOptions['toolFileSystem']>;
+export type ProductBuiltInToolAvailability = NonNullable<ComposeProductOptions['isBuiltInToolAvailable']>;
+export type ProductObservabilityStorage = NonNullable<ComposeProductOptions['observabilityStorage']>;
 
 export interface ProductRuntime {
   homePaths: MegumiHomePaths;
