@@ -28,7 +28,8 @@ export const settings = {
   skills: {
     discovered: 'Available Skills',
     discoveredDescription: 'System and user-configured Skills available for the current context.',
-    listLabel: 'Skill management', filterLabel: 'Filter Skills by source', filters: { all: 'All' },
+    listLabel: 'Skill management', filterLabel: 'Filter Skills by source', filters: { all: 'All', system: 'System', user: 'User' },
+    sources: { system: 'System', user: 'User' },
     refresh: 'Refresh', loading: 'Loading Skills…', unavailable: 'Skill management is unavailable.',
     empty: 'No Skills found', emptyDescription: 'Add a Skill to your user configuration to make it available here.',
     noMatches: 'No matching Skills', noMatchesDescription: 'Choose another source filter to see available Skills.',

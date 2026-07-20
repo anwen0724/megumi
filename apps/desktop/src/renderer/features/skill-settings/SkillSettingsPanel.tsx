@@ -205,7 +205,11 @@ export function SkillSettingsPanel() {
                     : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
                 )}
               >
-                {filter === 'all' ? t('skills.filters.all') : filter}
+                {filter === 'all'
+                  ? t('skills.filters.all')
+                  : filter === 'System'
+                    ? t('skills.filters.system')
+                    : t('skills.filters.user')}
               </button>
             ))}
           </div>
@@ -259,7 +263,9 @@ export function SkillSettingsPanel() {
                     {duplicateNames.has(skill.name) ? <p className="mt-0.5 truncate font-mono text-[0.68rem] text-[var(--color-text-subtle)]">{shortPath(skill.skillPath)}</p> : null}
                   </div>
                   <div className="grid grid-cols-[3.5rem_2rem_2.25rem] items-center gap-1">
-                    <span className={cx('text-right text-xs text-[var(--color-text-subtle)]', !skill.available && 'opacity-55')}>{skill.sourceLabel}</span>
+                    <span className={cx('text-right text-xs text-[var(--color-text-subtle)]', !skill.available && 'opacity-55')}>
+                      {skill.sourceLabel === 'System' ? t('skills.sources.system') : t('skills.sources.user')}
+                    </span>
                     <div className="relative">
                     <button
                       type="button"
