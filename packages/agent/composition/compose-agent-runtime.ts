@@ -34,7 +34,7 @@ import {
 } from './compose-agent-tool-runtime';
 import { composeAgentContext, type ContextCapacity } from '../context';
 import { composeAgentInstructions } from '../instructions';
-import { composeAgentSkills, type Skill, type SkillService } from '../skills';
+import { composeSkills, type Skill, type SkillService } from '@megumi/skills';
 import {
   createSettingsService,
   type MemorySettingsPort,
@@ -134,6 +134,7 @@ export interface AgentRuntime {
   inputService: InputService;
   commandService: CommandService;
   skillService: SkillService;
+  createSkillService(input?: { workspaceId?: string }): SkillService;
   sessionService: SessionService;
   sessionBranchService: SessionBranchService;
   settingsService: SettingsService;
@@ -242,17 +243,22 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
     repository: workspaceRepository,
     file_system: workspaceFileSystem,
   });
-  const skillRuntime = composeAgentSkills({
+  const skillComposition = composeSkills({
     database: persistence.database,
     homePath: options.homePaths.homePath,
-    workspaceService,
   });
+  const createSkillServiceForWorkspace = (input: { workspaceId?: string } = {}) => {
+    if (!input.workspaceId) return skillComposition.createSkillService();
+    const workspace = workspaceService.getWorkspace({ workspace_id: input.workspaceId });
+    return workspace.status === 'found'
+      ? skillComposition.createSkillService({ workspaceRoot: workspace.workspace.root_path })
+      : skillComposition.createSkillService();
+  };
+  const defaultSkillService = createSkillServiceForWorkspace();
   const commandService = createCommandService({
     skillCommandProvider: {
       async listSkillCommands(request) {
-        const skills = await skillRuntime.skillService.listSkills({
-          ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}),
-        });
+        const skills = await createSkillServiceForWorkspace(request).listSkills({});
         if (skills.status === 'failed') {
           return [];
         }
@@ -329,7 +335,6 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
       },
     },
     instructionService,
-    skillService: skillRuntime.skillService,
     policyProvider: {
       getPolicy() {
         const resolved = settingsService.getResolvedSettings();
@@ -380,6 +385,7 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
         workspace_id: request.workspace_id,
         services: {
           context: contextRuntime.contextService,
+          skills: createSkillServiceForWorkspace({ workspaceId: request.workspace_id }),
         },
         model_context: modelContextProvider({
           providerId: request.model_selection.provider_id,
@@ -396,9 +402,11 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
     context_service: contextRuntime.contextService,
     model_context_provider: modelContextProvider,
     model_call_service: modelCallService,
-    skill_service: skillRuntime.skillService,
+    skill_service_factory: ({ workspace_root }) => skillComposition.createSkillService({
+      ...(workspace_root ? { workspaceRoot: workspace_root } : {}),
+    }),
     tool_registry_service: toolRegistry,
-    tool_execution_service_factory: ({ run_id, session_id, workspace_id, workspace_root }) => {
+    tool_execution_service_factory: ({ run_id, session_id, workspace_id, workspace_root, skill_service }) => {
       const webSearchConfig = resolveWebSearchConfig();
       const runToolRegistry = composeAgentToolRegistryService({
         webSearchEnabled: Boolean(webSearchConfig),
@@ -407,13 +415,8 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
         projectRoot: workspace_root ?? process.cwd(),
         registryService: runToolRegistry,
         workspacePathPolicyService,
-        skillService: skillRuntime.skillService,
+        ...(skill_service ? { skillService: skill_service } : {}),
         ...(webSearchConfig ? { webSearchService: createWebSearchService(webSearchConfig) } : {}),
-        runContext: {
-          runId: run_id,
-          sessionId: session_id,
-          workspaceId: workspace_id,
-        },
       });
       return {
         executeTool(request) {
@@ -449,7 +452,8 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
     modelCallService,
     inputService,
     commandService,
-    skillService: skillRuntime.skillService,
+    skillService: defaultSkillService,
+    createSkillService: createSkillServiceForWorkspace,
     sessionService,
     sessionBranchService,
     settingsService,
@@ -621,17 +625,11 @@ export function createObservabilityAgentRunTraceLogger(
 
 function toSkillCommandDescriptor(skill: Skill): SkillCommandDescriptor {
   return {
-    skillId: skill.skillId,
-    commandName: commandNameFromSkillName(skill.name),
-    skillName: skill.name,
+    name: skill.name,
+    skillPath: skill.skillPath,
     description: skill.description,
-    sourceLabel: skill.source.label,
+    sourceLabel: skill.source.owner === 'system' ? 'System' : 'User',
   };
-}
-
-function commandNameFromSkillName(skillName: string): string {
-  const segments = skillName.split(':').filter(Boolean);
-  return segments.at(-1) ?? skillName;
 }
 
 function createProtocolRegistry(): ProtocolRegistry {

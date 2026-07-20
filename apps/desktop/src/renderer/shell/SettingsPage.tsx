@@ -1,11 +1,12 @@
 import { useEffect, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Activity, Bot, BrainCircuit, CheckCircle2, Globe2, Info, Palette, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Activity, Bot, BrainCircuit, Boxes, CheckCircle2, Globe2, Info, Palette, ShieldCheck } from 'lucide-react';
 import { DiagnosticsPanel } from '../features/observability';
 import { MemorySettingsPanel } from '../features/memory-settings';
 import { ProviderSettingsPanel } from '../features/provider-settings';
 import { WebSettingsPanel } from '../features/web-settings';
 import { PermissionRulesPanel } from '../features/permission-settings';
+import { SkillSettingsPanel } from '../features/skill-settings';
 import { ThemeSelector } from '../shared/theme';
 import { LanguageSelector } from '../shared/i18n';
 import {
@@ -16,7 +17,7 @@ import {
   cx,
 } from '../shared/ui';
 
-type SettingsCategory = 'appearance' | 'models' | 'web' | 'memory' | 'diagnostics' | 'security' | 'about';
+type SettingsCategory = 'appearance' | 'models' | 'skills' | 'web' | 'memory' | 'diagnostics' | 'security' | 'about';
 
 interface SettingsPageProps {
   onDone: () => void;
@@ -41,6 +42,7 @@ const categoryGroups: Array<{ id: 'personal' | 'aiTools' | 'support'; items: Set
     id: 'aiTools',
     items: [
       { id: 'models', icon: Bot },
+      { id: 'skills', icon: Boxes },
       { id: 'web', icon: Globe2 },
       { id: 'security', icon: ShieldCheck },
     ],
@@ -186,6 +188,8 @@ export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize 
               ) : null}
 
               {category === 'models' ? <ProviderSettingsPanel /> : null}
+
+              {category === 'skills' ? <SkillSettingsPanel /> : null}
 
               {category === 'web' ? <WebSettingsPanel /> : null}
 

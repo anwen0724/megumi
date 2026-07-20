@@ -2,7 +2,7 @@
  * Defines dependencies shared by Megumi built-in tool implementations.
  */
 import type { spawn as nodeSpawn } from 'node:child_process';
-import type { SkillService } from '../../skills';
+import type { SkillService } from '@megumi/skills';
 import type { WebSearchService } from './web-search';
 import type { WebFetchService } from './web-fetch';
 
@@ -57,12 +57,7 @@ export type BuiltInToolSpawn = typeof nodeSpawn;
 export type BuiltInToolContext = {
   workspaceFileAccess: WorkspaceFileAccess;
   spawn: BuiltInToolSpawn;
-  skillService?: Pick<SkillService, 'activateSkill'>;
+  skillService?: Pick<SkillService, 'useSkill'>;
   webSearchService?: WebSearchService;
   webFetchService?: WebFetchService;
-  runContext?: {
-    runId: string;
-    sessionId: string;
-    workspaceId?: string;
-  };
 };

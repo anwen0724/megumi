@@ -54,12 +54,12 @@ describe('composeAgentRuntime trace wiring', () => {
     }
   });
 
-  it('wires project skills into SkillService and /skill Agent Run prompts', async () => {
+  it('binds workspace-provided user Skills into the Run catalog and Prompt run context', async () => {
     const home = await createHome();
     const capturedPrompts: string[] = [];
     await writeProjectSkill({
       workspaceRoot: home.workspaceRoot,
-      skillId: 'qa:review',
+      name: 'review',
       description: 'Review code changes',
       content: 'Always inspect the diff before making claims.\n',
     });
@@ -77,12 +77,14 @@ describe('composeAgentRuntime trace wiring', () => {
       expect(workspace.status).toBe('opened');
       if (workspace.status !== 'opened') return;
 
-      const skills = await runtime.skillService.listSkills({
-        workspaceId: workspace.workspace.workspace_id,
-      });
+      const workspaceSkillService = runtime.createSkillService({ workspaceId: workspace.workspace.workspace_id });
+      const skills = await workspaceSkillService.listSkills({});
       expect(skills.status).toBe('ok');
-      expect(skills.status === 'ok' ? skills.skills.map((skill) => skill.skillId) : [])
-        .toContain('qa:review');
+      const selectedSkill = skills.status === 'ok'
+        ? skills.skills.find((skill) => skill.name === 'review')
+        : undefined;
+      expect(selectedSkill?.source.owner).toBe('user');
+      expect(selectedSkill?.skillPath).toBe(join(home.workspaceRoot, '.megumi', 'skills', 'review', 'SKILL.md'));
       const suggestions = await runtime.commandService.getCommandSuggestions({
         draft_input: '/rev',
         workspaceId: workspace.workspace.workspace_id,
@@ -97,11 +99,16 @@ describe('composeAgentRuntime trace wiring', () => {
             name: 'review',
             display: {
               primary: 'review',
-              secondary: 'qa:review - Review code changes',
-              badge: 'Project',
+              secondary: 'Review code changes',
+              badge: 'User',
             },
             completion: {
-              replacement_input: '/skill qa:review ',
+              replacement_input: '',
+              selection: {
+                type: 'skill',
+                name: 'review',
+                skillPath: join(home.workspaceRoot, '.megumi', 'skills', 'review', 'SKILL.md'),
+              },
             },
           }],
         }],
@@ -112,7 +119,12 @@ describe('composeAgentRuntime trace wiring', () => {
         request_id: 'request-skill-1',
         workspace_id: workspace.workspace.workspace_id,
         session: { type: 'new', title: 'Skill run' },
-        user_input: { text: '/skill qa:review check this patch' },
+        user_input: { text: 'check this patch' },
+        skill_selection: {
+          type: 'skill',
+          name: 'review',
+          skillPath: selectedSkill!.skillPath,
+        },
         model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
       });
       expect(run.status).toBe('started');
@@ -121,7 +133,7 @@ describe('composeAgentRuntime trace wiring', () => {
       expect(events.map((event) => event.eventType)).toContain('model_call.started');
 
       expect(capturedPrompts.join('\n')).toContain('Always inspect the diff before making claims.');
-      expect(capturedPrompts.join('\n')).toContain('"skillId":"qa:review"');
+      expect(capturedPrompts.join('\n')).toContain(`"skillPath":"${selectedSkill!.skillPath.replace(/\\/g, '\\\\')}"`);
     } finally {
       runtime.dispose();
     }
@@ -221,15 +233,15 @@ function capturingAiClient(capturedPrompts: string[]): AiClient {
 
 async function writeProjectSkill(input: {
   workspaceRoot: string;
-  skillId: string;
+  name: string;
   description: string;
   content: string;
 }): Promise<void> {
-  const skillRoot = join(input.workspaceRoot, '.megumi', 'skills', input.skillId.replace(/:/g, '-'));
+  const skillRoot = join(input.workspaceRoot, '.megumi', 'skills', input.name);
   await mkdir(skillRoot, { recursive: true });
   await writeFile(
     join(skillRoot, 'SKILL.md'),
-    `---\nname: ${input.skillId}\ndescription: ${input.description}\n---\n\n${input.content}`,
+    `---\nname: ${input.name}\ndescription: ${input.description}\n---\n\n${input.content}`,
     'utf8',
   );
 }

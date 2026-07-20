@@ -65,6 +65,10 @@ export const SettingsUpdatePayloadSchema = z.object({
   theme: z.enum(['megumi-warm', 'neutral-light', 'graphite-dark', 'sage-mist', 'midnight-blue']).optional(),
   setup: z.object({ completed: z.boolean().optional() }).strict().optional(),
   memory: z.object({ enabled: z.boolean().optional() }).strict().optional(),
+  modelSelection: z.object({
+    providerId: z.string().min(1),
+    modelId: z.string().min(1),
+  }).strict().optional(),
   web: z.object({
     search: z.object({
       provider: z.enum(['brave', 'tavily', 'exa', 'custom']).optional(),
@@ -130,6 +134,10 @@ const SettingsUiResolvedSchema = z.object({
   theme: z.enum(['megumi-warm', 'neutral-light', 'graphite-dark', 'sage-mist', 'midnight-blue']),
   setup: z.object({ completed: z.boolean(), completedAt: z.string().datetime().optional() }).strict(),
   memory: z.object({ enabled: z.boolean() }).strict(),
+  modelSelection: z.object({
+    providerId: z.string().min(1),
+    modelId: z.string().min(1),
+  }).strict().optional(),
   web: z.object({
     search: z.object({
       provider: z.enum(['brave', 'tavily', 'exa', 'custom']).optional(),
@@ -402,6 +410,10 @@ export type SettingsUiRaw = {
   memory?: {
     enabled?: boolean;
   };
+  modelSelection?: {
+    providerId: string;
+    modelId: string;
+  };
   web?: {
     search?: {
       provider?: 'brave' | 'tavily' | 'exa' | 'custom';
@@ -432,6 +444,10 @@ export type SettingsUiResolved = {
   };
   memory: {
     enabled: boolean;
+  };
+  modelSelection?: {
+    providerId: string;
+    modelId: string;
   };
   web: {
     search: {
@@ -624,6 +640,12 @@ export function toSettingsRawPatch(patch: SettingsUiRaw): SettingsRaw {
       },
     } : {}),
     ...(patch.memory ? { memory: patch.memory } : {}),
+    ...(patch.modelSelection ? {
+      model_selection: {
+        provider_id: patch.modelSelection.providerId,
+        model_id: patch.modelSelection.modelId,
+      },
+    } : {}),
     ...(patch.web?.search ? {
       web: {
         search: {
@@ -666,6 +688,12 @@ export function toSettingsUiResolved(
       ...(settings.setup.completed_at ? { completedAt: settings.setup.completed_at } : {}),
     },
     memory: settings.memory,
+    ...(settings.model_selection ? {
+      modelSelection: {
+        providerId: settings.model_selection.provider_id,
+        modelId: settings.model_selection.model_id,
+      },
+    } : {}),
     web: {
       search: {
         ...(webSearch.provider ? { provider: webSearch.provider } : {}),

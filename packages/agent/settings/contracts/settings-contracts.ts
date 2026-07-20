@@ -48,6 +48,12 @@ export const ContextSettingsRawSchema = z.object({
 }).strict();
 export type ContextSettingsRaw = z.infer<typeof ContextSettingsRawSchema>;
 
+export const ModelSelectionSettingsSchema = z.object({
+  provider_id: z.string().min(1),
+  model_id: z.string().min(1),
+}).strict();
+export type ModelSelectionSettings = z.infer<typeof ModelSelectionSettingsSchema>;
+
 export const SettingsRawSchema = z
   .object({
     language: SettingsLanguageSchema.optional(),
@@ -55,6 +61,7 @@ export const SettingsRawSchema = z
     setup: SetupSettingsRawSchema.optional(),
     memory: MemorySettingsRawSchema.optional(),
     context: ContextSettingsRawSchema.optional(),
+    model_selection: ModelSelectionSettingsSchema.optional(),
     web: z.object({ search: WebSearchSettingsRawSchema.optional() }).strict().optional(),
     providers: z.record(z.string().min(1), ProviderSettingsRawSchema).optional(),
     permissions: PermissionRulesRawSchema.optional(),
@@ -89,6 +96,7 @@ export const SettingsResolvedSchema = z
     setup: SetupSettingsResolvedSchema,
     memory: MemorySettingsResolvedSchema,
     context: ContextSettingsResolvedSchema,
+    model_selection: ModelSelectionSettingsSchema.optional(),
     web: z.object({ search: WebSearchSettingsResolvedSchema }).strict(),
     providers: z.record(z.string().min(1), ProviderSettingsResolvedSchema),
     permissions: PermissionRulesResolvedSchema,

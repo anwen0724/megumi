@@ -41,9 +41,9 @@ describe('Product Host runtime schemas', () => {
 
   it('owns Workspace, Skill, and Approval request validation', () => {
     expect(WorkspaceFilesListPayloadSchema.parse({ projectId: 'workspace:1', directoryPath: '' })).toBeDefined();
-    expect(SkillGetPayloadSchema.parse({ skillId: 'review' })).toBeDefined();
+    expect(SkillGetPayloadSchema.parse({ skillPath: 'C:/skills/review/SKILL.md' })).toBeDefined();
     expect(SkillDisablePayloadSchema.safeParse({
-      skillId: 'writing-plans',
+      skillPath: 'C:/skills/writing-plans/SKILL.md',
       reason: 'not used by owner',
     }).success).toBe(false);
     expect(ApprovalResolvePayloadSchema.safeParse({ approvalRequestId: 'a', decision: 'maybe' }).success).toBe(false);

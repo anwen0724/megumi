@@ -120,6 +120,31 @@ describe('SettingsHost semantics', () => {
     });
   });
 
+  it('maps the Composer model selection without combining its provider and model ids', async () => {
+    const settings = {
+      ...resolvedSettings(),
+      model_selection: { provider_id: 'deepseek', model_id: 'deepseek-v4-pro' },
+    };
+    const updateSettings = vi.fn(() => ({ status: 'updated' as const, settings }));
+    const host = createSettingsHost({
+      updateSettings,
+      getWebSearchSettings: vi.fn(() => ({
+        status: 'ok' as const,
+        settings: { has_api_key: false, credential_source: 'missing' as const },
+      })),
+    } as never);
+
+    await expect(host.update({
+      modelSelection: { providerId: 'deepseek', modelId: 'deepseek-v4-pro' },
+    })).resolves.toMatchObject({
+      status: 'updated',
+      settings: { modelSelection: { providerId: 'deepseek', modelId: 'deepseek-v4-pro' } },
+    });
+    expect(updateSettings).toHaveBeenCalledWith({ patch: {
+      model_selection: { provider_id: 'deepseek', model_id: 'deepseek-v4-pro' },
+    } });
+  });
+
   it('preserves provider mutation owner statuses', async () => {
     const provider = providerSettings();
     const host = createSettingsHost({

@@ -125,14 +125,11 @@ describe('ToolExecutionService', () => {
       }),
     });
     const input = mapSkillScriptExecutionRequestToRunCommandInput({
-      skillId: 'checks:test',
+      skillPath: 'C:\\skills\\checks\\SKILL.md',
       scriptName: 'check',
       scriptPath: 'C:\\skills\\checks\\scripts\\check.ps1',
       args: ['--watch'],
-      workspaceId: 'workspace:1',
-      sessionId: 'session:1',
-      runId: 'run:1',
-      approvalSummary: 'Run skill script check from checks:test',
+      approvalSummary: 'Run Skill script check',
     });
 
     const result = await service.executeTool({
@@ -148,7 +145,7 @@ describe('ToolExecutionService', () => {
     );
     expect(result.type === 'succeeded' ? result.rawResult.metadata : undefined).toMatchObject({
       source: 'skill',
-      skillId: 'checks:test',
+      skillPath: 'C:\\skills\\checks\\SKILL.md',
       scriptName: 'check',
     });
   });

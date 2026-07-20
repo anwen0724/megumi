@@ -29,7 +29,6 @@ function dependencies(
     },
     instructionScopeResolver: { resolve: () => ({ status: 'resolved', workspaceRoot: 'C:/w', workingDirectory: 'C:/w' }) },
     instructionService: { getSystemInstructions: () => [], getEffectiveAgentInstructions: async () => ({ status: 'ok', instructions: { sources: [] } }) },
-    skillService: { getSkillCatalog: async () => ({ status: 'ok', skills: [] }) },
     promptTokenCounter: { count: vi.fn(async () => ({ status: 'counted' as const, inputTokens: queue.shift() ?? 10, accuracy: 'estimated' as const })) },
     summaryModelCall: { complete: summaryModelCall },
     usageSnapshotCache: new Map(),
@@ -38,7 +37,7 @@ function dependencies(
 }
 
 const request = {
-  sessionId: 'S1', workspaceId: 'W1', activatedSkills: [], tools: [],
+  sessionId: 'S1', workspaceId: 'W1', skillCatalog: [], usedSkills: [], tools: [],
   modelContext: { providerId: 'p', modelId: 'm', contextWindowTokens: 100 },
   imageInputSupport: true as const,
   currentTurn: {

@@ -87,6 +87,7 @@ function createSessionMessageSendPayload(
     projectId: target.projectId,
     ...(branchMarkerId ? { branchMarkerId } : {}),
     text: payload.message,
+    ...(payload.skillSelection ? { skillSelection: payload.skillSelection } : {}),
     ...((payload.attachments?.length ?? 0) > 0 ? {
       attachments: payload.attachments!.map((attachment) => ({
         draftAttachmentId: attachment.draftAttachmentId,

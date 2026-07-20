@@ -40,7 +40,7 @@ describe('persistence table ownership', () => {
     expect(persistenceTableOwnership.skill).toMatchObject({
       module: 'skills',
       repository: 'SkillRepository',
-      modulePath: 'packages/agent/skills',
+      modulePath: 'packages/skills',
       tables: ['skill_availability'],
     });
   });

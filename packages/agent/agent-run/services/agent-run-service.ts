@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Public Agent Run Service factory.
  * It owns user-input-to-run orchestration and delegates model/tool looping to core.
  */
@@ -13,11 +13,10 @@ import type {
   SessionService,
 } from '../../session';
 import type { SettingsService } from '../../settings';
-import type { ActivatedSkillContent, SkillService } from '../../skills';
+import type { SkillCatalogItem, SkillSelection, UsedSkillContent, SkillService } from '@megumi/skills';
 import type { ToolExecutionService, ToolRegistryService } from '../../tools';
 import type { WorkspacePathPolicyService, WorkspaceService } from '../../workspace';
 import type {
-  ActivatedSkillInstruction,
   ContextCapacity,
   CurrentConversationTurn,
 } from '../../context';
@@ -82,7 +81,7 @@ export type CreateAgentRunServiceOptions = {
   context_service: Parameters<typeof runAgentModelToolLoop>[0]['context_service'];
   model_context_provider(selection: { providerId: string; modelId: string }): ContextCapacity;
   model_call_service: ModelCallService;
-  skill_service?: Pick<SkillService, 'activateSkill'>;
+  skill_service_factory?: (input: { workspace_root?: string }) => SkillService;
   tool_registry_service: Pick<ToolRegistryService, 'listAvailableTools'>;
   tool_execution_service?: Pick<ToolExecutionService, 'executeTool'>;
   tool_execution_service_factory?: (input: {
@@ -90,6 +89,7 @@ export type CreateAgentRunServiceOptions = {
     session_id: string;
     workspace_id: string;
     workspace_root?: string;
+    skill_service?: SkillService;
   }) => Pick<ToolExecutionService, 'executeTool'>;
   permission_service: Pick<PermissionService, 'evaluateToolCall' | 'applyApprovalDecision'>;
   workspace_service?: Pick<WorkspaceService, 'getWorkspace'>;
@@ -135,6 +135,7 @@ class DefaultAgentRunService implements AgentRunService {
   private readonly approvalContinuations = new Map<string, RunApprovalContinuation>();
   private readonly observabilityRuns = new Map<string, { trace: TraceHandle; root: SpanHandle }>();
   private readonly approvalWaitSpans = new Map<string, { runId: string; span: SpanHandle }>();
+  private readonly skillServicesByRun = new Map<string, SkillService>();
 
   constructor(private readonly options: CreateAgentRunServiceOptions) {
     this.activeRuns = options.active_run_store ?? new ActiveRunStore();
@@ -215,6 +216,13 @@ class DefaultAgentRunService implements AgentRunService {
         session,
       };
     }
+    const skillService = this.options.skill_service_factory?.({
+      ...(workspaceRoot.workspace_root ? { workspace_root: workspaceRoot.workspace_root } : {}),
+    });
+    const skillCatalogResult = skillService ? await skillService.getSkillCatalog({}) : { status: 'ok' as const, skills: [] };
+    if (skillCatalogResult.status === 'failed') {
+      return { ...failedStart(request, { code: 'context_failed', message: skillCatalogResult.message }), session };
+    }
     const userMessage = await this.options.session_service.saveUserMessage({
       message_id: userMessageId,
       session_id: sessionId,
@@ -254,13 +262,15 @@ class DefaultAgentRunService implements AgentRunService {
       changed_at: this.clock.now(),
     }));
     this.activeRuns.initializeExecution(run.run_id, userMessage.entry.entry_id);
+    if (skillService) this.skillServicesByRun.set(run.run_id, skillService);
     const queue = createAgentRunEventQueue((event) => this.options.event_publisher?.publish(event));
     const eventSink = this.createEventSink(queue, run);
     const commandSkills = await this.resolveCommandSkills({
-      command_result: commandRoute.command_result,
-      session_id: sessionId,
-      workspace_id: request.workspace_id,
-      run_id: run.run_id,
+      requested_skill: request.skill_selection
+        ?? (commandRoute.command_result?.type === 'agent_run'
+          ? commandRoute.command_result.input.requestedSkill
+          : undefined),
+      skill_service: skillService,
     });
     if (commandSkills.status === 'failed') {
       const terminalReply = commitTerminalReply({
@@ -294,6 +304,8 @@ class DefaultAgentRunService implements AgentRunService {
         });
       }
       queue.close();
+      this.activeRuns.release(run.run_id);
+      this.skillServicesByRun.delete(run.run_id);
       return {
         status: 'failed',
         request_id: request.request_id,
@@ -339,7 +351,9 @@ class DefaultAgentRunService implements AgentRunService {
         eventSink,
         run,
         current_turn: currentTurnFromSavedUserMessage(run.run_id, userMessage.message, userMessage.entry),
-        activated_skills: commandSkills.activated_skills,
+        skill_catalog: skillCatalogResult.skills,
+        used_skills: commandSkills.used_skills,
+        ...(skillService ? { skill_service: skillService } : {}),
         model_context: this.options.model_context_provider({
           providerId: request.model_selection.provider_id,
           modelId: request.model_selection.model_id,
@@ -437,6 +451,11 @@ class DefaultAgentRunService implements AgentRunService {
       }));
       this.endRunObservability(run.run_id, 'error');
       queue.close();
+      if (wasWaitingForApproval) {
+        this.activeRunAbortControllers.delete(run.run_id);
+        this.activeRuns.release(run.run_id);
+        this.skillServicesByRun.delete(run.run_id);
+      }
       return { status: 'failed', failure, events: queue.snapshot() };
     }
     const cancelled = this.activeRuns.saveRun(transitionAgentRunStatus({
@@ -461,6 +480,7 @@ class DefaultAgentRunService implements AgentRunService {
     if (wasWaitingForApproval) {
       this.activeRunAbortControllers.delete(run.run_id);
       this.activeRuns.release(run.run_id);
+      this.skillServicesByRun.delete(run.run_id);
     }
     return { status: 'cancelled', run: cancelled, events };
   }
@@ -647,7 +667,10 @@ class DefaultAgentRunService implements AgentRunService {
       if (!afterExecution || afterExecution.status === 'cancelled') {
         this.activeRunAbortControllers.delete(run.run_id);
         queue.close();
-        if (afterExecution) this.activeRuns.release(run.run_id);
+        if (afterExecution) {
+          this.activeRuns.release(run.run_id);
+          this.skillServicesByRun.delete(run.run_id);
+        }
         return { status: 'not_waiting', run: afterExecution ?? resumedRun };
       }
       const toolFact = toolResultRuntimeFactFromExecution({
@@ -765,7 +788,9 @@ class DefaultAgentRunService implements AgentRunService {
       eventSink,
       run: deferred.run,
       current_turn: currentTurn,
-      activated_skills: continuation.activated_skills,
+      used_skills: continuation.used_skills,
+      skill_catalog: continuation.skill_catalog,
+      ...(this.skillServicesByRun.get(run.run_id) ? { skill_service: this.skillServicesByRun.get(run.run_id) } : {}),
       model_context: continuation.model_context,
       model_config: continuation.model_config,
       permission_mode: continuation.permission_mode,
@@ -876,6 +901,7 @@ class DefaultAgentRunService implements AgentRunService {
     const events = queue.snapshot();
     queue.close();
     this.activeRuns.release(run.run_id);
+    this.skillServicesByRun.delete(run.run_id);
     return { status: 'failed', failure, events };
   }
 
@@ -1032,7 +1058,9 @@ class DefaultAgentRunService implements AgentRunService {
     eventSink: AgentRunRuntimeEventFactory;
     run: AgentRun;
     current_turn: CurrentConversationTurn;
-    activated_skills: ActivatedSkillInstruction[];
+    skill_catalog: SkillCatalogItem[];
+    used_skills: UsedSkillContent[];
+    skill_service?: SkillService;
     model_context: ContextCapacity;
     model_config: ModelCallConfig;
     permission_mode: PermissionMode;
@@ -1053,6 +1081,7 @@ class DefaultAgentRunService implements AgentRunService {
           session_id: input.run.session_id,
           workspace_id: input.run.workspace_id,
           ...(input.workspace_root ? { workspace_root: input.workspace_root } : {}),
+          ...(input.skill_service ? { skill_service: input.skill_service } : {}),
         }),
         permission_service: this.options.permission_service,
         trace_logger: this.traceLogger,
@@ -1072,7 +1101,8 @@ class DefaultAgentRunService implements AgentRunService {
       }, {
         run: input.run,
         current_turn: input.current_turn,
-        activated_skills: input.activated_skills,
+        skill_catalog: input.skill_catalog,
+        used_skills: input.used_skills,
         model_context: input.model_context,
         model_config: input.model_config,
         permission_mode: input.permission_mode,
@@ -1156,6 +1186,7 @@ class DefaultAgentRunService implements AgentRunService {
       this.activeRunAbortControllers.delete(input.run.run_id);
       this.activeModelCallByRun.delete(input.run.run_id);
       if (!retainForApproval) this.activeRuns.release(input.run.run_id);
+      if (!retainForApproval) this.skillServicesByRun.delete(input.run.run_id);
       queueMicrotask(() => input.queue.close());
     }
   }
@@ -1272,6 +1303,7 @@ class DefaultAgentRunService implements AgentRunService {
     session_id: string;
     workspace_id: string;
     workspace_root?: string;
+    skill_service?: SkillService;
   }): Pick<ToolExecutionService, 'executeTool'> {
     if (this.options.tool_execution_service_factory) {
       return this.options.tool_execution_service_factory(input);
@@ -1300,47 +1332,39 @@ class DefaultAgentRunService implements AgentRunService {
   }
 
   private async resolveCommandSkills(input: {
-    command_result?: CommandExecutionResult;
-    session_id: string;
-    workspace_id: string;
-    run_id: string;
+    requested_skill?: SkillSelection;
+    skill_service?: SkillService;
   }): Promise<
-    | { status: 'ok'; activated_skills: ActivatedSkillInstruction[] }
+    | { status: 'ok'; used_skills: UsedSkillContent[] }
     | { status: 'failed'; failure: AgentRunFailure }
   > {
-    if (input.command_result?.type !== 'agent_run' || !input.command_result.input.requestedSkillActivation) {
-      return { status: 'ok', activated_skills: [] };
+    if (!input.requested_skill) {
+      return { status: 'ok', used_skills: [] };
     }
-    if (!this.options.skill_service) {
+    if (!input.skill_service) {
       return {
         status: 'failed',
         failure: {
           code: 'runtime_protocol_violation',
-          message: 'Skill Service is not configured for skill command activation.',
+          message: 'Skill Service is not configured for the requested Skill.',
         },
       };
     }
 
-    const activation = await this.options.skill_service.activateSkill({
-      skillId: input.command_result.input.requestedSkillActivation.skillId,
-      sessionId: input.session_id,
-      workspaceId: input.workspace_id,
-      runId: input.run_id,
-      trigger: 'command',
-    });
-    if (activation.status === 'ok') {
+    const used = await input.skill_service.useSkill({ skillPath: input.requested_skill.skillPath });
+    if (used.status === 'ok') {
       return {
         status: 'ok',
-        activated_skills: [activatedSkillToInstruction(activation.activatedSkill)],
+        used_skills: [usedSkillContent(used.skill)],
       };
     }
     return {
       status: 'failed',
       failure: {
         code: 'runtime_protocol_violation',
-        message: activation.status === 'failed'
-          ? activation.message
-          : `Skill ${activation.skillId} is ${activation.status === 'not_found' ? 'not found' : 'unavailable'}.`,
+        message: used.status === 'failed'
+          ? used.message
+          : `Skill ${used.skillPath} is ${used.status === 'not_found' ? 'not found' : 'unavailable'}.`,
       },
     };
   }
@@ -1614,10 +1638,10 @@ function toolResultRuntimeFactFromExecution(input: {
   };
 }
 
-function activatedSkillToInstruction(skill: ActivatedSkillContent): ActivatedSkillInstruction {
+function usedSkillContent(skill: UsedSkillContent): UsedSkillContent {
   return {
-    skillId: skill.skillId,
     name: skill.name,
+    skillPath: skill.skillPath,
     content: skill.content,
   };
 }

@@ -15,7 +15,7 @@ describe('tool definitions', () => {
       'edit_file',
       'write_file',
       'run_command',
-      'activate_skill',
+      'use_skill',
       'web_search',
       'web_fetch',
     ]);

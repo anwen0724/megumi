@@ -1,7 +1,7 @@
 /*
  * Converts prepared Skill script requests into Tool module command inputs.
  */
-import type { SkillScriptExecutionRequest } from '../../skills';
+import type { SkillScriptExecutionRequest } from '@megumi/skills';
 import type { JsonObject } from '../../shared-json';
 
 export type RunCommandToolInput = {
@@ -23,12 +23,9 @@ export function mapSkillScriptExecutionRequestToRunCommandInput(
     cwd: '.',
     metadata: {
       source: 'skill',
-      skillId: request.skillId,
+      skillPath: request.skillPath,
       scriptName: request.scriptName,
       approvalSummary: request.approvalSummary,
-      ...(request.runId ? { runId: request.runId } : {}),
-      workspaceId: request.workspaceId,
-      sessionId: request.sessionId,
     },
   };
 }

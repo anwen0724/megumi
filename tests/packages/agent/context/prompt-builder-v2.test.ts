@@ -9,8 +9,9 @@ describe('buildPrompt', () => {
   it('renders a historical Tool Call without Result as ordinary ordered Context', () => {
     const activeContext = {
       sessionId: 'session-1',
-      instructions: { system: [], agentInstructions: { sources: [] }, activatedSkills: [] },
+      instructions: { system: [], agentInstructions: { sources: [] } },
       referenceContext: { skillCatalog: [] },
+      runContext: { skills: [] },
       historicalTurns: [{
         source: { runId: 'run-old', userEntryId: 'EU', userMessageId: 'MU', lastEntryId: 'EA', responseMessageRefs: [] },
         userMessage: { type: 'user_message' as const, content: [{ type: 'text' as const, text: 'Create a file' }] },
@@ -39,9 +40,11 @@ describe('buildPrompt', () => {
       instructions: {
         system: [{ instructionId: 'system-1', content: 'System rule' }],
         agentInstructions: { sources: [] },
-        activatedSkills: [],
       },
       referenceContext: { skillCatalog: [] },
+      runContext: {
+        skills: [{ name: 'Review', skillPath: 'C:/review/SKILL.md', content: 'Review carefully.' }],
+      },
       historicalTurns: [{
         source: {
           runId: 'run-history',
@@ -77,7 +80,8 @@ describe('buildPrompt', () => {
 
     const prompt = buildPrompt(activeContext);
 
-    expect(Object.keys(prompt)).toEqual(['instructions', 'referenceContext', 'conversation', 'tools']);
+    expect(Object.keys(prompt)).toEqual(['instructions', 'referenceContext', 'runContext', 'conversation', 'tools']);
+    expect(prompt.runContext.skills).toEqual(activeContext.runContext.skills);
     expect(prompt.conversation).toEqual([
       activeContext.historicalTurns[0].userMessage,
       { type: 'tool_call', toolCallId: 'call-1', toolName: 'lookup', arguments: { id: 1 } },

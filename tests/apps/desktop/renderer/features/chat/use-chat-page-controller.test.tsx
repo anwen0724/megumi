@@ -207,6 +207,46 @@ describe('useChatPageController', () => {
     expect(result.current.contextUsage).toEqual({ status: 'not_available' });
     expect(window.megumi.session.contextUsage.get).toHaveBeenCalledTimes(2);
   });
+
+  it('activates and persists the workspace selected for a new session', async () => {
+    const secondProject = {
+      id: 'project-2', projectId: 'project-2', name: 'Math', repoPath: 'C:/math',
+      repoPathKey: 'math-key', status: 'available' as const, createdAt, lastOpenedAt: createdAt,
+    };
+    useProjectStore.setState((state) => ({ projects: [...state.projects, secondProject] }));
+    Object.assign(window.megumi, {
+      project: {
+        open: vi.fn().mockResolvedValue({
+          ok: true,
+          data: {
+            status: 'activated',
+            project: {
+              projectId: secondProject.id,
+              name: secondProject.name,
+              rootPath: secondProject.repoPath,
+              status: secondProject.status,
+              createdAt,
+              lastOpenedAt: '2026-07-20T01:00:00.000Z',
+            },
+          },
+        }),
+      },
+    });
+    const { result } = renderHook(() => useChatPageController());
+
+    await act(async () => {
+      await result.current.switchNewSessionProject(secondProject.id);
+    });
+
+    expect(window.megumi.project.open).toHaveBeenCalledWith(expect.objectContaining({
+      payload: { projectId: secondProject.id },
+    }));
+    expect(useProjectStore.getState().currentProjectId).toBe(secondProject.id);
+    expect(useSessionStore.getState()).toMatchObject({
+      activeSessionId: null,
+      newSessionDraftTargetProjectId: secondProject.id,
+    });
+  });
 });
 
 function contextUsageResponseMeta() {

@@ -40,7 +40,6 @@ function fixture(counts: number[], options: { history?: SessionHistoryItem[]; hi
     },
     instructionScopeResolver: { resolve: vi.fn(() => ({ status: 'resolved', workspaceRoot: '/w', workingDirectory: '/w' })) },
     instructionService: { getSystemInstructions: vi.fn(() => []), getEffectiveAgentInstructions: vi.fn(async () => ({ status: 'ok', instructions: { sources: [] } })) },
-    skillService: { getSkillCatalog: vi.fn(async () => ({ status: 'ok', skills: [] })) },
     promptTokenCounter: { count: vi.fn(async () => ({ status: 'counted', inputTokens: queue.shift() ?? counts.at(-1) ?? 0, accuracy: 'estimated' })) },
     summaryModelCall: { complete: vi.fn(async () => ({ status: 'completed', content: 'short' })) },
     usageSnapshotCache: new Map(), ids: { preparationId: () => 'P1', compactionId: () => 'C1' }, clock: { now: () => 'now' },
@@ -51,7 +50,7 @@ function fixture(counts: number[], options: { history?: SessionHistoryItem[]; hi
 
 const modelContext = { providerId: 'p', modelId: 'm', contextWindowTokens: 100 };
 const currentTurn = { runId: 'R-current', userEntry: { entryId: 'EC', parentEntryId: 'EA' }, userMessage: { type: 'user_message' as const, content: [{ type: 'text' as const, text: 'now' }] }, runItems: [] };
-const request = { sessionId: 'S1', workspaceId: 'W1', currentTurn, activatedSkills: [], tools: [], modelContext, imageInputSupport: true as const };
+const request = { sessionId: 'S1', workspaceId: 'W1', currentTurn, skillCatalog: [], usedSkills: [], tools: [], modelContext, imageInputSupport: true as const };
 
 describe('ContextServiceImpl compaction', () => {
   it('defaults to retaining three completed Turns and summarizes every older Turn', async () => {

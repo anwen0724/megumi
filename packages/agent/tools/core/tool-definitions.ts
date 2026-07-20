@@ -9,7 +9,7 @@ export const BUILT_IN_TOOL_NAMES = [
   'edit_file',
   'write_file',
   'run_command',
-  'activate_skill',
+  'use_skill',
   'web_search',
   'web_fetch',
 ] as const;
@@ -282,26 +282,27 @@ const runCommandDefinition: ToolDefinition = {
   modelFacingDescription: 'Run a project-scoped command through the host command adapter and return redacted output previews.',
 };
 
-const activateSkillDefinition: ToolDefinition = {
-  name: 'activate_skill',
-  title: 'Activate skill',
-  description: 'Activate a skill by skillId when the current task needs it.',
+const useSkillDefinition: ToolDefinition = {
+  name: 'use_skill',
+  title: 'Use skill',
+  description: 'Load a skill by its exact skillPath when the current task needs it.',
   inputSchema: {
     type: 'object',
     properties: {
-      skillId: { type: 'string', description: 'Exact skillId from the available skill catalog.' },
+      skillPath: { type: 'string', description: 'Exact skillPath from the available skill catalog.' },
     },
-    required: ['skillId'],
+    required: ['skillPath'],
     additionalProperties: false,
   },
   outputSchema: {
     type: 'object',
     properties: {
-      activated: { type: 'boolean' },
-      skillId: { type: 'string' },
+      used: { type: 'boolean' },
+      name: { type: 'string' },
+      skillPath: { type: 'string' },
       message: { type: 'string' },
     },
-    required: ['activated', 'skillId', 'message'],
+    required: ['used', 'name', 'skillPath', 'message'],
   },
   annotations: { readOnlyHint: true, idempotentHint: false, openWorldHint: false },
   capabilities: ['project_read'],
@@ -309,8 +310,8 @@ const activateSkillDefinition: ToolDefinition = {
   sideEffect: 'none',
   availability: { status: 'available' },
   executionMode: 'serial',
-  permissionMetadata: { ruleToolName: 'activate_skill' },
-  modelFacingDescription: 'Activate a skill by exact skillId from the available skill catalog.',
+  permissionMetadata: { ruleToolName: 'use_skill' },
+  modelFacingDescription: 'Load a skill by exact skillPath from the available skill catalog.',
 };
 
 const webSearchDefinition: ToolDefinition = {
@@ -424,7 +425,7 @@ export const BUILT_IN_TOOL_DEFINITIONS: readonly ToolDefinition[] = deepFreeze([
   editFileDefinition,
   writeFileDefinition,
   runCommandDefinition,
-  activateSkillDefinition,
+  useSkillDefinition,
   webSearchDefinition,
   webFetchDefinition,
 ] satisfies ToolDefinition[]);

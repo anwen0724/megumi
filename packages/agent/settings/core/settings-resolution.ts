@@ -45,6 +45,7 @@ export function resolveSettings(raw: unknown): SettingsResolved {
             ...definedObject(parsed.context),
           }
         : undefined,
+      model_selection: parsed.model_selection,
       web: parsed.web
         ? {
             search: resolveNullableWebSearchSettings(parsed.web.search ?? {}),
@@ -89,6 +90,7 @@ export function mergeRawSettings(current: SettingsRaw, patch: SettingsRaw): Sett
             ...definedObject(patchParsed.context),
           }
         : undefined,
+      model_selection: patchParsed.model_selection,
       web: patchParsed.web
         ? {
             ...(currentParsed.web ?? {}),

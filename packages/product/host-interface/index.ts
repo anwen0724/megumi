@@ -47,10 +47,13 @@ export type {
 } from './chat-host';
 export type {
   DisableSkillUiResponse,
+  DeleteSkillUiResponse,
   EnableSkillUiResponse,
   GetSkillDetailUiResponse,
   ListSkillsUiResponse,
+  SkillDetailUiDto,
   SkillHost,
+  SkillListUiItem,
 } from './skill-host';
 export type {
   AppLanguage,
@@ -154,10 +157,12 @@ export {
   SkillGetPayloadSchema,
   SkillEnablePayloadSchema,
   SkillDisablePayloadSchema,
+  SkillDeletePayloadSchema,
   ListSkillsUiResponseSchema,
   GetSkillDetailUiResponseSchema,
   EnableSkillUiResponseSchema,
   DisableSkillUiResponseSchema,
+  DeleteSkillUiResponseSchema,
 } from './skill-host';
 export {
   SettingsGetPayloadSchema,

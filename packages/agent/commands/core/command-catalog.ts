@@ -170,6 +170,9 @@ function createSuggestion(
     match,
     completion: {
       replacement_input: command.suggestion?.replacement_input ?? `/${command.name} `,
+      ...(command.source.kind === 'skill' ? {
+        selection: { type: 'skill' as const, name: command.source.name, skillPath: command.source.skillPath },
+      } : {}),
     },
   };
 }

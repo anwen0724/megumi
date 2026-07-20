@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { usePermissionModeStore } from '@megumi/desktop/renderer/entities/permission-mode';
+import { useModelSelectionStore } from '@megumi/desktop/renderer/entities/model-selection';
 import { Composer } from '@megumi/desktop/renderer/features/chat/components/Composer';
 import type { ComposerProps } from '@megumi/desktop/renderer/features/chat/components/composer-types';
 import type { ProviderPublicStatusUiDto } from '@megumi/product/host-interface';
@@ -72,16 +73,22 @@ function setTextareaScrollHeight(textarea: HTMLElement, scrollHeight: number) {
   });
 }
 
+async function chooseComposerOption(controlLabel: 'Permission mode' | 'Model', optionName: string | RegExp) {
+  await userEvent.click(screen.getByRole('button', { name: controlLabel }));
+  await userEvent.click(screen.getByRole('option', { name: optionName }));
+}
+
 describe('Composer', () => {
   beforeEach(() => {
     usePermissionModeStore.setState({ mode: 'ask' });
+    useModelSelectionStore.setState(useModelSelectionStore.getInitialState(), true);
   });
 
   it('renders permission mode, model, context usage, attachment, and disabled send controls', () => {
     render(<TestComposer onSubmit={() => undefined} />);
 
-    expect(screen.getByLabelText('Permission mode')).toHaveValue('ask');
-    expect(screen.getByLabelText('Model')).toHaveValue('deepseek:deepseek-v4-flash');
+    expect(screen.getByLabelText('Permission mode')).toHaveAttribute('value', 'ask');
+    expect(screen.getByLabelText('Model')).toHaveAttribute('value', 'deepseek:deepseek-v4-flash');
     expect(screen.getByRole('button', { name: 'Attach images' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Choose context' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Context usage')).toBeInTheDocument();
@@ -131,8 +138,8 @@ describe('Composer', () => {
     const onSubmit = vi.fn();
     render(<TestComposer onSubmit={onSubmit} />);
 
-    await userEvent.selectOptions(screen.getByLabelText('Permission mode'), 'auto');
-    await userEvent.selectOptions(screen.getByLabelText('Model'), 'deepseek:deepseek-v4-pro');
+    await chooseComposerOption('Permission mode', 'Approve for me');
+    await chooseComposerOption('Model', /deepseek-v4-pro/);
     await userEvent.type(screen.getByLabelText('Message Megumi'), '  hello Megumi  ');
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
 
@@ -145,11 +152,12 @@ describe('Composer', () => {
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('');
   });
 
-  it('offers exactly the Agent Action Permission modes', () => {
+  it('offers exactly the Agent Action Permission modes', async () => {
     render(<TestComposer onSubmit={() => undefined} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Permission mode' }));
 
     expect(
-      Array.from(screen.getByLabelText('Permission mode').querySelectorAll('option')).map((option) => [
+      screen.getAllByRole('option').map((option) => [
         option.getAttribute('value'),
         option.textContent,
       ]),
@@ -349,30 +357,40 @@ describe('Composer', () => {
     expect(screen.getByRole('button', { name: 'Send message' })).not.toHaveTextContent('Send');
   });
 
-  it('themes native select dropdown options for dark and light themes', () => {
+  it('keeps the selected provider and model when the Composer remounts', async () => {
+    const first = render(<TestComposer onSubmit={() => undefined} />);
+    await chooseComposerOption('Model', /deepseek-v4-pro/);
+
+    expect(useModelSelectionStore.getState().selection).toEqual({
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-pro',
+    });
+
+    first.unmount();
     render(<TestComposer onSubmit={() => undefined} />);
-
-    for (const option of screen.getByLabelText('Permission mode').querySelectorAll('option')) {
-      expect(option).toHaveClass('bg-[var(--color-surface-elevated)]');
-      expect(option).toHaveClass('text-[var(--color-text)]');
-    }
-
-    for (const option of screen.getByLabelText('Model').querySelectorAll('option')) {
-      expect(option).toHaveClass('bg-[var(--color-surface-elevated)]');
-      expect(option).toHaveClass('text-[var(--color-text)]');
-    }
+    expect(screen.getByLabelText('Model')).toHaveAttribute('value', 'deepseek:deepseek-v4-pro');
   });
 
-  it('hides models whose providers are disabled', () => {
+  it('renders a theme-aware popup with a strongly highlighted selected option', async () => {
+    render(<TestComposer onSubmit={() => undefined} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Permission mode' }));
+    expect(screen.getByRole('listbox', { name: 'Permission mode' })).toHaveClass('bg-[var(--color-surface-elevated)]');
+    expect(screen.getByRole('option', { name: 'Ask for approval' })).toHaveClass('bg-[var(--color-accent)]');
+    expect(screen.getByRole('option', { name: 'Ask for approval' })).toHaveClass('text-[var(--color-accent-foreground)]');
+  });
+
+  it('hides models whose providers are disabled', async () => {
     render(<TestComposer providers={deepseekOnlyProviders} onSubmit={() => undefined} />);
 
-    const modelOptions = Array.from(screen.getByLabelText('Model').querySelectorAll('option'));
+    await userEvent.click(screen.getByRole('button', { name: 'Model' }));
+    const modelOptions = screen.getAllByRole('option');
 
     expect(modelOptions.map((option) => option.getAttribute('value'))).toEqual([
       'deepseek:deepseek-v4-flash',
       'deepseek:deepseek-v4-pro',
     ]);
-    expect(screen.queryByRole('option', { name: 'gpt-5.5' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /gpt-5.5/ })).not.toBeInTheDocument();
   });
 
   it('falls back when the selected model provider becomes disabled', async () => {
@@ -380,14 +398,15 @@ describe('Composer', () => {
       <TestComposer onSubmit={() => undefined} />,
     );
 
-    await userEvent.selectOptions(screen.getByLabelText('Model'), 'openai:gpt-5.5');
+    await chooseComposerOption('Model', /gpt-5.5/);
 
-    expect(screen.getByLabelText('Model')).toHaveValue('openai:gpt-5.5');
+    expect(screen.getByLabelText('Model')).toHaveAttribute('value', 'openai:gpt-5.5');
 
     rerender(<TestComposer providers={deepseekOnlyProviders} onSubmit={() => undefined} />);
 
-    expect(screen.getByLabelText('Model')).toHaveValue('deepseek:deepseek-v4-flash');
-    expect(screen.queryByRole('option', { name: 'gpt-5.5' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Model')).toHaveAttribute('value', 'deepseek:deepseek-v4-flash');
+    await userEvent.click(screen.getByRole('button', { name: 'Model' }));
+    expect(screen.queryByRole('option', { name: /gpt-5.5/ })).not.toBeInTheDocument();
   });
 
   it('keeps slash prefixes as ordinary drafts until a trusted command catalog is wired in', async () => {
@@ -497,7 +516,7 @@ describe('Composer', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it('shows the selected skill command name while submitting the stable skill command input', async () => {
+  it('shows the selected Skill name and submits task text with an exact Skill selection', async () => {
     const onSubmit = vi.fn();
     render(<TestComposer
       onSubmit={onSubmit}
@@ -511,14 +530,15 @@ describe('Composer', () => {
           items: [{
             name: 'test',
             description: 'Run project checks',
-            source: { kind: 'skill', skill_id: 'checks:test' },
+            source: { kind: 'skill', name: 'test', skillPath: 'C:/user/checks/SKILL.md' },
             display: {
               primary: 'test',
-              secondary: 'checks:test - Run project checks',
-              badge: 'Project',
+              secondary: 'Run project checks',
+              badge: 'User',
             },
             match: { field: 'name', value: 'test', prefix: 'te' },
-            displayInput: '/test ', submitInput: '/skill checks:test ',
+            displayInput: '/test ', submitInput: '',
+            selection: { type: 'skill', name: 'test', skillPath: 'C:/user/checks/SKILL.md' },
           }],
         }],
       })}
@@ -537,7 +557,8 @@ describe('Composer', () => {
     await userEvent.keyboard('{Enter}');
 
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-      message: '/skill checks:test --watch',
+      message: '--watch',
+      skillSelection: { type: 'skill', name: 'test', skillPath: 'C:/user/checks/SKILL.md' },
     }));
   });
 
@@ -589,14 +610,15 @@ describe('Composer', () => {
             items: [{
               name: 'test',
               description: 'Run project checks',
-              source: { kind: 'skill', skill_id: 'checks:test' },
+              source: { kind: 'skill', name: 'test', skillPath: 'C:/user/checks/SKILL.md' },
               display: {
                 primary: 'test',
-                secondary: 'checks:test - Run project checks',
-                badge: 'Project',
+                secondary: 'Run project checks',
+                badge: 'User',
               },
               match: { field: 'name', value: 'test', prefix: draft_input.slice(1) },
-              displayInput: '/test ', submitInput: '/skill checks:test ',
+              displayInput: '/test ', submitInput: '',
+              selection: { type: 'skill', name: 'test', skillPath: 'C:/user/checks/SKILL.md' },
             }],
           }],
         };
@@ -856,14 +878,14 @@ describe('Composer', () => {
     expect(screen.queryByText('Megumi is working')).not.toBeInTheDocument();
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), 'continue');
-    await userEvent.selectOptions(screen.getByLabelText('Model'), 'deepseek:deepseek-v4-pro');
+    await chooseComposerOption('Model', /deepseek-v4-pro/);
     await userEvent.keyboard('{Enter}');
     await userEvent.click(screen.getByRole('button', { name: 'Stop current run' }));
 
     const rightControls = screen.getByTestId('composer-actions');
 
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('continue');
-    expect(screen.getByLabelText('Model')).toHaveValue('deepseek:deepseek-v4-pro');
+    expect(screen.getByLabelText('Model')).toHaveAttribute('value', 'deepseek:deepseek-v4-pro');
     expect(rightControls).toHaveTextContent('Ask for approval');
     expect(rightControls).toHaveTextContent('deepseek-v4-pro');
     expect(rightControls.lastElementChild).toBe(screen.getByRole('button', { name: 'Stop current run' }));
@@ -939,7 +961,7 @@ describe('Composer', () => {
       />,
     );
 
-    await userEvent.selectOptions(screen.getByLabelText('Model'), 'deepseek:deepseek-v4-flash');
+    await chooseComposerOption('Model', /deepseek-v4-flash/);
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
 
     expect(onSubmit).not.toHaveBeenCalled();
@@ -955,7 +977,7 @@ describe('Composer', () => {
       />,
     );
 
-    await userEvent.selectOptions(screen.getByLabelText('Model'), 'deepseek:deepseek-v4-flash');
+    await chooseComposerOption('Model', /deepseek-v4-flash/);
     await userEvent.type(screen.getByLabelText('Message Megumi'), 'try again normally');
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
 

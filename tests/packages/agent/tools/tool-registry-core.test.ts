@@ -38,7 +38,7 @@ describe('tool registry core', () => {
       'edit_file',
       'write_file',
       'run_command',
-      'activate_skill',
+      'use_skill',
       'web_search',
       'web_fetch',
     ]);
@@ -64,7 +64,7 @@ describe('tool registry core', () => {
       'edit_file',
       'write_file',
       'run_command',
-      'activate_skill',
+      'use_skill',
       'web_search',
       'web_fetch',
     ]);

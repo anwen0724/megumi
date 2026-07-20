@@ -9,7 +9,6 @@ export * as context from './context';
 export * from './hooks';
 export * from './tools';
 export * as permissions from './permissions';
-export * as skills from './skills';
 export * from './memory';
 export * from './artifacts';
 export * from './workspace';

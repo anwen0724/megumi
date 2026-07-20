@@ -2,7 +2,7 @@
  * Defines the provider-neutral prompt, its semantic partitions, and preparation trace.
  */
 import type { ContentBlock, ConversationItem, ToolSetEntry } from '@megumi/ai';
-import type { SkillCatalogItem } from '../../../skills/domain/dto/context/skill-context-response';
+import type { SkillCatalogItem, UsedSkillContent } from '@megumi/skills';
 import type { CompactionResultRef } from './compaction';
 import type { ContextUsage } from './context-usage';
 
@@ -21,17 +21,12 @@ export type EffectiveAgentInstructions = {
   sources: AgentInstructionSource[];
 };
 
-export type ActivatedSkillInstruction = {
-  skillId: string;
-  name: string;
-  content: string;
-};
-
 export type PromptInstructions = {
   system: SystemInstruction[];
   agentInstructions: EffectiveAgentInstructions;
-  activatedSkills: ActivatedSkillInstruction[];
 };
+
+export type PromptRunContext = { skills: UsedSkillContent[] };
 
 export type VisibleCompactionSummary = {
   compactionId: string;
@@ -57,6 +52,7 @@ export type PromptReferenceContext = {
 export type Prompt = {
   instructions: PromptInstructions;
   referenceContext: PromptReferenceContext;
+  runContext: PromptRunContext;
   conversation: ConversationItem[];
   tools: ToolSetEntry[];
 };
@@ -66,7 +62,7 @@ export type ContextSourceRef = {
     | 'system_instruction'
     | 'agent_instruction'
     | 'skill_catalog'
-    | 'activated_skill'
+    | 'used_skill'
     | 'compaction_summary'
     | 'session_message'
     | 'current_run_item'

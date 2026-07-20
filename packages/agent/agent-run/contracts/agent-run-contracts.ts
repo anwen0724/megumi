@@ -4,6 +4,7 @@
  */
 import type { CommandAgentRunInput, HostInteractionRequest } from '../../commands';
 import type { RawUserInput } from '../../input';
+import type { SkillSelection } from '@megumi/skills';
 import type { ApprovalDecision, ApprovalOption, PermissionMode } from '../../permissions';
 import type { ProviderRuntimeConfig } from '../../settings';
 import type { RuntimeEvent } from '../../events';
@@ -133,6 +134,7 @@ export type StartRunRequest = {
     | { type: 'new'; title?: string };
   branch_marker_id?: string;
   user_input: RawUserInput;
+  skill_selection?: SkillSelection;
   model_selection: AgentRunModelSelection;
   permission_mode?: PermissionMode;
 };

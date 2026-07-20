@@ -27,6 +27,7 @@ import type {
   SettingsUpdatePayload,
   SettingsUpdateUiResult,
   DisableSkillUiResponse,
+  DeleteSkillUiResponse,
   EnableSkillUiResponse,
   GetSkillDetailUiResponse,
   ListSkillsUiResponse,
@@ -67,6 +68,7 @@ import type {
   RunEventsListPayload,
   RunListBySessionPayload,
   SkillDisablePayload,
+  SkillDeletePayload,
   SkillEnablePayload,
   SkillGetPayload,
   SkillListPayload,
@@ -204,6 +206,10 @@ export const api = {
       request: BusinessRequest<SkillDisablePayload, typeof IPC_CHANNELS.skill.disable>,
     ): Promise<RuntimeIpcResult<DisableSkillUiResponse, typeof IPC_CHANNELS.skill.disable>> =>
       invokeRuntimeIpc(IPC_CHANNELS.skill.disable, request),
+    delete: (
+      request: BusinessRequest<SkillDeletePayload, typeof IPC_CHANNELS.skill.delete>,
+    ): Promise<RuntimeIpcResult<DeleteSkillUiResponse, typeof IPC_CHANNELS.skill.delete>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.skill.delete, request),
   },
   session: {
     create: (

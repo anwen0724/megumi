@@ -33,7 +33,7 @@ describe('RequestTokenCounter', () => {
         { role: 'system', content: 'Instructions' },
         {
           role: 'user',
-          content: '{"type":"reference_context","kind":"skill_catalog","content":[{"skillId":"skill-1","description":"Catalog entry"}]}',
+          content: '{"type":"reference_context","kind":"skill_catalog","content":[{"name":"skill-1","description":"Catalog entry","skillPath":"C:/skills/skill-1/SKILL.md"}]}',
         },
         {
           role: 'user',
@@ -97,7 +97,7 @@ function completeRequest(): AiCallRequest {
         {
           role: 'context',
           kind: 'skill_catalog',
-          content: [{ skillId: 'skill-1', description: 'Catalog entry' }],
+          content: [{ name: 'skill-1', description: 'Catalog entry', skillPath: 'C:/skills/skill-1/SKILL.md' }],
         },
         {
           role: 'context',

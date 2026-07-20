@@ -15,6 +15,7 @@ import {
 
 export const ContextMessageKindSchema = z.enum([
     'skill_catalog',
+    'skill',
     'compaction_summary',
     'memory_recall',
     'historical_run_state',

@@ -2,10 +2,11 @@
  * Defines the stable Command system contracts shared by command definitions,
  * catalog registration, service execution, and input result routing.
  */
+import type { SkillSelection, SkillService } from '@megumi/skills';
 
 export type CommandSource =
   | { kind: 'built_in' }
-  | { kind: 'skill'; skill_id: string };
+  | { kind: 'skill'; name: string; skillPath: string };
 
 export type CommandDefinition = {
   name: string;
@@ -41,6 +42,7 @@ export type CommandExecutionContext = {
   image_input_support?: import('@megumi/ai').AiModelSupportLevel;
   services?: {
     context?: Pick<import('../../context').ContextService, 'compactSession'>;
+    skills?: Pick<SkillService, 'listSkills'>;
   };
 };
 
@@ -59,10 +61,7 @@ export type CommandExecutionResult =
 
 export type CommandAgentRunInput = {
   raw_input: string;
-  requestedSkillActivation?: {
-    skillId: string;
-    trigger: 'command';
-  };
+  requestedSkill?: SkillSelection;
   command: {
     name: string;
     source: CommandSource;
@@ -116,5 +115,6 @@ export type CommandSuggestionItem = {
   };
   completion: {
     replacement_input: string;
+    selection?: SkillSelection;
   };
 };

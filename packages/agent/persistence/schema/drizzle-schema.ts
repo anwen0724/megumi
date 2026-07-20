@@ -123,13 +123,11 @@ export const workspaceChangedFiles = sqliteTable('workspace_changed_files', {
 
 export const skillAvailability = sqliteTable('skill_availability', {
   skillAvailabilityId: text('skill_availability_id').primaryKey(),
-  skillId: text('skill_id').notNull(),
-  workspaceId: text('workspace_id'),
+  skillPath: text('skill_path').notNull(),
   available: integer('available').notNull(),
-  createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 }, (table) => [
-  uniqueIndex('idx_skill_availability_skill_workspace').on(table.skillId, table.workspaceId),
+  uniqueIndex('idx_skill_availability_path').on(table.skillPath),
 ]);
 
 export const memoryRecords = sqliteTable('memory_records', {

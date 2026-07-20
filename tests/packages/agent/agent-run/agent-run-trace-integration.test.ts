@@ -103,7 +103,6 @@ describe('Agent Run trace integration', () => {
             agentInstructions: {
               sources: [{ sourceId: 'agents-1', sourcePath: 'AGENTS.md', content: secrets.agents }],
             },
-            activatedSkills: [],
           },
           referenceContext: {
             skillCatalog: [],
@@ -112,6 +111,7 @@ describe('Agent Run trace integration', () => {
               items: [{ memoryId: 'memory-1', content: [{ type: 'text' as const, text: secrets.memory }] }],
             },
           },
+          runContext: { skills: [] },
           conversation: [
             { type: 'user_message' as const, content: [{ type: 'text' as const, text: secrets.user }] },
             {
@@ -191,6 +191,23 @@ describe('Agent Run trace integration', () => {
   it('records tool calls, tool execution, runtime source continuation, and loop counters', async () => {
     const records: AgentRunTraceRecordInput[] = [];
     const deps = createMessageFlowDependencies();
+    deps.tool_execution_service.executeTool = vi.fn(async (request) => ({
+      type: 'succeeded' as const,
+      toolName: request.toolName,
+      rawResult: {
+        outputKind: 'text' as const,
+        content: 'loaded',
+      },
+      runtimeSources: [{
+        source_id: 'source:review',
+        source_kind: 'skill',
+        text: 'Review carefully.',
+        persisted: false,
+        metadata: { name: 'review', skillPath: 'C:/skills/review/SKILL.md' },
+      }],
+      normalizedResult: { kind: 'text' as const, content: 'loaded', isError: false, truncated: false },
+      toolExecutionObservation: { summary: 'loaded' },
+    }));
     let modelCallIndex = 0;
     deps.model_call_service.modelCall = vi.fn(() => {
       modelCallIndex += 1;
@@ -244,6 +261,14 @@ describe('Agent Run trace integration', () => {
     expect(result.status).toBe('started');
     if (result.status !== 'started') return;
     await collectEvents(result.events);
+
+    expect(deps.context_service.prepareModelCall).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      usedSkills: [{
+        name: 'review',
+        skillPath: 'C:/skills/review/SKILL.md',
+        content: 'Review carefully.',
+      }],
+    }));
 
     expect(records).toEqual(expect.arrayContaining([
       expect.objectContaining({

@@ -41,7 +41,7 @@ export const persistenceTableOwnership = {
   skill: {
     module: 'skills',
     repository: 'SkillRepository',
-    modulePath: 'packages/agent/skills',
+    modulePath: 'packages/skills',
     tables: [
       'skill_availability',
     ],

@@ -39,7 +39,6 @@ export function composeAgentContext(input: ComposeAgentContextInput): {
     sessionService: input.sessionService,
     instructionScopeResolver: input.instructionScopeResolver,
     instructionService: input.instructionService,
-    skillService: input.skillService,
     usageSnapshotCache: cache,
     ...(input.isRunLive ? { isRunLive: input.isRunLive } : {}),
     ...(input.observability ? { observability: input.observability } : {}),

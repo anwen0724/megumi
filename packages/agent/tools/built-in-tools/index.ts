@@ -3,8 +3,8 @@
  */
 import { spawn as nodeSpawn } from 'node:child_process';
 import type { RawToolResult } from '../contracts/tool-contracts';
-import type { SkillService } from '../../skills';
-import { executeActivateSkill } from './activate-skill';
+import type { SkillService } from '@megumi/skills';
+import { executeUseSkill } from './use-skill';
 import { executeEditFile } from './edit-file';
 import { executeGlob } from './glob';
 import { executeListDirectory } from './list-directory';
@@ -29,14 +29,9 @@ export interface BuiltInToolExecutor {
 export function createBuiltInToolExecutor(input: {
   workspaceFileAccess: WorkspaceFileAccess;
   spawn?: BuiltInToolSpawn;
-  skillService?: Pick<SkillService, 'activateSkill'>;
+  skillService?: Pick<SkillService, 'useSkill'>;
   webSearchService?: WebSearchService;
   webFetchService?: WebFetchService;
-  runContext?: {
-    runId: string;
-    sessionId: string;
-    workspaceId?: string;
-  };
 }): BuiltInToolExecutor {
   const context: BuiltInToolContext = {
     workspaceFileAccess: input.workspaceFileAccess,
@@ -44,7 +39,6 @@ export function createBuiltInToolExecutor(input: {
     skillService: input.skillService,
     webSearchService: input.webSearchService,
     webFetchService: input.webFetchService ?? createWebFetchService(),
-    runContext: input.runContext,
   };
 
   return {
@@ -64,8 +58,8 @@ export function createBuiltInToolExecutor(input: {
           return executeWriteFile(context, request.input);
         case 'run_command':
           return executeRunCommand(context, request.input, request.signal);
-        case 'activate_skill':
-          return executeActivateSkill(context, request.input);
+        case 'use_skill':
+          return executeUseSkill(context, request.input);
         case 'web_search':
           return executeWebSearch(context, request.input, request.signal);
         case 'web_fetch':

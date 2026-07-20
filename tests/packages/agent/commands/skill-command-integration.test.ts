@@ -2,151 +2,51 @@ import { describe, expect, it } from 'vitest';
 import { createCommandService } from '@megumi/agent/commands';
 
 describe('skill command integration', () => {
-  it('routes explicit /skill commands to agent_run with requested activation', async () => {
+  it('returns an exact path selection from slash suggestions without encoding it in text', async () => {
+    const skillPath = 'C:/workspace/.megumi/skills/checks/SKILL.md';
     const service = createCommandService({
-      skills: [{
-        skillId: 'checks:test',
-        commandName: 'test',
-        skillName: 'checks:test',
-        description: 'Run project checks',
-        sourceLabel: 'Project',
-      }],
+      skills: [{ name: 'checks', skillPath, description: 'Run project checks', sourceLabel: 'User' }],
     });
 
-    await expect(service.handleCommandInput({
-      raw_input: '/skill checks:test --watch',
-    })).resolves.toEqual({
-      type: 'agent_run',
-      input: {
-        raw_input: '/skill checks:test --watch',
-        requestedSkillActivation: {
-          skillId: 'checks:test',
-          trigger: 'command',
-        },
-        command: {
-          name: 'skill',
-          source: { kind: 'skill', skill_id: 'checks:test' },
-          arguments_input: '--watch',
-        },
-      },
-    });
-  });
-
-  it('rejects /skill without a skillId', async () => {
-    const service = createCommandService();
-
-    await expect(service.handleCommandInput({ raw_input: '/skill' })).resolves.toEqual({
-      type: 'error',
-      message: 'Usage: /skill <skillId> [args]',
-    });
-  });
-
-  it('keeps the stable /skill command hidden from suggestions', async () => {
-    const service = createCommandService({
-      skills: [{
-        skillId: 'checks:test',
-        commandName: 'test',
-        skillName: 'checks:test',
-        description: 'Run project checks',
-        sourceLabel: 'Project',
-      }],
-    });
-
-    await expect(service.getCommandSuggestions({ draft_input: '/sk' })).resolves.toMatchObject({
+    await expect(service.getCommandSuggestions({ draft_input: '/che' })).resolves.toMatchObject({
       type: 'suggestions',
-      groups: [{
-        id: 'commands',
-        items: [],
-      }, {
-        id: 'skills',
-        items: [],
-      }],
-    });
-  });
-
-  it('does not execute natural skill command names without suggestion selection', async () => {
-    const service = createCommandService({
-      skills: [{
-        skillId: 'superpowers:brainstorming',
-        commandName: 'brainstorming',
-        skillName: 'superpowers:brainstorming',
-        description: 'Explore intent before implementation',
-        sourceLabel: 'System',
-      }],
-    });
-
-    await expect(service.handleCommandInput({ raw_input: '/brainstorming topic' })).resolves.toEqual({
-      type: 'not_command',
-      raw_input: '/brainstorming topic',
-    });
-  });
-
-  it('suggests skill display names but completes stable /skill input', async () => {
-    const service = createCommandService({
-      skills: [{
-        skillId: 'superpowers:brainstorming',
-        commandName: 'brainstorming',
-        skillName: 'superpowers:brainstorming',
-        description: 'Explore intent before implementation',
-        sourceLabel: 'System',
-      }],
-    });
-
-    const suggestions = await service.getCommandSuggestions({ draft_input: '/br' });
-
-    expect(suggestions).toMatchObject({
-      type: 'suggestions',
-      groups: [{
-        id: 'commands',
-        items: [],
-      }, {
+      groups: [{ id: 'commands', items: [] }, {
         id: 'skills',
         items: [{
-          name: 'brainstorming',
-          display: {
-            primary: 'brainstorming',
-            secondary: 'superpowers:brainstorming - Explore intent before implementation',
-            badge: 'System',
+          name: 'checks',
+          source: { kind: 'skill', name: 'checks', skillPath },
+          display: { primary: 'checks', secondary: 'Run project checks', badge: 'User' },
+          completion: {
+            replacement_input: '',
+            selection: { type: 'skill', name: 'checks', skillPath },
           },
-          completion: { replacement_input: '/skill superpowers:brainstorming ' },
         }],
       }],
     });
   });
 
-  it('shows same-priority same display names as distinct skill suggestions', async () => {
+  it('keeps distinct same-name skills when their SKILL.md paths differ', async () => {
     const service = createCommandService({
-      skills: [{
-        skillId: 'packages-a:test',
-        commandName: 'test',
-        skillName: 'packages-a:test',
-        description: 'Run tests for package A',
-        sourceLabel: 'Project',
-      }, {
-        skillId: 'packages-b:test',
-        commandName: 'test',
-        skillName: 'packages-b:test',
-        description: 'Run tests for package B',
-        sourceLabel: 'Project',
-      }],
+      skills: [
+        { name: 'review', skillPath: 'C:/a/SKILL.md', description: 'Review A', sourceLabel: 'User' },
+        { name: 'review', skillPath: 'C:/b/SKILL.md', description: 'Review B', sourceLabel: 'User' },
+      ],
     });
 
-    const suggestions = await service.getCommandSuggestions({ draft_input: '/te' });
-    expect(suggestions.type === 'suggestions' ? suggestions.groups[1]?.items.map((item) => ({
-      name: item.name,
-      secondary: item.display?.secondary,
-      badge: item.display?.badge,
-      replacement: item.completion.replacement_input,
-    })) : []).toEqual([{
-      name: 'test',
-      secondary: 'packages-a:test - Run tests for package A',
-      badge: 'Project',
-      replacement: '/skill packages-a:test ',
-    }, {
-      name: 'test',
-      secondary: 'packages-b:test - Run tests for package B',
-      badge: 'Project',
-      replacement: '/skill packages-b:test ',
-    }]);
+    const result = await service.getCommandSuggestions({ draft_input: '/rev' });
+    expect(result.type === 'suggestions' ? result.groups[1]?.items.map((item) => item.completion.selection) : []).toEqual([
+      { type: 'skill', name: 'review', skillPath: 'C:/a/SKILL.md' },
+      { type: 'skill', name: 'review', skillPath: 'C:/b/SKILL.md' },
+    ]);
+  });
+
+  it('does not execute a suggestion display name as an implicit command', async () => {
+    const service = createCommandService({
+      skills: [{ name: 'check-project', skillPath: 'C:/a/SKILL.md', description: 'Check', sourceLabel: 'User' }],
+    });
+    await expect(service.handleCommandInput({ raw_input: '/check-project task' })).resolves.toEqual({
+      type: 'not_command',
+      raw_input: '/check-project task',
+    });
   });
 });

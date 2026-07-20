@@ -15,7 +15,7 @@ describe('ToolRegistryService', () => {
       'edit_file',
       'write_file',
       'run_command',
-      'activate_skill',
+      'use_skill',
       'web_fetch',
     ]);
     for (const tool of result.tools) {

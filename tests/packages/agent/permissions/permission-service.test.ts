@@ -132,7 +132,10 @@ describe('Permission Service', () => {
 
   it('allows context activation but does not authorize later tools', async () => {
     const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
-    const result = await service.evaluateToolCall(baseRequest({ registered_tool: identity('activate_skill'), tool_input: { skillId: 'x' } }));
+    const result = await service.evaluateToolCall(baseRequest({
+      registered_tool: identity('use_skill'),
+      tool_input: { skillPath: 'C:/skills/x/SKILL.md' },
+    }));
     expect(result).toMatchObject({ operations: [{ action: 'agent.context.activate' }], decision: { type: 'allow', safety_assessment: 'safe' } });
   });
 

@@ -4,7 +4,7 @@
  */
 import type { Prompt } from '../../context';
 import type { ProviderRuntimeConfig } from '../../settings';
-import type { ToolExecutionObservation } from '../../tools';
+import type { ToolExecutionObservation, ToolRuntimeSource } from '../../tools';
 import type { JsonObject } from '../../shared-json';
 import type { AgentRunFailure } from './agent-run-contracts';
 
@@ -122,6 +122,7 @@ export type ToolResultRuntimeFact = {
   status: 'success' | 'failure' | 'permission_denied' | 'user_rejected' | 'cancelled';
   error?: { code: string; message: string; details?: JsonObject };
   observation?: ToolExecutionObservation;
+  runtimeSources?: ToolRuntimeSource[];
   content?: string;
   created_at: string;
 };
