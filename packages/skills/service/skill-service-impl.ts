@@ -1,5 +1,7 @@
-/* Implements one Root-bound SkillService over an immutable filesystem discovery set. */
+/* Owns one Root-bound Skill snapshot, availability reconciliation, use, and explicit User deletion. */
 
+import fs from 'node:fs';
+import path from 'node:path';
 import type { Skill } from '../domain/model/skill';
 import type { SkillCatalogItem } from '../domain/dto/context/skill-context-response';
 import type { SkillRepository } from '../repository/skill-repository';
@@ -7,6 +9,8 @@ import type { SkillService } from './skill-service';
 import type {
   DisableSkillRequest,
   DisableSkillResponse,
+  DeleteSkillRequest,
+  DeleteSkillResponse,
   EnableSkillRequest,
   EnableSkillResponse,
   GetSkillCatalogRequest,
@@ -39,10 +43,18 @@ export class SkillServiceImpl implements SkillService {
   private skills: Skill[];
 
   constructor(private readonly options: CreateSkillServiceOptions) {
-    const availability = new Map(
-      options.repository.listAvailability().map((item) => [comparablePath(item.skillPath), item.available]),
-    );
-    this.skills = readSkillPackages({ roots: options.roots }).map((skill) => ({
+    const discoveredSkills = readSkillPackages({ roots: options.roots });
+    const availabilityRecords = options.repository.listAvailability();
+    const currentAvailabilityRecords = availabilityRecords.filter((record) => {
+      if (belongsToReadableRoot(record.skillPath, options.roots) && isMissingSkillFile(record.skillPath)) {
+        options.repository.deleteAvailability({ skillPath: record.skillPath });
+        return false;
+      }
+      return true;
+    });
+    const availability = new Map(currentAvailabilityRecords
+      .map((item) => [comparablePath(item.skillPath), item.available]));
+    this.skills = discoveredSkills.map((skill) => ({
       ...skill,
       available: availability.get(comparablePath(skill.skillPath)) ?? skill.available,
     }));
@@ -63,6 +75,28 @@ export class SkillServiceImpl implements SkillService {
 
   async disableSkill(request: DisableSkillRequest): Promise<DisableSkillResponse> {
     return this.saveAvailability(request, false);
+  }
+
+  async deleteSkill(request: DeleteSkillRequest): Promise<DeleteSkillResponse> {
+    const skill = this.findSkill(request.skillPath);
+    if (!skill) return { status: 'not_found', skillPath: request.skillPath };
+    if (skill.source.owner !== 'user') {
+      return { status: 'not_allowed', skillPath: skill.skillPath, reason: 'system_skill' };
+    }
+    const userRoot = this.options.roots.find((root) => root.owner === 'user' && rootContainsSkill(root, skill.skillPath));
+    if (!userRoot) return { status: 'not_allowed', skillPath: skill.skillPath, reason: 'skill_root' };
+    const packageDirectory = path.dirname(skill.skillPath);
+    if (comparablePath(packageDirectory) === comparablePath(userRoot.rootPath)) {
+      return { status: 'not_allowed', skillPath: skill.skillPath, reason: 'skill_root' };
+    }
+    try {
+      fs.rmSync(packageDirectory, { recursive: true, force: false });
+      this.options.repository.deleteAvailability({ skillPath: skill.skillPath });
+      this.skills = this.skills.filter((item) => comparablePath(item.skillPath) !== comparablePath(skill.skillPath));
+      return { status: 'ok', skillPath: skill.skillPath };
+    } catch (error) {
+      return { status: 'failed', message: messageFromError(error, 'Failed to delete Skill package.') };
+    }
   }
 
   async getSkillCatalog(_request: GetSkillCatalogRequest): Promise<GetSkillCatalogResponse> {
@@ -171,6 +205,43 @@ function cloneSkill(skill: Skill): Skill {
 function comparablePath(value: string): string {
   const normalized = normalizeSkillPath(value);
   return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+}
+
+function belongsToReadableRoot(skillPath: string, roots: SkillRoot[]): boolean {
+  return roots.some((root) => canReadDirectory(root.rootPath) && rootContainsSkill(root, skillPath));
+}
+
+function rootContainsSkill(root: SkillRoot, skillPath: string): boolean {
+  const normalizedRoot = normalizeSkillPath(root.rootPath);
+  const normalizedSkillPath = path.resolve(skillPath);
+  const relativePath = path.relative(normalizedRoot, normalizedSkillPath);
+  if (!relativePath || relativePath === '..' || relativePath.startsWith(`..${path.sep}`) || path.isAbsolute(relativePath)) {
+    return false;
+  }
+  const firstDirectory = relativePath.split(path.sep)[0];
+  const excluded = root.excludedDirectoryNames ?? [];
+  return !excluded.some((name) => process.platform === 'win32'
+    ? name.toLowerCase() === firstDirectory.toLowerCase()
+    : name === firstDirectory);
+}
+
+function canReadDirectory(targetPath: string): boolean {
+  try {
+    if (!fs.statSync(targetPath).isDirectory()) return false;
+    fs.readdirSync(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isMissingSkillFile(targetPath: string): boolean {
+  try {
+    return !fs.statSync(targetPath).isFile();
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return code === 'ENOENT' || code === 'ENOTDIR';
+  }
 }
 
 function messageFromError(error: unknown, fallback: string): string {

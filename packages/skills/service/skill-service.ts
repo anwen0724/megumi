@@ -3,6 +3,8 @@
 import type {
   DisableSkillRequest,
   DisableSkillResponse,
+  DeleteSkillRequest,
+  DeleteSkillResponse,
   EnableSkillRequest,
   EnableSkillResponse,
   GetSkillCatalogRequest,
@@ -26,6 +28,7 @@ export interface SkillService {
   getSkill(request: GetSkillRequest): Promise<GetSkillResponse>;
   enableSkill(request: EnableSkillRequest): Promise<EnableSkillResponse>;
   disableSkill(request: DisableSkillRequest): Promise<DisableSkillResponse>;
+  deleteSkill(request: DeleteSkillRequest): Promise<DeleteSkillResponse>;
   getSkillCatalog(request: GetSkillCatalogRequest): Promise<GetSkillCatalogResponse>;
   useSkill(request: UseSkillRequest): Promise<UseSkillResponse>;
   readSkillResource(request: ReadSkillResourceRequest): Promise<ReadSkillResourceResponse>;

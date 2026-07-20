@@ -3,9 +3,11 @@ import { useTranslation } from 'react-i18next';
 import {
   Bot,
   Brain,
+  ChevronDown,
   Package,
   Paperclip,
   SendHorizontal,
+  ShieldAlert,
   Square,
   Terminal,
 } from 'lucide-react';
@@ -163,18 +165,29 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
           </div>
 
           <div data-testid="composer-actions" className="flex min-w-0 shrink-0 items-center justify-end gap-2">
-            <div className="flex h-8 shrink-0 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-muted)]">
+            <div
+              title={permissionMode === 'full_access' ? t('composer.fullAccessWarning') : undefined}
+              className={[
+                'relative flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs transition-colors hover:bg-[var(--color-surface-muted)] focus-within:bg-[var(--color-surface-muted)]',
+                permissionMode === 'full_access' ? 'text-[var(--color-warning)]' : 'text-[var(--color-text-muted)]',
+              ].join(' ')}
+            >
               <label htmlFor={permissionModeId} className="sr-only">
                 {t('composer.permissionMode')}
               </label>
-              <Bot size={14} aria-hidden="true" />
+              {permissionMode === 'full_access'
+                ? <ShieldAlert size={14} aria-hidden="true" />
+                : <Bot size={14} aria-hidden="true" />}
               <select
                 id={permissionModeId}
                 aria-label={t('composer.permissionMode')}
                 value={permissionMode}
                 disabled={inputLocked}
                 onChange={(event) => onPermissionModeChange(event.target.value as ComposerPermissionMode)}
-                className="bg-transparent text-xs text-[var(--color-text)] outline-none disabled:cursor-not-allowed"
+                className={[
+                  'max-w-32 appearance-none truncate bg-transparent pr-4 text-xs outline-none [field-sizing:content] disabled:cursor-not-allowed',
+                  permissionMode === 'full_access' ? 'text-[var(--color-warning)]' : 'text-[var(--color-text)]',
+                ].join(' ')}
               >
                 {COMPOSER_PERMISSION_MODE_OPTIONS.map((option) => (
                   <option
@@ -186,14 +199,10 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
                   </option>
                 ))}
               </select>
+              <ChevronDown size={13} aria-hidden="true" className="pointer-events-none absolute right-1.5" />
             </div>
-            {permissionMode === 'full_access' ? (
-              <span className="max-w-44 text-xs font-medium text-amber-500" role="status">
-                {t('composer.fullAccessWarning')}
-              </span>
-            ) : null}
 
-            <div className="flex h-8 max-w-44 min-w-0 items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text-muted)]">
+            <div className="relative flex h-8 max-w-44 min-w-0 items-center gap-1.5 rounded-md px-2 text-xs text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-muted)] focus-within:bg-[var(--color-surface-muted)]">
               <label htmlFor={modelId} className="sr-only">
                 {t('composer.model')}
               </label>
@@ -204,7 +213,7 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
                 value={model}
                 disabled={inputLocked}
                 onChange={(event) => onModelChange(event.target.value as ComposerModel)}
-                className="max-w-36 truncate bg-transparent text-xs text-[var(--color-text)] outline-none disabled:cursor-not-allowed"
+                className="max-w-36 appearance-none truncate bg-transparent pr-4 text-xs text-[var(--color-text)] outline-none [field-sizing:content] disabled:cursor-not-allowed"
               >
                 {modelOptions.map((option) => (
                   <option
@@ -216,6 +225,7 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
                   </option>
                 ))}
               </select>
+              <ChevronDown size={13} aria-hidden="true" className="pointer-events-none absolute right-1.5" />
             </div>
 
             {showStop ? (

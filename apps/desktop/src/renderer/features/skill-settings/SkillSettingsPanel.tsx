@@ -13,6 +13,7 @@ import {
   MoreHorizontal,
   RefreshCw,
   TerminalSquare,
+  Trash2,
   X,
 } from 'lucide-react';
 import type { SkillDetailUiDto, SkillListUiItem } from '@megumi/product/host-interface';
@@ -36,6 +37,7 @@ export function SkillSettingsPanel() {
   const [selectedPath, setSelectedPath] = useState<string>();
   const [detail, setDetail] = useState<SkillDetailUiDto>();
   const [detailError, setDetailError] = useState<string>();
+  const [deleteCandidatePath, setDeleteCandidatePath] = useState<string>();
 
   async function loadSkills() {
     const api = window.megumi?.skill;
@@ -65,19 +67,21 @@ export function SkillSettingsPanel() {
     setSelectedPath(undefined);
     setDetail(undefined);
     setDetailError(undefined);
+    setDeleteCandidatePath(undefined);
     void loadSkills();
   }, [workspaceId]);
 
   useEffect(() => {
-    if (!menuPath && !selectedPath) return undefined;
+    if (!menuPath && !selectedPath && !deleteCandidatePath) return undefined;
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key !== 'Escape') return;
-      if (selectedPath) closeDetail();
+      if (deleteCandidatePath) setDeleteCandidatePath(undefined);
+      else if (selectedPath) closeDetail();
       else setMenuPath(undefined);
     }
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [menuPath, selectedPath]);
+  }, [deleteCandidatePath, menuPath, selectedPath]);
 
   async function setAvailability(skill: SkillListUiItem) {
     const api = window.megumi?.skill;
@@ -133,6 +137,34 @@ export function SkillSettingsPanel() {
         : result.data.message);
   }
 
+  async function deleteSkill(skill: SkillListUiItem) {
+    const api = window.megumi?.skill;
+    if (!api?.delete) {
+      setError(t('skills.unavailable'));
+      return;
+    }
+    setPendingPath(skill.skillPath);
+    setError(undefined);
+    const result = await api.delete(createRendererRuntimeIpcRequest(
+      IPC_CHANNELS.skill.delete,
+      { skillPath: skill.skillPath, ...(workspaceId ? { workspaceId } : {}) },
+    ));
+    if (result.ok && result.data.status === 'ok') {
+      setSkills((current) => current.filter((item) => item.skillPath !== skill.skillPath));
+      setDeleteCandidatePath(undefined);
+    } else {
+      setError(result.ok && result.data.status === 'failed'
+        ? result.data.failure.message
+        : result.ok && result.data.status === 'not_allowed'
+          ? t('skills.deleteNotAllowed')
+          : result.ok
+            ? t('skills.notFound')
+            : result.data.message);
+      setDeleteCandidatePath(undefined);
+    }
+    setPendingPath(undefined);
+  }
+
   function closeDetail() {
     setSelectedPath(undefined);
     setDetail(undefined);
@@ -148,6 +180,9 @@ export function SkillSettingsPanel() {
     ? skills
     : skills.filter((skill) => skill.sourceLabel === sourceFilter), [skills, sourceFilter]);
   const selectedSkill = selectedPath ? skills.find((skill) => skill.skillPath === selectedPath) : undefined;
+  const deleteCandidate = deleteCandidatePath
+    ? skills.find((skill) => skill.skillPath === deleteCandidatePath)
+    : undefined;
 
   return (
     <div className="space-y-7">
@@ -208,7 +243,7 @@ export function SkillSettingsPanel() {
               return (
                 <div
                   key={skill.skillPath}
-                  className="group relative grid min-h-17 grid-cols-[auto_minmax(0,1fr)_auto_auto_auto] items-center gap-3 rounded-xl px-3 py-3 transition-colors hover:bg-[var(--color-surface-muted)]"
+                  className="group relative grid min-h-17 grid-cols-[auto_minmax(0,1fr)_8rem] items-center gap-3 rounded-xl px-3 py-3 transition-colors hover:bg-[var(--color-surface-muted)]"
                 >
                   <div className={cx('grid h-10 w-10 place-items-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)] shadow-sm', !skill.available && 'opacity-55')}>
                     <Box size={16} aria-hidden="true" />
@@ -223,8 +258,9 @@ export function SkillSettingsPanel() {
                     <p className="mt-0.5 truncate text-sm text-[var(--color-text-muted)]">{skill.description}</p>
                     {duplicateNames.has(skill.name) ? <p className="mt-0.5 truncate font-mono text-[0.68rem] text-[var(--color-text-subtle)]">{shortPath(skill.skillPath)}</p> : null}
                   </div>
-                  <span className={cx('px-1 text-xs text-[var(--color-text-subtle)]', !skill.available && 'opacity-55')}>{skill.sourceLabel}</span>
-                  <div className="relative">
+                  <div className="grid grid-cols-[3.5rem_2rem_2.25rem] items-center gap-1">
+                    <span className={cx('text-right text-xs text-[var(--color-text-subtle)]', !skill.available && 'opacity-55')}>{skill.sourceLabel}</span>
+                    <div className="relative">
                     <button
                       type="button"
                       aria-label={t('skills.moreActions', { name: displayName })}
@@ -247,16 +283,33 @@ export function SkillSettingsPanel() {
                           >
                             <FileText size={14} aria-hidden="true" />{t('skills.details')}
                           </button>
+                          {skill.sourceLabel === 'User' ? (
+                            <>
+                              <div className="my-1 border-t border-[var(--color-border)]" />
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setMenuPath(undefined);
+                                  setDeleteCandidatePath(skill.skillPath);
+                                }}
+                                className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-[var(--color-danger)] transition-colors hover:bg-[var(--color-danger)]/10 focus-visible:outline-none focus-visible:bg-[var(--color-danger)]/10"
+                              >
+                                <Trash2 size={14} aria-hidden="true" />{t('skills.delete')}
+                              </button>
+                            </>
+                          ) : null}
                         </div>
                       </>
                     ) : null}
+                    </div>
+                    <AvailabilitySwitch
+                      checked={skill.available}
+                      disabled={pendingPath === skill.skillPath}
+                      label={skill.available ? t('skills.disableNamed', { name: displayName }) : t('skills.enableNamed', { name: displayName })}
+                      onClick={() => void setAvailability(skill)}
+                    />
                   </div>
-                  <AvailabilitySwitch
-                    checked={skill.available}
-                    disabled={pendingPath === skill.skillPath}
-                    label={skill.available ? t('skills.disableNamed', { name: displayName }) : t('skills.enableNamed', { name: displayName })}
-                    onClick={() => void setAvailability(skill)}
-                  />
                 </div>
               );
             })}
@@ -272,6 +325,63 @@ export function SkillSettingsPanel() {
           onClose={closeDetail}
         />
       ) : null}
+
+      {deleteCandidate ? (
+        <DeleteSkillDialog
+          skill={deleteCandidate}
+          deleting={pendingPath === deleteCandidate.skillPath}
+          onCancel={() => setDeleteCandidatePath(undefined)}
+          onConfirm={() => void deleteSkill(deleteCandidate)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function DeleteSkillDialog({ skill, deleting, onCancel, onConfirm }: {
+  skill: SkillListUiItem;
+  deleting: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const { t } = useTranslation('settings');
+  const displayName = formatSkillName(skill.name);
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-6 backdrop-blur-[2px]"
+      onMouseDown={(event) => { if (!deleting && event.target === event.currentTarget) onCancel(); }}
+    >
+      <section
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-skill-title"
+        aria-describedby="delete-skill-description"
+        className="w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-5 shadow-2xl"
+      >
+        <div className="flex items-start gap-3">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--color-danger)]/10 text-[var(--color-danger)]">
+            <Trash2 size={17} aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <h2 id="delete-skill-title" className="text-base font-semibold text-[var(--color-text)]">
+              {t('skills.deleteTitle', { name: displayName })}
+            </h2>
+            <p id="delete-skill-description" className="mt-1 text-sm leading-5 text-[var(--color-text-muted)]">
+              {t('skills.deleteDescription')}
+            </p>
+          </div>
+        </div>
+        <code className="mt-4 block break-all rounded-lg bg-[var(--color-surface)] p-3 text-xs text-[var(--color-text-muted)]">
+          {skill.skillPath}
+        </code>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="ghost" onClick={onCancel} disabled={deleting}>{t('skills.cancelDelete')}</Button>
+          <Button variant="danger" onClick={onConfirm} disabled={deleting}>
+            {deleting ? <LoaderCircle size={14} className="animate-spin" aria-hidden="true" /> : <Trash2 size={14} aria-hidden="true" />}
+            {deleting ? t('skills.deleting') : t('skills.confirmDelete')}
+          </Button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -298,8 +408,8 @@ function AvailabilitySwitch({ checked, disabled, label, onClick }: {
       <span
         aria-hidden="true"
         className={cx(
-          'absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform',
-          checked ? 'translate-x-4' : 'translate-x-0.5',
+          'absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform',
+          checked ? 'translate-x-4' : 'translate-x-0',
         )}
       />
     </button>

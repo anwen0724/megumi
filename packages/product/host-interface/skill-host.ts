@@ -7,6 +7,7 @@ export interface SkillHost {
   getSkillDetail(request: GetSkillDetailUiRequest): Promise<GetSkillDetailUiResponse>;
   enableSkill(request: EnableSkillUiRequest): Promise<EnableSkillUiResponse>;
   disableSkill(request: DisableSkillUiRequest): Promise<DisableSkillUiResponse>;
+  deleteSkill(request: DeleteSkillUiRequest): Promise<DeleteSkillUiResponse>;
 }
 
 export const SkillListPayloadSchema = z.object({ workspaceId: z.string().min(1).optional() }).strict();
@@ -16,6 +17,7 @@ export const SkillGetPayloadSchema = z.object({
 }).strict();
 export const SkillEnablePayloadSchema = SkillGetPayloadSchema;
 export const SkillDisablePayloadSchema = SkillGetPayloadSchema;
+export const SkillDeletePayloadSchema = SkillGetPayloadSchema;
 
 const SkillDiagnosticUiItemSchema = z.object({
   level: z.enum(['info', 'warning', 'error']),
@@ -53,6 +55,16 @@ export const GetSkillDetailUiResponseSchema = z.discriminatedUnion('status', [
 ]);
 export const EnableSkillUiResponseSchema = SkillMutationUiResponseSchema;
 export const DisableSkillUiResponseSchema = SkillMutationUiResponseSchema;
+export const DeleteSkillUiResponseSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('ok'), skillPath: z.string().min(1) }).strict(),
+  z.object({ status: z.literal('not_found'), skillPath: z.string().min(1) }).strict(),
+  z.object({
+    status: z.literal('not_allowed'),
+    skillPath: z.string().min(1),
+    reason: z.enum(['system_skill', 'skill_root']),
+  }).strict(),
+  z.object({ status: z.literal('failed'), failure: z.object({ code: z.string(), message: z.string() }).strict() }).strict(),
+]);
 
 export function createSkillHost(input: {
   resolveSkillService(request: { workspaceId?: string }): SkillService;
@@ -81,6 +93,15 @@ export function createSkillHost(input: {
       if (result.status === 'not_found') return { status: 'not_found', skillPath: result.skillPath };
       if (result.status === 'failed') return toSkillFailure(result.message);
       return { status: 'ok', skillPath: result.availability.skillPath };
+    },
+    async deleteSkill(request) {
+      const result = await input.resolveSkillService(request).deleteSkill({ skillPath: request.skillPath });
+      if (result.status === 'not_found') return { status: 'not_found', skillPath: result.skillPath };
+      if (result.status === 'not_allowed') {
+        return { status: 'not_allowed', skillPath: result.skillPath, reason: result.reason };
+      }
+      if (result.status === 'failed') return toSkillFailure(result.message);
+      return { status: 'ok', skillPath: result.skillPath };
     },
   };
 }
@@ -115,6 +136,7 @@ export type ListSkillsUiRequest = { workspaceId?: string };
 export type GetSkillDetailUiRequest = { skillPath: string; workspaceId?: string };
 export type EnableSkillUiRequest = { skillPath: string; workspaceId?: string };
 export type DisableSkillUiRequest = { skillPath: string; workspaceId?: string };
+export type DeleteSkillUiRequest = { skillPath: string; workspaceId?: string };
 export type SkillDiagnosticUiItem = { level: 'info' | 'warning' | 'error'; message: string };
 export type SkillListUiItem = {
   name: string;
@@ -131,3 +153,8 @@ export type ListSkillsUiResponse = { status: 'ok'; skills: SkillListUiItem[] } |
 export type GetSkillDetailUiResponse = { status: 'ok'; skill: SkillDetailUiDto } | { status: 'not_found'; skillPath: string } | { status: 'failed'; failure: { code: string; message: string } };
 export type EnableSkillUiResponse = { status: 'ok'; skillPath: string } | { status: 'not_found'; skillPath: string } | { status: 'failed'; failure: { code: string; message: string } };
 export type DisableSkillUiResponse = EnableSkillUiResponse;
+export type DeleteSkillUiResponse =
+  | { status: 'ok'; skillPath: string }
+  | { status: 'not_found'; skillPath: string }
+  | { status: 'not_allowed'; skillPath: string; reason: 'system_skill' | 'skill_root' }
+  | { status: 'failed'; failure: { code: string; message: string } };

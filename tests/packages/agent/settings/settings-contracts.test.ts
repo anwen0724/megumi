@@ -72,6 +72,23 @@ describe('Settings v2 contracts', () => {
     });
   });
 
+  it('persists the last selected provider and model as one atomic setting', () => {
+    const fileStore = memorySettingsFileStore();
+    const service = createSettingsService({ file_store: fileStore });
+
+    expect(service.updateSettings({ patch: {
+      model_selection: { provider_id: 'deepseek', model_id: 'deepseek-v4-pro' },
+    } })).toMatchObject({
+      status: 'updated',
+      settings: {
+        model_selection: { provider_id: 'deepseek', model_id: 'deepseek-v4-pro' },
+      },
+    });
+    expect(fileStore.readRawSettings()).toMatchObject({
+      model_selection: { provider_id: 'deepseek', model_id: 'deepseek-v4-pro' },
+    });
+  });
+
   it('validates permission rules as Settings-owned contracts', () => {
     const rule = {
       source: 'session',

@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { usePermissionModeStore } from '@megumi/desktop/renderer/entities/permission-mode';
+import { useModelSelectionStore } from '@megumi/desktop/renderer/entities/model-selection';
 import { Composer } from '@megumi/desktop/renderer/features/chat/components/Composer';
 import type { ComposerProps } from '@megumi/desktop/renderer/features/chat/components/composer-types';
 import type { ProviderPublicStatusUiDto } from '@megumi/product/host-interface';
@@ -75,6 +76,7 @@ function setTextareaScrollHeight(textarea: HTMLElement, scrollHeight: number) {
 describe('Composer', () => {
   beforeEach(() => {
     usePermissionModeStore.setState({ mode: 'ask' });
+    useModelSelectionStore.setState(useModelSelectionStore.getInitialState(), true);
   });
 
   it('renders permission mode, model, context usage, attachment, and disabled send controls', () => {
@@ -347,6 +349,20 @@ describe('Composer', () => {
     expect(rightControls.children[2]).toBe(screen.getByRole('button', { name: 'Send message' }));
     expect(screen.getByRole('button', { name: 'Send message' })).toHaveClass('shrink-0');
     expect(screen.getByRole('button', { name: 'Send message' })).not.toHaveTextContent('Send');
+  });
+
+  it('keeps the selected provider and model when the Composer remounts', async () => {
+    const first = render(<TestComposer onSubmit={() => undefined} />);
+    await userEvent.selectOptions(screen.getByLabelText('Model'), 'deepseek:deepseek-v4-pro');
+
+    expect(useModelSelectionStore.getState().selection).toEqual({
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-pro',
+    });
+
+    first.unmount();
+    render(<TestComposer onSubmit={() => undefined} />);
+    expect(screen.getByLabelText('Model')).toHaveValue('deepseek:deepseek-v4-pro');
   });
 
   it('themes native select dropdown options for dark and light themes', () => {

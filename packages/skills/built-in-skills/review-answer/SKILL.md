@@ -1,5 +1,5 @@
 ---
-name: review-student-answer
+name: review-answer
 description: "检查和批改初中生已经完成的作答。用户询问答案是否正确、哪里出错、为什么丢分或应该怎样修改时使用。"
 ---
 

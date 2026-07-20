@@ -5,6 +5,7 @@ import { rendererI18n } from '@megumi/desktop/renderer/shared/i18n';
 import { useThemeStore } from '@megumi/desktop/renderer/shared/theme';
 import { useSetupWizardStore } from '@megumi/desktop/renderer/features/setup-wizard';
 import { usePermissionModeStore } from '@megumi/desktop/renderer/entities/permission-mode';
+import { useModelSelectionStore } from '@megumi/desktop/renderer/entities/model-selection';
 
 function successfulSettings(language: 'zh-CN' | 'en-US', setupCompleted = true) {
   return {
@@ -17,6 +18,7 @@ function successfulSettings(language: 'zh-CN' | 'en-US', setupCompleted = true) 
         setup: { completed: setupCompleted },
         permissions: { mode: 'ask' as const, allow: [], ask: [], deny: [] },
         memory: { enabled: false },
+        modelSelection: { providerId: 'deepseek', modelId: 'deepseek-v4-pro' },
         web: { search: { enabled: false, providerId: 'tavily', maxResults: 5, timeoutMs: 10_000 } },
         providers: {},
       },
@@ -37,6 +39,7 @@ describe('renderer bootstrap localization', () => {
     useThemeStore.setState(useThemeStore.getInitialState(), true);
     useSetupWizardStore.setState(useSetupWizardStore.getInitialState(), true);
     usePermissionModeStore.setState(usePermissionModeStore.getInitialState(), true);
+    useModelSelectionStore.setState(useModelSelectionStore.getInitialState(), true);
   });
 
   it('projects one resolved settings snapshot before the first render', async () => {
@@ -46,6 +49,10 @@ describe('renderer bootstrap localization', () => {
       expect(document.documentElement.lang).toBe('zh-CN');
       expect(useThemeStore.getState().theme).toBe('sage-mist');
       expect(usePermissionModeStore.getState().mode).toBe('ask');
+      expect(useModelSelectionStore.getState().selection).toEqual({
+        providerId: 'deepseek',
+        modelId: 'deepseek-v4-pro',
+      });
       expect(useSetupWizardStore.getState()).toMatchObject({
         status: 'ready',
         language: 'zh-CN',

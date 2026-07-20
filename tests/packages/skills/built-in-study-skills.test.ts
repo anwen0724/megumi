@@ -16,11 +16,11 @@ const BUILT_IN_SKILLS_ROOT = path.resolve(
 );
 
 const EXPECTED_STUDY_SKILLS = [
-  'explain-school-problem',
-  'generate-study-practice',
+  'explain-problem',
+  'generate-practice',
   'plan-study-session',
-  'review-student-answer',
-  'review-study-materials',
+  'review-answer',
+  'review-materials',
 ] as const;
 
 function readBuiltInSkills() {
@@ -50,19 +50,19 @@ describe('built-in study Skills', () => {
   it('gives each Skill a trigger description and task-specific workflow', () => {
     const skills = new Map(readBuiltInSkills().map((skill) => [skill.name, skill]));
 
-    expect(skills.get('explain-school-problem')).toMatchObject({
+    expect(skills.get('explain-problem')).toMatchObject({
       description: expect.stringMatching(/题目|知识点/),
       content: expect.stringMatching(/提示[\s\S]*完整讲解|完整讲解[\s\S]*提示/),
     });
-    expect(skills.get('review-student-answer')).toMatchObject({
+    expect(skills.get('review-answer')).toMatchObject({
       description: expect.stringMatching(/作答|答案/),
       content: expect.stringMatching(/第一个实质错误/),
     });
-    expect(skills.get('generate-study-practice')).toMatchObject({
+    expect(skills.get('generate-practice')).toMatchObject({
       description: expect.stringMatching(/练习/),
       content: expect.stringMatching(/答案[\s\S]*解析|解析[\s\S]*答案/),
     });
-    expect(skills.get('review-study-materials')).toMatchObject({
+    expect(skills.get('review-materials')).toMatchObject({
       description: expect.stringMatching(/资料|笔记/),
       content: expect.stringMatching(/冲突[\s\S]*不确定|不确定[\s\S]*冲突/),
     });

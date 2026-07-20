@@ -1,5 +1,5 @@
 ---
-name: generate-study-practice
+name: generate-practice
 description: "为初中学习生成练习题。用户要求按学科、知识点、年级、难度或数量出题，制作小测，或生成类似题进行巩固时使用。"
 ---
 

@@ -1,6 +1,6 @@
 /*
  * Owns the Megumi product home layout, metadata initialization, and built-in
- * system skill seed installation.
+ * system Skill source synchronization.
  */
 import path from 'node:path';
 import { createSettingsJsonSchema } from '../../agent/settings';
@@ -26,6 +26,7 @@ export interface MegumiHomeFileSystem {
   writeJson(filePath: string, data: unknown, options?: { spaces?: number }): Promise<void>;
   writeFile(filePath: string, data: string): Promise<void>;
   copyDirectory?(sourcePath: string, targetPath: string, options?: { overwrite?: boolean; errorOnExist?: boolean }): Promise<void>;
+  removeDirectory?(directoryPath: string): Promise<void>;
 }
 
 export interface MegumiHomeSyncFileSystem {
@@ -34,6 +35,7 @@ export interface MegumiHomeSyncFileSystem {
   writeJsonSync(filePath: string, data: unknown, options?: { spaces?: number }): void;
   writeFileSync(filePath: string, data: string): void;
   copyDirectorySync?(sourcePath: string, targetPath: string, options?: { overwrite?: boolean; errorOnExist?: boolean }): void;
+  removeDirectorySync?(directoryPath: string): void;
 }
 
 export interface MegumiHomeVersion {
@@ -260,6 +262,10 @@ async function installBuiltInSystemSkills(
     return;
   }
 
+  if (fileSystem.removeDirectory && await fileSystem.pathExists(paths.systemSkillsPath)) {
+    await fileSystem.removeDirectory(paths.systemSkillsPath);
+  }
+
   await fileSystem.copyDirectory(path.resolve(resolvedSeedPath), paths.systemSkillsPath, {
     overwrite: false,
     errorOnExist: false,
@@ -275,6 +281,10 @@ function installBuiltInSystemSkillsSync(
 
   if (!resolvedSeedPath || !fileSystem.copyDirectorySync || !fileSystem.pathExistsSync(resolvedSeedPath)) {
     return;
+  }
+
+  if (fileSystem.removeDirectorySync && fileSystem.pathExistsSync(paths.systemSkillsPath)) {
+    fileSystem.removeDirectorySync(paths.systemSkillsPath);
   }
 
   fileSystem.copyDirectorySync(path.resolve(resolvedSeedPath), paths.systemSkillsPath, {

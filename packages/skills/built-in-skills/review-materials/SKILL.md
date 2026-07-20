@@ -1,5 +1,5 @@
 ---
-name: review-study-materials
+name: review-materials
 description: "综合初中学习资料并形成复习结果。用户希望整理课本摘录、课堂笔记、图片或工作区资料，提炼重点、制作提纲或生成自测内容时使用。"
 ---
 

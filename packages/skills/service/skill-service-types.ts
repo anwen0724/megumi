@@ -30,6 +30,13 @@ export type DisableSkillResponse =
   | { status: 'not_found'; skillPath: string }
   | { status: 'failed'; message: string };
 
+export type DeleteSkillRequest = { skillPath: string };
+export type DeleteSkillResponse =
+  | { status: 'ok'; skillPath: string }
+  | { status: 'not_found'; skillPath: string }
+  | { status: 'not_allowed'; skillPath: string; reason: 'system_skill' | 'skill_root' }
+  | { status: 'failed'; message: string };
+
 export type GetSkillCatalogRequest = Record<string, never>;
 export type GetSkillCatalogResponse =
   | { status: 'ok'; skills: SkillCatalogItem[] }

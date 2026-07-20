@@ -115,6 +115,40 @@ describe('SkillSettingsPanel', () => {
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
+
+  it('deletes a User Skill through confirmation and never offers deletion for System Skills', async () => {
+    const user = userEvent.setup();
+    const userSkillPath = 'C:/home/.megumi/skills/review/SKILL.md';
+    const systemSkillPath = 'C:/home/.megumi/skills/.system/explain/SKILL.md';
+    const remove = vi.fn().mockResolvedValue({
+      ok: true,
+      data: { status: 'ok', skillPath: userSkillPath },
+    });
+    installSkillApi({
+      list: vi.fn().mockResolvedValue({
+        ok: true,
+        data: { status: 'ok', skills: [
+          skill('review', userSkillPath, 'User', 'Review homework'),
+          skill('explain', systemSkillPath, 'System', 'Explain a problem'),
+        ] },
+      }),
+      delete: remove,
+    });
+
+    render(<SkillSettingsPanel />);
+    await user.click(await screen.findByRole('button', { name: 'More actions for Review' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    expect(screen.getByRole('alertdialog', { name: 'Delete Review?' })).toHaveTextContent(userSkillPath);
+    await user.click(screen.getByRole('button', { name: 'Delete Skill' }));
+
+    await waitFor(() => expect(remove).toHaveBeenCalledWith(expect.objectContaining({
+      payload: { workspaceId: 'workspace:1', skillPath: userSkillPath },
+    })));
+    expect(screen.queryByText('Review homework')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'More actions for Explain' }));
+    expect(screen.queryByRole('menuitem', { name: 'Delete' })).not.toBeInTheDocument();
+  });
 });
 
 function skill(name: string, skillPath: string, sourceLabel: 'System' | 'User', description: string) {
@@ -128,6 +162,7 @@ function installSkillApi(overrides: {
   list: ReturnType<typeof vi.fn>;
   get?: ReturnType<typeof vi.fn>;
   disable?: ReturnType<typeof vi.fn>;
+  delete?: ReturnType<typeof vi.fn>;
 }) {
   Object.defineProperty(window, 'megumi', {
     configurable: true,
@@ -137,6 +172,7 @@ function installSkillApi(overrides: {
         get: overrides.get ?? vi.fn(),
         enable: vi.fn(),
         disable: overrides.disable ?? vi.fn(),
+        delete: overrides.delete ?? vi.fn(),
       },
     },
   });

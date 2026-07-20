@@ -41,6 +41,7 @@ export const IPC_CHANNELS = {
     get: 'skill:get',
     enable: 'skill:enable',
     disable: 'skill:disable',
+    delete: 'skill:delete',
   },
   approval: {
     resolve: 'approval:resolve',
@@ -112,6 +113,7 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.skill.get,
   IPC_CHANNELS.skill.enable,
   IPC_CHANNELS.skill.disable,
+  IPC_CHANNELS.skill.delete,
   IPC_CHANNELS.approval.resolve,
   IPC_CHANNELS.workspace.projectList,
   IPC_CHANNELS.workspace.projectUseExisting,

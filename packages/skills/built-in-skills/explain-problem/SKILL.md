@@ -1,5 +1,5 @@
 ---
-name: explain-school-problem
+name: explain-problem
 description: "讲解初中阶段的题目或知识点。用户看不懂题意、某个步骤或概念，要求提示、分步说明、完整讲解或更简单的解释时使用。"
 ---
 

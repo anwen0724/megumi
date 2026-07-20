@@ -187,21 +187,8 @@ export function useChatPageController() {
   }
 
   async function switchNewSessionProject(projectId: string) {
-    if (isDraftNewSession) {
-      useSessionStore.getState().setNewSessionDraftTargetProject(projectId);
-      setProjectPickerOpen(false);
-      return;
-    }
-
     if (projectId === currentProjectId) {
-      setProjectPickerOpen(false);
-      return;
-    }
-
-    const sessionBeforeOpen = activeSession;
-    const canMoveActiveSession = !sessionBeforeOpen;
-
-    if (!canMoveActiveSession) {
+      useSessionStore.getState().startNewSessionDraft(projectId);
       setProjectPickerOpen(false);
       return;
     }
@@ -211,6 +198,7 @@ export function useChatPageController() {
       return;
     }
 
+    useSessionStore.getState().startNewSessionDraft(project.id);
     setProjectPickerOpen(false);
   }
 

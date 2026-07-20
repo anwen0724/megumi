@@ -2,8 +2,8 @@
 import { type FormEvent, type KeyboardEvent, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/product/host-interface';
 import {
-  DEFAULT_COMPOSER_MODEL,
   getComposerModelOptionsForProviders,
+  modelOptionValue,
   type ComposerModel,
   type ComposerPermissionMode,
 } from '../components/composer-options';
@@ -12,6 +12,7 @@ import type { ComposerSurfaceProps } from '../components/ComposerSurface';
 import { showToast } from '../../../shared/ui';
 import { rendererI18n } from '../../../shared/i18n';
 import { usePermissionModeStore } from '../../../entities/permission-mode';
+import { useModelSelectionStore } from '../../../entities/model-selection';
 
 const COMPOSER_TEXTAREA_COMPACT_HEIGHT = 56;
 const COMPOSER_TEXTAREA_MAX_HEIGHT = 160;
@@ -73,7 +74,8 @@ export function useComposerController({
   const [selectedCommandSuggestionIndex, setSelectedCommandSuggestionIndex] = useState(0);
   const permissionMode = usePermissionModeStore((state) => state.mode);
   const persistPermissionMode = usePermissionModeStore((state) => state.persistMode);
-  const [model, setModel] = useState<ComposerModel>(DEFAULT_COMPOSER_MODEL);
+  const modelSelection = useModelSelectionStore((state) => state.selection);
+  const persistModelSelection = useModelSelectionStore((state) => state.persistSelection);
   const [selectedImages, setSelectedImages] = useState<ComposerDraftImage[]>(initialImages);
   const valueRef = useRef(value);
   const selectedImagesRef = useRef(selectedImages);
@@ -85,7 +87,12 @@ export function useComposerController({
     () => getComposerModelOptionsForProviders(providers),
     [providers],
   );
-  const selectedModelOption = modelOptions.find((option) => option.value === model);
+  const selectedModelValue = modelSelection
+    ? modelOptionValue(modelSelection.providerId, modelSelection.modelId)
+    : undefined;
+  const selectedModelOption = modelOptions.find((option) => option.value === selectedModelValue)
+    ?? modelOptions[0];
+  const model = selectedModelOption?.value ?? '';
   const maxImageCount = imageInputCapabilities?.maxImageCount ?? 0;
   const trimmedValue = value.trim();
   const inputLocked = false;
@@ -130,10 +137,11 @@ export function useComposerController({
       return;
     }
 
-    if (!modelOptions.some((option) => option.value === model)) {
-      setModel(modelOptions[0].value);
+    const fallback = modelOptions[0];
+    if (!selectedModelOption || selectedModelValue !== selectedModelOption.value) {
+      void persistModelSelection({ providerId: fallback.providerId, modelId: fallback.modelId });
     }
-  }, [model, modelOptions]);
+  }, [modelOptions, persistModelSelection, selectedModelOption, selectedModelValue]);
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
@@ -385,7 +393,10 @@ export function useComposerController({
     onValueChange: handleValueChange,
     onCommandSuggestionChoose: chooseCommandSuggestion,
     onPermissionModeChange: (mode) => { void persistPermissionMode(mode); },
-    onModelChange: setModel,
+    onModelChange: (nextModel) => {
+      const option = modelOptions.find((candidate) => candidate.value === nextModel);
+      if (option) void persistModelSelection({ providerId: option.providerId, modelId: option.modelId });
+    },
     onKeyDown: handleComposerKeyDown,
     onSubmit: handleSubmit,
     onStop,

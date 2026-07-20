@@ -3,6 +3,7 @@
  */
 import {
   DisableSkillUiResponseSchema,
+  DeleteSkillUiResponseSchema,
   EnableSkillUiResponseSchema,
   GetSkillDetailUiResponseSchema,
   ListSkillsUiResponseSchema,
@@ -15,6 +16,7 @@ import { IPC_CHANNELS } from '../channels';
 import type { RuntimeIpcError } from '../contracts';
 import {
   SkillDisableRequestSchema,
+  SkillDeleteRequestSchema,
   SkillEnableRequestSchema,
   SkillGetRequestSchema,
   SkillListRequestSchema,
@@ -68,6 +70,15 @@ export function registerSkillHandlers(
     responseSchema: DisableSkillUiResponseSchema,
     logger: options.logger,
     handle: (request) => service.host.skill.disableSkill(request.payload),
+    mapError: mapSkillIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.skill.delete, createIpcRequestHandler({
+    channel: IPC_CHANNELS.skill.delete,
+    requestSchema: SkillDeleteRequestSchema,
+    responseSchema: DeleteSkillUiResponseSchema,
+    logger: options.logger,
+    handle: (request) => service.host.skill.deleteSkill(request.payload),
     mapError: mapSkillIpcError,
   }));
 }

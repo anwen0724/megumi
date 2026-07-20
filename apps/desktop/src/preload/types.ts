@@ -6,6 +6,7 @@ import type {
   ChatListTimelineUiResult,
   ChatSendUserInputUiPayload,
   DisableSkillUiResponse,
+  DeleteSkillUiResponse,
   EnableSkillUiResponse,
   GetSkillDetailUiResponse,
   ListSkillsUiResponse,
@@ -19,6 +20,7 @@ import type {
   SessionContextUsageGetPayload,
   SessionTimelineListPayload,
   SkillDisablePayload,
+  SkillDeletePayload,
   SkillEnablePayload,
   SkillGetPayload,
   SkillListPayload,
@@ -49,3 +51,5 @@ export type SkillEnablePreloadPayload = SkillEnablePayload;
 export type SkillEnablePreloadData = EnableSkillUiResponse;
 export type SkillDisablePreloadPayload = SkillDisablePayload;
 export type SkillDisablePreloadData = DisableSkillUiResponse;
+export type SkillDeletePreloadPayload = SkillDeletePayload;
+export type SkillDeletePreloadData = DeleteSkillUiResponse;

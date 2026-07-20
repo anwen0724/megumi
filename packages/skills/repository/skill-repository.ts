@@ -1,4 +1,4 @@
-/* Persists availability for exact SKILL.md paths without depending on Agent persistence. */
+/* Persists and cleans sparse availability for exact SKILL.md paths. */
 
 import type Database from 'better-sqlite3';
 import type { SkillAvailability } from '../domain/entity/skill-availability';
@@ -47,6 +47,12 @@ export class SkillRepository {
       SELECT * FROM skill_availability ORDER BY skill_path ASC
     `).all() as SkillAvailabilityRow[];
     return rows.map(availabilityFromRow);
+  }
+
+  deleteAvailability(input: { skillPath: string }): boolean {
+    return this.database.prepare(`
+      DELETE FROM skill_availability WHERE skill_path = ?
+    `).run(input.skillPath).changes > 0;
   }
 }
 

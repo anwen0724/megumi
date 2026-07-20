@@ -16,6 +16,7 @@ class MemoryFileSystem implements MegumiHomeFileSystem {
   readonly textFiles = new Map<string, string>();
   readonly existingPaths = new Set<string>();
   readonly copiedDirectories: Array<{ sourcePath: string; targetPath: string }> = [];
+  readonly removedDirectories: string[] = [];
 
   async ensureDir(directoryPath: string): Promise<void> {
     this.directories.add(directoryPath);
@@ -44,6 +45,12 @@ class MemoryFileSystem implements MegumiHomeFileSystem {
   async copyDirectory(sourcePath: string, targetPath: string): Promise<void> {
     this.copiedDirectories.push({ sourcePath, targetPath });
     this.existingPaths.add(targetPath);
+  }
+
+  async removeDirectory(directoryPath: string): Promise<void> {
+    this.removedDirectories.push(directoryPath);
+    this.existingPaths.delete(directoryPath);
+    this.directories.delete(directoryPath);
   }
 }
 
@@ -137,6 +144,7 @@ describe('Megumi Home', () => {
       sourcePath: seedPath,
       targetPath: paths.systemSkillsPath,
     }]);
+    expect(fileSystem.removedDirectories).toEqual([paths.systemSkillsPath]);
   });
 
   it('does not infer built-in skill resources from the repository working directory', async () => {

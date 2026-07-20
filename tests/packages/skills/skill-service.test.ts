@@ -61,6 +61,49 @@ describe('SkillServiceImpl', () => {
     const secondList = await second.listSkills({});
     expect(secondList.status === 'ok' ? secondList.skills.map((skill) => skill.skillPath) : []).toEqual([firstPath, laterPath]);
   });
+
+  it('deletes only a User Skill package and its saved availability', async () => {
+    const root = createRoot();
+    const skillPath = writeSkill(root, 'deletable', 'deletable', 'Delete me', 'Body');
+    const repository = createRepository();
+    const service = new SkillServiceImpl({ repository, roots: [{ owner: 'user', rootPath: root }] });
+    await service.disableSkill({ skillPath });
+
+    expect(await service.deleteSkill({ skillPath })).toEqual({ status: 'ok', skillPath });
+    expect(fs.existsSync(path.dirname(skillPath))).toBe(false);
+    expect(repository.findAvailability({ skillPath })).toBeUndefined();
+    expect(await service.listSkills({})).toEqual({ status: 'ok', skills: [] });
+
+    const systemPath = writeSkill(root, 'system', 'system', 'System', 'Body');
+    const systemService = new SkillServiceImpl({ repository, roots: [{ owner: 'system', rootPath: root }] });
+    expect(await systemService.deleteSkill({ skillPath: systemPath })).toEqual({
+      status: 'not_allowed', skillPath: systemPath, reason: 'system_skill',
+    });
+    expect(fs.existsSync(systemPath)).toBe(true);
+  });
+
+  it('removes stale availability only when its scanned Root is accessible', async () => {
+    const root = createRoot();
+    const otherRoot = createRoot();
+    const skillPath = writeSkill(root, 'removed', 'removed', 'Removed', 'Body');
+    const otherSkillPath = writeSkill(otherRoot, 'not-scanned', 'not-scanned', 'Not scanned', 'Body');
+    const repository = createRepository();
+    repository.saveAvailability({
+      skillAvailabilityId: 'availability:removed', skillPath, available: false,
+      updatedAt: '2026-07-20T00:00:00.000Z',
+    });
+    repository.saveAvailability({
+      skillAvailabilityId: 'availability:not-scanned', skillPath: otherSkillPath, available: false,
+      updatedAt: '2026-07-20T00:00:00.000Z',
+    });
+    fs.rmSync(path.dirname(skillPath), { recursive: true });
+    fs.rmSync(path.dirname(otherSkillPath), { recursive: true });
+
+    new SkillServiceImpl({ repository, roots: [{ owner: 'user', rootPath: root }] });
+
+    expect(repository.findAvailability({ skillPath })).toBeUndefined();
+    expect(repository.findAvailability({ skillPath: otherSkillPath })).toBeDefined();
+  });
 });
 
 function createService(root: string): SkillServiceImpl {
