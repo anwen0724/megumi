@@ -28,12 +28,17 @@ export const settings = {
   skills: {
     discovered: 'Available Skills',
     discoveredDescription: 'System and user-configured Skills available for the current context.',
+    listLabel: 'Skill management', filterLabel: 'Filter Skills by source', filters: { all: 'All' },
     refresh: 'Refresh', loading: 'Loading Skills…', unavailable: 'Skill management is unavailable.',
     empty: 'No Skills found', emptyDescription: 'Add a Skill to your user configuration to make it available here.',
+    noMatches: 'No matching Skills', noMatchesDescription: 'Choose another source filter to see available Skills.',
     resources: 'Resources', scripts: 'Scripts', issues: '{{count}} issue(s)',
     enable: 'Enable', disable: 'Disable', saving: 'Saving…', notFound: 'The Skill is no longer available.',
     enableNamed: 'Enable {{name}}', disableNamed: 'Disable {{name}}', viewDetails: 'View {{name}} details',
-    loadingDetail: 'Loading details…', detailSummary: '{{resources}} resources · {{scripts}} scripts',
+    moreActions: 'More actions for {{name}}', closeMenu: 'Close actions menu', details: 'Details',
+    detailsTitle: '{{name}} details', closeDetails: 'Close details', loadingDetail: 'Loading details…',
+    location: 'Location', contents: 'Contents', instructions: 'Instructions',
+    detailSummary: '{{resources}} resources · {{scripts}} scripts',
   },
   security: {
     protections: 'Current protections',

@@ -31,12 +31,17 @@ export const settings = {
   skills: {
     discovered: '可用 Skills',
     discoveredDescription: '当前上下文中可用的系统和用户配置 Skills。',
+    listLabel: 'Skill 管理', filterLabel: '按来源筛选 Skills', filters: { all: '全部' },
     refresh: '刷新', loading: '正在加载 Skills…', unavailable: 'Skill 管理当前不可用。',
     empty: '未发现 Skills', emptyDescription: '在用户配置中添加 Skill 后，它会显示在这里。',
+    noMatches: '没有符合条件的 Skills', noMatchesDescription: '选择其他来源筛选条件以查看可用 Skills。',
     resources: '资源', scripts: '脚本', issues: '{{count}} 个问题',
     enable: '启用', disable: '禁用', saving: '正在保存…', notFound: '这个 Skill 已不可用。',
     enableNamed: '启用 {{name}}', disableNamed: '禁用 {{name}}', viewDetails: '查看 {{name}} 详情',
-    loadingDetail: '正在加载详情…', detailSummary: '{{resources}} 个资源 · {{scripts}} 个脚本',
+    moreActions: '{{name}} 的更多操作', closeMenu: '关闭操作菜单', details: '详情',
+    detailsTitle: '{{name}} 详情', closeDetails: '关闭详情', loadingDetail: '正在加载详情…',
+    location: '位置', contents: '内容', instructions: '说明正文',
+    detailSummary: '{{resources}} 个资源 · {{scripts}} 个脚本',
   },
   security: {
     protections: '当前保护措施',

@@ -4,14 +4,25 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, Box, FileText, FolderOpen, LoaderCircle, RefreshCw, TerminalSquare } from 'lucide-react';
+import {
+  AlertTriangle,
+  Box,
+  FileText,
+  FolderOpen,
+  LoaderCircle,
+  MoreHorizontal,
+  RefreshCw,
+  TerminalSquare,
+  X,
+} from 'lucide-react';
 import type { SkillDetailUiDto, SkillListUiItem } from '@megumi/product/host-interface';
 import { useProjectStore } from '../../entities/project';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../shared/ipc';
-import { Button, SettingsPageHeader, SettingsSection, cx } from '../../shared/ui';
+import { Button, SettingsPageHeader, cx } from '../../shared/ui';
 
 type LoadStatus = 'loading' | 'ready' | 'failed';
+type SourceFilter = 'all' | 'System' | 'User';
 
 export function SkillSettingsPanel() {
   const { t } = useTranslation('settings');
@@ -20,8 +31,11 @@ export function SkillSettingsPanel() {
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [error, setError] = useState<string>();
   const [pendingPath, setPendingPath] = useState<string>();
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
+  const [menuPath, setMenuPath] = useState<string>();
   const [selectedPath, setSelectedPath] = useState<string>();
   const [detail, setDetail] = useState<SkillDetailUiDto>();
+  const [detailError, setDetailError] = useState<string>();
 
   async function loadSkills() {
     const api = window.megumi?.skill;
@@ -47,10 +61,23 @@ export function SkillSettingsPanel() {
   }
 
   useEffect(() => {
+    setMenuPath(undefined);
     setSelectedPath(undefined);
     setDetail(undefined);
+    setDetailError(undefined);
     void loadSkills();
   }, [workspaceId]);
+
+  useEffect(() => {
+    if (!menuPath && !selectedPath) return undefined;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      if (selectedPath) closeDetail();
+      else setMenuPath(undefined);
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [menuPath, selectedPath]);
 
   async function setAvailability(skill: SkillListUiItem) {
     const api = window.megumi?.skill;
@@ -83,16 +110,33 @@ export function SkillSettingsPanel() {
 
   async function showDetail(skill: SkillListUiItem) {
     const api = window.megumi?.skill;
+    setMenuPath(undefined);
     setSelectedPath(skill.skillPath);
     setDetail(undefined);
-    if (!api?.get) return;
+    setDetailError(undefined);
+    if (!api?.get) {
+      setDetailError(t('skills.unavailable'));
+      return;
+    }
     const result = await api.get(createRendererRuntimeIpcRequest(
       IPC_CHANNELS.skill.get,
       { skillPath: skill.skillPath, ...(workspaceId ? { workspaceId } : {}) },
     ));
     if (result.ok && result.data.status === 'ok') {
       setDetail(result.data.skill);
+      return;
     }
+    setDetailError(result.ok && result.data.status === 'failed'
+      ? result.data.failure.message
+      : result.ok
+        ? t('skills.notFound')
+        : result.data.message);
+  }
+
+  function closeDetail() {
+    setSelectedPath(undefined);
+    setDetail(undefined);
+    setDetailError(undefined);
   }
 
   const duplicateNames = useMemo(() => {
@@ -100,15 +144,35 @@ export function SkillSettingsPanel() {
     for (const skill of skills) counts.set(skill.name, (counts.get(skill.name) ?? 0) + 1);
     return new Set([...counts].filter(([, count]) => count > 1).map(([name]) => name));
   }, [skills]);
+  const visibleSkills = useMemo(() => sourceFilter === 'all'
+    ? skills
+    : skills.filter((skill) => skill.sourceLabel === sourceFilter), [skills, sourceFilter]);
+  const selectedSkill = selectedPath ? skills.find((skill) => skill.skillPath === selectedPath) : undefined;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <SettingsPageHeader title={t('categories.skills.label')} description={t('categories.skills.description')} />
-      <SettingsSection>
-        <div className="flex items-center justify-between gap-4 border-b border-[var(--color-border)] px-5 py-4">
-          <div>
-            <h2 className="text-sm font-semibold text-[var(--color-text)]">{t('skills.discovered')}</h2>
-            <p className="mt-1 text-xs text-[var(--color-text-muted)]">{t('skills.discoveredDescription')}</p>
+
+      <section aria-label={t('skills.listLabel')}>
+        <div className="flex items-center justify-between gap-4 border-b border-[var(--color-border)] px-1 pb-3">
+          <div role="tablist" aria-label={t('skills.filterLabel')} className="inline-flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] p-0.5">
+            {(['all', 'System', 'User'] as const).map((filter) => (
+              <button
+                key={filter}
+                type="button"
+                role="tab"
+                aria-selected={sourceFilter === filter}
+                onClick={() => setSourceFilter(filter)}
+                className={cx(
+                  'min-w-16 rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]',
+                  sourceFilter === filter
+                    ? 'bg-[var(--color-surface)] text-[var(--color-text)] shadow-sm'
+                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
+                )}
+              >
+                {filter === 'all' ? t('skills.filters.all') : filter}
+              </button>
+            ))}
           </div>
           <Button variant="ghost" size="sm" onClick={() => void loadSkills()} disabled={status === 'loading'}>
             <RefreshCw size={14} aria-hidden="true" className={status === 'loading' ? 'animate-spin' : undefined} />
@@ -123,80 +187,215 @@ export function SkillSettingsPanel() {
         ) : null}
 
         {error ? (
-          <div role="alert" className="m-5 flex items-start gap-2 rounded-lg border border-[var(--color-danger)]/25 bg-[var(--color-danger)]/5 p-3 text-sm text-[var(--color-danger)]">
+          <div role="alert" className="my-4 flex items-start gap-2 rounded-lg border border-[var(--color-danger)]/25 bg-[var(--color-danger)]/5 p-3 text-sm text-[var(--color-danger)]">
             <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />{error}
           </div>
         ) : null}
 
         {status === 'ready' && skills.length === 0 ? (
-          <div className="grid min-h-44 place-items-center px-6 text-center">
-            <div>
-              <Box size={24} className="mx-auto text-[var(--color-text-subtle)]" aria-hidden="true" />
-              <p className="mt-3 text-sm font-medium text-[var(--color-text)]">{t('skills.empty')}</p>
-              <p className="mt-1 text-xs text-[var(--color-text-muted)]">{t('skills.emptyDescription')}</p>
-            </div>
-          </div>
+          <EmptySkills title={t('skills.empty')} description={t('skills.emptyDescription')} />
         ) : null}
 
-        {status === 'ready' && skills.length > 0 ? (
-          <div className="divide-y divide-[var(--color-border)]">
-            {skills.map((skill) => {
-              const displayName = formatSkillName(skill.name);
-              const selected = selectedPath === skill.skillPath;
-              return (
-                <div key={skill.skillPath} className={cx('px-5 py-4 transition-colors', selected && 'bg-[var(--color-accent-soft)]/35')}>
-                  <div className="flex items-start gap-4">
-                    <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] text-[var(--color-text-muted)]">
-                      <Box size={16} aria-hidden="true" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <button type="button" onClick={() => void showDetail(skill)} aria-label={t('skills.viewDetails', { name: displayName })} className="block max-w-full cursor-pointer text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]">
-                        <span className="flex items-center gap-2">
-                          <span className="truncate text-sm font-semibold text-[var(--color-text)]">{displayName}</span>
-                          <span className="rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[0.66rem] font-medium uppercase tracking-[0.08em] text-[var(--color-text-muted)]">{skill.sourceLabel}</span>
-                        </span>
-                        <span className="mt-1 block text-sm leading-5 text-[var(--color-text-muted)]">{skill.description}</span>
-                        {duplicateNames.has(skill.name) ? <span className="mt-1 block truncate font-mono text-[0.68rem] text-[var(--color-text-subtle)]">{shortPath(skill.skillPath)}</span> : null}
-                      </button>
-                      <div className="mt-2 flex min-h-5 items-center gap-3 text-xs text-[var(--color-text-subtle)]">
-                        {skill.hasResources ? <span className="inline-flex items-center gap-1"><FolderOpen size={12} aria-hidden="true" />{t('skills.resources')}</span> : null}
-                        {skill.hasScripts ? <span className="inline-flex items-center gap-1"><TerminalSquare size={12} aria-hidden="true" />{t('skills.scripts')}</span> : null}
-                        {skill.diagnostics.length > 0 ? <span className="inline-flex items-center gap-1 text-[var(--color-warning)]"><AlertTriangle size={12} aria-hidden="true" />{t('skills.issues', { count: skill.diagnostics.length })}</span> : null}
-                      </div>
-                    </div>
-                    <Button variant={skill.available ? 'secondary' : 'primary'} size="sm" disabled={pendingPath === skill.skillPath} onClick={() => void setAvailability(skill)} aria-label={skill.available ? t('skills.disableNamed', { name: displayName }) : t('skills.enableNamed', { name: displayName })}>
-                      {pendingPath === skill.skillPath ? t('skills.saving') : skill.available ? t('skills.disable') : t('skills.enable')}
-                    </Button>
-                  </div>
+        {status === 'ready' && skills.length > 0 && visibleSkills.length === 0 ? (
+          <EmptySkills title={t('skills.noMatches')} description={t('skills.noMatchesDescription')} />
+        ) : null}
 
-                  {selected ? <SkillDetail detail={detail} /> : null}
+        {status === 'ready' && visibleSkills.length > 0 ? (
+          <div className="mt-2 space-y-1">
+            {visibleSkills.map((skill) => {
+              const displayName = formatSkillName(skill.name);
+              const menuOpen = menuPath === skill.skillPath;
+              return (
+                <div
+                  key={skill.skillPath}
+                  className="group relative grid min-h-17 grid-cols-[auto_minmax(0,1fr)_auto_auto_auto] items-center gap-3 rounded-xl px-3 py-3 transition-colors hover:bg-[var(--color-surface-muted)]"
+                >
+                  <div className={cx('grid h-10 w-10 place-items-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)] shadow-sm', !skill.available && 'opacity-55')}>
+                    <Box size={16} aria-hidden="true" />
+                  </div>
+                  <div className={cx('min-w-0', !skill.available && 'opacity-55')}>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <h2 className="truncate text-sm font-medium text-[var(--color-text)]">{displayName}</h2>
+                      {skill.hasResources ? <FolderOpen size={12} className="shrink-0 text-[var(--color-text-subtle)]" aria-label={t('skills.resources')} /> : null}
+                      {skill.hasScripts ? <TerminalSquare size={12} className="shrink-0 text-[var(--color-text-subtle)]" aria-label={t('skills.scripts')} /> : null}
+                      {skill.diagnostics.length > 0 ? <AlertTriangle size={12} className="shrink-0 text-[var(--color-warning)]" aria-label={t('skills.issues', { count: skill.diagnostics.length })} /> : null}
+                    </div>
+                    <p className="mt-0.5 truncate text-sm text-[var(--color-text-muted)]">{skill.description}</p>
+                    {duplicateNames.has(skill.name) ? <p className="mt-0.5 truncate font-mono text-[0.68rem] text-[var(--color-text-subtle)]">{shortPath(skill.skillPath)}</p> : null}
+                  </div>
+                  <span className={cx('px-1 text-xs text-[var(--color-text-subtle)]', !skill.available && 'opacity-55')}>{skill.sourceLabel}</span>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      aria-label={t('skills.moreActions', { name: displayName })}
+                      aria-haspopup="menu"
+                      aria-expanded={menuOpen}
+                      onClick={() => setMenuPath(menuOpen ? undefined : skill.skillPath)}
+                      className="grid h-8 w-8 place-items-center rounded-full text-[var(--color-text-subtle)] transition-colors hover:bg-[var(--color-surface-elevated)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]"
+                    >
+                      <MoreHorizontal size={17} aria-hidden="true" />
+                    </button>
+                    {menuOpen ? (
+                      <>
+                        <button type="button" aria-label={t('skills.closeMenu')} onClick={() => setMenuPath(undefined)} className="fixed inset-0 z-10 cursor-default" />
+                        <div role="menu" className="absolute right-0 top-9 z-20 min-w-32 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-1 shadow-xl">
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => void showDetail(skill)}
+                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-accent-soft)] focus-visible:outline-none focus-visible:bg-[var(--color-accent-soft)]"
+                          >
+                            <FileText size={14} aria-hidden="true" />{t('skills.details')}
+                          </button>
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+                  <AvailabilitySwitch
+                    checked={skill.available}
+                    disabled={pendingPath === skill.skillPath}
+                    label={skill.available ? t('skills.disableNamed', { name: displayName }) : t('skills.enableNamed', { name: displayName })}
+                    onClick={() => void setAvailability(skill)}
+                  />
                 </div>
               );
             })}
           </div>
         ) : null}
-      </SettingsSection>
+      </section>
+
+      {selectedSkill ? (
+        <SkillDetailDialog
+          skill={selectedSkill}
+          detail={detail}
+          error={detailError}
+          onClose={closeDetail}
+        />
+      ) : null}
     </div>
   );
 }
 
-function SkillDetail({ detail }: { detail?: SkillDetailUiDto }) {
-  const { t } = useTranslation('settings');
-  if (!detail) return <p className="ml-13 mt-3 text-xs text-[var(--color-text-subtle)]">{t('skills.loadingDetail')}</p>;
+function AvailabilitySwitch({ checked, disabled, label, onClick }: {
+  checked: boolean;
+  disabled: boolean;
+  label: string;
+  onClick: () => void;
+}) {
   return (
-    <div className="ml-13 mt-4 space-y-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-      <div className="flex items-start gap-2">
-        <FileText size={14} className="mt-0.5 shrink-0 text-[var(--color-text-subtle)]" aria-hidden="true" />
-        <code className="break-all text-xs text-[var(--color-text-muted)]">{detail.skillPath}</code>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className={cx(
+        'relative h-5 w-9 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-app-bg)] disabled:cursor-wait disabled:opacity-60',
+        checked ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-border-strong)]',
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cx(
+          'absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform',
+          checked ? 'translate-x-4' : 'translate-x-0.5',
+        )}
+      />
+    </button>
+  );
+}
+
+function SkillDetailDialog({ skill, detail, error, onClose }: {
+  skill: SkillListUiItem;
+  detail?: SkillDetailUiDto;
+  error?: string;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation('settings');
+  const displayName = formatSkillName(skill.name);
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-6 backdrop-blur-[2px]"
+      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('skills.detailsTitle', { name: displayName })}
+        className="flex max-h-[calc(100vh-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-2xl"
+      >
+        <header className="flex items-start gap-3 border-b border-[var(--color-border)] px-5 py-4">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)]">
+            <Box size={16} aria-hidden="true" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h2 className="truncate text-base font-semibold text-[var(--color-text)]">{displayName}</h2>
+              <span className="text-xs text-[var(--color-text-subtle)]">{skill.sourceLabel}</span>
+            </div>
+            <p className="mt-1 text-sm leading-5 text-[var(--color-text-muted)]">{skill.description}</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label={t('skills.closeDetails')} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]">
+            <X size={17} aria-hidden="true" />
+          </button>
+        </header>
+
+        <div className="min-h-32 overflow-y-auto px-5 py-5">
+          {error ? (
+            <div role="alert" className="flex items-start gap-2 rounded-lg border border-[var(--color-danger)]/25 bg-[var(--color-danger)]/5 p-3 text-sm text-[var(--color-danger)]">
+              <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />{error}
+            </div>
+          ) : null}
+          {!detail && !error ? (
+            <div className="flex min-h-28 items-center justify-center gap-2 text-sm text-[var(--color-text-muted)]">
+              <LoaderCircle size={16} className="animate-spin" aria-hidden="true" />{t('skills.loadingDetail')}
+            </div>
+          ) : null}
+          {detail ? (
+            <div className="space-y-5">
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-subtle)]">{t('skills.location')}</h3>
+                <div className="mt-2 flex items-start gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+                  <FileText size={14} className="mt-0.5 shrink-0 text-[var(--color-text-subtle)]" aria-hidden="true" />
+                  <code className="break-all text-xs text-[var(--color-text-muted)]">{detail.skillPath}</code>
+                </div>
+              </div>
+              {(detail.resourcePaths.length > 0 || detail.scriptNames.length > 0) ? (
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-subtle)]">{t('skills.contents')}</h3>
+                  <p className="mt-2 text-sm text-[var(--color-text-muted)]">{t('skills.detailSummary', { resources: detail.resourcePaths.length, scripts: detail.scriptNames.length })}</p>
+                </div>
+              ) : null}
+              {detail.content ? (
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-subtle)]">{t('skills.instructions')}</h3>
+                  <div className="mt-2 max-h-72 overflow-y-auto whitespace-pre-wrap rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 font-mono text-xs leading-5 text-[var(--color-text-muted)]">{detail.content}</div>
+                </div>
+              ) : null}
+              {detail.diagnostics.length > 0 ? (
+                <div className="space-y-2">
+                  {detail.diagnostics.map((diagnostic, index) => (
+                    <p key={`${diagnostic.level}:${index}`} className="flex items-start gap-2 text-xs text-[var(--color-warning)]"><AlertTriangle size={13} className="mt-0.5 shrink-0" aria-hidden="true" />{diagnostic.message}</p>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function EmptySkills({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="grid min-h-44 place-items-center px-6 text-center">
+      <div>
+        <Box size={24} className="mx-auto text-[var(--color-text-subtle)]" aria-hidden="true" />
+        <p className="mt-3 text-sm font-medium text-[var(--color-text)]">{title}</p>
+        <p className="mt-1 text-xs text-[var(--color-text-muted)]">{description}</p>
       </div>
-      {detail.diagnostics.map((diagnostic, index) => (
-        <p key={`${diagnostic.level}:${index}`} className="text-xs text-[var(--color-warning)]">{diagnostic.message}</p>
-      ))}
-      {(detail.resourcePaths.length > 0 || detail.scriptNames.length > 0) ? (
-        <p className="text-xs text-[var(--color-text-muted)]">
-          {t('skills.detailSummary', { resources: detail.resourcePaths.length, scripts: detail.scriptNames.length })}
-        </p>
-      ) : null}
     </div>
   );
 }
