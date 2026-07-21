@@ -1,6 +1,14 @@
 /* Finds workspace files whose normalized paths match a glob pattern. */
 import type { RawToolResult } from '../contracts/tool-contracts';
-import { inputRecord, optionalPositiveInteger, optionalString, requireString } from './input';
+import { buildBoundedItemPage } from './bounded-page';
+import {
+  inputRecord,
+  optionalBoolean,
+  optionalNonNegativeInteger,
+  optionalPositiveInteger,
+  optionalString,
+  requireString,
+} from './input';
 import type { BuiltInToolContext } from './types';
 
 export async function executeGlob(
@@ -11,16 +19,20 @@ export async function executeGlob(
   const pattern = requireString(record, 'pattern');
   const cwd = optionalString(record, 'cwd', globStaticBase(pattern));
   const limit = optionalPositiveInteger(record, 'limit', 500);
-  const files = await context.workspaceFileAccess.walkFiles({ path: cwd });
+  const offset = optionalNonNegativeInteger(record, 'offset', 0);
+  const includeHidden = optionalBoolean(record, 'includeHidden', false);
+  const files = await context.workspaceFileAccess.walkFiles({ path: cwd, includeHidden });
   const matcher = globToRegExp(pattern);
-  const matches = files.filter((file) => matcher.test(normalizeSlash(file))).slice(0, limit);
+  const matches = files.filter((file) => matcher.test(normalizeSlash(file))).sort();
 
   return {
     outputKind: 'json',
-    content: {
-      matches,
-      truncated: files.length > matches.length,
-    },
+    content: buildBoundedItemPage({
+      items: matches,
+      offset,
+      limit,
+      contentFor: (pageMatches, page) => ({ matches: pageMatches, ...page }),
+    }),
   };
 }
 
@@ -35,6 +47,11 @@ function globToRegExp(pattern: string): RegExp {
     const char = normalized[index];
     const next = normalized[index + 1];
     if (char === '*' && next === '*') {
+      if (normalized[index + 2] === '/') {
+        source += '(?:.*/)?';
+        index += 2;
+        continue;
+      }
       source += '.*';
       index += 1;
       continue;

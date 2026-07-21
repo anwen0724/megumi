@@ -24,7 +24,7 @@ export function normalizeRawToolResult(input: {
   toolName: string;
   rawResult: RawToolResult;
 }): ToolExecutionResult {
-  const normalizedResult = normalizeRawContent(input.rawResult);
+  const normalizedResult = normalizeRawToolContent(input.rawResult);
 
   if (input.rawResult.isError) {
     const message = normalizedResult.content || 'Tool execution failed';
@@ -93,7 +93,7 @@ export function createCancelledToolResult(input: {
   });
 }
 
-function normalizeRawContent(rawResult: RawToolResult): NormalizedToolResult {
+export function normalizeRawToolContent(rawResult: RawToolResult): NormalizedToolResult {
   if (rawResult.outputKind === 'json') {
     return normalizeTextContent(JSON.stringify(rawResult.content, null, 2), Boolean(rawResult.isError), 'json');
   }

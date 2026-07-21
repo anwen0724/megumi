@@ -24,10 +24,17 @@ describe('ToolExecutionService', () => {
       type: 'succeeded',
       toolName: 'read_file',
       normalizedResult: {
-        kind: 'text',
-        content: 'hello from service',
+        kind: 'json',
         isError: false,
       },
+    });
+    expect(result.type === 'succeeded' ? JSON.parse(result.normalizedResult.content) : null).toEqual({
+      path: 'README.md',
+      content: 'hello from service',
+      offset: 0,
+      bytesReturned: 18,
+      sizeBytes: 18,
+      hasMore: false,
     });
   });
 
@@ -178,8 +185,7 @@ function fakeWorkspaceFileAccess(files: Map<string, string>): WorkspaceFileAcces
       const buffer = Buffer.from(value, 'utf8');
       return {
         path: input.path,
-        content: buffer.byteLength > input.maxBytes ? buffer.subarray(0, input.maxBytes).toString('utf8') : value,
-        truncated: buffer.byteLength > input.maxBytes,
+        content: value,
         sizeBytes: buffer.byteLength,
       };
     },
@@ -193,7 +199,6 @@ function fakeWorkspaceFileAccess(files: Map<string, string>): WorkspaceFileAcces
       return {
         path: input.path,
         entries: [],
-        truncated: false,
       };
     },
     async walkFiles() {

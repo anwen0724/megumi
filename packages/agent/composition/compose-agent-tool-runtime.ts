@@ -82,35 +82,27 @@ export function createLocalWorkspaceFileAccess(input: {
     async readFile(request) {
       const resolved = resolveReadablePath(workspacePathPolicyService, input.projectRoot, request.path);
       const rawContent = await fileSystem.readFile(resolved.absolutePath, 'utf8');
-      const truncated = truncateUtf8(rawContent, request.maxBytes);
       return {
         path: resolved.relativePath,
-        content: truncated.content,
-        truncated: truncated.truncated,
+        content: rawContent,
         sizeBytes: Buffer.byteLength(rawContent, 'utf8'),
       };
     },
     async listDirectory(request) {
       const resolved = resolveReadablePath(workspacePathPolicyService, input.projectRoot, request.path);
-      const entries = await fileSystem.readdir(resolved.absolutePath, { withFileTypes: true });
-      const visibleEntries = entries
-        .filter((entry) => entry.isFile() || entry.isDirectory())
-        .map((entry) => {
-          const relativePath = normalizeSlash(resolved.relativePath === '.'
-            ? entry.name
-            : `${resolved.relativePath}/${entry.name}`);
-          return {
-            name: entry.name,
-            kind: entry.isDirectory() ? 'directory' as const : 'file' as const,
-            path: relativePath,
-          };
-        })
-        .sort((left, right) => left.path.localeCompare(right.path));
+      const visibleEntries: Array<{ name: string; kind: 'file' | 'directory'; path: string }> = [];
+      await collectDirectoryEntries({
+        fileSystem,
+        absoluteDirectory: resolved.absolutePath,
+        relativeDirectory: resolved.relativePath === '.' ? '' : resolved.relativePath,
+        maxDepth: request.maxDepth,
+        includeHidden: request.includeHidden,
+        output: visibleEntries,
+      });
 
       return {
         path: resolved.relativePath,
-        entries: visibleEntries,
-        truncated: false,
+        entries: visibleEntries.sort((left, right) => left.path.localeCompare(right.path)),
       };
     },
     async walkFiles(request) {
@@ -119,6 +111,7 @@ export function createLocalWorkspaceFileAccess(input: {
         fileSystem,
         workspacePathPolicyService,
         rootRelativePath: request.path,
+        includeHidden: request.includeHidden ?? true,
       });
     },
     async readTextFile(request) {
@@ -204,6 +197,7 @@ async function walkFiles(input: {
   fileSystem: LocalWorkspaceFileSystem;
   workspacePathPolicyService: WorkspacePathPolicyService;
   rootRelativePath: string;
+  includeHidden: boolean;
 }): Promise<string[]> {
   const root = resolveReadablePath(input.workspacePathPolicyService, input.projectRoot, input.rootRelativePath);
   const stats = await input.fileSystem.stat(root.absolutePath);
@@ -220,6 +214,7 @@ async function walkFiles(input: {
     root.absolutePath,
     root.relativePath === '.' ? '' : root.relativePath,
     output,
+    input.includeHidden,
   );
   return output.sort();
 }
@@ -229,9 +224,13 @@ async function walkDirectory(
   absoluteDirectory: string,
   relativeDirectory: string,
   output: string[],
+  includeHidden: boolean,
 ): Promise<void> {
   const entries = await fileSystem.readdir(absoluteDirectory, { withFileTypes: true });
   for (const entry of entries) {
+    if (!includeHidden && isHiddenName(entry.name)) {
+      continue;
+    }
     const relativePath = normalizeSlash(relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name);
     const absolutePath = path.join(absoluteDirectory, entry.name);
     if (entry.isFile()) {
@@ -239,7 +238,7 @@ async function walkDirectory(
       continue;
     }
     if (entry.isDirectory()) {
-      await walkDirectory(fileSystem, absolutePath, relativePath, output);
+      await walkDirectory(fileSystem, absolutePath, relativePath, output, includeHidden);
     }
   }
 }
@@ -253,17 +252,44 @@ async function existsAsFile(fileSystem: LocalWorkspaceFileSystem, filePath: stri
   }
 }
 
-function truncateUtf8(content: string, maxBytes: number): { content: string; truncated: boolean } {
-  const buffer = Buffer.from(content, 'utf8');
-  if (buffer.byteLength <= maxBytes) {
-    return { content, truncated: false };
-  }
-  return {
-    content: buffer.subarray(0, maxBytes).toString('utf8'),
-    truncated: true,
-  };
-}
-
 function normalizeSlash(value: string): string {
   return value.replace(/\\/g, '/').replace(/^\.\/+/, '') || '.';
+}
+
+async function collectDirectoryEntries(input: {
+  fileSystem: LocalWorkspaceFileSystem;
+  absoluteDirectory: string;
+  relativeDirectory: string;
+  maxDepth: number;
+  includeHidden: boolean;
+  output: Array<{ name: string; kind: 'file' | 'directory'; path: string }>;
+  depth?: number;
+}): Promise<void> {
+  const depth = input.depth ?? 1;
+  const entries = await input.fileSystem.readdir(input.absoluteDirectory, { withFileTypes: true });
+  for (const entry of entries) {
+    if ((!entry.isFile() && !entry.isDirectory()) || (!input.includeHidden && isHiddenName(entry.name))) {
+      continue;
+    }
+    const relativePath = normalizeSlash(input.relativeDirectory
+      ? `${input.relativeDirectory}/${entry.name}`
+      : entry.name);
+    input.output.push({
+      name: entry.name,
+      kind: entry.isDirectory() ? 'directory' : 'file',
+      path: relativePath,
+    });
+    if (entry.isDirectory() && depth < input.maxDepth) {
+      await collectDirectoryEntries({
+        ...input,
+        absoluteDirectory: path.join(input.absoluteDirectory, entry.name),
+        relativeDirectory: relativePath,
+        depth: depth + 1,
+      });
+    }
+  }
+}
+
+function isHiddenName(name: string): boolean {
+  return name.startsWith('.');
 }

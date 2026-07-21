@@ -45,3 +45,33 @@ export function optionalPositiveInteger(
   }
   return Number(value);
 }
+
+export function optionalNonNegativeInteger(
+  input: Record<string, unknown>,
+  key: string,
+  fallback: number,
+): number {
+  const value = input[key];
+  if (value === undefined) {
+    return fallback;
+  }
+  if (!Number.isInteger(value) || Number(value) < 0) {
+    throw new Error(`Invalid non-negative integer input: ${key}`);
+  }
+  return Number(value);
+}
+
+export function optionalBoolean(
+  input: Record<string, unknown>,
+  key: string,
+  fallback: boolean,
+): boolean {
+  const value = input[key];
+  if (value === undefined) {
+    return fallback;
+  }
+  if (typeof value !== 'boolean') {
+    throw new Error(`Invalid boolean input: ${key}`);
+  }
+  return value;
+}
