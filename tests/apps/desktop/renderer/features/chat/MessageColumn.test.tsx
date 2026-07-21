@@ -17,7 +17,7 @@ describe('MessageColumn', () => {
       />,
     );
 
-    expect(screen.getByRole('region', { name: 'Workspace changes for this turn' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Workspace changes for this run' })).toBeInTheDocument();
     expect(screen.getByText('1 file changed')).toBeInTheDocument();
     expect(screen.getAllByText('hollow-world.md').length).toBeGreaterThanOrEqual(1);
   });

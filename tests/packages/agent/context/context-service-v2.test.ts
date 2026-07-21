@@ -8,7 +8,7 @@ import type { ContextServiceDependencies } from '@megumi/agent/context/service/c
 import { composeAgentContext } from '@megumi/agent/context';
 
 const capacity = { providerId: 'openai', modelId: 'gpt', contextWindowTokens: 100 };
-const currentTurn = {
+const currentRun = {
   runId: 'R-current',
   userEntry: { entryId: 'E-current', parentEntryId: 'E-assistant' },
   userMessage: { type: 'user_message' as const, content: [{ type: 'text' as const, text: 'now' }] },
@@ -44,7 +44,7 @@ function dependencies(inputTokens: number[] = [50]): ContextServiceDependencies 
 }
 
 function request() {
-  return { sessionId: 'S1', workspaceId: 'W1', currentTurn, skillCatalog: [], usedSkills: [], tools: [], modelContext: capacity, imageInputSupport: true as const };
+  return { sessionId: 'S1', workspaceId: 'W1', currentRun, skillCatalog: [], usedSkills: [], tools: [], modelContext: capacity, imageInputSupport: true as const };
 }
 
 describe('ContextServiceImpl prepareModelCall', () => {

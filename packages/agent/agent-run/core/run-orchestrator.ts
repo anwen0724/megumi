@@ -12,7 +12,7 @@ import type { WorkspacePathPolicyService } from '../../workspace';
 import type {
   ContextCapacity,
   ContextService,
-  CurrentConversationTurn,
+  CurrentConversationRun,
   PreparedModelCall,
 } from '../../context';
 import type { JsonValue } from '../../shared-json';
@@ -73,7 +73,7 @@ export type RunOrchestratorDependencies = {
 
 export type RunOrchestratorRequest = {
   run: AgentRun;
-  current_turn: CurrentConversationTurn;
+  current_run: CurrentConversationRun;
   skill_catalog: SkillCatalogItem[];
   used_skills: UsedSkillContent[];
   model_context: ContextCapacity;
@@ -98,7 +98,7 @@ export type RunApprovalContinuation = {
   original_approval_policy_by_approval_id: Record<string, Extract<PermissionDecision, { type: 'requires_approval' }>>;
   deferred_tool_calls: ModelRequestedToolCall[];
   deferred_call_order_offset: number;
-  current_turn: CurrentConversationTurn;
+  current_run: CurrentConversationRun;
   skill_catalog: SkillCatalogItem[];
   used_skills: UsedSkillContent[];
   model_context: ContextCapacity;
@@ -119,9 +119,9 @@ export async function runAgentModelToolLoop(
   let run = request.run;
   let modelCalls = 0;
   let toolRounds = 0;
-  let currentTurn: CurrentConversationTurn = {
-    ...request.current_turn,
-    runItems: [...request.current_turn.runItems],
+  let currentRun: CurrentConversationRun = {
+    ...request.current_run,
+    runItems: [...request.current_run.runItems],
   };
   let usedSkills = request.used_skills.map((skill) => ({ ...skill }));
   let lastPrepared: PreparedModelCall | undefined;
@@ -130,7 +130,7 @@ export async function runAgentModelToolLoop(
 
   while (true) {
     if (modelCalls >= dependencies.limits.max_model_calls) {
-      traceLoopCounters(dependencies, run, modelCalls, toolRounds, currentTurn.runItems.length);
+      traceLoopCounters(dependencies, run, modelCalls, toolRounds, currentRun.runItems.length);
       return failRun(dependencies, run, loopLimitFailure('maxModelCalls exceeded.'), {
         model_calls: modelCalls,
         tool_rounds: toolRounds,
@@ -141,7 +141,7 @@ export async function runAgentModelToolLoop(
     const preparation = await dependencies.context_service.prepareModelCall({
       sessionId: run.session_id,
       workspaceId: run.workspace_id,
-      currentTurn,
+      currentRun,
       skillCatalog: request.skill_catalog,
       usedSkills,
       tools,
@@ -187,7 +187,7 @@ export async function runAgentModelToolLoop(
       run_id: run.run_id,
       model_call_id: modelCall.model_call_id,
       message_id: responseMessageId,
-      parent_entry_id: currentTurn.lastEntryId ?? currentTurn.userEntry.entryId,
+      parent_entry_id: currentRun.lastEntryId ?? currentRun.userEntry.entryId,
       content: [],
       has_pending_work_tool_call: false,
     });
@@ -241,7 +241,7 @@ export async function runAgentModelToolLoop(
       if (modelEvents.failure.details?.reason === 'malformed_work_tool_call' && protocolRepairs < 1) {
         protocolRepairs += 1;
         dependencies.active_run_store.clearActiveModelResponse(run.run_id);
-        currentTurn = appendProtocolRepair(currentTurn);
+        currentRun = appendProtocolRepair(currentRun);
         continue;
       }
       return failRun(dependencies, run, modelEvents.failure, {
@@ -262,7 +262,7 @@ export async function runAgentModelToolLoop(
       if (protocolRepairs < 1) {
         protocolRepairs += 1;
         dependencies.active_run_store.clearActiveModelResponse(run.run_id);
-        currentTurn = appendProtocolRepair(currentTurn);
+        currentRun = appendProtocolRepair(currentRun);
         continue;
       }
       return failRun(dependencies, run, {
@@ -339,7 +339,7 @@ export async function runAgentModelToolLoop(
       message_id: responseMessageId,
       session_id: run.session_id,
       run_id: run.run_id,
-      parent_entry_id: currentTurn.lastEntryId ?? currentTurn.userEntry.entryId,
+      parent_entry_id: currentRun.lastEntryId ?? currentRun.userEntry.entryId,
       content: modelEvents.assistant_content,
       outcome_status: 'completed',
       ...(modelEvents.stop_reason ? { stop_reason: modelEvents.stop_reason } : {}),
@@ -353,10 +353,10 @@ export async function runAgentModelToolLoop(
     }
     dependencies.active_run_store.setLastEntryId(run.run_id, response.entry.entry_id);
     dependencies.active_run_store.clearActiveModelResponse(run.run_id);
-    currentTurn = { ...currentTurn, lastEntryId: response.entry.entry_id };
+    currentRun = { ...currentRun, lastEntryId: response.entry.entry_id };
 
     if (toolRounds >= dependencies.limits.max_tool_rounds) {
-      traceLoopCounters(dependencies, run, modelCalls, toolRounds, currentTurn.runItems.length);
+      traceLoopCounters(dependencies, run, modelCalls, toolRounds, currentRun.runItems.length);
       return failRun(dependencies, run, loopLimitFailure('maxToolRounds exceeded.'), {
         model_calls: modelCalls,
         tool_rounds: toolRounds,
@@ -400,7 +400,7 @@ export async function runAgentModelToolLoop(
       model_call_index: modelCalls,
       tool_calls: modelEvents.tool_calls,
     });
-    const appendedItems: CurrentConversationTurn['runItems'] = [];
+    const appendedItems: CurrentConversationRun['runItems'] = [];
     if (modelEvents.content) {
       appendedItems.push({ type: 'assistant_message', content: [{ type: 'text', text: modelEvents.content }] });
     }
@@ -443,7 +443,7 @@ export async function runAgentModelToolLoop(
         message_id: dependencies.ids.tool_result_message_id(),
         session_id: run.session_id,
         run_id: run.run_id,
-        parent_entry_id: currentTurn.lastEntryId ?? currentTurn.userEntry.entryId,
+        parent_entry_id: currentRun.lastEntryId ?? currentRun.userEntry.entryId,
         tool_call_id: toolResult.tool_call_id,
         tool_name: toolResult.tool_name,
         status: toolResult.status,
@@ -459,7 +459,7 @@ export async function runAgentModelToolLoop(
           code: 'session_failed', message: persisted.failure.message,
         }, { model_calls: modelCalls, tool_rounds: toolRounds });
       }
-      currentTurn = { ...currentTurn, lastEntryId: persisted.entry.entry_id };
+      currentRun = { ...currentRun, lastEntryId: persisted.entry.entry_id };
       dependencies.active_run_store.setLastEntryId(run.run_id, persisted.entry.entry_id);
       appendedItems.push(toolResultToConversationItem(toolResult));
     }
@@ -469,7 +469,7 @@ export async function runAgentModelToolLoop(
         run_items: appendedItems,
       });
     }
-    currentTurn = { ...currentTurn, runItems: [...currentTurn.runItems, ...appendedItems] };
+    currentRun = { ...currentRun, runItems: [...currentRun.runItems, ...appendedItems] };
     usedSkills = mergeUsedSkillSources(usedSkills, toolGroup.tool_result_facts);
     const afterToolGroup = dependencies.active_run_store.getRun(run.run_id);
     if (afterToolGroup?.status === 'cancelled') {
@@ -507,7 +507,7 @@ export async function runAgentModelToolLoop(
           reason: 'approval_required',
         },
       });
-      traceLoopCounters(dependencies, run, modelCalls, toolRounds, currentTurn.runItems.length);
+      traceLoopCounters(dependencies, run, modelCalls, toolRounds, currentRun.runItems.length);
       return {
         status: 'waiting_for_approval',
         run,
@@ -522,7 +522,7 @@ export async function runAgentModelToolLoop(
           ),
           deferred_tool_calls: toolGroup.deferred_tool_calls,
           deferred_call_order_offset: toolGroup.deferred_call_order_offset,
-          current_turn: currentTurn,
+          current_run: currentRun,
           skill_catalog: request.skill_catalog,
           used_skills: usedSkills,
           model_context: request.model_context,
@@ -533,7 +533,7 @@ export async function runAgentModelToolLoop(
       };
     }
 
-    traceLoopCounters(dependencies, run, modelCalls, toolRounds, currentTurn.runItems.length);
+    traceLoopCounters(dependencies, run, modelCalls, toolRounds, currentRun.runItems.length);
   }
 }
 
@@ -597,7 +597,7 @@ function emitContextCompactionProgress(
   });
 }
 
-function toolResultToConversationItem(toolResult: ToolResultRuntimeFact): CurrentConversationTurn['runItems'][number] {
+function toolResultToConversationItem(toolResult: ToolResultRuntimeFact): CurrentConversationRun['runItems'][number] {
   return {
     type: 'tool_result',
     toolCallId: toolResult.tool_call_id,
@@ -780,10 +780,10 @@ function shouldRepairModelResponse(response: {
     && !hasUserVisibleAssistantContent(response.assistant_content);
 }
 
-function appendProtocolRepair(currentTurn: CurrentConversationTurn): CurrentConversationTurn {
+function appendProtocolRepair(currentRun: CurrentConversationRun): CurrentConversationRun {
   return {
-    ...currentTurn,
-    runItems: [...currentTurn.runItems, {
+    ...currentRun,
+    runItems: [...currentRun.runItems, {
       type: 'context',
       kind: 'historical_run_state',
       content: {

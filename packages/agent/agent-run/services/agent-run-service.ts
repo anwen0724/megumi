@@ -18,7 +18,7 @@ import type { ToolExecutionService, ToolRegistryService } from '../../tools';
 import type { WorkspacePathPolicyService, WorkspaceService } from '../../workspace';
 import type {
   ContextCapacity,
-  CurrentConversationTurn,
+  CurrentConversationRun,
 } from '../../context';
 import type { RuntimeError, RuntimeEvent } from '../../events';
 import type {
@@ -350,7 +350,7 @@ class DefaultAgentRunService implements AgentRunService {
         queue,
         eventSink,
         run,
-        current_turn: currentTurnFromSavedUserMessage(run.run_id, userMessage.message, userMessage.entry),
+        current_run: currentRunFromSavedUserMessage(run.run_id, userMessage.message, userMessage.entry),
         skill_catalog: skillCatalogResult.skills,
         used_skills: commandSkills.used_skills,
         ...(skillService ? { skill_service: skillService } : {}),
@@ -616,21 +616,21 @@ class DefaultAgentRunService implements AgentRunService {
     });
 
     const continueAfterAcknowledgement = async () => {
-    let currentTurn = continuation.current_turn;
+    let currentRun = continuation.current_run;
     if (flow.status === 'denied') {
       this.activeRuns.saveStep({
         ...approvalStep,
         status: 'denied',
         completed_at: this.clock.now(),
       });
-      currentTurn = { ...currentTurn, runItems: [...currentTurn.runItems, toolResultToConversationItem(flow.tool_result)] };
+      currentRun = { ...currentRun, runItems: [...currentRun.runItems, toolResultToConversationItem(flow.tool_result)] };
       const savedToolResult = this.saveToolResultMessage(
-        resumedRun, flow.tool_result, currentTurn.lastEntryId ?? currentTurn.userEntry.entryId,
+        resumedRun, flow.tool_result, currentRun.lastEntryId ?? currentRun.userEntry.entryId,
       );
       if (savedToolResult.status === 'failed') {
         return this.failApprovalResume(resumedRun, savedToolResult.failure, queue, continuation);
       }
-      currentTurn = { ...currentTurn, lastEntryId: savedToolResult.entry_id };
+      currentRun = { ...currentRun, lastEntryId: savedToolResult.entry_id };
       eventSink.emit({
         eventType: 'tool_result.created',
         run: resumedRun,
@@ -679,7 +679,7 @@ class DefaultAgentRunService implements AgentRunService {
         result: toolResult,
         created_at: this.clock.now(),
       });
-      currentTurn = { ...currentTurn, runItems: [...currentTurn.runItems, toolResultToConversationItem(toolFact)] };
+      currentRun = { ...currentRun, runItems: [...currentRun.runItems, toolResultToConversationItem(toolFact)] };
       this.activeRuns.saveStep({
         ...approvalStep,
         status: toolResult.type === 'succeeded' ? 'completed' : 'failed',
@@ -689,12 +689,12 @@ class DefaultAgentRunService implements AgentRunService {
         } : {}),
       });
       const savedToolResult = this.saveToolResultMessage(
-        resumedRun, toolFact, currentTurn.lastEntryId ?? currentTurn.userEntry.entryId,
+        resumedRun, toolFact, currentRun.lastEntryId ?? currentRun.userEntry.entryId,
       );
       if (savedToolResult.status === 'failed') {
         return this.failApprovalResume(resumedRun, savedToolResult.failure, queue, continuation);
       }
-      currentTurn = { ...currentTurn, lastEntryId: savedToolResult.entry_id };
+      currentRun = { ...currentRun, lastEntryId: savedToolResult.entry_id };
       eventSink.emit({
         eventType: 'tool_result.created',
         run: resumedRun,
@@ -753,7 +753,7 @@ class DefaultAgentRunService implements AgentRunService {
           pending_approval_ids: pendingApprovalIds,
           original_approval_policy_by_approval_id: continuation.original_approval_policy_by_approval_id,
           run_id: resumedRun.run_id,
-          current_turn: currentTurn,
+          current_run: currentRun,
           model_config: continuation.model_config,
           permission_mode: continuation.permission_mode,
         });
@@ -769,11 +769,11 @@ class DefaultAgentRunService implements AgentRunService {
     const deferred = await this.continueDeferredToolCallGroup({
       run: resumedRun,
       continuation,
-      current_turn: currentTurn,
+      current_run: currentRun,
       eventSink,
       signal: controller.signal,
     });
-    currentTurn = deferred.current_turn;
+    currentRun = deferred.current_run;
     if (deferred.status === 'waiting_for_approval') {
       this.activeRunAbortControllers.delete(run.run_id);
       queue.close();
@@ -787,7 +787,7 @@ class DefaultAgentRunService implements AgentRunService {
       queue,
       eventSink,
       run: deferred.run,
-      current_turn: currentTurn,
+      current_run: currentRun,
       used_skills: continuation.used_skills,
       skill_catalog: continuation.skill_catalog,
       ...(this.skillServicesByRun.get(run.run_id) ? { skill_service: this.skillServicesByRun.get(run.run_id) } : {}),
@@ -915,19 +915,19 @@ class DefaultAgentRunService implements AgentRunService {
   private async continueDeferredToolCallGroup(input: {
     run: AgentRun;
     continuation: RunApprovalContinuation;
-    current_turn: CurrentConversationTurn;
+    current_run: CurrentConversationRun;
     eventSink: AgentRunRuntimeEventFactory;
     signal?: AbortSignal;
   }): Promise<
-    | { status: 'ready'; run: AgentRun; current_turn: CurrentConversationTurn }
-    | { status: 'waiting_for_approval'; run: AgentRun; current_turn: CurrentConversationTurn }
-    | { status: 'failed'; failure: AgentRunFailure; current_turn: CurrentConversationTurn }
+    | { status: 'ready'; run: AgentRun; current_run: CurrentConversationRun }
+    | { status: 'waiting_for_approval'; run: AgentRun; current_run: CurrentConversationRun }
+    | { status: 'failed'; failure: AgentRunFailure; current_run: CurrentConversationRun }
   > {
     if (input.continuation.deferred_tool_calls.length === 0) {
       return {
         status: 'ready',
         run: input.run,
-        current_turn: input.current_turn,
+        current_run: input.current_run,
       };
     }
 
@@ -938,7 +938,7 @@ class DefaultAgentRunService implements AgentRunService {
     if (permissionSettings.status === 'failed') {
       return {
         status: 'failed',
-        current_turn: input.current_turn,
+        current_run: input.current_run,
         failure: {
           code: 'approval_failed',
           message: permissionSettings.failure.message,
@@ -986,24 +986,24 @@ class DefaultAgentRunService implements AgentRunService {
       return {
         status: 'failed',
         failure: { code: 'cancel_failed', message: 'Agent Run was cancelled during deferred tool execution.' },
-        current_turn: input.current_turn,
+        current_run: input.current_run,
       };
     }
 
-    let currentTurn = input.current_turn;
+    let currentRun = input.current_run;
     for (const toolCall of toolGroup.tool_calls) {
       emitToolCallTerminalEvent(input.eventSink, input.run, toolCall);
     }
     for (const toolResult of toolGroup.tool_result_facts) {
       emitToolResultRuntimeEvent(input.eventSink, input.run, toolResult);
       const persisted = this.saveToolResultMessage(
-        input.run, toolResult, currentTurn.lastEntryId ?? currentTurn.userEntry.entryId,
+        input.run, toolResult, currentRun.lastEntryId ?? currentRun.userEntry.entryId,
       );
       if (persisted.status === 'failed') {
-        return { status: 'failed', failure: persisted.failure, current_turn: currentTurn };
+        return { status: 'failed', failure: persisted.failure, current_run: currentRun };
       }
-      currentTurn = { ...currentTurn, lastEntryId: persisted.entry_id };
-      currentTurn = { ...currentTurn, runItems: [...currentTurn.runItems, toolResultToConversationItem(toolResult)] };
+      currentRun = { ...currentRun, lastEntryId: persisted.entry_id };
+      currentRun = { ...currentRun, runItems: [...currentRun.runItems, toolResultToConversationItem(toolResult)] };
     }
 
     if (toolGroup.pending_approvals.length > 0) {
@@ -1034,7 +1034,7 @@ class DefaultAgentRunService implements AgentRunService {
         ),
         deferred_tool_calls: toolGroup.deferred_tool_calls,
         deferred_call_order_offset: toolGroup.deferred_call_order_offset,
-        current_turn: currentTurn,
+        current_run: currentRun,
       };
       for (const approvalId of nextContinuation.pending_approval_ids) {
         this.approvalContinuations.set(approvalId, nextContinuation);
@@ -1042,14 +1042,14 @@ class DefaultAgentRunService implements AgentRunService {
       return {
         status: 'waiting_for_approval',
         run: waitingRun,
-        current_turn: currentTurn,
+        current_run: currentRun,
       };
     }
 
     return {
       status: 'ready',
       run: input.run,
-      current_turn: currentTurn,
+      current_run: currentRun,
     };
   }
 
@@ -1057,7 +1057,7 @@ class DefaultAgentRunService implements AgentRunService {
     queue: RuntimeEventQueue;
     eventSink: AgentRunRuntimeEventFactory;
     run: AgentRun;
-    current_turn: CurrentConversationTurn;
+    current_run: CurrentConversationRun;
     skill_catalog: SkillCatalogItem[];
     used_skills: UsedSkillContent[];
     skill_service?: SkillService;
@@ -1100,7 +1100,7 @@ class DefaultAgentRunService implements AgentRunService {
         limits: this.limits,
       }, {
         run: input.run,
-        current_turn: input.current_turn,
+        current_run: input.current_run,
         skill_catalog: input.skill_catalog,
         used_skills: input.used_skills,
         model_context: input.model_context,
@@ -1619,7 +1619,7 @@ function createAgentRunEventQueue(
   };
 }
 
-function toolResultToConversationItem(toolResult: ToolResultRuntimeFact): CurrentConversationTurn['runItems'][number] {
+function toolResultToConversationItem(toolResult: ToolResultRuntimeFact): CurrentConversationRun['runItems'][number] {
   return {
     type: 'tool_result',
     toolCallId: toolResult.tool_call_id,
@@ -1654,11 +1654,11 @@ function usedSkillContent(skill: UsedSkillContent): UsedSkillContent {
   };
 }
 
-function currentTurnFromSavedUserMessage(
+function currentRunFromSavedUserMessage(
   runId: string,
   saved: SessionMessageWithAttachments,
   entry: SessionEntry,
-): CurrentConversationTurn {
+): CurrentConversationRun {
   return {
     runId,
     lastEntryId: entry.entry_id,

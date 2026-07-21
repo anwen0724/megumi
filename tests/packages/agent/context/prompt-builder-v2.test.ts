@@ -12,7 +12,7 @@ describe('buildPrompt', () => {
       instructions: { system: [], agentInstructions: { sources: [] } },
       referenceContext: { skillCatalog: [] },
       runContext: { skills: [] },
-      historicalTurns: [{
+      historicalRuns: [{
         source: { runId: 'run-old', userEntryId: 'EU', userMessageId: 'MU', lastEntryId: 'EA', responseMessageRefs: [] },
         userMessage: { type: 'user_message' as const, content: [{ type: 'text' as const, text: 'Create a file' }] },
         items: [{
@@ -23,14 +23,14 @@ describe('buildPrompt', () => {
           ],
         }],
       }],
-      currentTurn: { runId: 'run-now', userEntry: { entryId: 'EN' }, userMessage: { type: 'user_message' as const, content: [{ type: 'text' as const, text: 'Continue' }] }, runItems: [] },
+      currentRun: { runId: 'run-now', userEntry: { entryId: 'EN' }, userMessage: { type: 'user_message' as const, content: [{ type: 'text' as const, text: 'Continue' }] }, runItems: [] },
       tools: [],
     };
 
     expect(buildPrompt(activeContext).conversation).toEqual([
-      activeContext.historicalTurns[0].userMessage,
-      activeContext.historicalTurns[0].items[0],
-      activeContext.currentTurn.userMessage,
+      activeContext.historicalRuns[0].userMessage,
+      activeContext.historicalRuns[0].items[0],
+      activeContext.currentRun.userMessage,
     ]);
   });
 
@@ -45,7 +45,7 @@ describe('buildPrompt', () => {
       runContext: {
         skills: [{ name: 'Review', skillPath: 'C:/review/SKILL.md', content: 'Review carefully.' }],
       },
-      historicalTurns: [{
+      historicalRuns: [{
         source: {
           runId: 'run-history',
           userEntryId: 'entry-user-history',
@@ -60,7 +60,7 @@ describe('buildPrompt', () => {
           { type: 'assistant_message', content: [{ type: 'text', text: 'Historical assistant' }] },
         ],
       }],
-      currentTurn: {
+      currentRun: {
         runId: 'run-current',
         userEntry: { entryId: 'entry-user-current', parentEntryId: 'entry-assistant-history' },
         userMessage: { type: 'user_message', content: [{ type: 'text', text: 'Current user' }] },
@@ -83,12 +83,12 @@ describe('buildPrompt', () => {
     expect(Object.keys(prompt)).toEqual(['instructions', 'referenceContext', 'runContext', 'conversation', 'tools']);
     expect(prompt.runContext.skills).toEqual(activeContext.runContext.skills);
     expect(prompt.conversation).toEqual([
-      activeContext.historicalTurns[0].userMessage,
+      activeContext.historicalRuns[0].userMessage,
       { type: 'tool_call', toolCallId: 'call-1', toolName: 'lookup', arguments: { id: 1 } },
       { type: 'tool_result', toolCallId: 'call-1', toolName: 'lookup', status: 'success', content: [{ type: 'json', value: { answer: 42 } }] },
-      activeContext.historicalTurns[0].items[2],
-      activeContext.currentTurn.userMessage,
-      ...activeContext.currentTurn.runItems,
+      activeContext.historicalRuns[0].items[2],
+      activeContext.currentRun.userMessage,
+      ...activeContext.currentRun.runItems,
     ]);
     expect(prompt.conversation.filter((item) => item.type === 'user_message')).toHaveLength(2);
     expect(prompt.conversation.filter((item) => (

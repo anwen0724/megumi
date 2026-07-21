@@ -6,9 +6,9 @@ import type { EffectiveAgentInstructions, SystemInstruction } from '../../../ins
 import type { SkillCatalogItem, UsedSkillContent } from '@megumi/skills';
 import type { ActiveContext } from '../../domain/model/active-context';
 import type {
-  ConversationTurn,
-  CurrentConversationTurn,
-} from '../../domain/model/conversation-turn';
+  ConversationRun,
+  CurrentConversationRun,
+} from '../../domain/model/conversation-run';
 import type {
   ContextSourceRef,
   MemoryContextInput,
@@ -23,8 +23,8 @@ export type BuildActiveContextRequest = {
   usedSkills: UsedSkillContent[];
   compactionSummary?: VisibleCompactionSummary;
   memoryRecall?: MemoryContextInput;
-  historicalTurns: ConversationTurn[];
-  currentTurn: CurrentConversationTurn;
+  historicalRuns: ConversationRun[];
+  currentRun: CurrentConversationRun;
   tools: ToolSetEntry[];
 };
 
@@ -52,8 +52,8 @@ export function buildActiveContext(
     runContext: {
       skills: request.usedSkills.map((skill) => ({ ...skill })),
     },
-    historicalTurns: request.historicalTurns,
-    currentTurn: request.currentTurn,
+    historicalRuns: request.historicalRuns,
+    currentRun: request.currentRun,
     tools: request.tools,
   };
 
@@ -94,14 +94,14 @@ function buildSourceRefs(activeContext: ActiveContext): ContextSourceRef[] {
     })));
   }
 
-  for (const turn of activeContext.historicalTurns) {
+  for (const run of activeContext.historicalRuns) {
     refs.push(
-      { sourceType: 'session_message', sourceId: turn.source.userMessageId },
-      ...turn.source.responseMessageRefs.map(({ messageId }) => ({
+      { sourceType: 'session_message', sourceId: run.source.userMessageId },
+      ...run.source.responseMessageRefs.map(({ messageId }) => ({
         sourceType: 'session_message' as const,
         sourceId: messageId,
       })),
-      ...turn.items.flatMap((item) => item.type === 'tool_result'
+      ...run.items.flatMap((item) => item.type === 'tool_result'
         ? [{ sourceType: 'tool_result' as const, sourceId: item.toolCallId }]
         : []),
     );
@@ -109,14 +109,14 @@ function buildSourceRefs(activeContext: ActiveContext): ContextSourceRef[] {
 
   refs.push({
     sourceType: 'session_message',
-    sourceId: activeContext.currentTurn.userEntry.entryId,
+    sourceId: activeContext.currentRun.userEntry.entryId,
   });
-  activeContext.currentTurn.runItems.forEach((item, index) => {
+  activeContext.currentRun.runItems.forEach((item, index) => {
     refs.push(item.type === 'tool_result'
       ? { sourceType: 'tool_result', sourceId: item.toolCallId }
       : {
           sourceType: 'current_run_item',
-          sourceId: `${activeContext.currentTurn.runId}:${index}`,
+          sourceId: `${activeContext.currentRun.runId}:${index}`,
         });
   });
   refs.push(...activeContext.tools.map(({ name }) => ({

@@ -159,7 +159,7 @@ function buildExtractionInputContext(input: {
     },
     {
       partId: `${input.contextId}:user-part`,
-      kind: 'current_turn',
+      kind: 'current_run',
       role: 'user',
       text: input.prompt.user,
       sourceRefs: [userSourceRef],

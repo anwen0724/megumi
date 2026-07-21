@@ -6,14 +6,14 @@ import type { InstructionService } from '../../instructions';
 import type { SessionHistoryItem, SessionService } from '../../session';
 import type { SkillCatalogItem, UsedSkillContent } from '@megumi/skills';
 import type { ContextCapacity, ContextPolicy, ContextUsage, SessionUsageSnapshot } from '../domain/model/context-usage';
-import type { ConversationTurn, CurrentConversationTurn } from '../domain/model/conversation-turn';
+import type { ConversationRun, CurrentConversationRun } from '../domain/model/conversation-run';
 import type { ContextSourceRef, Prompt, VisibleCompactionSummary } from '../domain/model/prompt';
 import { buildActiveContext } from './internal/active-context-builder';
 import { buildCompactionSummaryRequest } from './internal/compaction-summary-builder';
 import { planCompaction, validateCompactionReduction } from './internal/compaction-planner';
 import { calculateContextUsage, type ContextPromptTokenCounter } from './internal/context-usage-calculator';
-import { buildConversationTurns } from './internal/conversation-turn-builder';
-import { conversationItemsFromTurn } from './internal/conversation-turn-items';
+import { buildConversationRuns } from './internal/conversation-run-builder';
+import { conversationItemsFromRun } from './internal/conversation-run-items';
 import { buildPrompt } from './internal/prompt-builder';
 import { materializePromptImages } from './internal/image-content-materializer';
 import type { ContextService } from './context-service';
@@ -63,7 +63,7 @@ export type ContextServiceDependencies = {
 type BuildFacts = {
   sessionId: string;
   expectedActiveEntryId: string | null;
-  historicalTurns: ConversationTurn[];
+  historicalRuns: ConversationRun[];
   systemInstructions: ReturnType<InstructionService['getSystemInstructions']>;
   agentInstructions: { sources: Array<{ sourceId: string; sourcePath: string; content: string }> };
   skillCatalog: SkillCatalogItem[];
@@ -71,7 +71,7 @@ type BuildFacts = {
   memoryRecall?: PrepareModelCallRequest['memoryRecall'];
   tools: PrepareModelCallRequest['tools'];
   compactionSummary?: VisibleCompactionSummary;
-  currentTurn?: CurrentConversationTurn;
+  currentRun?: CurrentConversationRun;
 };
 
 type BuiltPrompt = { prompt: Prompt; sourceRefs: ContextSourceRef[] };
@@ -86,7 +86,7 @@ type CompactInternalInput = {
 };
 type CompactInternalResult =
   | { status: 'compacted'; compactionId: string; usageAfter: ContextUsage; facts: BuildFacts }
-  | { status: 'nothing_to_compact'; reason: 'no_historical_turns' | 'no_older_turns' | 'summary_not_reducing' }
+  | { status: 'nothing_to_compact'; reason: 'no_historical_runs' | 'no_older_runs' | 'summary_not_reducing' }
   | { status: 'failed'; failure: ContextFailure };
 
 export class ContextServiceImpl implements ContextService {
@@ -98,7 +98,7 @@ export class ContextServiceImpl implements ContextService {
   constructor(private readonly dependencies: ContextServiceDependencies) {
     this.defaultPolicy = {
       compactionThresholdRatio: dependencies.policy?.compactionThresholdRatio ?? 0.8,
-      keepRecentTurns: dependencies.policy?.keepRecentTurns ?? 3,
+      keepRecentRuns: dependencies.policy?.keepRecentRuns ?? 3,
     };
     calculateContextUsage({ inputTokens: 0, capacity: { providerId: 'validation', modelId: 'validation', contextWindowTokens: 1 }, policy: this.defaultPolicy });
     this.clock = dependencies.clock ?? { now: () => new Date().toISOString() };
@@ -128,8 +128,8 @@ export class ContextServiceImpl implements ContextService {
     const loaded = await this.loadFacts({
       sessionId: request.sessionId,
       workspaceId: request.workspaceId,
-      throughEntryId: request.currentTurn.userEntry.parentEntryId ?? null,
-      currentTurn: request.currentTurn,
+      throughEntryId: request.currentRun.userEntry.parentEntryId ?? null,
+      currentRun: request.currentRun,
       skillCatalog: request.skillCatalog,
       usedSkills: request.usedSkills,
       memoryRecall: request.memoryRecall,
@@ -239,7 +239,7 @@ export class ContextServiceImpl implements ContextService {
     sessionId: string;
     workspaceId: string;
     throughEntryId?: string | null;
-    currentTurn?: CurrentConversationTurn;
+    currentRun?: CurrentConversationRun;
     skillCatalog: PrepareModelCallRequest['skillCatalog'];
     usedSkills: PrepareModelCallRequest['usedSkills'];
     memoryRecall?: PrepareModelCallRequest['memoryRecall'];
@@ -253,7 +253,7 @@ export class ContextServiceImpl implements ContextService {
     if (input.signal?.aborted) return failed(cancelled());
     if (historyResult.status === 'failed') return failed(ownerFailure('session_history_failed', 'Session history could not be loaded.', 'session', historyResult.failure));
 
-    const turns = buildConversationTurns({
+    const runs = buildConversationRuns({
       history: historyResult.history,
       ...(this.dependencies.isRunLive ? { isRunLive: this.dependencies.isRunLive } : {}),
     });
@@ -270,10 +270,10 @@ export class ContextServiceImpl implements ContextService {
       status: 'loaded',
       facts: {
         sessionId: input.sessionId,
-        expectedActiveEntryId: input.currentTurn?.lastEntryId ?? input.currentTurn?.userEntry.entryId
+        expectedActiveEntryId: input.currentRun?.lastEntryId ?? input.currentRun?.userEntry.entryId
           ?? historyResult.history.at(-1)?.entry.entry_id
           ?? null,
-        historicalTurns: turns.turns,
+        historicalRuns: runs.runs,
         systemInstructions,
         agentInstructions: agentInstructions.instructions,
         skillCatalog: input.skillCatalog,
@@ -281,19 +281,19 @@ export class ContextServiceImpl implements ContextService {
         ...(input.memoryRecall ? { memoryRecall: input.memoryRecall } : {}),
         tools: input.tools,
         ...(effectiveSummary(historyResult.history) ? { compactionSummary: effectiveSummary(historyResult.history) } : {}),
-        ...(input.currentTurn ? { currentTurn: input.currentTurn } : {}),
+        ...(input.currentRun ? { currentRun: input.currentRun } : {}),
       },
     };
   }
 
   private buildPrompt(facts: BuildFacts): BuiltPrompt {
-    if (facts.currentTurn) {
-      const built = buildActiveContext({ ...facts, currentTurn: facts.currentTurn });
+    if (facts.currentRun) {
+      const built = buildActiveContext({ ...facts, currentRun: facts.currentRun });
       return { prompt: buildPrompt(built.activeContext), sourceRefs: built.sourceRefs };
     }
     return {
-      prompt: promptWithoutCurrentTurn(facts),
-      sourceRefs: sourceRefsWithoutCurrentTurn(facts),
+      prompt: promptWithoutCurrentRun(facts),
+      sourceRefs: sourceRefsWithoutCurrentRun(facts),
     };
   }
 
@@ -341,9 +341,9 @@ export class ContextServiceImpl implements ContextService {
 
   private async compactInternalCore(input: CompactInternalInput): Promise<CompactInternalResult> {
     const plan = planCompaction({
-      historicalTurns: input.facts.historicalTurns,
-      keepRecentTurns: input.policy.keepRecentTurns,
-      ...(input.facts.currentTurn ? { currentTurn: input.facts.currentTurn } : {}),
+      historicalRuns: input.facts.historicalRuns,
+      keepRecentRuns: input.policy.keepRecentRuns,
+      ...(input.facts.currentRun ? { currentRun: input.facts.currentRun } : {}),
     });
     if (plan.status === 'nothing_to_compact') return plan;
     if (input.signal?.aborted) return failed(cancelled());
@@ -352,7 +352,7 @@ export class ContextServiceImpl implements ContextService {
     const progressBase = {
       compactionId,
       tokensBefore: input.usageBefore.usedTokens,
-      summarizedSourceCount: plan.plan.turns.length,
+      summarizedSourceCount: plan.plan.runs.length,
       ...(plan.plan.firstKeptEntryId ? { firstKeptSourceId: plan.plan.firstKeptEntryId } : {}),
       ...(input.facts.compactionSummary ? { previousCompactionId: input.facts.compactionSummary.compactionId } : {}),
     };
@@ -368,8 +368,8 @@ export class ContextServiceImpl implements ContextService {
       });
       return failed(failure);
     };
-    const summaryRequest = buildCompactionSummaryRequest({ previousSummary: input.facts.compactionSummary?.content, turns: plan.plan.turns });
-    const summaryPrompt = summaryPromptFrom(summaryRequest.systemPrompt, summaryRequest.input, plan.plan.turns);
+    const summaryRequest = buildCompactionSummaryRequest({ previousSummary: input.facts.compactionSummary?.content, runs: plan.plan.runs });
+    const summaryPrompt = summaryPromptFrom(summaryRequest.systemPrompt, summaryRequest.input, plan.plan.runs);
     const materializedSummary = await materializePromptImages({ prompt: summaryPrompt, sessionService: this.dependencies.sessionService, imageInputSupport: input.imageInputSupport });
     if (materializedSummary.status === 'failed') return compactionFailure(materializedSummary.failure);
     const generated = await this.dependencies.summaryModelCall.complete({ prompt: materializedSummary.prompt, modelContext: input.modelContext, sessionId: input.facts.sessionId, compactionId, ...(input.signal ? { signal: input.signal } : {}) });
@@ -378,8 +378,8 @@ export class ContextServiceImpl implements ContextService {
     if (generated.content.trim().length === 0) {
       return compactionFailure({ code: 'compaction_failed', message: 'Compaction summary model returned empty content.', retryable: true, cause: { owner: 'ai' } });
     }
-    const retainedTurns = input.facts.historicalTurns.slice(plan.plan.turns.length);
-    const compactedFacts: BuildFacts = { ...input.facts, historicalTurns: retainedTurns, compactionSummary: { compactionId, content: generated.content } };
+    const retainedRuns = input.facts.historicalRuns.slice(plan.plan.runs.length);
+    const compactedFacts: BuildFacts = { ...input.facts, historicalRuns: retainedRuns, compactionSummary: { compactionId, content: generated.content } };
     const projectedBuilt = await this.materializeBuiltPrompt(this.buildPrompt(compactedFacts), input.imageInputSupport);
     if (projectedBuilt.status === 'failed') return compactionFailure(projectedBuilt.failure);
     const projected = await this.countUsage(projectedBuilt.built.prompt, input.modelContext, input.policy, input.signal);
@@ -421,7 +421,7 @@ export class ContextServiceImpl implements ContextService {
     const policy = {
       compactionThresholdRatio: configured.compactionThresholdRatio
         ?? this.defaultPolicy.compactionThresholdRatio,
-      keepRecentTurns: configured.keepRecentTurns ?? this.defaultPolicy.keepRecentTurns,
+      keepRecentRuns: configured.keepRecentRuns ?? this.defaultPolicy.keepRecentRuns,
     };
     calculateContextUsage({
       inputTokens: 0,
@@ -460,17 +460,17 @@ function effectiveSummary(history: SessionHistoryItem[]): VisibleCompactionSumma
   return undefined;
 }
 
-function promptWithoutCurrentTurn(facts: BuildFacts): Prompt {
+function promptWithoutCurrentRun(facts: BuildFacts): Prompt {
   return {
     instructions: { system: facts.systemInstructions, agentInstructions: facts.agentInstructions },
     referenceContext: { skillCatalog: facts.skillCatalog, ...(facts.compactionSummary ? { compactionSummary: facts.compactionSummary } : {}), ...(facts.memoryRecall ? { memoryRecall: facts.memoryRecall } : {}) },
     runContext: { skills: facts.usedSkills },
-    conversation: facts.historicalTurns.flatMap(conversationItemsFromTurn),
+    conversation: facts.historicalRuns.flatMap(conversationItemsFromRun),
     tools: facts.tools,
   };
 }
 
-function sourceRefsWithoutCurrentTurn(facts: BuildFacts): ContextSourceRef[] {
+function sourceRefsWithoutCurrentRun(facts: BuildFacts): ContextSourceRef[] {
   return [
     ...facts.systemInstructions.map((item) => ({ sourceType: 'system_instruction' as const, sourceId: item.instructionId })),
     ...facts.agentInstructions.sources.map((item) => ({ sourceType: 'agent_instruction' as const, sourceId: item.sourceId })),
@@ -480,14 +480,14 @@ function sourceRefsWithoutCurrentTurn(facts: BuildFacts): ContextSourceRef[] {
   ];
 }
 
-function summaryPromptFrom(systemPrompt: string, input: string, turns: ConversationTurn[]): Prompt {
+function summaryPromptFrom(systemPrompt: string, input: string, runs: ConversationRun[]): Prompt {
   return {
     instructions: { system: [{ instructionId: 'context:compaction-summary', content: systemPrompt }], agentInstructions: { sources: [] } },
     referenceContext: { skillCatalog: [] },
     runContext: { skills: [] },
     conversation: [
       { type: 'user_message', content: [{ type: 'text', text: input }] },
-      ...turns.flatMap(conversationItemsFromTurn),
+      ...runs.flatMap(conversationItemsFromRun),
     ],
     tools: [],
   };

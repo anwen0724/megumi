@@ -177,7 +177,7 @@ export const chat = {
     },
   },
   workspace: {
-    changes: 'Workspace changes for this turn',
+    changes: 'Workspace changes for this run',
     openChangedFiles: 'Changed files that can be opened',
     changedFiles: 'Changed files',
     files: 'Project files',

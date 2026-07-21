@@ -28,7 +28,7 @@ describe('Agent final reply acceptance', () => {
     const runtimeEvents = await collectEvents(started.events);
 
     expect(deps.context_service.prepareModelCall).toHaveBeenCalledTimes(2);
-    expect(deps.context_service.prepareModelCall.mock.calls[1]?.[0].currentTurn.runItems).toContainEqual(
+    expect(deps.context_service.prepareModelCall.mock.calls[1]?.[0].currentRun.runItems).toContainEqual(
       expect.objectContaining({ type: 'context', kind: 'historical_run_state' }),
     );
     expect(deps.session_service.saveModelResponse).not.toHaveBeenCalled();

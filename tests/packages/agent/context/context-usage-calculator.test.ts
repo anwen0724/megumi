@@ -9,7 +9,7 @@ describe('calculateContextUsage', () => {
     expect(calculateContextUsage({
       inputTokens: 800,
       capacity: { providerId: 'p', modelId: 'm', contextWindowTokens: 1000 },
-      policy: { compactionThresholdRatio: 0.8, keepRecentTurns: 10 },
+      policy: { compactionThresholdRatio: 0.8, keepRecentRuns: 10 },
     })).toEqual({
       usedTokens: 800,
       contextWindowTokens: 1000,
@@ -23,7 +23,7 @@ describe('calculateContextUsage', () => {
     expect(calculateContextUsage({
       inputTokens: 1001,
       capacity: { providerId: 'p', modelId: 'm', contextWindowTokens: 1000 },
-      policy: { compactionThresholdRatio: 0.8, keepRecentTurns: 10 },
+      policy: { compactionThresholdRatio: 0.8, keepRecentRuns: 10 },
     })).toMatchObject({
       usedTokens: 1001,
       remainingTokens: -1,
@@ -42,7 +42,7 @@ describe('calculateContextUsage', () => {
     expect(() => calculateContextUsage({
       inputTokens,
       capacity: { providerId: 'p', modelId: 'm', contextWindowTokens },
-      policy: { compactionThresholdRatio: ratio, keepRecentTurns: 10 },
+      policy: { compactionThresholdRatio: ratio, keepRecentRuns: 10 },
     })).toThrow(RangeError);
   });
 });

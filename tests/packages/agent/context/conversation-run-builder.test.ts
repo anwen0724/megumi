@@ -1,9 +1,9 @@
 /* Verifies Context construction from explicit Session message variants. */
 import { describe, expect, it } from 'vitest';
 import type { SessionHistoryItem, SessionMessage } from '@megumi/agent/session';
-import { buildConversationTurns } from '@megumi/agent/context/service/internal/conversation-turn-builder';
+import { buildConversationRuns } from '@megumi/agent/context/service/internal/conversation-run-builder';
 
-describe('buildConversationTurns', () => {
+describe('buildConversationRuns', () => {
   it('preserves Work Tool history and the final Assistant Reply as different facts', () => {
     const history: SessionHistoryItem[] = [
       message('EU1', user('U1', 'R1', 'read it')),
@@ -22,9 +22,9 @@ describe('buildConversationTurns', () => {
       message('EU2', user('U2', 'R2', 'old request')),
     ];
 
-    const result = buildConversationTurns({ history });
+    const result = buildConversationRuns({ history });
 
-    expect(result.turns[0]).toMatchObject({
+    expect(result.runs[0]).toMatchObject({
       source: { userEntryId: 'EU1', lastEntryId: 'EA1' },
       items: [
         { type: 'assistant_message', content: text('checking') },
@@ -33,21 +33,21 @@ describe('buildConversationTurns', () => {
         { type: 'assistant_message', content: text('done') },
       ],
     });
-    expect(result.turns[1].items).toContainEqual(expect.objectContaining({
+    expect(result.runs[1].items).toContainEqual(expect.objectContaining({
       type: 'context', kind: 'historical_run_state', content: { status: 'interrupted' },
     }));
   });
 
   it('does not call a reply-less Run interrupted while it is still live', () => {
-    const result = buildConversationTurns({
+    const result = buildConversationRuns({
       history: [message('EU', user('U', 'R', 'working'))],
       isRunLive: () => true,
     });
-    expect(result.turns[0].items).toEqual([]);
+    expect(result.runs[0].items).toEqual([]);
   });
 
   it('represents an incomplete Work Tool intent as historical run state, not a fake message', () => {
-    const result = buildConversationTurns({
+    const result = buildConversationRuns({
       history: [
         message('EU', user('U', 'R', 'write')),
         message('EM', {
@@ -58,7 +58,7 @@ describe('buildConversationTurns', () => {
         message('EA', reply('A', 'R', 'cancelled', '')),
       ],
     });
-    expect(result.turns[0].items).toContainEqual(expect.objectContaining({
+    expect(result.runs[0].items).toContainEqual(expect.objectContaining({
       type: 'context', kind: 'historical_run_state',
       content: expect.objectContaining({ status: 'incomplete' }),
     }));

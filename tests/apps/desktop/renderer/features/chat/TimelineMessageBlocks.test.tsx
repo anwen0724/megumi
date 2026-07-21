@@ -168,7 +168,7 @@ describe('TimelineMessage canonical block rendering', () => {
       />}
     />);
 
-    expect(screen.getByLabelText('Workspace changes for this turn')).toBeInTheDocument();
+    expect(screen.getByLabelText('Workspace changes for this run')).toBeInTheDocument();
     expect(document.querySelector('[data-workspace-open-file-row="true"]')).toBeInTheDocument();
     expect(document.querySelector('[data-workspace-change-file-row="true"]')).toBeInTheDocument();
     expect(screen.getByText('app.ts')).toBeInTheDocument();

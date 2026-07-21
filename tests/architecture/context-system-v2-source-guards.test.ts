@@ -44,7 +44,7 @@ describe('Context system v2 source guards', () => {
       'domain/model/active-context.ts',
       'domain/model/compaction.ts',
       'domain/model/context-usage.ts',
-      'domain/model/conversation-turn.ts',
+      'domain/model/conversation-run.ts',
       'domain/model/prompt.ts',
       'index.ts',
       'service/context-service-impl.ts',
@@ -54,14 +54,14 @@ describe('Context system v2 source guards', () => {
       'service/internal/compaction-planner.ts',
       'service/internal/compaction-summary-builder.ts',
       'service/internal/context-usage-calculator.ts',
-      'service/internal/conversation-turn-builder.ts',
-      'service/internal/conversation-turn-items.ts',
+      'service/internal/conversation-run-builder.ts',
+      'service/internal/conversation-run-items.ts',
       'service/internal/image-content-materializer.ts',
       'service/internal/prompt-builder.ts',
     ]);
     expect(exists('packages/agent/context/domain/model/active-context.ts')).toBe(true);
     expect(exists('packages/agent/context/domain/model/prompt.ts')).toBe(true);
-    expect(exists('packages/agent/context/domain/model/conversation-turn.ts')).toBe(true);
+    expect(exists('packages/agent/context/domain/model/conversation-run.ts')).toBe(true);
     expect(exists('packages/agent/context/domain/model/context-usage.ts')).toBe(true);
     expect(exists('packages/agent/context/domain/model/compaction.ts')).toBe(true);
     expect(exists('packages/agent/context/service/context-service.ts')).toBe(true);
@@ -76,7 +76,7 @@ describe('Context system v2 source guards', () => {
     expect(exists('packages/agent/context/domain/dto/ui/context-ui-response.ts')).toBe(true);
     for (const internalFile of [
       'active-context-builder.ts',
-      'conversation-turn-builder.ts',
+      'conversation-run-builder.ts',
       'prompt-builder.ts',
       'context-usage-calculator.ts',
       'compaction-planner.ts',
@@ -134,10 +134,10 @@ describe('Context system v2 source guards', () => {
     expect(contextSource).not.toMatch(/ContextUsageSubscription|\.subscribe\(|\.unsubscribe\(/);
   });
 
-  it('uses fixed recent-Turn retention instead of threshold-seeking prefix estimates', () => {
+  it('uses fixed recent-Run retention instead of threshold-seeking prefix estimates', () => {
     const contextSource = readTree('packages/agent/context');
 
-    expect(contextSource).toContain('keepRecentTurns');
+    expect(contextSource).toContain('keepRecentRuns');
     expect(contextSource).not.toMatch(/previousSummaryInputTokens|nonCompressibleInputTokens|historicalTurnInputTokens|thresholdInputTokens/);
   });
 
