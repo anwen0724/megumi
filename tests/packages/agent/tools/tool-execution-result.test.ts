@@ -35,14 +35,19 @@ describe('tool execution result normalization', () => {
       toolName: 'read_file',
       code: 'tool_execution_failed',
       message: 'File not found',
+      details: { reason: 'not_found' },
     });
 
     expect(result.type).toBe('failed');
     expect(result.normalizedResult).toMatchObject({
       kind: 'error',
-      content: 'File not found',
       isError: true,
       truncated: false,
+    });
+    expect(JSON.parse(result.normalizedResult.content)).toEqual({
+      code: 'tool_execution_failed',
+      message: 'File not found',
+      details: { reason: 'not_found' },
     });
   });
 
@@ -74,6 +79,9 @@ describe('tool execution result normalization', () => {
     expect(result.normalizedResult.truncated).toBe(true);
     expect(result.normalizedResult.truncationReason).toBe('byte_limit');
     expect(result.normalizedResult.content).not.toContain('secret-token');
+    expect(result.normalizedResult.content).toContain('this tool output exceeded the safety limit');
+    expect(result.normalizedResult.content).toContain('Do not treat the following content as complete.');
+    expect(Buffer.byteLength(result.normalizedResult.content, 'utf8')).toBeLessThanOrEqual(12_000);
     expect(result.normalizedResult.metadata).toMatchObject({
       redactionState: 'redacted',
     });

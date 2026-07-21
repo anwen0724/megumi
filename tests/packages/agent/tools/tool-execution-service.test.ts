@@ -47,15 +47,20 @@ describe('ToolExecutionService', () => {
   it('returns invalid_tool_input before adapter execution', async () => {
     const service = createService(new Map());
 
-    await expect(service.executeTool({
+    const result = await service.executeTool({
       toolName: 'read_file',
       input: {},
-    })).resolves.toMatchObject({
+    });
+    expect(result).toMatchObject({
       type: 'failed',
       error: { code: 'invalid_tool_input' },
       normalizedResult: {
-        content: 'Invalid tool input at $.path: missing required property.',
+        isError: true,
       },
+    });
+    expect(JSON.parse(result.normalizedResult.content)).toEqual({
+      code: 'invalid_tool_input',
+      message: 'Invalid tool input at $.path: missing required property.',
     });
   });
 
@@ -95,8 +100,12 @@ describe('ToolExecutionService', () => {
       type: 'failed',
       error: { code: 'invalid_tool_input' },
       normalizedResult: {
-        content: 'Invalid tool input at $.paths[1]: expected string.',
+        isError: true,
       },
+    });
+    expect(JSON.parse(result.normalizedResult.content)).toEqual({
+      code: 'invalid_tool_input',
+      message: 'Invalid tool input at $.paths[1]: expected string.',
     });
     expect(adapter.execute).not.toHaveBeenCalled();
   });
