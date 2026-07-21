@@ -8,9 +8,10 @@ export type RunCommandToolInput = {
   command: string;
   cwd?: string;
   timeoutMs?: number;
-  envPolicy?: 'default' | 'minimal' | 'none';
-  metadata?: JsonObject;
+  [RUN_COMMAND_INTERNAL_METADATA]?: JsonObject;
 };
+
+export const RUN_COMMAND_INTERNAL_METADATA = Symbol('run-command-internal-metadata');
 
 export function mapSkillScriptExecutionRequestToRunCommandInput(
   request: SkillScriptExecutionRequest,
@@ -21,7 +22,7 @@ export function mapSkillScriptExecutionRequestToRunCommandInput(
       ...request.args.map(quoteCommandArgument),
     ].join(' '),
     cwd: '.',
-    metadata: {
+    [RUN_COMMAND_INTERNAL_METADATA]: {
       source: 'skill',
       skillPath: request.skillPath,
       scriptName: request.scriptName,

@@ -10,6 +10,7 @@ import {
   requireString,
 } from './input';
 import type { BuiltInToolContext } from './types';
+import { withFileFailure } from './file-failure';
 
 export async function executeGlob(
   context: BuiltInToolContext,
@@ -21,7 +22,9 @@ export async function executeGlob(
   const limit = optionalPositiveInteger(record, 'limit', 500);
   const offset = optionalNonNegativeInteger(record, 'offset', 0);
   const includeHidden = optionalBoolean(record, 'includeHidden', false);
-  const files = await context.workspaceFileAccess.walkFiles({ path: cwd, includeHidden });
+  const files = await withFileFailure('glob', () => (
+    context.workspaceFileAccess.walkFiles({ path: cwd, includeHidden })
+  ));
   const matcher = globToRegExp(pattern);
   const matches = files.filter((file) => matcher.test(normalizeSlash(file))).sort();
 

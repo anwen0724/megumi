@@ -4,6 +4,7 @@ import { MAX_NORMALIZED_CONTENT_BYTES } from '../core/tool-execution-result';
 import { fitsNormalizedJson, serializedBytes } from './bounded-page';
 import { inputRecord, optionalNonNegativeInteger, optionalPositiveInteger, requireString } from './input';
 import type { BuiltInToolContext } from './types';
+import { withFileFailure } from './file-failure';
 
 export async function executeReadFile(
   context: BuiltInToolContext,
@@ -13,7 +14,7 @@ export async function executeReadFile(
   const targetPath = requireString(record, 'path');
   const offset = optionalNonNegativeInteger(record, 'offset', 0);
   const limit = optionalPositiveInteger(record, 'limit', MAX_NORMALIZED_CONTENT_BYTES);
-  const result = await context.workspaceFileAccess.readFile({ path: targetPath });
+  const result = await withFileFailure('read', () => context.workspaceFileAccess.readFile({ path: targetPath }));
   const content = buildReadPage({ ...result, offset, limit });
 
   return {

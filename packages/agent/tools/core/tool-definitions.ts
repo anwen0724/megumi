@@ -261,16 +261,6 @@ const runCommandDefinition: ToolDefinition = {
       command: { type: 'string', description: 'Command line to run inside the project boundary.' },
       cwd: { type: 'string', description: 'Optional project-relative working directory.' },
       timeoutMs: { type: 'integer', description: 'Optional timeout in milliseconds.' },
-      envPolicy: {
-        type: 'string',
-        enum: ['default', 'minimal', 'none'],
-        description: 'Environment exposure policy requested for the command.',
-      },
-      metadata: {
-        type: 'object',
-        description: 'Internal execution metadata, for example a prepared skill script source.',
-        additionalProperties: true,
-      },
     },
     required: ['command'],
     additionalProperties: false,

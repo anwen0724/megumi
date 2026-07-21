@@ -12,6 +12,7 @@ import {
 } from '../core/tool-execution-result';
 import type { BuiltInToolExecutor } from '../built-in-tools';
 import type { ToolRegistryService } from './tool-registry-service';
+import { ToolExecutionFailure } from '../core/tool-execution-failure';
 
 export class ToolExecutionService {
   constructor(private readonly input: {
@@ -50,10 +51,17 @@ export class ToolExecutionService {
       });
       return normalizeRawToolResult({ toolName: request.toolName, rawResult });
     } catch (error) {
+      const cancelled = request.options?.signal?.aborted;
       return createFailedToolResult({
         toolName: request.toolName,
-        code: request.options?.signal?.aborted ? 'tool_cancelled' : 'tool_execution_failed',
-        message: error instanceof Error ? error.message : 'Tool execution failed',
+        code: cancelled ? 'tool_cancelled' : error instanceof ToolExecutionFailure
+          ? error.code
+          : 'tool_execution_failed',
+        message: cancelled ? 'Tool execution was cancelled'
+          : error instanceof ToolExecutionFailure ? error.message : 'Tool execution failed',
+        ...(!cancelled && error instanceof ToolExecutionFailure && error.details
+          ? { details: error.details }
+          : {}),
       });
     }
   }

@@ -5,6 +5,7 @@ import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
 import { createBuiltInToolExecutor } from '@megumi/agent/tools/built-in-tools';
+import { ToolExecutionService, ToolRegistryService } from '@megumi/agent/tools';
 import {
   composeAgentToolExecutionService,
   createLocalWorkspaceFileAccess,
@@ -75,6 +76,24 @@ describe('built-in tool adapter file and command execution', () => {
       content: expect.objectContaining({ changed: true, replacements: 1 }),
     });
     await expect(fs.readFile(path.join(tmpDir, 'nested', 'file.txt'), 'utf8')).resolves.toBe('hi world');
+  });
+
+  it('returns safe structured file failure facts without exposing host paths', async () => {
+    const service = composeAgentToolExecutionService({ projectRoot: tmpDir });
+    const result = await service.executeTool({
+      toolName: 'read_file',
+      input: { path: 'missing.txt' },
+    });
+
+    expect(result).toMatchObject({
+      type: 'failed',
+      error: {
+        code: 'tool_execution_failed',
+        message: 'The requested file or directory was not found.',
+        details: { reason: 'not_found', operation: 'read' },
+      },
+    });
+    expect(result.normalizedResult.content).not.toContain(tmpDir);
   });
 
   it('reads text in resumable UTF-8 byte pages without splitting characters', async () => {
@@ -245,5 +264,120 @@ describe('built-in tool adapter file and command execution', () => {
       shell: true,
       windowsHide: true,
     }));
+  });
+
+  it('bounds command stream capture while continuing to consume output', async () => {
+    const spawn = vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & { stdout: EventEmitter; stderr: EventEmitter; kill(): void };
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.kill = vi.fn();
+      queueMicrotask(() => {
+        child.stdout.emit('data', Buffer.from('x'.repeat(100_000)));
+        child.stderr.emit('data', Buffer.from('y'.repeat(100_000)));
+        child.emit('close', 0);
+      });
+      return child;
+    });
+    const adapter = createBuiltInToolExecutor({
+      workspaceFileAccess: createLocalWorkspaceFileAccess({ projectRoot: tmpDir }),
+      spawn: spawn as never,
+    });
+
+    const result = await adapter.execute({ toolName: 'run_command', input: { command: 'large-output' } });
+    const content = result.content as { stdoutPreview: string; stderrPreview: string; truncated: boolean };
+
+    expect(Buffer.byteLength(content.stdoutPreview, 'utf8')).toBeLessThanOrEqual(20_000);
+    expect(Buffer.byteLength(content.stderrPreview, 'utf8')).toBeLessThanOrEqual(20_000);
+    expect(content.truncated).toBe(true);
+  });
+
+  it('reports non-zero command exit as a structured tool failure', async () => {
+    const spawn = vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & { stdout: EventEmitter; stderr: EventEmitter; kill(): void };
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.kill = vi.fn();
+      queueMicrotask(() => {
+        child.stderr.emit('data', Buffer.from('compile failed'));
+        child.emit('close', 2);
+      });
+      return child;
+    });
+    const adapter = createBuiltInToolExecutor({
+      workspaceFileAccess: createLocalWorkspaceFileAccess({ projectRoot: tmpDir }),
+      spawn: spawn as never,
+    });
+
+    const result = await adapter.execute({ toolName: 'run_command', input: { command: 'compile' } });
+
+    expect(result).toMatchObject({
+      isError: true,
+      error: {
+        code: 'tool_execution_failed',
+        message: 'Command exited with code 2.',
+        details: { reason: 'non_zero_exit', exitCode: 2 },
+      },
+    });
+  });
+
+  it('reports command timeout without exposing process internals', async () => {
+    const spawn = vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & { stdout: EventEmitter; stderr: EventEmitter; kill(): void };
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.kill = vi.fn();
+      return child;
+    });
+    const service = new ToolExecutionService({
+      registryService: new ToolRegistryService(),
+      builtInTools: createBuiltInToolExecutor({
+        workspaceFileAccess: createLocalWorkspaceFileAccess({ projectRoot: tmpDir }),
+        spawn: spawn as never,
+      }),
+    });
+
+    const result = await service.executeTool({
+      toolName: 'run_command',
+      input: { command: 'hang', timeoutMs: 1 },
+    });
+
+    expect(result).toMatchObject({
+      type: 'failed',
+      error: {
+        code: 'tool_execution_failed',
+        message: 'Command timed out after 1ms.',
+        details: { reason: 'timeout', timeoutMs: 1 },
+      },
+    });
+  });
+
+  it('reports spawn failure without exposing the host error', async () => {
+    const spawn = vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & { stdout: EventEmitter; stderr: EventEmitter; kill(): void };
+      child.stdout = new EventEmitter();
+      child.stderr = new EventEmitter();
+      child.kill = vi.fn();
+      queueMicrotask(() => child.emit('error', new Error(`spawn failed at ${tmpDir}`)));
+      return child;
+    });
+    const service = new ToolExecutionService({
+      registryService: new ToolRegistryService(),
+      builtInTools: createBuiltInToolExecutor({
+        workspaceFileAccess: createLocalWorkspaceFileAccess({ projectRoot: tmpDir }),
+        spawn: spawn as never,
+      }),
+    });
+
+    const result = await service.executeTool({ toolName: 'run_command', input: { command: 'missing' } });
+
+    expect(result).toMatchObject({
+      type: 'failed',
+      error: {
+        message: 'Command process could not be started.',
+        details: { reason: 'spawn_failed' },
+      },
+    });
+    expect(result.normalizedResult.content).not.toContain(tmpDir);
   });
 });

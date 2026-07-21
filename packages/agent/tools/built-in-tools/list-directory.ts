@@ -9,6 +9,7 @@ import {
   optionalString,
 } from './input';
 import type { BuiltInToolContext } from './types';
+import { withFileFailure } from './file-failure';
 
 export async function executeListDirectory(
   context: BuiltInToolContext,
@@ -20,11 +21,11 @@ export async function executeListDirectory(
   const limit = optionalPositiveInteger(record, 'limit', 100);
   const includeHidden = optionalBoolean(record, 'includeHidden', false);
   const offset = optionalNonNegativeInteger(record, 'offset', 0);
-  const result = await context.workspaceFileAccess.listDirectory({
+  const result = await withFileFailure('list', () => context.workspaceFileAccess.listDirectory({
     path: requestedPath,
     maxDepth,
     includeHidden,
-  });
+  }));
 
   return {
     outputKind: 'json',

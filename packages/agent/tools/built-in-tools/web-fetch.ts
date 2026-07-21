@@ -11,6 +11,7 @@ import type { Readable } from 'node:stream';
 import type { RawToolResult } from '../contracts/tool-contracts';
 import { inputRecord, requireString } from './input';
 import type { BuiltInToolContext } from './types';
+import { ToolExecutionFailure } from '../core/tool-execution-failure';
 
 const MAX_REDIRECTS = 5;
 const MAX_RESPONSE_BYTES = 1_000_000;
@@ -49,18 +50,26 @@ export function createWebFetchService(input: { timeoutMs?: number } = {}): WebFe
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   return {
     async fetch(request) {
-      const initial = parsePublicUrl(request.url);
-      const response = await fetchPublicUrl(initial, request.signal, timeoutMs, 0);
-      const extracted = extractContent(response.body, response.contentType);
-      const truncated = truncateUtf8(extracted.content, MAX_CONTENT_BYTES);
-      return {
-        requestedUrl: initial.toString(),
-        finalUrl: response.finalUrl.toString(),
-        ...(extracted.title ? { title: extracted.title } : {}),
-        contentType: response.contentType,
-        content: truncated.content,
-        truncated: response.bodyTruncated || truncated.truncated,
-      };
+      try {
+        const initial = parsePublicUrl(request.url);
+        const response = await fetchPublicUrl(initial, request.signal, timeoutMs, 0);
+        const extracted = extractContent(response.body, response.contentType);
+        const truncated = truncateUtf8(extracted.content, MAX_CONTENT_BYTES);
+        return {
+          requestedUrl: initial.toString(),
+          finalUrl: response.finalUrl.toString(),
+          ...(extracted.title ? { title: extracted.title } : {}),
+          contentType: response.contentType,
+          content: truncated.content,
+          truncated: response.bodyTruncated || truncated.truncated,
+        };
+      } catch (error) {
+        if (error instanceof ToolExecutionFailure) throw error;
+        if (request.signal?.aborted) {
+          throw new ToolExecutionFailure('web_fetch was cancelled.', 'tool_cancelled', { reason: 'cancelled' });
+        }
+        throw new ToolExecutionFailure('web_fetch request failed.', 'tool_execution_failed', { reason: 'network_error' });
+      }
     },
   };
 }
@@ -71,7 +80,12 @@ async function fetchPublicUrl(
   timeoutMs: number,
   redirectCount: number,
 ): Promise<{ finalUrl: URL; contentType: string; body: Buffer; bodyTruncated: boolean }> {
-  if (redirectCount > MAX_REDIRECTS) throw new Error('web_fetch exceeded the redirect limit.');
+  if (redirectCount > MAX_REDIRECTS) {
+    throw new ToolExecutionFailure('web_fetch exceeded the redirect limit.', 'tool_execution_failed', {
+      reason: 'redirect_limit',
+      redirectLimit: MAX_REDIRECTS,
+    });
+  }
   const address = await resolvePublicAddress(url.hostname);
   const response = await requestAddress(url, address, signal, timeoutMs);
   if (isRedirect(response.statusCode) && response.location) {
@@ -79,16 +93,26 @@ async function fetchPublicUrl(
     return fetchPublicUrl(redirected, signal, timeoutMs, redirectCount + 1);
   }
   if (response.statusCode < 200 || response.statusCode >= 300) {
-    throw new Error(`web_fetch request failed with status ${response.statusCode}.`);
+    throw new ToolExecutionFailure(
+      `web_fetch request failed with status ${response.statusCode}.`,
+      'tool_execution_failed',
+      { reason: 'http_error', statusCode: response.statusCode },
+    );
   }
   const contentType = normalizeContentType(response.contentType);
-  if (!isSupportedContentType(contentType)) throw new Error(`web_fetch does not support content type ${contentType}.`);
+  if (!isSupportedContentType(contentType)) {
+    throw new ToolExecutionFailure(
+      `web_fetch does not support content type ${contentType}.`,
+      'tool_execution_failed',
+      { reason: 'unsupported_content_type', contentType },
+    );
+  }
   return { finalUrl: url, contentType, body: response.body, bodyTruncated: response.truncated };
 }
 
 async function resolvePublicAddress(hostname: string): Promise<{ address: string; family: 4 | 6 }> {
   if (hostname.toLowerCase() === 'localhost' || hostname.toLowerCase().endsWith('.localhost')) {
-    throw new Error('web_fetch blocked a local address.');
+    throw new ToolExecutionFailure('web_fetch blocked a local address.', 'tool_execution_failed', { reason: 'blocked_address' });
   }
   const literalFamily = net.isIP(hostname);
   const addressSource = literalFamily ? 'literal' as const : 'hostname' as const;
@@ -96,7 +120,11 @@ async function resolvePublicAddress(hostname: string): Promise<{ address: string
     ? [{ address: hostname, family: literalFamily as 4 | 6 }]
     : await dns.lookup(hostname, { all: true, verbatim: true });
   if (addresses.length === 0 || addresses.some((entry) => !isAllowedResolvedAddress(entry.address, addressSource))) {
-    throw new Error('web_fetch blocked a private or non-public address.');
+    throw new ToolExecutionFailure(
+      'web_fetch blocked a private or non-public address.',
+      'tool_execution_failed',
+      { reason: 'blocked_address' },
+    );
   }
   return addresses[0] as { address: string; family: 4 | 6 };
 }
@@ -107,7 +135,9 @@ function requestAddress(
   signal: AbortSignal | undefined,
   timeoutMs: number,
 ): Promise<{ statusCode: number; location?: string; contentType?: string; body: Buffer; truncated: boolean }> {
-  if (signal?.aborted) return Promise.reject(new Error('web_fetch was cancelled.'));
+  if (signal?.aborted) {
+    return Promise.reject(new ToolExecutionFailure('web_fetch was cancelled.', 'tool_cancelled', { reason: 'cancelled' }));
+  }
   return new Promise((resolve, reject) => {
     const transport = url.protocol === 'https:' ? https : http;
     const request = transport.request(url, {
@@ -141,8 +171,16 @@ function requestAddress(
         reject(error);
       }
     });
-    const timer = setTimeout(() => request.destroy(new Error(`web_fetch timed out after ${timeoutMs}ms.`)), timeoutMs);
-    const cancel = () => request.destroy(new Error('web_fetch was cancelled.'));
+    const timer = setTimeout(() => request.destroy(new ToolExecutionFailure(
+      `web_fetch timed out after ${timeoutMs}ms.`,
+      'tool_execution_failed',
+      { reason: 'timeout', timeoutMs },
+    )), timeoutMs);
+    const cancel = () => request.destroy(new ToolExecutionFailure(
+      'web_fetch was cancelled.',
+      'tool_cancelled',
+      { reason: 'cancelled' },
+    ));
     signal?.addEventListener('abort', cancel, { once: true });
     request.once('error', reject);
     request.once('close', () => {
@@ -169,7 +207,9 @@ async function collectLimited(
   let size = 0;
   let truncated = false;
   for await (const chunk of stream) {
-    if (signal?.aborted) throw new Error('web_fetch was cancelled.');
+    if (signal?.aborted) {
+      throw new ToolExecutionFailure('web_fetch was cancelled.', 'tool_cancelled', { reason: 'cancelled' });
+    }
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     const remaining = maxBytes - size;
     if (buffer.length > remaining) {
@@ -203,9 +243,15 @@ function htmlText(value: string): string {
 
 function parsePublicUrl(value: string): URL {
   let url: URL;
-  try { url = new URL(value); } catch { throw new Error('web_fetch requires a valid URL.'); }
+  try { url = new URL(value); } catch {
+    throw new ToolExecutionFailure('web_fetch requires a valid URL.', 'tool_execution_failed', { reason: 'invalid_url' });
+  }
   if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.username || url.password) {
-    throw new Error('web_fetch only accepts HTTP(S) URLs without embedded credentials.');
+    throw new ToolExecutionFailure(
+      'web_fetch only accepts HTTP(S) URLs without embedded credentials.',
+      'tool_execution_failed',
+      { reason: 'invalid_url' },
+    );
   }
   return url;
 }

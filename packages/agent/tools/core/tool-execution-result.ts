@@ -27,17 +27,17 @@ export function normalizeRawToolResult(input: {
   const normalizedResult = normalizeRawToolContent(input.rawResult);
 
   if (input.rawResult.isError) {
-    const message = normalizedResult.content || 'Tool execution failed';
+    const error = input.rawResult.error ?? {
+      code: 'tool_execution_failed' as const,
+      message: `${input.toolName} failed`,
+    };
     return {
       type: 'failed',
       toolName: input.toolName,
-      error: {
-        code: 'tool_execution_failed',
-        message,
-      },
+      error,
       normalizedResult: normalizeFailureContent({
-        code: 'tool_execution_failed',
-        message,
+        ...error,
+        output: input.rawResult.content,
       }),
       toolExecutionObservation: {
         summary: `${input.toolName} failed`,
@@ -176,6 +176,7 @@ function normalizeFailureContent(input: {
   code: ToolExecutionErrorCode;
   message: string;
   details?: JsonObject;
+  output?: unknown;
 }): NormalizedToolResult {
   return normalizeTextContent(JSON.stringify(input, null, 2), true);
 }

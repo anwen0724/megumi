@@ -110,4 +110,35 @@ describe('tool execution result normalization', () => {
       redactionState: 'redacted',
     });
   });
+
+  it('keeps structured adapter failure facts and bounded output in model-visible content', () => {
+    const result = normalizeRawToolResult({
+      toolName: 'run_command',
+      rawResult: {
+        outputKind: 'command',
+        content: { stdoutPreview: '', stderrPreview: 'compile failed' },
+        isError: true,
+        error: {
+          code: 'tool_execution_failed',
+          message: 'Command exited with code 2.',
+          details: { reason: 'non_zero_exit', exitCode: 2 },
+        },
+      },
+    });
+
+    expect(result).toMatchObject({
+      type: 'failed',
+      error: {
+        code: 'tool_execution_failed',
+        message: 'Command exited with code 2.',
+        details: { reason: 'non_zero_exit', exitCode: 2 },
+      },
+    });
+    expect(JSON.parse(result.normalizedResult.content)).toEqual({
+      code: 'tool_execution_failed',
+      message: 'Command exited with code 2.',
+      details: { reason: 'non_zero_exit', exitCode: 2 },
+      output: { stdoutPreview: '', stderrPreview: 'compile failed' },
+    });
+  });
 });

@@ -9,6 +9,7 @@ import {
   requireString,
 } from './input';
 import type { BuiltInToolContext } from './types';
+import { withFileFailure } from './file-failure';
 
 export async function executeSearchText(
   context: BuiltInToolContext,
@@ -20,12 +21,12 @@ export async function executeSearchText(
   const caseSensitive = Boolean(record.caseSensitive);
   const limit = optionalPositiveInteger(record, 'limit', 100);
   const offset = optionalNonNegativeInteger(record, 'offset', 0);
-  const files = await context.workspaceFileAccess.walkFiles({ path: rootPath });
+  const files = await withFileFailure('search', () => context.workspaceFileAccess.walkFiles({ path: rootPath }));
   const needle = caseSensitive ? query : query.toLowerCase();
   const matches: Array<{ path: string; line: number; preview: string }> = [];
 
   for (const file of files) {
-    const content = await context.workspaceFileAccess.readTextFile({ path: file });
+    const content = await withFileFailure('search', () => context.workspaceFileAccess.readTextFile({ path: file }));
     for (const [index, line] of content.split(/\r?\n/).entries()) {
       const haystack = caseSensitive ? line : line.toLowerCase();
       if (haystack.includes(needle)) {
