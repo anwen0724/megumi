@@ -1,12 +1,12 @@
 /*
- * Defines factual historical Turns and the unfinished current Turn used by Context.
+ * Defines factual historical Runs and the unfinished current Run used by Context.
  */
 import type { ConversationItem } from '@megumi/ai';
 
 type UserMessage = Extract<ConversationItem, { type: 'user_message' }>;
 type ResponseItem = Exclude<ConversationItem, UserMessage>;
 
-export type ConversationTurn = {
+export type ConversationRun = {
   source: {
     runId: string;
     userEntryId: string;
@@ -18,7 +18,7 @@ export type ConversationTurn = {
   items: ResponseItem[];
 };
 
-export type CurrentConversationTurn = {
+export type CurrentConversationRun = {
   runId: string;
   lastEntryId?: string;
   userEntry: {

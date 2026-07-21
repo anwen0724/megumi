@@ -2,17 +2,18 @@
 import type { RawToolResult } from '../contracts/tool-contracts';
 import { inputRecord, requireString } from './input';
 import type { BuiltInToolContext } from './types';
+import { withFileFailure } from './file-failure';
 
 export async function executeWriteFile(
   context: BuiltInToolContext,
   input: unknown,
 ): Promise<RawToolResult> {
   const record = inputRecord(input);
-  const result = await context.workspaceFileAccess.writeFile({
+  const result = await withFileFailure('write', () => context.workspaceFileAccess.writeFile({
     path: requireString(record, 'path'),
     content: requireString(record, 'content'),
     overwrite: Boolean(record.overwrite),
-  });
+  }));
 
   return {
     outputKind: 'json',

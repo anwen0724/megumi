@@ -176,7 +176,7 @@ export function createMessageFlowDependencies(input: {
             instructions: { system: [], agentInstructions: { sources: [] } },
             referenceContext: { skillCatalog: request.skillCatalog },
             runContext: { skills: request.usedSkills },
-            conversation: [request.currentTurn.userMessage, ...request.currentTurn.runItems],
+            conversation: [request.currentRun.userMessage, ...request.currentRun.runItems],
             tools: request.tools,
           },
           usage: {

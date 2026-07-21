@@ -7,6 +7,7 @@ import {
   isPublicIp,
   type WorkspaceFileAccess,
 } from '@megumi/agent/tools/built-in-tools';
+import { ToolExecutionService, ToolRegistryService } from '@megumi/agent/tools';
 
 describe('web_fetch built-in tool', () => {
   it('returns a provider-neutral page result from the injected network service', async () => {
@@ -56,6 +57,30 @@ describe('web_fetch built-in tool', () => {
   it('keeps private-address rejection inside the Tool Runtime', async () => {
     await expect(createWebFetchService().fetch({ url: 'http://127.0.0.1/private' }))
       .rejects.toThrow(/private|local|non-public/);
+  });
+
+  it('returns a safe structured reason when a non-public target is blocked', async () => {
+    const service = new ToolExecutionService({
+      registryService: new ToolRegistryService(),
+      builtInTools: createBuiltInToolExecutor({
+        workspaceFileAccess: unusedWorkspaceFileAccess(),
+        webFetchService: createWebFetchService(),
+      }),
+    });
+
+    const result = await service.executeTool({
+      toolName: 'web_fetch',
+      input: { url: 'http://127.0.0.1/private' },
+    });
+
+    expect(result).toMatchObject({
+      type: 'failed',
+      error: {
+        code: 'tool_execution_failed',
+        message: 'web_fetch blocked a private or non-public address.',
+        details: { reason: 'blocked_address' },
+      },
+    });
   });
 });
 

@@ -1,39 +1,39 @@
 /*
- * Plans rolling compaction by retaining a fixed number of recent complete Turns.
+ * Plans rolling compaction by retaining a fixed number of recent complete Runs.
  */
 import type {
-  ConversationTurn,
-  CurrentConversationTurn,
-} from '../../domain/model/conversation-turn';
+  ConversationRun,
+  CurrentConversationRun,
+} from '../../domain/model/conversation-run';
 
 export type CompactionPlan = {
-  turns: ConversationTurn[];
+  runs: ConversationRun[];
   coveredUntilEntryId: string;
   firstKeptEntryId?: string;
 };
 
 export type PlanCompactionRequest = {
-  historicalTurns: ConversationTurn[];
-  keepRecentTurns: number;
-  currentTurn?: CurrentConversationTurn;
+  historicalRuns: ConversationRun[];
+  keepRecentRuns: number;
+  currentRun?: CurrentConversationRun;
 };
 
 export type PlanCompactionResult =
   | { status: 'planned'; plan: CompactionPlan }
   | {
       status: 'nothing_to_compact';
-      reason: 'no_historical_turns' | 'no_older_turns';
+      reason: 'no_historical_runs' | 'no_older_runs';
     };
 
 export function planCompaction(request: PlanCompactionRequest): PlanCompactionResult {
-  validateKeepRecentTurns(request.keepRecentTurns);
-  if (request.historicalTurns.length === 0) {
-    return { status: 'nothing_to_compact', reason: 'no_historical_turns' };
+  validateKeepRecentRuns(request.keepRecentRuns);
+  if (request.historicalRuns.length === 0) {
+    return { status: 'nothing_to_compact', reason: 'no_historical_runs' };
   }
 
-  const prefixLength = request.historicalTurns.length - request.keepRecentTurns;
+  const prefixLength = request.historicalRuns.length - request.keepRecentRuns;
   if (prefixLength <= 0) {
-    return { status: 'nothing_to_compact', reason: 'no_older_turns' };
+    return { status: 'nothing_to_compact', reason: 'no_older_runs' };
   }
 
   return plannedPrefix(request, prefixLength);
@@ -63,24 +63,24 @@ function plannedPrefix(
   request: PlanCompactionRequest,
   prefixLength: number,
 ): { status: 'planned'; plan: CompactionPlan } {
-  const turns = request.historicalTurns.slice(0, prefixLength);
-  const lastCoveredTurn = turns[turns.length - 1];
-  const firstKeptEntryId = request.historicalTurns[prefixLength]?.source.userEntryId
-    ?? request.currentTurn?.userEntry.entryId;
+  const runs = request.historicalRuns.slice(0, prefixLength);
+  const lastCoveredRun = runs[runs.length - 1];
+  const firstKeptEntryId = request.historicalRuns[prefixLength]?.source.userEntryId
+    ?? request.currentRun?.userEntry.entryId;
 
   return {
     status: 'planned',
     plan: {
-      turns,
-      coveredUntilEntryId: lastCoveredTurn.source.lastEntryId,
+      runs,
+      coveredUntilEntryId: lastCoveredRun.source.lastEntryId,
       ...(firstKeptEntryId ? { firstKeptEntryId } : {}),
     },
   };
 }
 
-function validateKeepRecentTurns(value: number): void {
+function validateKeepRecentRuns(value: number): void {
   if (!Number.isInteger(value) || value < 0) {
-    throw new RangeError('keepRecentTurns must be a nonnegative integer.');
+    throw new RangeError('keepRecentRuns must be a nonnegative integer.');
   }
 }
 

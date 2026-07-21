@@ -2,7 +2,7 @@
  * Defines request and result types for the four ContextService business operations.
  */
 import type { AiModelSupportLevel, ToolSetEntry } from '@megumi/ai';
-import type { CurrentConversationTurn } from '../domain/model/conversation-turn';
+import type { CurrentConversationRun } from '../domain/model/conversation-run';
 import type { SkillCatalogItem, UsedSkillContent } from '@megumi/skills';
 import type {
   ContextCapacity,
@@ -57,7 +57,7 @@ export type ContextCompactionProgress =
 export type PrepareModelCallRequest = {
   sessionId: string;
   workspaceId: string;
-  currentTurn: CurrentConversationTurn;
+  currentRun: CurrentConversationRun;
   skillCatalog: SkillCatalogItem[];
   usedSkills: UsedSkillContent[];
   memoryRecall?: MemoryContextInput;
@@ -89,7 +89,7 @@ export type CompactSessionResult =
     }
   | {
       status: 'nothing_to_compact';
-      reason: 'no_historical_turns' | 'no_older_turns' | 'summary_not_reducing';
+      reason: 'no_historical_runs' | 'no_older_runs' | 'summary_not_reducing';
     }
   | { status: 'failed'; failure: ContextFailure };
 

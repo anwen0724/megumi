@@ -1,5 +1,5 @@
 /*
- * Builds provider-neutral historical Turns from explicit Session message
+ * Builds provider-neutral historical Runs from explicit Session message
  * variants. Only live-run lookup is process-local; all other facts come from
  * the active Session Entry path.
  */
@@ -9,19 +9,19 @@ import {
   type SessionHistoryItem,
   type SessionMessageAttachment,
 } from '../../../session';
-import type { ConversationTurn } from '../../domain/model/conversation-turn';
+import type { ConversationRun } from '../../domain/model/conversation-run';
 
-export type BuildConversationTurnsRequest = {
+export type BuildConversationRunsRequest = {
   history: SessionHistoryItem[];
   isRunLive?: (runId: string) => boolean;
 };
-export type BuildConversationTurnsResult = { status: 'built'; turns: ConversationTurn[] };
+export type BuildConversationRunsResult = { status: 'built'; runs: ConversationRun[] };
 type MessageHistoryItem = Extract<SessionHistoryItem, { type: 'message' }>;
 
-export function buildConversationTurns(request: BuildConversationTurnsRequest): BuildConversationTurnsResult {
+export function buildConversationRuns(request: BuildConversationRunsRequest): BuildConversationRunsResult {
   const messages = historyAfterEffectiveCompaction(request.history)
     .filter((item): item is MessageHistoryItem => item.type === 'message');
-  const turns: ConversationTurn[] = [];
+  const runs: ConversationRun[] = [];
 
   for (let index = 0; index < messages.length;) {
     const user = messages[index]!;
@@ -36,7 +36,7 @@ export function buildConversationTurns(request: BuildConversationTurnsRequest): 
       responses.push(messages[index]!);
       index += 1;
     }
-    turns.push({
+    runs.push({
       source: {
         runId,
         userEntryId: user.entry.entry_id,
@@ -54,7 +54,7 @@ export function buildConversationTurns(request: BuildConversationTurnsRequest): 
       items: responseItems(runId, user, responses, request.isRunLive),
     });
   }
-  return { status: 'built', turns };
+  return { status: 'built', runs };
 }
 
 function responseItems(
@@ -62,8 +62,8 @@ function responseItems(
   user: MessageHistoryItem,
   messages: MessageHistoryItem[],
   isRunLive?: (runId: string) => boolean,
-): ConversationTurn['items'] {
-  const items: ConversationTurn['items'] = [];
+): ConversationRun['items'] {
+  const items: ConversationRun['items'] = [];
   const resultIds = new Set(messages.flatMap(({ message }) =>
     message.message_kind === 'tool_result' ? [message.tool_call_id] : []));
   const callIds = new Set(messages.flatMap(({ message }) =>
@@ -135,7 +135,7 @@ function responseItems(
 }
 
 function appendAssistantText(
-  items: ConversationTurn['items'],
+  items: ConversationRun['items'],
   content: Array<{ type: string; text?: string }>,
 ): void {
   const visible = content.flatMap((block) =>
@@ -147,7 +147,7 @@ function hasVisibleText(content: Array<{ type: string; text?: string }>): boolea
   return content.some((block) => block.type === 'text' && Boolean(block.text?.trim()));
 }
 
-function runState(content: Record<string, JsonValue | undefined>): ConversationTurn['items'][number] {
+function runState(content: Record<string, JsonValue | undefined>): ConversationRun['items'][number] {
   return {
     type: 'context',
     kind: 'historical_run_state',

@@ -40,19 +40,16 @@ describe('tool definitions', () => {
     }
   });
 
-  it('allows run_command to carry internal skill script metadata', () => {
+  it('keeps internal command controls out of the model-visible schema', () => {
     const runCommand = listBuiltInToolDefinitions()
       .find((definition) => definition.name === 'run_command');
 
     expect(runCommand?.sideEffect).toBe('execute_command');
     expect(runCommand?.capabilities).toContain('command_run');
-    expect(runCommand?.inputSchema).toMatchObject({
-      properties: {
-        metadata: {
-          type: 'object',
-          additionalProperties: true,
-        },
-      },
+    expect(runCommand?.inputSchema.properties).toEqual({
+      command: expect.any(Object),
+      cwd: expect.any(Object),
+      timeoutMs: expect.any(Object),
     });
   });
 

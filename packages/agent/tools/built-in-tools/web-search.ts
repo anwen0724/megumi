@@ -6,6 +6,7 @@ import type { WebSearchProvider } from '../../settings';
 import type { RawToolResult } from '../contracts/tool-contracts';
 import { inputRecord, optionalPositiveInteger, requireString } from './input';
 import type { BuiltInToolContext } from './types';
+import { ToolExecutionFailure } from '../core/tool-execution-failure';
 
 const DEFAULT_RESULT_COUNT = 5;
 const MAX_RESULT_COUNT = 20;
@@ -63,7 +64,13 @@ export function createWebSearchService(input: WebSearchRuntimeConfig & {
         signal: request.signal,
         timeoutMs,
       });
-      if (!response.ok) throw new Error(webSearchHttpError(response.status));
+      if (!response.ok) {
+        throw new ToolExecutionFailure(
+          webSearchHttpError(response.status),
+          'tool_execution_failed',
+          { reason: webSearchHttpReason(response.status), statusCode: response.status },
+        );
+      }
       const payload: unknown = await response.json();
       return {
         query: request.query.trim(),
@@ -173,9 +180,18 @@ async function fetchWithTimeout(
       signal: controller.signal,
     });
   } catch (error) {
-    if (input.signal?.aborted) throw new Error('Web search was cancelled.');
-    if (controller.signal.aborted) throw new Error(`Web search timed out after ${input.timeoutMs}ms.`);
-    throw error;
+    if (input.signal?.aborted) {
+      throw new ToolExecutionFailure('Web search was cancelled.', 'tool_cancelled', { reason: 'cancelled' });
+    }
+    if (controller.signal.aborted) {
+      throw new ToolExecutionFailure(
+        `Web search timed out after ${input.timeoutMs}ms.`,
+        'tool_execution_failed',
+        { reason: 'timeout', timeoutMs: input.timeoutMs },
+      );
+    }
+    if (error instanceof ToolExecutionFailure) throw error;
+    throw new ToolExecutionFailure('Web search request failed.', 'tool_execution_failed', { reason: 'network_error' });
   } finally {
     clearTimeout(timeout);
     input.signal?.removeEventListener('abort', cancel);
@@ -198,6 +214,12 @@ function webSearchHttpError(status: number): string {
   if (status === 401 || status === 403) return 'Web search authentication failed.';
   if (status === 429) return 'Web search rate limit exceeded.';
   return `Web search request failed with status ${status}.`;
+}
+
+function webSearchHttpReason(status: number): string {
+  if (status === 401 || status === 403) return 'authentication_failed';
+  if (status === 429) return 'rate_limited';
+  return 'http_error';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

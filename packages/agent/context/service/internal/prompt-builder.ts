@@ -3,7 +3,7 @@
  */
 import type { ActiveContext } from '../../domain/model/active-context';
 import type { Prompt } from '../../domain/model/prompt';
-import { conversationItemsFromTurn } from './conversation-turn-items';
+import { conversationItemsFromRun } from './conversation-run-items';
 
 export function buildPrompt(activeContext: ActiveContext): Prompt {
   return {
@@ -11,9 +11,9 @@ export function buildPrompt(activeContext: ActiveContext): Prompt {
     referenceContext: activeContext.referenceContext,
     runContext: activeContext.runContext,
     conversation: [
-      ...activeContext.historicalTurns.flatMap(conversationItemsFromTurn),
-      activeContext.currentTurn.userMessage,
-      ...activeContext.currentTurn.runItems,
+      ...activeContext.historicalRuns.flatMap(conversationItemsFromRun),
+      activeContext.currentRun.userMessage,
+      ...activeContext.currentRun.runItems,
     ],
     tools: activeContext.tools,
   };

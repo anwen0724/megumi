@@ -40,7 +40,7 @@ const request = {
   sessionId: 'S1', workspaceId: 'W1', skillCatalog: [], usedSkills: [], tools: [],
   modelContext: { providerId: 'p', modelId: 'm', contextWindowTokens: 100 },
   imageInputSupport: true as const,
-  currentTurn: {
+  currentRun: {
     runId: 'R-current', userEntry: { entryId: 'E-current', parentEntryId: 'E-answer' },
     userMessage: { type: 'user_message' as const, content: [{ type: 'image' as const, source: { type: 'host_reference' as const, referenceId: 'A-current' } }] },
     runItems: [],
@@ -83,7 +83,7 @@ describe('Context image materialization', () => {
       return { status: 'completed' as const, content: 'summary' };
     });
     const deps = dependencies([90, 30, 30], summaryModelCall);
-    deps.policy = { compactionThresholdRatio: 0.8, keepRecentTurns: 0 };
+    deps.policy = { compactionThresholdRatio: 0.8, keepRecentRuns: 0 };
     expect(await new ContextServiceImpl(deps).prepareModelCall(request)).toMatchObject({ status: 'ready' });
     expect(JSON.stringify(summaryPrompt)).toContain('"type":"base64"');
     expect(JSON.stringify(summaryPrompt)).not.toContain('host_reference');

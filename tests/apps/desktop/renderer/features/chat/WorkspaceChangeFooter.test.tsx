@@ -16,7 +16,7 @@ describe('WorkspaceChangeFooter', () => {
       />,
     );
 
-    expect(screen.getByRole('region', { name: 'Workspace changes for this turn' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Workspace changes for this run' })).toBeInTheDocument();
     expect(screen.getByText('app.ts')).toBeInTheDocument();
     expect(screen.getAllByText('README.md').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('contentText')).not.toBeInTheDocument();

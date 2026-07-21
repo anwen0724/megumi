@@ -45,8 +45,8 @@ export function calculateContextUsage(request: CalculateContextUsageRequest): Co
     throw new RangeError('compactionThresholdRatio must be greater than 0 and less than 1.');
   }
 
-  if (!Number.isInteger(request.policy.keepRecentTurns) || request.policy.keepRecentTurns < 0) {
-    throw new RangeError('keepRecentTurns must be a nonnegative integer.');
+  if (!Number.isInteger(request.policy.keepRecentRuns) || request.policy.keepRecentRuns < 0) {
+    throw new RangeError('keepRecentRuns must be a nonnegative integer.');
   }
 
   return {

@@ -18,7 +18,7 @@ describe('electron image input adapter', () => {
     readImage.mockReset();
   });
 
-  it('turns a clipboard image into a transient reference that can be retried', async () => {
+  it('converts a clipboard image into a transient reference that can be retried', async () => {
     readImage.mockReturnValue({
       isEmpty: () => false,
       toPNG: () => Buffer.from([1, 2, 3]),

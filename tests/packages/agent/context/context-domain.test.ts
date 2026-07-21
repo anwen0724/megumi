@@ -13,8 +13,8 @@ import type {
   ContextService,
   ContextSourceRef,
   ContextUsage,
-  ConversationTurn,
-  CurrentConversationTurn,
+  ConversationRun,
+  CurrentConversationRun,
   GetSessionUsageSnapshotRequest,
   GetSessionUsageSnapshotResult,
   PrepareModelCallRequest,
@@ -45,8 +45,8 @@ describe('Context v2 public domain', () => {
       instructions: PromptInstructions;
       referenceContext: PromptReferenceContext;
       runContext: PromptRunContext;
-      historicalTurns: ConversationTurn[];
-      currentTurn: CurrentConversationTurn;
+      historicalRuns: ConversationRun[];
+      currentRun: CurrentConversationRun;
       tools: ToolSetEntry[];
     }>();
     expectTypeOf<Prompt>().toEqualTypeOf<{
@@ -76,7 +76,7 @@ describe('Context v2 public domain', () => {
     }>();
     expectTypeOf<ContextPolicy>().toEqualTypeOf<{
       compactionThresholdRatio: number;
-      keepRecentTurns: number;
+      keepRecentRuns: number;
     }>();
     expectTypeOf<ContextUsage>().toEqualTypeOf<{
       usedTokens: number;

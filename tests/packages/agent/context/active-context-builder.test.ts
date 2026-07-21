@@ -2,12 +2,12 @@
  * Verifies that resolved owner facts enter ActiveContext with correct authority and trace.
  */
 import { describe, expect, it } from 'vitest';
-import type { ConversationTurn, CurrentConversationTurn } from '@megumi/agent/context';
+import type { ConversationRun, CurrentConversationRun } from '@megumi/agent/context';
 import { buildActiveContext } from '@megumi/agent/context/service/internal/active-context-builder';
 
 describe('buildActiveContext', () => {
   it('separates instructions from reference facts and emits non-visible source refs', () => {
-    const historicalTurns: ConversationTurn[] = [{
+    const historicalRuns: ConversationRun[] = [{
       source: {
         runId: 'run-history',
         userEntryId: 'entry-user-history',
@@ -22,7 +22,7 @@ describe('buildActiveContext', () => {
         { type: 'assistant_message', content: [{ type: 'text', text: 'Earlier answer' }] },
       ],
     }];
-    const currentTurn: CurrentConversationTurn = {
+    const currentRun: CurrentConversationRun = {
       runId: 'run-current',
       userEntry: { entryId: 'entry-user-current', parentEntryId: 'entry-assistant-history' },
       userMessage: { type: 'user_message', content: [{ type: 'text', text: 'Current input' }] },
@@ -46,8 +46,8 @@ describe('buildActiveContext', () => {
         recallId: 'recall-1',
         items: [{ memoryId: 'memory-1', content: [{ type: 'text', text: 'Remembered fact' }] }],
       },
-      historicalTurns,
-      currentTurn,
+      historicalRuns,
+      currentRun,
       tools: [{ name: 'read', description: 'Read a path', inputSchema: { type: 'object' } }],
     });
 

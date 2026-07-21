@@ -78,7 +78,7 @@ describe('MemoryExtractionModelClientService', () => {
       },
     });
     expect(request?.inputContext.parts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: 'current_turn', role: 'user' }),
+      expect.objectContaining({ kind: 'current_run', role: 'user' }),
     ]));
     expect(request?.inputContext.parts).toEqual([
       expect.objectContaining({
@@ -88,7 +88,7 @@ describe('MemoryExtractionModelClientService', () => {
         required: true,
       }),
       expect.objectContaining({
-        kind: 'current_turn',
+        kind: 'current_run',
         role: 'user',
         text: '{"signals":["explicit_remember"]}',
         required: true,

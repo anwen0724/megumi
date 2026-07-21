@@ -1,8 +1,8 @@
 /*
- * Verifies the immutable Summary prompt and deterministic full-Turn input wrapper.
+ * Verifies the immutable Summary prompt and deterministic full-Run input wrapper.
  */
 import { describe, expect, it } from 'vitest';
-import type { ConversationTurn } from '@megumi/agent/context';
+import type { ConversationRun } from '@megumi/agent/context';
 import {
   COMPACTION_SUMMARY_SYSTEM_PROMPT,
   buildCompactionSummaryRequest,
@@ -12,12 +12,12 @@ const EXPECTED_PROMPT = `You are updating the rolling context summary for an ong
 
 Your input contains:
 1. The previous compaction summary, if one exists.
-2. A continuous prefix of historical conversation turns being compacted now.
+2. A continuous prefix of historical conversation runs being compacted now.
 
 Produce one replacement summary that preserves the information required to continue the task correctly.
 
 Requirements:
-- Merge the previous summary with newly compacted turns.
+- Merge the previous summary with newly compacted runs.
 - Preserve confirmed requirements, constraints, decisions, and their necessary reasons.
 - Preserve completed work, current state, exact paths, symbols, commands, identifiers, numbers, and errors.
 - Preserve failed approaches and explicitly rejected decisions when they affect future work.
@@ -47,28 +47,28 @@ describe('buildCompactionSummaryRequest', () => {
     expect(COMPACTION_SUMMARY_SYSTEM_PROMPT).toBe(EXPECTED_PROMPT);
     expect(buildCompactionSummaryRequest({
       previousSummary: 'Earlier state.',
-      turns: [turn('1')],
+      runs: [run('1')],
     }).systemPrompt).toBe(EXPECTED_PROMPT);
   });
 
   it('renders an absent previous Summary as an empty wrapper body', () => {
-    const request = buildCompactionSummaryRequest({ turns: [turn('1')] });
+    const request = buildCompactionSummaryRequest({ runs: [run('1')] });
 
     expect(request.input.startsWith(
-      '<previous_summary>\n\n</previous_summary>\n\n<conversation_turns>\n',
+      '<previous_summary>\n\n</previous_summary>\n\n<conversation_runs>\n',
     )).toBe(true);
     expect(request.input).not.toContain('No previous summary');
-    expect(request.input.endsWith('\n</conversation_turns>')).toBe(true);
+    expect(request.input.endsWith('\n</conversation_runs>')).toBe(true);
   });
 
-  it('wraps the prior Summary and preserves a complete Turn including its tool pair', () => {
+  it('wraps the prior Summary and preserves a complete Run including its tool pair', () => {
     const request = buildCompactionSummaryRequest({
       previousSummary: 'Earlier state.',
-      turns: [turn('1')],
+      runs: [run('1')],
     });
 
     expect(request.input.startsWith(
-      '<previous_summary>\nEarlier state.\n</previous_summary>\n\n<conversation_turns>\n',
+      '<previous_summary>\nEarlier state.\n</previous_summary>\n\n<conversation_runs>\n',
     )).toBe(true);
     expect(request.input).toContain('"type":"user_message"');
     expect(request.input).toContain('"type":"tool_call","toolCallId":"call-1"');
@@ -76,11 +76,11 @@ describe('buildCompactionSummaryRequest', () => {
     expect(request.input.indexOf('"type":"tool_call"')).toBeLessThan(
       request.input.indexOf('"type":"tool_result"'),
     );
-    expect(request.input.endsWith('\n</conversation_turns>')).toBe(true);
+    expect(request.input.endsWith('\n</conversation_runs>')).toBe(true);
   });
 
-  it('omits Context-owned turn source identifiers from the model input', () => {
-    const request = buildCompactionSummaryRequest({ turns: [turn('private')] });
+  it('omits Context-owned run source identifiers from the model input', () => {
+    const request = buildCompactionSummaryRequest({ runs: [run('private')] });
 
     expect(request.input).not.toContain('"source"');
     expect(request.input).not.toContain('run-private');
@@ -91,7 +91,7 @@ describe('buildCompactionSummaryRequest', () => {
   });
 });
 
-function turn(id: string): ConversationTurn {
+function run(id: string): ConversationRun {
   return {
     source: {
       runId: `run-${id}`,

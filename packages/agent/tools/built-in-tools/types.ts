@@ -9,15 +9,15 @@ import type { WebFetchService } from './web-fetch';
 export interface WorkspaceFileAccess {
   readFile(input: {
     path: string;
-    maxBytes: number;
   }): Promise<{
     path: string;
     content: string;
-    truncated: boolean;
     sizeBytes: number;
   }>;
   listDirectory(input: {
     path: string;
+    maxDepth: number;
+    includeHidden: boolean;
   }): Promise<{
     path: string;
     entries: Array<{
@@ -25,9 +25,8 @@ export interface WorkspaceFileAccess {
       kind: 'file' | 'directory';
       path: string;
     }>;
-    truncated: boolean;
   }>;
-  walkFiles(input: { path: string }): Promise<string[]>;
+  walkFiles(input: { path: string; includeHidden?: boolean }): Promise<string[]>;
   readTextFile(input: { path: string }): Promise<string>;
   replaceText(input: {
     path: string;

@@ -2,7 +2,7 @@
  * Defines the complete runtime Context input from which a model prompt is assembled.
  */
 import type { ToolSetEntry } from '@megumi/ai';
-import type { ConversationTurn, CurrentConversationTurn } from './conversation-turn';
+import type { ConversationRun, CurrentConversationRun } from './conversation-run';
 import type { PromptInstructions, PromptReferenceContext, PromptRunContext } from './prompt';
 
 export type ActiveContext = {
@@ -10,7 +10,7 @@ export type ActiveContext = {
   instructions: PromptInstructions;
   referenceContext: PromptReferenceContext;
   runContext: PromptRunContext;
-  historicalTurns: ConversationTurn[];
-  currentTurn: CurrentConversationTurn;
+  historicalRuns: ConversationRun[];
+  currentRun: CurrentConversationRun;
   tools: ToolSetEntry[];
 };

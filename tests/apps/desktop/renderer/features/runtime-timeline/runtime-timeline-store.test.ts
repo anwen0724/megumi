@@ -129,7 +129,7 @@ describe('runtime timeline store', () => {
     });
   });
 
-  it('sorts runtime-only assistant messages with their original user turn during hydration', () => {
+  it('sorts runtime-only assistant messages with their original user run during hydration', () => {
     const store = useRuntimeTimelineStore.getState();
 
     store.hydrateSessionTimeline('project-1', 'session-1', [

@@ -125,7 +125,7 @@ function materializePromptMessages(prompt: Prompt): ConversationMessage[] {
     content: memory.items.flatMap((item) => item.content.map(contentBlockToJson)),
   };
 
-  // The last user item is the current turn boundary. Memory belongs immediately
+  // The last user item is the current run boundary. Memory belongs immediately
   // before it, while any current-run tool protocol items remain after it.
   return [
     ...references,

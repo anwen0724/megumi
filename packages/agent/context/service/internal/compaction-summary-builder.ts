@@ -1,19 +1,19 @@
 /*
  * Builds the immutable model request for replacing the active rolling Summary.
  */
-import type { ConversationTurn } from '../../domain/model/conversation-turn';
-import { conversationItemsFromTurn } from './conversation-turn-items';
+import type { ConversationRun } from '../../domain/model/conversation-run';
+import { conversationItemsFromRun } from './conversation-run-items';
 
 export const COMPACTION_SUMMARY_SYSTEM_PROMPT = `You are updating the rolling context summary for an ongoing agent session.
 
 Your input contains:
 1. The previous compaction summary, if one exists.
-2. A continuous prefix of historical conversation turns being compacted now.
+2. A continuous prefix of historical conversation runs being compacted now.
 
 Produce one replacement summary that preserves the information required to continue the task correctly.
 
 Requirements:
-- Merge the previous summary with newly compacted turns.
+- Merge the previous summary with newly compacted runs.
 - Preserve confirmed requirements, constraints, decisions, and their necessary reasons.
 - Preserve completed work, current state, exact paths, symbols, commands, identifiers, numbers, and errors.
 - Preserve failed approaches and explicitly rejected decisions when they affect future work.
@@ -40,7 +40,7 @@ Next Steps`;
 
 export type BuildCompactionSummaryRequest = {
   previousSummary?: string;
-  turns: ConversationTurn[];
+  runs: ConversationRun[];
 };
 
 export type CompactionSummaryModelRequest = {
@@ -52,17 +52,17 @@ export function buildCompactionSummaryRequest(
   request: BuildCompactionSummaryRequest,
 ): CompactionSummaryModelRequest {
   const previousSummary = request.previousSummary ?? '';
-  const conversationTurns = request.turns.map(renderTurn).join('\n\n');
+  const conversationRuns = request.runs.map(renderRun).join('\n\n');
 
   return {
     systemPrompt: COMPACTION_SUMMARY_SYSTEM_PROMPT,
-    input: `<previous_summary>\n${previousSummary}\n</previous_summary>\n\n<conversation_turns>\n${conversationTurns}\n</conversation_turns>`,
+    input: `<previous_summary>\n${previousSummary}\n</previous_summary>\n\n<conversation_runs>\n${conversationRuns}\n</conversation_runs>`,
   };
 }
 
-function renderTurn(turn: ConversationTurn): string {
+function renderRun(run: ConversationRun): string {
   return JSON.stringify({
-    conversation: conversationItemsFromTurn(turn).map((item) => {
+    conversation: conversationItemsFromRun(run).map((item) => {
       if (item.type !== 'user_message' && item.type !== 'assistant_message' && item.type !== 'tool_result') {
         return item;
       }

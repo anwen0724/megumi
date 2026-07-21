@@ -1,4 +1,4 @@
-﻿import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   createAgentRunService,
   type CreateAgentRunServiceOptions,
@@ -79,7 +79,7 @@ describe('Agent Run message flow', () => {
     expect(deps.tool_registry_service.listAvailableTools).toHaveBeenCalledTimes(1);
     expect(deps.context_service.prepareModelCall).toHaveBeenCalledTimes(1);
     expect(deps.context_service.prepareModelCall).toHaveBeenCalledWith(expect.objectContaining({
-      currentTurn: expect.objectContaining({
+      currentRun: expect.objectContaining({
         runId: result.run.run_id,
         lastEntryId: 'entry-message-1',
         userEntry: { entryId: 'entry-message-1' },
@@ -93,7 +93,7 @@ describe('Agent Run message flow', () => {
         runItems: [],
       }),
     }));
-    expect(JSON.stringify(deps.context_service.prepareModelCall.mock.calls[0]?.[0].currentTurn))
+    expect(JSON.stringify(deps.context_service.prepareModelCall.mock.calls[0]?.[0].currentRun))
       .not.toContain('README.md');
     expect(deps.session_service.saveAssistantReply).toHaveBeenCalledWith(expect.objectContaining({
       run_id: result.run.run_id,
@@ -385,7 +385,7 @@ describe('Agent Run message flow', () => {
       },
     });
     expect(deps.context_service.prepareModelCall).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      currentTurn: expect.objectContaining({ runItems: expect.any(Array) }),
+      currentRun: expect.objectContaining({ runItems: expect.any(Array) }),
     }));
     expect(deps.context_service.recordCompletedRunUsage.mock.calls[0]?.[0])
       .not.toHaveProperty('providerInputTokens');

@@ -66,6 +66,7 @@ describe('web_search built-in tool', () => {
       error: {
         code: 'tool_execution_failed',
         message: 'Web search authentication failed.',
+        details: { reason: 'authentication_failed', statusCode: 401 },
       },
     });
     expect(JSON.stringify(result)).not.toContain('search-secret');

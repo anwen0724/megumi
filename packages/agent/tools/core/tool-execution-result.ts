@@ -7,7 +7,12 @@ import type {
   ToolExecutionResult,
 } from '../contracts/tool-contracts';
 
-const MAX_NORMALIZED_CONTENT_BYTES = 12_000;
+export const MAX_NORMALIZED_CONTENT_BYTES = 12_000;
+const TRUNCATION_WARNING = [
+  '[Megumi: this tool output exceeded the safety limit and was truncated.',
+  'Do not treat the following content as complete.]',
+  '',
+].join('\n');
 const SECRET_VALUE_PATTERNS: readonly RegExp[] = [
   /\b(Authorization\s*:\s*Bearer)\s+[A-Za-z0-9._~+/=-]+/gi,
   /\b(Bearer)\s+[A-Za-z0-9._~+/=-]+/gi,
@@ -19,17 +24,21 @@ export function normalizeRawToolResult(input: {
   toolName: string;
   rawResult: RawToolResult;
 }): ToolExecutionResult {
-  const normalizedResult = normalizeRawContent(input.rawResult);
+  const normalizedResult = normalizeRawToolContent(input.rawResult);
 
   if (input.rawResult.isError) {
+    const error = input.rawResult.error ?? {
+      code: 'tool_execution_failed' as const,
+      message: `${input.toolName} failed`,
+    };
     return {
       type: 'failed',
       toolName: input.toolName,
-      error: {
-        code: 'tool_execution_failed',
-        message: normalizedResult.content || 'Tool execution failed',
-      },
-      normalizedResult,
+      error,
+      normalizedResult: normalizeFailureContent({
+        ...error,
+        output: input.rawResult.content,
+      }),
       toolExecutionObservation: {
         summary: `${input.toolName} failed`,
       },
@@ -54,7 +63,11 @@ export function createFailedToolResult(input: {
   message: string;
   details?: JsonObject;
 }): ToolExecutionResult {
-  const normalizedResult = normalizeTextContent(input.message, true);
+  const normalizedResult = normalizeFailureContent({
+    code: input.code,
+    message: input.message,
+    ...(input.details ? { details: input.details } : {}),
+  });
   return {
     type: 'failed',
     ...(input.toolName ? { toolName: input.toolName } : {}),
@@ -80,7 +93,7 @@ export function createCancelledToolResult(input: {
   });
 }
 
-function normalizeRawContent(rawResult: RawToolResult): NormalizedToolResult {
+export function normalizeRawToolContent(rawResult: RawToolResult): NormalizedToolResult {
   if (rawResult.outputKind === 'json') {
     return normalizeTextContent(JSON.stringify(rawResult.content, null, 2), Boolean(rawResult.isError), 'json');
   }
@@ -100,7 +113,10 @@ function normalizeTextContent(
   const redacted = redact(content);
   const truncated = Buffer.byteLength(redacted.content, 'utf8') > MAX_NORMALIZED_CONTENT_BYTES;
   const normalizedContent = truncated
-    ? trimToUtf8Limit(redacted.content, MAX_NORMALIZED_CONTENT_BYTES)
+    ? TRUNCATION_WARNING + trimToUtf8Limit(
+      redacted.content,
+      MAX_NORMALIZED_CONTENT_BYTES - Buffer.byteLength(TRUNCATION_WARNING, 'utf8'),
+    )
     : redacted.content;
 
   return {
@@ -133,9 +149,38 @@ function redact(content: string): { content: string; redacted: boolean } {
 }
 
 function trimToUtf8Limit(content: string, maxBytes: number): string {
-  let output = content;
-  while (Buffer.byteLength(output, 'utf8') > maxBytes) {
-    output = output.slice(0, Math.max(0, output.length - 256));
+  let low = 0;
+  let high = content.length;
+  while (low < high) {
+    let midpoint = Math.ceil((low + high) / 2);
+    if (midpoint > 0 && isHighSurrogate(content.charCodeAt(midpoint - 1))) {
+      midpoint -= 1;
+    }
+    if (Buffer.byteLength(content.slice(0, midpoint), 'utf8') <= maxBytes) {
+      low = Math.max(low + 1, midpoint);
+    } else {
+      high = midpoint - 1;
+    }
   }
-  return output;
+  let end = Math.min(low, content.length);
+  while (end > 0 && Buffer.byteLength(content.slice(0, end), 'utf8') > maxBytes) {
+    end -= 1;
+  }
+  if (end > 0 && isHighSurrogate(content.charCodeAt(end - 1))) {
+    end -= 1;
+  }
+  return content.slice(0, end);
+}
+
+function normalizeFailureContent(input: {
+  code: ToolExecutionErrorCode;
+  message: string;
+  details?: JsonObject;
+  output?: unknown;
+}): NormalizedToolResult {
+  return normalizeTextContent(JSON.stringify(input, null, 2), true);
+}
+
+function isHighSurrogate(codeUnit: number): boolean {
+  return codeUnit >= 0xD800 && codeUnit <= 0xDBFF;
 }

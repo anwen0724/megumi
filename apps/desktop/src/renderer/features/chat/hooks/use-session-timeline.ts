@@ -156,7 +156,7 @@ async function reconcileTerminalRunTimeline(event: RuntimeEvent, projectId: stri
     );
   } catch {
     // Live Runtime Events already contain the completed answer. A failed
-    // reconciliation must not turn a successful Agent Run into a UI failure.
+    // reconciliation must not convert a successful Agent Run into a UI failure.
   }
 }
 

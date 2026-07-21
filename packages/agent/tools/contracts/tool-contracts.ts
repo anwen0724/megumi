@@ -115,6 +115,7 @@ export type RawToolResult = {
   outputKind: 'text' | 'json' | 'command' | 'file' | 'diff' | 'error';
   content: unknown;
   isError?: boolean;
+  error?: ToolExecutionError;
   metadata?: JsonObject;
   runtimeSources?: ToolRuntimeSource[];
 };

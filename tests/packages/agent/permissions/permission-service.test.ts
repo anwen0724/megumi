@@ -94,7 +94,7 @@ describe('Permission Service', () => {
     expect(result).not.toHaveProperty('execution_targets');
   });
 
-  it('does not turn Tool Runtime network analysis into a Permission decision', async () => {
+  it('does not run Tool Runtime network analysis into a Permission decision', async () => {
     const service = createPermissionService({ settings_service: new FakeSettingsApplyService() });
     const result = await service.evaluateToolCall(baseRequest({
       registered_tool: identity('web_fetch'),

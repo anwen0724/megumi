@@ -3,7 +3,7 @@
  */
 export * from './domain/model/active-context';
 export * from './domain/model/prompt';
-export * from './domain/model/conversation-turn';
+export * from './domain/model/conversation-run';
 export * from './domain/model/context-usage';
 export * from './domain/model/compaction';
 

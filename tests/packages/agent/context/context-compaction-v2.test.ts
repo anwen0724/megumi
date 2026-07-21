@@ -43,17 +43,17 @@ function fixture(counts: number[], options: { history?: SessionHistoryItem[]; hi
     promptTokenCounter: { count: vi.fn(async () => ({ status: 'counted', inputTokens: queue.shift() ?? counts.at(-1) ?? 0, accuracy: 'estimated' })) },
     summaryModelCall: { complete: vi.fn(async () => ({ status: 'completed', content: 'short' })) },
     usageSnapshotCache: new Map(), ids: { preparationId: () => 'P1', compactionId: () => 'C1' }, clock: { now: () => 'now' },
-    ...(options.useDefaultPolicy ? {} : { policy: { keepRecentTurns: 0 } }),
+    ...(options.useDefaultPolicy ? {} : { policy: { keepRecentRuns: 0 } }),
   } as ContextServiceDependencies;
   return { deps, service: new ContextServiceImpl(deps) };
 }
 
 const modelContext = { providerId: 'p', modelId: 'm', contextWindowTokens: 100 };
-const currentTurn = { runId: 'R-current', userEntry: { entryId: 'EC', parentEntryId: 'EA' }, userMessage: { type: 'user_message' as const, content: [{ type: 'text' as const, text: 'now' }] }, runItems: [] };
-const request = { sessionId: 'S1', workspaceId: 'W1', currentTurn, skillCatalog: [], usedSkills: [], tools: [], modelContext, imageInputSupport: true as const };
+const currentRun = { runId: 'R-current', userEntry: { entryId: 'EC', parentEntryId: 'EA' }, userMessage: { type: 'user_message' as const, content: [{ type: 'text' as const, text: 'now' }] }, runItems: [] };
+const request = { sessionId: 'S1', workspaceId: 'W1', currentRun, skillCatalog: [], usedSkills: [], tools: [], modelContext, imageInputSupport: true as const };
 
 describe('ContextServiceImpl compaction', () => {
-  it('defaults to retaining three completed Turns and summarizes every older Turn', async () => {
+  it('defaults to retaining three completed Runs and summarizes every older Run', async () => {
     const retainedOnly = fixture([80], { historyCount: 3, useDefaultPolicy: true });
     expect(await retainedOnly.service.prepareModelCall(request)).toMatchObject({ status: 'ready' });
     expect(retainedOnly.deps.summaryModelCall.complete).not.toHaveBeenCalled();
@@ -70,7 +70,7 @@ describe('ContextServiceImpl compaction', () => {
     expect(JSON.stringify(summaryRequest.prompt)).not.toContain('old-2');
   });
 
-  it('replaces the rolling Summary with the old Summary plus only Turns older than the retained three', async () => {
+  it('replaces the rolling Summary with the old Summary plus only Runs older than the retained three', async () => {
     const { deps, service } = fixture([80, 30, 30], {
       history: historyWithSummary(4),
       useDefaultPolicy: true,
@@ -88,10 +88,10 @@ describe('ContextServiceImpl compaction', () => {
     }));
   });
 
-  it('uses the default three-Turn retention for manual compaction', async () => {
+  it('uses the default three-Run retention for manual compaction', async () => {
     const retainedOnly = fixture([80], { historyCount: 3, useDefaultPolicy: true });
     await expect(retainedOnly.service.compactSession({ sessionId: 'S1', workspaceId: 'W1', modelContext, imageInputSupport: true }))
-      .resolves.toEqual({ status: 'nothing_to_compact', reason: 'no_older_turns' });
+      .resolves.toEqual({ status: 'nothing_to_compact', reason: 'no_older_runs' });
     expect(retainedOnly.deps.summaryModelCall.complete).not.toHaveBeenCalled();
 
     const withOlderHistory = fixture([80, 30], { historyCount: 4, useDefaultPolicy: true });
@@ -143,7 +143,7 @@ describe('ContextServiceImpl compaction', () => {
     });
   });
 
-  it('manual compact uses the same internals without a fake current turn', async () => {
+  it('manual compact uses the same internals without a fake current run', async () => {
     const { deps, service } = fixture([80, 25]);
     expect(await service.compactSession({ sessionId: 'S1', workspaceId: 'W1', modelContext, imageInputSupport: true })).toMatchObject({ status: 'compacted', usageBefore: { usedTokens: 80 }, usageAfter: { usedTokens: 25 } });
     expect(deps.promptTokenCounter.count).toHaveBeenCalledWith(expect.objectContaining({ prompt: expect.objectContaining({ conversation: expect.not.arrayContaining([expect.objectContaining({ type: 'user_message', content: [] })]) }) }));
