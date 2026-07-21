@@ -60,6 +60,7 @@ import {
 } from '../core/agent-run-runtime-events';
 import { ActiveRunStore } from '../core/active-run-store';
 import { assistantReplyReasonForFailure, commitTerminalReply } from '../core/terminal-reply';
+import { mapToolExecutionResultToRuntimeFact } from '../core/tool-result-mapper';
 import { createNoopAgentRunTraceLogger } from './agent-run-trace-logger';
 import type { ObservabilityService, SpanHandle, TraceHandle } from '@megumi/observability';
 
@@ -673,7 +674,7 @@ class DefaultAgentRunService implements AgentRunService {
         }
         return { status: 'not_waiting', run: afterExecution ?? resumedRun };
       }
-      const toolFact = toolResultRuntimeFactFromExecution({
+      const toolFact = mapToolExecutionResultToRuntimeFact({
         tool_call_id: approval.subject.tool_call_id,
         tool_name: approval.subject.tool_name,
         result: toolResult,
@@ -1626,23 +1627,6 @@ function toolResultToConversationItem(toolResult: ToolResultRuntimeFact): Curren
     toolName: toolResult.tool_name,
     status: toolResult.status === 'success' ? 'success' : 'failure',
     content: [{ type: 'text', text: toolResult.content ?? toolResult.observation?.summary ?? `${toolResult.tool_name} ${toolResult.status}` }],
-  };
-}
-
-function toolResultRuntimeFactFromExecution(input: {
-  tool_call_id: string;
-  tool_name: string;
-  result: Awaited<ReturnType<Pick<ToolExecutionService, 'executeTool'>['executeTool']>>;
-  created_at: string;
-}): ToolResultRuntimeFact {
-  return {
-    tool_call_id: input.tool_call_id,
-    tool_name: input.result.toolName ?? input.tool_name,
-    status: input.result.type === 'succeeded' ? 'success' : 'failure',
-    content: input.result.normalizedResult.content,
-    ...(input.result.type === 'failed' ? { error: input.result.error } : {}),
-    ...(input.result.toolExecutionObservation ? { observation: input.result.toolExecutionObservation } : {}),
-    created_at: input.created_at,
   };
 }
 

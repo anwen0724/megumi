@@ -8,12 +8,18 @@ import type {
   PermissionSettings,
   RegisteredToolFacts,
 } from '../../permissions';
-import { validateToolInput, type RegisteredTool, type ToolExecutionOptions, type ToolExecutionResult } from '../../tools';
+import {
+  validateToolInput,
+  type RegisteredTool,
+  type ToolExecutionOptions,
+  type ToolExecutionResult,
+} from '../../tools';
 import type { ToolSet } from '@megumi/ai';
 import type { WorkspacePathPolicyService } from '../../workspace';
 import type { AgentRunApprovalRequest, ToolCallStep } from '../contracts/agent-run-contracts';
 import type { AgentRunTraceLogger } from '../contracts/agent-run-trace-contracts';
 import type { ToolResultRuntimeFact } from '../contracts/model-call-contracts';
+import { mapToolExecutionResultToRuntimeFact } from './tool-result-mapper';
 
 export type ModelRequestedToolCall = {
   model_call_id: string;
@@ -335,7 +341,12 @@ async function executeWindows(
           ...plan,
           call: completedCall,
         },
-        tool_result: toolResultFromExecutionResult(plan.requested, result, completedAt),
+        tool_result: mapToolExecutionResultToRuntimeFact({
+          tool_call_id: plan.requested.tool_call_id,
+          tool_name: plan.requested.tool_name,
+          result,
+          created_at: completedAt,
+        }),
       };
     }));
 
@@ -471,23 +482,6 @@ function deniedToolResult(
     status: 'permission_denied',
     error: { code: 'permission_denied', message: reason },
     content: reason,
-    created_at: createdAt,
-  };
-}
-
-function toolResultFromExecutionResult(
-  toolCall: ModelRequestedToolCall,
-  result: ToolExecutionResult,
-  createdAt: string,
-): ToolResultRuntimeFact {
-  return {
-    tool_call_id: toolCall.tool_call_id,
-    tool_name: result.toolName ?? toolCall.tool_name,
-    status: result.type === 'succeeded' ? 'success' : 'failure',
-    content: result.normalizedResult.content,
-    ...(result.type === 'failed' ? { error: result.error } : {}),
-    ...(result.toolExecutionObservation ? { observation: result.toolExecutionObservation } : {}),
-    ...(result.type === 'succeeded' && result.runtimeSources ? { runtimeSources: result.runtimeSources } : {}),
     created_at: createdAt,
   };
 }
