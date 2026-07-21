@@ -35,7 +35,7 @@ export async function executeSearchText(
     }
   }
 
-  matches.sort((left, right) => left.path.localeCompare(right.path) || left.line - right.line);
+  matches.sort((left, right) => compareStableText(left.path, right.path) || left.line - right.line);
   return {
     outputKind: 'json',
     content: buildBoundedItemPage({
@@ -45,4 +45,8 @@ export async function executeSearchText(
       contentFor: (pageMatches, page) => ({ matches: pageMatches, ...page }),
     }),
   };
+}
+
+function compareStableText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }

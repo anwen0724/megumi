@@ -102,7 +102,7 @@ export function createLocalWorkspaceFileAccess(input: {
 
       return {
         path: resolved.relativePath,
-        entries: visibleEntries.sort((left, right) => left.path.localeCompare(right.path)),
+        entries: visibleEntries.sort((left, right) => compareStableText(left.path, right.path)),
       };
     },
     async walkFiles(request) {
@@ -292,4 +292,8 @@ async function collectDirectoryEntries(input: {
 
 function isHiddenName(name: string): boolean {
   return name.startsWith('.');
+}
+
+function compareStableText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
