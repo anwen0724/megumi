@@ -29,23 +29,29 @@ describe('InstructionService', () => {
       systemInstructions: [{ instructionId: 'caller.override', content: 'Caller override.' }],
     });
 
-    expect(service.getSystemInstructions()).toEqual([{
-      instructionId: 'megumi.agent.identity',
-      content: 'You are Megumi, the user\'s personal agent. Use the provided session context, project instructions, runtime facts, tool results, and memory facts to continue the user\'s task.',
-    }]);
+    expect(service.getSystemInstructions().map((instruction) => instruction.instructionId)).toEqual([
+      'megumi.agent.identity',
+      'megumi.agent.task-completion',
+    ]);
   });
 
-  it('returns the fixed Megumi agent system instruction by default', () => {
+  it('returns fixed identity and task-completion instructions by default', () => {
     const root = nativeTestRoot();
     const service = composeAgentInstructions({
       megumiHomePath: path.join(root, 'home', '.megumi'),
       fileSystem: createFileSystem(new Map()),
     });
 
-    expect(service.getSystemInstructions()).toEqual([{
-      instructionId: 'megumi.agent.identity',
-      content: 'You are Megumi, the user\'s personal agent. Use the provided session context, project instructions, runtime facts, tool results, and memory facts to continue the user\'s task.',
-    }]);
+    const instructions = service.getSystemInstructions();
+
+    expect(instructions.map((instruction) => instruction.instructionId)).toEqual([
+      'megumi.agent.identity',
+      'megumi.agent.task-completion',
+    ]);
+    expect(instructions[1]?.content).toContain('A successful tool call does not by itself mean the user\'s goal is complete.');
+    expect(instructions[1]?.content).toContain('Verify objectively checkable work');
+    expect(instructions[1]?.content).toContain('failure, denial, partial output, truncation, or more available results');
+    expect(instructions[1]?.content).toContain('Do not claim success without supporting evidence.');
   });
 
   it('returns user and workspace AGENTS.md sources from far to near without merging content', async () => {
