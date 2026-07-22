@@ -82,6 +82,29 @@ describe('Session Timeline projection', () => {
     ]);
   });
 
+  it('keeps the Run disclosure when a completed reply has no process items', () => {
+    const startedAt = '2026-07-19T00:00:00.000Z';
+    const endedAt = '2026-07-19T00:00:04.000Z';
+    const messages = [
+      item({ ...user('U1', 'hello'), created_at: startedAt, completed_at: startedAt }),
+      item({ ...reply('A1', 'completed', 'Hello!'), created_at: endedAt, completed_at: endedAt }),
+    ];
+
+    const projected = projectSessionTimelineMessages({ projectId: 'P1', messages });
+    const assistant = projected[1] as TimelineAssistantMessage;
+
+    expect(assistant.blocks).toEqual([
+      expect.objectContaining({
+        kind: 'process_disclosure',
+        status: 'completed',
+        startedAt,
+        endedAt,
+        items: [],
+      }),
+      expect.objectContaining({ kind: 'answer_text', status: 'completed', text: 'Hello!' }),
+    ]);
+  });
+
   it.each([
     ['failed', 'Partial answer.', 'failed'],
     ['cancelled', '', 'cancelled'],

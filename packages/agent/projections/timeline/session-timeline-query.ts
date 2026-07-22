@@ -163,18 +163,15 @@ function projectAssistantRun(
   const processItems = projectProcessItems(runId, messages, answerMessage?.message.message_id);
   const last = messages.at(-1) ?? user;
   const messageId = answerMessage?.message.message_id ?? `assistant:${runId}`;
-  const blocks: TimelineAssistantMessage['blocks'] = [];
-  if (processItems.length > 0) {
-    blocks.push({
-      blockId: `process:${runId}`,
-      kind: 'process_disclosure',
-      runId,
-      status: processStatus(messages, reply?.message),
-      startedAt: messages[0]?.message.created_at ?? user.message.created_at,
-      endedAt: last.message.completed_at ?? last.message.created_at,
-      items: processItems,
-    });
-  }
+  const blocks: TimelineAssistantMessage['blocks'] = [{
+    blockId: `process:${runId}`,
+    kind: 'process_disclosure',
+    runId,
+    status: processStatus(messages, reply?.message),
+    startedAt: user.message.created_at,
+    endedAt: last.message.completed_at ?? last.message.created_at,
+    items: processItems,
+  }];
   blocks.push({
     blockId: `answer:${messageId}`,
     kind: 'answer_text',
