@@ -1,0 +1,78 @@
+{
+	"name": "@megumi/ai",
+	"version": "0.1.0",
+	"description": "Unified LLM API with automatic model discovery and provider configuration",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"sideEffects": [
+		"./dist/images.js",
+		"./dist/providers/images/register-builtins.js"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./providers/*": {
+			"types": "./dist/providers/*.d.ts",
+			"import": "./dist/providers/*.js"
+		},
+		"./api/*": {
+			"types": "./dist/api/*.d.ts",
+			"import": "./dist/api/*.js"
+		},
+		"./bun-oauth": {
+			"types": "./dist/bun-oauth.d.ts",
+			"import": "./dist/bun-oauth.js"
+		}
+	},
+	"bin": {
+		"megumi-ai": "dist/cli.js"
+	},
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"scripts": {
+		"clean": "shx rm -rf dist",
+		"generate-models": "node scripts/generate-models.ts --strict",
+		"hydrate-model-data": "node scripts/generate-models.ts --strict --data-only",
+		"generate-model-catalog": "node scripts/generate-models.ts --strict --json-only --json-output ../../.artifacts/model-catalog",
+		"generate-image-models": "node scripts/generate-image-models.ts --strict",
+		"check:model-data": "node scripts/check-model-data.ts",
+		"build": "npm run generate-models && npm run build:offline",
+		"build:offline": "npm run check:model-data && tsc -p tsconfig.build.json && shx rm -rf dist/providers/data && shx cp -r src/providers/data dist/providers/data",
+		"prepublishOnly": "npm run clean && npm run build"
+	},
+	"dependencies": {
+		"@anthropic-ai/sdk": "0.91.1",
+		"@google/genai": "1.52.0",
+		"openai": "6.26.0",
+		"partial-json": "0.1.7",
+		"typebox": "1.1.38"
+	},
+	"keywords": [
+		"ai",
+		"llm",
+		"openai",
+		"anthropic",
+		"gemini",
+		"unified",
+		"api"
+	],
+	"author": "Megumi contributors",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/anwen0724/megumi.git",
+		"directory": "packages/ai"
+	},
+	"engines": {
+		"node": ">=22.19.0"
+	},
+	"devDependencies": {
+		"@types/node": "24.12.4",
+		"shx": "0.4.0"
+	}
+}

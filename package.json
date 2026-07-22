@@ -4,6 +4,9 @@
   "description": "AI-guided development workflow platform",
   "license": "MIT",
   "author": "Megumi contributors",
+  "workspaces": [
+    "packages/ai"
+  ],
   "main": ".vite/build/index.js",
   "scripts": {
     "start": "npm run rebuild:native:electron && electron-forge start",
@@ -44,13 +47,11 @@
     "vitest": "^4.1.5"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.94.0",
     "better-sqlite3": "^12.0.0",
     "drizzle-orm": "^0.45.2",
     "fs-extra": "^11.0.0",
     "i18next": "^26.3.6",
     "lucide-react": "^1.14.0",
-    "openai": "^4.70.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-i18next": "^17.0.9",

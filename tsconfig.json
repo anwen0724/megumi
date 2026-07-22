@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "commonjs",
-    "moduleResolution": "node",
+    "module": "preserve",
+    "moduleResolution": "bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "strict": true,
@@ -10,6 +10,8 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "sourceMap": true,
     "baseUrl": ".",
     "paths": {
@@ -20,8 +22,8 @@
       "@megumi/agent/*": ["packages/agent/*"],
       "@megumi/skills": ["packages/skills/index.ts"],
       "@megumi/skills/*": ["packages/skills/*"],
-      "@megumi/ai": ["packages/ai/index.ts"],
-      "@megumi/ai/*": ["packages/ai/*"],
+      "@megumi/ai": ["packages/ai/src/index.ts"],
+      "@megumi/ai/*": ["packages/ai/src/*"],
       "@megumi/observability": ["packages/observability/index.ts"],
       "@megumi/observability/*": ["packages/observability/*"]
     }
