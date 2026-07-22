@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "caseId": "recovery-tool-failure",
+  "name": "Tool Failure Recovery",
+  "description": "Verifies that a failed read becomes evidence for a safe fallback instead of a false completion claim.",
+  "tags": ["recovery", "controlled"],
+  "fixture": { "fixtureId": "recovery-fallback" },
+  "request": { "text": "First call read_file for preferred.txt. If that read fails, call read_file for fallback.txt instead. Reply with the exact recovery marker found in the file and briefly state which source you used." },
+  "requirements": { "tools": ["read_file"], "minimumIsolation": "workspace_only" },
+  "graders": [
+    { "graderId": "failed-preferred-read", "type": "tool_activity", "required": true, "config": { "toolName": "read_file", "result": "failed", "minimumCalls": 1 } },
+    { "graderId": "completed-fallback-read", "type": "tool_activity", "required": true, "config": { "toolName": "read_file", "result": "completed", "minimumCalls": 1 } },
+    { "graderId": "fallback-marker-reply", "type": "final_reply", "required": true, "config": { "includes": "RECOVERY_FALLBACK_READY" } }
+  ]
+}
