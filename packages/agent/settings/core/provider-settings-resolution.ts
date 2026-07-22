@@ -28,7 +28,7 @@ export function listProviderStatuses(
       provider_id: providerId,
       display_name: provider.display_name,
       enabled: provider.enabled,
-      protocol: provider.protocol,
+      api: provider.api,
       ...(provider.base_url ? { base_url: provider.base_url } : {}),
       models: Object.keys(provider.models),
       model_settings: provider.models,
@@ -87,7 +87,7 @@ export function resolveProviderRuntimeConfig(
     return failed('provider_model_unknown', 'Provider model is not configured.', request);
   }
 
-  if (provider.protocol === 'openai-compatible' && !provider.base_url) {
+  if (!provider.base_url) {
     return failed('provider_config_invalid', 'Provider base URL is required.', request);
   }
 
@@ -100,9 +100,12 @@ export function resolveProviderRuntimeConfig(
     status: 'ok',
     config: {
       provider_id: request.provider_id,
-      protocol: provider.protocol,
+      api: provider.api,
       ...(provider.base_url ? { base_url: provider.base_url } : {}),
       model_id: request.model_id,
+      display_name: provider.models[request.model_id]!.display_name,
+      context_window_tokens: provider.models[request.model_id]!.context_window_tokens,
+      max_output_tokens: provider.models[request.model_id]!.max_output_tokens,
       capabilities: provider.models[request.model_id]!.capabilities,
       api_key: apiKey,
     },

@@ -11,6 +11,7 @@ describe('buildConversationRuns', () => {
         ...base('M1', 'R1'), message_kind: 'model_response', outcome_status: 'completed',
         content: [
           { type: 'text', text: 'checking' },
+          { type: 'thinking', thinking: 'Need the file contents.' },
           { type: 'toolCall', id: 'T1', name: 'read_file', argumentsText: '{"path":"README.md"}' },
         ],
       }),
@@ -27,26 +28,26 @@ describe('buildConversationRuns', () => {
     expect(result.runs[0]).toMatchObject({
       source: { userEntryId: 'EU1', lastEntryId: 'EA1' },
       items: [
-        { type: 'assistant_message', content: text('checking') },
+        { type: 'assistant_message', content: [
+          { type: 'text', text: 'checking' },
+          { type: 'thinking', thinking: 'Need the file contents.' },
+        ] },
         { type: 'tool_call', toolCallId: 'T1', arguments: { path: 'README.md' } },
         { type: 'tool_result', toolCallId: 'T1', status: 'success', content: text('content') },
         { type: 'assistant_message', content: text('done') },
       ],
     });
-    expect(result.runs[1].items).toContainEqual(expect.objectContaining({
-      type: 'context', kind: 'historical_run_state', content: { status: 'interrupted' },
-    }));
+    expect(result.runs[1].items).toEqual([]);
   });
 
-  it('does not call a reply-less Run interrupted while it is still live', () => {
+  it('does not invent a status message for a reply-less Run', () => {
     const result = buildConversationRuns({
       history: [message('EU', user('U', 'R', 'working'))],
-      isRunLive: () => true,
     });
     expect(result.runs[0].items).toEqual([]);
   });
 
-  it('represents an incomplete Work Tool intent as historical run state, not a fake message', () => {
+  it('preserves an incomplete Work Tool intent without inserting synthetic run-state messages', () => {
     const result = buildConversationRuns({
       history: [
         message('EU', user('U', 'R', 'write')),
@@ -58,10 +59,9 @@ describe('buildConversationRuns', () => {
         message('EA', reply('A', 'R', 'cancelled', '')),
       ],
     });
-    expect(result.runs[0].items).toContainEqual(expect.objectContaining({
-      type: 'context', kind: 'historical_run_state',
-      content: expect.objectContaining({ status: 'incomplete' }),
-    }));
+    expect(result.runs[0].items).toEqual([
+      { type: 'tool_call', toolCallId: 'T', toolName: 'write_file', arguments: '{bad-json' },
+    ]);
   });
 });
 

@@ -1,4 +1,4 @@
-﻿import { existsSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,6 +13,7 @@ import {
 import {
   collectEvents,
   createMessageFlowDependencies,
+  testAssistantMessage,
 } from './agent-run-test-helpers';
 
 const tempDirectories: string[] = [];
@@ -49,7 +50,7 @@ describe('Agent Run trace integration', () => {
     expect(records.map((record) => record.event_type)).toEqual(expect.arrayContaining([
       'run.started',
       'trace.tools.created',
-      'trace.prompt.built',
+      'trace.context.built',
       'trace.model_call.request_payload',
       'trace.model_call.event_received',
       'run.completed',
@@ -81,9 +82,12 @@ describe('Agent Run trace integration', () => {
       status: 'ok' as const,
       config: {
         provider_id: 'deepseek',
-        protocol: 'openai-compatible' as const,
+        api: 'openai-completions' as const,
         base_url: 'https://api.deepseek.com',
         model_id: 'deepseek-chat',
+        display_name: 'DeepSeek Chat',
+        context_window_tokens: 256_000,
+        max_output_tokens: 8_192,
         api_key: secrets.apiKey,
         capabilities: {
           streaming: true,
@@ -97,30 +101,12 @@ describe('Agent Run trace integration', () => {
       status: 'ready' as const,
       prepared: {
         preparationId: 'preparation-canary',
-        prompt: {
-          instructions: {
-            system: [],
-            agentInstructions: {
-              sources: [{ sourceId: 'agents-1', sourcePath: 'AGENTS.md', content: secrets.agents }],
-            },
-          },
-          referenceContext: {
-            skillCatalog: [],
-            memoryRecall: {
-              recallId: 'recall-1',
-              items: [{ memoryId: 'memory-1', content: [{ type: 'text' as const, text: secrets.memory }] }],
-            },
-          },
-          runContext: { skills: [] },
-          conversation: [
-            { type: 'user_message' as const, content: [{ type: 'text' as const, text: secrets.user }] },
-            {
-              type: 'tool_result' as const,
-              toolCallId: 'tool-call-secret',
-              toolName: 'read_file',
-              status: 'success' as const,
-              content: [{ type: 'text' as const, text: secrets.toolResult }],
-            },
+        context: {
+          systemPrompt: secrets.agents,
+          messages: [
+            { role: 'user' as const, content: secrets.memory, timestamp: 0 },
+            { role: 'user' as const, content: secrets.user, timestamp: 0 },
+            { role: 'toolResult' as const, toolCallId: 'tool-call-secret', toolName: 'read_file', content: secrets.toolResult, isError: false, timestamp: 0 },
           ],
           tools: request.tools,
         },
@@ -167,7 +153,7 @@ describe('Agent Run trace integration', () => {
       expect(serializedPayloads).not.toContain(secret);
       expect(jsonl).not.toContain(secret);
     }
-    expect(records.find((record) => record.event_type === 'trace.prompt.built')?.payload)
+    expect(records.find((record) => record.event_type === 'trace.context.built')?.payload)
       .toEqual(expect.objectContaining({
         model_call_index: 1,
         preparation_id: 'preparation-canary',
@@ -177,10 +163,10 @@ describe('Agent Run trace integration', () => {
           memory: 1,
           tool_result: 1,
         },
-        conversation_item_count: 2,
-        conversation_item_type_counts: {
-          user_message: 1,
-          tool_result: 1,
+        conversation_message_count: 3,
+        conversation_role_counts: {
+          user: 2,
+          toolResult: 1,
         },
         tool_count: 1,
       }));
@@ -231,6 +217,10 @@ describe('Agent Run trace integration', () => {
                 model_call_id: 'model-call-1',
                 content: '',
                 finish_reason: 'tool_calls',
+                assistant_message: {
+                  ...testAssistantMessage('', 'toolUse'),
+                  content: [{ type: 'toolCall', id: 'tool-call-1', name: 'read_file', arguments: { path: 'README.md' } }],
+                },
                 created_at: '2026-01-01T00:00:00.000Z',
               },
             ])
@@ -240,6 +230,7 @@ describe('Agent Run trace integration', () => {
                 type: 'completed',
                 model_call_id: 'model-call-2',
                 content: 'done',
+                assistant_message: testAssistantMessage('done'),
                 created_at: '2026-01-01T00:00:00.000Z',
               },
             ]),
@@ -307,6 +298,10 @@ describe('Agent Run trace integration', () => {
           model_call_id: 'model-call-1',
           content: '',
           finish_reason: 'tool_calls',
+          assistant_message: {
+            ...testAssistantMessage('', 'toolUse'),
+            content: [{ type: 'toolCall', id: 'tool-call-1', name: 'read_file', arguments: { path: 'README.md' } }],
+          },
           created_at: '2026-01-01T00:00:00.000Z',
         },
       ],

@@ -12,7 +12,7 @@ function fixture() {
     sessionService: { getActiveHistory: vi.fn(), saveCompactionSummary: vi.fn() },
     instructionScopeResolver: { resolve: vi.fn() },
     instructionService: { getSystemInstructions: vi.fn(), getEffectiveAgentInstructions: vi.fn() },
-    promptTokenCounter: { count }, summaryModelCall: { complete: vi.fn() }, usageSnapshotCache: cache,
+    contextTokenEstimator: count, summaryModelCall: { complete: vi.fn() }, usageSnapshotCache: cache,
     clock: { now: () => '2026-07-12T00:00:00.000Z' },
   } as unknown as ContextServiceDependencies;
   return { service: new ContextServiceImpl(dependencies), count };

@@ -14,7 +14,7 @@ import {
   type ToolExecutionOptions,
   type ToolExecutionResult,
 } from '../../tools';
-import type { ToolSet } from '@megumi/ai';
+import type { Tool } from '@megumi/ai';
 import type { WorkspacePathPolicyService } from '../../workspace';
 import type { AgentRunApprovalRequest, ToolCallStep } from '../contracts/agent-run-contracts';
 import type { AgentRunTraceLogger } from '../contracts/agent-run-trace-contracts';
@@ -36,7 +36,7 @@ export type AgentRunToolCallRequest = {
   workspace_root?: string;
   permission_mode: PermissionMode;
   permission_settings: PermissionSettings;
-  tools: ToolSet;
+  tools: Tool[];
   tool_calls: ModelRequestedToolCall[];
   call_order_offset?: number;
   registered_tools_by_name: Map<string, RegisteredTool>;
@@ -80,7 +80,7 @@ export type AgentRunToolCallResult = {
   pending_approvals: AgentRunPendingApproval[];
   deferred_tool_calls: ModelRequestedToolCall[];
   deferred_call_order_offset: number;
-  next_model_prompt_ready: boolean;
+  next_model_call_ready: boolean;
 };
 
 export type AgentRunPendingApproval = {
@@ -266,7 +266,7 @@ export async function orchestrateToolCallGroup(
     pending_approvals: pendingApprovals,
     deferred_tool_calls: deferredToolCalls,
     deferred_call_order_offset: deferredCallOrderOffset,
-    next_model_prompt_ready: pendingApprovals.length === 0,
+    next_model_call_ready: pendingApprovals.length === 0,
   };
 }
 

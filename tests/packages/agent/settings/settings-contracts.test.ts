@@ -56,15 +56,17 @@ describe('Settings v2 contracts', () => {
         deepseek: {
           api_key: 'TEST_DEEPSEEK_API_KEY',
           enabled: false,
-          protocol: 'openai-compatible',
+          api: 'openai-completions',
           display_name: 'DeepSeek',
           base_url: 'https://api.deepseek.com',
           models: {
             'deepseek-v4-flash': {
               context_window_tokens: 1_000_000,
+              max_output_tokens: 384_000,
             },
             'deepseek-v4-pro': {
               context_window_tokens: 1_000_000,
+              max_output_tokens: 384_000,
             },
           },
         },

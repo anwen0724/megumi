@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import fs from 'fs-extra';
 import { afterEach, describe, expect, it } from 'vitest';
-import { AssistantEventStream, type AiClient, type AssistantStreamEvent } from '@megumi/ai';
 import { composeProduct } from '@megumi/product/composition';
 import type { SettingsRaw } from '@megumi/agent/settings';
+import { fakeModelCallService } from '../../../helpers/fake-model-call-service';
 
 const tempDirectories: string[] = [];
 
@@ -40,7 +40,7 @@ describe('composeProduct', () => {
       directoryPicker: {
         chooseDirectory: async () => ({ canceled: false, filePaths: [workspaceRoot] }),
       },
-      aiClient: fakeAiClient(),
+      modelCallService: fakeModelCallService(),
       settingsStorage: settingsStorage(),
     });
 
@@ -81,7 +81,7 @@ function settingsStorage() {
     providers: {
       deepseek: {
         enabled: true,
-        protocol: 'openai-compatible',
+        api: 'openai-completions',
         base_url: 'https://api.example.com/v1',
         models: { 'deepseek-chat': {} },
         api_key: 'test-api-key',
@@ -92,28 +92,6 @@ function settingsStorage() {
     readRawSettings: () => settings,
     writeRawSettings: (next: SettingsRaw) => {
       settings = next;
-    },
-  };
-}
-
-function fakeAiClient(): AiClient {
-  return {
-    stream: () => AssistantEventStream.from(singleAssistantMessage()),
-    complete: async () => ({
-      role: 'assistant',
-      content: [{ type: 'text', text: 'ok' }],
-      stopReason: 'end_turn',
-    }),
-  };
-}
-
-async function* singleAssistantMessage(): AsyncIterable<AssistantStreamEvent> {
-  yield {
-    type: 'message_end',
-    message: {
-      role: 'assistant',
-      content: [{ type: 'text', text: 'ok' }],
-      stopReason: 'end_turn',
     },
   };
 }

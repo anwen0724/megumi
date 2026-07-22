@@ -3,7 +3,7 @@
  * and exposes provider runtime and permission settings capabilities to callers.
  */
 import type { RuntimeError } from '../../events';
-import { listAiProviderDefinitions } from '@megumi/ai';
+import { listBuiltinProviderCatalog } from '../core/ai-model-catalog';
 import {
   mergeRawSettings,
   resolveSettings,
@@ -182,7 +182,7 @@ class DefaultSettingsService implements SettingsService {
       ? {
           [parsed.data.provider.provider_id]: {
             ...(parsed.data.provider.enabled !== undefined ? { enabled: parsed.data.provider.enabled } : {}),
-            ...(parsed.data.provider.protocol ? { protocol: parsed.data.provider.protocol } : {}),
+            ...(parsed.data.provider.api ? { api: parsed.data.provider.api } : {}),
             ...(parsed.data.provider.display_name ? { display_name: parsed.data.provider.display_name } : {}),
             ...(parsed.data.provider.base_url ? { base_url: parsed.data.provider.base_url } : {}),
             ...(parsed.data.provider.models
@@ -222,7 +222,7 @@ class DefaultSettingsService implements SettingsService {
   }
 
   listProviderCatalog(): ListProviderCatalogResult {
-    return { status: 'ok', providers: listAiProviderDefinitions() };
+    return { status: 'ok', providers: listBuiltinProviderCatalog() };
   }
 
   listAvailableModels(): ListAvailableModelsResult {
@@ -469,7 +469,11 @@ class DefaultSettingsService implements SettingsService {
 
   private readRawSettings(): SettingsRawSchemaResult {
     try {
-      return SettingsRawSchema.parse(this.options.file_store.readRawSettings());
+      const original = this.options.file_store.readRawSettings();
+      const migrated = migrateLegacyProviderApis(original);
+      const parsed = SettingsRawSchema.parse(migrated.value);
+      if (migrated.changed) this.options.file_store.writeRawSettings(parsed);
+      return parsed;
     } catch (error) {
       return settingsFailure('settings_raw_invalid', 'Raw settings are invalid.', toFailureDetails(error));
     }
@@ -567,7 +571,7 @@ function materializeSettingsForWrite(raw: SettingsRaw): SettingsRaw {
 function providerSettingsForWrite(provider: ProviderSettingsResolved, raw?: ProviderSettingsRaw) {
   return {
     enabled: provider.enabled,
-    protocol: provider.protocol,
+    api: provider.api,
     display_name: provider.display_name,
     ...(provider.base_url ? { base_url: provider.base_url } : {}),
     models: Object.fromEntries(Object.entries(provider.models).map(([modelId, model]) => [
@@ -577,6 +581,7 @@ function providerSettingsForWrite(provider: ProviderSettingsResolved, raw?: Prov
           ? { display_name: raw.models[modelId].display_name }
           : {}),
         context_window_tokens: model.context_window_tokens,
+        max_output_tokens: model.max_output_tokens,
         ...(raw?.models?.[modelId]?.capabilities
           ? { capabilities: raw.models[modelId].capabilities }
           : {}),
@@ -585,6 +590,32 @@ function providerSettingsForWrite(provider: ProviderSettingsResolved, raw?: Prov
     ...(provider.api_key ? { api_key: provider.api_key } : {}),
     ...(provider.api_key_env ? { api_key_env: provider.api_key_env } : {}),
   };
+}
+
+function migrateLegacyProviderApis(value: unknown): { value: unknown; changed: boolean } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return { value, changed: false };
+  const root = value as Record<string, unknown>;
+  if (!root.providers || typeof root.providers !== 'object' || Array.isArray(root.providers)) {
+    return { value, changed: false };
+  }
+  let changed = false;
+  const providers = Object.fromEntries(Object.entries(root.providers as Record<string, unknown>).map(([id, entry]) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [id, entry];
+    const provider = { ...(entry as Record<string, unknown>) };
+    if (provider.api === undefined && provider.protocol === 'openai-compatible') {
+      provider.api = 'openai-completions';
+      changed = true;
+    } else if (provider.api === undefined && provider.protocol === 'anthropic') {
+      provider.api = 'anthropic-messages';
+      changed = true;
+    }
+    if ('protocol' in provider) {
+      delete provider.protocol;
+      changed = true;
+    }
+    return [id, provider];
+  }));
+  return changed ? { value: { ...root, providers }, changed: true } : { value, changed: false };
 }
 
 function toFailureDetails(error: unknown): Record<string, unknown> {

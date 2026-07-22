@@ -38,7 +38,7 @@ async function sourceFiles(root: string): Promise<string[]> {
   const entries = await readdir(root, { withFileTypes: true });
   const nested = await Promise.all(entries.map(async (entry) => {
     const target = path.join(root, entry.name);
-    if (entry.isDirectory()) return sourceFiles(target);
+    if (entry.isDirectory()) return entry.name === 'node_modules' ? [] : sourceFiles(target);
     return /\.(?:ts|tsx)$/.test(entry.name) ? [target] : [];
   }));
   return nested.flat();

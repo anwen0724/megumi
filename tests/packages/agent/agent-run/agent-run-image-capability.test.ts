@@ -1,4 +1,4 @@
-﻿/* Verifies Agent Run preserves image facts while Context owns model-specific degradation. */
+/* Verifies Agent Run preserves image facts while Context owns model-specific degradation. */
 import { describe, expect, it } from 'vitest';
 import { createAgentRunService, type CreateAgentRunServiceOptions } from '@megumi/agent/agent-run';
 import { createInMemoryAgentRunRepository, createMessageFlowDependencies } from './agent-run-test-helpers';
@@ -11,9 +11,12 @@ describe('Agent Run image capability', () => {
       status: 'ok',
       config: {
         provider_id: 'deepseek',
-        protocol: 'openai-compatible',
+        api: 'openai-completions',
         base_url: 'https://api.deepseek.com',
         model_id: 'text-only',
+        display_name: 'Text only',
+        context_window_tokens: 256_000,
+        max_output_tokens: 8_192,
         api_key: 'test-key',
         capabilities: {
           streaming: true,
@@ -60,9 +63,12 @@ describe('Agent Run image capability', () => {
       status: 'ok',
       config: {
         provider_id: 'custom',
-        protocol: 'openai-compatible',
+        api: 'openai-completions',
         base_url: 'https://example.com/v1',
         model_id: 'custom-model',
+        display_name: 'Custom model',
+        context_window_tokens: 256_000,
+        max_output_tokens: 8_192,
         api_key: 'test-key',
         capabilities: {
           streaming: 'unknown',

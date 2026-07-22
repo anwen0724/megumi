@@ -12,11 +12,8 @@ import type {
   ProviderModelSettingsRaw,
   ProviderSettingsRaw,
 } from '../contracts/provider-settings-contracts';
-import {
-  getAiModelDefinition,
-  getAiProviderDefinition,
-  UNKNOWN_AI_MODEL_CAPABILITIES,
-} from '@megumi/ai';
+import { UNKNOWN_MODEL_CAPABILITIES } from '../../model-capability';
+import { getBuiltinModelCatalog, getBuiltinProviderCatalog } from './ai-model-catalog';
 
 export const DEFAULT_UNKNOWN_MODEL_CONTEXT_WINDOW_TOKENS = 256_000;
 
@@ -143,19 +140,19 @@ function resolveProviderSettings(providers: NonNullable<SettingsRaw['providers']
 }
 
 function resolveProvider(providerId: string, raw: ProviderSettingsRaw) {
-  const definition = getAiProviderDefinition(providerId);
+  const definition = getBuiltinProviderCatalog(providerId);
   const models: Record<string, ProviderModelSettingsRaw> = raw.models ?? Object.fromEntries(
     definition?.models.map((model) => [model.modelId, {}]) ?? [],
   );
   return {
     enabled: raw.enabled ?? true,
-    protocol: raw.protocol ?? definition?.protocol ?? 'openai-compatible',
+    api: raw.api ?? definition?.api ?? 'openai-completions',
     display_name: raw.display_name ?? definition?.displayName ?? providerId,
     ...(raw.base_url ?? definition?.defaultBaseUrl
       ? { base_url: raw.base_url ?? definition?.defaultBaseUrl }
       : {}),
     models: Object.fromEntries(Object.entries(models).map(([modelId, model]) => {
-      const known = getAiModelDefinition(providerId, modelId);
+      const known = getBuiltinModelCatalog(providerId, modelId);
       const configured = model.context_window_tokens;
       return [
         modelId,
@@ -164,8 +161,11 @@ function resolveProvider(providerId: string, raw: ProviderSettingsRaw) {
           context_window_tokens: known
             ? Math.min(configured ?? known.contextWindowTokens, known.contextWindowTokens)
             : configured ?? DEFAULT_UNKNOWN_MODEL_CONTEXT_WINDOW_TOKENS,
+          max_output_tokens: known
+            ? Math.min(model.max_output_tokens ?? known.maxOutputTokens, known.maxOutputTokens)
+            : model.max_output_tokens ?? 8_192,
           capabilities: {
-            ...(known?.capabilities ?? UNKNOWN_AI_MODEL_CAPABILITIES),
+            ...(known?.capabilities ?? UNKNOWN_MODEL_CAPABILITIES),
             ...(model.capabilities ?? {}),
           },
         },
@@ -209,7 +209,7 @@ function mergeRawProvider(current: ProviderSettingsRaw, patch: ProviderSettingsR
 function definedCredentialSettings(value: ProviderSettingsRaw) {
   const defined = definedObject(value);
   delete defined.enabled;
-  delete defined.protocol;
+  delete defined.api;
   delete defined.display_name;
   delete defined.base_url;
   delete defined.models;

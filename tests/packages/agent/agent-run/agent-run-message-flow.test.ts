@@ -7,6 +7,7 @@ import {
   collectEvents,
   createInMemoryAgentRunRepository,
   createMessageFlowDependencies,
+  testAssistantMessage,
 } from './agent-run-test-helpers';
 import { RuntimeEventSchema } from '@megumi/agent/events';
 
@@ -32,7 +33,7 @@ describe('Agent Run message flow', () => {
     if (result.status === 'started') await collectEvents(result.events);
   });
 
-  it('starts one run, builds prompts, saves assistant output, captures memory, and publishes events', async () => {
+  it('starts one run, builds Context, saves assistant output, captures memory, and publishes events', async () => {
     const repository = createInMemoryAgentRunRepository();
     const deps = createMessageFlowDependencies({ repository });
     const prepareModelCall = deps.context_service.prepareModelCall.getMockImplementation();
@@ -238,6 +239,7 @@ describe('Agent Run message flow', () => {
           model_call_id: 'model-call-1',
           content: 'assistant reply',
           usage: { input_tokens: 777 },
+          assistant_message: testAssistantMessage('assistant reply'),
           created_at: '2026-01-01T00:00:00.000Z',
         },
       ],
@@ -332,6 +334,13 @@ describe('Agent Run message flow', () => {
               content: 'I need to read the file.',
               finish_reason: 'tool_calls',
               usage: { input_tokens: 333 },
+              assistant_message: {
+                ...testAssistantMessage('I need to read the file.', 'toolUse'),
+                content: [
+                  { type: 'text', text: 'I need to read the file.' },
+                  { type: 'toolCall', id: 'provider-tool-call-1', name: 'read_file', arguments: { path: 'README.md' } },
+                ],
+              },
               created_at: '2026-01-01T00:00:00.000Z',
             },
           ]),
@@ -347,6 +356,7 @@ describe('Agent Run message flow', () => {
             type: 'completed' as const,
             model_call_id: 'model-call-2',
             content: 'Final answer.',
+            assistant_message: testAssistantMessage('Final answer.'),
             created_at: '2026-01-01T00:00:00.000Z',
           },
         ]),
@@ -374,18 +384,18 @@ describe('Agent Run message flow', () => {
 
     expect(modelCallRequests).toHaveLength(2);
     expect(modelCallRequests[1]).not.toHaveProperty('model_call_messages');
-    expect(modelCallRequests[1]).toMatchObject({
-      prompt: {
-        conversation: [
-          expect.objectContaining({ type: 'user_message' }),
-          { type: 'assistant_message', content: [{ type: 'text', text: 'I need to read the file.' }] },
+    expect(modelCallRequests[1]).toHaveProperty('context');
+    expect(deps.context_service.prepareModelCall).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      currentRun: expect.objectContaining({
+        runItems: [
+          expect.objectContaining({
+            type: 'assistant_message',
+            modelMessage: expect.objectContaining({ provider: 'deepseek', model: 'deepseek-chat' }),
+          }),
           { type: 'tool_call', toolCallId: 'provider-tool-call-1', toolName: 'read_file', arguments: { path: 'README.md' } },
           { type: 'tool_result', toolCallId: 'provider-tool-call-1', toolName: 'read_file', status: 'success', content: [{ type: 'text', text: 'tool ok' }] },
         ],
-      },
-    });
-    expect(deps.context_service.prepareModelCall).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      currentRun: expect.objectContaining({ runItems: expect.any(Array) }),
+      }),
     }));
     expect(deps.context_service.recordCompletedRunUsage.mock.calls[0]?.[0])
       .not.toHaveProperty('providerInputTokens');
@@ -457,6 +467,7 @@ describe('Agent Run message flow', () => {
           type: 'completed',
           model_call_id: 'model-call-1',
           content: 'assistant reply',
+          assistant_message: testAssistantMessage('assistant reply'),
           created_at: '2026-01-01T00:00:00.000Z',
         },
       ],

@@ -7,6 +7,7 @@ import {
 } from '@megumi/agent/agent-run/core/tool-call-orchestrator';
 import type { PermissionDecision, PermissionOperation } from '@megumi/agent/permissions';
 import type { RegisteredTool, ToolExecutionResult } from '@megumi/agent/tools';
+import { Type } from '@megumi/ai';
 
 const operation: PermissionOperation = {
   action: 'workspace.read', resource: { type: 'workspace.path', id: 'C:/workspace/README.md' },
@@ -107,7 +108,7 @@ function baseInput(): Omit<AgentRunToolCallRequest, 'tool_calls' | 'registered_t
   return {
     run_id: 'run-1', session_id: 'session-1', workspace_id: 'workspace-1', workspace_root: 'C:/workspace',
     permission_mode: 'ask', permission_settings: { mode: 'ask', allow: [], ask: [], deny: [] },
-    tools: [{ name: 'read_file', description: 'Read file', inputSchema: { type: 'object' } }],
+    tools: [{ name: 'read_file', description: 'Read file', parameters: Type.Object({}) }],
     workspace_path_policy_service: { classifyPath: vi.fn(() => ({
       absolute_path: 'C:/workspace/README.md', workspace_path: 'README.md', inside_workspace: true, protected: false, sensitive: false,
     })) },

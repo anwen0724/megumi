@@ -13,7 +13,7 @@ describe('ProviderSettingsPanel', () => {
       catalog: [{
         providerId: 'DeepSeek',
         displayName: 'DeepSeek',
-        protocol: 'openai-compatible',
+        protocol: 'openai-completions',
         defaultBaseUrl: 'https://api.deepseek.com',
         models: [
           { modelId: 'deepseek-v4-flash', displayName: 'DeepSeek V4 Flash', contextWindowTokens: 1_000_000, capabilities },
@@ -22,7 +22,7 @@ describe('ProviderSettingsPanel', () => {
       }, {
         providerId: 'OpenAI',
         displayName: 'OpenAI',
-        protocol: 'openai-compatible',
+        protocol: 'openai-completions',
         defaultBaseUrl: 'https://api.openai.com/v1',
         models: [
           { modelId: 'gpt-5.6', displayName: 'GPT-5.6', contextWindowTokens: 1_050_000, capabilities },
@@ -36,7 +36,7 @@ describe('ProviderSettingsPanel', () => {
         {
           providerId: 'DeepSeek',
           displayName: 'DeepSeek',
-          protocol: 'openai-compatible',
+          protocol: 'openai-completions',
           enabled: true,
           baseUrl: 'https://api.deepseek.com',
           modelIds: ['deepseek-v4-flash'],
@@ -50,7 +50,7 @@ describe('ProviderSettingsPanel', () => {
         {
           providerId: 'openai',
           displayName: 'OpenAI',
-          protocol: 'openai-compatible',
+          protocol: 'openai-completions',
           enabled: true,
           baseUrl: 'https://api.openai.com/v1',
           modelIds: ['gpt-5.5'],
@@ -115,14 +115,14 @@ describe('ProviderSettingsPanel', () => {
     await user.click(within(presets).getByRole('option', { name: /128K/ }));
     expect(screen.getByLabelText('Context window')).toHaveValue(131072);
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Done' }));
-    await user.selectOptions(screen.getByLabelText('Protocol'), 'anthropic');
+    await user.selectOptions(screen.getByLabelText('Protocol'), 'anthropic-messages');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(updateProvider).toHaveBeenCalledWith({
       providerId: 'DeepSeek',
       displayName: 'DeepSeek',
       enabled: true,
-      protocol: 'anthropic',
+      protocol: 'anthropic-messages',
       baseUrl: 'https://proxy.local/deepseek',
       models: [{
         modelId: 'deepseek-v4-flash',
@@ -179,7 +179,7 @@ describe('ProviderSettingsPanel', () => {
 
     await user.click(screen.getAllByRole('button', { name: 'Add provider' })[0]);
     await user.type(screen.getByLabelText('Provider'), 'Local Proxy');
-    await user.selectOptions(screen.getByLabelText('Protocol'), 'anthropic');
+    await user.selectOptions(screen.getByLabelText('Protocol'), 'anthropic-messages');
     await user.type(screen.getByLabelText('Base URL'), 'https://api.deepseek.com/v1');
     await user.click(screen.getByRole('button', { name: 'Add model' }));
     expect(screen.queryByRole('switch', { name: 'Image input' })).not.toBeInTheDocument();
@@ -194,7 +194,7 @@ describe('ProviderSettingsPanel', () => {
       providerId: 'Local Proxy',
       displayName: 'Local Proxy',
       enabled: true,
-      protocol: 'anthropic',
+      protocol: 'anthropic-messages',
       baseUrl: 'https://api.deepseek.com/v1',
       models: [{
         modelId: 'deepseek-chat',

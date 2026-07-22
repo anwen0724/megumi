@@ -1,5 +1,5 @@
 ﻿import type { JsonValue } from '../../shared-json';
-import type { ContentBlock } from '@megumi/ai';
+import type { ContentBlock } from '../../model-content';
 import type { RuntimeError } from './runtime-error-contracts';
 import type { RuntimeContext } from './runtime-context-contracts';
 import type {

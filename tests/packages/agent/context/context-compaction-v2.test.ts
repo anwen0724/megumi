@@ -40,7 +40,7 @@ function fixture(counts: number[], options: { history?: SessionHistoryItem[]; hi
     },
     instructionScopeResolver: { resolve: vi.fn(() => ({ status: 'resolved', workspaceRoot: '/w', workingDirectory: '/w' })) },
     instructionService: { getSystemInstructions: vi.fn(() => []), getEffectiveAgentInstructions: vi.fn(async () => ({ status: 'ok', instructions: { sources: [] } })) },
-    promptTokenCounter: { count: vi.fn(async () => ({ status: 'counted', inputTokens: queue.shift() ?? counts.at(-1) ?? 0, accuracy: 'estimated' })) },
+    contextTokenEstimator: vi.fn(() => queue.shift() ?? counts.at(-1) ?? 0),
     summaryModelCall: { complete: vi.fn(async () => ({ status: 'completed', content: 'short' })) },
     usageSnapshotCache: new Map(), ids: { preparationId: () => 'P1', compactionId: () => 'C1' }, clock: { now: () => 'now' },
     ...(options.useDefaultPolicy ? {} : { policy: { keepRecentRuns: 0 } }),
@@ -66,8 +66,8 @@ describe('ContextServiceImpl compaction', () => {
       first_kept_entry_id: 'EU-2',
     }));
     const summaryRequest = vi.mocked(withOlderHistory.deps.summaryModelCall.complete).mock.calls[0][0];
-    expect(JSON.stringify(summaryRequest.prompt)).toContain('old-1');
-    expect(JSON.stringify(summaryRequest.prompt)).not.toContain('old-2');
+    expect(JSON.stringify(summaryRequest.context)).toContain('old-1');
+    expect(JSON.stringify(summaryRequest.context)).not.toContain('old-2');
   });
 
   it('replaces the rolling Summary with the old Summary plus only Runs older than the retained three', async () => {
@@ -78,7 +78,7 @@ describe('ContextServiceImpl compaction', () => {
 
     expect(await service.prepareModelCall(request)).toMatchObject({ status: 'ready' });
     expect(deps.summaryModelCall.complete).toHaveBeenCalledTimes(1);
-    const summaryPrompt = JSON.stringify(vi.mocked(deps.summaryModelCall.complete).mock.calls[0][0].prompt);
+    const summaryPrompt = JSON.stringify(vi.mocked(deps.summaryModelCall.complete).mock.calls[0][0].context);
     expect(summaryPrompt).toContain('previous rolling summary');
     expect(summaryPrompt).toContain('old-1');
     expect(summaryPrompt).not.toContain('old-2');
@@ -146,7 +146,7 @@ describe('ContextServiceImpl compaction', () => {
   it('manual compact uses the same internals without a fake current run', async () => {
     const { deps, service } = fixture([80, 25]);
     expect(await service.compactSession({ sessionId: 'S1', workspaceId: 'W1', modelContext, imageInputSupport: true })).toMatchObject({ status: 'compacted', usageBefore: { usedTokens: 80 }, usageAfter: { usedTokens: 25 } });
-    expect(deps.promptTokenCounter.count).toHaveBeenCalledWith(expect.objectContaining({ prompt: expect.objectContaining({ conversation: expect.not.arrayContaining([expect.objectContaining({ type: 'user_message', content: [] })]) }) }));
+    expect(deps.contextTokenEstimator).toHaveBeenCalledWith(expect.objectContaining({ messages: expect.not.arrayContaining([expect.objectContaining({ role: 'user', content: [] })]) }));
   });
 
   it.each([
@@ -177,9 +177,9 @@ describe('ContextServiceImpl compaction', () => {
   it('does not persist when cancellation arrives after an owner count or summary await', async () => {
     const countController = new AbortController();
     const afterCount = fixture([80]);
-    afterCount.deps.promptTokenCounter.count = vi.fn(async () => {
+    afterCount.deps.contextTokenEstimator = vi.fn(() => {
       countController.abort();
-      return { status: 'counted' as const, inputTokens: 80, accuracy: 'estimated' as const };
+      return 80;
     });
     expect(await afterCount.service.prepareModelCall({ ...request, signal: countController.signal })).toMatchObject({
       status: 'failed', failure: { code: 'cancelled' },

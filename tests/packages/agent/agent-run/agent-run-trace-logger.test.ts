@@ -74,7 +74,7 @@ describe('Agent Run trace logger', () => {
 
     logger.record({
       trace_id: 'run-1',
-      event_type: 'trace.prompt.built',
+      event_type: 'trace.context.built',
       payload: { prompt: 'x'.repeat(4100) },
     });
 

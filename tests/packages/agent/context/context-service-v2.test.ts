@@ -35,7 +35,7 @@ function dependencies(inputTokens: number[] = [50]): ContextServiceDependencies 
       getSystemInstructions: vi.fn(() => [{ instructionId: 'system', content: 'system' }]),
       getEffectiveAgentInstructions: vi.fn(async () => ({ status: 'ok' as const, instructions: { sources: [] } })),
     },
-    promptTokenCounter: { count: vi.fn(async () => ({ status: 'counted' as const, inputTokens: counts.shift() ?? inputTokens.at(-1) ?? 0, accuracy: 'estimated' as const })) },
+    contextTokenEstimator: vi.fn(() => counts.shift() ?? inputTokens.at(-1) ?? 0),
     summaryModelCall: { complete: vi.fn(async () => ({ status: 'completed' as const, content: 'short' })) },
     usageSnapshotCache: new Map(),
     clock: { now: () => '2026-07-12T00:00:00.000Z' },
@@ -48,7 +48,7 @@ function request() {
 }
 
 describe('ContextServiceImpl prepareModelCall', () => {
-  it('queries history through the current user parent and builds one complete prompt and usage', async () => {
+  it('queries history through the current user parent and builds one complete Context and usage', async () => {
     const deps = dependencies([50]);
     const result = await new ContextServiceImpl(deps).prepareModelCall(request());
 
@@ -56,9 +56,9 @@ describe('ContextServiceImpl prepareModelCall', () => {
     expect(deps.instructionService.getEffectiveAgentInstructions).toHaveBeenCalledWith({ workspaceRoot: '/workspace', workingDirectory: '/workspace/packages/app' });
     expect(result).toMatchObject({ status: 'ready', prepared: { preparationId: 'P1', usage: { usedTokens: 50 } } });
     if (result.status === 'ready') {
-      expect(result.prepared.prompt.conversation.map((item) => item.type)).toEqual(['user_message', 'assistant_message', 'user_message', 'assistant_message']);
+      expect(result.prepared.context.messages.map((message) => message.role)).toEqual(['user', 'assistant', 'user', 'assistant']);
     }
-    expect(deps.promptTokenCounter.count).toHaveBeenCalledTimes(1);
+    expect(deps.contextTokenEstimator).toHaveBeenCalledTimes(1);
   });
 
   it('returns owner-aware failures without using diagnostics as recovery input', async () => {
@@ -72,7 +72,7 @@ describe('ContextServiceImpl prepareModelCall', () => {
     });
   });
 
-  it('returns context_window_exceeded when the final prompt reaches the hard window', async () => {
+  it('returns context_window_exceeded when the final Context reaches the hard window', async () => {
     const deps = dependencies([100]);
     deps.sessionService.getActiveHistory = vi.fn(() => ({ status: 'ok' as const, history: [] }));
     expect(await new ContextServiceImpl(deps).prepareModelCall(request())).toMatchObject({ status: 'failed', failure: { code: 'context_window_exceeded' } });
@@ -102,20 +102,22 @@ describe('ContextServiceImpl prepareModelCall', () => {
 });
 
 describe('composeAgentContext', () => {
-  it('resolves provider runtime config outside Context before counting the complete Prompt', async () => {
+  it('resolves provider runtime config outside Context for the compaction model call', async () => {
     const deps = dependencies();
-    const resolve = vi.fn(() => ({ status: 'resolved' as const, modelConfig: { provider_id: 'openai', protocol: 'openai-compatible' as const, model_id: 'gpt', capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true } } }));
-    const countPrompt = vi.fn(async () => ({ status: 'counted' as const, input_tokens: 10, accuracy: 'estimated' as const }));
+    const resolve = vi.fn(() => ({ status: 'resolved' as const, modelConfig: { provider_id: 'openai', api: 'openai-completions' as const, base_url: 'https://api.example.com/v1', model_id: 'gpt', display_name: 'GPT', context_window_tokens: 100, max_output_tokens: 20, capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true } } }));
+    const modelCall = vi.fn(() => ({ status: 'failed' as const, failure: { code: 'model_call_failed' as const, message: 'summary failed', retryable: false } }));
     const context = composeAgentContext({
       sessionService: deps.sessionService,
       instructionScopeResolver: deps.instructionScopeResolver,
       instructionService: deps.instructionService,
       modelRuntimeConfigResolver: { resolve },
-      modelCallService: { countPrompt, modelCall: vi.fn() },
+      contextTokenEstimator: vi.fn(() => 90),
+      policy: { keepRecentRuns: 0 },
+      modelCallService: { modelCall },
     });
 
-    expect(await context.contextService.prepareModelCall(request())).toMatchObject({ status: 'ready' });
+    expect(await context.contextService.prepareModelCall(request())).toMatchObject({ status: 'failed', failure: { code: 'compaction_failed' } });
     expect(resolve).toHaveBeenCalledWith({ providerId: 'openai', modelId: 'gpt' });
-    expect(countPrompt).toHaveBeenCalledWith(expect.objectContaining({ model_config: expect.objectContaining({ provider_id: 'openai', model_id: 'gpt' }) }));
+    expect(modelCall).toHaveBeenCalledWith(expect.objectContaining({ context: expect.any(Object), model_config: expect.objectContaining({ provider_id: 'openai', model_id: 'gpt' }) }));
   });
 });

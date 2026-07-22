@@ -1,8 +1,8 @@
 /*
  * Stable public contracts for Agent Run model calls.
- * Model Call Service consumes one complete Context Prompt per request.
+ * Model Call Service consumes one complete AI Context per request.
  */
-import type { Prompt } from '../../context';
+import type { AssistantMessage, Context } from '@megumi/ai';
 import type { ProviderRuntimeConfig } from '../../settings';
 import type { ToolExecutionObservation, ToolRuntimeSource } from '../../tools';
 import type { JsonObject } from '../../shared-json';
@@ -14,7 +14,7 @@ export type ModelCallRequest = {
   owner:
     | { type: 'agent_run'; run_id: string }
     | { type: 'context_compaction'; session_id: string; compaction_id?: string };
-  prompt: Prompt;
+  context: Context;
   model_config: ModelCallConfig;
   signal?: AbortSignal;
 };
@@ -75,6 +75,7 @@ export type ModelCallEvent =
         output_tokens?: number;
         total_tokens?: number;
       };
+      assistant_message: AssistantMessage;
       created_at: string;
     }
   | {
@@ -87,15 +88,6 @@ export type ModelCallEvent =
 export type ModelCallFailure = Omit<AgentRunFailure, 'code'> & {
   code: 'model_call_failed' | 'context_failed' | 'internal_error' | 'unsupported_content';
 };
-
-export type CountPromptRequest = {
-  prompt: Prompt;
-  model_config: ModelCallConfig;
-};
-
-export type CountPromptResult =
-  | { status: 'counted'; input_tokens: number; accuracy: 'exact' | 'estimated' }
-  | { status: 'failed'; failure: ModelCallFailure };
 
 export type ModelCallResult =
   | { status: 'started'; model_call_id: string; events: AsyncIterable<ModelCallEvent> }
@@ -111,7 +103,6 @@ export type CancelModelCallResult =
   | { status: 'not_cancellable'; model_call_id: string };
 
 export type ModelCallService = {
-  countPrompt(request: CountPromptRequest): Promise<CountPromptResult>;
   modelCall(request: ModelCallRequest): Promise<ModelCallResult> | ModelCallResult;
   cancelModelCall(request: CancelModelCallRequest): Promise<CancelModelCallResult> | CancelModelCallResult;
 };

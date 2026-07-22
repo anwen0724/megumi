@@ -1,7 +1,7 @@
 /* Verifies final-reply acceptance and bounded protocol repair semantics. */
 import { describe, expect, it, vi } from 'vitest';
 import { createAgentRunService, type CreateAgentRunServiceOptions } from '@megumi/agent/agent-run';
-import { collectEvents, createMessageFlowDependencies } from './agent-run-test-helpers';
+import { collectEvents, createMessageFlowDependencies, testAssistantMessage } from './agent-run-test-helpers';
 
 describe('Agent final reply acceptance', () => {
   it('repairs a max-token response once and commits only the valid final candidate', async () => {
@@ -15,10 +15,10 @@ describe('Agent final reply acceptance', () => {
         events: events(call === 1 ? [
           { type: 'started' as const, model_call_id: 'M1', created_at: 'now' },
           { type: 'text_delta' as const, model_call_id: 'M1', delta: 'Truncated', created_at: 'now' },
-          { type: 'completed' as const, model_call_id: 'M1', content: 'Truncated', finish_reason: 'max_tokens', created_at: 'now' },
+          { type: 'completed' as const, model_call_id: 'M1', content: 'Truncated', finish_reason: 'max_tokens', assistant_message: testAssistantMessage('Truncated'), created_at: 'now' },
         ] : [
           { type: 'started' as const, model_call_id: 'M2', created_at: 'now' },
-          { type: 'completed' as const, model_call_id: 'M2', content: 'Complete answer', finish_reason: 'stop', created_at: 'now' },
+          { type: 'completed' as const, model_call_id: 'M2', content: 'Complete answer', finish_reason: 'stop', assistant_message: testAssistantMessage('Complete answer'), created_at: 'now' },
         ]),
       };
     });
@@ -29,7 +29,7 @@ describe('Agent final reply acceptance', () => {
 
     expect(deps.context_service.prepareModelCall).toHaveBeenCalledTimes(2);
     expect(deps.context_service.prepareModelCall.mock.calls[1]?.[0].currentRun.runItems).toContainEqual(
-      expect.objectContaining({ type: 'context', kind: 'historical_run_state' }),
+      expect.objectContaining({ type: 'context', kind: 'model_retry_instruction' }),
     );
     expect(deps.session_service.saveModelResponse).not.toHaveBeenCalled();
     expect(deps.session_service.saveAssistantReply).toHaveBeenCalledTimes(1);

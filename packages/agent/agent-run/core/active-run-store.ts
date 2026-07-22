@@ -7,7 +7,7 @@ import type {
   AgentRunApprovalRequest,
   RunStep,
 } from '../contracts/agent-run-contracts';
-import type { AssistantContentBlock } from '@megumi/ai';
+import type { AssistantContentBlock } from '../../model-content';
 
 export type ActiveModelResponseDraft = {
   run_id: string;

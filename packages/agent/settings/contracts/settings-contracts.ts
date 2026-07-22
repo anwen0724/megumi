@@ -6,6 +6,7 @@ import { z } from 'zod';
 import {
   ProviderSettingsRawSchema,
   ProviderSettingsResolvedSchema,
+  ProviderApiSchema,
 } from './provider-settings-contracts';
 import {
   PermissionRulesRawSchema,
@@ -162,7 +163,7 @@ export const CompleteSetupProviderRequestSchema = z
   .object({
     provider_id: z.string().min(1),
     enabled: z.boolean().optional(),
-    protocol: z.enum(['openai-compatible', 'anthropic']).optional(),
+    api: ProviderApiSchema.optional(),
     display_name: z.string().min(1).optional(),
     base_url: z.string().url().optional(),
     models: z.array(z.string().min(1)).optional(),

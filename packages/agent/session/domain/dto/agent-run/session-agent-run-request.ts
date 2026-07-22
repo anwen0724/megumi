@@ -1,5 +1,5 @@
 /* Defines Session write requests used by Agent Run. */
-import type { AssistantContentBlock, ContentBlock } from '@megumi/ai';
+import type { AssistantContentBlock, ContentBlock } from '../../../../model-content';
 import type { AssistantReplyReasonCode, AssistantReplyStatus } from '../../model/session-message';
 import type { SessionImageImport } from '../../model/session-attachment';
 

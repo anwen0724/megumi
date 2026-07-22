@@ -2,7 +2,7 @@
  * Commits the single durable Assistant Reply for an Agent Run. Runtime
  * terminal events may only be emitted after this boundary succeeds.
  */
-import type { AssistantContentBlock } from '@megumi/ai';
+import type { AssistantContentBlock } from '../../model-content';
 import type {
   AssistantReplyReasonCode,
   AssistantReplyStatus,

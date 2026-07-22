@@ -22,7 +22,7 @@ describe('run-level Tool Set builder', () => {
       {
         name: 'read_file',
         description: 'Read files for the model',
-        inputSchema: { type: 'object' },
+        parameters: { type: 'object' },
       },
     ]);
     expect(builder.getRegisteredTool('run-1', 'read_file')?.definition.executionMode).toBe('parallel');

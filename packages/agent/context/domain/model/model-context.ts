@@ -1,8 +1,9 @@
 /*
- * Defines the provider-neutral prompt, its semantic partitions, and preparation trace.
+ * Defines Context-owned semantic inputs and the prepared AI Context returned to Agent Run.
  */
-import type { ContentBlock, ConversationItem, ToolSetEntry } from '@megumi/ai';
+import type { Context, Tool } from '@megumi/ai';
 import type { SkillCatalogItem, UsedSkillContent } from '@megumi/skills';
+import type { ContentBlock } from '../../../model-content';
 import type { CompactionResultRef } from './compaction';
 import type { ContextUsage } from './context-usage';
 
@@ -21,12 +22,12 @@ export type EffectiveAgentInstructions = {
   sources: AgentInstructionSource[];
 };
 
-export type PromptInstructions = {
+export type ContextInstructions = {
   system: SystemInstruction[];
   agentInstructions: EffectiveAgentInstructions;
 };
 
-export type PromptRunContext = { skills: UsedSkillContent[] };
+export type RunContext = { skills: UsedSkillContent[] };
 
 export type VisibleCompactionSummary = {
   compactionId: string;
@@ -43,18 +44,10 @@ export type MemoryContextInput = {
   items: MemoryReferenceItem[];
 };
 
-export type PromptReferenceContext = {
+export type ReferenceContext = {
   skillCatalog: SkillCatalogItem[];
   compactionSummary?: VisibleCompactionSummary;
   memoryRecall?: MemoryContextInput;
-};
-
-export type Prompt = {
-  instructions: PromptInstructions;
-  referenceContext: PromptReferenceContext;
-  runContext: PromptRunContext;
-  conversation: ConversationItem[];
-  tools: ToolSetEntry[];
 };
 
 export type ContextSourceRef = {
@@ -74,8 +67,10 @@ export type ContextSourceRef = {
 
 export type PreparedModelCall = {
   preparationId: string;
-  prompt: Prompt;
+  context: Context;
   usage: ContextUsage;
   sourceRefs: ContextSourceRef[];
   compaction?: CompactionResultRef;
 };
+
+export type ContextToolSet = Tool[];

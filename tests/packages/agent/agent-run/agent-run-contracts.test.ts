@@ -8,7 +8,7 @@ import type {
   StartRunRequest,
   StartRunResult,
 } from '@megumi/agent/agent-run';
-import type { ToolSet } from '@megumi/ai';
+import { Type, type Tool } from '@megumi/ai';
 
 describe('agent-run public contracts', () => {
   it('defines start run request and result shapes', () => {
@@ -93,9 +93,9 @@ describe('agent-run public contracts', () => {
         {
           name: 'read_file',
           description: 'Read a file',
-          inputSchema: { type: 'object' },
+          parameters: Type.Object({}),
         },
-      ] satisfies ToolSet;
+      ] satisfies Tool[];
 
     expect(tools[0]?.name).toBe('read_file');
   });

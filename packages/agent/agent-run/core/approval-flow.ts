@@ -53,7 +53,7 @@ export type ResumeApprovalFlowResult =
       run: AgentRun;
       approval_request: AgentRunApprovalRequest;
       continuation: 'continue_tool_group' | 'waiting_for_other_approval';
-      next_model_prompt_ready: false;
+      next_model_call_ready: false;
     }
   | {
       status: 'denied';
@@ -61,7 +61,7 @@ export type ResumeApprovalFlowResult =
       approval_request: AgentRunApprovalRequest;
       tool_result: ToolResultRuntimeFact;
       continuation: 'waiting_for_other_approval' | 'next_model_prompt';
-      next_model_prompt_ready: boolean;
+      next_model_call_ready: boolean;
     };
 
 export function createApprovalWait(request: CreateApprovalWaitRequest): CreateApprovalWaitResult {
@@ -138,7 +138,7 @@ export async function resumeApprovalFlow(
       run,
       approval_request: updatedApproval,
       continuation: hasOtherPendingApproval ? 'waiting_for_other_approval' : 'continue_tool_group',
-      next_model_prompt_ready: false,
+      next_model_call_ready: false,
     };
   }
 
@@ -148,7 +148,7 @@ export async function resumeApprovalFlow(
     approval_request: updatedApproval,
     tool_result: deniedToolResult(updatedApproval, request.decision.reason ?? 'Approval denied.', request.decided_at),
     continuation: hasOtherPendingApproval ? 'waiting_for_other_approval' : 'next_model_prompt',
-    next_model_prompt_ready: !hasOtherPendingApproval,
+    next_model_call_ready: !hasOtherPendingApproval,
   };
 }
 

@@ -1,5 +1,5 @@
 /*
- * Defines model capacity, Context policy, and complete prompt usage projections.
+ * Defines model capacity, Context policy, and complete Context usage projections.
  */
 export type ContextCapacity = {
   providerId: string;

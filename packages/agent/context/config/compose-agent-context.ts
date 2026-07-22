@@ -19,10 +19,10 @@ export type ContextModelRuntimeConfigResolver = {
 
 export type ComposeAgentContextInput = Omit<
   ContextServiceDependencies,
-  'promptTokenCounter' | 'summaryModelCall' | 'usageSnapshotCache'
+  'summaryModelCall' | 'usageSnapshotCache'
 > & {
   modelRuntimeConfigResolver: ContextModelRuntimeConfigResolver;
-  modelCallService: Pick<ModelCallService, 'countPrompt' | 'modelCall'>;
+  modelCallService: Pick<ModelCallService, 'modelCall'>;
   usageSnapshotCache?: ContextServiceDependencies['usageSnapshotCache'];
 };
 
@@ -39,22 +39,12 @@ export function composeAgentContext(input: ComposeAgentContextInput): {
     sessionService: input.sessionService,
     instructionScopeResolver: input.instructionScopeResolver,
     instructionService: input.instructionService,
+    ...(input.contextTokenEstimator ? { contextTokenEstimator: input.contextTokenEstimator } : {}),
     usageSnapshotCache: cache,
-    ...(input.isRunLive ? { isRunLive: input.isRunLive } : {}),
     ...(input.observability ? { observability: input.observability } : {}),
     ...(input.policy ? { policy: input.policy } : {}),
     ...(input.clock ? { clock: input.clock } : {}),
     ...(input.ids ? { ids: input.ids } : {}),
-    promptTokenCounter: {
-      async count(request) {
-        const resolved = resolveModelConfig(request.modelContext);
-        if (resolved.status === 'failed') return { status: 'failed', failure: modelFailure('token_count_failed', resolved.failure) };
-        const counted = await input.modelCallService.countPrompt({ prompt: request.prompt, model_config: resolved.modelConfig });
-        return counted.status === 'counted'
-          ? { status: 'counted', inputTokens: counted.input_tokens, accuracy: counted.accuracy }
-          : { status: 'failed', failure: modelFailure('token_count_failed', counted.failure) };
-      },
-    },
     summaryModelCall: {
       async complete(request) {
         if (!request.sessionId || !request.compactionId) {
@@ -64,7 +54,7 @@ export function composeAgentContext(input: ComposeAgentContextInput): {
         if (resolved.status === 'failed') return { status: 'failed', failure: modelFailure('compaction_failed', resolved.failure) };
         const call = await input.modelCallService.modelCall({
           owner: { type: 'context_compaction', session_id: request.sessionId, compaction_id: request.compactionId },
-          prompt: request.prompt,
+          context: request.context,
           model_config: resolved.modelConfig,
           ...(request.signal ? { signal: request.signal } : {}),
         });
@@ -84,7 +74,7 @@ export function composeAgentContext(input: ComposeAgentContextInput): {
 }
 
 function modelFailure(
-  code: 'token_count_failed' | 'compaction_failed',
+  code: 'compaction_failed',
   failure: Pick<ModelCallFailure, 'code' | 'message' | 'retryable'> | { code: string; message: string; retryable?: boolean },
 ): ContextFailure {
   return {

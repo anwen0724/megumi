@@ -11,7 +11,7 @@ const catalog = [
   {
     providerId: 'DeepSeek',
     displayName: 'DeepSeek',
-    protocol: 'openai-compatible' as const,
+    protocol: 'openai-completions' as const,
     defaultBaseUrl: 'https://api.deepseek.com',
     models: [
       {
@@ -25,7 +25,7 @@ const catalog = [
   {
     providerId: 'OpenAI',
     displayName: 'OpenAI',
-    protocol: 'openai-compatible' as const,
+    protocol: 'openai-completions' as const,
     defaultBaseUrl: 'https://api.openai.com/v1',
     models: [
       {

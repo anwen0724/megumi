@@ -45,7 +45,7 @@ class MemoryStorage implements ObservabilityStorage {
 }
 
 describe("Observability Agent Run trace logger", () => {
-  it("records nested provider usage and ignores the duplicate prompt-built span", async () => {
+  it("records nested provider usage and ignores the duplicate Context-built span", async () => {
     const storage = new MemoryStorage();
     const runtime = composeObservability({
       directoryPath: "/logs",
@@ -67,7 +67,7 @@ describe("Observability Agent Run trace logger", () => {
         trace_id: "run-1",
         run_id: "run-1",
         session_id: "session-1",
-        event_type: "trace.prompt.built",
+        event_type: "trace.context.built",
         payload: {},
       });
       logger.record({

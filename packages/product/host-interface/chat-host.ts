@@ -8,7 +8,7 @@ import {
   type TimelineUserMessage,
 } from '../../agent/projections/timeline';
 import { z } from 'zod';
-import { encodeBase64 } from '@megumi/ai';
+import { encodeBase64 } from '@megumi/agent/model-content';
 
 import { IMAGE_INPUT_POLICY } from '../../agent/input';
 

@@ -33,7 +33,7 @@ import {
 } from '../../../shared/ui';
 import { formatNumber, formatTokenCount, localizeRendererError } from '../../../shared/i18n';
 
-type ProviderProtocol = 'openai-compatible' | 'anthropic';
+type ProviderProtocol = 'openai-completions' | 'openai-responses' | 'openai-codex-responses' | 'anthropic-messages' | 'google-generative-ai';
 
 interface ProviderModelForm {
   modelId: string;
@@ -123,7 +123,7 @@ function createQuickProviderFormState(entry: ProviderCatalogUiDto): ProviderForm
 function createNewProviderFormState(): ProviderFormState {
   return {
     provider: '',
-    protocol: 'openai-compatible',
+    protocol: 'openai-completions',
     enabled: true,
     baseUrl: '',
     models: [],
@@ -469,8 +469,11 @@ export function ProviderSettingsPanel() {
                   <FieldRow label={t('provider.protocol')}>
                     <div className="relative">
                       <select aria-label={t('provider.protocol')} value={selectedForm.protocol} onChange={(event) => updateForm({ protocol: event.target.value as ProviderProtocol })} className={cx(fieldClassName, 'appearance-none pr-10')}>
-                        <option value="openai-compatible">OpenAI Compatible</option>
-                        <option value="anthropic">Anthropic</option>
+                        <option value="openai-completions">{t('provider.apiOpenAiCompletions')}</option>
+                        <option value="openai-responses">{t('provider.apiOpenAiResponses')}</option>
+                        <option value="openai-codex-responses">{t('provider.apiOpenAiCodexResponses')}</option>
+                        <option value="anthropic-messages">{t('provider.apiAnthropicMessages')}</option>
+                        <option value="google-generative-ai">{t('provider.apiGoogleGenerativeAi')}</option>
                       </select>
                       <ChevronDown size={16} aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
                     </div>

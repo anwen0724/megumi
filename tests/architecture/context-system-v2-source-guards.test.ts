@@ -45,7 +45,7 @@ describe('Context system v2 source guards', () => {
       'domain/model/compaction.ts',
       'domain/model/context-usage.ts',
       'domain/model/conversation-run.ts',
-      'domain/model/prompt.ts',
+      'domain/model/model-context.ts',
       'index.ts',
       'service/context-service-impl.ts',
       'service/context-service-types.ts',
@@ -53,14 +53,14 @@ describe('Context system v2 source guards', () => {
       'service/internal/active-context-builder.ts',
       'service/internal/compaction-planner.ts',
       'service/internal/compaction-summary-builder.ts',
+      'service/internal/context-builder.ts',
       'service/internal/context-usage-calculator.ts',
       'service/internal/conversation-run-builder.ts',
       'service/internal/conversation-run-items.ts',
       'service/internal/image-content-materializer.ts',
-      'service/internal/prompt-builder.ts',
     ]);
     expect(exists('packages/agent/context/domain/model/active-context.ts')).toBe(true);
-    expect(exists('packages/agent/context/domain/model/prompt.ts')).toBe(true);
+    expect(exists('packages/agent/context/domain/model/model-context.ts')).toBe(true);
     expect(exists('packages/agent/context/domain/model/conversation-run.ts')).toBe(true);
     expect(exists('packages/agent/context/domain/model/context-usage.ts')).toBe(true);
     expect(exists('packages/agent/context/domain/model/compaction.ts')).toBe(true);
@@ -77,7 +77,7 @@ describe('Context system v2 source guards', () => {
     for (const internalFile of [
       'active-context-builder.ts',
       'conversation-run-builder.ts',
-      'prompt-builder.ts',
+      'context-builder.ts',
       'context-usage-calculator.ts',
       'compaction-planner.ts',
       'compaction-summary-builder.ts',
@@ -141,7 +141,7 @@ describe('Context system v2 source guards', () => {
     expect(contextSource).not.toMatch(/previousSummaryInputTokens|nonCompressibleInputTokens|historicalTurnInputTokens|thresholdInputTokens/);
   });
 
-  it('keeps Prompt.tools as the only model-facing tool input', () => {
+  it('keeps Context.tools as the only model-facing tool input', () => {
     const agentRunSource = readTree('packages/agent/agent-run');
 
     expect(agentRunSource).not.toMatch(/model_call_messages|tool_set|toolSet/);

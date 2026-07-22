@@ -29,7 +29,7 @@ function dependencies(
     },
     instructionScopeResolver: { resolve: () => ({ status: 'resolved', workspaceRoot: 'C:/w', workingDirectory: 'C:/w' }) },
     instructionService: { getSystemInstructions: () => [], getEffectiveAgentInstructions: async () => ({ status: 'ok', instructions: { sources: [] } }) },
-    promptTokenCounter: { count: vi.fn(async () => ({ status: 'counted' as const, inputTokens: queue.shift() ?? 10, accuracy: 'estimated' as const })) },
+    contextTokenEstimator: vi.fn(() => queue.shift() ?? 10),
     summaryModelCall: { complete: summaryModelCall },
     usageSnapshotCache: new Map(),
     ids: { preparationId: () => 'P1', compactionId: () => 'C1' },
@@ -48,15 +48,17 @@ const request = {
 };
 
 describe('Context image materialization', () => {
-  it('returns a complete Prompt with historical and current images resolved to Base64', async () => {
+  it('returns a complete Context with historical and current images resolved to Base64', async () => {
     const result = await new ContextServiceImpl(dependencies()).prepareModelCall(request);
     expect(result.status).toBe('ready');
     if (result.status !== 'ready') return;
-    const images = result.prepared.prompt.conversation.flatMap((item) =>
-      item.type === 'user_message' ? item.content.filter((block) => block.type === 'image') : []);
+    const images = result.prepared.context.messages.flatMap((message) =>
+      message.role === 'user' && Array.isArray(message.content)
+        ? message.content.filter((block) => block.type === 'image')
+        : []);
     expect(images).toEqual([
-      { type: 'image', source: { type: 'base64', mediaType: 'image/png', data: 'AQ==' } },
-      { type: 'image', source: { type: 'base64', mediaType: 'image/png', data: 'Ag==' } },
+      { type: 'image', mimeType: 'image/png', data: 'AQ==' },
+      { type: 'image', mimeType: 'image/png', data: 'Ag==' },
     ]);
   });
 
@@ -69,23 +71,23 @@ describe('Context image materialization', () => {
 
     expect(result.status).toBe('ready');
     if (result.status !== 'ready') return;
-    expect(JSON.stringify(result.prepared.prompt.conversation)).not.toContain('"type":"image"');
-    expect(JSON.stringify(result.prepared.prompt.conversation)).toContain(
+    expect(JSON.stringify(result.prepared.context.messages)).not.toContain('"type":"image"');
+    expect(JSON.stringify(result.prepared.context.messages)).toContain(
       '[An image was attached, but the selected model cannot view image content.]',
     );
     expect(deps.sessionService.readAttachmentContent).not.toHaveBeenCalled();
   });
 
-  it('materializes images in the compaction summary model request', async () => {
-    let summaryPrompt: Parameters<ContextServiceDependencies['summaryModelCall']['complete']>[0]['prompt'] | undefined;
+  it('uses a text-only compaction Context without leaking host image references', async () => {
+    let summaryContext: Parameters<ContextServiceDependencies['summaryModelCall']['complete']>[0]['context'] | undefined;
     const summaryModelCall: ContextServiceDependencies['summaryModelCall']['complete'] = vi.fn(async (input) => {
-      summaryPrompt = input.prompt;
+      summaryContext = input.context;
       return { status: 'completed' as const, content: 'summary' };
     });
     const deps = dependencies([90, 30, 30], summaryModelCall);
     deps.policy = { compactionThresholdRatio: 0.8, keepRecentRuns: 0 };
     expect(await new ContextServiceImpl(deps).prepareModelCall(request)).toMatchObject({ status: 'ready' });
-    expect(JSON.stringify(summaryPrompt)).toContain('"type":"base64"');
-    expect(JSON.stringify(summaryPrompt)).not.toContain('host_reference');
+    expect(JSON.stringify(summaryContext)).toContain('Image attachment included as structured content below');
+    expect(JSON.stringify(summaryContext)).not.toContain('host_reference');
   });
 });

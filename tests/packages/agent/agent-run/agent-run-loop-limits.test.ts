@@ -4,7 +4,7 @@ import {
   type CreateAgentRunServiceOptions,
 } from '@megumi/agent/agent-run';
 import { RuntimeEventSchema } from '@megumi/agent/events';
-import { collectEvents, createInMemoryAgentRunRepository, createMessageFlowDependencies } from './agent-run-test-helpers';
+import { collectEvents, createInMemoryAgentRunRepository, createMessageFlowDependencies, testAssistantMessage } from './agent-run-test-helpers';
 
 describe('Agent Run loop limits', () => {
   it('uses agent friendly default loop limits', async () => {
@@ -31,6 +31,7 @@ describe('Agent Run loop limits', () => {
                   type: 'completed',
                   model_call_id: `model-call-${modelCallCount}`,
                   content: 'done',
+                  assistant_message: testAssistantMessage('done'),
                   created_at: '2026-01-01T00:00:00.000Z',
                 },
               ],
@@ -128,7 +129,16 @@ function toolCallModelEvents(
       arguments_text: '{"path":"README.md"}',
       created_at: '2026-01-01T00:00:00.000Z',
     },
-    { type: 'completed', model_call_id: modelCallId, content: '', created_at: '2026-01-01T00:00:00.000Z' },
+    {
+      type: 'completed',
+      model_call_id: modelCallId,
+      content: '',
+      assistant_message: {
+        ...testAssistantMessage('', 'toolUse'),
+        content: [{ type: 'toolCall', id: toolCallId, name: 'read_file', arguments: { path: 'README.md' } }],
+      },
+      created_at: '2026-01-01T00:00:00.000Z',
+    },
   ];
 }
 

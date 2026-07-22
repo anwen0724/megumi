@@ -1,23 +1,11 @@
 /*
- * Derives complete prompt usage from a validated token count and Context policy.
+ * Derives Context-window usage from a validated token estimate and Context policy.
  */
 import type {
   ContextCapacity,
   ContextPolicy,
   ContextUsage,
 } from '../../domain/model/context-usage';
-import type { Prompt } from '../../domain/model/prompt';
-import type { ContextFailure } from '../context-service-types';
-
-export type ContextPromptTokenCounter = {
-  count(request: {
-    prompt: Prompt;
-    modelContext: ContextCapacity;
-  }): Promise<
-    | { status: 'counted'; inputTokens: number; accuracy: 'exact' | 'estimated' }
-    | { status: 'failed'; failure: ContextFailure }
-  >;
-};
 
 export type CalculateContextUsageRequest = {
   inputTokens: number;

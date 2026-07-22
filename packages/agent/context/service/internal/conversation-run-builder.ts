@@ -3,9 +3,9 @@
  * variants. Only live-run lookup is process-local; all other facts come from
  * the active Session Entry path.
  */
-import type { ContentBlock, JsonValue } from '@megumi/ai';
+import type { AssistantContentBlock, ContentBlock } from '../../../model-content';
+import type { JsonValue } from '../../../shared-json';
 import {
-  isLegacySessionMessage,
   type SessionHistoryItem,
   type SessionMessageAttachment,
 } from '../../../session';
@@ -13,7 +13,6 @@ import type { ConversationRun } from '../../domain/model/conversation-run';
 
 export type BuildConversationRunsRequest = {
   history: SessionHistoryItem[];
-  isRunLive?: (runId: string) => boolean;
 };
 export type BuildConversationRunsResult = { status: 'built'; runs: ConversationRun[] };
 type MessageHistoryItem = Extract<SessionHistoryItem, { type: 'message' }>;
@@ -51,49 +50,28 @@ export function buildConversationRuns(request: BuildConversationRunsRequest): Bu
         type: 'user_message',
         content: [...user.message.content, ...user.attachments.map(attachmentContent)],
       },
-      items: responseItems(runId, user, responses, request.isRunLive),
+      items: responseItems(responses),
     });
   }
   return { status: 'built', runs };
 }
 
-function responseItems(
-  runId: string,
-  user: MessageHistoryItem,
-  messages: MessageHistoryItem[],
-  isRunLive?: (runId: string) => boolean,
-): ConversationRun['items'] {
+function responseItems(messages: MessageHistoryItem[]): ConversationRun['items'] {
   const items: ConversationRun['items'] = [];
-  const resultIds = new Set(messages.flatMap(({ message }) =>
-    message.message_kind === 'tool_result' ? [message.tool_call_id] : []));
   const callIds = new Set(messages.flatMap(({ message }) =>
     message.message_kind === 'model_response'
       ? message.content.flatMap((block) => block.type === 'toolCall' ? [block.id] : [])
       : []));
-  let hasReply = false;
-  let hasLegacyFact = isLegacySessionMessage(user.message);
-
   for (const { message } of messages) {
-    hasLegacyFact ||= isLegacySessionMessage(message);
     if (message.message_kind === 'model_response') {
-      appendAssistantText(items, message.content);
+      appendAssistantContent(items, message.content);
       const calls = message.content.filter((block): block is Extract<typeof block, { type: 'toolCall' }> => block.type === 'toolCall');
-      const completedCalls = calls.filter((call) => resultIds.has(call.id));
-      items.push(...completedCalls.map((call) => ({
+      items.push(...calls.map((call) => ({
         type: 'tool_call' as const,
         toolCallId: call.id,
         toolName: call.name,
         arguments: parseArguments(call.argumentsText),
       })));
-      const pendingCalls = calls.filter((call) => !resultIds.has(call.id));
-      if (pendingCalls.length > 0 || message.outcome_status !== 'completed') {
-        items.push(runState({
-          status: message.outcome_status,
-          reasonCode: message.reason_code,
-          stopReason: message.stop_reason,
-          pendingWorkToolCalls: pendingCalls.map((call) => ({ id: call.id, name: call.name })),
-        }));
-      }
       continue;
     }
     if (message.message_kind === 'tool_result') {
@@ -105,54 +83,30 @@ function responseItems(
           status: message.status === 'success' ? 'success' : 'failure',
           content: message.content,
         });
-      } else {
-        items.push(runState({
-          status: 'incomplete',
-          reasonCode: 'orphaned_tool_result',
-          toolCallId: message.tool_call_id,
-          toolName: message.tool_name,
-        }));
       }
       continue;
     }
     if (message.message_kind === 'assistant_reply') {
-      hasReply = true;
-      appendAssistantText(items, message.content);
-      if (message.status !== 'completed') {
-        items.push(runState({
-          status: message.status,
-          reasonCode: message.reason_code,
-          partial: hasVisibleText(message.content),
-        }));
-      }
+      appendAssistantContent(items, message.content);
     }
-  }
-
-  if (!hasReply && !isRunLive?.(runId)) {
-    items.push(runState({ status: hasLegacyFact ? 'legacy_unknown' : 'interrupted' }));
   }
   return items;
 }
 
-function appendAssistantText(
+function appendAssistantContent(
   items: ConversationRun['items'],
-  content: Array<{ type: string; text?: string }>,
+  content: AssistantContentBlock[],
 ): void {
-  const visible = content.flatMap((block) =>
-    block.type === 'text' && block.text ? [{ type: 'text' as const, text: block.text }] : []);
-  if (visible.length > 0) items.push({ type: 'assistant_message', content: visible });
-}
-
-function hasVisibleText(content: Array<{ type: string; text?: string }>): boolean {
-  return content.some((block) => block.type === 'text' && Boolean(block.text?.trim()));
-}
-
-function runState(content: Record<string, JsonValue | undefined>): ConversationRun['items'][number] {
-  return {
-    type: 'context',
-    kind: 'historical_run_state',
-    content: Object.fromEntries(Object.entries(content).filter(([, value]) => value !== undefined)) as JsonValue,
-  };
+  const semanticContent: AssistantContentBlock[] = [];
+  for (const block of content) {
+    if (block.type === 'text' && block.text) {
+      semanticContent.push({ type: 'text', text: block.text });
+    }
+    if (block.type === 'thinking' && block.thinking) {
+      semanticContent.push({ type: 'thinking', thinking: block.thinking });
+    }
+  }
+  if (semanticContent.length > 0) items.push({ type: 'assistant_message', content: semanticContent });
 }
 
 function parseArguments(value: string): JsonValue {

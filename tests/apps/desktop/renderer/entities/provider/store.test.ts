@@ -11,7 +11,7 @@ const providers: ProviderPublicStatusUiDto[] = [
   {
     providerId: 'deepseek',
     displayName: 'DeepSeek',
-    protocol: 'openai-compatible',
+    protocol: 'openai-completions',
     enabled: true,
     baseUrl: 'https://api.deepseek.com',
     modelIds: ['deepseek-v4-flash'],
@@ -23,7 +23,7 @@ const providers: ProviderPublicStatusUiDto[] = [
 const catalog: ProviderCatalogUiDto[] = [{
   providerId: 'DeepSeek',
   displayName: 'DeepSeek',
-  protocol: 'openai-compatible',
+  protocol: 'openai-completions',
   defaultBaseUrl: 'https://api.deepseek.com',
   models: [{
     modelId: 'deepseek-v4-flash', displayName: 'DeepSeek V4 Flash', contextWindowTokens: 1_000_000,

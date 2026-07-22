@@ -1,7 +1,8 @@
 /*
  * Defines request and result types for the four ContextService business operations.
  */
-import type { AiModelSupportLevel, ToolSetEntry } from '@megumi/ai';
+import type { Tool } from '@megumi/ai';
+import type { ModelSupportLevel } from '../../model-capability';
 import type { CurrentConversationRun } from '../domain/model/conversation-run';
 import type { SkillCatalogItem, UsedSkillContent } from '@megumi/skills';
 import type {
@@ -12,7 +13,7 @@ import type {
 import type {
   MemoryContextInput,
   PreparedModelCall,
-} from '../domain/model/prompt';
+} from '../domain/model/model-context';
 
 export type ContextFailure = {
   code:
@@ -25,7 +26,7 @@ export type ContextFailure = {
     | 'compaction_failed'
     | 'compaction_persist_failed'
     | 'context_window_exceeded'
-    | 'prompt_build_failed'
+    | 'context_build_failed'
     | 'image_materialization_failed'
     | 'cancelled';
   message: string;
@@ -61,9 +62,9 @@ export type PrepareModelCallRequest = {
   skillCatalog: SkillCatalogItem[];
   usedSkills: UsedSkillContent[];
   memoryRecall?: MemoryContextInput;
-  tools: ToolSetEntry[];
+  tools: Tool[];
   modelContext: ContextCapacity;
-  imageInputSupport: AiModelSupportLevel;
+  imageInputSupport: ModelSupportLevel;
   onCompactionProgress?: (progress: ContextCompactionProgress) => void;
   signal?: AbortSignal;
 };
@@ -76,7 +77,7 @@ export type CompactSessionRequest = {
   sessionId: string;
   workspaceId: string;
   modelContext: ContextCapacity;
-  imageInputSupport: AiModelSupportLevel;
+  imageInputSupport: ModelSupportLevel;
   signal?: AbortSignal;
 };
 

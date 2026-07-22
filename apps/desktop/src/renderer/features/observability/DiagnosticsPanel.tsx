@@ -413,7 +413,7 @@ function formatContextCapacity(summary: RunTraceSummary): string {
 
 function formatContextRatio(ratio: number | undefined): string {
   return ratio === undefined
-    ? rendererI18n.t('settings:diagnostics.promptNotRecorded')
+    ? rendererI18n.t('settings:diagnostics.contextNotRecorded')
     : rendererI18n.t('settings:diagnostics.contextRatio', { percent: formatPercent(ratio) });
 }
 

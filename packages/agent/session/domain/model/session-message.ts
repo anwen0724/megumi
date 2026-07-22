@@ -5,7 +5,7 @@ import {
   ContentBlockListSchema,
   type AssistantContentBlock,
   type ContentBlock,
-} from '@megumi/ai';
+} from '../../../model-content';
 import type { SessionMessageAttachment } from './session-attachment';
 
 export const SESSION_MESSAGE_KINDS = [

@@ -180,7 +180,7 @@ describe('SettingsHost semantics', () => {
         providers: [{
           providerId: 'DeepSeek',
           displayName: 'DeepSeek',
-          protocol: 'openai-compatible' as const,
+          api: 'openai-completions' as const,
           defaultBaseUrl: 'https://api.deepseek.com',
           models: [{
             modelId: 'deepseek-v4-flash',
@@ -198,7 +198,7 @@ describe('SettingsHost semantics', () => {
       catalog: [{
         providerId: 'DeepSeek',
         displayName: 'DeepSeek',
-        protocol: 'openai-compatible',
+        protocol: 'openai-completions',
         defaultBaseUrl: 'https://api.deepseek.com',
         models: [{
           modelId: 'deepseek-v4-flash',
@@ -262,7 +262,7 @@ function resolvedSettings() {
 function providerSettings() {
   return {
     enabled: true,
-    protocol: 'openai-compatible' as const,
+    protocol: 'openai-completions' as const,
     display_name: 'DeepSeek',
     base_url: 'https://api.deepseek.com',
     models: { 'deepseek-v4-flash': { context_window_tokens: 1_000_000 } },

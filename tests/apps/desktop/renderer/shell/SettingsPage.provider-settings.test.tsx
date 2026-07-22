@@ -12,7 +12,7 @@ describe('SettingsPage provider settings', () => {
         {
           providerId: 'deepseek',
           displayName: 'DeepSeek',
-          protocol: 'openai-compatible',
+          protocol: 'openai-completions',
           enabled: true,
           baseUrl: 'https://api.deepseek.com',
           modelIds: ['deepseek-v4-flash'],

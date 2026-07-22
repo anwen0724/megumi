@@ -1,16 +1,16 @@
 /*
- * Defines the complete runtime Context input from which a model prompt is assembled.
+ * Defines the complete runtime inputs from which the model-facing Context is assembled.
  */
-import type { ToolSetEntry } from '@megumi/ai';
+import type { Tool } from '@megumi/ai';
 import type { ConversationRun, CurrentConversationRun } from './conversation-run';
-import type { PromptInstructions, PromptReferenceContext, PromptRunContext } from './prompt';
+import type { ContextInstructions, ReferenceContext, RunContext } from './model-context';
 
 export type ActiveContext = {
   sessionId: string;
-  instructions: PromptInstructions;
-  referenceContext: PromptReferenceContext;
-  runContext: PromptRunContext;
+  instructions: ContextInstructions;
+  referenceContext: ReferenceContext;
+  runContext: RunContext;
   historicalRuns: ConversationRun[];
-  currentRun: CurrentConversationRun;
-  tools: ToolSetEntry[];
+  currentRun?: CurrentConversationRun;
+  tools: Tool[];
 };

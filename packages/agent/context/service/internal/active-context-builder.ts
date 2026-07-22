@@ -1,7 +1,7 @@
 /*
  * Assembles already resolved owner facts into ActiveContext and a separate source trace.
  */
-import type { ToolSetEntry } from '@megumi/ai';
+import type { Tool } from '@megumi/ai';
 import type { EffectiveAgentInstructions, SystemInstruction } from '../../../instructions';
 import type { SkillCatalogItem, UsedSkillContent } from '@megumi/skills';
 import type { ActiveContext } from '../../domain/model/active-context';
@@ -13,7 +13,7 @@ import type {
   ContextSourceRef,
   MemoryContextInput,
   VisibleCompactionSummary,
-} from '../../domain/model/prompt';
+} from '../../domain/model/model-context';
 
 export type BuildActiveContextRequest = {
   sessionId: string;
@@ -24,8 +24,8 @@ export type BuildActiveContextRequest = {
   compactionSummary?: VisibleCompactionSummary;
   memoryRecall?: MemoryContextInput;
   historicalRuns: ConversationRun[];
-  currentRun: CurrentConversationRun;
-  tools: ToolSetEntry[];
+  currentRun?: CurrentConversationRun;
+  tools: Tool[];
 };
 
 export type BuildActiveContextResult = {
@@ -53,7 +53,7 @@ export function buildActiveContext(
       skills: request.usedSkills.map((skill) => ({ ...skill })),
     },
     historicalRuns: request.historicalRuns,
-    currentRun: request.currentRun,
+    ...(request.currentRun ? { currentRun: request.currentRun } : {}),
     tools: request.tools,
   };
 
@@ -107,18 +107,20 @@ function buildSourceRefs(activeContext: ActiveContext): ContextSourceRef[] {
     );
   }
 
-  refs.push({
-    sourceType: 'session_message',
-    sourceId: activeContext.currentRun.userEntry.entryId,
-  });
-  activeContext.currentRun.runItems.forEach((item, index) => {
-    refs.push(item.type === 'tool_result'
-      ? { sourceType: 'tool_result', sourceId: item.toolCallId }
-      : {
-          sourceType: 'current_run_item',
-          sourceId: `${activeContext.currentRun.runId}:${index}`,
-        });
-  });
+  if (activeContext.currentRun) {
+    refs.push({
+      sourceType: 'session_message',
+      sourceId: activeContext.currentRun.userEntry.entryId,
+    });
+    activeContext.currentRun.runItems.forEach((item, index) => {
+      refs.push(item.type === 'tool_result'
+        ? { sourceType: 'tool_result', sourceId: item.toolCallId }
+        : {
+            sourceType: 'current_run_item',
+            sourceId: `${activeContext.currentRun!.runId}:${index}`,
+          });
+    });
+  }
   refs.push(...activeContext.tools.map(({ name }) => ({
     sourceType: 'tool_definition' as const,
     sourceId: name,

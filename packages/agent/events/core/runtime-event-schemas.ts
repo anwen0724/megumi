@@ -1,5 +1,5 @@
 ﻿import { z } from 'zod';
-import { ContentBlockListSchema } from '@megumi/ai';
+import { ContentBlockListSchema } from '../../model-content';
 import { JsonObjectSchema, JsonValueSchema } from '../../shared-json';
 import { RuntimeContextSchema } from '../contracts/runtime-context-contracts';
 import { RuntimeErrorSchema } from '../contracts/runtime-error-contracts';

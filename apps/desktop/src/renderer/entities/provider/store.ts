@@ -22,7 +22,7 @@ export type ProviderStoreStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'err
 export interface ProviderUpdateInput {
   providerId: string;
   enabled?: boolean;
-  protocol?: 'openai-compatible' | 'anthropic';
+  protocol?: 'openai-completions' | 'openai-responses' | 'openai-codex-responses' | 'anthropic-messages' | 'google-generative-ai';
   displayName?: string;
   baseUrl?: string;
   modelIds?: string[];

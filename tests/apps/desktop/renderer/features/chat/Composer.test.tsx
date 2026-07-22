@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,7 +12,7 @@ const defaultProviders: ProviderPublicStatusUiDto[] = [
   {
     providerId: 'deepseek' as const,
     displayName: 'DeepSeek',
-    protocol: 'openai-compatible' as const,
+    protocol: 'openai-completions' as const,
     enabled: true,
     modelIds: ['deepseek-v4-flash', 'deepseek-v4-pro'],
     modelCapabilities: {
@@ -26,7 +26,7 @@ const defaultProviders: ProviderPublicStatusUiDto[] = [
   {
     providerId: 'openai' as const,
     displayName: 'OpenAI',
-    protocol: 'openai-compatible' as const,
+    protocol: 'openai-completions' as const,
     enabled: true,
     modelIds: ['gpt-5.5'],
     modelCapabilities: { 'gpt-5.5': { streaming: true, toolCalls: true, thinking: true, imageInput: true } },

@@ -9,8 +9,9 @@ import {
   createSettingsModelContextProvider,
 } from '@megumi/agent/composition';
 import { createSettingsService, type SettingsRaw } from '@megumi/agent/settings';
-import { AssistantEventStream, type AiClient, type AssistantStreamEvent } from '@megumi/ai';
 import { collectEvents } from '../agent-run/agent-run-test-helpers';
+import { fakeModelCallService } from '../../../helpers/fake-model-call-service';
+import type { Context } from '@megumi/ai';
 
 const tempDirectories: string[] = [];
 
@@ -41,7 +42,7 @@ describe('composeAgentRuntime trace wiring', () => {
     const runtime = composeAgentRuntime({
       homePaths: home.paths,
       runtimeLogger: { warn() {} },
-      aiClient: fakeAiClient(),
+      modelCallService: fakeModelCallService(),
       settingsStorage: settingsStorage(),
     });
 
@@ -54,9 +55,9 @@ describe('composeAgentRuntime trace wiring', () => {
     }
   });
 
-  it('binds workspace-provided user Skills into the Run catalog and Prompt run context', async () => {
+  it('binds workspace-provided user Skills into the Run catalog and model Context', async () => {
     const home = await createHome();
-    const capturedPrompts: string[] = [];
+    const capturedContexts: Context[] = [];
     await writeProjectSkill({
       workspaceRoot: home.workspaceRoot,
       name: 'review',
@@ -66,7 +67,7 @@ describe('composeAgentRuntime trace wiring', () => {
     const runtime = composeAgentRuntime({
       homePaths: home.paths,
       runtimeLogger: { warn() {} },
-      aiClient: capturingAiClient(capturedPrompts),
+      modelCallService: fakeModelCallService('ok', (request) => capturedContexts.push(request.context)),
       settingsStorage: settingsStorage(),
     });
 
@@ -132,8 +133,23 @@ describe('composeAgentRuntime trace wiring', () => {
       const events = await collectEvents(run.events);
       expect(events.map((event) => event.eventType)).toContain('model_call.started');
 
-      expect(capturedPrompts.join('\n')).toContain('Always inspect the diff before making claims.');
-      expect(capturedPrompts.join('\n')).toContain(`"skillPath":"${selectedSkill!.skillPath.replace(/\\/g, '\\\\')}"`);
+      const contextText = capturedContexts
+        .flatMap((context) => context.messages)
+        .map((message) => typeof message.content === 'string' ? message.content : JSON.stringify(message.content))
+        .join('\n');
+      const referenceContexts = capturedContexts
+        .flatMap((context) => context.messages)
+        .flatMap((message) => {
+          if (typeof message.content !== 'string' || !message.content.startsWith('{"type":"reference_context"')) {
+            return [];
+          }
+          return [JSON.parse(message.content) as { kind: string; content: unknown }];
+        });
+      expect(contextText).toContain('Always inspect the diff before making claims.');
+      expect(referenceContexts).toContainEqual(expect.objectContaining({
+        kind: 'skill',
+        content: expect.objectContaining({ skillPath: selectedSkill!.skillPath }),
+      }));
     } finally {
       runtime.dispose();
     }
@@ -189,7 +205,7 @@ function settingsStorage() {
     providers: {
       deepseek: {
         enabled: true,
-        protocol: 'openai-compatible',
+        api: 'openai-completions',
         base_url: 'https://api.example.com/v1',
         models: { 'deepseek-chat': {} },
         api_key: 'test-api-key',
@@ -201,33 +217,6 @@ function settingsStorage() {
     writeRawSettings: (next: SettingsRaw) => {
       settings = next;
     },
-  };
-}
-
-function fakeAiClient(): AiClient {
-  return {
-    stream() {
-      return AssistantEventStream.from(singleAssistantMessage());
-    },
-    complete: async () => ({
-      role: 'assistant',
-      content: [{ type: 'text', text: 'ok' }],
-      stopReason: 'end_turn',
-    }),
-  };
-}
-
-function capturingAiClient(capturedPrompts: string[]): AiClient {
-  return {
-    stream(request) {
-      capturedPrompts.push(JSON.stringify(request.context));
-      return AssistantEventStream.from(singleAssistantMessage());
-    },
-    complete: async () => ({
-      role: 'assistant',
-      content: [{ type: 'text', text: 'ok' }],
-      stopReason: 'end_turn',
-    }),
   };
 }
 
@@ -244,17 +233,6 @@ async function writeProjectSkill(input: {
     `---\nname: ${input.name}\ndescription: ${input.description}\n---\n\n${input.content}`,
     'utf8',
   );
-}
-
-async function* singleAssistantMessage(): AsyncIterable<AssistantStreamEvent> {
-  yield {
-    type: 'message_end',
-    message: {
-      role: 'assistant',
-      content: [{ type: 'text', text: 'ok' }],
-      stopReason: 'end_turn',
-    },
-  };
 }
 
 async function waitFor(predicate: () => boolean | Promise<boolean>): Promise<void> {

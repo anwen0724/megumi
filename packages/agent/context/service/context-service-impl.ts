@@ -5,17 +5,17 @@
 import type { InstructionService } from '../../instructions';
 import type { SessionHistoryItem, SessionService } from '../../session';
 import type { SkillCatalogItem, UsedSkillContent } from '@megumi/skills';
+import { estimateContextTokens, type Context as AiContext } from '@megumi/ai';
 import type { ContextCapacity, ContextPolicy, ContextUsage, SessionUsageSnapshot } from '../domain/model/context-usage';
 import type { ConversationRun, CurrentConversationRun } from '../domain/model/conversation-run';
-import type { ContextSourceRef, Prompt, VisibleCompactionSummary } from '../domain/model/prompt';
+import type { ContextSourceRef, VisibleCompactionSummary } from '../domain/model/model-context';
 import { buildActiveContext } from './internal/active-context-builder';
 import { buildCompactionSummaryRequest } from './internal/compaction-summary-builder';
 import { planCompaction, validateCompactionReduction } from './internal/compaction-planner';
-import { calculateContextUsage, type ContextPromptTokenCounter } from './internal/context-usage-calculator';
+import { calculateContextUsage } from './internal/context-usage-calculator';
 import { buildConversationRuns } from './internal/conversation-run-builder';
-import { conversationItemsFromRun } from './internal/conversation-run-items';
-import { buildPrompt } from './internal/prompt-builder';
-import { materializePromptImages } from './internal/image-content-materializer';
+import { buildContext } from './internal/context-builder';
+import { materializeActiveContextImages } from './internal/image-content-materializer';
 import type { ContextService } from './context-service';
 import type {
   CompactSessionRequest,
@@ -41,9 +41,9 @@ export type ContextServiceDependencies = {
   sessionService: Pick<SessionService, 'getActiveHistory' | 'saveCompactionSummary' | 'readAttachmentContent'>;
   instructionScopeResolver: InstructionScopeResolver;
   instructionService: InstructionService;
-  promptTokenCounter: ContextPromptTokenCounter;
+  contextTokenEstimator?: (context: AiContext) => number;
   summaryModelCall: {
-    complete(request: { prompt: Prompt; modelContext: ContextCapacity; sessionId?: string; compactionId?: string; signal?: AbortSignal }): Promise<
+    complete(request: { context: AiContext; modelContext: ContextCapacity; sessionId?: string; compactionId?: string; signal?: AbortSignal }): Promise<
       | { status: 'completed'; content: string }
       | { status: 'failed'; failure: ContextFailure }
     >;
@@ -52,7 +52,6 @@ export type ContextServiceDependencies = {
     get(sessionId: string): SessionUsageSnapshot | undefined;
     set(sessionId: string, snapshot: SessionUsageSnapshot): void;
   };
-  isRunLive?: (runId: string) => boolean;
   observability?: ObservabilityService;
   policy?: Partial<ContextPolicy>;
   policyProvider?: { getPolicy(): Partial<ContextPolicy> };
@@ -74,7 +73,7 @@ type BuildFacts = {
   currentRun?: CurrentConversationRun;
 };
 
-type BuiltPrompt = { prompt: Prompt; sourceRefs: ContextSourceRef[] };
+type BuiltContext = { context: AiContext; sourceRefs: ContextSourceRef[] };
 type CompactInternalInput = {
   facts: BuildFacts;
   usageBefore: ContextUsage;
@@ -140,11 +139,10 @@ export class ContextServiceImpl implements ContextService {
     if (request.signal?.aborted) return failed(cancelled());
 
     let facts = loaded.facts;
-    let built = this.buildPrompt(facts);
-    const materialized = await this.materializeBuiltPrompt(built, request.imageInputSupport);
-    if (materialized.status === 'failed') return materialized;
-    built = materialized.built;
-    let usageResult = await this.countUsage(built.prompt, request.modelContext, policy, request.signal);
+    let buildResult = await this.buildModelContext(facts, request.imageInputSupport);
+    if (buildResult.status === 'failed') return buildResult;
+    let built = buildResult.built;
+    let usageResult = this.countUsage(built.context, request.modelContext, policy, request.signal);
     if (usageResult.status === 'failed') return usageResult;
     let usage = usageResult.usage;
     let compactionId: string | undefined;
@@ -165,11 +163,10 @@ export class ContextServiceImpl implements ContextService {
         compactionId = compacted.compactionId;
         // A saved Summary is now an owner fact. Rebuild and recount rather than
         // returning the pre-persistence validation projection.
-        built = this.buildPrompt(facts);
-        const rematerialized = await this.materializeBuiltPrompt(built, request.imageInputSupport);
-        if (rematerialized.status === 'failed') return rematerialized;
-        built = rematerialized.built;
-        usageResult = await this.countUsage(built.prompt, request.modelContext, policy, request.signal);
+        buildResult = await this.buildModelContext(facts, request.imageInputSupport);
+        if (buildResult.status === 'failed') return buildResult;
+        built = buildResult.built;
+        usageResult = this.countUsage(built.context, request.modelContext, policy, request.signal);
         if (usageResult.status === 'failed') return usageResult;
         usage = usageResult.usage;
       }
@@ -182,7 +179,7 @@ export class ContextServiceImpl implements ContextService {
       status: 'ready',
       prepared: {
         preparationId,
-        prompt: built.prompt,
+        context: built.context,
         usage,
         sourceRefs: built.sourceRefs,
         ...(compactionId ? { compaction: { compactionId } } : {}),
@@ -200,11 +197,9 @@ export class ContextServiceImpl implements ContextService {
     const loaded = await this.loadFacts({ sessionId: request.sessionId, workspaceId: request.workspaceId, tools: [], skillCatalog: [], usedSkills: [], signal: request.signal });
     if (loaded.status === 'failed') return loaded;
     if (request.signal?.aborted) return failed(cancelled());
-    const rawBuilt = this.buildPrompt(loaded.facts);
-    const materialized = await this.materializeBuiltPrompt(rawBuilt, request.imageInputSupport);
-    if (materialized.status === 'failed') return materialized;
-    const built = materialized.built;
-    const before = await this.countUsage(built.prompt, request.modelContext, policy, request.signal);
+    const buildResult = await this.buildModelContext(loaded.facts, request.imageInputSupport);
+    if (buildResult.status === 'failed') return buildResult;
+    const before = this.countUsage(buildResult.built.context, request.modelContext, policy, request.signal);
     if (before.status === 'failed') return before;
     const compacted = await this.compactInternal({ facts: loaded.facts, usageBefore: before.usage, modelContext: request.modelContext, imageInputSupport: request.imageInputSupport, policy, signal: request.signal });
     if (compacted.status !== 'compacted') return compacted;
@@ -253,10 +248,7 @@ export class ContextServiceImpl implements ContextService {
     if (input.signal?.aborted) return failed(cancelled());
     if (historyResult.status === 'failed') return failed(ownerFailure('session_history_failed', 'Session history could not be loaded.', 'session', historyResult.failure));
 
-    const runs = buildConversationRuns({
-      history: historyResult.history,
-      ...(this.dependencies.isRunLive ? { isRunLive: this.dependencies.isRunLive } : {}),
-    });
+    const runs = buildConversationRuns({ history: historyResult.history });
 
     const scope = this.dependencies.instructionScopeResolver.resolve({ workspaceId: input.workspaceId });
     if (input.signal?.aborted) return failed(cancelled());
@@ -286,36 +278,38 @@ export class ContextServiceImpl implements ContextService {
     };
   }
 
-  private buildPrompt(facts: BuildFacts): BuiltPrompt {
-    if (facts.currentRun) {
-      const built = buildActiveContext({ ...facts, currentRun: facts.currentRun });
-      return { prompt: buildPrompt(built.activeContext), sourceRefs: built.sourceRefs };
-    }
-    return {
-      prompt: promptWithoutCurrentRun(facts),
-      sourceRefs: sourceRefsWithoutCurrentRun(facts),
-    };
-  }
-
-  private async materializeBuiltPrompt(
-    built: BuiltPrompt,
+  private async buildModelContext(
+    facts: BuildFacts,
     imageInputSupport: PrepareModelCallRequest['imageInputSupport'],
-  ): Promise<{ status: 'materialized'; built: BuiltPrompt } | { status: 'failed'; failure: ContextFailure }> {
-    const result = await materializePromptImages({
-      prompt: built.prompt,
+  ): Promise<{ status: 'built'; built: BuiltContext } | { status: 'failed'; failure: ContextFailure }> {
+    const active = buildActiveContext(facts);
+    const result = await materializeActiveContextImages({
+      activeContext: active.activeContext,
       sessionService: this.dependencies.sessionService,
       imageInputSupport,
     });
     if (result.status === 'failed') return result;
-    return { status: 'materialized', built: { ...built, prompt: result.prompt } };
+    try {
+      return {
+        status: 'built',
+        built: { context: buildContext(result.activeContext), sourceRefs: active.sourceRefs },
+      };
+    } catch (error) {
+      return failed({
+        code: 'context_build_failed',
+        message: messageOf(error),
+        retryable: false,
+        cause: { owner: 'ai' },
+      });
+    }
   }
 
-  private async countUsage(prompt: Prompt, capacity: ContextCapacity, policy: ContextPolicy, signal?: AbortSignal): Promise<{ status: 'counted'; usage: ContextUsage } | { status: 'failed'; failure: ContextFailure }> {
-    const result = await this.dependencies.promptTokenCounter.count({ prompt, modelContext: capacity });
+  private countUsage(context: AiContext, capacity: ContextCapacity, policy: ContextPolicy, signal?: AbortSignal): { status: 'counted'; usage: ContextUsage } | { status: 'failed'; failure: ContextFailure } {
     if (signal?.aborted) return failed(cancelled());
-    if (result.status === 'failed') return failed(result.failure);
     try {
-      return { status: 'counted', usage: calculateContextUsage({ inputTokens: result.inputTokens, capacity, policy }) };
+      const inputTokens = this.dependencies.contextTokenEstimator?.(context)
+        ?? estimateContextTokens(context).tokens;
+      return { status: 'counted', usage: calculateContextUsage({ inputTokens, capacity, policy }) };
     } catch (error) {
       return failed({ code: 'token_count_failed', message: messageOf(error), retryable: false, cause: { owner: 'ai' } });
     }
@@ -369,10 +363,11 @@ export class ContextServiceImpl implements ContextService {
       return failed(failure);
     };
     const summaryRequest = buildCompactionSummaryRequest({ previousSummary: input.facts.compactionSummary?.content, runs: plan.plan.runs });
-    const summaryPrompt = summaryPromptFrom(summaryRequest.systemPrompt, summaryRequest.input, plan.plan.runs);
-    const materializedSummary = await materializePromptImages({ prompt: summaryPrompt, sessionService: this.dependencies.sessionService, imageInputSupport: input.imageInputSupport });
-    if (materializedSummary.status === 'failed') return compactionFailure(materializedSummary.failure);
-    const generated = await this.dependencies.summaryModelCall.complete({ prompt: materializedSummary.prompt, modelContext: input.modelContext, sessionId: input.facts.sessionId, compactionId, ...(input.signal ? { signal: input.signal } : {}) });
+    const summaryContext: AiContext = {
+      systemPrompt: summaryRequest.systemPrompt,
+      messages: [{ role: 'user', content: summaryRequest.input, timestamp: Date.parse(this.clock.now()) }],
+    };
+    const generated = await this.dependencies.summaryModelCall.complete({ context: summaryContext, modelContext: input.modelContext, sessionId: input.facts.sessionId, compactionId, ...(input.signal ? { signal: input.signal } : {}) });
     if (input.signal?.aborted) return compactionFailure(cancelled());
     if (generated.status === 'failed') return compactionFailure({ ...generated.failure, code: 'compaction_failed' });
     if (generated.content.trim().length === 0) {
@@ -380,9 +375,9 @@ export class ContextServiceImpl implements ContextService {
     }
     const retainedRuns = input.facts.historicalRuns.slice(plan.plan.runs.length);
     const compactedFacts: BuildFacts = { ...input.facts, historicalRuns: retainedRuns, compactionSummary: { compactionId, content: generated.content } };
-    const projectedBuilt = await this.materializeBuiltPrompt(this.buildPrompt(compactedFacts), input.imageInputSupport);
+    const projectedBuilt = await this.buildModelContext(compactedFacts, input.imageInputSupport);
     if (projectedBuilt.status === 'failed') return compactionFailure(projectedBuilt.failure);
-    const projected = await this.countUsage(projectedBuilt.built.prompt, input.modelContext, input.policy, input.signal);
+    const projected = this.countUsage(projectedBuilt.built.context, input.modelContext, input.policy, input.signal);
     if (projected.status === 'failed') return compactionFailure(projected.failure);
     const reduction = validateCompactionReduction({
       usageBeforeInputTokens: input.usageBefore.usedTokens,
@@ -460,39 +455,6 @@ function effectiveSummary(history: SessionHistoryItem[]): VisibleCompactionSumma
   return undefined;
 }
 
-function promptWithoutCurrentRun(facts: BuildFacts): Prompt {
-  return {
-    instructions: { system: facts.systemInstructions, agentInstructions: facts.agentInstructions },
-    referenceContext: { skillCatalog: facts.skillCatalog, ...(facts.compactionSummary ? { compactionSummary: facts.compactionSummary } : {}), ...(facts.memoryRecall ? { memoryRecall: facts.memoryRecall } : {}) },
-    runContext: { skills: facts.usedSkills },
-    conversation: facts.historicalRuns.flatMap(conversationItemsFromRun),
-    tools: facts.tools,
-  };
-}
-
-function sourceRefsWithoutCurrentRun(facts: BuildFacts): ContextSourceRef[] {
-  return [
-    ...facts.systemInstructions.map((item) => ({ sourceType: 'system_instruction' as const, sourceId: item.instructionId })),
-    ...facts.agentInstructions.sources.map((item) => ({ sourceType: 'agent_instruction' as const, sourceId: item.sourceId })),
-    ...facts.skillCatalog.map((item) => ({ sourceType: 'skill_catalog' as const, sourceId: item.skillPath })),
-    ...facts.usedSkills.map((item) => ({ sourceType: 'used_skill' as const, sourceId: item.skillPath })),
-    ...(facts.compactionSummary ? [{ sourceType: 'compaction_summary' as const, sourceId: facts.compactionSummary.compactionId }] : []),
-  ];
-}
-
-function summaryPromptFrom(systemPrompt: string, input: string, runs: ConversationRun[]): Prompt {
-  return {
-    instructions: { system: [{ instructionId: 'context:compaction-summary', content: systemPrompt }], agentInstructions: { sources: [] } },
-    referenceContext: { skillCatalog: [] },
-    runContext: { skills: [] },
-    conversation: [
-      { type: 'user_message', content: [{ type: 'text', text: input }] },
-      ...runs.flatMap(conversationItemsFromRun),
-    ],
-    tools: [],
-  };
-}
-
 function validateSnapshotRequest(request: RecordCompletedRunUsageRequest): ContextFailure | undefined {
   const usage = request.preCallUsage;
   const validUsage = Number.isInteger(usage.usedTokens) && usage.usedTokens >= 0
@@ -511,7 +473,7 @@ function ownerFailure(code: ContextFailure['code'], message: string, owner: NonN
 }
 
 function windowExceeded(usage: ContextUsage): ContextFailure {
-  return { code: 'context_window_exceeded', message: `Prompt uses ${usage.usedTokens} tokens for a ${usage.contextWindowTokens}-token Context Window.`, retryable: false };
+  return { code: 'context_window_exceeded', message: `Context uses ${usage.usedTokens} tokens for a ${usage.contextWindowTokens}-token Context Window.`, retryable: false };
 }
 
 function cancelled(): ContextFailure { return { code: 'cancelled', message: 'Context preparation was cancelled.', retryable: true }; }

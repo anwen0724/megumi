@@ -58,6 +58,9 @@ function listSourceFiles(relativeDirectory: string): string[] {
 }
 
 function isAllowedLegacyArchiveLine(file: string, line: string): boolean {
+  if (file === 'packages/ai/src/api/anthropic-messages.ts') {
+    return line.includes('tool_use_id');
+  }
   if (file === 'packages/ai/protocols/anthropic/anthropic-protocol-adapter.ts') {
     return line.includes('tool_use_id') || line.includes("type: 'tool_use'");
   }

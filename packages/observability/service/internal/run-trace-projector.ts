@@ -42,7 +42,7 @@ export function projectRunTrace(
   if (typeof attrs?.modelId === "string") summary.modelId = attrs.modelId;
   const providerInput = sum(traceRecords, "model.input_tokens");
   const providerOutput = sum(traceRecords, "model.output_tokens");
-  // Capacity describes the latest prepared Prompt; provider usage is a Run total.
+  // Capacity describes the latest prepared Context; provider usage is a Run total.
   const contextUsed = lastMeasurement(traceRecords, "context.used_tokens");
   const contextWindow = lastMeasurement(traceRecords, "context.window_tokens");
   if (providerInput !== undefined) summary.providerInputTokens = providerInput;

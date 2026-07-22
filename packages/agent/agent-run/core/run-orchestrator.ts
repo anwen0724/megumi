@@ -4,7 +4,8 @@
  */
 import type { PermissionDecision, PermissionMode, PermissionService } from '../../permissions';
 import { hasUserVisibleAssistantContent, type SessionService } from '../../session';
-import type { AssistantContentBlock } from '@megumi/ai';
+import type { AssistantMessage } from '@megumi/ai';
+import type { AssistantContentBlock } from '../../model-content';
 import type { SkillCatalogItem, UsedSkillContent } from '@megumi/skills';
 import type { SettingsService } from '../../settings';
 import type { ToolExecutionService } from '../../tools';
@@ -161,14 +162,14 @@ export async function runAgentModelToolLoop(
     }
 
     lastPrepared = preparation.prepared;
-    traceRun(dependencies, run, 'trace.prompt.built', {
+    traceRun(dependencies, run, 'trace.context.built', {
       model_call_index: modelCalls,
       ...preparedModelCallTraceMetadata(lastPrepared),
     });
 
     const modelCall = await dependencies.model_call_service.modelCall({
       owner: { type: 'agent_run', run_id: run.run_id },
-      prompt: lastPrepared.prompt,
+      context: lastPrepared.context,
       model_config: request.model_config,
       signal: request.signal,
     });
@@ -401,9 +402,11 @@ export async function runAgentModelToolLoop(
       tool_calls: modelEvents.tool_calls,
     });
     const appendedItems: CurrentConversationRun['runItems'] = [];
-    if (modelEvents.content) {
-      appendedItems.push({ type: 'assistant_message', content: [{ type: 'text', text: modelEvents.content }] });
-    }
+    appendedItems.push({
+      type: 'assistant_message',
+      content: modelEvents.assistant_content,
+      ...(modelEvents.ai_message ? { modelMessage: modelEvents.ai_message } : {}),
+    });
     appendedItems.push(...modelEvents.tool_calls.map((toolCall) => ({
       type: 'tool_call' as const,
       toolCallId: toolCall.tool_call_id,
@@ -646,6 +649,7 @@ async function collectModelCallEvents(
   stop_reason?: string;
   provider_input_tokens?: number;
   completed_event_received: boolean;
+  ai_message?: AssistantMessage;
   failure?: AgentRunFailure;
 }> {
   const textDeltas: string[] = [];
@@ -656,6 +660,7 @@ async function collectModelCallEvents(
   let providerInputTokens: number | undefined;
   let stopReason: string | undefined;
   let completedEventReceived = false;
+  let aiMessage: AssistantMessage | undefined;
   const runtimeEventState: ModelCallRuntimeEventState = {};
 
   for await (const event of events) {
@@ -702,6 +707,10 @@ async function collectModelCallEvents(
       completedContent = event.content;
       stopReason = event.finish_reason;
       providerInputTokens = event.usage?.input_tokens;
+      aiMessage = event.assistant_message;
+      assistantContent.splice(0, assistantContent.length, ...productContentFromAiMessage(event.assistant_message));
+      textDeltas.length = 0;
+      thinkingDeltas.length = 0;
     }
     if (event.type === 'failed') {
       flushAssistantText(assistantContent, textDeltas, completedContent);
@@ -716,6 +725,7 @@ async function collectModelCallEvents(
         assistant_content: assistantContent,
         tool_calls: toolCalls,
         completed_event_received: completedEventReceived,
+        ...(aiMessage ? { ai_message: aiMessage } : {}),
         ...(stopReason ? { stop_reason: stopReason } : {}),
         failure: event.failure,
       };
@@ -732,6 +742,7 @@ async function collectModelCallEvents(
     assistant_content: assistantContent,
     tool_calls: toolCalls,
     completed_event_received: completedEventReceived,
+    ...(aiMessage ? { ai_message: aiMessage } : {}),
     ...(stopReason ? { stop_reason: stopReason } : {}),
     ...(providerInputTokens !== undefined ? { provider_input_tokens: providerInputTokens } : {}),
   };
@@ -785,7 +796,7 @@ function appendProtocolRepair(currentRun: CurrentConversationRun): CurrentConver
     ...currentRun,
     runItems: [...currentRun.runItems, {
       type: 'context',
-      kind: 'historical_run_state',
+      kind: 'model_retry_instruction',
       content: {
         status: 'protocol_repair',
         instruction: 'Return one user-visible final response, or issue a valid Work Tool Call.',
@@ -809,6 +820,19 @@ function flushAssistantText(
     content.push({ type: 'text', text: streamed });
   }
   textDeltas.length = 0;
+}
+
+function productContentFromAiMessage(message: AssistantMessage): AssistantContentBlock[] {
+  return message.content.map((block) => {
+    if (block.type === 'text') return { type: 'text' as const, text: block.text };
+    if (block.type === 'thinking') return { type: 'thinking' as const, thinking: block.thinking };
+    return {
+      type: 'toolCall' as const,
+      id: block.id,
+      name: block.name,
+      argumentsText: JSON.stringify(block.arguments),
+    };
+  });
 }
 
 function emitModelCallRuntimeEvent(
@@ -1161,19 +1185,20 @@ function traceLoopCounters(
 }
 
 function preparedModelCallTraceMetadata(prepared: PreparedModelCall): Record<string, unknown> {
+  const sourceTypeCounts = countBy(prepared.sourceRefs.map((source) => source.sourceType));
   return {
     preparation_id: prepared.preparationId,
     usage: { ...prepared.usage },
     source_count: prepared.sourceRefs.length,
-    source_type_counts: countBy(prepared.sourceRefs.map((source) => source.sourceType)),
-    system_instruction_count: prepared.prompt.instructions.system.length,
-    agent_instruction_count: prepared.prompt.instructions.agentInstructions.sources.length,
-    used_skill_count: prepared.prompt.runContext.skills.length,
-    skill_catalog_count: prepared.prompt.referenceContext.skillCatalog.length,
-    memory_item_count: prepared.prompt.referenceContext.memoryRecall?.items.length ?? 0,
-    conversation_item_count: prepared.prompt.conversation.length,
-    conversation_item_type_counts: countBy(prepared.prompt.conversation.map((item) => item.type)),
-    tool_count: prepared.prompt.tools.length,
+    source_type_counts: sourceTypeCounts,
+    system_instruction_count: sourceTypeCounts.system_instruction ?? 0,
+    agent_instruction_count: sourceTypeCounts.agent_instruction ?? 0,
+    used_skill_count: sourceTypeCounts.used_skill ?? 0,
+    skill_catalog_count: sourceTypeCounts.skill_catalog ?? 0,
+    memory_item_count: sourceTypeCounts.memory ?? 0,
+    conversation_message_count: prepared.context.messages.length,
+    conversation_role_counts: countBy(prepared.context.messages.map((message) => message.role)),
+    tool_count: prepared.context.tools?.length ?? 0,
   };
 }
 

@@ -1,5 +1,5 @@
 /*
- * Defines the Instructions-owned DTOs consumed by Context prompt assembly.
+ * Defines the Instructions-owned DTOs consumed by Context assembly.
  */
 
 export type SystemInstruction = {

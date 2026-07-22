@@ -13,6 +13,7 @@ import {
   type ModelCallService,
 } from '../agent-run';
 import { ActiveRunStore } from '../agent-run/core/active-run-store';
+import { resolveModelRuntime } from '../agent-run/adapters/model-runtime-resolver';
 import { createCommandService, type CommandService, type SkillCommandDescriptor } from '../commands';
 import { createInputService, type InputFileReader, type InputService } from '../input';
 import {
@@ -59,18 +60,6 @@ import {
   type LocalWorkspaceServiceFileSystem,
 } from '../adapters/local/workspace/project-file-system';
 import { createLocalWorkspaceFilesFileSystem } from '../adapters/local/workspace/workspace-files-file-system';
-import {
-  createAiClient,
-  createAnthropicProtocolAdapter,
-  createOpenAICompatibleProtocolAdapter,
-  createRequestTokenCounter,
-  ProtocolRegistry,
-  AssistantEventStream,
-  type AiClient,
-  type AiCallRequest,
-  type AssistantMessage,
-  type AssistantStreamEvent,
-} from '@megumi/ai';
 import type { ObservabilityService, SpanHandle, TraceHandle } from '@megumi/observability';
 import type { RuntimeEvent } from '../events';
 import {
@@ -117,8 +106,7 @@ export interface ComposeAgentRuntimeOptions {
   migrationEnvironment?: Parameters<typeof composeAgentPersistence>[0]['migrationEnvironment'];
   runtimeLogger: RuntimeLogger;
   observabilityService?: ObservabilityService;
-  aiClient?: AiClient;
-  modelCallProviderService?: LegacyModelCallProviderForTests;
+  modelCallService?: ModelCallService;
   modelContextProvider?: ModelContextProvider;
   appSettingsProvider?: unknown;
   memorySettingsProvider?: MemorySettingsPort;
@@ -179,16 +167,6 @@ export function createSettingsModelContextProvider(
   };
 }
 
-type LegacyModelCallProviderForTests = {
-  streamModelCall(request: {
-    sessionId: string;
-    runId: string;
-    stepId: string;
-  }): AsyncIterable<RuntimeEvent> | Promise<AsyncIterable<RuntimeEvent>>;
-  completeModelCall?(request: unknown): Promise<{ ok: true; text: string } | { ok: false; error: unknown }>;
-  cancelModelCall?(request: unknown): boolean;
-};
-
 export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentRuntime {
   const persistence = composeAgentPersistence({
     sqlitePath: options.homePaths.sqlitePath,
@@ -238,7 +216,7 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
     isWebSearchEnabled: () => Boolean(resolveWebSearchConfig()),
     ...(options.isBuiltInToolAvailable ? { isBuiltInToolAvailable: options.isBuiltInToolAvailable } : {}),
   });
-  const agentRunSettingsService = options.aiClient || options.modelCallProviderService
+  const agentRunSettingsService = options.modelCallService
     ? createModelConfigSettingsFacade(settingsService)
     : settingsService;
   const workspaceFileSystem = options.projectFileSystem ?? createLocalProjectFileSystem();
@@ -309,12 +287,8 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
     },
   });
   const agentRunTraceLogger = createObservabilityAgentRunTraceLogger(options.observabilityService);
-  const protocolRegistry = createProtocolRegistry();
-  const modelCallService = createModelCallService({
-    ai_client: options.aiClient
-      ?? (options.modelCallProviderService ? aiClientFromLegacyProvider(options.modelCallProviderService) : undefined)
-      ?? createAiClient({ registry: protocolRegistry }),
-    request_token_counter: createRequestTokenCounter(protocolRegistry),
+  const modelCallService = options.modelCallService ?? createModelCallService({
+    resolve_model_runtime: resolveModelRuntime,
   });
   const instructionService = composeAgentInstructions({
     megumiHomePath: options.homePaths.homePath,
@@ -326,10 +300,6 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
   const modelContextProvider = options.modelContextProvider ?? createSettingsModelContextProvider(settingsService);
   const contextRuntime = composeAgentContext({
     sessionService,
-    isRunLive: (runId) => {
-      const active = activeRunStore.getRun(runId);
-      return Boolean(active && !['completed', 'failed', 'cancelled'].includes(active.status));
-    },
     instructionScopeResolver: {
       resolve({ workspaceId }) {
         const workspace = workspaceService.getWorkspace({ workspace_id: workspaceId });
@@ -521,9 +491,9 @@ export function createObservabilityAgentRunTraceLogger(
         record.event_type === 'run.started'
         || record.event_type === 'run.completed'
         || record.event_type === 'run.failed'
-        || record.event_type === 'trace.prompt.built'
+        || record.event_type === 'trace.context.built'
       ) {
-        // ContextService owns the real prompt-preparation span and measurements.
+        // ContextService owns Context preparation and its measurements.
         return;
       }
 
@@ -638,13 +608,6 @@ function toSkillCommandDescriptor(skill: Skill): SkillCommandDescriptor {
   };
 }
 
-function createProtocolRegistry(): ProtocolRegistry {
-  return new ProtocolRegistry([
-    createOpenAICompatibleProtocolAdapter({ fetch }),
-    createAnthropicProtocolAdapter({ fetch }),
-  ]);
-}
-
 function createModelConfigSettingsFacade(settingsService: SettingsService): Pick<SettingsService, 'resolveProviderRuntimeConfig' | 'resolvePermissionSettings'> {
   return {
     resolvePermissionSettings: (request) => settingsService.resolvePermissionSettings(request),
@@ -662,98 +625,17 @@ function createModelConfigSettingsFacade(settingsService: SettingsService): Pick
         status: 'ok',
         config: {
           provider_id: request.provider_id,
-          protocol: provider.protocol,
+          api: provider.api,
           ...(provider.base_url ? { base_url: provider.base_url } : {}),
           model_id: request.model_id,
+          display_name: provider.models[request.model_id]!.display_name,
+          context_window_tokens: provider.models[request.model_id]!.context_window_tokens,
+          max_output_tokens: provider.models[request.model_id]!.max_output_tokens,
           capabilities: provider.models[request.model_id]!.capabilities,
         },
       };
     },
   };
-}
-
-function aiClientFromLegacyProvider(provider: LegacyModelCallProviderForTests): AiClient {
-  return {
-    stream(request: AiCallRequest) {
-      return AssistantEventStream.from(legacyRuntimeEventsToAssistantEvents(provider, request));
-    },
-    async complete(request: AiCallRequest): Promise<AssistantMessage> {
-      const result = await provider.completeModelCall?.(request);
-      if (!result || !result.ok) {
-        return {
-          role: 'assistant',
-          content: [],
-          stopReason: 'error',
-        };
-      }
-      return {
-        role: 'assistant',
-        content: [{ type: 'text', text: result.text }],
-        stopReason: 'end_turn',
-      };
-    },
-  };
-}
-
-async function* legacyRuntimeEventsToAssistantEvents(
-  provider: LegacyModelCallProviderForTests,
-  request: AiCallRequest,
-): AsyncIterable<AssistantStreamEvent> {
-  const runId = String(request.metadata?.runId ?? `run:${crypto.randomUUID()}`);
-  const stepId = String(request.metadata?.stepId ?? `step:${crypto.randomUUID()}`);
-  const sessionId = String(request.metadata?.sessionId ?? `session:${crypto.randomUUID()}`);
-  const events = await provider.streamModelCall({ runId, stepId, sessionId });
-  let finalText = '';
-
-  for await (const event of events) {
-    if (event.eventType === 'assistant.output.delta') {
-      const delta = stringPayload(event, 'delta') ?? '';
-      finalText += delta;
-      yield {
-        type: 'content_block_delta',
-        index: 0,
-        delta: { type: 'text_delta', text: delta },
-      };
-      continue;
-    }
-    if (event.eventType === 'assistant.output.completed') {
-      finalText = stringPayload(event, 'content') ?? finalText;
-      continue;
-    }
-    if (event.eventType === 'tool.call.created') {
-      yield {
-        type: 'content_block_start',
-        index: 0,
-        block: {
-          type: 'toolCall',
-          id: stringPayload(event, 'toolCallId'),
-          name: stringPayload(event, 'toolName'),
-          argumentsText: JSON.stringify(payloadValue(event, 'input') ?? {}),
-        },
-      };
-    }
-  }
-
-  yield {
-    type: 'message_end',
-    message: {
-      role: 'assistant',
-      content: finalText ? [{ type: 'text', text: finalText }] : [],
-      stopReason: 'end_turn',
-    },
-  };
-}
-
-function payloadValue(event: RuntimeEvent, key: string): unknown {
-  const payload = event.payload;
-  return payload && typeof payload === 'object' && key in payload
-    ? (payload as Record<string, unknown>)[key]
-    : undefined;
-}
-
-function stringPayload(event: RuntimeEvent, key: string): string | undefined {
-  const value = payloadValue(event, key);
-  return typeof value === 'string' ? value : undefined;
 }
 
 export function finalizeWorkspaceChangesForTerminalRunEvent(input: {

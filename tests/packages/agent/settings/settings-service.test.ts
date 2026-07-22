@@ -195,24 +195,26 @@ describe('Settings Service', () => {
     const service = createSettingsService({ file_store: fileStore });
 
     expect(service.setProviderApiKey({
-      provider_id: 'DeepSeek',
+      provider_id: 'deepseek',
       api_key: 'TEST_DEEPSEEK_API_KEY',
     })).toMatchObject({ status: 'updated' });
 
     expect(fileStore.raw).toEqual({
       context: { compaction_threshold_ratio: 0.8 },
       providers: {
-        DeepSeek: {
+        deepseek: {
           enabled: true,
-          protocol: 'openai-compatible',
+          api: 'openai-completions',
           display_name: 'DeepSeek',
           base_url: 'https://api.deepseek.com',
           models: {
             'deepseek-v4-flash': {
               context_window_tokens: 1_000_000,
+              max_output_tokens: 384_000,
             },
             'deepseek-v4-pro': {
               context_window_tokens: 1_000_000,
+              max_output_tokens: 384_000,
             },
           },
           api_key: 'TEST_DEEPSEEK_API_KEY',
@@ -224,10 +226,10 @@ describe('Settings Service', () => {
   it('keeps model capability overrides sparse while resolving a complete effective capability set', () => {
     const fileStore = new MemorySettingsFileStore();
     const service = createSettingsService({ file_store: fileStore });
-    service.setProviderApiKey({ provider_id: 'DeepSeek', api_key: 'TEST_DEEPSEEK_API_KEY' });
+    service.setProviderApiKey({ provider_id: 'deepseek', api_key: 'TEST_DEEPSEEK_API_KEY' });
 
     expect(service.updateProviderSettings({
-      provider_id: 'DeepSeek',
+      provider_id: 'deepseek',
       patch: {
         models: {
           'deepseek-v4-flash': { capabilities: { imageInput: true, thinking: 'unknown' } },
@@ -235,12 +237,13 @@ describe('Settings Service', () => {
       },
     })).toMatchObject({ status: 'updated' });
 
-    expect(fileStore.raw.providers?.DeepSeek?.models?.['deepseek-v4-flash']).toEqual({
+    expect(fileStore.raw.providers?.deepseek?.models?.['deepseek-v4-flash']).toEqual({
       context_window_tokens: 1_000_000,
+      max_output_tokens: 384_000,
       capabilities: { imageInput: true, thinking: 'unknown' },
     });
     expect(service.resolveProviderRuntimeConfig({
-      provider_id: 'DeepSeek',
+      provider_id: 'deepseek',
       model_id: 'deepseek-v4-flash',
     })).toMatchObject({
       status: 'ok',
@@ -267,7 +270,7 @@ describe('Settings Service', () => {
     const fileStore = new MemorySettingsFileStore();
     fileStore.raw = {
       providers: {
-        DeepSeek: {
+        deepseek: {
           enabled: true,
           api_key: 'TEST_DEEPSEEK_API_KEY',
         },
@@ -276,15 +279,18 @@ describe('Settings Service', () => {
     const service = createSettingsService({ file_store: fileStore });
 
     expect(service.resolveProviderRuntimeConfig({
-      provider_id: 'DeepSeek',
+      provider_id: 'deepseek',
       model_id: 'deepseek-v4-flash',
     })).toEqual({
       status: 'ok',
       config: {
-        provider_id: 'DeepSeek',
-        protocol: 'openai-compatible',
+        provider_id: 'deepseek',
+        api: 'openai-completions',
         base_url: 'https://api.deepseek.com',
         model_id: 'deepseek-v4-flash',
+        display_name: 'DeepSeek V4 Flash',
+        context_window_tokens: 1_000_000,
+        max_output_tokens: 384_000,
         api_key: 'TEST_DEEPSEEK_API_KEY',
         capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: false },
       },
@@ -296,7 +302,7 @@ describe('Settings Service', () => {
     fileStore.raw = {
       context: { compaction_threshold_ratio: 0.7 },
       providers: {
-        DeepSeek: {
+        deepseek: {
           models: {
             'deepseek-v4-flash': { context_window_tokens: 2_000_000 },
           },
@@ -306,7 +312,7 @@ describe('Settings Service', () => {
     const service = createSettingsService({ file_store: fileStore });
 
     expect(service.resolveModelContextSettings({
-      provider_id: 'DeepSeek',
+      provider_id: 'deepseek',
       model_id: 'deepseek-v4-flash',
     })).toEqual({
       status: 'ok',
@@ -354,7 +360,7 @@ describe('Settings Service', () => {
       providers: {
         local: {
           enabled: true,
-          protocol: 'openai-compatible',
+          api: 'openai-completions',
           display_name: 'Local',
           base_url: 'http://localhost:11434/v1',
           models: { llama3: { display_name: 'Llama 3 Local' }, qwen3: {} },
@@ -389,7 +395,7 @@ describe('Settings Service', () => {
       providers: {
         local: {
           enabled: true,
-          protocol: 'openai-compatible',
+          api: 'openai-completions',
           display_name: 'Local',
           base_url: 'http://localhost:11434/v1',
           models: { llama3: {} },
@@ -406,9 +412,12 @@ describe('Settings Service', () => {
       status: 'ok',
       config: {
         provider_id: 'local',
-        protocol: 'openai-compatible',
+        api: 'openai-completions',
         base_url: 'http://localhost:11434/v1',
         model_id: 'llama3',
+        display_name: 'llama3',
+        context_window_tokens: 256_000,
+        max_output_tokens: 8_192,
         api_key: 'sk-local',
         capabilities: { streaming: 'unknown', toolCalls: 'unknown', thinking: 'unknown', imageInput: 'unknown' },
       },
@@ -421,14 +430,14 @@ describe('Settings Service', () => {
       providers: {
         missing_key: {
           enabled: true,
-          protocol: 'openai-compatible',
+          api: 'openai-completions',
           display_name: 'Missing key',
           base_url: 'http://localhost:11434/v1',
           models: { llama3: {} },
         },
         disabled: {
           enabled: false,
-          protocol: 'openai-compatible',
+          api: 'openai-completions',
           display_name: 'Disabled',
           base_url: 'http://localhost:11434/v1',
           models: { llama3: {} },

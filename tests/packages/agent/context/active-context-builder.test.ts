@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ConversationRun, CurrentConversationRun } from '@megumi/agent/context';
 import { buildActiveContext } from '@megumi/agent/context/service/internal/active-context-builder';
+import { Type } from '@megumi/ai';
 
 describe('buildActiveContext', () => {
   it('separates instructions from reference facts and emits non-visible source refs', () => {
@@ -48,7 +49,7 @@ describe('buildActiveContext', () => {
       },
       historicalRuns,
       currentRun,
-      tools: [{ name: 'read', description: 'Read a path', inputSchema: { type: 'object' } }],
+      tools: [{ name: 'read', description: 'Read a path', parameters: Type.Object({}) }],
     });
 
     expect(result.activeContext.instructions).toEqual({

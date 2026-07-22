@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   SettingsRaw,
   SettingsResolved,
   SettingsService,
@@ -55,7 +55,7 @@ const PermissionRuleChangeUiSchema = z.object({
 }).strict();
 
 const ProviderSettingsUiPatchSchema = z.object({
-  enabled: z.boolean().optional(), protocol: z.enum(['openai-compatible', 'anthropic']).optional(),
+  enabled: z.boolean().optional(), protocol: z.enum(['openai-completions', 'openai-responses', 'openai-codex-responses', 'anthropic-messages', 'google-generative-ai']).optional(),
   displayName: z.string().optional(), baseUrl: z.string().optional(), models: z.array(z.string()).optional(),
   apiKeyEnv: z.string().nullable().optional(),
 }).strict();
@@ -89,7 +89,7 @@ export const SettingsCompleteSetupPayloadSchema = z.object({
   provider: z.object({
     providerId: z.string().min(1),
     enabled: z.boolean().optional(),
-    protocol: z.enum(['openai-compatible', 'anthropic']).optional(),
+    protocol: z.enum(['openai-completions', 'openai-responses', 'openai-codex-responses', 'anthropic-messages', 'google-generative-ai']).optional(),
     displayName: z.string().min(1).optional(),
     baseUrl: z.string().url().optional(),
     modelIds: z.array(z.string().min(1)).optional(),
@@ -106,7 +106,7 @@ const ModelCapabilitiesUiSchema = z.object({
   imageInput: ModelSupportLevelUiSchema.optional(),
 }).strict();
 export const ProviderUpdatePayloadSchema = z.object({
-  providerId: z.string().min(1), enabled: z.boolean().optional(), protocol: z.enum(['openai-compatible', 'anthropic']).optional(),
+  providerId: z.string().min(1), enabled: z.boolean().optional(), protocol: z.enum(['openai-completions', 'openai-responses', 'openai-codex-responses', 'anthropic-messages', 'google-generative-ai']).optional(),
   displayName: z.string().optional(), baseUrl: z.string().optional(), modelIds: z.array(z.string()).optional(),
   modelCapabilities: z.record(z.string(), ModelCapabilitiesUiSchema).optional(),
   models: z.array(z.object({
@@ -123,7 +123,7 @@ export const ProviderDeleteApiKeyPayloadSchema = ProviderDeletePayloadSchema;
 
 const ProviderSettingsUiDtoSchema = z.object({
   enabled: z.boolean(),
-  protocol: z.enum(['openai-compatible', 'anthropic']),
+  protocol: z.enum(['openai-completions', 'openai-responses', 'openai-codex-responses', 'anthropic-messages', 'google-generative-ai']),
   displayName: z.string(),
   baseUrl: z.string().optional(),
   models: z.array(z.string()),
@@ -167,7 +167,7 @@ const ProviderPublicStatusUiDtoSchema = z.object({
   providerId: z.string().min(1),
   displayName: z.string(),
   enabled: z.boolean(),
-  protocol: z.enum(['openai-compatible', 'anthropic']),
+  protocol: z.enum(['openai-completions', 'openai-responses', 'openai-codex-responses', 'anthropic-messages', 'google-generative-ai']),
   baseUrl: z.string().optional(),
   modelIds: z.array(z.string()),
   modelSettings: z.record(z.string(), z.object({
@@ -188,7 +188,7 @@ const ProviderPublicStatusUiDtoSchema = z.object({
 const ProviderCatalogUiDtoSchema = z.object({
   providerId: z.string().min(1),
   displayName: z.string().min(1),
-  protocol: z.enum(['openai-compatible', 'anthropic']),
+  protocol: z.enum(['openai-completions', 'openai-responses', 'openai-codex-responses', 'anthropic-messages', 'google-generative-ai']),
   defaultBaseUrl: z.string().url(),
   models: z.array(z.object({
     modelId: z.string().min(1),
@@ -299,7 +299,7 @@ export function createSettingsHost(
           provider: {
             provider_id: request.provider.providerId,
             ...(request.provider.enabled !== undefined ? { enabled: request.provider.enabled } : {}),
-            ...(request.provider.protocol ? { protocol: request.provider.protocol } : {}),
+            ...(request.provider.protocol ? { api: request.provider.protocol } : {}),
             ...(request.provider.displayName !== undefined ? { display_name: request.provider.displayName } : {}),
             ...(request.provider.baseUrl !== undefined ? { base_url: request.provider.baseUrl } : {}),
             ...(request.provider.modelIds !== undefined ? { models: request.provider.modelIds } : {}),
@@ -347,7 +347,7 @@ export function createSettingsHost(
         provider_id: providerId,
         patch: {
           ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
-          ...(input.protocol !== undefined ? { protocol: input.protocol } : {}),
+          ...(input.protocol !== undefined ? { api: input.protocol } : {}),
           ...(input.displayName !== undefined ? { display_name: input.displayName } : {}),
           ...(input.baseUrl !== undefined ? { base_url: input.baseUrl } : {}),
           ...(modelPatch !== undefined ? { models: modelPatch } : {}),
@@ -484,7 +484,7 @@ export type PermissionRuleCatalogUiDto = {
 
 export type ProviderSettingsUiDto = {
   enabled: boolean;
-  protocol: 'openai-compatible' | 'anthropic';
+  protocol: 'openai-completions' | 'openai-responses' | 'openai-codex-responses' | 'anthropic-messages' | 'google-generative-ai';
   displayName: string;
   baseUrl?: string;
   models: string[];
@@ -495,7 +495,7 @@ export type ProviderPublicStatusUiDto = {
   providerId: string;
   displayName: string;
   enabled: boolean;
-  protocol: 'openai-compatible' | 'anthropic';
+  protocol: 'openai-completions' | 'openai-responses' | 'openai-codex-responses' | 'anthropic-messages' | 'google-generative-ai';
   baseUrl?: string;
   modelIds: string[];
   modelSettings?: Record<string, ProviderModelSettingsUiDto>;
@@ -512,7 +512,7 @@ export type ProviderPublicStatusUiDto = {
 export type ProviderCatalogUiDto = {
   providerId: string;
   displayName: string;
-  protocol: 'openai-compatible' | 'anthropic';
+  protocol: 'openai-completions' | 'openai-responses' | 'openai-codex-responses' | 'anthropic-messages' | 'google-generative-ai';
   defaultBaseUrl: string;
   models: Array<{
     modelId: string;
@@ -530,7 +530,7 @@ export type HostFailure = {
 
 export type ProviderSettingsUiPatch = {
   enabled?: boolean;
-  protocol?: 'openai-compatible' | 'anthropic';
+  protocol?: 'openai-completions' | 'openai-responses' | 'openai-codex-responses' | 'anthropic-messages' | 'google-generative-ai';
   displayName?: string;
   baseUrl?: string;
   models?: string[];
@@ -558,7 +558,7 @@ export type SettingsCompleteSetupUiRequest = {
   provider?: {
     providerId: string;
     enabled?: boolean;
-    protocol?: 'openai-compatible' | 'anthropic';
+    protocol?: 'openai-completions' | 'openai-responses' | 'openai-codex-responses' | 'anthropic-messages' | 'google-generative-ai';
     displayName?: string;
     baseUrl?: string;
     modelIds?: string[];
@@ -585,7 +585,7 @@ export type ProviderListUiResult =
 export interface ProviderUpdateUiRequest {
   providerId: string;
   enabled?: boolean;
-  protocol?: 'openai-compatible' | 'anthropic';
+  protocol?: 'openai-completions' | 'openai-responses' | 'openai-codex-responses' | 'anthropic-messages' | 'google-generative-ai';
   displayName?: string;
   baseUrl?: string;
   modelIds?: string[];
@@ -707,7 +707,7 @@ export function toSettingsUiResolved(
       providerId,
       {
         enabled: provider.enabled,
-        protocol: provider.protocol,
+        protocol: provider.api,
         displayName: provider.display_name,
         ...(provider.base_url ? { baseUrl: provider.base_url } : {}),
         models: Object.keys(provider.models),
@@ -781,7 +781,7 @@ export function toProviderPublicStatusUiDto(provider: {
   provider_id: string;
   display_name: string;
   enabled: boolean;
-  protocol: ProviderPublicStatusUiDto['protocol'];
+  api: ProviderPublicStatusUiDto['protocol'];
   base_url?: string;
   models: string[];
   model_settings: Record<string, {
@@ -802,7 +802,7 @@ export function toProviderPublicStatusUiDto(provider: {
     providerId: provider.provider_id,
     displayName: provider.display_name,
     enabled: provider.enabled,
-    protocol: provider.protocol,
+    protocol: provider.api,
     ...(provider.base_url ? { baseUrl: provider.base_url } : {}),
     modelIds: provider.models,
     modelSettings: Object.fromEntries(Object.entries(provider.model_settings).map(([modelId, model]) => [
@@ -828,14 +828,14 @@ export function toProviderPublicStatusUiDto(provider: {
 export function toProviderCatalogUiDto(provider: {
   providerId: string;
   displayName: string;
-  protocol: ProviderCatalogUiDto['protocol'];
+  api: ProviderCatalogUiDto['protocol'];
   defaultBaseUrl: string;
   models: Array<{ modelId: string; displayName: string; contextWindowTokens: number; capabilities: ModelCapabilitiesUiDto }>;
 }): ProviderCatalogUiDto {
   return {
     providerId: provider.providerId,
     displayName: provider.displayName,
-    protocol: provider.protocol,
+    protocol: provider.api,
     defaultBaseUrl: provider.defaultBaseUrl,
     models: provider.models.map((model) => ({
       modelId: model.modelId,
@@ -848,7 +848,7 @@ export function toProviderCatalogUiDto(provider: {
 
 export function toProviderSettingsUiDto(provider: {
   enabled: boolean;
-  protocol: ProviderSettingsUiDto['protocol'];
+  api: ProviderSettingsUiDto['protocol'];
   display_name: string;
   base_url?: string;
   models: Record<string, { context_window_tokens: number }>;
@@ -856,7 +856,7 @@ export function toProviderSettingsUiDto(provider: {
 }): ProviderSettingsUiDto {
   return {
     enabled: provider.enabled,
-    protocol: provider.protocol,
+    protocol: provider.api,
     displayName: provider.display_name,
     ...(provider.base_url ? { baseUrl: provider.base_url } : {}),
     models: Object.keys(provider.models),

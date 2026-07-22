@@ -2,7 +2,7 @@
  * Public entrypoint for stable Context v2 domain, caller, and service contracts.
  */
 export * from './domain/model/active-context';
-export * from './domain/model/prompt';
+export * from './domain/model/model-context';
 export * from './domain/model/conversation-run';
 export * from './domain/model/context-usage';
 export * from './domain/model/compaction';

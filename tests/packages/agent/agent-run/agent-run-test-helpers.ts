@@ -150,9 +150,12 @@ export function createMessageFlowDependencies(input: {
         status: 'ok' as const,
         config: {
           provider_id: 'deepseek',
-          protocol: 'openai-compatible' as const,
+          api: 'openai-completions' as const,
           base_url: 'https://api.deepseek.com',
           model_id: 'deepseek-chat',
+          display_name: 'DeepSeek Chat',
+          context_window_tokens: 256_000,
+          max_output_tokens: 8_192,
           api_key: 'test-key',
           capabilities: {
             streaming: true,
@@ -172,11 +175,8 @@ export function createMessageFlowDependencies(input: {
         status: 'ready' as const,
         prepared: {
           preparationId: 'preparation-1',
-          prompt: {
-            instructions: { system: [], agentInstructions: { sources: [] } },
-            referenceContext: { skillCatalog: request.skillCatalog },
-            runContext: { skills: request.usedSkills },
-            conversation: [request.currentRun.userMessage, ...request.currentRun.runItems],
+          context: {
+            messages: [{ role: 'user' as const, content: 'test input', timestamp: 0 }],
             tools: request.tools,
           },
           usage: {
@@ -199,7 +199,7 @@ export function createMessageFlowDependencies(input: {
           { type: 'started', model_call_id: 'model-call-1', created_at: '2026-01-01T00:00:00.000Z' },
           { type: 'text_delta', model_call_id: 'model-call-1', delta: 'assistant ', created_at: '2026-01-01T00:00:00.000Z' },
           { type: 'text_delta', model_call_id: 'model-call-1', delta: 'reply', created_at: '2026-01-01T00:00:00.000Z' },
-          { type: 'completed', model_call_id: 'model-call-1', content: 'assistant reply', created_at: '2026-01-01T00:00:00.000Z' },
+          { type: 'completed', model_call_id: 'model-call-1', content: 'assistant reply', assistant_message: testAssistantMessage('assistant reply'), created_at: '2026-01-01T00:00:00.000Z' },
         ]),
       })),
       cancelModelCall: vi.fn(() => ({ status: 'not_found' as const, model_call_id: 'model-call-1' })),
@@ -268,6 +268,26 @@ export function createMessageFlowDependencies(input: {
       max_model_calls: input.max_model_calls ?? 4,
       max_tool_rounds: input.max_tool_rounds ?? 4,
     },
+  };
+}
+
+export function testAssistantMessage(text: string, stopReason: 'stop' | 'toolUse' = 'stop') {
+  return {
+    role: 'assistant' as const,
+    content: text ? [{ type: 'text' as const, text }] : [],
+    api: 'openai-completions',
+    provider: 'deepseek',
+    model: 'deepseek-chat',
+    usage: {
+      input: 1,
+      output: 1,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 2,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason,
+    timestamp: 0,
   };
 }
 
