@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   TimelineAssistantMessage,
@@ -263,6 +263,32 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(article).not.toHaveTextContent('Answer started');
     expect(article).not.toHaveTextContent('model.step.completed');
     expect(article).not.toHaveTextContent('TOOL CALLS');
+  });
+
+  it('updates the elapsed duration while a Run is waiting for its first event', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(createdAt));
+    let unmount: () => void = () => {};
+    try {
+      ({ unmount } = render(<TimelineMessage message={assistantMessage({
+        blocks: [{
+          blockId: 'process:run-1',
+          kind: 'process_disclosure',
+          runId: 'run-1',
+          status: 'running',
+          startedAt: createdAt,
+          items: [],
+        }],
+      })} />));
+
+      const disclosure = screen.getByRole('button', { name: /Collapse process disclosure/ });
+      expect(disclosure).toHaveTextContent('0s');
+      act(() => vi.advanceTimersByTime(3_000));
+      expect(disclosure).toHaveTextContent('3s');
+    } finally {
+      unmount();
+      vi.useRealTimers();
+    }
   });
 
   it('keeps thinking expanded by default after completion', () => {

@@ -17,10 +17,10 @@ import { rendererI18n } from '../../../shared/i18n';
 import { cx } from '../../../shared/ui';
 import { TimelineMarkdown } from './TimelineMarkdown';
 
-function formatDuration(start?: string, end?: string): string {
+function formatDuration(start?: string, end?: string, currentTime = Date.now()): string {
   if (!start) return '';
   const startedAt = new Date(start).getTime();
-  const endedAt = end ? new Date(end).getTime() : Date.now();
+  const endedAt = end ? new Date(end).getTime() : currentTime;
   if (Number.isNaN(startedAt) || Number.isNaN(endedAt) || endedAt < startedAt) return '';
   const seconds = Math.max(0, Math.round((endedAt - startedAt) / 1000));
   return `${seconds}s`;
@@ -223,12 +223,20 @@ export function ProcessDisclosureBlockView({ block }: { block: ProcessDisclosure
   const { t } = useTranslation('chat');
   const defaultExpanded = useMemo(() => defaultProcessExpanded(block.status), [block.status]);
   const [expanded, setExpanded] = useState(defaultExpanded);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   useEffect(() => {
     setExpanded(defaultExpanded);
   }, [block.blockId, defaultExpanded]);
 
-  const duration = formatDuration(block.startedAt, block.endedAt);
+  useEffect(() => {
+    if (block.status !== 'running' || block.endedAt || !block.startedAt) return undefined;
+    setCurrentTime(Date.now());
+    const interval = window.setInterval(() => setCurrentTime(Date.now()), 1_000);
+    return () => window.clearInterval(interval);
+  }, [block.endedAt, block.startedAt, block.status]);
+
+  const duration = formatDuration(block.startedAt, block.endedAt, currentTime);
 
   return (
     <section aria-label={t('processing.processLabel')} className="min-w-0 space-y-2">

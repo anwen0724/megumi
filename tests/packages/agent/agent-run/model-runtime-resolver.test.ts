@@ -33,4 +33,28 @@ describe('Model runtime resolver', () => {
     });
     expect(runtime.provider.getModels()).toEqual([runtime.model]);
   });
+
+  it('attempts image input unless Settings explicitly marks the model as text-only', () => {
+    const base = {
+      provider_id: 'custom',
+      api: 'openai-completions' as const,
+      base_url: 'https://llm.example.test/v1',
+      model_id: 'custom-model',
+      display_name: 'Custom model',
+      context_window_tokens: 128_000,
+      max_output_tokens: 8_192,
+      api_key: 'secret',
+    };
+    const unknown = resolveModelRuntime({
+      ...base,
+      capabilities: { streaming: 'unknown', toolCalls: 'unknown', thinking: 'unknown', imageInput: 'unknown' },
+    });
+    const unsupported = resolveModelRuntime({
+      ...base,
+      capabilities: { streaming: true, toolCalls: true, thinking: false, imageInput: false },
+    });
+
+    expect(unknown.model.input).toEqual(['text', 'image']);
+    expect(unsupported.model.input).toEqual(['text']);
+  });
 });

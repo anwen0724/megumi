@@ -44,7 +44,7 @@ export function resolveModelRuntime(config: ProviderRuntimeConfig): ResolvedMode
         contextWindow: config.context_window_tokens,
         maxTokens: config.max_output_tokens,
         reasoning: config.capabilities.thinking === true,
-        input: config.capabilities.imageInput === true ? ['text', 'image'] : ['text'],
+        input: config.capabilities.imageInput === false ? ['text'] : ['text', 'image'],
       },
     };
   }
@@ -72,7 +72,7 @@ function customModel(config: ProviderRuntimeConfig): Model<Api> {
     provider: config.provider_id,
     baseUrl: config.base_url ?? '',
     reasoning: config.capabilities.thinking === true,
-    input: config.capabilities.imageInput === true ? ['text', 'image'] : ['text'],
+    input: config.capabilities.imageInput === false ? ['text'] : ['text', 'image'],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: config.context_window_tokens,
     maxTokens: config.max_output_tokens,
