@@ -107,7 +107,7 @@ function appRawToSettingsRaw(raw: AppSettingsRaw): SettingsRaw {
         providerId,
         {
           ...(provider.enabled !== undefined ? { enabled: provider.enabled } : {}),
-          ...(provider.protocol ? { protocol: provider.protocol } : {}),
+          ...(provider.protocol ? { api: legacyAppProviderApi(provider.protocol) } : {}),
           ...(provider.displayName ? { display_name: provider.displayName } : {}),
           ...(provider.baseUrl ? { base_url: provider.baseUrl } : {}),
           ...(provider.models
@@ -157,6 +157,10 @@ const AppSettingsRawSchema = z
   .strict();
 
 type AppSettingsRaw = z.infer<typeof AppSettingsRawSchema>;
+
+function legacyAppProviderApi(protocol: 'openai-compatible' | 'anthropic') {
+  return protocol === 'anthropic' ? 'anthropic-messages' : 'openai-completions';
+}
 
 function readFileIfExistsSync(filePath: string): string | undefined {
   try {
