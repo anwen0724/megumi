@@ -58,7 +58,12 @@ export interface RuntimeTimelineStoreState {
       clientMessageId: string;
       messageId?: string;
       text: string;
-      attachments?: Array<{ draftAttachmentId: string; name: string; declaredMimeType?: string }>;
+      attachments?: Array<{
+        draftAttachmentId: string;
+        type: 'image' | 'file';
+        name: string;
+        declaredMimeType?: string;
+      }>;
       createdAt: string;
       runId?: string;
     },
@@ -220,7 +225,12 @@ function upsertPendingUserMessage(
     clientMessageId: string;
     messageId?: string;
     text: string;
-    attachments?: Array<{ draftAttachmentId: string; name: string; declaredMimeType?: string }>;
+    attachments?: Array<{
+      draftAttachmentId: string;
+      type: 'image' | 'file';
+      name: string;
+      declaredMimeType?: string;
+    }>;
     createdAt: string;
     runId?: string;
   },
@@ -248,6 +258,7 @@ function upsertPendingUserMessage(
     createdAt: input.createdAt,
     updatedAt: input.createdAt,
     attachmentId: attachment.draftAttachmentId,
+    attachmentType: attachment.type,
     name: attachment.name,
     ...(attachment.declaredMimeType ? { mediaType: attachment.declaredMimeType } : {}),
     source: 'local_file' as const,

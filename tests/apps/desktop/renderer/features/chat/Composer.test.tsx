@@ -60,6 +60,14 @@ function TestComposer(props: ComposerProps) {
         maxImageCount: 5,
         maxImageBytes: 10 * 1024 * 1024,
         maxTotalBytes: 25 * 1024 * 1024,
+        maxDocumentCount: 10,
+        maxDocumentBytes: 50 * 1024 * 1024,
+        allowedDocumentMediaTypes: [
+          'application/pdf',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'text/plain',
+          'text/markdown',
+        ],
       }}
       {...props}
     />
@@ -71,6 +79,11 @@ function setTextareaScrollHeight(textarea: HTMLElement, scrollHeight: number) {
     configurable: true,
     value: scrollHeight,
   });
+}
+
+async function selectImageFromAttachmentMenu() {
+  await userEvent.click(screen.getByRole('button', { name: 'Attach files' }));
+  await userEvent.click(screen.getByRole('menuitem', { name: 'Attach images' }));
 }
 
 async function chooseComposerOption(controlLabel: 'Permission mode' | 'Model', optionName: string | RegExp) {
@@ -89,7 +102,7 @@ describe('Composer', () => {
 
     expect(screen.getByLabelText('Permission mode')).toHaveAttribute('value', 'ask');
     expect(screen.getByLabelText('Model')).toHaveAttribute('value', 'deepseek:deepseek-v4-flash');
-    expect(screen.getByRole('button', { name: 'Attach images' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Attach files' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Choose context' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Context usage')).toBeInTheDocument();
     expect(screen.getByText('Context window:')).toBeInTheDocument();
@@ -222,16 +235,40 @@ describe('Composer', () => {
       <TestComposer
         onSubmit={() => undefined}
         onChooseContext={onChooseContext}
-        onSelectImages={async () => { onAttachFiles(); return [{ draftAttachmentId: 'draft-1', name: 'image.png', declaredMimeType: 'image/png', referenceId: 'ref-1', previewDataUrl: 'data:image/png;base64,aQ==' }]; }}
+        onSelectImages={async () => { onAttachFiles(); return [{ type: 'image', draftAttachmentId: 'draft-1', name: 'image.png', declaredMimeType: 'image/png', referenceId: 'ref-1', previewDataUrl: 'data:image/png;base64,aQ==' }]; }}
       />,
     );
 
-    await userEvent.click(screen.getByRole('button', { name: 'Attach images' }));
+    await selectImageFromAttachmentMenu();
 
     expect(screen.queryByRole('button', { name: 'Choose context' })).not.toBeInTheDocument();
     expect(onChooseContext).not.toHaveBeenCalled();
     expect(onAttachFiles).toHaveBeenCalledTimes(1);
     expect(await screen.findByAltText('image.png')).toBeInTheDocument();
+  });
+
+  it('selects a document from the shared attachment menu and submits the same draft attachment', async () => {
+    const onSubmit = vi.fn();
+    const document = {
+      type: 'file' as const,
+      draftAttachmentId: 'draft-document-1',
+      name: 'notes.pdf',
+      declaredMimeType: 'application/pdf',
+      sizeBytes: 4096,
+      referenceId: 'document-reference-1',
+    };
+    render(
+      <TestComposer
+        onSubmit={onSubmit}
+        onSelectDocuments={async () => [document]}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Attach files' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Attach documents' }));
+    expect(await screen.findByText('notes.pdf')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ attachments: [document] }));
   });
 
   it('allows image attachments for a text-only model and explains the model-facing degradation', async () => {
@@ -241,6 +278,7 @@ describe('Composer', () => {
         providers={textOnlyProviders}
         onSubmit={onSubmit}
         onSelectImages={async () => [{
+          type: 'image',
           draftAttachmentId: 'draft-text-only',
           name: 'diagram.png',
           declaredMimeType: 'image/png',
@@ -250,8 +288,8 @@ describe('Composer', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Attach images' })).toBeEnabled();
-    await userEvent.click(screen.getByRole('button', { name: 'Attach images' }));
+    expect(screen.getByRole('button', { name: 'Attach files' })).toBeEnabled();
+    await selectImageFromAttachmentMenu();
 
     expect(await screen.findByAltText('diagram.png')).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent(
@@ -265,6 +303,7 @@ describe('Composer', () => {
 
   it('imports a pasted clipboard image without blocking native text paste', async () => {
     const onPasteImage = vi.fn(async () => [{
+      type: 'image' as const,
       draftAttachmentId: 'draft-paste',
       name: 'clipboard-image.png',
       declaredMimeType: 'image/png',
@@ -289,17 +328,15 @@ describe('Composer', () => {
   });
 
   it('restores the complete in-memory draft after the composer remounts', async () => {
-    let draft = { text: '', images: [] as Array<{
-      draftAttachmentId: string;
-      name: string;
-      declaredMimeType?: string;
-      referenceId: string;
-      previewDataUrl: string;
-    }> };
+    let draft: Parameters<NonNullable<ComposerProps['onDraftChange']>>[0] = {
+      text: '',
+      attachments: [],
+    };
     const onDraftChange = vi.fn((nextDraft: typeof draft) => {
       draft = nextDraft;
     });
     const selectedImage = {
+      type: 'image' as const,
       draftAttachmentId: 'draft-restored',
       name: 'restored.png',
       declaredMimeType: 'image/png',
@@ -315,14 +352,14 @@ describe('Composer', () => {
     );
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), 'Keep this draft');
-    await userEvent.click(screen.getByRole('button', { name: 'Attach images' }));
-    await waitFor(() => expect(draft).toEqual({ text: 'Keep this draft', images: [selectedImage] }));
+    await selectImageFromAttachmentMenu();
+    await waitFor(() => expect(draft).toEqual({ text: 'Keep this draft', attachments: [selectedImage] }));
     first.unmount();
 
     render(
       <TestComposer
         initialValue={draft.text}
-        initialImages={draft.images}
+        initialAttachments={draft.attachments}
         onSubmit={() => undefined}
         onDraftChange={onDraftChange}
       />,
@@ -346,7 +383,7 @@ describe('Composer', () => {
     expect(toolbar).toHaveClass('justify-between');
     expect(toolbar).toHaveClass('flex-nowrap');
     expect(screen.queryByRole('button', { name: 'Choose context' })).not.toBeInTheDocument();
-    expect(leftControls?.children[0]).toBe(screen.getByRole('button', { name: 'Attach images' }));
+    expect(leftControls?.children[0]).toContainElement(screen.getByRole('button', { name: 'Attach files' }));
     expect(leftControls?.children[1]).toContainElement(screen.getByLabelText('Context usage'));
     expect(rightControls).toHaveClass('shrink-0');
     expect(rightControls.children).toHaveLength(3);
@@ -829,7 +866,7 @@ describe('Composer', () => {
 
   it('consumes the shared draft before an asynchronous first send can remount the composer', async () => {
     let resolveSubmit: ((value: boolean) => void) | undefined;
-    let draft: Parameters<NonNullable<ComposerProps['onDraftChange']>>[0] = { text: '', images: [] };
+    let draft: Parameters<NonNullable<ComposerProps['onDraftChange']>>[0] = { text: '', attachments: [] };
     const onDraftChange = vi.fn((nextDraft: typeof draft) => {
       draft = nextDraft;
     });
@@ -846,7 +883,7 @@ describe('Composer', () => {
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(input).toHaveValue('');
-    expect(draft).toEqual({ text: '', images: [] });
+    expect(draft).toEqual({ text: '', attachments: [] });
 
     resolveSubmit?.(true);
   });
@@ -992,16 +1029,16 @@ describe('Composer', () => {
   it('submits an image-only draft and removes the preview after submit', async () => {
     const onSubmit = vi.fn();
     render(<TestComposer onSubmit={onSubmit} onSelectImages={async () => [{
-      draftAttachmentId: 'draft-1', name: 'diagram.png', declaredMimeType: 'image/png',
+      type: 'image', draftAttachmentId: 'draft-1', name: 'diagram.png', declaredMimeType: 'image/png',
       referenceId: 'ref-1', previewDataUrl: 'data:image/png;base64,AQID',
     }]} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Attach images' }));
+    await selectImageFromAttachmentMenu();
     expect(await screen.findByAltText('diagram.png')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
     expect(onSubmit).toHaveBeenCalledWith({
       message: '', permissionMode: 'ask', providerId: 'deepseek', model: 'deepseek-v4-flash',
       attachments: [{
-        draftAttachmentId: 'draft-1', name: 'diagram.png', declaredMimeType: 'image/png',
+        type: 'image', draftAttachmentId: 'draft-1', name: 'diagram.png', declaredMimeType: 'image/png',
         referenceId: 'ref-1', previewDataUrl: 'data:image/png;base64,AQID',
       }],
     });
@@ -1011,11 +1048,11 @@ describe('Composer', () => {
   it('restores the image draft when the host rejects the consumed submit', async () => {
     const onSubmit = vi.fn().mockResolvedValue(false);
     render(<TestComposer onSubmit={onSubmit} onSelectImages={async () => [{
-      draftAttachmentId: 'draft-1', name: 'diagram.png', declaredMimeType: 'image/png',
+      type: 'image', draftAttachmentId: 'draft-1', name: 'diagram.png', declaredMimeType: 'image/png',
       referenceId: 'ref-1', previewDataUrl: 'data:image/png;base64,AQID',
     }]} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Attach images' }));
+    await selectImageFromAttachmentMenu();
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
 
     expect(await screen.findByAltText('diagram.png')).toBeInTheDocument();

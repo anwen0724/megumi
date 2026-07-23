@@ -7,11 +7,18 @@ import type {
 } from '@megumi/product/host-interface';
 import type { CommandSuggestionResult } from '@megumi/product/host-interface';
 import type { ComposerModel, ComposerPermissionMode } from './composer-options';
-import type { ChatComposerDraft, ChatComposerDraftImage } from '../../../entities/chat-ui/store';
+import type {
+  ChatComposerDraft,
+  ChatComposerDraftAttachment,
+  ChatComposerDraftDocument,
+  ChatComposerDraftImage,
+} from '../../../entities/chat-ui/store';
 
 export type ComposerStatus = 'idle' | 'sending' | 'running' | 'waiting-approval' | 'error';
 
 export type ComposerDraftImage = ChatComposerDraftImage;
+export type ComposerDraftDocument = ChatComposerDraftDocument;
+export type ComposerDraftAttachment = ChatComposerDraftAttachment;
 
 export interface ComposerSubmitPayload {
   message: string;
@@ -20,13 +27,13 @@ export interface ComposerSubmitPayload {
   permissionSource?: PermissionModeSelectionSource;
   providerId: string;
   model: ComposerModel;
-  attachments?: ComposerDraftImage[];
+  attachments?: ComposerDraftAttachment[];
 }
 
 export interface ComposerProps {
   status?: ComposerStatus;
   initialValue?: string;
-  initialImages?: ComposerDraftImage[];
+  initialAttachments?: ComposerDraftAttachment[];
   providers?: ProviderPublicStatusUiDto[];
   contextUsage?: ChatGetContextUsageUiResult;
   imageInputCapabilities?: ChatImageInputCapabilitiesUiResult;
@@ -36,6 +43,7 @@ export interface ComposerProps {
   onStop?: () => void;
   onChooseContext?: () => void;
   onSelectImages?: () => Promise<ComposerDraftImage[]>;
+  onSelectDocuments?: () => Promise<ComposerDraftDocument[]>;
   onPasteImage?: () => Promise<ComposerDraftImage[]>;
   onDraftChange?: (draft: ChatComposerDraft) => void;
   getCommandSuggestions?: (request: { draft_input: string }) => CommandSuggestionResult | Promise<CommandSuggestionResult>;

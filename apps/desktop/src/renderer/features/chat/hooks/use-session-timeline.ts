@@ -91,7 +91,7 @@ function createSessionMessageSendPayload(
     ...((payload.attachments?.length ?? 0) > 0 ? {
       attachments: payload.attachments!.map((attachment) => ({
         draftAttachmentId: attachment.draftAttachmentId,
-        type: 'image' as const,
+        type: attachment.type,
         name: attachment.name,
         ...(attachment.declaredMimeType ? { declaredMimeType: attachment.declaredMimeType } : {}),
         source: { type: 'host_file_reference' as const, referenceId: attachment.referenceId },

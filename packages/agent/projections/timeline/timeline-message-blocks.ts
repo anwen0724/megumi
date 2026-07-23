@@ -112,6 +112,7 @@ export interface UserTextBlock extends TimelineBlockBase {
 export interface UserAttachmentBlock extends TimelineBlockBase {
   kind: 'user_attachment';
   attachmentId: string;
+  attachmentType: 'image' | 'file';
   name: string;
   mediaType?: string;
   sizeBytes?: number;

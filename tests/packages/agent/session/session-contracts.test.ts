@@ -106,6 +106,7 @@ describe('session contracts v2', () => {
 
   it('models transient image imports separately from canonical attachment facts', () => {
     const input: SessionImageImport = {
+      type: 'image',
       name: 'error.png',
       media_type: 'image/png',
       byte_length: 8,

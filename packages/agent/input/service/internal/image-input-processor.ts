@@ -39,6 +39,7 @@ export async function processInputImages(input: {
     }
     processed.push({
       draft_attachment_id: image.draft_attachment_id,
+      type: 'image',
       name: safeName(image.name),
       media_type: mediaType,
       byte_length: bytes.byteLength,

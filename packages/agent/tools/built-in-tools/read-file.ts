@@ -5,6 +5,7 @@ import { fitsNormalizedJson, serializedBytes } from './bounded-page';
 import { inputRecord, optionalNonNegativeInteger, optionalPositiveInteger, requireString } from './input';
 import type { BuiltInToolContext } from './types';
 import { withFileFailure } from './file-failure';
+import { extractFileText } from './document-text-extractor';
 
 export async function executeReadFile(
   context: BuiltInToolContext,
@@ -14,7 +15,7 @@ export async function executeReadFile(
   const targetPath = requireString(record, 'path');
   const offset = optionalNonNegativeInteger(record, 'offset', 0);
   const limit = optionalPositiveInteger(record, 'limit', MAX_NORMALIZED_CONTENT_BYTES);
-  const result = await withFileFailure('read', () => context.workspaceFileAccess.readFile({ path: targetPath }));
+  const result = await withFileFailure('read', () => extractFileText(context.workspaceFileAccess, targetPath));
   const content = buildReadPage({ ...result, offset, limit });
 
   return {

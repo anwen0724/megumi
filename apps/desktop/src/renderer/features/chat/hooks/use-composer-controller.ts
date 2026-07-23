@@ -7,7 +7,13 @@ import {
   type ComposerModel,
   type ComposerPermissionMode,
 } from '../components/composer-options';
-import type { ComposerDraftImage, ComposerProps, ComposerSubmitPayload } from '../components/composer-types';
+import type {
+  ComposerDraftAttachment,
+  ComposerDraftDocument,
+  ComposerDraftImage,
+  ComposerProps,
+  ComposerSubmitPayload,
+} from '../components/composer-types';
 import type { ComposerSurfaceProps } from '../components/ComposerSurface';
 import { showToast } from '../../../shared/ui';
 import { rendererI18n } from '../../../shared/i18n';
@@ -28,7 +34,7 @@ function createComposerSubmitPayload(input: {
   permissionMode: ComposerPermissionMode;
   providerId: string;
   model: ComposerModel;
-  attachments: ComposerDraftImage[];
+  attachments: ComposerDraftAttachment[];
   skillSelection?: SelectedCommandCompletion['selection'];
 }): ComposerSubmitPayload {
   return {
@@ -52,7 +58,7 @@ function resolveSubmitMessage(rawValue: string, completion: SelectedCommandCompl
 export function useComposerController({
   status = 'idle',
   initialValue = '',
-  initialImages = [],
+  initialAttachments = [],
   providers,
   contextUsage,
   imageInputCapabilities,
@@ -62,6 +68,7 @@ export function useComposerController({
   onStop,
   onChooseContext,
   onSelectImages,
+  onSelectDocuments,
   onPasteImage,
   onDraftChange,
   getCommandSuggestions,
@@ -76,12 +83,12 @@ export function useComposerController({
   const persistPermissionMode = usePermissionModeStore((state) => state.persistMode);
   const modelSelection = useModelSelectionStore((state) => state.selection);
   const persistModelSelection = useModelSelectionStore((state) => state.persistSelection);
-  const [selectedImages, setSelectedImages] = useState<ComposerDraftImage[]>(initialImages);
+  const [selectedAttachments, setSelectedAttachments] = useState<ComposerDraftAttachment[]>(initialAttachments);
   const valueRef = useRef(value);
-  const selectedImagesRef = useRef(selectedImages);
+  const selectedAttachmentsRef = useRef(selectedAttachments);
   const selectedCommandCompletionRef = useRef(selectedCommandCompletion);
   valueRef.current = value;
-  selectedImagesRef.current = selectedImages;
+  selectedAttachmentsRef.current = selectedAttachments;
   selectedCommandCompletionRef.current = selectedCommandCompletion;
   const modelOptions = useMemo(
     () => getComposerModelOptionsForProviders(providers),
@@ -94,6 +101,13 @@ export function useComposerController({
     ?? modelOptions[0];
   const model = selectedModelOption?.value ?? '';
   const maxImageCount = imageInputCapabilities?.maxImageCount ?? 0;
+  const maxDocumentCount = imageInputCapabilities?.maxDocumentCount ?? 0;
+  const selectedImages = selectedAttachments.filter(
+    (attachment): attachment is ComposerDraftImage => attachment.type === 'image',
+  );
+  const selectedDocuments = selectedAttachments.filter(
+    (attachment): attachment is ComposerDraftDocument => attachment.type === 'file',
+  );
   const trimmedValue = value.trim();
   const inputLocked = false;
   const sendLocked = status === 'sending' || status === 'running' || status === 'waiting-approval';
@@ -102,11 +116,14 @@ export function useComposerController({
     : undefined;
   const canSend = (
     trimmedValue.length > 0
-    || selectedImages.length > 0
+    || selectedAttachments.length > 0
     || (selectedCommandCompletion !== null && !selectedCommandCompletion.selection)
   )
     && !sendLocked && modelOptions.length > 0;
   const canAttachImages = selectedImages.length < maxImageCount
+    && !sendLocked
+    && selectedCommandCompletion === null;
+  const canAttachDocuments = selectedDocuments.length < maxDocumentCount
     && !sendLocked
     && selectedCommandCompletion === null;
   const showStop = status === 'sending' || status === 'running' || status === 'waiting-approval';
@@ -129,8 +146,8 @@ export function useComposerController({
   }, [seedTextKey, seedText]);
 
   useEffect(() => {
-    onDraftChange?.({ text: value, images: selectedImages });
-  }, [onDraftChange, selectedImages, value]);
+    onDraftChange?.({ text: value, attachments: selectedAttachments });
+  }, [onDraftChange, selectedAttachments, value]);
 
   useEffect(() => {
     if (modelOptions.length === 0) {
@@ -208,7 +225,7 @@ export function useComposerController({
 
     const submittedDraft = {
       text: value,
-      images: selectedImages,
+      attachments: selectedAttachments,
       commandCompletion: selectedCommandCompletion,
     };
     const payload = createComposerSubmitPayload({
@@ -216,7 +233,7 @@ export function useComposerController({
       permissionMode,
       providerId: selectedModelOption.providerId,
       model: selectedModelOption.modelId,
-      attachments: selectedImages,
+      attachments: selectedAttachments,
       ...(selectedCommandCompletion?.selection ? { skillSelection: selectedCommandCompletion.selection } : {}),
     });
 
@@ -224,12 +241,12 @@ export function useComposerController({
     // replace the welcome Composer with ComposerDock. Otherwise the new
     // Composer instance hydrates from the stale submitted draft.
     valueRef.current = '';
-    selectedImagesRef.current = [];
+    selectedAttachmentsRef.current = [];
     selectedCommandCompletionRef.current = null;
-    onDraftChange?.({ text: '', images: [] });
+    onDraftChange?.({ text: '', attachments: [] });
     setValue('');
     setSelectedCommandCompletion(null);
-    setSelectedImages([]);
+    setSelectedAttachments([]);
 
     const succeeded = await onSubmit(payload);
     if (succeeded !== false) return;
@@ -238,16 +255,16 @@ export function useComposerController({
     // started composing a replacement while the request was pending.
     if (
       valueRef.current.length === 0 &&
-      selectedImagesRef.current.length === 0 &&
+      selectedAttachmentsRef.current.length === 0 &&
       selectedCommandCompletionRef.current === null
     ) {
       valueRef.current = submittedDraft.text;
-      selectedImagesRef.current = submittedDraft.images;
+      selectedAttachmentsRef.current = submittedDraft.attachments;
       selectedCommandCompletionRef.current = submittedDraft.commandCompletion;
-      onDraftChange?.({ text: submittedDraft.text, images: submittedDraft.images });
+      onDraftChange?.({ text: submittedDraft.text, attachments: submittedDraft.attachments });
       setValue(submittedDraft.text);
       setSelectedCommandCompletion(submittedDraft.commandCompletion);
-      setSelectedImages(submittedDraft.images);
+      setSelectedAttachments(submittedDraft.attachments);
     }
   }
 
@@ -273,6 +290,11 @@ export function useComposerController({
     appendImages(images);
   }
 
+  async function selectDocuments() {
+    if (!canAttachDocuments || !onSelectDocuments) return;
+    appendDocuments(await onSelectDocuments());
+  }
+
   async function pasteImage() {
     if (!onPasteImage || sendLocked || selectedCommandCompletion) return;
     if (selectedImages.length >= maxImageCount) {
@@ -287,7 +309,19 @@ export function useComposerController({
     if (images.length > remaining) {
       showImageLimitToast();
     }
-    setSelectedImages((current) => [...current, ...images.slice(0, remaining)]);
+    setSelectedAttachments((current) => [...current, ...images.slice(0, remaining)]);
+  }
+
+  function appendDocuments(documents: ComposerDraftDocument[]) {
+    const remaining = Math.max(0, maxDocumentCount - selectedDocuments.length);
+    if (documents.length > remaining) {
+      showToast({
+        tone: 'warning',
+        title: rendererI18n.t('chat:notifications.documentLimit.title'),
+        message: rendererI18n.t('chat:notifications.documentLimit.message', { count: maxDocumentCount }),
+      });
+    }
+    setSelectedAttachments((current) => [...current, ...documents.slice(0, remaining)]);
   }
 
   function showImageLimitToast() {
@@ -298,8 +332,10 @@ export function useComposerController({
     });
   }
 
-  function removeImage(draftAttachmentId: string) {
-    setSelectedImages((current) => current.filter((image) => image.draftAttachmentId !== draftAttachmentId));
+  function removeAttachment(draftAttachmentId: string) {
+    setSelectedAttachments((current) => current.filter(
+      (attachment) => attachment.draftAttachmentId !== draftAttachmentId,
+    ));
   }
 
   function applyCommandSuggestion(item: CommandSuggestionItem) {
@@ -387,8 +423,9 @@ export function useComposerController({
     selectedCommandSuggestionIndex,
     selectedCommandCompletion,
     contextUsage,
-    selectedImages,
+    selectedAttachments,
     canAttachImages,
+    canAttachDocuments,
     imageInputNotice,
     onValueChange: handleValueChange,
     onCommandSuggestionChoose: chooseCommandSuggestion,
@@ -401,9 +438,10 @@ export function useComposerController({
     onSubmit: handleSubmit,
     onStop,
     onChooseContext,
-    onAttachFiles: () => { void selectImages(); },
+    onAttachImages: () => { void selectImages(); },
+    onAttachDocuments: () => { void selectDocuments(); },
     onPasteImage: () => { void pasteImage(); },
-    onRemoveImage: removeImage,
+    onRemoveAttachment: removeAttachment,
   };
 
   return {

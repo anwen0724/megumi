@@ -156,6 +156,7 @@ export const UserAttachmentBlockSchema = z
     ...TimelineBlockBaseShape,
     kind: z.literal('user_attachment'),
     attachmentId: z.string().min(1),
+    attachmentType: z.enum(['image', 'file']),
     name: z.string().min(1),
     mediaType: z.string().min(1).optional(),
     sizeBytes: z.number().int().nonnegative().optional(),

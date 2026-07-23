@@ -13,6 +13,7 @@ describe('input image contracts', () => {
     const request: ProcessUserInputRequest = { user_input: { text: 'inspect', attachments: [attachment] } };
     const processed: ProcessedInputImage = {
       draft_attachment_id: attachment.draft_attachment_id,
+      type: 'image',
       name: 'error.png',
       media_type: 'image/png',
       byte_length: 8,

@@ -3,11 +3,11 @@
  * command semantics owned by the Command module.
  */
 import type { ParsedUserInput } from '../../domain/model/user-input';
-import type { ProcessedInputImage } from '../../domain/model/image-input';
+import type { ProcessedInputAttachment } from '../../domain/model/user-input';
 
 export type ParseUserInputRequest = {
   normalized_text: string;
-  attachments: ProcessedInputImage[];
+  attachments: ProcessedInputAttachment[];
 };
 
 export function parseUserInput(request: ParseUserInputRequest): ParsedUserInput {

@@ -6,7 +6,11 @@ import { electronFileOpenAdapter } from '../adapters/electron-file-open-adapter'
 import { electronObservabilityStorageAdapter } from '../adapters/electron-observability-storage-adapter';
 import { getElectronProductEnvironment } from '../adapters/electron-product-environment-adapter';
 import { saveDiagnosticBundle } from '../adapters/electron-diagnostic-bundle-save-adapter';
-import { electronImagePickerAdapter, electronInputFileReader } from '../adapters/electron-image-input-adapter';
+import {
+  electronInputAttachmentPickerAdapter,
+  electronInputFileReader,
+  electronLocalFileAvailability,
+} from '../adapters/electron-input-attachment-adapter';
 import { electronSessionAttachmentFileSystem } from '../adapters/electron-session-attachment-file-system';
 
 export function composeDesktopMain() {
@@ -18,7 +22,8 @@ export function composeDesktopMain() {
     diagnosticBundleSave: { save: saveDiagnosticBundle },
     directoryPicker: electronDirectoryPickerAdapter,
     fileOpen: electronFileOpenAdapter,
-    imagePicker: electronImagePickerAdapter,
+    attachmentPicker: electronInputAttachmentPickerAdapter,
+    localFileAvailability: electronLocalFileAvailability,
     inputFileReader: electronInputFileReader,
     sessionAttachmentFileSystem: electronSessionAttachmentFileSystem,
   });

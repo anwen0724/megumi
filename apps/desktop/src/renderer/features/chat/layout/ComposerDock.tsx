@@ -11,7 +11,13 @@ import { ApprovalStack } from '../components/ApprovalStack';
 import { BranchDraftStack, type ComposerBranchDraftView } from '../components/BranchDraftStack';
 import { ComposerSurface } from '../components/ComposerSurface';
 import type { ChatComposerDraft } from '../../../entities/chat-ui/store';
-import type { ComposerDraftImage, ComposerStatus, ComposerSubmitPayload } from '../components/composer-types';
+import type {
+  ComposerDraftAttachment,
+  ComposerDraftDocument,
+  ComposerDraftImage,
+  ComposerStatus,
+  ComposerSubmitPayload,
+} from '../components/composer-types';
 import { useComposerController } from '../hooks/use-composer-controller';
 import { ComposerOverlayLayer } from './ComposerOverlayLayer';
 
@@ -26,12 +32,13 @@ interface ComposerDockProps {
   contextUsage?: ChatGetContextUsageUiResult;
   imageInputCapabilities?: ChatImageInputCapabilitiesUiResult;
   initialValue?: string;
-  initialImages?: ComposerDraftImage[];
+  initialAttachments?: ComposerDraftAttachment[];
   onSubmit: (payload: ComposerSubmitPayload) => boolean | void | Promise<boolean | void>;
   onStop: () => void;
   onHeightChange?: (height: number) => void;
   getCommandSuggestions?: (request: { draft_input: string }) => CommandSuggestionResult | Promise<CommandSuggestionResult>;
   onSelectImages?: () => Promise<ComposerDraftImage[]>;
+  onSelectDocuments?: () => Promise<ComposerDraftDocument[]>;
   onPasteImage?: () => Promise<ComposerDraftImage[]>;
   onDraftChange?: (draft: ChatComposerDraft) => void;
 }
@@ -45,12 +52,13 @@ export function ComposerDock({
   contextUsage,
   imageInputCapabilities,
   initialValue,
-  initialImages,
+  initialAttachments,
   onSubmit,
   onStop,
   onHeightChange,
   getCommandSuggestions,
   onSelectImages,
+  onSelectDocuments,
   onPasteImage,
   onDraftChange,
 }: ComposerDockProps) {
@@ -61,12 +69,13 @@ export function ComposerDock({
     contextUsage,
     imageInputCapabilities,
     initialValue,
-    initialImages,
+    initialAttachments,
     seedTextKey: null,
     seedText: null,
     onSubmit,
     onStop,
     onSelectImages,
+    onSelectDocuments,
     onPasteImage,
     onDraftChange,
     onChooseContext: () => undefined,

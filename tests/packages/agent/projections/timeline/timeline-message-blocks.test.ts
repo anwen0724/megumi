@@ -76,6 +76,7 @@ describe('timeline message and block contracts', () => {
           blockId: 'block-user-attachment-1',
           kind: 'user_attachment',
           attachmentId: 'attachment-1',
+          attachmentType: 'image',
           name: 'screenshot.png',
           mediaType: 'image/png',
           sizeBytes: 1200,

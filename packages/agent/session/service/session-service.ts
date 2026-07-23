@@ -2,7 +2,7 @@
 import type { Session, SessionRuntimeError } from '../domain/model/session';
 import type { SessionEntry } from '../domain/model/session-entry';
 import type { SessionMessage, SessionMessageWithAttachments } from '../domain/model/session-message';
-import type { SessionAttachmentContent } from '../domain/model/session-attachment';
+import type { SessionAttachmentContent, SessionMessageAttachment } from '../domain/model/session-attachment';
 import type {
   SaveAssistantReplyRequest,
   SaveModelResponseRequest,
@@ -66,6 +66,10 @@ export type SessionService = {
   appendSessionEntry(request: AppendSessionEntryRequest): AppendSessionEntryResult;
   switchActiveEntry(request: SwitchActiveEntryRequest): SwitchActiveEntryResult;
   saveCompactionSummary(request: SaveCompactionSummaryRequest): SaveCompactionSummaryResult;
+  getAttachment(request: { attachment_id: string }):
+    | { status: 'found'; attachment: SessionMessageAttachment }
+    | { status: 'not_found' }
+    | { status: 'failed'; failure: SessionRuntimeError };
   readAttachmentContent(request: { attachment_id: string }): Promise<
     | { status: 'ok'; content: SessionAttachmentContent }
     | { status: 'failed'; failure: SessionRuntimeError }

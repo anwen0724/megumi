@@ -3,6 +3,7 @@ import { create } from 'zustand';
 export type AgentRunStatus = 'idle' | 'sending' | 'running' | 'waiting-approval' | 'error';
 
 export interface ChatComposerDraftImage {
+  type: 'image';
   draftAttachmentId: string;
   name: string;
   declaredMimeType?: string;
@@ -10,9 +11,22 @@ export interface ChatComposerDraftImage {
   previewDataUrl: string;
 }
 
+export interface ChatComposerDraftDocument {
+  type: 'file';
+  draftAttachmentId: string;
+  name: string;
+  declaredMimeType: string;
+  sizeBytes: number;
+  referenceId: string;
+}
+
+export type ChatComposerDraftAttachment =
+  | ChatComposerDraftImage
+  | ChatComposerDraftDocument;
+
 export interface ChatComposerDraft {
   text: string;
-  images: ChatComposerDraftImage[];
+  attachments: ChatComposerDraftAttachment[];
 }
 
 interface ChatUiSessionState {
@@ -36,7 +50,7 @@ export const useChatUiStore = create<ChatUiState>((set) => ({
   activeSessionId: null,
   agentStatus: 'idle',
   lastError: null,
-  composerDraft: { text: '', images: [] },
+  composerDraft: { text: '', attachments: [] },
   sessionStates: {},
   setActiveSession: (activeSessionId) => set((state) => {
     if (!activeSessionId) {

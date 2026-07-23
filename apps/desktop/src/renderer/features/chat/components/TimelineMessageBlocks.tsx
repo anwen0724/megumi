@@ -11,13 +11,62 @@ import { useEffect, useState } from 'react';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
 import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
 import { useTranslation } from 'react-i18next';
+import { FileText } from 'lucide-react';
 
 function UserBlockView({ block }: { block: UserTimelineBlock }) {
   if (block.kind === 'user_attachment') {
-    return <TimelineImageAttachment attachmentId={block.attachmentId} name={block.name} />;
+    return block.attachmentType === 'image'
+      ? <TimelineImageAttachment attachmentId={block.attachmentId} name={block.name} />
+      : <TimelineDocumentAttachment attachmentId={block.attachmentId} name={block.name} mediaType={block.mediaType} />;
   }
 
   return <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{block.text}</p>;
+}
+
+function TimelineDocumentAttachment({
+  attachmentId,
+  name,
+  mediaType,
+}: {
+  attachmentId: string;
+  name: string;
+  mediaType?: string;
+}) {
+  const { t } = useTranslation('chat');
+  const [availability, setAvailability] = useState<'checking' | 'available' | 'unavailable'>('checking');
+  useEffect(() => {
+    let active = true;
+    void window.megumi.session.documentInput.getAttachmentStatus(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.attachmentFileStatus, { attachmentId }),
+    ).then((result) => {
+      if (!active) return;
+      setAvailability(result.ok && result.data.status === 'available' ? 'available' : 'unavailable');
+    }).catch(() => {
+      if (active) setAvailability('unavailable');
+    });
+    return () => { active = false; };
+  }, [attachmentId]);
+  return (
+    <div className={[
+      'inline-flex max-w-full items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm',
+      availability === 'unavailable' ? 'opacity-60' : '',
+    ].join(' ')}>
+      <FileText size={18} className="shrink-0 text-[var(--color-accent)]" aria-hidden="true" />
+      <span className="truncate text-[var(--color-text)]">{name}</span>
+      {mediaType ? <span className="text-xs text-[var(--color-text-muted)]">{documentTypeLabel(mediaType)}</span> : null}
+      {availability === 'unavailable'
+        ? <span className="text-xs text-[var(--color-danger)]">{t('timeline.attachmentUnavailable')}</span>
+        : null}
+    </div>
+  );
+}
+
+function documentTypeLabel(mediaType: string): string {
+  if (mediaType === 'application/pdf') return 'PDF';
+  if (mediaType.includes('wordprocessingml')) return 'DOCX';
+  if (mediaType === 'text/markdown') return 'Markdown';
+  if (mediaType === 'text/plain') return 'TXT';
+  return mediaType;
 }
 
 function TimelineImageAttachment({ attachmentId, name }: { attachmentId: string; name: string }) {

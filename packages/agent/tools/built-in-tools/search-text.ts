@@ -10,6 +10,7 @@ import {
 } from './input';
 import type { BuiltInToolContext } from './types';
 import { withFileFailure } from './file-failure';
+import { extractFileText } from './document-text-extractor';
 
 export async function executeSearchText(
   context: BuiltInToolContext,
@@ -23,14 +24,25 @@ export async function executeSearchText(
   const offset = optionalNonNegativeInteger(record, 'offset', 0);
   const files = await withFileFailure('search', () => context.workspaceFileAccess.walkFiles({ path: rootPath }));
   const needle = caseSensitive ? query : query.toLowerCase();
-  const matches: Array<{ path: string; line: number; preview: string }> = [];
+  const matches: Array<{ path: string; line: number; page?: number; preview: string }> = [];
 
   for (const file of files) {
-    const content = await withFileFailure('search', () => context.workspaceFileAccess.readTextFile({ path: file }));
-    for (const [index, line] of content.split(/\r?\n/).entries()) {
+    const extracted = await withFileFailure('search', () => extractFileText(context.workspaceFileAccess, file));
+    let currentPage: number | undefined;
+    for (const [index, line] of extracted.content.split(/\r?\n/).entries()) {
+      const pageMarker = /^\[Page (\d+)]$/.exec(line);
+      if (pageMarker) {
+        currentPage = Number(pageMarker[1]);
+        continue;
+      }
       const haystack = caseSensitive ? line : line.toLowerCase();
       if (haystack.includes(needle)) {
-        matches.push({ path: file, line: index + 1, preview: line.slice(0, 500) });
+        matches.push({
+          path: extracted.path,
+          line: index + 1,
+          ...(currentPage !== undefined ? { page: currentPage } : {}),
+          preview: line.slice(0, 500),
+        });
       }
     }
   }

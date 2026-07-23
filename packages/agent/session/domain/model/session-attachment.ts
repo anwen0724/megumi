@@ -14,11 +14,22 @@ export type SessionMessageAttachment = {
 export type SupportedSessionImageMediaType = 'image/png' | 'image/jpeg' | 'image/webp';
 
 export type SessionImageImport = {
+  type: 'image';
   name: string;
   media_type: SupportedSessionImageMediaType;
   byte_length: number;
   bytes: Uint8Array;
 };
+
+export type SessionFileReference = {
+  type: 'file';
+  name: string;
+  media_type: string;
+  local_path: string;
+  size_bytes: number;
+};
+
+export type SessionAttachmentImport = SessionImageImport | SessionFileReference;
 
 export type SessionAttachmentContent = {
   bytes: Uint8Array;

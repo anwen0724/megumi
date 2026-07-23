@@ -23,7 +23,7 @@ const NORMALIZED_HISTORY_SOURCE = {
 } as const;
 
 export class ContextMaterializationError extends Error {
-  constructor(readonly contentType: 'image' | 'file') {
+  constructor(readonly contentType: 'image') {
     super(`Context contains an unmaterialized ${contentType} block.`);
     this.name = 'ContextMaterializationError';
   }
@@ -204,6 +204,17 @@ function toolResultMessage(item: Extract<ConversationItem, { type: 'tool_result'
 function contentBlockToAi(block: ContentBlock): TextContent | ImageContent {
   if (block.type === 'text') return { type: 'text', text: block.text };
   if (block.type === 'json') return { type: 'text', text: JSON.stringify(block.value) };
+  if (block.type === 'file') {
+    return {
+      type: 'text',
+      text: JSON.stringify({
+        type: 'attached_file',
+        path: block.path,
+        ...(block.name ? { name: block.name } : {}),
+        ...(block.mediaType ? { mediaType: block.mediaType } : {}),
+      }),
+    };
+  }
   if (block.type === 'image' && block.source.type === 'base64') {
     return { type: 'image', data: block.source.data, mimeType: block.source.mediaType };
   }
@@ -213,6 +224,14 @@ function contentBlockToAi(block: ContentBlock): TextContent | ImageContent {
 function contentBlockToReference(block: ContentBlock): unknown {
   if (block.type === 'text') return { type: 'text', text: block.text };
   if (block.type === 'json') return { type: 'json', value: block.value };
+  if (block.type === 'file') {
+    return {
+      type: 'attached_file',
+      path: block.path,
+      ...(block.name ? { name: block.name } : {}),
+      ...(block.mediaType ? { mediaType: block.mediaType } : {}),
+    };
+  }
   if (block.type === 'image' && block.source.type === 'base64') {
     return { type: 'image', data: block.source.data, mimeType: block.source.mediaType };
   }

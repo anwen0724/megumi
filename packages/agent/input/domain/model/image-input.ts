@@ -13,6 +13,7 @@ export type RawUserInputImage = {
 
 export type ProcessedInputImage = {
   draft_attachment_id: string;
+  type: 'image';
   name: string;
   media_type: SupportedImageMediaType;
   byte_length: number;

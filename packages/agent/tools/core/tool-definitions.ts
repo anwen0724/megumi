@@ -19,7 +19,7 @@ export type BuiltInToolName = (typeof BUILT_IN_TOOL_NAMES)[number];
 const readFileDefinition: ToolDefinition = {
   name: 'read_file',
   title: 'Read file',
-  description: 'Read a UTF-8 byte page from a text file. Continue with nextOffset when hasMore is true.',
+  description: 'Read a bounded UTF-8 text page from a text, Markdown, DOCX, or PDF file. Continue with nextOffset when hasMore is true.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -50,7 +50,7 @@ const readFileDefinition: ToolDefinition = {
   availability: { status: 'available' },
   executionMode: 'parallel',
   permissionMetadata: { ruleToolName: 'read_file' },
-  modelFacingDescription: 'Read a UTF-8 byte page from a text file. If hasMore is true, call read_file again with nextOffset.',
+  modelFacingDescription: 'Read a bounded text page from a text, Markdown, DOCX, or PDF file. If hasMore is true, call read_file again with nextOffset.',
 };
 
 const listDirectoryDefinition: ToolDefinition = {
@@ -140,7 +140,7 @@ const globDefinition: ToolDefinition = {
 const searchTextDefinition: ToolDefinition = {
   name: 'search_text',
   title: 'Search text',
-  description: 'Search text in files and return redacted, size-limited matches.',
+  description: 'Search text in readable files, including Markdown, DOCX, and PDF, and return size-limited matches.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -163,6 +163,7 @@ const searchTextDefinition: ToolDefinition = {
           properties: {
             path: { type: 'string' },
             line: { type: 'integer' },
+            page: { type: 'integer' },
             preview: { type: 'string' },
           },
         },
@@ -180,13 +181,13 @@ const searchTextDefinition: ToolDefinition = {
   availability: { status: 'available' },
   executionMode: 'parallel',
   permissionMetadata: { ruleToolName: 'search_text' },
-  modelFacingDescription: 'Search text in files and return redacted, size-limited matches.',
+  modelFacingDescription: 'Search text in files, including Markdown, DOCX, and PDF, and return size-limited matches with line or PDF page locations.',
 };
 
 const editFileDefinition: ToolDefinition = {
   name: 'edit_file',
   title: 'Edit file',
-  description: 'Apply an exact text replacement to an existing file.',
+  description: 'Apply an exact text replacement to an existing UTF-8 text file. Structured PDF and DOCX editing is not supported.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -214,13 +215,13 @@ const editFileDefinition: ToolDefinition = {
   availability: { status: 'available' },
   executionMode: 'serial',
   permissionMetadata: { ruleToolName: 'edit_file' },
-  modelFacingDescription: 'Apply an exact text replacement to an existing file.',
+  modelFacingDescription: 'Apply an exact text replacement to an existing UTF-8 text file. Do not use this tool to edit PDF or DOCX files.',
 };
 
 const writeFileDefinition: ToolDefinition = {
   name: 'write_file',
   title: 'Write file',
-  description: 'Create or overwrite a file with provided text content.',
+  description: 'Create or overwrite a UTF-8 text file with provided text content. Structured PDF and DOCX writing is not supported.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -248,7 +249,7 @@ const writeFileDefinition: ToolDefinition = {
   availability: { status: 'available' },
   executionMode: 'serial',
   permissionMetadata: { ruleToolName: 'write_file' },
-  modelFacingDescription: 'Create or overwrite a file with provided text content.',
+  modelFacingDescription: 'Create or overwrite a UTF-8 text file with provided text content. Do not use this tool to write PDF or DOCX files.',
 };
 
 const runCommandDefinition: ToolDefinition = {

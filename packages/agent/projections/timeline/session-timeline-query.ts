@@ -130,6 +130,7 @@ export function projectSessionTimelineUserMessage(
     blockId: `user-attachment:${attachment.attachment_id}`,
     kind: 'user_attachment' as const,
     attachmentId: attachment.attachment_id,
+    attachmentType: attachment.type,
     name: attachment.name ?? attachment.attachment_id,
     ...(attachment.mime_type ? { mediaType: attachment.mime_type } : {}),
     source: attachment.source_type === 'local_file' ? 'local_file' as const : 'unknown' as const,

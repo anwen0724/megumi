@@ -69,4 +69,50 @@ describe('buildContext', () => {
     });
     expect(context.messages.some((message) => message.role === 'toolResult')).toBe(false);
   });
+
+  it('keeps a document reference in the same user message without inlining document content', () => {
+    const context = buildContext({
+      sessionId: 'session-1',
+      instructions: { system: [], agentInstructions: { sources: [] } },
+      referenceContext: { skillCatalog: [] },
+      runContext: { skills: [] },
+      historicalRuns: [],
+      currentRun: {
+        runId: 'run-1',
+        userEntry: { entryId: 'entry-1' },
+        userMessage: {
+          type: 'user_message',
+          content: [
+            { type: 'text', text: '总结这个文件' },
+            {
+              type: 'file',
+              path: 'C:/materials/notes.docx',
+              name: 'notes.docx',
+              mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            },
+          ],
+        },
+        runItems: [],
+      },
+      tools: [],
+    });
+
+    expect(context.messages).toHaveLength(1);
+    expect(context.messages[0]).toMatchObject({
+      role: 'user',
+      content: [
+        { type: 'text', text: '总结这个文件' },
+        {
+          type: 'text',
+          text: JSON.stringify({
+            type: 'attached_file',
+            path: 'C:/materials/notes.docx',
+            name: 'notes.docx',
+            mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          }),
+        },
+      ],
+    });
+    expect(JSON.stringify(context)).not.toContain('attachmentId');
+  });
 });

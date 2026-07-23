@@ -11,6 +11,9 @@ import {
   createLocalWorkspaceFileAccess,
 } from '@megumi/agent/composition/compose-agent-tool-runtime';
 
+const DOCX_FIXTURE_BASE64 = 'UEsDBAoAAAAIAPAh91x5bjPX6AAAAK0BAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbH1QyU7DMBD9FWuuKHHggBCK0wPLETiUDxjZk8SqN3nc0v49Tlt6QIXjzFv1+tXeO7GjzDYGBbdtB4KCjsaGScHn+rV5AMEFg0EXAyk4EMNq6NeHRCyqNrCCuZT0KCXrmTxyGxOFiowxeyz1zJNMqDc4kbzrunupYygUSlMWDxj6Zxpx64p42df3qUcmxyCeTsQlSwGm5KzGUnG5C+ZXSnNOaKvyyOHZJr6pBJBXExbk74Cz7r0Ok60h8YG5vKGvLPkVs5Em6q2vyvZ/mys94zhaTRf94pZy1MRcF/euvSAebfjpL49zD99QSwMECgAAAAAA8CH3XAAAAAAAAAAAAAAAAAYAAABfcmVscy9QSwMECgAAAAgA8CH3XJv9N+qtAAAAKQEAAAsAAABfcmVscy8ucmVsc43POw7CMAwG4KtE3mlaBoRQ0y4IqSsqB7ASN61oHkrCo7cnAwNFDIy2f3+W6/ZpZnanECdnBVRFCYysdGqyWsClP232wGJCq3B2lgQsFKFt6jPNmPJKHCcfWTZsFDCm5A+cRzmSwVg4TzZPBhcMplwGzT3KK2ri27Lc8fBpwNpknRIQOlUB6xdP/9huGCZJRydvhmz6ceIrkWUMmpKAhwuKq3e7yCzwpuarF5sXUEsDBAoAAAAAAPAh91wAAAAAAAAAAAAAAAAFAAAAd29yZC9QSwMECgAAAAgA8CH3XD2eKt/IAAAAMAEAABEAAAB3b3JkL2RvY3VtZW50LnhtbG2PwU7DMAyGX8XKnaZwmFDVdredd4AHCIlZIzVxsL11fXuScUBCXD7Ltvzp93i8pxVuyBIpT+a56w1g9hRivkzm/e309GpA1OXgVso4mR3FHOdxGwL5a8KsUAVZhm0yi2oZrBW/YHLSUcFcd5/EyWlt+WI34lCYPIpUf1rtS98fbHIxm6b8oLC3Whq4Qefzskv0Aoy32DJCJkUZbds18oPl79mJ2CPg19WtAjWNgMaEAs57XJGdVlX3r0XQ65ntY/ATyP4+O38DUEsBAhQACgAAAAgA8CH3XHluM9foAAAArQEAABMAAAAAAAAAAAAAAAAAAAAAAFtDb250ZW50X1R5cGVzXS54bWxQSwECFAAKAAAAAADwIfdcAAAAAAAAAAAAAAAABgAAAAAAAAAAABAAAAAZAQAAX3JlbHMvUEsBAhQACgAAAAgA8CH3XJv9N+qtAAAAKQEAAAsAAAAAAAAAAAAAAAAAPQEAAF9yZWxzLy5yZWxzUEsBAhQACgAAAAAA8CH3XAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAQAAAAEwIAAHdvcmQvUEsBAhQACgAAAAgA8CH3XD2eKt/IAAAAMAEAABEAAAAAAAAAAAAAAAAANgIAAHdvcmQvZG9jdW1lbnQueG1sUEsFBgAAAAAFAAUAIAEAAC0DAAAAAA==';
+const PDF_FIXTURE_BASE64 = 'JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCA2MTIgNzkyXSAvUmVzb3VyY2VzIDw8IC9Gb250IDw8IC9GMSA0IDAgUiA+PiA+PiAvQ29udGVudHMgNSAwIFIgPj4KZW5kb2JqCjQgMCBvYmoKPDwgL1R5cGUgL0ZvbnQgL1N1YnR5cGUgL1R5cGUxIC9CYXNlRm9udCAvSGVsdmV0aWNhID4+CmVuZG9iago1IDAgb2JqCjw8IC9MZW5ndGggNjQgPj4Kc3RyZWFtCkJUIC9GMSAxMiBUZiA3MiA3MjAgVGQgKFBoeXNpY3MgcmV2aXNpb24gbm90ZXMpIFRqIEVUCmVuZHN0cmVhbQplbmRvYmoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNTggMDAwMDAgbiAKMDAwMDAwMDExNSAwMDAwMCBuIAowMDAwMDAwMjQxIDAwMDAwIG4gCjAwMDAwMDAzMTEgMDAwMDAgbiAKdHJhaWxlcgo8PCAvU2l6ZSA2IC9Sb290IDEgMCBSID4+CnN0YXJ0eHJlZgo0MTQKJSVFT0Y=';
+
 describe('built-in tool adapter file and command execution', () => {
   let tmpDir: string;
 
@@ -76,6 +79,58 @@ describe('built-in tool adapter file and command execution', () => {
       content: expect.objectContaining({ changed: true, replacements: 1 }),
     });
     await expect(fs.readFile(path.join(tmpDir, 'nested', 'file.txt'), 'utf8')).resolves.toBe('hi world');
+  });
+
+  it('reads DOCX and PDF text through read_file and locates PDF matches through search_text', async () => {
+    await fs.writeFile(path.join(tmpDir, 'notes.docx'), Buffer.from(DOCX_FIXTURE_BASE64, 'base64'));
+    await fs.writeFile(path.join(tmpDir, 'notes.pdf'), Buffer.from(PDF_FIXTURE_BASE64, 'base64'));
+    const adapter = createBuiltInToolExecutor({
+      workspaceFileAccess: createLocalWorkspaceFileAccess({ projectRoot: tmpDir }),
+    });
+
+    const docxRead = await adapter.execute({
+      toolName: 'read_file',
+      input: { path: 'notes.docx' },
+    });
+    const pdfRead = await adapter.execute({
+      toolName: 'read_file',
+      input: { path: 'notes.pdf' },
+    });
+    const pdfSearch = await adapter.execute({
+      toolName: 'search_text',
+      input: { path: 'notes.pdf', query: 'Physics' },
+    });
+
+    expect(docxRead).toMatchObject({
+      outputKind: 'json',
+      content: { content: expect.stringContaining('Force equals mass times acceleration.') },
+    });
+    expect(pdfRead).toMatchObject({
+      outputKind: 'json',
+      content: { content: expect.stringContaining('[Page 1]\nPhysics revision notes') },
+    });
+    expect(pdfSearch).toMatchObject({
+      outputKind: 'json',
+      content: {
+        matches: [{
+          path: 'notes.pdf',
+          page: 1,
+          preview: 'Physics revision notes',
+        }],
+      },
+    });
+
+    await expect(adapter.execute({
+      toolName: 'edit_file',
+      input: {
+        path: 'notes.docx',
+        oldText: 'Physics',
+        newText: 'Chemistry',
+      },
+    })).rejects.toThrow('DOCX structured editing is not supported by text file tools.');
+    await expect(fs.readFile(path.join(tmpDir, 'notes.docx'))).resolves.toEqual(
+      Buffer.from(DOCX_FIXTURE_BASE64, 'base64'),
+    );
   });
 
   it('returns safe structured file failure facts without exposing host paths', async () => {

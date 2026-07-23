@@ -63,6 +63,33 @@ describe('buildConversationRuns', () => {
       { type: 'tool_call', toolCallId: 'T', toolName: 'write_file', arguments: '{bad-json' },
     ]);
   });
+
+  it('restores a historical document attachment as the original local path', () => {
+    const userHistory = message('EU', user('U', 'R', 'read it'));
+    userHistory.attachments = [{
+      attachment_id: 'attachment:1',
+      message_id: 'U',
+      session_id: 'S1',
+      type: 'file',
+      name: 'notes.pdf',
+      mime_type: 'application/pdf',
+      source_type: 'local_file',
+      source_value: 'C:/materials/notes.pdf',
+      created_at: 'now',
+    }];
+
+    const result = buildConversationRuns({ history: [userHistory] });
+
+    expect(result.runs[0].userMessage.content).toEqual([
+      { type: 'text', text: 'read it' },
+      {
+        type: 'file',
+        path: 'C:/materials/notes.pdf',
+        name: 'notes.pdf',
+        mediaType: 'application/pdf',
+      },
+    ]);
+  });
 });
 
 function base(messageId: string, runId: string) {

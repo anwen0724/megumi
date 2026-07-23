@@ -10,7 +10,7 @@ import {
 import { z } from 'zod';
 import { encodeBase64 } from '@megumi/agent/model-content';
 
-import { IMAGE_INPUT_POLICY } from '../../agent/input';
+import { DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from '../../agent/input';
 
 import type {
   AgentRun,
@@ -51,8 +51,10 @@ export interface ChatHost {
   getContextUsage(request: ChatGetContextUsageUiRequest): Promise<ChatGetContextUsageUiResult>;
   getInputCapabilities(): ChatImageInputCapabilitiesUiResult;
   selectImages(): Promise<ChatSelectImagesUiResult>;
+  selectDocuments(): Promise<ChatSelectDocumentsUiResult>;
   readClipboardImage(): Promise<ChatSelectImagesUiResult>;
   readAttachmentImage(request: ChatReadAttachmentImageUiRequest): Promise<ChatReadAttachmentImageUiResult>;
+  getAttachmentFileStatus(request: ChatGetAttachmentFileStatusUiRequest): Promise<ChatGetAttachmentFileStatusUiResult>;
 }
 
 const IsoDateTimeSchema = z.string().datetime();
@@ -81,13 +83,22 @@ export const SessionMessageSendPayloadSchema = z.object({
   skillSelection: z.object({
     type: z.literal('skill'), name: z.string().min(1), skillPath: z.string().min(1),
   }).strict().optional(),
-  attachments: z.array(z.object({
-    draftAttachmentId: z.string().min(1),
-    type: z.literal('image'),
-    name: z.string().optional(),
-    declaredMimeType: z.string().optional(),
-    source: z.object({ type: z.literal('host_file_reference'), referenceId: z.string().min(1) }).strict(),
-  }).strict()).max(IMAGE_INPUT_POLICY.maxImageCount).optional(),
+  attachments: z.array(z.discriminatedUnion('type', [
+    z.object({
+      draftAttachmentId: z.string().min(1),
+      type: z.literal('image'),
+      name: z.string().optional(),
+      declaredMimeType: z.string().optional(),
+      source: z.object({ type: z.literal('host_file_reference'), referenceId: z.string().min(1) }).strict(),
+    }).strict(),
+    z.object({
+      draftAttachmentId: z.string().min(1),
+      type: z.literal('file'),
+      name: z.string().optional(),
+      declaredMimeType: z.string().optional(),
+      source: z.object({ type: z.literal('host_file_reference'), referenceId: z.string().min(1) }).strict(),
+    }).strict(),
+  ])).max(IMAGE_INPUT_POLICY.maxImageCount + DOCUMENT_INPUT_POLICY.maxDocumentCount).optional(),
   branchMarkerId: z.string().min(1).optional(),
   clientMessageId: z.string().min(1).optional(), createdAt: IsoDateTimeSchema.optional(),
   modelSelection: z.object({ provider_id: z.string().min(1), model_id: z.string().min(1) }).strict(),
@@ -104,8 +115,10 @@ export const RunListBySessionPayloadSchema = z.object({ sessionId: z.string().mi
 export const RunEventsListPayloadSchema = z.object({ runId: z.string().min(1) }).strict();
 export const ImageInputCapabilitiesPayloadSchema = z.object({}).strict();
 export const ImageInputSelectPayloadSchema = z.object({}).strict();
+export const DocumentInputSelectPayloadSchema = z.object({}).strict();
 export const ImageInputClipboardReadPayloadSchema = z.object({}).strict();
 export const AttachmentImageReadPayloadSchema = z.object({ attachmentId: z.string().min(1) }).strict();
+export const AttachmentFileStatusPayloadSchema = z.object({ attachmentId: z.string().min(1) }).strict();
 
 const HostFailureSchema = z.object({
   code: z.string().min(1),
@@ -121,15 +134,31 @@ const SelectedImageUiDtoSchema = z.object({
   previewDataUrl: z.string(),
 }).strict();
 export type SelectedImageUiDto = z.infer<typeof SelectedImageUiDtoSchema>;
+const SelectedDocumentUiDtoSchema = z.object({
+  draftAttachmentId: z.string().min(1),
+  name: z.string().min(1),
+  declaredMimeType: z.string(),
+  sizeBytes: z.number().int().nonnegative(),
+  referenceId: z.string().min(1),
+}).strict();
+export type SelectedDocumentUiDto = z.infer<typeof SelectedDocumentUiDtoSchema>;
 export type ChatImageInputCapabilitiesUiResult = z.infer<typeof ChatImageInputCapabilitiesUiResultSchema>;
 export const ChatImageInputCapabilitiesUiResultSchema = z.object({
   allowedMediaTypes: z.array(z.string()),
   maxImageCount: z.number().int().positive(),
   maxImageBytes: z.number().int().positive(),
   maxTotalBytes: z.number().int().positive(),
+  allowedDocumentMediaTypes: z.array(z.string()),
+  maxDocumentCount: z.number().int().positive(),
+  maxDocumentBytes: z.number().int().positive(),
 }).strict();
 export const ChatSelectImagesUiResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('selected'), images: z.array(SelectedImageUiDtoSchema) }).strict(),
+  z.object({ status: z.literal('cancelled') }).strict(),
+  z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
+]);
+export const ChatSelectDocumentsUiResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('selected'), documents: z.array(SelectedDocumentUiDtoSchema) }).strict(),
   z.object({ status: z.literal('cancelled') }).strict(),
   z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
 ]);
@@ -137,9 +166,17 @@ export const ChatReadAttachmentImageUiResultSchema = z.discriminatedUnion('statu
   z.object({ status: z.literal('ok'), dataUrl: z.string().min(1) }).strict(),
   z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
 ]);
+export const ChatGetAttachmentFileStatusUiResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('available') }).strict(),
+  z.object({ status: z.literal('unavailable') }).strict(),
+  z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
+]);
 export type ChatSelectImagesUiResult = z.infer<typeof ChatSelectImagesUiResultSchema>;
+export type ChatSelectDocumentsUiResult = z.infer<typeof ChatSelectDocumentsUiResultSchema>;
 export type ChatReadAttachmentImageUiRequest = z.infer<typeof AttachmentImageReadPayloadSchema>;
 export type ChatReadAttachmentImageUiResult = z.infer<typeof ChatReadAttachmentImageUiResultSchema>;
+export type ChatGetAttachmentFileStatusUiRequest = z.infer<typeof AttachmentFileStatusPayloadSchema>;
+export type ChatGetAttachmentFileStatusUiResult = z.infer<typeof ChatGetAttachmentFileStatusUiResultSchema>;
 
 const ChatSessionUiDtoSchema = z.object({
   id: z.string().min(1), projectId: z.string().min(1), title: z.string(),
@@ -266,7 +303,7 @@ export interface SessionBranchHostPort {
 
 export type ChatContextUsagePort = Pick<ContextService, 'getSessionUsageSnapshot'>;
 
-export type ImagePickerPort = {
+export type InputAttachmentPickerPort = {
   selectImages(): Promise<
     | { status: 'selected'; images: SelectedImageUiDto[] }
     | { status: 'cancelled' }
@@ -275,6 +312,14 @@ export type ImagePickerPort = {
     | { status: 'selected'; images: SelectedImageUiDto[] }
     | { status: 'cancelled' }
   >;
+  selectDocuments(): Promise<
+    | { status: 'selected'; documents: SelectedDocumentUiDto[] }
+    | { status: 'cancelled' }
+  >;
+};
+
+export type LocalFileAvailabilityPort = {
+  exists(path: string): Promise<boolean>;
 };
 
 export function createChatHost(options: {
@@ -285,7 +330,8 @@ export function createChatHost(options: {
   branchService: SessionBranchHostPort;
   sessionTimelineQuery: SessionTimelineQuery;
   contextService: ChatContextUsagePort;
-  imagePicker?: ImagePickerPort;
+  attachmentPicker?: InputAttachmentPickerPort;
+  localFileAvailability?: LocalFileAvailabilityPort;
 }): ChatHost {
   return {
     async createSession(request) {
@@ -390,26 +436,40 @@ export function createChatHost(options: {
         maxImageCount: IMAGE_INPUT_POLICY.maxImageCount,
         maxImageBytes: IMAGE_INPUT_POLICY.maxImageBytes,
         maxTotalBytes: IMAGE_INPUT_POLICY.maxTotalBytes,
+        allowedDocumentMediaTypes: [...DOCUMENT_INPUT_POLICY.allowedMediaTypes],
+        maxDocumentCount: DOCUMENT_INPUT_POLICY.maxDocumentCount,
+        maxDocumentBytes: DOCUMENT_INPUT_POLICY.maxDocumentBytes,
       };
     },
 
     async selectImages() {
-      if (!options.imagePicker) {
+      if (!options.attachmentPicker) {
         return { status: 'failed', failure: { code: 'image_picker_unavailable', message: 'Image picker is unavailable.' } };
       }
       try {
-        return await options.imagePicker.selectImages();
+        return await options.attachmentPicker.selectImages();
       } catch {
         return { status: 'failed', failure: { code: 'image_picker_failed', message: 'Images could not be selected.' } };
       }
     },
 
+    async selectDocuments() {
+      if (!options.attachmentPicker) {
+        return { status: 'failed', failure: { code: 'document_picker_unavailable', message: 'Document picker is unavailable.' } };
+      }
+      try {
+        return await options.attachmentPicker.selectDocuments();
+      } catch {
+        return { status: 'failed', failure: { code: 'document_picker_failed', message: 'Documents could not be selected.' } };
+      }
+    },
+
     async readClipboardImage() {
-      if (!options.imagePicker) {
+      if (!options.attachmentPicker) {
         return { status: 'failed', failure: { code: 'clipboard_image_unavailable', message: 'Clipboard image input is unavailable.' } };
       }
       try {
-        return await options.imagePicker.readClipboardImage();
+        return await options.attachmentPicker.readClipboardImage();
       } catch (error) {
         return {
           status: 'failed',
@@ -428,6 +488,27 @@ export function createChatHost(options: {
         status: 'ok',
         dataUrl: `data:${result.content.media_type};base64,${encodeBase64(result.content.bytes)}`,
       };
+    },
+
+    async getAttachmentFileStatus(request) {
+      const result = options.sessionService.getAttachment({ attachment_id: request.attachmentId });
+      if (
+        result.status !== 'found'
+        || result.attachment.type !== 'file'
+        || result.attachment.source_type !== 'local_file'
+      ) {
+        return { status: 'unavailable' };
+      }
+      if (!options.localFileAvailability) {
+        return { status: 'failed', failure: { code: 'file_status_unavailable', message: 'Local file status is unavailable.' } };
+      }
+      try {
+        return await options.localFileAvailability.exists(result.attachment.source_value)
+          ? { status: 'available' }
+          : { status: 'unavailable' };
+      } catch {
+        return { status: 'unavailable' };
+      }
     },
 
     async cancelUserInput(request) {
@@ -705,7 +786,7 @@ export interface ChatSendUserInputUiRequest {
   skillSelection?: { type: 'skill'; name: string; skillPath: string };
   attachments?: Array<{
     draftAttachmentId: string;
-    type: 'image';
+    type: 'image' | 'file';
     name?: string;
     declaredMimeType?: string;
     source: { type: 'host_file_reference'; referenceId: string };

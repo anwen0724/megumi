@@ -36,7 +36,7 @@ export type ImageContentBlock = z.infer<typeof ImageContentBlockSchema>;
 
 export const FileContentBlockSchema = z.object({
   type: z.literal('file'),
-  fileId: z.string().min(1),
+  path: z.string().min(1),
   name: z.string().min(1).optional(),
   mediaType: z.string().min(1).optional(),
 }).strict();

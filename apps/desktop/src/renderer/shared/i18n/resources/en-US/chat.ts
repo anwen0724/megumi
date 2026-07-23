@@ -14,6 +14,7 @@ export const chat = {
   composer: {
     label: 'Message composer',
     selectedImages: 'Selected images',
+    selectedAttachments: 'Selected attachments',
     removeImage: 'Remove {{name}}',
     argumentsPlaceholder: 'Add arguments…',
     messagePlaceholder: 'Ask Megumi anything…',
@@ -24,7 +25,10 @@ export const chat = {
     usageUnavailable: 'Usage not available',
     usageHint: 'Open a session or run the agent to calculate usage.',
     messageLabel: 'Message Megumi',
+    attachFiles: 'Attach files',
     attachImages: 'Attach images',
+    attachDocuments: 'Attach documents',
+    removeAttachment: 'Remove attachment {{name}}',
     stop: 'Stop current run',
     send: 'Send message',
     usedPercent: '{{percent}}% used',
@@ -37,6 +41,7 @@ export const chat = {
     },
   },
   timeline: {
+    attachmentUnavailable: 'File unavailable',
     label: 'Chat timeline',
     userMessage: 'User message',
     assistantMessage: 'Megumi message',
@@ -211,6 +216,8 @@ export const chat = {
   notifications: {
     actionFailed: { title: 'Action failed', message: 'The action could not be completed.' },
     imageSelectFailed: { title: 'Images could not be selected', message: 'Try selecting the images again.' },
+    documentSelectFailed: { title: 'Documents could not be selected', message: 'Try selecting the documents again.' },
+    documentLimit: { title: 'Document limit reached', message: 'You can attach up to {{count}} documents at once.' },
     imagePasteFailed: { title: 'Image could not be pasted', message: 'Try copying and pasting the image again.' },
     imageLimit: { title: 'Image limit reached', message: 'You can attach up to {{count}} images.' },
     approvalFailed: { title: 'Approval failed', message: 'The approval response could not be saved.' },

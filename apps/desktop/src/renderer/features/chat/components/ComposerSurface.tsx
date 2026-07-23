@@ -1,8 +1,19 @@
-import { forwardRef, type ClipboardEvent, type FormEvent, type KeyboardEvent, type RefObject } from 'react';
+import {
+  forwardRef,
+  type ClipboardEvent,
+  type FormEvent,
+  type KeyboardEvent,
+  type RefObject,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Bot,
   Brain,
+  FileText,
+  ImagePlus,
   Package,
   Paperclip,
   SendHorizontal,
@@ -21,7 +32,7 @@ import {
 } from './composer-options';
 import { CommandSuggestionPanel } from './CommandSuggestionPanel';
 import { ComposerSelect } from './ComposerSelect';
-import type { ComposerDraftImage } from './composer-types';
+import type { ComposerDraftAttachment } from './composer-types';
 import { formatTokenCount } from '../../../shared/i18n';
 
 export interface ComposerSurfaceProps {
@@ -40,8 +51,9 @@ export interface ComposerSurfaceProps {
   selectedCommandSuggestionIndex: number;
   selectedCommandCompletion: ComposerCommandCompletionUi | null;
   contextUsage?: ChatGetContextUsageUiResult;
-  selectedImages: ComposerDraftImage[];
+  selectedAttachments: ComposerDraftAttachment[];
   canAttachImages: boolean;
+  canAttachDocuments: boolean;
   imageInputNotice?: string;
   onValueChange: (value: string) => void;
   onCommandSuggestionChoose: (item: CommandSuggestionItem) => void;
@@ -51,9 +63,10 @@ export interface ComposerSurfaceProps {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onStop?: () => void;
   onChooseContext?: () => void;
-  onAttachFiles?: () => void;
+  onAttachImages?: () => void;
+  onAttachDocuments?: () => void;
   onPasteImage?: () => void;
-  onRemoveImage: (draftAttachmentId: string) => void;
+  onRemoveAttachment: (draftAttachmentId: string) => void;
 }
 export type ComposerCommandCompletionUi = {
   label: string;
@@ -76,8 +89,9 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
   selectedCommandSuggestionIndex,
   selectedCommandCompletion,
   contextUsage,
-  selectedImages,
+  selectedAttachments,
   canAttachImages,
+  canAttachDocuments,
   imageInputNotice,
   onValueChange,
   onCommandSuggestionChoose,
@@ -86,14 +100,12 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
   onKeyDown,
   onSubmit,
   onStop,
-  onAttachFiles,
+  onAttachImages,
+  onAttachDocuments,
   onPasteImage,
-  onRemoveImage,
+  onRemoveAttachment,
 }, ref) {
   const { t } = useTranslation('chat');
-  function handleAttachFiles() {
-    onAttachFiles?.();
-  }
 
   function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
     const hasImage = Array.from(event.clipboardData.items).some(
@@ -118,12 +130,18 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
       />
       <div className="overflow-visible rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-soft)] transition-shadow duration-150">
         <div data-testid="composer-input-panel" className="px-4 py-3">
-          {selectedImages.length > 0 ? (
-            <div className="mb-3 flex flex-wrap gap-2" aria-label={t('composer.selectedImages')}>
-              {selectedImages.map((image) => (
-                <div key={image.draftAttachmentId} className="group relative h-16 w-16 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
-                  <img src={image.previewDataUrl} alt={image.name} className="h-full w-full object-cover" />
-                  <button type="button" aria-label={t('composer.removeImage', { name: image.name })} onClick={() => onRemoveImage(image.draftAttachmentId)} className="absolute right-1 top-1 rounded bg-black/65 px-1 text-xs text-white opacity-0 group-hover:opacity-100">×</button>
+          {selectedAttachments.length > 0 ? (
+            <div className="mb-3 flex flex-wrap gap-2" aria-label={t('composer.selectedAttachments')}>
+              {selectedAttachments.map((attachment) => attachment.type === 'image' ? (
+                <div key={attachment.draftAttachmentId} className="group relative h-16 w-16 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
+                  <img src={attachment.previewDataUrl} alt={attachment.name} className="h-full w-full object-cover" />
+                  <button type="button" aria-label={t('composer.removeAttachment', { name: attachment.name })} onClick={() => onRemoveAttachment(attachment.draftAttachmentId)} className="absolute right-1 top-1 rounded bg-black/65 px-1 text-xs text-white opacity-0 group-hover:opacity-100">×</button>
+                </div>
+              ) : (
+                <div key={attachment.draftAttachmentId} className="group relative flex h-16 max-w-64 items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 pr-8">
+                  <FileText size={20} className="shrink-0 text-[var(--color-accent)]" aria-hidden="true" />
+                  <span className="truncate text-xs text-[var(--color-text)]">{attachment.name}</span>
+                  <button type="button" aria-label={t('composer.removeAttachment', { name: attachment.name })} onClick={() => onRemoveAttachment(attachment.draftAttachmentId)} className="absolute right-2 top-2 rounded px-1 text-xs text-[var(--color-text-muted)] opacity-0 group-hover:opacity-100">×</button>
                 </div>
               ))}
             </div>
@@ -158,9 +176,12 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
 
         <div data-testid="composer-toolbar" className="flex min-h-12 flex-nowrap items-center justify-between gap-2 px-3 py-2">
           <div className="flex shrink-0 items-center gap-1.5">
-            <IconButton label={t('composer.attachImages')} variant="ghost" size="sm" className="shrink-0" onClick={handleAttachFiles} disabled={!canAttachImages}>
-              <Paperclip size={16} aria-hidden="true" />
-            </IconButton>
+            <AttachmentPicker
+              canAttachImages={canAttachImages}
+              canAttachDocuments={canAttachDocuments}
+              onAttachImages={onAttachImages}
+              onAttachDocuments={onAttachDocuments}
+            />
             <ContextUsageIndicator contextUsage={contextUsage} />
           </div>
 
@@ -232,6 +253,77 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
     </form>
   );
 });
+
+function AttachmentPicker({
+  canAttachImages,
+  canAttachDocuments,
+  onAttachImages,
+  onAttachDocuments,
+}: Pick<
+  ComposerSurfaceProps,
+  'canAttachImages' | 'canAttachDocuments' | 'onAttachImages' | 'onAttachDocuments'
+>) {
+  const { t } = useTranslation('chat');
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeWhenClickingOutside = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', closeWhenClickingOutside);
+    return () => document.removeEventListener('pointerdown', closeWhenClickingOutside);
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative shrink-0">
+      <IconButton
+        label={t('composer.attachFiles')}
+        variant="ghost"
+        size="sm"
+        className="shrink-0"
+        onClick={() => setOpen((current) => !current)}
+        disabled={!canAttachImages && !canAttachDocuments}
+      >
+        <Paperclip size={16} aria-hidden="true" />
+      </IconButton>
+      {open ? (
+        <div
+          role="menu"
+          className="absolute bottom-full left-0 z-50 mb-2 min-w-40 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-1 shadow-[var(--shadow-soft)]"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!canAttachImages}
+            onClick={() => {
+              setOpen(false);
+              onAttachImages?.();
+            }}
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-[var(--color-text)] hover:bg-[var(--color-accent-soft)] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <ImagePlus size={16} aria-hidden="true" />
+            {t('composer.attachImages')}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!canAttachDocuments}
+            onClick={() => {
+              setOpen(false);
+              onAttachDocuments?.();
+            }}
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-[var(--color-text)] hover:bg-[var(--color-accent-soft)] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <FileText size={16} aria-hidden="true" />
+            {t('composer.attachDocuments')}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function CommandCompletionChip({ completion }: { completion: ComposerCommandCompletionUi }) {
   return (

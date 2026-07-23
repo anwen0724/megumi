@@ -133,7 +133,7 @@ function attachmentContent(attachment: SessionMessageAttachment): ContentBlock {
   }
   return {
     type: 'file',
-    fileId: attachment.attachment_id,
+    path: attachment.source_value,
     ...(attachment.name ? { name: attachment.name } : {}),
     ...(attachment.mime_type ? { mediaType: attachment.mime_type } : {}),
   };

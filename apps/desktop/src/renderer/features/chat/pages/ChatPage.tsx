@@ -12,7 +12,7 @@ import { useChatPageController } from '../hooks/use-chat-page-controller';
 import { ChatViewport } from '../layout/ChatViewport';
 import { ComposerDock } from '../layout/ComposerDock';
 import { Composer } from '../components/Composer';
-import type { ComposerDraftImage } from '../components/composer-types';
+import type { ComposerDraftDocument, ComposerDraftImage } from '../components/composer-types';
 import { showToast } from '../../../shared/ui';
 import { rendererI18n } from '../../../shared/i18n';
 import { collectPendingApprovalActivities } from '../approval-overlay';
@@ -64,7 +64,25 @@ export function ChatPage() {
       showToast({ tone: 'error', title: rendererI18n.t('chat:notifications.imageSelectFailed.title'), message: rendererI18n.t('chat:notifications.imageSelectFailed.message') });
       return [];
     }
-    return result.data.status === 'selected' ? result.data.images : [];
+    return result.data.status === 'selected'
+      ? result.data.images.map((image) => ({ ...image, type: 'image' as const }))
+      : [];
+  }, []);
+  const selectDocuments = useCallback(async (): Promise<ComposerDraftDocument[]> => {
+    const result = await window.megumi.session.documentInput.select(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.documentInputSelect, {}),
+    );
+    if (!result.ok || result.data.status === 'failed') {
+      showToast({
+        tone: 'error',
+        title: rendererI18n.t('chat:notifications.documentSelectFailed.title'),
+        message: rendererI18n.t('chat:notifications.documentSelectFailed.message'),
+      });
+      return [];
+    }
+    return result.data.status === 'selected'
+      ? result.data.documents.map((document) => ({ ...document, type: 'file' as const }))
+      : [];
   }, []);
   const pasteImage = useCallback(async (): Promise<ComposerDraftImage[]> => {
     const result = await window.megumi.session.imageInput.readClipboard(
@@ -78,7 +96,9 @@ export function ChatPage() {
       showToast({ tone: 'error', title: rendererI18n.t('chat:notifications.imagePasteFailed.title'), message: rendererI18n.t('chat:notifications.imagePasteFailed.message') });
       return [];
     }
-    return result.data.status === 'selected' ? result.data.images : [];
+    return result.data.status === 'selected'
+      ? result.data.images.map((image) => ({ ...image, type: 'image' as const }))
+      : [];
   }, []);
   const timelineScroll = useTimelineAutoScroll({
     sessionKey: controller.activeRuntimeTimelineSessionKey,
@@ -182,12 +202,13 @@ export function ChatPage() {
             contextUsage={controller.contextUsage}
             imageInputCapabilities={imageInputCapabilities}
             initialValue={composerDraft.text}
-            initialImages={composerDraft.images}
+            initialAttachments={composerDraft.attachments}
             onSubmit={controller.handleSubmit}
             onStop={controller.handleStop}
             onHeightChange={setComposerHeight}
             getCommandSuggestions={getCommandSuggestions}
             onSelectImages={selectImages}
+            onSelectDocuments={selectDocuments}
             onPasteImage={pasteImage}
             onDraftChange={setComposerDraft}
           />
@@ -228,12 +249,13 @@ export function ChatPage() {
                 contextUsage={controller.contextUsage}
                 imageInputCapabilities={imageInputCapabilities}
                 initialValue={composerDraft.text}
-                initialImages={composerDraft.images}
+                initialAttachments={composerDraft.attachments}
                 seedTextKey={null}
                 seedText={null}
                 onSubmit={controller.handleSubmit}
                 onStop={controller.handleStop}
                 onSelectImages={selectImages}
+                onSelectDocuments={selectDocuments}
                 onPasteImage={pasteImage}
                 onDraftChange={setComposerDraft}
                 onChooseContext={() => undefined}

@@ -5,15 +5,17 @@ export type RawUserInput = {
   attachments?: RawUserInputAttachment[];
 };
 
+import type { ProcessedInputDocument, RawUserInputDocument } from './document-input';
 import type { ProcessedInputImage, RawUserInputImage } from './image-input';
 
-export type RawUserInputAttachment = RawUserInputImage;
+export type RawUserInputAttachment = RawUserInputImage | RawUserInputDocument;
+export type ProcessedInputAttachment = ProcessedInputImage | ProcessedInputDocument;
 
 export type ParsedUserInput =
   | {
       type: 'message';
       text: string;
-      attachments: ProcessedInputImage[];
+      attachments: ProcessedInputAttachment[];
     }
   | {
       type: 'command';
@@ -31,7 +33,12 @@ export type InputFailure = {
     | 'image_format_unsupported'
     | 'image_mime_mismatch'
     | 'image_read_failed'
-    | 'command_image_unsupported';
+    | 'document_count_exceeded'
+    | 'document_too_large'
+    | 'document_format_unsupported'
+    | 'document_mime_mismatch'
+    | 'document_reference_unavailable'
+    | 'command_attachment_unsupported';
   message: string;
   details?: Record<string, unknown>;
 };

@@ -18,6 +18,7 @@ export const chat = {
   composer: {
     label: '消息编辑器',
     selectedImages: '已选图片',
+    selectedAttachments: '已选附件',
     removeImage: '移除 {{name}}',
     argumentsPlaceholder: '添加参数…',
     messagePlaceholder: '向 Megumi 提问…',
@@ -28,7 +29,10 @@ export const chat = {
     usageUnavailable: '暂无用量信息',
     usageHint: '打开会话或运行 Agent 后即可计算用量。',
     messageLabel: '给 Megumi 发送消息',
+    attachFiles: '添加附件',
     attachImages: '附加图片',
+    attachDocuments: '附加文档',
+    removeAttachment: '移除附件 {{name}}',
     stop: '停止当前运行',
     send: '发送消息',
     usedPercent: '已使用 {{percent}}%',
@@ -41,6 +45,7 @@ export const chat = {
     },
   },
   timeline: {
+    attachmentUnavailable: '文件不可用',
     label: '聊天时间线',
     userMessage: '用户消息',
     assistantMessage: 'Megumi 消息',
@@ -215,6 +220,8 @@ export const chat = {
   notifications: {
     actionFailed: { title: '操作失败', message: '无法完成该操作。' },
     imageSelectFailed: { title: '无法选择图片', message: '请重新选择图片。' },
+    documentSelectFailed: { title: '无法选择文档', message: '请重新选择文档。' },
+    documentLimit: { title: '文档数量已达上限', message: '一次最多可附加 {{count}} 个文档。' },
     imagePasteFailed: { title: '无法粘贴图片', message: '请重新复制并粘贴图片。' },
     imageLimit: { title: '已达到图片上限', message: '最多可以附加 {{count}} 张图片。' },
     approvalFailed: { title: '审批失败', message: '无法保存审批结果。' },

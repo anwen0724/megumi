@@ -122,6 +122,7 @@ describe('SessionService', () => {
       session_id: 'S1',
       content: [{ type: 'text', text: '看图' }],
       attachments: [{
+        type: 'image',
         name: 'error.png',
         media_type: 'image/png',
         byte_length: 8,
@@ -150,6 +151,47 @@ describe('SessionService', () => {
     expect(service.getActivePath({ session_id: 'S1' })).toMatchObject({
       status: 'ok',
       entries: [{ message_id: 'M1' }],
+    });
+  });
+
+  it('persists a document as its original local-file reference without creating a managed copy', async () => {
+    const { service, workspaceId, managedFiles } = createService();
+    service.createSession({ workspace_id: workspaceId, title: 'Session' });
+
+    const result = await service.saveUserMessage({
+      message_id: 'M-document',
+      session_id: 'S1',
+      content: [{ type: 'text', text: '总结文档' }],
+      attachments: [{
+        type: 'file',
+        name: 'notes.docx',
+        media_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        local_path: 'C:/materials/notes.docx',
+        size_bytes: 2048,
+      }],
+      created_at: '2026-07-04T00:01:00.000Z',
+    });
+
+    expect(result).toMatchObject({
+      status: 'saved',
+      message: {
+        attachments: [{
+          type: 'file',
+          source_type: 'local_file',
+          source_value: 'C:/materials/notes.docx',
+        }],
+      },
+    });
+    expect(managedFiles.size).toBe(0);
+    expect(service.listMessages({ session_id: 'S1' })).toMatchObject({
+      status: 'ok',
+      messages: [{
+        attachments: [{
+          type: 'file',
+          source_type: 'local_file',
+          source_value: 'C:/materials/notes.docx',
+        }],
+      }],
     });
   });
 
@@ -292,7 +334,7 @@ describe('SessionService', () => {
     const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
     const saved = await service.saveUserMessage({
       message_id: 'M-image', session_id: 'S1', content: [],
-      attachments: [{ name: 'image.png', media_type: 'image/png', byte_length: bytes.byteLength, bytes }],
+      attachments: [{ type: 'image', name: 'image.png', media_type: 'image/png', byte_length: bytes.byteLength, bytes }],
       created_at: '2026-07-04T00:01:00.000Z',
     });
     expect(saved.status).toBe('saved');
@@ -302,7 +344,7 @@ describe('SessionService', () => {
 
     const failed = await service.saveUserMessage({
       message_id: 'M-missing', session_id: 'missing', content: [],
-      attachments: [{ name: 'orphan.png', media_type: 'image/png', byte_length: bytes.byteLength, bytes }],
+      attachments: [{ type: 'image', name: 'orphan.png', media_type: 'image/png', byte_length: bytes.byteLength, bytes }],
       created_at: '2026-07-04T00:02:00.000Z',
     });
     expect(failed).toMatchObject({ status: 'failed', failure: { code: 'session_not_found' } });

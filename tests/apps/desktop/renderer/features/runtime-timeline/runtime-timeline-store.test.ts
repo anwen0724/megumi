@@ -475,6 +475,7 @@ describe('runtime timeline store', () => {
       text: '',
       attachments: [{
         draftAttachmentId: 'draft-image-1',
+        type: 'image',
         name: 'diagram.png',
         declaredMimeType: 'image/png',
       }],

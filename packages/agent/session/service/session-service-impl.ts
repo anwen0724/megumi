@@ -101,23 +101,37 @@ class DefaultSessionService implements SessionService {
   async saveUserMessage(request: SaveUserMessageRequest): Promise<SaveUserMessageResult> {
     const imported: SessionMessageAttachment[] = [];
     try {
-      for (const image of request.attachments ?? []) {
+      for (const attachment of request.attachments ?? []) {
+        const attachmentId = this.attachmentId();
+        if (attachment.type === 'file') {
+          imported.push({
+            attachment_id: attachmentId,
+            message_id: request.message_id,
+            session_id: request.session_id,
+            type: 'file',
+            name: attachment.name,
+            mime_type: attachment.media_type,
+            source_type: 'local_file',
+            source_value: attachment.local_path,
+            created_at: request.created_at,
+          });
+          continue;
+        }
         if (!this.options.attachmentFileStore) {
           return { status: 'failed', failure: { code: 'attachment_store_unavailable', message: 'Managed attachment storage is unavailable.' } };
         }
-        const attachmentId = this.attachmentId();
         const stored = await this.options.attachmentFileStore.write({
           attachmentId,
-          mediaType: image.media_type,
-          bytes: image.bytes,
+          mediaType: attachment.media_type,
+          bytes: attachment.bytes,
         });
         imported.push({
           attachment_id: attachmentId,
           message_id: request.message_id,
           session_id: request.session_id,
           type: 'image',
-          name: image.name,
-          mime_type: image.media_type,
+          name: attachment.name,
+          mime_type: attachment.media_type,
           source_type: 'host_reference',
           source_value: stored.referenceId,
           created_at: request.created_at,
@@ -173,6 +187,17 @@ class DefaultSessionService implements SessionService {
       return result;
     } catch (error) {
       await this.cleanupImportedAttachments(imported);
+      return failed(error);
+    }
+  }
+
+  getAttachment(request: { attachment_id: string }) {
+    try {
+      const attachment = this.options.repository.findAttachmentById(request.attachment_id);
+      return attachment
+        ? { status: 'found' as const, attachment }
+        : { status: 'not_found' as const };
+    } catch (error) {
       return failed(error);
     }
   }
@@ -660,7 +685,9 @@ class DefaultSessionService implements SessionService {
 
   private async cleanupImportedAttachments(attachments: SessionMessageAttachment[]): Promise<void> {
     if (!this.options.attachmentFileStore) return;
-    await Promise.all(attachments.map((attachment) => (
+    await Promise.all(attachments.filter((attachment) => (
+      attachment.source_type === 'host_reference'
+    )).map((attachment) => (
       this.options.attachmentFileStore!.delete(attachment.source_value).catch(() => undefined)
     )));
   }

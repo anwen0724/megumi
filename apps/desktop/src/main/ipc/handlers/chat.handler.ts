@@ -17,7 +17,9 @@ import {
   ChatSendUserInputUiPayloadSchema,
   ChatImageInputCapabilitiesUiResultSchema,
   ChatSelectImagesUiResultSchema,
+  ChatSelectDocumentsUiResultSchema,
   ChatReadAttachmentImageUiResultSchema,
+  ChatGetAttachmentFileStatusUiResultSchema,
   type ProductHostInterface,
 } from '@megumi/product/host-interface';
 import type { RuntimeEvent } from '@megumi/product/runtime-events';
@@ -43,8 +45,10 @@ import {
   SessionTimelineListRequestSchema,
   ImageInputCapabilitiesGetRequestSchema,
   ImageInputSelectRequestSchema,
+  DocumentInputSelectRequestSchema,
   ImageInputClipboardReadRequestSchema,
   AttachmentImageReadRequestSchema,
+  AttachmentFileStatusRequestSchema,
   type CommandSuggestionsPayload,
   type RunEventsListPayload,
   type RunListBySessionPayload,
@@ -58,6 +62,8 @@ import {
   type SessionMessageSendPayload,
   type SessionTimelineListPayload,
   type AttachmentImageReadPayload,
+  type AttachmentFileStatusPayload,
+  type DocumentInputSelectPayload,
 } from '../schemas';
 
 export interface ChatHandlersService {
@@ -164,6 +170,16 @@ export function registerChatHandlers(
     mapError: mapChatIpcError,
   }));
 
+  ipcMain.handle(IPC_CHANNELS.chat.documentInputSelect, createIpcRequestHandler({
+    channel: IPC_CHANNELS.chat.documentInputSelect,
+    requestSchema: DocumentInputSelectRequestSchema,
+    responseSchema: ChatSelectDocumentsUiResultSchema,
+    logger: options.logger,
+    handle: (_request: RuntimeIpcRequest<DocumentInputSelectPayload, typeof IPC_CHANNELS.chat.documentInputSelect>) =>
+      service.host.chat.selectDocuments(),
+    mapError: mapChatIpcError,
+  }));
+
   ipcMain.handle(IPC_CHANNELS.chat.imageInputClipboardRead, createIpcRequestHandler({
     channel: IPC_CHANNELS.chat.imageInputClipboardRead,
     requestSchema: ImageInputClipboardReadRequestSchema,
@@ -180,6 +196,16 @@ export function registerChatHandlers(
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<AttachmentImageReadPayload, typeof IPC_CHANNELS.chat.attachmentImageRead>) =>
       service.host.chat.readAttachmentImage(request.payload),
+    mapError: mapChatIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.chat.attachmentFileStatus, createIpcRequestHandler({
+    channel: IPC_CHANNELS.chat.attachmentFileStatus,
+    requestSchema: AttachmentFileStatusRequestSchema,
+    responseSchema: ChatGetAttachmentFileStatusUiResultSchema,
+    logger: options.logger,
+    handle: (request: RuntimeIpcRequest<AttachmentFileStatusPayload, typeof IPC_CHANNELS.chat.attachmentFileStatus>) =>
+      service.host.chat.getAttachmentFileStatus(request.payload),
     mapError: mapChatIpcError,
   }));
 

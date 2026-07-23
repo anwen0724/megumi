@@ -3,14 +3,17 @@ import type { RawToolResult } from '../contracts/tool-contracts';
 import { inputRecord, requireString } from './input';
 import type { BuiltInToolContext } from './types';
 import { withFileFailure } from './file-failure';
+import { assertTextMutationTarget } from './text-file-capability';
 
 export async function executeEditFile(
   context: BuiltInToolContext,
   input: unknown,
 ): Promise<RawToolResult> {
   const record = inputRecord(input);
+  const targetPath = requireString(record, 'path');
+  assertTextMutationTarget(targetPath);
   const result = await withFileFailure('edit', () => context.workspaceFileAccess.replaceText({
-    path: requireString(record, 'path'),
+    path: targetPath,
     oldText: requireString(record, 'oldText'),
     newText: requireString(record, 'newText'),
     replaceAll: Boolean(record.replaceAll),

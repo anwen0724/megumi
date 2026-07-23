@@ -229,12 +229,23 @@ class DefaultAgentRunService implements AgentRunService {
       session_id: sessionId,
       run_id: runId,
       content: [{ type: 'text', text: textForRun(parsedInput, commandRoute.command_result) }],
-      attachments: parsedInput.attachments.map((image) => ({
-        name: image.name,
-        media_type: image.media_type,
-        byte_length: image.byte_length,
-        bytes: image.bytes,
-      })),
+      attachments: parsedInput.attachments.map((attachment) => (
+        attachment.type === 'image'
+          ? {
+              type: 'image' as const,
+              name: attachment.name,
+              media_type: attachment.media_type,
+              byte_length: attachment.byte_length,
+              bytes: attachment.bytes,
+            }
+          : {
+              type: 'file' as const,
+              name: attachment.name,
+              media_type: attachment.media_type,
+              local_path: attachment.local_path,
+              size_bytes: attachment.size_bytes,
+            }
+      )),
       ...(branchParent.parent_entry_id ? { parent_entry_id: branchParent.parent_entry_id } : {}),
       created_at: this.clock.now(),
     });
@@ -1661,7 +1672,7 @@ function currentRunFromSavedUserMessage(
             }
           : {
               type: 'file' as const,
-              fileId: attachment.attachment_id,
+              path: attachment.source_value,
               ...(attachment.name ? { name: attachment.name } : {}),
               ...(attachment.mime_type ? { mediaType: attachment.mime_type } : {}),
             }),

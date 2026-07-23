@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import path from 'node:path';
 import { createInputService, type RawUserInputAttachment } from '@megumi/agent/input';
 
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1]);
@@ -56,7 +57,11 @@ describe('Input Service image processing', () => {
       },
     });
     if (result.status === 'ok' && result.parsed_user_input.type === 'message') {
-      expect(result.parsed_user_input.attachments[0].bytes).toBe(png);
+      const firstAttachment = result.parsed_user_input.attachments[0];
+      expect(firstAttachment?.type).toBe('image');
+      if (firstAttachment?.type === 'image') {
+        expect(firstAttachment.bytes).toBe(png);
+      }
     }
   });
 
@@ -70,6 +75,46 @@ describe('Input Service image processing', () => {
     });
   });
 
+  it('resolves a selected document to its canonical local-file reference without reading or copying it', async () => {
+    const selectedPath = path.resolve('C:/materials/notes.pdf');
+    const service = createInputService({
+      fileReader: {
+        async readFile() {
+          throw new Error('Document processing must not read document bytes.');
+        },
+        async resolveLocalFile(source) {
+          expect(source).toEqual({ type: 'host_file_reference', reference_id: 'document:1' });
+          return { path: selectedPath, sizeBytes: 4096 };
+        },
+      },
+    });
+
+    await expect(service.processUserInput({
+      user_input: {
+        text: '总结这份资料',
+        attachments: [{
+          draft_attachment_id: 'draft:document:1',
+          type: 'file',
+          name: 'notes.pdf',
+          declared_mime_type: 'application/pdf',
+          source: { type: 'host_file_reference', reference_id: 'document:1' },
+        }],
+      },
+    })).resolves.toMatchObject({
+      status: 'ok',
+      parsed_user_input: {
+        type: 'message',
+        attachments: [{
+          type: 'file',
+          name: 'notes.pdf',
+          media_type: 'application/pdf',
+          local_path: selectedPath,
+          size_bytes: 4096,
+        }],
+      },
+    });
+  });
+
   it('rejects disguised formats, MIME mismatches, and images on commands', async () => {
     const service = createService({ bad: new TextEncoder().encode('<svg/>'), png });
     await expect(service.processUserInput({ user_input: { text: 'x', attachments: [image('bad')] } })).resolves.toMatchObject({
@@ -79,7 +124,7 @@ describe('Input Service image processing', () => {
       status: 'failed', failure: { code: 'image_mime_mismatch' },
     });
     await expect(service.processUserInput({ user_input: { text: '/compact', attachments: [image('png')] } })).resolves.toMatchObject({
-      status: 'failed', failure: { code: 'command_image_unsupported' },
+      status: 'failed', failure: { code: 'command_attachment_unsupported' },
     });
   });
 });

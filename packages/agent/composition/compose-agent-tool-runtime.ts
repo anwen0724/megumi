@@ -17,6 +17,7 @@ import { createWorkspacePathPolicyService } from '../workspace';
 
 export interface LocalWorkspaceFileSystem {
   readFile(path: string, encoding: 'utf8'): Promise<string>;
+  readBinaryFile?(path: string): Promise<Uint8Array>;
   writeFile(path: string, content: string, encoding: 'utf8'): Promise<void>;
   mkdir(path: string, options: { recursive: true }): Promise<unknown>;
   stat(path: string): Promise<{ isFile(): boolean; isDirectory(): boolean; size: number }>;
@@ -75,10 +76,25 @@ export function createLocalWorkspaceFileAccess(input: {
   fileSystem?: LocalWorkspaceFileSystem;
   workspacePathPolicyService?: WorkspacePathPolicyService;
 }): WorkspaceFileAccess {
-  const fileSystem = input.fileSystem ?? fs;
+  const fileSystem: LocalWorkspaceFileSystem = input.fileSystem ?? {
+    ...fs,
+    readBinaryFile: async (filePath) => new Uint8Array(await fs.readFile(filePath)),
+  };
   const workspacePathPolicyService = input.workspacePathPolicyService ?? createWorkspacePathPolicyService();
 
   return {
+    async readBinaryFile(request) {
+      const resolved = resolveReadablePath(workspacePathPolicyService, input.projectRoot, request.path);
+      if (!fileSystem.readBinaryFile) {
+        throw new Error('Binary file reading is unavailable.');
+      }
+      const bytes = await fileSystem.readBinaryFile(resolved.absolutePath);
+      return {
+        path: resolved.relativePath,
+        bytes: new Uint8Array(bytes),
+        sizeBytes: bytes.byteLength,
+      };
+    },
     async readFile(request) {
       const resolved = resolveReadablePath(workspacePathPolicyService, input.projectRoot, request.path);
       const rawContent = await fileSystem.readFile(resolved.absolutePath, 'utf8');

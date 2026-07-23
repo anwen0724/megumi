@@ -7,6 +7,13 @@ import type { WebSearchService } from './web-search';
 import type { WebFetchService } from './web-fetch';
 
 export interface WorkspaceFileAccess {
+  readBinaryFile?(input: {
+    path: string;
+  }): Promise<{
+    path: string;
+    bytes: Uint8Array;
+    sizeBytes: number;
+  }>;
   readFile(input: {
     path: string;
   }): Promise<{

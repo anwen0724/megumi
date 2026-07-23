@@ -194,6 +194,7 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
   const inputService = createInputService({
     fileReader: options.inputFileReader ?? {
       readFile: async () => { throw new Error('Host image file reading is unavailable.'); },
+      resolveLocalFile: async () => { throw new Error('Host document file resolution is unavailable.'); },
     },
   });
   const settingsService = resolveSettingsService(options.appSettingsProvider) ?? createSettingsService({

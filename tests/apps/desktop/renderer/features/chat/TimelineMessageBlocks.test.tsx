@@ -112,6 +112,7 @@ describe('TimelineMessage canonical block rendering', () => {
           blockId: 'user-attachment-1',
           kind: 'user_attachment',
           attachmentId: 'attachment-1',
+          attachmentType: 'image',
           name: 'error.png',
           mediaType: 'image/png',
           sizeBytes: 1024,

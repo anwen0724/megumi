@@ -74,7 +74,7 @@ function renderRun(run: ConversationRun): string {
             return { type: 'text' as const, text: '[Image attachment included as structured content below]' };
           }
           if (block.type === 'file') {
-            return { type: 'text' as const, text: `[File attachment: ${block.name ?? block.fileId}]` };
+            return { type: 'text' as const, text: `[File attachment: ${block.name ?? block.path} at ${block.path}]` };
           }
           return block;
         }),
