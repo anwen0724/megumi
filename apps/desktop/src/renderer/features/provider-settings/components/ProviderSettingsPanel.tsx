@@ -507,7 +507,7 @@ export function ProviderSettingsPanel() {
                 </FormGroup>
 
                 <FormGroup title={t('provider.models')} bordered>
-                  <div className="overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-app-bg)]/35">
+                  <div className="max-h-[min(24rem,40vh)] overflow-y-auto overscroll-contain rounded-md border border-[var(--color-border)] bg-[var(--color-app-bg)]/35 [scrollbar-gutter:stable]">
                     {selectedForm.models.map((model, index) => (
                       <div key={model.modelId} className={cx('flex items-center gap-3 px-3 py-2.5', index > 0 ? 'border-t border-[var(--color-border)]' : undefined)}>
                         <div className="min-w-0 flex-1">
