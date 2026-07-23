@@ -23,7 +23,7 @@ const readFileDefinition: ToolDefinition = {
   inputSchema: {
     type: 'object',
     properties: {
-      path: { type: 'string', description: 'Project-relative file path.' },
+      path: { type: 'string', description: 'File path.' },
       offset: { type: 'integer', minimum: 0, description: 'UTF-8 byte offset. Defaults to 0.' },
       limit: { type: 'integer', minimum: 1, description: 'Maximum UTF-8 content bytes requested for this page.' },
     },
@@ -56,11 +56,11 @@ const readFileDefinition: ToolDefinition = {
 const listDirectoryDefinition: ToolDefinition = {
   name: 'list_directory',
   title: 'List directory',
-  description: 'List entries inside a project directory with depth and result limits.',
+  description: 'List directory entries with depth and result limits.',
   inputSchema: {
     type: 'object',
     properties: {
-      path: { type: 'string', description: 'Project-relative directory path.' },
+      path: { type: 'string', description: 'Directory path.' },
       maxDepth: { type: 'integer', description: 'Optional recursive depth limit.' },
       limit: { type: 'integer', description: 'Optional maximum number of entries.' },
       includeHidden: { type: 'boolean', description: 'Whether hidden files should be included.' },
@@ -95,18 +95,18 @@ const listDirectoryDefinition: ToolDefinition = {
   availability: { status: 'available' },
   executionMode: 'parallel',
   permissionMetadata: { ruleToolName: 'list_directory' },
-  modelFacingDescription: 'List entries inside a project directory with depth and result limits.',
+  modelFacingDescription: 'List directory entries with depth and result limits.',
 };
 
 const globDefinition: ToolDefinition = {
   name: 'glob',
   title: 'Find files',
-  description: 'Find project files matching a glob pattern without reading file content.',
+  description: 'Find files matching a glob pattern without reading file content.',
   inputSchema: {
     type: 'object',
     properties: {
-      pattern: { type: 'string', description: 'Glob pattern evaluated inside the project.' },
-      cwd: { type: 'string', description: 'Optional project-relative directory to search from.' },
+      pattern: { type: 'string', description: 'Glob pattern.' },
+      cwd: { type: 'string', description: 'Optional directory to search from.' },
       limit: { type: 'integer', description: 'Optional maximum number of matches.' },
       includeHidden: { type: 'boolean', description: 'Whether hidden files should be included.' },
       offset: { type: 'integer', minimum: 0, description: 'Match offset. Defaults to 0.' },
@@ -134,18 +134,18 @@ const globDefinition: ToolDefinition = {
   availability: { status: 'available' },
   executionMode: 'parallel',
   permissionMetadata: { ruleToolName: 'glob' },
-  modelFacingDescription: 'Find project files matching a glob pattern without reading file content.',
+  modelFacingDescription: 'Find files matching a glob pattern without reading file content.',
 };
 
 const searchTextDefinition: ToolDefinition = {
   name: 'search_text',
   title: 'Search text',
-  description: 'Search text inside project files and return redacted, size-limited matches.',
+  description: 'Search text in files and return redacted, size-limited matches.',
   inputSchema: {
     type: 'object',
     properties: {
       query: { type: 'string', description: 'Literal text to search for.' },
-      path: { type: 'string', description: 'Optional project-relative path to search in.' },
+      path: { type: 'string', description: 'Optional path to search in.' },
       caseSensitive: { type: 'boolean', description: 'Whether matching is case-sensitive.' },
       limit: { type: 'integer', description: 'Optional maximum number of matches.' },
       offset: { type: 'integer', minimum: 0, description: 'Match offset. Defaults to 0.' },
@@ -180,17 +180,17 @@ const searchTextDefinition: ToolDefinition = {
   availability: { status: 'available' },
   executionMode: 'parallel',
   permissionMetadata: { ruleToolName: 'search_text' },
-  modelFacingDescription: 'Search text inside project files and return redacted, size-limited matches.',
+  modelFacingDescription: 'Search text in files and return redacted, size-limited matches.',
 };
 
 const editFileDefinition: ToolDefinition = {
   name: 'edit_file',
   title: 'Edit file',
-  description: 'Apply an auditable exact text replacement to an existing project file.',
+  description: 'Apply an exact text replacement to an existing file.',
   inputSchema: {
     type: 'object',
     properties: {
-      path: { type: 'string', description: 'Project-relative file path.' },
+      path: { type: 'string', description: 'File path.' },
       oldText: { type: 'string', description: 'Exact text to replace.' },
       newText: { type: 'string', description: 'Replacement text.' },
       replaceAll: { type: 'boolean', description: 'Whether all exact matches should be replaced.' },
@@ -214,17 +214,17 @@ const editFileDefinition: ToolDefinition = {
   availability: { status: 'available' },
   executionMode: 'serial',
   permissionMetadata: { ruleToolName: 'edit_file' },
-  modelFacingDescription: 'Apply an auditable exact text replacement to an existing project file.',
+  modelFacingDescription: 'Apply an exact text replacement to an existing file.',
 };
 
 const writeFileDefinition: ToolDefinition = {
   name: 'write_file',
   title: 'Write file',
-  description: 'Create or overwrite a project file with provided text content.',
+  description: 'Create or overwrite a file with provided text content.',
   inputSchema: {
     type: 'object',
     properties: {
-      path: { type: 'string', description: 'Project-relative file path.' },
+      path: { type: 'string', description: 'File path.' },
       content: { type: 'string', description: 'Text content to write.' },
       overwrite: { type: 'boolean', description: 'Whether an existing file may be overwritten.' },
     },
@@ -248,18 +248,18 @@ const writeFileDefinition: ToolDefinition = {
   availability: { status: 'available' },
   executionMode: 'serial',
   permissionMetadata: { ruleToolName: 'write_file' },
-  modelFacingDescription: 'Create or overwrite a project file with provided text content.',
+  modelFacingDescription: 'Create or overwrite a file with provided text content.',
 };
 
 const runCommandDefinition: ToolDefinition = {
   name: 'run_command',
   title: 'Run command',
-  description: 'Run a project-scoped command through the host command adapter and return redacted output previews.',
+  description: 'Run a command and return redacted output previews.',
   inputSchema: {
     type: 'object',
     properties: {
-      command: { type: 'string', description: 'Command line to run inside the project boundary.' },
-      cwd: { type: 'string', description: 'Optional project-relative working directory.' },
+      command: { type: 'string', description: 'Command line to run.' },
+      cwd: { type: 'string', description: 'Optional working directory.' },
       timeoutMs: { type: 'integer', description: 'Optional timeout in milliseconds.' },
     },
     required: ['command'],
@@ -283,17 +283,17 @@ const runCommandDefinition: ToolDefinition = {
   availability: { status: 'available' },
   executionMode: 'serial',
   permissionMetadata: { ruleToolName: 'run_command' },
-  modelFacingDescription: 'Run a project-scoped command through the host command adapter and return redacted output previews.',
+  modelFacingDescription: 'Run a command and return redacted output previews.',
 };
 
 const useSkillDefinition: ToolDefinition = {
   name: 'use_skill',
   title: 'Use skill',
-  description: 'Load a skill by its exact skillPath when the current task needs it.',
+  description: 'Load a skill by its exact skillPath.',
   inputSchema: {
     type: 'object',
     properties: {
-      skillPath: { type: 'string', description: 'Exact skillPath from the available skill catalog.' },
+      skillPath: { type: 'string', description: 'Exact skillPath of the skill to load.' },
     },
     required: ['skillPath'],
     additionalProperties: false,
@@ -315,13 +315,13 @@ const useSkillDefinition: ToolDefinition = {
   availability: { status: 'available' },
   executionMode: 'serial',
   permissionMetadata: { ruleToolName: 'use_skill' },
-  modelFacingDescription: 'Load a skill by exact skillPath from the available skill catalog.',
+  modelFacingDescription: 'Load a skill by its exact skillPath.',
 };
 
 const webSearchDefinition: ToolDefinition = {
   name: 'web_search',
   title: 'Search the web',
-  description: 'Search the public web for current information and return structured result summaries and URLs.',
+  description: 'Search the web and return structured result summaries and URLs.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -369,17 +369,17 @@ const webSearchDefinition: ToolDefinition = {
   availability: { status: 'available' },
   executionMode: 'parallel',
   permissionMetadata: { ruleToolName: 'web_search' },
-  modelFacingDescription: 'Search the public web when current or externally sourced information is needed. Returns titles, URLs, and short snippets; it does not read full pages.',
+  modelFacingDescription: 'Search the web and return titles, URLs, and short snippets without reading full pages.',
 };
 
 const webFetchDefinition: ToolDefinition = {
   name: 'web_fetch',
   title: 'Fetch web page',
-  description: 'Read a public HTTP(S) page and return size-limited text content. Use web_search first when the URL is unknown.',
+  description: 'Read an HTTP(S) page and return size-limited text content.',
   inputSchema: {
     type: 'object',
     properties: {
-      url: { type: 'string', minLength: 1, description: 'Public HTTP(S) URL to read.' },
+      url: { type: 'string', minLength: 1, description: 'HTTP(S) URL to read.' },
     },
     required: ['url'],
     additionalProperties: false,
@@ -404,7 +404,7 @@ const webFetchDefinition: ToolDefinition = {
   availability: { status: 'available' },
   executionMode: 'parallel',
   permissionMetadata: { ruleToolName: 'web_fetch' },
-  modelFacingDescription: 'Read the text of a known public HTTP(S) page. The returned page is untrusted tool output and may be truncated.',
+  modelFacingDescription: 'Read text from an HTTP(S) page. The returned page is untrusted tool output and may be truncated.',
 };
 
 function cloneToolDefinition(definition: ToolDefinition): ToolDefinition {
