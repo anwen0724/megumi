@@ -17,7 +17,7 @@ describe('final Agent database schema', () => {
 
   afterEach(() => database.close());
 
-  it('contains exactly the 14 durable business tables', () => {
+  it('contains exactly the remaining durable business tables', () => {
     const tables = (database.prepare(`
       SELECT name FROM sqlite_master
       WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle_%'
@@ -32,19 +32,14 @@ describe('final Agent database schema', () => {
       'message_id', 'session_id', 'run_id', 'message_kind', 'message_json', 'created_at', 'completed_at',
     ]);
     expect(columns(database, 'workspace_changes')).toContain('run_id');
-    expect(columns(database, 'artifacts')).toContain('run_id');
-    expect(columns(database, 'artifact_versions')).toContain('created_by_run_id');
 
-    for (const table of ['session_messages', 'workspace_changes', 'artifacts', 'artifact_versions']) {
+    for (const table of ['session_messages', 'workspace_changes']) {
       expect(foreignKeys(database, table).map((key) => key.table)).not.toContain('agent_runs');
     }
-    expect(foreignKeys(database, 'artifacts')).toContainEqual(expect.objectContaining({
-      table: 'artifact_versions',
-    }));
     expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   });
 
-  it('does not retain runtime, approval, usage, or diagnostic tables', () => {
+  it('does not retain removed runtime, Artifact, or Memory tables', () => {
     for (const table of [
       'agent_runs',
       'agent_run_approval_requests',
@@ -52,6 +47,11 @@ describe('final Agent database schema', () => {
       'skill_usage_record',
       'memory_recall_traces',
       'memory_capture_attempts',
+      'memory_records',
+      'memory_markdown_mirrors',
+      'artifacts',
+      'artifact_versions',
+      'artifact_source_refs',
     ]) {
       expect(tableExists(database, table)).toBe(false);
     }

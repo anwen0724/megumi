@@ -39,10 +39,6 @@ const mocks = vi.hoisted(() => {
       createVersion: vi.fn(),
       updateStatus: vi.fn(),
       reference: vi.fn(),
-      plan: {
-        getByRun: vi.fn(),
-        updateStatus: vi.fn(),
-      },
     },
     settings: {
       get: vi.fn(),
@@ -88,94 +84,6 @@ const mocks = vi.hoisted(() => {
     migrateDatabase: vi.fn(),
     agentHost,
     composeProduct: vi.fn(),
-    ArtifactRepository: vi.fn(function ArtifactRepository(
-      this: { database?: unknown },
-      database: unknown,
-    ) {
-      this.database = database;
-    }),
-    MemoryRepository: vi.fn(function MemoryRepository(
-      this: { database?: unknown },
-      database: unknown,
-    ) {
-      this.database = database;
-    }),
-    ArtifactContentStore: vi.fn(function ArtifactContentStore(
-      this: { options?: unknown },
-      options: unknown,
-    ) {
-      this.options = options;
-    }),
-    ArtifactService: vi.fn(function ArtifactService() {
-      return {
-        listByRun: vi.fn(),
-        listBySession: vi.fn(),
-        get: vi.fn(),
-        getVersion: vi.fn(),
-        createVersion: vi.fn(),
-        updateStatus: vi.fn(),
-        reference: vi.fn(),
-      };
-    }),
-    createMemoryService: vi.fn(() => ({
-      proposeCandidate: vi.fn(),
-      listCandidates: vi.fn(),
-      acceptCandidate: vi.fn(),
-      rejectCandidate: vi.fn(),
-      archiveCandidate: vi.fn(),
-      listMemories: vi.fn(),
-      getMemory: vi.fn(),
-      updateMemory: vi.fn(),
-      archiveMemory: vi.fn(),
-      deleteMemory: vi.fn(),
-      disableMemory: vi.fn(),
-      enableMemory: vi.fn(),
-      listSourceRefs: vi.fn(),
-      listAccessLogs: vi.fn(),
-      recallPreview: vi.fn(),
-    })),
-    MemoryRecallRuntimeService: vi.fn(function MemoryRecallRuntimeService(
-      this: { options?: unknown },
-      options: unknown,
-    ) {
-      this.options = options;
-      return {
-        recallForNewUserInput: vi.fn(() =>
-          Promise.resolve({ status: 'skipped', reason: 'memory_disabled', memoryRecallSources: [] }),
-        ),
-      };
-    }),
-    MemoryRuntimeCaptureService: vi.fn(function MemoryRuntimeCaptureService(
-      this: { options?: unknown },
-      options: unknown,
-    ) {
-      this.options = options;
-      return {
-        evaluateRunCompletedCapture: vi.fn(() =>
-          Promise.resolve({ status: 'skipped', reason: 'memory_disabled' }),
-        ),
-      };
-    }),
-    MemoryExtractionModelClientService: vi.fn(function MemoryExtractionModelClientService(
-      this: { options?: unknown },
-      options: unknown,
-    ) {
-      this.options = options;
-      return {
-        extractMemoryCandidates: vi.fn(() =>
-          Promise.resolve({ ok: false, reason: 'not_configured' }),
-        ),
-      };
-    }),
-    PlanArtifactCompatibilityService: vi.fn(function PlanArtifactCompatibilityService(
-      this: { options?: unknown },
-      options: unknown,
-    ) {
-      this.options = options;
-      return {
-        syncImplementationPlanArtifact: vi.fn(),
-      };
-    }),
     showOpenDialog: vi.fn(),
     getAllWindows: vi.fn(() => []),
     quit: vi.fn(),
@@ -215,18 +123,6 @@ vi.mock('@megumi/product/composition', () => ({
   composeProduct: mocks.composeProduct,
 }));
 
-vi.mock('@megumi/agent/artifacts', () => ({
-  ArtifactService: mocks.ArtifactService,
-  PlanArtifactCompatibilityService: mocks.PlanArtifactCompatibilityService,
-}));
-
-vi.mock('@megumi/agent/memory', () => ({
-  createMemoryService: mocks.createMemoryService,
-  MemoryRecallRuntimeService: mocks.MemoryRecallRuntimeService,
-  MemoryRuntimeCaptureService: mocks.MemoryRuntimeCaptureService,
-  MemoryExtractionModelClientService: mocks.MemoryExtractionModelClientService,
-}));
-
 vi.mock('electron', () => ({
   app: {
     quit: mocks.quit,
@@ -258,12 +154,6 @@ describe('main runtime logger composition', () => {
         dispose: mocks.agentHost.dispose,
       };
     });
-    mocks.ArtifactRepository.mockClear();
-    mocks.MemoryRepository.mockClear();
-    mocks.ArtifactContentStore.mockClear();
-    mocks.ArtifactService.mockClear();
-    mocks.createMemoryService.mockClear();
-    mocks.PlanArtifactCompatibilityService.mockClear();
     mocks.showOpenDialog.mockClear();
     mocks.getAllWindows.mockClear();
     mocks.quit.mockClear();

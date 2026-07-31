@@ -3,8 +3,6 @@
  * Host-facing adaptation is owned by packages/product.
  */
 import { readFile, readdir } from 'node:fs/promises';
-import { ArtifactContentStore } from '../artifacts/artifact-content-store';
-import { ArtifactService, PlanArtifactCompatibilityService, PlanArtifactService } from '../artifacts';
 import { createCommandService, type CommandService, type SkillCommandDescriptor } from '../commands';
 import { createInputService, type InputFileReader, type InputService } from '../input';
 import {
@@ -30,7 +28,6 @@ import { composeAgentInstructions } from '../instructions';
 import { composeSkills, type Skill, type SkillService } from '@megumi/skills';
 import {
   createSettingsService,
-  type MemorySettingsPort,
   type SettingsFileStore,
   type SettingsService,
 } from '../settings';
@@ -66,24 +63,6 @@ import { createWebSearchService } from '../tools/built-in-tools';
 import type { ToolExecutionService, ToolRegistryService } from '../tools';
 import type { Models } from '@megumi/ai';
 
-type ImplementationPlanArtifactRecord = {
-  planArtifactId: string;
-  producingRunId: string;
-  title: string;
-  status: 'draft' | 'proposed' | 'accepted' | 'rejected' | 'superseded';
-  createdAt: string;
-  updatedAt: string;
-  acceptedAt?: string;
-  rejectedAt?: string;
-  supersededAt?: string;
-  supersededByPlanId?: string;
-  metadata?: CompositionJsonObject;
-};
-
-type CompositionJsonPrimitive = string | number | boolean | null;
-type CompositionJsonValue = CompositionJsonPrimitive | CompositionJsonObject | CompositionJsonValue[];
-type CompositionJsonObject = { [key: string]: CompositionJsonValue };
-
 export interface AgentHomePaths {
   homePath: string;
   sqlitePath: string;
@@ -101,7 +80,6 @@ export interface ComposeAgentRuntimeOptions {
   isRunLive?: (runId: string) => boolean;
   modelContextProvider?: ModelContextProvider;
   appSettingsProvider?: unknown;
-  memorySettingsProvider?: MemorySettingsPort;
   workspaceChangeFooterProjector?: unknown;
   projectFileSystem?: LocalWorkspaceServiceFileSystem;
   settingsStorage?: SettingsFileStore;
@@ -126,8 +104,6 @@ export interface AgentRuntime {
   permissionService: PermissionService;
   toolRegistryService: ToolRegistryService;
   toolExecutionForRun(input: AgentToolExecutionScope): Pick<ToolExecutionService, 'executeTool'>;
-  artifactService: ArtifactService;
-  planArtifactService: PlanArtifactService;
   contextRuntime: ReturnType<typeof composeAgentContext>;
   sessionTimelineQuery: SessionTimelineQuery;
   modelContextProvider: ModelContextProvider;
@@ -349,20 +325,6 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
     },
     ...(options.observabilityService ? { observability: options.observabilityService } : {}),
   });
-  const artifactContentStore = new ArtifactContentStore({
-    artifactRoot: `${options.homePaths.homePath}/artifacts`,
-  });
-  const artifactService = new ArtifactService({
-    repository: persistence.artifactRepository,
-    contentStore: artifactContentStore,
-  });
-  const planArtifactCompatibility = new PlanArtifactCompatibilityService({
-    repository: persistence.artifactRepository,
-  });
-  const planArtifactService = new PlanArtifactService({
-    repository: createInMemoryPlanArtifactRepository(),
-    planArtifactCompatibility,
-  });
   const toolExecutionForRun = (scope: AgentToolExecutionScope) => {
     const workspace = workspaceService.getWorkspace({ workspace_id: scope.workspaceId });
     if (workspace.status !== 'found') {
@@ -415,8 +377,6 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
     permissionService,
     toolRegistryService: toolRegistry,
     toolExecutionForRun,
-    artifactService,
-    planArtifactService,
     contextRuntime,
     sessionTimelineQuery,
     modelContextProvider,
@@ -481,32 +441,6 @@ function isWorkspaceChangeFooterProjectorService(value: unknown): value is Works
     && value !== null
     && 'projectRunFooter' in value
     && typeof value.projectRunFooter === 'function';
-}
-
-function createInMemoryPlanArtifactRepository() {
-  const plans = new Map<string, ImplementationPlanArtifactRecord>();
-  return {
-    saveImplementationPlan(plan: ImplementationPlanArtifactRecord): ImplementationPlanArtifactRecord {
-      plans.set(plan.planArtifactId, plan);
-      return plan;
-    },
-    getImplementationPlanByProducingRun(runId: string): ImplementationPlanArtifactRecord | undefined {
-      return [...plans.values()].find((plan) => plan.producingRunId === runId);
-    },
-    updateImplementationPlanStatus(input: { planArtifactId: string; status: ImplementationPlanArtifactRecord['status']; updatedAt: string }): ImplementationPlanArtifactRecord | undefined {
-      const current = plans.get(input.planArtifactId);
-      if (!current) {
-        return undefined;
-      }
-      const updated = {
-        ...current,
-        status: input.status,
-        updatedAt: input.updatedAt,
-      };
-      plans.set(updated.planArtifactId, updated);
-      return updated;
-    },
-  };
 }
 
 function resolveSettingsService(value: unknown): SettingsService | undefined {

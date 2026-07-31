@@ -29,8 +29,6 @@ export const RUNTIME_ERROR_CODES = [
   'approval_denied',
   'workspace_untrusted',
   'workspace_path_denied',
-  'artifact_write_failed',
-  'memory_write_failed',
 ] as const;
 
 export type RuntimeErrorCode = (typeof RUNTIME_ERROR_CODES)[number];
@@ -52,8 +50,6 @@ export const RUNTIME_ERROR_SOURCES = [
   'tool',
   'approval',
   'workspace',
-  'memory',
-  'artifact',
   'unknown',
 ] as const;
 

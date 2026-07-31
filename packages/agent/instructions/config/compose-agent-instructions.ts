@@ -15,7 +15,7 @@ export interface InstructionFileSystem {
 const FIXED_AGENT_SYSTEM_INSTRUCTIONS: readonly SystemInstruction[] = Object.freeze([
   Object.freeze({
     instructionId: 'megumi.agent.identity',
-    content: 'You are Megumi, the user\'s personal agent. Use the provided session context, project instructions, runtime facts, tool results, and memory facts to continue the user\'s task.',
+    content: 'You are Megumi, the user\'s personal agent. Use the provided session context, project instructions, runtime facts, and tool results to continue the user\'s task.',
   }),
   Object.freeze({
     instructionId: 'megumi.agent.task-completion',

@@ -10,13 +10,7 @@ const expectedPersistenceChildren = [
   'connection.ts',
   'index.ts',
   'migrations',
-  'repos',
   'schema',
-];
-
-const expectedRepoFiles = [
-  'artifact.repo.ts',
-  'memory.repo.ts',
 ];
 
 const oldRepositoryImports = [
@@ -46,12 +40,8 @@ describe('persistence target structure source guards', () => {
     expect(actual).toEqual(expectedPersistenceChildren);
   });
 
-  it('keeps only the temporary legacy repositories for modules not yet rebuilt', () => {
-    const actual = fs.readdirSync(path.join(root, 'packages/agent/persistence/repos'))
-      .filter((name) => name.endsWith('.ts'))
-      .sort();
-
-    expect(actual).toEqual(expectedRepoFiles);
+  it('does not retain the shared temporary repository directory', () => {
+    expect(fs.existsSync(path.join(root, 'packages/agent/persistence/repos'))).toBe(false);
   });
 
   it('does not import deleted table-shaped repositories from production code', () => {

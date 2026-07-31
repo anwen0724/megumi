@@ -24,13 +24,12 @@ import {
   type MegumiHomePaths,
 } from '../home';
 import { createApprovalHost } from '../host-interface/approval-host';
-import { createArtifactHost } from '../host-interface/artifact-host';
+import { createUnavailableArtifactHost } from '../host-interface/artifact-host';
 import {
   createChatHost,
   type InputAttachmentPickerPort,
   type LocalFileAvailabilityPort,
 } from '../host-interface/chat-host';
-import { createPlanHost } from '../host-interface/plan-host';
 import type { ProductHostInterface } from '../host-interface/product-host-interface';
 import { createSettingsHost } from '../host-interface/settings-host';
 import { createSkillHost } from '../host-interface/skill-host';
@@ -165,7 +164,6 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
   });
   const engineController = trackProductRuns(rawEngine, runReadModel);
   const engine = engineController.engine;
-  const artifacts = createArtifactHost(runtime.artifactService);
   const host: ProductHostInterface = {
     chat: createChatHost({
       engine,
@@ -195,8 +193,7 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
       listAvailableTools: () => runtime.toolRegistryService.listAvailableTools().tools,
     }),
     approval: createApprovalHost(engine),
-    artifacts,
-    plan: createPlanHost(runtime.planArtifactService),
+    artifacts: createUnavailableArtifactHost(),
     observability: createObservabilityHost(observability.queryService, options.diagnosticBundleSave),
   };
 

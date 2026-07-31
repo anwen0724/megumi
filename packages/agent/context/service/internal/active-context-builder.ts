@@ -11,7 +11,6 @@ import type {
 } from '../../domain/model/conversation-run';
 import type {
   ContextSourceRef,
-  MemoryContextInput,
   VisibleCompactionSummary,
 } from '../../domain/model/model-context';
 
@@ -22,7 +21,6 @@ export type BuildActiveContextRequest = {
   skillCatalog: SkillCatalogItem[];
   usedSkills: UsedSkillContent[];
   compactionSummary?: VisibleCompactionSummary;
-  memoryRecall?: MemoryContextInput;
   historicalRuns: ConversationRun[];
   currentRun?: CurrentConversationRun;
   tools: Tool[];
@@ -47,7 +45,6 @@ export function buildActiveContext(
       ...(request.compactionSummary
         ? { compactionSummary: request.compactionSummary }
         : {}),
-      ...(request.memoryRecall ? { memoryRecall: request.memoryRecall } : {}),
     },
     runContext: {
       skills: request.usedSkills.map((skill) => ({ ...skill })),
@@ -83,15 +80,9 @@ function buildSourceRefs(activeContext: ActiveContext): ContextSourceRef[] {
     })),
   ];
 
-  const { compactionSummary, memoryRecall } = activeContext.referenceContext;
+  const { compactionSummary } = activeContext.referenceContext;
   if (compactionSummary) {
     refs.push({ sourceType: 'compaction_summary', sourceId: compactionSummary.compactionId });
-  }
-  if (memoryRecall) {
-    refs.push(...memoryRecall.items.map(({ memoryId }) => ({
-      sourceType: 'memory' as const,
-      sourceId: memoryId,
-    })));
   }
 
   for (const run of activeContext.historicalRuns) {

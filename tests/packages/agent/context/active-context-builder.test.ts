@@ -43,10 +43,6 @@ describe('buildActiveContext', () => {
         content: 'Activated instruction',
       }],
       compactionSummary: { compactionId: 'compaction-1', content: 'Earlier summary' },
-      memoryRecall: {
-        recallId: 'recall-1',
-        items: [{ memoryId: 'memory-1', content: [{ type: 'text', text: 'Remembered fact' }] }],
-      },
       historicalRuns,
       currentRun,
       tools: [{ name: 'read', description: 'Read a path', parameters: Type.Object({}) }],
@@ -61,19 +57,13 @@ describe('buildActiveContext', () => {
     expect(result.activeContext.referenceContext).toEqual({
       skillCatalog: [{ name: 'Catalog Skill', description: 'Available skill', skillPath: 'C:/catalog/SKILL.md' }],
       compactionSummary: { compactionId: 'compaction-1', content: 'Earlier summary' },
-      memoryRecall: {
-        recallId: 'recall-1',
-        items: [{ memoryId: 'memory-1', content: [{ type: 'text', text: 'Remembered fact' }] }],
-      },
     });
     expect(result.activeContext.runContext).toEqual({
       skills: [{ name: 'Active Skill', skillPath: 'C:/active/SKILL.md', content: 'Activated instruction' }],
     });
     expect(JSON.stringify(result.activeContext.instructions)).not.toContain('Earlier summary');
-    expect(JSON.stringify(result.activeContext.instructions)).not.toContain('Remembered fact');
     expect(JSON.stringify(result.activeContext.instructions)).not.toContain('Available skill');
     expect(result.sourceRefs).toContainEqual({ sourceType: 'compaction_summary', sourceId: 'compaction-1' });
-    expect(result.sourceRefs).toContainEqual({ sourceType: 'memory', sourceId: 'memory-1' });
     expect(result.sourceRefs).toContainEqual({ sourceType: 'used_skill', sourceId: 'C:/active/SKILL.md' });
     expect(JSON.stringify(result.activeContext)).not.toContain('sourceRefs');
   });

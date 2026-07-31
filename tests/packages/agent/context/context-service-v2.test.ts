@@ -109,12 +109,6 @@ describe('ContextServiceImpl build', () => {
       skill: { name: 'selected', skillPath: '/skills/selected/SKILL.md', content: 'Selected instructions.' },
     }));
     deps.skillServiceFactory = vi.fn(() => ({ getSkillCatalog, useSkill }));
-    deps.memoryHomePath = '/home';
-    deps.memoryRecall = {
-      recallForNewUserInput: vi.fn(async () => ({
-        memoryRecallSources: [{ sourceId: 'recall:1', text: 'Remember this.', memoryIds: ['memory:1'] }],
-      })),
-    };
     const runWithSkillSource = {
       ...currentRun,
       runItems: [{
@@ -157,7 +151,6 @@ describe('ContextServiceImpl build', () => {
       const serialized = JSON.stringify(result.prepared.context.messages);
       expect(serialized).toContain('Selected instructions.');
       expect(serialized).toContain('Dynamic instructions.');
-      expect(serialized).toContain('Remember this.');
     }
   });
 

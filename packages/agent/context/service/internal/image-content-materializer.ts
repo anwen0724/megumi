@@ -33,26 +33,13 @@ export async function materializeActiveContextImages(input: {
           runItems: await materializeConversationItems(input.activeContext.currentRun.runItems, materialize),
         }
       : undefined;
-    const memoryRecall = input.activeContext.referenceContext.memoryRecall
-      ? {
-          ...input.activeContext.referenceContext.memoryRecall,
-          items: await Promise.all(input.activeContext.referenceContext.memoryRecall.items.map(async (item) => ({
-            ...item,
-            content: await materialize(item.content),
-          }))),
-        }
-      : undefined;
-
     return {
       status: 'materialized',
       activeContext: {
         ...input.activeContext,
         historicalRuns,
         ...(currentRun ? { currentRun } : {}),
-        referenceContext: {
-          ...input.activeContext.referenceContext,
-          ...(memoryRecall ? { memoryRecall } : {}),
-        },
+        referenceContext: input.activeContext.referenceContext,
       },
     };
   } catch (error) {

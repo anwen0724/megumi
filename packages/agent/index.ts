@@ -8,8 +8,6 @@ export * as context from './context';
 export * from './hooks';
 export * from './tools';
 export * as permissions from './permissions';
-export * from './memory';
-export * from './artifacts';
 export * from './workspace';
 export * from './persistence';
 export * as projections from './projections';

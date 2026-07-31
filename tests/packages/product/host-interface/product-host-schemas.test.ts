@@ -12,7 +12,6 @@ import {
   ChatSendUserInputUiPayloadSchema,
   ListSkillsUiResponseSchema,
   ProviderListUiResultSchema,
-  PlanStatusUpdatePayloadSchema,
   SessionBranchDraftCancelPayloadSchema,
   SessionBranchDraftCreatePayloadSchema,
   SettingsCompleteSetupPayloadSchema,
@@ -230,7 +229,7 @@ describe('Product Host runtime schemas', () => {
     }).success).toBe(false);
   });
 
-  it('rejects renderer-provided Artifact and Plan canonical timestamps', () => {
+  it('rejects renderer-provided Artifact canonical timestamps', () => {
     expect(ArtifactVersionCreatePayloadSchema.safeParse({
       artifactId: 'artifact:1',
       contentType: 'markdown',
@@ -250,11 +249,6 @@ describe('Product Host runtime schemas', () => {
       referencedByKind: 'run',
       referencedById: 'run:1',
       createdAt: '2026-05-16T00:00:00.000Z',
-    }).success).toBe(false);
-    expect(PlanStatusUpdatePayloadSchema.safeParse({
-      planArtifactId: 'plan:1',
-      status: 'accepted',
-      updatedAt: '2026-05-16T00:00:00.000Z',
     }).success).toBe(false);
   });
 

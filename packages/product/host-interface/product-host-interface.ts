@@ -3,7 +3,6 @@
  * This is not an Electron IPC contract; desktop, CLI, or web hosts may call it.
  */
 import type { ArtifactHost } from './artifact-host';
-import type { PlanHost } from './plan-host';
 import type { ApprovalHost } from './approval-host';
 import type { ChatHost } from './chat-host';
 import type { SettingsHost } from './settings-host';
@@ -18,6 +17,5 @@ export interface ProductHostInterface {
   settings: SettingsHost;
   approval: ApprovalHost;
   artifacts: ArtifactHost;
-  plan: PlanHost;
   observability: ObservabilityHost;
 }

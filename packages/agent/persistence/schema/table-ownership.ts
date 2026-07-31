@@ -46,23 +46,6 @@ export const persistenceTableOwnership = {
       'skill_availability',
     ],
   },
-  memory: {
-    module: 'memory',
-    repository: 'MemoryRepository',
-    tables: [
-      'memory_records',
-      'memory_markdown_mirrors',
-    ],
-  },
-  artifact: {
-    module: 'artifacts',
-    repository: 'ArtifactRepository',
-    tables: [
-      'artifacts',
-      'artifact_versions',
-      'artifact_source_refs',
-    ],
-  },
 } as const satisfies Record<string, PersistenceTableOwner>;
 
 export type PersistenceTableOwnership = typeof persistenceTableOwnership;

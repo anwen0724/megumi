@@ -37,21 +37,7 @@ export function buildContext(activeContext: ActiveContext): Context {
       : []),
   ];
   const messages = materializeReferenceMessages(activeContext);
-  const memory = activeContext.referenceContext.memoryRecall;
-
-  if (memory && activeContext.currentRun) {
-    const currentUserIndex = findLastUserItemIndex(conversation);
-    if (currentUserIndex < 0) {
-      throw new Error('Memory recall requires a current user message.');
-    }
-    messages.push(
-      ...materializeConversation(conversation.slice(0, currentUserIndex)),
-      referenceMessage('memory_recall', memory.items.flatMap((item) => item.content.map(contentBlockToReference))),
-      ...materializeConversation(conversation.slice(currentUserIndex)),
-    );
-  } else {
-    messages.push(...materializeConversation(conversation));
-  }
+  messages.push(...materializeConversation(conversation));
 
   for (const skill of activeContext.runContext.skills) {
     messages.push(referenceMessage('skill', {
@@ -220,30 +206,6 @@ function contentBlockToAi(block: ContentBlock): TextContent | ImageContent {
     return { type: 'image', data: block.source.data, mimeType: block.source.mediaType };
   }
   throw new ContextMaterializationError(block.type);
-}
-
-function contentBlockToReference(block: ContentBlock): unknown {
-  if (block.type === 'text') return { type: 'text', text: block.text };
-  if (block.type === 'json') return { type: 'json', value: block.value };
-  if (block.type === 'file') {
-    return {
-      type: 'attached_file',
-      path: block.path,
-      ...(block.name ? { name: block.name } : {}),
-      ...(block.mediaType ? { mediaType: block.mediaType } : {}),
-    };
-  }
-  if (block.type === 'image' && block.source.type === 'base64') {
-    return { type: 'image', data: block.source.data, mimeType: block.source.mediaType };
-  }
-  throw new ContextMaterializationError(block.type);
-}
-
-function findLastUserItemIndex(items: ConversationItem[]): number {
-  for (let index = items.length - 1; index >= 0; index -= 1) {
-    if (items[index]?.type === 'user_message') return index;
-  }
-  return -1;
 }
 
 function parseJson(value: string): JsonValue {

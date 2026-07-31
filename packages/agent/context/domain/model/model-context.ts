@@ -3,7 +3,6 @@
  */
 import type { Context, Tool } from '@megumi/ai';
 import type { SkillCatalogItem, UsedSkillContent } from '@megumi/skills';
-import type { ContentBlock } from '../../../model-content';
 import type { CompactionResultRef } from './compaction';
 import type { ContextUsage } from './context-usage';
 
@@ -34,20 +33,9 @@ export type VisibleCompactionSummary = {
   content: string;
 };
 
-export type MemoryReferenceItem = {
-  memoryId: string;
-  content: ContentBlock[];
-};
-
-export type MemoryContextInput = {
-  recallId: string;
-  items: MemoryReferenceItem[];
-};
-
 export type ReferenceContext = {
   skillCatalog: SkillCatalogItem[];
   compactionSummary?: VisibleCompactionSummary;
-  memoryRecall?: MemoryContextInput;
 };
 
 export type ContextSourceRef = {
@@ -59,7 +47,6 @@ export type ContextSourceRef = {
     | 'compaction_summary'
     | 'session_message'
     | 'current_run_item'
-    | 'memory'
     | 'tool_definition'
     | 'tool_result';
   sourceId: string;

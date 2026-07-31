@@ -6,10 +6,6 @@ import type {
   ApprovalRequest,
   ApprovalScope,
   ApprovalStatus,
-  ArtifactContentStorage,
-  ArtifactContentType,
-  ArtifactKind,
-  ArtifactStatus,
   CancelReason,
   CancelRequestedBy,
   CancelScope,
@@ -19,12 +15,6 @@ import type {
   ContextPatchAppliedPayload,
   ContextPatchRejectedPayload,
   ContextPatchRequestedPayload,
-  MemoryAccessKind,
-  MemoryCandidateStatus,
-  MemoryKind,
-  MemoryRecordStatus,
-  MemoryRiskLevel,
-  MemoryScope,
   ModelInputContextSourceRef,
   PermissionDecision,
   ResumeMode,
@@ -138,21 +128,6 @@ export const RUNTIME_EVENT_TYPES = [
   'retry.started',
   'retry.completed',
   'retry.failed',
-  'artifact.created',
-  'artifact.version.created',
-  'artifact.status.changed',
-  'artifact.referenced',
-  'artifact.content.write.failed',
-  'memory.candidate.proposed',
-  'memory.candidate.accepted',
-  'memory.candidate.rejected',
-  'memory.record.created',
-  'memory.record.updated',
-  'memory.record.status.changed',
-  'memory.recall.requested',
-  'memory.recall.completed',
-  'memory.recall.failed',
-  'memory.access.recorded',
   'workspace.restore.requested',
   'workspace.restore.completed',
 ] as const;
@@ -182,8 +157,6 @@ export const RUNTIME_EVENT_SOURCES = [
   'tool',
   'approval',
   'workspace',
-  'memory',
-  'artifact',
   'database',
   'security',
   'unknown',
@@ -744,109 +717,6 @@ export interface ApprovalExpiredPayload {
   expiredAt: string;
 }
 
-export interface ArtifactCreatedPayload {
-  artifactId: string;
-  artifactVersionId?: string;
-  kind: ArtifactKind;
-  title: string;
-  status: ArtifactStatus;
-}
-
-export interface ArtifactVersionCreatedPayload {
-  artifactId: string;
-  artifactVersionId: string;
-  versionNumber: number;
-  contentType: ArtifactContentType;
-  textPreview: string;
-}
-
-export interface ArtifactStatusChangedPayload {
-  artifactId: string;
-  from: ArtifactStatus;
-  to: ArtifactStatus;
-}
-
-export interface ArtifactReferencedPayload {
-  artifactId: string;
-  artifactVersionId?: string;
-  referencedByKind: 'run' | 'step' | 'artifact' | 'message';
-  referencedById: string;
-}
-
-export interface ArtifactContentWriteFailedPayload {
-  artifactId?: string;
-  artifactVersionId?: string;
-  storage: ArtifactContentStorage;
-  error: RuntimeError;
-}
-
-export interface MemoryCandidateProposedPayload {
-  candidateId: string;
-  scope: MemoryScope;
-  kind: MemoryKind;
-  status: MemoryCandidateStatus;
-  riskLevel: MemoryRiskLevel;
-  summary: string;
-  sourceRefCount: number;
-}
-
-export interface MemoryCandidateAcceptedPayload {
-  candidateId: string;
-  memoryId: string;
-  reviewedAt: string;
-}
-
-export interface MemoryCandidateRejectedPayload {
-  candidateId: string;
-  rejectionReason: string;
-  reviewedAt: string;
-}
-
-export interface MemoryRecordCreatedPayload {
-  memoryId: string;
-  scope: MemoryScope;
-  kind: MemoryKind;
-  status: MemoryRecordStatus;
-  summary: string;
-}
-
-export interface MemoryRecordUpdatedPayload {
-  memoryId: string;
-  changedFields: string[];
-}
-
-export interface MemoryRecordStatusChangedPayload {
-  memoryId: string;
-  from: MemoryRecordStatus;
-  to: MemoryRecordStatus;
-  reason?: string;
-}
-
-export interface MemoryRecallRequestedPayload {
-  recallRequestId: string;
-  scopes: MemoryScope[];
-  kinds?: MemoryKind[];
-  limit: number;
-}
-
-export interface MemoryRecallCompletedPayload {
-  recallRequestId: string;
-  resultCount: number;
-  selectedCount: number;
-}
-
-export interface MemoryRecallFailedPayload {
-  recallRequestId: string;
-  error: RuntimeError;
-}
-
-export interface MemoryAccessRecordedPayload {
-  accessLogId: string;
-  memoryId: string;
-  accessKind: MemoryAccessKind;
-  selectedForContext: boolean;
-}
-
 export interface WorkspaceRestoreRequestedPayload {
   restoreRequestId: string;
   changeSetId: string;
@@ -951,21 +821,6 @@ export type RuntimeEventPayloadByType = {
   'retry.started': RetryStartedPayload;
   'retry.completed': RetryCompletedPayload;
   'retry.failed': RetryFailedPayload;
-  'artifact.created': ArtifactCreatedPayload;
-  'artifact.version.created': ArtifactVersionCreatedPayload;
-  'artifact.status.changed': ArtifactStatusChangedPayload;
-  'artifact.referenced': ArtifactReferencedPayload;
-  'artifact.content.write.failed': ArtifactContentWriteFailedPayload;
-  'memory.candidate.proposed': MemoryCandidateProposedPayload;
-  'memory.candidate.accepted': MemoryCandidateAcceptedPayload;
-  'memory.candidate.rejected': MemoryCandidateRejectedPayload;
-  'memory.record.created': MemoryRecordCreatedPayload;
-  'memory.record.updated': MemoryRecordUpdatedPayload;
-  'memory.record.status.changed': MemoryRecordStatusChangedPayload;
-  'memory.recall.requested': MemoryRecallRequestedPayload;
-  'memory.recall.completed': MemoryRecallCompletedPayload;
-  'memory.recall.failed': MemoryRecallFailedPayload;
-  'memory.access.recorded': MemoryAccessRecordedPayload;
   'workspace.restore.requested': WorkspaceRestoreRequestedPayload;
   'workspace.restore.completed': WorkspaceRestoreCompletedPayload;
 };

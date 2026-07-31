@@ -75,9 +75,9 @@ describe('legacy Session history backfill', () => {
       expect(new Set(chain.map((entry) => entry.message_id))).toEqual(new Set(messages.map((message) => message.message_id)));
       expect(tableExists(migrated.database, 'agent_run_runtime_events')).toBe(false);
       expect(tableExists(migrated.database, 'agent_runs')).toBe(false);
+      expect(tableExists(migrated.database, 'artifacts')).toBe(false);
+      expect(tableExists(migrated.database, 'memory_records')).toBe(false);
       expect(migrated.database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-      expect((migrated.database.prepare(`PRAGMA foreign_key_list(artifacts)`).all() as Array<{ from: string; table: string }>))
-        .toContainEqual(expect.objectContaining({ from: 'current_version_id', table: 'artifact_versions' }));
     } finally {
       migrated.database.close();
     }

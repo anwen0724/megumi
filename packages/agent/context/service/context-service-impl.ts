@@ -14,11 +14,10 @@ import {
   type Models,
   type Tool,
 } from '@megumi/ai';
-import type { MemoryRecallPort, ModelInputMemoryRecallSource } from '../../memory';
 import { capabilitiesFromModel } from '../../model-capability';
 import type { ContextCapacity, ContextPolicy, ContextUsage, SessionUsageSnapshot } from '../domain/model/context-usage';
 import type { ConversationRun, CurrentConversationRun } from '../domain/model/conversation-run';
-import type { ContextSourceRef, MemoryContextInput, VisibleCompactionSummary } from '../domain/model/model-context';
+import type { ContextSourceRef, VisibleCompactionSummary } from '../domain/model/model-context';
 import { buildActiveContext } from './internal/active-context-builder';
 import { buildCompactionSummaryRequest } from './internal/compaction-summary-builder';
 import { planCompaction, validateCompactionReduction } from './internal/compaction-planner';
@@ -52,8 +51,6 @@ export type ContextServiceDependencies = {
   instructionScopeResolver: InstructionScopeResolver;
   instructionService: InstructionService;
   skillServiceFactory?: (input: { workspaceRoot: string }) => Pick<SkillService, 'getSkillCatalog' | 'useSkill'>;
-  memoryRecall?: Pick<MemoryRecallPort, 'recallForNewUserInput'>;
-  memoryHomePath?: string;
   models: Pick<Models, 'completeSimple'>;
   contextTokenEstimator?: (context: AiContext) => number;
   usageSnapshotCache: {
@@ -75,7 +72,6 @@ type BuildFacts = {
   agentInstructions: { sources: Array<{ sourceId: string; sourcePath: string; content: string }> };
   skillCatalog: SkillCatalogItem[];
   usedSkills: UsedSkillContent[];
-  memoryRecall?: MemoryContextInput;
   tools: Tool[];
   compactionSummary?: VisibleCompactionSummary;
   currentRun?: CurrentConversationRun;
@@ -284,14 +280,6 @@ export class ContextServiceImpl implements ContextService {
       signal: input.signal,
     });
     if (skills.status === 'failed') return skills;
-    const memoryRecall = await this.loadMemoryRecall({
-      workspaceId: input.workspaceId,
-      sessionId: input.sessionId,
-      currentRun: input.currentRun,
-      workingDirectory: scope.workingDirectory,
-      model: input.model,
-      signal: input.signal,
-    });
     if (input.signal?.aborted) return failed(cancelled());
     return {
       status: 'loaded',
@@ -305,7 +293,6 @@ export class ContextServiceImpl implements ContextService {
         agentInstructions: agentInstructions.instructions,
         skillCatalog: skills.skillCatalog,
         usedSkills: skills.usedSkills,
-        ...(memoryRecall ? { memoryRecall } : {}),
         tools: toAiTools(input.tools),
         ...(effectiveSummary(historyResult.history) ? { compactionSummary: effectiveSummary(historyResult.history) } : {}),
         ...(input.currentRun ? { currentRun: input.currentRun } : {}),
@@ -376,43 +363,6 @@ export class ContextServiceImpl implements ContextService {
       skillCatalog: catalog.skills,
       usedSkills,
     };
-  }
-
-  private async loadMemoryRecall(input: {
-    workspaceId: string;
-    sessionId: string;
-    currentRun?: CurrentConversationRun;
-    workingDirectory: string;
-    model: Model<Api>;
-    signal?: AbortSignal;
-  }): Promise<MemoryContextInput | undefined> {
-    if (
-      !this.dependencies.memoryRecall
-      || !this.dependencies.memoryHomePath
-      || !input.currentRun
-    ) {
-      return undefined;
-    }
-    const queryText = currentRunText(input.currentRun);
-    if (!queryText) return undefined;
-    try {
-      const recalled = await this.dependencies.memoryRecall.recallForNewUserInput({
-        homePath: this.dependencies.memoryHomePath,
-        sessionId: input.sessionId,
-        runId: input.currentRun.runId,
-        projectId: input.workspaceId,
-        effectiveCwd: input.workingDirectory,
-        queryText,
-        providerId: input.model.provider,
-        modelId: input.model.id,
-      });
-      if (input.signal?.aborted) return undefined;
-      return memoryContextFromSources(input.currentRun.runId, recalled.memoryRecallSources);
-    } catch {
-      // Recall is an optional enrichment. Its owner degrades to no recalled
-      // memory instead of preventing an otherwise valid Context build.
-      return undefined;
-    }
   }
 
   private async buildModelContext(
@@ -665,30 +615,6 @@ function mergeUsedSkill(usedSkills: UsedSkillContent[], skill: UsedSkillContent)
   } else {
     usedSkills.push({ ...skill });
   }
-}
-
-function currentRunText(currentRun: CurrentConversationRun): string {
-  return currentRun.userMessage.content
-    .flatMap((block) => block.type === 'text' ? [block.text] : [])
-    .join('\n')
-    .trim();
-}
-
-function memoryContextFromSources(
-  runId: string,
-  sources: ModelInputMemoryRecallSource[],
-): MemoryContextInput | undefined {
-  if (sources.length === 0) return undefined;
-  return {
-    recallId: sources[0]?.sourceId ?? `memory-recall:${runId}`,
-    items: sources.flatMap((source) => {
-      const memoryIds = source.memoryIds?.length ? source.memoryIds : [source.sourceId];
-      return memoryIds.map((memoryId) => ({
-        memoryId,
-        content: [{ type: 'text' as const, text: source.text }],
-      }));
-    }),
-  };
 }
 
 function modelFailure(error: unknown): ContextFailure {

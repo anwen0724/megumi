@@ -101,11 +101,6 @@ export type {
   ArtifactVersionCreateData,
   ArtifactVersionGetData,
 } from './artifact-host';
-export type {
-  PlanByRunGetData,
-  PlanHost,
-  PlanStatusUpdateData,
-} from './plan-host';
 export type { ObservabilityHost, ObservabilityExportResult, DiagnosticBundleSavePort } from './observability-host';
 export { ObservabilityListPayloadSchema, ObservabilityRunPayloadSchema, ObservabilityQueryResultSchema } from './observability-host';
 export {
@@ -204,8 +199,3 @@ export {
   ArtifactStatusUpdateDataSchema,
   ArtifactReferenceDataSchema,
 } from './artifact-host';
-export {
-  PlanByRunGetDataSchema,
-  PlanStatusUpdatePayloadSchema,
-  PlanStatusUpdateDataSchema,
-} from './plan-host';

@@ -1,15 +1,12 @@
 // Drizzle schema source-of-truth for Agent product persistence.
 import { sql } from 'drizzle-orm';
-import { type AnySQLiteColumn, index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 type JsonObject = Record<string, unknown>;
 type JsonArray = unknown[];
 type JsonValue = JsonObject | JsonArray | string | number | boolean | null;
 
 const jsonText = (name: string) => text(name, { mode: 'json' }).$type<JsonValue>();
-
-// Explicit AnySQLiteColumn return types allow the Artifact/version cycle to
-// remain visible in the schema source without TypeScript self-inference.
 
 export const workspaces = sqliteTable('workspaces', {
   workspaceId: text('workspace_id').primaryKey(),
@@ -128,103 +125,4 @@ export const skillAvailability = sqliteTable('skill_availability', {
   updatedAt: text('updated_at').notNull(),
 }, (table) => [
   uniqueIndex('idx_skill_availability_path').on(table.skillPath),
-]);
-
-export const memoryRecords = sqliteTable('memory_records', {
-  memoryId: text('memory_id').primaryKey(),
-  workspaceId: text('workspace_id').references(() => workspaces.workspaceId, { onDelete: 'set null' }),
-  sessionId: text('session_id').references(() => sessions.sessionId, { onDelete: 'set null' }),
-  scope: text('scope').notNull(),
-  kind: text('kind').notNull(),
-  status: text('status').notNull(),
-  content: text('content').notNull(),
-  normalizedText: text('normalized_text').notNull(),
-  summary: text('summary'),
-  confidence: real('confidence'),
-  sourceJson: jsonText('source_json'),
-  evidenceJson: jsonText('evidence_json'),
-  dedupeKey: text('dedupe_key'),
-  supersededById: text('superseded_by_id').references((): AnySQLiteColumn => memoryRecords.memoryId, {
-    onDelete: 'set null',
-  }),
-  createdAt: text('created_at').notNull(),
-  updatedAt: text('updated_at').notNull(),
-  lastUsedAt: text('last_used_at'),
-  useCount: integer('use_count').notNull(),
-  metadataJson: jsonText('metadata_json'),
-}, (table) => [
-  index('idx_memory_records_scope_workspace_kind_status').on(table.scope, table.workspaceId, table.kind, table.status),
-  index('idx_memory_records_last_used_at').on(table.lastUsedAt),
-  uniqueIndex('idx_memory_records_dedupe')
-    .on(table.scope, table.workspaceId, table.kind, table.dedupeKey)
-    .where(sql`${table.status} = 'active'`),
-]);
-
-export const memoryMarkdownMirrors = sqliteTable('memory_markdown_mirrors', {
-  mirrorId: text('mirror_id').primaryKey(),
-  memoryId: text('memory_id').notNull().references(() => memoryRecords.memoryId, { onDelete: 'cascade' }),
-  workspaceId: text('workspace_id').references(() => workspaces.workspaceId, { onDelete: 'set null' }),
-  targetPath: text('target_path').notNull(),
-  status: text('status').notNull(),
-  lastExportedAt: text('last_exported_at'),
-  contentHash: text('content_hash'),
-  lastError: text('last_error'),
-  createdAt: text('created_at').notNull(),
-  updatedAt: text('updated_at').notNull(),
-  metadataJson: jsonText('metadata_json'),
-}, (table) => [
-  index('idx_memory_markdown_mirrors_memory').on(table.memoryId),
-]);
-
-export const artifacts = sqliteTable('artifacts', {
-  artifactId: text('artifact_id').primaryKey(),
-  workspaceId: text('workspace_id').references(() => workspaces.workspaceId, { onDelete: 'set null' }),
-  sessionId: text('session_id').references(() => sessions.sessionId, { onDelete: 'set null' }),
-  runId: text('run_id'),
-  kind: text('kind').notNull(),
-  title: text('title').notNull(),
-  status: text('status').notNull(),
-  currentVersionId: text('current_version_id').references(
-    (): AnySQLiteColumn => artifactVersions.artifactVersionId,
-    { onDelete: 'set null' },
-  ),
-  createdAt: text('created_at').notNull(),
-  updatedAt: text('updated_at').notNull(),
-  deletedAt: text('deleted_at'),
-  metadataJson: jsonText('metadata_json'),
-}, (table) => [
-  index('idx_artifacts_session_updated').on(table.sessionId, table.updatedAt),
-]);
-
-export const artifactVersions = sqliteTable('artifact_versions', {
-  artifactVersionId: text('artifact_version_id').primaryKey(),
-  artifactId: text('artifact_id').notNull().references(() => artifacts.artifactId, { onDelete: 'cascade' }),
-  versionNumber: integer('version_number').notNull(),
-  storage: text('storage').notNull(),
-  contentType: text('content_type').notNull(),
-  contentFormat: text('content_format').notNull(),
-  inlineText: text('inline_text'),
-  contentKey: text('content_key'),
-  mimeType: text('mime_type'),
-  sizeBytes: integer('size_bytes'),
-  sha256: text('sha256'),
-  textPreview: text('text_preview'),
-  createdByRunId: text('created_by_run_id'),
-  createdAt: text('created_at').notNull(),
-  metadataJson: jsonText('metadata_json'),
-}, (table) => [
-  uniqueIndex('idx_artifact_versions_artifact_version').on(table.artifactId, table.versionNumber),
-]);
-
-export const artifactSourceRefs = sqliteTable('artifact_source_refs', {
-  sourceRefId: text('source_ref_id').primaryKey(),
-  artifactId: text('artifact_id').notNull().references(() => artifacts.artifactId, { onDelete: 'cascade' }),
-  artifactVersionId: text('artifact_version_id').references(() => artifactVersions.artifactVersionId, { onDelete: 'cascade' }),
-  sourceKind: text('source_kind').notNull(),
-  sourceId: text('source_id').notNull(),
-  excerptPreview: text('excerpt_preview'),
-  createdAt: text('created_at').notNull(),
-  metadataJson: jsonText('metadata_json'),
-}, (table) => [
-  index('idx_artifact_source_refs_artifact').on(table.artifactId),
 ]);

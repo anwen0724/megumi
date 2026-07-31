@@ -107,25 +107,3 @@ export type WorkspaceRestoreRequestedBy = string;
 export type WorkspaceRestoreResultStatus = string;
 export const WorkspaceRestoreRequestedBySchema = z.string().min(1);
 export const WorkspaceRestoreResultStatusSchema = z.string().min(1);
-
-export type ArtifactContentStorage = string;
-export type ArtifactContentType = string;
-export type ArtifactKind = string;
-export type ArtifactStatus = string;
-export const ArtifactContentStorageSchema = z.string().min(1);
-export const ArtifactContentTypeSchema = z.string().min(1);
-export const ArtifactKindSchema = z.string().min(1);
-export const ArtifactStatusSchema = z.string().min(1);
-
-export type MemoryAccessKind = string;
-export type MemoryCandidateStatus = string;
-export type MemoryKind = string;
-export type MemoryRecordStatus = string;
-export type MemoryRiskLevel = string;
-export type MemoryScope = string;
-export const MemoryAccessKindSchema = z.string().min(1);
-export const MemoryCandidateStatusSchema = z.string().min(1);
-export const MemoryKindSchema = z.string().min(1);
-export const MemoryRecordStatusSchema = z.string().min(1);
-export const MemoryRiskLevelSchema = z.string().min(1);
-export const MemoryScopeSchema = z.string().min(1);

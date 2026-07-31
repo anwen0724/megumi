@@ -19,10 +19,6 @@ import {
 import {
   APPROVAL_SCOPES,
   ApprovalRequestSchema,
-  ArtifactContentStorageSchema,
-  ArtifactContentTypeSchema,
-  ArtifactKindSchema,
-  ArtifactStatusSchema,
   CancelReasonSchema,
   CancelRequestedBySchema,
   CancelScopeSchema,
@@ -30,12 +26,6 @@ import {
   CheckpointReasonSchema,
   CONTEXT_PATCH_OPERATIONS,
   CONTEXT_PATCH_REQUESTERS,
-  MemoryAccessKindSchema,
-  MemoryCandidateStatusSchema,
-  MemoryKindSchema,
-  MemoryRecordStatusSchema,
-  MemoryRiskLevelSchema,
-  MemoryScopeSchema,
   ModelInputContextSourceRefSchema,
   PermissionDecisionSchema,
   ResumeModeSchema,
@@ -847,139 +837,6 @@ const ApprovalExpiredPayloadSchema = z
   })
   .strict();
 
-const ArtifactCreatedPayloadSchema = z
-  .object({
-    artifactId: z.string().min(1),
-    artifactVersionId: z.string().min(1).optional(),
-    kind: ArtifactKindSchema,
-    title: z.string().min(1),
-    status: ArtifactStatusSchema,
-  })
-  .strict();
-
-const ArtifactVersionCreatedPayloadSchema = z
-  .object({
-    artifactId: z.string().min(1),
-    artifactVersionId: z.string().min(1),
-    versionNumber: z.number().int().positive(),
-    contentType: ArtifactContentTypeSchema,
-    textPreview: z.string(),
-  })
-  .strict();
-
-const ArtifactStatusChangedPayloadSchema = z
-  .object({
-    artifactId: z.string().min(1),
-    from: ArtifactStatusSchema,
-    to: ArtifactStatusSchema,
-  })
-  .strict();
-
-const ArtifactReferencedPayloadSchema = z
-  .object({
-    artifactId: z.string().min(1),
-    artifactVersionId: z.string().min(1).optional(),
-    referencedByKind: z.enum(['run', 'step', 'artifact', 'message']),
-    referencedById: z.string().min(1),
-  })
-  .strict();
-
-const ArtifactContentWriteFailedPayloadSchema = z
-  .object({
-    artifactId: z.string().min(1).optional(),
-    artifactVersionId: z.string().min(1).optional(),
-    storage: ArtifactContentStorageSchema,
-    error: RuntimeErrorSchema,
-  })
-  .strict();
-
-const MemoryCandidateProposedPayloadSchema = z
-  .object({
-    candidateId: z.string().min(1),
-    scope: MemoryScopeSchema,
-    kind: MemoryKindSchema,
-    status: MemoryCandidateStatusSchema,
-    riskLevel: MemoryRiskLevelSchema,
-    summary: z.string().min(1),
-    sourceRefCount: z.number().int().nonnegative(),
-  })
-  .strict();
-
-const MemoryCandidateAcceptedPayloadSchema = z
-  .object({
-    candidateId: z.string().min(1),
-    memoryId: z.string().min(1),
-    reviewedAt: RuntimeEventIsoDateTimeSchema,
-  })
-  .strict();
-
-const MemoryCandidateRejectedPayloadSchema = z
-  .object({
-    candidateId: z.string().min(1),
-    rejectionReason: z.string().min(1),
-    reviewedAt: RuntimeEventIsoDateTimeSchema,
-  })
-  .strict();
-
-const MemoryRecordCreatedPayloadSchema = z
-  .object({
-    memoryId: z.string().min(1),
-    scope: MemoryScopeSchema,
-    kind: MemoryKindSchema,
-    status: MemoryRecordStatusSchema,
-    summary: z.string().min(1),
-  })
-  .strict();
-
-const MemoryRecordUpdatedPayloadSchema = z
-  .object({
-    memoryId: z.string().min(1),
-    changedFields: z.array(z.string().min(1)).min(1),
-  })
-  .strict();
-
-const MemoryRecordStatusChangedPayloadSchema = z
-  .object({
-    memoryId: z.string().min(1),
-    from: MemoryRecordStatusSchema,
-    to: MemoryRecordStatusSchema,
-    reason: z.string().min(1).optional(),
-  })
-  .strict();
-
-const MemoryRecallRequestedPayloadSchema = z
-  .object({
-    recallRequestId: z.string().min(1),
-    scopes: z.array(MemoryScopeSchema).min(1),
-    kinds: z.array(MemoryKindSchema).optional(),
-    limit: z.number().int().positive(),
-  })
-  .strict();
-
-const MemoryRecallCompletedPayloadSchema = z
-  .object({
-    recallRequestId: z.string().min(1),
-    resultCount: z.number().int().nonnegative(),
-    selectedCount: z.number().int().nonnegative(),
-  })
-  .strict();
-
-const MemoryRecallFailedPayloadSchema = z
-  .object({
-    recallRequestId: z.string().min(1),
-    error: RuntimeErrorSchema,
-  })
-  .strict();
-
-const MemoryAccessRecordedPayloadSchema = z
-  .object({
-    accessLogId: z.string().min(1),
-    memoryId: z.string().min(1),
-    accessKind: MemoryAccessKindSchema,
-    selectedForContext: z.boolean(),
-  })
-  .strict();
-
 const WorkspaceRestoreRequestedPayloadSchema = z
   .object({
     restoreRequestId: z.string().min(1),
@@ -1233,42 +1090,6 @@ export const ActionRetryRequestedEventSchema = eventSchema('action.retry.request
 export const RetryStartedEventSchema = eventSchema('retry.started', RetryStartedPayloadSchema);
 export const RetryCompletedEventSchema = eventSchema('retry.completed', RetryCompletedPayloadSchema);
 export const RetryFailedEventSchema = eventSchema('retry.failed', RetryFailedPayloadSchema);
-export const ArtifactCreatedEventSchema = eventSchema('artifact.created', ArtifactCreatedPayloadSchema);
-export const ArtifactVersionCreatedEventSchema = eventSchema(
-  'artifact.version.created',
-  ArtifactVersionCreatedPayloadSchema,
-);
-export const ArtifactStatusChangedEventSchema = eventSchema(
-  'artifact.status.changed',
-  ArtifactStatusChangedPayloadSchema,
-);
-export const ArtifactReferencedEventSchema = eventSchema('artifact.referenced', ArtifactReferencedPayloadSchema);
-export const ArtifactContentWriteFailedEventSchema = eventSchema(
-  'artifact.content.write.failed',
-  ArtifactContentWriteFailedPayloadSchema,
-);
-export const MemoryCandidateProposedEventSchema = eventSchema(
-  'memory.candidate.proposed',
-  MemoryCandidateProposedPayloadSchema,
-);
-export const MemoryCandidateAcceptedEventSchema = eventSchema(
-  'memory.candidate.accepted',
-  MemoryCandidateAcceptedPayloadSchema,
-);
-export const MemoryCandidateRejectedEventSchema = eventSchema(
-  'memory.candidate.rejected',
-  MemoryCandidateRejectedPayloadSchema,
-);
-export const MemoryRecordCreatedEventSchema = eventSchema('memory.record.created', MemoryRecordCreatedPayloadSchema);
-export const MemoryRecordUpdatedEventSchema = eventSchema('memory.record.updated', MemoryRecordUpdatedPayloadSchema);
-export const MemoryRecordStatusChangedEventSchema = eventSchema(
-  'memory.record.status.changed',
-  MemoryRecordStatusChangedPayloadSchema,
-);
-export const MemoryRecallRequestedEventSchema = eventSchema('memory.recall.requested', MemoryRecallRequestedPayloadSchema);
-export const MemoryRecallCompletedEventSchema = eventSchema('memory.recall.completed', MemoryRecallCompletedPayloadSchema);
-export const MemoryRecallFailedEventSchema = eventSchema('memory.recall.failed', MemoryRecallFailedPayloadSchema);
-export const MemoryAccessRecordedEventSchema = eventSchema('memory.access.recorded', MemoryAccessRecordedPayloadSchema);
 export const WorkspaceRestoreRequestedEventSchema = eventSchema(
   'workspace.restore.requested',
   WorkspaceRestoreRequestedPayloadSchema,
@@ -1364,21 +1185,6 @@ export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   RetryStartedEventSchema,
   RetryCompletedEventSchema,
   RetryFailedEventSchema,
-  ArtifactCreatedEventSchema,
-  ArtifactVersionCreatedEventSchema,
-  ArtifactStatusChangedEventSchema,
-  ArtifactReferencedEventSchema,
-  ArtifactContentWriteFailedEventSchema,
-  MemoryCandidateProposedEventSchema,
-  MemoryCandidateAcceptedEventSchema,
-  MemoryCandidateRejectedEventSchema,
-  MemoryRecordCreatedEventSchema,
-  MemoryRecordUpdatedEventSchema,
-  MemoryRecordStatusChangedEventSchema,
-  MemoryRecallRequestedEventSchema,
-  MemoryRecallCompletedEventSchema,
-  MemoryRecallFailedEventSchema,
-  MemoryAccessRecordedEventSchema,
   WorkspaceRestoreRequestedEventSchema,
   WorkspaceRestoreCompletedEventSchema,
 ]);

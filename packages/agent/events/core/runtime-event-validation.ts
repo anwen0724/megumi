@@ -40,8 +40,6 @@ export const RUNTIME_SOURCES = [
   'tool',
   'approval',
   'workspace',
-  'memory',
-  'artifact',
   'unknown',
 ] as const;
 

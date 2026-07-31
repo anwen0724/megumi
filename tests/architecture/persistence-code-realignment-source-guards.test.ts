@@ -135,17 +135,17 @@ describe('persistence code realignment source guards', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps persistence composition on database infrastructure and temporary legacy repositories only', () => {
+  it('keeps persistence composition on database infrastructure only', () => {
     const source = fs.readFileSync(
       path.join(root, 'packages/agent/composition/compose-agent-persistence.ts'),
       'utf8',
     );
 
-    for (const expected of [
+    for (const removed of [
       'memoryRepository',
       'artifactRepository',
     ]) {
-      expect(source).toContain(expected);
+      expect(source).not.toContain(removed);
     }
 
     for (const forbidden of [
