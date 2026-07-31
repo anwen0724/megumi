@@ -503,7 +503,6 @@ describe('TimelineMessage canonical block rendering', () => {
             kind: 'tool_activity',
             toolCallId: 'tool-call-demo-echo',
             toolExecutionId: 'tool-execution-demo-echo',
-            toolResultId: 'tool-result-demo-echo',
             toolName: 'demo_echo',
             displayName: 'Demo echo',
             inputSummary: 'hello',

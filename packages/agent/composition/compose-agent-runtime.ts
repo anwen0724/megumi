@@ -5,15 +5,6 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { ArtifactContentStore } from '../artifacts/artifact-content-store';
 import { ArtifactService, PlanArtifactCompatibilityService, PlanArtifactService } from '../artifacts';
-import {
-  createAgentRunService,
-  createModelCallService,
-  type AgentRunTraceLogger,
-  type AgentRunService,
-  type ModelCallService,
-} from '../agent-run';
-import { ActiveRunStore } from '../agent-run/core/active-run-store';
-import { resolveModelRuntime } from '../agent-run/adapters/model-runtime-resolver';
 import { createCommandService, type CommandService, type SkillCommandDescriptor } from '../commands';
 import { createInputService, type InputFileReader, type InputService } from '../input';
 import {
@@ -60,8 +51,7 @@ import {
   type LocalWorkspaceServiceFileSystem,
 } from '../adapters/local/workspace/project-file-system';
 import { createLocalWorkspaceFilesFileSystem } from '../adapters/local/workspace/workspace-files-file-system';
-import type { ObservabilityService, SpanHandle, TraceHandle } from '@megumi/observability';
-import type { RuntimeEvent } from '../events';
+import type { ObservabilityService } from '@megumi/observability';
 import {
   createSessionTimelineQuery,
   type SessionTimelineQuery,
@@ -73,7 +63,8 @@ import {
 import { WorkspaceChangeRepository } from '../workspace/repositories/workspace-change-repository';
 import { WorkspaceRepository } from '../workspace/repositories/workspace-repository';
 import { createWebSearchService } from '../tools/built-in-tools';
-import type { ToolRegistryService } from '../tools/services/tool-registry-service';
+import type { ToolExecutionService, ToolRegistryService } from '../tools';
+import type { Models } from '@megumi/ai';
 
 type ImplementationPlanArtifactRecord = {
   planArtifactId: string;
@@ -106,7 +97,8 @@ export interface ComposeAgentRuntimeOptions {
   migrationEnvironment?: Parameters<typeof composeAgentPersistence>[0]['migrationEnvironment'];
   runtimeLogger: RuntimeLogger;
   observabilityService?: ObservabilityService;
-  modelCallService?: ModelCallService;
+  models?: Pick<Models, 'completeSimple'>;
+  isRunLive?: (runId: string) => boolean;
   modelContextProvider?: ModelContextProvider;
   appSettingsProvider?: unknown;
   memorySettingsProvider?: MemorySettingsPort;
@@ -120,8 +112,6 @@ export interface ComposeAgentRuntimeOptions {
 }
 
 export interface AgentRuntime {
-  agentRunService: AgentRunService;
-  modelCallService: ModelCallService;
   inputService: InputService;
   commandService: CommandService;
   skillService: SkillService;
@@ -135,12 +125,19 @@ export interface AgentRuntime {
   workspacePathPolicyService: WorkspacePathPolicyService;
   permissionService: PermissionService;
   toolRegistryService: ToolRegistryService;
+  toolExecutionForRun(input: AgentToolExecutionScope): Pick<ToolExecutionService, 'executeTool'>;
   artifactService: ArtifactService;
   planArtifactService: PlanArtifactService;
   contextRuntime: ReturnType<typeof composeAgentContext>;
   sessionTimelineQuery: SessionTimelineQuery;
   modelContextProvider: ModelContextProvider;
   dispose(): void;
+}
+
+export interface AgentToolExecutionScope {
+  runId: string;
+  sessionId: string;
+  workspaceId: string;
 }
 
 export type ModelContextProvider = (selection: {
@@ -176,7 +173,6 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
   const workspaceRepository = new WorkspaceRepository(persistence.database);
   const workspaceChangeRepository = new WorkspaceChangeRepository(persistence.database);
   const sessionRepository = new SessionV2Repository(persistence.database);
-  const activeRunStore = new ActiveRunStore();
   const sessionService = observeSessionService(createSessionService({
     repository: sessionRepository,
     ...(options.sessionAttachmentFileSystem ? {
@@ -217,9 +213,6 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
     isWebSearchEnabled: () => Boolean(resolveWebSearchConfig()),
     ...(options.isBuiltInToolAvailable ? { isBuiltInToolAvailable: options.isBuiltInToolAvailable } : {}),
   });
-  const agentRunSettingsService = options.modelCallService
-    ? createModelConfigSettingsFacade(settingsService)
-    : settingsService;
   const workspaceFileSystem = options.projectFileSystem ?? createLocalProjectFileSystem();
   const workspacePathPolicyService = createWorkspacePathPolicyService();
   const workspaceService = createWorkspaceService({
@@ -262,10 +255,7 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
   );
   const sessionTimelineQuery = createSessionTimelineQuery({
     sessionService,
-    isRunLive: (runId) => {
-      const active = activeRunStore.getRun(runId);
-      return Boolean(active && !['completed', 'failed', 'cancelled'].includes(active.status));
-    },
+    isRunLive: options.isRunLive ?? (() => false),
     workspaceChangeFooterProjector,
   });
   const workspaceFilesService = createWorkspaceFilesService({
@@ -275,6 +265,18 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
   });
   const permissionService = createPermissionService({
     settings_service: {
+      resolvePermissionSettings(request) {
+        const result = settingsService.resolvePermissionSettings(request);
+        return result.status === 'ok'
+          ? result
+          : {
+              status: 'failed' as const,
+              failure: {
+                code: result.failure.code,
+                message: result.failure.message,
+              },
+            };
+      },
       async addPermissionRules(request) {
         const result = settingsService.addPermissionRules({
           rules: request.rules,
@@ -286,10 +288,29 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
           : { status: 'failed' as const, failure: result.failure };
       },
     },
-  });
-  const agentRunTraceLogger = createObservabilityAgentRunTraceLogger(options.observabilityService);
-  const modelCallService = options.modelCallService ?? createModelCallService({
-    resolve_model_runtime: resolveModelRuntime,
+    workspace_path_policy: {
+      classifyPath(request) {
+        const workspace = workspaceService.getWorkspace({
+          workspace_id: request.workspace_id,
+        });
+        if (workspace.status !== 'found') {
+          return {
+            status: 'failed' as const,
+            failure: {
+              code: 'workspace_not_found',
+              message: 'Workspace was not found.',
+            },
+          };
+        }
+        return {
+          status: 'classified' as const,
+          workspace_path: workspacePathPolicyService.classifyPath({
+            workspace_root: workspace.workspace.root_path,
+            target_path: request.target_path,
+          }),
+        };
+      },
+    },
   });
   const instructionService = composeAgentInstructions({
     megumiHomePath: options.homePaths.homePath,
@@ -299,6 +320,11 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
     },
   });
   const modelContextProvider = options.modelContextProvider ?? createSettingsModelContextProvider(settingsService);
+  const contextModels: Pick<Models, 'completeSimple'> = options.models ?? {
+    async completeSimple() {
+      throw new Error('Agent Context requires Product-owned Models.');
+    },
+  };
   const contextRuntime = composeAgentContext({
     sessionService,
     instructionScopeResolver: {
@@ -310,6 +336,9 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
       },
     },
     instructionService,
+    skillServiceFactory: ({ workspaceRoot }) =>
+      skillComposition.createSkillService({ workspaceRoot }),
+    models: contextModels,
     policyProvider: {
       getPolicy() {
         const resolved = settingsService.getResolvedSettings();
@@ -318,19 +347,7 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
           : {};
       },
     },
-    modelCallService,
     ...(options.observabilityService ? { observability: options.observabilityService } : {}),
-    modelRuntimeConfigResolver: {
-      resolve({ providerId, modelId }) {
-        const resolved = agentRunSettingsService.resolveProviderRuntimeConfig({
-          provider_id: providerId,
-          model_id: modelId,
-        });
-        return resolved.status === 'ok'
-          ? { status: 'resolved', modelConfig: resolved.config }
-          : { status: 'failed', failure: resolved.failure };
-      },
-    },
   });
   const artifactContentStore = new ArtifactContentStore({
     artifactRoot: `${options.homePaths.homePath}/artifacts`,
@@ -346,87 +363,44 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
     repository: createInMemoryPlanArtifactRepository(),
     planArtifactCompatibility,
   });
-  const agentRunService = createAgentRunService({
-    active_run_store: activeRunStore,
-    input_service: inputService,
-    command_service: commandService,
-    command_execution_context_provider: ({ request, session_id }) => {
-      const providerConfig = agentRunSettingsService.resolveProviderRuntimeConfig({
-        provider_id: request.model_selection.provider_id,
-        model_id: request.model_selection.model_id,
-      });
-      return {
-        session_id,
-        workspace_id: request.workspace_id,
-        services: {
-          context: contextRuntime.contextService,
-          skills: createSkillServiceForWorkspace({ workspaceId: request.workspace_id }),
-        },
-        model_context: modelContextProvider({
-          providerId: request.model_selection.provider_id,
-          modelId: request.model_selection.model_id,
-        }),
-        image_input_support: providerConfig.status === 'ok'
-          ? providerConfig.config.capabilities.imageInput
-          : 'unknown',
-      };
-    },
-    session_service: sessionService,
-    branch_service: sessionBranchService,
-    settings_service: agentRunSettingsService,
-    context_service: contextRuntime.contextService,
-    model_context_provider: modelContextProvider,
-    model_call_service: modelCallService,
-    skill_service_factory: ({ workspace_root }) => skillComposition.createSkillService({
-      ...(workspace_root ? { workspaceRoot: workspace_root } : {}),
-    }),
-    tool_registry_service: toolRegistry,
-    tool_execution_service_factory: ({ run_id, session_id, workspace_id, workspace_root, skill_service }) => {
-      const webSearchConfig = resolveWebSearchConfig();
-      const runToolRegistry = composeAgentToolRegistryService({
-        webSearchEnabled: Boolean(webSearchConfig),
-        ...(options.isBuiltInToolAvailable ? { isBuiltInToolAvailable: options.isBuiltInToolAvailable } : {}),
-      });
-      const toolExecutionService = composeAgentToolExecutionService({
-        projectRoot: workspace_root ?? process.cwd(),
-        registryService: runToolRegistry,
-        workspacePathPolicyService,
-        ...(options.toolFileSystem ? { fileSystem: options.toolFileSystem } : {}),
-        ...(skill_service ? { skillService: skill_service } : {}),
-        ...(webSearchConfig ? { webSearchService: createWebSearchService(webSearchConfig) } : {}),
-      });
-      return {
-        executeTool(request) {
-          return workspaceChangeService.trackToolExecution({
-            scope: { run_id, session_id, workspace_id },
-            tool_execution: {
-              tool_name: request.toolName,
-              input: request.input,
-              workspace_root: workspace_root ?? process.cwd(),
-            },
-            execute: () => Promise.resolve(toolExecutionService.executeTool(request)),
-          });
-        },
-      };
-    },
-    permission_service: permissionService,
-    trace_logger: agentRunTraceLogger,
-    ...(options.observabilityService ? { observability: options.observabilityService } : {}),
-    workspace_service: workspaceService,
-    workspace_path_policy_service: workspacePathPolicyService,
-    event_publisher: {
-      publish(event) {
-        finalizeWorkspaceChangesForTerminalRunEvent({
-          event,
-          activeRuns: activeRunStore,
-          workspaceChanges: workspaceChangeService,
+  const toolExecutionForRun = (scope: AgentToolExecutionScope) => {
+    const workspace = workspaceService.getWorkspace({ workspace_id: scope.workspaceId });
+    if (workspace.status !== 'found') {
+      throw new Error(`Workspace ${scope.workspaceId} is unavailable for Tool execution.`);
+    }
+    const workspaceRoot = workspace.workspace.root_path;
+    const webSearchConfig = resolveWebSearchConfig();
+    const runToolRegistry = composeAgentToolRegistryService({
+      webSearchEnabled: Boolean(webSearchConfig),
+      ...(options.isBuiltInToolAvailable ? { isBuiltInToolAvailable: options.isBuiltInToolAvailable } : {}),
+    });
+    const toolExecutionService = composeAgentToolExecutionService({
+      projectRoot: workspaceRoot,
+      registryService: runToolRegistry,
+      workspacePathPolicyService,
+      ...(options.toolFileSystem ? { fileSystem: options.toolFileSystem } : {}),
+      skillService: createSkillServiceForWorkspace({ workspaceId: scope.workspaceId }),
+      ...(webSearchConfig ? { webSearchService: createWebSearchService(webSearchConfig) } : {}),
+    });
+    return {
+      executeTool(request: Parameters<ToolExecutionService['executeTool']>[0]) {
+        return workspaceChangeService.trackToolExecution({
+          scope: {
+            run_id: scope.runId,
+            session_id: scope.sessionId,
+            workspace_id: scope.workspaceId,
+          },
+          tool_execution: {
+            tool_name: request.toolName,
+            input: request.input,
+            workspace_root: workspaceRoot,
+          },
+          execute: () => Promise.resolve(toolExecutionService.executeTool(request)),
         });
       },
-    },
-  });
+    };
+  };
   return {
-    agentRunService,
-    modelCallService,
     inputService,
     commandService,
     skillService: defaultSkillService,
@@ -440,6 +414,7 @@ export function composeAgentRuntime(options: ComposeAgentRuntimeOptions): AgentR
     workspacePathPolicyService,
     permissionService,
     toolRegistryService: toolRegistry,
+    toolExecutionForRun,
     artifactService,
     planArtifactService,
     contextRuntime,
@@ -479,127 +454,6 @@ function observeSessionService(service: SessionService, observability?: Observab
   });
 }
 
-export function createObservabilityAgentRunTraceLogger(
-  observability?: ObservabilityService,
-): AgentRunTraceLogger {
-  if (!observability) return { record: () => undefined };
-  const modelSpans = new Map<string, SpanHandle>();
-  const toolSpans = new Map<string, SpanHandle>();
-
-  return {
-    record(record) {
-      if (
-        record.event_type === 'run.started'
-        || record.event_type === 'run.completed'
-        || record.event_type === 'run.failed'
-        || record.event_type === 'trace.context.built'
-      ) {
-        // ContextService owns Context preparation and its measurements.
-        return;
-      }
-
-      if (record.event_type === 'trace.model_call.request_payload' && record.model_call_id) {
-        const span = observability.startSpan({
-          name: 'model.call',
-          attributes: {
-            providerId: record.payload.provider_id,
-            modelId: record.payload.model_id,
-          },
-        });
-        modelSpans.set(record.model_call_id, span);
-        return;
-      }
-
-      if (record.event_type === 'trace.model_call.event_received' && record.model_call_id) {
-        const event = record.payload.event as {
-          type?: string;
-          usage?: { input_tokens?: number; output_tokens?: number };
-        } | undefined;
-        const span = modelSpans.get(record.model_call_id);
-        const correlation = span?.context ?? {
-          traceId: record.trace_id,
-          runId: record.run_id,
-          sessionId: record.session_id,
-          workspaceId: record.workspace_id,
-        };
-
-        if (event?.usage?.input_tokens !== undefined) {
-          observability.recordMeasurement({
-            name: 'model.input_tokens',
-            value: event.usage.input_tokens,
-            unit: 'token',
-            correlation,
-          });
-        }
-        if (event?.usage?.output_tokens !== undefined) {
-          observability.recordMeasurement({
-            name: 'model.output_tokens',
-            value: event.usage.output_tokens,
-            unit: 'token',
-            correlation,
-          });
-        }
-
-        if (
-          event?.type === 'completed'
-          || event?.type === 'failed'
-          || event?.type === 'cancelled'
-        ) {
-          if (span) {
-            observability.endSpan({
-              span,
-              status: event.type === 'completed'
-                ? 'ok'
-                : event.type === 'cancelled'
-                  ? 'cancelled'
-                  : 'error',
-            });
-            modelSpans.delete(record.model_call_id);
-          }
-        }
-        return;
-      }
-
-      if (record.event_type === 'trace.tool_call.requested' && record.tool_call_id) {
-        const span = observability.startSpan({
-          name: 'tool.call',
-          attributes: { toolName: record.payload.tool_name },
-        });
-        toolSpans.set(record.tool_call_id, span);
-        return;
-      }
-
-      if (record.event_type === 'trace.tool_execution.result' && record.tool_call_id) {
-        const span = toolSpans.get(record.tool_call_id);
-        if (span) {
-          observability.endSpan({
-            span,
-            status: record.payload.status === 'completed' ? 'ok' : 'error',
-            attributes: {
-              resultBytes: typeof record.payload.output_size === 'number'
-                ? record.payload.output_size
-                : undefined,
-            },
-          });
-          toolSpans.delete(record.tool_call_id);
-        }
-        return;
-      }
-
-      observability.recordLog({
-        level: record.event_type.includes('failed') ? 'warn' : 'info',
-        event: record.event_type,
-        correlation: {
-          traceId: record.trace_id,
-          runId: record.run_id,
-          sessionId: record.session_id,
-          workspaceId: record.workspace_id,
-        },
-      });
-    },
-  };
-}
-
 function toSkillCommandDescriptor(skill: Skill): SkillCommandDescriptor {
   return {
     name: skill.name,
@@ -607,58 +461,6 @@ function toSkillCommandDescriptor(skill: Skill): SkillCommandDescriptor {
     description: skill.description,
     sourceLabel: skill.source.owner === 'system' ? 'System' : 'User',
   };
-}
-
-function createModelConfigSettingsFacade(settingsService: SettingsService): Pick<SettingsService, 'resolveProviderRuntimeConfig' | 'resolvePermissionSettings'> {
-  return {
-    resolvePermissionSettings: (request) => settingsService.resolvePermissionSettings(request),
-    resolveProviderRuntimeConfig(request) {
-      const result = settingsService.resolveProviderRuntimeConfig(request);
-      if (result.status === 'ok') {
-        return result;
-      }
-      const resolved = settingsService.getResolvedSettings();
-      const provider = resolved.status === 'ok' ? resolved.settings.providers[request.provider_id] : undefined;
-      if (!provider || !provider.enabled || !provider.models[request.model_id]) {
-        return result;
-      }
-      return {
-        status: 'ok',
-        config: {
-          provider_id: request.provider_id,
-          api: provider.api,
-          ...(provider.base_url ? { base_url: provider.base_url } : {}),
-          model_id: request.model_id,
-          display_name: provider.models[request.model_id]!.display_name,
-          context_window_tokens: provider.models[request.model_id]!.context_window_tokens,
-          max_output_tokens: provider.models[request.model_id]!.max_output_tokens,
-          capabilities: provider.models[request.model_id]!.capabilities,
-        },
-      };
-    },
-  };
-}
-
-export function finalizeWorkspaceChangesForTerminalRunEvent(input: {
-  event: RuntimeEvent;
-  activeRuns: Pick<ActiveRunStore, 'getRun'>;
-  workspaceChanges: Pick<WorkspaceChangeService, 'finalizeChangeSet'>;
-}): void {
-  if (!isTerminalRunEvent(input.event) || !input.event.runId) {
-    return;
-  }
-
-  const run = input.activeRuns.getRun(input.event.runId);
-  if (!run) {
-    return;
-  }
-
-  input.workspaceChanges.finalizeChangeSet({
-    workspace_id: run.workspace_id,
-    session_id: run.session_id,
-    run_id: run.run_id,
-    finalized_at: input.event.createdAt,
-  });
 }
 
 function resolveWorkspaceChangeFooterProjector(
@@ -680,13 +482,6 @@ function isWorkspaceChangeFooterProjectorService(value: unknown): value is Works
     && 'projectRunFooter' in value
     && typeof value.projectRunFooter === 'function';
 }
-
-function isTerminalRunEvent(event: RuntimeEvent): boolean {
-  return event.eventType === 'run.completed' ||
-    event.eventType === 'run.failed' ||
-    event.eventType === 'run.cancelled';
-}
-
 
 function createInMemoryPlanArtifactRepository() {
   const plans = new Map<string, ImplementationPlanArtifactRecord>();

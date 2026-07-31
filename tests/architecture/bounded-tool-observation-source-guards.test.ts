@@ -17,16 +17,16 @@ describe('bounded Tool Result source guards', () => {
     expect(definitions).toContain("query: { type: 'string', description: 'Literal text to search for.' }");
   });
 
-  it('routes direct and approval-resumed execution through one mapper without reading rawResult', () => {
-    const orchestrator = read('packages/agent/agent-run/core/tool-call-orchestrator.ts');
-    const service = read('packages/agent/agent-run/services/agent-run-service.ts');
-    const mapper = read('packages/agent/agent-run/core/tool-result-mapper.ts');
-    const agentRunSource = `${orchestrator}\n${service}\n${mapper}`;
+  it('routes direct and approval-resumed execution through one Engine mapper without rawResult', () => {
+    const toolCall = read('packages/engine/src/tool-call.ts');
+    const runLoop = read('packages/engine/src/run-loop.ts');
+    const engineSource = `${toolCall}\n${runLoop}`;
 
-    expect(orchestrator).toContain('mapToolExecutionResultToRuntimeFact({');
-    expect(service).toContain('mapToolExecutionResultToRuntimeFact({');
-    expect(agentRunSource).not.toContain('toolResultFromExecutionResult');
-    expect(agentRunSource).not.toContain('toolResultRuntimeFactFromExecution');
-    expect(agentRunSource).not.toContain('.rawResult');
+    expect(toolCall).toContain('async function executeToolCall(');
+    expect(toolCall).toContain('content: result.normalizedResult.content');
+    expect(toolCall).toContain('runtimeSources: result.runtimeSources');
+    expect(engineSource).not.toContain('toolResultFromExecutionResult');
+    expect(engineSource).not.toContain('toolResultRuntimeFactFromExecution');
+    expect(engineSource).not.toContain('.rawResult');
   });
 });

@@ -1,4 +1,18 @@
 import type { AssistantMessage, AssistantMessageEvent } from "../types.ts";
+import {
+	classifyModelFailure,
+	withSafeModelFailure,
+} from "../model-failure.ts";
+
+type AssistantMessageEventInput =
+	| Exclude<AssistantMessageEvent, { type: "error" }>
+	| {
+			type: "error";
+			reason: "aborted" | "error";
+			error: AssistantMessage;
+			failure?: AssistantMessage["failure"];
+			cause?: unknown;
+	  };
 
 // Generic event stream class for async iteration
 export class EventStream<T, R = T> implements AsyncIterable<T> {
@@ -79,6 +93,38 @@ export class AssistantMessageEventStream extends EventStream<AssistantMessageEve
 				throw new Error("Unexpected event type for final result");
 			},
 		);
+	}
+
+	override push(event: AssistantMessageEventInput): void {
+		if (event.type !== "error") {
+			super.push(event);
+			return;
+		}
+		const failure = classifyModelFailure({
+			reason: event.reason,
+			failure: event.failure ?? event.error.failure,
+			error: event.cause,
+		});
+		const safeError = withSafeModelFailure(event.error, failure);
+		// Provider streams reuse one mutable AssistantMessage across partial events.
+		// Normalize that same object so previously emitted partial references cannot
+		// reveal a raw provider error after the terminal catch mutates it.
+		Object.assign(event.error, safeError);
+		const { cause: _cause, ...publicEvent } = event;
+		super.push({
+			...publicEvent,
+			failure,
+			error: event.error,
+		});
+	}
+
+	fail(input: {
+		reason: "aborted" | "error";
+		error: AssistantMessage;
+		cause?: unknown;
+		failure?: AssistantMessage["failure"];
+	}): void {
+		this.push({ type: "error", ...input });
 	}
 }
 

@@ -338,6 +338,23 @@ export interface Usage {
 
 export type StopReason = "stop" | "length" | "toolUse" | "error" | "aborted";
 
+export type ModelFailureCode =
+	| "aborted"
+	| "authentication_failed"
+	| "invalid_request"
+	| "rate_limited"
+	| "provider_unavailable"
+	| "transport_failed"
+	| "provider_failed"
+	| "unknown";
+
+export interface ModelFailure {
+	code: ModelFailureCode;
+	message: string;
+	retryable: boolean;
+	retryAfterMs?: number;
+}
+
 export interface UserMessage {
 	role: "user";
 	content: string | (TextContent | ImageContent)[];
@@ -355,6 +372,7 @@ export interface AssistantMessage {
 	diagnostics?: AssistantMessageDiagnostic[]; // Redacted provider/runtime diagnostics for failures and recoveries.
 	usage: Usage;
 	stopReason: StopReason;
+	failure?: ModelFailure;
 	errorMessage?: string;
 	timestamp: number; // Unix timestamp in milliseconds
 }
@@ -434,7 +452,12 @@ export type AssistantMessageEvent =
 	| { type: "toolcall_delta"; contentIndex: number; delta: string; partial: AssistantMessage }
 	| { type: "toolcall_end"; contentIndex: number; toolCall: ToolCall; partial: AssistantMessage }
 	| { type: "done"; reason: Extract<StopReason, "stop" | "length" | "toolUse">; message: AssistantMessage }
-	| { type: "error"; reason: Extract<StopReason, "aborted" | "error">; error: AssistantMessage };
+	| {
+			type: "error";
+			reason: Extract<StopReason, "aborted" | "error">;
+			failure: ModelFailure;
+			error: AssistantMessage;
+	  };
 
 /**
  * Compatibility settings for OpenAI-compatible completions APIs.

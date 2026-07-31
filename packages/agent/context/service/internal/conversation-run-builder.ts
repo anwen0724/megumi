@@ -80,7 +80,9 @@ function responseItems(messages: MessageHistoryItem[]): ConversationRun['items']
           type: 'tool_result',
           toolCallId: message.tool_call_id,
           toolName: message.tool_name,
-          status: message.status === 'success' ? 'success' : 'failure',
+          status: message.status === 'success'
+            ? 'success'
+            : message.status === 'cancelled' ? 'cancelled' : 'failure',
           content: message.content,
         });
       }
@@ -90,7 +92,41 @@ function responseItems(messages: MessageHistoryItem[]): ConversationRun['items']
       appendAssistantContent(items, message.content);
     }
   }
-  return items;
+  return repairInterruptedToolCalls(items);
+}
+
+function repairInterruptedToolCalls(
+  items: ConversationRun['items'],
+): ConversationRun['items'] {
+  const completedCallIds = new Set(items.flatMap((item) =>
+    item.type === 'tool_result' ? [item.toolCallId] : []));
+  const repaired: ConversationRun['items'] = [];
+  const missingGroup: Extract<ConversationRun['items'][number], { type: 'tool_call' }>[] = [];
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index]!;
+    repaired.push(item);
+    if (item.type === 'tool_call' && !completedCallIds.has(item.toolCallId)) {
+      missingGroup.push(item);
+    }
+    if (item.type === 'tool_call' && items[index + 1]?.type === 'tool_call') continue;
+    for (const missing of missingGroup.splice(0)) {
+      repaired.push({
+        type: 'tool_result',
+        toolCallId: missing.toolCallId,
+        toolName: missing.toolName,
+        status: 'cancelled',
+        error: {
+          code: 'runtime_interrupted',
+          message: 'Tool execution was interrupted before a result was committed.',
+        },
+        content: [{
+          type: 'text',
+          text: 'Tool execution was cancelled because the previous runtime was interrupted.',
+        }],
+      });
+    }
+  }
+  return repaired;
 }
 
 function appendAssistantContent(

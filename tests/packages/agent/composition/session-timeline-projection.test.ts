@@ -162,7 +162,7 @@ describe('Session Timeline projection', () => {
       modelCallId: 'M1', toolCallId: 'T1', toolName: 'web_fetch', input: { url: 'https://example.com' },
     }, 1));
     live = reduceRuntimeTimelineEvent(live, runtimeEvent('tool_result.created', {
-      toolResultId: 'tool-result:T1', toolCallId: 'T1', toolExecutionId: 'T1', toolName: 'web_fetch',
+      toolCallId: 'T1', toolName: 'web_fetch',
       kind: eventKind, content: [{ type: 'text', text: error?.message ?? 'success body' }], ...(error ? { error } : {}),
     }, 2));
     const liveAssistant = live.find((message) => message.role === 'assistant') as TimelineAssistantMessage;

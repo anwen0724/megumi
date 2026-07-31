@@ -98,7 +98,7 @@ function createInitialFormState(
         ...(imageInputOverride !== undefined ? { imageInputOverride } : {}),
       };
     }),
-    apiKey: provider.apiKey ?? '',
+    apiKey: '',
     apiKeyDirty: false,
   };
 }
@@ -354,7 +354,7 @@ export function ProviderSettingsPanel() {
 
     if (selectedForm.apiKeyDirty && selectedForm.apiKey.trim()) {
       await setApiKey({ providerId: providerName, apiKey: selectedForm.apiKey.trim() });
-      updateForm({ apiKey: selectedForm.apiKey.trim(), apiKeyDirty: false });
+      updateForm({ apiKey: '', apiKeyDirty: false });
     }
 
     if (isCreating || selectedEntry?.source === 'quick') {

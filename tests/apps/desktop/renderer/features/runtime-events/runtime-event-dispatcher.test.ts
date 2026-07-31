@@ -54,19 +54,20 @@ describe('runtime event dispatcher', () => {
 
   it('ignores text deltas for run state and chat UI state', () => {
     dispatchRuntimeEvent(runtimeEvent('run.started', 1, { runKind: 'agent' }));
-    dispatchRuntimeEvent(runtimeEvent('model.output.delta', 2, { modelStepId: 'model-step-1', delta: 'Docs ' }, {
+    dispatchRuntimeEvent(runtimeEvent('model_call.text_delta', 2, { modelCallId: 'model-call-1', delta: 'Docs ' }, {
       source: 'provider',
     }));
     dispatchRuntimeEvent(runtimeEvent('assistant.output.delta', 3, { delta: 'answer.' }));
     dispatchRuntimeEvent(runtimeEvent('context.effective.updated', 4, { sourceCount: 1 }));
-    dispatchRuntimeEvent(runtimeEvent('model.step.completed', 5, { modelStepId: 'model-step-1', finishReason: 'stop' }, {
+    dispatchRuntimeEvent(runtimeEvent('model_call.completed', 5, { modelCallId: 'model-call-1', finishReason: 'stop' }, {
       source: 'provider',
     }));
 
     expect(useRunStore.getState().eventsByRun['run-1'].map((event) => event.eventType)).toEqual([
       'run.started',
+      'model_call.text_delta',
       'context.effective.updated',
-      'model.step.completed',
+      'model_call.completed',
     ]);
     expect(useChatUiStore.getState()).toMatchObject({
       agentStatus: 'running',
@@ -170,7 +171,6 @@ describe('runtime event dispatcher', () => {
       input: { path: 'src/app.ts' },
     }));
     dispatchRuntimeEvent(runtimeEvent('tool_result.created', 2, {
-      toolResultId: 'tool-result-1',
       toolCallId: 'tool-call-1',
       toolExecutionId: 'tool-execution-1',
       toolName: 'edit_file',
@@ -225,7 +225,7 @@ describe('runtime event dispatcher', () => {
     });
     dispatchRuntimeEvent(runtimeEvent('run.status.changed', 3, {
       from: 'running',
-      to: 'waiting_for_approval',
+      to: 'waiting',
     }));
     dispatchRuntimeEvent(runtimeEvent('approval.resolved', 4, {
       approvalRequestId: 'approval-1',
@@ -350,10 +350,10 @@ describe('useRunStore', () => {
 
     store.applyRuntimeEvent(runtimeEvent('run.status.changed', 1, {
       from: 'running',
-      to: 'waiting_for_approval',
+      to: 'waiting',
     }));
     store.applyRuntimeEvent(runtimeEvent('run.status.changed', 2, {
-      from: 'waiting_for_approval',
+      from: 'waiting',
       to: 'cancelling',
     }));
 
@@ -363,37 +363,5 @@ describe('useRunStore', () => {
     });
   });
 
-  it('tracks run step state from step status runtime events', () => {
-    const store = useRunStore.getState();
-
-    store.applyRuntimeEvent(runtimeEvent('step.created', 1, {
-      kind: 'model',
-      status: 'running',
-      title: 'Model response',
-    }, { stepId: 'step-1' }));
-    store.applyRuntimeEvent(runtimeEvent('step.status.changed', 2, {
-      from: 'running',
-      to: 'failed',
-    }, { stepId: 'step-1' }));
-    store.applyRuntimeEvent(runtimeEvent('step.failed', 3, {
-      kind: 'model',
-      error: {
-        code: 'provider_failed',
-        message: 'Provider failed.',
-        severity: 'error',
-        retryable: false,
-        source: 'provider',
-      },
-    }, { stepId: 'step-1' }));
-
-    expect(useRunStore.getState().stepsByRun['run-1']?.['step-1']).toMatchObject({
-      stepId: 'step-1',
-      runId: 'run-1',
-      kind: 'model',
-      title: 'Model response',
-      status: 'failed',
-      errorMessage: 'Provider failed.',
-    });
-  });
 });
 

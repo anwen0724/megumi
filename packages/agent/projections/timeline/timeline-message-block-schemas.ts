@@ -208,7 +208,6 @@ export const ToolActivityItemSchema = z
     kind: z.literal('tool_activity'),
     toolCallId: z.string().min(1),
     toolExecutionId: z.string().min(1).optional(),
-    toolResultId: z.string().min(1).optional(),
     toolName: z.string().min(1),
     displayName: z.string().min(1).optional(),
     inputSummary: OptionalTextSchema,

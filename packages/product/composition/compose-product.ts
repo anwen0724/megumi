@@ -6,6 +6,18 @@ import {
   composeAgentRuntime,
   type ComposeAgentRuntimeOptions,
 } from '@megumi/agent/composition';
+import type {
+  ResolveProviderRuntimeConfigRequest,
+  SettingsError,
+} from '@megumi/agent/settings';
+import type { Api, Model, Models, ProviderStreams } from '@megumi/ai';
+import {
+  createEngine,
+  type Engine,
+  type EnginePolicy,
+  type Run,
+} from '@megumi/engine';
+import type { RuntimeEvent } from '@megumi/agent/events';
 import {
   initializeMegumiHomeSync,
   type InitializeMegumiHomeSyncOptions,
@@ -33,10 +45,12 @@ import type { RuntimeLogger } from '@megumi/agent/composition';
 import { composeObservability, type ObservabilityStorage } from '@megumi/observability';
 import { migrateLegacyPermissionSettingsFile } from '../migrations/legacy-permission-settings';
 import { migrateLegacyProviderApiSettingsFile } from '../migrations/legacy-provider-api-settings';
+import { composeModels } from './compose-models';
+import { ProductRunReadModel } from './product-run-read-model';
 
 export type ComposeProductOptions = Omit<
   ComposeAgentRuntimeOptions,
-  'homePaths' | 'runtimeLogger'
+  'homePaths' | 'runtimeLogger' | 'models'
 > & {
   home: InitializeMegumiHomeSyncOptions;
   logWriter?: RuntimeLogWriterPort;
@@ -48,6 +62,7 @@ export type ComposeProductOptions = Omit<
   fileOpen?: FileOpenPort;
   attachmentPicker?: InputAttachmentPickerPort;
   localFileAvailability?: LocalFileAvailabilityPort;
+  modelStreams?: Partial<Record<Api, ProviderStreams>>;
 };
 
 /** Host capabilities implemented by shells without importing Agent internals. */
@@ -62,8 +77,14 @@ export interface ProductRuntime {
   host: ProductHostInterface;
   logger: RuntimeLogger;
   observability: ReturnType<typeof composeObservability>;
-  dispose(): void;
+  models: Models;
+  resolveModel(request: ResolveProviderRuntimeConfigRequest): Promise<ResolveModelResult>;
+  dispose(): Promise<void>;
 }
+
+export type ResolveModelResult =
+  | { status: 'ok'; model: Model<Api> }
+  | { status: 'failed'; failure: SettingsError };
 
 export function composeProduct(options: ComposeProductOptions): ProductRuntime {
   const homePaths = initializeMegumiHomeSync(options.home);
@@ -78,6 +99,12 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
     now: options.logClock?.now,
   });
   const logger = createObservabilityRuntimeLogger(observability.service);
+  const modelComposition = composeModels({
+    ...(options.modelStreams ? { apiImplementations: options.modelStreams } : {}),
+  });
+  const runReadModel = new ProductRunReadModel({
+    terminalRetentionMs: PRODUCT_ENGINE_POLICY.terminalRunRetentionMs,
+  });
   const runtime = composeAgentRuntime({
     ...agentOptions(options),
     homePaths: {
@@ -88,17 +115,70 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
     },
     runtimeLogger: logger,
     observabilityService: observability.service,
+    models: modelComposition.models,
+    isRunLive: (runId) => runReadModel.listLiveRunIds().includes(runId),
   });
+  const resolveModel: ProductRuntime['resolveModel'] = async (request) => {
+    const resolved = runtime.settingsService.resolveProviderRuntimeConfig(request);
+    if (resolved.status === 'failed') return resolved;
+    try {
+      return {
+        status: 'ok',
+        model: await modelComposition.resolveModel(resolved.config),
+      };
+    } catch {
+      return {
+        status: 'failed',
+        failure: {
+          code: 'model_resolution_failed',
+          message: 'The selected model could not be prepared.',
+        },
+      };
+    }
+  };
+  const rawEngine = createEngine({
+    models: modelComposition.models,
+    context: runtime.contextRuntime.contextService,
+    session: runtime.sessionService,
+    toolRegistry: runtime.toolRegistryService,
+    toolExecutionForRun: runtime.toolExecutionForRun,
+    permissions: runtime.permissionService,
+    eventPublisher: {
+      publish(event) {
+        runReadModel.recordEvent(event);
+        finalizeWorkspaceChangesForTerminalEvent(event, runReadModel, runtime.workspaceChangeService);
+      },
+    },
+    observability: observability.service,
+    ids: {
+      createRunId: () => `run:${crypto.randomUUID()}`,
+      createModelCallId: () => `model-call:${crypto.randomUUID()}`,
+      createToolExecutionId: () => `tool-execution:${crypto.randomUUID()}`,
+      createRunApprovalId: () => `run-approval:${crypto.randomUUID()}`,
+      createSessionMessageId: () => `message:${crypto.randomUUID()}`,
+      createRuntimeEventId: () => `event:${crypto.randomUUID()}`,
+    },
+    clock: {
+      now: () => new Date().toISOString(),
+    },
+    policy: PRODUCT_ENGINE_POLICY,
+  });
+  const engineController = trackProductRuns(rawEngine, runReadModel);
+  const engine = engineController.engine;
   const artifacts = createArtifactHost(runtime.artifactService);
   const host: ProductHostInterface = {
     chat: createChatHost({
-      agentRunService: runtime.agentRunService,
+      engine,
+      inputService: runtime.inputService,
       commandService: runtime.commandService,
       sessionService: runtime.sessionService,
       workspaceService: runtime.workspaceService,
       branchService: runtime.sessionBranchService,
+      runReadModel,
       sessionTimelineQuery: runtime.sessionTimelineQuery,
       contextService: runtime.contextRuntime.contextService,
+      createSkillService: runtime.createSkillService,
+      resolveModel,
       ...(options.attachmentPicker ? { attachmentPicker: options.attachmentPicker } : {}),
       ...(options.localFileAvailability ? { localFileAvailability: options.localFileAvailability } : {}),
     }),
@@ -114,24 +194,168 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
     settings: createSettingsHost(runtime.settingsService, {
       listAvailableTools: () => runtime.toolRegistryService.listAvailableTools().tools,
     }),
-    approval: createApprovalHost(runtime.agentRunService),
+    approval: createApprovalHost(engine),
     artifacts,
     plan: createPlanHost(runtime.planArtifactService),
     observability: createObservabilityHost(observability.queryService, options.diagnosticBundleSave),
   };
 
+  let disposePromise: Promise<void> | undefined;
   return {
     homePaths,
     host,
     logger,
     observability,
-    dispose: () => { void observability.flush(); runtime.dispose(); },
+    models: modelComposition.models,
+    resolveModel,
+    dispose: () => {
+      disposePromise ??= disposeProduct({ engineController, runReadModel, observability, runtime });
+      return disposePromise;
+    },
   };
+}
+
+const PRODUCT_ENGINE_POLICY = {
+  maxModelCallsPerRun: 80,
+  maxToolRoundsPerRun: 50,
+  maxToolCallsPerModelCall: 32,
+  maxToolCallsPerRun: 256,
+  maxConcurrentToolExecutions: 4,
+  modelCallTimeoutMs: 120_000,
+  toolExecutionTimeoutMs: 120_000,
+  cancellationTimeoutMs: 10_000,
+  maxModelCallAttempts: 3,
+  modelRetryDelayMs: 1_000,
+  maxToolExecutionsPerCall: 1,
+  toolRetryDelayMs: 500,
+  terminalRunRetentionMs: 300_000,
+} satisfies EnginePolicy;
+
+function trackProductRuns(
+  engine: Engine,
+  readModel: ProductRunReadModel,
+): { engine: Engine; stopAccepting(): void } {
+  let accepting = true;
+  const tracked: Engine = {
+    async startRun(request) {
+      if (!accepting) {
+        return {
+          status: 'failed',
+          failure: {
+            code: 'internal_error',
+            message: 'Product is shutting down and is not accepting new Runs.',
+          },
+        };
+      }
+      const result = await engine.startRun(request);
+      if (
+        result.status === 'started'
+        || result.status === 'already_started'
+        || result.status === 'session_busy'
+      ) {
+        readModel.recordRun(result.status === 'session_busy' ? result.activeRun : result.run);
+      }
+      return result;
+    },
+    async resumeRun(request) {
+      if (!accepting) {
+        return {
+          status: 'failed',
+          failure: {
+            code: 'internal_error',
+            message: 'Product is shutting down and is not accepting Run resumes.',
+          },
+        };
+      }
+      const result = await engine.resumeRun(request);
+      if (
+        result.status === 'resumed'
+        || result.status === 'not_waiting'
+        || result.status === 'already_resolved'
+      ) {
+        readModel.recordRun(result.run);
+      }
+      return result;
+    },
+    async cancelRun(request) {
+      const result = await engine.cancelRun(request);
+      if (
+        result.status === 'cancellation_requested'
+        || result.status === 'already_cancelling'
+        || result.status === 'already_terminal'
+      ) {
+        readModel.recordRun(result.run);
+      }
+      return result;
+    },
+  };
+  return {
+    engine: tracked,
+    stopAccepting() {
+      accepting = false;
+    },
+  };
+}
+
+function finalizeWorkspaceChangesForTerminalEvent(
+  event: RuntimeEvent,
+  readModel: ProductRunReadModel,
+  workspaceChanges: {
+    finalizeChangeSet(request: {
+      workspace_id: string;
+      session_id: string;
+      run_id: string;
+      finalized_at: string;
+    }): unknown;
+  },
+): void {
+  if (
+    !event.runId
+    || (event.eventType !== 'run.completed'
+      && event.eventType !== 'run.failed'
+      && event.eventType !== 'run.cancelled')
+  ) {
+    return;
+  }
+  const run = readModel.getRun(event.runId);
+  if (!run) return;
+  try {
+    workspaceChanges.finalizeChangeSet({
+      workspace_id: run.workspaceId,
+      session_id: run.sessionId,
+      run_id: run.runId,
+      finalized_at: event.createdAt,
+    });
+  } catch {
+    // Workspace projection failure must not alter the already decided Run result.
+  }
+}
+
+async function disposeProduct(input: {
+  engineController: { engine: Engine; stopAccepting(): void };
+  runReadModel: ProductRunReadModel;
+  observability: { flush(): Promise<void> };
+  runtime: { dispose(): void };
+}): Promise<void> {
+  input.engineController.stopAccepting();
+  await Promise.all(
+    input.runReadModel
+      .listLiveRunIds()
+      .map((runId) => input.engineController.engine.cancelRun({ runId })),
+  );
+  const converged = await input.runReadModel.waitForConvergence(
+    PRODUCT_ENGINE_POLICY.cancellationTimeoutMs + 2_000,
+  );
+  if (!converged) {
+    throw new Error('Product shutdown timed out while waiting for live Runs to become terminal.');
+  }
+  await input.observability.flush();
+  input.runtime.dispose();
 }
 
 function agentOptions(
   options: ComposeProductOptions,
-): Omit<ComposeAgentRuntimeOptions, 'homePaths' | 'runtimeLogger'> {
+): Omit<ComposeAgentRuntimeOptions, 'homePaths' | 'runtimeLogger' | 'models'> {
   const {
     home: _home,
     logWriter: _logWriter,
@@ -143,6 +367,7 @@ function agentOptions(
     fileOpen: _fileOpen,
     attachmentPicker: _attachmentPicker,
     localFileAvailability: _localFileAvailability,
+    modelStreams: _modelStreams,
     ...agent
   } = options;
   return agent;

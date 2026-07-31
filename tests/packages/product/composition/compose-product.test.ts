@@ -6,7 +6,12 @@ import fs from 'fs-extra';
 import { afterEach, describe, expect, it } from 'vitest';
 import { composeProduct } from '@megumi/product/composition';
 import type { SettingsRaw } from '@megumi/agent/settings';
-import { fakeModelCallService } from '../../../helpers/fake-model-call-service';
+import {
+  AssistantMessageEventStream,
+  type Api,
+  type Model,
+  type ProviderStreams,
+} from '@megumi/ai';
 
 const tempDirectories: string[] = [];
 
@@ -40,13 +45,28 @@ describe('composeProduct', () => {
       directoryPicker: {
         chooseDirectory: async () => ({ canceled: false, filePaths: [workspaceRoot] }),
       },
-      modelCallService: fakeModelCallService(),
+      modelStreams: {
+        'openai-completions': fixedReplyStreams('Product integration reply.'),
+      },
       settingsStorage: settingsStorage(),
     });
 
     try {
       expect(product.homePaths.homePath).toBe(homePath);
       expect(fs.pathExistsSync(product.homePaths.settingsSchemaPath)).toBe(true);
+      const resolvedModel = await product.resolveModel({
+        provider_id: 'deepseek',
+        model_id: 'deepseek-chat',
+      });
+      expect(resolvedModel.status).toBe('ok');
+      if (resolvedModel.status === 'ok') {
+        expect(resolvedModel.model).toMatchObject({
+          provider: 'deepseek',
+          id: 'deepseek-chat',
+          api: 'openai-completions',
+        });
+      }
+      expect(JSON.stringify(resolvedModel)).not.toContain('test-api-key');
 
       const opened = await product.host.workspace.useExistingProject();
       if (opened.status !== 'opened') return;
@@ -71,7 +91,7 @@ describe('composeProduct', () => {
       for await (const event of result.events) events.push(event.eventType);
       expect(events).toContain('run.completed');
     } finally {
-      product.dispose();
+      await product.dispose();
     }
   });
 });
@@ -93,5 +113,41 @@ function settingsStorage() {
     writeRawSettings: (next: SettingsRaw) => {
       settings = next;
     },
+  };
+}
+
+function fixedReplyStreams(text: string): ProviderStreams {
+  const stream = (model: Model<Api>) => {
+    const events = new AssistantMessageEventStream();
+    const message = {
+      role: 'assistant' as const,
+      content: [{ type: 'text' as const, text }],
+      api: model.api,
+      provider: model.provider,
+      model: model.id,
+      usage: {
+        input: 1,
+        output: 1,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 2,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: 'stop' as const,
+      timestamp: Date.now(),
+    };
+    events.push({ type: 'start', partial: { ...message, content: [] } });
+    events.push({
+      type: 'text_delta',
+      contentIndex: 0,
+      delta: text,
+      partial: message,
+    });
+    events.push({ type: 'done', reason: 'stop', message });
+    return events;
+  };
+  return {
+    stream,
+    streamSimple: stream,
   };
 }

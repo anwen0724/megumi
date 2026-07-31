@@ -41,15 +41,31 @@ export type CancelSessionBranchDraftResult =
   | { status: 'cancelled'; events: AsyncIterable<RuntimeEvent> }
   | { status: 'not_cancelled'; reason: 'branch_marker_not_found' | 'branch_marker_not_active' };
 
-export type ConsumeSessionBranchDraftRequest = { session_id: string; branch_marker_id: string };
-export type ConsumeSessionBranchDraftResult =
-  | { status: 'consumed'; branch_draft: SessionBranchDraft }
-  | { status: 'not_consumed'; reason: 'branch_marker_not_found' | 'branch_marker_not_active' };
+export type ResolveSessionBranchDraftRequest = {
+  request_id: string;
+  session_id: string;
+  branch_marker_id: string;
+};
+export type ResolveSessionBranchDraftResult =
+  | { status: 'resolved'; branch_draft: SessionBranchDraft }
+  | {
+      status: 'not_resolved';
+      reason: 'branch_marker_not_found' | 'branch_marker_not_active' | 'branch_marker_already_committed';
+    };
+
+export type CommitSessionBranchDraftRequest = ResolveSessionBranchDraftRequest;
+export type CommitSessionBranchDraftResult =
+  | { status: 'committed' | 'already_committed'; branch_draft: SessionBranchDraft }
+  | {
+      status: 'not_committed';
+      reason: 'branch_marker_not_found' | 'branch_marker_not_active' | 'branch_marker_already_committed';
+    };
 
 export interface SessionBranchService {
   createBranchDraft(request: CreateSessionBranchDraftRequest): CreateSessionBranchDraftResult;
   cancelBranchDraft(request: CancelSessionBranchDraftRequest): CancelSessionBranchDraftResult;
-  consumeBranchDraft(request: ConsumeSessionBranchDraftRequest): ConsumeSessionBranchDraftResult;
+  resolveBranchDraft(request: ResolveSessionBranchDraftRequest): ResolveSessionBranchDraftResult;
+  commitBranchDraft(request: CommitSessionBranchDraftRequest): CommitSessionBranchDraftResult;
 }
 
 interface SessionBranchServiceOptions {
@@ -65,12 +81,18 @@ interface SessionBranchServiceOptions {
   };
 }
 
-type DraftState = SessionBranchDraft;
+type CommittedDraftState = {
+  branch_draft: SessionBranchDraft;
+  request_id: string;
+};
+
+const MAX_COMMITTED_DRAFTS = 256;
 
 export function createSessionBranchService(
   options: SessionBranchServiceOptions = {},
 ): SessionBranchService {
-  const drafts = new Map<string, DraftState>();
+  const drafts = new Map<string, SessionBranchDraft>();
+  const committedDrafts = new Map<string, CommittedDraftState>();
   const branchMarkerId = options.ids?.branchMarkerId ?? (() => `branch:${crypto.randomUUID()}`);
   const eventId = options.ids?.eventId ?? (() => `event:${crypto.randomUUID()}`);
   const now = options.clock?.now ?? (() => new Date().toISOString());
@@ -139,19 +161,63 @@ export function createSessionBranchService(
       return { status: 'cancelled', events: asyncEvents([event]) };
     },
 
-    consumeBranchDraft(request: ConsumeSessionBranchDraftRequest): ConsumeSessionBranchDraftResult {
+    resolveBranchDraft(request: ResolveSessionBranchDraftRequest): ResolveSessionBranchDraftResult {
       const draft = drafts.get(request.branch_marker_id);
-      if (!draft) {
-        return { status: 'not_consumed', reason: 'branch_marker_not_found' };
-      }
-      if (draft.session_id !== request.session_id) {
-        return { status: 'not_consumed', reason: 'branch_marker_not_active' };
+      if (draft) {
+        if (draft.session_id !== request.session_id) {
+          return { status: 'not_resolved', reason: 'branch_marker_not_active' };
+        }
+        return { status: 'resolved', branch_draft: draft };
       }
 
+      const committed = committedDrafts.get(request.branch_marker_id);
+      if (!committed) {
+        return { status: 'not_resolved', reason: 'branch_marker_not_found' };
+      }
+      if (committed.branch_draft.session_id !== request.session_id) {
+        return { status: 'not_resolved', reason: 'branch_marker_not_active' };
+      }
+      if (committed.request_id !== request.request_id) {
+        return { status: 'not_resolved', reason: 'branch_marker_already_committed' };
+      }
+      return { status: 'resolved', branch_draft: committed.branch_draft };
+    },
+
+    commitBranchDraft(request: CommitSessionBranchDraftRequest): CommitSessionBranchDraftResult {
+      const draft = drafts.get(request.branch_marker_id);
+      if (!draft) {
+        const committed = committedDrafts.get(request.branch_marker_id);
+        if (!committed) {
+          return { status: 'not_committed', reason: 'branch_marker_not_found' };
+        }
+        if (committed.branch_draft.session_id !== request.session_id) {
+          return { status: 'not_committed', reason: 'branch_marker_not_active' };
+        }
+        if (committed.request_id !== request.request_id) {
+          return { status: 'not_committed', reason: 'branch_marker_already_committed' };
+        }
+        return { status: 'already_committed', branch_draft: committed.branch_draft };
+      }
+      if (draft.session_id !== request.session_id) {
+        return { status: 'not_committed', reason: 'branch_marker_not_active' };
+      }
       drafts.delete(request.branch_marker_id);
-      return { status: 'consumed', branch_draft: draft };
+      committedDrafts.set(request.branch_marker_id, {
+        branch_draft: draft,
+        request_id: request.request_id,
+      });
+      pruneCommittedDrafts(committedDrafts);
+      return { status: 'committed', branch_draft: draft };
     },
   };
+}
+
+function pruneCommittedDrafts(committedDrafts: Map<string, CommittedDraftState>): void {
+  while (committedDrafts.size > MAX_COMMITTED_DRAFTS) {
+    const oldestMarkerId = committedDrafts.keys().next().value as string | undefined;
+    if (!oldestMarkerId) return;
+    committedDrafts.delete(oldestMarkerId);
+  }
 }
 
 function resolveSourceEntryId(

@@ -60,11 +60,33 @@ export function reduceRuntimeTimelineEvent(
     return nextMessages;
   }
 
+  if (event.eventType === 'model_call.projection_reset') {
+    const payload = event.payload as { modelCallId?: string };
+    const assistant = ensureAssistantMessage(nextMessages, event);
+    const modelCallId = payload.modelCallId ?? event.runId;
+    assistant.blocks = assistant.blocks.filter((block) => (
+      block.kind !== 'answer_text'
+      || (block.textId !== `text:${modelCallId}` && block.runId !== modelCallId)
+      || block.status === 'completed'
+    ));
+    const process = assistant.blocks.find(
+      (block): block is ProcessDisclosureBlock => block.kind === 'process_disclosure',
+    );
+    if (process) {
+      process.items = process.items.filter((item) => (
+        item.kind !== 'thinking' || item.thinkingId !== modelCallId
+      ));
+      process.updatedAt = event.createdAt;
+    }
+    assistant.updatedAt = event.createdAt;
+    return nextMessages;
+  }
+
   if (event.eventType === 'model.thinking.started') {
-    const payload = event.payload as { modelStepId?: string };
+    const payload = event.payload as { modelCallId?: string };
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
-    const item = ensureThinkingItem(process, payload.modelStepId ?? event.eventId, event.createdAt);
+    const item = ensureThinkingItem(process, payload.modelCallId ?? event.eventId, event.createdAt);
     item.status = 'streaming';
     item.updatedAt = event.createdAt;
     process.updatedAt = event.createdAt;
@@ -73,10 +95,10 @@ export function reduceRuntimeTimelineEvent(
   }
 
   if (event.eventType === 'model.thinking.delta') {
-    const payload = event.payload as { modelStepId?: string; delta?: string };
+    const payload = event.payload as { modelCallId?: string; delta?: string };
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
-    const item = ensureThinkingItem(process, payload.modelStepId ?? event.eventId, event.createdAt);
+    const item = ensureThinkingItem(process, payload.modelCallId ?? event.eventId, event.createdAt);
     item.text += payload.delta ?? '';
     item.status = 'streaming';
     item.updatedAt = event.createdAt;
@@ -86,10 +108,10 @@ export function reduceRuntimeTimelineEvent(
   }
 
   if (event.eventType === 'model.thinking.completed') {
-    const payload = event.payload as { modelStepId?: string };
+    const payload = event.payload as { modelCallId?: string };
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
-    const item = ensureThinkingItem(process, payload.modelStepId ?? event.eventId, event.createdAt);
+    const item = ensureThinkingItem(process, payload.modelCallId ?? event.eventId, event.createdAt);
     item.status = 'completed';
     item.updatedAt = event.createdAt;
     process.updatedAt = event.createdAt;
@@ -155,7 +177,6 @@ export function reduceRuntimeTimelineEvent(
     const payload = event.payload as {
       toolCallId?: string;
       toolExecutionId?: string;
-      toolResultId?: string;
       toolName?: string;
       kind?: string;
       summary?: string;
@@ -166,7 +187,6 @@ export function reduceRuntimeTimelineEvent(
     const process = ensureProcessBlock(assistant, event);
     const item = ensureToolItem(process, payload.toolCallId ?? event.eventId, event.createdAt);
     item.toolExecutionId = payload.toolExecutionId;
-    item.toolResultId = payload.toolResultId;
     item.toolName = payload.toolName ?? item.toolName;
     item.status = payload.kind === 'success'
       ? 'succeeded'
@@ -193,7 +213,6 @@ export function reduceRuntimeTimelineEvent(
       approvalRequest?: {
         approvalRequestId?: string;
         toolCallId?: string;
-        toolExecutionId?: string;
         toolName?: string;
         options?: Array<{ option_id?: string; scope?: 'once' | 'session'; display?: { label?: string; description?: string } }>;
         defaultOptionId?: string;
@@ -204,7 +223,6 @@ export function reduceRuntimeTimelineEvent(
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
     const item = ensureToolItem(process, approval?.toolCallId ?? event.eventId, event.createdAt);
-    item.toolExecutionId = approval?.toolExecutionId;
     item.toolName = approval?.toolName ?? item.toolName;
     item.status = 'awaiting_approval';
     const options = (approval?.options ?? []).flatMap((option) => (

@@ -8,7 +8,7 @@
   ToolCallRequestedPayload,
   ToolCallStartedPayload,
 } from '@megumi/product/runtime-events';
-import { useChatUiStore, type AgentRunStatus } from '../../entities/chat-ui/store';
+import { useChatUiStore, type RunUiStatus } from '../../entities/chat-ui/store';
 import { useRunStore } from '../../entities/run/store';
 import { useSessionStore } from '../../entities/session/store';
 import { useToolCallStore } from '../../entities/tool-call';
@@ -38,7 +38,7 @@ function syncActiveChatUiSession(sessionId: string | null): void {
   }
 }
 
-function setAgentStatusForSession(sessionId: string | null, agentStatus: AgentRunStatus): void {
+function setAgentStatusForSession(sessionId: string | null, agentStatus: RunUiStatus): void {
   syncActiveChatUiSession(sessionId);
   useChatUiStore.getState().setAgentStatus(agentStatus, sessionId);
 }
@@ -63,7 +63,7 @@ function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): vo
     const payload = event.payload as ToolCallRequestedPayload;
     const existing = store.findByToolCallId(payload.toolCallId);
     store.upsertToolCall({
-      toolExecutionId: existing?.toolExecutionId ?? payload.toolCallId,
+      ...(existing?.toolExecutionId ? { toolExecutionId: existing.toolExecutionId } : {}),
       toolCallId: payload.toolCallId,
       runId: event.runId ?? '',
       toolName: payload.toolName,
@@ -78,7 +78,7 @@ function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): vo
     const existing = store.findByToolCallId(payload.toolCallId);
     store.upsertToolCall({
       ...existing,
-      toolExecutionId: payload.toolExecutionId,
+      ...(payload.toolExecutionId ? { toolExecutionId: payload.toolExecutionId } : {}),
       toolCallId: payload.toolCallId,
       runId: event.runId ?? existing?.runId ?? '',
       toolName: payload.toolName,
@@ -154,7 +154,7 @@ function applyToolEvent(event: RuntimeEvent, targetSessionId: string | null): vo
 export function dispatchRuntimeEvent(event: RuntimeEvent, options?: DispatchRuntimeEventOptions): void {
   const targetSessionId = resolveEventSessionId(event, options);
 
-  if (event.eventType === 'assistant.output.delta' || event.eventType === 'model.output.delta') {
+  if (event.eventType === 'assistant.output.delta') {
     return;
   }
 
@@ -179,12 +179,17 @@ export function dispatchRuntimeEvent(event: RuntimeEvent, options?: DispatchRunt
 
   if (event.eventType === 'run.status.changed') {
     const to = (event.payload as { to?: string }).to;
-    if (to === 'waiting_for_approval') {
+    if (to === 'waiting') {
       setAgentStatusForSession(targetSessionId, 'waiting-approval');
     }
     if (to === 'running') {
       setAgentStatusForSession(targetSessionId, 'running');
     }
+    return;
+  }
+
+  if (event.eventType === 'run.waiting') {
+    setAgentStatusForSession(targetSessionId, 'waiting-approval');
     return;
   }
 

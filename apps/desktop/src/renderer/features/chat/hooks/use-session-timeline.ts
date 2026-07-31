@@ -446,7 +446,7 @@ export function useSessionTimeline() {
         return;
       }
 
-      if (result.data.status !== 'cancelled') {
+      if (result.data.status !== 'cancellation_requested') {
         showToast({
           tone: result.data.status === 'failed' ? 'error' : 'warning',
           title: rendererI18n.t(result.data.status === 'failed'
@@ -458,12 +458,7 @@ export function useSessionTimeline() {
         });
         return;
       }
-
-      useChatUiStore.getState().setAgentStatus('idle', runSessionId);
-      activeRunIdRef.current = null;
-      activeTraceIdRef.current = null;
-      runSessionIdRef.current = null;
-      processedEventIdsByRunRef.current.clear();
+      // The Run remains active until a terminal RuntimeEvent confirms its outcome.
     } catch (error) {
       showToast({
         tone: 'error',

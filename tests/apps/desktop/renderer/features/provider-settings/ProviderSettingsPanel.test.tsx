@@ -40,7 +40,6 @@ describe('ProviderSettingsPanel', () => {
           enabled: true,
           baseUrl: 'https://api.deepseek.com',
           modelIds: ['deepseek-v4-flash'],
-          apiKey: 'sk-existing-key',
           hasApiKey: false,
           credentialSource: 'missing',
           envOverrideActive: false,
@@ -204,7 +203,7 @@ describe('ProviderSettingsPanel', () => {
     });
   });
 
-  it('reveals and updates the locally stored API key', async () => {
+  it('accepts a replacement API key without revealing stored plaintext', async () => {
     const user = userEvent.setup();
     const updateProvider = vi.fn();
     const setApiKey = vi.fn();
@@ -215,14 +214,13 @@ describe('ProviderSettingsPanel', () => {
     expect(screen.getByLabelText('API Key')).toHaveAttribute('type', 'password');
     await user.click(screen.getByRole('button', { name: 'Show API key' }));
     expect(screen.getByLabelText('API Key')).toHaveAttribute('type', 'text');
-    expect(screen.getByLabelText('API Key')).toHaveValue('sk-existing-key');
-    await user.clear(screen.getByLabelText('API Key'));
+    expect(screen.getByLabelText('API Key')).toHaveValue('');
     await user.type(screen.getByLabelText('API Key'), 'sk-new-key');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(updateProvider).toHaveBeenCalledWith(expect.objectContaining({ providerId: 'DeepSeek' }));
     expect(setApiKey).toHaveBeenCalledWith({ providerId: 'DeepSeek', apiKey: 'sk-new-key' });
-    expect(screen.getByLabelText('API Key')).toHaveValue('sk-new-key');
+    expect(screen.getByLabelText('API Key')).toHaveValue('');
   });
 
   it('deletes the selected provider configuration', async () => {

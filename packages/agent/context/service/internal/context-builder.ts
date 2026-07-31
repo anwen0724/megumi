@@ -196,7 +196,8 @@ function toolResultMessage(item: Extract<ConversationItem, { type: 'tool_result'
     toolCallId: item.toolCallId,
     toolName: item.toolName,
     content: item.content.map(contentBlockToAi),
-    isError: item.status === 'failure',
+    ...(item.error ? { details: { error: item.error } } : {}),
+    isError: item.status !== 'success',
     timestamp: 0,
   };
 }

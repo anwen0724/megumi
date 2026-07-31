@@ -26,7 +26,6 @@ import type {
   MemoryRiskLevel,
   MemoryScope,
   ModelInputContextSourceRef,
-  ModelStepProviderState,
   PermissionDecision,
   ResumeMode,
   ResumeReason,
@@ -38,8 +37,6 @@ import type {
   RunActionStatus,
   RunObservationSource,
   RunStatus,
-  RunStepKind,
-  RunStepStatus,
   SessionActiveLeafReason,
   SessionBranchMarkerReason,
   SessionCompactionTriggerReason,
@@ -69,12 +66,7 @@ export const RUNTIME_EVENT_TYPES = [
   'run.failed',
   'run.cancelled',
   'run.interrupted',
-  'run.waiting_for_approval',
-  'step.created',
-  'step.started',
-  'step.status.changed',
-  'step.completed',
-  'step.failed',
+  'run.waiting',
   'observation.received',
   'context.patch.requested',
   'context.patch.applied',
@@ -90,16 +82,13 @@ export const RUNTIME_EVENT_TYPES = [
   'assistant.output.completed',
   'model_call.started',
   'model_call.text_delta',
+  'model_call.projection_reset',
   'model_call.completed',
   'model_call.tool_call',
-  'model.step.started',
-  'model.output.delta',
-  'model.step.provider_state.recorded',
   'model.thinking.started',
   'model.thinking.delta',
   'model.thinking.completed',
   'model.tool_call.detected',
-  'model.step.completed',
   'tool_call.requested',
   'tool_call.started',
   'tool_call.completed',
@@ -143,10 +132,8 @@ export const RUNTIME_EVENT_TYPES = [
   'run.resume.failed',
   'run.cancel.requested',
   'run.cancelling',
-  'step.cancelled',
   'action.cancelled',
   'run.retry.requested',
-  'step.retry.requested',
   'action.retry.requested',
   'retry.started',
   'retry.completed',
@@ -218,7 +205,6 @@ export interface RuntimeEvent<TPayload extends object = object> {
   eventType: RuntimeEventEnvelopeType;
   runId?: string;
   sessionId?: string;
-  stepId?: string;
   actionId?: string;
   observationId?: string;
   messageId?: string;
@@ -281,30 +267,6 @@ export interface RunStartedPayload {
 export interface RunStatusChangedPayload {
   from: RunStatus;
   to: RunStatus;
-}
-
-export interface StepCreatedPayload {
-  kind: RunStepKind;
-  status: RunStepStatus;
-  title?: string;
-}
-
-export interface StepStartedPayload {
-  kind: RunStepKind;
-}
-
-export interface StepStatusChangedPayload {
-  from: RunStepStatus;
-  to: RunStepStatus;
-}
-
-export interface StepCompletedPayload {
-  kind: RunStepKind;
-}
-
-export interface StepFailedPayload {
-  kind: RunStepKind;
-  error: RuntimeError;
 }
 
 export interface ActionRequestedPayload {
@@ -382,6 +344,11 @@ export interface ModelCallTextDeltaPayload {
   delta: string;
 }
 
+export interface ModelCallProjectionResetPayload {
+  modelCallId: string;
+  failedAttemptNumber: number;
+}
+
 export interface ModelCallCompletedPayload {
   modelCallId: string;
   finishReason: 'stop' | 'tool_calls' | 'cancelled' | 'failed' | string;
@@ -396,42 +363,24 @@ export interface ModelCallToolCallPayload {
   input: JsonValue;
 }
 
-export interface ModelStepStartedPayload {
-  modelStepId: string;
-  providerId: string;
-  modelId: string;
-}
-
-export interface ModelOutputDeltaPayload {
-  modelStepId: string;
-  delta: string;
-}
-
-export interface ModelStepProviderStateRecordedPayload extends ModelStepProviderState {}
-
 export interface ModelThinkingStartedPayload {
-  modelStepId: string;
+  modelCallId: string;
 }
 
 export interface ModelThinkingDeltaPayload {
-  modelStepId: string;
+  modelCallId: string;
   delta: string;
 }
 
 export interface ModelThinkingCompletedPayload {
-  modelStepId: string;
+  modelCallId: string;
 }
 
 export interface ModelToolCallDetectedPayload {
-  modelStepId: string;
+  modelCallId: string;
   toolCallId: string;
   providerToolCallId: string;
   toolName: string;
-}
-
-export interface ModelStepCompletedPayload {
-  modelStepId: string;
-  finishReason?: string;
 }
 
 export type RuntimeToolSourceKind = 'built_in' | 'mcp' | 'plugin' | 'project_local' | 'skill';
@@ -450,7 +399,7 @@ export interface RuntimeToolSourceIdentity {
 
 export interface ToolCallCreatedPayload {
   toolCallId: string;
-  modelStepId: string;
+  modelCallId: string;
   providerToolCallId: string;
   toolName: string;
   input: JsonValue;
@@ -495,7 +444,7 @@ export interface ToolCallRequestedPayload {
 
 export interface ToolCallStartedPayload {
   toolCallId: string;
-  toolExecutionId: string;
+  toolExecutionId?: string;
   toolName: string;
   input: JsonValue;
 }
@@ -514,7 +463,6 @@ export interface ToolCallFailedPayload {
 }
 
 export interface ToolResultCreatedPayload {
-  toolResultId: string;
   toolCallId: string;
   toolExecutionId?: string;
   toolName: string;
@@ -526,7 +474,6 @@ export interface ToolResultCreatedPayload {
 export type AgentRunToolResultCreatedPayload = ToolResultCreatedPayload;
 
 export interface CanonicalToolResultCreatedPayload {
-  toolResultId: string;
   toolCallId: string;
   toolExecutionId?: string;
   toolName?: string;
@@ -605,10 +552,9 @@ export interface RunInterruptedPayload {
   reason: SessionInterruptedRunReason;
 }
 
-export interface RunWaitingForApprovalPayload {
+export interface RunWaitingPayload {
   approvalRequestId: string;
   toolCallId: string;
-  toolExecutionId: string;
   reason: string;
 }
 
@@ -644,8 +590,7 @@ export interface RunResumeRequestedPayload {
 }
 
 export interface RunResumedPayload {
-  resumeRequestId: string;
-  checkpointId?: string;
+  runApprovalId: string;
 }
 
 export interface RunResumeFailedPayload {
@@ -662,11 +607,6 @@ export interface RunCancelRequestedPayload {
 
 export interface RunCancellingPayload {
   cancelRequestId: string;
-}
-
-export interface StepCancelledPayload {
-  cancelRequestId: string;
-  reason?: CancelReason;
 }
 
 export interface ActionCancelledPayload {
@@ -938,12 +878,7 @@ export type RuntimeEventPayloadByType = {
   'run.failed': RunFailedPayload;
   'run.cancelled': RunCancelledPayload;
   'run.interrupted': RunInterruptedPayload;
-  'run.waiting_for_approval': RunWaitingForApprovalPayload;
-  'step.created': StepCreatedPayload;
-  'step.started': StepStartedPayload;
-  'step.status.changed': StepStatusChangedPayload;
-  'step.completed': StepCompletedPayload;
-  'step.failed': StepFailedPayload;
+  'run.waiting': RunWaitingPayload;
   'action.requested': ActionRequestedPayload;
   'observation.received': ObservationReceivedPayload;
   'context.patch.requested': ContextPatchRequestedPayload;
@@ -960,16 +895,13 @@ export type RuntimeEventPayloadByType = {
   'assistant.output.completed': AssistantOutputCompletedPayload;
   'model_call.started': ModelCallStartedPayload;
   'model_call.text_delta': ModelCallTextDeltaPayload;
+  'model_call.projection_reset': ModelCallProjectionResetPayload;
   'model_call.completed': ModelCallCompletedPayload;
   'model_call.tool_call': ModelCallToolCallPayload;
-  'model.step.started': ModelStepStartedPayload;
-  'model.output.delta': ModelOutputDeltaPayload;
-  'model.step.provider_state.recorded': ModelStepProviderStateRecordedPayload;
   'model.thinking.started': ModelThinkingStartedPayload;
   'model.thinking.delta': ModelThinkingDeltaPayload;
   'model.thinking.completed': ModelThinkingCompletedPayload;
   'model.tool_call.detected': ModelToolCallDetectedPayload;
-  'model.step.completed': ModelStepCompletedPayload;
   'tool_call.requested': ToolCallRequestedPayload;
   'tool_call.started': ToolCallStartedPayload;
   'tool_call.completed': ToolCallCompletedPayload;
@@ -1013,10 +945,8 @@ export type RuntimeEventPayloadByType = {
   'run.resume.failed': RunResumeFailedPayload;
   'run.cancel.requested': RunCancelRequestedPayload;
   'run.cancelling': RunCancellingPayload;
-  'step.cancelled': StepCancelledPayload;
   'action.cancelled': ActionCancelledPayload;
   'run.retry.requested': RunRetryRequestedPayload;
-  'step.retry.requested': RunRetryRequestedPayload;
   'action.retry.requested': RunRetryRequestedPayload;
   'retry.started': RetryStartedPayload;
   'retry.completed': RetryCompletedPayload;

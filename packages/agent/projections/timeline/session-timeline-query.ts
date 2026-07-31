@@ -260,7 +260,6 @@ function projectProcessItems(
           toolName: block.name,
           inputSummary: summarizeToolTarget(block.name, parseToolArguments(block.argumentsText)),
           ...(result ? {
-            toolResultId: `tool-result:${block.id}`,
             ...(result.status === 'success' ? {} : { resultSummary: result.error?.message ?? sessionMessageText(result) }),
             status: result.status === 'success'
               ? 'succeeded' as const

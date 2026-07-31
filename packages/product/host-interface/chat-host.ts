@@ -9,14 +9,12 @@ import {
 } from '../../agent/projections/timeline';
 import { z } from 'zod';
 import { encodeBase64 } from '@megumi/agent/model-content';
-
-import { DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from '../../agent/input';
+import type { Engine, Run, RunInput, StartRunResult } from '@megumi/engine';
 
 import type {
-  AgentRun,
-  AgentRunService,
-  StartRunResult,
-} from '../../agent/agent-run';
+  InputService,
+} from '../../agent/input';
+import { DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from '../../agent/input';
 
 import {
   sessionMessageText,
@@ -30,6 +28,7 @@ import type { CommandService } from '../../agent/commands';
 import type { ContextService, GetSessionUsageSnapshotResult } from '../../agent/context';
 import type { SessionTimelineQuery } from '../../agent/projections/timeline';
 import type { WorkspaceService } from '../../agent/workspace';
+import type { SkillService } from '@megumi/skills';
 
 /*
  * Implements the ChatHost interface by orchestrating Agent public modules.
@@ -183,7 +182,8 @@ const ChatSessionUiDtoSchema = z.object({
   status: z.enum(['active', 'archived']), createdAt: z.string().datetime(), updatedAt: z.string().datetime(),
 }).strict();
 const ChatRunUiDtoSchema = z.object({
-  runId: z.string().min(1), sessionId: z.string().min(1), status: z.string().min(1),
+  runId: z.string().min(1), sessionId: z.string().min(1),
+  status: z.enum(['running', 'waiting', 'cancelling', 'completed', 'failed', 'cancelled']),
   createdAt: z.string().datetime(), completedAt: z.string().datetime().optional(),
 }).strict();
 export const ChatSendUserInputUiPayloadSchema = z.discriminatedUnion('type', [
@@ -256,7 +256,8 @@ export const ChatGetSessionHydrationUiResultSchema = z.object({
   runtimeEvents: z.array(RuntimeEventSchema),
 }).strict();
 export const ChatCancelUserInputUiPayloadSchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('cancelled') }).strict(),
+  z.object({ status: z.literal('cancellation_requested'), run: ChatRunUiDtoSchema }).strict(),
+  z.object({ status: z.literal('cancelling'), run: ChatRunUiDtoSchema }).strict(),
   z.object({ status: z.literal('not_found'), runId: z.string().min(1) }).strict(),
   z.object({
     status: z.literal('not_cancellable'),
@@ -299,9 +300,18 @@ export const ChatGetContextUsageUiResultSchema = z.discriminatedUnion('status', 
 export interface SessionBranchHostPort {
   createBranchDraft: SessionBranchService['createBranchDraft'];
   cancelBranchDraft: SessionBranchService['cancelBranchDraft'];
+  resolveBranchDraft: SessionBranchService['resolveBranchDraft'];
+  commitBranchDraft: SessionBranchService['commitBranchDraft'];
 }
 
-export type ChatContextUsagePort = Pick<ContextService, 'getSessionUsageSnapshot'>;
+export interface ChatRunReadModel {
+  listRunsBySession(sessionId: string): readonly Run[];
+  listEventsByRun(runId: string): readonly RuntimeEvent[];
+}
+
+export type ChatContextUsagePort =
+  Pick<ContextService, 'getSessionUsageSnapshot'>
+  & Partial<Pick<ContextService, 'compactSession'>>;
 
 export type InputAttachmentPickerPort = {
   selectImages(): Promise<
@@ -323,13 +333,23 @@ export type LocalFileAvailabilityPort = {
 };
 
 export function createChatHost(options: {
-  agentRunService: Pick<AgentRunService, 'startRun' | 'cancelRun'>;
-  commandService: Pick<CommandService, 'getCommandSuggestions'>;
+  engine: Pick<Engine, 'startRun' | 'cancelRun'>;
+  inputService: Pick<InputService, 'processUserInput'>;
+  commandService: Pick<CommandService, 'getCommandSuggestions' | 'handleCommandInput'>;
   sessionService: SessionService;
   workspaceService: Pick<WorkspaceService, 'listWorkspaces'>;
   branchService: SessionBranchHostPort;
+  runReadModel: ChatRunReadModel;
   sessionTimelineQuery: SessionTimelineQuery;
   contextService: ChatContextUsagePort;
+  createSkillService(input: { workspaceId?: string }): Pick<SkillService, 'listSkills'>;
+  resolveModel(request: {
+    provider_id: string;
+    model_id: string;
+  }): Promise<
+    | { status: 'ok'; model: Run['model'] }
+    | { status: 'failed'; failure: { code: string; message: string; retryable?: boolean } }
+  >;
   attachmentPicker?: InputAttachmentPickerPort;
   localFileAvailability?: LocalFileAvailabilityPort;
 }): ChatHost {
@@ -393,16 +413,7 @@ export function createChatHost(options: {
 
     async sendUserInput(request) {
       const requestId = request.requestId ?? `request:${crypto.randomUUID()}`;
-      const result = await options.agentRunService.startRun({
-        request_id: requestId,
-        workspace_id: request.projectId,
-        session: request.sessionId
-          ? { type: 'existing', session_id: request.sessionId }
-          : {
-              type: 'new',
-              ...(request.sessionTitle ? { title: request.sessionTitle } : {}),
-            },
-        ...(request.branchMarkerId ? { branch_marker_id: request.branchMarkerId } : {}),
+      const input = await options.inputService.processUserInput({
         user_input: {
           text: request.text,
           ...(request.attachments ? {
@@ -416,13 +427,172 @@ export function createChatHost(options: {
                 reference_id: attachment.source.referenceId,
               },
             })),
-          } : {}),
+            } : {}),
         },
-        ...(request.skillSelection ? { skill_selection: request.skillSelection } : {}),
-        model_selection: request.modelSelection,
-        ...(request.permissionMode ? { permission_mode: request.permissionMode } : {}),
       });
-      const mapped = mapStartRunResult(result);
+      if (input.status === 'failed') {
+        return {
+          payload: {
+            type: 'error',
+            requestId,
+            message: input.failure.message,
+          },
+        };
+      }
+
+      let session: Session | undefined;
+      let modelResolution: Awaited<ReturnType<typeof options.resolveModel>> | undefined;
+      const resolveSelectedModel = async () => {
+        modelResolution ??= await options.resolveModel(request.modelSelection);
+        return modelResolution;
+      };
+      let runInput: RunInput;
+      let selectedSkill = request.skillSelection;
+
+      if (input.parsed_user_input.type === 'command') {
+        if (request.sessionId) {
+          const resolvedExistingSession = resolveSessionForRun(options.sessionService, request);
+          if (resolvedExistingSession.status === 'failed') {
+            return {
+              payload: {
+                type: 'error',
+                requestId,
+                message: resolvedExistingSession.failure.message,
+              },
+            };
+          }
+          session = resolvedExistingSession.session;
+        }
+        const commandModel = await resolveSelectedModel();
+        const command = await options.commandService.handleCommandInput({
+          raw_input: input.parsed_user_input.text,
+          execution_context: {
+            ...(session ? { session_id: session.session_id } : {}),
+            workspace_id: request.projectId,
+            services: {
+              ...(options.contextService.compactSession
+                ? {
+                    context: {
+                      compactSession: (compactRequest) =>
+                        options.contextService.compactSession!(compactRequest),
+                    },
+                  }
+                : {}),
+              skills: options.createSkillService({ workspaceId: request.projectId }),
+            },
+            ...(commandModel.status === 'ok' ? { model: commandModel.model } : {}),
+          },
+        });
+        if (command.type === 'host_interaction_request') {
+          return {
+            payload: {
+              type: 'host_interaction_request',
+              ...(session ? { session: toChatSessionUiDto(session) } : {}),
+              requestId,
+              request: command.request,
+            },
+          };
+        }
+        if (command.type === 'completed') {
+          return {
+            payload: {
+              type: 'completed',
+              ...(session ? { session: toChatSessionUiDto(session) } : {}),
+              requestId,
+              ...(command.message ? { message: command.message } : {}),
+            },
+          };
+        }
+        if (command.type === 'error') {
+          return {
+            payload: {
+              type: 'error',
+              ...(session ? { session: toChatSessionUiDto(session) } : {}),
+              requestId,
+              message: command.message,
+            },
+          };
+        }
+        if (command.type === 'agent_run') {
+          runInput = {
+            type: 'message',
+            text: command.input.raw_input,
+            attachments: [],
+          };
+          selectedSkill ??= command.input.requestedSkill;
+        } else {
+          runInput = {
+            type: 'message',
+            text: input.parsed_user_input.text,
+            attachments: [],
+          };
+        }
+      } else {
+        runInput = input.parsed_user_input;
+      }
+
+      if (!session) {
+        const resolvedSession = resolveSessionForRun(options.sessionService, request);
+        if (resolvedSession.status === 'failed') {
+          return {
+            payload: {
+              type: 'error',
+              requestId,
+              message: resolvedSession.failure.message,
+            },
+          };
+        }
+        session = resolvedSession.session;
+      }
+      const model = await resolveSelectedModel();
+      if (model.status === 'failed') {
+        return {
+          payload: {
+            type: 'error',
+            session: toChatSessionUiDto(session),
+            requestId,
+            message: model.failure.message,
+          },
+        };
+      }
+      const branch = resolveBranchParent(
+        options.branchService,
+        session,
+        request.branchMarkerId,
+        requestId,
+      );
+      if (branch.status === 'failed') {
+        return {
+          payload: {
+            type: 'error',
+            session: toChatSessionUiDto(session),
+            requestId,
+            message: branch.message,
+          },
+        };
+      }
+
+      const result = await options.engine.startRun({
+        requestId,
+        workspaceId: request.projectId,
+        sessionId: session.session_id,
+        ...(branch.parentEntryId ? { parentEntryId: branch.parentEntryId } : {}),
+        input: runInput,
+        model: model.model,
+        permissionMode: request.permissionMode ?? 'ask',
+        ...(selectedSkill ? { selectedSkill } : {}),
+      });
+      if (
+        request.branchMarkerId
+        && (result.status === 'started' || result.status === 'already_started')
+      ) {
+        options.branchService.commitBranchDraft({
+          request_id: requestId,
+          session_id: session.session_id,
+          branch_marker_id: request.branchMarkerId,
+        });
+      }
+      const mapped = mapStartRunResult(result, requestId, session);
       const { events, ...payload } = mapped;
       return {
         payload: payload as ChatSendUserInputUiPayload,
@@ -512,32 +682,33 @@ export function createChatHost(options: {
     },
 
     async cancelUserInput(request) {
-      const result = await options.agentRunService.cancelRun({ run_id: request.runId });
-      if (result.status === 'cancelled') {
-        return { payload: { status: 'cancelled' }, events: asyncIterableFrom(result.events) };
-      }
-      if (result.status === 'not_found') {
-        return { payload: { status: 'not_found', runId: result.run_id } };
-      }
-      if (result.status === 'not_cancellable') {
+      const result = await options.engine.cancelRun({ runId: request.runId });
+      if (result.status === 'cancellation_requested') {
         return {
           payload: {
-            status: 'not_cancellable',
+            status: 'cancellation_requested',
             run: toChatRunUiDto(result.run),
-            reason: result.reason,
+          },
+          events: result.events,
+        };
+      }
+      if (result.status === 'already_cancelling') {
+        return {
+          payload: {
+            status: 'cancelling',
+            run: toChatRunUiDto(result.run),
           },
         };
       }
+      if (result.status === 'not_found') {
+        return { payload: { status: 'not_found', runId: result.runId } };
+      }
       return {
         payload: {
-          status: 'failed',
-          failure: {
-            code: result.failure.code,
-            message: result.failure.message,
-            ...(result.failure.retryable !== undefined ? { retryable: result.failure.retryable } : {}),
-          },
+          status: 'not_cancellable',
+          run: toChatRunUiDto(result.run),
+          reason: result.status === 'already_terminal' ? 'already_terminal' : 'not_running',
         },
-        ...(result.events ? { events: asyncIterableFrom(result.events) } : {}),
       };
     },
 
@@ -578,12 +749,16 @@ export function createChatHost(options: {
       return { suggestions: toHostCommandSuggestions(await options.commandService.getCommandSuggestions(request)) };
     },
 
-    async listRuns(_request) {
-      return { runs: [] };
+    async listRuns(request) {
+      return {
+        runs: options.runReadModel
+          .listRunsBySession(request.sessionId)
+          .map(toChatRunUiDto),
+      };
     },
 
-    async listRunEvents(_request) {
-      return { events: [] };
+    async listRunEvents(request) {
+      return { events: [...options.runReadModel.listEventsByRun(request.runId)] };
     },
 
     async getSessionHydration(request) {
@@ -594,8 +769,12 @@ export function createChatHost(options: {
       return {
         messages: timeline.messages,
         diagnostics: timeline.diagnostics,
-        runs: [],
-        runtimeEvents: [],
+        runs: options.runReadModel
+          .listRunsBySession(request.sessionId)
+          .map(toChatRunUiDto),
+        runtimeEvents: options.runReadModel
+          .listRunsBySession(request.sessionId)
+          .flatMap((run) => options.runReadModel.listEventsByRun(run.runId)),
       };
     },
 
@@ -629,51 +808,108 @@ function mapSessionUsageSnapshot(result: GetSessionUsageSnapshotResult): ChatGet
 
 function mapStartRunResult(
   result: StartRunResult,
-): ChatSendUserInputUiPayload & { events?: AsyncIterable<import('../../agent/events').RuntimeEvent> } {
-  if (result.status === 'started') {
+  requestId: string,
+  session: Session,
+): ChatSendUserInputUiPayload & { events?: AsyncIterable<RuntimeEvent> } {
+  if (result.status === 'started' || result.status === 'already_started') {
     return {
       type: 'agent_run',
-      session: toChatSessionUiDto(result.session),
-      requestId: result.request_id,
-      userMessageId: result.user_message_id,
-      userMessage: projectSessionTimelineUserMessage(result.session.workspace_id, result.user_message),
+      session: toChatSessionUiDto(session),
+      requestId,
+      userMessageId: result.userMessage.message.message_id,
+      userMessage: projectSessionTimelineUserMessage(session.workspace_id, result.userMessage),
       run: toChatRunUiDto(result.run),
-      events: result.events,
+      ...(result.status === 'started' ? { events: result.events } : {}),
     };
   }
 
-  if (result.status === 'host_interaction_required') {
+  if (result.status === 'session_busy') {
     return {
-      type: 'host_interaction_request',
-      ...(result.session ? { session: toChatSessionUiDto(result.session) } : {}),
-      requestId: result.request_id,
-      request: result.interaction,
-    };
-  }
-
-  if (result.status === 'completed') {
-    return {
-      type: 'completed',
-      ...(result.session ? { session: toChatSessionUiDto(result.session) } : {}),
-      requestId: result.request_id,
-      ...(result.message ? { message: result.message } : {}),
-      ...(result.events ? { events: asyncIterableFrom(result.events) } : {}),
+      type: 'error',
+      session: toChatSessionUiDto(session),
+      requestId,
+      message: 'The session already has an active Run.',
     };
   }
 
   return {
     type: 'error',
-    ...(result.session ? { session: toChatSessionUiDto(result.session) } : {}),
-    requestId: result.request_id,
+    session: toChatSessionUiDto(session),
+    requestId,
     message: result.failure.message,
-    ...(result.events ? { events: asyncIterableFrom(result.events) } : {}),
   };
 }
 
-async function* asyncIterableFrom<T>(items: Iterable<T>): AsyncIterable<T> {
-  for (const item of items) {
-    yield item;
+function resolveSessionForRun(
+  sessionService: Pick<SessionService, 'getSession' | 'createSession'>,
+  request: ChatSendUserInputUiRequest,
+):
+  | { status: 'ok'; session: Session }
+  | { status: 'failed'; failure: { code: string; message: string } } {
+  if (request.sessionId) {
+    const existing = sessionService.getSession({ session_id: request.sessionId });
+    if (existing.status === 'found') {
+      if (existing.session.workspace_id !== request.projectId) {
+        return {
+          status: 'failed',
+          failure: {
+            code: 'session_workspace_mismatch',
+            message: 'Session does not belong to the requested Workspace.',
+          },
+        };
+      }
+      return { status: 'ok', session: existing.session };
+    }
+    return {
+      status: 'failed',
+      failure: {
+        code: 'session_failed',
+        message: existing.status === 'failed' ? existing.failure.message : 'Session was not found.',
+      },
+    };
   }
+
+  const created = sessionService.createSession({
+    workspace_id: request.projectId,
+    initial_user_text: request.text,
+    ...(request.sessionTitle ? { title: request.sessionTitle } : {}),
+  });
+  return created.status === 'created'
+    ? { status: 'ok', session: created.session }
+    : {
+        status: 'failed',
+        failure: { code: 'session_failed', message: created.failure.message },
+      };
+}
+
+function resolveBranchParent(
+  branchService: Pick<SessionBranchService, 'resolveBranchDraft'>,
+  session: Session,
+  branchMarkerId: string | undefined,
+  requestId: string,
+):
+  | { status: 'ok'; parentEntryId?: string }
+  | { status: 'failed'; message: string } {
+  if (!branchMarkerId) return { status: 'ok' };
+  const resolved = branchService.resolveBranchDraft({
+    request_id: requestId,
+    session_id: session.session_id,
+    branch_marker_id: branchMarkerId,
+  });
+  if (resolved.status === 'resolved') {
+    return {
+      status: 'ok',
+      parentEntryId: resolved.branch_draft.source_entry_id,
+    };
+  }
+  return {
+    status: 'failed',
+    message: resolved.reason === 'branch_marker_not_found'
+      ? 'Branch draft was not found.'
+      : resolved.reason === 'branch_marker_already_committed'
+        ? 'Branch draft has already been committed by another request.'
+        : 'Branch draft does not belong to the active session.',
+  };
 }
 
 function toHostCommandSuggestions(
@@ -695,8 +931,8 @@ function toHostCommandSuggestions(
 }
 
 /*
- * Chat/session UI DTOs exposed to hosts. These are projections of product data,
- * not session module service contracts.
+ * Chat/session UI DTOs exposed to hosts. These are projections of Engine Run
+ * and Session facts, not module service contracts.
  */
 
 
@@ -722,7 +958,7 @@ export interface ChatSessionMessageUiDto {
 export interface ChatRunUiDto {
   runId: string;
   sessionId: string;
-  status: 'queued' | 'running' | 'waiting_for_approval' | 'completed' | 'failed' | 'cancelled' | string;
+  status: Run['status'];
   createdAt: string;
   completedAt?: string;
 }
@@ -839,7 +1075,8 @@ export interface ChatCancelUserInputUiRequest {
   runId: string;
 }
 export type ChatCancelUserInputUiPayload =
-  | { status: 'cancelled' }
+  | { status: 'cancellation_requested'; run: ChatRunUiDto }
+  | { status: 'cancelling'; run: ChatRunUiDto }
   | { status: 'not_found'; runId: string }
   | { status: 'not_cancellable'; run: ChatRunUiDto; reason: 'already_terminal' | 'not_running' }
   | { status: 'failed'; failure: { code: string; message: string; retryable?: boolean } };
@@ -975,13 +1212,13 @@ export function toChatMessageUiDto(item: SessionMessageWithAttachments): ChatSes
   };
 }
 
-export function toChatRunUiDto(run: AgentRun): ChatRunUiDto {
+export function toChatRunUiDto(run: Run): ChatRunUiDto {
   return {
-    runId: run.run_id,
-    sessionId: run.session_id,
+    runId: run.runId,
+    sessionId: run.sessionId,
     status: run.status,
-    createdAt: run.created_at,
-    ...(run.completed_at ? { completedAt: run.completed_at } : {}),
+    createdAt: run.createdAt,
+    ...(run.completedAt ? { completedAt: run.completedAt } : {}),
   };
 }
 

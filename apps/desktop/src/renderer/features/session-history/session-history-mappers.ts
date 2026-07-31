@@ -51,7 +51,7 @@ export function hydratedRuntimeEventsForRuns(
   return Object.entries(eventsByRun)
     .filter(([runId]) => runIds.has(runId))
     .flatMap(([, events]) => events)
-    .filter((event) => event.eventType !== 'assistant.output.delta' && event.eventType !== 'model.output.delta')
+    .filter((event) => event.eventType !== 'assistant.output.delta')
     .sort((left, right) => {
       const createdAtOrder = left.createdAt.localeCompare(right.createdAt);
       return createdAtOrder === 0 ? left.sequence - right.sequence : createdAtOrder;

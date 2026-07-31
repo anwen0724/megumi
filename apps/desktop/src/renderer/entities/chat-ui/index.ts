@@ -1,2 +1,2 @@
 export { useChatUiStore } from './store';
-export type { AgentRunStatus } from './store';
+export type { RunUiStatus } from './store';

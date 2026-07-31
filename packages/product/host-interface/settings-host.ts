@@ -178,7 +178,6 @@ const ProviderPublicStatusUiDtoSchema = z.object({
   }).strict()).optional(),
   modelCapabilities: z.record(z.string(), ModelCapabilitiesUiSchema.required()).optional(),
   modelCapabilityOverrides: z.record(z.string(), ModelCapabilitiesUiSchema).optional(),
-  apiKey: z.string().min(1).optional(),
   hasApiKey: z.boolean(),
   credentialSource: z.enum(['settings', 'environment', 'missing']),
   envOverrideActive: z.boolean(),
@@ -501,7 +500,6 @@ export type ProviderPublicStatusUiDto = {
   modelSettings?: Record<string, ProviderModelSettingsUiDto>;
   modelCapabilities?: Record<string, ModelCapabilitiesUiDto>;
   modelCapabilityOverrides?: Record<string, Partial<ModelCapabilitiesUiDto>>;
-  apiKey?: string;
   hasApiKey: boolean;
   credentialSource: 'settings' | 'environment' | 'missing';
   envOverrideActive: boolean;
@@ -791,7 +789,6 @@ export function toProviderPublicStatusUiDto(provider: {
   }>;
   model_capabilities: Record<string, ModelCapabilitiesUiDto>;
   model_capability_overrides: Record<string, Partial<ModelCapabilitiesUiDto>>;
-  api_key?: string;
   has_api_key: boolean;
   credential_source: ProviderPublicStatusUiDto['credentialSource'];
   env_override_active: boolean;
@@ -816,7 +813,6 @@ export function toProviderPublicStatusUiDto(provider: {
     ])),
     modelCapabilities: provider.model_capabilities,
     modelCapabilityOverrides: provider.model_capability_overrides,
-    ...(provider.api_key ? { apiKey: provider.api_key } : {}),
     hasApiKey: provider.has_api_key,
     credentialSource: provider.credential_source,
     envOverrideActive: provider.env_override_active,

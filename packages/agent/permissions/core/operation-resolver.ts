@@ -1,12 +1,20 @@
 /* Resolves registered Tool Call facts into normalized permission operations. */
-import type { EvaluateToolCallRequest, PermissionOperation } from '../contracts/permission-contracts';
+import type {
+  EvaluateToolCallRequest,
+  PermissionOperation,
+  WorkspacePathPermissionFacts,
+} from '../contracts/permission-contracts';
 
 const PATH_ACTIONS: Record<string, 'workspace.read' | 'workspace.write'> = {
   read_file: 'workspace.read', list_directory: 'workspace.read', glob: 'workspace.read', search_text: 'workspace.read',
   write_file: 'workspace.write', edit_file: 'workspace.write',
 };
 
-export function resolvePermissionOperations(request: EvaluateToolCallRequest): PermissionOperation[] {
+export type PermissionOperationRequest = EvaluateToolCallRequest & {
+  workspace_path?: WorkspacePathPermissionFacts;
+};
+
+export function resolvePermissionOperations(request: PermissionOperationRequest): PermissionOperation[] {
   const name = request.registered_tool.registered_tool_name;
   const context: PermissionOperation['context'] = {
     workspace_id: request.workspace_id, session_id: request.session_id, run_id: request.run_id,
@@ -43,6 +51,14 @@ export function resolvePermissionOperations(request: EvaluateToolCallRequest): P
   if (name === 'use_skill') return [{ action: 'agent.context.activate', context }];
   const stableId = `${request.registered_tool.source_id}/${request.registered_tool.namespace}/${request.registered_tool.source_tool_name}`;
   return [{ action: 'external.invoke', resource: { type: 'tool.identity', id: stableId }, context }];
+}
+
+export function resolveWorkspacePathTarget(
+  request: Pick<EvaluateToolCallRequest, 'registered_tool' | 'tool_input'>,
+): string | undefined {
+  return PATH_ACTIONS[request.registered_tool.registered_tool_name]
+    ? readString(request.tool_input, ['path', 'target_path', 'workspace_path'])
+    : undefined;
 }
 
 function readString(input: unknown, fields: string[]): string | undefined {

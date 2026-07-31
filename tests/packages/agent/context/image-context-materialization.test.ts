@@ -2,6 +2,36 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ContextServiceImpl, type ContextServiceDependencies } from '@megumi/agent/context/service/context-service-impl';
 import type { SessionHistoryItem } from '@megumi/agent/session';
+import type { Api, AssistantMessage, Context, Model, Models } from '@megumi/ai';
+
+const imageModel: Model<Api> = {
+  id: 'm',
+  name: 'Model',
+  api: 'openai-completions',
+  provider: 'p',
+  baseUrl: 'https://api.example.com/v1',
+  reasoning: false,
+  input: ['text', 'image'],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 100,
+  maxTokens: 20,
+};
+
+function summaryMessage(): AssistantMessage {
+  return {
+    role: 'assistant',
+    content: [{ type: 'text', text: 'summary' }],
+    api: imageModel.api,
+    provider: imageModel.provider,
+    model: imageModel.id,
+    usage: {
+      input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason: 'stop',
+    timestamp: 0,
+  };
+}
 
 const imageAttachment = {
   attachment_id: 'A-history', message_id: 'M-user', session_id: 'S1', type: 'image' as const,
@@ -18,7 +48,7 @@ function history(): SessionHistoryItem[] {
 
 function dependencies(
   counts = [10],
-  summaryModelCall: ContextServiceDependencies['summaryModelCall']['complete'] = vi.fn(async () => ({ status: 'completed' as const, content: 'summary' })),
+  completeSimple: Pick<Models, 'completeSimple'>['completeSimple'] = vi.fn(async () => summaryMessage()),
 ): ContextServiceDependencies {
   const queue = [...counts];
   return {
@@ -30,16 +60,14 @@ function dependencies(
     instructionScopeResolver: { resolve: () => ({ status: 'resolved', workspaceRoot: 'C:/w', workingDirectory: 'C:/w' }) },
     instructionService: { getSystemInstructions: () => [], getEffectiveAgentInstructions: async () => ({ status: 'ok', instructions: { sources: [] } }) },
     contextTokenEstimator: vi.fn(() => queue.shift() ?? 10),
-    summaryModelCall: { complete: summaryModelCall },
+    models: { completeSimple },
     usageSnapshotCache: new Map(),
     ids: { preparationId: () => 'P1', compactionId: () => 'C1' },
   };
 }
 
 const request = {
-  sessionId: 'S1', workspaceId: 'W1', skillCatalog: [], usedSkills: [], tools: [],
-  modelContext: { providerId: 'p', modelId: 'm', contextWindowTokens: 100 },
-  imageInputSupport: true as const,
+  sessionId: 'S1', workspaceId: 'W1', tools: [], model: imageModel,
   currentRun: {
     runId: 'R-current', userEntry: { entryId: 'E-current', parentEntryId: 'E-answer' },
     userMessage: { type: 'user_message' as const, content: [{ type: 'image' as const, source: { type: 'host_reference' as const, referenceId: 'A-current' } }] },
@@ -49,7 +77,7 @@ const request = {
 
 describe('Context image materialization', () => {
   it('returns a complete Context with historical and current images resolved to Base64', async () => {
-    const result = await new ContextServiceImpl(dependencies()).prepareModelCall(request);
+    const result = await new ContextServiceImpl(dependencies()).build(request);
     expect(result.status).toBe('ready');
     if (result.status !== 'ready') return;
     const images = result.prepared.context.messages.flatMap((message) =>
@@ -64,9 +92,9 @@ describe('Context image materialization', () => {
 
   it('replaces every image with a model-visible text marker when image input is unsupported', async () => {
     const deps = dependencies();
-    const result = await new ContextServiceImpl(deps).prepareModelCall({
+    const result = await new ContextServiceImpl(deps).build({
       ...request,
-      imageInputSupport: false,
+      model: { ...imageModel, input: ['text'] as const },
     });
 
     expect(result.status).toBe('ready');
@@ -79,14 +107,14 @@ describe('Context image materialization', () => {
   });
 
   it('uses a text-only compaction Context without leaking host image references', async () => {
-    let summaryContext: Parameters<ContextServiceDependencies['summaryModelCall']['complete']>[0]['context'] | undefined;
-    const summaryModelCall: ContextServiceDependencies['summaryModelCall']['complete'] = vi.fn(async (input) => {
-      summaryContext = input.context;
-      return { status: 'completed' as const, content: 'summary' };
+    let summaryContext: Context | undefined;
+    const completeSimple: Pick<Models, 'completeSimple'>['completeSimple'] = vi.fn(async (_model, context) => {
+      summaryContext = context;
+      return summaryMessage();
     });
-    const deps = dependencies([90, 30, 30], summaryModelCall);
+    const deps = dependencies([90, 30, 30], completeSimple);
     deps.policy = { compactionThresholdRatio: 0.8, keepRecentRuns: 0 };
-    expect(await new ContextServiceImpl(deps).prepareModelCall(request)).toMatchObject({ status: 'ready' });
+    expect(await new ContextServiceImpl(deps).build(request)).toMatchObject({ status: 'ready' });
     expect(JSON.stringify(summaryContext)).toContain('Image attachment included as structured content below');
     expect(JSON.stringify(summaryContext)).not.toContain('host_reference');
   });

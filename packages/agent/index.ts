@@ -2,7 +2,6 @@
 export * from './input';
 export * from './commands';
 export * from './session';
-export * from './agent-run';
 export * from './events';
 export * from './runtime-error';
 export * as context from './context';

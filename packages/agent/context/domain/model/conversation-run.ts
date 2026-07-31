@@ -5,6 +5,7 @@
 import type { AssistantContentBlock, ContentBlock } from '../../../model-content';
 import type { AssistantMessage } from '@megumi/ai';
 import type { JsonValue } from '../../../shared-json';
+import type { ToolRuntimeSource } from '../../../tools';
 
 export type ConversationItem =
   | { type: 'user_message'; content: ContentBlock[] }
@@ -20,8 +21,10 @@ export type ConversationItem =
       type: 'tool_result';
       toolCallId: string;
       toolName: string;
-      status: 'success' | 'failure';
+      status: 'success' | 'failure' | 'cancelled';
       content: ContentBlock[];
+      error?: { code: string; message: string };
+      runtimeSources?: ToolRuntimeSource[];
     }
   | { type: 'context'; kind: 'model_retry_instruction'; content: JsonValue };
 

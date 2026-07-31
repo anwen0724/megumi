@@ -1,8 +1,10 @@
 import type { Api, AssistantMessage, AssistantMessageEvent, Model, ProviderStreams } from "../types.ts";
+import { classifyModelFailure, withSafeModelFailure } from "../model-failure.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 
 function createSetupErrorMessage(model: Model<Api>, error: unknown): AssistantMessage {
-	return {
+	const failure = classifyModelFailure({ reason: "error", error });
+	return withSafeModelFailure({
 		role: "assistant",
 		content: [],
 		api: model.api,
@@ -17,9 +19,10 @@ function createSetupErrorMessage(model: Model<Api>, error: unknown): AssistantMe
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 		},
 		stopReason: "error",
-		errorMessage: error instanceof Error ? error.message : String(error),
+		failure,
+		errorMessage: failure.message,
 		timestamp: Date.now(),
-	};
+	}, failure);
 }
 
 function hasResult(
@@ -53,7 +56,7 @@ export function lazyStream(
 		.then((inner) => forwardStream(outer, inner))
 		.catch((error) => {
 			const message = createSetupErrorMessage(model, error);
-			outer.push({ type: "error", reason: "error", error: message });
+			outer.push({ type: "error", reason: "error", failure: message.failure!, error: message });
 			outer.end(message);
 		});
 

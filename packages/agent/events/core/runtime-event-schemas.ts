@@ -48,8 +48,6 @@ import {
   RunActionStatusSchema,
   RunObservationSourceSchema,
   RunStatusSchema,
-  RunStepKindSchema,
-  RunStepStatusSchema,
   SESSION_ACTIVE_LEAF_REASONS,
   SESSION_BRANCH_MARKER_REASONS,
   SESSION_COMPACTION_TRIGGER_REASONS,
@@ -117,7 +115,6 @@ const RuntimeEventBaseSchema = z
     schemaVersion: z.literal(RUNTIME_EVENT_SCHEMA_VERSION),
     runId: z.string().min(1).optional(),
     sessionId: z.string().min(1).optional(),
-    stepId: z.string().min(1).optional(),
     actionId: z.string().min(1).optional(),
     observationId: z.string().min(1).optional(),
     messageId: z.string().min(1).optional(),
@@ -212,32 +209,6 @@ const RunStatusChangedPayloadSchema = z
   .object({
     from: RunStatusSchema,
     to: RunStatusSchema,
-  })
-  .strict();
-
-const StepCreatedPayloadSchema = z
-  .object({
-    kind: RunStepKindSchema,
-    status: RunStepStatusSchema,
-    title: z.string().min(1).optional(),
-  })
-  .strict();
-
-const StepStartedPayloadSchema = z.object({ kind: RunStepKindSchema }).strict();
-
-const StepStatusChangedPayloadSchema = z
-  .object({
-    from: RunStepStatusSchema,
-    to: RunStepStatusSchema,
-  })
-  .strict();
-
-const StepCompletedPayloadSchema = z.object({ kind: RunStepKindSchema }).strict();
-
-const StepFailedPayloadSchema = z
-  .object({
-    kind: RunStepKindSchema,
-    error: RuntimeErrorSchema,
   })
   .strict();
 
@@ -361,6 +332,13 @@ const ModelCallTextDeltaPayloadSchema = z
   })
   .strict();
 
+const ModelCallProjectionResetPayloadSchema = z
+  .object({
+    modelCallId: z.string().min(1),
+    failedAttemptNumber: z.number().int().positive(),
+  })
+  .strict();
+
 const StructuredModelCallCompletedPayloadSchema = z
   .object({
     modelCallId: z.string().min(1),
@@ -393,91 +371,38 @@ const ModelCallToolCallPayloadSchema = z
   })
   .strict();
 
-const ModelStepStartedPayloadSchema = z
-  .object({
-    modelStepId: z.string().min(1),
-    providerId: z.string().min(1),
-    modelId: z.string().min(1),
-  })
-  .strict();
-
-const ModelOutputDeltaPayloadSchema = z
-  .object({
-    modelStepId: z.string().min(1),
-    delta: z.string(),
-  })
-  .strict();
-
-const ProviderStateBlockSchema = z.discriminatedUnion('type', [
-  z
-    .object({
-      type: z.literal('reasoning_content'),
-      text: z.string(),
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('thinking'),
-      text: z.string(),
-      signature: z.string().min(1).optional(),
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('redacted_thinking'),
-      data: z.string().min(1),
-    })
-    .strict(),
-]);
-
-const ModelStepProviderStateRecordedPayloadSchema = z
-  .object({
-    modelStepId: z.string().min(1),
-    providerId: z.string().min(1),
-    modelId: z.string().min(1),
-    blocks: z.array(ProviderStateBlockSchema).min(1),
-  })
-  .strict();
-
 const ModelThinkingStartedPayloadSchema = z
   .object({
-    modelStepId: z.string().min(1),
+    modelCallId: z.string().min(1),
   })
   .strict();
 
 const ModelThinkingDeltaPayloadSchema = z
   .object({
-    modelStepId: z.string().min(1),
+    modelCallId: z.string().min(1),
     delta: z.string(),
   })
   .strict();
 
 const ModelThinkingCompletedPayloadSchema = z
   .object({
-    modelStepId: z.string().min(1),
+    modelCallId: z.string().min(1),
   })
   .strict();
 
 const ModelToolCallDetectedPayloadSchema = z
   .object({
-    modelStepId: z.string().min(1),
+    modelCallId: z.string().min(1),
     toolCallId: z.string().min(1),
     providerToolCallId: z.string().min(1),
     toolName: z.string().min(1),
   })
   .strict();
 
-const ModelStepCompletedPayloadSchema = z
-  .object({
-    modelStepId: z.string().min(1),
-    finishReason: z.string().min(1).optional(),
-  })
-  .strict();
-
 const ToolCallCreatedPayloadSchema = z
   .object({
     toolCallId: z.string().min(1),
-    modelStepId: z.string().min(1),
+    modelCallId: z.string().min(1),
     providerToolCallId: z.string().min(1),
     toolName: z.string().min(1),
     input: JsonValueSchema,
@@ -531,11 +456,15 @@ const AgentRunToolCallRequestedPayloadSchema = z
 const AgentRunToolCallStartedPayloadSchema = z
   .object({
     toolCallId: z.string().min(1),
-    toolExecutionId: z.string().min(1),
+    toolExecutionId: z.string().min(1).optional(),
     toolName: z.string().min(1),
     input: JsonValueSchema,
   })
-  .strict();
+  .strict()
+  .refine((payload) => payload.toolExecutionId === undefined || payload.toolExecutionId !== payload.toolCallId, {
+    message: 'Tool execution identity must be distinct from the tool call identity.',
+    path: ['toolExecutionId'],
+  });
 
 const AgentRunToolCallCompletedPayloadSchema = z
   .object({
@@ -543,7 +472,11 @@ const AgentRunToolCallCompletedPayloadSchema = z
     toolExecutionId: z.string().min(1).optional(),
     toolName: z.string().min(1),
   })
-  .strict();
+  .strict()
+  .refine((payload) => payload.toolExecutionId === undefined || payload.toolExecutionId !== payload.toolCallId, {
+    message: 'Tool execution identity must be distinct from the tool call identity.',
+    path: ['toolExecutionId'],
+  });
 
 const AgentRunToolCallFailedPayloadSchema = z
   .object({
@@ -552,11 +485,14 @@ const AgentRunToolCallFailedPayloadSchema = z
     toolName: z.string().min(1),
     error: RuntimeErrorSchema,
   })
-  .strict();
+  .strict()
+  .refine((payload) => payload.toolExecutionId === undefined || payload.toolExecutionId !== payload.toolCallId, {
+    message: 'Tool execution identity must be distinct from the tool call identity.',
+    path: ['toolExecutionId'],
+  });
 
 const AgentRunToolResultCreatedPayloadSchema = z
   .object({
-    toolResultId: z.string().min(1),
     toolCallId: z.string().min(1),
     toolExecutionId: z.string().min(1).optional(),
     toolName: z.string().min(1),
@@ -568,11 +504,14 @@ const AgentRunToolResultCreatedPayloadSchema = z
       details: JsonObjectSchema.optional(),
     }).strict().optional(),
   })
-  .strict();
+  .strict()
+  .refine((payload) => payload.toolExecutionId === undefined || payload.toolExecutionId !== payload.toolCallId, {
+    message: 'Tool execution identity must be distinct from the tool call identity.',
+    path: ['toolExecutionId'],
+  });
 
 const ToolResultCreatedPayloadSchema = z
   .object({
-    toolResultId: z.string().min(1),
     toolCallId: z.string().min(1),
     toolExecutionId: z.string().min(1).optional(),
     toolName: z.string().min(1).optional(),
@@ -589,7 +528,11 @@ const ToolResultCreatedPayloadSchema = z
     summary: z.string().min(1),
     sourceIdentity: RuntimeToolSourceIdentitySchema.optional(),
   })
-  .strict();
+  .strict()
+  .refine((payload) => payload.toolExecutionId === undefined || payload.toolExecutionId !== payload.toolCallId, {
+    message: 'Tool execution identity must be distinct from the tool call identity.',
+    path: ['toolExecutionId'],
+  });
 
 const ToolRegistrySourcesEnsuredPayloadSchema = z
   .object({
@@ -663,11 +606,10 @@ const RunInterruptedPayloadSchema = z
   })
   .strict();
 
-const RunWaitingForApprovalPayloadSchema = z
+const RunWaitingPayloadSchema = z
   .object({
     approvalRequestId: z.string().min(1),
     toolCallId: z.string().min(1),
-    toolExecutionId: z.string().min(1),
     reason: z.string().min(1),
   })
   .strict();
@@ -708,8 +650,7 @@ const RunResumeRequestedPayloadSchema = z
 
 const RunResumedPayloadSchema = z
   .object({
-    resumeRequestId: z.string().min(1),
-    checkpointId: z.string().min(1).optional(),
+    runApprovalId: z.string().min(1),
   })
   .strict();
 
@@ -1126,15 +1067,10 @@ export const RunCompletedEventSchema = eventSchema('run.completed', RunCompleted
 export const RunFailedEventSchema = eventSchema('run.failed', RunFailedPayloadSchema);
 export const RunCancelledEventSchema = eventSchema('run.cancelled', RunCancelledPayloadSchema);
 export const RunInterruptedEventSchema = eventSchema('run.interrupted', RunInterruptedPayloadSchema);
-export const RunWaitingForApprovalEventSchema = eventSchema(
-  'run.waiting_for_approval',
-  RunWaitingForApprovalPayloadSchema,
+export const RunWaitingEventSchema = eventSchema(
+  'run.waiting',
+  RunWaitingPayloadSchema,
 );
-export const StepCreatedEventSchema = eventSchema('step.created', StepCreatedPayloadSchema);
-export const StepStartedEventSchema = eventSchema('step.started', StepStartedPayloadSchema);
-export const StepStatusChangedEventSchema = eventSchema('step.status.changed', StepStatusChangedPayloadSchema);
-export const StepCompletedEventSchema = eventSchema('step.completed', StepCompletedPayloadSchema);
-export const StepFailedEventSchema = eventSchema('step.failed', StepFailedPayloadSchema);
 export const ActionRequestedEventSchema = eventSchema('action.requested', ActionRequestedPayloadSchema);
 export const ObservationReceivedEventSchema = eventSchema('observation.received', ObservationReceivedPayloadSchema);
 export const ContextPatchRequestedEventSchema = eventSchema(
@@ -1175,14 +1111,12 @@ export const AssistantOutputCompletedEventSchema = eventSchema(
 );
 export const ModelCallStartedEventSchema = eventSchema('model_call.started', ModelCallStartedPayloadSchema);
 export const ModelCallTextDeltaEventSchema = eventSchema('model_call.text_delta', ModelCallTextDeltaPayloadSchema);
+export const ModelCallProjectionResetEventSchema = eventSchema(
+  'model_call.projection_reset',
+  ModelCallProjectionResetPayloadSchema,
+);
 export const ModelCallCompletedEventSchema = eventSchema('model_call.completed', ModelCallCompletedPayloadSchema);
 export const ModelCallToolCallEventSchema = eventSchema('model_call.tool_call', ModelCallToolCallPayloadSchema);
-export const ModelStepStartedEventSchema = eventSchema('model.step.started', ModelStepStartedPayloadSchema);
-export const ModelOutputDeltaEventSchema = eventSchema('model.output.delta', ModelOutputDeltaPayloadSchema);
-export const ModelStepProviderStateRecordedEventSchema = eventSchema(
-  'model.step.provider_state.recorded',
-  ModelStepProviderStateRecordedPayloadSchema,
-);
 export const ModelThinkingStartedEventSchema = eventSchema(
   'model.thinking.started',
   ModelThinkingStartedPayloadSchema,
@@ -1196,7 +1130,6 @@ export const ModelThinkingCompletedEventSchema = eventSchema(
   ModelThinkingCompletedPayloadSchema,
 );
 export const ModelToolCallDetectedEventSchema = eventSchema('model.tool_call.detected', ModelToolCallDetectedPayloadSchema);
-export const ModelStepCompletedEventSchema = eventSchema('model.step.completed', ModelStepCompletedPayloadSchema);
 export const ToolCallCreatedEventSchema = eventSchema('tool.call.created', ToolCallCreatedPayloadSchema);
 export const ToolCallResolvedEventSchema = eventSchema('tool.call.resolved', ToolCallResolvedPayloadSchema);
 export const ToolCallResolutionFailedEventSchema = eventSchema(
@@ -1294,10 +1227,8 @@ export const RunResumedEventSchema = eventSchema('run.resumed', RunResumedPayloa
 export const RunResumeFailedEventSchema = eventSchema('run.resume.failed', RunResumeFailedPayloadSchema);
 export const RunCancelRequestedEventSchema = eventSchema('run.cancel.requested', RunCancelRequestedPayloadSchema);
 export const RunCancellingEventSchema = eventSchema('run.cancelling', RunCancellingPayloadSchema);
-export const StepCancelledEventSchema = eventSchema('step.cancelled', CancelledPayloadSchema);
 export const ActionCancelledEventSchema = eventSchema('action.cancelled', CancelledPayloadSchema);
 export const RunRetryRequestedEventSchema = eventSchema('run.retry.requested', RunRetryRequestedPayloadSchema);
-export const StepRetryRequestedEventSchema = eventSchema('step.retry.requested', RunRetryRequestedPayloadSchema);
 export const ActionRetryRequestedEventSchema = eventSchema('action.retry.requested', RunRetryRequestedPayloadSchema);
 export const RetryStartedEventSchema = eventSchema('retry.started', RetryStartedPayloadSchema);
 export const RetryCompletedEventSchema = eventSchema('retry.completed', RetryCompletedPayloadSchema);
@@ -1360,12 +1291,7 @@ export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   RunFailedEventSchema,
   RunCancelledEventSchema,
   RunInterruptedEventSchema,
-  RunWaitingForApprovalEventSchema,
-  StepCreatedEventSchema,
-  StepStartedEventSchema,
-  StepStatusChangedEventSchema,
-  StepCompletedEventSchema,
-  StepFailedEventSchema,
+  RunWaitingEventSchema,
   ActionRequestedEventSchema,
   ObservationReceivedEventSchema,
   ContextPatchRequestedEventSchema,
@@ -1382,16 +1308,13 @@ export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   AssistantOutputCompletedEventSchema,
   ModelCallStartedEventSchema,
   ModelCallTextDeltaEventSchema,
+  ModelCallProjectionResetEventSchema,
   ModelCallCompletedEventSchema,
   ModelCallToolCallEventSchema,
-  ModelStepStartedEventSchema,
-  ModelOutputDeltaEventSchema,
-  ModelStepProviderStateRecordedEventSchema,
   ModelThinkingStartedEventSchema,
   ModelThinkingDeltaEventSchema,
   ModelThinkingCompletedEventSchema,
   ModelToolCallDetectedEventSchema,
-  ModelStepCompletedEventSchema,
   ToolCallCreatedEventSchema,
   ToolCallResolvedEventSchema,
   ToolCallResolutionFailedEventSchema,
@@ -1435,10 +1358,8 @@ export const RuntimeEventSchema = z.discriminatedUnion('eventType', [
   RunResumeFailedEventSchema,
   RunCancelRequestedEventSchema,
   RunCancellingEventSchema,
-  StepCancelledEventSchema,
   ActionCancelledEventSchema,
   RunRetryRequestedEventSchema,
-  StepRetryRequestedEventSchema,
   ActionRetryRequestedEventSchema,
   RetryStartedEventSchema,
   RetryCompletedEventSchema,

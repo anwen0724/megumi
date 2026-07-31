@@ -5,7 +5,8 @@
   "license": "MIT",
   "author": "Megumi contributors",
   "workspaces": [
-    "packages/ai"
+    "packages/ai",
+    "packages/engine"
   ],
   "main": ".vite/build/index.js",
   "scripts": {

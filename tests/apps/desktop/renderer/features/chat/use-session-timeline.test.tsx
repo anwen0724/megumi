@@ -185,7 +185,7 @@ describe('useSessionTimeline', () => {
             }),
             cancel: vi.fn().mockResolvedValue({
               ok: true,
-              data: { status: 'cancelled' },
+              data: { status: 'cancellation_requested' },
             }),
           },
           branchDraft: {
@@ -388,13 +388,14 @@ describe('useSessionTimeline', () => {
   });
 
   it('cancels a hydrated active run from the run store', async () => {
+    useChatUiStore.getState().setAgentStatus('running', 'session-1');
     useRunStore.setState({
       activeRunId: 'run-1',
       runs: {
         'run-1': {
           runId: 'run-1',
           sessionId: 'session-1',
-          status: 'waiting_for_approval',
+          status: 'waiting',
           updatedAt: createdAt,
         },
       },
@@ -410,7 +411,7 @@ describe('useSessionTimeline', () => {
       payload: { runId: 'run-1' },
     }));
     expect(useChatUiStore.getState().sessionStates['session-1']).toMatchObject({
-      agentStatus: 'idle',
+      agentStatus: 'running',
     });
   });
 

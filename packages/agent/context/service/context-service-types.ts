@@ -1,17 +1,16 @@
 /*
  * Defines request and result types for the four ContextService business operations.
  */
-import type { Tool } from '@megumi/ai';
-import type { ModelSupportLevel } from '../../model-capability';
+import type { Api, Model } from '@megumi/ai';
 import type { CurrentConversationRun } from '../domain/model/conversation-run';
-import type { SkillCatalogItem, UsedSkillContent } from '@megumi/skills';
+import type { SkillSelection } from '@megumi/skills';
+import type { ToolDefinition } from '../../tools';
 import type {
   ContextCapacity,
   ContextUsage,
   SessionUsageSnapshot,
 } from '../domain/model/context-usage';
 import type {
-  MemoryContextInput,
   PreparedModelCall,
 } from '../domain/model/model-context';
 
@@ -55,29 +54,25 @@ export type ContextCompactionProgress =
       previousCompactionId?: string;
     };
 
-export type PrepareModelCallRequest = {
+export type BuildContextRequest = {
   sessionId: string;
   workspaceId: string;
   currentRun: CurrentConversationRun;
-  skillCatalog: SkillCatalogItem[];
-  usedSkills: UsedSkillContent[];
-  memoryRecall?: MemoryContextInput;
-  tools: Tool[];
-  modelContext: ContextCapacity;
-  imageInputSupport: ModelSupportLevel;
+  selectedSkill?: SkillSelection;
+  tools: readonly ToolDefinition[];
+  model: Model<Api>;
   onCompactionProgress?: (progress: ContextCompactionProgress) => void;
   signal?: AbortSignal;
 };
 
-export type PrepareModelCallResult =
+export type BuildContextResult =
   | { status: 'ready'; prepared: PreparedModelCall }
   | { status: 'failed'; failure: ContextFailure };
 
 export type CompactSessionRequest = {
   sessionId: string;
   workspaceId: string;
-  modelContext: ContextCapacity;
-  imageInputSupport: ModelSupportLevel;
+  model: Model<Api>;
   signal?: AbortSignal;
 };
 
@@ -97,7 +92,7 @@ export type CompactSessionResult =
 export type RecordCompletedRunUsageRequest = {
   sessionId: string;
   runId: string;
-  modelContext: ContextCapacity;
+  model: Model<Api>;
   preCallUsage: ContextUsage;
   providerInputTokens?: number;
 };

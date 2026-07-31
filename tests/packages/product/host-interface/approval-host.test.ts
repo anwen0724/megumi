@@ -1,150 +1,160 @@
 /*
- * Verifies ApprovalHost result mapping.
+ * Verifies the stable Product approval DTO mapping over Engine.resumeRun.
  */
 import { describe, expect, it, vi } from 'vitest';
+import type { RuntimeEvent } from '@megumi/agent/events';
 import { createApprovalHost } from '@megumi/product/host-interface/approval-host';
 
-describe('createApprovalHost', () => {
-  it('returns failed when Agent Run cannot resume the approval', async () => {
-    const resumeRunAfterApproval = vi.fn(async () => ({
-      status: 'failed' as const,
-      failure: {
-        code: 'runtime_interrupted' as const,
-        message: 'Approval continuation is no longer available in this runtime.',
-        retryable: false,
-      },
-      events: [],
+describe('ApprovalHost', () => {
+  it('maps an approved decision to Engine and returns the resumed event segment', async () => {
+    const event = runtimeEvent();
+    const resumeRun = vi.fn(async () => ({
+      status: 'resumed' as const,
+      run: runFixture('running'),
+      events: asyncEvents([event]),
     }));
-    const controller = createApprovalHost({
-      resumeRunAfterApproval,
-    });
+    const host = createApprovalHost({ resumeRun } as never);
 
-    const result = await controller.resolve({
-      approvalRequestId: 'approval-1',
+    const result = await host.resolve({
+      approvalRequestId: 'approval:1',
       decision: 'approved',
-      optionId: 'once:call-1',
+      optionId: 'allow_once',
+      reason: 'Needed for this task.',
     });
 
-    expect(result).toEqual({
-      payload: {
-        status: 'failed',
-        approvalRequestId: 'approval-1',
+    expect(resumeRun).toHaveBeenCalledWith({
+      runApprovalId: 'approval:1',
+      decision: {
+        decision: 'approved',
+        optionId: 'allow_once',
+        reason: 'Needed for this task.',
+      },
+    });
+    expect(result.payload).toEqual({
+      status: 'resumed',
+      approvalRequestId: 'approval:1',
+      run: {
+        runId: 'run:1',
+        sessionId: 'session:1',
+        status: 'running',
+        createdAt: '2026-07-10T00:00:00.000Z',
+      },
+    });
+    await expect(collectAsync(result.events!)).resolves.toEqual([event]);
+  });
+
+  it('maps a denied decision without inventing decision metadata', async () => {
+    const resumeRun = vi.fn(async () => ({
+      status: 'resumed' as const,
+      run: runFixture('running'),
+      events: asyncEvents([]),
+    }));
+    const host = createApprovalHost({ resumeRun } as never);
+
+    await host.resolve({
+      approvalRequestId: 'approval:1',
+      decision: 'denied',
+      reason: 'Not allowed.',
+    });
+
+    expect(resumeRun).toHaveBeenCalledWith({
+      runApprovalId: 'approval:1',
+      decision: { decision: 'denied', reason: 'Not allowed.' },
+    });
+  });
+
+  it.each([
+    [
+      { status: 'not_found' as const, runApprovalId: 'approval:missing' },
+      { status: 'not_found', approvalRequestId: 'approval:missing' },
+    ],
+    [
+      { status: 'not_waiting' as const, run: runFixture('completed') },
+      {
+        status: 'not_waiting',
+        approvalRequestId: 'approval:1',
+        run: expect.objectContaining({ status: 'completed' }),
+      },
+    ],
+    [
+      { status: 'already_resolved' as const, run: runFixture('completed') },
+      {
+        status: 'not_waiting',
+        approvalRequestId: 'approval:1',
+        run: expect.objectContaining({ status: 'completed' }),
+      },
+    ],
+    [
+      {
+        status: 'failed' as const,
         failure: {
-          code: 'runtime_interrupted',
-          message: 'Approval continuation is no longer available in this runtime.',
+          code: 'permission_failed' as const,
+          message: 'Permission decision failed.',
           retryable: false,
         },
       },
-      events: expect.anything(),
-    });
-    expect(resumeRunAfterApproval).toHaveBeenCalledWith({
-      approval_request_id: 'approval-1',
-      decision: {
-        approval_request_id: 'approval-1',
-        decision: 'approved',
-        option_id: 'once:call-1',
-        decided_by: 'user',
-      },
-    });
-  });
-
-  it('returns resumed and forwards Agent Run events when approval resumes', async () => {
-    async function* events() {}
-    const resumeRunAfterApproval = vi.fn(async () => ({
-      status: 'resumed' as const,
-      run: {
-        run_id: 'run-1',
-        workspace_id: 'workspace-1',
-        session_id: 'session-1',
-        model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
-        trigger: { type: 'user_input' as const, user_message_id: 'message-1' },
-        status: 'running' as const,
-        created_at: '2026-07-09T00:00:00.000Z',
-      },
-      events: events(),
-    }));
-    const controller = createApprovalHost({
-      resumeRunAfterApproval,
-    });
-
-    const result = await controller.resolve({
-      approvalRequestId: 'approval-1',
-      decision: 'approved',
-      optionId: 'session:run_command',
-    });
-
-    expect(result.payload).toMatchObject({
-      status: 'resumed',
-      approvalRequestId: 'approval-1',
-      run: {
-        runId: 'run-1',
-        sessionId: 'session-1',
-      },
-    });
-    expect(result.payload).not.toHaveProperty('data');
-    expect(result.events).toBeDefined();
-    expect(resumeRunAfterApproval).toHaveBeenCalledWith({
-      approval_request_id: 'approval-1',
-      decision: {
-        approval_request_id: 'approval-1',
-        decision: 'approved',
-        option_id: 'session:run_command',
-        decided_by: 'user',
-      },
-    });
-  });
-
-  it('returns Agent Run not_found and not_waiting approval statuses without converting them to failed', async () => {
-    const notFound = createApprovalHost({
-      resumeRunAfterApproval: vi.fn(async () => ({
-        status: 'not_found' as const,
-        approval_request_id: 'approval-missing',
-      })),
-    });
-
-    await expect(notFound.resolve({
-      approvalRequestId: 'approval-missing',
-      decision: 'approved',
-      optionId: 'once:call-1',
-    })).resolves.toEqual({
-      payload: {
-        status: 'not_found',
-        approvalRequestId: 'approval-missing',
-      },
-    });
-
-    const notWaiting = createApprovalHost({
-      resumeRunAfterApproval: vi.fn(async () => ({
-        status: 'not_waiting' as const,
-        run: {
-          run_id: 'run-1',
-          workspace_id: 'workspace-1',
-          session_id: 'session-1',
-          model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
-          trigger: { type: 'user_input' as const, user_message_id: 'message-1' },
-          status: 'completed' as const,
-          created_at: '2026-07-09T00:00:00.000Z',
-          completed_at: '2026-07-09T00:00:01.000Z',
-        },
-      })),
-    });
-
-    await expect(notWaiting.resolve({
-      approvalRequestId: 'approval-1',
-      decision: 'approved',
-      optionId: 'once:call-1',
-    })).resolves.toEqual({
-      payload: {
-        status: 'not_waiting',
-        approvalRequestId: 'approval-1',
-        run: {
-          runId: 'run-1',
-          sessionId: 'session-1',
-          status: 'completed',
-          createdAt: '2026-07-09T00:00:00.000Z',
-          completedAt: '2026-07-09T00:00:01.000Z',
+      {
+        status: 'failed',
+        approvalRequestId: 'approval:1',
+        failure: {
+          code: 'permission_failed',
+          message: 'Permission decision failed.',
+          retryable: false,
         },
       },
+    ],
+  ])('projects Engine resume result %s', async (engineResult, expectedPayload) => {
+    const host = createApprovalHost({
+      resumeRun: vi.fn(async () => engineResult),
+    } as never);
+
+    const result = await host.resolve({
+      approvalRequestId: 'approval:1',
+      decision: 'denied',
     });
+
+    expect(result.payload).toEqual(expectedPayload);
   });
 });
+
+function runFixture(status: 'running' | 'completed') {
+  return {
+    runId: 'run:1',
+    requestId: 'request:1',
+    workspaceId: 'workspace:1',
+    sessionId: 'session:1',
+    userMessageId: 'message:1',
+    model: {},
+    permissionMode: 'ask',
+    status,
+    createdAt: '2026-07-10T00:00:00.000Z',
+    startedAt: '2026-07-10T00:00:00.000Z',
+    ...(status === 'completed' ? { completedAt: '2026-07-10T00:01:00.000Z' } : {}),
+  } as never;
+}
+
+function runtimeEvent(): RuntimeEvent {
+  return {
+    eventId: 'event:1',
+    schemaVersion: 1,
+    eventType: 'run.resumed',
+    runId: 'run:1',
+    sessionId: 'session:1',
+    sequence: 1,
+    createdAt: '2026-07-10T00:00:00.000Z',
+    source: 'core',
+    visibility: 'user',
+    persist: 'transient',
+    payload: { approvalRequestId: 'approval:1' },
+  } as RuntimeEvent;
+}
+
+async function* asyncEvents<T>(events: readonly T[]): AsyncIterable<T> {
+  yield* events;
+}
+
+async function collectAsync<T>(events: AsyncIterable<T>): Promise<T[]> {
+  const result: T[] = [];
+  for await (const event of events) result.push(event);
+  return result;
+}

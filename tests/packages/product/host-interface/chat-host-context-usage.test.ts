@@ -9,7 +9,7 @@ import type { GetSessionUsageSnapshotResult } from '@megumi/agent/context';
 function createHost(getSessionUsageSnapshot: (request: { sessionId: string }) => GetSessionUsageSnapshotResult) {
   const contextService = {
     getSessionUsageSnapshot: vi.fn(getSessionUsageSnapshot),
-    prepareModelCall: vi.fn(),
+    build: vi.fn(),
     compactSession: vi.fn(),
     recordCompletedRunUsage: vi.fn(),
     refreshAndGetSessionUsage: vi.fn(),
@@ -18,12 +18,19 @@ function createHost(getSessionUsageSnapshot: (request: { sessionId: string }) =>
 
   return {
     host: createChatHost({
-      agentRunService: {} as never,
-      commandService: { getCommandSuggestions: vi.fn() },
+      runReadModel: { listRunsBySession: () => [], listEventsByRun: () => [] },
+      engine: { startRun: vi.fn(), cancelRun: vi.fn() } as never,
+      inputService: { processUserInput: vi.fn() },
+      commandService: {
+        getCommandSuggestions: vi.fn(),
+        handleCommandInput: vi.fn(),
+      },
       sessionService: {} as never,
       branchService: {
         createBranchDraft: vi.fn() as never,
         cancelBranchDraft: vi.fn() as never,
+        resolveBranchDraft: vi.fn() as never,
+        commitBranchDraft: vi.fn() as never,
       },
       workspaceService: {
         listWorkspaces: async () => ({ workspaces: [] }),
@@ -32,6 +39,8 @@ function createHost(getSessionUsageSnapshot: (request: { sessionId: string }) =>
         listSessionTimeline: vi.fn() as never,
       },
       contextService,
+      createSkillService: vi.fn(() => ({ listSkills: vi.fn() })) as never,
+      resolveModel: vi.fn(),
     }),
     contextService,
   };
@@ -81,7 +90,7 @@ describe('ChatHost context usage', () => {
         },
       });
       expect(contextService.getSessionUsageSnapshot).toHaveBeenCalledWith({ sessionId: 'session:1' });
-      expect(contextService.prepareModelCall).not.toHaveBeenCalled();
+      expect(contextService.build).not.toHaveBeenCalled();
       expect(contextService.compactSession).not.toHaveBeenCalled();
       expect(contextService.recordCompletedRunUsage).not.toHaveBeenCalled();
       expect(contextService.refreshAndGetSessionUsage).not.toHaveBeenCalled();

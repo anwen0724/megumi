@@ -10,15 +10,15 @@ export const built_in_commands: CommandDefinition[] = [
     name: 'compact',
     description: 'Compact the current session context',
     source: { kind: 'built_in' },
+    requires_session: true,
     async execute(request) {
       const executionContext = request.execution_context;
       const contextService = executionContext?.services?.context;
-      if (executionContext?.session_id && executionContext.workspace_id && executionContext.model_context && contextService) {
+      if (executionContext?.session_id && executionContext.workspace_id && executionContext.model && contextService) {
         const result = await contextService.compactSession({
           sessionId: executionContext.session_id,
           workspaceId: executionContext.workspace_id,
-          modelContext: executionContext.model_context,
-          imageInputSupport: executionContext.image_input_support ?? 'unknown',
+          model: executionContext.model,
         });
 
         if (result.status === 'failed') {

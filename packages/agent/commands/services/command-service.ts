@@ -80,6 +80,12 @@ export function createCommandService(options: {
       if (!command) {
         return { type: 'not_command', raw_input: request.invocation.raw_input };
       }
+      if (command.requires_session && !request.execution_context?.session_id) {
+        return {
+          type: 'error',
+          message: 'Command requires an existing Session.',
+        };
+      }
 
       return command.execute({
         invocation: request.invocation,

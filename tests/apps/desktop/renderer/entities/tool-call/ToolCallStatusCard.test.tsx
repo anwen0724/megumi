@@ -9,7 +9,6 @@ function createToolExecution(overrides: Partial<ToolExecution> = {}): ToolExecut
     toolExecutionId: 'tool-execution-1',
     toolCallId: 'tool-call-1',
     runId: 'run-1',
-    stepId: 'step-1',
     toolName: 'run_command',
     input: { command: 'npm test' },
     inputPreview: {

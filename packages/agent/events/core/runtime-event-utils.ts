@@ -164,7 +164,7 @@ export function createRuntimeErrorFromUnknown(
 }
 
 function isTextDeltaRuntimeEvent(event: RuntimeEvent): boolean {
-  return event.eventType === 'assistant.output.delta' || event.eventType === 'model.output.delta';
+  return event.eventType === 'assistant.output.delta' || event.eventType === 'model_call.text_delta';
 }
 
 function canMergeTextDelta(left: RuntimeEvent, right: RuntimeEvent): boolean {
@@ -172,10 +172,10 @@ function canMergeTextDelta(left: RuntimeEvent, right: RuntimeEvent): boolean {
     return false;
   }
 
-  if (left.eventType === 'model.output.delta') {
-    const leftModelStepId = (left.payload as { modelStepId?: unknown }).modelStepId;
-    const rightModelStepId = (right.payload as { modelStepId?: unknown }).modelStepId;
-    return leftModelStepId === rightModelStepId;
+  if (left.eventType === 'model_call.text_delta') {
+    const leftModelCallId = (left.payload as { modelCallId?: unknown }).modelCallId;
+    const rightModelCallId = (right.payload as { modelCallId?: unknown }).modelCallId;
+    return leftModelCallId === rightModelCallId;
   }
 
   return true;

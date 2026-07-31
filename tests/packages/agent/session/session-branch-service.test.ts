@@ -90,7 +90,7 @@ describe('SessionBranchService', () => {
     });
   });
 
-  it('consumes active branch drafts and exposes only the resolved source entry to internal callers', () => {
+  it('resolves without consuming, commits only after start, and supports the same request retry', () => {
     const service = createSessionBranchService({
       ids: {
         branchMarkerId: () => 'branch:owner-1',
@@ -104,11 +104,12 @@ describe('SessionBranchService', () => {
       source_message_id: 'assistant-message:1',
     });
 
-    expect(service.consumeBranchDraft({
+    expect(service.resolveBranchDraft({
+      request_id: 'request:run',
       session_id: 'session:1',
       branch_marker_id: 'branch:owner-1',
     })).toEqual({
-      status: 'consumed',
+      status: 'resolved',
       branch_draft: {
         branch_marker_id: 'branch:owner-1',
         session_id: 'session:1',
@@ -117,12 +118,29 @@ describe('SessionBranchService', () => {
         created_at: '2026-07-10T00:00:00.000Z',
       },
     });
-    expect(service.consumeBranchDraft({
+    expect(service.resolveBranchDraft({
+      request_id: 'request:run',
+      session_id: 'session:1',
+      branch_marker_id: 'branch:owner-1',
+    }).status).toBe('resolved');
+
+    expect(service.commitBranchDraft({
+      request_id: 'request:run',
+      session_id: 'session:1',
+      branch_marker_id: 'branch:owner-1',
+    }).status).toBe('committed');
+    expect(service.commitBranchDraft({
+      request_id: 'request:run',
+      session_id: 'session:1',
+      branch_marker_id: 'branch:owner-1',
+    }).status).toBe('already_committed');
+    expect(service.resolveBranchDraft({
+      request_id: 'request:other',
       session_id: 'session:1',
       branch_marker_id: 'branch:owner-1',
     })).toEqual({
-      status: 'not_consumed',
-      reason: 'branch_marker_not_found',
+      status: 'not_resolved',
+      reason: 'branch_marker_already_committed',
     });
   });
 });

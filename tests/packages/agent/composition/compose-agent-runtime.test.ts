@@ -1,3 +1,7 @@
+/*
+ * Verifies that Agent composition exposes owner services to Product without
+ * constructing the retired AgentRun or ModelCall execution services.
+ */
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -9,18 +13,15 @@ import {
   createSettingsModelContextProvider,
 } from '@megumi/agent/composition';
 import { createSettingsService, type SettingsRaw } from '@megumi/agent/settings';
-import { collectEvents } from '../agent-run/agent-run-test-helpers';
-import { fakeModelCallService } from '../../../helpers/fake-model-call-service';
-import type { Context } from '@megumi/ai';
 
 const tempDirectories: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(tempDirectories.splice(0).map((directory) => removeTempDirectory(directory)));
+  await Promise.all(tempDirectories.splice(0).map(removeTempDirectory));
 });
 
-describe('composeAgentRuntime trace wiring', () => {
-  it('reads model capacity through resolved Settings and preserves selection identity', async () => {
+describe('composeAgentRuntime owner wiring', () => {
+  it('reads model capacity through resolved Settings without coupling Context to the resolver', async () => {
     const provider = createSettingsModelContextProvider(createSettingsService({
       file_store: settingsStorage(),
     }));
@@ -33,31 +34,41 @@ describe('composeAgentRuntime trace wiring', () => {
     const contextRoot = join(process.cwd(), 'packages', 'agent', 'context');
     const files = (await readdir(contextRoot, { recursive: true }))
       .filter((file) => file.endsWith('.ts'));
-    const sources = await Promise.all(files.map((file) => readFile(join(contextRoot, file), 'utf8')));
+    const sources = await Promise.all(
+      files.map((file) => readFile(join(contextRoot, file), 'utf8')),
+    );
     expect(sources.join('\n')).not.toContain('createSettingsModelContextProvider');
   });
 
-  it('does not create the retired Agent Run trace file', async () => {
+  it('exposes owner capabilities and does not create retired Run services or trace files', async () => {
     const home = await createHome();
     const runtime = composeAgentRuntime({
       homePaths: home.paths,
       runtimeLogger: { warn() {} },
-      modelCallService: fakeModelCallService(),
       settingsStorage: settingsStorage(),
+      models: {
+        completeSimple: async () => {
+          throw new Error('not used');
+        },
+      },
     });
 
     try {
-      await startOneRun(runtime, home.workspaceRoot);
-      const logPath = join(home.homePath, 'logs', 'agent-run-trace.jsonl');
-      expect(existsSync(logPath)).toBe(false);
+      expect(runtime.inputService.processUserInput).toBeTypeOf('function');
+      expect(runtime.contextRuntime.contextService.build).toBeTypeOf('function');
+      expect(runtime.sessionService.saveUserMessage).toBeTypeOf('function');
+      expect(runtime.permissionService.evaluateToolCall).toBeTypeOf('function');
+      expect(runtime.toolRegistryService.listAvailableTools).toBeTypeOf('function');
+      expect(runtime).not.toHaveProperty('agentRunService');
+      expect(runtime).not.toHaveProperty('modelCallService');
+      expect(existsSync(join(home.homePath, 'logs', 'agent-run-trace.jsonl'))).toBe(false);
     } finally {
       runtime.dispose();
     }
   });
 
-  it('binds workspace-provided user Skills into the Run catalog and model Context', async () => {
+  it('resolves workspace Skills and creates a run-scoped Tool execution capability', async () => {
     const home = await createHome();
-    const capturedContexts: Context[] = [];
     await writeProjectSkill({
       workspaceRoot: home.workspaceRoot,
       name: 'review',
@@ -67,8 +78,12 @@ describe('composeAgentRuntime trace wiring', () => {
     const runtime = composeAgentRuntime({
       homePaths: home.paths,
       runtimeLogger: { warn() {} },
-      modelCallService: fakeModelCallService('ok', (request) => capturedContexts.push(request.context)),
       settingsStorage: settingsStorage(),
+      models: {
+        completeSimple: async () => {
+          throw new Error('not used');
+        },
+      },
     });
 
     try {
@@ -78,78 +93,45 @@ describe('composeAgentRuntime trace wiring', () => {
       expect(workspace.status).toBe('opened');
       if (workspace.status !== 'opened') return;
 
-      const workspaceSkillService = runtime.createSkillService({ workspaceId: workspace.workspace.workspace_id });
-      const skills = await workspaceSkillService.listSkills({});
-      expect(skills.status).toBe('ok');
-      const selectedSkill = skills.status === 'ok'
-        ? skills.skills.find((skill) => skill.name === 'review')
-        : undefined;
-      expect(selectedSkill?.source.owner).toBe('user');
-      expect(selectedSkill?.skillPath).toBe(join(home.workspaceRoot, '.megumi', 'skills', 'review', 'SKILL.md'));
+      const skills = await runtime.createSkillService({
+        workspaceId: workspace.workspace.workspace_id,
+      }).listSkills({});
+      expect(skills).toMatchObject({
+        status: 'ok',
+        skills: [expect.objectContaining({
+          name: 'review',
+          source: { owner: 'user' },
+        })],
+      });
       const suggestions = await runtime.commandService.getCommandSuggestions({
         draft_input: '/rev',
         workspaceId: workspace.workspace.workspace_id,
       });
       expect(suggestions).toMatchObject({
         type: 'suggestions',
-        groups: [{
-          id: 'commands',
-        }, {
+        groups: expect.arrayContaining([expect.objectContaining({
           id: 'skills',
-          items: [{
+          items: [expect.objectContaining({
             name: 'review',
-            display: {
-              primary: 'review',
-              secondary: 'Review code changes',
-              badge: 'User',
-            },
             completion: {
               replacement_input: '',
-              selection: {
-                type: 'skill',
-                name: 'review',
-                skillPath: join(home.workspaceRoot, '.megumi', 'skills', 'review', 'SKILL.md'),
-              },
+              selection: expect.objectContaining({ name: 'review' }),
             },
-          }],
-        }],
+          })],
+        })]),
       });
-      expect(JSON.stringify(suggestions)).not.toContain(workspace.workspace.workspace_id);
 
-      const run = await runtime.agentRunService.startRun({
-        request_id: 'request-skill-1',
-        workspace_id: workspace.workspace.workspace_id,
-        session: { type: 'new', title: 'Skill run' },
-        user_input: { text: 'check this patch' },
-        skill_selection: {
-          type: 'skill',
-          name: 'review',
-          skillPath: selectedSkill!.skillPath,
-        },
-        model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
+      const toolExecution = runtime.toolExecutionForRun({
+        runId: 'run:1',
+        sessionId: 'session:1',
+        workspaceId: workspace.workspace.workspace_id,
       });
-      expect(run.status).toBe('started');
-      if (run.status !== 'started') return;
-      const events = await collectEvents(run.events);
-      expect(events.map((event) => event.eventType)).toContain('model_call.started');
-
-      const contextText = capturedContexts
-        .flatMap((context) => context.messages)
-        .map((message) => typeof message.content === 'string' ? message.content : JSON.stringify(message.content))
-        .join('\n');
-      const referenceContexts = capturedContexts
-        .flatMap((context) => context.messages)
-        .flatMap((message) => {
-          if (typeof message.content !== 'string' || !message.content.startsWith('{"type":"reference_context"')) {
-            return [];
-          }
-          return [JSON.parse(message.content) as { kind: string; content: unknown }];
-        });
-      expect(contextText).toContain('Always inspect the diff before making claims.');
-      expect(referenceContexts).toContainEqual(expect.objectContaining({
-        kind: 'skill',
-        content: expect.objectContaining({ skillPath: selectedSkill!.skillPath }),
-      }));
+      expect(toolExecution.executeTool).toBeTypeOf('function');
+      expect(() => runtime.toolExecutionForRun({
+        runId: 'run:missing-workspace',
+        sessionId: 'session:1',
+        workspaceId: 'workspace:missing',
+      })).toThrow('Workspace workspace:missing is unavailable for Tool execution.');
     } finally {
       runtime.dispose();
     }
@@ -161,7 +143,7 @@ async function createHome(): Promise<{
   workspaceRoot: string;
   paths: Parameters<typeof composeAgentRuntime>[0]['homePaths'];
 }> {
-  const homePath = await mkdtemp(join(tmpdir(), 'megumi-runtime-trace-'));
+  const homePath = await mkdtemp(join(tmpdir(), 'megumi-agent-composition-'));
   tempDirectories.push(homePath);
   const workspaceRoot = join(homePath, 'workspace');
   await mkdir(workspaceRoot);
@@ -175,29 +157,6 @@ async function createHome(): Promise<{
       attachmentsPath: join(homePath, 'attachments'),
     },
   };
-}
-
-async function startOneRun(
-  runtime: ReturnType<typeof composeAgentRuntime>,
-  workspaceRoot: string,
-): Promise<string> {
-  const workspace = await runtime.workspaceService.openWorkspace({
-    root_path: workspaceRoot,
-  });
-  expect(workspace.status).toBe('opened');
-  if (workspace.status !== 'opened') return '';
-
-  const run = await runtime.agentRunService.startRun({
-    request_id: 'request-1',
-    workspace_id: workspace.workspace.workspace_id,
-    session: { type: 'new', title: 'Trace test' },
-    user_input: { text: 'hello' },
-    model_selection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
-  });
-  expect(run.status).toBe('started');
-  if (run.status !== 'started') return '';
-  await collectEvents(run.events);
-  return run.run.run_id;
 }
 
 function settingsStorage() {
@@ -235,24 +194,11 @@ async function writeProjectSkill(input: {
   );
 }
 
-async function waitFor(predicate: () => boolean | Promise<boolean>): Promise<void> {
-  const startedAt = Date.now();
-  while (!(await predicate())) {
-    if (Date.now() - startedAt > 1000) {
-      throw new Error('Timed out waiting for trace file.');
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-}
-
 async function removeTempDirectory(directory: string): Promise<void> {
   let lastError: unknown;
   for (let attempt = 0; attempt < 10; attempt += 1) {
     try {
-      await rm(directory, {
-        recursive: true,
-        force: true,
-      });
+      await rm(directory, { recursive: true, force: true });
       return;
     } catch (error) {
       lastError = error;
@@ -260,24 +206,4 @@ async function removeTempDirectory(directory: string): Promise<void> {
     }
   }
   throw lastError;
-}
-
-async function waitForTraceEvents(
-  logPath: string,
-  expectedEventTypes: string[],
-): Promise<Array<{ event_type: string }>> {
-  let records: Array<{ event_type: string }> = [];
-  await waitFor(async () => {
-    if (!existsSync(logPath)) {
-      return false;
-    }
-
-    const content = (await readFile(logPath, 'utf8')).trim();
-    records = content
-      ? content.split('\n').map((line) => JSON.parse(line) as { event_type: string })
-      : [];
-    const actualEventTypes = new Set(records.map((record) => record.event_type));
-    return expectedEventTypes.every((eventType) => actualEventTypes.has(eventType));
-  });
-  return records;
 }

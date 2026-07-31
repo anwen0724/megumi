@@ -3,7 +3,7 @@ import type { TraceContext } from "./trace";
 
 export type ObservabilitySpanName =
   | "agent_run"
-  | "context.prepare_model_call"
+  | "context.build"
   | "context.compact"
   | "model.call"
   | "tool.call"

@@ -110,9 +110,8 @@ export function useChatPageController() {
     agentStatus === 'sending' ||
     agentStatus === 'running' ||
     agentStatus === 'waiting-approval' ||
-    activeRun?.status === 'queued' ||
     activeRun?.status === 'running' ||
-    activeRun?.status === 'waiting_for_approval' ||
+    activeRun?.status === 'waiting' ||
     activeRun?.status === 'cancelling';
 
   const hasPendingApproval = timelineMessages.some((message) => message.role === 'assistant' && message.blocks.some((block) => (

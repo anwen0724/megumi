@@ -177,6 +177,23 @@ describe('createCommandService', () => {
       services: {},
     }]);
   });
+
+  it('rejects commands that require an existing Session before invoking their handler', async () => {
+    const execute = vi.fn(async () => ({ type: 'completed' as const }));
+    const service = createCommandService({
+      built_in_commands: [{
+        ...testCommand('compact'),
+        requires_session: true,
+        execute,
+      }],
+    });
+
+    await expect(service.handleCommandInput({ raw_input: '/compact' })).resolves.toEqual({
+      type: 'error',
+      message: 'Command requires an existing Session.',
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
 });
 
 function testCommand(name: string): CommandDefinition {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RuntimeEventSchema, type RuntimeEvent } from '@megumi/agent/events';
+import { RUNTIME_EVENT_TYPES, RuntimeEventSchema, type RuntimeEvent } from '@megumi/agent/events';
 
 function event(
   eventType: RuntimeEvent['eventType'],
@@ -58,7 +58,6 @@ describe('agent run runtime event schemas', () => {
       content: [{ type: 'text', text: 'I will inspect it.' }],
     });
     expect(RuntimeEventSchema.safeParse(event('tool_result.created', {
-      toolResultId: 'tool-result:1',
       toolCallId: 'tool-call:1',
       toolName: 'read_file',
       kind: 'success',
@@ -75,7 +74,6 @@ describe('agent run runtime event schemas', () => {
     })).success).toBe(true);
 
     expect(RuntimeEventSchema.safeParse(event('tool_result.created', {
-      toolResultId: 'tool-result:1',
       toolCallId: 'tool-call:1',
       toolExecutionId: 'tool-execution:1',
       toolName: 'list_directory',
@@ -84,14 +82,13 @@ describe('agent run runtime event schemas', () => {
     })).success).toBe(true);
 
     expect(RuntimeEventSchema.safeParse(event('tool_result.created', {
-      toolResultId: 'tool-result:tool-call-1',
       toolCallId: 'tool-call-1',
       toolExecutionId: 'tool-call-1',
       toolName: 'read_file',
       kind: 'failure',
       content: [{ type: 'text', text: 'Tool execution failed.' }],
       error: { code: 'tool_execution_failed', message: 'Tool execution failed.' },
-    })).success).toBe(true);
+    })).success).toBe(false);
   });
 
   it('rejects missing required payload fields', () => {
@@ -100,10 +97,36 @@ describe('agent run runtime event schemas', () => {
     })).success).toBe(false);
 
     expect(RuntimeEventSchema.safeParse(event('tool_result.created', {
-      toolResultId: 'tool-result:1',
       kind: 'success',
       content: [{ type: 'text', text: 'Read directory.' }],
     })).success).toBe(false);
+  });
+
+  it('uses V2 Run states and waiting events without fabricated execution identities', () => {
+    expect(RuntimeEventSchema.safeParse(event('run.status.changed', {
+      from: 'running',
+      to: 'waiting',
+    })).success).toBe(true);
+    expect(RuntimeEventSchema.safeParse(event('run.waiting', {
+      approvalRequestId: 'approval:1',
+      toolCallId: 'tool-call:1',
+      reason: 'approval_required',
+    })).success).toBe(true);
+    expect(RuntimeEventSchema.safeParse(event('run.waiting', {
+      approvalRequestId: 'approval:1',
+      toolCallId: 'tool-call:1',
+      toolExecutionId: 'tool-call:1',
+      reason: 'approval_required',
+    })).success).toBe(false);
+  });
+
+  it('does not expose generic or model Step events', () => {
+    expect(RUNTIME_EVENT_TYPES).not.toContain('step.created');
+    expect(RUNTIME_EVENT_TYPES).not.toContain('step.started');
+    expect(RUNTIME_EVENT_TYPES).not.toContain('step.completed');
+    expect(RUNTIME_EVENT_TYPES).not.toContain('step.failed');
+    expect(RUNTIME_EVENT_TYPES).not.toContain('model.step.started');
+    expect(RUNTIME_EVENT_TYPES).not.toContain('model.step.completed');
   });
 
   it('accepts Session compaction events with optional causative run ids', () => {

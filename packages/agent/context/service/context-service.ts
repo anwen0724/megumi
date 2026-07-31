@@ -6,14 +6,14 @@ import type {
   CompactSessionResult,
   GetSessionUsageSnapshotRequest,
   GetSessionUsageSnapshotResult,
-  PrepareModelCallRequest,
-  PrepareModelCallResult,
+  BuildContextRequest,
+  BuildContextResult,
   RecordCompletedRunUsageRequest,
   RecordCompletedRunUsageResult,
 } from './context-service-types';
 
 export interface ContextService {
-  prepareModelCall(request: PrepareModelCallRequest): Promise<PrepareModelCallResult>;
+  build(request: BuildContextRequest): Promise<BuildContextResult>;
   compactSession(request: CompactSessionRequest): Promise<CompactSessionResult>;
   recordCompletedRunUsage(request: RecordCompletedRunUsageRequest): RecordCompletedRunUsageResult;
   getSessionUsageSnapshot(request: GetSessionUsageSnapshotRequest): GetSessionUsageSnapshotResult;

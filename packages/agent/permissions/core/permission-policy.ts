@@ -1,13 +1,17 @@
 /* Applies safety assessment, explicit rule precedence, and permission mode defaults. */
 import type {
-  ApprovalOption, EvaluateToolCallRequest, EvaluateToolCallResult, PermissionDecision, PermissionOperation,
-  PermissionRule, SafetyAssessment,
+  ApprovalOption, EvaluateToolCallResult, PermissionDecision, PermissionOperation,
+  PermissionRule, PermissionSettings, SafetyAssessment,
 } from '../contracts/permission-contracts';
 import { classifyCommand } from './command-classifier';
-import { resolvePermissionOperations } from './operation-resolver';
+import { resolvePermissionOperations, type PermissionOperationRequest } from './operation-resolver';
 import { matchesPermissionRule } from './permission-rule-matcher';
 
-export function evaluateToolCall(request: EvaluateToolCallRequest): EvaluateToolCallResult {
+type PermissionPolicyRequest = PermissionOperationRequest & {
+  permission_settings: PermissionSettings;
+};
+
+export function evaluateToolCall(request: PermissionPolicyRequest): EvaluateToolCallResult {
   const operations = resolvePermissionOperations(request);
   const safety = highestSafety(operations.map((operation) => assessOperation(operation, request)));
   const settings = request.permission_settings;
@@ -17,15 +21,15 @@ export function evaluateToolCall(request: EvaluateToolCallRequest): EvaluateTool
   const allExplicitlyAllowed = operations.every((operation) => settings.allow.some((rule) => matchesPermissionRule(rule, operation)));
   if (allExplicitlyAllowed) return ok(operations, { type: 'allow', operations, safety_assessment: safety, reason: 'Allowed by an explicit permission rule.' });
 
-  const mode = request.permission_mode;
+  const mode = settings.mode;
   const allowByMode = mode === 'full_access' || (mode === 'auto' && safety === 'safe')
     || (mode === 'ask' && operations.every(isAskModeImplicitlySafe));
   return allowByMode
-    ? ok(operations, { type: 'allow', operations, safety_assessment: safety, reason: `Allowed by ${request.permission_mode} mode.` })
-    : ok(operations, approvalDecision(operations, safety, request, `Approval required by ${request.permission_mode} mode.`));
+    ? ok(operations, { type: 'allow', operations, safety_assessment: safety, reason: `Allowed by ${mode} mode.` })
+    : ok(operations, approvalDecision(operations, safety, request, `Approval required by ${mode} mode.`));
 }
 
-function assessOperation(operation: PermissionOperation, request: EvaluateToolCallRequest): SafetyAssessment {
+function assessOperation(operation: PermissionOperation, request: PermissionPolicyRequest): SafetyAssessment {
   if (operation.action === 'agent.context.activate') return 'safe';
   if (operation.action === 'external.invoke') return 'prohibited';
   if (operation.action === 'workspace.read' || operation.action === 'workspace.write') {
@@ -47,7 +51,7 @@ function isAskModeImplicitlySafe(operation: PermissionOperation): boolean {
   return operation.action === 'workspace.read' || operation.action === 'agent.context.activate';
 }
 
-function approvalDecision(operations: PermissionOperation[], safety: SafetyAssessment, request: EvaluateToolCallRequest, reason: string): PermissionDecision {
+function approvalDecision(operations: PermissionOperation[], safety: SafetyAssessment, request: PermissionPolicyRequest, reason: string): PermissionDecision {
   const highRisk = safety === 'prohibited';
   const options: ApprovalOption[] = [{
     option_id: `once:${request.tool_call_id}`, scope: 'once',

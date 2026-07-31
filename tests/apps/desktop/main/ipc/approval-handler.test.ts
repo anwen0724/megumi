@@ -64,7 +64,7 @@ describe('registerApprovalHandlers', () => {
               status: 'failed' as const,
               approvalRequestId: 'approval-1',
               failure: {
-                code: 'runtime_interrupted' as const,
+                code: 'runtime_protocol_violation' as const,
                 message: 'Approval continuation is no longer available in this runtime.',
                 retryable: false,
               },
@@ -92,7 +92,7 @@ describe('registerApprovalHandlers', () => {
         status: 'failed',
         approvalRequestId: 'approval-1',
         failure: {
-          code: 'runtime_interrupted',
+          code: 'runtime_protocol_violation',
           message: 'Approval continuation is no longer available in this runtime.',
         },
       },

@@ -43,7 +43,7 @@ describe('built_in_commands', () => {
     });
   });
 
-  it('runs compact through ContextService with explicit model capacity', async () => {
+  it('runs compact through ContextService with the resolved Model', async () => {
     const compact = built_in_commands.find((command) => command.name === 'compact');
     const contextService = {
       compactSession: vi.fn(async () => ({
@@ -52,6 +52,12 @@ describe('built_in_commands', () => {
         usageBefore: { usedTokens: 900, contextWindowTokens: 1000, remainingTokens: 100, usedRatio: 0.9, compactionThresholdRatio: 0.8 },
         usageAfter: { usedTokens: 400, contextWindowTokens: 1000, remainingTokens: 600, usedRatio: 0.4, compactionThresholdRatio: 0.8 },
       })),
+    };
+    const model = {
+      id: 'm', name: 'Model', api: 'openai-completions' as const, provider: 'p',
+      baseUrl: 'https://api.example.com/v1', reasoning: false, input: ['text' as const],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 1000, maxTokens: 100,
     };
 
     const result = await compact!.execute({
@@ -66,15 +72,14 @@ describe('built_in_commands', () => {
         services: {
           context: contextService,
         },
-        model_context: { providerId: 'p', modelId: 'm', contextWindowTokens: 1000 },
+        model,
       },
     });
 
     expect(contextService.compactSession).toHaveBeenCalledWith({
       sessionId: 'session:1',
       workspaceId: 'workspace:1',
-      modelContext: { providerId: 'p', modelId: 'm', contextWindowTokens: 1000 },
-      imageInputSupport: 'unknown',
+      model,
     });
     expect(result).toMatchObject({ type: 'completed' });
   });

@@ -5,7 +5,6 @@ type RunId = string;
 type SessionId = string;
 type ToolCallId = string;
 type ToolExecutionId = string;
-type ToolResultId = string;
 
 export const TIMELINE_MESSAGE_ROLES = ['user', 'assistant', 'separator', 'activity'] as const;
 export type TimelineMessageRole = (typeof TIMELINE_MESSAGE_ROLES)[number];
@@ -181,7 +180,6 @@ export interface ToolActivityItem extends ProcessDisclosureItemBase {
   kind: 'tool_activity';
   toolCallId: ToolCallId | string;
   toolExecutionId?: ToolExecutionId | string;
-  toolResultId?: ToolResultId | string;
   toolName: string;
   displayName?: string;
   inputSummary?: string;

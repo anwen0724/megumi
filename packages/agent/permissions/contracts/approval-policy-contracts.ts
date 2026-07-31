@@ -1,6 +1,14 @@
 /* Defines immutable Approval Option application contracts for Permissions. */
 import { z } from 'zod';
-import { PermissionDecisionSchema, PermissionRuleSchema, RuntimeErrorSchema, type PermissionRule, type RuntimeError } from './permission-contracts';
+import {
+  PermissionDecisionSchema,
+  PermissionRuleSchema,
+  RuntimeErrorSchema,
+  type PermissionRule,
+  type PermissionSettings,
+  type RuntimeError,
+  type WorkspacePathPermissionFacts,
+} from './permission-contracts';
 
 export const ApprovalScopeSchema = z.enum(['once', 'session']);
 export type ApprovalScope = z.infer<typeof ApprovalScopeSchema>;
@@ -30,8 +38,32 @@ export const ApplyApprovalDecisionResultSchema = z.discriminatedUnion('status', 
 ]);
 export type ApplyApprovalDecisionResult = z.infer<typeof ApplyApprovalDecisionResultSchema>;
 
-export type PermissionSettingsApplyService = {
-  addPermissionRules(request: { session_id: string; rules: PermissionRule[]; applied_at: string }): Promise<
-    { status: 'saved' } | { status: 'failed'; failure: RuntimeError }
-  >;
+export type PermissionSettingsService = {
+  resolvePermissionSettings(request: {
+    workspace_id: string;
+    session_id: string;
+  }):
+    | { status: 'ok'; permission_settings: PermissionSettings }
+    | { status: 'failed'; failure: RuntimeError }
+    | Promise<
+        | { status: 'ok'; permission_settings: PermissionSettings }
+        | { status: 'failed'; failure: RuntimeError }
+      >;
+  addPermissionRules(request: { session_id: string; rules: PermissionRule[]; applied_at: string }):
+    | { status: 'saved' }
+    | { status: 'failed'; failure: RuntimeError }
+    | Promise<{ status: 'saved' } | { status: 'failed'; failure: RuntimeError }>;
+};
+
+export type PermissionWorkspacePathPolicy = {
+  classifyPath(request: {
+    workspace_id: string;
+    target_path: string;
+  }):
+    | { status: 'classified'; workspace_path: WorkspacePathPermissionFacts }
+    | { status: 'failed'; failure: RuntimeError }
+    | Promise<
+        | { status: 'classified'; workspace_path: WorkspacePathPermissionFacts }
+        | { status: 'failed'; failure: RuntimeError }
+      >;
 };

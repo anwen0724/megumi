@@ -127,9 +127,9 @@ describe('useSessionHistoryHydration', () => {
                 }],
                 runtimeEvents: [
                   runtimeEvent('run.started', 1, { runKind: 'agent' }),
-                  runtimeEvent('model.thinking.started', 2, { modelStepId: 'thinking-1' }),
-                  runtimeEvent('model.thinking.delta', 3, { modelStepId: 'thinking-1', delta: 'Need greet.' }),
-                  runtimeEvent('model.thinking.completed', 4, { modelStepId: 'thinking-1' }),
+                  runtimeEvent('model.thinking.started', 2, { modelCallId: 'thinking-1' }),
+                  runtimeEvent('model.thinking.delta', 3, { modelCallId: 'thinking-1', delta: 'Need greet.' }),
+                  runtimeEvent('model.thinking.completed', 4, { modelCallId: 'thinking-1' }),
                   runtimeEvent('model_call.text_delta', 5, {
                     modelCallId: 'model-call-1',
                     delta: 'Duplicate replay text.',
@@ -165,9 +165,9 @@ describe('useSessionHistoryHydration', () => {
               data: {
                 events: [
                   runtimeEvent('run.started', 1, { runKind: 'agent' }),
-                  runtimeEvent('model.thinking.started', 2, { modelStepId: 'thinking-1' }),
-                  runtimeEvent('model.thinking.delta', 3, { modelStepId: 'thinking-1', delta: 'Need greet.' }),
-                  runtimeEvent('model.thinking.completed', 4, { modelStepId: 'thinking-1' }),
+                  runtimeEvent('model.thinking.started', 2, { modelCallId: 'thinking-1' }),
+                  runtimeEvent('model.thinking.delta', 3, { modelCallId: 'thinking-1', delta: 'Need greet.' }),
+                  runtimeEvent('model.thinking.completed', 4, { modelCallId: 'thinking-1' }),
                   runtimeEvent('model_call.text_delta', 5, {
                     modelCallId: 'model-call-1',
                     delta: 'Duplicate replay text.',
@@ -276,9 +276,9 @@ describe('useSessionHistoryHydration', () => {
         }],
         runtimeEvents: [
           runtimeEvent('run.started', 1, { runKind: 'agent' }),
-          runtimeEvent('model.thinking.started', 2, { modelStepId: 'thinking-1' }),
-          runtimeEvent('model.thinking.delta', 3, { modelStepId: 'thinking-1', delta: 'Need greet.' }),
-          runtimeEvent('model.thinking.completed', 4, { modelStepId: 'thinking-1' }),
+          runtimeEvent('model.thinking.started', 2, { modelCallId: 'thinking-1' }),
+          runtimeEvent('model.thinking.delta', 3, { modelCallId: 'thinking-1', delta: 'Need greet.' }),
+          runtimeEvent('model.thinking.completed', 4, { modelCallId: 'thinking-1' }),
         ],
       },
     });

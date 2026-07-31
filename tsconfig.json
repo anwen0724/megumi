@@ -20,6 +20,8 @@
       "@megumi/product/*": ["packages/product/*"],
       "@megumi/agent": ["packages/agent/index.ts"],
       "@megumi/agent/*": ["packages/agent/*"],
+      "@megumi/engine": ["packages/engine/src/index.ts"],
+      "@megumi/engine/*": ["packages/engine/src/*"],
       "@megumi/skills": ["packages/skills/index.ts"],
       "@megumi/skills/*": ["packages/skills/*"],
       "@megumi/ai": ["packages/ai/src/index.ts"],

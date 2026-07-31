@@ -14,6 +14,7 @@ export type CommandDefinition = {
   description: string;
   argument_hint?: string;
   source: CommandSource;
+  requires_session?: boolean;
   hide_from_suggestions?: boolean;
   suggestion?: {
     display_name?: string;
@@ -36,10 +37,9 @@ export type ExecuteCommandRequest = {
 };
 
 export type CommandExecutionContext = {
-  session_id: string;
+  session_id?: string;
   workspace_id?: string;
-  model_context?: import('../../context').ContextCapacity;
-  image_input_support?: import('../../model-capability').ModelSupportLevel;
+  model?: import('@megumi/ai').Model<import('@megumi/ai').Api>;
   services?: {
     context?: Pick<import('../../context').ContextService, 'compactSession'>;
     skills?: Pick<SkillService, 'listSkills'>;

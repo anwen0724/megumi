@@ -4,11 +4,21 @@
  */
 import type { InstructionService } from '../../instructions';
 import type { SessionHistoryItem, SessionService } from '../../session';
-import type { SkillCatalogItem, UsedSkillContent } from '@megumi/skills';
-import { estimateContextTokens, type Context as AiContext } from '@megumi/ai';
+import type { SkillCatalogItem, SkillService, UsedSkillContent } from '@megumi/skills';
+import {
+  Type,
+  estimateContextTokens,
+  type Api,
+  type Context as AiContext,
+  type Model,
+  type Models,
+  type Tool,
+} from '@megumi/ai';
+import type { MemoryRecallPort, ModelInputMemoryRecallSource } from '../../memory';
+import { capabilitiesFromModel } from '../../model-capability';
 import type { ContextCapacity, ContextPolicy, ContextUsage, SessionUsageSnapshot } from '../domain/model/context-usage';
 import type { ConversationRun, CurrentConversationRun } from '../domain/model/conversation-run';
-import type { ContextSourceRef, VisibleCompactionSummary } from '../domain/model/model-context';
+import type { ContextSourceRef, MemoryContextInput, VisibleCompactionSummary } from '../domain/model/model-context';
 import { buildActiveContext } from './internal/active-context-builder';
 import { buildCompactionSummaryRequest } from './internal/compaction-summary-builder';
 import { planCompaction, validateCompactionReduction } from './internal/compaction-planner';
@@ -24,8 +34,8 @@ import type {
   ContextCompactionProgress,
   GetSessionUsageSnapshotRequest,
   GetSessionUsageSnapshotResult,
-  PrepareModelCallRequest,
-  PrepareModelCallResult,
+  BuildContextRequest,
+  BuildContextResult,
   RecordCompletedRunUsageRequest,
   RecordCompletedRunUsageResult,
 } from './context-service-types';
@@ -41,13 +51,11 @@ export type ContextServiceDependencies = {
   sessionService: Pick<SessionService, 'getActiveHistory' | 'saveCompactionSummary' | 'readAttachmentContent'>;
   instructionScopeResolver: InstructionScopeResolver;
   instructionService: InstructionService;
+  skillServiceFactory?: (input: { workspaceRoot: string }) => Pick<SkillService, 'getSkillCatalog' | 'useSkill'>;
+  memoryRecall?: Pick<MemoryRecallPort, 'recallForNewUserInput'>;
+  memoryHomePath?: string;
+  models: Pick<Models, 'completeSimple'>;
   contextTokenEstimator?: (context: AiContext) => number;
-  summaryModelCall: {
-    complete(request: { context: AiContext; modelContext: ContextCapacity; sessionId?: string; compactionId?: string; signal?: AbortSignal }): Promise<
-      | { status: 'completed'; content: string }
-      | { status: 'failed'; failure: ContextFailure }
-    >;
-  };
   usageSnapshotCache: {
     get(sessionId: string): SessionUsageSnapshot | undefined;
     set(sessionId: string, snapshot: SessionUsageSnapshot): void;
@@ -67,8 +75,8 @@ type BuildFacts = {
   agentInstructions: { sources: Array<{ sourceId: string; sourcePath: string; content: string }> };
   skillCatalog: SkillCatalogItem[];
   usedSkills: UsedSkillContent[];
-  memoryRecall?: PrepareModelCallRequest['memoryRecall'];
-  tools: PrepareModelCallRequest['tools'];
+  memoryRecall?: MemoryContextInput;
+  tools: Tool[];
   compactionSummary?: VisibleCompactionSummary;
   currentRun?: CurrentConversationRun;
 };
@@ -77,8 +85,7 @@ type BuiltContext = { context: AiContext; sourceRefs: ContextSourceRef[] };
 type CompactInternalInput = {
   facts: BuildFacts;
   usageBefore: ContextUsage;
-  modelContext: ContextCapacity;
-  imageInputSupport: PrepareModelCallRequest['imageInputSupport'];
+  model: Model<Api>;
   policy: ContextPolicy;
   onProgress?: (progress: ContextCompactionProgress) => void;
   signal?: AbortSignal;
@@ -107,10 +114,10 @@ export class ContextServiceImpl implements ContextService {
     };
   }
 
-  async prepareModelCall(request: PrepareModelCallRequest): Promise<PrepareModelCallResult> {
-    const span = this.dependencies.observability?.startSpan({ name: 'context.prepare_model_call', correlation: { sessionId: request.sessionId, workspaceId: request.workspaceId } });
+  async build(request: BuildContextRequest): Promise<BuildContextResult> {
+    const span = this.dependencies.observability?.startSpan({ name: 'context.build', correlation: { sessionId: request.sessionId, workspaceId: request.workspaceId } });
     const operation = async () => {
-      const result = await this.withSessionOperation(request.sessionId, () => this.prepareModelCallExclusive(request));
+      const result = await this.withSessionOperation(request.sessionId, () => this.buildExclusive(request));
       if (span) this.dependencies.observability?.endSpan({ span, status: result.status === 'ready' ? 'ok' : result.failure.code === 'cancelled' ? 'cancelled' : 'error' });
       if (result.status === 'ready') {
         this.dependencies.observability?.recordMeasurement({ name: 'context.used_tokens', value: result.prepared.usage.usedTokens, unit: 'token', correlation: { sessionId: request.sessionId } });
@@ -121,28 +128,28 @@ export class ContextServiceImpl implements ContextService {
     return span ? this.dependencies.observability!.runInSpanContext(span, operation) : operation();
   }
 
-  private async prepareModelCallExclusive(request: PrepareModelCallRequest): Promise<PrepareModelCallResult> {
+  private async buildExclusive(request: BuildContextRequest): Promise<BuildContextResult> {
     if (request.signal?.aborted) return failed(cancelled());
     const policy = this.resolvePolicy();
+    const capacity = capacityFromModel(request.model);
     const loaded = await this.loadFacts({
       sessionId: request.sessionId,
       workspaceId: request.workspaceId,
       throughEntryId: request.currentRun.userEntry.parentEntryId ?? null,
       currentRun: request.currentRun,
-      skillCatalog: request.skillCatalog,
-      usedSkills: request.usedSkills,
-      memoryRecall: request.memoryRecall,
+      selectedSkill: request.selectedSkill,
       tools: request.tools,
+      model: request.model,
       signal: request.signal,
     });
     if (loaded.status === 'failed') return loaded;
     if (request.signal?.aborted) return failed(cancelled());
 
     let facts = loaded.facts;
-    let buildResult = await this.buildModelContext(facts, request.imageInputSupport);
+    let buildResult = await this.buildModelContext(facts, request.model);
     if (buildResult.status === 'failed') return buildResult;
     let built = buildResult.built;
-    let usageResult = this.countUsage(built.context, request.modelContext, policy, request.signal);
+    let usageResult = this.countUsage(built.context, capacity, policy, request.signal);
     if (usageResult.status === 'failed') return usageResult;
     let usage = usageResult.usage;
     let compactionId: string | undefined;
@@ -151,8 +158,7 @@ export class ContextServiceImpl implements ContextService {
       const compacted = await this.compactInternal({
         facts,
         usageBefore: usage,
-        modelContext: request.modelContext,
-        imageInputSupport: request.imageInputSupport,
+        model: request.model,
         policy,
         onProgress: request.onCompactionProgress,
         signal: request.signal,
@@ -163,10 +169,10 @@ export class ContextServiceImpl implements ContextService {
         compactionId = compacted.compactionId;
         // A saved Summary is now an owner fact. Rebuild and recount rather than
         // returning the pre-persistence validation projection.
-        buildResult = await this.buildModelContext(facts, request.imageInputSupport);
+        buildResult = await this.buildModelContext(facts, request.model);
         if (buildResult.status === 'failed') return buildResult;
         built = buildResult.built;
-        usageResult = this.countUsage(built.context, request.modelContext, policy, request.signal);
+        usageResult = this.countUsage(built.context, capacity, policy, request.signal);
         if (usageResult.status === 'failed') return usageResult;
         usage = usageResult.usage;
       }
@@ -194,14 +200,27 @@ export class ContextServiceImpl implements ContextService {
   private async compactSessionExclusive(request: CompactSessionRequest): Promise<CompactSessionResult> {
     if (request.signal?.aborted) return failed(cancelled());
     const policy = this.resolvePolicy();
-    const loaded = await this.loadFacts({ sessionId: request.sessionId, workspaceId: request.workspaceId, tools: [], skillCatalog: [], usedSkills: [], signal: request.signal });
+    const capacity = capacityFromModel(request.model);
+    const loaded = await this.loadFacts({
+      sessionId: request.sessionId,
+      workspaceId: request.workspaceId,
+      tools: [],
+      model: request.model,
+      signal: request.signal,
+    });
     if (loaded.status === 'failed') return loaded;
     if (request.signal?.aborted) return failed(cancelled());
-    const buildResult = await this.buildModelContext(loaded.facts, request.imageInputSupport);
+    const buildResult = await this.buildModelContext(loaded.facts, request.model);
     if (buildResult.status === 'failed') return buildResult;
-    const before = this.countUsage(buildResult.built.context, request.modelContext, policy, request.signal);
+    const before = this.countUsage(buildResult.built.context, capacity, policy, request.signal);
     if (before.status === 'failed') return before;
-    const compacted = await this.compactInternal({ facts: loaded.facts, usageBefore: before.usage, modelContext: request.modelContext, imageInputSupport: request.imageInputSupport, policy, signal: request.signal });
+    const compacted = await this.compactInternal({
+      facts: loaded.facts,
+      usageBefore: before.usage,
+      model: request.model,
+      policy,
+      signal: request.signal,
+    });
     if (compacted.status !== 'compacted') return compacted;
     return { status: 'compacted', compactionId: compacted.compactionId, usageBefore: before.usage, usageAfter: compacted.usageAfter };
   }
@@ -209,14 +228,15 @@ export class ContextServiceImpl implements ContextService {
   recordCompletedRunUsage(request: RecordCompletedRunUsageRequest): RecordCompletedRunUsageResult {
     const invalid = validateSnapshotRequest(request);
     if (invalid) return failed(invalid);
+    const capacity = capacityFromModel(request.model);
     const usage = request.providerInputTokens === undefined
       ? request.preCallUsage
-      : calculateContextUsage({ inputTokens: request.providerInputTokens, capacity: request.modelContext, policy: this.resolvePolicy() });
+      : calculateContextUsage({ inputTokens: request.providerInputTokens, capacity, policy: this.resolvePolicy() });
     const snapshot: SessionUsageSnapshot = {
       sessionId: request.sessionId,
       runId: request.runId,
-      providerId: request.modelContext.providerId,
-      modelId: request.modelContext.modelId,
+      providerId: request.model.provider,
+      modelId: request.model.id,
       usage,
       accuracy: request.providerInputTokens === undefined ? 'estimated' : 'provider_reported',
       calculatedAt: this.clock.now(),
@@ -235,10 +255,9 @@ export class ContextServiceImpl implements ContextService {
     workspaceId: string;
     throughEntryId?: string | null;
     currentRun?: CurrentConversationRun;
-    skillCatalog: PrepareModelCallRequest['skillCatalog'];
-    usedSkills: PrepareModelCallRequest['usedSkills'];
-    memoryRecall?: PrepareModelCallRequest['memoryRecall'];
-    tools: PrepareModelCallRequest['tools'];
+    selectedSkill?: BuildContextRequest['selectedSkill'];
+    tools: BuildContextRequest['tools'];
+    model: Model<Api>;
     signal?: AbortSignal;
   }): Promise<{ status: 'loaded'; facts: BuildFacts } | { status: 'failed'; failure: ContextFailure }> {
     const historyResult = this.dependencies.sessionService.getActiveHistory({
@@ -258,6 +277,22 @@ export class ContextServiceImpl implements ContextService {
     const agentInstructions = await this.dependencies.instructionService.getEffectiveAgentInstructions({ workspaceRoot: scope.workspaceRoot, workingDirectory: scope.workingDirectory });
     if (input.signal?.aborted) return failed(cancelled());
     if (agentInstructions.status === 'failed') return failed(ownerFailure('instruction_load_failed', agentInstructions.message, 'instructions', { code: 'instruction_load_failed', message: agentInstructions.message }));
+    const skills = await this.loadSkills({
+      workspaceRoot: scope.workspaceRoot,
+      selectedSkill: input.selectedSkill,
+      currentRun: input.currentRun,
+      signal: input.signal,
+    });
+    if (skills.status === 'failed') return skills;
+    const memoryRecall = await this.loadMemoryRecall({
+      workspaceId: input.workspaceId,
+      sessionId: input.sessionId,
+      currentRun: input.currentRun,
+      workingDirectory: scope.workingDirectory,
+      model: input.model,
+      signal: input.signal,
+    });
+    if (input.signal?.aborted) return failed(cancelled());
     return {
       status: 'loaded',
       facts: {
@@ -268,25 +303,127 @@ export class ContextServiceImpl implements ContextService {
         historicalRuns: runs.runs,
         systemInstructions,
         agentInstructions: agentInstructions.instructions,
-        skillCatalog: input.skillCatalog,
-        usedSkills: input.usedSkills,
-        ...(input.memoryRecall ? { memoryRecall: input.memoryRecall } : {}),
-        tools: input.tools,
+        skillCatalog: skills.skillCatalog,
+        usedSkills: skills.usedSkills,
+        ...(memoryRecall ? { memoryRecall } : {}),
+        tools: toAiTools(input.tools),
         ...(effectiveSummary(historyResult.history) ? { compactionSummary: effectiveSummary(historyResult.history) } : {}),
         ...(input.currentRun ? { currentRun: input.currentRun } : {}),
       },
     };
   }
 
+  private async loadSkills(input: {
+    workspaceRoot: string;
+    selectedSkill?: BuildContextRequest['selectedSkill'];
+    currentRun?: CurrentConversationRun;
+    signal?: AbortSignal;
+  }): Promise<
+    | { status: 'loaded'; skillCatalog: SkillCatalogItem[]; usedSkills: UsedSkillContent[] }
+    | { status: 'failed'; failure: ContextFailure }
+  > {
+    const skillService = this.dependencies.skillServiceFactory?.({
+      workspaceRoot: input.workspaceRoot,
+    });
+    if (!skillService) {
+      if (input.selectedSkill) {
+        return failed(ownerFailure(
+          'skill_catalog_failed',
+          'Skill Service is not configured for the selected Skill.',
+          'skills',
+          { code: 'skill_service_unavailable' },
+        ));
+      }
+      return {
+        status: 'loaded',
+        skillCatalog: [],
+        usedSkills: usedSkillsFromCurrentRun(input.currentRun),
+      };
+    }
+
+    const catalog = await skillService.getSkillCatalog({});
+    if (input.signal?.aborted) return failed(cancelled());
+    if (catalog.status === 'failed') {
+      return failed(ownerFailure(
+        'skill_catalog_failed',
+        catalog.message,
+        'skills',
+        { code: 'skill_catalog_failed', message: catalog.message },
+      ));
+    }
+
+    const usedSkills = usedSkillsFromCurrentRun(input.currentRun);
+    if (input.selectedSkill) {
+      const selected = await skillService.useSkill({
+        skillPath: input.selectedSkill.skillPath,
+      });
+      if (input.signal?.aborted) return failed(cancelled());
+      if (selected.status !== 'ok') {
+        return failed(ownerFailure(
+          'skill_catalog_failed',
+          selected.status === 'failed'
+            ? selected.message
+            : `Skill ${selected.skillPath} is ${selected.status === 'not_found' ? 'not found' : 'unavailable'}.`,
+          'skills',
+          { code: `skill_${selected.status}` },
+        ));
+      }
+      mergeUsedSkill(usedSkills, selected.skill);
+    }
+
+    return {
+      status: 'loaded',
+      skillCatalog: catalog.skills,
+      usedSkills,
+    };
+  }
+
+  private async loadMemoryRecall(input: {
+    workspaceId: string;
+    sessionId: string;
+    currentRun?: CurrentConversationRun;
+    workingDirectory: string;
+    model: Model<Api>;
+    signal?: AbortSignal;
+  }): Promise<MemoryContextInput | undefined> {
+    if (
+      !this.dependencies.memoryRecall
+      || !this.dependencies.memoryHomePath
+      || !input.currentRun
+    ) {
+      return undefined;
+    }
+    const queryText = currentRunText(input.currentRun);
+    if (!queryText) return undefined;
+    try {
+      const recalled = await this.dependencies.memoryRecall.recallForNewUserInput({
+        homePath: this.dependencies.memoryHomePath,
+        sessionId: input.sessionId,
+        runId: input.currentRun.runId,
+        projectId: input.workspaceId,
+        effectiveCwd: input.workingDirectory,
+        queryText,
+        providerId: input.model.provider,
+        modelId: input.model.id,
+      });
+      if (input.signal?.aborted) return undefined;
+      return memoryContextFromSources(input.currentRun.runId, recalled.memoryRecallSources);
+    } catch {
+      // Recall is an optional enrichment. Its owner degrades to no recalled
+      // memory instead of preventing an otherwise valid Context build.
+      return undefined;
+    }
+  }
+
   private async buildModelContext(
     facts: BuildFacts,
-    imageInputSupport: PrepareModelCallRequest['imageInputSupport'],
+    model: Model<Api>,
   ): Promise<{ status: 'built'; built: BuiltContext } | { status: 'failed'; failure: ContextFailure }> {
     const active = buildActiveContext(facts);
     const result = await materializeActiveContextImages({
       activeContext: active.activeContext,
       sessionService: this.dependencies.sessionService,
-      imageInputSupport,
+      imageInputSupport: capabilitiesFromModel(model).imageInput,
     });
     if (result.status === 'failed') return result;
     try {
@@ -367,17 +504,31 @@ export class ContextServiceImpl implements ContextService {
       systemPrompt: summaryRequest.systemPrompt,
       messages: [{ role: 'user', content: summaryRequest.input, timestamp: Date.parse(this.clock.now()) }],
     };
-    const generated = await this.dependencies.summaryModelCall.complete({ context: summaryContext, modelContext: input.modelContext, sessionId: input.facts.sessionId, compactionId, ...(input.signal ? { signal: input.signal } : {}) });
-    if (input.signal?.aborted) return compactionFailure(cancelled());
-    if (generated.status === 'failed') return compactionFailure({ ...generated.failure, code: 'compaction_failed' });
-    if (generated.content.trim().length === 0) {
+    let generated;
+    try {
+      generated = await this.dependencies.models.completeSimple(input.model, summaryContext, {
+        sessionId: input.facts.sessionId,
+        ...(input.signal ? { signal: input.signal } : {}),
+      });
+    } catch (error) {
+      return compactionFailure(input.signal?.aborted ? cancelled() : modelFailure(error));
+    }
+    if (input.signal?.aborted || generated.stopReason === 'aborted') return compactionFailure(cancelled());
+    if (generated.stopReason === 'error') {
+      return compactionFailure(modelFailure(generated.failure ?? generated.errorMessage));
+    }
+    const summaryContent = generated.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('');
+    if (summaryContent.trim().length === 0) {
       return compactionFailure({ code: 'compaction_failed', message: 'Compaction summary model returned empty content.', retryable: true, cause: { owner: 'ai' } });
     }
     const retainedRuns = input.facts.historicalRuns.slice(plan.plan.runs.length);
-    const compactedFacts: BuildFacts = { ...input.facts, historicalRuns: retainedRuns, compactionSummary: { compactionId, content: generated.content } };
-    const projectedBuilt = await this.buildModelContext(compactedFacts, input.imageInputSupport);
+    const compactedFacts: BuildFacts = { ...input.facts, historicalRuns: retainedRuns, compactionSummary: { compactionId, content: summaryContent } };
+    const projectedBuilt = await this.buildModelContext(compactedFacts, input.model);
     if (projectedBuilt.status === 'failed') return compactionFailure(projectedBuilt.failure);
-    const projected = this.countUsage(projectedBuilt.built.context, input.modelContext, input.policy, input.signal);
+    const projected = this.countUsage(projectedBuilt.built.context, capacityFromModel(input.model), input.policy, input.signal);
     if (projected.status === 'failed') return compactionFailure(projected.failure);
     const reduction = validateCompactionReduction({
       usageBeforeInputTokens: input.usageBefore.usedTokens,
@@ -398,7 +549,7 @@ export class ContextServiceImpl implements ContextService {
     const saved = this.dependencies.sessionService.saveCompactionSummary({
       compaction_id: compactionId,
       session_id: input.facts.sessionId,
-      summary_text: generated.content,
+      summary_text: summaryContent,
       covered_until_entry_id: plan.plan.coveredUntilEntryId,
       ...(plan.plan.firstKeptEntryId ? { first_kept_entry_id: plan.plan.firstKeptEntryId } : {}),
       expected_active_entry_id: input.facts.expectedActiveEntryId,
@@ -458,14 +609,105 @@ function effectiveSummary(history: SessionHistoryItem[]): VisibleCompactionSumma
 function validateSnapshotRequest(request: RecordCompletedRunUsageRequest): ContextFailure | undefined {
   const usage = request.preCallUsage;
   const validUsage = Number.isInteger(usage.usedTokens) && usage.usedTokens >= 0
-    && Number.isInteger(request.modelContext.contextWindowTokens) && request.modelContext.contextWindowTokens > 0
-    && usage.contextWindowTokens === request.modelContext.contextWindowTokens
+    && Number.isInteger(request.model.contextWindow) && request.model.contextWindow > 0
+    && usage.contextWindowTokens === request.model.contextWindow
     && usage.remainingTokens === usage.contextWindowTokens - usage.usedTokens
     && usage.usedRatio === usage.usedTokens / usage.contextWindowTokens
     && Number.isFinite(usage.compactionThresholdRatio) && usage.compactionThresholdRatio > 0 && usage.compactionThresholdRatio < 1;
   const validProvider = request.providerInputTokens === undefined || (Number.isInteger(request.providerInputTokens) && request.providerInputTokens >= 0);
-  if (request.sessionId && request.runId && request.modelContext.providerId && request.modelContext.modelId && validUsage && validProvider) return undefined;
+  if (request.sessionId && request.runId && request.model.provider && request.model.id && validUsage && validProvider) return undefined;
   return { code: 'usage_snapshot_invalid', message: 'Completed Run usage snapshot input is invalid.', retryable: false };
+}
+
+function capacityFromModel(model: Model<Api>): ContextCapacity {
+  return {
+    providerId: model.provider,
+    modelId: model.id,
+    contextWindowTokens: model.contextWindow,
+  };
+}
+
+function toAiTools(definitions: BuildContextRequest['tools']): Tool[] {
+  return definitions
+    .filter((definition) => definition.availability.status === 'available')
+    .map((definition) => ({
+      name: definition.name,
+      description: definition.modelFacingDescription ?? definition.description,
+      parameters: Type.Unsafe(definition.inputSchema),
+    }));
+}
+
+function usedSkillsFromCurrentRun(currentRun: CurrentConversationRun | undefined): UsedSkillContent[] {
+  const usedSkills: UsedSkillContent[] = [];
+  for (const item of currentRun?.runItems ?? []) {
+    if (item.type !== 'tool_result' || item.toolName !== 'use_skill' || item.status !== 'success') {
+      continue;
+    }
+    for (const source of item.runtimeSources ?? []) {
+      if (source.source_kind !== 'skill') continue;
+      const name = source.metadata?.name;
+      const skillPath = source.metadata?.skillPath;
+      if (typeof name !== 'string' || typeof skillPath !== 'string') continue;
+      mergeUsedSkill(usedSkills, {
+        name,
+        skillPath,
+        content: source.text,
+      });
+    }
+  }
+  return usedSkills;
+}
+
+function mergeUsedSkill(usedSkills: UsedSkillContent[], skill: UsedSkillContent): void {
+  const index = usedSkills.findIndex((candidate) => candidate.skillPath === skill.skillPath);
+  if (index >= 0) {
+    usedSkills[index] = { ...skill };
+  } else {
+    usedSkills.push({ ...skill });
+  }
+}
+
+function currentRunText(currentRun: CurrentConversationRun): string {
+  return currentRun.userMessage.content
+    .flatMap((block) => block.type === 'text' ? [block.text] : [])
+    .join('\n')
+    .trim();
+}
+
+function memoryContextFromSources(
+  runId: string,
+  sources: ModelInputMemoryRecallSource[],
+): MemoryContextInput | undefined {
+  if (sources.length === 0) return undefined;
+  return {
+    recallId: sources[0]?.sourceId ?? `memory-recall:${runId}`,
+    items: sources.flatMap((source) => {
+      const memoryIds = source.memoryIds?.length ? source.memoryIds : [source.sourceId];
+      return memoryIds.map((memoryId) => ({
+        memoryId,
+        content: [{ type: 'text' as const, text: source.text }],
+      }));
+    }),
+  };
+}
+
+function modelFailure(error: unknown): ContextFailure {
+  const candidate = typeof error === 'object' && error !== null
+    ? error as { code?: unknown; message?: unknown; retryable?: unknown }
+    : undefined;
+  return {
+    code: 'compaction_failed',
+    message: typeof candidate?.message === 'string'
+      ? candidate.message
+      : typeof error === 'string'
+        ? error
+        : 'Compaction summary model call failed.',
+    retryable: typeof candidate?.retryable === 'boolean' ? candidate.retryable : true,
+    cause: {
+      owner: 'ai',
+      ...(typeof candidate?.code === 'string' ? { code: candidate.code } : {}),
+    },
+  };
 }
 
 function ownerFailure(code: ContextFailure['code'], message: string, owner: NonNullable<ContextFailure['cause']>['owner'], failure: { code?: string; message?: string }): ContextFailure {

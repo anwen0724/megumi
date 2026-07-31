@@ -21,8 +21,13 @@ function createHost(input: {
 
   return {
     host: createChatHost({
-      agentRunService: {} as never,
-      commandService: { getCommandSuggestions: vi.fn() },
+      runReadModel: { listRunsBySession: () => [], listEventsByRun: () => [] },
+      engine: { startRun: vi.fn(), cancelRun: vi.fn() } as never,
+      inputService: { processUserInput: vi.fn() },
+      commandService: {
+        getCommandSuggestions: vi.fn(),
+        handleCommandInput: vi.fn(),
+      },
       sessionService: {
         readAttachmentContent,
         getAttachment: input.getAttachment ?? (() => ({ status: 'not_found' as const })),
@@ -31,9 +36,13 @@ function createHost(input: {
       branchService: {
         createBranchDraft: vi.fn() as never,
         cancelBranchDraft: vi.fn() as never,
+        resolveBranchDraft: vi.fn() as never,
+        commitBranchDraft: vi.fn() as never,
       },
       sessionTimelineQuery: { listSessionTimeline: vi.fn() as never },
       contextService: { getSessionUsageSnapshot: vi.fn() },
+      createSkillService: vi.fn(() => ({ listSkills: vi.fn() })) as never,
+      resolveModel: vi.fn(),
       ...(input.selectImages || input.selectDocuments || input.readClipboardImage ? {
         attachmentPicker: {
           selectImages: input.selectImages ?? (async () => ({ status: 'cancelled' as const })),

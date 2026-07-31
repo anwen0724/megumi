@@ -210,6 +210,58 @@ describe('SettingsHost semantics', () => {
     });
   });
 
+  it('never serializes Settings or environment provider secrets in list responses', async () => {
+    const settingsSecret = 'settings-provider-secret';
+    const environmentSecret = 'environment-provider-secret';
+    const host = createSettingsHost({
+      listProviderSettings: vi.fn(() => ({
+        status: 'ok' as const,
+        providers: [
+          providerStatus({
+            provider_id: 'settings-provider',
+            api_key: settingsSecret,
+            has_api_key: true,
+            credential_source: 'settings',
+          }),
+          providerStatus({
+            provider_id: 'environment-provider',
+            api_key: environmentSecret,
+            has_api_key: true,
+            credential_source: 'environment',
+            env_override_active: true,
+            api_key_env: 'ENVIRONMENT_PROVIDER_API_KEY',
+          }),
+        ],
+      })),
+      listProviderCatalog: vi.fn(() => ({ status: 'ok' as const, providers: [] })),
+    } as never);
+
+    const result = await host.listProviders();
+    const serialized = JSON.stringify(result);
+
+    expect(serialized).not.toContain(settingsSecret);
+    expect(serialized).not.toContain(environmentSecret);
+    expect(serialized).not.toContain('"apiKey"');
+    expect(result).toMatchObject({
+      status: 'ok',
+      providers: [
+        {
+          providerId: 'settings-provider',
+          hasApiKey: true,
+          credentialSource: 'settings',
+          envOverrideActive: false,
+        },
+        {
+          providerId: 'environment-provider',
+          hasApiKey: true,
+          credentialSource: 'environment',
+          envOverrideActive: true,
+          apiKeyEnv: 'ENVIRONMENT_PROVIDER_API_KEY',
+        },
+      ],
+    });
+  });
+
   it('projects permission rules and applies UI rule changes through Settings', async () => {
     const settings = { ...resolvedSettings(), permissions: {
       mode: 'ask' as const,
@@ -266,5 +318,41 @@ function providerSettings() {
     display_name: 'DeepSeek',
     base_url: 'https://api.deepseek.com',
     models: { 'deepseek-v4-flash': { context_window_tokens: 1_000_000 } },
+  };
+}
+
+function providerStatus(overrides: Record<string, unknown> = {}) {
+  return {
+    provider_id: 'provider:1',
+    display_name: 'Provider',
+    enabled: true,
+    api: 'openai-completions' as const,
+    base_url: 'https://api.provider.test',
+    models: ['model:1'],
+    model_settings: {
+      'model:1': {
+        display_name: 'Model',
+        context_window_tokens: 128_000,
+        capabilities: {
+          streaming: true,
+          toolCalls: true,
+          thinking: false,
+          imageInput: false,
+        },
+      },
+    },
+    model_capabilities: {
+      'model:1': {
+        streaming: true,
+        toolCalls: true,
+        thinking: false,
+        imageInput: false,
+      },
+    },
+    model_capability_overrides: {},
+    has_api_key: false,
+    credential_source: 'missing' as const,
+    env_override_active: false,
+    ...overrides,
   };
 }

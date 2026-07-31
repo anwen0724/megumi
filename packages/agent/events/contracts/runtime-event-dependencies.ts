@@ -3,7 +3,7 @@
  * still broader than the refactored module contracts.
  */
 import { z } from 'zod';
-import { JsonObjectSchema, JsonValueSchema, type JsonObject } from '../../shared-json';
+import { JsonObjectSchema, type JsonObject } from '../../shared-json';
 
 export type ModelInputContextSourceRef = {
   sourceRefId?: string;
@@ -25,7 +25,7 @@ export const ModelInputContextSourceRefSchema = z
 
 export const SESSION_ACTIVE_LEAF_REASONS = ['user_selected', 'branch_created', 'run_completed', 'system'] as const;
 export const SESSION_BRANCH_MARKER_REASONS = ['branch', 'rerun', 'system'] as const;
-export const SESSION_INTERRUPTED_RUN_PREVIOUS_STATUSES = ['running', 'waiting_for_approval'] as const;
+export const SESSION_INTERRUPTED_RUN_PREVIOUS_STATUSES = ['running', 'waiting'] as const;
 export const SESSION_INTERRUPTED_RUN_REASONS = ['approval_required', 'cancelled', 'failed', 'runtime_restarted'] as const;
 export const SESSION_COMPACTION_TRIGGER_REASONS = ['manual', 'automatic', 'context_limit'] as const;
 
@@ -37,18 +37,22 @@ export type SessionCompactionTriggerReason = string;
 export type RunActionKind = string;
 export type RunActionStatus = string;
 export type RunObservationSource = string;
-export type RunStatus = string;
+export const RUN_STATUSES = [
+  'running',
+  'waiting',
+  'cancelling',
+  'completed',
+  'failed',
+  'cancelled',
+] as const;
+export type RunStatus = (typeof RUN_STATUSES)[number];
 export type SessionMessageStatus = string;
 export type SessionStatus = string;
-export type RunStepKind = string;
-export type RunStepStatus = string;
 
 export const RunActionKindSchema = z.string().min(1);
 export const RunActionStatusSchema = z.string().min(1);
 export const RunObservationSourceSchema = z.string().min(1);
-export const RunStatusSchema = z.string().min(1);
-export const RunStepKindSchema = z.string().min(1);
-export const RunStepStatusSchema = z.string().min(1);
+export const RunStatusSchema = z.enum(RUN_STATUSES);
 export const SessionMessageStatusSchema = z.string().min(1);
 export const SessionStatusSchema = z.string().min(1);
 
@@ -125,23 +129,3 @@ export const MemoryKindSchema = z.string().min(1);
 export const MemoryRecordStatusSchema = z.string().min(1);
 export const MemoryRiskLevelSchema = z.string().min(1);
 export const MemoryScopeSchema = z.string().min(1);
-
-export type ModelStepProviderState = {
-  providerStateId?: string;
-  providerId?: string;
-  modelId?: string;
-  stateKind?: string;
-  value?: unknown;
-  metadata?: JsonObject;
-};
-
-export const ModelStepProviderStateSchema = z
-  .object({
-    providerStateId: z.string().min(1).optional(),
-    providerId: z.string().min(1).optional(),
-    modelId: z.string().min(1).optional(),
-    stateKind: z.string().min(1).optional(),
-    value: JsonValueSchema.optional(),
-    metadata: JsonObjectSchema.optional(),
-  })
-  .passthrough();

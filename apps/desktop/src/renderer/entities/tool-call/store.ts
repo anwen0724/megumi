@@ -27,10 +27,9 @@ export interface ToolPolicyDecision {
 }
 
 export interface ToolExecution {
-  toolExecutionId: string;
+  toolExecutionId?: string;
   toolCallId: string;
   runId: string;
-  stepId?: string;
   toolName: string;
   modelVisibleName?: string;
   status: ToolExecutionStatus;
@@ -61,7 +60,7 @@ export const useToolCallStore = create<ToolCallState>((set, get) => ({
   upsertToolCall: (toolExecution) => set((state) => ({
     toolCallsById: {
       ...state.toolCallsById,
-      [toolExecution.toolExecutionId]: toolExecution,
+      [toolExecution.toolExecutionId ?? toolExecution.toolCallId]: toolExecution,
     },
   })),
   findByToolCallId: (toolCallId) => Object.values(get().toolCallsById)

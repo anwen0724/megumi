@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type AgentRunStatus = 'idle' | 'sending' | 'running' | 'waiting-approval' | 'error';
+export type RunUiStatus = 'idle' | 'sending' | 'running' | 'waiting-approval' | 'error';
 
 export interface ChatComposerDraftImage {
   type: 'image';
@@ -30,18 +30,18 @@ export interface ChatComposerDraft {
 }
 
 interface ChatUiSessionState {
-  agentStatus: AgentRunStatus;
+  agentStatus: RunUiStatus;
   lastError: string | null;
 }
 
 interface ChatUiState {
   activeSessionId: string | null;
-  agentStatus: AgentRunStatus;
+  agentStatus: RunUiStatus;
   lastError: string | null;
   composerDraft: ChatComposerDraft;
   sessionStates: Record<string, ChatUiSessionState>;
   setActiveSession: (sessionId: string | null) => void;
-  setAgentStatus: (status: AgentRunStatus, sessionId?: string | null) => void;
+  setAgentStatus: (status: RunUiStatus, sessionId?: string | null) => void;
   setLastError: (error: string | null, sessionId?: string | null) => void;
   setComposerDraft: (draft: ChatComposerDraft) => void;
 }

@@ -76,7 +76,6 @@ export interface RunRuntimeEventFactoryInput<TType extends RuntimeEventType> {
   eventType: TType;
   runId: RunId | string;
   sessionId?: string;
-  stepId?: string;
   actionId?: string;
   observationId?: string;
   requestId?: string;
@@ -112,7 +111,6 @@ export function createRuntimeEvent<TType extends RuntimeEventType>(
     eventType: input.eventType,
     runId: input.runId,
     ...(input.sessionId ? { sessionId: input.sessionId } : {}),
-    ...(input.stepId ? { stepId: input.stepId } : {}),
     ...(input.actionId ? { actionId: input.actionId } : {}),
     ...(input.observationId ? { observationId: input.observationId } : {}),
     requestId: input.requestId ?? input.runtimeContext?.requestId,
@@ -188,18 +186,6 @@ export function createSessionBranchDraftCancelledEvent(
     visibility: 'system',
     persist: 'required',
   });
-}
-
-export function createModelStepStartedEvent(
-  input: RunRuntimeEventFactoryInput<'model.step.started'>,
-): TypedRuntimeEvent<'model.step.started'> {
-  return createRuntimeEvent(input);
-}
-
-export function createModelStepProviderStateRecordedEvent(
-  input: RunRuntimeEventFactoryInput<'model.step.provider_state.recorded'>,
-): TypedRuntimeEvent<'model.step.provider_state.recorded'> {
-  return createRuntimeEvent(input);
 }
 
 export function createModelThinkingStartedEvent(
@@ -444,9 +430,9 @@ export function createApprovalRequestedEvent(
   return createRuntimeEvent(input);
 }
 
-export function createRunWaitingForApprovalEvent(
-  input: RunRuntimeEventFactoryInput<'run.waiting_for_approval'>,
-): TypedRuntimeEvent<'run.waiting_for_approval'> {
+export function createRunWaitingEvent(
+  input: RunRuntimeEventFactoryInput<'run.waiting'>,
+): TypedRuntimeEvent<'run.waiting'> {
   return createRuntimeEvent(input);
 }
 
@@ -454,7 +440,6 @@ export function createContextPatchRequestedEvent(input: {
   eventId: string;
   runId: string;
   sessionId?: string;
-  stepId?: string;
   actionId?: string;
   sequence: number;
   createdAt: string;
@@ -474,7 +459,6 @@ export function createContextPatchAppliedEvent(input: {
   eventId: string;
   runId: string;
   sessionId?: string;
-  stepId?: string;
   actionId?: string;
   observationId?: string;
   sequence: number;
@@ -495,7 +479,6 @@ export function createContextPatchRejectedEvent(input: {
   eventId: string;
   runId: string;
   sessionId?: string;
-  stepId?: string;
   actionId?: string;
   observationId?: string;
   sequence: number;
@@ -516,7 +499,6 @@ export function createContextEffectiveUpdatedEvent(input: {
   eventId: string;
   runId: string;
   sessionId?: string;
-  stepId?: string;
   sequence: number;
   createdAt: string;
   runtimeContext?: RuntimeContext;

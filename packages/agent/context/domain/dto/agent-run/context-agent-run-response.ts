@@ -2,6 +2,6 @@
  * Reuses ContextService result types at the Agent Run caller boundary.
  */
 export type {
-  PrepareModelCallResult,
+  BuildContextResult,
   RecordCompletedRunUsageResult,
 } from '../../../service/context-service-types';

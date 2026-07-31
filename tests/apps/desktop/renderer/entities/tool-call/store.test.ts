@@ -6,7 +6,6 @@ const toolCall: ToolExecution = {
   toolExecutionId: 'tool-execution-1',
   toolCallId: 'tool-call-1',
   runId: 'run-1',
-  stepId: 'step-1',
   toolName: 'read_file',
   input: { path: 'src/index.ts' },
   inputPreview: {

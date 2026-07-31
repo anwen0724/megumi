@@ -142,9 +142,10 @@ describe('Context system v2 source guards', () => {
   });
 
   it('keeps Context.tools as the only model-facing tool input', () => {
-    const agentRunSource = readTree('packages/agent/agent-run');
+    const engineSource = readTree('packages/engine/src');
 
-    expect(agentRunSource).not.toMatch(/model_call_messages|tool_set|toolSet/);
+    expect(engineSource).not.toMatch(/model_call_messages|tool_set|toolSet/);
+    expect(engineSource).toContain('tools: modelVisibleToolDefinitions(runtime.registeredTools)');
   });
 
   it('keeps Host Context Usage as a snapshot-only query', () => {

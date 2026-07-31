@@ -47,7 +47,7 @@ describe('buildConversationRuns', () => {
     expect(result.runs[0].items).toEqual([]);
   });
 
-  it('preserves an incomplete Work Tool intent without inserting synthetic run-state messages', () => {
+  it('derives one cancelled Tool Result for an unclosed committed Tool Call', () => {
     const result = buildConversationRuns({
       history: [
         message('EU', user('U', 'R', 'write')),
@@ -56,11 +56,26 @@ describe('buildConversationRuns', () => {
           reason_code: 'user_cancelled',
           content: [{ type: 'toolCall', id: 'T', name: 'write_file', argumentsText: '{bad-json' }],
         }),
-        message('EA', reply('A', 'R', 'cancelled', '')),
+        message('EA', reply('A', 'R', 'cancelled', 'cancelled reply')),
       ],
     });
     expect(result.runs[0].items).toEqual([
       { type: 'tool_call', toolCallId: 'T', toolName: 'write_file', arguments: '{bad-json' },
+      {
+        type: 'tool_result',
+        toolCallId: 'T',
+        toolName: 'write_file',
+        status: 'cancelled',
+        error: {
+          code: 'runtime_interrupted',
+          message: 'Tool execution was interrupted before a result was committed.',
+        },
+        content: [{
+          type: 'text',
+          text: 'Tool execution was cancelled because the previous runtime was interrupted.',
+        }],
+      },
+      { type: 'assistant_message', content: text('cancelled reply') },
     ]);
   });
 

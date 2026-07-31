@@ -1,4 +1,4 @@
-/* Guards the ownership boundary between Permissions, Agent Run, Workspace, and Tools. */
+/* Guards the ownership boundary between Permissions, Engine, Workspace, and Tools. */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -32,9 +32,9 @@ describe('Permissions owner boundary', () => {
     expect(permissions).not.toMatch(/NetworkTargetClassifier|dns\.lookup|resolved_addresses/);
   });
 
-  it('does not carry authorization artifacts through Agent Run or Tools', () => {
+  it('does not carry authorization artifacts through Engine or Tools', () => {
     const source = [
-      readTypeScriptTree('packages/agent/agent-run'),
+      readTypeScriptTree('packages/engine/src'),
       readTypeScriptTree('packages/agent/tools'),
     ].join('\n');
     expect(source).not.toMatch(/authorizedTargets|execution_targets|permissionExecutionTargetsToToolOptions/);

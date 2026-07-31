@@ -71,7 +71,15 @@ describe('Product Host runtime schemas', () => {
 
   it('validates structured Chat cancel results', () => {
     expect(ChatCancelUserInputUiPayloadSchema.safeParse({ cancelled: false }).success).toBe(false);
-    expect(ChatCancelUserInputUiPayloadSchema.safeParse({ status: 'cancelled' }).success).toBe(true);
+    expect(ChatCancelUserInputUiPayloadSchema.safeParse({
+      status: 'cancellation_requested',
+      run: {
+        runId: 'run:1',
+        sessionId: 'session:1',
+        status: 'cancelling',
+        createdAt: '2026-07-10T00:00:00.000Z',
+      },
+    }).success).toBe(true);
     expect(ChatCancelUserInputUiPayloadSchema.safeParse({ status: 'not_found', runId: 'run:1' }).success).toBe(true);
     expect(ChatCancelUserInputUiPayloadSchema.safeParse({
       status: 'not_cancellable',
@@ -173,7 +181,7 @@ describe('Product Host runtime schemas', () => {
 
     const failure = {
       status: 'failed', approvalRequestId: 'approval:1',
-      failure: { code: 'approval_failed', message: 'failed', retryable: false },
+      failure: { code: 'internal_error', message: 'failed', retryable: false },
     };
     expect(ApprovalResolveResultSchema.safeParse(failure).success).toBe(true);
     expect(ApprovalResolveResultSchema.safeParse({

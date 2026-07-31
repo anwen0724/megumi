@@ -163,8 +163,7 @@ export type PermissionDecision = z.infer<typeof PermissionDecisionSchema>;
 export const EvaluateToolCallRequestSchema = z.object({
   run_id: z.string().min(1), session_id: z.string().min(1), workspace_id: z.string().min(1), tool_call_id: z.string().min(1),
   tool_input: z.unknown(), registered_tool: RegisteredToolFactsSchema,
-  permission_mode: PermissionModeSchema, permission_settings: PermissionSettingsSchema,
-  workspace_path: WorkspacePathPermissionFactsSchema.optional(),
+  permission_mode: PermissionModeSchema,
   evaluated_at: z.string().min(1),
 }).strict();
 export type EvaluateToolCallRequest = z.infer<typeof EvaluateToolCallRequestSchema>;

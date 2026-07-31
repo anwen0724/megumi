@@ -9,7 +9,7 @@ import {
   PermissionOperationSchema,
   PermissionRuleSchema,
   SafetyAssessmentSchema,
-  type PermissionSettingsApplyService,
+  type PermissionSettingsService,
 } from '@megumi/agent/permissions';
 
 const toolIdentity = {
@@ -116,10 +116,22 @@ describe('Agent Action Permissions contracts', () => {
     }).success).toBe(false);
   });
 
-  it('exposes a batch-only Settings apply port', () => {
-    const service: PermissionSettingsApplyService = {
+  it('exposes one Settings port for resolution and batch persistence', () => {
+    const service: PermissionSettingsService = {
+      resolvePermissionSettings() {
+        return {
+          status: 'ok',
+          permission_settings: {
+            mode: 'ask',
+            allow: [],
+            ask: [],
+            deny: [],
+          },
+        };
+      },
       async addPermissionRules() { return { status: 'saved' }; },
     };
+    expect(service.resolvePermissionSettings).toBeTypeOf('function');
     expect(service.addPermissionRules).toBeTypeOf('function');
     expect(service).not.toHaveProperty('addPermissionRule');
   });

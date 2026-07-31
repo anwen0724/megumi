@@ -31,7 +31,7 @@ describe("DiagnosticsPanel", () => {
           spans: [
             {
               spanId: "span-1",
-              name: "context.prepare_model_call",
+              name: "context.build",
               status: "ok",
               startedAt: "2026-07-14T00:00:00.000Z",
               endedAt: "2026-07-14T00:00:00.010Z",
@@ -112,7 +112,7 @@ describe("DiagnosticsPanel", () => {
     expect(screen.getByText("1.43% of the context window")).toBeInTheDocument();
     expect(screen.getByText("14,480 in · 620 out")).toBeInTheDocument();
     expect(screen.getByText("Build context")).toBeInTheDocument();
-    expect(screen.queryByText("context.prepare_model_call")).not.toBeInTheDocument();
+    expect(screen.queryByText("context.build")).not.toBeInTheDocument();
     expect(screen.getAllByRole("img", { name: "Completed" })).toHaveLength(2);
     expect(screen.getByRole("option", { name: "Megumi" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Megumi / Context design" })).toBeInTheDocument();

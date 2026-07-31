@@ -32,6 +32,35 @@ describe('runtime timeline store', () => {
     useRuntimeTimelineStore.getState().setActiveSession('project-1', 'session-1');
   });
 
+  it('removes failed ModelCall attempt text and thinking on projection reset', () => {
+    const store = useRuntimeTimelineStore.getState();
+    store.dispatch(runtimeEvent('run.started', 1, { runKind: 'agent' }));
+    store.dispatch(runtimeEvent('model_call.text_delta', 2, {
+      modelCallId: 'model-call-1',
+      delta: 'discarded answer',
+    }));
+    store.dispatch(runtimeEvent('model.thinking.started', 3, {
+      modelCallId: 'model-call-1',
+    }));
+    store.dispatch(runtimeEvent('model.thinking.delta', 4, {
+      modelCallId: 'model-call-1',
+      delta: 'discarded thinking',
+    }));
+    store.dispatch(runtimeEvent('model_call.projection_reset', 5, {
+      modelCallId: 'model-call-1',
+      failedAttemptNumber: 1,
+    }));
+    store.dispatch(runtimeEvent('model_call.text_delta', 6, {
+      modelCallId: 'model-call-1',
+      delta: 'successful answer',
+    }));
+
+    const session = useRuntimeTimelineStore.getState().sessions['project-1:session-1'];
+    expect(JSON.stringify(session?.messages)).toContain('successful answer');
+    expect(JSON.stringify(session?.messages)).not.toContain('discarded answer');
+    expect(JSON.stringify(session?.messages)).not.toContain('discarded thinking');
+  });
+
   it('accepts distinct events with the same sequence and projects both into timeline text', () => {
     const store = useRuntimeTimelineStore.getState();
 
@@ -62,12 +91,12 @@ describe('runtime timeline store', () => {
   it('does not project the same runtime event more than once', () => {
     const store = useRuntimeTimelineStore.getState();
     const thinkingDelta = runtimeEvent('model.thinking.delta', 3, {
-      modelStepId: 'thinking-1',
+      modelCallId: 'thinking-1',
       delta: 'Think once.',
     });
 
     store.dispatch(runtimeEvent('run.started', 1, { runKind: 'agent' }));
-    store.dispatch(runtimeEvent('model.thinking.started', 2, { modelStepId: 'thinking-1' }));
+    store.dispatch(runtimeEvent('model.thinking.started', 2, { modelCallId: 'thinking-1' }));
     store.dispatch(thinkingDelta);
     store.dispatch(thinkingDelta);
 
@@ -106,13 +135,13 @@ describe('runtime timeline store', () => {
     };
 
     store.dispatch(runtimeEvent('run.started', 1, { runKind: 'agent' }));
-    store.dispatch(runtimeEvent('model.thinking.started', 2, { modelStepId: 'thinking-1' }));
-    store.dispatch(runtimeEvent('model.thinking.delta', 3, { modelStepId: 'thinking-1', delta: 'Dirty duplicate.' }));
+    store.dispatch(runtimeEvent('model.thinking.started', 2, { modelCallId: 'thinking-1' }));
+    store.dispatch(runtimeEvent('model.thinking.delta', 3, { modelCallId: 'thinking-1', delta: 'Dirty duplicate.' }));
 
     store.hydrateCommittedMessages('project-1', 'session-1', [committedAssistant]);
     store.dispatch(runtimeEvent('run.started', 1, { runKind: 'agent' }));
-    store.dispatch(runtimeEvent('model.thinking.started', 2, { modelStepId: 'thinking-1' }));
-    store.dispatch(runtimeEvent('model.thinking.delta', 3, { modelStepId: 'thinking-1', delta: 'Clean replay.' }, {
+    store.dispatch(runtimeEvent('model.thinking.started', 2, { modelCallId: 'thinking-1' }));
+    store.dispatch(runtimeEvent('model.thinking.delta', 3, { modelCallId: 'thinking-1', delta: 'Clean replay.' }, {
       eventId: 'event-clean-thinking',
     }));
 
@@ -330,9 +359,9 @@ describe('runtime timeline store', () => {
 
     store.hydrateCommittedMessages('project-1', 'session-1', [committedAssistant]);
     store.dispatch(runtimeEvent('run.started', 1, { runKind: 'agent' }));
-    store.dispatch(runtimeEvent('model.thinking.started', 2, { modelStepId: 'thinking-1' }));
-    store.dispatch(runtimeEvent('model.thinking.delta', 3, { modelStepId: 'thinking-1', delta: 'I should answer.' }));
-    store.dispatch(runtimeEvent('model.thinking.completed', 4, { modelStepId: 'thinking-1' }));
+    store.dispatch(runtimeEvent('model.thinking.started', 2, { modelCallId: 'thinking-1' }));
+    store.dispatch(runtimeEvent('model.thinking.delta', 3, { modelCallId: 'thinking-1', delta: 'I should answer.' }));
+    store.dispatch(runtimeEvent('model.thinking.completed', 4, { modelCallId: 'thinking-1' }));
     store.dispatch(runtimeEvent('model_call.text_delta', 5, {
       modelCallId: 'model-call-1',
       delta: 'Replayed duplicate text.',

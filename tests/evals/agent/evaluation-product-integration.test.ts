@@ -6,7 +6,12 @@ import { ExecutionProfileSchema } from '../../../evals/agent/config/execution-pr
 import { EvaluationTargetSchema } from '../../../evals/agent/config/evaluation-target';
 import { createComposeProductEvaluationFactory } from '../../../evals/agent/runner/compose-product-runtime-factory';
 import { runEvaluationAttempt } from '../../../evals/agent/runner/evaluation-runner';
-import { fakeModelCallService } from '../../helpers/fake-model-call-service';
+import {
+  AssistantMessageEventStream,
+  type Api,
+  type Model,
+  type ProviderStreams,
+} from '@megumi/ai';
 
 describe('Evaluation Product integration', () => {
   it('runs and reconciles a real Product session in an isolated temporary Home', async () => {
@@ -26,7 +31,12 @@ describe('Evaluation Product integration', () => {
       }),
       runtimeFactory: createComposeProductEvaluationFactory({
         requireCredential: false,
-        productOverrides: { modelCallService: fakeModelCallService('Evaluation integration reply.') },
+        credential: 'controlled-evaluation-key',
+        productOverrides: {
+          modelStreams: {
+            'openai-completions': fixedReplyStreams('Evaluation integration reply.'),
+          },
+        },
       }),
       availableIsolation: ['workspace_only'],
     });
@@ -37,3 +47,39 @@ describe('Evaluation Product integration', () => {
     expect(result.retainedEnvironmentPath).toBeUndefined();
   });
 });
+
+function fixedReplyStreams(text: string): ProviderStreams {
+  const stream = (model: Model<Api>) => {
+    const events = new AssistantMessageEventStream();
+    const message = {
+      role: 'assistant' as const,
+      content: [{ type: 'text' as const, text }],
+      api: model.api,
+      provider: model.provider,
+      model: model.id,
+      usage: {
+        input: 1,
+        output: 1,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 2,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: 'stop' as const,
+      timestamp: Date.now(),
+    };
+    events.push({ type: 'start', partial: { ...message, content: [] } });
+    events.push({
+      type: 'text_delta',
+      contentIndex: 0,
+      delta: text,
+      partial: message,
+    });
+    events.push({ type: 'done', reason: 'stop', message });
+    return events;
+  };
+  return {
+    stream,
+    streamSimple: stream,
+  };
+}

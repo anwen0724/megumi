@@ -510,7 +510,7 @@ function unique(values: readonly string[]): string[] {
 function formatSpanName(name: string): string {
   const names: Record<string, string> = {
     agent_run: rendererI18n.t('settings:diagnostics.spans.agentRun'),
-    "context.prepare_model_call": rendererI18n.t('settings:diagnostics.spans.prepareContext'),
+    "context.build": rendererI18n.t('settings:diagnostics.spans.prepareContext'),
     "context.compact": rendererI18n.t('settings:diagnostics.spans.compact'),
     "model.call": rendererI18n.t('settings:diagnostics.spans.modelCall'),
     "tool.call": rendererI18n.t('settings:diagnostics.spans.toolCall'),

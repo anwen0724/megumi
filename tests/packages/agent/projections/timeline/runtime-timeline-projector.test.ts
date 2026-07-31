@@ -75,7 +75,6 @@ describe('runtime timeline projection', () => {
       input: { path: '.' },
     }, 4));
     messages = reduceRuntimeTimelineEvent(messages, event('tool_result.created', {
-      toolResultId: 'tool-result:1',
       toolCallId: 'tool-call:1',
       toolExecutionId: 'tool-execution:1',
       toolName: 'list_directory',
@@ -118,7 +117,6 @@ describe('runtime timeline projection', () => {
       input: { path: '.', limit: 30 },
     }, 2));
     messages = reduceRuntimeTimelineEvent(messages, event('tool_result.created', {
-      toolResultId: 'tool-result:1',
       toolCallId: 'tool-call:1',
       toolExecutionId: 'tool-execution:1',
       toolName: 'list_directory',
@@ -143,14 +141,14 @@ describe('runtime timeline projection', () => {
   it('projects every run process event family into process disclosure items', () => {
     let messages = reduceRuntimeTimelineEvent([], event('run.started', {}, 1));
     messages = reduceRuntimeTimelineEvent(messages, event('model.thinking.started', {
-      modelStepId: 'model-call:1',
+      modelCallId: 'model-call:1',
     }, 2));
     messages = reduceRuntimeTimelineEvent(messages, event('model.thinking.delta', {
-      modelStepId: 'model-call:1',
+      modelCallId: 'model-call:1',
       delta: 'I should inspect the workspace.',
     }, 3));
     messages = reduceRuntimeTimelineEvent(messages, event('model.thinking.completed', {
-      modelStepId: 'model-call:1',
+      modelCallId: 'model-call:1',
     }, 4));
     messages = reduceRuntimeTimelineEvent(messages, event('approval.requested', {
       approvalRequest: {
@@ -217,7 +215,7 @@ describe('runtime timeline projection', () => {
       resumeMode: 'continue',
     }, 12));
     messages = reduceRuntimeTimelineEvent(messages, event('run.resumed', {
-      resumeRequestId: 'resume:1',
+      runApprovalId: 'approval:1',
     }, 13));
     messages = reduceRuntimeTimelineEvent(messages, event('run.resume.failed', {
       resumeRequestId: 'resume:2',

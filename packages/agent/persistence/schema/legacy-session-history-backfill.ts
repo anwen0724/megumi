@@ -25,7 +25,7 @@ type LegacyMessageRow = {
   created_at: string;
 };
 
-type ModelStep = {
+type LegacyModelCallRecord = {
   modelCallId: string;
   order: number;
   createdAt: string;
@@ -112,7 +112,7 @@ export function prepareLegacySessionHistoryBackfill(database: MegumiDatabase): v
 }
 
 function projectRun(events: LegacyEventRow[], existingFinalText?: string): StagedProjection[] {
-  const steps = new Map<string, ModelStep>();
+  const steps = new Map<string, LegacyModelCallRecord>();
   const results = new Map<string, { toolName: string; status: 'success' | 'failure'; content: unknown[]; createdAt: string; order: number }>();
   for (const event of events) {
     const payload = parsePayload(event);
@@ -216,10 +216,14 @@ function projectRun(events: LegacyEventRow[], existingFinalText?: string): Stage
   return output.sort((left, right) => left.order - right.order || left.sourceId.localeCompare(right.sourceId));
 }
 
-function step(steps: Map<string, ModelStep>, modelCallId: string, event: LegacyEventRow): ModelStep {
+function step(
+  steps: Map<string, LegacyModelCallRecord>,
+  modelCallId: string,
+  event: LegacyEventRow,
+): LegacyModelCallRecord {
   const existing = steps.get(modelCallId);
   if (existing) return existing;
-  const created: ModelStep = {
+  const created: LegacyModelCallRecord = {
     modelCallId, order: event.sequence, createdAt: event.created_at,
     thinking: [], text: [], toolCalls: [],
   };
