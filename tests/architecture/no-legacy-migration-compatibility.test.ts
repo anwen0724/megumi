@@ -74,19 +74,23 @@ describe('migration compatibility removal', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps Agent database schema and migrations in the product core', () => {
-    expect(fs.existsSync(path.join(root, 'packages/agent/persistence/schema/drizzle-schema.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(root, 'packages/agent/persistence/schema/migrate.ts'))).toBe(true);
-
-    const oldMigrationPath = path.join(root, 'packages/agent/persistence/schema/migrations.ts');
-    if (fs.existsSync(oldMigrationPath)) {
-      expect(fs.readFileSync(oldMigrationPath, 'utf8')).not.toContain('export function migrateDatabase');
-    }
+  it('keeps Database schema and migrations in the Database Package', () => {
+    expect(fs.existsSync(path.join(root, 'packages/database/src/database-schema.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/database/src/database-migrations.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/database/migrations/meta/_journal.json'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/agent/persistence'))).toBe(false);
   });
 
   it('does not let the desktop shell own database schema, migrations, or repositories', () => {
     const violations: string[] = [];
-    const forbiddenImports = ['drizzle-orm', 'drizzle-kit', 'persistence/schema', 'persistence/repos'];
+    const forbiddenImports = [
+      '@megumi/database',
+      'packages/database',
+      'drizzle-orm',
+      'drizzle-kit',
+      'database-schema',
+      'database-migrations',
+    ];
 
     for (const file of walkFiles(path.join(root, 'apps/desktop'))) {
       const source = fs.readFileSync(file, 'utf8');

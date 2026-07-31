@@ -1,11 +1,82 @@
-/*
- * Guards the Context v2 package structure and stable public surface.
- */
+/* Guards the Context Package structure, stable exports, and Owner boundaries. */
+// @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
+
+describe('Context Package source guards', () => {
+  it('provides the confirmed Context Package files', () => {
+    expect(listFiles('packages/context/src')).toEqual([
+      'active-context.ts',
+      'compaction/compaction-planner.ts',
+      'compaction/compaction-summary.ts',
+      'compaction/context-compactor.ts',
+      'context-builder.ts',
+      'context-policy.ts',
+      'context-usage.ts',
+      'conversation-run.ts',
+      'image-content.ts',
+      'index.ts',
+    ]);
+    expect(exists('packages/context/package.json')).toBe(true);
+    expect(exists('packages/context/tsconfig.json')).toBe(true);
+  });
+
+  it('exports capability contracts without exposing implementation helpers or Service synonyms', () => {
+    const publicIndex = read('packages/context/src/index.ts');
+
+    for (const required of [
+      'createContext',
+      'ContextBuilder',
+      'ContextCompactor',
+      'ContextUsageReader',
+      'ContextUsageRecorder',
+    ]) {
+      expect(publicIndex).toContain(required);
+    }
+    expect(publicIndex).not.toMatch(/ContextService|context-service|compaction-planner|compaction-summary|image-content/u);
+  });
+
+  it('does not recreate repository, ports, DTO, or Service layers', () => {
+    for (const forbidden of [
+      'packages/context/src/repository',
+      'packages/context/src/ports',
+      'packages/context/src/domain/dto',
+      'packages/context/src/service',
+      'packages/context/src/services',
+    ]) {
+      expect(exists(forbidden), forbidden).toBe(false);
+    }
+  });
+
+  it('keeps Context independent from Product, Settings, providers, Desktop, and Database', () => {
+    const source = readTree('packages/context/src');
+
+    expect(source).not.toMatch(/@megumi\/(?:product|settings|database)(?:\/|['"])/u);
+    expect(source).not.toMatch(/from ['"][^'"]*provider/iu);
+    expect(source).not.toMatch(/from ['"](?:node:|electron)|apps[\\/]desktop/u);
+    expect(source).not.toMatch(/better-sqlite3|sqlite|Repository/u);
+    expect(source).not.toContain('256_000');
+  });
+
+  it('keeps usage snapshot reads side-effect free and compaction retention policy explicit', () => {
+    const contextSource = readTree('packages/context/src');
+    const hostSource = read('packages/product/src/host/chat-host.ts');
+
+    expect(contextSource).toContain('keepRecentRuns');
+    expect(contextSource).not.toMatch(/ContextUsageMonitor|subscribeContextUsage|unsubscribeContextUsage/u);
+    expect(hostSource).not.toMatch(/refreshAndGetSessionUsage|contextUsageWindowProvider|request\.refresh/u);
+  });
+
+  it('keeps Context.tools as the only model-facing Tool input', () => {
+    const engineSource = readTree('packages/engine/src');
+
+    expect(engineSource).not.toMatch(/model_call_messages|tool_set|toolSet/u);
+    expect(engineSource).toContain('tools: modelVisibleToolDefinitions(runtime.registeredTools)');
+  });
+});
 
 function exists(relativePath: string): boolean {
   return fs.existsSync(path.join(root, relativePath));
@@ -16,142 +87,23 @@ function read(relativePath: string): string {
 }
 
 function readTree(relativePath: string): string {
-  const absolutePath = path.join(root, relativePath);
-  return fs.readdirSync(absolutePath, { recursive: true, withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.ts'))
-    .map((entry) => fs.readFileSync(path.join(entry.parentPath, entry.name), 'utf8'))
+  return listAbsoluteFiles(relativePath)
+    .filter((file) => file.endsWith('.ts'))
+    .map((file) => fs.readFileSync(file, 'utf8'))
     .join('\n');
 }
 
 function listFiles(relativePath: string): string[] {
   const absolutePath = path.join(root, relativePath);
-  return fs.readdirSync(absolutePath, { recursive: true, withFileTypes: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => path.relative(absolutePath, path.join(entry.parentPath, entry.name)).replaceAll('\\', '/'))
+  return listAbsoluteFiles(relativePath)
+    .map((file) => path.relative(absolutePath, file).replaceAll('\\', '/'))
     .sort();
 }
 
-describe('Context system v2 source guards', () => {
-  it('provides the target domain and service contract files', () => {
-    expect(listFiles('packages/agent/context')).toEqual([
-      'config/compose-agent-context.ts',
-      'domain/dto/agent-run/context-agent-run-request.ts',
-      'domain/dto/agent-run/context-agent-run-response.ts',
-      'domain/dto/command/context-command-request.ts',
-      'domain/dto/command/context-command-response.ts',
-      'domain/dto/ui/context-ui-request.ts',
-      'domain/dto/ui/context-ui-response.ts',
-      'domain/model/active-context.ts',
-      'domain/model/compaction.ts',
-      'domain/model/context-usage.ts',
-      'domain/model/conversation-run.ts',
-      'domain/model/model-context.ts',
-      'index.ts',
-      'service/context-service-impl.ts',
-      'service/context-service-types.ts',
-      'service/context-service.ts',
-      'service/internal/active-context-builder.ts',
-      'service/internal/compaction-planner.ts',
-      'service/internal/compaction-summary-builder.ts',
-      'service/internal/context-builder.ts',
-      'service/internal/context-usage-calculator.ts',
-      'service/internal/conversation-run-builder.ts',
-      'service/internal/conversation-run-items.ts',
-      'service/internal/image-content-materializer.ts',
-    ]);
-    expect(exists('packages/agent/context/domain/model/active-context.ts')).toBe(true);
-    expect(exists('packages/agent/context/domain/model/model-context.ts')).toBe(true);
-    expect(exists('packages/agent/context/domain/model/conversation-run.ts')).toBe(true);
-    expect(exists('packages/agent/context/domain/model/context-usage.ts')).toBe(true);
-    expect(exists('packages/agent/context/domain/model/compaction.ts')).toBe(true);
-    expect(exists('packages/agent/context/service/context-service.ts')).toBe(true);
-    expect(exists('packages/agent/context/service/context-service-types.ts')).toBe(true);
-    expect(exists('packages/agent/context/service/context-service-impl.ts')).toBe(true);
-    expect(exists('packages/agent/context/config/compose-agent-context.ts')).toBe(true);
-    expect(exists('packages/agent/context/domain/dto/agent-run/context-agent-run-request.ts')).toBe(true);
-    expect(exists('packages/agent/context/domain/dto/agent-run/context-agent-run-response.ts')).toBe(true);
-    expect(exists('packages/agent/context/domain/dto/command/context-command-request.ts')).toBe(true);
-    expect(exists('packages/agent/context/domain/dto/command/context-command-response.ts')).toBe(true);
-    expect(exists('packages/agent/context/domain/dto/ui/context-ui-request.ts')).toBe(true);
-    expect(exists('packages/agent/context/domain/dto/ui/context-ui-response.ts')).toBe(true);
-    for (const internalFile of [
-      'active-context-builder.ts',
-      'conversation-run-builder.ts',
-      'context-builder.ts',
-      'context-usage-calculator.ts',
-      'compaction-planner.ts',
-      'compaction-summary-builder.ts',
-    ]) {
-      expect(exists(`packages/agent/context/service/internal/${internalFile}`)).toBe(true);
-    }
-  });
-
-  it('exports only the stable public surface', () => {
-    const publicIndex = read('packages/agent/context/index.ts');
-    const composition = read('packages/agent/context/config/compose-agent-context.ts');
-
-    expect(publicIndex).not.toContain('/internal/');
-    expect(publicIndex).not.toContain('context-service-impl');
-    expect(publicIndex).not.toContain('UsageMonitor');
-    expect(publicIndex).not.toContain('signalBus');
-    expect(publicIndex).not.toContain('./contracts/');
-    expect(publicIndex).not.toContain('./core/');
-    expect(publicIndex).not.toContain('./services/');
-    expect(composition).toMatch(/contextService:\s*ContextService[;\n]/);
-    expect(composition).not.toMatch(/contextService:\s*ContextServiceImpl/);
-  });
-
-  it('does not create repository or ports layers', () => {
-    expect(exists('packages/agent/context/repository')).toBe(false);
-    expect(exists('packages/agent/context/ports')).toBe(false);
-  });
-
-  it('removes the legacy Context layers and composition surfaces', () => {
-    expect(exists('packages/agent/context/contracts')).toBe(false);
-    expect(exists('packages/agent/context/core')).toBe(false);
-    expect(exists('packages/agent/context/services')).toBe(false);
-    expect(exists('packages/agent/composition/context-repository.ts')).toBe(false);
-    expect(exists('packages/agent/composition/compose-agent-context.ts')).toBe(false);
-  });
-
-  it('keeps Context independent of settings, providers, hosts, persistence, and repositories', () => {
-    const contextSource = readTree('packages/agent/context');
-
-    expect(contextSource).not.toMatch(/from ['"][^'"]*settings/i);
-    expect(contextSource).not.toMatch(/from ['"][^'"]*provider/i);
-    expect(contextSource).not.toMatch(/from ['"][^'"]*(electron|desktop|preload|renderer)/i);
-    expect(contextSource).not.toMatch(/from ['"]node:(fs|path)/i);
-    expect(contextSource).not.toMatch(/better-sqlite3|sqlite/i);
-    expect(contextSource).not.toMatch(/from ['"][^'"]*repositor/i);
-    expect(contextSource).not.toContain('256_000');
-  });
-
-  it('has no usage monitor, signal, or subscription implementation', () => {
-    const contextSource = readTree('packages/agent/context');
-
-    expect(contextSource).not.toMatch(/ContextUsageMonitor|contextUsageSignalBus|ContextUsageSignal/);
-    expect(contextSource).not.toMatch(/subscribeContextUsage|unsubscribeContextUsage/);
-    expect(contextSource).not.toMatch(/ContextUsageSubscription|\.subscribe\(|\.unsubscribe\(/);
-  });
-
-  it('uses fixed recent-Run retention instead of threshold-seeking prefix estimates', () => {
-    const contextSource = readTree('packages/agent/context');
-
-    expect(contextSource).toContain('keepRecentRuns');
-    expect(contextSource).not.toMatch(/previousSummaryInputTokens|nonCompressibleInputTokens|historicalTurnInputTokens|thresholdInputTokens/);
-  });
-
-  it('keeps Context.tools as the only model-facing tool input', () => {
-    const engineSource = readTree('packages/engine/src');
-
-    expect(engineSource).not.toMatch(/model_call_messages|tool_set|toolSet/);
-    expect(engineSource).toContain('tools: modelVisibleToolDefinitions(runtime.registeredTools)');
-  });
-
-  it('keeps Host Context Usage as a snapshot-only query', () => {
-    const hostSource = read('packages/product/host-interface/chat-host.ts');
-
-    expect(hostSource).toContain('getSessionUsageSnapshot');
-    expect(hostSource).not.toMatch(/refreshAndGetSessionUsage|contextUsageWindowProvider|request\.refresh/);
-  });
-});
+function listAbsoluteFiles(relativePath: string): string[] {
+  const absolutePath = path.join(root, relativePath);
+  if (!fs.existsSync(absolutePath)) return [];
+  return fs.readdirSync(absolutePath, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => path.join(entry.parentPath, entry.name));
+}

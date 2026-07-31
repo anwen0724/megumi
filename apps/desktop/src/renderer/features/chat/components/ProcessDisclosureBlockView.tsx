@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, ChevronRight, CircleDot, CircleSlash, Clock3, XCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type {
@@ -12,7 +12,7 @@ import type {
   RetryActivityItem,
   ThinkingItem,
   ToolActivityItem,
-} from '@megumi/product/runtime-timeline';
+} from '@megumi/product/host';
 import { rendererI18n } from '../../../shared/i18n';
 import { cx } from '../../../shared/ui';
 import { TimelineMarkdown } from './TimelineMarkdown';

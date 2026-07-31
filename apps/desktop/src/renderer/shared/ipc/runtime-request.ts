@@ -3,7 +3,7 @@ import {
   buildRuntimeContext,
   generateRuntimeTraceId,
   type RuntimeContext,
-} from '@megumi/product/runtime-events';
+} from '@megumi/product/host';
 import { rendererRuntimeOperationNameFromChannel } from './runtime-operation-name';
 
 export interface CreateRendererRuntimeIpcRequestOptions {

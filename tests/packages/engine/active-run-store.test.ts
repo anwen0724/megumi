@@ -2,7 +2,7 @@
  * Verifies in-process Run concurrency, start idempotency, and bounded retention.
  */
 import { describe, expect, it } from 'vitest';
-import type { SessionEntry, SessionMessageWithAttachments } from '@megumi/agent/session';
+import type { SessionEntry, SessionMessageWithAttachments } from '@megumi/session';
 import type { EngineClock, RunFailure } from '@megumi/engine';
 import {
   ActiveRunStore,

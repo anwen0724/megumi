@@ -1,5 +1,5 @@
-﻿import { create } from 'zustand';
-import type { RuntimeEvent } from '@megumi/product/runtime-events';
+import { create } from 'zustand';
+import type { RuntimeEvent } from '@megumi/product/host';
 import {
   reduceRuntimeTimelineEvent,
   type AnswerTextBlock,
@@ -7,7 +7,7 @@ import {
   type TimelineAssistantMessage,
   type TimelineMessage,
   type TimelineUserMessage,
-} from '@megumi/product/runtime-timeline';
+} from '@megumi/product/host';
 
 export type RuntimeTimelineStatus = 'running' | 'completed' | 'failed' | 'cancelled' | 'needs_replay';
 export type TimelineHydrationStatus = 'idle' | 'hydrating' | 'ready' | 'failed';

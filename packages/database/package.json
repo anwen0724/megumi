@@ -1,0 +1,15 @@
+{
+  "name": "@megumi/database",
+  "version": "0.1.0",
+  "description": "Megumi database connection, schema, and migration infrastructure",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/database-schema.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.0.0",
+    "drizzle-orm": "^0.45.2"
+  }
+}

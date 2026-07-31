@@ -3,13 +3,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createDatabase, type MegumiDatabase } from '@megumi/agent/persistence';
-import { applyAgentDatabaseMigrations } from '@megumi/agent/persistence/schema';
-import { SkillRepository } from '@megumi/skills';
+import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/database';
+import { SkillRepository } from '@megumi/skills/repository/skill-repository';
 import { SkillServiceImpl } from '@megumi/skills/service/skill-service-impl';
 
 const tempRoots: string[] = [];
-let database: MegumiDatabase | undefined;
+let database: DatabaseConnection | undefined;
 afterEach(() => {
   database?.close();
   database = undefined;
@@ -112,8 +111,8 @@ function createService(root: string): SkillServiceImpl {
 
 function createRepository(): SkillRepository {
   if (!database) {
-    database = createDatabase();
-    applyAgentDatabaseMigrations(database);
+    database = createDatabase({ filename: ':memory:' });
+    migrateDatabase({ database });
   }
   return new SkillRepository(database);
 }

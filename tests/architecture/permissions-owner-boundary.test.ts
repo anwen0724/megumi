@@ -20,14 +20,14 @@ function readTypeScriptTree(relative: string): string {
 
 describe('Permissions owner boundary', () => {
   it('keeps execution targets out of Permission and Tool contracts', () => {
-    const permissionContracts = read('packages/agent/permissions/contracts/permission-contracts.ts');
-    const toolContracts = read('packages/agent/tools/contracts/tool-contracts.ts');
+    const permissionContracts = read('packages/permissions/src/permission-operation.ts');
+    const toolContracts = read('packages/tools/src/tool.ts');
     expect(permissionContracts).not.toMatch(/execution_targets|PermissionExecutionTargets|NetworkTargetPermissionFacts/);
     expect(toolContracts).not.toMatch(/authorizedTargets|workspacePath\?: \{ absolutePath|resolvedAddresses/);
   });
 
   it('keeps network execution analysis outside Permissions', () => {
-    const permissions = readTypeScriptTree('packages/agent/permissions');
+    const permissions = readTypeScriptTree('packages/permissions/src');
     expect(permissions).not.toMatch(/node:(?:dns|net|http|https)/);
     expect(permissions).not.toMatch(/NetworkTargetClassifier|dns\.lookup|resolved_addresses/);
   });
@@ -35,7 +35,7 @@ describe('Permissions owner boundary', () => {
   it('does not carry authorization artifacts through Engine or Tools', () => {
     const source = [
       readTypeScriptTree('packages/engine/src'),
-      readTypeScriptTree('packages/agent/tools'),
+      readTypeScriptTree('packages/tools/src'),
     ].join('\n');
     expect(source).not.toMatch(/authorizedTargets|execution_targets|permissionExecutionTargetsToToolOptions/);
   });

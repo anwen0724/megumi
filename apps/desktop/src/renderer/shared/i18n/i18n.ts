@@ -1,7 +1,7 @@
 /* Owns the single bundled i18next runtime used by the Desktop Renderer. */
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import type { AppLanguage } from '@megumi/product/host-interface';
+import type { AppLanguage } from '@megumi/product/host';
 import { resources } from './resources';
 
 export const DEFAULT_RENDERER_LANGUAGE: AppLanguage = 'en-US';

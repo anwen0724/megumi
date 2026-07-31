@@ -1,5 +1,5 @@
-﻿import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
-import type { ChatImageInputCapabilitiesUiResult, CommandSuggestionResult } from '@megumi/product/host-interface';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import type { ChatImageInputCapabilitiesUiResult, CommandSuggestionResult } from '@megumi/product/host';
 import { useTranslation } from 'react-i18next';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import { useProviderStore } from '../../../entities/provider/store';

@@ -8,7 +8,7 @@ import {
   initializeMegumiHomeSync,
   resolveMegumiHomePath,
   type MegumiHomeFileSystem,
-} from '@megumi/product/home';
+} from '@megumi/product';
 
 class MemoryFileSystem implements MegumiHomeFileSystem {
   readonly directories = new Set<string>();

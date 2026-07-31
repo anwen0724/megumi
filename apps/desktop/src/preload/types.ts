@@ -11,7 +11,7 @@ import type {
   GetSkillDetailUiResponse,
   ListSkillsUiResponse,
   WorkspaceOpenFileUiResult,
-} from '@megumi/product/host-interface';
+} from '@megumi/product/host';
 import type {
   SessionBranchDraftCancelPayload,
   SessionBranchDraftCreatePayload,

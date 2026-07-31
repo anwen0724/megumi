@@ -25,7 +25,7 @@ import type {
   ArtifactStatusUpdateData,
   ArtifactVersionCreateData,
   ArtifactVersionGetData,
-} from '@megumi/product/host-interface';
+} from '@megumi/product/host';
 import {
   ArtifactGetDataSchema,
   ArtifactListDataSchema,
@@ -33,8 +33,8 @@ import {
   ArtifactStatusUpdateDataSchema,
   ArtifactVersionCreateDataSchema,
   ArtifactVersionGetDataSchema,
-} from '@megumi/product/host-interface';
-import type { RuntimeLogger } from '@megumi/product/logging';
+} from '@megumi/product/host';
+import type { RuntimeLogger } from '@megumi/product';
 import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { createIpcRequestHandler } from '../create-request-handler';
 import { IPC_CHANNELS } from '../channels';

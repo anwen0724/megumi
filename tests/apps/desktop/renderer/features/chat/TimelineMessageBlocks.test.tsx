@@ -6,7 +6,7 @@ import type {
   TimelineActivityMessage,
   TimelineSeparatorMessage,
   TimelineUserMessage,
-} from '@megumi/agent/projections/timeline';
+} from '@megumi/projections';
 import { TimelineMessage } from '@megumi/desktop/renderer/features/chat/components/TimelineMessage';
 import { WorkspaceChangeFooter } from '@megumi/desktop/renderer/features/chat/components/WorkspaceChangeFooter';
 import { ToastViewport, useToastStore } from '@megumi/desktop/renderer/shared/ui';

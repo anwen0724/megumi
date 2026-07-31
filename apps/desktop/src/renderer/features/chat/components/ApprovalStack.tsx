@@ -1,5 +1,5 @@
 /* Places approval cards in the composer overlay while consuming canonical Tool Activity facts. */
-import type { ToolActivityItem } from '@megumi/product/runtime-timeline';
+import type { ToolActivityItem } from '@megumi/product/host';
 import { useTranslation } from 'react-i18next';
 import {
   ApprovalCard,

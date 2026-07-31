@@ -7,9 +7,8 @@ import { describe, expect, it } from 'vitest';
 const root = process.cwd();
 
 const migrationRuntimeFiles = [
-  'packages/agent/persistence/schema/migrate.ts',
-  'packages/agent/persistence/schema/migration-paths.ts',
-  'packages/agent/composition/compose-agent-persistence.ts',
+  'packages/database/src/database-migrations.ts',
+  'packages/database/src/migration-resources.ts',
 ];
 
 describe('database migration runtime contract', () => {
@@ -33,11 +32,11 @@ describe('database migration runtime contract', () => {
 
   it('uses Drizzle migrations as the only schema upgrade mechanism', () => {
     const migrateSource = fs.readFileSync(
-      path.join(root, 'packages/agent/persistence/schema/migrate.ts'),
+      path.join(root, 'packages/database/src/database-migrations.ts'),
       'utf8',
     );
 
     expect(migrateSource).toContain('drizzle-orm/better-sqlite3/migrator');
-    expect(migrateSource).toContain('migrate(drizzle(database)');
+    expect(migrateSource).toContain('migrate(drizzle(getDatabaseDriverForMigration(request.database))');
   });
 });

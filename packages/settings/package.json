@@ -1,0 +1,16 @@
+{
+  "name": "@megumi/settings",
+  "version": "0.1.0",
+  "description": "Megumi settings facts, resolution, schema, and local storage",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./store": "./src/settings-store.ts"
+  },
+  "dependencies": {
+    "@megumi/ai": "0.1.0",
+    "@megumi/permissions": "0.1.0",
+    "zod": "^3.25.76"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "@megumi/skills",
+  "version": "0.1.0",
+  "description": "Megumi Skill discovery, usage, resources, and scripts",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@megumi/database": "0.1.0"
+  }
+}

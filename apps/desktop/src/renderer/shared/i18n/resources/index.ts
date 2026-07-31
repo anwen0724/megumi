@@ -1,5 +1,5 @@
 /* Assembles complete bundled locale resources for the Desktop Renderer. */
-import type { AppLanguage } from '@megumi/product/host-interface';
+import type { AppLanguage } from '@megumi/product/host';
 import { chat as enChat } from './en-US/chat';
 import { common as enCommon } from './en-US/common';
 import { errors as enErrors } from './en-US/errors';

@@ -39,10 +39,10 @@ function offenders(files: string[], pattern: RegExp): string[] {
 describe('settings.json source guards', () => {
   it('keeps Megumi Home user configuration on settings.json instead of config.json', () => {
     const mainFiles = productionFilesUnder('apps', 'desktop', 'src', 'main');
-    const agentLocalFiles = productionFilesUnder('packages', 'agent', 'adapters', 'local');
+    const settingsFiles = productionFilesUnder('packages', 'settings', 'src');
 
     expect(offenders(mainFiles, /\bconfigPath\b|config\.json|config\.schema\.json|MegumiHomeConfigService|MegumiHomeConfigParseError/)).toEqual([]);
-    expect(offenders(agentLocalFiles, /settingsPath|settings\.json|LocalSettingsJson/)).not.toEqual([]);
+    expect(offenders(settingsFiles, /settingsPath|settings\.json|SettingsStore/)).not.toEqual([]);
     expect(offenders(mainFiles, /AppSettingsService/)).toEqual([]);
   });
 
@@ -58,7 +58,7 @@ describe('settings.json source guards', () => {
 
   it('does not create DB-backed provider or memory settings tables', () => {
     const dbFiles = [
-      ...productionFilesUnder('packages', 'db'),
+      ...productionFilesUnder('packages', 'database'),
       ...productionFilesUnder('apps', 'desktop', 'src', 'main'),
     ];
 
@@ -67,7 +67,6 @@ describe('settings.json source guards', () => {
 
   it('does not expose legacy memory settings IPC', () => {
     const files = [
-      ...productionFilesUnder('packages', 'shared'),
       ...productionFilesUnder('apps', 'desktop', 'src', 'preload'),
       ...productionFilesUnder('apps', 'desktop', 'src', 'renderer'),
       ...productionFilesUnder('apps', 'desktop', 'src', 'main', 'ipc'),

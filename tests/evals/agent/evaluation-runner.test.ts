@@ -1,6 +1,6 @@
 /* Verifies Headless Runner lifecycle across initial, approval, and terminal streams. */
 // @vitest-environment node
-import type { RuntimeEvent } from '@megumi/product/runtime-events';
+import type { RuntimeEvent } from '@megumi/product/host';
 import { describe, expect, it, vi } from 'vitest';
 import { EvaluationCaseSchema } from '../../../evals/agent/cases/evaluation-case';
 import { ExecutionProfileSchema } from '../../../evals/agent/config/execution-profile';

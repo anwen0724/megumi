@@ -1,14 +1,14 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import fs from 'fs-extra';
 import { afterEach, describe, expect, it } from 'vitest';
-import { composeProduct } from '@megumi/product/composition';
-import type { SettingsRaw } from '@megumi/agent/settings';
+import { composeProduct } from '@megumi/product';
 import {
   AssistantMessageEventStream,
   type Api,
+  type AssistantMessage,
   type Model,
   type ProviderStreams,
 } from '@megumi/ai';
@@ -28,6 +28,13 @@ describe('composeProduct', () => {
     const homePath = join(root, 'home');
     const workspaceRoot = join(root, 'workspace');
     mkdirSync(workspaceRoot);
+    fs.writeFileSync(join(workspaceRoot, 'README.md'), '# Product integration\n');
+    fs.outputFileSync(
+      join(workspaceRoot, '.megumi', 'skills', 'review', 'SKILL.md'),
+      '---\nname: review\ndescription: Review workspace changes\n---\nReview the changed files.\n',
+    );
+    const skillPath = join(workspaceRoot, '.megumi', 'skills', 'review', 'SKILL.md');
+    const modelScript = toolThenReplyStreams(skillPath);
     const product = composeProduct({
       home: {
         env: { MEGUMI_HOME: homePath },
@@ -41,12 +48,11 @@ describe('composeProduct', () => {
         },
         clock: { now: () => new Date('2026-07-10T00:00:00.000Z') },
       },
-      logWriter: { appendText: () => undefined },
       directoryPicker: {
         chooseDirectory: async () => ({ canceled: false, filePaths: [workspaceRoot] }),
       },
       modelStreams: {
-        'openai-completions': fixedReplyStreams('Product integration reply.'),
+        'openai-completions': modelScript.streams,
       },
       settingsStorage: settingsStorage(),
     });
@@ -64,6 +70,7 @@ describe('composeProduct', () => {
           provider: 'deepseek',
           id: 'deepseek-chat',
           api: 'openai-completions',
+          contextWindow: 64_000,
         });
       }
       expect(JSON.stringify(resolvedModel)).not.toContain('test-api-key');
@@ -71,6 +78,22 @@ describe('composeProduct', () => {
       const opened = await product.host.workspace.useExistingProject();
       if (opened.status !== 'opened') return;
       expect(opened.project?.rootPath).toBe(workspaceRoot);
+      const workspaceSkills = await product.host.skill.listSkills({ workspaceId: opened.project.projectId });
+      expect(workspaceSkills).toMatchObject({
+        status: 'ok',
+        skills: expect.arrayContaining([expect.objectContaining({ name: 'review', available: true })]),
+      });
+      const settings = await product.host.settings.get({});
+      expect(settings).toMatchObject({
+        status: 'ok',
+        settings: {
+          permissions: {
+            catalog: {
+              tools: expect.arrayContaining([expect.objectContaining({ registeredToolName: 'use_skill' })]),
+            },
+          },
+        },
+      });
 
       const session = await product.host.chat.createSession({
         projectId: opened.project.projectId,
@@ -82,14 +105,16 @@ describe('composeProduct', () => {
         sessionId: session.session.id,
         text: 'hello',
         modelSelection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
-        permissionMode: 'ask',
+        permissionMode: 'full_access',
       });
 
       expect(result.payload.type).toBe('agent_run');
       if (result.payload.type !== 'agent_run' || !result.events) return;
       const events = [];
       for await (const event of result.events) events.push(event.eventType);
+      expect(events.filter((eventType) => eventType === 'tool.execution.completed')).toHaveLength(2);
       expect(events).toContain('run.completed');
+      expect(JSON.stringify(modelScript.contexts[2])).toContain('Review the changed files.');
     } finally {
       await product.dispose();
     }
@@ -97,31 +122,68 @@ describe('composeProduct', () => {
 });
 
 function settingsStorage() {
-  let settings: SettingsRaw = {
+  let settings: Record<string, unknown> = {
     providers: {
       deepseek: {
         enabled: true,
         api: 'openai-completions',
         base_url: 'https://api.example.com/v1',
-        models: { 'deepseek-chat': {} },
+        models: { 'deepseek-chat': { context_window_tokens: 64_000 } },
         api_key: 'test-api-key',
       },
     },
   };
   return {
-    readRawSettings: () => settings,
-    writeRawSettings: (next: SettingsRaw) => {
+    read: () => settings,
+    write: (next: Readonly<Record<string, unknown>>) => {
       settings = next;
     },
   };
 }
 
-function fixedReplyStreams(text: string): ProviderStreams {
-  const stream = (model: Model<Api>) => {
+function toolThenReplyStreams(skillPath: string): { streams: ProviderStreams; contexts: unknown[] } {
+  let callCount = 0;
+  const contexts: unknown[] = [];
+  const stream: ProviderStreams['stream'] = (model, context) => {
+    callCount += 1;
+    contexts.push(context);
+    if (callCount === 1) {
+      return assistantStream(model, 'I will read the workspace file.', {
+          id: 'tool-call:read-readme',
+          name: 'read_file',
+          arguments: { path: 'README.md' },
+        });
+    }
+    if (callCount === 2) {
+      return assistantStream(model, 'I will load the selected review method.', {
+        id: 'tool-call:use-review-skill',
+        name: 'use_skill',
+        arguments: { skillPath },
+      });
+    }
+    return assistantStream(model, 'Product integration reply.');
+  };
+  return { streams: { stream, streamSimple: stream }, contexts };
+}
+
+function assistantStream(
+  model: Model<Api>,
+  text: string,
+  toolCall?: { id: string; name: string; arguments: Record<string, unknown> },
+): AssistantMessageEventStream {
     const events = new AssistantMessageEventStream();
-    const message = {
+    const content: AssistantMessage['content'] = [{ type: 'text', text }];
+    if (toolCall) {
+      content.push({
+        type: 'toolCall',
+        id: toolCall.id,
+        name: toolCall.name,
+        arguments: toolCall.arguments,
+      });
+    }
+    const message: AssistantMessage = {
       role: 'assistant' as const,
-      content: [{ type: 'text' as const, text }],
+      content,
       api: model.api,
       provider: model.provider,
       model: model.id,
@@ -133,7 +195,7 @@ function fixedReplyStreams(text: string): ProviderStreams {
         totalTokens: 2,
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
       },
-      stopReason: 'stop' as const,
+      stopReason: toolCall ? 'toolUse' : 'stop',
       timestamp: Date.now(),
     };
     events.push({ type: 'start', partial: { ...message, content: [] } });
@@ -141,13 +203,16 @@ function fixedReplyStreams(text: string): ProviderStreams {
       type: 'text_delta',
       contentIndex: 0,
       delta: text,
-      partial: message,
+      partial: { ...message, content: [{ type: 'text', text }] },
     });
-    events.push({ type: 'done', reason: 'stop', message });
+    if (toolCall) {
+      events.push({
+        type: 'toolcall_end',
+        contentIndex: 1,
+        toolCall: content[1] as Extract<AssistantMessage['content'][number], { type: 'toolCall' }>,
+        partial: message,
+      });
+    }
+    events.push({ type: 'done', reason: toolCall ? 'toolUse' : 'stop', message });
     return events;
-  };
-  return {
-    stream,
-    streamSimple: stream,
-  };
 }

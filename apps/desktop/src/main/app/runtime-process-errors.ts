@@ -2,9 +2,8 @@
 import {
   generateRuntimeDebugId,
   normalizeHostRuntimeError,
-} from '@megumi/product/runtime-events';
-import { redactRuntimeValue } from '@megumi/product/logging';
-import { noopRuntimeLogger, type RuntimeLogger } from '@megumi/product/logging';
+} from '@megumi/product/host';
+import { noopRuntimeLogger, redactRuntimeValue, type RuntimeLogger } from '@megumi/product';
 
 type RuntimeProcessEventName = 'uncaughtException' | 'unhandledRejection';
 

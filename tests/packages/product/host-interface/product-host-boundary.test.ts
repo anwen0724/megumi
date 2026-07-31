@@ -3,7 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const root = path.resolve(__dirname, '../../../..');
-const hostRoot = path.join(root, 'packages/product/host-interface');
+const hostRoot = path.join(root, 'packages/product/src/host');
 
 function readFiles(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -17,12 +17,15 @@ describe('Product Host Interface boundary', () => {
     expect(fs.readdirSync(hostRoot).sort()).toEqual([
       'approval-host.ts',
       'artifact-host.ts',
+      'chat-contract.ts',
       'chat-host.ts',
       'index.ts',
       'observability-host.ts',
-      'product-host-interface.ts',
+      'product-host.ts',
+      'settings-contract.ts',
       'settings-host.ts',
-      'skill-host.ts',
+      'skills-host.ts',
+      'workspace-contract.ts',
       'workspace-host.ts',
     ]);
   });
@@ -39,8 +42,22 @@ describe('Product Host Interface boundary', () => {
     expect(source).not.toContain(['@megumi', 'shared'].join('/'));
   });
 
+  it('keeps stable contracts out of Settings and Workspace Host implementations', () => {
+    const settingsContract = fs.readFileSync(path.join(hostRoot, 'settings-contract.ts'), 'utf8');
+    const settingsHost = fs.readFileSync(path.join(hostRoot, 'settings-host.ts'), 'utf8');
+    const workspaceContract = fs.readFileSync(path.join(hostRoot, 'workspace-contract.ts'), 'utf8');
+    const workspaceHost = fs.readFileSync(path.join(hostRoot, 'workspace-host.ts'), 'utf8');
+
+    expect(settingsHost).not.toContain("from 'zod'");
+    expect(settingsHost).not.toMatch(/export const \w+Schema/);
+    expect(settingsContract).not.toContain('createSettingsHost');
+    expect(workspaceHost).not.toContain("from 'zod'");
+    expect(workspaceHost).not.toMatch(/export const \w+Schema/);
+    expect(workspaceContract).not.toContain('createWorkspaceHost');
+  });
+
   it('keeps Host factory implementations out of the renderer-safe public entry', async () => {
-    const host = await import('@megumi/product/host-interface');
+    const host = await import('@megumi/product/host');
 
     expect(Object.keys(host).filter((name) => name.startsWith('create'))).toEqual([]);
   });

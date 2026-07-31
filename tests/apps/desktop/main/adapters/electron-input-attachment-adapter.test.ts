@@ -16,7 +16,7 @@ vi.mock('electron', () => ({
 
 import {
   electronInputAttachmentPickerAdapter,
-  electronInputFileReader,
+  electronInputSourceAccess,
 } from '@megumi/desktop/main/adapters/electron-input-attachment-adapter';
 
 describe('electron input attachment adapter', () => {
@@ -48,10 +48,10 @@ describe('electron input attachment adapter', () => {
 
     const source = {
       type: 'host_file_reference' as const,
-      reference_id: result.images[0].referenceId,
+      referenceId: result.images[0].referenceId,
     };
-    await expect(electronInputFileReader.readFile(source)).resolves.toEqual(new Uint8Array([1, 2, 3]));
-    await expect(electronInputFileReader.readFile(source)).resolves.toEqual(new Uint8Array([1, 2, 3]));
+    await expect(electronInputSourceAccess.readImage(source)).resolves.toEqual(new Uint8Array([1, 2, 3]));
+    await expect(electronInputSourceAccess.readImage(source)).resolves.toEqual(new Uint8Array([1, 2, 3]));
   });
 
   it('does not manufacture an attachment when the clipboard image is empty', async () => {
@@ -76,9 +76,9 @@ describe('electron input attachment adapter', () => {
     });
     expect(result.documents[0]).not.toHaveProperty('path');
 
-    await expect(electronInputFileReader.resolveLocalFile?.({
+    await expect(electronInputSourceAccess.resolveDocument({
       type: 'host_file_reference',
-      reference_id: result.documents[0].referenceId,
+      referenceId: result.documents[0].referenceId,
     })).resolves.toEqual({
       path: path.resolve(documentPath),
       sizeBytes: 8,

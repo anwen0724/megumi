@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { ToolActivityItem } from '@megumi/product/runtime-timeline';
+import type { ToolActivityItem } from '@megumi/product/host';
 import { Badge, Button, Panel } from '../../shared/ui';
 import type { ToolApprovalResolvePayload, ToolApprovalResolveResult } from './types';
 

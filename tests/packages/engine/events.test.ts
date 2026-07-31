@@ -2,8 +2,8 @@
  * Protects formal RuntimeEvent publication, ordering, and consumer isolation.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { RunResumedEventSchema, type RuntimeEvent } from '@megumi/agent/events';
-import { reduceRuntimeTimelineEvent } from '@megumi/agent/projections/timeline';
+import { RunResumedEventSchema, type RuntimeEvent } from '@megumi/events';
+import { createRuntimeTimeline, reduceRuntimeTimeline } from '@megumi/projections';
 import type { ObservabilityService } from '@megumi/observability';
 import {
   createRuntimeEventSegment,
@@ -121,13 +121,13 @@ describe('Engine RuntimeEvents', () => {
     expect(resetIndex).toBeGreaterThan(0);
     expect(resetIndex).toBeLessThan(successfulDeltaIndex);
 
-    let timeline = [] as ReturnType<typeof reduceRuntimeTimelineEvent>;
+    let timeline = createRuntimeTimeline();
     for (const event of events.slice(0, resetIndex + 1)) {
-      timeline = reduceRuntimeTimelineEvent(timeline, event);
+      timeline = reduceRuntimeTimeline({ timeline, event });
     }
     expect(JSON.stringify(timeline)).not.toContain('discard me');
     for (const event of events.slice(resetIndex + 1)) {
-      timeline = reduceRuntimeTimelineEvent(timeline, event);
+      timeline = reduceRuntimeTimeline({ timeline, event });
     }
     expect(JSON.stringify(timeline)).toContain('keep me');
     expect(JSON.stringify(timeline)).not.toContain('discard me');

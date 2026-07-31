@@ -21,7 +21,7 @@ import {
   SkillGetPayloadSchema,
   WorkspaceFilesListPayloadSchema,
   WorkspaceListProjectsUiResultSchema,
-} from '@megumi/product/host-interface';
+} from '@megumi/product/host';
 
 describe('Product Host runtime schemas', () => {
   it('accepts canonical Host requests and rejects renderer-derived workspace facts', () => {

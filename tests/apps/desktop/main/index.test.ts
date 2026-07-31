@@ -2,7 +2,7 @@
 import { existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { noopRuntimeLogger } from '@megumi/product/logging';
+import { noopRuntimeLogger } from '@megumi/observability';
 
 const mocks = vi.hoisted(() => {
   const homePath = `${process.cwd().replaceAll('\\', '/')}/.tmp/megumi-runtime-logger-review`;
@@ -114,12 +114,7 @@ vi.mock('@megumi/desktop/main/app/create-window', () => ({
   createMainWindow: mocks.createMainWindow,
 }));
 
-vi.mock('@megumi/agent/workspace', () => ({
-  createWorkspaceChangeFooterProjectorService: vi.fn(() => ({ projectRunFooter: vi.fn() })),
-  isWorkspaceChangeFooterProjectorPort: vi.fn(() => false),
-}));
-
-vi.mock('@megumi/product/composition', () => ({
+vi.mock('@megumi/product', () => ({
   composeProduct: mocks.composeProduct,
 }));
 

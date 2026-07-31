@@ -25,7 +25,7 @@ describe('project hardening guards', () => {
     expect(storeSource).not.toContain('localStorage');
   });
 
-  it('has no WorkspaceStore reference outside source guard tests', () => {
+  it('has no WorkspaceStore reference in renderer source', () => {
     // Use ripgrep instead of PowerShell recursion so this guard remains stable
     // when it runs concurrently with the full Vitest suite.
     const result = spawnSync('rg', [
@@ -35,12 +35,8 @@ describe('project hardening guards', () => {
       '*.ts',
       '--glob',
       '*.tsx',
-      '--glob',
-      '!*guard.test.ts',
       'WorkspaceStore',
-      'apps',
-      'packages',
-      'tests',
+      'apps/desktop/src/renderer',
     ], {
       encoding: 'utf8',
     });

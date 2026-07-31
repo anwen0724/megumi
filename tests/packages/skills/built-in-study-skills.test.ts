@@ -1,11 +1,11 @@
 /*
  * Verifies the product's built-in study Skills as real packages and confirms
- * they remain compatible with the existing slash-command projection.
+ * they remain selectable through the Commands suggestion projection.
  */
 
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createSkillCommands } from '@megumi/agent/commands/core/skill-commands';
+import { createCommands } from '@megumi/commands';
 import { readSkillPackages } from '@megumi/skills/service/internal/skill-package-reader';
 
 const BUILT_IN_SKILLS_ROOT = path.resolve(
@@ -72,27 +72,32 @@ describe('built-in study Skills', () => {
     });
   });
 
-  it('projects every Skill through the existing /skill command path', () => {
+  it('projects every Skill as a selection without creating executable Skill commands', async () => {
     const skills = readBuiltInSkills();
-    const commands = createSkillCommands({
-      skills: skills.map((skill) => ({
-        name: skill.name,
-        skillPath: skill.skillPath,
-        description: skill.description,
-        sourceLabel: 'System' as const,
-      })),
+    const commands = createCommands({
+      skillSuggestionProvider: {
+        listSkillSuggestions: () => skills.map((skill) => ({
+          name: skill.name,
+          skillPath: skill.skillPath,
+          description: skill.description,
+          sourceLabel: 'System' as const,
+        })),
+      },
     });
-
-    expect(commands.slice(1).map((command) => ({
-      name: command.name,
-      source: command.source,
-      selection: command.source.kind === 'skill'
-        ? { type: 'skill', name: command.source.name, skillPath: command.source.skillPath }
-        : undefined,
-    }))).toEqual(EXPECTED_STUDY_SKILLS.map((skillName) => ({
-      name: skillName,
-      source: expect.objectContaining({ kind: 'skill', name: skillName }),
-      selection: expect.objectContaining({ type: 'skill', name: skillName }),
-    })));
+    const result = await commands.suggest({ draftInput: '/' });
+    expect(commands.list().map((command) => command.name)).toEqual(['compact', 'review']);
+    expect(result).toMatchObject({
+      type: 'suggestions',
+      groups: expect.arrayContaining([expect.objectContaining({
+        id: 'skills',
+        items: EXPECTED_STUDY_SKILLS.map((skillName) => expect.objectContaining({
+          name: skillName,
+          source: expect.objectContaining({ kind: 'skill', name: skillName }),
+          completion: expect.objectContaining({
+            selection: expect.objectContaining({ type: 'skill', name: skillName }),
+          }),
+        })),
+      })]),
+    });
   });
 });

@@ -1,9 +1,10 @@
 /*
- * Verifies the stable Product approval DTO mapping over Engine.resumeRun.
+ * Verifies Product approval continuation and the thin Host forwarding adapter.
  */
 import { describe, expect, it, vi } from 'vitest';
-import type { RuntimeEvent } from '@megumi/agent/events';
-import { createApprovalHost } from '@megumi/product/host-interface/approval-host';
+import type { RuntimeEvent } from '@megumi/events';
+import { createProductApproval } from '../../../../packages/product/src/approval';
+import { createApprovalHost } from '../../../../packages/product/src/host/approval-host';
 
 describe('ApprovalHost', () => {
   it('maps an approved decision to Engine and returns the resumed event segment', async () => {
@@ -13,7 +14,7 @@ describe('ApprovalHost', () => {
       run: runFixture('running'),
       events: asyncEvents([event]),
     }));
-    const host = createApprovalHost({ resumeRun } as never);
+    const host = createApprovalHost(createProductApproval({ resumeRun } as never));
 
     const result = await host.resolve({
       approvalRequestId: 'approval:1',
@@ -49,7 +50,7 @@ describe('ApprovalHost', () => {
       run: runFixture('running'),
       events: asyncEvents([]),
     }));
-    const host = createApprovalHost({ resumeRun } as never);
+    const host = createApprovalHost(createProductApproval({ resumeRun } as never));
 
     await host.resolve({
       approvalRequestId: 'approval:1',
@@ -104,9 +105,9 @@ describe('ApprovalHost', () => {
       },
     ],
   ])('projects Engine resume result %s', async (engineResult, expectedPayload) => {
-    const host = createApprovalHost({
+    const host = createApprovalHost(createProductApproval({
       resumeRun: vi.fn(async () => engineResult),
-    } as never);
+    } as never));
 
     const result = await host.resolve({
       approvalRequestId: 'approval:1',

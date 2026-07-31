@@ -7,12 +7,11 @@ export default defineConfig({
   resolve: {
     alias: {
       '@megumi/desktop': path.resolve(__dirname, 'apps/desktop/src'),
-      '@megumi/product': path.resolve(__dirname, 'packages/product'),
+      '@megumi/product': path.resolve(__dirname, 'packages/product/src'),
       '@megumi/engine': path.resolve(__dirname, 'packages/engine/src'),
-      '@megumi/agent': path.resolve(__dirname, 'packages/agent'),
-      '@megumi/skills': path.resolve(__dirname, 'packages/skills'),
+      '@megumi/skills': path.resolve(__dirname, 'packages/skills/src'),
       '@megumi/ai': path.resolve(__dirname, 'packages/ai/src'),
-      '@megumi/observability': path.resolve(__dirname, 'packages/observability'),
+      '@megumi/observability': path.resolve(__dirname, 'packages/observability/src'),
     },
   },
   root: 'apps/desktop/src/renderer',

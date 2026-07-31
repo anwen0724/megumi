@@ -1,6 +1,6 @@
 // Owns Composer interaction state and builds the host-neutral submit payload.
 import { type FormEvent, type KeyboardEvent, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/product/host-interface';
+import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/product/host';
 import {
   getComposerModelOptionsForProviders,
   modelOptionValue,

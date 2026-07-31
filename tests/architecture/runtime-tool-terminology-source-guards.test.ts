@@ -57,23 +57,14 @@ function listSourceFiles(relativeDirectory: string): string[] {
   return files;
 }
 
-function isAllowedLegacyArchiveLine(file: string, line: string): boolean {
+function isAllowedProviderProtocolLine(file: string, line: string): boolean {
   if (file === 'packages/ai/src/api/anthropic-messages.ts') {
     return line.includes('tool_use_id');
   }
   if (file === 'packages/ai/protocols/anthropic/anthropic-protocol-adapter.ts') {
     return line.includes('tool_use_id') || line.includes("type: 'tool_use'");
   }
-  if (file !== 'packages/db/schema/migrations.ts' && file !== 'packages/agent/persistence/migrations/0000_database_foundation_redesign.sql') {
-    return false;
-  }
-
-  return line.includes('DROP INDEX IF EXISTS idx_tool_uses')
-    || line.includes('DROP INDEX IF EXISTS idx_tool_calls_tool_use_id')
-    || line.includes('DROP INDEX IF EXISTS idx_tool_results_tool_use_id')
-    || line.includes('DROP INDEX IF EXISTS idx_permission_decisions_tool_use_id')
-    || line.includes("column.name === 'tool_use_id'")
-    || line.includes("archiveTableIfNeeded(database, 'tool_uses', 'tool_uses_legacy_08')");
+  return false;
 }
 
 describe('runtime tool terminology source guards', () => {
@@ -86,7 +77,7 @@ describe('runtime tool terminology source guards', () => {
       const lines = source.split(/\r?\n/);
 
       lines.forEach((line, index) => {
-        if (isAllowedLegacyArchiveLine(file, line)) {
+        if (isAllowedProviderProtocolLine(file, line)) {
           return;
         }
 

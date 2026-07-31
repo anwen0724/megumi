@@ -1,7 +1,7 @@
 // Renders command suggestions supplied by a trusted catalog; this component does not own command discovery.
 import { Package, Terminal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/product/host-interface';
+import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/product/host';
 
 interface CommandSuggestionPanelProps {
   suggestions: CommandSuggestionResult;

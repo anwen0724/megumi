@@ -6,7 +6,7 @@ import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store
 import { useToolCallStore } from '@megumi/desktop/renderer/entities/tool-call';
 import { dispatchRuntimeEvent } from '@megumi/desktop/renderer/features/runtime-events/runtime-event-dispatcher';
 import { useRuntimeTimelineStore } from '@megumi/desktop/renderer/features/runtime-timeline';
-import type { RuntimeEvent } from '@megumi/agent/events';
+import type { RuntimeEvent } from '@megumi/events';
 
 function runtimeEvent(
   eventType: RuntimeEvent['eventType'],

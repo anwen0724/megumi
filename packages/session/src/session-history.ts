@@ -1,0 +1,808 @@
+/* Owns Session semantic message commits, active history, and compaction facts. */
+import type { AssistantContentBlock, ContentBlock } from '@megumi/ai';
+import type {
+  SessionAttachmentContentStore,
+  SessionAttachmentImport,
+  SessionMessageAttachment,
+} from './session-attachment';
+import {
+  buildActiveConversationPath,
+  readActivePath,
+  type SessionCompactionSummary,
+  type SessionEntry,
+  type SessionHistoryItem,
+} from './session-entry-graph';
+import type {
+  AssistantReplyReasonCode,
+  AssistantReplyStatus,
+  SessionMessage,
+  SessionMessageWithAttachments,
+} from './session-message';
+import { sessionFailure, type SessionFailure } from './session';
+import type { SessionStore } from './session-store';
+
+export interface SaveUserMessageRequest {
+  message_id: string;
+  session_id: string;
+  run_id?: string;
+  content: ContentBlock[];
+  attachments?: SessionAttachmentImport[];
+  parent_entry_id?: string;
+  created_at: string;
+}
+
+export interface SaveModelResponseRequest {
+  message_id: string;
+  session_id: string;
+  run_id: string;
+  parent_entry_id?: string;
+  content: AssistantContentBlock[];
+  outcome_status: 'completed' | 'incomplete' | 'failed';
+  reason_code?: string;
+  stop_reason?: string;
+  completed_at: string;
+}
+
+export interface SaveAssistantReplyRequest {
+  message_id: string;
+  session_id: string;
+  run_id: string;
+  parent_entry_id?: string;
+  status: AssistantReplyStatus;
+  content: AssistantContentBlock[];
+  reason_code?: AssistantReplyReasonCode;
+  completed_at: string;
+}
+
+export interface SaveToolResultMessageRequest {
+  message_id: string;
+  session_id: string;
+  run_id: string;
+  parent_entry_id?: string;
+  tool_call_id: string;
+  tool_name: string;
+  status: 'success' | 'failure' | 'permission_denied' | 'user_rejected' | 'cancelled';
+  error?: { code: string; message: string; details?: Record<string, unknown> };
+  content: ContentBlock[];
+  completed_at: string;
+}
+
+export type SaveUserMessageResult =
+  | { status: 'saved'; message: SessionMessageWithAttachments; entry: SessionEntry }
+  | { status: 'failed'; failure: SessionFailure };
+
+export type SaveMessageResult =
+  | { status: 'saved'; message: SessionMessage; entry: SessionEntry }
+  | { status: 'failed'; failure: SessionFailure };
+
+export type SaveModelResponseResult = SaveMessageResult;
+export type SaveAssistantReplyResult = SaveMessageResult;
+export type SaveToolResultMessageResult = SaveMessageResult;
+
+export interface ListMessagesRequest {
+  session_id: string;
+  active_path_only?: boolean;
+}
+
+export type ListMessagesResult =
+  | { status: 'ok'; messages: SessionMessageWithAttachments[] }
+  | { status: 'failed'; failure: SessionFailure };
+
+export interface ListUserMessagesByRunIdsRequest {
+  run_ids: string[];
+}
+
+export type ListUserMessagesByRunIdsResult =
+  | { status: 'ok'; messages: SessionMessage[] }
+  | { status: 'failed'; failure: SessionFailure };
+
+export interface GetActiveHistoryRequest {
+  session_id: string;
+  through_entry_id?: string | null;
+}
+
+export type GetActiveHistoryResult =
+  | { status: 'ok'; history: SessionHistoryItem[] }
+  | { status: 'failed'; failure: SessionFailure };
+
+export interface GetActiveConversationHistoryRequest {
+  session_id: string;
+  run_id?: string;
+}
+
+export type GetActiveConversationHistoryResult =
+  | { status: 'ok'; messages: SessionMessageWithAttachments[] }
+  | { status: 'failed'; failure: SessionFailure };
+
+export interface SaveCompactionSummaryRequest {
+  compaction_id: string;
+  session_id: string;
+  summary_text: string;
+  covered_until_entry_id: string;
+  first_kept_entry_id?: string;
+  expected_active_entry_id?: string | null;
+  created_at: string;
+  append_to_active_path?: boolean;
+}
+
+export type SaveCompactionSummaryResult =
+  | { status: 'saved'; compaction: SessionCompactionSummary; entry?: SessionEntry }
+  | { status: 'failed'; failure: SessionFailure };
+
+export interface SessionHistory {
+  saveUserMessage(request: SaveUserMessageRequest): Promise<SaveUserMessageResult>;
+  saveModelResponse(request: SaveModelResponseRequest): SaveModelResponseResult;
+  saveAssistantReply(request: SaveAssistantReplyRequest): SaveAssistantReplyResult;
+  saveToolResultMessage(request: SaveToolResultMessageRequest): SaveToolResultMessageResult;
+  listMessages(request: ListMessagesRequest): ListMessagesResult;
+  listUserMessagesByRunIds(request: ListUserMessagesByRunIdsRequest): ListUserMessagesByRunIdsResult;
+  getActiveHistory(request: GetActiveHistoryRequest): GetActiveHistoryResult;
+  getActiveConversationHistory(
+    request: GetActiveConversationHistoryRequest,
+  ): GetActiveConversationHistoryResult;
+  saveCompactionSummary(request: SaveCompactionSummaryRequest): SaveCompactionSummaryResult;
+}
+
+export interface SessionIdFactories {
+  sessionId?: () => string;
+  entryId?: (input: { kind: 'message' | 'compaction'; source_id: string }) => string;
+  attachmentId?: () => string;
+}
+
+export interface CreateSessionHistoryOptions {
+  store: SessionStore;
+  ids?: SessionIdFactories;
+  attachmentContentStore?: SessionAttachmentContentStore;
+}
+
+export function createSessionHistory(options: CreateSessionHistoryOptions): SessionHistory {
+  const implementation = new DefaultSessionHistory(options);
+  return {
+    saveUserMessage: (request) => implementation.saveUserMessage(request),
+    saveModelResponse: (request) => implementation.saveModelResponse(request),
+    saveAssistantReply: (request) => implementation.saveAssistantReply(request),
+    saveToolResultMessage: (request) => implementation.saveToolResultMessage(request),
+    listMessages: (request) => implementation.listMessages(request),
+    listUserMessagesByRunIds: (request) => implementation.listUserMessagesByRunIds(request),
+    getActiveHistory: (request) => implementation.getActiveHistory(request),
+    getActiveConversationHistory: (request) => implementation.getActiveConversationHistory(request),
+    saveCompactionSummary: (request) => implementation.saveCompactionSummary(request),
+  };
+}
+
+class DefaultSessionHistory implements SessionHistory {
+  constructor(private readonly options: CreateSessionHistoryOptions) {}
+
+  async saveUserMessage(request: SaveUserMessageRequest): Promise<SaveUserMessageResult> {
+    const candidate: SessionMessage = {
+      message_id: request.message_id,
+      session_id: request.session_id,
+      ...(request.run_id ? { run_id: request.run_id } : {}),
+      message_kind: 'user_message',
+      content: request.content,
+      created_at: request.created_at,
+      completed_at: request.created_at,
+    };
+    const existing = await this.replayUserMessage(candidate, request.attachments ?? []);
+    if (existing) return existing;
+
+    const imported: SessionMessageAttachment[] = [];
+    try {
+      for (const [ordinal, attachment] of (request.attachments ?? []).entries()) {
+        const attachmentId = this.attachmentId();
+        if (attachment.type === 'file') {
+          imported.push({
+            attachment_id: attachmentId,
+            message_id: request.message_id,
+            session_id: request.session_id,
+            type: 'file',
+            name: attachment.name,
+            mime_type: attachment.media_type,
+            source_type: 'local_file',
+            source_value: attachment.local_path,
+            ordinal,
+            created_at: request.created_at,
+          });
+          continue;
+        }
+        if (!this.options.attachmentContentStore) {
+          return {
+            status: 'failed',
+            failure: {
+              code: 'attachment_store_unavailable',
+              message: 'Managed attachment storage is unavailable.',
+            },
+          };
+        }
+        const stored = await this.options.attachmentContentStore.write({
+          attachmentId,
+          mediaType: attachment.media_type,
+          bytes: attachment.bytes,
+        });
+        imported.push({
+          attachment_id: attachmentId,
+          message_id: request.message_id,
+          session_id: request.session_id,
+          type: 'image',
+          name: attachment.name,
+          mime_type: attachment.media_type,
+          source_type: 'host_reference',
+          source_value: stored.referenceId,
+          ordinal,
+          created_at: request.created_at,
+        });
+      }
+
+      const result = this.options.store.runInTransaction<SaveUserMessageResult>(() => {
+        const session = this.options.store.findSessionById(request.session_id);
+        if (!session) return sessionNotFound(request.session_id);
+        const parent = this.resolveParentEntryId({
+          session_id: request.session_id,
+          explicit_parent_entry_id: request.parent_entry_id,
+          active_entry_id: session.active_entry_id,
+        });
+        if (parent.status === 'failed') return parent;
+
+        const message = this.options.store.insertMessage(candidate);
+        this.options.store.insertMessageAttachments(imported);
+        const entry = this.options.store.insertEntry({
+          entry_id: this.entryId({ kind: 'message', source_id: request.message_id }),
+          session_id: request.session_id,
+          ...(parent.parent_entry_id ? { parent_entry_id: parent.parent_entry_id } : {}),
+          entry_type: 'message',
+          message_id: request.message_id,
+          created_at: request.created_at,
+        });
+        this.options.store.updateActiveEntry({
+          session_id: request.session_id,
+          active_entry_id: entry.entry_id,
+          updated_at: request.created_at,
+        });
+        return { status: 'saved', message: { message, attachments: imported }, entry };
+      });
+      if (result.status === 'failed') await this.cleanupImportedAttachments(imported);
+      return result;
+    } catch (error) {
+      await this.cleanupImportedAttachments(imported);
+      return sessionFailure(error);
+    }
+  }
+
+  saveModelResponse(request: SaveModelResponseRequest): SaveModelResponseResult {
+    const message: SessionMessage = {
+      message_id: request.message_id,
+      session_id: request.session_id,
+      run_id: request.run_id,
+      message_kind: 'model_response',
+      content: request.content,
+      outcome_status: request.outcome_status,
+      ...(request.reason_code ? { reason_code: request.reason_code } : {}),
+      ...(request.stop_reason ? { stop_reason: request.stop_reason } : {}),
+      created_at: request.completed_at,
+      completed_at: request.completed_at,
+    };
+    return this.saveSynchronousMessage(message, request.parent_entry_id, 'Model Response');
+  }
+
+  saveAssistantReply(request: SaveAssistantReplyRequest): SaveAssistantReplyResult {
+    const message: SessionMessage = {
+      message_id: request.message_id,
+      session_id: request.session_id,
+      run_id: request.run_id,
+      message_kind: 'assistant_reply',
+      status: request.status,
+      content: request.content,
+      ...(request.reason_code ? { reason_code: request.reason_code } : {}),
+      created_at: request.completed_at,
+      completed_at: request.completed_at,
+    };
+    const replay = this.replayMessage(message);
+    if (replay) return replay;
+    try {
+      if (this.options.store.findAssistantReplyByRunId(request.session_id, request.run_id)) {
+        return {
+          status: 'failed',
+          failure: {
+            code: 'assistant_reply_exists',
+            message: 'Assistant Reply already exists for this Run.',
+          },
+        };
+      }
+    } catch (error) {
+      return sessionFailure(error);
+    }
+    return this.insertSynchronousMessage(message, request.parent_entry_id, 'Assistant Reply');
+  }
+
+  saveToolResultMessage(request: SaveToolResultMessageRequest): SaveToolResultMessageResult {
+    const message: SessionMessage = {
+      message_id: request.message_id,
+      session_id: request.session_id,
+      run_id: request.run_id,
+      message_kind: 'tool_result',
+      tool_call_id: request.tool_call_id,
+      tool_name: request.tool_name,
+      status: request.status,
+      ...(request.error ? { error: request.error } : {}),
+      content: request.content,
+      created_at: request.completed_at,
+      completed_at: request.completed_at,
+    };
+    return this.saveSynchronousMessage(message, request.parent_entry_id, 'Tool Result');
+  }
+
+  listMessages(request: ListMessagesRequest): ListMessagesResult {
+    try {
+      const messages = request.active_path_only
+        ? this.messagesForActivePath(request.session_id)
+        : {
+            status: 'ok' as const,
+            messages: this.options.store.listMessagesBySessionId(request.session_id),
+          };
+      if (messages.status === 'failed') return messages;
+      return { status: 'ok', messages: this.attachmentsForMessages(messages.messages) };
+    } catch (error) {
+      return sessionFailure(error);
+    }
+  }
+
+  listUserMessagesByRunIds(
+    request: ListUserMessagesByRunIdsRequest,
+  ): ListUserMessagesByRunIdsResult {
+    try {
+      return {
+        status: 'ok',
+        messages: this.options.store.listUserMessagesByRunIds(request.run_ids),
+      };
+    } catch (error) {
+      return sessionFailure(error);
+    }
+  }
+
+  getActiveHistory(request: GetActiveHistoryRequest): GetActiveHistoryResult {
+    try {
+      const activePath = readActivePath(
+        this.options.store,
+        request.session_id,
+        request.through_entry_id,
+      );
+      if (activePath.status === 'failed') return activePath;
+      const path = activePath.entries;
+      const messages = this.options.store.listMessagesByIds(
+        path.flatMap((entry) => entry.message_id ? [entry.message_id] : []),
+      );
+      const messagesById = new Map(messages.map((message) => [message.message_id, message]));
+      const attachmentsByMessageId = groupAttachments(
+        this.options.store.listAttachmentsByMessageIds([...messagesById.keys()]),
+      );
+      const compactions = this.options.store.listCompactionSummariesByIds(
+        path.flatMap((entry) => entry.compaction_id ? [entry.compaction_id] : []),
+      );
+      const compactionsById = new Map(compactions.map((item) => [item.compaction_id, item]));
+      const history: SessionHistoryItem[] = [];
+      for (const entry of path) {
+        if (entry.entry_type === 'message' && entry.message_id) {
+          const message = messagesById.get(entry.message_id);
+          if (message) {
+            history.push({
+              type: 'message',
+              entry,
+              message,
+              attachments: attachmentsByMessageId.get(message.message_id) ?? [],
+            });
+          }
+          continue;
+        }
+        if (entry.entry_type === 'compaction' && entry.compaction_id) {
+          const compaction = compactionsById.get(entry.compaction_id);
+          if (compaction) history.push({ type: 'compaction', entry, compaction });
+        }
+      }
+      return { status: 'ok', history };
+    } catch (error) {
+      return sessionFailure(error);
+    }
+  }
+
+  getActiveConversationHistory(
+    request: GetActiveConversationHistoryRequest,
+  ): GetActiveConversationHistoryResult {
+    try {
+      const session = this.options.store.findSessionById(request.session_id);
+      if (!session) return sessionNotFound(request.session_id);
+      const entries = this.options.store.listEntriesBySessionId(request.session_id);
+      const compactionIds = entries.flatMap((entry) => (
+        entry.compaction_id ? [entry.compaction_id] : []
+      ));
+      const path = buildActiveConversationPath({
+        session_id: request.session_id,
+        active_entry_id: session.active_entry_id,
+        entries,
+        compactions: this.options.store.listCompactionSummariesByIds(compactionIds),
+      });
+      const activePathOrderByMessageId = new Map<string, number>();
+      for (const [activePathOrder, entry] of path.entries()) {
+        if (entry.message_id) activePathOrderByMessageId.set(entry.message_id, activePathOrder);
+      }
+      const messageIds = [...activePathOrderByMessageId.keys()];
+      const persistedMessages = request.run_id
+        ? this.options.store.listMessagesByRunId(request.session_id, request.run_id)
+        : this.options.store.listMessagesByIds(messageIds);
+      const messagesById = new Map(
+        persistedMessages.map((message) => [message.message_id, message]),
+      );
+      const orderedMessages = messageIds.flatMap((messageId) => {
+        const message = messagesById.get(messageId);
+        return message ? [message] : [];
+      });
+      return {
+        status: 'ok',
+        messages: this.attachmentsForMessages(orderedMessages).map((item) => ({
+          ...item,
+          active_path_order: activePathOrderByMessageId.get(item.message.message_id),
+        })),
+      };
+    } catch (error) {
+      return sessionFailure(error);
+    }
+  }
+
+  saveCompactionSummary(request: SaveCompactionSummaryRequest): SaveCompactionSummaryResult {
+    try {
+      const existing = this.options.store.findCompactionSummaryById(request.compaction_id);
+      if (existing) {
+        if (!sameValue(existing, compactionFromRequest(request))) {
+          return {
+            status: 'failed',
+            failure: {
+              code: 'compaction_identity_conflict',
+              message: 'Compaction identity already exists with different facts.',
+            },
+          };
+        }
+        const entry = this.options.store.findEntryById(
+          this.entryId({ kind: 'compaction', source_id: request.compaction_id }),
+        );
+        return {
+          status: 'saved',
+          compaction: existing,
+          ...(entry ? { entry } : {}),
+        };
+      }
+
+      return this.options.store.runInTransaction<SaveCompactionSummaryResult>(() => {
+        const session = this.options.store.findSessionById(request.session_id);
+        if (!session) return sessionNotFound(request.session_id);
+        if (
+          Object.prototype.hasOwnProperty.call(request, 'expected_active_entry_id')
+          && session.active_entry_id !== (request.expected_active_entry_id ?? undefined)
+        ) {
+          return {
+            status: 'failed',
+            failure: {
+              code: 'active_entry_changed',
+              message: 'Session active entry changed while compaction was being prepared',
+            },
+          };
+        }
+        const coveredEntry = this.options.store.findEntryById(request.covered_until_entry_id);
+        if (!coveredEntry || coveredEntry.session_id !== request.session_id) {
+          return {
+            status: 'failed',
+            failure: {
+              code: 'invalid_covered_until_entry',
+              message: 'covered_until_entry_id must belong to the session',
+            },
+          };
+        }
+        const firstKeptEntry = request.first_kept_entry_id
+          ? this.options.store.findEntryById(request.first_kept_entry_id)
+          : undefined;
+        if (
+          request.first_kept_entry_id
+          && (!firstKeptEntry || firstKeptEntry.session_id !== request.session_id)
+        ) {
+          return {
+            status: 'failed',
+            failure: {
+              code: 'invalid_first_kept_entry',
+              message: 'first_kept_entry_id must belong to the session',
+            },
+          };
+        }
+        const compaction = this.options.store.insertCompactionSummary(compactionFromRequest(request));
+        if (!request.append_to_active_path) return { status: 'saved', compaction };
+
+        const entry = this.options.store.insertEntry({
+          entry_id: this.entryId({ kind: 'compaction', source_id: request.compaction_id }),
+          session_id: request.session_id,
+          ...(request.first_kept_entry_id ? {} : (
+            session.active_entry_id ? { parent_entry_id: session.active_entry_id } : {}
+          )),
+          entry_type: 'compaction',
+          compaction_id: request.compaction_id,
+          created_at: request.created_at,
+        });
+        if (request.first_kept_entry_id) {
+          this.options.store.updateEntryParent({
+            entry_id: request.first_kept_entry_id,
+            parent_entry_id: entry.entry_id,
+          });
+        }
+        if (
+          !session.active_entry_id
+          || session.active_entry_id === request.covered_until_entry_id
+          || (!request.first_kept_entry_id
+            && session.active_entry_id !== request.covered_until_entry_id)
+        ) {
+          this.options.store.updateActiveEntry({
+            session_id: request.session_id,
+            active_entry_id: entry.entry_id,
+            updated_at: request.created_at,
+          });
+        }
+        return { status: 'saved', compaction, entry };
+      });
+    } catch (error) {
+      return sessionFailure(error);
+    }
+  }
+
+  private saveSynchronousMessage(
+    message: SessionMessage,
+    parentEntryId: string | undefined,
+    label: string,
+  ): SaveMessageResult {
+    const replay = this.replayMessage(message);
+    return replay ?? this.insertSynchronousMessage(message, parentEntryId, label);
+  }
+
+  private insertSynchronousMessage(
+    message: SessionMessage,
+    parentEntryId: string | undefined,
+    label: string,
+  ): SaveMessageResult {
+    try {
+      return this.options.store.runInTransaction<SaveMessageResult>(() => {
+        const session = this.options.store.findSessionById(message.session_id);
+        if (!session) return sessionNotFound(message.session_id);
+        if (parentEntryId && session.active_entry_id !== parentEntryId) {
+          return {
+            status: 'failed',
+            failure: {
+              code: 'active_entry_changed',
+              message: `Session active entry changed before ${label} append`,
+            },
+          };
+        }
+        const saved = this.options.store.insertMessage(message);
+        const entry = this.options.store.insertEntry({
+          entry_id: this.entryId({ kind: 'message', source_id: message.message_id }),
+          session_id: message.session_id,
+          ...((parentEntryId ?? session.active_entry_id)
+            ? { parent_entry_id: parentEntryId ?? session.active_entry_id }
+            : {}),
+          entry_type: 'message',
+          message_id: message.message_id,
+          created_at: message.completed_at ?? message.created_at,
+        });
+        this.options.store.updateActiveEntry({
+          session_id: message.session_id,
+          active_entry_id: entry.entry_id,
+          updated_at: message.completed_at ?? message.created_at,
+        });
+        return { status: 'saved', message: saved, entry };
+      });
+    } catch (error) {
+      return sessionFailure(error);
+    }
+  }
+
+  private replayMessage(message: SessionMessage): SaveMessageResult | undefined {
+    try {
+      const existing = this.options.store.findMessageById(message.message_id);
+      if (!existing) return undefined;
+      if (!sameValue(existing, message)) return messageIdentityConflict();
+      const entry = this.options.store.findMessageEntry({
+        session_id: message.session_id,
+        message_id: message.message_id,
+      });
+      return entry
+        ? { status: 'saved', message: existing, entry }
+        : messageIdentityConflict();
+    } catch (error) {
+      return sessionFailure(error);
+    }
+  }
+
+  private async replayUserMessage(
+    message: SessionMessage,
+    requestedAttachments: SessionAttachmentImport[],
+  ): Promise<SaveUserMessageResult | undefined> {
+    try {
+      const existing = this.options.store.findMessageById(message.message_id);
+      if (!existing) return undefined;
+      if (!sameValue(existing, message)) return messageIdentityConflict();
+      const entry = this.options.store.findMessageEntry({
+        session_id: message.session_id,
+        message_id: message.message_id,
+      });
+      const attachments = this.options.store.listAttachmentsByMessageIds([message.message_id]);
+      if (
+        !entry
+        || !(await sameAttachmentImports(
+          attachments,
+          requestedAttachments,
+          this.options.attachmentContentStore,
+        ))
+      ) {
+        return messageIdentityConflict();
+      }
+      return {
+        status: 'saved',
+        message: { message: existing, attachments },
+        entry,
+      };
+    } catch (error) {
+      return sessionFailure(error);
+    }
+  }
+
+  private messagesForActivePath(sessionId: string):
+    | { status: 'ok'; messages: SessionMessage[] }
+    | { status: 'failed'; failure: SessionFailure } {
+    const activePath = readActivePath(this.options.store, sessionId);
+    if (activePath.status === 'failed') return activePath;
+    const messageIds = activePath.entries.flatMap((entry) => (
+      entry.entry_type === 'message' && entry.message_id ? [entry.message_id] : []
+    ));
+    const messagesById = new Map(
+      this.options.store.listMessagesByIds(messageIds).map((message) => [message.message_id, message]),
+    );
+    return {
+      status: 'ok',
+      messages: messageIds.flatMap((messageId) => {
+        const message = messagesById.get(messageId);
+        return message ? [message] : [];
+      }),
+    };
+  }
+
+  private attachmentsForMessages(messages: SessionMessage[]): SessionMessageWithAttachments[] {
+    const attachmentsByMessageId = groupAttachments(
+      this.options.store.listAttachmentsByMessageIds(messages.map((message) => message.message_id)),
+    );
+    return messages.map((message) => ({
+      message,
+      attachments: attachmentsByMessageId.get(message.message_id) ?? [],
+    }));
+  }
+
+  private resolveParentEntryId(input: {
+    session_id: string;
+    explicit_parent_entry_id?: string;
+    active_entry_id?: string;
+  }): { status: 'ok'; parent_entry_id?: string } | Extract<SaveUserMessageResult, { status: 'failed' }> {
+    const parentEntryId = input.explicit_parent_entry_id ?? input.active_entry_id;
+    if (!input.explicit_parent_entry_id) {
+      return { status: 'ok', ...(parentEntryId ? { parent_entry_id: parentEntryId } : {}) };
+    }
+    const parent = this.options.store.findEntryById(input.explicit_parent_entry_id);
+    if (!parent || parent.session_id !== input.session_id) {
+      return {
+        status: 'failed',
+        failure: {
+          code: 'invalid_parent_entry',
+          message: 'parent_entry_id must belong to the same session',
+        },
+      };
+    }
+    return { status: 'ok', parent_entry_id: parentEntryId };
+  }
+
+  private entryId(input: { kind: 'message' | 'compaction'; source_id: string }): string {
+    return this.options.ids?.entryId?.(input) ?? `${input.kind}:${input.source_id}`;
+  }
+
+  private attachmentId(): string {
+    return this.options.ids?.attachmentId?.() ?? `attachment:${crypto.randomUUID()}`;
+  }
+
+  private async cleanupImportedAttachments(
+    attachments: SessionMessageAttachment[],
+  ): Promise<void> {
+    if (!this.options.attachmentContentStore) return;
+    await Promise.all(attachments
+      .filter((attachment) => attachment.source_type === 'host_reference')
+      .map((attachment) => (
+        this.options.attachmentContentStore!.delete(attachment.source_value).catch(() => undefined)
+      )));
+  }
+}
+
+function groupAttachments(
+  attachments: SessionMessageAttachment[],
+): Map<string, SessionMessageAttachment[]> {
+  const grouped = new Map<string, SessionMessageAttachment[]>();
+  for (const attachment of attachments) {
+    const existing = grouped.get(attachment.message_id) ?? [];
+    existing.push(attachment);
+    grouped.set(attachment.message_id, existing);
+  }
+  return grouped;
+}
+
+function sessionNotFound(sessionId: string): { status: 'failed'; failure: SessionFailure } {
+  return {
+    status: 'failed',
+    failure: { code: 'session_not_found', message: `Session ${sessionId} was not found` },
+  };
+}
+
+function messageIdentityConflict(): { status: 'failed'; failure: SessionFailure } {
+  return {
+    status: 'failed',
+    failure: {
+      code: 'message_identity_conflict',
+      message: 'Message identity already exists with different facts.',
+    },
+  };
+}
+
+function compactionFromRequest(request: SaveCompactionSummaryRequest): SessionCompactionSummary {
+  return {
+    compaction_id: request.compaction_id,
+    session_id: request.session_id,
+    summary_text: request.summary_text,
+    covered_until_entry_id: request.covered_until_entry_id,
+    ...(request.first_kept_entry_id ? { first_kept_entry_id: request.first_kept_entry_id } : {}),
+    created_at: request.created_at,
+  };
+}
+
+async function sameAttachmentImports(
+  persisted: SessionMessageAttachment[],
+  requested: SessionAttachmentImport[],
+  contentStore: SessionAttachmentContentStore | undefined,
+): Promise<boolean> {
+  if (persisted.length !== requested.length) return false;
+  for (const [ordinal, attachment] of persisted.entries()) {
+    const candidate = requested[ordinal];
+    if (!candidate || attachment.ordinal !== ordinal || attachment.type !== candidate.type) return false;
+    if (attachment.name !== candidate.name || attachment.mime_type !== candidate.media_type) return false;
+    if (candidate.type === 'file') {
+      if (attachment.source_type !== 'local_file' || attachment.source_value !== candidate.local_path) {
+        return false;
+      }
+      continue;
+    }
+    if (attachment.source_type !== 'host_reference' || !contentStore) return false;
+    try {
+      const persistedBytes = await contentStore.read(attachment.source_value);
+      if (!sameBytes(persistedBytes, candidate.bytes)) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
+  return left.byteLength === right.byteLength
+    && left.every((value, index) => value === right[index]);
+}
+
+function sameValue(left: unknown, right: unknown): boolean {
+  return canonicalJson(left) === canonicalJson(right);
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right));
+    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}

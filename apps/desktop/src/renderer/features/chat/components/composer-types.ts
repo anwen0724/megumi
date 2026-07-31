@@ -4,8 +4,8 @@ import type {
   ChatGetContextUsageUiResult,
   ChatImageInputCapabilitiesUiResult,
   ProviderPublicStatusUiDto,
-} from '@megumi/product/host-interface';
-import type { CommandSuggestionResult } from '@megumi/product/host-interface';
+} from '@megumi/product/host';
+import type { CommandSuggestionResult } from '@megumi/product/host';
 import type { ComposerModel, ComposerPermissionMode } from './composer-options';
 import type {
   ChatComposerDraft,

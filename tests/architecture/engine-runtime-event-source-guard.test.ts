@@ -46,7 +46,7 @@ describe('Engine RuntimeEvent source boundary', () => {
 
   it('does not restore the deleted ChatStream protocol or bridge', () => {
     const productionFiles = [
-      'packages/agent/projections/timeline/runtime-timeline-projection.ts',
+      'packages/projections/src/timeline/runtime-timeline.ts',
       'apps/desktop/src/main/ipc/handlers/chat.handler.ts',
       'apps/desktop/src/main/shell-composition/desktop-main-composition.ts',
       'apps/desktop/src/renderer/features/runtime-events/runtime-event-dispatcher.ts',

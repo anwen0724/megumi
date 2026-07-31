@@ -1,8 +1,8 @@
 /*
  * Owns in-process Run identity, per-Session exclusion, and bounded terminal summaries.
  */
-import type { SessionEntry, SessionMessageWithAttachments } from '@megumi/agent/session';
-import type { ApprovalDecision } from '@megumi/agent/permissions';
+import type { SessionEntry, SessionMessageWithAttachments } from '@megumi/session';
+import type { ApprovalDecision } from '@megumi/permissions';
 import type { EngineClock, RunApproval } from './engine';
 import type { Run, RunFailure } from './run';
 import type { EngineRunRuntime } from './run-loop';

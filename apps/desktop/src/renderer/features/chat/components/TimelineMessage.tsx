@@ -1,7 +1,7 @@
-﻿import { memo, type ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import { Archive, Check, Copy, GitBranch, LoaderCircle, TriangleAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/product/runtime-timeline';
+import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/product/host';
 import { IconButton, RecoverableErrorBoundary } from '../../../shared/ui';
 import { TimelineMessageBlocks } from './TimelineMessageBlocks';
 import { formatTime as formatLocalizedTime } from '../../../shared/i18n';

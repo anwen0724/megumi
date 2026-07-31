@@ -2,7 +2,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { CommandSuggestionPanel } from '@megumi/desktop/renderer/features/chat/components/CommandSuggestionPanel';
-import type { CommandSuggestionResult } from '@megumi/product/host-interface';
+import type { CommandSuggestionResult } from '@megumi/product/host';
 
 describe('CommandSuggestionPanel skill suggestions', () => {
   it('renders Skill fields and preserves the exact selected skillPath', () => {

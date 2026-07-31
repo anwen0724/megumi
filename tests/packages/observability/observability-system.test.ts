@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   composeObservability,
+  createObservabilityRuntimeLogger,
   type ObservabilityStorage,
 } from "@megumi/observability";
 
@@ -45,6 +46,33 @@ class MemoryStorage implements ObservabilityStorage {
 }
 
 describe("Observability system", () => {
+  it("routes runtime logs through the unified redacted observability stream", async () => {
+    const storage = new MemoryStorage();
+    const runtime = composeObservability({
+      directoryPath: "/logs",
+      storage,
+      appVersion: "1",
+      platform: "test",
+      arch: "x64",
+    });
+    const logger = createObservabilityRuntimeLogger(runtime.service);
+
+    logger.warn("provider failed with Bearer abcdef1234567890", {
+      providerId: "openai",
+      apiKey: "TEST_API_KEY_VALUE",
+      stack: "raw stack",
+    });
+    await runtime.flush();
+
+    expect([...storage.files.keys()]).toEqual(["/logs/observability.jsonl"]);
+    const content = storage.files.get("/logs/observability.jsonl")?.content ?? "";
+    expect(content).toContain('"event":"provider_failed_with_Bearer__redacted_"');
+    expect(content).toContain('"providerId":"openai"');
+    expect(content).not.toContain("TEST_API_KEY_VALUE");
+    expect(content).not.toContain("raw stack");
+    expect(content).not.toContain("runtime.jsonl");
+  });
+
   it("records a correlated Run waterfall and projects it after flush", async () => {
     const storage = new MemoryStorage();
     let tick = 0;
@@ -117,6 +145,26 @@ describe("Observability system", () => {
     expect(storage.files.values().next().value?.content).not.toContain(
       "secret",
     );
+
+    const recent = await runtime.queryService.listRecentRunTraces({ limit: 5 });
+    expect(recent).toMatchObject({
+      status: "ok",
+      traces: [expect.objectContaining({ runId: "R1", status: "ok" })],
+    });
+
+    const diagnostic = await runtime.queryService.createDiagnosticBundle({ runId: "R1" });
+    expect(diagnostic).toMatchObject({
+      status: "created",
+      bundle: {
+        suggestedDirectoryName: "megumi-diagnostic-R1",
+        files: [
+          expect.objectContaining({ relativePath: "manifest.json" }),
+          expect.objectContaining({ relativePath: "run-traces.jsonl" }),
+          expect.objectContaining({ relativePath: "environment.json" }),
+        ],
+      },
+    });
+    expect(JSON.stringify(diagnostic)).not.toContain("secret");
   });
   it("preserves sibling span parents during parallel async work", async () => {
     const storage = new MemoryStorage();

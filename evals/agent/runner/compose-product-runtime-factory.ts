@@ -1,8 +1,8 @@
 /* Creates the production Evaluation runtime exclusively through Product Composition and Host. */
-import { composeProduct, type ComposeProductOptions } from '@megumi/product/composition';
+import { composeProduct, type ComposeProductOptions } from '@megumi/product';
 import {
   createEvaluationHomeOptions,
-  createEvaluationInputFileReader,
+  createEvaluationInputSourceAccess,
   nodeObservabilityStorage,
   nodeSessionAttachmentFileSystem,
 } from '../adapters/node-product-host-adapters';
@@ -37,7 +37,7 @@ export function createComposeProductEvaluationFactory(
           chooseDirectory: async () => ({ canceled: false, filePaths: [input.workspaceRoot] }),
         },
         observabilityStorage: nodeObservabilityStorage,
-        inputFileReader: createEvaluationInputFileReader(input.workspaceRoot),
+        inputSourceAccess: createEvaluationInputSourceAccess(input.workspaceRoot),
         sessionAttachmentFileSystem: nodeSessionAttachmentFileSystem,
         toolFileSystem: input.toolFileSystem,
         isBuiltInToolAvailable: input.isBuiltInToolAvailable,

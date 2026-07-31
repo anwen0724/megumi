@@ -2,7 +2,7 @@
  * Defines the public Run snapshot and the internal lifecycle transition invariant.
  */
 import type { Api, Model } from '@megumi/ai';
-import type { PermissionMode } from '@megumi/agent/permissions';
+import type { PermissionMode } from '@megumi/permissions';
 import type { SkillSelection } from '@megumi/skills';
 
 export type RunStatus =

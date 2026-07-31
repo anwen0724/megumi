@@ -1,0 +1,14 @@
+{
+  "name": "@megumi/events",
+  "version": "0.1.0",
+  "description": "Megumi runtime event envelope, schemas, publishing, and error contracts",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@megumi/ai": "0.1.0",
+    "zod": "^3.25.76"
+  }
+}

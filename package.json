@@ -5,8 +5,7 @@
   "license": "MIT",
   "author": "Megumi contributors",
   "workspaces": [
-    "packages/ai",
-    "packages/engine"
+    "packages/*"
   ],
   "main": ".vite/build/index.js",
   "scripts": {
@@ -16,6 +15,7 @@
     "test": "npm run rebuild:native:node && vitest run",
     "eval:agent": "npm run rebuild:native:node && tsx --tsconfig evals/agent/tsconfig.json evals/agent/cli.ts",
     "typecheck:evals": "tsc --project evals/agent/tsconfig.json --noEmit",
+    "typecheck:packages": "tsc --build tsconfig.packages.json",
     "typecheck:product": "tsc --project tsconfig.product.json --noEmit",
     "rebuild:native:electron": "electron-rebuild -f -w better-sqlite3",
     "rebuild:native:node": "npm rebuild better-sqlite3"

@@ -12,7 +12,7 @@ import {
   approvalDecisionFor,
   startRequest,
 } from './engine-test-fixtures';
-import { registeredTool } from './tool-call-test-fixtures';
+import { approvalSubjectFor, registeredTool } from './tool-call-test-fixtures';
 
 describe('Engine cancellation', () => {
   it('cancels a Run whose Context build observes the Run AbortSignal', async () => {
@@ -75,7 +75,7 @@ describe('Engine cancellation', () => {
 
   it('closes a persisted ToolCall with a cancelled ToolResult before Run cancellation', async () => {
     const tool = registeredTool('slow-tool');
-    const executeTool = vi.fn(async (request) => new Promise<{
+    const executeTool = vi.fn(async (request, options) => new Promise<{
       type: 'failed';
       toolName: string;
       error: { code: 'tool_cancelled'; message: string };
@@ -86,7 +86,7 @@ describe('Engine cancellation', () => {
         truncated: false;
       };
     }>((resolve) => {
-      request.options?.signal?.addEventListener('abort', () => resolve({
+      options?.signal?.addEventListener('abort', () => resolve({
         type: 'failed',
         toolName: request.toolName,
         error: { code: 'tool_cancelled', message: 'cancelled' },
@@ -139,7 +139,12 @@ describe('Engine cancellation', () => {
       permissions: {
         evaluateToolCall: async (request) => {
           const decision = approvalDecisionFor(request);
-          return { status: 'ok', operations: decision.operations, decision };
+          return {
+            status: 'ok',
+            operations: decision.operations,
+            decision,
+            approvalSubject: approvalSubjectFor(request, decision),
+          };
         },
         applyApprovalDecision: async () => ({
           status: 'applied',

@@ -1,5 +1,5 @@
-import type { PermissionMode } from '@megumi/product/host-interface';
-import type { ModelSupportLevelUi, ProviderPublicStatusUiDto } from '@megumi/product/host-interface';
+import type { PermissionMode } from '@megumi/product/host';
+import type { ModelSupportLevelUi, ProviderPublicStatusUiDto } from '@megumi/product/host';
 
 export type ComposerPermissionMode = PermissionMode;
 export type ComposerModel = string;

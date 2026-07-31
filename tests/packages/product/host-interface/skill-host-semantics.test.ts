@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createSkillHost } from '@megumi/product/host-interface/skill-host';
+import { createSkillHost } from '../../../../packages/product/src/host/skills-host';
 
 describe('SkillHost semantics', () => {
   it('resolves a root-bound service and projects owner/path without leaking diagnostics internals', async () => {

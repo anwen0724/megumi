@@ -62,7 +62,7 @@ describe('engine public contracts', () => {
       'models',
       'context',
       'session',
-      'toolRegistry',
+      'toolCatalog',
       'toolExecutionForRun',
       'permissions',
       'eventPublisher',
@@ -80,13 +80,12 @@ describe('engine public contracts', () => {
     expect(dependencyNames).not.toContain('settings');
   });
 
-  it('narrows Engine input to the processed message branch', () => {
+  it('accepts only the normalized UserInput contract', () => {
     const request = {
       requestId: 'request:1',
       workspaceId: 'workspace:1',
       sessionId: 'session:1',
       input: {
-        type: 'message',
         text: 'hello',
         attachments: [],
       },
@@ -94,7 +93,7 @@ describe('engine public contracts', () => {
       permissionMode: 'ask',
     } satisfies StartRunRequest;
 
-    expect(request.input.type).toBe('message');
+    expect(request.input).toEqual({ text: 'hello', attachments: [] });
     expect(request.sessionId).toBe('session:1');
     expect('providerConfig' in request).toBe(false);
   });

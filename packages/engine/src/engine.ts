@@ -2,27 +2,27 @@
  * Defines the stable Engine boundary and its owner-provided composition dependencies.
  */
 import type { Api, Model, Models } from '@megumi/ai';
-import type { ContextService } from '@megumi/agent/context';
-import type { RuntimeEvent } from '@megumi/agent/events';
+import type { UserInput } from '@megumi/input';
+import type { ContextBuilder, ContextUsageRecorder } from '@megumi/context';
+import type { RuntimeEvent } from '@megumi/events';
 import type {
   ApprovalDecision,
   ApprovalOption,
   PermissionMode,
   PermissionOperation,
-  PermissionService,
-} from '@megumi/agent/permissions';
+  Permissions,
+} from '@megumi/permissions';
 import type {
   SessionEntry,
   SessionMessageWithAttachments,
-  SessionService,
-} from '@megumi/agent/session';
+  SessionHistory,
+} from '@megumi/session';
 import type {
   RegisteredTool,
-  ToolExecutionService,
+  ToolExecutor,
   ToolIdentity,
-  ToolRegistryService,
-} from '@megumi/agent/tools';
-import type { ParsedUserInput } from '@megumi/agent/input';
+  ToolCatalog,
+} from '@megumi/tools';
 import type { ObservabilityService } from '@megumi/observability';
 import type { SkillSelection } from '@megumi/skills';
 import type { EnginePolicy } from './engine-policy';
@@ -49,7 +49,7 @@ import {
 } from './run-loop';
 import type { ToolCallApprovalContinuation } from './tool-call';
 
-export type RunInput = Extract<ParsedUserInput, { readonly type: 'message' }>;
+export type RunInput = UserInput;
 
 export interface StartRunRequest {
   readonly requestId: string;
@@ -176,19 +176,20 @@ export interface EngineClock {
 
 export interface CreateEngineOptions {
   readonly models: Models;
-  readonly context: Pick<ContextService, 'build'>;
+  readonly context: Pick<ContextBuilder, 'build'>
+    & Pick<ContextUsageRecorder, 'recordCompletedModelCall'>;
   readonly session: Pick<
-    SessionService,
+    SessionHistory,
     'saveUserMessage' | 'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'
   >;
-  readonly toolRegistry: Pick<ToolRegistryService, 'listAvailableTools'>;
+  readonly toolCatalog: Pick<ToolCatalog, 'list'>;
   readonly toolExecutionForRun: (scope: {
     readonly runId: string;
     readonly sessionId: string;
     readonly workspaceId: string;
-  }) => Pick<ToolExecutionService, 'executeTool'>;
+  }) => Pick<ToolExecutor, 'preflight' | 'execute'>;
   readonly permissions: Pick<
-    PermissionService,
+    Permissions,
     'evaluateToolCall' | 'applyApprovalDecision'
   >;
   readonly eventPublisher: RuntimeEventPublisher;
@@ -270,10 +271,10 @@ export function createEngine(options: CreateEngineOptions): Engine {
         return { status: 'session_busy', activeRun: reserved.activeRun };
       }
 
-      let registeredTools: RegisteredTool[];
-      let toolExecution: Pick<ToolExecutionService, 'executeTool'>;
+      let registeredTools: readonly RegisteredTool[];
+      let toolExecution: Pick<ToolExecutor, 'preflight' | 'execute'>;
       try {
-        registeredTools = options.toolRegistry.listAvailableTools().tools;
+        registeredTools = options.toolCatalog.list().tools;
         toolExecution = options.toolExecutionForRun({
           runId,
           sessionId: request.sessionId,
@@ -298,16 +299,16 @@ export function createEngine(options: CreateEngineOptions): Engine {
             ? {
                 type: 'image' as const,
                 name: attachment.name,
-                media_type: attachment.media_type,
-                byte_length: attachment.byte_length,
+                media_type: attachment.mediaType,
+                byte_length: attachment.byteLength,
                 bytes: attachment.bytes,
               }
             : {
                 type: 'file' as const,
                 name: attachment.name,
-                media_type: attachment.media_type,
-                local_path: attachment.local_path,
-                size_bytes: attachment.size_bytes,
+                media_type: attachment.mediaType,
+                local_path: attachment.localPath,
+                size_bytes: attachment.sizeBytes,
               }
         )),
         ...(request.parentEntryId ? { parent_entry_id: request.parentEntryId } : {}),
@@ -410,18 +411,18 @@ export function createEngine(options: CreateEngineOptions): Engine {
         },
         decision: request.decision.decision === 'approved'
           ? {
-              approval_request_id: request.runApprovalId,
+              approvalRequestId: request.runApprovalId,
               decision: 'approved',
-              option_id: request.decision.optionId,
-              decided_by: 'user',
-              decided_at: options.clock.now(),
+              optionId: request.decision.optionId,
+              decidedBy: 'user',
+              decidedAt: options.clock.now(),
               ...(request.decision.reason ? { reason: request.decision.reason } : {}),
             }
           : {
-              approval_request_id: request.runApprovalId,
+              approvalRequestId: request.runApprovalId,
               decision: 'denied',
-              decided_by: 'user',
-              decided_at: options.clock.now(),
+              decidedBy: 'user',
+              decidedAt: options.clock.now(),
               ...(request.decision.reason ? { reason: request.decision.reason } : {}),
             },
       });

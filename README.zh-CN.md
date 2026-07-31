@@ -147,11 +147,25 @@ npm run make
 ## 仓库结构
 
 ```text
-apps/desktop          Electron desktop app
-packages/agent        Core agent runtime
-packages/product      Product host interface and composition
-packages/ai           Model provider protocol layer
-tests                 Vitest test suite
+apps/desktop            Electron 桌面应用
+packages/product        产品装配、Host 接口、Home 和生命周期
+packages/engine         Run、ModelCall、ToolCall、批准和取消执行
+packages/input          用户输入规范化和附件处理
+packages/commands       显式命令和建议
+packages/session        Session 历史、Entry、附件和分支
+packages/context        有界模型 Context、压缩和用量
+packages/instructions   System 和 Workspace 指令来源
+packages/tools          Tool Catalog、执行、内置工具和结果规范化
+packages/permissions    Permission 规则、决策和批准
+packages/workspace      Workspace 生命周期、路径、文件和变更事实
+packages/settings       Settings Schema、存储和解析
+packages/database       Database 连接、Schema、Migration 和事务
+packages/events         Runtime Event、Schema、Sequence 和错误
+packages/projections    Session、Runtime 和 Workspace 只读视图
+packages/ai             Provider-neutral Model 和 Provider 协议 Adapter
+packages/skills         Skill 发现、使用、资源和可用性
+packages/observability  Trace、Log、Measurement 和诊断
+tests                   Vitest 测试套件
 ```
 
 ## 贡献

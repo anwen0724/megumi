@@ -7,7 +7,13 @@ const read = (relativePath: string) => fs.readFileSync(path.join(root, relativeP
 
 describe('bounded Tool Result source guards', () => {
   it('keeps continuation facts in actual read-only tool results and removes stale model inputs', () => {
-    const definitions = read('packages/agent/tools/core/tool-definitions.ts');
+    const definitions = [
+      'packages/tools/src/built-ins/read-file.ts',
+      'packages/tools/src/built-ins/list-directory.ts',
+      'packages/tools/src/built-ins/glob.ts',
+      'packages/tools/src/built-ins/search-text.ts',
+      'packages/tools/src/built-ins/run-command.ts',
+    ].map(read).join('\n');
 
     expect(definitions).not.toContain('maxBytes: {');
     expect(definitions).not.toContain('envPolicy: {');

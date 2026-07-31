@@ -2,7 +2,7 @@
  * Protects the public Engine boundary: idempotent start and session exclusion.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { registeredTool, succeeded } from './tool-call-test-fixtures';
+import { approvalSubjectFor, registeredTool, succeeded } from './tool-call-test-fixtures';
 import {
   approvalDecisionFor,
   assistantStream,
@@ -61,7 +61,7 @@ describe('createEngine', () => {
     const first = await fixture.engine.startRun(startRequest);
     const conflicting = await fixture.engine.startRun({
       ...startRequest,
-      input: { type: 'message', text: 'different', attachments: [] },
+      input: { text: 'different', attachments: [] },
     });
 
     expect(conflicting).toMatchObject({
@@ -98,7 +98,12 @@ describe('createEngine', () => {
       permissions: {
         evaluateToolCall: async (request) => {
           const decision = approvalDecisionFor(request);
-          return { status: 'ok', operations: decision.operations, decision };
+          return {
+            status: 'ok',
+            operations: decision.operations,
+            decision,
+            approvalSubject: approvalSubjectFor(request, decision),
+          };
         },
         applyApprovalDecision,
       },
@@ -162,7 +167,12 @@ describe('createEngine', () => {
       permissions: {
         evaluateToolCall: async (request) => {
           const decision = approvalDecisionFor(request);
-          return { status: 'ok', operations: decision.operations, decision };
+          return {
+            status: 'ok',
+            operations: decision.operations,
+            decision,
+            approvalSubject: approvalSubjectFor(request, decision),
+          };
         },
         applyApprovalDecision: async () => ({
           status: 'failed',

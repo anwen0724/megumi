@@ -1,15 +1,20 @@
 /*
  * Shares focused ToolCall test facts without exporting production test seams.
  */
+import { vi } from 'vitest';
 import type {
+  ApprovalSubject,
+  EvaluateToolCallRequest,
   PermissionDecision,
   PermissionMode,
-  PermissionService,
-} from '@megumi/agent/permissions';
-import type {
-  RegisteredTool,
-  ToolExecutionResult,
-} from '@megumi/agent/tools';
+  Permissions,
+} from '@megumi/permissions';
+import {
+  createToolExecutor,
+  type RegisteredTool,
+  type ToolExecutor,
+  type ToolExecutionResult,
+} from '@megumi/tools';
 import type { EnginePolicy, Run } from '@megumi/engine';
 import { ActiveRunStore } from '../../../packages/engine/src/active-run-store';
 import { createRun } from '../../../packages/engine/src/run';
@@ -75,7 +80,7 @@ export function registeredTool(
 ): RegisteredTool {
   return {
     identity: {
-      sourceId: 'built-in',
+      sourceId: 'built_in',
       namespace: 'megumi',
       sourceToolName: name,
     },
@@ -101,7 +106,7 @@ export function registeredTool(
     },
     registeredToolName: name,
     source: {
-      sourceId: 'built-in',
+      sourceId: 'built_in',
       sourceKind: 'built_in',
       namespace: 'megumi',
       displayName: 'Built in',
@@ -127,46 +132,76 @@ export function toolCall(
   };
 }
 
-export function allowDecision(request: {
-  run_id: string;
-  session_id: string;
-  workspace_id: string;
-  registered_tool: {
-    source_id: string;
-    namespace: string;
-    source_tool_name: string;
-    registered_tool_name: string;
-  };
-}): Extract<PermissionDecision, { type: 'allow' }> {
+export function allowDecision(
+  request: EvaluateToolCallRequest,
+): Extract<PermissionDecision, { type: 'allow' }> {
   return {
     type: 'allow',
     operations: [{
       action: 'agent.context.activate',
       context: {
-        workspace_id: request.workspace_id,
-        session_id: request.session_id,
-        run_id: request.run_id,
-        tool_identity: request.registered_tool,
+        workspaceId: request.workspaceId,
+        sessionId: request.sessionId,
+        runId: request.runId,
+        toolIdentity: {
+          sourceId: request.registeredTool.identity.sourceId,
+          namespace: request.registeredTool.identity.namespace,
+          sourceToolName: request.registeredTool.identity.sourceToolName,
+          registeredToolName: request.registeredTool.registeredToolName,
+        },
       },
     }],
-    safety_assessment: 'safe',
+    safetyAssessment: 'safe',
+    safetySummary: 'Safe in Engine test.',
     reason: 'Allowed in test.',
   };
 }
 
-function permissionService(): Pick<
-  PermissionService,
+export function approvalSubjectFor(
+  request: EvaluateToolCallRequest,
+  decision: PermissionDecision,
+): ApprovalSubject {
+  return {
+    version: 1,
+    toolCallId: request.toolCallId,
+    toolIdentity: {
+      sourceId: request.registeredTool.identity.sourceId,
+      namespace: request.registeredTool.identity.namespace,
+      sourceToolName: request.registeredTool.identity.sourceToolName,
+      registeredToolName: request.registeredTool.registeredToolName,
+    },
+    criticalInput: request.toolInput,
+    operations: decision.operations,
+    safetyAssessment: decision.safetyAssessment,
+    riskFacts: {},
+    fingerprint: `test-subject:${request.toolCallId}:${request.registeredTool.registeredToolName}`,
+  };
+}
+
+export function permissionService(
+  decide: (
+    request: EvaluateToolCallRequest,
+  ) => PermissionDecision = allowDecision,
+): Pick<
+  Permissions,
   'evaluateToolCall' | 'applyApprovalDecision'
 > {
+  const evaluateToolCall: Permissions['evaluateToolCall'] = vi.fn(async (permissionRequest) => {
+    const decision = decide(permissionRequest);
+    return {
+      status: 'ok' as const,
+      operations: decision.operations,
+      decision,
+      approvalSubject: approvalSubjectFor(permissionRequest, decision),
+    };
+  });
+  const applyApprovalDecision: Permissions['applyApprovalDecision'] = vi.fn(async () => ({
+    status: 'applied' as const,
+    effect: { type: 'none' as const },
+  }));
   return {
-    evaluateToolCall: async (permissionRequest) => {
-      const decision = allowDecision(permissionRequest);
-      return { status: 'ok', operations: decision.operations, decision };
-    },
-    applyApprovalDecision: async () => ({
-      status: 'applied',
-      effect: { type: 'none' },
-    }),
+    evaluateToolCall,
+    applyApprovalDecision,
   };
 }
 
@@ -174,7 +209,6 @@ export function succeeded(toolName: string): ToolExecutionResult {
   return {
     type: 'succeeded',
     toolName,
-    rawResult: { outputKind: 'text', content: `result:${toolName}` },
     normalizedResult: {
       kind: 'text',
       content: `result:${toolName}`,
@@ -184,14 +218,38 @@ export function succeeded(toolName: string): ToolExecutionResult {
   };
 }
 
+export function toolExecutor(
+  tools: readonly RegisteredTool[],
+  execute: ToolExecutor['execute'] = async ({ toolName }) => succeeded(toolName),
+): Pick<ToolExecutor, 'preflight' | 'execute'> {
+  const owner = createToolExecutor({
+    catalog: {
+      list: () => ({ tools }),
+      get: ({ toolName }) => {
+        const tool = tools.find((candidate) => candidate.registeredToolName === toolName);
+        return tool
+          ? { status: 'found' as const, tool }
+          : { status: 'not_found' as const, toolName };
+      },
+    },
+    adapter: {
+      async execute({ toolName }) {
+        return { outputKind: 'text', content: `unused:${toolName}` };
+      },
+    },
+  });
+  return { preflight: owner.preflight, execute };
+}
+
 export function request(input: {
   calls: readonly ToolCall[];
   tools: readonly RegisteredTool[];
   store?: ActiveRunStore;
-  permissions?: Pick<PermissionService, 'evaluateToolCall' | 'applyApprovalDecision'>;
-  executeTool?: ProcessToolCallsRequest['toolExecution']['executeTool'];
+  permissions?: Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>;
+  executeTool?: ProcessToolCallsRequest['toolExecution']['execute'];
   signal?: AbortSignal;
   overridePolicy?: Partial<EnginePolicy>;
+  onExecutionId?: (id: string) => void;
 }): ProcessToolCallsRequest {
   let executionNumber = 0;
   let approvalNumber = 0;
@@ -203,12 +261,14 @@ export function request(input: {
     toolCalls: input.calls,
     registeredTools: input.tools,
     permissions: input.permissions ?? permissionService(),
-    toolExecution: {
-      executeTool: input.executeTool ?? (async ({ toolName }) => succeeded(toolName)),
-    },
+    toolExecution: toolExecutor(input.tools, input.executeTool),
     store: input.store ?? storeForRun(),
     ids: {
-      createToolExecutionId: () => `tool-execution:${++executionNumber}`,
+      createToolExecutionId: () => {
+        const id = `tool-execution:${++executionNumber}`;
+        input.onExecutionId?.(id);
+        return id;
+      },
       createRunApprovalId: () => `approval:${++approvalNumber}`,
     },
     clock: { now: () => now },
