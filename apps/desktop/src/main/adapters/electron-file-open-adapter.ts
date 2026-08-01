@@ -1,6 +1,6 @@
 /* Electron adapter for opening a validated absolute file path. */
 import { shell } from 'electron';
-import type { FileOpenPort } from '@megumi/product/host-interface';
+import type { FileOpenPort } from '@megumi/product/host';
 
 export const electronFileOpenAdapter: FileOpenPort = {
   openPath: async (absolutePath) => {

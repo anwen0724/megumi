@@ -6,7 +6,7 @@ import type {
   TimelineActivityMessage,
   TimelineSeparatorMessage,
   TimelineUserMessage,
-} from '@megumi/agent/projections/timeline';
+} from '@megumi/projections';
 import { TimelineMessage } from '@megumi/desktop/renderer/features/chat/components/TimelineMessage';
 import { WorkspaceChangeFooter } from '@megumi/desktop/renderer/features/chat/components/WorkspaceChangeFooter';
 import { ToastViewport, useToastStore } from '@megumi/desktop/renderer/shared/ui';
@@ -551,7 +551,7 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(screen.queryByRole('button', { name: 'Deny' })).not.toBeInTheDocument();
   });
 
-  it('renders built-in tool activity with tool-specific labels and hides raw result summaries', () => {
+  it('renders built-in tool activity with tool-specific labels and safe result summaries', () => {
     render(<TimelineMessage message={assistantMessage({
       blocks: [
         {
@@ -568,7 +568,7 @@ describe('TimelineMessage canonical block rendering', () => {
               toolCallId: 'tool-call-list-directory',
               toolName: 'list_directory',
               inputSummary: '工作区目录',
-              resultSummary: '{"path":".","entries":[{"name":"README.md"}]}',
+              resultSummary: 'Found 1 entry.',
               status: 'succeeded',
             },
             {
@@ -577,7 +577,7 @@ describe('TimelineMessage canonical block rendering', () => {
               toolCallId: 'tool-call-read-file',
               toolName: 'read_file',
               inputSummary: 'Claude自我介绍.md',
-              resultSummary: '# Claude 自我介绍',
+              resultSummary: 'Read 21 bytes.',
               status: 'succeeded',
             },
             {
@@ -634,8 +634,8 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(screen.getByText('Edited README.md')).toBeInTheDocument();
     expect(screen.getByText('Wrote notes.md')).toBeInTheDocument();
     expect(screen.getByText('Ran command npm test')).toBeInTheDocument();
-    expect(screen.queryByText(/"entries"/)).not.toBeInTheDocument();
-    expect(screen.queryByText('# Claude 自我介绍')).not.toBeInTheDocument();
+    expect(screen.getByText('Found 1 entry.')).toBeInTheDocument();
+    expect(screen.getByText('Read 21 bytes.')).toBeInTheDocument();
   });
 
   it('renders italic markdown in answer text without literal delimiters', () => {

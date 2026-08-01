@@ -1,0 +1,18 @@
+{
+  "name": "@megumi/session",
+  "version": "0.1.0",
+  "description": "Megumi Session semantic history, entry graph, attachments, and branch drafts",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./attachment-store": "./src/session-attachment.ts",
+    "./store": "./src/session-store.ts"
+  },
+  "dependencies": {
+    "@megumi/ai": "0.1.0",
+    "@megumi/database": "0.1.0",
+    "@megumi/events": "0.1.0",
+    "zod": "^3.25.76"
+  }
+}

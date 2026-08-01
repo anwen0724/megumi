@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   RunCancelledPayload,
   RunFailedPayload,
   RuntimeEvent,
@@ -7,7 +7,7 @@
   ToolCallFailedPayload,
   ToolCallRequestedPayload,
   ToolCallStartedPayload,
-} from '@megumi/product/runtime-events';
+} from '@megumi/product/host';
 import { useChatUiStore, type RunUiStatus } from '../../entities/chat-ui/store';
 import { useRunStore } from '../../entities/run/store';
 import { useSessionStore } from '../../entities/session/store';

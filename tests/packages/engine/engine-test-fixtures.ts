@@ -10,18 +10,22 @@ import type {
 } from '@megumi/ai';
 import { createModelFailure } from '@megumi/ai';
 import type {
+  EvaluateToolCallRequest,
   PermissionDecision,
-  PermissionService,
-} from '@megumi/agent/permissions';
-import type { BuildContextResult } from '@megumi/agent/context';
+  Permissions,
+} from '@megumi/permissions';
+import type {
+  BuildContextResult,
+  RecordCompletedModelCallUsageRequest,
+} from '@megumi/context';
 import type {
   SaveAssistantReplyRequest,
   SaveModelResponseRequest,
   SaveToolResultMessageRequest,
   SaveUserMessageRequest,
-} from '@megumi/agent/session';
-import type { ToolExecutionService } from '@megumi/agent/tools';
-import type { RuntimeEvent } from '@megumi/agent/events';
+} from '@megumi/session';
+import type { ToolExecutor } from '@megumi/tools';
+import type { RuntimeEvent } from '@megumi/events';
 import type { ObservabilityService } from '@megumi/observability';
 import type {
   CreateEngineOptions,
@@ -31,7 +35,13 @@ import type {
 } from '@megumi/engine';
 import { AssistantMessageEventStream } from '../../../packages/ai/src/utils/event-stream';
 import { createEngine } from '../../../packages/engine/src/engine';
-import { allowDecision, registeredTool, succeeded } from './tool-call-test-fixtures';
+import {
+  allowDecision,
+  approvalSubjectFor,
+  registeredTool,
+  succeeded,
+  toolExecutor,
+} from './tool-call-test-fixtures';
 
 const ZERO_USAGE = {
   input: 0,
@@ -75,7 +85,7 @@ export const startRequest: StartRunRequest = {
   requestId: 'request:1',
   workspaceId: 'workspace:1',
   sessionId: 'session:1',
-  input: { type: 'message', text: 'hello', attachments: [] },
+  input: { text: 'hello', attachments: [] },
   model,
   permissionMode: 'ask',
 };
@@ -85,6 +95,7 @@ export interface EngineFixture {
   readonly options: CreateEngineOptions;
   readonly writes: string[];
   readonly contextRuns: unknown[];
+  readonly contextUsageRecords: RecordCompletedModelCallUsageRequest[];
   readonly published: RuntimeEvent[];
   readonly assistantReplies: SaveAssistantReplyRequest[];
   readonly toolResults: SaveToolResultMessageRequest[];
@@ -94,10 +105,10 @@ export function createEngineFixture(input: {
   readonly streams?: AssistantMessageEventStream[];
   readonly tools?: ReturnType<typeof registeredTool>[];
   readonly permissions?: Pick<
-    PermissionService,
+    Permissions,
     'evaluateToolCall' | 'applyApprovalDecision'
   >;
-  readonly executeTool?: ToolExecutionService['executeTool'];
+  readonly executeTool?: ToolExecutor['execute'];
   readonly policy?: Partial<EnginePolicy>;
   readonly contextBuild?: CreateEngineOptions['context']['build'];
   readonly eventPublisher?: CreateEngineOptions['eventPublisher'];
@@ -105,6 +116,7 @@ export function createEngineFixture(input: {
 } = {}): EngineFixture {
   const writes: string[] = [];
   const contextRuns: unknown[] = [];
+  const contextUsageRecords: RecordCompletedModelCallUsageRequest[] = [];
   const published: RuntimeEvent[] = [];
   const assistantReplies: SaveAssistantReplyRequest[] = [];
   const toolResults: SaveToolResultMessageRequest[] = [];
@@ -159,12 +171,17 @@ export function createEngineFixture(input: {
   };
 
   const defaultPermissions: Pick<
-    PermissionService,
+    Permissions,
     'evaluateToolCall' | 'applyApprovalDecision'
   > = {
     evaluateToolCall: async (request) => {
       const decision = allowDecision(request);
-      return { status: 'ok', operations: decision.operations, decision };
+      return {
+        status: 'ok',
+        operations: decision.operations,
+        decision,
+        approvalSubject: approvalSubjectFor(request, decision),
+      };
     },
     applyApprovalDecision: async () => ({
       status: 'applied',
@@ -200,6 +217,21 @@ export function createEngineFixture(input: {
           },
         };
       }),
+      recordCompletedModelCall: (request) => {
+        contextUsageRecords.push(structuredClone(request));
+        return {
+          status: 'recorded',
+          snapshot: {
+            sessionId: request.sessionId,
+            runId: request.runId,
+            providerId: request.model.provider,
+            modelId: request.model.id,
+            usage: request.preCallUsage,
+            accuracy: 'estimated',
+            calculatedAt: '2026-07-31T00:00:00.000Z',
+          },
+        };
+      },
     },
     session: {
       saveUserMessage,
@@ -207,12 +239,10 @@ export function createEngineFixture(input: {
       saveToolResultMessage,
       saveAssistantReply,
     },
-    toolRegistry: {
-      listAvailableTools: () => ({ tools: input.tools ?? [] }),
+    toolCatalog: {
+      list: () => ({ tools: input.tools ?? [] }),
     },
-    toolExecutionForRun: () => ({
-      executeTool: input.executeTool ?? (async ({ toolName }) => succeeded(toolName)),
-    }),
+    toolExecutionForRun: () => toolExecutor(input.tools ?? [], input.executeTool),
     permissions: input.permissions ?? defaultPermissions,
     eventPublisher: input.eventPublisher ?? {
       publish: (event) => {
@@ -236,6 +266,7 @@ export function createEngineFixture(input: {
     options,
     writes,
     contextRuns,
+    contextUsageRecords,
     published,
     assistantReplies,
     toolResults,
@@ -363,20 +394,22 @@ export async function collectEvents(events: AsyncIterable<RuntimeEvent>): Promis
 }
 
 export function approvalDecisionFor(
-  request: Parameters<PermissionService['evaluateToolCall']>[0],
+  request: EvaluateToolCallRequest,
 ): Extract<PermissionDecision, { type: 'requires_approval' }> {
   const allowed = allowDecision(request);
+  const subject = approvalSubjectFor(request, allowed);
   return {
     ...allowed,
     type: 'requires_approval',
     reason: 'Approval required.',
     options: [{
-      option_id: `once:${request.tool_call_id}`,
+      optionId: `once:${request.toolCallId}`,
       scope: 'once',
       display: { label: 'Once', description: 'Allow once.' },
       effect: { type: 'current_tool_call' },
     }],
-    default_option_id: `once:${request.tool_call_id}`,
+    defaultOptionId: `once:${request.toolCallId}`,
+    subjectFingerprint: subject.fingerprint,
   };
 }
 

@@ -2,8 +2,8 @@
 import { clipboard, dialog } from 'electron';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
-import type { InputAttachmentPickerPort } from '@megumi/product/host-interface';
-import type { ProductInputFileReader } from '@megumi/product/composition';
+import type { InputAttachmentPickerPort } from '@megumi/product/host';
+import type { ProductInputSourceAccess } from '@megumi/product';
 
 type TransientInputSource =
   | { type: 'file'; filePath: string }
@@ -84,24 +84,28 @@ export const electronInputAttachmentPickerAdapter: InputAttachmentPickerPort = {
   },
 };
 
-export const electronInputFileReader: ProductInputFileReader = {
-  async readFile(source) {
+export const electronInputSourceAccess: ProductInputSourceAccess = {
+  async readImage(source, options) {
+    if (options?.signal?.aborted) throw new DOMException('aborted', 'AbortError');
     if (source.type !== 'host_file_reference') throw new Error('Desktop Input only accepts host file references.');
-    const selectedSource = selectedSources.get(source.reference_id);
+    const selectedSource = selectedSources.get(source.referenceId);
     if (!selectedSource) throw new Error('Image selection reference is unavailable.');
     if (selectedSource.type === 'bytes') return new Uint8Array(selectedSource.bytes);
 
     const bytes = new Uint8Array(await readFile(selectedSource.filePath));
-    selectedSources.set(source.reference_id, { type: 'bytes', bytes });
+    if (options?.signal?.aborted) throw new DOMException('aborted', 'AbortError');
+    selectedSources.set(source.referenceId, { type: 'bytes', bytes });
     return new Uint8Array(bytes);
   },
-  async resolveLocalFile(source) {
+  async resolveDocument(source, options) {
+    if (options?.signal?.aborted) throw new DOMException('aborted', 'AbortError');
     if (source.type !== 'host_file_reference') throw new Error('Desktop Input only accepts host file references.');
-    const selectedSource = selectedSources.get(source.reference_id);
+    const selectedSource = selectedSources.get(source.referenceId);
     if (!selectedSource || selectedSource.type !== 'file') {
       throw new Error('Document selection reference is unavailable.');
     }
     const fileStat = await stat(selectedSource.filePath);
+    if (options?.signal?.aborted) throw new DOMException('aborted', 'AbortError');
     if (!fileStat.isFile()) throw new Error('Selected document is not a file.');
     return { path: path.resolve(selectedSource.filePath), sizeBytes: fileStat.size };
   },

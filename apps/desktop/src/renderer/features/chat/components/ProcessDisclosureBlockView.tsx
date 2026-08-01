@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, ChevronRight, CircleDot, CircleSlash, Clock3, XCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type {
@@ -12,7 +12,7 @@ import type {
   RetryActivityItem,
   ThinkingItem,
   ToolActivityItem,
-} from '@megumi/product/runtime-timeline';
+} from '@megumi/product/host';
 import { rendererI18n } from '../../../shared/i18n';
 import { cx } from '../../../shared/ui';
 import { TimelineMarkdown } from './TimelineMarkdown';
@@ -146,7 +146,7 @@ function ToolActivityItemView({ item }: { item: ToolActivityItem }) {
       <ItemIcon item={item} />
       <span className="min-w-0 flex-1">
         <span className="block break-words text-[var(--color-text)] [overflow-wrap:anywhere]">{toolLabel(item)}</span>
-        {item.resultSummary && item.status !== 'succeeded' ? <span className="block break-words text-xs text-[var(--color-text-muted)]">{item.resultSummary}</span> : null}
+        {item.resultSummary && item.status === 'succeeded' && !item.error ? <span className="block break-words text-xs text-[var(--color-text-muted)]">{item.resultSummary}</span> : null}
         {item.error ? <span className="block break-words text-xs text-[var(--color-danger)]">{item.error.message}</span> : null}
       </span>
     </div>

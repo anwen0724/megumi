@@ -7,7 +7,7 @@ import {
   RuntimeIdSchema,
   RuntimeResultMetaSchema,
   type RuntimeContext,
-} from '@megumi/product/runtime-events';
+} from '@megumi/product/host';
 import { IPC_CHANNELS } from './channels';
 import { RuntimeIpcErrorSchema, type RuntimeIpcError } from './errors';
 export type { RuntimeIpcError } from './errors';

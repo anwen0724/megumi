@@ -3,7 +3,7 @@ import { mkdir, open, readFile, readdir, realpath, stat, writeFile } from 'node:
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import type { ProductToolFileSystem } from '@megumi/product/composition';
+import type { ProductToolFileSystem } from '@megumi/product';
 
 export async function createScopedWorkspaceFileSystem(workspaceRoot: string): Promise<ProductToolFileSystem> {
   const lexicalRoot = path.resolve(workspaceRoot);

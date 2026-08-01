@@ -1,8 +1,8 @@
 ﻿// @vitest-environment jsdom
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { RuntimeEvent } from '@megumi/agent/events';
-import type { TimelineAssistantMessage } from '@megumi/agent/projections/timeline';
+import type { RuntimeEvent } from '@megumi/events';
+import type { TimelineAssistantMessage } from '@megumi/projections';
 import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';

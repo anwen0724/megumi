@@ -147,11 +147,25 @@ npm run make
 ## Repository Layout
 
 ```text
-apps/desktop          Electron desktop app
-packages/agent Core agent runtime
-packages/product      Product host interface and composition
-packages/ai           Model provider protocol layer
-tests                 Vitest test suite
+apps/desktop            Electron desktop app
+packages/product        Product composition, Host interface, Home, and lifecycle
+packages/engine         Run, ModelCall, ToolCall, approval, and cancellation execution
+packages/input          User input normalization and attachment processing
+packages/commands       Explicit commands and suggestions
+packages/session        Session history, entries, attachments, and branches
+packages/context        Bounded model context, compaction, and usage
+packages/instructions   System and workspace instruction sources
+packages/tools          Tool catalog, execution, built-ins, and normalized results
+packages/permissions    Permission rules, decisions, and approvals
+packages/workspace      Workspace lifecycle, paths, files, and change facts
+packages/settings       Settings schema, storage, and resolution
+packages/database       Database connection, schema, migrations, and transactions
+packages/events         Runtime events, schemas, sequencing, and errors
+packages/projections    Session, runtime, and workspace read models
+packages/ai             Provider-neutral models and provider protocol adapters
+packages/skills         Skill discovery, use, resources, and availability
+packages/observability  Traces, logs, measurements, and diagnostics
+tests                   Vitest test suite
 ```
 
 ## Contributing

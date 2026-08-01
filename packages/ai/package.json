@@ -50,7 +50,8 @@
 		"@google/genai": "1.52.0",
 		"openai": "6.26.0",
 		"partial-json": "0.1.7",
-		"typebox": "1.1.38"
+		"typebox": "1.1.38",
+		"zod": "^3.25.76"
 	},
 	"keywords": [
 		"ai",

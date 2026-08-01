@@ -1,5 +1,5 @@
 /* Projects a resolved Settings language into i18next and HTML attributes. */
-import type { AppLanguage } from '@megumi/product/host-interface';
+import type { AppLanguage } from '@megumi/product/host';
 import {
   DEFAULT_RENDERER_LANGUAGE,
   ensureRendererI18n,

@@ -8,21 +8,21 @@ const read = (relative: string) => fs.readFileSync(path.join(root, relative), 'u
 
 describe('Engine final reply source guards', () => {
   it('keeps Session variants explicit and removes the generic assistant write seam', () => {
-    const messageModel = read('packages/agent/session/domain/model/session-message.ts');
-    const service = read('packages/agent/session/service/session-service.ts');
+    const messageModel = read('packages/session/src/session-message.ts');
+    const history = read('packages/session/src/session-history.ts');
     expect(messageModel).toContain("'model_response'");
     expect(messageModel).toContain("'assistant_reply'");
     expect(messageModel).not.toContain('conversation:');
-    expect(service).toContain('saveModelResponse');
-    expect(service).toContain('saveAssistantReply');
-    expect(service).not.toContain('saveAssistantMessage');
+    expect(history).toContain('saveModelResponse');
+    expect(history).toContain('saveAssistantReply');
+    expect(history).not.toContain('saveAssistantMessage');
   });
 
   it('does not introduce a model-callable finalization tool or persisted Run outcome', () => {
     const source = [
       read('packages/engine/src/run-loop.ts'),
       read('packages/engine/src/tool-call.ts'),
-      read('packages/agent/persistence/schema/drizzle-schema.ts'),
+      read('packages/database/src/database-schema.ts'),
     ].join('\n');
     expect(source).not.toContain('submit_final_reply');
     expect(source).not.toMatch(/run[_-]?outcome/i);

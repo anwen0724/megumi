@@ -1,0 +1,10 @@
+{
+  "name": "@megumi/instructions",
+  "version": "0.1.0",
+  "description": "Megumi Instructions source discovery and reading contracts",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

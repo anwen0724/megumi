@@ -1,0 +1,15 @@
+{
+  "name": "@megumi/workspace",
+  "version": "0.1.0",
+  "description": "Megumi Workspace lifecycle, path, files, and change facts",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./store": "./src/workspace-store.ts",
+    "./node": "./src/node-workspace-file-system.ts"
+  },
+  "dependencies": {
+    "@megumi/database": "0.1.0"
+  }
+}

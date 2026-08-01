@@ -1,6 +1,6 @@
 /* Verifies one Suite uses the same Runner across cases and emits comparable reports. */
 // @vitest-environment node
-import type { RuntimeEvent } from '@megumi/product/runtime-events';
+import type { RuntimeEvent } from '@megumi/product/host';
 import { describe, expect, it, vi } from 'vitest';
 import { runEvaluationSuite } from '../../../evals/agent/runner/evaluation-suite-runner';
 import type { EvaluationProductRuntime } from '../../../evals/agent/runner/evaluation-runner';

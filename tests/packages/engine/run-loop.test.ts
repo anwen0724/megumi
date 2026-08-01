@@ -24,6 +24,13 @@ describe('Engine run loop', () => {
 
     expect(fixture.writes).toEqual(['user', 'assistant:completed']);
     expect(fixture.contextRuns).toHaveLength(1);
+    expect(fixture.contextUsageRecords).toEqual([
+      expect.objectContaining({
+        sessionId: startRequest.sessionId,
+        runId: started.run.runId,
+        preCallUsage: expect.objectContaining({ contextWindowTokens: 4_096 }),
+      }),
+    ]);
     expect(events.at(-1)?.eventType).toBe('run.completed');
   });
 
@@ -32,16 +39,16 @@ describe('Engine run loop', () => {
     const executeTool = vi.fn(async ({ toolName }) => ({
       type: 'succeeded' as const,
       toolName,
-      rawResult: { outputKind: 'text' as const, content: 'raw output must stay hidden' },
       normalizedResult: {
         kind: 'text' as const,
         content: 'tool output',
         isError: false,
         truncated: false,
       },
+      observation: { summary: 'lookup completed' },
       runtimeSources: [{
-        source_id: 'source:1',
-        source_kind: 'test',
+        sourceId: 'source:1',
+        sourceKind: 'test',
         text: 'runtime source',
         persisted: false,
       }],
@@ -78,11 +85,14 @@ describe('Engine run loop', () => {
         {
           type: 'tool_result',
           toolName: 'lookup',
-          runtimeSources: [{ source_id: 'source:1' }],
+          runtimeSources: [{ sourceId: 'source:1' }],
         },
       ],
     });
     expect(events.map((event) => event.eventType)).toContain('tool_result.created');
+    expect(events.find((event) => event.eventType === 'tool_result.created')?.payload).toMatchObject({
+      summary: 'lookup completed',
+    });
     expect(JSON.stringify(fixture.toolResults)).not.toContain('raw output must stay hidden');
     expect(fixture.toolResults[0]).toMatchObject({
       status: 'success',

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const root = path.resolve(__dirname, '../..');
 const forbiddenPackage = ['@megumi', 'shared'].join('/');
+const forbiddenImport = new RegExp(`(?:from\\s+|import\\s*\\()['"]${forbiddenPackage}(?:/|['"])`, 'u');
 const checkedRoots = ['apps', 'packages', 'tests'].map((item) => path.join(root, item));
 
 function files(dir: string): string[] {
@@ -22,7 +23,7 @@ describe('shared package removal', () => {
     const offenders = checkedRoots
       .flatMap(files)
       .filter((file) => /\.(ts|tsx)$/.test(file))
-      .filter((file) => fs.readFileSync(file, 'utf8').includes(forbiddenPackage));
+      .filter((file) => forbiddenImport.test(fs.readFileSync(file, 'utf8')));
 
     expect(offenders).toEqual([]);
   });

@@ -20,7 +20,7 @@ function sourceFiles(directories: string[], extensions = ['.ts', '.tsx']): strin
     if (!existsSync(path)) return;
     for (const entry of readdirSync(path, { withFileTypes: true })) {
       const child = join(path, entry.name);
-      if (entry.isDirectory()) visit(child);
+      if (entry.isDirectory() && entry.name !== 'node_modules' && entry.name !== 'dist') visit(child);
       else if (extensions.some((extension) => entry.name.endsWith(extension))) files.push(child);
     }
   }
@@ -35,9 +35,7 @@ function displayPath(path: string): string {
 describe('Desktop i18n architecture boundaries', () => {
   it('keeps Desktop localization dependencies out of product core, main, and preload', () => {
     const forbiddenOwners = sourceFiles([
-      'packages/agent',
-      'packages/product',
-      'packages/ai',
+      'packages',
       'apps/desktop/src/main',
       'apps/desktop/src/preload',
     ]);

@@ -2,38 +2,36 @@
  * Owns one Run's in-process execution state, event segments, semantic commits,
  * model/tool loop, approval continuation, and cancellation convergence.
  */
-import type { Api, AssistantMessage, Model } from '@megumi/ai';
+import type { Api, AssistantMessage, Model, Tool } from '@megumi/ai';
 import type {
   CurrentConversationRun,
-} from '@megumi/agent/context';
+} from '@megumi/context';
 import {
   createRuntimeEvent,
   type RuntimeError,
   type RuntimeEvent,
   type RuntimeEventPayloadByType,
   type RuntimeEventType,
-} from '@megumi/agent/events';
-import type { PermissionMode } from '@megumi/agent/permissions';
+} from '@megumi/events';
+import type { PermissionMode } from '@megumi/permissions';
 import type {
   SessionEntry,
   SessionMessageWithAttachments,
-} from '@megumi/agent/session';
+} from '@megumi/session';
 import type {
   RegisteredTool,
-  ToolDefinition,
-  ToolExecutionService,
-} from '@megumi/agent/tools';
+  ToolExecutor,
+} from '@megumi/tools';
 import type { SkillSelection } from '@megumi/skills';
 import type {
   ObservabilitySpanName,
   TraceHandle,
   SpanHandle,
 } from '@megumi/observability';
-import type { AssistantContentBlock } from '@megumi/agent/model-content';
-import type { JsonValue } from '@megumi/agent/shared-json';
+import type { AssistantContentBlock, JsonObject, JsonValue } from '@megumi/ai';
 import type {
   ApprovalDecision,
-} from '@megumi/agent/permissions';
+} from '@megumi/permissions';
 import type {
   CreateEngineOptions,
   RunApproval,
@@ -73,7 +71,7 @@ export interface RuntimeEventSegment {
 export interface EngineRunRuntime {
   readonly controller: AbortController;
   readonly registeredTools: readonly RegisteredTool[];
-  readonly toolExecution: Pick<ToolExecutionService, 'executeTool'>;
+  readonly toolExecution: Pick<ToolExecutor, 'preflight' | 'execute'>;
   readonly selectedSkill?: SkillSelection;
   currentRun: CurrentConversationRun;
   eventSequence: number;
@@ -106,7 +104,7 @@ export function createEngineRunRuntime(input: {
   readonly userMessage: SessionMessageWithAttachments;
   readonly userEntry: SessionEntry;
   readonly registeredTools: readonly RegisteredTool[];
-  readonly toolExecution: Pick<ToolExecutionService, 'executeTool'>;
+  readonly toolExecution: Pick<ToolExecutor, 'preflight' | 'execute'>;
   readonly selectedSkill?: SkillSelection;
 }): EngineRunRuntime {
   return {
@@ -322,9 +320,9 @@ async function continueRunAfterApprovalInContext(
       emitEvent(dependencies, runtime, running, 'approval.resolved', {
         approvalRequestId: approval.runApprovalId,
         toolCallId: approval.toolCallId,
-        decision: approval.status,
+        decision: resolvedApprovalStatus(approval.status),
         ...(approval.decision?.decision === 'approved'
-          ? { optionId: approval.decision.option_id }
+          ? { optionId: approval.decision.optionId }
           : {}),
         decidedAt: approval.decidedAt ?? dependencies.clock.now(),
       });
@@ -515,6 +513,20 @@ async function executeRunLoop(
           retryable: terminal.failure.retryable,
         });
         return;
+      }
+
+      try {
+        dependencies.context.recordCompletedModelCall({
+          sessionId: run.sessionId,
+          runId: run.runId,
+          model: run.model,
+          preCallUsage: context.prepared.usage,
+          ...(terminal.message.usage.totalTokens > 0
+            ? { providerInputTokens: terminal.message.usage.input }
+            : {}),
+        });
+      } catch {
+        // Usage is a reconstructable read model and cannot rewrite the ModelCall outcome.
       }
 
       const runAfterModelCall = dependencies.store.getRun(run.runId);
@@ -730,6 +742,9 @@ async function commitNewToolResults(
       toolName: result.toolName,
       kind: result.status,
       content: [{ type: 'text', text: result.content }],
+      ...(result.status === 'success' && result.observation?.summary
+        ? { summary: result.observation.summary }
+        : {}),
       ...(result.error ? { error: toEventError(result.error) } : {}),
     });
   }
@@ -917,6 +932,15 @@ function emitModelCallEvent(
   }
 }
 
+function resolvedApprovalStatus(
+  status: RunApproval['status'],
+): 'approved' | 'denied' | 'cancelled' {
+  if (status === 'pending') {
+    throw new Error('A pending RunApproval cannot emit approval.resolved.');
+  }
+  return status;
+}
+
 function emitApprovalRequested(
   dependencies: RunLoopDependencies,
   runtime: EngineRunRuntime,
@@ -928,15 +952,34 @@ function emitApprovalRequested(
       approvalRequestId: approval.runApprovalId,
       runId: approval.runId,
       toolCallId: approval.toolCallId,
-      toolIdentity: approval.toolIdentity,
-      input: approval.input,
-      operations: approval.operations,
-      options: approval.options,
+      toolName: approval.toolName,
+      toolIdentity: {
+        sourceId: approval.toolIdentity.sourceId,
+        namespace: approval.toolIdentity.namespace,
+        sourceToolName: approval.toolIdentity.sourceToolName,
+      },
+      input: toJsonValue(approval.input),
+      operations: approval.operations.map((operation) => (
+        toJsonValue(operation) as JsonObject
+      )),
+      options: approval.options.map((option) => ({
+        optionId: option.optionId,
+        scope: option.scope,
+        display: { ...option.display },
+        effect: toJsonValue(option.effect) as JsonObject,
+      })),
       defaultOptionId: approval.defaultOptionId,
       status: approval.status,
       createdAt: approval.createdAt,
       ...(approval.summary ? { summary: approval.summary } : {}),
-      ...(approval.preview ? { preview: approval.preview } : {}),
+      ...(approval.preview
+        ? {
+            preview: {
+              action: approval.preview.action,
+              targets: approval.preview.targets.map((target) => ({ ...target })),
+            },
+          }
+        : {}),
     },
   });
 }
@@ -1358,10 +1401,11 @@ function currentRunFromSavedUserMessage(
   };
 }
 
-function modelVisibleToolDefinitions(tools: readonly RegisteredTool[]): ToolDefinition[] {
+function modelVisibleToolDefinitions(tools: readonly RegisteredTool[]): Tool[] {
   return tools.map((tool) => ({
-    ...snapshot(tool.definition),
     name: tool.registeredToolName,
+    description: tool.definition.modelFacingDescription ?? tool.definition.description,
+    parameters: snapshot(tool.definition.inputSchema) as Tool['parameters'],
   }));
 }
 

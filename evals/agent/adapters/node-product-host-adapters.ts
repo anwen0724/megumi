@@ -2,12 +2,12 @@
 import { appendFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import fs from 'fs-extra';
 import path from 'node:path';
-import type { InitializeMegumiHomeSyncOptions } from '@megumi/product/home';
+import type { InitializeMegumiHomeSyncOptions } from '@megumi/product';
 import type {
-  ProductInputFileReader,
+  ProductInputSourceAccess,
   ProductObservabilityStorage,
   ProductSessionAttachmentFileSystem,
-} from '@megumi/product/composition';
+} from '@megumi/product';
 import { resolveProductSystemSkillsPath } from '@megumi/product';
 import { resolveOwnedWorkspacePath } from './scoped-workspace-file-system';
 
@@ -62,13 +62,21 @@ export const nodeObservabilityStorage: ProductObservabilityStorage = {
   remove: (filePath) => rm(filePath, { force: true }),
 };
 
-export function createEvaluationInputFileReader(workspaceRoot: string): ProductInputFileReader {
+export function createEvaluationInputSourceAccess(workspaceRoot: string): ProductInputSourceAccess {
   return {
-    async readFile(source) {
+    async readImage(source, options) {
+      if (options?.signal?.aborted) throw new DOMException('aborted', 'AbortError');
       if (source.type !== 'host_file_reference') {
         throw new Error('Evaluation accepts only owned host file references.');
       }
-      return readFile(await resolveOwnedWorkspacePath(workspaceRoot, source.reference_id));
+      return readFile(await resolveOwnedWorkspacePath(workspaceRoot, source.referenceId));
+    },
+    async resolveDocument(source, options) {
+      if (options?.signal?.aborted) throw new DOMException('aborted', 'AbortError');
+      const filePath = await resolveOwnedWorkspacePath(workspaceRoot, source.referenceId);
+      const details = await stat(filePath);
+      if (!details.isFile()) throw new Error('Evaluation document reference is not a file.');
+      return { path: filePath, sizeBytes: details.size };
     },
   };
 }

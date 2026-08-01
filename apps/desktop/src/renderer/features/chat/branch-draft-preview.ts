@@ -1,4 +1,4 @@
-import type { TimelineMessage } from '@megumi/product/runtime-timeline';
+import type { TimelineMessage } from '@megumi/product/host';
 
 export interface BranchDraftViewInput {
   messageId: string;

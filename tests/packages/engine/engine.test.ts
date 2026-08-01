@@ -2,7 +2,8 @@
  * Protects the public Engine boundary: idempotent start and session exclusion.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { registeredTool, succeeded } from './tool-call-test-fixtures';
+import type { ApprovalRequestedPayload } from '@megumi/events';
+import { approvalSubjectFor, registeredTool, succeeded } from './tool-call-test-fixtures';
 import {
   approvalDecisionFor,
   assistantStream,
@@ -61,7 +62,7 @@ describe('createEngine', () => {
     const first = await fixture.engine.startRun(startRequest);
     const conflicting = await fixture.engine.startRun({
       ...startRequest,
-      input: { type: 'message', text: 'different', attachments: [] },
+      input: { text: 'different', attachments: [] },
     });
 
     expect(conflicting).toMatchObject({
@@ -98,7 +99,12 @@ describe('createEngine', () => {
       permissions: {
         evaluateToolCall: async (request) => {
           const decision = approvalDecisionFor(request);
-          return { status: 'ok', operations: decision.operations, decision };
+          return {
+            status: 'ok',
+            operations: decision.operations,
+            decision,
+            approvalSubject: approvalSubjectFor(request, decision),
+          };
         },
         applyApprovalDecision,
       },
@@ -109,10 +115,13 @@ describe('createEngine', () => {
     if (started.status !== 'started') throw new Error('Expected started Run.');
     const firstSegment = await collectEvents(started.events);
     const requested = firstSegment.find((event) => event.eventType === 'approval.requested');
-    const approval = (
-      requested?.payload as { approvalRequest?: { approvalRequestId: string; defaultOptionId: string } }
-    ).approvalRequest;
-    if (!approval) throw new Error('Expected approval request event.');
+    if (!requested) throw new Error('Expected approval request event.');
+    const approvalRequest = (requested.payload as ApprovalRequestedPayload).approvalRequest;
+    expect(approvalRequest.options[0]).toHaveProperty('optionId');
+    const approval = {
+      approvalRequestId: approvalRequest.approvalRequestId,
+      defaultOptionId: approvalRequest.defaultOptionId,
+    };
 
     const resumed = await fixture.engine.resumeRun({
       runApprovalId: approval.approvalRequestId,
@@ -162,7 +171,12 @@ describe('createEngine', () => {
       permissions: {
         evaluateToolCall: async (request) => {
           const decision = approvalDecisionFor(request);
-          return { status: 'ok', operations: decision.operations, decision };
+          return {
+            status: 'ok',
+            operations: decision.operations,
+            decision,
+            approvalSubject: approvalSubjectFor(request, decision),
+          };
         },
         applyApprovalDecision: async () => ({
           status: 'failed',
@@ -174,10 +188,12 @@ describe('createEngine', () => {
     if (started.status !== 'started') throw new Error('Expected started Run.');
     const waitingEvents = await collectEvents(started.events);
     const requested = waitingEvents.find((event) => event.eventType === 'approval.requested');
-    const approval = (
-      requested?.payload as { approvalRequest?: { approvalRequestId: string; defaultOptionId: string } }
-    ).approvalRequest;
-    if (!approval) throw new Error('Expected approval request event.');
+    if (!requested) throw new Error('Expected approval request event.');
+    const approvalRequest = (requested.payload as ApprovalRequestedPayload).approvalRequest;
+    const approval = {
+      approvalRequestId: approvalRequest.approvalRequestId,
+      defaultOptionId: approvalRequest.defaultOptionId,
+    };
 
     const resumed = await fixture.engine.resumeRun({
       runApprovalId: approval.approvalRequestId,

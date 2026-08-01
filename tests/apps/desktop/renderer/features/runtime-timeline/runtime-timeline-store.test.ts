@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { RuntimeEvent } from '@megumi/agent/events';
-import type { TimelineAssistantMessage, TimelineMessage } from '@megumi/agent/projections/timeline';
+import type { RuntimeEvent } from '@megumi/events';
+import type { TimelineAssistantMessage, TimelineMessage } from '@megumi/projections';
 import { useRuntimeTimelineStore } from '@megumi/desktop/renderer/features/runtime-timeline';
 
 function runtimeEvent(

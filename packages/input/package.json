@@ -1,0 +1,14 @@
+{
+  "name": "@megumi/input",
+  "version": "0.1.0",
+  "description": "Megumi user input normalization and attachment processing",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@megumi/ai": "0.1.0",
+    "@megumi/skills": "0.1.0"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/ai" },
+    { "path": "./packages/commands" },
+    { "path": "./packages/context" },
+    { "path": "./packages/database" },
+    { "path": "./packages/engine" },
+    { "path": "./packages/events" },
+    { "path": "./packages/input" },
+    { "path": "./packages/instructions" },
+    { "path": "./packages/observability" },
+    { "path": "./packages/permissions" },
+    { "path": "./packages/product" },
+    { "path": "./packages/projections" },
+    { "path": "./packages/session" },
+    { "path": "./packages/settings" },
+    { "path": "./packages/skills" },
+    { "path": "./packages/tools" },
+    { "path": "./packages/workspace" }
+  ]
+}

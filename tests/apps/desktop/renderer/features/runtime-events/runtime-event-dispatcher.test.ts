@@ -6,7 +6,7 @@ import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store
 import { useToolCallStore } from '@megumi/desktop/renderer/entities/tool-call';
 import { dispatchRuntimeEvent } from '@megumi/desktop/renderer/features/runtime-events/runtime-event-dispatcher';
 import { useRuntimeTimelineStore } from '@megumi/desktop/renderer/features/runtime-timeline';
-import type { RuntimeEvent } from '@megumi/agent/events';
+import type { RuntimeEvent } from '@megumi/events';
 
 function runtimeEvent(
   eventType: RuntimeEvent['eventType'],
@@ -195,12 +195,18 @@ describe('runtime event dispatcher', () => {
       approvalRequest: {
         approvalRequestId: 'approval-1',
         toolCallId: 'tool-call-1',
-        toolExecutionId: 'tool-execution-1',
         runId: 'run-1',
         toolName: 'edit_file',
+        toolIdentity: {
+          sourceId: 'built-in',
+          namespace: 'megumi',
+          sourceToolName: 'edit_file',
+        },
+        input: { path: 'src/app.ts' },
+        operations: [],
         summary: 'Edit src/app.ts',
         options: [{
-          option_id: 'once:tool-call-1',
+          optionId: 'once:tool-call-1',
           scope: 'once',
           display: { label: 'Once', description: 'Allow this call.' },
           effect: { type: 'current_tool_call' },

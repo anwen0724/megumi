@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createWorkspaceHost } from '@megumi/product/host-interface/workspace-host';
+import { createWorkspaceHost } from '../../../../packages/product/src/host/workspace-host';
 
 describe('WorkspaceHost files', () => {
   it('maps canonical Workspace file results and opens only the resolved absolute path', async () => {
@@ -22,7 +22,7 @@ describe('WorkspaceHost files', () => {
             modified_at: '2026-07-10T00:00:00.000Z',
           }],
         })),
-        resolveFile: vi.fn(() => ({
+        resolveFile: vi.fn(async () => ({
           status: 'ok' as const,
           workspace_id: 'workspace:1',
           workspace_root: 'C:/work/megumi',
@@ -49,7 +49,7 @@ describe('WorkspaceHost files', () => {
       workspaceService: workspaceServiceStub(),
       workspaceFilesService: {
         listDirectory: vi.fn(),
-        resolveFile: vi.fn(() => ({
+        resolveFile: vi.fn(async () => ({
           status: 'ok' as const,
           workspace_id: 'workspace:1',
           workspace_root: 'C:/work/megumi',
@@ -76,7 +76,7 @@ describe('WorkspaceHost files', () => {
           status: 'path_rejected' as const,
           reason: 'outside_workspace' as const,
         })),
-        resolveFile: vi.fn(() => ({
+        resolveFile: vi.fn(async () => ({
           status: 'workspace_not_found' as const,
           workspace_id: 'workspace:missing',
         })),

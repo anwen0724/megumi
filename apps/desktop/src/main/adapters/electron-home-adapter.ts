@@ -6,7 +6,7 @@ import {
   type InitializeMegumiHomeSyncOptions,
   type MegumiHomeResourceLocator,
   type MegumiHomeSyncFileSystem,
-} from '@megumi/product/home';
+} from '@megumi/product';
 import { resolveProductSystemSkillsPath } from '@megumi/product';
 
 export function createElectronMegumiHomeSyncOptions(): InitializeMegumiHomeSyncOptions {

@@ -1,5 +1,5 @@
-﻿import { create } from 'zustand';
-import type { RuntimeEvent } from '@megumi/product/runtime-events';
+import { create } from 'zustand';
+import type { RuntimeEvent } from '@megumi/product/host';
 
 export type RendererRunStatus =
   | 'running'

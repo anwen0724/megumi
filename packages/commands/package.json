@@ -1,0 +1,15 @@
+{
+  "name": "@megumi/commands",
+  "version": "0.1.0",
+  "description": "Megumi explicit command handling and input suggestions",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@megumi/ai": "0.1.0",
+    "@megumi/input": "0.1.0",
+    "@megumi/skills": "0.1.0"
+  }
+}

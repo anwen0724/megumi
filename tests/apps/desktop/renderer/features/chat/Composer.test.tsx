@@ -6,7 +6,7 @@ import { usePermissionModeStore } from '@megumi/desktop/renderer/entities/permis
 import { useModelSelectionStore } from '@megumi/desktop/renderer/entities/model-selection';
 import { Composer } from '@megumi/desktop/renderer/features/chat/components/Composer';
 import type { ComposerProps } from '@megumi/desktop/renderer/features/chat/components/composer-types';
-import type { ProviderPublicStatusUiDto } from '@megumi/product/host-interface';
+import type { ProviderPublicStatusUiDto } from '@megumi/product/host';
 
 const defaultProviders: ProviderPublicStatusUiDto[] = [
   {

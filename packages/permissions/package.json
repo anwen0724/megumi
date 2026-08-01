@@ -1,0 +1,14 @@
+{
+  "name": "@megumi/permissions",
+  "version": "0.1.0",
+  "description": "Megumi permission evaluation and approval policy",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@megumi/tools": "0.1.0",
+    "zod": "^3.25.76"
+  }
+}

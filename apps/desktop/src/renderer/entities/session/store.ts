@@ -1,6 +1,6 @@
 /* Stores canonical Product Host Session projections plus renderer selection state. */
 import { create } from 'zustand';
-import type { ChatSessionUiDto } from '@megumi/product/host-interface';
+import type { ChatSessionUiDto } from '@megumi/product/host';
 
 interface SessionState {
   sessions: ChatSessionUiDto[];

@@ -1,0 +1,10 @@
+{
+  "name": "@megumi/observability",
+  "version": "0.1.0",
+  "description": "Megumi tracing, logging, measurement, and diagnostics",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

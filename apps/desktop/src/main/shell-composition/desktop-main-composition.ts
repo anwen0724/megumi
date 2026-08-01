@@ -1,6 +1,6 @@
 // Composes the Electron UI shell and connects it to the Product Host Interface.
 import { createElectronMegumiHomeSyncOptions } from '../adapters/electron-home-adapter';
-import { composeProduct } from '@megumi/product/composition';
+import { composeProduct } from '@megumi/product';
 import { electronDirectoryPickerAdapter } from '../adapters/electron-directory-picker-adapter';
 import { electronFileOpenAdapter } from '../adapters/electron-file-open-adapter';
 import { electronObservabilityStorageAdapter } from '../adapters/electron-observability-storage-adapter';
@@ -8,7 +8,7 @@ import { getElectronProductEnvironment } from '../adapters/electron-product-envi
 import { saveDiagnosticBundle } from '../adapters/electron-diagnostic-bundle-save-adapter';
 import {
   electronInputAttachmentPickerAdapter,
-  electronInputFileReader,
+  electronInputSourceAccess,
   electronLocalFileAvailability,
 } from '../adapters/electron-input-attachment-adapter';
 import { electronSessionAttachmentFileSystem } from '../adapters/electron-session-attachment-file-system';
@@ -24,7 +24,7 @@ export function composeDesktopMain() {
     fileOpen: electronFileOpenAdapter,
     attachmentPicker: electronInputAttachmentPickerAdapter,
     localFileAvailability: electronLocalFileAvailability,
-    inputFileReader: electronInputFileReader,
+    inputSourceAccess: electronInputSourceAccess,
     sessionAttachmentFileSystem: electronSessionAttachmentFileSystem,
   });
   const runtimeLogger = product.logger;

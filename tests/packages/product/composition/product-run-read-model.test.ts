@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { RuntimeEvent } from '@megumi/agent/events';
+import type { RuntimeEvent } from '@megumi/events';
 import type { Run } from '@megumi/engine';
-import { ProductRunReadModel } from '@megumi/product/composition/product-run-read-model';
+import { ProductRunReadModel } from '../../../../packages/product/src/run-read-model';
 
 describe('ProductRunReadModel', () => {
   it('projects waiting and cancelling states and resolves terminal convergence', async () => {

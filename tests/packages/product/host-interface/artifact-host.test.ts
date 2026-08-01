@@ -1,6 +1,6 @@
 /* Verifies the preserved Artifact UI seam no longer reaches the removed backend. */
 import { describe, expect, it } from 'vitest';
-import { createUnavailableArtifactHost } from '@megumi/product/host-interface/artifact-host';
+import { createUnavailableArtifactHost } from '../../../../packages/product/src/host/artifact-host';
 
 describe('createUnavailableArtifactHost', () => {
   it('returns empty read projections for the unchanged desktop UI', () => {

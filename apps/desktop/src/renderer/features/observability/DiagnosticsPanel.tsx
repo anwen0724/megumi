@@ -13,7 +13,7 @@ import type { RunTraceDetail, RunTraceSummary } from "@megumi/observability";
 import type {
   ChatSessionUiDto,
   WorkspaceProjectUiDto,
-} from "@megumi/product/host-interface";
+} from "@megumi/product/host";
 import { IPC_CHANNELS } from "../../../main/ipc/channels";
 import { createRendererRuntimeIpcRequest } from "../../shared/ipc/runtime-request";
 import { Button, SettingsPageHeader, cx } from "../../shared/ui";

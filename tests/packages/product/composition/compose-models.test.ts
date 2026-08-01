@@ -1,12 +1,11 @@
 // @vitest-environment node
-import type { ProviderRuntimeConfig } from '@megumi/agent/settings';
 import {
   AssistantMessageEventStream,
   InMemoryCredentialStore,
   type ProviderStreams,
 } from '@megumi/ai';
 import { builtinProviders } from '@megumi/ai/providers/all';
-import { composeModels } from '@megumi/product/composition';
+import { composeModels, type ProductModelConfig } from '../../../../packages/product/src/models';
 import { describe, expect, it } from 'vitest';
 
 describe('Product Models composition', () => {
@@ -16,7 +15,7 @@ describe('Product Models composition', () => {
     expect(openai).toBeDefined();
     expect(builtin).toBeDefined();
     if (!openai || !builtin) return;
-    const api: ProviderRuntimeConfig['api'] = 'openai-responses';
+    const api: ProductModelConfig['api'] = 'openai-responses';
     expect(builtin.api).toBe(api);
 
     const apiKey = 'builtin-secret';
@@ -101,7 +100,7 @@ describe('Product Models composition', () => {
   });
 });
 
-function config(overrides: Partial<ProviderRuntimeConfig> = {}): ProviderRuntimeConfig {
+function config(overrides: Partial<ProductModelConfig> = {}): ProductModelConfig {
   return {
     provider_id: 'custom-provider',
     api: 'openai-responses',

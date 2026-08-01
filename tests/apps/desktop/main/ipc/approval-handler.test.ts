@@ -11,7 +11,7 @@ import {
 import type { RuntimeIpcRequest } from '@megumi/desktop/main/ipc/contracts';
 import type { ApprovalResolvePayload } from '@megumi/desktop/main/ipc/schemas';
 import { forwardRuntimeEvents } from '@megumi/desktop/main/ipc/event-forwarders';
-import type { RuntimeLogger } from '@megumi/product/logging';
+import type { RuntimeLogger } from '@megumi/product';
 
 vi.mock('@megumi/desktop/main/ipc/event-forwarders', () => ({
   forwardRuntimeEvents: vi.fn(),

@@ -16,7 +16,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import type { SkillDetailUiDto, SkillListUiItem } from '@megumi/product/host-interface';
+import type { SkillDetailUiDto, SkillListUiItem } from '@megumi/product/host';
 import { useProjectStore } from '../../entities/project';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../shared/ipc';

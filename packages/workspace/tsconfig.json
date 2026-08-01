@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.package.json",
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "rootDir": "./src",
+    "outDir": "./dist/types",
+    "tsBuildInfoFile": "./dist/types/.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../database" }
+  ]
+}

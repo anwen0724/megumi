@@ -1,10 +1,10 @@
-// Drizzle Kit configuration for the Agent SQLite schema.
+// Drizzle Kit configuration for the product Database schema.
 import { defineConfig } from 'drizzle-kit';
 
 export default defineConfig({
   dialect: 'sqlite',
-  schema: './packages/agent/persistence/schema/drizzle-schema.ts',
-  out: './packages/agent/persistence/migrations',
+  schema: './packages/database/src/database-schema.ts',
+  out: './packages/database/migrations',
   dbCredentials: {
     url: './.megumi/sqlite/megumi.sqlite3',
   },

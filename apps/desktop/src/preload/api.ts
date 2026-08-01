@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron';
-import { generateRuntimeDebugId, type RuntimeEvent } from '@megumi/product/runtime-events';
+import { generateRuntimeDebugId, type RuntimeEvent } from '@megumi/product/host';
 import type {
   ApprovalHostResult,
   ChatCancelBranchDraftUiResult,
@@ -45,12 +45,12 @@ import type {
   ArtifactVersionCreateData,
   ArtifactVersionGetData,
   WorkspaceListFilesUiResult,
-} from '@megumi/product/host-interface';
+} from '@megumi/product/host';
 import { IPC_CHANNELS } from '../main/ipc/channels';
 import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from '../main/ipc/contracts';
 import type { RuntimeIpcError } from '../main/ipc/errors';
 import type { GetRunTraceResult, ListRecentRunTracesResult } from '@megumi/observability';
-import type { ObservabilityExportResult } from '@megumi/product/host-interface';
+import type { ObservabilityExportResult } from '@megumi/product/host';
 import type {
   ApprovalResolvePayload,
   ArtifactGetPayload,

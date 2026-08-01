@@ -8,7 +8,7 @@ import {
   initializeMegumiHomeSync,
   resolveMegumiHomePath,
   type MegumiHomeFileSystem,
-} from '@megumi/product/home';
+} from '@megumi/product';
 
 class MemoryFileSystem implements MegumiHomeFileSystem {
   readonly directories = new Set<string>();
@@ -238,7 +238,7 @@ describe('Megumi Home foundation', () => {
 
   it('keeps host resource paths out of the Product Home implementation', () => {
     const source = fs.readFileSync(
-      path.resolve('packages/product/home/megumi-home.ts'),
+      path.resolve('packages/product/src/home/home.ts'),
       'utf8',
     );
 

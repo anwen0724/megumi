@@ -4,7 +4,7 @@ import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
 import type {
   ProviderCatalogUiDto,
   ProviderPublicStatusUiDto,
-} from '@megumi/product/host-interface';
+} from '@megumi/product/host';
 import { useProviderStore } from '@megumi/desktop/renderer/entities/provider/store';
 
 const providers: ProviderPublicStatusUiDto[] = [

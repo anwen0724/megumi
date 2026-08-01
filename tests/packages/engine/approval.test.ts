@@ -4,11 +4,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type {
   ApprovalDecision,
+  EvaluateToolCallRequest,
   PermissionDecision,
-  PermissionOperation,
-  PermissionService,
-} from '@megumi/agent/permissions';
-import type { RegisteredTool, ToolExecutionResult } from '@megumi/agent/tools';
+  Permissions,
+} from '@megumi/permissions';
+import type { RegisteredTool, ToolExecutionResult } from '@megumi/tools';
 import type { RunApproval } from '@megumi/engine';
 import { ActiveRunStore } from '../../../packages/engine/src/active-run-store';
 import { transitionRun } from '../../../packages/engine/src/run';
@@ -20,6 +20,7 @@ import {
 } from '../../../packages/engine/src/tool-call';
 import {
   allowDecision,
+  approvalSubjectFor,
   now,
   policy,
   registeredTool,
@@ -31,30 +32,32 @@ import {
 } from './tool-call-test-fixtures';
 
 function approvalDecisionFor(
-  permissionRequest: Parameters<PermissionService['evaluateToolCall']>[0],
+  permissionRequest: EvaluateToolCallRequest,
 ): Extract<PermissionDecision, { type: 'requires_approval' }> {
   const allowed = allowDecision(permissionRequest);
+  const subject = approvalSubjectFor(permissionRequest, allowed);
   return {
     ...allowed,
     type: 'requires_approval',
     reason: 'Approval required.',
     options: [{
-      option_id: `once:${permissionRequest.tool_call_id}`,
+      optionId: `once:${permissionRequest.toolCallId}`,
       scope: 'once',
       display: { label: 'Once', description: 'Allow once.' },
       effect: { type: 'current_tool_call' },
     }],
-    default_option_id: `once:${permissionRequest.tool_call_id}`,
+    defaultOptionId: `once:${permissionRequest.toolCallId}`,
+    subjectFingerprint: subject.fingerprint,
   };
 }
 
 function approvalPermissions(input: {
   approvalToolName: string;
-  apply?: PermissionService['applyApprovalDecision'];
-}): Pick<PermissionService, 'evaluateToolCall' | 'applyApprovalDecision'> {
-  const evaluateToolCall: PermissionService['evaluateToolCall'] = vi.fn(
+  apply?: Permissions['applyApprovalDecision'];
+}): Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'> {
+  const evaluateToolCall: Permissions['evaluateToolCall'] = vi.fn(
     async (permissionRequest) => {
-      const decision = permissionRequest.registered_tool.registered_tool_name
+      const decision = permissionRequest.registeredTool.registeredToolName
         === input.approvalToolName
         ? approvalDecisionFor(permissionRequest)
         : allowDecision(permissionRequest);
@@ -62,10 +65,11 @@ function approvalPermissions(input: {
         status: 'ok' as const,
         operations: decision.operations,
         decision,
+        approvalSubject: approvalSubjectFor(permissionRequest, decision),
       };
     },
   );
-  const defaultApply: PermissionService['applyApprovalDecision'] = vi.fn(async () => ({
+  const defaultApply: Permissions['applyApprovalDecision'] = vi.fn(async () => ({
     status: 'applied' as const,
     effect: { type: 'none' as const },
   }));
@@ -76,8 +80,8 @@ function approvalPermissions(input: {
 }
 
 async function createWaiting(input: {
-  apply?: PermissionService['applyApprovalDecision'];
-  executeTool?: ProcessToolCallsRequest['toolExecution']['executeTool'];
+  apply?: Permissions['applyApprovalDecision'];
+  executeTool?: ProcessToolCallsRequest['toolExecution']['execute'];
 }) {
   const store = storeForRun();
   const first = registeredTool('first', { executionMode: 'parallel' });
@@ -105,20 +109,20 @@ async function createWaiting(input: {
 
 function approve(approval: RunApproval): ApprovalDecision {
   return {
-    approval_request_id: approval.runApprovalId,
+    approvalRequestId: approval.runApprovalId,
     decision: 'approved',
-    option_id: approval.defaultOptionId,
-    decided_by: 'user',
-    decided_at: '2026-07-31T00:00:01.000Z',
+    optionId: approval.defaultOptionId,
+    decidedBy: 'user',
+    decidedAt: '2026-07-31T00:00:01.000Z',
   };
 }
 
 function deny(approval: RunApproval): ApprovalDecision {
   return {
-    approval_request_id: approval.runApprovalId,
+    approvalRequestId: approval.runApprovalId,
     decision: 'denied',
-    decided_by: 'user',
-    decided_at: '2026-07-31T00:00:01.000Z',
+    decidedBy: 'user',
+    decidedAt: '2026-07-31T00:00:01.000Z',
   };
 }
 
@@ -217,8 +221,10 @@ describe('resumeToolCallApproval', () => {
     expect(resumed.status).toBe('resumed');
     expect(order).toEqual(['apply', 'execute']);
     expect(applyApprovalDecision).toHaveBeenCalledWith(expect.objectContaining({
-      original_permission_decision: expect.objectContaining({ type: 'requires_approval' }),
-      session_id: 'session:1',
+      originalPermissionDecision: expect.objectContaining({ type: 'requires_approval' }),
+      originalSubject: expect.objectContaining({ toolCallId: 'tool-call:1' }),
+      currentSubject: expect.objectContaining({ toolCallId: 'tool-call:1' }),
+      sessionId: 'session:1',
     }));
     expect(executeTool).toHaveBeenCalledOnce();
     if (resumed.status !== 'resumed') throw new Error('Expected resumed');
@@ -270,40 +276,41 @@ describe('resumeToolCallApproval', () => {
     const currentRun = run();
     const store = storeForRun(currentRun);
     const tool = registeredTool('approval');
-    const permissionRequest = {
-      run_id: currentRun.runId,
-      session_id: currentRun.sessionId,
-      workspace_id: currentRun.workspaceId,
-      tool_call_id: 'tool-call:1',
-      tool_input: { value: 'approval' },
-      registered_tool: {
-        registered_tool_name: tool.registeredToolName,
-        source_id: tool.identity.sourceId,
-        namespace: tool.identity.namespace,
-        source_tool_name: tool.identity.sourceToolName,
-      },
-      permission_mode: 'ask' as const,
-      evaluated_at: '2026-07-31T00:00:00.000Z',
+    const permissionRequest: EvaluateToolCallRequest = {
+      runId: currentRun.runId,
+      sessionId: currentRun.sessionId,
+      workspaceId: currentRun.workspaceId,
+      toolCallId: 'tool-call:1',
+      toolInput: { value: 'approval' },
+      registeredTool: tool,
+      permissionMode: 'ask',
+      evaluatedAt: '2026-07-31T00:00:00.000Z',
     };
     const originalDecision = approvalDecisionFor(permissionRequest);
+    const originalApprovalSubject = approvalSubjectFor(permissionRequest, originalDecision);
     const approval: RunApproval = {
       runApprovalId: 'approval:mismatch',
       runId: currentRun.runId,
-      toolCallId: permissionRequest.tool_call_id,
+      toolCallId: permissionRequest.toolCallId,
+      toolName: tool.registeredToolName,
       toolIdentity: tool.identity,
       input: { value: 'different' },
       operations: originalDecision.operations,
       options: originalDecision.options,
-      defaultOptionId: originalDecision.default_option_id,
+      defaultOptionId: originalDecision.defaultOptionId,
+      summary: 'approval requires approval.',
       createdAt: now,
       status: 'pending',
     };
     const continuation: ToolCallApprovalContinuation = {
       runId: currentRun.runId,
       sessionId: currentRun.sessionId,
+      workspaceId: currentRun.workspaceId,
+      permissionMode: 'ask',
       toolCall: toolCall(0, tool.registeredToolName),
       registeredTool: tool,
       originalPermissionDecision: originalDecision,
+      originalApprovalSubject,
       completedToolResults: [],
       completedToolExecutions: [],
       remainingToolCalls: [],
@@ -317,7 +324,10 @@ describe('resumeToolCallApproval', () => {
       decision: approve(approval),
       store,
       permissions,
-      toolExecution: { executeTool },
+      toolExecution: {
+        preflight: () => ({ status: 'ready', input: {} }),
+        execute: executeTool,
+      },
       ids: {
         createToolExecutionId: () => 'tool-execution:1',
         createRunApprovalId: () => 'unused',

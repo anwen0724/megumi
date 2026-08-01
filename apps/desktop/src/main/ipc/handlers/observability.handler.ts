@@ -2,8 +2,8 @@
 import {
   ObservabilityQueryResultSchema,
   type ProductHostInterface,
-} from "@megumi/product/host-interface";
-import type { RuntimeLogger } from "@megumi/product/logging";
+} from "@megumi/product/host";
+import type { RuntimeLogger } from "@megumi/product";
 import {
   electronIpcMain,
   type DesktopIpcMain,

@@ -10,10 +10,10 @@ const forbiddenDirectories = [
   'packages/context-management',
   'packages/db',
   'packages/memory',
-  'packages/tools',
   'packages/security',
   'packages/home',
-  'tests/packages/tools',
+  'packages/shared',
+  'tests/packages/memory',
   'tests/packages/security',
   'tests/packages/home',
 ];
@@ -23,9 +23,9 @@ const forbiddenAliases = [
   '@megumi/context-management',
   '@megumi/db',
   '@megumi/memory',
-  '@megumi/tools',
   '@megumi/security',
   '@megumi/home',
+  '@megumi/shared',
 ];
 
 const configFiles = [
@@ -37,7 +37,7 @@ const configFiles = [
   'package.json',
 ];
 
-describe('old package removal', () => {
+describe('legacy package removal', () => {
   it('removes old package directories from the repository', () => {
     const existing = forbiddenDirectories.filter((directory) =>
       fs.existsSync(path.join(root, directory)),

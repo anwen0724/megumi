@@ -1,7 +1,7 @@
 // Coordinates the renderer first-run setup flow through existing settings and provider IPC APIs.
 import { create } from 'zustand';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
-import type { AppLanguage, AppThemeName } from '@megumi/product/host-interface';
+import type { AppLanguage, AppThemeName } from '@megumi/product/host';
 import { createRendererRuntimeIpcRequest } from '../../shared/ipc';
 import { rendererError, type RendererErrorDescriptor } from '../../shared/i18n';
 

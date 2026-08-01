@@ -11,7 +11,7 @@ import {
   registerArtifactHandlers,
   type ArtifactHandlersService,
 } from './handlers/artifact.handler';
-import type { RuntimeLogger } from '@megumi/product/logging';
+import type { RuntimeLogger } from '@megumi/product';
 import { registerObservabilityHandlers } from './handlers/observability.handler';
 import { electronIpcMain, type DesktopIpcMain } from '../adapters/electron-ipc-main-adapter';
 
@@ -24,7 +24,7 @@ export interface RegisterAllHandlersOptions {
   settings?: SettingsHandlersService;
   approval?: ApprovalHandlersService;
   artifact?: ArtifactHandlersService;
-  observability?: { host: Pick<import('@megumi/product/host-interface').ProductHostInterface, 'observability'> };
+  observability?: { host: Pick<import('@megumi/product/host').ProductHostInterface, 'observability'> };
 }
 
 export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): void {

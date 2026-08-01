@@ -22,8 +22,8 @@ import {
   Terminal,
 } from 'lucide-react';
 import { IconButton } from '../../../shared/ui';
-import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/product/host-interface';
-import type { ChatGetContextUsageUiResult } from '@megumi/product/host-interface';
+import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/product/host';
+import type { ChatGetContextUsageUiResult } from '@megumi/product/host';
 import {
   COMPOSER_PERMISSION_MODE_OPTIONS,
   type ComposerModel,
