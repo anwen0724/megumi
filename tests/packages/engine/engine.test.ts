@@ -2,6 +2,7 @@
  * Protects the public Engine boundary: idempotent start and session exclusion.
  */
 import { describe, expect, it, vi } from 'vitest';
+import type { ApprovalRequestedPayload } from '@megumi/events';
 import { approvalSubjectFor, registeredTool, succeeded } from './tool-call-test-fixtures';
 import {
   approvalDecisionFor,
@@ -114,10 +115,13 @@ describe('createEngine', () => {
     if (started.status !== 'started') throw new Error('Expected started Run.');
     const firstSegment = await collectEvents(started.events);
     const requested = firstSegment.find((event) => event.eventType === 'approval.requested');
-    const approval = (
-      requested?.payload as { approvalRequest?: { approvalRequestId: string; defaultOptionId: string } }
-    ).approvalRequest;
-    if (!approval) throw new Error('Expected approval request event.');
+    if (!requested) throw new Error('Expected approval request event.');
+    const approvalRequest = (requested.payload as ApprovalRequestedPayload).approvalRequest;
+    expect(approvalRequest.options[0]).toHaveProperty('optionId');
+    const approval = {
+      approvalRequestId: approvalRequest.approvalRequestId,
+      defaultOptionId: approvalRequest.defaultOptionId,
+    };
 
     const resumed = await fixture.engine.resumeRun({
       runApprovalId: approval.approvalRequestId,
@@ -184,10 +188,12 @@ describe('createEngine', () => {
     if (started.status !== 'started') throw new Error('Expected started Run.');
     const waitingEvents = await collectEvents(started.events);
     const requested = waitingEvents.find((event) => event.eventType === 'approval.requested');
-    const approval = (
-      requested?.payload as { approvalRequest?: { approvalRequestId: string; defaultOptionId: string } }
-    ).approvalRequest;
-    if (!approval) throw new Error('Expected approval request event.');
+    if (!requested) throw new Error('Expected approval request event.');
+    const approvalRequest = (requested.payload as ApprovalRequestedPayload).approvalRequest;
+    const approval = {
+      approvalRequestId: approvalRequest.approvalRequestId,
+      defaultOptionId: approvalRequest.defaultOptionId,
+    };
 
     const resumed = await fixture.engine.resumeRun({
       runApprovalId: approval.approvalRequestId,

@@ -73,7 +73,7 @@ describe('runtime event envelope parity', () => {
     })).success).toBe(true);
   });
 
-  it('accepts model-call and tool-result events without legacy tool result shapes', () => {
+  it('accepts model-call and tool-result events with optional user-facing summaries', () => {
     expect(RuntimeEventSchema.safeParse(event('model_call.text_delta', {
       modelCallId: 'model-call:1', delta: 'hello',
     })).success).toBe(true);
@@ -82,8 +82,9 @@ describe('runtime event envelope parity', () => {
       content: [{ type: 'text', text: 'done' }],
     })).success).toBe(true);
     expect(RuntimeEventSchema.safeParse(event('tool_result.created', {
-      toolCallId: 'tool-call:1', toolName: 'read_file', kind: 'success', summary: 'legacy',
-    })).success).toBe(false);
+      toolCallId: 'tool-call:1', toolName: 'read_file', kind: 'success',
+      content: [{ type: 'text', text: 'done' }], summary: 'read_file completed',
+    })).success).toBe(true);
     expect(RuntimeEventSchema.safeParse(event('tool_result.created', {
       toolCallId: 'tool-call:1', toolExecutionId: 'tool-call:1', toolName: 'read_file',
       kind: 'failure', content: [{ type: 'text', text: 'failed' }],
@@ -122,6 +123,44 @@ describe('runtime event envelope parity', () => {
     })).success).toBe(true);
     expect(RuntimeEventSchema.safeParse(event('run.waiting', {
       approvalRequestId: 'approval:1', toolCallId: 'tool-call:1', toolExecutionId: 'tool-call:1', reason: 'approval_required',
+    })).success).toBe(false);
+  });
+
+  it('enforces the canonical approval event serialization contract', () => {
+    const approvalRequest = {
+      approvalRequest: {
+        approvalRequestId: 'approval:1',
+        runId: 'run:1',
+        toolCallId: 'tool-call:1',
+        toolName: 'write_file',
+        toolIdentity: {
+          sourceId: 'built-in',
+          namespace: 'megumi',
+          sourceToolName: 'write_file',
+        },
+        input: { path: 'README.md' },
+        operations: [],
+        options: [{
+          optionId: 'once:tool-call:1',
+          scope: 'once',
+          display: { label: 'Once', description: 'Allow this call.' },
+          effect: { type: 'current_tool_call' },
+        }],
+        defaultOptionId: 'once:tool-call:1',
+        status: 'pending',
+        createdAt: '2026-07-31T00:00:00.000Z',
+      },
+    };
+    expect(RuntimeEventSchema.safeParse(event('approval.requested', approvalRequest)).success).toBe(true);
+    expect(RuntimeEventSchema.safeParse(event('approval.requested', {
+      approval_request: approvalRequest.approvalRequest,
+    })).success).toBe(false);
+    expect(RuntimeEventSchema.safeParse(event('approval.requested', {
+      approvalRequest: {
+        approvalRequestId: 'approval:1',
+        options: [{ optionId: 'once:tool-call:1' }],
+        defaultOptionId: 'once:tool-call:1',
+      },
     })).success).toBe(false);
   });
 

@@ -114,6 +114,29 @@ describe('composeProduct', () => {
       for await (const event of result.events) events.push(event.eventType);
       expect(events.filter((eventType) => eventType === 'tool.execution.completed')).toHaveLength(2);
       expect(events).toContain('run.completed');
+
+      const firstContext = modelScript.contexts[0] as {
+        systemPrompt?: string;
+        tools?: Array<{
+          name: string;
+          description: string;
+          parameters?: { properties?: Record<string, { description?: string }> };
+        }>;
+      };
+      expect(firstContext.systemPrompt).toContain(`Working directory: ${workspaceRoot}`);
+      expect(firstContext.systemPrompt).toContain('Operating system:');
+      expect(firstContext.systemPrompt).toContain('Shell:');
+      const listDirectory = firstContext.tools?.find((tool) => tool.name === 'list_directory');
+      expect(listDirectory).toMatchObject({
+        description: 'List files and directories.',
+        parameters: {
+          properties: {
+            path: {
+              description: 'The directory to list. Relative paths are resolved from the current working directory.',
+            },
+          },
+        },
+      });
       expect(JSON.stringify(modelScript.contexts[2])).toContain('Review the changed files.');
     } finally {
       await product.dispose();

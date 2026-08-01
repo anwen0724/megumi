@@ -22,6 +22,7 @@ import {
   buildAiContext,
   type ActiveContextFacts,
   type ContextSourceRef,
+  type ExecutionEnvironment,
   type VisibleCompactionSummary,
 } from './active-context';
 import {
@@ -101,12 +102,12 @@ export interface ContextBuilder {
   build(request: BuildContextRequest): Promise<BuildContextResult>;
 }
 
-export interface InstructionScopeResolver {
+export interface ContextScopeResolver {
   resolve(request: { readonly workspaceId: string }):
     | {
         readonly status: 'resolved';
         readonly workspaceRoot: string;
-        readonly workingDirectory: string;
+        readonly executionEnvironment: ExecutionEnvironment;
       }
     | {
         readonly status: 'failed';
@@ -117,7 +118,7 @@ export interface InstructionScopeResolver {
 export interface CreateContextOptions {
   readonly sessionHistory: Pick<SessionHistory, 'getActiveHistory' | 'saveCompactionSummary'>;
   readonly attachmentReader: Pick<SessionAttachmentReader, 'readAttachmentContent'>;
-  readonly instructionScopeResolver: InstructionScopeResolver;
+  readonly scopeResolver: ContextScopeResolver;
   readonly instructionReader: InstructionReader;
   readonly skillServiceFactory?: (
     input: { readonly workspaceRoot: string },
@@ -359,7 +360,7 @@ class DefaultContext implements ContextCapabilities {
       ));
     }
 
-    const scope = this.options.instructionScopeResolver.resolve({ workspaceId: input.workspaceId });
+    const scope = this.options.scopeResolver.resolve({ workspaceId: input.workspaceId });
     if (input.signal?.aborted) return failed(cancelled());
     if (scope.status === 'failed') {
       return failed(ownerFailure(
@@ -372,7 +373,10 @@ class DefaultContext implements ContextCapabilities {
     const systemInstructions = this.options.instructionReader.getSystemInstructions();
     if (input.signal?.aborted) return failed(cancelled());
     const effectiveInstructions = await this.options.instructionReader.getEffectiveInstructions(
-      { workspaceRoot: scope.workspaceRoot, workingDirectory: scope.workingDirectory },
+      {
+        workspaceRoot: scope.workspaceRoot,
+        workingDirectory: scope.executionEnvironment.workingDirectory,
+      },
       input.signal ? { signal: input.signal } : undefined,
     );
     if (input.signal?.aborted || effectiveInstructions.status === 'cancelled') {
@@ -399,6 +403,7 @@ class DefaultContext implements ContextCapabilities {
       status: 'loaded',
       facts: {
         sessionId: input.sessionId,
+        executionEnvironment: { ...scope.executionEnvironment },
         expectedActiveEntryId: input.currentRun?.lastEntryId
           ?? input.currentRun?.userEntry.entryId
           ?? historyResult.history.at(-1)?.entry.entry_id

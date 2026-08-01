@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { ToolActivityItem } from '@megumi/product/host';
+import type { TFunction } from 'i18next';
 import { Badge, Button, Panel } from '../../shared/ui';
 import type { ToolApprovalResolvePayload, ToolApprovalResolveResult } from './types';
 
@@ -17,7 +18,7 @@ export function ApprovalCard({ request, onResolve }: ApprovalCardProps) {
   const [optionId, setOptionId] = useState(approval?.defaultOptionId ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [submissionError, setSubmissionError] = useState<string>();
-  const displayToolName = request.displayName ?? request.toolName;
+  const displayToolName = localizedApprovalToolName(t, request.toolName, request.displayName);
 
   useEffect(() => {
     setOptionId(approval?.defaultOptionId ?? '');
@@ -58,7 +59,7 @@ export function ApprovalCard({ request, onResolve }: ApprovalCardProps) {
             <h3 className="truncate text-sm font-semibold text-[var(--color-text)]">{displayToolName}</h3>
             <Badge variant="approval">{t('approvals.needed')}</Badge>
           </div>
-          {approval.summary ? <p className="mt-2 text-sm text-[var(--color-text-muted)]">{approval.summary}</p> : null}
+          <p className="mt-2 text-sm text-[var(--color-text-muted)]">{t('approvals.summary', { name: displayToolName })}</p>
           <p className="mt-2 truncate rounded-md bg-[var(--color-surface-muted)] px-2 py-1.5 text-xs text-[var(--color-text-muted)]">
             {request.inputSummary ?? request.toolName}
           </p>
@@ -75,7 +76,9 @@ export function ApprovalCard({ request, onResolve }: ApprovalCardProps) {
               className="h-8 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]"
             >
               {approval.options.map((option) => (
-                <option key={option.optionId} value={option.optionId}>{option.label}</option>
+                <option key={option.optionId} value={option.optionId}>
+                  {approvalOptionLabel(t, option)}
+                </option>
               ))}
             </select>
             <Button size="sm" variant="primary" disabled={submitting || !optionId} onClick={() => { void resolve('approved'); }} aria-label={t('approvals.approve', { name: displayToolName })}>
@@ -90,4 +93,27 @@ export function ApprovalCard({ request, onResolve }: ApprovalCardProps) {
       </div>
     </Panel>
   );
+}
+
+function localizedApprovalToolName(t: TFunction<'chat'>, toolName: string, fallback?: string): string {
+  if (toolName === 'read_file') return t('approvals.toolNames.readFile');
+  if (toolName === 'list_directory') return t('approvals.toolNames.listDirectory');
+  if (toolName === 'glob') return t('approvals.toolNames.glob');
+  if (toolName === 'search_text') return t('approvals.toolNames.searchText');
+  if (toolName === 'edit_file') return t('approvals.toolNames.editFile');
+  if (toolName === 'write_file') return t('approvals.toolNames.writeFile');
+  if (toolName === 'run_command') return t('approvals.toolNames.runCommand');
+  if (toolName === 'use_skill') return t('approvals.toolNames.useSkill');
+  if (toolName === 'web_search') return t('approvals.toolNames.webSearch');
+  if (toolName === 'web_fetch') return t('approvals.toolNames.webFetch');
+  return fallback ?? toolName;
+}
+
+function approvalOptionLabel(
+  t: TFunction<'chat'>,
+  option: { scope: 'once' | 'session'; label: string },
+): string {
+  const highRisk = option.label.toLowerCase().includes('high risk');
+  if (option.scope === 'once') return t(highRisk ? 'approvals.onceHighRisk' : 'approvals.once');
+  return t(highRisk ? 'approvals.sessionHighRisk' : 'approvals.session');
 }

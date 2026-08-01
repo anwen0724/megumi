@@ -1,5 +1,9 @@
 /* Reduces live Runtime Events into a host-neutral Timeline read model. */
-import type { RuntimeEvent } from '@megumi/events';
+import type {
+  ApprovalRequestedPayload,
+  ApprovalResolvedPayload,
+  RuntimeEvent,
+} from '@megumi/events';
 import type {
   AnswerTextBlock,
   AssistantTextItem,
@@ -198,7 +202,7 @@ function projectRuntimeTimelineEvent(
     item.toolExecutionId = payload.toolExecutionId;
     item.toolName = payload.toolName ?? item.toolName;
     item.status = event.eventType === 'tool_call.completed' ? 'succeeded' : 'failed';
-    item.resultSummary = payload.error?.message ?? item.resultSummary;
+    if (event.eventType === 'tool_call.failed') delete item.resultSummary;
     item.error = payload.error?.code && payload.error.message
       ? { code: payload.error.code, message: payload.error.message, ...(payload.error.details ? { details: payload.error.details } : {}) }
       : item.error;
@@ -231,9 +235,11 @@ function projectRuntimeTimelineEvent(
         : payload.kind === 'cancelled'
           ? 'cancelled'
           : 'failed';
-    item.resultSummary = payload.kind === 'success'
-      ? undefined
-      : payload.error?.message ?? payload.summary ?? payload.content?.find((block) => block.type === 'text')?.text;
+    if (payload.kind === 'success' && payload.summary) {
+      item.resultSummary = payload.summary;
+    } else {
+      delete item.resultSummary;
+    }
     item.error = payload.error?.code && payload.error.message
       ? { code: payload.error.code, message: payload.error.message, ...(payload.error.details ? { details: payload.error.details } : {}) }
       : undefined;
@@ -245,35 +251,23 @@ function projectRuntimeTimelineEvent(
   }
 
   if (event.eventType === 'approval.requested') {
-    const payload = event.payload as {
-      approvalRequest?: {
-        approvalRequestId?: string;
-        toolCallId?: string;
-        toolName?: string;
-        options?: Array<{ option_id?: string; scope?: 'once' | 'session'; display?: { label?: string; description?: string } }>;
-        defaultOptionId?: string;
-        summary?: string;
-      };
-    };
-    const approval = payload.approvalRequest;
+    const approval = (event.payload as ApprovalRequestedPayload).approvalRequest;
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
-    const item = ensureToolItem(process, approval?.toolCallId ?? event.eventId, event.createdAt);
-    item.toolName = approval?.toolName ?? item.toolName;
+    const item = ensureToolItem(process, approval.toolCallId, event.createdAt);
+    item.toolName = approval.toolName;
     item.status = 'awaiting_approval';
-    const options = (approval?.options ?? []).flatMap((option) => (
-      option.option_id && option.scope && option.display?.label && option.display.description
-        ? [{ optionId: option.option_id, scope: option.scope, label: option.display.label, description: option.display.description }]
-        : []
-    ));
-    if (approval?.approvalRequestId && approval.defaultOptionId && options.length > 0) {
-      item.approval = {
-        approvalRequestId: approval.approvalRequestId,
-        defaultOptionId: approval.defaultOptionId,
-        ...(approval.summary ? { summary: approval.summary } : {}),
-        options,
-      };
-    }
+    item.approval = {
+      approvalRequestId: approval.approvalRequestId,
+      defaultOptionId: approval.defaultOptionId,
+      ...(approval.summary ? { summary: approval.summary } : {}),
+      options: approval.options.map((option) => ({
+        optionId: option.optionId,
+        scope: option.scope,
+        label: option.display.label,
+        description: option.display.description,
+      })),
+    };
     item.updatedAt = event.createdAt;
     process.updatedAt = event.createdAt;
     assistant.updatedAt = event.createdAt;
@@ -281,10 +275,10 @@ function projectRuntimeTimelineEvent(
   }
 
   if (event.eventType === 'approval.resolved') {
-    const payload = event.payload as { approvalRequestId?: string; toolCallId?: string; decision?: string };
+    const payload = event.payload as ApprovalResolvedPayload;
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
-    const item = ensureToolItem(process, payload.toolCallId ?? event.eventId, event.createdAt);
+    const item = ensureToolItem(process, payload.toolCallId, event.createdAt);
     item.status = payload.decision === 'approved' ? 'queued' : 'denied';
     item.approval = undefined;
     item.updatedAt = event.createdAt;
@@ -331,7 +325,6 @@ function projectRuntimeTimelineEvent(
 
   if (event.eventType === 'run.interrupted'
     || event.eventType === 'run.resume.requested'
-    || event.eventType === 'run.resumed'
     || event.eventType === 'run.resume.failed') {
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
@@ -639,7 +632,6 @@ function recoveryStatusFromEvent(eventType: RuntimeEvent['eventType']): Recovery
 function recoveryLabel(eventType: RuntimeEvent['eventType'], failureMessage: string | undefined): string {
   if (eventType === 'run.interrupted') return 'Run was interrupted';
   if (eventType === 'run.resume.requested') return 'Run resume requested';
-  if (eventType === 'run.resumed') return 'Run resumed';
   return failureMessage ? `Run resume failed: ${failureMessage}` : 'Run resume failed';
 }
 

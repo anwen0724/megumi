@@ -31,6 +31,16 @@ describe('run_command built-in Tool', () => {
     });
     expect(tools.catalog.get({ toolName: 'run_command' })).toMatchObject({
       status: 'found',
+      tool: {
+        definition: {
+          inputSchema: {
+            properties: { command: { description: 'A command written for Windows PowerShell 5.1.' } },
+          },
+        },
+      },
+    });
+    expect(tools.catalog.get({ toolName: 'run_command' })).toMatchObject({
+      status: 'found',
       tool: { definition: { permissionMetadata: {
         shellKind: 'powershell', executionMethod: 'shell',
       } } },

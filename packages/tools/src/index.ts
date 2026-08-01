@@ -42,6 +42,7 @@ export {
 } from './tool-executor';
 export {
   isSuccessfulToolExecutionResult,
+  ToolExecutionFailure,
 } from './tool-result';
 export {
   BUILT_IN_TOOL_NAMES,

@@ -109,6 +109,7 @@ describe('runtime timeline projection', () => {
       toolExecutionId: 'tool-execution:1',
       toolName: 'list_directory',
       kind: 'success',
+      content: [{ type: 'text', text: '{"path":".","entries":[]}' }],
       summary: '已读取目录。',
     }, 5));
     messages = reduceRuntimeTimelineEvent(messages, event('model_call.started', {
@@ -131,7 +132,7 @@ describe('runtime timeline projection', () => {
     expect(process).toEqual(expect.objectContaining({ status: 'completed' }));
     expect(JSON.stringify(process)).toContain('我先读取目录。');
     expect(JSON.stringify(process)).toContain('工作区目录');
-    expect(JSON.stringify(process)).not.toContain('已读取目录。');
+    expect(JSON.stringify(process)).toContain('已读取目录。');
     expect(answer).toEqual(expect.objectContaining({
       text: '目录里有 README.md。',
       status: 'completed',
@@ -151,7 +152,7 @@ describe('runtime timeline projection', () => {
       toolExecutionId: 'tool-execution:1',
       toolName: 'list_directory',
       kind: 'success',
-      summary: '{"path":".","entries":[{"name":"README.md"}]}',
+      content: [{ type: 'text', text: '{"path":".","entries":[{"name":"README.md"}]}' }],
     }, 3));
 
     const assistant = messages.find((message) => message.role === 'assistant');
@@ -166,6 +167,7 @@ describe('runtime timeline projection', () => {
     });
     expect(JSON.stringify(tool)).not.toContain('"path":"."');
     expect(JSON.stringify(tool)).not.toContain('README.md');
+    expect(tool).not.toHaveProperty('resultSummary');
   });
 
   it('projects every run process event family into process disclosure items', () => {
@@ -184,12 +186,18 @@ describe('runtime timeline projection', () => {
       approvalRequest: {
         approvalRequestId: 'approval:1',
         toolCallId: 'tool-call:1',
-        toolExecutionId: 'tool-execution:1',
         runId: 'run:1',
         toolName: 'edit_file',
+        toolIdentity: {
+          sourceId: 'built-in',
+          namespace: 'megumi',
+          sourceToolName: 'edit_file',
+        },
+        input: { path: 'README.md' },
+        operations: [],
         summary: 'Edit README.md',
         options: [{
-          option_id: 'once:tool-call:1',
+          optionId: 'once:tool-call:1',
           scope: 'once',
           display: { label: 'Once', description: 'Allow this call.' },
           effect: { type: 'current_tool_call' },
@@ -283,10 +291,44 @@ describe('runtime timeline projection', () => {
       'error_activity',
       'cancelled_activity',
     ]));
+    expect(JSON.stringify(process)).not.toContain('Run resumed');
     expect(answer).toMatchObject({
       status: 'cancelled',
       text: '',
     });
+  });
+
+  it('keeps a failed Tool error out of resultSummary', () => {
+    let messages = reduceRuntimeTimelineEvent([], event('run.started', {}, 1));
+    messages = reduceRuntimeTimelineEvent(messages, event('model_call.tool_call', {
+      modelCallId: 'model-call:1',
+      toolCallId: 'tool-call:1',
+      toolName: 'run_command',
+      input: { command: 'bad command' },
+    }, 2));
+    messages = reduceRuntimeTimelineEvent(messages, event('tool_result.created', {
+      toolCallId: 'tool-call:1',
+      toolName: 'run_command',
+      kind: 'failure',
+      content: [{ type: 'text', text: 'Command exited with code 1.' }],
+      error: {
+        code: 'tool_execution_failed',
+        message: 'Command exited with code 1.',
+        severity: 'error',
+        retryable: false,
+        source: 'tool',
+      },
+    }, 3));
+
+    const assistant = messages.find((message) => message.role === 'assistant');
+    const process = assistant?.blocks.find((block) => block.kind === 'process_disclosure');
+    const tool = process?.items.find((item) => item.kind === 'tool_activity');
+    expect(tool).toMatchObject({
+      kind: 'tool_activity',
+      status: 'failed',
+      error: { code: 'tool_execution_failed', message: 'Command exited with code 1.' },
+    });
+    expect(tool).not.toHaveProperty('resultSummary');
   });
 
   it('does not project session-scoped compaction into an assistant message', () => {

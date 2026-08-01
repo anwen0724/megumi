@@ -59,7 +59,7 @@ describe('built-in Tool Catalog', () => {
     }
   });
 
-  it('preserves the confirmed pre-migration model-visible definition facts', () => {
+  it('preserves the confirmed model-visible definition facts', () => {
     const tools = createTools({
       workspaceFileAccess: unusedWorkspaceFileAccess(),
       process: createProcessAdapter(),
@@ -84,7 +84,7 @@ describe('built-in Tool Catalog', () => {
 
     expect(definitions).toEqual([
       ['read_file', 'Read a bounded UTF-8 text page from a text, Markdown, DOCX, or PDF file. Continue with nextOffset when hasMore is true.', 'project_read', 'low', 'none', 'parallel'],
-      ['list_directory', 'List directory entries with depth and result limits.', 'project_read', 'low', 'none', 'parallel'],
+      ['list_directory', 'List files and directories.', 'project_read', 'low', 'none', 'parallel'],
       ['glob', 'Find files matching a glob pattern without reading file content.', 'project_read', 'low', 'none', 'parallel'],
       ['search_text', 'Search text in readable files, including Markdown, DOCX, and PDF, and return size-limited matches.', 'project_read', 'low', 'none', 'parallel'],
       ['edit_file', 'Apply an exact text replacement to an existing UTF-8 text file. Structured PDF and DOCX editing is not supported.', 'project_write', 'medium', 'project_file_operation', 'serial'],
@@ -109,6 +109,22 @@ describe('built-in Tool Catalog', () => {
         cwd: expect.any(Object),
         timeoutMs: expect.any(Object),
       });
+
+    const listDirectory = tools.catalog.get({ toolName: 'list_directory' });
+    const listDirectoryDefinition = listDirectory.status === 'found'
+      ? listDirectory.tool.definition
+      : undefined;
+    const properties = listDirectoryDefinition?.inputSchema.properties;
+    const pathSchema = properties && typeof properties === 'object' && !Array.isArray(properties)
+      ? properties.path
+      : undefined;
+    const pathObject = pathSchema && typeof pathSchema === 'object' && !Array.isArray(pathSchema)
+      ? pathSchema
+      : undefined;
+    expect(pathObject).toMatchObject({
+      description: 'The directory to list. Relative paths are resolved from the current working directory.',
+    });
+    expect(JSON.stringify(listDirectoryDefinition)).not.toContain('outside the active Workspace');
   });
 });
 

@@ -6,6 +6,11 @@ import { describe, expect, it, vi } from 'vitest';
 function activeContext(): ActiveContext {
   return {
     sessionId: 'session:1',
+    executionEnvironment: {
+      workingDirectory: '/workspace',
+      operatingSystem: 'Linux',
+      shell: 'POSIX shell',
+    },
     systemInstructions: [],
     effectiveInstructions: { sources: [] },
     skillCatalog: [],

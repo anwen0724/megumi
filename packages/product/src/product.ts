@@ -54,6 +54,7 @@ import {
   type BuiltInToolName,
   type ToolCatalog,
   type ToolExecutor,
+  ToolExecutionFailure,
   type ToolProcessAdapter,
   type WorkspaceFileAccess,
 } from '@megumi/tools';
@@ -216,17 +217,22 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
       : skillComposition.createSkillService();
   };
   const instructions = createInstructionReader({ megumiHomePath: homePaths.homePath });
+  const toolProcess = options.toolProcess ?? createNodeToolProcessAdapter();
   const context = createContext({
     sessionHistory: history,
     attachmentReader: attachments,
-    instructionScopeResolver: {
+    scopeResolver: {
       resolve({ workspaceId }) {
         const workspace = workspaces.getWorkspace({ workspace_id: workspaceId });
         return workspace.status === 'found'
           ? {
               status: 'resolved',
               workspaceRoot: workspace.workspace.root_path,
-              workingDirectory: workspace.workspace.root_path,
+              executionEnvironment: {
+                workingDirectory: workspace.workspace.root_path,
+                operatingSystem: modelVisibleOperatingSystem(process.platform),
+                shell: toolProcess.shellName,
+              },
             }
           : {
               status: 'failed',
@@ -342,7 +348,7 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
     workspaceChanges,
     resolveSkillService,
     fileSystem: options.toolFileSystem ?? nodeProductToolFileSystem,
-    process: options.toolProcess ?? createNodeToolProcessAdapter(),
+    process: toolProcess,
     isBuiltInToolAvailable: options.isBuiltInToolAvailable,
   });
   const workspaceChangeFooter = createWorkspaceChangeFooterProjector({ workspaceChanges });
@@ -577,7 +583,13 @@ function createProductWorkspaceFileAccess(input: {
       workspace_root: input.workspaceRoot,
       target_path: candidate,
     });
-    if (resolved.status !== 'resolved') throw new Error('Tool path is outside the active Workspace.');
+    if (resolved.status !== 'resolved') {
+      throw new ToolExecutionFailure(
+        'Path is outside the active Workspace.',
+        'tool_execution_failed',
+        { reason: 'outside_workspace' },
+      );
+    }
     return { absolutePath: resolved.absolute_path, relativePath: resolved.workspace_path || '.' };
   };
   const walk = async (absoluteDirectory: string, relativeDirectory: string, includeHidden: boolean, output: string[]) => {
@@ -679,6 +691,7 @@ function createProductWorkspaceFileAccess(input: {
 function createNodeToolProcessAdapter(): ToolProcessAdapter {
   const shellKind = process.platform === 'win32' ? 'powershell' as const : 'posix_shell' as const;
   return {
+    shellName: shellKind === 'powershell' ? 'Windows PowerShell 5.1' : 'POSIX shell',
     shellKind,
     executionMethod: 'shell',
     run(request, options) {
@@ -700,6 +713,13 @@ function createNodeToolProcessAdapter(): ToolProcessAdapter {
       });
     },
   };
+}
+
+function modelVisibleOperatingSystem(platform: NodeJS.Platform): string {
+  if (platform === 'win32') return 'Windows';
+  if (platform === 'darwin') return 'macOS';
+  if (platform === 'linux') return 'Linux';
+  return platform;
 }
 
 function trackProductRuns(engine: Engine, readModel: ProductRunReadModel): { engine: Engine; stopAccepting(): void } {

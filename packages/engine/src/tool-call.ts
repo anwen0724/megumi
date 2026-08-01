@@ -671,6 +671,7 @@ function createRunApproval(
     runApprovalId: request.ids.createRunApprovalId(),
     runId: request.runId,
     toolCallId: call.toolCallId,
+    toolName: registeredTool.registeredToolName,
     toolIdentity: snapshotToolIdentity(registeredTool.identity),
     input: snapshotValue(call.input),
     operations: decision.operations.map((operation) => snapshotValue(operation) as PermissionOperation),

@@ -39,8 +39,15 @@ export interface ContextSourceRef {
   readonly sourceId: string;
 }
 
+export interface ExecutionEnvironment {
+  readonly workingDirectory: string;
+  readonly operatingSystem: string;
+  readonly shell: string;
+}
+
 export interface ActiveContext {
   readonly sessionId: string;
+  readonly executionEnvironment: ExecutionEnvironment;
   readonly systemInstructions: SystemInstruction[];
   readonly effectiveInstructions: EffectiveInstructions;
   readonly skillCatalog: SkillCatalogItem[];
@@ -61,6 +68,7 @@ export function assembleActiveContext(facts: ActiveContext): {
 } {
   const activeContext: ActiveContext = Object.freeze({
     sessionId: facts.sessionId,
+    executionEnvironment: { ...facts.executionEnvironment },
     systemInstructions: [...facts.systemInstructions],
     effectiveInstructions: {
       sources: [...facts.effectiveInstructions.sources],
@@ -94,12 +102,22 @@ export function buildAiContext(activeContext: ActiveContext): AiContext {
   const systemPrompt = [
     ...activeContext.systemInstructions.map((instruction) => instruction.content),
     ...activeContext.effectiveInstructions.sources.map((source) => source.content),
+    formatExecutionEnvironment(activeContext.executionEnvironment),
   ].join('\n\n');
   return {
     ...(systemPrompt ? { systemPrompt } : {}),
     messages,
     ...(activeContext.tools.length > 0 ? { tools: activeContext.tools } : {}),
   };
+}
+
+function formatExecutionEnvironment(environment: ExecutionEnvironment): string {
+  return [
+    'Execution environment:',
+    `- Working directory: ${environment.workingDirectory}`,
+    `- Operating system: ${environment.operatingSystem}`,
+    `- Shell: ${environment.shell}`,
+  ].join('\n');
 }
 
 function sourceRefsFor(activeContext: ActiveContext): ContextSourceRef[] {

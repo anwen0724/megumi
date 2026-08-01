@@ -7,7 +7,7 @@ export {
   type ContextCapabilities,
   type ContextFailure,
   type CreateContextOptions,
-  type InstructionScopeResolver,
+  type ContextScopeResolver,
   type PreparedModelCall,
 } from './context-builder';
 export {
@@ -34,6 +34,7 @@ export {
 } from './context-usage';
 export {
   type ContextSourceRef,
+  type ExecutionEnvironment,
   type VisibleCompactionSummary,
 } from './active-context';
 export {

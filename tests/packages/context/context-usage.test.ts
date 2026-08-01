@@ -28,7 +28,7 @@ function options(): CreateContextOptions {
   return {
     sessionHistory: { getActiveHistory: vi.fn(), saveCompactionSummary: vi.fn() },
     attachmentReader: { readAttachmentContent: vi.fn() },
-    instructionScopeResolver: { resolve: vi.fn() },
+    scopeResolver: { resolve: vi.fn() },
     instructionReader: { getSystemInstructions: vi.fn(), getEffectiveInstructions: vi.fn() },
     models: { completeSimple: vi.fn() },
     clock: { now: () => '2026-07-12T00:00:00.000Z' },

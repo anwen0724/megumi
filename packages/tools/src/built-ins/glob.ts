@@ -19,7 +19,10 @@ export const globToolDefinition: ToolDefinition = {
     type: 'object',
     properties: {
       pattern: { type: 'string', description: 'Glob pattern.' },
-      cwd: { type: 'string', description: 'Optional directory to search from.' },
+      cwd: {
+        type: 'string',
+        description: 'The directory to search from. Relative paths are resolved from the current working directory.',
+      },
       limit: { type: 'integer', description: 'Optional maximum number of matches.' },
       includeHidden: { type: 'boolean', description: 'Whether hidden files should be included.' },
       offset: { type: 'integer', minimum: 0, description: 'Match offset. Defaults to 0.' },

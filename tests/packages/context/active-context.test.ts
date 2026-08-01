@@ -10,6 +10,11 @@ import {
 function baseContext(): ActiveContext {
   return {
     sessionId: 'session:1',
+    executionEnvironment: {
+      workingDirectory: 'C:/workspace',
+      operatingSystem: 'Windows',
+      shell: 'Windows PowerShell 5.1',
+    },
     systemInstructions: [{ instructionId: 'system:1', content: 'System rule' }],
     effectiveInstructions: { sources: [] },
     skillCatalog: [{
@@ -57,7 +62,13 @@ describe('active Context materialization', () => {
     };
 
     const context = buildAiContext(active);
-    expect(context.systemPrompt).toBe('System rule');
+    expect(context.systemPrompt).toBe([
+      'System rule',
+      'Execution environment:',
+      '- Working directory: C:/workspace',
+      '- Operating system: Windows',
+      '- Shell: Windows PowerShell 5.1',
+    ].join('\n\n').replaceAll('\n\n- ', '\n- '));
     expect(context.systemPrompt).not.toContain('Review carefully');
     const assistantIndex = context.messages.findIndex((message) => message.role === 'assistant');
     expect(context.messages[assistantIndex]).toMatchObject({

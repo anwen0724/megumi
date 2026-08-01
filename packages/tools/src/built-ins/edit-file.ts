@@ -14,7 +14,10 @@ export const editFileToolDefinition: ToolDefinition = {
   inputSchema: {
     type: 'object',
     properties: {
-      path: { type: 'string', description: 'File path.' },
+      path: {
+        type: 'string',
+        description: 'The file to edit. Relative paths are resolved from the current working directory.',
+      },
       oldText: { type: 'string', description: 'Exact text to replace.' },
       newText: { type: 'string', description: 'Replacement text.' },
       replaceAll: { type: 'boolean', description: 'Whether all exact matches should be replaced.' },

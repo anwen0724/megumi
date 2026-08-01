@@ -227,14 +227,34 @@ function runtimeWith(input: {
 function approvalEvent(approvalRequestId: string, toolName: string, resource: string): RuntimeEvent {
   return event('approval.requested', {
     approvalRequest: {
-      approvalRequestId,
+      approvalRequestId: approvalRequestId,
+      runId: 'run-1',
       toolCallId: `call-${approvalRequestId}`,
-      toolName,
+      toolName: toolName,
+      toolIdentity: {
+        sourceId: 'built-in',
+        namespace: 'megumi',
+        sourceToolName: toolName,
+      },
+      input: {},
+      operations: [],
       options: [
-        { option_id: 'once', scope: 'once', display: { label: 'Once', description: 'Once' } },
-        { option_id: 'session', scope: 'session', display: { label: 'Session', description: 'Session' } },
+        {
+          optionId: 'once',
+          scope: 'once',
+          display: { label: 'Once', description: 'Once' },
+          effect: { type: 'current_tool_call' },
+        },
+        {
+          optionId: 'session',
+          scope: 'session',
+          display: { label: 'Session', description: 'Session' },
+          effect: { type: 'persist_permission_rule' },
+        },
       ],
-      default_option_id: 'once',
+      defaultOptionId: 'once',
+      status: 'pending',
+      createdAt: '2026-07-31T00:00:00.000Z',
       preview: { action: 'workspace.read', targets: [{ kind: 'workspace.path', label: resource }] },
     },
   });

@@ -45,6 +45,7 @@ describe('Engine run loop', () => {
         isError: false,
         truncated: false,
       },
+      observation: { summary: 'lookup completed' },
       runtimeSources: [{
         sourceId: 'source:1',
         sourceKind: 'test',
@@ -89,6 +90,9 @@ describe('Engine run loop', () => {
       ],
     });
     expect(events.map((event) => event.eventType)).toContain('tool_result.created');
+    expect(events.find((event) => event.eventType === 'tool_result.created')?.payload).toMatchObject({
+      summary: 'lookup completed',
+    });
     expect(JSON.stringify(fixture.toolResults)).not.toContain('raw output must stay hidden');
     expect(fixture.toolResults[0]).toMatchObject({
       status: 'success',

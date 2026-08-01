@@ -5,7 +5,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
-import { createTools, type ToolExecutionResult } from '../../../packages/tools/src';
+import {
+  createTools,
+  ToolExecutionFailure,
+  type ToolExecutionResult,
+} from '../../../packages/tools/src';
 import { createLocalWorkspaceFileAccess, parsedToolContent } from './tool-test-fixtures';
 
 const DOCX_FIXTURE_BASE64 = 'UEsDBAoAAAAIAPAh91x5bjPX6AAAAK0BAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbH1QyU7DMBD9FWuuKHHggBCK0wPLETiUDxjZk8SqN3nc0v49Tlt6QIXjzFv1+tXeO7GjzDYGBbdtB4KCjsaGScHn+rV5AMEFg0EXAyk4EMNq6NeHRCyqNrCCuZT0KCXrmTxyGxOFiowxeyz1zJNMqDc4kbzrunupYygUSlMWDxj6Zxpx64p42df3qUcmxyCeTsQlSwGm5KzGUnG5C+ZXSnNOaKvyyOHZJr6pBJBXExbk74Cz7r0Ok60h8YG5vKGvLPkVs5Em6q2vyvZ/mys94zhaTRf94pZy1MRcF/euvSAebfjpL49zD99QSwMECgAAAAAA8CH3XAAAAAAAAAAAAAAAAAYAAABfcmVscy9QSwMECgAAAAgA8CH3XJv9N+qtAAAAKQEAAAsAAABfcmVscy8ucmVsc43POw7CMAwG4KtE3mlaBoRQ0y4IqSsqB7ASN61oHkrCo7cnAwNFDIy2f3+W6/ZpZnanECdnBVRFCYysdGqyWsClP232wGJCq3B2lgQsFKFt6jPNmPJKHCcfWTZsFDCm5A+cRzmSwVg4TzZPBhcMplwGzT3KK2ri27Lc8fBpwNpknRIQOlUB6xdP/9huGCZJRydvhmz6ceIrkWUMmpKAhwuKq3e7yCzwpuarF5sXUEsDBAoAAAAAAPAh91wAAAAAAAAAAAAAAAAFAAAAd29yZC9QSwMECgAAAAgA8CH3XD2eKt/IAAAAMAEAABEAAAB3b3JkL2RvY3VtZW50LnhtbG2PwU7DMAyGX8XKnaZwmFDVdredd4AHCIlZIzVxsL11fXuScUBCXD7Ltvzp93i8pxVuyBIpT+a56w1g9hRivkzm/e309GpA1OXgVso4mR3FHOdxGwL5a8KsUAVZhm0yi2oZrBW/YHLSUcFcd5/EyWlt+WI34lCYPIpUf1rtS98fbHIxm6b8oLC3Whq4Qefzskv0Aoy32DJCJkUZbds18oPl79mJ2CPg19WtAjWNgMaEAs57XJGdVlX3r0XQ65ntY/ATyP4+O38DUEsBAhQACgAAAAgA8CH3XHluM9foAAAArQEAABMAAAAAAAAAAAAAAAAAAAAAAFtDb250ZW50X1R5cGVzXS54bWxQSwECFAAKAAAAAADwIfdcAAAAAAAAAAAAAAAABgAAAAAAAAAAABAAAAAZAQAAX3JlbHMvUEsBAhQACgAAAAgA8CH3XJv9N+qtAAAAKQEAAAsAAAAAAAAAAAAAAAAAPQEAAF9yZWxzLy5yZWxzUEsBAhQACgAAAAAA8CH3XAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAQAAAAEwIAAHdvcmQvUEsBAhQACgAAAAgA8CH3XD2eKt/IAAAAMAEAABEAAAAAAAAAAAAAAAAANgIAAHdvcmQvZG9jdW1lbnQueG1sUEsFBgAAAAAFAAUAIAEAAC0DAAAAAA==';
@@ -127,6 +131,30 @@ describe('Workspace-backed built-in Tools', () => {
       error: { message: 'The requested file or directory was not found.', details: { reason: 'not_found' } },
     });
     expect(result.normalizedResult.content).not.toContain(root);
+  });
+
+  it('preserves a structured Workspace path rejection from its adapter', async () => {
+    const workspaceFileAccess = {
+      ...createLocalWorkspaceFileAccess(root),
+      readFile: async () => {
+        throw new ToolExecutionFailure(
+          'Path is outside the active Workspace.',
+          'tool_execution_failed',
+          { reason: 'outside_workspace' },
+        );
+      },
+    };
+    const result = await createTools({ workspaceFileAccess }).executor.execute({
+      toolName: 'read_file',
+      input: { path: 'C:/outside/file.txt' },
+    });
+    expect(result).toMatchObject({
+      type: 'failed',
+      error: {
+        message: 'Path is outside the active Workspace.',
+        details: { reason: 'outside_workspace' },
+      },
+    });
   });
 });
 

@@ -14,7 +14,10 @@ export const writeFileToolDefinition: ToolDefinition = {
   inputSchema: {
     type: 'object',
     properties: {
-      path: { type: 'string', description: 'File path.' },
+      path: {
+        type: 'string',
+        description: 'The file to write. Relative paths are resolved from the current working directory.',
+      },
       content: { type: 'string', description: 'Text content to write.' },
       overwrite: { type: 'boolean', description: 'Whether an existing file may be overwritten.' },
     },

@@ -13,7 +13,10 @@ export const readFileToolDefinition: ToolDefinition = {
   inputSchema: {
     type: 'object',
     properties: {
-      path: { type: 'string', description: 'File path.' },
+      path: {
+        type: 'string',
+        description: 'The file to read. Relative paths are resolved from the current working directory.',
+      },
       offset: { type: 'integer', minimum: 0, description: 'UTF-8 byte offset. Defaults to 0.' },
       limit: { type: 'integer', minimum: 1, description: 'Maximum UTF-8 content bytes requested for this page.' },
     },

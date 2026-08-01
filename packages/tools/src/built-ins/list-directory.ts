@@ -13,11 +13,14 @@ import { withFileFailure, type BuiltInToolContext } from './workspace-file-acces
 export const listDirectoryToolDefinition: ToolDefinition = {
   name: 'list_directory',
   title: 'List directory',
-  description: 'List directory entries with depth and result limits.',
+  description: 'List files and directories.',
   inputSchema: {
     type: 'object',
     properties: {
-      path: { type: 'string', description: 'Directory path.' },
+      path: {
+        type: 'string',
+        description: 'The directory to list. Relative paths are resolved from the current working directory.',
+      },
       maxDepth: { type: 'integer', description: 'Optional recursive depth limit.' },
       limit: { type: 'integer', description: 'Optional maximum number of entries.' },
       includeHidden: { type: 'boolean', description: 'Whether hidden files should be included.' },
@@ -43,7 +46,7 @@ export const listDirectoryToolDefinition: ToolDefinition = {
   availability: { status: 'available' },
   executionMode: 'parallel',
   permissionMetadata: { ruleToolName: 'list_directory' },
-  modelFacingDescription: 'List directory entries with depth and result limits.',
+  modelFacingDescription: 'List files and directories.',
 };
 
 export async function executeListDirectory(

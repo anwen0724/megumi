@@ -19,7 +19,10 @@ export const searchTextToolDefinition: ToolDefinition = {
     type: 'object',
     properties: {
       query: { type: 'string', description: 'Literal text to search for.' },
-      path: { type: 'string', description: 'Optional path to search in.' },
+      path: {
+        type: 'string',
+        description: 'The path to search in. Relative paths are resolved from the current working directory.',
+      },
       caseSensitive: { type: 'boolean', description: 'Whether matching is case-sensitive.' },
       limit: { type: 'integer', description: 'Optional maximum number of matches.' },
       offset: { type: 'integer', minimum: 0, description: 'Match offset. Defaults to 0.' },

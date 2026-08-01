@@ -320,7 +320,7 @@ async function continueRunAfterApprovalInContext(
       emitEvent(dependencies, runtime, running, 'approval.resolved', {
         approvalRequestId: approval.runApprovalId,
         toolCallId: approval.toolCallId,
-        decision: approval.status,
+        decision: resolvedApprovalStatus(approval.status),
         ...(approval.decision?.decision === 'approved'
           ? { optionId: approval.decision.optionId }
           : {}),
@@ -742,6 +742,9 @@ async function commitNewToolResults(
       toolName: result.toolName,
       kind: result.status,
       content: [{ type: 'text', text: result.content }],
+      ...(result.status === 'success' && result.observation?.summary
+        ? { summary: result.observation.summary }
+        : {}),
       ...(result.error ? { error: toEventError(result.error) } : {}),
     });
   }
@@ -929,6 +932,15 @@ function emitModelCallEvent(
   }
 }
 
+function resolvedApprovalStatus(
+  status: RunApproval['status'],
+): 'approved' | 'denied' | 'cancelled' {
+  if (status === 'pending') {
+    throw new Error('A pending RunApproval cannot emit approval.resolved.');
+  }
+  return status;
+}
+
 function emitApprovalRequested(
   dependencies: RunLoopDependencies,
   runtime: EngineRunRuntime,
@@ -936,20 +948,39 @@ function emitApprovalRequested(
   approval: RunApproval,
 ): void {
   emitEvent(dependencies, runtime, run, 'approval.requested', {
-    approvalRequest: toJsonValue({
+    approvalRequest: {
       approvalRequestId: approval.runApprovalId,
       runId: approval.runId,
       toolCallId: approval.toolCallId,
-      toolIdentity: approval.toolIdentity,
-      input: approval.input,
-      operations: approval.operations,
-      options: approval.options,
+      toolName: approval.toolName,
+      toolIdentity: {
+        sourceId: approval.toolIdentity.sourceId,
+        namespace: approval.toolIdentity.namespace,
+        sourceToolName: approval.toolIdentity.sourceToolName,
+      },
+      input: toJsonValue(approval.input),
+      operations: approval.operations.map((operation) => (
+        toJsonValue(operation) as JsonObject
+      )),
+      options: approval.options.map((option) => ({
+        optionId: option.optionId,
+        scope: option.scope,
+        display: { ...option.display },
+        effect: toJsonValue(option.effect) as JsonObject,
+      })),
       defaultOptionId: approval.defaultOptionId,
       status: approval.status,
       createdAt: approval.createdAt,
       ...(approval.summary ? { summary: approval.summary } : {}),
-      ...(approval.preview ? { preview: approval.preview } : {}),
-    }) as JsonObject,
+      ...(approval.preview
+        ? {
+            preview: {
+              action: approval.preview.action,
+              targets: approval.preview.targets.map((target) => ({ ...target })),
+            },
+          }
+        : {}),
+    },
   });
 }
 

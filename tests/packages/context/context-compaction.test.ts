@@ -116,11 +116,15 @@ function fixture(
       })),
     },
     attachmentReader: { readAttachmentContent: vi.fn() },
-    instructionScopeResolver: {
+    scopeResolver: {
       resolve: vi.fn(() => ({
         status: 'resolved' as const,
         workspaceRoot: '/workspace',
-        workingDirectory: '/workspace',
+        executionEnvironment: {
+          workingDirectory: '/workspace',
+          operatingSystem: 'Linux',
+          shell: 'POSIX shell',
+        },
       })),
     },
     instructionReader: {

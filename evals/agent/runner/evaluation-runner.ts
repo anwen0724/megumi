@@ -5,6 +5,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { ProductHostInterface } from '@megumi/product/host';
 import type { RuntimeEvent } from '@megumi/product/host';
+import type { ApprovalRequestedPayload } from '@megumi/events';
 import type { EvaluationCase } from '../cases/evaluation-case';
 import type { EvaluationIsolation, ExecutionProfile } from '../config/execution-profile';
 import type { EvaluationTarget } from '../config/evaluation-target';
@@ -459,37 +460,33 @@ interface ApprovalFacts {
 }
 
 function approvalFacts(event: RuntimeEvent): ApprovalFacts | undefined {
-  const request = (event.payload as { approvalRequest?: Record<string, unknown> }).approvalRequest;
-  const preview = request?.preview as { action?: unknown; targets?: Array<{ label?: unknown }> } | undefined;
-  const rawOptions = request?.options as Array<{ option_id?: unknown; scope?: unknown }> | undefined;
-  const rawIdentity = request?.toolIdentity as { sourceId?: unknown; namespace?: unknown; sourceToolName?: unknown } | undefined;
-  const operations = Array.isArray(request?.operations) ? request.operations as Array<{
+  const request = (event.payload as ApprovalRequestedPayload).approvalRequest;
+  const operations = request.operations as Array<{
     action?: unknown;
     resource?: { matcher?: { value?: unknown }; type?: unknown };
-  }> : [];
-  const approvalRequestId = request?.approvalRequestId;
-  const toolName = request?.toolName;
-  if (typeof approvalRequestId !== 'string' || typeof toolName !== 'string' || !Array.isArray(rawOptions)) return undefined;
+  }>;
   return {
-    approvalRequestId,
-    toolName,
-    ...(rawIdentity && typeof rawIdentity.sourceId === 'string' && typeof rawIdentity.namespace === 'string'
-      && typeof rawIdentity.sourceToolName === 'string'
-      ? { toolIdentity: { sourceId: rawIdentity.sourceId, namespace: rawIdentity.namespace, sourceToolName: rawIdentity.sourceToolName } }
-      : {}),
+    approvalRequestId: request.approvalRequestId,
+    toolName: request.toolName,
+    toolIdentity: {
+      sourceId: request.toolIdentity.sourceId,
+      namespace: request.toolIdentity.namespace,
+      sourceToolName: request.toolIdentity.sourceToolName,
+    },
     actions: [
       ...operations.flatMap((operation) => typeof operation.action === 'string' ? [operation.action] : []),
-      ...(typeof preview?.action === 'string' ? [preview.action] : []),
+      ...(request.preview ? [request.preview.action] : []),
     ],
     resources: [
-      ...(preview?.targets ?? []).flatMap((target) => typeof target.label === 'string' ? [target.label] : []),
+      ...(request.preview?.targets ?? []).map((target) => target.label),
       ...operations.flatMap((operation) => typeof operation.resource?.matcher?.value === 'string'
         ? [operation.resource.matcher.value]
         : []),
     ],
-    options: rawOptions.flatMap((option) => typeof option.option_id === 'string' && typeof option.scope === 'string'
-      ? [{ optionId: option.option_id, scope: option.scope }]
-      : []),
+    options: request.options.map((option) => ({
+      optionId: option.optionId,
+      scope: option.scope,
+    })),
   };
 }
 

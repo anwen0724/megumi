@@ -91,6 +91,7 @@ export interface ToolResultCreatedPayload {
   toolName: string;
   kind: 'success' | 'failure' | 'permission_denied' | 'user_rejected' | 'cancelled';
   content: ContentBlock[];
+  summary?: string;
   error?: { code: string; message: string; details?: Record<string, JsonValue> };
 }
 export type AgentRunToolResultCreatedPayload = ToolResultCreatedPayload;
@@ -266,6 +267,7 @@ const AgentRunToolResultCreatedPayloadSchema = distinctExecutionIdentity(z.objec
   toolName: z.string().min(1),
   kind: z.enum(['success', 'failure', 'permission_denied', 'user_rejected', 'cancelled']),
   content: ContentBlockListSchema,
+  summary: z.string().min(1).optional(),
   error: z.object({ code: z.string().min(1), message: z.string().min(1), details: JsonObjectSchema.optional() }).strict().optional(),
 }).strict());
 const CanonicalToolResultCreatedPayloadSchema = distinctExecutionIdentity(z.object({

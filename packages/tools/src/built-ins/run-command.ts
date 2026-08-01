@@ -15,6 +15,7 @@ export type ToolProcessExecutionMethod = 'shell';
 
 export interface ToolProcessAdapter {
   readonly shellKind: ToolShellKind;
+  readonly shellName: string;
   readonly executionMethod: ToolProcessExecutionMethod;
   run(
     request: ToolProcessRequest,
@@ -52,8 +53,14 @@ export function createRunCommandToolDefinition(process: ToolProcessAdapter): Too
     inputSchema: {
       type: 'object',
       properties: {
-        command: { type: 'string', description: 'Command line to run.' },
-        cwd: { type: 'string', description: 'Optional working directory.' },
+        command: {
+          type: 'string',
+          description: `A command written for ${process.shellName}.`,
+        },
+        cwd: {
+          type: 'string',
+          description: 'The working directory for the command. Relative paths are resolved from the current working directory.',
+        },
         timeoutMs: { type: 'integer', description: 'Optional timeout in milliseconds.' },
       },
       required: ['command'],

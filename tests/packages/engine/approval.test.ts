@@ -292,6 +292,7 @@ describe('resumeToolCallApproval', () => {
       runApprovalId: 'approval:mismatch',
       runId: currentRun.runId,
       toolCallId: permissionRequest.toolCallId,
+      toolName: tool.registeredToolName,
       toolIdentity: tool.identity,
       input: { value: 'different' },
       operations: originalDecision.operations,

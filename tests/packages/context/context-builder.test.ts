@@ -107,11 +107,15 @@ function fixture(tokens = 50): CreateContextOptions {
         failure: { code: 'attachment_not_found', message: 'not found' },
       })),
     },
-    instructionScopeResolver: {
+    scopeResolver: {
       resolve: vi.fn(() => ({
         status: 'resolved' as const,
         workspaceRoot: '/workspace',
-        workingDirectory: '/workspace/packages/app',
+        executionEnvironment: {
+          workingDirectory: '/workspace/packages/app',
+          operatingSystem: 'Linux',
+          shell: 'POSIX shell',
+        },
       })),
     },
     instructionReader: {
@@ -155,7 +159,7 @@ describe('Context.build', () => {
       prepared: {
         preparationId: 'preparation:1',
         usage: { usedTokens: 50, contextWindowTokens: 100 },
-        context: { systemPrompt: 'system\n\nrules', tools: [{ name: 'read_file' }] },
+        context: { systemPrompt: expect.stringContaining('Working directory: /workspace/packages/app'), tools: [{ name: 'read_file' }] },
       },
     });
     if (result.status === 'ready') {
@@ -242,7 +246,7 @@ describe('Context.build', () => {
 
     const failedOptions: CreateContextOptions = {
       ...fixture(),
-      instructionScopeResolver: {
+      scopeResolver: {
         resolve: vi.fn(() => ({
           status: 'failed' as const,
           failure: { code: 'workspace_missing', message: 'missing' },

@@ -138,6 +138,7 @@ export interface RunApproval {
   readonly runApprovalId: string;
   readonly runId: string;
   readonly toolCallId: string;
+  readonly toolName: string;
   readonly toolIdentity: ToolIdentity;
   readonly input: unknown;
   readonly operations: readonly PermissionOperation[];
