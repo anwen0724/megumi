@@ -1,7 +1,7 @@
-/* Moves or renames one file or directory inside the active Workspace. */
+﻿/* Moves or renames one file or directory inside the active Workspace. */
 import type { RawToolResult, ToolDefinition } from '../tool';
 import { inputRecord, optionalBoolean, requireString } from './tool-input';
-import { withFileFailure, type BuiltInToolContext } from './workspace-file-access';
+import { toolEffectPath, withFileFailure, type BuiltInToolContext } from './workspace-file-access';
 
 export const movePathToolDefinition: ToolDefinition = {
   name: 'move_path', title: 'Move path', description: 'Move or rename a file or directory.',
@@ -11,5 +11,5 @@ export const movePathToolDefinition: ToolDefinition = {
 export async function executeMovePath(context: BuiltInToolContext, input: unknown, signal?: AbortSignal): Promise<RawToolResult> {
   const record = inputRecord(input);
   const result = await withFileFailure('move', () => context.workspaceFileAccess.movePath({ source: requireString(record, 'source'), destination: requireString(record, 'destination'), overwrite: optionalBoolean(record, 'overwrite', false), signal }));
-  return { outputKind: 'json', content: result, effectReport: { coverage: 'complete', effects: [{ type: 'moved', ...result }], itemFailures: [] } };
+  return { outputKind: 'json', content: result, effectReport: { coverage: 'complete', effects: [{ type: 'moved', source: toolEffectPath(result.source), destination: toolEffectPath(result.destination), pathType: result.pathType }], itemFailures: [] } };
 }

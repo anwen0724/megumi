@@ -191,12 +191,17 @@ export interface ToolItemFailure {
   readonly message: string;
 }
 
+export interface ToolEffectPath {
+  readonly location: 'workspace' | 'external';
+  readonly path: string;
+}
+
 export type ToolEffect =
-  | { readonly type: 'created'; readonly path: string; readonly pathType: 'file' | 'directory' }
-  | { readonly type: 'modified'; readonly path: string; readonly pathType: 'file' }
-  | { readonly type: 'copied'; readonly source: string; readonly destination: string; readonly pathType: 'file' | 'directory' }
-  | { readonly type: 'moved'; readonly source: string; readonly destination: string; readonly pathType: 'file' | 'directory' }
-  | { readonly type: 'deleted'; readonly path: string; readonly pathType: 'file' | 'directory'; readonly recoverable: true };
+  | { readonly type: 'created'; readonly path: ToolEffectPath; readonly pathType: 'file' | 'directory' }
+  | { readonly type: 'modified'; readonly path: ToolEffectPath; readonly pathType: 'file' }
+  | { readonly type: 'copied'; readonly source: ToolEffectPath; readonly destination: ToolEffectPath; readonly pathType: 'file' | 'directory' }
+  | { readonly type: 'moved'; readonly source: ToolEffectPath; readonly destination: ToolEffectPath; readonly pathType: 'file' | 'directory' }
+  | { readonly type: 'deleted'; readonly path: ToolEffectPath; readonly pathType: 'file' | 'directory'; readonly recoverable: true };
 
 export type ToolEffectReport =
   | { readonly coverage: 'complete'; readonly effects: readonly ToolEffect[]; readonly itemFailures: readonly ToolItemFailure[] }

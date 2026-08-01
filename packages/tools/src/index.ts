@@ -1,4 +1,4 @@
-/* Public interface for Tool contracts, Catalog, Executor, and built-in adapter composition. */
+﻿/* Public interface for Tool contracts, Catalog, Executor, and built-in adapter composition. */
 
 export type {
   ExecuteToolRequest,
@@ -24,6 +24,7 @@ export type {
   ToolExecutionOptions,
   ToolExecutionResult,
   ToolEffect,
+  ToolEffectPath,
   ToolEffectReport,
   ToolIdentity,
   ToolItemFailure,

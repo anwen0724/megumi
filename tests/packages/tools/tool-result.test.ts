@@ -1,4 +1,4 @@
-/* Tests the internal normalization fallback without exposing raw adapter results publicly. */
+﻿/* Tests the internal normalization fallback without exposing raw adapter results publicly. */
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -12,7 +12,7 @@ describe('Tool result normalization', () => {
   it('preserves structured effects on both successful and failed results', () => {
     const effectReport = {
       coverage: 'complete' as const,
-      effects: [{ type: 'modified' as const, path: 'notes.md', pathType: 'file' as const }],
+      effects: [{ type: 'modified' as const, path: { location: 'workspace' as const, path: 'notes.md' }, pathType: 'file' as const }],
       itemFailures: [],
     };
     const success = normalizeRawToolResult({

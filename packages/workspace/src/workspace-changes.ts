@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Records structured file effects reported by Tool execution without inferring
  * behavior from Tool names or re-running filesystem observations.
  */
@@ -49,12 +49,17 @@ export interface WorkspaceChangeExecutionScope {
   tool_execution_id?: string;
 }
 
+interface WorkspaceToolEffectPath {
+  readonly location: 'workspace' | 'external';
+  readonly path: string;
+}
+
 type WorkspaceToolEffect =
-  | { readonly type: 'created'; readonly path: string; readonly pathType: 'file' | 'directory' }
-  | { readonly type: 'modified'; readonly path: string; readonly pathType: 'file' }
-  | { readonly type: 'copied'; readonly source: string; readonly destination: string; readonly pathType: 'file' | 'directory' }
-  | { readonly type: 'moved'; readonly source: string; readonly destination: string; readonly pathType: 'file' | 'directory' }
-  | { readonly type: 'deleted'; readonly path: string; readonly pathType: 'file' | 'directory'; readonly recoverable: true };
+  | { readonly type: 'created'; readonly path: WorkspaceToolEffectPath; readonly pathType: 'file' | 'directory' }
+  | { readonly type: 'modified'; readonly path: WorkspaceToolEffectPath; readonly pathType: 'file' }
+  | { readonly type: 'copied'; readonly source: WorkspaceToolEffectPath; readonly destination: WorkspaceToolEffectPath; readonly pathType: 'file' | 'directory' }
+  | { readonly type: 'moved'; readonly source: WorkspaceToolEffectPath; readonly destination: WorkspaceToolEffectPath; readonly pathType: 'file' | 'directory' }
+  | { readonly type: 'deleted'; readonly path: WorkspaceToolEffectPath; readonly pathType: 'file' | 'directory'; readonly recoverable: true };
 
 export interface WorkspaceToolEffectReport {
   readonly coverage: WorkspaceEffectCoverage;
@@ -150,7 +155,8 @@ export function createWorkspaceChanges(options: CreateWorkspaceChangesRequest): 
       if (!request.scope || !result.effectReport) return result;
       const scope = request.scope;
       const effectReport = result.effectReport;
-      if (effectReport.effects.length === 0 && effectReport.coverage === 'complete') return result;
+      const hasWorkspaceEffect = effectReport.effects.some(effectAffectsWorkspace);
+      if (!hasWorkspaceEffect && effectReport.coverage === 'complete') return result;
 
       try {
         const changeSet = getOrCreateOpenChangeSet({
@@ -168,10 +174,10 @@ export function createWorkspaceChanges(options: CreateWorkspaceChangesRequest): 
             changedFileId: changedFileId(),
             createdAt: now(),
           });
-          options.store.upsertChangedFile(file);
+          if (file) options.store.upsertChangedFile(file);
         }
       } catch {
-        await reportFailure(scope, effectReport.effects[0] ? effectPath(effectReport.effects[0]) : undefined);
+        await reportFailure(scope, effectReport.effects.map(effectWorkspacePath).find(Boolean));
       }
       return result;
     },
@@ -213,33 +219,70 @@ function changedFileFromEffect(input: {
   changeSetId: string;
   changedFileId: string;
   createdAt: string;
-}): WorkspaceChangedFile {
+}): WorkspaceChangedFile | undefined {
   const effect = input.effect;
-  const workspacePath = effectPath(effect);
+  const projection = workspaceProjection(effect);
+  if (!projection) return undefined;
   return {
     changed_file_id: input.changedFileId,
     change_set_id: input.changeSetId,
-    workspace_path: workspacePath,
-    change_kind: changeKindForEffect(effect),
+    workspace_path: projection.path,
+    change_kind: projection.changeKind,
     effect_type: effect.type,
-    ...('source' in effect ? { source_workspace_path: effect.source } : {}),
-    ...('destination' in effect ? { destination_workspace_path: effect.destination } : {}),
+    ...(projection.source ? { source_workspace_path: projection.source } : {}),
+    ...(projection.destination ? { destination_workspace_path: projection.destination } : {}),
     path_type: effect.pathType,
     ...('recoverable' in effect ? { recoverable: effect.recoverable } : {}),
     created_at: input.createdAt,
   };
 }
 
-function effectPath(effect: WorkspaceToolEffect): string {
-  return 'destination' in effect ? effect.destination : effect.path;
+function effectAffectsWorkspace(effect: WorkspaceToolEffect): boolean {
+  return Boolean(workspaceProjection(effect));
 }
 
-function changeKindForEffect(effect: WorkspaceToolEffect): WorkspaceChangeKind {
-  if (effect.type === 'created' || effect.type === 'copied') return 'created';
-  if (effect.type === 'deleted') return 'deleted';
-  return 'modified';
+function effectWorkspacePath(effect: WorkspaceToolEffect): string | undefined {
+  return workspaceProjection(effect)?.path;
 }
 
+function workspaceProjection(effect: WorkspaceToolEffect): {
+  readonly path: string;
+  readonly changeKind: WorkspaceChangeKind;
+  readonly source?: string;
+  readonly destination?: string;
+} | undefined {
+  if (effect.type === 'copied') {
+    if (effect.destination.location !== 'workspace') return undefined;
+    return {
+      path: effect.destination.path,
+      changeKind: 'created',
+      ...(effect.source.location === 'workspace' ? { source: effect.source.path } : {}),
+      destination: effect.destination.path,
+    };
+  }
+  if (effect.type === 'moved') {
+    if (effect.destination.location === 'workspace') {
+      return {
+        path: effect.destination.path,
+        changeKind: 'modified',
+        ...(effect.source.location === 'workspace' ? { source: effect.source.path } : {}),
+        destination: effect.destination.path,
+      };
+    }
+    return effect.source.location === 'workspace'
+      ? { path: effect.source.path, changeKind: 'deleted', source: effect.source.path }
+      : undefined;
+  }
+  if (effect.path.location !== 'workspace') return undefined;
+  return {
+    path: effect.path.path,
+    changeKind: effect.type === 'created'
+      ? 'created'
+      : effect.type === 'deleted'
+        ? 'deleted'
+        : 'modified',
+  };
+}
 export function resolveChangeKind(input: {
   before: { exists: false } | { exists: true; size_bytes: number; modified_at_ms: number; content_hash: string };
   after: { exists: false } | { exists: true; size_bytes: number; modified_at_ms: number; content_hash: string };

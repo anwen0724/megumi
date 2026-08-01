@@ -1,4 +1,4 @@
-/* Protects structured Tool Effect projection and projection-failure isolation. */
+﻿/* Protects structured Tool Effect projection and projection-failure isolation. */
 import { describe, expect, it, vi } from 'vitest';
 import {
   createWorkspaceChanges,
@@ -10,6 +10,8 @@ import {
 
 type Result = { type: 'succeeded' | 'failed'; value?: string; effectReport?: WorkspaceToolEffectReport };
 const result = (effectReport?: WorkspaceToolEffectReport, type: Result['type'] = 'succeeded'): Result => ({ type, ...(effectReport ? { effectReport } : {}) });
+const workspacePath = (value: string) => ({ location: 'workspace' as const, path: value });
+const externalPath = (value: string) => ({ location: 'external' as const, path: value });
 const report = (effects: WorkspaceToolEffectReport['effects'], coverage: WorkspaceToolEffectReport['coverage'] = 'complete'): WorkspaceToolEffectReport => ({ coverage, effects, itemFailures: [], ...(coverage === 'unknown' ? { reason: 'observer unavailable' } : {}) });
 
 describe('WorkspaceChanges', () => {
@@ -19,10 +21,10 @@ describe('WorkspaceChanges', () => {
     await changes.trackToolExecution({
       scope: scope(),
       execute: async () => result(report([
-        { type: 'created', path: 'src/new.ts', pathType: 'file' },
-        { type: 'copied', source: 'src/a.ts', destination: 'src/b.ts', pathType: 'file' },
-        { type: 'moved', source: 'notes/old', destination: 'notes/new', pathType: 'directory' },
-        { type: 'deleted', path: 'tmp.txt', pathType: 'file', recoverable: true },
+        { type: 'created', path: workspacePath('src/new.ts'), pathType: 'file' },
+        { type: 'copied', source: workspacePath('src/a.ts'), destination: workspacePath('src/b.ts'), pathType: 'file' },
+        { type: 'moved', source: workspacePath('notes/old'), destination: workspacePath('notes/new'), pathType: 'directory' },
+        { type: 'deleted', path: workspacePath('tmp.txt'), pathType: 'file', recoverable: true },
       ])),
     });
     expect(store.files).toMatchObject([
@@ -34,11 +36,40 @@ describe('WorkspaceChanges', () => {
     expect(store.changeSets).toHaveLength(1);
   });
 
+  it('keeps external-only effects out of WorkspaceChanges and projects a move out as deletion', async () => {
+    const externalOnlyStore = fakeStore();
+    await createChanges(externalOnlyStore).trackToolExecution({
+      scope: scope(),
+      execute: async () => result(report([{
+        type: 'created',
+        path: externalPath('C:/outside/new.ts'),
+        pathType: 'file',
+      }])),
+    });
+    expect(externalOnlyStore.changeSets).toEqual([]);
+    expect(externalOnlyStore.files).toEqual([]);
+
+    const mixedStore = fakeStore();
+    await createChanges(mixedStore).trackToolExecution({
+      scope: scope(),
+      execute: async () => result(report([{
+        type: 'moved',
+        source: workspacePath('notes/paper.md'),
+        destination: externalPath('C:/archive/paper.md'),
+        pathType: 'file',
+      }])),
+    });
+    expect(mixedStore.files).toMatchObject([{
+      workspace_path: 'notes/paper.md',
+      effect_type: 'moved',
+      change_kind: 'deleted',
+    }]);
+  });
   it('records effects from a failed result and preserves partial completion facts', async () => {
     const store = fakeStore();
     await createChanges(store).trackToolExecution({
       scope: scope(),
-      execute: async () => result(report([{ type: 'modified', path: 'partial.md', pathType: 'file' }]), 'failed'),
+      execute: async () => result(report([{ type: 'modified', path: workspacePath('partial.md'), pathType: 'file' }]), 'failed'),
     });
     expect(store.files).toMatchObject([{ workspace_path: 'partial.md', effect_type: 'modified' }]);
   });
@@ -54,7 +85,7 @@ describe('WorkspaceChanges', () => {
     const store = fakeStore({ failChangedFileWrite: true });
     const diagnostic = vi.fn();
     const changes = createChanges(store, diagnostic);
-    const businessResult = result(report([{ type: 'created', path: 'new.md', pathType: 'file' }]));
+    const businessResult = result(report([{ type: 'created', path: workspacePath('new.md'), pathType: 'file' }]));
     await expect(changes.trackToolExecution({ scope: scope(), execute: async () => businessResult })).resolves.toBe(businessResult);
     expect(diagnostic).toHaveBeenCalledWith(expect.objectContaining({ reason: 'store_failed', phase: 'project_change' }));
   });
@@ -62,11 +93,11 @@ describe('WorkspaceChanges', () => {
   it('finalizes idempotently and never opens another set for the same finalized scope', async () => {
     const store = fakeStore();
     const changes = createChanges(store);
-    await changes.trackToolExecution({ scope: scope(), execute: async () => result(report([{ type: 'created', path: 'first.ts', pathType: 'file' }])) });
+    await changes.trackToolExecution({ scope: scope(), execute: async () => result(report([{ type: 'created', path: workspacePath('first.ts'), pathType: 'file' }])) });
     const request = { ...scope(), finalized_at: '2026-05-16T00:01:00.000Z' };
     expect(changes.finalizeChangeSet(request)).toMatchObject({ status: 'finalized' });
     expect(changes.finalizeChangeSet(request)).toMatchObject({ status: 'finalized' });
-    await changes.trackToolExecution({ scope: scope(), execute: async () => result(report([{ type: 'created', path: 'second.ts', pathType: 'file' }])) });
+    await changes.trackToolExecution({ scope: scope(), execute: async () => result(report([{ type: 'created', path: workspacePath('second.ts'), pathType: 'file' }])) });
     expect(store.files.map((file) => file.workspace_path)).toEqual(['first.ts']);
   });
 });

@@ -1,9 +1,9 @@
-/* Defines the Sandbox-backed Workspace, Skills, process, and Web interfaces used by built-in Tools. */
+﻿/* Defines the Sandbox-backed Workspace, Skills, process, and Web interfaces used by built-in Tools. */
 
 import path from 'node:path';
 import type { SandboxFileAccess } from '@megumi/sandbox';
 import type { UseSkillRequest, UseSkillResponse } from '@megumi/skills';
-import type { ToolExecutionErrorCode } from '../tool';
+import type { ToolEffectPath, ToolExecutionErrorCode } from '../tool';
 import { ToolExecutionFailure } from '../tool-result';
 import type { ToolProcessAdapter } from './run-command';
 import type { WebFetch } from './web-fetch';
@@ -23,6 +23,9 @@ export interface BuiltInToolContext {
   readonly webFetch?: WebFetch;
 }
 
+export function toolEffectPath(value: string): ToolEffectPath {
+  return { location: path.isAbsolute(value) ? 'external' : 'workspace', path: value };
+}
 export async function withFileFailure<T>(operation: string, action: () => Promise<T>): Promise<T> {
   try {
     return await action();

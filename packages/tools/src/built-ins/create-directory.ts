@@ -1,7 +1,7 @@
-/* Creates one directory inside the active Workspace. */
+﻿/* Creates one directory inside the active Workspace. */
 import type { RawToolResult, ToolDefinition } from '../tool';
 import { inputRecord, optionalBoolean, requireString } from './tool-input';
-import { withFileFailure, type BuiltInToolContext } from './workspace-file-access';
+import { toolEffectPath, withFileFailure, type BuiltInToolContext } from './workspace-file-access';
 
 export const createDirectoryToolDefinition: ToolDefinition = {
   name: 'create_directory', title: 'Create directory', description: 'Create a directory.',
@@ -12,5 +12,5 @@ export const createDirectoryToolDefinition: ToolDefinition = {
 export async function executeCreateDirectory(context: BuiltInToolContext, input: unknown, signal?: AbortSignal): Promise<RawToolResult> {
   const record = inputRecord(input);
   const result = await withFileFailure('create_directory', () => context.workspaceFileAccess.createDirectory({ path: requireString(record, 'path'), recursive: optionalBoolean(record, 'recursive', false), signal }));
-  return { outputKind: 'json', content: result, effectReport: { coverage: 'complete', effects: result.created ? [{ type: 'created', path: result.path, pathType: 'directory' }] : [], itemFailures: [] } };
+  return { outputKind: 'json', content: result, effectReport: { coverage: 'complete', effects: result.created ? [{ type: 'created', path: toolEffectPath(result.path), pathType: 'directory' }] : [], itemFailures: [] } };
 }

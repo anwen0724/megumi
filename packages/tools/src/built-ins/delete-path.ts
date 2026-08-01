@@ -1,7 +1,7 @@
-/* Recoverably deletes one file or directory inside the active Workspace. */
+﻿/* Recoverably deletes one file or directory inside the active Workspace. */
 import type { RawToolResult, ToolDefinition } from '../tool';
 import { inputRecord, optionalBoolean, requireString } from './tool-input';
-import { withFileFailure, type BuiltInToolContext } from './workspace-file-access';
+import { toolEffectPath, withFileFailure, type BuiltInToolContext } from './workspace-file-access';
 
 export const deletePathToolDefinition: ToolDefinition = {
   name: 'delete_path', title: 'Delete path', description: 'Move a file or directory to a recoverable Workspace location.',
@@ -11,5 +11,5 @@ export const deletePathToolDefinition: ToolDefinition = {
 export async function executeDeletePath(context: BuiltInToolContext, input: unknown, signal?: AbortSignal): Promise<RawToolResult> {
   const record = inputRecord(input);
   const result = await withFileFailure('delete', () => context.workspaceFileAccess.deletePath({ path: requireString(record, 'path'), recursive: optionalBoolean(record, 'recursive', false), signal }));
-  return { outputKind: 'json', content: result, effectReport: { coverage: 'complete', effects: [{ type: 'deleted', path: result.path, pathType: result.pathType, recoverable: true }], itemFailures: [] } };
+  return { outputKind: 'json', content: result, effectReport: { coverage: 'complete', effects: [{ type: 'deleted', path: toolEffectPath(result.path), pathType: result.pathType, recoverable: true }], itemFailures: [] } };
 }
