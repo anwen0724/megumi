@@ -1,11 +1,12 @@
-﻿/* Verifies the real Windows AppContainer and Job Object command boundary. */
+/* Verifies the real Windows AppContainer and Job Object command boundary. */
 // @vitest-environment node
 
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createWindowsSandboxProcess, WINDOWS_SANDBOX_CAPABILITIES } from '../../../packages/sandbox/src';
+import { createWindowsSandboxBackend } from '../../../packages/sandbox/src/windows-sandbox-backend';
+import { createWindowsSandboxProcess } from '../../../packages/sandbox/src/windows-sandbox-process';
 
 const roots: string[] = [];
 afterEach(async () => Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true }))));
@@ -35,13 +36,29 @@ const windowsIt = process.platform === 'win32' ? it : it.skip;
 
 describe('Windows Sandbox process', () => {
   windowsIt('discloses every mandatory execution capability', () => {
-    expect(WINDOWS_SANDBOX_CAPABILITIES).toMatchObject({
+    expect(createWindowsSandboxBackend().capabilities({ executionAccess: {
+      fileSystem: { mode: 'workspace' }, process: 'sandboxed', network: 'denied',
+    } })).toMatchObject({
       fileReadBoundary: true, fileWriteBoundary: true, environmentIsolation: true,
       networkIsolation: true, processTreeTermination: true, timeLimit: true,
       outputLimit: true, processCountLimit: true,
     });
   });
 
+  windowsIt('reports shell_unavailable before launch when Windows PowerShell cannot be resolved', async () => {
+    const root = await workspace();
+    const originalSystemRoot = process.env.SystemRoot;
+    process.env.SystemRoot = path.join(root, 'missing-windows');
+    try {
+      await expect(createWindowsSandboxProcess({ workspaceRoot: root }).run(
+        { command: 'Write-Output test', cwd: root },
+        { signal: new AbortController().signal, onStdout: () => undefined, onStderr: () => undefined },
+      )).rejects.toMatchObject({ code: 'shell_unavailable' });
+    } finally {
+      if (originalSystemRoot === undefined) delete process.env.SystemRoot;
+      else process.env.SystemRoot = originalSystemRoot;
+    }
+  });
   windowsIt('runs PowerShell with a sanitized environment and no network capability', async () => {
     const root = await workspace();
     process.env.MEGUMI_TEST_SECRET = 'must-not-cross';

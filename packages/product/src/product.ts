@@ -2,7 +2,6 @@
  * Composes the complete Product directly from real Package contracts and owns
  * Product resource startup, per-Run Tool snapshots, and ordered shutdown.
  */
-import { spawn } from 'node:child_process';
 import path from 'node:path';
 import type { Api, Model, Models, ProviderStreams } from '@megumi/ai';
 import {
@@ -29,7 +28,7 @@ import {
   type RuntimeLogger,
 } from '@megumi/observability';
 import { createPermissions } from '@megumi/permissions';
-import { createNodeSandbox, type Sandbox } from '@megumi/sandbox';
+import type { Sandbox, SandboxCapabilities } from '@megumi/sandbox';
 import {
   createSessionTimelineQuery,
   createWorkspaceChangeFooterProjector,
@@ -100,6 +99,7 @@ import { migrateLegacyProviderApiSettingsFile } from './migrations/legacy-provid
 
 export interface ComposeProductOptions {
   home: InitializeMegumiHomeSyncOptions;
+  sandbox: Sandbox;
   migrationsFolder?: string;
   migrationEnvironment?: Omit<ResolveDatabaseMigrationsFolderRequest, 'migrationsFolder'>;
   observabilityStorage?: ObservabilityStorage;
@@ -112,7 +112,6 @@ export interface ComposeProductOptions {
   inputSourceAccess?: InputSourceAccess;
   sessionAttachmentFileSystem?: SessionAttachmentFileSystem;
   settingsStorage?: SettingsStore;
-  toolProcess?: ToolProcessAdapter;
   isBuiltInToolAvailable?: (toolName: string) => boolean;
   modelStreams?: Partial<Record<Api, ProviderStreams>>;
 }
@@ -163,7 +162,7 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
   const workspaceStore = createWorkspaceStore({ database });
   const workspaceFileSystem = createNodeWorkspaceFileSystem();
   const workspacePathPolicy = createWorkspacePathPolicy();
-  const sandbox = createNodeSandbox();
+  const sandbox = options.sandbox;
   const workspaces = createWorkspaceCatalog({ store: workspaceStore, file_system: workspaceFileSystem });
   const workspaceFiles = createWorkspaceFiles({
     catalog: workspaces,
@@ -201,7 +200,7 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
       : skillComposition.createSkillService();
   };
   const instructions = createInstructionReader({ megumiHomePath: homePaths.homePath });
-  const toolProcess = options.toolProcess ?? createProductToolProcessDescriptor();
+  const toolProcess = createSandboxProcessDescriptor(sandbox.capabilities());
   const context = createContext({
     sessionHistory: history,
     attachmentReader: attachments,
@@ -215,7 +214,7 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
               executionEnvironment: {
                 workingDirectory: workspace.workspace.root_path,
                 operatingSystem: modelVisibleOperatingSystem(process.platform),
-                shell: toolProcess.shellName,
+                shell: toolProcess?.shellName ?? 'Unavailable',
               },
             }
           : {
@@ -329,7 +328,7 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
     workspaceChanges,
     sandbox,
     resolveSkillService,
-    ...(options.toolProcess ? { process: options.toolProcess } : {}),
+    ...(toolProcess ? { process: toolProcess } : {}),
     isBuiltInToolAvailable: options.isBuiltInToolAvailable,
   });
   const workspaceChangeFooter = createWorkspaceChangeFooterProjector({ workspaceChanges });
@@ -465,7 +464,7 @@ function createProductToolSnapshots(input: {
 } {
   type Snapshot = ReturnType<typeof resolveToolSnapshot>;
   let pending: Snapshot | undefined;
-  const toolAvailable = (name: string) => (name !== 'run_command' || Boolean(input.process) || process.platform === 'win32')
+  const toolAvailable = (name: string) => (name !== 'run_command' || Boolean(input.process))
     && (input.isBuiltInToolAvailable ? input.isBuiltInToolAvailable(name) : true);
   const catalog: Pick<ToolCatalog, 'list'> = {
     list(request) {
@@ -473,7 +472,7 @@ function createProductToolSnapshots(input: {
       return createToolsForSnapshot(
         pending,
         unavailableWorkspaceFileAccess,
-        input.process ?? createProductToolProcessDescriptor(),
+        input.process,
         input.resolveSkillService(),
       ).catalog.list(request);
     },
@@ -489,7 +488,7 @@ function createProductToolSnapshots(input: {
       const preflightTools = createToolsForSnapshot(
         snapshot,
         unavailableWorkspaceFileAccess,
-        input.process ?? createProductToolProcessDescriptor(),
+        input.process,
         input.resolveSkillService({ workspaceId: scope.workspaceId }),
       );
       return createSandboxToolExecutor({
@@ -547,12 +546,12 @@ function resolveToolSnapshot(
 function createToolsForSnapshot(
   snapshot: ReturnType<typeof resolveToolSnapshot>,
   workspaceFileAccess: WorkspaceFileAccess,
-  process: ToolProcessAdapter,
+  process: ToolProcessAdapter | undefined,
   skills?: Pick<SkillService, 'useSkill'>,
 ) {
   return createTools({
     workspaceFileAccess,
-    process,
+    ...(process ? { process } : {}),
     ...(skills ? { skills } : {}),
     ...(snapshot.webSearch ? { webSearch: snapshot.webSearch } : {}),
     webFetch: snapshot.webFetch,
@@ -560,22 +559,22 @@ function createToolsForSnapshot(
   });
 }
 
-function createProductToolProcessDescriptor(): ToolProcessAdapter {
+function createSandboxProcessDescriptor(
+  capabilities: SandboxCapabilities,
+): ToolProcessAdapter | undefined {
+  if (!capabilities.shellKind || !capabilities.shellName) return undefined;
   return {
-    shellName: process.platform === 'win32'
-      ? 'Windows PowerShell 5.1 (AppContainer)'
-      : 'Unavailable isolated shell',
-    shellKind: process.platform === 'win32' ? 'powershell' : 'posix_shell',
+    shellName: capabilities.shellName,
+    shellKind: capabilities.shellKind,
     executionMethod: 'shell',
     async run() {
       throw new ToolExecutionFailure(
-        'No supported execution Sandbox is available for this platform.',
+        'The active Sandbox Scope is required for process execution.',
         'sandbox_unavailable',
       );
     },
   };
 }
-
 
 function modelVisibleOperatingSystem(platform: NodeJS.Platform): string {
   if (platform === 'win32') return 'Windows';

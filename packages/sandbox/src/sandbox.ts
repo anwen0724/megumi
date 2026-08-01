@@ -7,6 +7,7 @@ import type { ToolExecutionAccess } from './sandbox-access';
 export interface SandboxCapabilities {
   readonly platform: NodeJS.Platform;
   readonly shellKind?: 'powershell' | 'cmd' | 'posix_shell';
+  readonly shellName?: string;
   readonly workspaceEffectObservation: boolean;
   readonly fileReadBoundary: boolean;
   readonly fileWriteBoundary: boolean;

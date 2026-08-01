@@ -1,10 +1,10 @@
-﻿/* Verifies Sandbox Scope time/output enforcement above the platform process backend. */
+/* Verifies Sandbox Scope time/output enforcement above the platform process backend. */
 // @vitest-environment node
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createNodeSandbox } from '../../../packages/sandbox/src';
+import { createSandbox, resolveSandboxBackend } from '../../../packages/sandbox/src';
 
 const roots: string[] = [];
 afterEach(async () => Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true }))));
@@ -17,7 +17,7 @@ async function openScope(
 ) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'megumi-sandbox-scope-'));
   roots.push(root);
-  const opened = await createNodeSandbox().open({
+  const opened = await createSandbox({ backend: resolveSandboxBackend({ platform: 'win32' }) }).open({
     policy: {
       workspaceRoot: root,
       executionAccess: {

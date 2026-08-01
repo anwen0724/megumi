@@ -22,7 +22,7 @@ export function createProcessAdapter(input: {
     executionMethod: 'shell',
     shellName: input.shellKind === 'cmd'
       ? 'Windows Command Prompt'
-      : input.shellKind === 'posix_shell' ? 'POSIX shell' : 'Windows PowerShell 5.1',
+      : input.shellKind === 'posix_shell' ? 'POSIX shell' : 'Windows PowerShell',
     run: input.run ?? (async (_request, options) => {
       options.onStdout('ok');
       return { exitCode: 0 };

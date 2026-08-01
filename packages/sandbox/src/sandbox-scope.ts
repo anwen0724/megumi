@@ -1,72 +1,34 @@
-﻿/* Opens one bounded Sandbox scope and converges all process executions on close. */
-import process from 'node:process';
+/* Opens one bounded Sandbox scope through an injected platform Backend. */
 import { createNodeSandboxFileAccess } from './node-sandbox';
-import { createNodeUnrestrictedProcess } from './node-unrestricted-process';
+import type { SandboxBackend } from './sandbox-backend';
 import type { OpenSandboxRequest, Sandbox, SandboxCapabilities, SandboxScope } from './sandbox';
 import { SandboxProcessError, type SandboxProcess } from './sandbox-process';
-import {
-  createWindowsSandboxProcess,
-  WINDOWS_SANDBOX_CAPABILITIES,
-  WINDOWS_UNRESTRICTED_CAPABILITIES,
-} from './windows-sandbox-process';
 
-const PORTABLE_CAPABILITIES: SandboxCapabilities = {
-  platform: 'linux',
-  shellKind: 'posix_shell',
-  workspaceEffectObservation: false,
-  fileReadBoundary: true,
-  fileWriteBoundary: true,
-  environmentIsolation: false,
-  networkIsolation: false,
-  processTreeTermination: false,
-  timeLimit: false,
-  outputLimit: false,
-  processCountLimit: false,
-  cpuLimit: false,
-  memoryLimit: false,
+const DEFAULT_EXECUTION_ACCESS = {
+  fileSystem: { mode: 'workspace' as const },
+  process: 'sandboxed' as const,
+  network: 'denied' as const,
 };
 
-const PORTABLE_UNRESTRICTED_CAPABILITIES: SandboxCapabilities = {
-  ...PORTABLE_CAPABILITIES,
-  fileReadBoundary: false,
-  fileWriteBoundary: false,
-  environmentIsolation: true,
-  networkIsolation: false,
-  processTreeTermination: true,
-  timeLimit: true,
-  outputLimit: true,
-};
-export function createNodeSandbox(input: { readonly platform?: NodeJS.Platform } = {}): Sandbox {
-  const platform = input.platform ?? process.platform;
-  const advertisedCapabilities = platform === 'win32'
-    ? WINDOWS_SANDBOX_CAPABILITIES
-    : { ...PORTABLE_CAPABILITIES, platform, shellKind: 'posix_shell' as const };
+export function createSandbox(input: { readonly backend: SandboxBackend }): Sandbox {
   return {
-    capabilities: () => ({ ...advertisedCapabilities }),
+    capabilities: () => ({
+      ...input.backend.capabilities({ executionAccess: DEFAULT_EXECUTION_ACCESS }),
+    }),
     async open(request) {
       request.signal?.throwIfAborted();
-      const isolation = request.policy.executionAccess.process === 'sandboxed'
-        ? 'restricted' as const
-        : 'unrestricted' as const;
-      const capabilities = platform === 'win32'
-        ? isolation === 'restricted'
-          ? WINDOWS_SANDBOX_CAPABILITIES
-          : WINDOWS_UNRESTRICTED_CAPABILITIES
-        : isolation === 'unrestricted'
-          ? { ...PORTABLE_UNRESTRICTED_CAPABILITIES, platform }
-          : advertisedCapabilities;
-      const processAdapter = platform === 'win32'
-        ? createWindowsSandboxProcess({
-            workspaceRoot: request.policy.workspaceRoot,
-            maxProcessCount: request.policy.maxProcessCount,
-            isolation,
-          })
-        : isolation === 'unrestricted'
-          ? createNodeUnrestrictedProcess()
-          : unavailableProcess();
+      const backendRequest = {
+        workspaceRoot: request.policy.workspaceRoot,
+        executionAccess: request.policy.executionAccess,
+        maxProcessCount: request.policy.maxProcessCount,
+      };
       return {
         status: 'opened',
-        scope: createScope(request, capabilities, processAdapter),
+        scope: createScope(
+          request,
+          input.backend.capabilities({ executionAccess: request.policy.executionAccess }),
+          input.backend.createProcess(backendRequest),
+        ),
       };
     },
   };
@@ -148,17 +110,6 @@ function createScope(
         && result.reason.code === 'termination_unconfirmed')
         ? { status: 'termination_unconfirmed' }
         : { status: 'closed' };
-    },
-  };
-}
-
-function unavailableProcess(): SandboxProcess {
-  return {
-    shellKind: 'posix_shell',
-    shellName: 'Unavailable isolated shell',
-    executionMethod: 'shell',
-    async run() {
-      throw new SandboxProcessError('sandbox_unavailable', 'No proven process Sandbox is available for this platform.');
     },
   };
 }

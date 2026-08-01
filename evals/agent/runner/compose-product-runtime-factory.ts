@@ -1,5 +1,6 @@
 /* Creates the production Evaluation runtime exclusively through Product Composition and Host. */
 import { composeProduct, type ComposeProductOptions } from '@megumi/product';
+import { createSandbox, resolveSandboxBackend } from '@megumi/sandbox';
 import {
   createEvaluationHomeOptions,
   createEvaluationInputSourceAccess,
@@ -31,6 +32,7 @@ export function createComposeProductEvaluationFactory(
         throw new Error(`Provider credential is required for Evaluation target ${input.target.targetId}.`);
       }
       const product = composeProduct({
+        sandbox: createSandbox({ backend: resolveSandboxBackend() }),
         ...options.productOverrides,
         home: createEvaluationHomeOptions(input.homeRoot),
         directoryPicker: {

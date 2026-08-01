@@ -34,7 +34,7 @@ describe('run_command built-in Tool', () => {
       tool: {
         definition: {
           inputSchema: {
-            properties: { command: { description: 'A command written for Windows PowerShell 5.1.' } },
+            properties: { command: { description: 'A command written for Windows PowerShell.' } },
           },
         },
       },

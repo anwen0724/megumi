@@ -1,4 +1,4 @@
-﻿/* Guards target Owner Packages and the Product Host against reverse dependencies. */
+/* Guards target Owner Packages and the Product Host against reverse dependencies. */
 // @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
@@ -58,7 +58,15 @@ describe('Package Owner boundaries', () => {
     expect(productSource).not.toMatch(/\.sandbox\.open\s*\(/u);
     expect(productSource).not.toMatch(/\.scope\.close\s*\(/u);
     expect(productSource).not.toContain('executeSandboxScope');
+    expect(productSource).not.toContain('createNodeSandbox');
+    expect(productSource).not.toContain('resolveSandboxBackend');
+    expect(productSource).toContain('sandbox: Sandbox');
     expect(productSource).toContain('createSandboxToolExecutor');
+  });
+  it('keeps the generic Sandbox Scope independent from platform implementations', () => {
+    const scopeSource = fs.readFileSync(path.join(root, 'packages/sandbox/src/sandbox-scope.ts'), 'utf8');
+    expect(scopeSource).not.toMatch(/windows-|process.platform|['"]win32['"]/u);
+    expect(scopeSource).toContain('SandboxBackend');
   });
   it('allows Package subpaths only when the owning manifest exports them', () => {
     const packageExports = readPackageExports();

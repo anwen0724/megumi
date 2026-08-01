@@ -13,7 +13,7 @@ function baseContext(): ActiveContext {
     executionEnvironment: {
       workingDirectory: 'C:/workspace',
       operatingSystem: 'Windows',
-      shell: 'Windows PowerShell 5.1',
+      shell: 'Windows PowerShell',
     },
     systemInstructions: [{ instructionId: 'system:1', content: 'System rule' }],
     effectiveInstructions: { sources: [] },
@@ -67,7 +67,7 @@ describe('active Context materialization', () => {
       'Execution environment:',
       '- Working directory: C:/workspace',
       '- Operating system: Windows',
-      '- Shell: Windows PowerShell 5.1',
+      '- Shell: Windows PowerShell',
     ].join('\n\n').replaceAll('\n\n- ', '\n- '));
     expect(context.systemPrompt).not.toContain('Review carefully');
     const assistantIndex = context.messages.findIndex((message) => message.role === 'assistant');
