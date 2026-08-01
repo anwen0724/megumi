@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Protects lexical and canonical Workspace path boundaries across platforms.
  */
 import { describe, expect, it } from 'vitest';
@@ -71,5 +71,26 @@ describe('WorkspacePathPolicy', () => {
     });
 
     expect(result).toEqual({ status: 'outside_workspace', target_path: 'linked/new.txt' });
+  });
+  it('canonicalizes an external path without treating it as a Workspace path', async () => {
+    const result = await policy.classifyCanonicalPath({
+      workspace_root: '/workspace',
+      target_path: '../outside/new.txt',
+      platform: 'linux',
+      file_system: {
+        async realpath(target) {
+          if (target === '/workspace') return '/workspace';
+          if (target === '/outside') return '/canonical-outside';
+          throw new Error('missing');
+        },
+      },
+    });
+
+    expect(result).toMatchObject({
+      absolute_path: '/canonical-outside/new.txt',
+      inside_workspace: false,
+      protected: false,
+      sensitive: false,
+    });
   });
 });

@@ -263,21 +263,15 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
         if (workspace.status !== 'found') {
           return { status: 'failed', failure: { code: 'workspace_not_found', message: 'Workspace was not found.' } };
         }
-        const canonical = await workspacePathPolicy.resolveCanonicalPath({
+        const canonical = await workspacePathPolicy.classifyCanonicalPath({
           workspace_root: workspace.workspace.root_path,
           target_path: request.targetPath,
           file_system: workspaceFileSystem,
         });
-        if (canonical.status !== 'resolved') {
-          return { status: 'classified', workspacePath: {
-            absolutePath: request.targetPath, workspacePath: request.targetPath,
-            insideWorkspace: false, protected: false, sensitive: false,
-          } };
-        }
         return { status: 'classified', workspacePath: {
           absolutePath: canonical.absolute_path,
           workspacePath: canonical.workspace_path,
-          insideWorkspace: true,
+          insideWorkspace: canonical.inside_workspace,
           protected: canonical.protected,
           sensitive: canonical.sensitive,
         } };

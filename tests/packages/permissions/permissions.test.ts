@@ -224,6 +224,46 @@ describe('Permissions', () => {
     }))).toMatchObject({ decision: { type: 'allow', safetyAssessment: 'prohibited' } });
   });
 
+  it('grants only the canonical external path after a file action is approved', async () => {
+    const fixture = createFixture();
+    const evaluated = await fixture.permissions.evaluateToolCall(baseRequest({
+      registeredTool: registeredTool('write_file'),
+      toolInput: { path: '../outside/a.ts', content: 'x' },
+      permissionMode: 'ask',
+    }));
+    if (evaluated.status !== 'ok' || evaluated.decision.type !== 'requires_approval') {
+      throw new Error('Approval expected.');
+    }
+
+    const applied = await fixture.permissions.applyApprovalDecision({
+      originalPermissionDecision: evaluated.decision,
+      originalSubject: evaluated.approvalSubject,
+      currentSubject: evaluated.approvalSubject,
+      decision: {
+        approvalRequestId: 'approval_1',
+        decision: 'approved',
+        optionId: evaluated.decision.defaultOptionId,
+        decidedBy: 'user',
+        decidedAt: '2026-07-19T00:00:01.000Z',
+      },
+      sessionId: 'session_1',
+      appliedAt: '2026-07-19T00:00:01.000Z',
+      permissionMode: 'ask',
+    });
+
+    expect(applied).toMatchObject({
+      status: 'applied',
+      executionAccess: {
+        fileSystem: {
+          mode: 'workspace_and_paths',
+          readablePaths: [],
+          writablePaths: ['C:/outside/a.ts'],
+        },
+        process: 'sandboxed',
+        network: 'denied',
+      },
+    });
+  });
   it('fails closed for unknown shell kinds and untrusted external tools', async () => {
     const fixture = createFixture();
     expect(await fixture.permissions.evaluateToolCall(baseRequest({

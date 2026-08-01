@@ -1,4 +1,4 @@
-/* Exercises canonical workspace file actions through the real Node adapter. */
+﻿/* Exercises canonical workspace file actions through the real Node adapter. */
 // @vitest-environment node
 
 import fs from 'node:fs/promises';
@@ -79,5 +79,69 @@ describe('Node Sandbox file access', () => {
       edits: [{ oldText: 'external', newText: 'lost' }],
     })).rejects.toMatchObject({ code: 'content_conflict' });
     await expect(fs.readFile(path.join(root, 'paper.md'), 'utf8')).resolves.toBe('external change');
+  });
+  it('allows only the approved external path and its descendants', async () => {
+    const { root } = await workspace();
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'megumi-approved-external-'));
+    roots.push(outside);
+    const approved = path.join(outside, 'approved.txt');
+    const sibling = path.join(outside, 'sibling.txt');
+    await fs.writeFile(approved, 'approved', 'utf8');
+    await fs.writeFile(sibling, 'sibling', 'utf8');
+    const files = createNodeSandboxFileAccess({
+      workspaceRoot: root,
+      access: {
+        mode: 'workspace_and_paths',
+        readablePaths: [approved],
+        writablePaths: [],
+      },
+    });
+
+    await expect(files.readFile({ path: approved })).resolves.toMatchObject({
+      path: path.resolve(approved),
+      content: 'approved',
+    });
+    await expect(files.readFile({ path: sibling })).rejects.toMatchObject({
+      code: 'path_outside_workspace',
+    });
+  });
+
+  it('allows an approved external write but not a sibling write', async () => {
+    const { root } = await workspace();
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'megumi-approved-write-'));
+    roots.push(outside);
+    const approved = path.join(outside, 'approved.txt');
+    const sibling = path.join(outside, 'sibling.txt');
+    const files = createNodeSandboxFileAccess({
+      workspaceRoot: root,
+      access: {
+        mode: 'workspace_and_paths',
+        readablePaths: [],
+        writablePaths: [approved],
+      },
+    });
+
+    await expect(files.writeFile({ path: approved, content: 'approved', overwrite: false }))
+      .resolves.toMatchObject({ path: path.resolve(approved), created: true });
+    await expect(files.writeFile({ path: sibling, content: 'sibling', overwrite: false }))
+      .rejects.toMatchObject({ code: 'path_outside_workspace' });
+  });
+
+  it('allows unrestricted external access while retaining recoverable delete', async () => {
+    const { root } = await workspace();
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'megumi-unrestricted-files-'));
+    roots.push(outside);
+    const target = path.join(outside, 'target.txt');
+    await fs.writeFile(target, 'delete me', 'utf8');
+    const files = createNodeSandboxFileAccess({
+      workspaceRoot: root,
+      access: { mode: 'unrestricted' },
+    });
+
+    const removed = await files.deletePath({ path: target, recursive: false });
+    expect(removed).toMatchObject({ path: path.resolve(target), recoverable: true });
+    expect(path.isAbsolute(removed.recoveryPath)).toBe(true);
+    await expect(fs.readFile(removed.recoveryPath, 'utf8')).resolves.toBe('delete me');
+    await expect(fs.stat(target)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 });
