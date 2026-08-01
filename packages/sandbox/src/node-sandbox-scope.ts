@@ -1,6 +1,7 @@
 ﻿/* Opens one bounded Sandbox scope and converges all process executions on close. */
 import process from 'node:process';
 import { createNodeSandboxFileAccess } from './node-sandbox';
+import { createNodeUnrestrictedProcess } from './node-unrestricted-process';
 import type { OpenSandboxRequest, Sandbox, SandboxCapabilities, SandboxScope } from './sandbox';
 import { SandboxProcessError, type SandboxProcess } from './sandbox-process';
 import {
@@ -25,6 +26,16 @@ const PORTABLE_CAPABILITIES: SandboxCapabilities = {
   memoryLimit: false,
 };
 
+const PORTABLE_UNRESTRICTED_CAPABILITIES: SandboxCapabilities = {
+  ...PORTABLE_CAPABILITIES,
+  fileReadBoundary: false,
+  fileWriteBoundary: false,
+  environmentIsolation: true,
+  networkIsolation: false,
+  processTreeTermination: true,
+  timeLimit: true,
+  outputLimit: true,
+};
 export function createNodeSandbox(input: { readonly platform?: NodeJS.Platform } = {}): Sandbox {
   const platform = input.platform ?? process.platform;
   const advertisedCapabilities = platform === 'win32'
@@ -41,14 +52,18 @@ export function createNodeSandbox(input: { readonly platform?: NodeJS.Platform }
         ? isolation === 'restricted'
           ? WINDOWS_SANDBOX_CAPABILITIES
           : WINDOWS_UNRESTRICTED_CAPABILITIES
-        : advertisedCapabilities;
+        : isolation === 'unrestricted'
+          ? { ...PORTABLE_UNRESTRICTED_CAPABILITIES, platform }
+          : advertisedCapabilities;
       const processAdapter = platform === 'win32'
         ? createWindowsSandboxProcess({
             workspaceRoot: request.policy.workspaceRoot,
             maxProcessCount: request.policy.maxProcessCount,
             isolation,
           })
-        : unavailableProcess();
+        : isolation === 'unrestricted'
+          ? createNodeUnrestrictedProcess()
+          : unavailableProcess();
       return {
         status: 'opened',
         scope: createScope(request, capabilities, processAdapter),

@@ -18,3 +18,4 @@ export { createNodeSandbox } from './node-sandbox-scope';
 
 export { executeSandboxScope } from './sandbox-scope-execution';
 export type { SandboxScopeExecutionResult } from './sandbox-scope-execution';
+export { createNodeUnrestrictedProcess } from './node-unrestricted-process';

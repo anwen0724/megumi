@@ -57,7 +57,8 @@ describe('Package Owner boundaries', () => {
     const productSource = fs.readFileSync(path.join(root, 'packages/product/src/product.ts'), 'utf8');
     expect(productSource).not.toMatch(/\.sandbox\.open\s*\(/u);
     expect(productSource).not.toMatch(/\.scope\.close\s*\(/u);
-    expect(productSource).toContain('executeSandboxScope');
+    expect(productSource).not.toContain('executeSandboxScope');
+    expect(productSource).toContain('createSandboxToolExecutor');
   });
   it('allows Package subpaths only when the owning manifest exports them', () => {
     const packageExports = readPackageExports();

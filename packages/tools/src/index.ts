@@ -84,3 +84,6 @@ export {
   type WebFetch,
   type WebFetchResult,
 } from './built-ins/web-fetch';
+
+export { createSandboxToolExecutor } from './sandbox-tool-executor';
+export type { CreateSandboxToolExecutorRequest } from './sandbox-tool-executor';

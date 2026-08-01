@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Composes the complete Product directly from real Package contracts and owns
  * Product resource startup, per-Run Tool snapshots, and ordered shutdown.
  */
@@ -29,7 +29,7 @@ import {
   type RuntimeLogger,
 } from '@megumi/observability';
 import { createPermissions } from '@megumi/permissions';
-import { createNodeSandbox, executeSandboxScope, type Sandbox } from '@megumi/sandbox';
+import { createNodeSandbox, type Sandbox } from '@megumi/sandbox';
 import {
   createSessionTimelineQuery,
   createWorkspaceChangeFooterProjector,
@@ -49,6 +49,7 @@ import { composeSkills, type SkillService } from '@megumi/skills';
 import {
   BUILT_IN_TOOL_NAMES,
   createTools,
+  createSandboxToolExecutor,
   createWebFetch,
   createWebSearch,
   type BuiltInToolName,
@@ -491,50 +492,36 @@ function createProductToolSnapshots(input: {
         input.process ?? createProductToolProcessDescriptor(),
         input.resolveSkillService({ workspaceId: scope.workspaceId }),
       );
-      return {
+      return createSandboxToolExecutor({
         preflight: (request) => preflightTools.executor.preflight(request),
-        async execute(request, operationOptions) {
-          if (!operationOptions?.executionAccess) {
-            return sandboxFailure(request.toolName, 'Tool execution access was not provided.');
-          }
-          const execution = await executeSandboxScope({
-            sandbox: input.sandbox,
-            open: {
-              policy: {
-                workspaceRoot,
-                executionAccess: operationOptions.executionAccess,
-                maxExecutionTimeMs: PRODUCT_ENGINE_POLICY.toolExecutionTimeoutMs,
-                maxOutputBytes: 20_000,
-                maxProcessCount: 16,
-              },
-              ...(operationOptions.signal ? { signal: operationOptions.signal } : {}),
-            },
-            async execute(sandboxScope) {
-              const scopedTools = createToolsForSnapshot(
-                snapshot,
-                sandboxScope.files,
-                sandboxScope.process,
-                input.resolveSkillService({ workspaceId: scope.workspaceId }),
-              );
-              return input.workspaceChanges.trackToolExecution({
-                scope: {
-                  run_id: scope.runId,
-                  session_id: scope.sessionId,
-                  workspace_id: scope.workspaceId,
-                },
-                execute: () => scopedTools.executor.execute(request, operationOptions),
-              });
-            },
-          });
-          if (execution.status === 'unavailable') {
-            return sandboxFailure(request.toolName, execution.reason);
-          }
-          return execution.status === 'termination_unconfirmed'
-            ? sandboxFailure(request.toolName, 'Sandbox scope could not confirm process termination.', execution.value.effectReport)
-            : execution.value;
+        sandbox: input.sandbox,
+        policy: {
+          workspaceRoot,
+          maxExecutionTimeMs: PRODUCT_ENGINE_POLICY.toolExecutionTimeoutMs,
+          maxOutputBytes: 20_000,
+          maxProcessCount: 16,
         },
-      };
-    },  };
+        createExecutor(sandboxScope) {
+          return createToolsForSnapshot(
+            snapshot,
+            sandboxScope.files,
+            sandboxScope.process,
+            input.resolveSkillService({ workspaceId: scope.workspaceId }),
+          ).executor;
+        },
+        trackExecution(execute) {
+          return input.workspaceChanges.trackToolExecution({
+            scope: {
+              run_id: scope.runId,
+              session_id: scope.sessionId,
+              workspace_id: scope.workspaceId,
+            },
+            execute,
+          });
+        },
+      });
+    },
+  };
 }
 
 function resolveToolSnapshot(
@@ -590,16 +577,6 @@ function createProductToolProcessDescriptor(): ToolProcessAdapter {
 }
 
 
-function sandboxFailure(toolName: string, message: string, effectReport?: import('@megumi/tools').ToolEffectReport): import('@megumi/tools').ToolExecutionResult {
-  return {
-    type: 'failed',
-    toolName,
-    error: { code: 'sandbox_unavailable', message },
-    normalizedResult: { kind: 'error', content: message, isError: true, truncated: false },
-    observation: { summary: message },
-    ...(effectReport ? { effectReport } : {}),
-  };
-}
 function modelVisibleOperatingSystem(platform: NodeJS.Platform): string {
   if (platform === 'win32') return 'Windows';
   if (platform === 'darwin') return 'macOS';

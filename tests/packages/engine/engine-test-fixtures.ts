@@ -39,7 +39,9 @@ import {
   allowDecision,
   approvalSubjectFor,
   registeredTool,
+  restrictedExecutionAccess,
   succeeded,
+  unrestrictedExecutionAccess,
   toolExecutor,
 } from './tool-call-test-fixtures';
 
@@ -181,11 +183,13 @@ export function createEngineFixture(input: {
         operations: decision.operations,
         decision,
         approvalSubject: approvalSubjectFor(request, decision),
+        executionAccess: restrictedExecutionAccess,
       };
     },
     applyApprovalDecision: async () => ({
       status: 'applied',
       effect: { type: 'none' },
+      executionAccess: unrestrictedExecutionAccess,
     }),
   };
 

@@ -1,8 +1,8 @@
-﻿/* Runs Windows commands in either an AppContainer or an unrestricted bounded Job Object. */
+/* Runs Windows commands in either an AppContainer or an unrestricted bounded Job Object. */
 
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import fs from 'node:fs/promises';
+import fs, { type FileHandle } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { SandboxCapabilities } from './sandbox';
@@ -12,6 +12,11 @@ import { WINDOWS_JOB_LAUNCHER_SOURCE } from './windows-job-launcher-source';
 const HELPER_ERROR_PREFIX = 'MEGUMI_SANDBOX_ERROR:';
 let helperPromise: Promise<string> | undefined;
 const reservedDriveLetters = new Set<string>();
+
+interface DriveReservation {
+  readonly drive: string;
+  release(): Promise<void>;
+}
 
 export const WINDOWS_SANDBOX_CAPABILITIES: SandboxCapabilities = {
   platform: 'win32', shellKind: 'powershell', workspaceEffectObservation: false,
@@ -49,49 +54,107 @@ export function createWindowsSandboxProcess(input: {
         throw new SandboxProcessError('sandbox_denied', 'Command cwd is outside the active Workspace.');
       }
       const helper = await ensureWindowsLauncher();
-      const drive = isolation === 'restricted' ? await reserveDriveLetter() : '-';
-      const relativeCwd = path.relative(canonicalRoot, canonicalCwd);
-      const mappedCwd = relativeCwd === '' ? `${drive}\\` : `${drive}\\${relativeCwd}`;
-      const command = isolation === 'restricted'
-        ? request.command.replaceAll(canonicalRoot, `${drive}\\`)
-        : request.command;
-      const scopeTemp = isolation === 'restricted'
-        ? path.join(canonicalRoot, '.megumi', 'sandbox-tmp', randomUUID())
-        : await fs.mkdtemp(path.join(os.tmpdir(), 'megumi-process-'));
-      await fs.mkdir(scopeTemp, { recursive: true });
-      const windowsRoot = process.env.SystemRoot ?? 'C:\\Windows';
-      const executable = path.join(windowsRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-      const args = [
-        '--isolation', isolation,
-        '--workspace', canonicalRoot,
-        '--cwd', canonicalCwd,
-        '--drive', drive,
-        '--max-processes', String(maxProcessCount),
-        executable,
-        '-NoLogo', '-NoProfile', '-NonInteractive', '-Command',
-        `$ErrorActionPreference = 'Continue'; Set-Location -LiteralPath '${(isolation === 'restricted' ? mappedCwd : canonicalCwd).replaceAll("'", "''")}'; ${command}`,
-      ];
+      const driveReservation = isolation === 'restricted' ? await reserveDriveLetter() : undefined;
+      let scopeTemp: string | undefined;
       try {
+        const drive = driveReservation?.drive ?? '-';
+        const relativeCwd = path.relative(canonicalRoot, canonicalCwd);
+        const mappedCwd = relativeCwd === '' ? `${drive}\\` : `${drive}\\${relativeCwd}`;
+        const command = isolation === 'restricted'
+          ? request.command.replaceAll(canonicalRoot, `${drive}\\`)
+          : request.command;
+        scopeTemp = isolation === 'restricted'
+          ? path.join(canonicalRoot, '.megumi', 'sandbox-tmp', randomUUID())
+          : await fs.mkdtemp(path.join(os.tmpdir(), 'megumi-process-'));
+        await fs.mkdir(scopeTemp, { recursive: true });
+        const windowsRoot = process.env.SystemRoot ?? 'C:\\Windows';
+        const executable = path.join(windowsRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+        const args = [
+          '--isolation', isolation,
+          '--workspace', canonicalRoot,
+          '--cwd', canonicalCwd,
+          '--drive', drive,
+          '--max-processes', String(maxProcessCount),
+          executable,
+          '-NoLogo', '-NoProfile', '-NonInteractive', '-Command',
+          `$ErrorActionPreference = 'Continue'; Set-Location -LiteralPath '${(isolation === 'restricted' ? mappedCwd : canonicalCwd).replaceAll("'", "''")}'; ${command}`,
+        ];
         return await runLauncher({ helper, args, cwd: canonicalCwd, temp: scopeTemp, options });
       } finally {
-        if (isolation === 'restricted') reservedDriveLetters.delete(drive);
-        await fs.rm(scopeTemp, { recursive: true, force: true }).catch(() => undefined);
+        await driveReservation?.release();
+        if (scopeTemp) await fs.rm(scopeTemp, { recursive: true, force: true }).catch(() => undefined);
       }
     },
   };
 }
 
-async function reserveDriveLetter(): Promise<string> {
+async function reserveDriveLetter(): Promise<DriveReservation> {
+  const lockDirectory = path.join(os.tmpdir(), 'megumi-sandbox-drive-locks');
+  await fs.mkdir(lockDirectory, { recursive: true });
   for (let code = 'Z'.charCodeAt(0); code >= 'P'.charCodeAt(0); code -= 1) {
     const drive = `${String.fromCharCode(code)}:`;
     if (reservedDriveLetters.has(drive)) continue;
-    try { await fs.access(`${drive}\\`); continue; } catch { /* Unmapped drive. */ }
+    const lockPath = path.join(lockDirectory, `${drive[0]}.lock`);
+    const lock = await acquireDriveLock(lockPath);
+    if (!lock) continue;
+    try {
+      await fs.access(`${drive}\\`);
+      await releaseDriveLock(lock, lockPath);
+      continue;
+    } catch { /* Unmapped drive. */ }
     reservedDriveLetters.add(drive);
-    return drive;
+    return {
+      drive,
+      async release() {
+        reservedDriveLetters.delete(drive);
+        await releaseDriveLock(lock, lockPath);
+      },
+    };
   }
   throw new SandboxProcessError('sandbox_unavailable', 'No temporary drive letter is available for the Windows Sandbox.');
 }
 
+async function acquireDriveLock(lockPath: string): Promise<FileHandle | undefined> {
+  try {
+    const lock = await fs.open(lockPath, 'wx');
+    await lock.writeFile(String(process.pid), 'utf8');
+    return lock;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+  }
+  const [ownerText, lockStats] = await Promise.all([
+    fs.readFile(lockPath, 'utf8').catch(() => ''),
+    fs.stat(lockPath).catch(() => undefined),
+  ]);
+  const owner = Number.parseInt(ownerText, 10);
+  const lockIsBeingCreated = !Number.isSafeInteger(owner)
+    && lockStats !== undefined
+    && Date.now() - lockStats.mtimeMs < 60_000;
+  if (lockIsBeingCreated || (Number.isSafeInteger(owner) && isProcessAlive(owner))) return undefined;
+  await fs.rm(lockPath, { force: true }).catch(() => undefined);
+  try {
+    const lock = await fs.open(lockPath, 'wx');
+    await lock.writeFile(String(process.pid), 'utf8');
+    return lock;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return undefined;
+    throw error;
+  }
+}
+
+async function releaseDriveLock(lock: FileHandle, lockPath: string): Promise<void> {
+  await lock.close().catch(() => undefined);
+  await fs.rm(lockPath, { force: true }).catch(() => undefined);
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
 async function ensureWindowsLauncher(): Promise<string> {
   helperPromise ??= compileWindowsLauncher();
   return helperPromise;
