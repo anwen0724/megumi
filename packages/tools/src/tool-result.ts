@@ -48,6 +48,8 @@ export function normalizeRawToolResult(input: {
       normalizedResult: normalizeFailureContent({ ...error, output: input.rawResult.content }),
       observation: { summary: `${input.toolName} failed` },
       ...(input.rawResult.metadata ? { metadata: cloneJsonObject(input.rawResult.metadata) } : {}),
+    ...(input.rawResult.effectReport ? { effectReport: cloneEffectReport(input.rawResult.effectReport) } : {}),
+      ...(input.rawResult.effectReport ? { effectReport: cloneEffectReport(input.rawResult.effectReport) } : {}),
     };
   }
 
@@ -60,6 +62,7 @@ export function normalizeRawToolResult(input: {
       ? { runtimeSources: input.rawResult.runtimeSources.map(cloneRuntimeSource) }
       : {}),
     ...(input.rawResult.metadata ? { metadata: cloneJsonObject(input.rawResult.metadata) } : {}),
+    ...(input.rawResult.effectReport ? { effectReport: cloneEffectReport(input.rawResult.effectReport) } : {}),
   };
 }
 
@@ -172,6 +175,10 @@ function trimToUtf8Limit(content: string, maxBytes: number): string {
 
 function isHighSurrogate(codeUnit: number): boolean {
   return codeUnit >= 0xD800 && codeUnit <= 0xDBFF;
+}
+
+function cloneEffectReport<T>(report: T): T {
+  return JSON.parse(JSON.stringify(report)) as T;
 }
 
 function cloneJsonObject(value: JsonObject): JsonObject {

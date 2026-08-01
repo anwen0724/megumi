@@ -9,6 +9,30 @@ import {
 } from '../../../packages/tools/src/tool-result';
 
 describe('Tool result normalization', () => {
+  it('preserves structured effects on both successful and failed results', () => {
+    const effectReport = {
+      coverage: 'complete' as const,
+      effects: [{ type: 'modified' as const, path: 'notes.md', pathType: 'file' as const }],
+      itemFailures: [],
+    };
+    const success = normalizeRawToolResult({
+      toolName: 'edit_file',
+      rawResult: { outputKind: 'json', content: { changed: true }, effectReport },
+    });
+    const failure = normalizeRawToolResult({
+      toolName: 'copy_path',
+      rawResult: {
+        outputKind: 'error',
+        content: 'copy failed',
+        isError: true,
+        error: { code: 'path_conflict', message: 'Destination exists.' },
+        effectReport,
+      },
+    });
+
+    expect(success.effectReport).toEqual(effectReport);
+    expect(failure.effectReport).toEqual(effectReport);
+  });
   it('redacts, bounds, and hides the raw adapter value', () => {
     const result = normalizeRawToolResult({
       toolName: 'run_command',

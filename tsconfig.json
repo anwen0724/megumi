@@ -49,6 +49,8 @@
       "@megumi/settings/*": ["packages/settings/src/*"],
       "@megumi/projections": ["packages/projections/src/index.ts"],
       "@megumi/projections/*": ["packages/projections/src/*"],
+      "@megumi/sandbox": ["packages/sandbox/src/index.ts"],
+      "@megumi/sandbox/*": ["packages/sandbox/src/*"],
       "@megumi/skills": ["packages/skills/src/index.ts"],
       "@megumi/skills/*": ["packages/skills/src/*"],
       "@megumi/ai": ["packages/ai/src/index.ts"],

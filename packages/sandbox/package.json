@@ -1,0 +1,13 @@
+{
+  "name": "@megumi/sandbox",
+  "version": "0.1.0",
+  "description": "Megumi execution isolation contracts and Node adapters",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@megumi/workspace": "0.1.0"
+  }
+}

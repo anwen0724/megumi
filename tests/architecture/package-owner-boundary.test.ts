@@ -17,6 +17,7 @@ const ownerPackages = [
   'observability',
   'permissions',
   'projections',
+  'sandbox',
   'session',
   'settings',
   'skills',
