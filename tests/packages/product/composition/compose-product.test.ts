@@ -5,7 +5,6 @@ import { join } from 'node:path';
 import fs from 'fs-extra';
 import { afterEach, describe, expect, it } from 'vitest';
 import { composeProduct } from '@megumi/product';
-import { createSandbox, resolveSandboxBackend } from '@megumi/sandbox';
 import {
   AssistantMessageEventStream,
   type Api,
@@ -37,7 +36,6 @@ describe('composeProduct', () => {
     const skillPath = join(workspaceRoot, '.megumi', 'skills', 'review', 'SKILL.md');
     const modelScript = toolThenReplyStreams(skillPath);
     const product = composeProduct({
-      sandbox: createSandbox({ backend: resolveSandboxBackend() }),
       home: {
         env: { MEGUMI_HOME: homePath },
         homeDirectory: root,

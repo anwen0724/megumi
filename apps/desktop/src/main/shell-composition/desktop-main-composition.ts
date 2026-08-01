@@ -1,7 +1,6 @@
 // Composes the Electron UI shell and connects it to the Product Host Interface.
 import { createElectronMegumiHomeSyncOptions } from '../adapters/electron-home-adapter';
 import { composeProduct } from '@megumi/product';
-import { createSandbox, resolveSandboxBackend } from '@megumi/sandbox';
 import { electronDirectoryPickerAdapter } from '../adapters/electron-directory-picker-adapter';
 import { electronFileOpenAdapter } from '../adapters/electron-file-open-adapter';
 import { electronObservabilityStorageAdapter } from '../adapters/electron-observability-storage-adapter';
@@ -16,7 +15,6 @@ import { electronSessionAttachmentFileSystem } from '../adapters/electron-sessio
 
 export function composeDesktopMain() {
   const product = composeProduct({
-    sandbox: createSandbox({ backend: resolveSandboxBackend() }),
     home: createElectronMegumiHomeSyncOptions(),
     migrationEnvironment: getElectronProductEnvironment(),
     observabilityStorage: electronObservabilityStorageAdapter,

@@ -60,13 +60,24 @@ describe('Package Owner boundaries', () => {
     expect(productSource).not.toContain('executeSandboxScope');
     expect(productSource).not.toContain('createNodeSandbox');
     expect(productSource).not.toContain('resolveSandboxBackend');
-    expect(productSource).toContain('sandbox: Sandbox');
+    expect(productSource).toContain('createSandbox()');
     expect(productSource).toContain('createSandboxToolExecutor');
   });
   it('keeps the generic Sandbox Scope independent from platform implementations', () => {
     const scopeSource = fs.readFileSync(path.join(root, 'packages/sandbox/src/sandbox-scope.ts'), 'utf8');
     expect(scopeSource).not.toMatch(/windows-|process.platform|['"]win32['"]/u);
     expect(scopeSource).toContain('SandboxBackend');
+  });
+  it('keeps platform Backend selection internal to Sandbox', () => {
+    const publicSource = fs.readFileSync(path.join(root, 'packages/sandbox/src/index.ts'), 'utf8');
+    const desktopSource = readTypeScriptTree('apps/desktop');
+    const evaluationSource = readTypeScriptTree('evals/agent');
+    expect(publicSource).not.toContain('resolveSandboxBackend');
+    expect(publicSource).not.toContain('SandboxBackend');
+    expect(desktopSource).not.toContain('resolveSandboxBackend');
+    expect(desktopSource).not.toContain('createSandbox');
+    expect(evaluationSource).not.toContain('resolveSandboxBackend');
+    expect(evaluationSource).not.toContain('createSandbox');
   });
   it('allows Package subpaths only when the owning manifest exports them', () => {
     const packageExports = readPackageExports();

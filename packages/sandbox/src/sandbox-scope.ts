@@ -1,6 +1,6 @@
-/* Opens one bounded Sandbox scope through an injected platform Backend. */
+/* Opens one bounded Sandbox scope through the selected platform Backend. */
 import { createNodeSandboxFileAccess } from './node-sandbox';
-import type { SandboxBackend } from './sandbox-backend';
+import { resolveSandboxBackend, type SandboxBackend } from './sandbox-backend';
 import type { OpenSandboxRequest, Sandbox, SandboxCapabilities, SandboxScope } from './sandbox';
 import { SandboxProcessError, type SandboxProcess } from './sandbox-process';
 
@@ -10,10 +10,14 @@ const DEFAULT_EXECUTION_ACCESS = {
   network: 'denied' as const,
 };
 
-export function createSandbox(input: { readonly backend: SandboxBackend }): Sandbox {
+export function createSandbox(): Sandbox {
+  return createSandboxWithBackend(resolveSandboxBackend());
+}
+
+export function createSandboxWithBackend(backend: SandboxBackend): Sandbox {
   return {
     capabilities: () => ({
-      ...input.backend.capabilities({ executionAccess: DEFAULT_EXECUTION_ACCESS }),
+      ...backend.capabilities({ executionAccess: DEFAULT_EXECUTION_ACCESS }),
     }),
     async open(request) {
       request.signal?.throwIfAborted();
@@ -26,8 +30,8 @@ export function createSandbox(input: { readonly backend: SandboxBackend }): Sand
         status: 'opened',
         scope: createScope(
           request,
-          input.backend.capabilities({ executionAccess: request.policy.executionAccess }),
-          input.backend.createProcess(backendRequest),
+          backend.capabilities({ executionAccess: request.policy.executionAccess }),
+          backend.createProcess(backendRequest),
         ),
       };
     },

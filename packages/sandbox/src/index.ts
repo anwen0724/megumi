@@ -9,12 +9,6 @@ export type {
   SandboxPolicy,
   SandboxScope,
 } from './sandbox';
-export type {
-  CreateSandboxBackendProcessRequest,
-  SandboxBackend,
-  SandboxBackendCapabilitiesRequest,
-} from './sandbox-backend';
-export { createUnsupportedSandboxBackend, resolveSandboxBackend } from './sandbox-backend';
 export type { SandboxFileAccess, SandboxFileEntry, SandboxTextEdit, SandboxWalkResult, SandboxWalkWarning } from './sandbox-files';
 export { createNodeSandboxFileAccess, SandboxFileError } from './node-sandbox';
 export { SandboxProcessError } from './sandbox-process';

@@ -4,7 +4,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createSandbox, resolveSandboxBackend } from '../../../packages/sandbox/src';
+import { resolveSandboxBackend } from '../../../packages/sandbox/src/sandbox-backend';
+import { createSandboxWithBackend } from '../../../packages/sandbox/src/sandbox-scope';
 
 const roots: string[] = [];
 afterEach(async () => Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true }))));
@@ -17,7 +18,7 @@ async function openScope(
 ) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'megumi-sandbox-scope-'));
   roots.push(root);
-  const opened = await createSandbox({ backend: resolveSandboxBackend({ platform: 'win32' }) }).open({
+  const opened = await createSandboxWithBackend(resolveSandboxBackend({ platform: 'win32' })).open({
     policy: {
       workspaceRoot: root,
       executionAccess: {

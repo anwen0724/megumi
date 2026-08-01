@@ -4,13 +4,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  createSandbox,
-  createUnsupportedSandboxBackend,
-  resolveSandboxBackend,
-  type SandboxBackend,
   type SandboxCapabilities,
   type SandboxProcess,
 } from '../../../packages/sandbox/src';
+import {
+  createUnsupportedSandboxBackend,
+  resolveSandboxBackend,
+  type SandboxBackend,
+} from '../../../packages/sandbox/src/sandbox-backend';
+import { createSandboxWithBackend } from '../../../packages/sandbox/src/sandbox-scope';
 
 const workspaceAccess = {
   fileSystem: { mode: 'workspace' as const },
@@ -47,7 +49,7 @@ describe('Sandbox Backend', () => {
       capabilities: vi.fn(() => capabilities),
       createProcess: vi.fn(() => processAdapter),
     };
-    const sandbox = createSandbox({ backend });
+    const sandbox = createSandboxWithBackend(backend);
     const opened = await sandbox.open({
       policy: {
         workspaceRoot: process.cwd(),

@@ -28,7 +28,7 @@ import {
   type RuntimeLogger,
 } from '@megumi/observability';
 import { createPermissions } from '@megumi/permissions';
-import type { Sandbox, SandboxCapabilities } from '@megumi/sandbox';
+import { createSandbox, type Sandbox, type SandboxCapabilities } from '@megumi/sandbox';
 import {
   createSessionTimelineQuery,
   createWorkspaceChangeFooterProjector,
@@ -99,7 +99,6 @@ import { migrateLegacyProviderApiSettingsFile } from './migrations/legacy-provid
 
 export interface ComposeProductOptions {
   home: InitializeMegumiHomeSyncOptions;
-  sandbox: Sandbox;
   migrationsFolder?: string;
   migrationEnvironment?: Omit<ResolveDatabaseMigrationsFolderRequest, 'migrationsFolder'>;
   observabilityStorage?: ObservabilityStorage;
@@ -162,7 +161,7 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
   const workspaceStore = createWorkspaceStore({ database });
   const workspaceFileSystem = createNodeWorkspaceFileSystem();
   const workspacePathPolicy = createWorkspacePathPolicy();
-  const sandbox = options.sandbox;
+  const sandbox = createSandbox();
   const workspaces = createWorkspaceCatalog({ store: workspaceStore, file_system: workspaceFileSystem });
   const workspaceFiles = createWorkspaceFiles({
     catalog: workspaces,
