@@ -118,9 +118,25 @@ export interface ToolExecutionOutputChunk {
   readonly truncated: boolean;
 }
 
+export type ToolExecutionFileAccess =
+  | { readonly mode: 'workspace' }
+  | {
+      readonly mode: 'workspace_and_paths';
+      readonly readablePaths: readonly string[];
+      readonly writablePaths: readonly string[];
+    }
+  | { readonly mode: 'unrestricted' };
+
+export interface ToolExecutionAccess {
+  readonly fileSystem: ToolExecutionFileAccess;
+  readonly process: 'sandboxed' | 'unrestricted';
+  readonly network: 'denied' | 'unrestricted';
+}
+
 export interface ToolExecutionOptions {
   readonly signal?: AbortSignal;
   readonly onOutput?: (output: ToolExecutionOutputChunk) => void;
+  readonly executionAccess?: ToolExecutionAccess;
 }
 
 export type RawToolResult = {

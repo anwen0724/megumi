@@ -1,7 +1,7 @@
 /*
  * Applies rule precedence, Permission mode defaults, and risk assessment to resolved operations.
  */
-import type { JsonObject } from '@megumi/tools';
+import type { JsonObject, ToolExecutionAccess } from '@megumi/tools';
 import {
   createApprovalSubject,
   type ApprovalOption,
@@ -9,6 +9,7 @@ import {
   type PermissionDecision,
 } from './approval';
 import type { EvaluateToolCallRequest, PermissionOperation } from './permission-operation';
+import { executionAccessFor } from './permission-execution-access';
 import {
   matchesPermissionRule,
   type PermissionRule,
@@ -19,6 +20,7 @@ import {
 export interface PermissionPolicyResult {
   readonly decision: PermissionDecision;
   readonly approvalSubject: ApprovalSubject;
+  readonly executionAccess?: ToolExecutionAccess;
 }
 
 export function evaluatePermissionPolicy(request: {
@@ -86,6 +88,7 @@ export function evaluatePermissionPolicy(request: {
         safetySummary,
         reason: 'Allowed by an explicit Permission rule.',
       },
+      executionAccess: executionAccessFor({ permissionMode: settings.mode, operations }),
     };
   }
 
@@ -102,6 +105,7 @@ export function evaluatePermissionPolicy(request: {
           safetySummary,
           reason: `Allowed by ${settings.mode} mode.`,
         },
+        executionAccess: executionAccessFor({ permissionMode: settings.mode, operations }),
       }
     : {
         approvalSubject,

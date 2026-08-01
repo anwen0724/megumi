@@ -23,6 +23,7 @@ import {
   type PermissionWorkspacePathClassifier,
 } from './permission-operation';
 import { evaluatePermissionPolicy } from './permission-policy';
+import { ToolExecutionAccessSchema } from './permission-execution-access';
 import {
   PermissionFailureSchema,
   type PermissionFailure,
@@ -36,6 +37,7 @@ export const EvaluateToolCallResultSchema = z.discriminatedUnion('status', [
     operations: z.array(PermissionOperationSchema).min(1),
     decision: PermissionDecisionSchema,
     approvalSubject: ApprovalSubjectSchema,
+    executionAccess: ToolExecutionAccessSchema.optional(),
   }).strict(),
   z.object({ status: z.literal('failed'), failure: PermissionFailureSchema }).strict(),
 ]);
@@ -46,6 +48,7 @@ export type EvaluateToolCallResult =
       readonly operations: readonly PermissionOperation[];
       readonly decision: PermissionDecision;
       readonly approvalSubject: ApprovalSubject;
+      readonly executionAccess?: import('@megumi/tools').ToolExecutionAccess;
     }
   | { readonly status: 'failed'; readonly failure: PermissionFailure };
 
@@ -132,6 +135,7 @@ export function createPermissions(dependencies: CreatePermissionsRequest): Permi
         operations: resolved.operations,
         decision: policy.decision,
         approvalSubject: policy.approvalSubject,
+        ...(policy.executionAccess ? { executionAccess: policy.executionAccess } : {}),
       };
     },
 

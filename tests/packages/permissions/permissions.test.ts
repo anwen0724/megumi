@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 /* Verifies operation resolution, policy order, modes, immutable approval subjects, and persistence effects. */
 import { describe, expect, it } from 'vitest';
 import {
@@ -178,6 +178,38 @@ describe('Permissions', () => {
       .toMatchObject({ decision: { type: 'requires_approval' } });
   });
 
+  it('returns the execution access selected by the permission mode and risk', async () => {
+    const fixture = createFixture();
+    const restricted = await fixture.permissions.evaluateToolCall(baseRequest({
+      registeredTool: registeredTool('read_file'),
+      toolInput: { path: 'notes/a.md' },
+      permissionMode: 'auto',
+    }));
+    expect(restricted).toMatchObject({
+      status: 'ok',
+      decision: { type: 'allow' },
+      executionAccess: {
+        fileSystem: { mode: 'workspace' },
+        process: 'sandboxed',
+        network: 'denied',
+      },
+    });
+
+    const unrestricted = await fixture.permissions.evaluateToolCall(baseRequest({
+      registeredTool: registeredTool('write_file'),
+      toolInput: { path: '../outside/a.ts', content: 'x' },
+      permissionMode: 'full_access',
+    }));
+    expect(unrestricted).toMatchObject({
+      status: 'ok',
+      decision: { type: 'allow' },
+      executionAccess: {
+        fileSystem: { mode: 'unrestricted' },
+        process: 'unrestricted',
+        network: 'unrestricted',
+      },
+    });
+  });
   it('keeps prohibited operations approvable while full access remains explicit', async () => {
     const fixture = createFixture();
     expect(await fixture.permissions.evaluateToolCall(baseRequest({
@@ -259,8 +291,17 @@ describe('Permissions', () => {
       },
       sessionId: 'session_1',
       appliedAt: '2026-07-19T00:00:01.000Z',
+      permissionMode: 'ask',
     });
-    expect(unchanged).toEqual({ status: 'applied', effect: { type: 'none' } });
+    expect(unchanged).toEqual({
+      status: 'applied',
+      effect: { type: 'none' },
+      executionAccess: {
+        fileSystem: { mode: 'unrestricted' },
+        process: 'unrestricted',
+        network: 'unrestricted',
+      },
+    });
 
     const changedEvaluation = await fixture.permissions.evaluateToolCall(baseRequest({
       toolInput: { command: 'npm install' },
@@ -277,6 +318,7 @@ describe('Permissions', () => {
       },
       sessionId: 'session_1',
       appliedAt: '2026-07-19T00:00:02.000Z',
+      permissionMode: 'ask',
     })).toMatchObject({ status: 'rejected', reason: 'subject_changed' });
   });
 
@@ -300,6 +342,7 @@ describe('Permissions', () => {
       },
       sessionId: 'session_1',
       appliedAt: '2026-07-19T00:00:02.000Z',
+      permissionMode: 'ask',
     })).toMatchObject({ status: 'rejected', reason: 'subject_invalid' });
     expect(fixture.ruleAccess.writes).toHaveLength(0);
   });
@@ -328,6 +371,7 @@ describe('Permissions', () => {
       },
       sessionId: 'session_1',
       appliedAt: '2026-07-19T00:00:02.000Z',
+      permissionMode: 'ask',
     });
     expect(result).toMatchObject({ status: 'applied', effect: { type: 'session_tool_grant' } });
     expect(fixture.ruleAccess.writes).toEqual([{

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Protects RunApproval pause, atomic claim, revalidation, application, and resolution.
  */
 import { describe, expect, it, vi } from 'vitest';
@@ -29,6 +29,8 @@ import {
   storeForRun,
   succeeded,
   toolCall,
+  restrictedExecutionAccess,
+  unrestrictedExecutionAccess,
 } from './tool-call-test-fixtures';
 
 function approvalDecisionFor(
@@ -66,12 +68,16 @@ function approvalPermissions(input: {
         operations: decision.operations,
         decision,
         approvalSubject: approvalSubjectFor(permissionRequest, decision),
+        ...(decision.type === 'allow'
+          ? { executionAccess: restrictedExecutionAccess }
+          : {}),
       };
     },
   );
   const defaultApply: Permissions['applyApprovalDecision'] = vi.fn(async () => ({
     status: 'applied' as const,
     effect: { type: 'none' as const },
+    executionAccess: unrestrictedExecutionAccess,
   }));
   return {
     evaluateToolCall,
@@ -193,7 +199,11 @@ describe('resumeToolCallApproval', () => {
     const order: string[] = [];
     const applyApprovalDecision = vi.fn(async () => {
       order.push('apply');
-      return { status: 'applied' as const, effect: { type: 'none' as const } };
+      return {
+        status: 'applied' as const,
+        effect: { type: 'none' as const },
+        executionAccess: unrestrictedExecutionAccess,
+      };
     });
     const executeTool = vi.fn(async ({ toolName }) => {
       order.push('execute');
@@ -227,6 +237,12 @@ describe('resumeToolCallApproval', () => {
       sessionId: 'session:1',
     }));
     expect(executeTool).toHaveBeenCalledOnce();
+    expect(executeTool).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        executionAccess: unrestrictedExecutionAccess,
+      }),
+    );
     if (resumed.status !== 'resumed') throw new Error('Expected resumed');
     expect(resumed.toolResults).toMatchObject([
       { toolName: 'first', status: 'success' },

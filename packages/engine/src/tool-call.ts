@@ -12,6 +12,7 @@ import type {
 import {
   type NormalizedToolResult,
   type RegisteredTool,
+  type ToolExecutionAccess,
   type ToolExecutionObservation,
   type ToolExecutionOutputChunk,
   type ToolEffectReport,
@@ -169,6 +170,7 @@ export type ResumeToolCallApprovalResult =
 interface PlannedToolCall {
   readonly call: ToolCall;
   readonly registeredTool: RegisteredTool;
+  readonly executionAccess: ToolExecutionAccess;
 }
 
 interface ExecutedToolCall {
@@ -329,7 +331,15 @@ export async function processToolCalls(
       };
     }
 
-    const plan = { call: preparedCall, registeredTool };
+if (!permission.executionAccess) {
+      await flushParallelWindow();
+      return failedProcessing(
+        permissionFailure('Permission allow decision did not provide Tool execution access.'),
+        toolResults,
+        toolExecutions,
+      );
+    }
+    const plan = { call: preparedCall, registeredTool, executionAccess: permission.executionAccess };
     const executionMode = registeredTool.definition.executionMode ?? 'serial';
     if (executionMode === 'parallel') {
       parallelWindow.push(plan);
@@ -381,6 +391,7 @@ export async function resumeToolCallApproval(
       decision: request.decision,
       sessionId: continuation.sessionId,
       appliedAt: request.clock.now(),
+      permissionMode: continuation.permissionMode,
     });
   } catch {
     cancelClaimedApproval(request.store, approval.runApprovalId, request.clock.now());
@@ -430,6 +441,13 @@ export async function resumeToolCallApproval(
     };
   }
 
+  if (!applied.executionAccess) {
+    cancelClaimedApproval(request.store, approval.runApprovalId, request.clock.now());
+    return {
+      status: 'failed',
+      failure: permissionFailure('Approved ToolCall did not receive Tool execution access.'),
+    };
+  }
   const resolvedApproval = request.store.resolveRunApproval({
     runApprovalId: approval.runApprovalId,
     status: 'approved',
@@ -454,6 +472,7 @@ export async function resumeToolCallApproval(
       {
         call: continuation.toolCall,
         registeredTool: continuation.registeredTool,
+        executionAccess: applied.executionAccess!,
       },
     );
   } catch {
@@ -561,6 +580,7 @@ async function executeToolCall(
     }, {
       signal,
       onOutput: (output) => request.onToolExecutionOutput?.(runningExecution, output),
+      executionAccess: plan.executionAccess,
     }))
       .then((result) => ({ type: 'result' as const, result }))
       .catch(() => ({ type: 'thrown' as const }));
