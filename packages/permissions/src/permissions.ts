@@ -17,7 +17,7 @@ import {
   EvaluateToolCallRequestSchema,
   PermissionOperationSchema,
   resolvePermissionOperations,
-  resolveWorkspacePathTarget,
+  resolveWorkspacePathTargets,
   type EvaluateToolCallRequest,
   type PermissionOperation,
   type PermissionWorkspacePathClassifier,
@@ -89,15 +89,15 @@ export function createPermissions(dependencies: CreatePermissionsRequest): Permi
         );
       }
 
-      const targetPath = resolveWorkspacePathTarget(parsed.data);
-      let workspacePath: Awaited<ReturnType<PermissionWorkspacePathClassifier['classifyWorkspacePath']>> | undefined;
+      const pathTargets = resolveWorkspacePathTargets(parsed.data);
+      const workspacePaths: Record<string, Awaited<ReturnType<PermissionWorkspacePathClassifier['classifyWorkspacePath']>>> = {};
       try {
-        workspacePath = targetPath
-          ? await dependencies.workspacePathClassifier.classifyWorkspacePath({
-              workspaceId: parsed.data.workspaceId,
-              targetPath,
-            })
-          : undefined;
+        for (const target of pathTargets) {
+          workspacePaths[target.field] = await dependencies.workspacePathClassifier.classifyWorkspacePath({
+            workspaceId: parsed.data.workspaceId,
+            targetPath: target.path,
+          });
+        }
       } catch {
         return dependencyFailure(
           'permission_workspace_path_failed',
@@ -105,19 +105,20 @@ export function createPermissions(dependencies: CreatePermissionsRequest): Permi
           'workspace_path_classification_threw',
         );
       }
-      if (workspacePath?.status === 'failed') {
+      const failedPath = Object.values(workspacePaths).find((result) => result.status === 'failed');
+      if (failedPath?.status === 'failed') {
         return dependencyFailure(
           'permission_workspace_path_failed',
           'Workspace path could not be classified.',
-          workspacePath.failure.code,
+          failedPath.failure.code,
         );
       }
 
       const resolved = resolvePermissionOperations({
         evaluation: parsed.data,
-        ...(workspacePath?.status === 'classified'
-          ? { workspacePath: workspacePath.workspacePath }
-          : {}),
+        workspacePaths: Object.fromEntries(Object.entries(workspacePaths).flatMap(([field, result]) => (
+          result.status === 'classified' ? [[field, result.workspacePath]] : []
+        ))),
       });
       const policy = evaluatePermissionPolicy({
         evaluation: parsed.data,

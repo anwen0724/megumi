@@ -120,7 +120,7 @@ function assessOperation(operation: PermissionOperation, riskFacts: JsonObject):
   if (operation.action === 'agent.context.activate') return 'safe';
   if (operation.action === 'external.invoke') return 'prohibited';
   if (operation.action === 'workspace.read' || operation.action === 'workspace.write') {
-    const path = objectFact(riskFacts.path);
+    const path = operation.resource?.attributes ?? objectFact(riskFacts.path);
     if (!path || path.classified !== true) return 'prohibited';
     return path.insideWorkspace === true && path.protected !== true && path.sensitive !== true
       ? 'safe'
@@ -161,27 +161,25 @@ function approvalDecision(request: {
   readonly reason: string;
 }): PermissionDecision {
   const highRisk = request.safetyAssessment === 'prohibited';
-  const tool = request.evaluation.registeredTool;
-  const options: ApprovalOption[] = [
-    {
-      optionId: `once:${request.evaluation.toolCallId}`,
-      scope: 'once',
-      display: {
-        label: highRisk ? 'Allow once (high risk)' : 'Once',
-        description: highRisk
-          ? 'This target is outside the normal safety boundary. Allow only this Tool Call.'
-          : 'Allow only this Tool Call.',
-      },
-      effect: { type: 'current_tool_call' },
+  const options: ApprovalOption[] = [{
+    optionId: `once:${request.evaluation.toolCallId}`,
+    scope: 'once',
+    display: {
+      label: highRisk ? 'Allow once (high risk)' : 'Once',
+      description: highRisk
+        ? 'This target is outside the normal safety boundary. Allow only this Tool Call.'
+        : 'Allow only this Tool Call.',
     },
-    {
-      optionId: `session:${tool.identity.sourceId}:${tool.identity.namespace}:${tool.identity.sourceToolName}`,
+    effect: { type: 'current_tool_call' },
+  }];
+  const sessionOperation = sessionGrantOperation(request);
+  if (sessionOperation?.resource?.id) {
+    options.push({
+      optionId: `session:${request.evaluation.toolCallId}:${sessionOperation.resource.id}`,
       scope: 'session',
       display: {
-        label: highRisk ? 'Allow Tool for Session (high risk)' : 'Session',
-        description: highRisk
-          ? 'This target is outside the normal safety boundary. Allow this Tool throughout the current Session.'
-          : 'Allow this Tool for the current Session.',
+        label: 'Session',
+        description: 'Allow this read operation for the same Workspace path during this Session.',
       },
       effect: {
         type: 'session_tool_grant',
@@ -189,17 +187,17 @@ function approvalDecision(request: {
           source: 'session',
           source_id: request.evaluation.sessionId,
           target: {
-            kind: 'tool',
-            tool_identity: {
-              source_id: tool.identity.sourceId,
-              namespace: tool.identity.namespace,
-              source_tool_name: tool.identity.sourceToolName,
+            kind: 'operation',
+            action: sessionOperation.action,
+            resource: {
+              type: sessionOperation.resource.type,
+              matcher: { operator: 'exact', value: sessionOperation.resource.id },
             },
           },
         },
       },
-    },
-  ];
+    });
+  }
   return {
     type: 'requires_approval',
     operations: request.operations,
@@ -210,6 +208,21 @@ function approvalDecision(request: {
     defaultOptionId: options[0].optionId,
     subjectFingerprint: request.approvalSubject.fingerprint,
   };
+}
+
+function sessionGrantOperation(request: {
+  readonly evaluation: EvaluateToolCallRequest;
+  readonly operations: readonly PermissionOperation[];
+  readonly safetyAssessment: SafetyAssessment;
+}): PermissionOperation | undefined {
+  const tool = request.evaluation.registeredTool;
+  if (request.safetyAssessment !== 'safe'
+    || request.operations.length !== 1
+    || request.operations[0].action !== 'workspace.read'
+    || tool.source.sourceKind !== 'built_in'
+    || tool.identity.sourceToolName !== 'read_file'
+    || tool.registeredToolName !== 'read_file') return undefined;
+  return request.operations[0];
 }
 
 function matchesAny(rules: readonly PermissionRule[], operations: readonly PermissionOperation[]): boolean {

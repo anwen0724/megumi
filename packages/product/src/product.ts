@@ -261,25 +261,29 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
       },
     },
     workspacePathClassifier: {
-      classifyWorkspacePath(request) {
+      async classifyWorkspacePath(request) {
         const workspace = workspaces.getWorkspace({ workspace_id: request.workspaceId });
         if (workspace.status !== 'found') {
           return { status: 'failed', failure: { code: 'workspace_not_found', message: 'Workspace was not found.' } };
         }
-        const classified = workspacePathPolicy.classifyPath({
+        const canonical = await workspacePathPolicy.resolveCanonicalPath({
           workspace_root: workspace.workspace.root_path,
           target_path: request.targetPath,
+          file_system: workspaceFileSystem,
         });
-        return {
-          status: 'classified',
-          workspacePath: {
-            absolutePath: classified.absolute_path,
-            workspacePath: classified.workspace_path,
-            insideWorkspace: classified.inside_workspace,
-            protected: classified.protected,
-            sensitive: classified.sensitive,
-          },
-        };
+        if (canonical.status !== 'resolved') {
+          return { status: 'classified', workspacePath: {
+            absolutePath: request.targetPath, workspacePath: request.targetPath,
+            insideWorkspace: false, protected: false, sensitive: false,
+          } };
+        }
+        return { status: 'classified', workspacePath: {
+          absolutePath: canonical.absolute_path,
+          workspacePath: canonical.workspace_path,
+          insideWorkspace: true,
+          protected: canonical.protected,
+          sensitive: canonical.sensitive,
+        } };
       },
     },
   });
