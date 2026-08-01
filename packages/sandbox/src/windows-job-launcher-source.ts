@@ -1,4 +1,4 @@
-/* Embeds the trusted Windows launcher compiled on demand for AppContainer + Job Object startup. */
+﻿/* Embeds the trusted Windows launcher compiled on demand for AppContainer + Job Object startup. */
 
 export const WINDOWS_JOB_LAUNCHER_SOURCE = String.raw`
 using System;
@@ -9,6 +9,7 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
 
+// Supports restricted AppContainer and unrestricted Job-only execution.
 public static class MegumiSandboxLauncher {
   const int STARTF_USESTDHANDLES = 0x00000100;
   const uint EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
@@ -69,27 +70,32 @@ public static class MegumiSandboxLauncher {
   [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] static extern bool DefineDosDevice(uint flags, string deviceName, string targetPath);
 
   public static int Main(string[] args) {
-    if (args.Length < 7 || args[0] != "--workspace" || args[2] != "--drive" || args[4] != "--max-processes") return Fail("INVALID_ARGUMENTS", "Launcher arguments are invalid.");
-    string workspace = Path.GetFullPath(args[1]);
-    string drive = args[3];
+    if (args.Length < 11 || args[0] != "--isolation" || args[2] != "--workspace" || args[4] != "--cwd" || args[6] != "--drive" || args[8] != "--max-processes") return Fail("INVALID_ARGUMENTS", "Launcher arguments are invalid.");
+    bool restricted = args[1] == "restricted";
+    if (!restricted && args[1] != "unrestricted") return Fail("INVALID_ARGUMENTS", "Isolation mode is invalid.");
+    string workspace = Path.GetFullPath(args[3]);
+    string cwd = Path.GetFullPath(args[5]);
+    string drive = args[7];
     uint maxProcesses;
-    if (!UInt32.TryParse(args[5], out maxProcesses) || maxProcesses < 2) return Fail("INVALID_ARGUMENTS", "Process limit is invalid.");
-    string program = Path.GetFullPath(args[6]);
-    string[] programArgs = new string[args.Length - 7];
-    Array.Copy(args, 7, programArgs, 0, programArgs.Length);
+    if (!UInt32.TryParse(args[9], out maxProcesses) || maxProcesses < 2) return Fail("INVALID_ARGUMENTS", "Process limit is invalid.");
+    string program = Path.GetFullPath(args[10]);
+    string[] programArgs = new string[args.Length - 11];
+    Array.Copy(args, 11, programArgs, 0, programArgs.Length);
     string moniker = "Megumi.Sandbox." + Guid.NewGuid().ToString("N");
     IntPtr sid = IntPtr.Zero, job = IntPtr.Zero, attributes = IntPtr.Zero;
     FileSystemAccessRule accessRule = null;
     string driveTarget = @"\??\" + workspace;
     try {
-      int hr = CreateAppContainerProfile(moniker, "Megumi Sandbox", "Megumi command execution scope", IntPtr.Zero, 0, out sid);
-      if (hr != 0) throw new Win32Exception(hr & 0xffff, "CreateAppContainerProfile failed");
-      SecurityIdentifier identity = new SecurityIdentifier(sid);
-      DirectorySecurity security = Directory.GetAccessControl(workspace);
-      accessRule = new FileSystemAccessRule(identity, FileSystemRights.Modify | FileSystemRights.ReadAndExecute | FileSystemRights.Synchronize, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow);
-      security.AddAccessRule(accessRule);
-      Directory.SetAccessControl(workspace, security);
-      if (!DefineDosDevice(DDD_RAW_TARGET_PATH | DDD_NO_BROADCAST_SYSTEM, drive, driveTarget)) ThrowLast("Workspace drive mapping failed");
+      if (restricted) {
+        int hr = CreateAppContainerProfile(moniker, "Megumi Sandbox", "Megumi command execution scope", IntPtr.Zero, 0, out sid);
+        if (hr != 0) throw new Win32Exception(hr & 0xffff, "CreateAppContainerProfile failed");
+        SecurityIdentifier identity = new SecurityIdentifier(sid);
+        DirectorySecurity security = Directory.GetAccessControl(workspace);
+        accessRule = new FileSystemAccessRule(identity, FileSystemRights.Modify | FileSystemRights.ReadAndExecute | FileSystemRights.Synchronize, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow);
+        security.AddAccessRule(accessRule);
+        Directory.SetAccessControl(workspace, security);
+        if (!DefineDosDevice(DDD_RAW_TARGET_PATH | DDD_NO_BROADCAST_SYSTEM, drive, driveTarget)) ThrowLast("Workspace drive mapping failed");
+      }
       job = CreateJobObject(IntPtr.Zero, null);
       if (job == IntPtr.Zero) ThrowLast("CreateJobObject failed");
       JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION();
@@ -98,16 +104,17 @@ public static class MegumiSandboxLauncher {
       if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, ref limits, (uint)Marshal.SizeOf(typeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION)))) ThrowLast("SetInformationJobObject failed");
 
       IntPtr size = IntPtr.Zero;
-      InitializeProcThreadAttributeList(IntPtr.Zero, 2, 0, ref size);
+      int attributeCount = restricted ? 2 : 1;
+      InitializeProcThreadAttributeList(IntPtr.Zero, attributeCount, 0, ref size);
       attributes = Marshal.AllocHGlobal(size);
-      if (!InitializeProcThreadAttributeList(attributes, 2, 0, ref size)) ThrowLast("InitializeProcThreadAttributeList failed");
+      if (!InitializeProcThreadAttributeList(attributes, attributeCount, 0, ref size)) ThrowLast("InitializeProcThreadAttributeList failed");
       SECURITY_CAPABILITIES capabilities = new SECURITY_CAPABILITIES { AppContainerSid=sid, Capabilities=IntPtr.Zero, CapabilityCount=0, Reserved=0 };
       IntPtr capabilitiesPtr = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(SECURITY_CAPABILITIES)));
       IntPtr jobPtr = Marshal.AllocHGlobal(IntPtr.Size);
       try {
         Marshal.StructureToPtr(capabilities, capabilitiesPtr, false);
         Marshal.WriteIntPtr(jobPtr, job);
-        if (!UpdateProcThreadAttribute(attributes, 0, (IntPtr)PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES, capabilitiesPtr, (IntPtr)Marshal.SizeOf(typeof(SECURITY_CAPABILITIES)), IntPtr.Zero, IntPtr.Zero)) ThrowLast("AppContainer attribute failed");
+        if (restricted && !UpdateProcThreadAttribute(attributes, 0, (IntPtr)PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES, capabilitiesPtr, (IntPtr)Marshal.SizeOf(typeof(SECURITY_CAPABILITIES)), IntPtr.Zero, IntPtr.Zero)) ThrowLast("AppContainer attribute failed");
         if (!UpdateProcThreadAttribute(attributes, 0, (IntPtr)PROC_THREAD_ATTRIBUTE_JOB_LIST, jobPtr, (IntPtr)IntPtr.Size, IntPtr.Zero, IntPtr.Zero)) ThrowLast("Job list attribute failed");
         STARTUPINFOEX startup = new STARTUPINFOEX();
         startup.StartupInfo.cb = Marshal.SizeOf(typeof(STARTUPINFOEX));
@@ -118,7 +125,8 @@ public static class MegumiSandboxLauncher {
         startup.lpAttributeList = attributes;
         PROCESS_INFORMATION process;
         StringBuilder commandLine = new StringBuilder(BuildCommandLine(program, programArgs));
-        if (!CreateProcess(program, commandLine, IntPtr.Zero, IntPtr.Zero, true, EXTENDED_STARTUPINFO_PRESENT, IntPtr.Zero, drive + @"\", ref startup, out process)) ThrowLast("CreateProcess failed");
+        string currentDirectory = restricted ? drive + @"\" : cwd;
+        if (!CreateProcess(program, commandLine, IntPtr.Zero, IntPtr.Zero, true, EXTENDED_STARTUPINFO_PRESENT, IntPtr.Zero, currentDirectory, ref startup, out process)) ThrowLast("CreateProcess failed");
         CloseHandle(process.hThread);
         try {
           if (WaitForSingleObject(process.hProcess, INFINITE) != 0) ThrowLast("WaitForSingleObject failed");
@@ -132,12 +140,12 @@ public static class MegumiSandboxLauncher {
     } finally {
       if (attributes != IntPtr.Zero) { DeleteProcThreadAttributeList(attributes); Marshal.FreeHGlobal(attributes); }
       if (job != IntPtr.Zero) CloseHandle(job);
-      DefineDosDevice(DDD_REMOVE_DEFINITION | DDD_EXACT_MATCH_ON_REMOVE | DDD_NO_BROADCAST_SYSTEM, drive, driveTarget);
+      if (restricted) DefineDosDevice(DDD_REMOVE_DEFINITION | DDD_EXACT_MATCH_ON_REMOVE | DDD_NO_BROADCAST_SYSTEM, drive, driveTarget);
       if (accessRule != null && sid != IntPtr.Zero) {
         try { DirectorySecurity security = Directory.GetAccessControl(workspace); security.RemoveAccessRuleSpecific(accessRule); Directory.SetAccessControl(workspace, security); } catch { }
       }
       if (sid != IntPtr.Zero) FreeSid(sid);
-      DeleteAppContainerProfile(moniker);
+      if (restricted) DeleteAppContainerProfile(moniker);
     }
   }
 

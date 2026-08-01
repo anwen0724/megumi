@@ -1,9 +1,13 @@
-/* Opens one bounded Sandbox scope and converges all process executions on close. */
+﻿/* Opens one bounded Sandbox scope and converges all process executions on close. */
 import process from 'node:process';
 import { createNodeSandboxFileAccess } from './node-sandbox';
 import type { OpenSandboxRequest, Sandbox, SandboxCapabilities, SandboxScope } from './sandbox';
 import { SandboxProcessError, type SandboxProcess } from './sandbox-process';
-import { createWindowsSandboxProcess, WINDOWS_SANDBOX_CAPABILITIES } from './windows-sandbox-process';
+import {
+  createWindowsSandboxProcess,
+  WINDOWS_SANDBOX_CAPABILITIES,
+  WINDOWS_UNRESTRICTED_CAPABILITIES,
+} from './windows-sandbox-process';
 
 const PORTABLE_CAPABILITIES: SandboxCapabilities = {
   platform: 'linux',
@@ -23,15 +27,27 @@ const PORTABLE_CAPABILITIES: SandboxCapabilities = {
 
 export function createNodeSandbox(input: { readonly platform?: NodeJS.Platform } = {}): Sandbox {
   const platform = input.platform ?? process.platform;
-  const capabilities = platform === 'win32'
+  const advertisedCapabilities = platform === 'win32'
     ? WINDOWS_SANDBOX_CAPABILITIES
     : { ...PORTABLE_CAPABILITIES, platform, shellKind: 'posix_shell' as const };
   return {
-    capabilities: () => ({ ...capabilities }),
+    capabilities: () => ({ ...advertisedCapabilities }),
     async open(request) {
       request.signal?.throwIfAborted();
+      const isolation = request.policy.executionAccess.process === 'sandboxed'
+        ? 'restricted' as const
+        : 'unrestricted' as const;
+      const capabilities = platform === 'win32'
+        ? isolation === 'restricted'
+          ? WINDOWS_SANDBOX_CAPABILITIES
+          : WINDOWS_UNRESTRICTED_CAPABILITIES
+        : advertisedCapabilities;
       const processAdapter = platform === 'win32'
-        ? createWindowsSandboxProcess({ workspaceRoot: request.policy.workspaceRoot, maxProcessCount: request.policy.maxProcessCount })
+        ? createWindowsSandboxProcess({
+            workspaceRoot: request.policy.workspaceRoot,
+            maxProcessCount: request.policy.maxProcessCount,
+            isolation,
+          })
         : unavailableProcess();
       return {
         status: 'opened',
@@ -41,7 +57,11 @@ export function createNodeSandbox(input: { readonly platform?: NodeJS.Platform }
   };
 }
 
-function createScope(request: OpenSandboxRequest, capabilities: SandboxCapabilities, processAdapter: SandboxProcess): SandboxScope {
+function createScope(
+  request: OpenSandboxRequest,
+  capabilities: SandboxCapabilities,
+  processAdapter: SandboxProcess,
+): SandboxScope {
   const scopeController = new AbortController();
   const active = new Set<Promise<unknown>>();
   let closed = false;
@@ -98,7 +118,10 @@ function createScope(request: OpenSandboxRequest, capabilities: SandboxCapabilit
   };
   return {
     capabilities: { ...capabilities },
-    files: createNodeSandboxFileAccess({ workspaceRoot: request.policy.workspaceRoot }),
+    files: createNodeSandboxFileAccess({
+      workspaceRoot: request.policy.workspaceRoot,
+      access: request.policy.executionAccess.fileSystem,
+    }),
     process: boundedProcess,
     async close() {
       if (closed) return { status: 'closed' };

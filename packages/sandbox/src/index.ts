@@ -1,5 +1,6 @@
-/* Public interface for Sandbox policy, scopes, files, and process execution. */
+﻿/* Public interface for Sandbox policy, scopes, files, and process execution. */
 
+export type { ToolExecutionAccess, ToolExecutionFileAccess } from './sandbox-access';
 export type {
   OpenSandboxRequest,
   OpenSandboxResult,
@@ -12,5 +13,5 @@ export type { SandboxFileAccess, SandboxFileEntry, SandboxTextEdit, SandboxWalkR
 export { createNodeSandboxFileAccess, SandboxFileError } from './node-sandbox';
 export { SandboxProcessError } from './sandbox-process';
 export type { SandboxProcess, SandboxProcessOptions, SandboxProcessRequest, SandboxProcessResult, SandboxShellKind } from './sandbox-process';
-export { createWindowsSandboxProcess, WINDOWS_SANDBOX_CAPABILITIES } from './windows-sandbox-process';
+export { createWindowsSandboxProcess, WINDOWS_SANDBOX_CAPABILITIES, WINDOWS_UNRESTRICTED_CAPABILITIES } from './windows-sandbox-process';
 export { createNodeSandbox } from './node-sandbox-scope';

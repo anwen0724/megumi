@@ -1,4 +1,4 @@
-/* Runs Windows commands inside an AppContainer assigned atomically to a bounded Job Object. */
+﻿/* Runs Windows commands in either an AppContainer or an unrestricted bounded Job Object. */
 
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
@@ -14,57 +14,67 @@ let helperPromise: Promise<string> | undefined;
 const reservedDriveLetters = new Set<string>();
 
 export const WINDOWS_SANDBOX_CAPABILITIES: SandboxCapabilities = {
-  platform: 'win32',
-  shellKind: 'powershell',
-  workspaceEffectObservation: false,
-  fileReadBoundary: true,
-  fileWriteBoundary: true,
-  environmentIsolation: true,
-  networkIsolation: true,
-  processTreeTermination: true,
-  timeLimit: true,
-  outputLimit: true,
-  processCountLimit: true,
-  cpuLimit: false,
-  memoryLimit: false,
+  platform: 'win32', shellKind: 'powershell', workspaceEffectObservation: false,
+  fileReadBoundary: true, fileWriteBoundary: true, environmentIsolation: true,
+  networkIsolation: true, processTreeTermination: true, timeLimit: true,
+  outputLimit: true, processCountLimit: true, cpuLimit: false, memoryLimit: false,
+};
+
+export const WINDOWS_UNRESTRICTED_CAPABILITIES: SandboxCapabilities = {
+  ...WINDOWS_SANDBOX_CAPABILITIES,
+  fileReadBoundary: false,
+  fileWriteBoundary: false,
+  networkIsolation: false,
 };
 
 export function createWindowsSandboxProcess(input: {
   readonly workspaceRoot: string;
   readonly maxProcessCount?: number;
+  readonly isolation?: 'restricted' | 'unrestricted';
 }): SandboxProcess {
   const workspaceRoot = path.resolve(input.workspaceRoot);
   const maxProcessCount = input.maxProcessCount ?? 16;
+  const isolation = input.isolation ?? 'restricted';
   return {
     shellKind: 'powershell',
-    shellName: 'Windows PowerShell 5.1 (AppContainer)',
+    shellName: isolation === 'restricted'
+      ? 'Windows PowerShell 5.1 (AppContainer)'
+      : 'Windows PowerShell 5.1',
     executionMethod: 'shell',
     async run(request, options) {
       options.signal.throwIfAborted();
       const canonicalRoot = await fs.realpath(workspaceRoot);
       const canonicalCwd = await fs.realpath(request.cwd);
-      if (!inside(canonicalRoot, canonicalCwd)) throw new SandboxProcessError('sandbox_denied', 'Command cwd is outside the active Workspace.');
+      if (isolation === 'restricted' && !inside(canonicalRoot, canonicalCwd)) {
+        throw new SandboxProcessError('sandbox_denied', 'Command cwd is outside the active Workspace.');
+      }
       const helper = await ensureWindowsLauncher();
-      const drive = await reserveDriveLetter();
+      const drive = isolation === 'restricted' ? await reserveDriveLetter() : '-';
       const relativeCwd = path.relative(canonicalRoot, canonicalCwd);
       const mappedCwd = relativeCwd === '' ? `${drive}\\` : `${drive}\\${relativeCwd}`;
-      const mappedCommand = request.command.replaceAll(canonicalRoot, `${drive}\\`);
-      const scopeTemp = path.join(canonicalRoot, '.megumi', 'sandbox-tmp', randomUUID());
+      const command = isolation === 'restricted'
+        ? request.command.replaceAll(canonicalRoot, `${drive}\\`)
+        : request.command;
+      const scopeTemp = isolation === 'restricted'
+        ? path.join(canonicalRoot, '.megumi', 'sandbox-tmp', randomUUID())
+        : await fs.mkdtemp(path.join(os.tmpdir(), 'megumi-process-'));
       await fs.mkdir(scopeTemp, { recursive: true });
       const windowsRoot = process.env.SystemRoot ?? 'C:\\Windows';
       const executable = path.join(windowsRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
       const args = [
+        '--isolation', isolation,
         '--workspace', canonicalRoot,
+        '--cwd', canonicalCwd,
         '--drive', drive,
         '--max-processes', String(maxProcessCount),
         executable,
         '-NoLogo', '-NoProfile', '-NonInteractive', '-Command',
-        `$ErrorActionPreference = 'Continue'; Set-Location -LiteralPath '${mappedCwd.replaceAll("'", "''")}'; ${mappedCommand}`,
+        `$ErrorActionPreference = 'Continue'; Set-Location -LiteralPath '${(isolation === 'restricted' ? mappedCwd : canonicalCwd).replaceAll("'", "''")}'; ${command}`,
       ];
       try {
         return await runLauncher({ helper, args, cwd: canonicalCwd, temp: scopeTemp, options });
       } finally {
-        reservedDriveLetters.delete(drive);
+        if (isolation === 'restricted') reservedDriveLetters.delete(drive);
         await fs.rm(scopeTemp, { recursive: true, force: true }).catch(() => undefined);
       }
     },
@@ -81,25 +91,38 @@ async function reserveDriveLetter(): Promise<string> {
   }
   throw new SandboxProcessError('sandbox_unavailable', 'No temporary drive letter is available for the Windows Sandbox.');
 }
+
 async function ensureWindowsLauncher(): Promise<string> {
   helperPromise ??= compileWindowsLauncher();
   return helperPromise;
 }
 
 async function compileWindowsLauncher(): Promise<string> {
-  if (process.platform !== 'win32') throw new SandboxProcessError('sandbox_unavailable', 'Windows AppContainer is unavailable on this platform.');
+  if (process.platform !== 'win32') throw new SandboxProcessError('sandbox_unavailable', 'Windows process isolation is unavailable on this platform.');
   const version = createHash('sha256').update(WINDOWS_JOB_LAUNCHER_SOURCE).digest('hex').slice(0, 16);
   const directory = path.join(os.tmpdir(), 'megumi-sandbox-launcher', version);
-  const sourcePath = path.join(directory, 'MegumiSandboxLauncher.cs');
   const executablePath = path.join(directory, 'MegumiSandboxLauncher.exe');
   await fs.mkdir(directory, { recursive: true });
   try { await fs.access(executablePath); return executablePath; } catch { /* compile below */ }
-  await fs.writeFile(sourcePath, WINDOWS_JOB_LAUNCHER_SOURCE, 'utf8');
-  const escapedSource = sourcePath.replaceAll("'", "''");
-  const escapedOutput = executablePath.replaceAll("'", "''");
-  await runTrustedPowerShell(`Add-Type -Path '${escapedSource}' -OutputAssembly '${escapedOutput}' -OutputType ConsoleApplication`);
-  try { await fs.access(executablePath); } catch { throw new SandboxProcessError('sandbox_unavailable', 'Windows Sandbox launcher compilation produced no executable.'); }
-  return executablePath;
+  const compilationId = randomUUID();
+  const sourcePath = path.join(directory, `MegumiSandboxLauncher.${compilationId}.cs`);
+  const temporaryExecutablePath = path.join(directory, `MegumiSandboxLauncher.${compilationId}.exe`);
+  try {
+    await fs.writeFile(sourcePath, WINDOWS_JOB_LAUNCHER_SOURCE, 'utf8');
+    const escapedSource = sourcePath.replaceAll("'", "''");
+    const escapedOutput = temporaryExecutablePath.replaceAll("'", "''");
+    await runTrustedPowerShell(`Add-Type -Path '${escapedSource}' -OutputAssembly '${escapedOutput}' -OutputType ConsoleApplication`);
+    try {
+      await fs.rename(temporaryExecutablePath, executablePath);
+    } catch {
+      try { await fs.access(executablePath); }
+      catch { throw new SandboxProcessError('sandbox_unavailable', 'Windows process launcher compilation produced no executable.'); }
+    }
+    return executablePath;
+  } finally {
+    await fs.rm(sourcePath, { force: true }).catch(() => undefined);
+    await fs.rm(temporaryExecutablePath, { force: true }).catch(() => undefined);
+  }
 }
 
 function runTrustedPowerShell(command: string): Promise<void> {
@@ -107,8 +130,8 @@ function runTrustedPowerShell(command: string): Promise<void> {
     const child = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
     let stderr = '';
     child.stderr.on('data', (chunk) => { if (stderr.length < 16_000) stderr += String(chunk); });
-    child.once('error', () => reject(new SandboxProcessError('sandbox_unavailable', 'Windows Sandbox launcher could not be compiled.')));
-    child.once('close', (code) => code === 0 ? resolve() : reject(new SandboxProcessError('sandbox_unavailable', `Windows Sandbox launcher compilation failed: ${stderr.trim()}`)));
+    child.once('error', () => reject(new SandboxProcessError('sandbox_unavailable', 'Windows process launcher could not be compiled.')));
+    child.once('close', (code) => code === 0 ? resolve() : reject(new SandboxProcessError('sandbox_unavailable', `Windows process launcher compilation failed: ${stderr.trim()}`)));
   });
 }
 
@@ -143,7 +166,7 @@ function runLauncher(input: {
     child.once('error', () => {
       if (settled) return;
       settled = true;
-      reject(new SandboxProcessError('sandbox_unavailable', 'The Windows Sandbox launcher could not start.'));
+      reject(new SandboxProcessError('sandbox_unavailable', 'The Windows process launcher could not start.'));
     });
     child.once('close', (code) => {
       input.options.signal.removeEventListener('abort', abort);
@@ -178,8 +201,8 @@ function sanitizedEnvironment(temp: string): NodeJS.ProcessEnv {
 function parseHelperError(stderr: string): { readonly code: string; readonly message: string } | undefined {
   const line = stderr.split(/\r?\n/u).find((value) => value.startsWith(HELPER_ERROR_PREFIX));
   if (!line) return undefined;
-  try { return JSON.parse(line.slice(HELPER_ERROR_PREFIX.length)) as { code: string; message: string }; }
-  catch { return { code: 'SANDBOX_SETUP_FAILED', message: 'The Windows Sandbox launcher returned an invalid failure.' }; }
+  try { return JSON.parse(line.slice(HELPER_ERROR_PREFIX.length)) as { readonly code: string; readonly message: string }; }
+  catch { return { code: 'SANDBOX_SETUP_FAILED', message: 'The Windows process launcher returned an invalid failure.' }; }
 }
 
 function inside(root: string, candidate: string): boolean {

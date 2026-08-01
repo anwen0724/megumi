@@ -1,7 +1,8 @@
-/* Defines execution-isolation policy, capability disclosure, and scope lifecycle. */
+﻿/* Defines execution-isolation policy, capability disclosure, and scope lifecycle. */
 
 import type { SandboxFileAccess } from './sandbox-files';
 import type { SandboxProcess } from './sandbox-process';
+import type { ToolExecutionAccess } from './sandbox-access';
 
 export interface SandboxCapabilities {
   readonly platform: NodeJS.Platform;
@@ -21,7 +22,7 @@ export interface SandboxCapabilities {
 
 export interface SandboxPolicy {
   readonly workspaceRoot: string;
-  readonly allowNetwork: boolean;
+  readonly executionAccess: ToolExecutionAccess;
   readonly maxExecutionTimeMs: number;
   readonly maxOutputBytes: number;
   readonly maxProcessCount: number;

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Composes the complete Product directly from real Package contracts and owns
  * Product resource startup, per-Run Tool snapshots, and ordered shutdown.
  */
@@ -500,10 +500,13 @@ function createProductToolSnapshots(input: {
       return {
         preflight: (request) => preflightTools.executor.preflight(request),
         async execute(request, operationOptions) {
+          if (!operationOptions?.executionAccess) {
+            return sandboxFailure(request.toolName, 'Tool execution access was not provided.');
+          }
           const opened = await input.sandbox.open({
             policy: {
               workspaceRoot,
-              allowNetwork: false,
+              executionAccess: operationOptions.executionAccess,
               maxExecutionTimeMs: PRODUCT_ENGINE_POLICY.toolExecutionTimeoutMs,
               maxOutputBytes: 20_000,
               maxProcessCount: 16,
@@ -514,7 +517,7 @@ function createProductToolSnapshots(input: {
           const scopedTools = createToolsForSnapshot(
             snapshot,
             opened.scope.files,
-            input.process ?? opened.scope.process,
+            opened.scope.process,
             input.resolveSkillService({ workspaceId: scope.workspaceId }),
           );
           let result;

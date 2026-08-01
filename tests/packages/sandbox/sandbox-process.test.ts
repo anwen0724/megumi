@@ -1,4 +1,4 @@
-/* Verifies Sandbox Scope time/output enforcement above the platform process backend. */
+﻿/* Verifies Sandbox Scope time/output enforcement above the platform process backend. */
 // @vitest-environment node
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -10,11 +10,25 @@ const roots: string[] = [];
 afterEach(async () => Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true }))));
 const windowsIt = process.platform === 'win32' ? it : it.skip;
 
-async function openScope(maxExecutionTimeMs: number, maxOutputBytes: number) {
+async function openScope(
+  maxExecutionTimeMs: number,
+  maxOutputBytes: number,
+  processAccess: 'sandboxed' | 'unrestricted' = 'sandboxed',
+) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'megumi-sandbox-scope-'));
   roots.push(root);
   const opened = await createNodeSandbox().open({
-    policy: { workspaceRoot: root, allowNetwork: false, maxExecutionTimeMs, maxOutputBytes, maxProcessCount: 4 },
+    policy: {
+      workspaceRoot: root,
+      executionAccess: {
+        fileSystem: { mode: processAccess === 'sandboxed' ? 'workspace' : 'unrestricted' },
+        process: processAccess,
+        network: processAccess === 'sandboxed' ? 'denied' : 'unrestricted',
+      },
+      maxExecutionTimeMs,
+      maxOutputBytes,
+      maxProcessCount: 4,
+    },
   });
   if (opened.status !== 'opened') throw new Error(opened.reason);
   return { root, scope: opened.scope };

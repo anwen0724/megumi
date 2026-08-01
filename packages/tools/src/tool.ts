@@ -1,6 +1,9 @@
-/* Defines stable Tool facts and execution contracts shared across Package seams. */
+﻿/* Defines stable Tool facts and execution contracts shared across Package seams. */
 
 import type { JsonObject, JsonValue } from '@megumi/ai';
+import type { ToolExecutionAccess } from '@megumi/sandbox';
+
+export type { ToolExecutionAccess, ToolExecutionFileAccess } from '@megumi/sandbox';
 
 export type JsonSchemaObject = JsonObject;
 
@@ -118,20 +121,6 @@ export interface ToolExecutionOutputChunk {
   readonly truncated: boolean;
 }
 
-export type ToolExecutionFileAccess =
-  | { readonly mode: 'workspace' }
-  | {
-      readonly mode: 'workspace_and_paths';
-      readonly readablePaths: readonly string[];
-      readonly writablePaths: readonly string[];
-    }
-  | { readonly mode: 'unrestricted' };
-
-export interface ToolExecutionAccess {
-  readonly fileSystem: ToolExecutionFileAccess;
-  readonly process: 'sandboxed' | 'unrestricted';
-  readonly network: 'denied' | 'unrestricted';
-}
 
 export interface ToolExecutionOptions {
   readonly signal?: AbortSignal;

@@ -1,9 +1,10 @@
-/* Implements canonical Workspace file actions with conflict-safe Node filesystem operations. */
+﻿/* Implements canonical Workspace file actions with conflict-safe Node filesystem operations. */
 
 import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createWorkspacePathPolicy } from '@megumi/workspace';
+import type { ToolExecutionFileAccess } from './sandbox-access';
 import type { SandboxFileAccess, SandboxTextEdit } from './sandbox-files';
 
 const MAX_EDIT_COUNT = 100;
@@ -20,7 +21,10 @@ export class SandboxFileError extends Error {
   }
 }
 
-export function createNodeSandboxFileAccess(input: { readonly workspaceRoot: string }): SandboxFileAccess {
+export function createNodeSandboxFileAccess(input: {
+  readonly workspaceRoot: string;
+  readonly access?: ToolExecutionFileAccess;
+}): SandboxFileAccess {
   const pathPolicy = createWorkspacePathPolicy();
   const canonicalRootPromise = fs.realpath(path.resolve(input.workspaceRoot));
 

@@ -1,4 +1,4 @@
-/* Verifies Sandbox capability disclosure and scope ownership contracts. */
+﻿/* Verifies Sandbox capability disclosure and scope ownership contracts. */
 
 import { describe, expect, it } from 'vitest';
 import type {
@@ -27,7 +27,11 @@ describe('Sandbox contracts', () => {
     };
     const policy: SandboxPolicy = {
       workspaceRoot: 'C:/workspace',
-      allowNetwork: false,
+      executionAccess: {
+        fileSystem: { mode: 'workspace' },
+        process: 'sandboxed',
+        network: 'denied',
+      },
       maxExecutionTimeMs: 1_000,
       maxOutputBytes: 2_000,
       maxProcessCount: 4,
