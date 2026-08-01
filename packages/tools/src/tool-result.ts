@@ -48,7 +48,6 @@ export function normalizeRawToolResult(input: {
       normalizedResult: normalizeFailureContent({ ...error, output: input.rawResult.content }),
       observation: { summary: `${input.toolName} failed` },
       ...(input.rawResult.metadata ? { metadata: cloneJsonObject(input.rawResult.metadata) } : {}),
-    ...(input.rawResult.effectReport ? { effectReport: cloneEffectReport(input.rawResult.effectReport) } : {}),
       ...(input.rawResult.effectReport ? { effectReport: cloneEffectReport(input.rawResult.effectReport) } : {}),
     };
   }

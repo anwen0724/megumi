@@ -134,7 +134,7 @@ function createBuiltInToolAdapter(context: BuiltInToolContext): ToolExecutionAda
         case 'copy_path': return executeCopyPath(context, request.input, options?.signal);
         case 'move_path': return executeMovePath(context, request.input, options?.signal);
         case 'delete_path': return executeDeletePath(context, request.input, options?.signal);
-        case 'run_command': return executeRunCommand(context, request.input, options?.signal);
+        case 'run_command': return executeRunCommand(context, request.input, options);
         case 'use_skill': return executeUseSkill(context, request.input);
         case 'web_search': return executeWebSearch(context, request.input, options?.signal);
         case 'web_fetch': return executeWebFetch(context, request.input, options?.signal);

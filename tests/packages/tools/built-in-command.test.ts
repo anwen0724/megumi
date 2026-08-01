@@ -76,6 +76,26 @@ describe('run_command built-in Tool', () => {
     expect(content.truncated).toBe(true);
   });
 
+  it('publishes bounded redacted stdout and stderr without changing the final result', async () => {
+    const outputs: Array<{ stream: string; chunk: string; truncated: boolean }> = [];
+    const tools = commandTools(root, async (_request, options) => {
+      options.onStdout('token=super-secret\n');
+      options.onStderr('warning\n');
+      return { exitCode: 0, terminationConfirmed: true };
+    });
+    const execution = await tools.executor.execute(
+      { toolName: 'run_command', input: { command: 'inspect' } },
+      { onOutput: (output) => outputs.push(output) },
+    );
+    expect(outputs).toEqual([
+      { stream: 'stdout', chunk: 'token=[REDACTED]\n', truncated: false },
+      { stream: 'stderr', chunk: 'warning\n', truncated: false },
+    ]);
+    expect(execution).toMatchObject({
+      type: 'succeeded',
+      effectReport: { coverage: 'unknown', effects: [], reason: expect.stringContaining('file-effect observation') },
+    });
+  });
   it('keeps non-zero exit, timeout, cancellation, and spawn failure distinct', async () => {
     const nonZero = commandTools(root, async (_request, options) => {
       options.onStderr('compile failed');
@@ -84,7 +104,7 @@ describe('run_command built-in Tool', () => {
     await expect(nonZero.executor.execute({
       toolName: 'run_command', input: { command: 'compile' },
     })).resolves.toMatchObject({
-      type: 'failed', error: { code: 'tool_execution_failed', details: { reason: 'non_zero_exit', exitCode: 2 } },
+      type: 'failed', error: { code: 'command_failed', details: { reason: 'non_zero_exit', exitCode: 2 } },
     });
 
     const hangingRun = (_request: unknown, options: { signal: AbortSignal }) => (
@@ -96,7 +116,7 @@ describe('run_command built-in Tool', () => {
     await expect(hanging.executor.execute({
       toolName: 'run_command', input: { command: 'hang', timeoutMs: 1 },
     })).resolves.toMatchObject({
-      type: 'failed', error: { code: 'tool_execution_failed', details: { reason: 'timeout', timeoutMs: 1 } },
+      type: 'failed', error: { code: 'tool_timeout', details: { reason: 'timeout', timeoutMs: 1 } },
     });
 
     const controller = new AbortController();
@@ -110,7 +130,7 @@ describe('run_command built-in Tool', () => {
     const failed = commandTools(root, async () => { throw new Error(`host path ${root}`); });
     const failedResult = await failed.executor.execute({ toolName: 'run_command', input: { command: 'missing' } });
     expect(failedResult).toMatchObject({
-      type: 'failed', error: { message: 'Command process could not be started.', details: { reason: 'spawn_failed' } },
+      type: 'failed', error: { code: 'shell_unavailable', message: 'Command process could not be started.', details: { reason: 'spawn_failed' } },
     });
     expect(JSON.stringify(failedResult)).not.toContain(root);
   });

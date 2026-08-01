@@ -18,7 +18,7 @@ export const globToolDefinition: ToolDefinition = {
   inputSchema: {
     type: 'object',
     properties: {
-      pattern: { type: 'string', description: 'Glob pattern.' },
+      pattern: { type: 'string', description: 'Glob pattern using *, **, ?, or character sets.' },
       cwd: {
         type: 'string',
         description: 'The directory to search from. Relative paths are resolved from the current working directory.',
@@ -59,11 +59,11 @@ export async function executeGlob(
   const limit = optionalPositiveInteger(record, 'limit', 500);
   const offset = optionalNonNegativeInteger(record, 'offset', 0);
   const includeHidden = optionalBoolean(record, 'includeHidden', false);
-  const files = await withFileFailure('glob', () => (
+  const traversal = await withFileFailure('glob', () => (
     context.workspaceFileAccess.walkFiles({ path: cwd, includeHidden, signal })
   ));
   const matcher = globToRegExp(pattern);
-  const matches = files.filter((file) => matcher.test(normalizeSlash(file))).sort();
+  const matches = traversal.files.filter((file) => matcher.test(normalizeSlash(file))).sort();
 
   return {
     outputKind: 'json',
@@ -71,7 +71,13 @@ export async function executeGlob(
       items: matches,
       offset,
       limit,
-      contentFor: (pageMatches, page) => ({ matches: pageMatches, ...page }),
+      contentFor: (pageMatches, page) => ({
+        matches: pageMatches, ...page,
+        scannedFileCount: traversal.scannedFileCount,
+        skippedCount: traversal.skippedCount,
+        limitReached: traversal.limitReached,
+        warnings: traversal.warnings,
+      }),
     }),
   };
 }
@@ -100,7 +106,20 @@ function globToRegExp(pattern: string): RegExp {
       source += '[^/]*';
       continue;
     }
-    source += char.replace(/[|\\{}()[\]^$+?.]/g, '\\$&');
+    if (char === '?') {
+      source += '[^/]';
+      continue;
+    }
+    if (char === '[') {
+      const closing = normalized.indexOf(']', index + 1);
+      if (closing < 0) throw new TypeError('Invalid glob pattern: unclosed character set.');
+      const body = normalized.slice(index + 1, closing);
+      if (!body || body.includes('/')) throw new TypeError('Invalid glob character set.');
+      source += '[' + body.replace(/\\/g, '\\\\') + ']';
+      index = closing;
+      continue;
+    }
+    source += char.replace(/[|\\{}()[\]^$+.]/g, '\\$&');
   }
   return new RegExp(`${source}$`);
 }
@@ -109,7 +128,7 @@ function globStaticBase(pattern: string): string {
   const normalized = normalizeSlash(pattern);
   const staticSegments: string[] = [];
   for (const segment of normalized.split('/')) {
-    if (segment.includes('*')) {
+    if (/[*?\[]/.test(segment)) {
       break;
     }
     staticSegments.push(segment);

@@ -25,6 +25,7 @@ export function createWorkspaceStoreFixture() {
       session_id TEXT NOT NULL,
       run_id TEXT NOT NULL,
       status TEXT NOT NULL,
+      effect_coverage TEXT NOT NULL,
       changed_file_count INTEGER NOT NULL,
       created_at TEXT NOT NULL,
       finalized_at TEXT
@@ -36,6 +37,11 @@ export function createWorkspaceStoreFixture() {
       change_set_id TEXT NOT NULL REFERENCES workspace_changes(change_set_id),
       workspace_path TEXT NOT NULL,
       change_kind TEXT NOT NULL,
+      effect_type TEXT NOT NULL,
+      source_workspace_path TEXT,
+      destination_workspace_path TEXT,
+      path_type TEXT NOT NULL,
+      recoverable INTEGER,
       created_at TEXT NOT NULL,
       UNIQUE(change_set_id, workspace_path)
     )

@@ -18,6 +18,7 @@ export type {
   ToolExecutionErrorCode,
   ToolExecutionMode,
   ToolExecutionObservation,
+  ToolExecutionOutputChunk,
   ToolExecutionOptions,
   ToolExecutionResult,
   ToolEffect,

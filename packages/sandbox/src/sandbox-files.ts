@@ -6,6 +6,15 @@ export interface SandboxFileEntry {
   readonly path: string;
 }
 
+export interface SandboxWalkWarning { readonly path: string; readonly code: string; readonly message: string }
+export interface SandboxWalkResult {
+  readonly files: readonly string[];
+  readonly scannedFileCount: number;
+  readonly skippedCount: number;
+  readonly limitReached: boolean;
+  readonly warnings: readonly SandboxWalkWarning[];
+}
+
 export interface SandboxTextEdit {
   readonly oldText: string;
   readonly newText: string;
@@ -21,7 +30,7 @@ export interface SandboxFileAccess {
   listDirectory(request: { readonly path: string; readonly maxDepth: number; readonly includeHidden: boolean; readonly signal?: AbortSignal }): Promise<{
     readonly path: string; readonly entries: readonly SandboxFileEntry[];
   }>;
-  walkFiles(request: { readonly path: string; readonly includeHidden?: boolean; readonly signal?: AbortSignal }): Promise<readonly string[]>;
+  walkFiles(request: { readonly path: string; readonly includeHidden?: boolean; readonly maxFiles?: number; readonly maxDepth?: number; readonly signal?: AbortSignal }): Promise<SandboxWalkResult>;
   editFile(request: { readonly path: string; readonly edits: readonly SandboxTextEdit[]; readonly expectedFingerprint?: string; readonly signal?: AbortSignal }): Promise<{
     readonly path: string; readonly replacements: number; readonly changed: boolean; readonly previousFingerprint: string; readonly fingerprint: string;
   }>;

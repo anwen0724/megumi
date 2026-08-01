@@ -79,6 +79,7 @@ export const RUNTIME_EVENT_TYPES = [
   'permission.decision.created',
   'tool.execution.approval_requested',
   'tool.execution.started',
+  'tool.execution.output',
   'tool.execution.routed',
   'tool.execution.completed',
   'tool.execution.failed',

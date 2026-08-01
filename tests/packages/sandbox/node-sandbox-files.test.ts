@@ -50,6 +50,15 @@ describe('Node Sandbox file access', () => {
     await expect(fs.stat(path.join(root, 'archive/b.md'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  it('rejects copying or moving a directory into itself without leaving staging files', async () => {
+    const { root, files } = await workspace();
+    await files.createDirectory({ path: 'source', recursive: false });
+    await files.writeFile({ path: 'source/a.txt', content: 'safe', overwrite: false });
+    await expect(files.copyPath({ source: 'source', destination: 'source/copy', overwrite: false })).rejects.toMatchObject({ code: 'path_conflict' });
+    await expect(files.movePath({ source: 'source', destination: 'source/moved', overwrite: false })).rejects.toMatchObject({ code: 'path_conflict' });
+    await expect(fs.readFile(path.join(root, 'source/a.txt'), 'utf8')).resolves.toBe('safe');
+    expect((await fs.readdir(root)).filter((name) => name.includes('megumi-copy') || name.includes('megumi-backup'))).toEqual([]);
+  });
   it('applies ordered edits atomically and rejects a stale fingerprint', async () => {
     const { root, files } = await workspace();
     await fs.writeFile(path.join(root, 'paper.md'), 'alpha beta gamma', 'utf8');

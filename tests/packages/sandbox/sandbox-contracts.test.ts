@@ -11,6 +11,9 @@ import type {
 describe('Sandbox contracts', () => {
   it('requires explicit capability disclosure before opening a scope', async () => {
     const capabilities: SandboxCapabilities = {
+      platform: 'win32',
+      shellKind: 'powershell',
+      workspaceEffectObservation: false,
       fileReadBoundary: true,
       fileWriteBoundary: true,
       environmentIsolation: true,

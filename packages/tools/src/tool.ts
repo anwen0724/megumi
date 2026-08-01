@@ -112,8 +112,15 @@ export interface ExecuteToolRequest {
   readonly input: unknown;
 }
 
+export interface ToolExecutionOutputChunk {
+  readonly stream: 'stdout' | 'stderr';
+  readonly chunk: string;
+  readonly truncated: boolean;
+}
+
 export interface ToolExecutionOptions {
   readonly signal?: AbortSignal;
+  readonly onOutput?: (output: ToolExecutionOutputChunk) => void;
 }
 
 export type RawToolResult = {
@@ -143,7 +150,7 @@ export interface ToolExecutionObservation {
 export type ToolExecutionErrorCode =
   | 'unknown_tool'
   | 'invalid_tool_input'
-| 'tool_execution_failed'
+  | 'tool_execution_failed'
   | 'tool_cancelled'
   | 'path_outside_workspace'
   | 'symlink_escape'

@@ -4,6 +4,9 @@ import type { SandboxFileAccess } from './sandbox-files';
 import type { SandboxProcess } from './sandbox-process';
 
 export interface SandboxCapabilities {
+  readonly platform: NodeJS.Platform;
+  readonly shellKind?: 'powershell' | 'cmd' | 'posix_shell';
+  readonly workspaceEffectObservation: boolean;
   readonly fileReadBoundary: boolean;
   readonly fileWriteBoundary: boolean;
   readonly environmentIsolation: boolean;

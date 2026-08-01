@@ -9,6 +9,9 @@ import type { SandboxFileAccess, SandboxTextEdit } from './sandbox-files';
 const MAX_EDIT_COUNT = 100;
 const MAX_EDIT_BYTES = 1_000_000;
 const DEFAULT_IGNORED_DIRECTORIES = new Set(['.git', 'node_modules', 'dist', 'build', 'coverage']);
+const MAX_TRAVERSAL_FILES = 10_000;
+const MAX_TRAVERSAL_DEPTH = 32;
+const MAX_TRAVERSAL_WARNINGS = 100;
 
 export class SandboxFileError extends Error {
   public constructor(public readonly code: string, message: string) {
@@ -31,7 +34,12 @@ export function createNodeSandboxFileAccess(input: { readonly workspaceRoot: str
     if (resolved.status !== 'resolved') {
       throw new SandboxFileError('path_outside_workspace', 'Path is outside the active Workspace.');
     }
-    return { absolutePath: resolved.absolute_path, workspacePath: resolved.workspace_path || '.' };
+    return {
+      absolutePath: resolved.absolute_path,
+      workspacePath: resolved.workspace_path || '.',
+      protected: resolved.protected,
+      sensitive: resolved.sensitive,
+    };
   };
 
   const ensureSignal = (signal?: AbortSignal) => signal?.throwIfAborted();
@@ -43,12 +51,16 @@ export function createNodeSandboxFileAccess(input: { readonly workspaceRoot: str
     return { ...resolved, value, fingerprint: fingerprint(value) };
   };
 
-  const atomicReplace = async (absolutePath: string, content: string, signal?: AbortSignal) => {
+  const atomicReplace = async (absolutePath: string, content: string, expectedFingerprint: string, signal?: AbortSignal) => {
     ensureSignal(signal);
     const temporaryPath = path.join(path.dirname(absolutePath), `.${path.basename(absolutePath)}.${randomUUID()}.megumi-tmp`);
     try {
       await fs.writeFile(temporaryPath, content, { encoding: 'utf8', flag: 'wx', signal });
       ensureSignal(signal);
+      const current = await readOptional(absolutePath);
+      if (!current || fingerprint(current) !== expectedFingerprint) {
+        throw new SandboxFileError('content_conflict', 'The file changed before the replacement was committed.');
+      }
       await fs.rename(temporaryPath, absolutePath);
     } finally {
       await fs.rm(temporaryPath, { force: true }).catch(() => undefined);
@@ -88,12 +100,29 @@ export function createNodeSandboxFileAccess(input: { readonly workspaceRoot: str
     const to = await resolve(destination);
     if (from.absolutePath === to.absolutePath) throw new SandboxFileError('path_conflict', 'Source and destination are the same path.');
     const sourceStat = await fs.stat(from.absolutePath);
-    if (await exists(to.absolutePath) && !overwrite) throw new SandboxFileError('path_conflict', 'Destination already exists.');
+    if (!sourceStat.isFile() && !sourceStat.isDirectory()) throw new SandboxFileError('path_type_mismatch', 'Only files and directories can be copied.');
+    if (sourceStat.isDirectory() && sameOrDescendant(from.absolutePath, to.absolutePath)) throw new SandboxFileError('path_conflict', 'A directory cannot be copied into itself.');
+    const destinationExists = await exists(to.absolutePath);
+    if (destinationExists && !overwrite) throw new SandboxFileError('path_conflict', 'Destination already exists.');
     await fs.mkdir(path.dirname(to.absolutePath), { recursive: true });
-    ensureSignal(signal);
-    if (sourceStat.isDirectory()) await fs.cp(from.absolutePath, to.absolutePath, { recursive: true, force: overwrite, errorOnExist: !overwrite });
-    else if (sourceStat.isFile()) await fs.copyFile(from.absolutePath, to.absolutePath, overwrite ? 0 : fsConstantsCopyExcl());
-    else throw new SandboxFileError('path_type_mismatch', 'Only files and directories can be copied.');
+    const staged = path.join(path.dirname(to.absolutePath), `.${path.basename(to.absolutePath)}.${randomUUID()}.megumi-copy`);
+    const backup = destinationExists
+      ? path.join(path.dirname(to.absolutePath), `.${path.basename(to.absolutePath)}.${randomUUID()}.megumi-backup`)
+      : undefined;
+    try {
+      if (sourceStat.isDirectory()) await fs.cp(from.absolutePath, staged, { recursive: true, force: false, errorOnExist: true });
+      else await fs.copyFile(from.absolutePath, staged, fsConstantsCopyExcl());
+      ensureSignal(signal);
+      if (backup) await fs.rename(to.absolutePath, backup);
+      try { await fs.rename(staged, to.absolutePath); }
+      catch (error) {
+        if (backup) await fs.rename(backup, to.absolutePath).catch(() => undefined);
+        throw error;
+      }
+      if (backup) await fs.rm(backup, { recursive: true, force: true });
+    } finally {
+      await fs.rm(staged, { recursive: true, force: true }).catch(() => undefined);
+    }
     return { source: from.workspacePath, destination: to.workspacePath, pathType: sourceStat.isDirectory() ? 'directory' as const : 'file' as const };
   };
 
@@ -125,23 +154,47 @@ export function createNodeSandboxFileAccess(input: { readonly workspaceRoot: str
     async walkFiles(request) {
       const root = await resolve(request.path);
       const stat = await fs.stat(root.absolutePath);
-      if (stat.isFile()) return [root.workspacePath];
+      if (stat.isFile()) {
+        const skipped = root.protected || root.sensitive;
+        return { files: skipped ? [] : [root.workspacePath], scannedFileCount: 1, skippedCount: skipped ? 1 : 0, limitReached: false, warnings: skipped ? [{ path: root.workspacePath, code: 'sensitive_or_protected', message: 'The file was skipped by Workspace policy.' }] : [] };
+      }
       if (!stat.isDirectory()) throw new SandboxFileError('path_type_mismatch', 'The requested path is not a directory.');
+      const maxFiles = Math.min(request.maxFiles ?? MAX_TRAVERSAL_FILES, MAX_TRAVERSAL_FILES);
+      const maxDepth = Math.min(request.maxDepth ?? MAX_TRAVERSAL_DEPTH, MAX_TRAVERSAL_DEPTH);
       const files: string[] = [];
-      const walk = async (absoluteDirectory: string, relativeDirectory: string) => {
+      const warnings: Array<{ path: string; code: string; message: string }> = [];
+      let scannedFileCount = 0;
+      let skippedCount = 0;
+      let limitReached = false;
+      const warn = (pathValue: string, code: string, message: string) => {
+        skippedCount += 1;
+        if (warnings.length < MAX_TRAVERSAL_WARNINGS) warnings.push({ path: pathValue, code, message });
+      };
+      const walk = async (absoluteDirectory: string, relativeDirectory: string, depth: number) => {
         ensureSignal(request.signal);
-        for (const entry of await fs.readdir(absoluteDirectory, { withFileTypes: true })) {
+        if (depth > maxDepth || limitReached) { limitReached = true; return; }
+        let entries;
+        try { entries = await fs.readdir(absoluteDirectory, { withFileTypes: true }); }
+        catch { warn(relativeDirectory || '.', 'directory_unreadable', 'The directory could not be read.'); return; }
+        for (const entry of entries) {
           ensureSignal(request.signal);
-          if (shouldIgnore(entry.name, request.includeHidden ?? false)) continue;
+          if (limitReached) return;
+          if (shouldIgnore(entry.name, request.includeHidden ?? false)) { warn(normalizeSlash(relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name), 'ignored', 'The path was skipped by traversal policy.'); continue; }
           const relative = normalizeSlash(relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name);
-          if (entry.isFile()) files.push(relative);
-          else if (entry.isDirectory()) await walk(path.join(absoluteDirectory, entry.name), relative);
+          if (entry.isDirectory()) { await walk(path.join(absoluteDirectory, entry.name), relative, depth + 1); continue; }
+          if (!entry.isFile()) { warn(relative, 'unsupported_path_type', 'Only regular files are scanned.'); continue; }
+          scannedFileCount += 1;
+          if (scannedFileCount > maxFiles) { limitReached = true; return; }
+          try {
+            const resolved = await resolve(relative);
+            if (resolved.protected || resolved.sensitive) { warn(relative, 'sensitive_or_protected', 'The file was skipped by Workspace policy.'); continue; }
+            files.push(relative);
+          } catch { warn(relative, 'path_unavailable', 'The file could not be resolved safely.'); }
         }
       };
-      await walk(root.absolutePath, root.workspacePath === '.' ? '' : root.workspacePath);
-      return files.sort();
-    },
-    async editFile(request) {
+      await walk(root.absolutePath, root.workspacePath === '.' ? '' : root.workspacePath, 1);
+      return { files: files.sort(), scannedFileCount, skippedCount, limitReached, warnings };
+    },    async editFile(request) {
       const before = await readBytes(request.path, request.signal);
       if (request.expectedFingerprint && request.expectedFingerprint !== before.fingerprint) throw new SandboxFileError('content_conflict', 'The file changed after it was read.');
       const content = before.value.toString('utf8');
@@ -149,7 +202,7 @@ export function createNodeSandboxFileAccess(input: { readonly workspaceRoot: str
       if (updated === content) return { path: before.workspacePath, replacements: request.edits.length, changed: false, previousFingerprint: before.fingerprint, fingerprint: before.fingerprint };
       const current = await readBytes(request.path, request.signal);
       if (current.fingerprint !== before.fingerprint) throw new SandboxFileError('content_conflict', 'The file changed before the edit was committed.');
-      await atomicReplace(before.absolutePath, updated, request.signal);
+      await atomicReplace(before.absolutePath, updated, before.fingerprint, request.signal);
       return { path: before.workspacePath, replacements: request.edits.length, changed: true, previousFingerprint: before.fingerprint, fingerprint: fingerprint(Buffer.from(updated)) };
     },
     async replaceText(request) {
@@ -165,7 +218,7 @@ export function createNodeSandboxFileAccess(input: { readonly workspaceRoot: str
       if (updated !== content) {
         const current = await readBytes(request.path, request.signal);
         if (current.fingerprint !== before.fingerprint) throw new SandboxFileError('content_conflict', 'The file changed before the edit was committed.');
-        await atomicReplace(before.absolutePath, updated, request.signal);
+        await atomicReplace(before.absolutePath, updated, before.fingerprint, request.signal);
       }
       return { path: before.workspacePath, replacements: edits.length, changed: updated !== content };
     },
@@ -176,7 +229,7 @@ export function createNodeSandboxFileAccess(input: { readonly workspaceRoot: str
       const existing = await readOptional(target.absolutePath);
       if (existing && !request.overwrite) throw new SandboxFileError('path_conflict', 'Destination already exists.');
       if (request.expectedFingerprint && (!existing || fingerprint(existing) !== request.expectedFingerprint)) throw new SandboxFileError('content_conflict', 'The file changed after it was read.');
-      if (existing) await atomicReplace(target.absolutePath, request.content, request.signal);
+      if (existing) await atomicReplace(target.absolutePath, request.content, fingerprint(existing), request.signal);
       else await fs.writeFile(target.absolutePath, request.content, { encoding: 'utf8', flag: 'wx', signal: request.signal });
       return { path: target.workspacePath, bytesWritten: Buffer.byteLength(request.content), created: !existing, overwritten: Boolean(existing), fingerprint: fingerprint(Buffer.from(request.content)) };
     },
@@ -189,11 +242,27 @@ export function createNodeSandboxFileAccess(input: { readonly workspaceRoot: str
     },
     copyPath: (request) => copy(request.source, request.destination, request.overwrite, request.signal),
     async movePath(request) {
-      const copied = await copy(request.source, request.destination, request.overwrite, request.signal);
-      const source = await resolve(request.source);
       ensureSignal(request.signal);
-      await fs.rm(source.absolutePath, { recursive: copied.pathType === 'directory', force: false });
-      return copied;
+      const source = await resolve(request.source);
+      const destination = await resolve(request.destination);
+      if (source.absolutePath === destination.absolutePath) throw new SandboxFileError('path_conflict', 'Source and destination are the same path.');
+      const sourceStat = await fs.stat(source.absolutePath);
+      if (!sourceStat.isFile() && !sourceStat.isDirectory()) throw new SandboxFileError('path_type_mismatch', 'Only files and directories can be moved.');
+      if (sourceStat.isDirectory() && sameOrDescendant(source.absolutePath, destination.absolutePath)) throw new SandboxFileError('path_conflict', 'A directory cannot be moved into itself.');
+      const destinationExists = await exists(destination.absolutePath);
+      if (destinationExists && !request.overwrite) throw new SandboxFileError('path_conflict', 'Destination already exists.');
+      await fs.mkdir(path.dirname(destination.absolutePath), { recursive: true });
+      const backup = destinationExists
+        ? path.join(path.dirname(destination.absolutePath), `.${path.basename(destination.absolutePath)}.${randomUUID()}.megumi-backup`)
+        : undefined;
+      if (backup) await fs.rename(destination.absolutePath, backup);
+      try { await fs.rename(source.absolutePath, destination.absolutePath); }
+      catch (error) {
+        if (backup) await fs.rename(backup, destination.absolutePath).catch(() => undefined);
+        throw error;
+      }
+      if (backup) await fs.rm(backup, { recursive: true, force: true });
+      return { source: source.workspacePath, destination: destination.workspacePath, pathType: sourceStat.isDirectory() ? 'directory' as const : 'file' as const };
     },
     async deletePath(request) {
       ensureSignal(request.signal);
@@ -217,6 +286,10 @@ export function createNodeSandboxFileAccess(input: { readonly workspaceRoot: str
   };
 }
 
+function sameOrDescendant(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+}
 function fingerprint(content: Uint8Array): string {
   return createHash('sha256').update(content).digest('hex');
 }

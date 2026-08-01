@@ -29,7 +29,7 @@ import {
   type RuntimeLogger,
 } from '@megumi/observability';
 import { createPermissions } from '@megumi/permissions';
-import { createNodeSandboxFileAccess } from '@megumi/sandbox';
+import { createNodeSandbox, type Sandbox } from '@megumi/sandbox';
 import {
   createSessionTimelineQuery,
   createWorkspaceChangeFooterProjector,
@@ -162,17 +162,14 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
   const workspaceStore = createWorkspaceStore({ database });
   const workspaceFileSystem = createNodeWorkspaceFileSystem();
   const workspacePathPolicy = createWorkspacePathPolicy();
+  const sandbox = createNodeSandbox();
   const workspaces = createWorkspaceCatalog({ store: workspaceStore, file_system: workspaceFileSystem });
   const workspaceFiles = createWorkspaceFiles({
     catalog: workspaces,
     path_policy: workspacePathPolicy,
     file_system: workspaceFileSystem,
   });
-  const workspaceChanges = createWorkspaceChanges({
-    store: workspaceStore,
-    path_policy: workspacePathPolicy,
-    file_system: workspaceFileSystem,
-  });
+  const workspaceChanges = createWorkspaceChanges({ store: workspaceStore });
 
   const sessionStore = createSessionStore({ database });
   const attachmentContentStore = options.sessionAttachmentFileSystem
@@ -203,7 +200,7 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
       : skillComposition.createSkillService();
   };
   const instructions = createInstructionReader({ megumiHomePath: homePaths.homePath });
-  const toolProcess = options.toolProcess ?? createNodeToolProcessAdapter();
+  const toolProcess = options.toolProcess ?? createProductToolProcessDescriptor();
   const context = createContext({
     sessionHistory: history,
     attachmentReader: attachments,
@@ -335,8 +332,9 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
     settings,
     workspaces,
     workspaceChanges,
+    sandbox,
     resolveSkillService,
-    process: toolProcess,
+    ...(options.toolProcess ? { process: options.toolProcess } : {}),
     isBuiltInToolAvailable: options.isBuiltInToolAvailable,
   });
   const workspaceChangeFooter = createWorkspaceChangeFooterProjector({ workspaceChanges });
@@ -462,8 +460,9 @@ function createProductToolSnapshots(input: {
   settings: Settings;
   workspaces: WorkspaceCatalog;
   workspaceChanges: ReturnType<typeof createWorkspaceChanges>;
+  sandbox: Sandbox;
   resolveSkillService(request?: { workspaceId?: string }): SkillService;
-  process: ToolProcessAdapter;
+  process?: ToolProcessAdapter;
   isBuiltInToolAvailable?: (toolName: string) => boolean;
 }): {
   catalog: Pick<ToolCatalog, 'list'>;
@@ -471,13 +470,15 @@ function createProductToolSnapshots(input: {
 } {
   type Snapshot = ReturnType<typeof resolveToolSnapshot>;
   let pending: Snapshot | undefined;
+  const toolAvailable = (name: string) => (name !== 'run_command' || Boolean(input.process) || process.platform === 'win32')
+    && (input.isBuiltInToolAvailable ? input.isBuiltInToolAvailable(name) : true);
   const catalog: Pick<ToolCatalog, 'list'> = {
     list(request) {
-      pending = resolveToolSnapshot(input.settings, input.isBuiltInToolAvailable);
+      pending = resolveToolSnapshot(input.settings, toolAvailable);
       return createToolsForSnapshot(
         pending,
         unavailableWorkspaceFileAccess,
-        input.process,
+        input.process ?? createProductToolProcessDescriptor(),
         input.resolveSkillService(),
       ).catalog.list(request);
     },
@@ -485,38 +486,58 @@ function createProductToolSnapshots(input: {
   return {
     catalog,
     executionForRun(scope) {
-      const snapshot = pending ?? resolveToolSnapshot(input.settings, input.isBuiltInToolAvailable);
+      const snapshot = pending ?? resolveToolSnapshot(input.settings, toolAvailable);
       pending = undefined;
       const workspace = input.workspaces.getWorkspace({ workspace_id: scope.workspaceId });
       if (workspace.status !== 'found') throw new Error(`Workspace ${scope.workspaceId} is unavailable for Tool execution.`);
       const workspaceRoot = workspace.workspace.root_path;
-      const tools = createToolsForSnapshot(
+      const preflightTools = createToolsForSnapshot(
         snapshot,
-        createNodeSandboxFileAccess({ workspaceRoot }),
-        input.process,
+        unavailableWorkspaceFileAccess,
+        input.process ?? createProductToolProcessDescriptor(),
         input.resolveSkillService({ workspaceId: scope.workspaceId }),
       );
       return {
-        preflight: (request) => tools.executor.preflight(request),
-        execute(request, operationOptions) {
-          return input.workspaceChanges.trackToolExecution({
-            scope: {
-              run_id: scope.runId,
-              session_id: scope.sessionId,
-              workspace_id: scope.workspaceId,
+        preflight: (request) => preflightTools.executor.preflight(request),
+        async execute(request, operationOptions) {
+          const opened = await input.sandbox.open({
+            policy: {
+              workspaceRoot,
+              allowNetwork: false,
+              maxExecutionTimeMs: PRODUCT_ENGINE_POLICY.toolExecutionTimeoutMs,
+              maxOutputBytes: 20_000,
+              maxProcessCount: 16,
             },
-            tool_execution: {
-              tool_name: request.toolName,
-              input: request.input,
-              workspace_root: workspaceRoot,
-            },
-            execute: () => tools.executor.execute(request, operationOptions),
-            is_successful_outcome: (result) => result.type === 'succeeded',
+            ...(operationOptions?.signal ? { signal: operationOptions.signal } : {}),
           });
+          if (opened.status === 'unavailable') return sandboxFailure(request.toolName, opened.reason);
+          const scopedTools = createToolsForSnapshot(
+            snapshot,
+            opened.scope.files,
+            input.process ?? opened.scope.process,
+            input.resolveSkillService({ workspaceId: scope.workspaceId }),
+          );
+          let result;
+          try {
+            result = await input.workspaceChanges.trackToolExecution({
+              scope: {
+                run_id: scope.runId,
+                session_id: scope.sessionId,
+                workspace_id: scope.workspaceId,
+              },
+              execute: () => scopedTools.executor.execute(request, operationOptions),
+            });
+          } catch (error) {
+            await opened.scope.close();
+            throw error;
+          }
+          const closed = await opened.scope.close();
+          return closed.status === 'termination_unconfirmed'
+            ? sandboxFailure(request.toolName, 'Sandbox scope could not confirm process termination.', result.effectReport)
+            : result;
         },
       };
-    },
-  };
+    },  };
 }
 
 function resolveToolSnapshot(
@@ -555,33 +576,33 @@ function createToolsForSnapshot(
   });
 }
 
-function createNodeToolProcessAdapter(): ToolProcessAdapter {
-  const shellKind = process.platform === 'win32' ? 'powershell' as const : 'posix_shell' as const;
+function createProductToolProcessDescriptor(): ToolProcessAdapter {
   return {
-    shellName: shellKind === 'powershell' ? 'Windows PowerShell 5.1' : 'POSIX shell',
-    shellKind,
+    shellName: process.platform === 'win32'
+      ? 'Windows PowerShell 5.1 (AppContainer)'
+      : 'Unavailable isolated shell',
+    shellKind: process.platform === 'win32' ? 'powershell' : 'posix_shell',
     executionMethod: 'shell',
-    run(request, options) {
-      return new Promise((resolve, reject) => {
-        const executable = process.platform === 'win32' ? 'powershell.exe' : '/bin/sh';
-        const args = process.platform === 'win32'
-          ? ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', request.command]
-          : ['-lc', request.command];
-        const child = spawn(executable, args, { cwd: request.cwd, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-        const abort = () => child.kill();
-        options.signal.addEventListener('abort', abort, { once: true });
-        child.stdout.on('data', options.onStdout);
-        child.stderr.on('data', options.onStderr);
-        child.once('error', reject);
-        child.once('close', (code) => {
-          options.signal.removeEventListener('abort', abort);
-          resolve({ exitCode: code ?? -1 });
-        });
-      });
+    async run() {
+      throw new ToolExecutionFailure(
+        'No supported execution Sandbox is available for this platform.',
+        'sandbox_unavailable',
+      );
     },
   };
 }
 
+
+function sandboxFailure(toolName: string, message: string, effectReport?: import('@megumi/tools').ToolEffectReport): import('@megumi/tools').ToolExecutionResult {
+  return {
+    type: 'failed',
+    toolName,
+    error: { code: 'sandbox_unavailable', message },
+    normalizedResult: { kind: 'error', content: message, isError: true, truncated: false },
+    observation: { summary: message },
+    ...(effectReport ? { effectReport } : {}),
+  };
+}
 function modelVisibleOperatingSystem(platform: NodeJS.Platform): string {
   if (platform === 'win32') return 'Windows';
   if (platform === 'darwin') return 'macOS';

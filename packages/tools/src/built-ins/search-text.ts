@@ -61,36 +61,52 @@ export async function executeSearchText(
   const caseSensitive = Boolean(record.caseSensitive);
   const limit = optionalPositiveInteger(record, 'limit', 100);
   const offset = optionalNonNegativeInteger(record, 'offset', 0);
-  const files = await withFileFailure('search', () => (
+  const traversal = await withFileFailure('search', () => (
     context.workspaceFileAccess.walkFiles({ path: rootPath, signal })
   ));
   const needle = caseSensitive ? query : query.toLowerCase();
   const matches: Array<{ path: string; line: number; page?: number; preview: string }> = [];
+  const warnings = [...traversal.warnings];
+  const startedAt = Date.now();
+  const maxTotalBytes = 50_000_000;
+  const maxFileBytes = 5_000_000;
+  const targetMatchCount = offset + limit + 1;
+  let totalReadBytes = 0;
+  let limitReached = traversal.limitReached;
 
-  for (const file of files) {
+  files: for (const file of traversal.files) {
     signal?.throwIfAborted();
-    const extracted = await withFileFailure('search', () => (
-      extractFileText(context.workspaceFileAccess, file, signal)
-    ));
+    if (Date.now() - startedAt > 30_000) { limitReached = true; break; }
+    let extracted;
+    try { extracted = await extractFileText(context.workspaceFileAccess, file, signal); }
+    catch {
+      signal?.throwIfAborted();
+      warnings.push({ path: file, code: 'file_unreadable', message: 'The file could not be searched.' });
+      continue;
+    }
+    const fileBytes = Buffer.byteLength(extracted.content, 'utf8');
+    if (fileBytes > maxFileBytes || totalReadBytes + fileBytes > maxTotalBytes) {
+      warnings.push({ path: file, code: 'read_limit', message: 'The file was skipped because the search read limit was reached.' });
+      limitReached = true;
+      if (totalReadBytes + fileBytes > maxTotalBytes) break;
+      continue;
+    }
+    totalReadBytes += fileBytes;
     let currentPage: number | undefined;
     for (const [index, line] of extracted.content.split(/\r?\n/).entries()) {
       const pageMarker = /^\[Page (\d+)]$/.exec(line);
-      if (pageMarker) {
-        currentPage = Number(pageMarker[1]);
-        continue;
-      }
+      if (pageMarker) { currentPage = Number(pageMarker[1]); continue; }
       const haystack = caseSensitive ? line : line.toLowerCase();
-      if (haystack.includes(needle)) {
-        matches.push({
-          path: extracted.path,
-          line: index + 1,
-          ...(currentPage !== undefined ? { page: currentPage } : {}),
-          preview: line.slice(0, 500),
-        });
-      }
+      if (!haystack.includes(needle)) continue;
+      matches.push({
+        path: extracted.path,
+        line: index + 1,
+        ...(currentPage !== undefined ? { page: currentPage } : {}),
+        preview: line.slice(0, 500),
+      });
+      if (matches.length >= targetMatchCount) { limitReached = true; break files; }
     }
   }
-
   matches.sort((left, right) => compareStableText(left.path, right.path) || left.line - right.line);
   return {
     outputKind: 'json',
@@ -98,7 +114,14 @@ export async function executeSearchText(
       items: matches,
       offset,
       limit,
-      contentFor: (pageMatches, page) => ({ matches: pageMatches, ...page }),
+      contentFor: (pageMatches, page) => ({
+        matches: pageMatches, ...page,
+        scannedFileCount: traversal.scannedFileCount,
+        skippedCount: traversal.skippedCount + warnings.length - traversal.warnings.length,
+        totalReadBytes,
+        limitReached,
+        warnings: warnings.slice(0, 100),
+      }),
     }),
   };
 }

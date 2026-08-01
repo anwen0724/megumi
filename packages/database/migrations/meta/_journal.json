@@ -57,6 +57,13 @@
       "when": 1785542400000,
       "tag": "0007_session_attachment_order",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1785628800000,
+      "tag": "0008_workspace_tool_effects",
+      "breakpoints": true
     }
   ]
 }

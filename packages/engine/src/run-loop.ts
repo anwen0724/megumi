@@ -756,7 +756,7 @@ function toolExecutionCallbacks(
   runtime: EngineRunRuntime,
 ): Pick<
   Parameters<typeof processToolCalls>[0],
-  'onToolExecutionStarted' | 'onToolExecutionFinished'
+  'onToolExecutionStarted' | 'onToolExecutionFinished' | 'onToolExecutionOutput'
 > {
   return {
     onToolExecutionStarted: (execution) => {
@@ -770,7 +770,16 @@ function toolExecutionCallbacks(
         startedAt: execution.startedAt,
       });
     },
-    onToolExecutionFinished: (execution, result) => {
+    onToolExecutionOutput: (execution, output) => {
+      const run = dependencies.store.getRun(execution.runId);
+      if (!run || isTerminalRunStatus(run.status)) return;
+      emitEvent(dependencies, runtime, run, 'tool.execution.output', {
+        toolExecutionId: execution.toolExecutionId,
+        stream: output.stream,
+        delta: output.chunk,
+        truncated: output.truncated,
+      });
+    },    onToolExecutionFinished: (execution, result) => {
       endObservedSpan(
         dependencies,
         runtime.toolSpans.get(execution.toolExecutionId),

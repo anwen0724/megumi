@@ -9,15 +9,15 @@ import {
   stat,
 } from 'node:fs/promises';
 import type { WorkspaceCatalogFileSystem } from './workspace-catalog';
-import type {
-  WorkspaceChangeFileSystem,
-  WorkspaceFileFingerprint,
-} from './workspace-changes';
 import type { WorkspaceFilesFileSystem } from './workspace-files';
+
+export type WorkspaceFileFingerprint =
+  | { exists: false }
+  | { exists: true; size_bytes: number; modified_at_ms: number; content_hash: string };
 
 export type NodeWorkspaceFileSystem = WorkspaceCatalogFileSystem
   & WorkspaceFilesFileSystem
-  & WorkspaceChangeFileSystem;
+  & { fingerprint(target: string): Promise<WorkspaceFileFingerprint> };
 
 export function createNodeWorkspaceFileSystem(): NodeWorkspaceFileSystem {
   return {

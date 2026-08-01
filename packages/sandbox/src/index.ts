@@ -8,6 +8,9 @@ export type {
   SandboxPolicy,
   SandboxScope,
 } from './sandbox';
-export type { SandboxFileAccess, SandboxFileEntry, SandboxTextEdit } from './sandbox-files';
+export type { SandboxFileAccess, SandboxFileEntry, SandboxTextEdit, SandboxWalkResult, SandboxWalkWarning } from './sandbox-files';
 export { createNodeSandboxFileAccess, SandboxFileError } from './node-sandbox';
-export type { SandboxProcess } from './sandbox-process';
+export { SandboxProcessError } from './sandbox-process';
+export type { SandboxProcess, SandboxProcessOptions, SandboxProcessRequest, SandboxProcessResult, SandboxShellKind } from './sandbox-process';
+export { createWindowsSandboxProcess, WINDOWS_SANDBOX_CAPABILITIES } from './windows-sandbox-process';
+export { createNodeSandbox } from './node-sandbox-scope';

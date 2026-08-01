@@ -90,14 +90,25 @@ describe('Workspace-backed built-in Tools', () => {
       toolName: 'search_text', input: { path: '.', query: 'needle', offset: 1, limit: 1 },
     }));
     expect(parsedToolContent(listed)).toMatchObject({ offset: 1, hasMore: true, nextOffset: 2 });
-    expect(parsedToolContent(firstGlob)).toEqual({ matches: ['a.ts'], offset: 0, hasMore: true, nextOffset: 1 });
-    expect(parsedToolContent(secondGlob)).toEqual({ matches: ['nested/b.ts'], offset: 1, hasMore: false });
-    expect(parsedToolContent(searched)).toEqual({
+    expect(parsedToolContent(firstGlob)).toMatchObject({ matches: ['a.ts'], offset: 0, hasMore: true, nextOffset: 1 });
+    expect(parsedToolContent(secondGlob)).toMatchObject({ matches: ['nested/b.ts'], offset: 1, hasMore: false });
+    expect(parsedToolContent(searched)).toMatchObject({
       matches: [{ path: 'nested/b.ts', line: 1, preview: 'needle' }],
       offset: 1, hasMore: true, nextOffset: 2,
     });
   });
 
+  it('supports question-mark and character-set Glob syntax while skipping sensitive files', async () => {
+    await fs.outputFile(path.join(root, 'a.ts'), 'safe');
+    await fs.outputFile(path.join(root, 'b.ts'), 'safe');
+    await fs.outputFile(path.join(root, '.env'), 'SECRET=hidden');
+    const tools = fileTools(root);
+    const question = await succeeded(tools.executor.execute({ toolName: 'glob', input: { pattern: '?.ts', cwd: '.' } }));
+    const characterSet = await succeeded(tools.executor.execute({ toolName: 'glob', input: { pattern: '[ab].ts', cwd: '.', includeHidden: true } }));
+    expect(parsedToolContent(question)).toMatchObject({ matches: ['a.ts', 'b.ts'] });
+    expect(parsedToolContent(characterSet)).toMatchObject({ matches: ['a.ts', 'b.ts'], skippedCount: expect.any(Number) });
+    expect(JSON.stringify(parsedToolContent(characterSet))).not.toContain('SECRET=hidden');
+  });
   it('extracts DOCX and page-aware PDF text while refusing structured mutation', async () => {
     await fs.writeFile(path.join(root, 'notes.docx'), Buffer.from(DOCX_FIXTURE_BASE64, 'base64'));
     await fs.writeFile(path.join(root, 'notes.pdf'), Buffer.from(PDF_FIXTURE_BASE64, 'base64'));
