@@ -12,7 +12,10 @@ import type {
 import {
   type NormalizedToolResult,
   type RegisteredTool,
+  type ToolExecutionAccess,
   type ToolExecutionObservation,
+  type ToolExecutionOutputChunk,
+  type ToolEffectReport,
   type ToolExecutionResult,
   type ToolExecutor,
   type ToolIdentity,
@@ -59,6 +62,7 @@ export interface ToolResult {
   readonly normalizedResult?: NormalizedToolResult;
   readonly observation?: ToolExecutionObservation;
   readonly runtimeSources?: readonly ToolRuntimeSource[];
+  readonly effectReport?: ToolEffectReport;
   readonly completedAt: string;
 }
 
@@ -90,13 +94,17 @@ export interface ProcessToolCallsRequest {
   readonly clock: EngineClock;
   readonly policy: Pick<
     EnginePolicy,
-    'maxConcurrentToolExecutions' | 'toolExecutionTimeoutMs' | 'maxToolExecutionsPerCall'
+    'maxConcurrentToolExecutions' | 'toolExecutionTimeoutMs' | 'cancellationTimeoutMs' | 'maxToolExecutionsPerCall'
   >;
   readonly signal: AbortSignal;
   readonly onToolExecutionStarted?: (execution: ToolExecution) => void;
   readonly onToolExecutionFinished?: (
     execution: ToolExecution,
     result: ToolResult,
+  ) => void;
+  readonly onToolExecutionOutput?: (
+    execution: ToolExecution,
+    output: ToolExecutionOutputChunk,
   ) => void;
 }
 
@@ -131,7 +139,7 @@ export interface ResumeToolCallApprovalRequest {
   readonly clock: EngineClock;
   readonly policy: Pick<
     EnginePolicy,
-    'maxConcurrentToolExecutions' | 'toolExecutionTimeoutMs' | 'maxToolExecutionsPerCall'
+    'maxConcurrentToolExecutions' | 'toolExecutionTimeoutMs' | 'cancellationTimeoutMs' | 'maxToolExecutionsPerCall'
   >;
   readonly signal: AbortSignal;
   readonly onApprovalApplied?: (approval: RunApproval) => void;
@@ -139,6 +147,10 @@ export interface ResumeToolCallApprovalRequest {
   readonly onToolExecutionFinished?: (
     execution: ToolExecution,
     result: ToolResult,
+  ) => void;
+  readonly onToolExecutionOutput?: (
+    execution: ToolExecution,
+    output: ToolExecutionOutputChunk,
   ) => void;
 }
 
@@ -158,6 +170,7 @@ export type ResumeToolCallApprovalResult =
 interface PlannedToolCall {
   readonly call: ToolCall;
   readonly registeredTool: RegisteredTool;
+  readonly executionAccess: ToolExecutionAccess;
 }
 
 interface ExecutedToolCall {
@@ -318,7 +331,15 @@ export async function processToolCalls(
       };
     }
 
-    const plan = { call: preparedCall, registeredTool };
+if (!permission.executionAccess) {
+      await flushParallelWindow();
+      return failedProcessing(
+        permissionFailure('Permission allow decision did not provide Tool execution access.'),
+        toolResults,
+        toolExecutions,
+      );
+    }
+    const plan = { call: preparedCall, registeredTool, executionAccess: permission.executionAccess };
     const executionMode = registeredTool.definition.executionMode ?? 'serial';
     if (executionMode === 'parallel') {
       parallelWindow.push(plan);
@@ -370,6 +391,7 @@ export async function resumeToolCallApproval(
       decision: request.decision,
       sessionId: continuation.sessionId,
       appliedAt: request.clock.now(),
+      permissionMode: continuation.permissionMode,
     });
   } catch {
     cancelClaimedApproval(request.store, approval.runApprovalId, request.clock.now());
@@ -419,6 +441,13 @@ export async function resumeToolCallApproval(
     };
   }
 
+  if (!applied.executionAccess) {
+    cancelClaimedApproval(request.store, approval.runApprovalId, request.clock.now());
+    return {
+      status: 'failed',
+      failure: permissionFailure('Approved ToolCall did not receive Tool execution access.'),
+    };
+  }
   const resolvedApproval = request.store.resolveRunApproval({
     runApprovalId: approval.runApprovalId,
     status: 'approved',
@@ -443,6 +472,7 @@ export async function resumeToolCallApproval(
       {
         call: continuation.toolCall,
         registeredTool: continuation.registeredTool,
+        executionAccess: applied.executionAccess!,
       },
     );
   } catch {
@@ -511,6 +541,7 @@ async function executeToolCall(
     | 'signal'
     | 'onToolExecutionStarted'
     | 'onToolExecutionFinished'
+    | 'onToolExecutionOutput'
   >,
   plan: PlannedToolCall,
 ): Promise<ExecutedToolCall> {
@@ -546,7 +577,11 @@ async function executeToolCall(
     const execution = Promise.resolve(request.toolExecution.execute({
       toolName: plan.registeredTool.registeredToolName,
       input: plan.call.input,
-    }, { signal }))
+    }, {
+      signal,
+      onOutput: (output) => request.onToolExecutionOutput?.(runningExecution, output),
+      executionAccess: plan.executionAccess,
+    }))
       .then((result) => ({ type: 'result' as const, result }))
       .catch(() => ({ type: 'thrown' as const }));
     const outcome = await Promise.race([execution, interruption.result]);
@@ -554,7 +589,27 @@ async function executeToolCall(
 
     if (outcome.type === 'interrupted') {
       const timedOut = outcome.reason === 'timeout';
-      if (!timedOut) await execution;
+      const stopped = await confirmToolExecutionStopped(execution, request.policy.cancellationTimeoutMs);
+      if (stopped === 'unconfirmed') {
+        const stoppedAt = request.clock.now();
+        return finishExecution(request, {
+          toolExecution: { ...runningExecution, status: 'failed', completedAt: stoppedAt },
+          toolResult: failedToolResult(
+            plan.call,
+            'termination_unconfirmed',
+            'Tool execution stopped responding before process termination could be confirmed.',
+            stoppedAt,
+          ),
+        });
+      }
+      if (stopped.type === 'result'
+        && stopped.result.type === 'failed'
+        && stopped.result.error.code === 'termination_unconfirmed') {
+        return finishExecution(
+          request,
+          mapExecutionResult(plan.call, runningExecution, stopped.result, request.clock.now()),
+        );
+      }
       return finishExecution(request, {
         toolExecution: {
           ...runningExecution,
@@ -564,7 +619,7 @@ async function executeToolCall(
         toolResult: timedOut
           ? failedToolResult(
               plan.call,
-              'tool_execution_timeout',
+              'tool_timeout',
               'Tool execution timed out.',
               completedAt,
             )
@@ -597,6 +652,17 @@ async function executeToolCall(
   }
 }
 
+async function confirmToolExecutionStopped<T>(execution: Promise<T>, timeoutMs: number): Promise<T | 'unconfirmed'> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      execution,
+      new Promise<'unconfirmed'>((resolve) => { timer = setTimeout(() => resolve('unconfirmed'), timeoutMs); }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 function finishExecution(
   request: Pick<ProcessToolCallsRequest, 'onToolExecutionFinished'>,
   executed: ExecutedToolCall,
@@ -627,6 +693,7 @@ function mapExecutionResult(
           ? { observation: result.observation }
           : {}),
         ...(result.runtimeSources ? { runtimeSources: result.runtimeSources } : {}),
+        ...(result.effectReport ? { effectReport: result.effectReport } : {}),
         completedAt,
       },
     };
@@ -639,6 +706,7 @@ function mapExecutionResult(
         ...cancelledToolResult(call, completedAt),
         content: result.normalizedResult.content,
         normalizedResult: result.normalizedResult,
+        ...(result.effectReport ? { effectReport: result.effectReport } : {}),
       },
     };
   }
@@ -653,6 +721,7 @@ function mapExecutionResult(
       error: result.error,
       content: result.normalizedResult.content,
       normalizedResult: result.normalizedResult,
+      ...(result.effectReport ? { effectReport: result.effectReport } : {}),
       ...(result.observation
         ? { observation: result.observation }
         : {}),

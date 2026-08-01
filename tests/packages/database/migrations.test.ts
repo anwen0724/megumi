@@ -60,7 +60,7 @@ describe('migrateDatabase', () => {
 
     try {
       const result = migrateDatabase({ database });
-      expect(result.currentMigration).toBe('0007_session_attachment_order');
+      expect(result.currentMigration).toBe('0008_workspace_tool_effects');
       expect(tableNames(database)).toContain('__drizzle_migrations');
       const migrationRows = database.prepare<{ hash: string }>({
         sql: 'SELECT hash FROM __drizzle_migrations',

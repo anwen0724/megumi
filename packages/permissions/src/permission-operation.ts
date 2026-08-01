@@ -100,25 +100,43 @@ export interface ResolvedPermissionOperations {
   readonly riskFacts: JsonObject;
 }
 
-const PATH_ACTIONS: Record<string, 'workspace.read' | 'workspace.write'> = {
-  read_file: 'workspace.read',
-  list_directory: 'workspace.read',
-  glob: 'workspace.read',
-  search_text: 'workspace.read',
-  write_file: 'workspace.write',
-  edit_file: 'workspace.write',
+interface WorkspacePathTarget {
+  readonly field: string;
+  readonly path: string;
+  readonly action: 'workspace.read' | 'workspace.write';
+}
+
+const PATH_TARGETS: Record<string, readonly { field: string; action: 'workspace.read' | 'workspace.write' }[]> = {
+  read_file: [{ field: 'path', action: 'workspace.read' }],
+  list_directory: [{ field: 'path', action: 'workspace.read' }],
+  glob: [{ field: 'cwd', action: 'workspace.read' }],
+  search_text: [{ field: 'path', action: 'workspace.read' }],
+  write_file: [{ field: 'path', action: 'workspace.write' }],
+  edit_file: [{ field: 'path', action: 'workspace.write' }],
+  create_directory: [{ field: 'path', action: 'workspace.write' }],
+  copy_path: [{ field: 'source', action: 'workspace.read' }, { field: 'destination', action: 'workspace.write' }],
+  move_path: [{ field: 'source', action: 'workspace.write' }, { field: 'destination', action: 'workspace.write' }],
+  delete_path: [{ field: 'path', action: 'workspace.write' }],
+  run_command: [{ field: 'cwd', action: 'workspace.read' }],
 };
 
-export function resolveWorkspacePathTarget(request: EvaluateToolCallRequest): string | undefined {
+export function resolveWorkspacePathTargets(request: EvaluateToolCallRequest): readonly WorkspacePathTarget[] {
   const builtInName = trustedBuiltInName(request.registeredTool);
-  return builtInName && PATH_ACTIONS[builtInName]
-    ? readString(request.toolInput, ['path', 'targetPath', 'target_path', 'workspacePath', 'workspace_path'])
-    : undefined;
+  if (!builtInName) return [];
+  return (PATH_TARGETS[builtInName] ?? []).flatMap((target) => {
+    const value = readString(request.toolInput, [target.field]);
+    const fallback = target.field === 'cwd' ? '.' : undefined;
+    return value || fallback ? [{ ...target, path: value ?? fallback! }] : [];
+  });
+}
+
+export function resolveWorkspacePathTarget(request: EvaluateToolCallRequest): string | undefined {
+  return resolveWorkspacePathTargets(request)[0]?.path;
 }
 
 export function resolvePermissionOperations(request: {
   readonly evaluation: EvaluateToolCallRequest;
-  readonly workspacePath?: WorkspacePathPermissionFacts;
+  readonly workspacePaths?: Readonly<Record<string, WorkspacePathPermissionFacts>>;
 }): ResolvedPermissionOperations {
   const evaluation = request.evaluation;
   const tool = evaluation.registeredTool;
@@ -141,51 +159,60 @@ export function resolvePermissionOperations(request: {
   };
   const criticalInput = normalizeJsonValue(evaluation.toolInput);
 
-  const pathAction = builtInName ? PATH_ACTIONS[builtInName] : undefined;
-  if (pathAction) {
-    const workspacePath = request.workspacePath;
-    const id = workspacePath
-      ? (workspacePath.insideWorkspace ? workspacePath.workspacePath : workspacePath.absolutePath)
-      : resolveWorkspacePathTarget(evaluation);
-    return {
-      operations: [{
-        action: pathAction,
-        resource: { type: 'workspace.path', ...(id ? { id } : {}) },
-        context,
-      }],
-      criticalInput,
-      riskFacts: {
-        ...commonRiskFacts,
-        path: workspacePath ? workspacePathRiskFacts(workspacePath) : { classified: false },
-      },
-    };
-  }
+  const pathTargets = resolveWorkspacePathTargets(evaluation);
 
   if (builtInName === 'run_command') {
     const command = readString(evaluation.toolInput, ['command']) ?? '';
-    const shellAssessment = classifyShellCommand({
-      command,
-      shellKind: trustedShellKind(tool),
-    });
+    const shellAssessment = classifyShellCommand({ command, shellKind: trustedShellKind(tool) });
+    const cwdTarget = pathTargets.find((target) => target.field === 'cwd');
+    const cwd = cwdTarget ? request.workspacePaths?.[cwdTarget.field] : undefined;
     return {
-      operations: [{
-        action: 'process.execute',
-        resource: {
-          type: 'process.command',
-          ...(shellAssessment.normalizedCommand ? { id: shellAssessment.normalizedCommand } : {}),
-          attributes: {
-            shellKind: shellAssessment.shellKind,
-            classification: shellAssessment.classification,
-            hasControlOperator: shellAssessment.hasControlOperator,
-            hasRedirection: shellAssessment.hasRedirection,
+      operations: [
+        {
+          action: 'process.execute',
+          resource: {
+            type: 'process.command',
+            ...(shellAssessment.normalizedCommand ? { id: shellAssessment.normalizedCommand } : {}),
+            attributes: {
+              shellKind: shellAssessment.shellKind,
+              classification: shellAssessment.classification,
+              hasControlOperator: shellAssessment.hasControlOperator,
+              hasRedirection: shellAssessment.hasRedirection,
+              ...(cwd ? { cwd: cwd.workspacePath } : {}),
+            },
           },
+          context,
         },
-        context,
-      }],
+        ...(cwdTarget ? [workspaceOperation(cwdTarget, cwd, context)] : []),
+      ],
       criticalInput,
       riskFacts: {
         ...commonRiskFacts,
         shell: shellRiskFacts(shellAssessment),
+        paths: cwd ? { cwd: workspacePathRiskFacts(cwd) } : {},
+      },
+    };
+  }
+
+  if (pathTargets.length > 0) {
+    const operations = pathTargets.map((target) => workspaceOperation(
+      target,
+      request.workspacePaths?.[target.field],
+      context,
+    ));
+    const pathFacts = Object.fromEntries(pathTargets.map((target) => [
+      target.field,
+      request.workspacePaths?.[target.field]
+        ? workspacePathRiskFacts(request.workspacePaths[target.field])
+        : { classified: false },
+    ]));
+    return {
+      operations,
+      criticalInput,
+      riskFacts: {
+        ...commonRiskFacts,
+        paths: pathFacts,
+        ...(pathTargets.length === 1 ? { path: pathFacts[pathTargets[0].field] } : {}),
       },
     };
   }
@@ -236,6 +263,33 @@ export function resolvePermissionOperations(request: {
     }],
     criticalInput,
     riskFacts: { ...commonRiskFacts, trustedOperationResolver: false },
+  };
+}
+
+function workspaceOperation(
+  target: WorkspacePathTarget,
+  pathFacts: WorkspacePathPermissionFacts | undefined,
+  context: PermissionOperation['context'],
+): PermissionOperation {
+  const id = pathFacts
+    ? (pathFacts.insideWorkspace ? pathFacts.workspacePath : pathFacts.absolutePath)
+    : target.path;
+  return {
+    action: target.action,
+    resource: {
+      type: 'workspace.path',
+      ...(id ? { id } : {}),
+      attributes: {
+        inputField: target.field,
+        classified: Boolean(pathFacts),
+        ...(pathFacts ? {
+          insideWorkspace: pathFacts.insideWorkspace,
+          protected: pathFacts.protected,
+          sensitive: pathFacts.sensitive,
+        } : {}),
+      },
+    },
+    context,
   };
 }
 

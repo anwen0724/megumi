@@ -169,6 +169,7 @@ export function matchesPermissionRule(
   operation: PermissionOperationForRuleMatch,
 ): boolean {
   if (rule.target.kind === 'tool') {
+    if (rule.source === 'session') return false;
     return rule.target.tool_identity.source_id === operation.context.toolIdentity.sourceId
       && rule.target.tool_identity.namespace === operation.context.toolIdentity.namespace
       && rule.target.tool_identity.source_tool_name === operation.context.toolIdentity.sourceToolName;

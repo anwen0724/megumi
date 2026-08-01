@@ -1,8 +1,9 @@
-/* Creates or overwrites a text file inside the active workspace. */
+﻿/* Creates or overwrites a text file inside the active workspace. */
 import type { RawToolResult, ToolDefinition } from '../tool';
 import { inputRecord, requireString } from './tool-input';
 import {
   assertTextMutationTarget,
+  toolEffectPath,
   withFileFailure,
   type BuiltInToolContext,
 } from './workspace-file-access';
@@ -64,6 +65,14 @@ export async function executeWriteFile(
       bytesWritten: result.bytesWritten,
       created: result.created,
       overwritten: result.overwritten,
+      fingerprint: result.fingerprint,
+    },
+    effectReport: {
+      coverage: 'complete',
+      effects: result.created
+        ? [{ type: 'created', path: toolEffectPath(result.path), pathType: 'file' }]
+        : [{ type: 'modified', path: toolEffectPath(result.path), pathType: 'file' }],
+      itemFailures: [],
     },
   };
 }

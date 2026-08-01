@@ -152,11 +152,11 @@ describe('processToolCalls result mapping', () => {
       calls: [toolCall(0, tool.registeredToolName)],
       tools: [tool],
       executeTool: never,
-      overridePolicy: { toolExecutionTimeoutMs: 5 },
+      overridePolicy: { toolExecutionTimeoutMs: 5, cancellationTimeoutMs: 10 },
     }));
     expect(timedOut.toolResults).toMatchObject([{
       status: 'failure',
-      error: { code: 'tool_execution_timeout' },
+      error: { code: 'termination_unconfirmed' },
     }]);
     expect(timedOut.toolExecutions).toHaveLength(1);
 

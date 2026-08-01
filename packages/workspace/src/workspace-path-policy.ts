@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Owns lexical and canonical Workspace path classification without deciding permissions.
  */
 import path from 'node:path';
@@ -58,6 +58,7 @@ export interface WorkspacePathPolicy {
   resolvePath(request: ResolveWorkspacePathRequest): ResolveWorkspacePathResult;
   assertOrdinaryPath(request: AssertOrdinaryWorkspacePathRequest): AssertOrdinaryWorkspacePathResult;
   resolveCanonicalPath(request: ResolveCanonicalWorkspacePathRequest): Promise<ResolveWorkspacePathResult>;
+  classifyCanonicalPath(request: ResolveCanonicalWorkspacePathRequest): Promise<WorkspacePathClassification>;
 }
 
 export function createWorkspacePathPolicy(): WorkspacePathPolicy {
@@ -76,6 +77,7 @@ export function createWorkspacePathPolicy(): WorkspacePathPolicy {
       };
     },
     resolveCanonicalPath,
+    classifyCanonicalPath,
   };
 }
 
@@ -114,6 +116,25 @@ export function normalizeWorkspaceSlash(value: string): string {
   return value.replace(/\\/g, '/').replace(/^\.\/+/, '');
 }
 
+async function classifyCanonicalPath(
+  request: ResolveCanonicalWorkspacePathRequest,
+): Promise<WorkspacePathClassification> {
+  const platform = request.platform ?? process.platform;
+  const pathApi = pathApiFor(platform);
+  const canonicalRoot = pathApi.resolve(await request.file_system.realpath(pathApi.resolve(request.workspace_root)));
+  const lexical = classifyWorkspacePath(request);
+  const canonicalTarget = await canonicalizePotentialPath(
+    lexical.absolute_path,
+    pathApi,
+    request.file_system,
+  );
+  return classifyWorkspacePath({
+    ...request,
+    workspace_root: canonicalRoot,
+    target_path: canonicalTarget,
+    platform,
+  });
+}
 async function resolveCanonicalPath(
   request: ResolveCanonicalWorkspacePathRequest,
 ): Promise<ResolveWorkspacePathResult> {

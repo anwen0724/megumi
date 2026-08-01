@@ -64,6 +64,7 @@ interface ChangeSetRow {
   session_id: string;
   run_id: string;
   status: WorkspaceChangeSet['status'];
+  effect_coverage: WorkspaceChangeSet['effect_coverage'];
   changed_file_count: number;
   created_at: string;
   finalized_at: string | null;
@@ -75,6 +76,11 @@ interface ChangedFileRow {
   change_set_id: string;
   workspace_path: string;
   change_kind: WorkspaceChangedFile['change_kind'];
+  effect_type: WorkspaceChangedFile['effect_type'];
+  source_workspace_path: string | null;
+  destination_workspace_path: string | null;
+  path_type: WorkspaceChangedFile['path_type'];
+  recoverable: number | null;
   created_at: string;
 }
 
@@ -156,14 +162,15 @@ export function createWorkspaceStore(request: CreateWorkspaceStoreRequest): Work
     insertChangeSet(changeSet) {
       database.prepare({ sql: `
         INSERT INTO workspace_changes (
-          change_set_id, workspace_id, session_id, run_id, status,
+          change_set_id, workspace_id, session_id, run_id, status, effect_coverage,
           changed_file_count, created_at, finalized_at
         ) VALUES (
-          @change_set_id, @workspace_id, @session_id, @run_id, @status,
+          @change_set_id, @workspace_id, @session_id, @run_id, @status, @effect_coverage,
           @changed_file_count, @created_at, @finalized_at
         )
         ON CONFLICT(change_set_id) DO UPDATE SET
           status = excluded.status,
+          effect_coverage = excluded.effect_coverage,
           changed_file_count = excluded.changed_file_count,
           finalized_at = excluded.finalized_at
       ` }).run(toChangeSetRow(changeSet));
@@ -224,12 +231,19 @@ export function createWorkspaceStore(request: CreateWorkspaceStoreRequest): Work
           : file;
         database.prepare({ sql: `
           INSERT INTO workspace_changed_files (
-            changed_file_id, change_set_id, workspace_path, change_kind, created_at
+            changed_file_id, change_set_id, workspace_path, change_kind, effect_type,
+            source_workspace_path, destination_workspace_path, path_type, recoverable, created_at
           ) VALUES (
-            @changed_file_id, @change_set_id, @workspace_path, @change_kind, @created_at
+            @changed_file_id, @change_set_id, @workspace_path, @change_kind, @effect_type,
+            @source_workspace_path, @destination_workspace_path, @path_type, @recoverable, @created_at
           )
           ON CONFLICT(change_set_id, workspace_path) DO UPDATE SET
-            change_kind = excluded.change_kind
+            change_kind = excluded.change_kind,
+            effect_type = excluded.effect_type,
+            source_workspace_path = excluded.source_workspace_path,
+            destination_workspace_path = excluded.destination_workspace_path,
+            path_type = excluded.path_type,
+            recoverable = excluded.recoverable
         ` }).run(toChangedFileRow(persisted));
         database.prepare({ sql: `
           UPDATE workspace_changes
@@ -311,18 +325,31 @@ function fromChangeSetRow(row: ChangeSetRow): WorkspaceChangeSet {
     session_id: row.session_id,
     run_id: row.run_id,
     status: row.status,
+    effect_coverage: row.effect_coverage,
     changed_file_count: row.changed_file_count,
     created_at: row.created_at,
     ...(row.finalized_at ? { finalized_at: row.finalized_at } : {}),
   };
 }
-function toChangedFileRow(file: WorkspaceChangedFile): ChangedFileRow { return { ...file }; }
+function toChangedFileRow(file: WorkspaceChangedFile): ChangedFileRow {
+  return {
+    ...file,
+    source_workspace_path: file.source_workspace_path ?? null,
+    destination_workspace_path: file.destination_workspace_path ?? null,
+    recoverable: file.recoverable === undefined ? null : file.recoverable ? 1 : 0,
+  };
+}
 function fromChangedFileRow(row: ChangedFileRow): WorkspaceChangedFile {
   return {
     changed_file_id: row.changed_file_id,
     change_set_id: row.change_set_id,
     workspace_path: row.workspace_path,
     change_kind: row.change_kind,
+    effect_type: row.effect_type,
+    ...(row.source_workspace_path ? { source_workspace_path: row.source_workspace_path } : {}),
+    ...(row.destination_workspace_path ? { destination_workspace_path: row.destination_workspace_path } : {}),
+    path_type: row.path_type,
+    ...(row.recoverable === null ? {} : { recoverable: row.recoverable === 1 }),
     created_at: row.created_at,
   };
 }

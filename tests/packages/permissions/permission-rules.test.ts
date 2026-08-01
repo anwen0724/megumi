@@ -37,6 +37,12 @@ function rule(
 }
 
 describe('Permission rules', () => {
+  it('does not match legacy Session grants that authorize an entire Tool identity', () => {
+    expect(matchesPermissionRule({
+      source: 'session', source_id: 'session_1',
+      target: { kind: 'tool', tool_identity: { source_id: 'built_in', namespace: 'megumi', source_tool_name: 'read_file' } },
+    }, operation('workspace.read', 'workspace.path', 'secret.md'))).toBe(false);
+  });
   it('matches path and command prefixes only at their semantic boundaries', () => {
     const pathRule = rule('workspace.write', 'workspace.path', {
       operator: 'prefix', value: 'C:/work/src',

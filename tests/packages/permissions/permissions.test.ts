@@ -1,4 +1,4 @@
-// @vitest-environment node
+﻿// @vitest-environment node
 /* Verifies operation resolution, policy order, modes, immutable approval subjects, and persistence effects. */
 import { describe, expect, it } from 'vitest';
 import {
@@ -144,6 +144,21 @@ describe('Permissions', () => {
     ]);
   });
 
+  it('classifies source and destination separately for path-to-path actions', async () => {
+    const fixture = createFixture();
+    const result = await fixture.permissions.evaluateToolCall(baseRequest({
+      registeredTool: registeredTool('copy_path'),
+      toolInput: { source: 'notes/a.md', destination: 'archive/a.md', overwrite: false },
+    }));
+    expect(result).toMatchObject({ status: 'ok', operations: [
+      { action: 'workspace.read', resource: { id: 'notes/a.md' } },
+      { action: 'workspace.write', resource: { id: 'archive/a.md' } },
+    ] });
+    expect(fixture.pathClassifier.requests).toEqual([
+      { workspaceId: 'workspace_1', targetPath: 'notes/a.md' },
+      { workspaceId: 'workspace_1', targetPath: 'archive/a.md' },
+    ]);
+  });
   it('keeps deny then ask then allow before the selected mode', async () => {
     const fixture = createFixture();
     const toolRule: PermissionRule = {
@@ -163,6 +178,38 @@ describe('Permissions', () => {
       .toMatchObject({ decision: { type: 'requires_approval' } });
   });
 
+  it('returns the execution access selected by the permission mode and risk', async () => {
+    const fixture = createFixture();
+    const restricted = await fixture.permissions.evaluateToolCall(baseRequest({
+      registeredTool: registeredTool('read_file'),
+      toolInput: { path: 'notes/a.md' },
+      permissionMode: 'auto',
+    }));
+    expect(restricted).toMatchObject({
+      status: 'ok',
+      decision: { type: 'allow' },
+      executionAccess: {
+        fileSystem: { mode: 'workspace' },
+        process: 'sandboxed',
+        network: 'denied',
+      },
+    });
+
+    const unrestricted = await fixture.permissions.evaluateToolCall(baseRequest({
+      registeredTool: registeredTool('write_file'),
+      toolInput: { path: '../outside/a.ts', content: 'x' },
+      permissionMode: 'full_access',
+    }));
+    expect(unrestricted).toMatchObject({
+      status: 'ok',
+      decision: { type: 'allow' },
+      executionAccess: {
+        fileSystem: { mode: 'unrestricted' },
+        process: 'unrestricted',
+        network: 'unrestricted',
+      },
+    });
+  });
   it('keeps prohibited operations approvable while full access remains explicit', async () => {
     const fixture = createFixture();
     expect(await fixture.permissions.evaluateToolCall(baseRequest({
@@ -177,6 +224,46 @@ describe('Permissions', () => {
     }))).toMatchObject({ decision: { type: 'allow', safetyAssessment: 'prohibited' } });
   });
 
+  it('grants only the canonical external path after a file action is approved', async () => {
+    const fixture = createFixture();
+    const evaluated = await fixture.permissions.evaluateToolCall(baseRequest({
+      registeredTool: registeredTool('write_file'),
+      toolInput: { path: '../outside/a.ts', content: 'x' },
+      permissionMode: 'ask',
+    }));
+    if (evaluated.status !== 'ok' || evaluated.decision.type !== 'requires_approval') {
+      throw new Error('Approval expected.');
+    }
+
+    const applied = await fixture.permissions.applyApprovalDecision({
+      originalPermissionDecision: evaluated.decision,
+      originalSubject: evaluated.approvalSubject,
+      currentSubject: evaluated.approvalSubject,
+      decision: {
+        approvalRequestId: 'approval_1',
+        decision: 'approved',
+        optionId: evaluated.decision.defaultOptionId,
+        decidedBy: 'user',
+        decidedAt: '2026-07-19T00:00:01.000Z',
+      },
+      sessionId: 'session_1',
+      appliedAt: '2026-07-19T00:00:01.000Z',
+      permissionMode: 'ask',
+    });
+
+    expect(applied).toMatchObject({
+      status: 'applied',
+      executionAccess: {
+        fileSystem: {
+          mode: 'workspace_and_paths',
+          readablePaths: [],
+          writablePaths: ['C:/outside/a.ts'],
+        },
+        process: 'sandboxed',
+        network: 'denied',
+      },
+    });
+  });
   it('fails closed for unknown shell kinds and untrusted external tools', async () => {
     const fixture = createFixture();
     expect(await fixture.permissions.evaluateToolCall(baseRequest({
@@ -244,8 +331,17 @@ describe('Permissions', () => {
       },
       sessionId: 'session_1',
       appliedAt: '2026-07-19T00:00:01.000Z',
+      permissionMode: 'ask',
     });
-    expect(unchanged).toEqual({ status: 'applied', effect: { type: 'none' } });
+    expect(unchanged).toEqual({
+      status: 'applied',
+      effect: { type: 'none' },
+      executionAccess: {
+        fileSystem: { mode: 'unrestricted' },
+        process: 'unrestricted',
+        network: 'unrestricted',
+      },
+    });
 
     const changedEvaluation = await fixture.permissions.evaluateToolCall(baseRequest({
       toolInput: { command: 'npm install' },
@@ -262,16 +358,16 @@ describe('Permissions', () => {
       },
       sessionId: 'session_1',
       appliedAt: '2026-07-19T00:00:02.000Z',
+      permissionMode: 'ask',
     })).toMatchObject({ status: 'rejected', reason: 'subject_changed' });
   });
 
-  it('rejects a forged subject before applying a session grant', async () => {
+  it('rejects a forged subject before applying any approval', async () => {
     const fixture = createFixture();
     const evaluated = await fixture.permissions.evaluateToolCall(baseRequest());
     if (evaluated.status !== 'ok' || evaluated.decision.type !== 'requires_approval') {
       throw new Error('Approval expected.');
     }
-    const sessionOption = evaluated.decision.options.find((option) => option.scope === 'session');
     const forged = {
       ...evaluated.approvalSubject,
       criticalInput: { command: 'Remove-Item -Recurse .' },
@@ -281,18 +377,26 @@ describe('Permissions', () => {
       originalSubject: forged,
       currentSubject: forged,
       decision: {
-        approvalRequestId: 'approval_1', decision: 'approved', optionId: sessionOption?.optionId ?? '',
+        approvalRequestId: 'approval_1', decision: 'approved', optionId: evaluated.decision.defaultOptionId,
         decidedBy: 'user', decidedAt: '2026-07-19T00:00:02.000Z',
       },
       sessionId: 'session_1',
       appliedAt: '2026-07-19T00:00:02.000Z',
+      permissionMode: 'ask',
     })).toMatchObject({ status: 'rejected', reason: 'subject_invalid' });
     expect(fixture.ruleAccess.writes).toHaveLength(0);
   });
 
-  it('writes only the immutable Session grant selected by the original decision', async () => {
+  it('offers a resource-scoped Session grant only for an ordinary read_file', async () => {
     const fixture = createFixture();
-    const evaluated = await fixture.permissions.evaluateToolCall(baseRequest());
+    fixture.ruleAccess.settings = {
+      mode: 'ask', allow: [], deny: [],
+      ask: [{ source: 'user', target: { kind: 'operation', action: 'workspace.read', resource: { type: 'workspace.path', matcher: { operator: 'exact', value: 'notes/a.md' } } } }],
+    };
+    const evaluated = await fixture.permissions.evaluateToolCall(baseRequest({
+      registeredTool: registeredTool('read_file'),
+      toolInput: { path: 'notes/a.md' },
+    }));
     if (evaluated.status !== 'ok' || evaluated.decision.type !== 'requires_approval') {
       throw new Error('Approval expected.');
     }
@@ -307,6 +411,7 @@ describe('Permissions', () => {
       },
       sessionId: 'session_1',
       appliedAt: '2026-07-19T00:00:02.000Z',
+      permissionMode: 'ask',
     });
     expect(result).toMatchObject({ status: 'applied', effect: { type: 'session_tool_grant' } });
     expect(fixture.ruleAccess.writes).toEqual([{
@@ -315,16 +420,27 @@ describe('Permissions', () => {
         source: 'session',
         source_id: 'session_1',
         target: {
-          kind: 'tool',
-          tool_identity: {
-            source_id: 'built_in', namespace: 'megumi', source_tool_name: 'run_command',
-          },
+          kind: 'operation',
+          action: 'workspace.read',
+          resource: { type: 'workspace.path', matcher: { operator: 'exact', value: 'notes/a.md' } },
         },
       }],
       appliedAt: '2026-07-19T00:00:02.000Z',
     }]);
   });
 
+  it('never offers a Session grant for commands or mutable file actions', async () => {
+    const fixture = createFixture();
+    for (const request of [
+      baseRequest(),
+      baseRequest({ registeredTool: registeredTool('write_file'), toolInput: { path: 'notes/a.md', content: 'x' } }),
+      baseRequest({ registeredTool: registeredTool('delete_path'), toolInput: { path: 'notes/a.md' } }),
+    ]) {
+      const result = await fixture.permissions.evaluateToolCall(request);
+      if (result.status !== 'ok' || result.decision.type !== 'requires_approval') throw new Error('Approval expected.');
+      expect(result.decision.options.map((option) => option.scope)).toEqual(['once']);
+    }
+  });
   it('sanitizes dependency failures at the Permissions boundary', async () => {
     const fixture = createFixture();
     fixture.ruleAccess.failure = { code: 'settings_raw_invalid', message: 'raw Settings body' };

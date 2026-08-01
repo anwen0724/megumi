@@ -25,7 +25,7 @@ const EXPECTED_RUNTIME_EVENT_ENVELOPE_TYPES = [
   'tool.registry.snapshot.created', 'tool.registry.entry.resolved', 'tool.registry.model_visible_tools.derived',
   'tool.execution.requested', 'tool.execution.validated', 'tool.execution.decided', 'tool.execution.queued',
   'tool.execution.rejected', 'tool.execution.cancelled', 'tool.execution.policy_decided',
-  'permission.decision.created', 'tool.execution.approval_requested', 'tool.execution.started',
+  'permission.decision.created', 'tool.execution.approval_requested', 'tool.execution.started', 'tool.execution.output',
   'tool.execution.routed', 'tool.execution.completed', 'tool.execution.failed', 'tool.execution.denied',
   'tool.observation.ready', 'tool.continuation.ready', 'tool.continuation.emitted', 'approval.requested',
   'approval.resolved', 'approval.expired', 'checkpoint.created', 'checkpoint.restored',

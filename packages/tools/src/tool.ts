@@ -1,6 +1,9 @@
-/* Defines stable Tool facts and execution contracts shared across Package seams. */
+﻿/* Defines stable Tool facts and execution contracts shared across Package seams. */
 
 import type { JsonObject, JsonValue } from '@megumi/ai';
+import type { ToolExecutionAccess } from '@megumi/sandbox';
+
+export type { ToolExecutionAccess, ToolExecutionFileAccess } from '@megumi/sandbox';
 
 export type JsonSchemaObject = JsonObject;
 
@@ -112,8 +115,17 @@ export interface ExecuteToolRequest {
   readonly input: unknown;
 }
 
+export interface ToolExecutionOutputChunk {
+  readonly stream: 'stdout' | 'stderr';
+  readonly chunk: string;
+  readonly truncated: boolean;
+}
+
+
 export interface ToolExecutionOptions {
   readonly signal?: AbortSignal;
+  readonly onOutput?: (output: ToolExecutionOutputChunk) => void;
+  readonly executionAccess?: ToolExecutionAccess;
 }
 
 export type RawToolResult = {
@@ -123,6 +135,7 @@ export type RawToolResult = {
   readonly error?: ToolExecutionError;
   readonly metadata?: JsonObject;
   readonly runtimeSources?: readonly ToolRuntimeSource[];
+  readonly effectReport?: ToolEffectReport;
 };
 
 export interface NormalizedToolResult {
@@ -143,7 +156,20 @@ export type ToolExecutionErrorCode =
   | 'unknown_tool'
   | 'invalid_tool_input'
   | 'tool_execution_failed'
-  | 'tool_cancelled';
+  | 'tool_cancelled'
+  | 'path_outside_workspace'
+  | 'symlink_escape'
+  | 'path_not_found'
+  | 'path_type_mismatch'
+  | 'path_conflict'
+  | 'content_conflict'
+  | 'sandbox_unavailable'
+  | 'sandbox_denied'
+  | 'shell_unavailable'
+  | 'command_failed'
+  | 'tool_timeout'
+  | 'termination_unconfirmed'
+  | 'output_limit';
 
 export interface ToolExecutionError {
   readonly code: ToolExecutionErrorCode;
@@ -159,6 +185,28 @@ export interface ToolRuntimeSource {
   readonly metadata?: JsonObject;
 }
 
+export interface ToolItemFailure {
+  readonly path: string;
+  readonly code: string;
+  readonly message: string;
+}
+
+export interface ToolEffectPath {
+  readonly location: 'workspace' | 'external';
+  readonly path: string;
+}
+
+export type ToolEffect =
+  | { readonly type: 'created'; readonly path: ToolEffectPath; readonly pathType: 'file' | 'directory' }
+  | { readonly type: 'modified'; readonly path: ToolEffectPath; readonly pathType: 'file' }
+  | { readonly type: 'copied'; readonly source: ToolEffectPath; readonly destination: ToolEffectPath; readonly pathType: 'file' | 'directory' }
+  | { readonly type: 'moved'; readonly source: ToolEffectPath; readonly destination: ToolEffectPath; readonly pathType: 'file' | 'directory' }
+  | { readonly type: 'deleted'; readonly path: ToolEffectPath; readonly pathType: 'file' | 'directory'; readonly recoverable: true };
+
+export type ToolEffectReport =
+  | { readonly coverage: 'complete'; readonly effects: readonly ToolEffect[]; readonly itemFailures: readonly ToolItemFailure[] }
+  | { readonly coverage: 'unknown'; readonly effects: readonly ToolEffect[]; readonly itemFailures: readonly ToolItemFailure[]; readonly reason: string };
+
 export type ToolExecutionResult =
   | {
       readonly type: 'succeeded';
@@ -167,6 +215,7 @@ export type ToolExecutionResult =
       readonly observation?: ToolExecutionObservation;
       readonly runtimeSources?: readonly ToolRuntimeSource[];
       readonly metadata?: JsonObject;
+      readonly effectReport?: ToolEffectReport;
     }
   | {
       readonly type: 'failed';
@@ -175,6 +224,7 @@ export type ToolExecutionResult =
       readonly normalizedResult: NormalizedToolResult;
       readonly observation?: ToolExecutionObservation;
       readonly metadata?: JsonObject;
+      readonly effectReport?: ToolEffectReport;
     };
 
 export type { JsonObject, JsonValue };

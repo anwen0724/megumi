@@ -9,7 +9,6 @@ export {
   type ProductObservabilityStorage,
   type ProductRuntime,
   type ProductSessionAttachmentFileSystem,
-  type ProductToolFileSystem,
   type ResolveModelResult,
 } from './product';
 export type { ProductHostInterface } from './host/product-host';

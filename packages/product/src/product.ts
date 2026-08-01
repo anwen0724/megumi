@@ -2,8 +2,6 @@
  * Composes the complete Product directly from real Package contracts and owns
  * Product resource startup, per-Run Tool snapshots, and ordered shutdown.
  */
-import { spawn } from 'node:child_process';
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { Api, Model, Models, ProviderStreams } from '@megumi/ai';
 import {
@@ -30,6 +28,7 @@ import {
   type RuntimeLogger,
 } from '@megumi/observability';
 import { createPermissions } from '@megumi/permissions';
+import { createSandbox, type Sandbox, type SandboxCapabilities } from '@megumi/sandbox';
 import {
   createSessionTimelineQuery,
   createWorkspaceChangeFooterProjector,
@@ -49,6 +48,7 @@ import { composeSkills, type SkillService } from '@megumi/skills';
 import {
   BUILT_IN_TOOL_NAMES,
   createTools,
+  createSandboxToolExecutor,
   createWebFetch,
   createWebSearch,
   type BuiltInToolName,
@@ -97,19 +97,6 @@ import type {
 import { migrateLegacyPermissionSettingsFile } from './migrations/legacy-permission-settings';
 import { migrateLegacyProviderApiSettingsFile } from './migrations/legacy-provider-api-settings';
 
-export interface ProductToolFileSystem {
-  readFile(path: string, encoding: 'utf8'): Promise<string>;
-  readBinaryFile?(path: string): Promise<Uint8Array>;
-  writeFile(path: string, content: string, encoding: 'utf8'): Promise<void>;
-  mkdir(path: string, options: { recursive: true }): Promise<unknown>;
-  stat(path: string): Promise<{ isFile(): boolean; isDirectory(): boolean; size: number }>;
-  readdir(path: string, options: { withFileTypes: true }): Promise<Array<{
-    name: string;
-    isFile(): boolean;
-    isDirectory(): boolean;
-  }>>;
-}
-
 export interface ComposeProductOptions {
   home: InitializeMegumiHomeSyncOptions;
   migrationsFolder?: string;
@@ -124,8 +111,6 @@ export interface ComposeProductOptions {
   inputSourceAccess?: InputSourceAccess;
   sessionAttachmentFileSystem?: SessionAttachmentFileSystem;
   settingsStorage?: SettingsStore;
-  toolFileSystem?: ProductToolFileSystem;
-  toolProcess?: ToolProcessAdapter;
   isBuiltInToolAvailable?: (toolName: string) => boolean;
   modelStreams?: Partial<Record<Api, ProviderStreams>>;
 }
@@ -176,17 +161,14 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
   const workspaceStore = createWorkspaceStore({ database });
   const workspaceFileSystem = createNodeWorkspaceFileSystem();
   const workspacePathPolicy = createWorkspacePathPolicy();
+  const sandbox = createSandbox();
   const workspaces = createWorkspaceCatalog({ store: workspaceStore, file_system: workspaceFileSystem });
   const workspaceFiles = createWorkspaceFiles({
     catalog: workspaces,
     path_policy: workspacePathPolicy,
     file_system: workspaceFileSystem,
   });
-  const workspaceChanges = createWorkspaceChanges({
-    store: workspaceStore,
-    path_policy: workspacePathPolicy,
-    file_system: workspaceFileSystem,
-  });
+  const workspaceChanges = createWorkspaceChanges({ store: workspaceStore });
 
   const sessionStore = createSessionStore({ database });
   const attachmentContentStore = options.sessionAttachmentFileSystem
@@ -217,7 +199,7 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
       : skillComposition.createSkillService();
   };
   const instructions = createInstructionReader({ megumiHomePath: homePaths.homePath });
-  const toolProcess = options.toolProcess ?? createNodeToolProcessAdapter();
+  const toolProcess = createSandboxProcessDescriptor(sandbox.capabilities());
   const context = createContext({
     sessionHistory: history,
     attachmentReader: attachments,
@@ -231,7 +213,7 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
               executionEnvironment: {
                 workingDirectory: workspace.workspace.root_path,
                 operatingSystem: modelVisibleOperatingSystem(process.platform),
-                shell: toolProcess.shellName,
+                shell: toolProcess?.shellName ?? 'Unavailable',
               },
             }
           : {
@@ -275,25 +257,23 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
       },
     },
     workspacePathClassifier: {
-      classifyWorkspacePath(request) {
+      async classifyWorkspacePath(request) {
         const workspace = workspaces.getWorkspace({ workspace_id: request.workspaceId });
         if (workspace.status !== 'found') {
           return { status: 'failed', failure: { code: 'workspace_not_found', message: 'Workspace was not found.' } };
         }
-        const classified = workspacePathPolicy.classifyPath({
+        const canonical = await workspacePathPolicy.classifyCanonicalPath({
           workspace_root: workspace.workspace.root_path,
           target_path: request.targetPath,
+          file_system: workspaceFileSystem,
         });
-        return {
-          status: 'classified',
-          workspacePath: {
-            absolutePath: classified.absolute_path,
-            workspacePath: classified.workspace_path,
-            insideWorkspace: classified.inside_workspace,
-            protected: classified.protected,
-            sensitive: classified.sensitive,
-          },
-        };
+        return { status: 'classified', workspacePath: {
+          absolutePath: canonical.absolute_path,
+          workspacePath: canonical.workspace_path,
+          insideWorkspace: canonical.inside_workspace,
+          protected: canonical.protected,
+          sensitive: canonical.sensitive,
+        } };
       },
     },
   });
@@ -344,11 +324,10 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
   const tools = createProductToolSnapshots({
     settings,
     workspaces,
-    workspacePathPolicy,
     workspaceChanges,
+    sandbox,
     resolveSkillService,
-    fileSystem: options.toolFileSystem ?? nodeProductToolFileSystem,
-    process: toolProcess,
+    ...(toolProcess ? { process: toolProcess } : {}),
     isBuiltInToolAvailable: options.isBuiltInToolAvailable,
   });
   const workspaceChangeFooter = createWorkspaceChangeFooterProjector({ workspaceChanges });
@@ -473,11 +452,10 @@ function openDatabase(homePaths: MegumiHomePaths, options: ComposeProductOptions
 function createProductToolSnapshots(input: {
   settings: Settings;
   workspaces: WorkspaceCatalog;
-  workspacePathPolicy: WorkspacePathPolicy;
   workspaceChanges: ReturnType<typeof createWorkspaceChanges>;
+  sandbox: Sandbox;
   resolveSkillService(request?: { workspaceId?: string }): SkillService;
-  fileSystem: ProductToolFileSystem;
-  process: ToolProcessAdapter;
+  process?: ToolProcessAdapter;
   isBuiltInToolAvailable?: (toolName: string) => boolean;
 }): {
   catalog: Pick<ToolCatalog, 'list'>;
@@ -485,9 +463,11 @@ function createProductToolSnapshots(input: {
 } {
   type Snapshot = ReturnType<typeof resolveToolSnapshot>;
   let pending: Snapshot | undefined;
+  const toolAvailable = (name: string) => (name !== 'run_command' || Boolean(input.process))
+    && (input.isBuiltInToolAvailable ? input.isBuiltInToolAvailable(name) : true);
   const catalog: Pick<ToolCatalog, 'list'> = {
     list(request) {
-      pending = resolveToolSnapshot(input.settings, input.isBuiltInToolAvailable);
+      pending = resolveToolSnapshot(input.settings, toolAvailable);
       return createToolsForSnapshot(
         pending,
         unavailableWorkspaceFileAccess,
@@ -499,40 +479,45 @@ function createProductToolSnapshots(input: {
   return {
     catalog,
     executionForRun(scope) {
-      const snapshot = pending ?? resolveToolSnapshot(input.settings, input.isBuiltInToolAvailable);
+      const snapshot = pending ?? resolveToolSnapshot(input.settings, toolAvailable);
       pending = undefined;
       const workspace = input.workspaces.getWorkspace({ workspace_id: scope.workspaceId });
       if (workspace.status !== 'found') throw new Error(`Workspace ${scope.workspaceId} is unavailable for Tool execution.`);
       const workspaceRoot = workspace.workspace.root_path;
-      const tools = createToolsForSnapshot(
+      const preflightTools = createToolsForSnapshot(
         snapshot,
-        createProductWorkspaceFileAccess({
-          workspaceRoot,
-          fileSystem: input.fileSystem,
-          pathPolicy: input.workspacePathPolicy,
-        }),
+        unavailableWorkspaceFileAccess,
         input.process,
         input.resolveSkillService({ workspaceId: scope.workspaceId }),
       );
-      return {
-        preflight: (request) => tools.executor.preflight(request),
-        execute(request, operationOptions) {
+      return createSandboxToolExecutor({
+        preflight: (request) => preflightTools.executor.preflight(request),
+        sandbox: input.sandbox,
+        policy: {
+          workspaceRoot,
+          maxExecutionTimeMs: PRODUCT_ENGINE_POLICY.toolExecutionTimeoutMs,
+          maxOutputBytes: 20_000,
+          maxProcessCount: 16,
+        },
+        createExecutor(sandboxScope) {
+          return createToolsForSnapshot(
+            snapshot,
+            sandboxScope.files,
+            sandboxScope.process,
+            input.resolveSkillService({ workspaceId: scope.workspaceId }),
+          ).executor;
+        },
+        trackExecution(execute) {
           return input.workspaceChanges.trackToolExecution({
             scope: {
               run_id: scope.runId,
               session_id: scope.sessionId,
               workspace_id: scope.workspaceId,
             },
-            tool_execution: {
-              tool_name: request.toolName,
-              input: request.input,
-              workspace_root: workspaceRoot,
-            },
-            execute: () => tools.executor.execute(request, operationOptions),
-            is_successful_outcome: (result) => result.type === 'succeeded',
+            execute,
           });
         },
-      };
+      });
     },
   };
 }
@@ -560,12 +545,12 @@ function resolveToolSnapshot(
 function createToolsForSnapshot(
   snapshot: ReturnType<typeof resolveToolSnapshot>,
   workspaceFileAccess: WorkspaceFileAccess,
-  process: ToolProcessAdapter,
+  process: ToolProcessAdapter | undefined,
   skills?: Pick<SkillService, 'useSkill'>,
 ) {
   return createTools({
     workspaceFileAccess,
-    process,
+    ...(process ? { process } : {}),
     ...(skills ? { skills } : {}),
     ...(snapshot.webSearch ? { webSearch: snapshot.webSearch } : {}),
     webFetch: snapshot.webFetch,
@@ -573,144 +558,19 @@ function createToolsForSnapshot(
   });
 }
 
-function createProductWorkspaceFileAccess(input: {
-  workspaceRoot: string;
-  fileSystem: ProductToolFileSystem;
-  pathPolicy: WorkspacePathPolicy;
-}): WorkspaceFileAccess {
-  const resolvePath = (candidate: string) => {
-    const resolved = input.pathPolicy.resolvePath({
-      workspace_root: input.workspaceRoot,
-      target_path: candidate,
-    });
-    if (resolved.status !== 'resolved') {
-      throw new ToolExecutionFailure(
-        'Path is outside the active Workspace.',
-        'tool_execution_failed',
-        { reason: 'outside_workspace' },
-      );
-    }
-    return { absolutePath: resolved.absolute_path, relativePath: resolved.workspace_path || '.' };
-  };
-  const walk = async (absoluteDirectory: string, relativeDirectory: string, includeHidden: boolean, output: string[]) => {
-    for (const entry of await input.fileSystem.readdir(absoluteDirectory, { withFileTypes: true })) {
-      if (!includeHidden && entry.name.startsWith('.')) continue;
-      const relative = normalizeSlash(relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name);
-      const absolute = path.join(absoluteDirectory, entry.name);
-      if (entry.isFile()) output.push(relative);
-      else if (entry.isDirectory()) await walk(absolute, relative, includeHidden, output);
-    }
-  };
-  const collect = async (
-    absoluteDirectory: string,
-    relativeDirectory: string,
-    maxDepth: number,
-    includeHidden: boolean,
-    output: Array<{ name: string; kind: 'file' | 'directory'; path: string }>,
-    depth = 1,
-  ) => {
-    for (const entry of await input.fileSystem.readdir(absoluteDirectory, { withFileTypes: true })) {
-      if ((!entry.isFile() && !entry.isDirectory()) || (!includeHidden && entry.name.startsWith('.'))) continue;
-      const relative = normalizeSlash(relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name);
-      output.push({ name: entry.name, kind: entry.isDirectory() ? 'directory' : 'file', path: relative });
-      if (entry.isDirectory() && depth < maxDepth) {
-        await collect(path.join(absoluteDirectory, entry.name), relative, maxDepth, includeHidden, output, depth + 1);
-      }
-    }
-  };
+function createSandboxProcessDescriptor(
+  capabilities: SandboxCapabilities,
+): ToolProcessAdapter | undefined {
+  if (!capabilities.shellKind || !capabilities.shellName) return undefined;
   return {
-    async readBinaryFile(request) {
-      const resolved = resolvePath(request.path);
-      if (!input.fileSystem.readBinaryFile) throw new Error('Binary file reading is unavailable.');
-      const bytes = await input.fileSystem.readBinaryFile(resolved.absolutePath);
-      return { path: resolved.relativePath, bytes, sizeBytes: bytes.byteLength };
-    },
-    async readFile(request) {
-      const resolved = resolvePath(request.path);
-      const content = await input.fileSystem.readFile(resolved.absolutePath, 'utf8');
-      return { path: resolved.relativePath, content, sizeBytes: Buffer.byteLength(content, 'utf8') };
-    },
-    async listDirectory(request) {
-      const resolved = resolvePath(request.path);
-      const entries: Array<{ name: string; kind: 'file' | 'directory'; path: string }> = [];
-      await collect(
-        resolved.absolutePath,
-        resolved.relativePath === '.' ? '' : resolved.relativePath,
-        request.maxDepth,
-        request.includeHidden,
-        entries,
-      );
-      return { path: resolved.relativePath, entries: entries.sort((a, b) => a.path.localeCompare(b.path)) };
-    },
-    async walkFiles(request) {
-      const resolved = resolvePath(request.path);
-      const stats = await input.fileSystem.stat(resolved.absolutePath);
-      if (stats.isFile()) return [resolved.relativePath];
-      const output: string[] = [];
-      if (stats.isDirectory()) {
-        await walk(
-          resolved.absolutePath,
-          resolved.relativePath === '.' ? '' : resolved.relativePath,
-          request.includeHidden ?? true,
-          output,
-        );
-      }
-      return output.sort();
-    },
-    async replaceText(request) {
-      const resolved = resolvePath(request.path);
-      const content = await input.fileSystem.readFile(resolved.absolutePath, 'utf8');
-      const occurrences = content.split(request.oldText).length - 1;
-      if (occurrences === 0) throw new Error(`Text not found in file: ${resolved.relativePath}`);
-      if (!request.replaceAll && occurrences > 1) throw new Error(`Text occurs multiple times in file: ${resolved.relativePath}`);
-      const updated = request.replaceAll
-        ? content.split(request.oldText).join(request.newText)
-        : content.replace(request.oldText, request.newText);
-      await input.fileSystem.writeFile(resolved.absolutePath, updated, 'utf8');
-      return { path: resolved.relativePath, replacements: request.replaceAll ? occurrences : 1, changed: updated !== content };
-    },
-    async writeFile(request) {
-      const resolved = resolvePath(request.path);
-      const exists = await isFile(input.fileSystem, resolved.absolutePath);
-      if (exists && !request.overwrite) throw new Error(`File already exists: ${resolved.relativePath}`);
-      await input.fileSystem.mkdir(path.dirname(resolved.absolutePath), { recursive: true });
-      await input.fileSystem.writeFile(resolved.absolutePath, request.content, 'utf8');
-      return {
-        path: resolved.relativePath,
-        bytesWritten: Buffer.byteLength(request.content, 'utf8'),
-        created: !exists,
-        overwritten: exists,
-      };
-    },
-    async resolveCommandCwd(request) {
-      return resolvePath(request.path).absolutePath;
-    },
-  };
-}
-
-function createNodeToolProcessAdapter(): ToolProcessAdapter {
-  const shellKind = process.platform === 'win32' ? 'powershell' as const : 'posix_shell' as const;
-  return {
-    shellName: shellKind === 'powershell' ? 'Windows PowerShell 5.1' : 'POSIX shell',
-    shellKind,
+    shellName: capabilities.shellName,
+    shellKind: capabilities.shellKind,
     executionMethod: 'shell',
-    run(request, options) {
-      return new Promise((resolve, reject) => {
-        const executable = process.platform === 'win32' ? 'powershell.exe' : '/bin/sh';
-        const args = process.platform === 'win32'
-          ? ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', request.command]
-          : ['-lc', request.command];
-        const child = spawn(executable, args, { cwd: request.cwd, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-        const abort = () => child.kill();
-        options.signal.addEventListener('abort', abort, { once: true });
-        child.stdout.on('data', options.onStdout);
-        child.stderr.on('data', options.onStderr);
-        child.once('error', reject);
-        child.once('close', (code) => {
-          options.signal.removeEventListener('abort', abort);
-          resolve({ exitCode: code ?? -1 });
-        });
-      });
+    async run() {
+      throw new ToolExecutionFailure(
+        'The active Sandbox Scope is required for process execution.',
+        'sandbox_unavailable',
+      );
     },
   };
 }
@@ -783,30 +643,19 @@ async function disposeProduct(input: {
   input.database.close();
 }
 
-async function isFile(fileSystem: ProductToolFileSystem, filePath: string): Promise<boolean> {
-  try { return (await fileSystem.stat(filePath)).isFile(); }
-  catch { return false; }
-}
-
-function normalizeSlash(value: string): string {
-  return value.replace(/\\/g, '/').replace(/^\.\/+/, '') || '.';
-}
-
-const nodeProductToolFileSystem: ProductToolFileSystem = {
-  readFile: (filePath) => fs.readFile(filePath, 'utf8'),
-  readBinaryFile: async (filePath) => new Uint8Array(await fs.readFile(filePath)),
-  writeFile: (filePath, content) => fs.writeFile(filePath, content, 'utf8'),
-  mkdir: (directoryPath, options) => fs.mkdir(directoryPath, options),
-  stat: (targetPath) => fs.stat(targetPath),
-  readdir: (directoryPath, options) => fs.readdir(directoryPath, options),
-};
 
 const unavailableWorkspaceFileAccess: WorkspaceFileAccess = {
+  readBinaryFile: async () => { throw new Error('Run Workspace is unavailable.'); },
   readFile: async () => { throw new Error('Run Workspace is unavailable.'); },
   listDirectory: async () => { throw new Error('Run Workspace is unavailable.'); },
   walkFiles: async () => { throw new Error('Run Workspace is unavailable.'); },
+  editFile: async () => { throw new Error('Run Workspace is unavailable.'); },
   replaceText: async () => { throw new Error('Run Workspace is unavailable.'); },
   writeFile: async () => { throw new Error('Run Workspace is unavailable.'); },
+  createDirectory: async () => { throw new Error('Run Workspace is unavailable.'); },
+  copyPath: async () => { throw new Error('Run Workspace is unavailable.'); },
+  movePath: async () => { throw new Error('Run Workspace is unavailable.'); },
+  deletePath: async () => { throw new Error('Run Workspace is unavailable.'); },
   resolveCommandCwd: async () => { throw new Error('Run Workspace is unavailable.'); },
 };
 

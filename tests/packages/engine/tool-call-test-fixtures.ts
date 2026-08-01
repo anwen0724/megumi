@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Shares focused ToolCall test facts without exporting production test seams.
  */
 import { vi } from 'vitest';
@@ -12,6 +12,7 @@ import type {
 import {
   createToolExecutor,
   type RegisteredTool,
+  type ToolExecutionAccess,
   type ToolExecutor,
   type ToolExecutionResult,
 } from '@megumi/tools';
@@ -22,6 +23,18 @@ import type {
   ProcessToolCallsRequest,
   ToolCall,
 } from '../../../packages/engine/src/tool-call';
+
+export const restrictedExecutionAccess: ToolExecutionAccess = {
+  fileSystem: { mode: 'workspace' },
+  process: 'sandboxed',
+  network: 'denied',
+};
+
+export const unrestrictedExecutionAccess: ToolExecutionAccess = {
+  fileSystem: { mode: 'unrestricted' },
+  process: 'unrestricted',
+  network: 'unrestricted',
+};
 
 export const now = '2026-07-31T00:00:00.000Z';
 export const policy: EnginePolicy = {
@@ -193,11 +206,15 @@ export function permissionService(
       operations: decision.operations,
       decision,
       approvalSubject: approvalSubjectFor(permissionRequest, decision),
+      ...(decision.type === 'allow'
+        ? { executionAccess: restrictedExecutionAccess }
+        : {}),
     };
   });
   const applyApprovalDecision: Permissions['applyApprovalDecision'] = vi.fn(async () => ({
     status: 'applied' as const,
     effect: { type: 'none' as const },
+    executionAccess: unrestrictedExecutionAccess,
   }));
   return {
     evaluateToolCall,

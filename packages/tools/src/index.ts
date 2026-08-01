@@ -1,4 +1,4 @@
-/* Public interface for Tool contracts, Catalog, Executor, and built-in adapter composition. */
+﻿/* Public interface for Tool contracts, Catalog, Executor, and built-in adapter composition. */
 
 export type {
   ExecuteToolRequest,
@@ -18,9 +18,16 @@ export type {
   ToolExecutionErrorCode,
   ToolExecutionMode,
   ToolExecutionObservation,
+  ToolExecutionOutputChunk,
+  ToolExecutionAccess,
+  ToolExecutionFileAccess,
   ToolExecutionOptions,
   ToolExecutionResult,
+  ToolEffect,
+  ToolEffectPath,
+  ToolEffectReport,
   ToolIdentity,
+  ToolItemFailure,
   ToolRegistration,
   ToolRiskLevel,
   ToolRuntimeSource,
@@ -77,3 +84,6 @@ export {
   type WebFetch,
   type WebFetchResult,
 } from './built-ins/web-fetch';
+
+export { createSandboxToolExecutor } from './sandbox-tool-executor';
+export type { CreateSandboxToolExecutorRequest } from './sandbox-tool-executor';

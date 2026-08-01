@@ -86,9 +86,11 @@ export function createToolExecutor(request: CreateToolExecutorRequest): ToolExec
         }, options);
         return normalizeRawToolResult({ toolName: executeRequest.toolName, rawResult });
       } catch (error) {
-        const cancelled = options.signal?.aborted || (
+        const terminationUnconfirmed = error instanceof ToolExecutionFailure
+          && error.code === 'termination_unconfirmed';
+        const cancelled = !terminationUnconfirmed && (options.signal?.aborted || (
           error instanceof ToolExecutionFailure && error.code === 'tool_cancelled'
-        );
+        ));
         return createFailedToolResult({
           toolName: executeRequest.toolName,
           code: cancelled

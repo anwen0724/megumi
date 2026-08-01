@@ -32,7 +32,7 @@ describe('released Database migration fixture matrix', () => {
         seedReleaseFacts(database, releaseVersion);
         const result = migrateDatabase({ database, migrationsFolder: migrationsRoot });
 
-        expect(result.currentMigration).toBe('0007_session_attachment_order');
+        expect(result.currentMigration).toBe('0008_workspace_tool_effects');
         expect(appTableNames(database)).toEqual([...databaseTables].sort());
         expect(database.prepare<{ name: string }>({
           sql: "SELECT name FROM workspaces WHERE workspace_id = 'workspace:fixture'",

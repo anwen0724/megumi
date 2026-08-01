@@ -10,9 +10,13 @@ import type {
 } from '../tool';
 import { createToolCatalog, type ToolCatalog } from '../tool-catalog';
 import { createToolExecutor, type ToolExecutionAdapter, type ToolExecutor } from '../tool-executor';
+import { createDirectoryToolDefinition, executeCreateDirectory } from './create-directory';
+import { copyPathToolDefinition, executeCopyPath } from './copy-path';
+import { deletePathToolDefinition, executeDeletePath } from './delete-path';
 import { editFileToolDefinition, executeEditFile } from './edit-file';
 import { executeGlob, globToolDefinition } from './glob';
 import { executeListDirectory, listDirectoryToolDefinition } from './list-directory';
+import { executeMovePath, movePathToolDefinition } from './move-path';
 import { executeReadFile, readFileToolDefinition } from './read-file';
 import {
   createRunCommandToolDefinition,
@@ -37,6 +41,10 @@ export const BUILT_IN_TOOL_NAMES = [
   'search_text',
   'edit_file',
   'write_file',
+  'create_directory',
+  'copy_path',
+  'move_path',
+  'delete_path',
   'run_command',
   'use_skill',
   'web_search',
@@ -101,6 +109,10 @@ function definitionsFor(context: BuiltInToolContext): readonly ToolDefinition[] 
     searchTextToolDefinition,
     editFileToolDefinition,
     writeFileToolDefinition,
+    createDirectoryToolDefinition,
+    copyPathToolDefinition,
+    movePathToolDefinition,
+    deletePathToolDefinition,
     ...(context.process ? [createRunCommandToolDefinition(context.process)] : []),
     ...(context.skills ? [useSkillToolDefinition] : []),
     ...(context.webSearch ? [webSearchToolDefinition] : []),
@@ -118,7 +130,11 @@ function createBuiltInToolAdapter(context: BuiltInToolContext): ToolExecutionAda
         case 'search_text': return executeSearchText(context, request.input, options?.signal);
         case 'edit_file': return executeEditFile(context, request.input, options?.signal);
         case 'write_file': return executeWriteFile(context, request.input, options?.signal);
-        case 'run_command': return executeRunCommand(context, request.input, options?.signal);
+        case 'create_directory': return executeCreateDirectory(context, request.input, options?.signal);
+        case 'copy_path': return executeCopyPath(context, request.input, options?.signal);
+        case 'move_path': return executeMovePath(context, request.input, options?.signal);
+        case 'delete_path': return executeDeletePath(context, request.input, options?.signal);
+        case 'run_command': return executeRunCommand(context, request.input, options);
         case 'use_skill': return executeUseSkill(context, request.input);
         case 'web_search': return executeWebSearch(context, request.input, options?.signal);
         case 'web_fetch': return executeWebFetch(context, request.input, options?.signal);

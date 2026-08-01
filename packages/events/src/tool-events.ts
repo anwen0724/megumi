@@ -151,6 +151,7 @@ export interface ToolExecutionApprovalRequestedPayload {
   approvalRequest: ApprovalRequest;
 }
 export interface ToolExecutionStartedPayload { toolExecutionId: string; startedAt?: string }
+export interface ToolExecutionOutputPayload { toolExecutionId: string; stream: 'stdout' | 'stderr'; delta: string; truncated: boolean }
 export interface ToolExecutionRoutedPayload extends RuntimeToolSourceIdentity {
   toolExecutionId: string;
   toolName: ToolName;
@@ -208,6 +209,7 @@ export interface ToolEventPayloads {
   'permission.decision.created': PermissionDecisionCreatedPayload;
   'tool.execution.approval_requested': ToolExecutionApprovalRequestedPayload;
   'tool.execution.started': ToolExecutionStartedPayload;
+  'tool.execution.output': ToolExecutionOutputPayload;
   'tool.execution.routed': ToolExecutionRoutedPayload;
   'tool.execution.completed': ToolExecutionCompletedPayload;
   'tool.execution.failed': ToolExecutionFailedPayload;
@@ -313,6 +315,7 @@ const ToolExecutionApprovalRequestedPayloadSchema = z.object({
   toolExecutionId: z.string().min(1), toolName: z.string().min(1), approvalRequest: ApprovalRequestSchema,
 }).strict();
 const ToolExecutionStartedPayloadSchema = z.object({ toolExecutionId: z.string().min(1), startedAt: RuntimeEventIsoDateTimeSchema.optional() }).strict();
+const ToolExecutionOutputPayloadSchema = z.object({ toolExecutionId: z.string().min(1), stream: z.enum(['stdout', 'stderr']), delta: z.string(), truncated: z.boolean() }).strict();
 const ToolExecutionRoutedPayloadSchema = RuntimeToolSourceIdentitySchema.extend({
   toolExecutionId: z.string().min(1), toolName: ToolNameSchema, executorKind: z.enum(['built_in', 'mcp', 'plugin', 'project_local', 'skill']),
 }).strict();
@@ -347,6 +350,7 @@ export const ToolExecutionPolicyDecidedEventSchema = eventSchema('tool.execution
 export const PermissionDecisionCreatedEventSchema = eventSchema('permission.decision.created', PermissionDecisionCreatedPayloadSchema);
 export const ToolExecutionApprovalRequestedEventSchema = eventSchema('tool.execution.approval_requested', ToolExecutionApprovalRequestedPayloadSchema);
 export const ToolExecutionStartedEventSchema = eventSchema('tool.execution.started', ToolExecutionStartedPayloadSchema);
+export const ToolExecutionOutputEventSchema = eventSchema('tool.execution.output', ToolExecutionOutputPayloadSchema);
 export const ToolExecutionRoutedEventSchema = eventSchema('tool.execution.routed', ToolExecutionRoutedPayloadSchema);
 export const ToolExecutionCompletedEventSchema = eventSchema('tool.execution.completed', ToolExecutionCompletedPayloadSchema);
 export const ToolExecutionFailedEventSchema = eventSchema('tool.execution.failed', ToolExecutionFailedPayloadSchema);
@@ -380,6 +384,7 @@ export const TOOL_EVENT_SCHEMAS = {
   'permission.decision.created': PermissionDecisionCreatedEventSchema,
   'tool.execution.approval_requested': ToolExecutionApprovalRequestedEventSchema,
   'tool.execution.started': ToolExecutionStartedEventSchema,
+  'tool.execution.output': ToolExecutionOutputEventSchema,
   'tool.execution.routed': ToolExecutionRoutedEventSchema,
   'tool.execution.completed': ToolExecutionCompletedEventSchema,
   'tool.execution.failed': ToolExecutionFailedEventSchema,
@@ -418,6 +423,7 @@ export function createToolExecutionPolicyDecidedEvent(input: RunRuntimeEventFact
 export function createPermissionDecisionCreatedEvent(input: RunRuntimeEventFactoryInput<'permission.decision.created'>) { return createRuntimeEvent(input); }
 export function createToolExecutionApprovalRequestedEvent(input: RunRuntimeEventFactoryInput<'tool.execution.approval_requested'>) { return createRuntimeEvent(input); }
 export function createToolExecutionStartedEvent(input: RunRuntimeEventFactoryInput<'tool.execution.started'>) { return createRuntimeEvent(input); }
+export function createToolExecutionOutputEvent(input: RunRuntimeEventFactoryInput<'tool.execution.output'>) { return createRuntimeEvent(input); }
 export function createToolExecutionCompletedEvent(input: RunRuntimeEventFactoryInput<'tool.execution.completed'>) { return createRuntimeEvent(input); }
 export function createToolExecutionFailedEvent(input: RunRuntimeEventFactoryInput<'tool.execution.failed'>) { return createRuntimeEvent(input); }
 export function createToolExecutionDeniedEvent(input: RunRuntimeEventFactoryInput<'tool.execution.denied'>) { return createRuntimeEvent(input); }

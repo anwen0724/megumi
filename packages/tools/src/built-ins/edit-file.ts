@@ -1,67 +1,31 @@
-/* Applies an exact text replacement to an existing workspace file. */
+﻿/* Applies ordered, conflict-safe text edits to one Workspace file. */
 import type { RawToolResult, ToolDefinition } from '../tool';
 import { inputRecord, requireString } from './tool-input';
-import {
-  assertTextMutationTarget,
-  withFileFailure,
-  type BuiltInToolContext,
-} from './workspace-file-access';
+import { assertTextMutationTarget, toolEffectPath, withFileFailure, type BuiltInToolContext } from './workspace-file-access';
 
 export const editFileToolDefinition: ToolDefinition = {
-  name: 'edit_file',
-  title: 'Edit file',
-  description: 'Apply an exact text replacement to an existing UTF-8 text file. Structured PDF and DOCX editing is not supported.',
+  name: 'edit_file', title: 'Edit file', description: 'Apply ordered exact-text edits to an existing UTF-8 text file.',
   inputSchema: {
     type: 'object',
     properties: {
-      path: {
-        type: 'string',
-        description: 'The file to edit. Relative paths are resolved from the current working directory.',
-      },
-      oldText: { type: 'string', description: 'Exact text to replace.' },
-      newText: { type: 'string', description: 'Replacement text.' },
-      replaceAll: { type: 'boolean', description: 'Whether all exact matches should be replaced.' },
+      path: { type: 'string', description: 'File path.' },
+      edits: { type: 'array', items: { type: 'object', properties: { oldText: { type: 'string', minLength: 1 }, newText: { type: 'string' } }, required: ['oldText', 'newText'], additionalProperties: false } },
+      expectedFingerprint: { type: 'string', description: 'Optional fingerprint returned by read_file.' },
     },
-    required: ['path', 'oldText', 'newText'],
-    additionalProperties: false,
+    required: ['path', 'edits'], additionalProperties: false,
   },
-  outputSchema: {
-    type: 'object',
-    properties: { path: { type: 'string' }, replacements: { type: 'integer' }, changed: { type: 'boolean' } },
-    required: ['path', 'replacements', 'changed'],
-  },
-  annotations: { destructiveHint: true, idempotentHint: false, openWorldHint: false },
-  capabilities: ['project_write'],
-  riskLevel: 'medium',
-  sideEffect: 'project_file_operation',
-  availability: { status: 'available' },
-  executionMode: 'serial',
-  permissionMetadata: { ruleToolName: 'edit_file' },
-  modelFacingDescription: 'Apply an exact text replacement to an existing UTF-8 text file. Do not use this tool to edit PDF or DOCX files.',
+  annotations: { destructiveHint: true, idempotentHint: false, openWorldHint: false }, capabilities: ['project_write'], riskLevel: 'medium', sideEffect: 'project_file_operation', availability: { status: 'available' }, executionMode: 'serial', permissionMetadata: { ruleToolName: 'edit_file' },
 };
 
-export async function executeEditFile(
-  context: BuiltInToolContext,
-  input: unknown,
-  signal?: AbortSignal,
-): Promise<RawToolResult> {
+export async function executeEditFile(context: BuiltInToolContext, input: unknown, signal?: AbortSignal): Promise<RawToolResult> {
   const record = inputRecord(input);
   const targetPath = requireString(record, 'path');
   assertTextMutationTarget(targetPath);
-  const result = await withFileFailure('edit', () => context.workspaceFileAccess.replaceText({
-    path: targetPath,
-    oldText: requireString(record, 'oldText'),
-    newText: requireString(record, 'newText'),
-    replaceAll: Boolean(record.replaceAll),
-    signal,
-  }));
-
-  return {
-    outputKind: 'json',
-    content: {
-      path: result.path,
-      replacements: result.replacements,
-      changed: result.changed,
-    },
-  };
+  if (!Array.isArray(record.edits)) throw new Error('edits must be an array.');
+  const edits = record.edits.map((value) => {
+    const edit = inputRecord(value);
+    return { oldText: requireString(edit, 'oldText'), newText: typeof edit.newText === 'string' ? edit.newText : (() => { throw new Error('Missing or invalid string input: newText'); })() };
+  });
+  const result = await withFileFailure('edit', () => context.workspaceFileAccess.editFile({ path: targetPath, edits, ...(typeof record.expectedFingerprint === 'string' ? { expectedFingerprint: record.expectedFingerprint } : {}), signal }));
+  return { outputKind: 'json', content: { path: result.path, replacements: result.replacements, changed: result.changed, fingerprint: result.fingerprint }, effectReport: { coverage: 'complete', effects: result.changed ? [{ type: 'modified', path: toolEffectPath(result.path), pathType: 'file' }] : [], itemFailures: [] } };
 }

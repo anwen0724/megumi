@@ -6,6 +6,7 @@ import type { JsonObject, JsonValue } from '@megumi/tools';
 import {
   JsonValueSchema,
   PermissionFailureSchema,
+  PermissionModeSchema,
   PermissionRuleSchema,
   SafetyAssessmentSchema,
   type PermissionFailure,
@@ -18,6 +19,7 @@ import {
   type PermissionOperation,
   type PermissionToolIdentity,
 } from './permission-operation';
+import { executionAccessFor, ToolExecutionAccessSchema } from './permission-execution-access';
 
 export const PermissionDenialCodeSchema = z.enum(['rule_denied', 'policy_denied']);
 export type PermissionDenialCode = z.infer<typeof PermissionDenialCodeSchema>;
@@ -115,6 +117,7 @@ export const ApplyApprovalDecisionRequestSchema = z.object({
   decision: ApprovalDecisionSchema,
   sessionId: z.string().min(1),
   appliedAt: z.string().min(1),
+  permissionMode: PermissionModeSchema,
 }).strict();
 export type ApplyApprovalDecisionRequest = z.infer<typeof ApplyApprovalDecisionRequestSchema>;
 
@@ -128,7 +131,11 @@ export const ApprovalEffectSchema = z.discriminatedUnion('type', [
 export type ApprovalEffect = z.infer<typeof ApprovalEffectSchema>;
 
 export const ApplyApprovalDecisionResultSchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('applied'), effect: ApprovalEffectSchema }).strict(),
+  z.object({
+    status: z.literal('applied'),
+    effect: ApprovalEffectSchema,
+    executionAccess: ToolExecutionAccessSchema.optional(),
+  }).strict(),
   z.object({
     status: z.literal('rejected'),
     reason: z.enum([
@@ -194,8 +201,13 @@ export function resolveApprovalEffect(
     (candidate) => candidate.optionId === approvalDecision.optionId,
   );
   if (!option) return rejected('option_not_found', 'Approval option was not found.');
+  const executionAccess = executionAccessFor({
+    permissionMode: request.permissionMode,
+    operations: request.currentSubject.operations,
+    approved: true,
+  });
   if (option.effect.type === 'current_tool_call') {
-    return { status: 'applied', effect: { type: 'none' } };
+    return { status: 'applied', effect: { type: 'none' }, executionAccess };
   }
   if (option.effect.rule.source !== 'session'
     || option.effect.rule.source_id !== request.sessionId) {
@@ -204,6 +216,7 @@ export function resolveApprovalEffect(
   return {
     status: 'applied',
     effect: { type: 'session_tool_grant', rule: option.effect.rule },
+    executionAccess,
   };
 }
 

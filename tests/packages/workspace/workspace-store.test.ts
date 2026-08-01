@@ -26,6 +26,7 @@ const changeSet = (overrides: Partial<WorkspaceChangeSet> = {}): WorkspaceChange
   session_id: 'session:one',
   run_id: 'run:one',
   status: 'open',
+  effect_coverage: 'complete',
   changed_file_count: 0,
   created_at: '2026-05-16T00:00:00.000Z',
   ...overrides,
@@ -35,6 +36,8 @@ const changedFile = (overrides: Partial<WorkspaceChangedFile> = {}): WorkspaceCh
   change_set_id: 'change-set:one',
   workspace_path: 'src/index.ts',
   change_kind: 'created',
+  effect_type: 'created',
+  path_type: 'file',
   created_at: '2026-05-16T00:00:01.000Z',
   ...overrides,
 });
@@ -73,7 +76,7 @@ describe('WorkspaceStore', () => {
       store.upsertWorkspace(workspace());
       store.insertChangeSet(changeSet());
       store.upsertChangedFile(changedFile());
-      store.upsertChangedFile(changedFile({ changed_file_id: 'changed-file:other', change_kind: 'modified' }));
+      store.upsertChangedFile(changedFile({ changed_file_id: 'changed-file:other', change_kind: 'modified', effect_type: 'modified' }));
 
       const first = store.finalizeChangeSet({
         change_set_id: 'change-set:one', finalized_at: '2026-05-16T00:01:00.000Z',
@@ -87,7 +90,7 @@ describe('WorkspaceStore', () => {
       expect(second).toEqual(first);
       expect(store.getChangeSummary('change-set:one')).toEqual({
         change_set: first,
-        files: [changedFile({ change_kind: 'modified' })],
+        files: [changedFile({ change_kind: 'modified', effect_type: 'modified' })],
       });
     } finally { database.close(); }
   });

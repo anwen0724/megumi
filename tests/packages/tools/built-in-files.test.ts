@@ -1,4 +1,4 @@
-/* Protects the six Workspace-backed built-in Tools and bounded document behavior. */
+﻿/* Protects the six Workspace-backed built-in Tools and bounded document behavior. */
 
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -10,6 +10,7 @@ import {
   ToolExecutionFailure,
   type ToolExecutionResult,
 } from '../../../packages/tools/src';
+import { createNodeSandboxFileAccess } from '../../../packages/sandbox/src';
 import { createLocalWorkspaceFileAccess, parsedToolContent } from './tool-test-fixtures';
 
 const DOCX_FIXTURE_BASE64 = 'UEsDBAoAAAAIAPAh91x5bjPX6AAAAK0BAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbH1QyU7DMBD9FWuuKHHggBCK0wPLETiUDxjZk8SqN3nc0v49Tlt6QIXjzFv1+tXeO7GjzDYGBbdtB4KCjsaGScHn+rV5AMEFg0EXAyk4EMNq6NeHRCyqNrCCuZT0KCXrmTxyGxOFiowxeyz1zJNMqDc4kbzrunupYygUSlMWDxj6Zxpx64p42df3qUcmxyCeTsQlSwGm5KzGUnG5C+ZXSnNOaKvyyOHZJr6pBJBXExbk74Cz7r0Ok60h8YG5vKGvLPkVs5Em6q2vyvZ/mys94zhaTRf94pZy1MRcF/euvSAebfjpL49zD99QSwMECgAAAAAA8CH3XAAAAAAAAAAAAAAAAAYAAABfcmVscy9QSwMECgAAAAgA8CH3XJv9N+qtAAAAKQEAAAsAAABfcmVscy8ucmVsc43POw7CMAwG4KtE3mlaBoRQ0y4IqSsqB7ASN61oHkrCo7cnAwNFDIy2f3+W6/ZpZnanECdnBVRFCYysdGqyWsClP232wGJCq3B2lgQsFKFt6jPNmPJKHCcfWTZsFDCm5A+cRzmSwVg4TzZPBhcMplwGzT3KK2ri27Lc8fBpwNpknRIQOlUB6xdP/9huGCZJRydvhmz6ceIrkWUMmpKAhwuKq3e7yCzwpuarF5sXUEsDBAoAAAAAAPAh91wAAAAAAAAAAAAAAAAFAAAAd29yZC9QSwMECgAAAAgA8CH3XD2eKt/IAAAAMAEAABEAAAB3b3JkL2RvY3VtZW50LnhtbG2PwU7DMAyGX8XKnaZwmFDVdredd4AHCIlZIzVxsL11fXuScUBCXD7Ltvzp93i8pxVuyBIpT+a56w1g9hRivkzm/e309GpA1OXgVso4mR3FHOdxGwL5a8KsUAVZhm0yi2oZrBW/YHLSUcFcd5/EyWlt+WI34lCYPIpUf1rtS98fbHIxm6b8oLC3Whq4Qefzskv0Aoy32DJCJkUZbds18oPl79mJ2CPg19WtAjWNgMaEAs57XJGdVlX3r0XQ65ntY/ATyP4+O38DUEsBAhQACgAAAAgA8CH3XHluM9foAAAArQEAABMAAAAAAAAAAAAAAAAAAAAAAFtDb250ZW50X1R5cGVzXS54bWxQSwECFAAKAAAAAADwIfdcAAAAAAAAAAAAAAAABgAAAAAAAAAAABAAAAAZAQAAX3JlbHMvUEsBAhQACgAAAAgA8CH3XJv9N+qtAAAAKQEAAAsAAAAAAAAAAAAAAAAAPQEAAF9yZWxzLy5yZWxzUEsBAhQACgAAAAAA8CH3XAAAAAAAAAAAAAAAAAUAAAAAAAAAAAAQAAAAEwIAAHdvcmQvUEsBAhQACgAAAAgA8CH3XD2eKt/IAAAAMAEAABEAAAAAAAAAAAAAAAAANgIAAHdvcmQvZG9jdW1lbnQueG1sUEsFBgAAAAAFAAUAIAEAAC0DAAAAAA==';
@@ -35,13 +36,49 @@ describe('Workspace-backed built-in Tools', () => {
     }));
     const edit = await succeeded(tools.executor.execute({
       toolName: 'edit_file',
-      input: { path: 'nested/file.txt', oldText: 'hello', newText: 'hi' },
+      input: { path: 'nested/file.txt', edits: [{ oldText: 'hello', newText: 'hi' }] },
     }));
     expect(parsedToolContent(read)).toMatchObject({ content: 'hello world', sizeBytes: 11, hasMore: false });
     expect(parsedToolContent(edit)).toMatchObject({ changed: true, replacements: 1 });
     await expect(fs.readFile(path.join(root, 'nested/file.txt'), 'utf8')).resolves.toBe('hi world');
   });
 
+
+  it('creates, copies, moves, and recoverably deletes through the same Executor', async () => {
+    const tools = fileTools(root);
+    await succeeded(tools.executor.execute({ toolName: 'create_directory', input: { path: 'notes' } }));
+    await succeeded(tools.executor.execute({ toolName: 'write_file', input: { path: 'notes/a.md', content: 'alpha' } }));
+    const copied = await succeeded(tools.executor.execute({ toolName: 'copy_path', input: { source: 'notes/a.md', destination: 'notes/b.md' } }));
+    const moved = await succeeded(tools.executor.execute({ toolName: 'move_path', input: { source: 'notes/b.md', destination: 'archive/b.md' } }));
+    const deleted = await succeeded(tools.executor.execute({ toolName: 'delete_path', input: { path: 'archive/b.md' } }));
+    expect(copied.effectReport?.effects).toEqual([{ type: 'copied', source: { location: 'workspace', path: 'notes/a.md' }, destination: { location: 'workspace', path: 'notes/b.md' }, pathType: 'file' }]);
+    expect(moved.effectReport?.effects).toEqual([{ type: 'moved', source: { location: 'workspace', path: 'notes/b.md' }, destination: { location: 'workspace', path: 'archive/b.md' }, pathType: 'file' }]);
+    expect(deleted.effectReport?.effects).toEqual([{ type: 'deleted', path: { location: 'workspace', path: 'archive/b.md' }, pathType: 'file', recoverable: true }]);
+  });
+  it('marks an unrestricted external file effect without changing the Tool result path', async () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-tool-external-'));
+    try {
+      const target = path.join(outside, 'external.md');
+      const tools = createTools({
+        workspaceFileAccess: createNodeSandboxFileAccess({
+          workspaceRoot: root,
+          access: { mode: 'unrestricted' },
+        }),
+      });
+      const written = await succeeded(tools.executor.execute({
+        toolName: 'write_file',
+        input: { path: target, content: 'external' },
+      }));
+      expect(parsedToolContent(written)).toMatchObject({ path: target });
+      expect(written.effectReport?.effects).toEqual([{
+        type: 'created',
+        path: { location: 'external', path: target },
+        pathType: 'file',
+      }]);
+    } finally {
+      fs.removeSync(outside);
+    }
+  });
   it('returns resumable UTF-8 byte pages without splitting a character', async () => {
     await fs.writeFile(path.join(root, 'unicode.txt'), 'ab你cd好ef', 'utf8');
     const tools = fileTools(root);
@@ -78,14 +115,25 @@ describe('Workspace-backed built-in Tools', () => {
       toolName: 'search_text', input: { path: '.', query: 'needle', offset: 1, limit: 1 },
     }));
     expect(parsedToolContent(listed)).toMatchObject({ offset: 1, hasMore: true, nextOffset: 2 });
-    expect(parsedToolContent(firstGlob)).toEqual({ matches: ['a.ts'], offset: 0, hasMore: true, nextOffset: 1 });
-    expect(parsedToolContent(secondGlob)).toEqual({ matches: ['nested/b.ts'], offset: 1, hasMore: false });
-    expect(parsedToolContent(searched)).toEqual({
+    expect(parsedToolContent(firstGlob)).toMatchObject({ matches: ['a.ts'], offset: 0, hasMore: true, nextOffset: 1 });
+    expect(parsedToolContent(secondGlob)).toMatchObject({ matches: ['nested/b.ts'], offset: 1, hasMore: false });
+    expect(parsedToolContent(searched)).toMatchObject({
       matches: [{ path: 'nested/b.ts', line: 1, preview: 'needle' }],
       offset: 1, hasMore: true, nextOffset: 2,
     });
   });
 
+  it('supports question-mark and character-set Glob syntax while skipping sensitive files', async () => {
+    await fs.outputFile(path.join(root, 'a.ts'), 'safe');
+    await fs.outputFile(path.join(root, 'b.ts'), 'safe');
+    await fs.outputFile(path.join(root, '.env'), 'SECRET=hidden');
+    const tools = fileTools(root);
+    const question = await succeeded(tools.executor.execute({ toolName: 'glob', input: { pattern: '?.ts', cwd: '.' } }));
+    const characterSet = await succeeded(tools.executor.execute({ toolName: 'glob', input: { pattern: '[ab].ts', cwd: '.', includeHidden: true } }));
+    expect(parsedToolContent(question)).toMatchObject({ matches: ['a.ts', 'b.ts'] });
+    expect(parsedToolContent(characterSet)).toMatchObject({ matches: ['a.ts', 'b.ts'], skippedCount: expect.any(Number) });
+    expect(JSON.stringify(parsedToolContent(characterSet))).not.toContain('SECRET=hidden');
+  });
   it('extracts DOCX and page-aware PDF text while refusing structured mutation', async () => {
     await fs.writeFile(path.join(root, 'notes.docx'), Buffer.from(DOCX_FIXTURE_BASE64, 'base64'));
     await fs.writeFile(path.join(root, 'notes.pdf'), Buffer.from(PDF_FIXTURE_BASE64, 'base64'));
@@ -103,7 +151,7 @@ describe('Workspace-backed built-in Tools', () => {
     expect(parsedToolContent(pdf)).toMatchObject({ content: expect.stringContaining('[Page 1]\nPhysics revision notes') });
     expect(parsedToolContent(search)).toMatchObject({ matches: [{ path: 'notes.pdf', page: 1, preview: 'Physics revision notes' }] });
     const mutation = await tools.executor.execute({
-      toolName: 'edit_file', input: { path: 'notes.docx', oldText: 'Physics', newText: 'Chemistry' },
+      toolName: 'edit_file', input: { path: 'notes.docx', edits: [{ oldText: 'Physics', newText: 'Chemistry' }] },
     });
     expect(mutation).toMatchObject({
       type: 'failed',

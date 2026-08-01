@@ -3,7 +3,7 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import type { ApprovalRequestedPayload } from '@megumi/events';
-import { approvalSubjectFor, registeredTool, succeeded } from './tool-call-test-fixtures';
+import { approvalSubjectFor, registeredTool, succeeded, unrestrictedExecutionAccess } from './tool-call-test-fixtures';
 import {
   approvalDecisionFor,
   assistantStream,
@@ -85,6 +85,7 @@ describe('createEngine', () => {
     const applyApprovalDecision = vi.fn(async () => ({
       status: 'applied' as const,
       effect: { type: 'none' as const },
+      executionAccess: unrestrictedExecutionAccess,
     }));
     const fixture = createEngineFixture({
       tools: [tool],

@@ -2,7 +2,7 @@
 
 import type { JsonObject } from '@megumi/ai';
 import type { SkillScriptExecutionRequest } from '@megumi/skills';
-import type { RawToolResult, ToolDefinition } from '../tool';
+import type { RawToolResult, ToolDefinition, ToolExecutionErrorCode, ToolExecutionOptions, ToolExecutionOutputChunk } from '../tool';
 import { normalizeRawToolContent, ToolExecutionFailure } from '../tool-result';
 import { inputRecord, optionalPositiveInteger, optionalString, requireString } from './tool-input';
 import type { BuiltInToolContext } from './workspace-file-access';
@@ -36,6 +36,7 @@ export interface ToolProcessOptions {
 
 export interface ToolProcessResult {
   readonly exitCode: number;
+  readonly terminationConfirmed?: boolean;
 }
 
 export interface RunCommandToolInput {
@@ -112,14 +113,14 @@ export function mapSkillScriptExecutionRequestToRunCommandInput(request: {
 export async function executeRunCommand(
   context: BuiltInToolContext,
   input: unknown,
-  signal?: AbortSignal,
+  options: ToolExecutionOptions = {},
 ): Promise<RawToolResult> {
   if (!context.process) throw new Error('run_command requires a process adapter.');
   const record = inputRecord(input);
   const command = requireString(record, 'command');
   const cwd = await context.workspaceFileAccess.resolveCommandCwd({
     path: optionalString(record, 'cwd', '.'),
-    signal,
+    signal: options.signal,
   });
   const timeoutMs = optionalPositiveInteger(record, 'timeoutMs', 60_000);
   const internalMetadata = (record as Record<PropertyKey, unknown>)[RUN_COMMAND_INTERNAL_METADATA];
@@ -128,7 +129,8 @@ export async function executeRunCommand(
     command,
     cwd,
     timeoutMs,
-    signal,
+    signal: options.signal,
+    onOutput: options.onOutput,
     process: context.process,
   });
   const content = buildBoundedCommandContent({
@@ -144,7 +146,7 @@ export async function executeRunCommand(
     isError: result.exitCode !== 0,
     ...(result.exitCode !== 0 ? {
       error: {
-        code: 'tool_execution_failed' as const,
+        code: 'command_failed' as const,
         message: `Command exited with code ${result.exitCode}.`,
         details: { reason: 'non_zero_exit', exitCode: result.exitCode },
       },
@@ -153,6 +155,12 @@ export async function executeRunCommand(
       shellKind: context.process.shellKind,
       executionMethod: context.process.executionMethod,
       ...(isInternalMetadata(internalMetadata) ? internalMetadata : {}),
+    },
+    effectReport: {
+      coverage: 'unknown',
+      effects: [],
+      itemFailures: [],
+      reason: 'run_command does not provide reliable Workspace file-effect observation.',
     },
   };
 }
@@ -202,6 +210,7 @@ async function runShellCommand(input: {
   readonly cwd: string;
   readonly timeoutMs: number;
   readonly signal?: AbortSignal;
+  readonly onOutput?: (output: ToolExecutionOutputChunk) => void;
   readonly process: ToolProcessAdapter;
 }): Promise<{ readonly exitCode: number; readonly stdout: string; readonly stderr: string; readonly truncated: boolean }> {
   input.signal?.throwIfAborted();
@@ -220,8 +229,8 @@ async function runShellCommand(input: {
       { command: input.command, cwd: input.cwd },
       {
         signal: controller.signal,
-        onStdout: (chunk) => stdout.append(chunk),
-        onStderr: (chunk) => stderr.append(chunk),
+        onStdout: (chunk) => publishCapturedOutput('stdout', stdout.append(chunk), stdout.truncated, input.onOutput),
+        onStderr: (chunk) => publishCapturedOutput('stderr', stderr.append(chunk), stderr.truncated, input.onOutput),
       },
     );
     if (timedOut) throw timeoutFailure(input.timeoutMs);
@@ -232,12 +241,15 @@ async function runShellCommand(input: {
       stderr: stderr.toString(),
       truncated: stdout.truncated || stderr.truncated,
     };
-  } catch {
+  } catch (error) {
+    if (isStableProcessFailure(error) && error.code === 'termination_unconfirmed') throw processFailure(error);
     if (timedOut) throw timeoutFailure(input.timeoutMs);
     if (input.signal?.aborted) throw cancelledFailure();
+    if (error instanceof ToolExecutionFailure) throw error;
+    if (isStableProcessFailure(error)) throw processFailure(error);
     throw new ToolExecutionFailure(
       'Command process could not be started.',
-      'tool_execution_failed',
+      'shell_unavailable',
       { reason: 'spawn_failed' },
     );
   } finally {
@@ -246,6 +258,36 @@ async function runShellCommand(input: {
   }
 }
 
+function publishCapturedOutput(
+  stream: 'stdout' | 'stderr',
+  chunk: string,
+  truncated: boolean,
+  publish?: (output: ToolExecutionOutputChunk) => void,
+): void {
+  if (!publish || chunk.length === 0) return;
+  publish({ stream, chunk: redactCommandOutput(chunk), truncated });
+}
+
+function redactCommandOutput(value: string): string {
+  return value
+    .replace(/\b(Authorization\s*:\s*Bearer)\s+[A-Za-z0-9._~+/=-]+/giu, '$1 [REDACTED]')
+    .replace(/\b(api[-_ ]?key|token|password|secret)\s*[:=]\s*("[^"]+"|'[^']+'|[^\s,;]+)/giu, '$1=[REDACTED]');
+}
+
+const STABLE_PROCESS_FAILURE_CODES = new Set<ToolExecutionErrorCode>([
+  'sandbox_unavailable', 'sandbox_denied', 'shell_unavailable',
+  'tool_cancelled', 'tool_timeout', 'termination_unconfirmed', 'output_limit',
+]);
+
+function isStableProcessFailure(error: unknown): error is { readonly code: ToolExecutionErrorCode; readonly message: string } {
+  return Boolean(error && typeof error === 'object'
+    && 'code' in error && STABLE_PROCESS_FAILURE_CODES.has((error as { code: ToolExecutionErrorCode }).code)
+    && 'message' in error && typeof (error as { message: unknown }).message === 'string');
+}
+
+function processFailure(error: { readonly code: ToolExecutionErrorCode; readonly message: string }): ToolExecutionFailure {
+  return new ToolExecutionFailure(error.message, error.code, { reason: 'sandbox_process' });
+}
 function buildScriptCommand(
   scriptPath: string,
   args: readonly string[],
@@ -283,7 +325,7 @@ function quotePosixArgument(value: string): string {
 function timeoutFailure(timeoutMs: number): ToolExecutionFailure {
   return new ToolExecutionFailure(
     `Command timed out after ${timeoutMs}ms.`,
-    'tool_execution_failed',
+    'tool_timeout',
     { reason: 'timeout', timeoutMs },
   );
 }
@@ -307,25 +349,29 @@ class BoundedByteCapture {
 
   public constructor(private readonly maxBytes: number) {}
 
-  public append(value: Uint8Array | string): void {
+  public append(value: Uint8Array | string): string {
     const chunk = typeof value === 'string' ? Buffer.from(value, 'utf8') : Buffer.from(value);
     const remaining = this.maxBytes - this.capturedBytes;
+    let emitted = Buffer.alloc(0);
     if (remaining > 0) {
-      const captured = chunk.subarray(0, remaining);
-      this.chunks.push(captured);
-      this.capturedBytes += captured.byteLength;
+      emitted = chunk.subarray(0, remaining);
+      this.chunks.push(emitted);
+      this.capturedBytes += emitted.byteLength;
     }
     if (chunk.byteLength > remaining) this.truncated = true;
+    return completeUtf8Prefix(emitted).toString('utf8');
   }
 
   public toString(): string {
-    const content = Buffer.concat(this.chunks);
-    let end = content.byteLength;
-    while (end > 0 && !isCompleteUtf8Prefix(content.subarray(0, end))) end -= 1;
-    return content.subarray(0, end).toString('utf8');
+    return completeUtf8Prefix(Buffer.concat(this.chunks)).toString('utf8');
   }
 }
 
+function completeUtf8Prefix(content: Buffer): Buffer {
+  let end = content.byteLength;
+  while (end > 0 && !isCompleteUtf8Prefix(content.subarray(0, end))) end -= 1;
+  return content.subarray(0, end);
+}
 function isCompleteUtf8Prefix(content: Buffer): boolean {
   if (content.byteLength === 0) return true;
   let start = content.byteLength - 1;
