@@ -3,7 +3,6 @@
  * Product resource startup, per-Run Tool snapshots, and ordered shutdown.
  */
 import { spawn } from 'node:child_process';
-import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { Api, Model, Models, ProviderStreams } from '@megumi/ai';
 import {
@@ -30,6 +29,7 @@ import {
   type RuntimeLogger,
 } from '@megumi/observability';
 import { createPermissions } from '@megumi/permissions';
+import { createNodeSandboxFileAccess } from '@megumi/sandbox';
 import {
   createSessionTimelineQuery,
   createWorkspaceChangeFooterProjector,
@@ -97,19 +97,6 @@ import type {
 import { migrateLegacyPermissionSettingsFile } from './migrations/legacy-permission-settings';
 import { migrateLegacyProviderApiSettingsFile } from './migrations/legacy-provider-api-settings';
 
-export interface ProductToolFileSystem {
-  readFile(path: string, encoding: 'utf8'): Promise<string>;
-  readBinaryFile?(path: string): Promise<Uint8Array>;
-  writeFile(path: string, content: string, encoding: 'utf8'): Promise<void>;
-  mkdir(path: string, options: { recursive: true }): Promise<unknown>;
-  stat(path: string): Promise<{ isFile(): boolean; isDirectory(): boolean; size: number }>;
-  readdir(path: string, options: { withFileTypes: true }): Promise<Array<{
-    name: string;
-    isFile(): boolean;
-    isDirectory(): boolean;
-  }>>;
-}
-
 export interface ComposeProductOptions {
   home: InitializeMegumiHomeSyncOptions;
   migrationsFolder?: string;
@@ -124,7 +111,6 @@ export interface ComposeProductOptions {
   inputSourceAccess?: InputSourceAccess;
   sessionAttachmentFileSystem?: SessionAttachmentFileSystem;
   settingsStorage?: SettingsStore;
-  toolFileSystem?: ProductToolFileSystem;
   toolProcess?: ToolProcessAdapter;
   isBuiltInToolAvailable?: (toolName: string) => boolean;
   modelStreams?: Partial<Record<Api, ProviderStreams>>;
@@ -344,10 +330,8 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
   const tools = createProductToolSnapshots({
     settings,
     workspaces,
-    workspacePathPolicy,
     workspaceChanges,
     resolveSkillService,
-    fileSystem: options.toolFileSystem ?? nodeProductToolFileSystem,
     process: toolProcess,
     isBuiltInToolAvailable: options.isBuiltInToolAvailable,
   });
@@ -473,10 +457,8 @@ function openDatabase(homePaths: MegumiHomePaths, options: ComposeProductOptions
 function createProductToolSnapshots(input: {
   settings: Settings;
   workspaces: WorkspaceCatalog;
-  workspacePathPolicy: WorkspacePathPolicy;
   workspaceChanges: ReturnType<typeof createWorkspaceChanges>;
   resolveSkillService(request?: { workspaceId?: string }): SkillService;
-  fileSystem: ProductToolFileSystem;
   process: ToolProcessAdapter;
   isBuiltInToolAvailable?: (toolName: string) => boolean;
 }): {
@@ -506,11 +488,7 @@ function createProductToolSnapshots(input: {
       const workspaceRoot = workspace.workspace.root_path;
       const tools = createToolsForSnapshot(
         snapshot,
-        createProductWorkspaceFileAccess({
-          workspaceRoot,
-          fileSystem: input.fileSystem,
-          pathPolicy: input.workspacePathPolicy,
-        }),
+        createNodeSandboxFileAccess({ workspaceRoot }),
         input.process,
         input.resolveSkillService({ workspaceId: scope.workspaceId }),
       );
@@ -571,121 +549,6 @@ function createToolsForSnapshot(
     webFetch: snapshot.webFetch,
     disabledToolNames: snapshot.disabledToolNames as readonly BuiltInToolName[],
   });
-}
-
-function createProductWorkspaceFileAccess(input: {
-  workspaceRoot: string;
-  fileSystem: ProductToolFileSystem;
-  pathPolicy: WorkspacePathPolicy;
-}): WorkspaceFileAccess {
-  const resolvePath = (candidate: string) => {
-    const resolved = input.pathPolicy.resolvePath({
-      workspace_root: input.workspaceRoot,
-      target_path: candidate,
-    });
-    if (resolved.status !== 'resolved') {
-      throw new ToolExecutionFailure(
-        'Path is outside the active Workspace.',
-        'tool_execution_failed',
-        { reason: 'outside_workspace' },
-      );
-    }
-    return { absolutePath: resolved.absolute_path, relativePath: resolved.workspace_path || '.' };
-  };
-  const walk = async (absoluteDirectory: string, relativeDirectory: string, includeHidden: boolean, output: string[]) => {
-    for (const entry of await input.fileSystem.readdir(absoluteDirectory, { withFileTypes: true })) {
-      if (!includeHidden && entry.name.startsWith('.')) continue;
-      const relative = normalizeSlash(relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name);
-      const absolute = path.join(absoluteDirectory, entry.name);
-      if (entry.isFile()) output.push(relative);
-      else if (entry.isDirectory()) await walk(absolute, relative, includeHidden, output);
-    }
-  };
-  const collect = async (
-    absoluteDirectory: string,
-    relativeDirectory: string,
-    maxDepth: number,
-    includeHidden: boolean,
-    output: Array<{ name: string; kind: 'file' | 'directory'; path: string }>,
-    depth = 1,
-  ) => {
-    for (const entry of await input.fileSystem.readdir(absoluteDirectory, { withFileTypes: true })) {
-      if ((!entry.isFile() && !entry.isDirectory()) || (!includeHidden && entry.name.startsWith('.'))) continue;
-      const relative = normalizeSlash(relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name);
-      output.push({ name: entry.name, kind: entry.isDirectory() ? 'directory' : 'file', path: relative });
-      if (entry.isDirectory() && depth < maxDepth) {
-        await collect(path.join(absoluteDirectory, entry.name), relative, maxDepth, includeHidden, output, depth + 1);
-      }
-    }
-  };
-  return {
-    async readBinaryFile(request) {
-      const resolved = resolvePath(request.path);
-      if (!input.fileSystem.readBinaryFile) throw new Error('Binary file reading is unavailable.');
-      const bytes = await input.fileSystem.readBinaryFile(resolved.absolutePath);
-      return { path: resolved.relativePath, bytes, sizeBytes: bytes.byteLength };
-    },
-    async readFile(request) {
-      const resolved = resolvePath(request.path);
-      const content = await input.fileSystem.readFile(resolved.absolutePath, 'utf8');
-      return { path: resolved.relativePath, content, sizeBytes: Buffer.byteLength(content, 'utf8') };
-    },
-    async listDirectory(request) {
-      const resolved = resolvePath(request.path);
-      const entries: Array<{ name: string; kind: 'file' | 'directory'; path: string }> = [];
-      await collect(
-        resolved.absolutePath,
-        resolved.relativePath === '.' ? '' : resolved.relativePath,
-        request.maxDepth,
-        request.includeHidden,
-        entries,
-      );
-      return { path: resolved.relativePath, entries: entries.sort((a, b) => a.path.localeCompare(b.path)) };
-    },
-    async walkFiles(request) {
-      const resolved = resolvePath(request.path);
-      const stats = await input.fileSystem.stat(resolved.absolutePath);
-      if (stats.isFile()) return [resolved.relativePath];
-      const output: string[] = [];
-      if (stats.isDirectory()) {
-        await walk(
-          resolved.absolutePath,
-          resolved.relativePath === '.' ? '' : resolved.relativePath,
-          request.includeHidden ?? true,
-          output,
-        );
-      }
-      return output.sort();
-    },
-    async replaceText(request) {
-      const resolved = resolvePath(request.path);
-      const content = await input.fileSystem.readFile(resolved.absolutePath, 'utf8');
-      const occurrences = content.split(request.oldText).length - 1;
-      if (occurrences === 0) throw new Error(`Text not found in file: ${resolved.relativePath}`);
-      if (!request.replaceAll && occurrences > 1) throw new Error(`Text occurs multiple times in file: ${resolved.relativePath}`);
-      const updated = request.replaceAll
-        ? content.split(request.oldText).join(request.newText)
-        : content.replace(request.oldText, request.newText);
-      await input.fileSystem.writeFile(resolved.absolutePath, updated, 'utf8');
-      return { path: resolved.relativePath, replacements: request.replaceAll ? occurrences : 1, changed: updated !== content };
-    },
-    async writeFile(request) {
-      const resolved = resolvePath(request.path);
-      const exists = await isFile(input.fileSystem, resolved.absolutePath);
-      if (exists && !request.overwrite) throw new Error(`File already exists: ${resolved.relativePath}`);
-      await input.fileSystem.mkdir(path.dirname(resolved.absolutePath), { recursive: true });
-      await input.fileSystem.writeFile(resolved.absolutePath, request.content, 'utf8');
-      return {
-        path: resolved.relativePath,
-        bytesWritten: Buffer.byteLength(request.content, 'utf8'),
-        created: !exists,
-        overwritten: exists,
-      };
-    },
-    async resolveCommandCwd(request) {
-      return resolvePath(request.path).absolutePath;
-    },
-  };
 }
 
 function createNodeToolProcessAdapter(): ToolProcessAdapter {
@@ -783,30 +646,19 @@ async function disposeProduct(input: {
   input.database.close();
 }
 
-async function isFile(fileSystem: ProductToolFileSystem, filePath: string): Promise<boolean> {
-  try { return (await fileSystem.stat(filePath)).isFile(); }
-  catch { return false; }
-}
-
-function normalizeSlash(value: string): string {
-  return value.replace(/\\/g, '/').replace(/^\.\/+/, '') || '.';
-}
-
-const nodeProductToolFileSystem: ProductToolFileSystem = {
-  readFile: (filePath) => fs.readFile(filePath, 'utf8'),
-  readBinaryFile: async (filePath) => new Uint8Array(await fs.readFile(filePath)),
-  writeFile: (filePath, content) => fs.writeFile(filePath, content, 'utf8'),
-  mkdir: (directoryPath, options) => fs.mkdir(directoryPath, options),
-  stat: (targetPath) => fs.stat(targetPath),
-  readdir: (directoryPath, options) => fs.readdir(directoryPath, options),
-};
 
 const unavailableWorkspaceFileAccess: WorkspaceFileAccess = {
+  readBinaryFile: async () => { throw new Error('Run Workspace is unavailable.'); },
   readFile: async () => { throw new Error('Run Workspace is unavailable.'); },
   listDirectory: async () => { throw new Error('Run Workspace is unavailable.'); },
   walkFiles: async () => { throw new Error('Run Workspace is unavailable.'); },
+  editFile: async () => { throw new Error('Run Workspace is unavailable.'); },
   replaceText: async () => { throw new Error('Run Workspace is unavailable.'); },
   writeFile: async () => { throw new Error('Run Workspace is unavailable.'); },
+  createDirectory: async () => { throw new Error('Run Workspace is unavailable.'); },
+  copyPath: async () => { throw new Error('Run Workspace is unavailable.'); },
+  movePath: async () => { throw new Error('Run Workspace is unavailable.'); },
+  deletePath: async () => { throw new Error('Run Workspace is unavailable.'); },
   resolveCommandCwd: async () => { throw new Error('Run Workspace is unavailable.'); },
 };
 

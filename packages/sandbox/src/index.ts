@@ -8,5 +8,6 @@ export type {
   SandboxPolicy,
   SandboxScope,
 } from './sandbox';
-export type { SandboxFileAccess } from './sandbox-files';
+export type { SandboxFileAccess, SandboxFileEntry, SandboxTextEdit } from './sandbox-files';
+export { createNodeSandboxFileAccess, SandboxFileError } from './node-sandbox';
 export type { SandboxProcess } from './sandbox-process';

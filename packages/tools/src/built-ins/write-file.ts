@@ -64,6 +64,14 @@ export async function executeWriteFile(
       bytesWritten: result.bytesWritten,
       created: result.created,
       overwritten: result.overwritten,
+      fingerprint: result.fingerprint,
+    },
+    effectReport: {
+      coverage: 'complete',
+      effects: result.created
+        ? [{ type: 'created', path: result.path, pathType: 'file' }]
+        : [{ type: 'modified', path: result.path, pathType: 'file' }],
+      itemFailures: [],
     },
   };
 }

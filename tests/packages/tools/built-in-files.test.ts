@@ -35,13 +35,25 @@ describe('Workspace-backed built-in Tools', () => {
     }));
     const edit = await succeeded(tools.executor.execute({
       toolName: 'edit_file',
-      input: { path: 'nested/file.txt', oldText: 'hello', newText: 'hi' },
+      input: { path: 'nested/file.txt', edits: [{ oldText: 'hello', newText: 'hi' }] },
     }));
     expect(parsedToolContent(read)).toMatchObject({ content: 'hello world', sizeBytes: 11, hasMore: false });
     expect(parsedToolContent(edit)).toMatchObject({ changed: true, replacements: 1 });
     await expect(fs.readFile(path.join(root, 'nested/file.txt'), 'utf8')).resolves.toBe('hi world');
   });
 
+
+  it('creates, copies, moves, and recoverably deletes through the same Executor', async () => {
+    const tools = fileTools(root);
+    await succeeded(tools.executor.execute({ toolName: 'create_directory', input: { path: 'notes' } }));
+    await succeeded(tools.executor.execute({ toolName: 'write_file', input: { path: 'notes/a.md', content: 'alpha' } }));
+    const copied = await succeeded(tools.executor.execute({ toolName: 'copy_path', input: { source: 'notes/a.md', destination: 'notes/b.md' } }));
+    const moved = await succeeded(tools.executor.execute({ toolName: 'move_path', input: { source: 'notes/b.md', destination: 'archive/b.md' } }));
+    const deleted = await succeeded(tools.executor.execute({ toolName: 'delete_path', input: { path: 'archive/b.md' } }));
+    expect(copied.effectReport?.effects).toEqual([{ type: 'copied', source: 'notes/a.md', destination: 'notes/b.md', pathType: 'file' }]);
+    expect(moved.effectReport?.effects).toEqual([{ type: 'moved', source: 'notes/b.md', destination: 'archive/b.md', pathType: 'file' }]);
+    expect(deleted.effectReport?.effects).toEqual([{ type: 'deleted', path: 'archive/b.md', pathType: 'file', recoverable: true }]);
+  });
   it('returns resumable UTF-8 byte pages without splitting a character', async () => {
     await fs.writeFile(path.join(root, 'unicode.txt'), 'ab你cd好ef', 'utf8');
     const tools = fileTools(root);
@@ -103,7 +115,7 @@ describe('Workspace-backed built-in Tools', () => {
     expect(parsedToolContent(pdf)).toMatchObject({ content: expect.stringContaining('[Page 1]\nPhysics revision notes') });
     expect(parsedToolContent(search)).toMatchObject({ matches: [{ path: 'notes.pdf', page: 1, preview: 'Physics revision notes' }] });
     const mutation = await tools.executor.execute({
-      toolName: 'edit_file', input: { path: 'notes.docx', oldText: 'Physics', newText: 'Chemistry' },
+      toolName: 'edit_file', input: { path: 'notes.docx', edits: [{ oldText: 'Physics', newText: 'Chemistry' }] },
     });
     expect(mutation).toMatchObject({
       type: 'failed',
