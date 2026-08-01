@@ -1,4 +1,4 @@
-/* Guards target Owner Packages and the Product Host against reverse dependencies. */
+﻿/* Guards target Owner Packages and the Product Host against reverse dependencies. */
 // @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
@@ -53,6 +53,12 @@ describe('Package Owner boundaries', () => {
     expect(hostSource).not.toContain('apps/desktop');
   });
 
+  it('keeps per-execution Sandbox scope lifecycle inside Sandbox', () => {
+    const productSource = fs.readFileSync(path.join(root, 'packages/product/src/product.ts'), 'utf8');
+    expect(productSource).not.toMatch(/\.sandbox\.open\s*\(/u);
+    expect(productSource).not.toMatch(/\.scope\.close\s*\(/u);
+    expect(productSource).toContain('executeSandboxScope');
+  });
   it('allows Package subpaths only when the owning manifest exports them', () => {
     const packageExports = readPackageExports();
     const violations = sourceFiles(['packages', 'apps', 'evals']).flatMap((file) => {

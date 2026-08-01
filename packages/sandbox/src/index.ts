@@ -15,3 +15,6 @@ export { SandboxProcessError } from './sandbox-process';
 export type { SandboxProcess, SandboxProcessOptions, SandboxProcessRequest, SandboxProcessResult, SandboxShellKind } from './sandbox-process';
 export { createWindowsSandboxProcess, WINDOWS_SANDBOX_CAPABILITIES, WINDOWS_UNRESTRICTED_CAPABILITIES } from './windows-sandbox-process';
 export { createNodeSandbox } from './node-sandbox-scope';
+
+export { executeSandboxScope } from './sandbox-scope-execution';
+export type { SandboxScopeExecutionResult } from './sandbox-scope-execution';

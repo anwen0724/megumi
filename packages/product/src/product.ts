@@ -29,7 +29,7 @@ import {
   type RuntimeLogger,
 } from '@megumi/observability';
 import { createPermissions } from '@megumi/permissions';
-import { createNodeSandbox, type Sandbox } from '@megumi/sandbox';
+import { createNodeSandbox, executeSandboxScope, type Sandbox } from '@megumi/sandbox';
 import {
   createSessionTimelineQuery,
   createWorkspaceChangeFooterProjector,
@@ -497,41 +497,41 @@ function createProductToolSnapshots(input: {
           if (!operationOptions?.executionAccess) {
             return sandboxFailure(request.toolName, 'Tool execution access was not provided.');
           }
-          const opened = await input.sandbox.open({
-            policy: {
-              workspaceRoot,
-              executionAccess: operationOptions.executionAccess,
-              maxExecutionTimeMs: PRODUCT_ENGINE_POLICY.toolExecutionTimeoutMs,
-              maxOutputBytes: 20_000,
-              maxProcessCount: 16,
-            },
-            ...(operationOptions?.signal ? { signal: operationOptions.signal } : {}),
-          });
-          if (opened.status === 'unavailable') return sandboxFailure(request.toolName, opened.reason);
-          const scopedTools = createToolsForSnapshot(
-            snapshot,
-            opened.scope.files,
-            opened.scope.process,
-            input.resolveSkillService({ workspaceId: scope.workspaceId }),
-          );
-          let result;
-          try {
-            result = await input.workspaceChanges.trackToolExecution({
-              scope: {
-                run_id: scope.runId,
-                session_id: scope.sessionId,
-                workspace_id: scope.workspaceId,
+          const execution = await executeSandboxScope({
+            sandbox: input.sandbox,
+            open: {
+              policy: {
+                workspaceRoot,
+                executionAccess: operationOptions.executionAccess,
+                maxExecutionTimeMs: PRODUCT_ENGINE_POLICY.toolExecutionTimeoutMs,
+                maxOutputBytes: 20_000,
+                maxProcessCount: 16,
               },
-              execute: () => scopedTools.executor.execute(request, operationOptions),
-            });
-          } catch (error) {
-            await opened.scope.close();
-            throw error;
+              ...(operationOptions.signal ? { signal: operationOptions.signal } : {}),
+            },
+            async execute(sandboxScope) {
+              const scopedTools = createToolsForSnapshot(
+                snapshot,
+                sandboxScope.files,
+                sandboxScope.process,
+                input.resolveSkillService({ workspaceId: scope.workspaceId }),
+              );
+              return input.workspaceChanges.trackToolExecution({
+                scope: {
+                  run_id: scope.runId,
+                  session_id: scope.sessionId,
+                  workspace_id: scope.workspaceId,
+                },
+                execute: () => scopedTools.executor.execute(request, operationOptions),
+              });
+            },
+          });
+          if (execution.status === 'unavailable') {
+            return sandboxFailure(request.toolName, execution.reason);
           }
-          const closed = await opened.scope.close();
-          return closed.status === 'termination_unconfirmed'
-            ? sandboxFailure(request.toolName, 'Sandbox scope could not confirm process termination.', result.effectReport)
-            : result;
+          return execution.status === 'termination_unconfirmed'
+            ? sandboxFailure(request.toolName, 'Sandbox scope could not confirm process termination.', execution.value.effectReport)
+            : execution.value;
         },
       };
     },  };
