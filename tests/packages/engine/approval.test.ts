@@ -87,7 +87,7 @@ function approvalPermissions(input: {
 
 async function createWaiting(input: {
   apply?: Permissions['applyApprovalDecision'];
-  executeTool?: ProcessToolCallsRequest['toolExecution']['execute'];
+  executeTool?: NonNullable<Parameters<typeof request>[0]['executeTool']>;
 }) {
   const store = storeForRun();
   const first = registeredTool('first', { executionMode: 'parallel' });
@@ -221,7 +221,7 @@ describe('resumeToolCallApproval', () => {
       decision: approve(waiting.approval),
       store,
       permissions,
-      toolExecution: processingRequest.toolExecution,
+      tools: processingRequest.tools,
       ids: processingRequest.ids,
       clock: processingRequest.clock,
       policy,
@@ -268,7 +268,7 @@ describe('resumeToolCallApproval', () => {
       decision: deny(waiting.approval),
       store,
       permissions,
-      toolExecution: processingRequest.toolExecution,
+      tools: processingRequest.tools,
       ids: processingRequest.ids,
       clock: processingRequest.clock,
       policy,
@@ -340,9 +340,9 @@ describe('resumeToolCallApproval', () => {
       decision: approve(approval),
       store,
       permissions,
-      toolExecution: {
-        preflight: () => ({ status: 'ready', input: {} }),
-        execute: executeTool,
+      tools: {
+        preflightToolCall: () => ({ status: 'ready', input: {} }),
+        executeToolCall: executeTool,
       },
       ids: {
         createToolExecutionId: () => 'tool-execution:1',
@@ -370,7 +370,7 @@ describe('resumeToolCallApproval', () => {
       decision: approve(failing.waiting.approval),
       store: failing.store,
       permissions: failing.permissions,
-      toolExecution: failing.processingRequest.toolExecution,
+      tools: failing.processingRequest.tools,
       ids: failing.processingRequest.ids,
       clock: failing.processingRequest.clock,
       policy,

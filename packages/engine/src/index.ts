@@ -8,6 +8,8 @@ export type {
   CreateEngineOptions,
   Engine,
   EngineClock,
+  GetRunRequest,
+  GetRunResult,
   EngineIdFactory,
   ResumeRunRequest,
   ResumeRunResult,
@@ -15,9 +17,10 @@ export type {
   RunApproval,
   RunApprovalStatus,
   RunInput,
-  RuntimeEventPublisher,
   StartRunRequest,
   StartRunResult,
+  ShutdownEngineRequest,
+  ShutdownEngineResult,
 } from './engine';
 export type { EnginePolicy } from './engine-policy';
 export type {

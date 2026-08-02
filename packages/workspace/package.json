@@ -10,6 +10,7 @@
     "./node": "./src/node-workspace-file-system.ts"
   },
   "dependencies": {
-    "@megumi/database": "0.1.0"
+    "@megumi/database": "0.1.0",
+    "@megumi/events": "0.1.0"
   }
 }

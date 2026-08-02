@@ -20,14 +20,23 @@ describe('Product Host Interface boundary', () => {
       'chat-contract.ts',
       'chat-host.ts',
       'index.ts',
+      'observability-contract.ts',
       'observability-host.ts',
       'product-host.ts',
+      'runtime-redaction.ts',
       'settings-contract.ts',
       'settings-host.ts',
       'skills-host.ts',
       'workspace-contract.ts',
       'workspace-host.ts',
     ]);
+  });
+
+  it('keeps Host redaction on the browser-safe Observability entry', () => {
+    const source = fs.readFileSync(path.join(hostRoot, 'runtime-redaction.ts'), 'utf8');
+
+    expect(source).toContain("from '@megumi/observability/redaction'");
+    expect(source).not.toContain("from '@megumi/observability';");
   });
 
   it('does not depend on desktop or IPC transport', () => {

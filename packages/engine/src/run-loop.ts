@@ -18,10 +18,7 @@ import type {
   SessionEntry,
   SessionMessageWithAttachments,
 } from '@megumi/session';
-import type {
-  RegisteredTool,
-  ToolExecutor,
-} from '@megumi/tools';
+import type { RegisteredTool } from '@megumi/tools';
 import type { SkillSelection } from '@megumi/skills';
 import type {
   ObservabilitySpanName,
@@ -71,7 +68,6 @@ export interface RuntimeEventSegment {
 export interface EngineRunRuntime {
   readonly controller: AbortController;
   readonly registeredTools: readonly RegisteredTool[];
-  readonly toolExecution: Pick<ToolExecutor, 'preflight' | 'execute'>;
   readonly selectedSkill?: SkillSelection;
   currentRun: CurrentConversationRun;
   eventSequence: number;
@@ -104,13 +100,11 @@ export function createEngineRunRuntime(input: {
   readonly userMessage: SessionMessageWithAttachments;
   readonly userEntry: SessionEntry;
   readonly registeredTools: readonly RegisteredTool[];
-  readonly toolExecution: Pick<ToolExecutor, 'preflight' | 'execute'>;
   readonly selectedSkill?: SkillSelection;
 }): EngineRunRuntime {
   return {
     controller: new AbortController(),
     registeredTools: snapshot(input.registeredTools),
-    toolExecution: input.toolExecution,
     ...(input.selectedSkill ? { selectedSkill: snapshot(input.selectedSkill) } : {}),
     currentRun: currentRunFromSavedUserMessage(
       input.run.runId,
@@ -302,7 +296,7 @@ async function continueRunAfterApprovalInContext(
     decision: input.decision,
     store: dependencies.store,
     permissions: dependencies.permissions,
-    toolExecution: runtime.toolExecution,
+    tools: dependencies.tools,
     ids: dependencies.ids,
     clock: dependencies.clock,
     policy: dependencies.policy,
@@ -650,7 +644,7 @@ async function processToolBatch(
     toolCalls: calls,
     registeredTools: runtime.registeredTools,
     permissions: dependencies.permissions,
-    toolExecution: runtime.toolExecution,
+    tools: dependencies.tools,
     store: dependencies.store,
     ids: dependencies.ids,
     clock: dependencies.clock,
@@ -1005,6 +999,7 @@ function emitEvent<TType extends RuntimeEventType>(
     eventType,
     runId: run.runId,
     sessionId: run.sessionId,
+    workspaceId: run.workspaceId,
     requestId: run.requestId,
     sequence: ++runtime.eventSequence,
     createdAt: dependencies.clock.now(),
@@ -1015,7 +1010,7 @@ function emitEvent<TType extends RuntimeEventType>(
   });
   runtime.currentSegment?.push(event);
   try {
-    const publication = dependencies.eventPublisher.publish(event);
+    const publication = dependencies.events.publish({ event });
     if (publication && typeof publication.then === 'function') {
       void publication.catch(() => undefined);
     }
@@ -1216,6 +1211,7 @@ function finishRuntime(
     ...runtime.currentRun,
     runItems: [],
   };
+  dependencies.tools.releaseRunTools({ runId: runtime.currentRun.runId });
   dependencies.store.releaseRunRuntime(runtime.currentRun.runId);
 }
 

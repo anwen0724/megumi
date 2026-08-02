@@ -18,7 +18,6 @@ describe('Product Models composition', () => {
     const api: ProductModelConfig['api'] = 'openai-responses';
     expect(builtin.api).toBe(api);
 
-    const apiKey = 'builtin-secret';
     const composition = composeModels();
     const model = await composition.resolveModel(config({
       provider_id: openai.id,
@@ -26,7 +25,6 @@ describe('Product Models composition', () => {
       api,
       base_url: builtin.baseUrl,
       display_name: 'Configured OpenAI model',
-      api_key: apiKey,
     }));
 
     expect(composition.models.getProvider(openai.id)?.name).toBe(openai.name);
@@ -37,7 +35,6 @@ describe('Product Models composition', () => {
       baseUrl: builtin.baseUrl,
       name: 'Configured OpenAI model',
     });
-    expect(JSON.stringify(model)).not.toContain(apiKey);
   });
 
   it('registers a custom provider and model for a configured API and base URL', async () => {
@@ -48,7 +45,6 @@ describe('Product Models composition', () => {
       api: 'openai-completions',
       base_url: 'https://models.acme.test/v1',
       display_name: 'Acme Reasoner',
-      api_key: 'custom-secret',
     }));
 
     expect(composition.models.getProvider('acme')).toMatchObject({
@@ -66,11 +62,14 @@ describe('Product Models composition', () => {
 
   it('updates the provider credential without copying either secret into the resolved Model', async () => {
     const credentials = new InMemoryCredentialStore();
-    const composition = composeModels({ credentials });
     const firstSecret = 'first-secret';
     const secondSecret = 'second-secret';
-    const first = await composition.resolveModel(config({ api_key: firstSecret }));
-    const second = await composition.resolveModel(config({ api_key: secondSecret }));
+    await credentials.modify('custom-provider', async () => ({ type: 'api_key', key: firstSecret }));
+    const composition = composeModels({ credentials });
+    const first = await composition.resolveModel(config());
+    expect((await composition.models.getAuth(first))?.auth.apiKey).toBe(firstSecret);
+    await credentials.modify('custom-provider', async () => ({ type: 'api_key', key: secondSecret }));
+    const second = await composition.resolveModel(config());
 
     expect((await composition.models.getAuth(second))?.auth.apiKey).toBe(secondSecret);
     expect(JSON.stringify({ first, second })).not.toContain(firstSecret);
@@ -86,7 +85,7 @@ describe('Product Models composition', () => {
       apiImplementations: { 'openai-responses': streams },
     });
 
-    const model = await composition.resolveModel(config({ api_key: undefined }));
+    const model = await composition.resolveModel(config());
 
     expect(model).toMatchObject({
       provider: 'custom-provider',
@@ -115,7 +114,6 @@ function config(overrides: Partial<ProductModelConfig> = {}): ProductModelConfig
       thinking: false,
       imageInput: true,
     },
-    api_key: 'secret',
     ...overrides,
   };
 }

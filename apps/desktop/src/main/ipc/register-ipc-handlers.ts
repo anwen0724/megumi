@@ -11,12 +11,12 @@ import {
   registerArtifactHandlers,
   type ArtifactHandlersService,
 } from './handlers/artifact.handler';
-import type { RuntimeLogger } from '@megumi/product';
+import type { ProductRuntimeLogger } from '@megumi/product';
 import { registerObservabilityHandlers } from './handlers/observability.handler';
 import { electronIpcMain, type DesktopIpcMain } from '../adapters/electron-ipc-main-adapter';
 
 export interface RegisterAllHandlersOptions {
-  logger?: RuntimeLogger;
+  logger?: ProductRuntimeLogger;
   ipcMain?: DesktopIpcMain;
   workspace?: WorkspaceHandlersService;
   chat?: ChatHandlersService;

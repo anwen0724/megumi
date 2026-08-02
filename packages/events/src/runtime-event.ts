@@ -149,6 +149,7 @@ export interface RuntimeEvent<TPayload extends object = object> {
   runId?: string;
   sessionId?: string;
   actionId?: string;
+  workspaceId?: string;
   observationId?: string;
   messageId?: string;
   requestId?: string;

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import fs from 'fs-extra';
 import { afterEach, describe, expect, it } from 'vitest';
 import { composeProduct } from '@megumi/product';
+import { createNodeWorkspaceFileSystem } from '@megumi/workspace/node';
 import {
   AssistantMessageEventStream,
   type Api,
@@ -51,6 +52,7 @@ describe('composeProduct', () => {
       directoryPicker: {
         chooseDirectory: async () => ({ canceled: false, filePaths: [workspaceRoot] }),
       },
+      workspaceFileSystem: createNodeWorkspaceFileSystem(),
       modelStreams: {
         'openai-completions': modelScript.streams,
       },
@@ -58,22 +60,7 @@ describe('composeProduct', () => {
     });
 
     try {
-      expect(product.homePaths.homePath).toBe(homePath);
-      expect(fs.pathExistsSync(product.homePaths.settingsSchemaPath)).toBe(true);
-      const resolvedModel = await product.resolveModel({
-        provider_id: 'deepseek',
-        model_id: 'deepseek-chat',
-      });
-      expect(resolvedModel.status).toBe('ok');
-      if (resolvedModel.status === 'ok') {
-        expect(resolvedModel.model).toMatchObject({
-          provider: 'deepseek',
-          id: 'deepseek-chat',
-          api: 'openai-completions',
-          contextWindow: 64_000,
-        });
-      }
-      expect(JSON.stringify(resolvedModel)).not.toContain('test-api-key');
+      expect(fs.pathExistsSync(join(homePath, 'settings.schema.json'))).toBe(true);
 
       const opened = await product.host.workspace.useExistingProject();
       if (opened.status !== 'opened') return;
@@ -138,6 +125,9 @@ describe('composeProduct', () => {
         },
       });
       expect(JSON.stringify(modelScript.contexts[2])).toContain('Review the changed files.');
+      const firstDispose = product.dispose();
+      expect(product.dispose()).toBe(firstDispose);
+      await firstDispose;
     } finally {
       await product.dispose();
     }

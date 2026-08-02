@@ -84,6 +84,7 @@ const mocks = vi.hoisted(() => {
     migrateDatabase: vi.fn(),
     agentHost,
     composeProduct: vi.fn(),
+    createDesktopWorkspaceFileSystem: vi.fn(() => ({ kind: 'node-workspace-file-system' })),
     showOpenDialog: vi.fn(),
     getAllWindows: vi.fn(() => []),
     quit: vi.fn(),
@@ -118,8 +119,14 @@ vi.mock('@megumi/product', () => ({
   composeProduct: mocks.composeProduct,
 }));
 
+vi.mock('@megumi/desktop/main/adapters/desktop-workspace-file-system-adapter', () => ({
+  createDesktopWorkspaceFileSystem: mocks.createDesktopWorkspaceFileSystem,
+}));
+
 vi.mock('electron', () => ({
   app: {
+    isPackaged: false,
+    getVersion: () => 'test-version',
     quit: mocks.quit,
   },
   BrowserWindow: {
@@ -140,10 +147,10 @@ describe('main runtime logger composition', () => {
     mocks.registerAppLifecycle.mockClear();
     mocks.createMainWindow.mockClear();
     mocks.composeProduct.mockReset();
+    mocks.createDesktopWorkspaceFileSystem.mockClear();
     mocks.composeProduct.mockImplementation(() => {
       const logger = noopRuntimeLogger;
       return {
-        homePaths: mocks.megumiHomePaths,
         logger,
         host: mocks.agentHost,
         dispose: mocks.agentHost.dispose,
@@ -185,6 +192,8 @@ describe('main runtime logger composition', () => {
       observabilityStorage: expect.objectContaining({ appendText: expect.any(Function), readText: expect.any(Function) }),
       diagnosticBundleSave: expect.objectContaining({ save: expect.any(Function) }),
       productEnvironment: expect.objectContaining({ platform: expect.any(String), arch: expect.any(String) }),
+      settingsEnvironment: expect.objectContaining({ readVariable: expect.any(Function) }),
+      workspaceFileSystem: expect.objectContaining({ kind: 'node-workspace-file-system' }),
       directoryPicker: expect.objectContaining({
         chooseDirectory: expect.any(Function),
       }),

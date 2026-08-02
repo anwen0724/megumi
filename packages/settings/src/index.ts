@@ -1,4 +1,11 @@
 /* Exposes stable Settings contracts while hiding the secret-bearing file model. */
+export { createSettingsCredentialStore } from './settings-credential-store';
+export {
+  createRecordSettingsEnvironment,
+  emptySettingsEnvironment,
+  type SettingsEnvironment,
+} from './settings-environment';
+
 export {
   SettingsOperationError,
   createSettings,

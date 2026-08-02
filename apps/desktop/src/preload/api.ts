@@ -45,12 +45,13 @@ import type {
   ArtifactVersionCreateData,
   ArtifactVersionGetData,
   WorkspaceListFilesUiResult,
+  ObservabilityExportResult,
+  ObservabilityGetRunTraceUiResult,
+  ObservabilityListRunTracesUiResult,
 } from '@megumi/product/host';
 import { IPC_CHANNELS } from '../main/ipc/channels';
 import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from '../main/ipc/contracts';
 import type { RuntimeIpcError } from '../main/ipc/errors';
-import type { GetRunTraceResult, ListRecentRunTracesResult } from '@megumi/observability';
-import type { ObservabilityExportResult } from '@megumi/product/host';
 import type {
   ApprovalResolvePayload,
   ArtifactGetPayload,
@@ -374,8 +375,8 @@ export const api = {
     },
   },
   observability: {
-    list: (request: BusinessRequest<ObservabilityListPayload, typeof IPC_CHANNELS.observability.list>): Promise<RuntimeIpcResult<ListRecentRunTracesResult, typeof IPC_CHANNELS.observability.list>> => invokeRuntimeIpc(IPC_CHANNELS.observability.list, request),
-    get: (request: BusinessRequest<ObservabilityRunPayload, typeof IPC_CHANNELS.observability.get>): Promise<RuntimeIpcResult<GetRunTraceResult, typeof IPC_CHANNELS.observability.get>> => invokeRuntimeIpc(IPC_CHANNELS.observability.get, request),
+    list: (request: BusinessRequest<ObservabilityListPayload, typeof IPC_CHANNELS.observability.list>): Promise<RuntimeIpcResult<ObservabilityListRunTracesUiResult, typeof IPC_CHANNELS.observability.list>> => invokeRuntimeIpc(IPC_CHANNELS.observability.list, request),
+    get: (request: BusinessRequest<ObservabilityRunPayload, typeof IPC_CHANNELS.observability.get>): Promise<RuntimeIpcResult<ObservabilityGetRunTraceUiResult, typeof IPC_CHANNELS.observability.get>> => invokeRuntimeIpc(IPC_CHANNELS.observability.get, request),
     createBundle: (request: BusinessRequest<ObservabilityRunPayload, typeof IPC_CHANNELS.observability.bundle>): Promise<RuntimeIpcResult<ObservabilityExportResult, typeof IPC_CHANNELS.observability.bundle>> => invokeRuntimeIpc(IPC_CHANNELS.observability.bundle, request),
   },
   runtime: {

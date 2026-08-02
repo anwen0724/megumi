@@ -6,7 +6,7 @@ import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  createTools,
+  createBuiltInTools,
   mapSkillScriptExecutionRequestToRunCommandInput,
 } from '../../../packages/tools/src';
 import { createLocalWorkspaceFileAccess, createProcessAdapter, parsedToolContent } from './tool-test-fixtures';
@@ -25,7 +25,7 @@ describe('run_command built-in Tool', () => {
       options.onStdout('output\napiKey=secret-token\n');
       return { exitCode: 0 };
     });
-    const tools = createTools({
+    const tools = createBuiltInTools({
       workspaceFileAccess: createLocalWorkspaceFileAccess(root),
       process: createProcessAdapter({ shellKind: 'powershell', run }),
     });
@@ -188,7 +188,7 @@ function commandTools(
   root: string,
   run: NonNullable<Parameters<typeof createProcessAdapter>[0]>['run'],
 ) {
-  return createTools({
+  return createBuiltInTools({
     workspaceFileAccess: createLocalWorkspaceFileAccess(root),
     process: createProcessAdapter({ run }),
   });

@@ -13,10 +13,13 @@ export const RUN_COMMAND_INTERNAL_METADATA = Symbol('run-command-internal-metada
 export type ToolShellKind = 'powershell' | 'cmd' | 'posix_shell';
 export type ToolProcessExecutionMethod = 'shell';
 
-export interface ToolProcessAdapter {
+export interface ToolProcessDescriptor {
   readonly shellKind: ToolShellKind;
   readonly shellName: string;
   readonly executionMethod: ToolProcessExecutionMethod;
+}
+
+export interface ToolProcessAdapter extends ToolProcessDescriptor {
   run(
     request: ToolProcessRequest,
     options: ToolProcessOptions,
@@ -46,7 +49,7 @@ export interface RunCommandToolInput {
   readonly [RUN_COMMAND_INTERNAL_METADATA]?: JsonObject;
 }
 
-export function createRunCommandToolDefinition(process: ToolProcessAdapter): ToolDefinition {
+export function createRunCommandToolDefinition(process: ToolProcessDescriptor): ToolDefinition {
   return {
     name: 'run_command',
     title: 'Run command',

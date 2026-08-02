@@ -1,4 +1,11 @@
 /* Exposes stable Projections read models, queries, reducers, and creation entries. */
+export { createRunProjection } from './run-projection';
+export type {
+  CreateRunProjectionRequest,
+  ProjectedRun,
+  ProjectedRunStatus,
+  RunProjection,
+} from './run-projection';
 export {
   TimelineAssistantMessageSchema,
   TimelineMessageSchema,

@@ -42,6 +42,7 @@ export {
 } from './tool-catalog';
 export {
   createToolExecutor,
+  preflightToolExecution,
   type CreateToolExecutorRequest,
   type ToolExecutionAdapter,
   type ToolExecutionPreflightResult,
@@ -53,16 +54,37 @@ export {
 } from './tool-result';
 export {
   BUILT_IN_TOOL_NAMES,
-  createTools,
+  createBuiltInToolExecutor,
+  createBuiltInTools,
+  resolveBuiltInToolRegistrations,
   type BuiltInToolName,
-  type CreateToolsRequest,
-  type CreateToolsResult,
+  type CreateBuiltInToolExecutorRequest,
+  type CreateBuiltInToolsRequest,
+  type CreateBuiltInToolsResult,
+  type ResolveBuiltInToolRegistrationsRequest,
+  type ResolveBuiltInToolRegistrationsResult,
 } from './built-ins';
+export {
+  createTools,
+  type BuiltInToolAvailability,
+  type CreateToolsRequest,
+  type ExecuteRunToolCallRequest,
+  type ListAvailableToolsRequest,
+  type PreflightRunToolCallRequest,
+  type ReleaseRunToolsRequest,
+  type ResolveRunToolsRequest,
+  type ResolveRunToolsResult,
+  type RunToolScope,
+  type ToolExecutionPolicy,
+  type ToolResolutionFailure,
+  type Tools,
+} from './tools';
 export type { SkillUse, WorkspaceFileAccess } from './built-ins/workspace-file-access';
 export {
   mapSkillScriptExecutionRequestToRunCommandInput,
   type RunCommandToolInput,
   type ToolProcessAdapter,
+  type ToolProcessDescriptor,
   type ToolProcessExecutionMethod,
   type ToolProcessOptions,
   type ToolProcessRequest,

@@ -4,7 +4,7 @@
 import type { Api, Model, Models } from '@megumi/ai';
 import type { UserInput } from '@megumi/input';
 import type { ContextBuilder, ContextUsageRecorder } from '@megumi/context';
-import type { RuntimeEvent } from '@megumi/events';
+import type { EventPublisher, RuntimeEvent } from '@megumi/events';
 import type {
   ApprovalDecision,
   ApprovalOption,
@@ -17,12 +17,7 @@ import type {
   SessionMessageWithAttachments,
   SessionHistory,
 } from '@megumi/session';
-import type {
-  RegisteredTool,
-  ToolExecutor,
-  ToolIdentity,
-  ToolCatalog,
-} from '@megumi/tools';
+import type { ToolIdentity, Tools } from '@megumi/tools';
 import type { ObservabilityService } from '@megumi/observability';
 import type { SkillSelection } from '@megumi/skills';
 import type { EnginePolicy } from './engine-policy';
@@ -126,10 +121,28 @@ export type CancelRunResult =
   | { readonly status: 'already_terminal'; readonly run: Run }
   | { readonly status: 'not_found'; readonly runId: string };
 
+export interface GetRunRequest {
+  readonly runId: string;
+}
+
+export type GetRunResult =
+  | { readonly status: 'found'; readonly run: Run }
+  | { readonly status: 'not_found'; readonly runId: string };
+
+export interface ShutdownEngineRequest {
+  readonly timeoutMs: number;
+}
+
+export type ShutdownEngineResult =
+  | { readonly status: 'shut_down' }
+  | { readonly status: 'timed_out'; readonly activeRuns: readonly Run[] };
+
 export interface Engine {
   startRun(request: StartRunRequest): Promise<StartRunResult>;
   resumeRun(request: ResumeRunRequest): Promise<ResumeRunResult>;
   cancelRun(request: CancelRunRequest): Promise<CancelRunResult>;
+  getRun(request: GetRunRequest): GetRunResult;
+  shutdown(request: ShutdownEngineRequest): Promise<ShutdownEngineResult>;
 }
 
 export type RunApprovalStatus = 'pending' | 'approved' | 'denied' | 'cancelled';
@@ -158,10 +171,6 @@ export interface RunApproval {
   readonly decision?: ApprovalDecision;
 }
 
-export interface RuntimeEventPublisher {
-  publish(event: RuntimeEvent): void | Promise<void>;
-}
-
 export interface EngineIdFactory {
   createRunId(): string;
   createModelCallId(): string;
@@ -183,17 +192,18 @@ export interface CreateEngineOptions {
     SessionHistory,
     'saveUserMessage' | 'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'
   >;
-  readonly toolCatalog: Pick<ToolCatalog, 'list'>;
-  readonly toolExecutionForRun: (scope: {
-    readonly runId: string;
-    readonly sessionId: string;
-    readonly workspaceId: string;
-  }) => Pick<ToolExecutor, 'preflight' | 'execute'>;
+  readonly tools: Pick<
+    Tools,
+    | 'resolveRunTools'
+    | 'preflightToolCall'
+    | 'executeToolCall'
+    | 'releaseRunTools'
+  >;
   readonly permissions: Pick<
     Permissions,
     'evaluateToolCall' | 'applyApprovalDecision'
   >;
-  readonly eventPublisher: RuntimeEventPublisher;
+  readonly events: EventPublisher;
   readonly observability?: ObservabilityService;
   readonly ids: EngineIdFactory;
   readonly clock: EngineClock;
@@ -213,8 +223,18 @@ export function createEngine(options: CreateEngineOptions): Engine {
   };
   const capacity = eventSegmentCapacity(options);
 
-  return {
+  let accepting = true;
+  const engine: Engine = {
     async startRun(request): Promise<StartRunResult> {
+      if (!accepting) {
+        return {
+          status: 'failed',
+          failure: {
+            code: 'internal_error',
+            message: 'Engine is shutting down and is not accepting new Runs.',
+          },
+        };
+      }
       const createdAt = options.clock.now();
       const runId = options.ids.createRunId();
       const userMessageId = options.ids.createSessionMessageId();
@@ -272,11 +292,9 @@ export function createEngine(options: CreateEngineOptions): Engine {
         return { status: 'session_busy', activeRun: reserved.activeRun };
       }
 
-      let registeredTools: readonly RegisteredTool[];
-      let toolExecution: Pick<ToolExecutor, 'preflight' | 'execute'>;
+      let toolRegistration;
       try {
-        registeredTools = options.toolCatalog.list().tools;
-        toolExecution = options.toolExecutionForRun({
+        toolRegistration = options.tools.resolveRunTools({
           runId,
           sessionId: request.sessionId,
           workspaceId: request.workspaceId,
@@ -289,6 +307,16 @@ export function createEngine(options: CreateEngineOptions): Engine {
         store.failStart({ requestId: request.requestId, failure });
         return { status: 'failed', failure };
       }
+      if (toolRegistration.status === 'failed') {
+        const failure: RunFailure = {
+          code: 'tool_system_failed',
+          message: toolRegistration.failure.message,
+          details: { toolResolutionCode: toolRegistration.failure.code },
+        };
+        store.failStart({ requestId: request.requestId, failure });
+        return { status: 'failed', failure };
+      }
+      const registeredTools = toolRegistration.registeredTools;
 
       const saved = await options.session.saveUserMessage({
         message_id: userMessageId,
@@ -320,6 +348,7 @@ export function createEngine(options: CreateEngineOptions): Engine {
           code: 'session_failed',
           message: saved.failure.message,
         };
+        options.tools.releaseRunTools({ runId });
         store.failStart({ requestId: request.requestId, failure });
         return { status: 'failed', failure };
       }
@@ -329,7 +358,6 @@ export function createEngine(options: CreateEngineOptions): Engine {
         userMessage: saved.message,
         userEntry: saved.entry,
         registeredTools,
-        toolExecution,
         ...(request.selectedSkill ? { selectedSkill: request.selectedSkill } : {}),
       });
       store.setRunRuntime(run.runId, runtime);
@@ -356,6 +384,15 @@ export function createEngine(options: CreateEngineOptions): Engine {
     },
 
     async resumeRun(request): Promise<ResumeRunResult> {
+      if (!accepting) {
+        return {
+          status: 'failed',
+          failure: {
+            code: 'internal_error',
+            message: 'Engine is shutting down and is not accepting Run resumes.',
+          },
+        };
+      }
       const record = store.getRunApproval(request.runApprovalId);
       if (!record) {
         return { status: 'not_found', runApprovalId: request.runApprovalId };
@@ -510,7 +547,26 @@ export function createEngine(options: CreateEngineOptions): Engine {
         events: segment.events,
       };
     },
+
+    getRun(request): GetRunResult {
+      const run = store.getRun(request.runId);
+      return run
+        ? { status: 'found', run }
+        : { status: 'not_found', runId: request.runId };
+    },
+
+    async shutdown(request): Promise<ShutdownEngineResult> {
+      accepting = false;
+      await Promise.allSettled(
+        store.listActiveRuns().map((run) => engine.cancelRun({ runId: run.runId })),
+      );
+      const idle = await store.waitForIdle(request.timeoutMs);
+      return idle
+        ? { status: 'shut_down' }
+        : { status: 'timed_out', activeRuns: store.listActiveRuns() };
+    },
   };
+  return engine;
 }
 
 function canonicalJson(value: unknown): string {

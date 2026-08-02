@@ -17,7 +17,7 @@ import {
   type ToolExecutionOutputChunk,
   type ToolEffectReport,
   type ToolExecutionResult,
-  type ToolExecutor,
+  type Tools,
   type ToolIdentity,
   type ToolRuntimeSource,
   type JsonValue,
@@ -88,7 +88,7 @@ export interface ProcessToolCallsRequest {
   readonly toolCalls: readonly ToolCall[];
   readonly registeredTools: readonly RegisteredTool[];
   readonly permissions: Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>;
-  readonly toolExecution: Pick<ToolExecutor, 'preflight' | 'execute'>;
+  readonly tools: Pick<Tools, 'preflightToolCall' | 'executeToolCall'>;
   readonly store: ActiveRunStore;
   readonly ids: Pick<EngineIdFactory, 'createToolExecutionId' | 'createRunApprovalId'>;
   readonly clock: EngineClock;
@@ -134,7 +134,7 @@ export interface ResumeToolCallApprovalRequest {
   readonly decision: ApprovalDecision;
   readonly store: ActiveRunStore;
   readonly permissions: Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>;
-  readonly toolExecution: Pick<ToolExecutor, 'preflight' | 'execute'>;
+  readonly tools: Pick<Tools, 'preflightToolCall' | 'executeToolCall'>;
   readonly ids: Pick<EngineIdFactory, 'createToolExecutionId' | 'createRunApprovalId'>;
   readonly clock: EngineClock;
   readonly policy: Pick<
@@ -222,7 +222,8 @@ export async function processToolCalls(
       continue;
     }
 
-    const preflight = request.toolExecution.preflight({
+    const preflight = request.tools.preflightToolCall({
+      runId: request.runId,
       toolName: registeredTool.registeredToolName,
       input: call.input,
     });
@@ -460,7 +461,7 @@ export async function resumeToolCallApproval(
     executed = await executeToolCall(
       {
         runId: approval.runId,
-        toolExecution: request.toolExecution,
+        tools: request.tools,
         store: request.store,
         ids: request.ids,
         clock: request.clock,
@@ -533,7 +534,7 @@ async function executeToolCall(
   request: Pick<
     ProcessToolCallsRequest,
     | 'runId'
-    | 'toolExecution'
+    | 'tools'
     | 'store'
     | 'ids'
     | 'clock'
@@ -574,9 +575,12 @@ async function executeToolCall(
       timeoutController,
       timeoutMs: request.policy.toolExecutionTimeoutMs,
     });
-    const execution = Promise.resolve(request.toolExecution.execute({
+    const execution = Promise.resolve(request.tools.executeToolCall({
+      runId: request.runId,
       toolName: plan.registeredTool.registeredToolName,
       input: plan.call.input,
+      toolCallId: plan.call.toolCallId,
+      toolExecutionId,
     }, {
       signal,
       onOutput: (output) => request.onToolExecutionOutput?.(runningExecution, output),

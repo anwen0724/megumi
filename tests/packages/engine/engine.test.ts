@@ -214,4 +214,25 @@ describe('createEngine', () => {
     ]);
     expect(fixture.published.at(-1)?.eventType).toBe('run.failed');
   });
+
+  it('owns shutdown by rejecting new Runs and converging active Runs', async () => {
+    const fixture = createEngineFixture({
+      streams: [neverEndingStream()],
+    });
+    const started = await fixture.engine.startRun(startRequest);
+    if (started.status !== 'started') throw new Error('Expected started Run.');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await expect(fixture.engine.shutdown({ timeoutMs: 1_000 })).resolves.toEqual({
+      status: 'shut_down',
+    });
+    expect(fixture.engine.getRun({ runId: started.run.runId })).toMatchObject({
+      status: 'found',
+      run: { status: 'cancelled' },
+    });
+    await expect(fixture.engine.startRun({
+      ...startRequest,
+      requestId: 'request:after-shutdown',
+    })).resolves.toMatchObject({ status: 'failed' });
+  });
 });

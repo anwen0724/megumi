@@ -1,6 +1,7 @@
 /*
  * Exposes stable Workspace facts, ports, and creation entry points.
  */
+export { createWorkspaceChangeEventHandler } from './workspace-change-events';
 export type {
   ActivateWorkspaceRequest,
   ActivateWorkspaceResult,

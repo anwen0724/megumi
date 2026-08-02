@@ -1,7 +1,7 @@
 /* Verifies use_skill keeps full Skill instructions in the runtimeSources side channel. */
 
 import { describe, expect, it, vi } from 'vitest';
-import { createTools } from '../../../packages/tools/src';
+import { createBuiltInTools } from '../../../packages/tools/src';
 import { createLocalWorkspaceFileAccess } from './tool-test-fixtures';
 
 describe('use_skill built-in Tool', () => {
@@ -14,7 +14,7 @@ describe('use_skill built-in Tool', () => {
         content: 'Review carefully.',
       },
     }));
-    const tools = createTools({
+    const tools = createBuiltInTools({
       workspaceFileAccess: createLocalWorkspaceFileAccess(process.cwd()),
       skills: { useSkill } as never,
     });
@@ -36,12 +36,12 @@ describe('use_skill built-in Tool', () => {
   });
 
   it('does not register use_skill without a Run-bound Skills interface', () => {
-    const tools = createTools({ workspaceFileAccess: createLocalWorkspaceFileAccess(process.cwd()) });
+    const tools = createBuiltInTools({ workspaceFileAccess: createLocalWorkspaceFileAccess(process.cwd()) });
     expect(tools.catalog.get({ toolName: 'use_skill' }).status).toBe('not_found');
   });
 
   it('returns a normal Tool failure for a Skill outside the Run snapshot', async () => {
-    const tools = createTools({
+    const tools = createBuiltInTools({
       workspaceFileAccess: createLocalWorkspaceFileAccess(process.cwd()),
       skills: {
         useSkill: vi.fn(async () => ({ status: 'not_found' as const, skillPath: 'C:/other/SKILL.md' })),

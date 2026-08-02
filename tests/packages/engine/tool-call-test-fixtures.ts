@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Shares focused ToolCall test facts without exporting production test seams.
  */
 import { vi } from 'vitest';
@@ -15,6 +15,7 @@ import {
   type ToolExecutionAccess,
   type ToolExecutor,
   type ToolExecutionResult,
+  type Tools,
 } from '@megumi/tools';
 import type { EnginePolicy, Run } from '@megumi/engine';
 import { ActiveRunStore } from '../../../packages/engine/src/active-run-store';
@@ -258,12 +259,34 @@ export function toolExecutor(
   return { preflight: owner.preflight, execute };
 }
 
+export function toolsForRun(
+  tools: readonly RegisteredTool[],
+  execute?: ToolExecutor['execute'],
+): Pick<
+  Tools,
+  | 'resolveRunTools'
+  | 'preflightToolCall'
+  | 'executeToolCall'
+  | 'releaseRunTools'
+> {
+  const executor = toolExecutor(tools, execute);
+  return {
+    resolveRunTools: () => ({
+      status: 'resolved',
+      registeredTools: tools,
+    }),
+    preflightToolCall: ({ toolName, input }) => executor.preflight({ toolName, input }),
+    executeToolCall: ({ toolName, input }, options) => executor.execute({ toolName, input }, options),
+    releaseRunTools: () => undefined,
+  };
+}
+
 export function request(input: {
   calls: readonly ToolCall[];
   tools: readonly RegisteredTool[];
   store?: ActiveRunStore;
   permissions?: Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>;
-  executeTool?: ProcessToolCallsRequest['toolExecution']['execute'];
+  executeTool?: ToolExecutor['execute'];
   signal?: AbortSignal;
   overridePolicy?: Partial<EnginePolicy>;
   onExecutionId?: (id: string) => void;
@@ -278,7 +301,7 @@ export function request(input: {
     toolCalls: input.calls,
     registeredTools: input.tools,
     permissions: input.permissions ?? permissionService(),
-    toolExecution: toolExecutor(input.tools, input.executeTool),
+    tools: toolsForRun(input.tools, input.executeTool),
     store: input.store ?? storeForRun(),
     ids: {
       createToolExecutionId: () => {

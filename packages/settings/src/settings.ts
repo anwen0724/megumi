@@ -1,4 +1,5 @@
 /* Implements the unified Settings capability over a secret-bearing file model. */
+import { emptySettingsEnvironment, type SettingsEnvironment } from './settings-environment';
 import {
   CompleteSetupRequestSchema,
   DEFAULT_SETTINGS,
@@ -86,11 +87,9 @@ import {
   type WriteWebSearchApiKeyRequest,
 } from './web-search-settings';
 
-type EnvMap = NodeJS.ProcessEnv | Record<string, string | undefined>;
-
 export interface CreateSettingsRequest {
   readonly store: SettingsStore;
-  readonly env?: EnvMap;
+  readonly environment?: SettingsEnvironment;
   readonly now?: () => string;
 }
 
@@ -137,10 +136,10 @@ export function createSettings(request: CreateSettingsRequest): Settings {
 }
 
 class DefaultSettings implements Settings {
-  private readonly env: EnvMap;
+  private readonly environment: SettingsEnvironment;
 
   constructor(private readonly request: CreateSettingsRequest) {
-    this.env = request.env ?? {};
+    this.environment = request.environment ?? emptySettingsEnvironment;
   }
 
   read(): SettingsRaw {
@@ -212,7 +211,7 @@ class DefaultSettings implements Settings {
           resolved.providers,
           raw.providers ?? {},
           file.providers ?? {},
-          this.env,
+          this.environment,
         ),
       };
     } catch {
@@ -345,7 +344,7 @@ class DefaultSettings implements Settings {
         settings: resolveWebSearchSettings(
           resolvePublicSettings(publicRawFromFile(file)).web.search,
           file.web?.search ?? {},
-          this.env,
+          this.environment,
         ),
       };
     } catch {
@@ -357,7 +356,7 @@ class DefaultSettings implements Settings {
     const parsed = ReadProviderApiKeyRequestSchema.safeParse(request);
     if (!parsed.success) return failure('provider_api_key_request_invalid', 'Provider API key request is invalid.');
     try {
-      return readProviderCredential(this.readFile().providers?.[parsed.data.provider_id], this.env);
+      return readProviderCredential(this.readFile().providers?.[parsed.data.provider_id], this.environment);
     } catch {
       return failure('settings_read_failed', 'Provider API key could not be read.');
     }
@@ -407,7 +406,7 @@ class DefaultSettings implements Settings {
       return failure('web_search_api_key_request_invalid', 'Web Search API key request is invalid.');
     }
     try {
-      return readWebSearchCredential(this.readFile().web?.search ?? {}, this.env);
+      return readWebSearchCredential(this.readFile().web?.search ?? {}, this.environment);
     } catch {
       return failure('settings_read_failed', 'Web Search API key could not be read.');
     }

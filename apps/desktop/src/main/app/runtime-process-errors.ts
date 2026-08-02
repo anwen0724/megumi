@@ -2,8 +2,13 @@
 import {
   generateRuntimeDebugId,
   normalizeHostRuntimeError,
+  redactHostRuntimeValue,
 } from '@megumi/product/host';
-import { noopRuntimeLogger, redactRuntimeValue, type RuntimeLogger } from '@megumi/product';
+import type { ProductRuntimeLogger } from '@megumi/product';
+
+const noopRuntimeLogger: ProductRuntimeLogger = {
+  warn: () => undefined,
+};
 
 type RuntimeProcessEventName = 'uncaughtException' | 'unhandledRejection';
 
@@ -13,7 +18,7 @@ export interface RuntimeProcessLike {
 
 export interface RegisterRuntimeProcessErrorHandlersOptions {
   process?: RuntimeProcessLike;
-  logger?: RuntimeLogger;
+  logger?: ProductRuntimeLogger;
   debugIdFactory?: () => string;
 }
 
@@ -33,7 +38,7 @@ export function registerRuntimeProcessErrorHandlers(
 }
 
 function createDetails(error: unknown, debugIdFactory: () => string): Record<string, unknown> {
-  return redactRuntimeValue({
+  return redactHostRuntimeValue({
     error: normalizeHostRuntimeError(error, {
       source: 'main',
       debugId: debugIdFactory(),

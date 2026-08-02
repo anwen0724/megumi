@@ -9,7 +9,7 @@ import type { ApprovalRequestedPayload } from '@megumi/events';
 import type { EvaluationCase } from '../cases/evaluation-case';
 import type { EvaluationIsolation, ExecutionProfile } from '../config/execution-profile';
 import type { EvaluationTarget } from '../config/evaluation-target';
-import { createScopedWorkspaceFileSystem } from '../adapters/scoped-workspace-file-system';
+import { createEvaluationWorkspaceFileSystem } from '../adapters/scoped-workspace-file-system';
 import {
   digestOwnedFile,
   readBoundedOwnedText,
@@ -26,12 +26,11 @@ type EvaluationHost = {
   approval: Pick<ProductHostInterface['approval'], 'resolve'>;
   settings: Pick<ProductHostInterface['settings'], 'get'>;
   skill: Pick<ProductHostInterface['skill'], 'listSkills'>;
-  observability: Pick<ProductHostInterface['observability'], 'getRunTrace'>;
+  observability: Pick<ProductHostInterface['observability'], 'getRunTrace' | 'flush'>;
 };
 
 export interface EvaluationProductRuntime {
   host: EvaluationHost;
-  observability: { flush(): Promise<void> };
   dispose(): void | Promise<void>;
 }
 
@@ -40,7 +39,7 @@ export interface EvaluationRuntimeFactoryInput {
   workspaceRoot: string;
   target: EvaluationTarget;
   profile: ExecutionProfile;
-  toolFileSystem: Awaited<ReturnType<typeof createScopedWorkspaceFileSystem>>;
+  workspaceFileSystem: Awaited<ReturnType<typeof createEvaluationWorkspaceFileSystem>>;
   isBuiltInToolAvailable(toolName: string): boolean;
 }
 
@@ -97,7 +96,7 @@ export async function runEvaluationAttempt(input: RunEvaluationAttemptInput): Pr
   const homeRoot = path.join(evaluationRoot, 'home');
   const workspaceRoot = path.join(evaluationRoot, 'workspace');
   const outputRoot = path.join(evaluationRoot, 'output');
-const runtimeEvents: RuntimeEvent[] = [];
+  const runtimeEvents: RuntimeEvent[] = [];
   const session = { messages: [] as unknown[], timeline: [] as unknown[] };
   let evidence = unavailableEvidence(execution.executionId);
   const runtimeFacts = { relevantSettings: 'unavailable' as unknown, toolCatalog: [] as unknown[], skillCatalog: [] as unknown[] };
@@ -126,7 +125,7 @@ const runtimeEvents: RuntimeEvent[] = [];
       throw new SetupError(`Evaluation fixture or temporary environment setup failed: ${errorMessage(error)}`);
     }
     const declaredWorkspacePaths = graderWorkspacePaths(input.evaluationCase);
-    const toolFileSystem = await createScopedWorkspaceFileSystem(workspaceRoot);
+    const workspaceFileSystem = await createEvaluationWorkspaceFileSystem(workspaceRoot);
     const initialWorkspaceFiles = await snapshotWorkspaceFiles(workspaceRoot, declaredWorkspacePaths);
     const enabled = input.profile.enabledTools ? new Set(input.profile.enabledTools) : undefined;
     try {
@@ -135,7 +134,7 @@ const runtimeEvents: RuntimeEvent[] = [];
         workspaceRoot,
         target: input.target,
         profile: input.profile,
-        toolFileSystem,
+        workspaceFileSystem,
         isBuiltInToolAvailable: (toolName) => enabled?.has(toolName) ?? true,
       });
     } catch (error) {
@@ -257,7 +256,7 @@ const runtimeEvents: RuntimeEvent[] = [];
     const timeline = await runtime.host.chat.listTimeline({ projectId: workspaceId, sessionId, ...(runId ? { runId } : {}) });
     session.timeline = timeline.messages;
     try {
-      await runtime.observability.flush();
+      await runtime.host.observability.flush();
     } catch (error) {
       diagnostics.push({ code: 'observability_flush_failed', message: errorMessage(error), source: 'observability' });
     }

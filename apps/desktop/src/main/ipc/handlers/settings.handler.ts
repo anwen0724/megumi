@@ -9,7 +9,7 @@ import {
   SettingsUpdateUiResultSchema,
   type ProductHostInterface,
 } from '@megumi/product/host';
-import type { RuntimeLogger } from '@megumi/product';
+import type { ProductRuntimeLogger } from '@megumi/product';
 import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { createIpcRequestHandler } from '../create-request-handler';
 import { IPC_CHANNELS } from '../channels';
@@ -30,7 +30,7 @@ export interface SettingsHandlersService {
 }
 
 export interface RegisterSettingsHandlersOptions {
-  logger?: RuntimeLogger;
+  logger?: ProductRuntimeLogger;
   ipcMain?: DesktopIpcMain;
 }
 

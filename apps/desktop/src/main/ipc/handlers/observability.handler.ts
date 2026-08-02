@@ -3,7 +3,7 @@ import {
   ObservabilityQueryResultSchema,
   type ProductHostInterface,
 } from "@megumi/product/host";
-import type { RuntimeLogger } from "@megumi/product";
+import type { ProductRuntimeLogger } from "@megumi/product";
 import {
   electronIpcMain,
   type DesktopIpcMain,
@@ -26,7 +26,7 @@ export function registerObservabilityHandlers(
   service: {
     host: Pick<ProductHostInterface, "observability">;
   },
-  options: { logger?: RuntimeLogger; ipcMain?: DesktopIpcMain } = {},
+  options: { logger?: ProductRuntimeLogger; ipcMain?: DesktopIpcMain } = {},
 ) {
   const ipcMain = options.ipcMain ?? electronIpcMain;
   ipcMain.handle(

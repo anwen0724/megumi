@@ -8,10 +8,10 @@ import type { Engine, Run } from '@megumi/engine';
 import { DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from '@megumi/input';
 import type { Session, SessionAttachmentReader, SessionBranchDrafts, SessionCatalog, SessionHistory, SessionMessageWithAttachments } from '@megumi/session';
 import { sessionMessageText } from '@megumi/session';
-import type { SessionTimelineQuery } from '@megumi/projections';
+import type { ProjectedRun, RunProjection, SessionTimelineQuery } from '@megumi/projections';
 import type { WorkspaceCatalog } from '@megumi/workspace';
 import type { InputSubmission } from './input-submission';
-import type { ProductRunReadModel } from './run-read-model';
+
 import type {
   ChatHost,
   ChatHostFailure,
@@ -36,7 +36,7 @@ export function createProductChat(options: {
   attachments: SessionAttachmentReader;
   branches: SessionBranchDrafts;
   workspaces: Pick<WorkspaceCatalog, 'listWorkspaces'>;
-  runs: ProductRunReadModel;
+  runs: RunProjection;
   timeline: SessionTimelineQuery;
   context: Pick<ContextCapabilities, 'getSessionUsage'>;
   attachmentPicker?: InputAttachmentPickerPort;
@@ -97,12 +97,12 @@ export function createProductChat(options: {
     async getCommandSuggestions(request) {
       return { suggestions: toCommandSuggestions(await options.commands.suggest({ draftInput: request.draft_input, ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}) })) };
     },
-    async listRuns(request) { return { runs: options.runs.listRunsBySession(request.sessionId).map(toChatRun) }; },
-    async listRunEvents(request) { return { events: [...options.runs.listEventsByRun(request.runId)] }; },
+    async listRuns(request) { return { runs: options.runs.listRuns({ sessionId: request.sessionId }).map(toChatRun) }; },
+    async listRunEvents(request) { return { events: [...options.runs.listEvents({ runId: request.runId })] }; },
     async getSessionHydration(request) {
       const timeline = options.timeline.list({ workspaceId: request.projectId, sessionId: request.sessionId });
-      const runs = options.runs.listRunsBySession(request.sessionId);
-      return { messages: timeline.messages, diagnostics: timeline.diagnostics, runs: runs.map(toChatRun), runtimeEvents: runs.flatMap((run) => options.runs.listEventsByRun(run.runId)) };
+      const runs = options.runs.listRuns({ sessionId: request.sessionId });
+      return { messages: timeline.messages, diagnostics: timeline.diagnostics, runs: runs.map(toChatRun), runtimeEvents: runs.flatMap((run) => options.runs.listEvents({ runId: run.runId })) };
     },
     async getContextUsage(request) {
       const result = options.context.getSessionUsage({ sessionId: request.sessionId });
@@ -148,7 +148,7 @@ function toChatMessage(item: SessionMessageWithAttachments): ChatSessionMessageU
   const message = item.message;
   return { id: message.message_id, sessionId: message.session_id, ...(message.run_id ? { runId: message.run_id } : {}), role: message.message_kind === 'user_message' ? 'user' : message.message_kind === 'tool_result' ? 'toolResult' : 'assistant', text: sessionMessageText(message), createdAt: message.created_at };
 }
-function toChatRun(run: Run): ChatRunUiDto {
+function toChatRun(run: Run | ProjectedRun): ChatRunUiDto {
   return { runId: run.runId, sessionId: run.sessionId, status: run.status, createdAt: run.createdAt, ...(run.completedAt ? { completedAt: run.completedAt } : {}) };
 }
 function toCommandSuggestions(result: Awaited<ReturnType<Commands['suggest']>>): HostCommandSuggestionResult {

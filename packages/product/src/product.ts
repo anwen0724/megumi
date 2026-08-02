@@ -1,9 +1,9 @@
 /*
- * Composes the complete Product directly from real Package contracts and owns
- * Product resource startup, per-Run Tool snapshots, and ordered shutdown.
+ * Composes Package contracts into the Product entry point and owns the
+ * Product-wide startup, shutdown, and resource rollback sequence.
  */
 import path from 'node:path';
-import type { Api, Model, Models, ProviderStreams } from '@megumi/ai';
+import type { Api, Model, ProviderStreams } from '@megumi/ai';
 import {
   createCommands,
   createInputCommandHandler,
@@ -18,18 +18,18 @@ import {
   type ResolveDatabaseMigrationsFolderRequest,
 } from '@megumi/database';
 import { createEngine, type Engine, type EnginePolicy } from '@megumi/engine';
-import type { RuntimeEvent } from '@megumi/events';
+import { createRuntimeEventBus, type EventSubscription } from '@megumi/events';
 import { createInputProcessor, type InputSourceAccess } from '@megumi/input';
 import { createInstructionReader } from '@megumi/instructions';
 import {
   composeObservability,
   createObservabilityRuntimeLogger,
   type ObservabilityStorage,
-  type RuntimeLogger,
 } from '@megumi/observability';
 import { createPermissions } from '@megumi/permissions';
-import { createSandbox, type Sandbox, type SandboxCapabilities } from '@megumi/sandbox';
+import { createSandbox } from '@megumi/sandbox';
 import {
+  createRunProjection,
   createSessionTimelineQuery,
   createWorkspaceChangeFooterProjector,
 } from '@megumi/projections';
@@ -42,31 +42,25 @@ import {
 } from '@megumi/session';
 import { createSessionAttachmentFileStore } from '@megumi/session/attachment-store';
 import { createSessionStore } from '@megumi/session/store';
-import { createSettings, type Settings, type SettingsStore } from '@megumi/settings';
+import {
+  createSettings,
+  createSettingsCredentialStore,
+  type SettingsEnvironment,
+  type SettingsStore,
+} from '@megumi/settings';
 import { createSettingsStore } from '@megumi/settings/store';
 import { composeSkills, type SkillService } from '@megumi/skills';
 import {
-  BUILT_IN_TOOL_NAMES,
   createTools,
-  createSandboxToolExecutor,
-  createWebFetch,
-  createWebSearch,
-  type BuiltInToolName,
-  type ToolCatalog,
-  type ToolExecutor,
-  ToolExecutionFailure,
-  type ToolProcessAdapter,
-  type WorkspaceFileAccess,
+  type BuiltInToolAvailability,
 } from '@megumi/tools';
 import {
   createWorkspaceCatalog,
+  createWorkspaceChangeEventHandler,
   createWorkspaceChanges,
   createWorkspaceFiles,
   createWorkspacePathPolicy,
-  type WorkspaceCatalog,
-  type WorkspacePathPolicy,
 } from '@megumi/workspace';
-import { createNodeWorkspaceFileSystem } from '@megumi/workspace/node';
 import { createWorkspaceStore } from '@megumi/workspace/store';
 import {
   initializeMegumiHomeSync,
@@ -77,7 +71,6 @@ import { createProductChat } from './chat';
 import { createProductApproval } from './approval';
 import { createInputSubmission } from './input-submission';
 import { composeModels } from './models';
-import { ProductRunReadModel } from './run-read-model';
 import { createApprovalHost } from './host/approval-host';
 import { createUnavailableArtifactHost } from './host/artifact-host';
 import { createChatHost } from './host/chat-host';
@@ -96,45 +89,70 @@ import type {
 } from './host/workspace-contract';
 import { migrateLegacyPermissionSettingsFile } from './migrations/legacy-permission-settings';
 import { migrateLegacyProviderApiSettingsFile } from './migrations/legacy-provider-api-settings';
+import type { ProductWorkspaceFileSystem } from './workspace-file-system';
 
+export interface ProductEnvironment {
+  readonly appVersion: string;
+  readonly platform: string;
+  readonly arch: string;
+}
+
+export type ProductSettingsEnvironment = SettingsEnvironment;
 export interface ComposeProductOptions {
   home: InitializeMegumiHomeSyncOptions;
   migrationsFolder?: string;
   migrationEnvironment?: Omit<ResolveDatabaseMigrationsFolderRequest, 'migrationsFolder'>;
   observabilityStorage?: ObservabilityStorage;
-  productEnvironment?: { appVersion: string; platform: string; arch: string };
+  productEnvironment?: ProductEnvironment;
   diagnosticBundleSave?: DiagnosticBundleSavePort;
   directoryPicker?: DirectoryPickerPort;
   fileOpen?: FileOpenPort;
+  workspaceFileSystem: ProductWorkspaceFileSystem;
   attachmentPicker?: InputAttachmentPickerPort;
   localFileAvailability?: LocalFileAvailabilityPort;
+  settingsEnvironment?: ProductSettingsEnvironment;
   inputSourceAccess?: InputSourceAccess;
   sessionAttachmentFileSystem?: SessionAttachmentFileSystem;
   settingsStorage?: SettingsStore;
-  isBuiltInToolAvailable?: (toolName: string) => boolean;
+  builtInToolAvailability?: BuiltInToolAvailability;
   modelStreams?: Partial<Record<Api, ProviderStreams>>;
 }
 
 export type ProductInputSourceAccess = NonNullable<ComposeProductOptions['inputSourceAccess']>;
 export type ProductSessionAttachmentFileSystem = NonNullable<ComposeProductOptions['sessionAttachmentFileSystem']>;
-export type ProductBuiltInToolAvailability = NonNullable<ComposeProductOptions['isBuiltInToolAvailable']>;
 export type ProductObservabilityStorage = NonNullable<ComposeProductOptions['observabilityStorage']>;
 
+export interface ProductRuntimeLogger {
+  info?(event: string, details?: Record<string, unknown>): void;
+  warn(event: string, details?: Record<string, unknown>): void;
+  error?(event: string, details?: Record<string, unknown>): void;
+}
+
 export interface ProductRuntime {
-  homePaths: MegumiHomePaths;
   host: ProductHostInterface;
-  logger: RuntimeLogger;
-  observability: ReturnType<typeof composeObservability>;
-  models: Models;
-  resolveModel(request: { provider_id: string; model_id: string }): Promise<ResolveModelResult>;
+  logger: ProductRuntimeLogger;
   dispose(): Promise<void>;
 }
 
-export type ResolveModelResult =
+type ProductModelResolver = (
+  request: { provider_id: string; model_id: string },
+) => Promise<ProductModelResolutionResult>;
+
+type ProductModelResolutionResult =
   | { status: 'ok'; model: Model<Api> }
   | { status: 'failed'; failure: { code: string; message: string; retryable?: boolean } };
 
 export function composeProduct(options: ComposeProductOptions): ProductRuntime {
+  const resources: ProductResources = { eventSubscriptions: [] };
+  try {
+    return composeProductRuntime(options, resources);
+  } catch (error) {
+    rollbackProductStartup(resources);
+    throw error;
+  }
+}
+
+function composeProductRuntime(options: ComposeProductOptions, resources: ProductResources): ProductRuntime {
   const homePaths = initializeMegumiHomeSync(options.home);
   migrateLegacyPermissionSettingsFile(homePaths.settingsPath);
   migrateLegacyProviderApiSettingsFile(homePaths.settingsPath);
@@ -146,20 +164,23 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
     arch: options.productEnvironment?.arch ?? 'unknown',
   });
   const logger = createObservabilityRuntimeLogger(observability.service);
-  const modelComposition = composeModels({
-    ...(options.modelStreams ? { apiImplementations: options.modelStreams } : {}),
-  });
-  const runReadModel = new ProductRunReadModel({
+
+  const runProjection = createRunProjection({
     terminalRetentionMs: PRODUCT_ENGINE_POLICY.terminalRunRetentionMs,
   });
   const database = openDatabase(homePaths, options);
+  resources.database = database;
 
   const settings = createSettings({
     store: options.settingsStorage ?? createSettingsStore({ settingsPath: homePaths.settingsPath }),
-    env: process.env,
+    ...(options.settingsEnvironment ? { environment: options.settingsEnvironment } : {}),
+  });
+  const modelComposition = composeModels({
+    credentials: createSettingsCredentialStore(settings),
+    ...(options.modelStreams ? { apiImplementations: options.modelStreams } : {}),
   });
   const workspaceStore = createWorkspaceStore({ database });
-  const workspaceFileSystem = createNodeWorkspaceFileSystem();
+  const workspaceFileSystem = options.workspaceFileSystem;
   const workspacePathPolicy = createWorkspacePathPolicy();
   const sandbox = createSandbox();
   const workspaces = createWorkspaceCatalog({ store: workspaceStore, file_system: workspaceFileSystem });
@@ -199,7 +220,7 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
       : skillComposition.createSkillService();
   };
   const instructions = createInstructionReader({ megumiHomePath: homePaths.homePath });
-  const toolProcess = createSandboxProcessDescriptor(sandbox.capabilities());
+  const sandboxCapabilities = sandbox.capabilities();
   const context = createContext({
     sessionHistory: history,
     attachmentReader: attachments,
@@ -212,8 +233,8 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
               workspaceRoot: workspace.workspace.root_path,
               executionEnvironment: {
                 workingDirectory: workspace.workspace.root_path,
-                operatingSystem: modelVisibleOperatingSystem(process.platform),
-                shell: toolProcess?.shellName ?? 'Unavailable',
+                operatingSystem: modelVisibleOperatingSystem(sandboxCapabilities.platform),
+                shell: sandboxCapabilities.shellName ?? 'Unavailable',
               },
             }
           : {
@@ -300,18 +321,13 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
     sourceAccess: options.inputSourceAccess ?? unavailableInputSourceAccess,
     commandHandler: createInputCommandHandler(commands),
   });
-  const resolveModel: ProductRuntime['resolveModel'] = async (request) => {
+  const resolveModel: ProductModelResolver = async (request) => {
     const resolved = settings.resolveProvider(request);
     if (resolved.status === 'failed') return { status: 'failed', failure: resolved.failure };
-    const credential = settings.readProviderApiKey({ provider_id: request.provider_id });
-    if (credential.status === 'failed') return { status: 'failed', failure: credential.failure };
     try {
       return {
         status: 'ok',
-        model: await modelComposition.resolveModel({
-          ...resolved.config,
-          ...(credential.status === 'found' ? { api_key: credential.api_key } : {}),
-        }),
+        model: await modelComposition.resolveModel(resolved.config),
       };
     } catch {
       return {
@@ -321,34 +337,54 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
     }
   };
 
-  const tools = createProductToolSnapshots({
+  const tools = createTools({
     settings,
     workspaces,
     workspaceChanges,
+    skills: skillComposition,
     sandbox,
-    resolveSkillService,
-    ...(toolProcess ? { process: toolProcess } : {}),
-    isBuiltInToolAvailable: options.isBuiltInToolAvailable,
+    executionPolicy: {
+      maxExecutionTimeMs: PRODUCT_ENGINE_POLICY.toolExecutionTimeoutMs,
+      maxOutputBytes: 20_000,
+      maxProcessCount: 16,
+    },
+    ...(options.builtInToolAvailability
+      ? { builtInToolAvailability: options.builtInToolAvailability }
+      : {}),
   });
+  const events = createRuntimeEventBus({
+    onConsumerError: ({ eventId, eventType, subscriberIndex, error }) => {
+      observability.service.recordLog({
+        level: 'warn',
+        event: 'runtime_event_consumer_failed',
+        attributes: {
+          eventId,
+          eventType,
+          subscriberIndex,
+          errorCode: error.code,
+          debugId: error.debugId,
+        },
+      });
+    },
+  });
+  const eventSubscriptions: EventSubscription[] = [
+    events.subscribe({ handler: (event) => runProjection.project(event) }),
+    events.subscribe({ handler: createWorkspaceChangeEventHandler(workspaceChanges) }),
+  ];
+  resources.eventSubscriptions.push(...eventSubscriptions);
   const workspaceChangeFooter = createWorkspaceChangeFooterProjector({ workspaceChanges });
   const timeline = createSessionTimelineQuery({
     sessionHistory: history,
-    isRunLive: (runId) => runReadModel.listLiveRunIds().includes(runId),
+    isRunLive: (runId) => runProjection.isRunLive({ runId }),
     workspaceChangeFooterProjector: workspaceChangeFooter,
   });
-  const rawEngine = createEngine({
+  const engine = createEngine({
     models: modelComposition.models,
     context,
     session: history,
-    toolCatalog: tools.catalog,
-    toolExecutionForRun: tools.executionForRun,
+    tools,
     permissions,
-    eventPublisher: {
-      publish(event) {
-        runReadModel.recordEvent(event);
-        finalizeWorkspaceChangesForTerminalEvent(event, runReadModel, workspaceChanges);
-      },
-    },
+    events,
     observability: observability.service,
     ids: {
       createRunId: () => `run:${crypto.randomUUID()}`,
@@ -361,8 +397,7 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
     clock: { now: () => new Date().toISOString() },
     policy: PRODUCT_ENGINE_POLICY,
   });
-  const engineController = trackProductRuns(rawEngine, runReadModel);
-  const engine = engineController.engine;
+
   const submission = createInputSubmission({
     engine,
     input,
@@ -379,7 +414,7 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
     attachments,
     branches,
     workspaces,
-    runs: runReadModel,
+    runs: runProjection,
     timeline,
     context,
     ...(options.attachmentPicker ? { attachmentPicker: options.attachmentPicker } : {}),
@@ -396,23 +431,23 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
       ...(options.fileOpen ? { fileOpen: options.fileOpen } : {}),
     }),
     settings: createSettingsHost(settings, {
-      listAvailableTools: () => [...tools.catalog.list().tools],
+      listAvailableTools: () => [...tools.listAvailableTools().tools],
     }),
     approval: createApprovalHost(approval),
     artifacts: createUnavailableArtifactHost(),
-    observability: createObservabilityHost(observability.queryService, options.diagnosticBundleSave),
+    observability: createObservabilityHost({
+      queries: observability.queryService,
+      flush: observability.flush,
+      ...(options.diagnosticBundleSave ? { save: options.diagnosticBundleSave } : {}),
+    }),
   };
 
   let disposePromise: Promise<void> | undefined;
   return {
-    homePaths,
     host,
     logger,
-    observability,
-    models: modelComposition.models,
-    resolveModel,
     dispose: () => {
-      disposePromise ??= disposeProduct({ engineController, runReadModel, observability, database });
+      disposePromise ??= disposeProduct({ engine, eventSubscriptions, observability, database });
       return disposePromise;
     },
   };
@@ -449,132 +484,6 @@ function openDatabase(homePaths: MegumiHomePaths, options: ComposeProductOptions
   }
 }
 
-function createProductToolSnapshots(input: {
-  settings: Settings;
-  workspaces: WorkspaceCatalog;
-  workspaceChanges: ReturnType<typeof createWorkspaceChanges>;
-  sandbox: Sandbox;
-  resolveSkillService(request?: { workspaceId?: string }): SkillService;
-  process?: ToolProcessAdapter;
-  isBuiltInToolAvailable?: (toolName: string) => boolean;
-}): {
-  catalog: Pick<ToolCatalog, 'list'>;
-  executionForRun(scope: { runId: string; sessionId: string; workspaceId: string }): Pick<ToolExecutor, 'preflight' | 'execute'>;
-} {
-  type Snapshot = ReturnType<typeof resolveToolSnapshot>;
-  let pending: Snapshot | undefined;
-  const toolAvailable = (name: string) => (name !== 'run_command' || Boolean(input.process))
-    && (input.isBuiltInToolAvailable ? input.isBuiltInToolAvailable(name) : true);
-  const catalog: Pick<ToolCatalog, 'list'> = {
-    list(request) {
-      pending = resolveToolSnapshot(input.settings, toolAvailable);
-      return createToolsForSnapshot(
-        pending,
-        unavailableWorkspaceFileAccess,
-        input.process,
-        input.resolveSkillService(),
-      ).catalog.list(request);
-    },
-  };
-  return {
-    catalog,
-    executionForRun(scope) {
-      const snapshot = pending ?? resolveToolSnapshot(input.settings, toolAvailable);
-      pending = undefined;
-      const workspace = input.workspaces.getWorkspace({ workspace_id: scope.workspaceId });
-      if (workspace.status !== 'found') throw new Error(`Workspace ${scope.workspaceId} is unavailable for Tool execution.`);
-      const workspaceRoot = workspace.workspace.root_path;
-      const preflightTools = createToolsForSnapshot(
-        snapshot,
-        unavailableWorkspaceFileAccess,
-        input.process,
-        input.resolveSkillService({ workspaceId: scope.workspaceId }),
-      );
-      return createSandboxToolExecutor({
-        preflight: (request) => preflightTools.executor.preflight(request),
-        sandbox: input.sandbox,
-        policy: {
-          workspaceRoot,
-          maxExecutionTimeMs: PRODUCT_ENGINE_POLICY.toolExecutionTimeoutMs,
-          maxOutputBytes: 20_000,
-          maxProcessCount: 16,
-        },
-        createExecutor(sandboxScope) {
-          return createToolsForSnapshot(
-            snapshot,
-            sandboxScope.files,
-            sandboxScope.process,
-            input.resolveSkillService({ workspaceId: scope.workspaceId }),
-          ).executor;
-        },
-        trackExecution(execute) {
-          return input.workspaceChanges.trackToolExecution({
-            scope: {
-              run_id: scope.runId,
-              session_id: scope.sessionId,
-              workspace_id: scope.workspaceId,
-            },
-            execute,
-          });
-        },
-      });
-    },
-  };
-}
-
-function resolveToolSnapshot(
-  settings: Settings,
-  isAvailable?: (toolName: string) => boolean,
-) {
-  const webSettings = settings.resolveWebSearch();
-  const credential = settings.readWebSearchApiKey({});
-  const webSearch = webSettings.status === 'ok'
-    && webSettings.settings.provider
-    && credential.status === 'found'
-    ? createWebSearch({
-        provider: webSettings.settings.provider,
-        apiKey: credential.api_key,
-        ...(webSettings.settings.base_url ? { baseUrl: webSettings.settings.base_url } : {}),
-      })
-    : undefined;
-  const disabledToolNames = BUILT_IN_TOOL_NAMES.filter((name) =>
-    (isAvailable ? !isAvailable(name) : false) || (name === 'web_search' && !webSearch));
-  return { webSearch, webFetch: createWebFetch(), disabledToolNames };
-}
-
-function createToolsForSnapshot(
-  snapshot: ReturnType<typeof resolveToolSnapshot>,
-  workspaceFileAccess: WorkspaceFileAccess,
-  process: ToolProcessAdapter | undefined,
-  skills?: Pick<SkillService, 'useSkill'>,
-) {
-  return createTools({
-    workspaceFileAccess,
-    ...(process ? { process } : {}),
-    ...(skills ? { skills } : {}),
-    ...(snapshot.webSearch ? { webSearch: snapshot.webSearch } : {}),
-    webFetch: snapshot.webFetch,
-    disabledToolNames: snapshot.disabledToolNames as readonly BuiltInToolName[],
-  });
-}
-
-function createSandboxProcessDescriptor(
-  capabilities: SandboxCapabilities,
-): ToolProcessAdapter | undefined {
-  if (!capabilities.shellKind || !capabilities.shellName) return undefined;
-  return {
-    shellName: capabilities.shellName,
-    shellKind: capabilities.shellKind,
-    executionMethod: 'shell',
-    async run() {
-      throw new ToolExecutionFailure(
-        'The active Sandbox Scope is required for process execution.',
-        'sandbox_unavailable',
-      );
-    },
-  };
-}
-
 function modelVisibleOperatingSystem(platform: NodeJS.Platform): string {
   if (platform === 'win32') return 'Windows';
   if (platform === 'darwin') return 'macOS';
@@ -582,82 +491,77 @@ function modelVisibleOperatingSystem(platform: NodeJS.Platform): string {
   return platform;
 }
 
-function trackProductRuns(engine: Engine, readModel: ProductRunReadModel): { engine: Engine; stopAccepting(): void } {
-  let accepting = true;
-  const tracked: Engine = {
-    async startRun(request) {
-      if (!accepting) return { status: 'failed', failure: { code: 'internal_error', message: 'Product is shutting down and is not accepting new Runs.' } };
-      const result = await engine.startRun(request);
-      if (result.status === 'started' || result.status === 'already_started' || result.status === 'session_busy') {
-        readModel.recordRun(result.status === 'session_busy' ? result.activeRun : result.run);
-      }
-      return result;
-    },
-    async resumeRun(request) {
-      if (!accepting) return { status: 'failed', failure: { code: 'internal_error', message: 'Product is shutting down and is not accepting Run resumes.' } };
-      const result = await engine.resumeRun(request);
-      if (result.status === 'resumed' || result.status === 'not_waiting' || result.status === 'already_resolved') readModel.recordRun(result.run);
-      return result;
-    },
-    async cancelRun(request) {
-      const result = await engine.cancelRun(request);
-      if (result.status === 'cancellation_requested' || result.status === 'already_cancelling' || result.status === 'already_terminal') readModel.recordRun(result.run);
-      return result;
-    },
-  };
-  return { engine: tracked, stopAccepting: () => { accepting = false; } };
+interface ProductResources {
+  database?: DatabaseConnection;
+  eventSubscriptions: EventSubscription[];
 }
 
-function finalizeWorkspaceChangesForTerminalEvent(
-  event: RuntimeEvent,
-  readModel: ProductRunReadModel,
-  workspaceChanges: ReturnType<typeof createWorkspaceChanges>,
-): void {
-  if (!event.runId || !['run.completed', 'run.failed', 'run.cancelled'].includes(event.eventType)) return;
-  const run = readModel.getRun(event.runId);
-  if (!run) return;
-  try {
-    workspaceChanges.finalizeChangeSet({
-      workspace_id: run.workspaceId,
-      session_id: run.sessionId,
-      run_id: run.runId,
-      finalized_at: event.createdAt,
-    });
-  } catch {
-    // Projection failure cannot rewrite the already-decided Run outcome.
+function rollbackProductStartup(resources: ProductResources): void {
+  for (const subscription of [...resources.eventSubscriptions].reverse()) {
+    try {
+      subscription.unsubscribe();
+    } catch {
+      // Startup rollback preserves the original composition failure.
+    }
   }
+  if (!resources.database) return;
+  try {
+    resources.database.close();
+  } catch {
+    // Startup rollback preserves the original composition failure.
+  }
+}
+
+interface ProductDisposeFailure {
+  readonly resource: 'engine' | 'events' | 'observability' | 'database';
+  readonly error: unknown;
 }
 
 async function disposeProduct(input: {
-  engineController: { engine: Engine; stopAccepting(): void };
-  runReadModel: ProductRunReadModel;
+  engine: Engine;
+  eventSubscriptions: readonly EventSubscription[];
   observability: { flush(): Promise<void> };
   database: DatabaseConnection;
 }): Promise<void> {
-  input.engineController.stopAccepting();
-  await Promise.all(input.runReadModel.listLiveRunIds().map((runId) => input.engineController.engine.cancelRun({ runId })));
-  if (!await input.runReadModel.waitForConvergence(PRODUCT_ENGINE_POLICY.cancellationTimeoutMs + 2_000)) {
-    throw new Error('Product shutdown timed out while waiting for live Runs to become terminal.');
+  const failures: ProductDisposeFailure[] = [];
+  try {
+    const result = await input.engine.shutdown({
+      timeoutMs: PRODUCT_ENGINE_POLICY.cancellationTimeoutMs + 2_000,
+    });
+    if (result.status === 'timed_out') {
+      failures.push({
+        resource: 'engine',
+        error: new Error(`Engine shutdown timed out with ${result.activeRuns.length} active Run(s).`),
+      });
+    }
+  } catch (error) {
+    failures.push({ resource: 'engine', error });
   }
-  await input.observability.flush();
-  input.database.close();
+
+  for (const subscription of input.eventSubscriptions) {
+    try {
+      subscription.unsubscribe();
+    } catch (error) {
+      failures.push({ resource: 'events', error });
+    }
+  }
+  try {
+    await input.observability.flush();
+  } catch (error) {
+    failures.push({ resource: 'observability', error });
+  }
+  try {
+    input.database.close();
+  } catch (error) {
+    failures.push({ resource: 'database', error });
+  }
+  if (failures.length > 0) {
+    throw new AggregateError(
+      failures.map((failure) => failure.error),
+      `Product disposal failed for: ${failures.map((failure) => failure.resource).join(', ')}.`,
+    );
+  }
 }
-
-
-const unavailableWorkspaceFileAccess: WorkspaceFileAccess = {
-  readBinaryFile: async () => { throw new Error('Run Workspace is unavailable.'); },
-  readFile: async () => { throw new Error('Run Workspace is unavailable.'); },
-  listDirectory: async () => { throw new Error('Run Workspace is unavailable.'); },
-  walkFiles: async () => { throw new Error('Run Workspace is unavailable.'); },
-  editFile: async () => { throw new Error('Run Workspace is unavailable.'); },
-  replaceText: async () => { throw new Error('Run Workspace is unavailable.'); },
-  writeFile: async () => { throw new Error('Run Workspace is unavailable.'); },
-  createDirectory: async () => { throw new Error('Run Workspace is unavailable.'); },
-  copyPath: async () => { throw new Error('Run Workspace is unavailable.'); },
-  movePath: async () => { throw new Error('Run Workspace is unavailable.'); },
-  deletePath: async () => { throw new Error('Run Workspace is unavailable.'); },
-  resolveCommandCwd: async () => { throw new Error('Run Workspace is unavailable.'); },
-};
 
 const unavailableInputSourceAccess: InputSourceAccess = {
   async readImage() { throw new Error('Host image file reading is unavailable.'); },

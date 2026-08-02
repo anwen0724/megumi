@@ -4,7 +4,7 @@
 import type { IpcMainInvokeEvent } from 'electron';
 import type { z } from 'zod';
 import { generateRuntimeDebugId, type RuntimeContext } from '@megumi/product/host';
-import type { RuntimeLogger } from '@megumi/product';
+import type { ProductRuntimeLogger } from '@megumi/product';
 import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from './contracts';
 import type { RuntimeIpcError } from './errors';
 import { sanitizeZodIssues } from './errors';
@@ -18,7 +18,7 @@ export interface CreateIpcRequestHandlerOptions<
   requestSchema: z.ZodType<RuntimeIpcRequest<TPayload, TChannel>>;
   responseSchema: z.ZodType<TData>;
   responseValidation?: 'strict' | 'dev-only' | 'off';
-  logger?: RuntimeLogger;
+  logger?: ProductRuntimeLogger;
   handle(
     request: RuntimeIpcRequest<TPayload, TChannel>,
     event: IpcMainInvokeEvent,

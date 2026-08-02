@@ -5,6 +5,8 @@ import { electronDirectoryPickerAdapter } from '../adapters/electron-directory-p
 import { electronFileOpenAdapter } from '../adapters/electron-file-open-adapter';
 import { electronObservabilityStorageAdapter } from '../adapters/electron-observability-storage-adapter';
 import { getElectronProductEnvironment } from '../adapters/electron-product-environment-adapter';
+import { getElectronMigrationEnvironment } from '../adapters/electron-migration-environment-adapter';
+import { createDesktopSettingsEnvironment } from '../adapters/desktop-settings-environment-adapter';
 import { saveDiagnosticBundle } from '../adapters/electron-diagnostic-bundle-save-adapter';
 import {
   electronInputAttachmentPickerAdapter,
@@ -12,14 +14,17 @@ import {
   electronLocalFileAvailability,
 } from '../adapters/electron-input-attachment-adapter';
 import { electronSessionAttachmentFileSystem } from '../adapters/electron-session-attachment-file-system';
+import { createDesktopWorkspaceFileSystem } from '../adapters/desktop-workspace-file-system-adapter';
 
 export function composeDesktopMain() {
   const product = composeProduct({
     home: createElectronMegumiHomeSyncOptions(),
-    migrationEnvironment: getElectronProductEnvironment(),
+    migrationEnvironment: getElectronMigrationEnvironment(),
     observabilityStorage: electronObservabilityStorageAdapter,
-    productEnvironment: { appVersion: process.env.npm_package_version ?? 'unknown', platform: process.platform, arch: process.arch },
+    productEnvironment: getElectronProductEnvironment(),
     diagnosticBundleSave: { save: saveDiagnosticBundle },
+    workspaceFileSystem: createDesktopWorkspaceFileSystem(),
+    settingsEnvironment: createDesktopSettingsEnvironment(),
     directoryPicker: electronDirectoryPickerAdapter,
     fileOpen: electronFileOpenAdapter,
     attachmentPicker: electronInputAttachmentPickerAdapter,

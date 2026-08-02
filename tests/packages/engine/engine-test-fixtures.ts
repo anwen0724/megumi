@@ -42,7 +42,7 @@ import {
   restrictedExecutionAccess,
   succeeded,
   unrestrictedExecutionAccess,
-  toolExecutor,
+  toolsForRun,
 } from './tool-call-test-fixtures';
 
 const ZERO_USAGE = {
@@ -113,7 +113,9 @@ export function createEngineFixture(input: {
   readonly executeTool?: ToolExecutor['execute'];
   readonly policy?: Partial<EnginePolicy>;
   readonly contextBuild?: CreateEngineOptions['context']['build'];
-  readonly eventPublisher?: CreateEngineOptions['eventPublisher'];
+  readonly eventPublisher?: {
+    publish(event: RuntimeEvent): void | Promise<void>;
+  };
   readonly observability?: ObservabilityService;
 } = {}): EngineFixture {
   const writes: string[] = [];
@@ -243,14 +245,12 @@ export function createEngineFixture(input: {
       saveToolResultMessage,
       saveAssistantReply,
     },
-    toolCatalog: {
-      list: () => ({ tools: input.tools ?? [] }),
-    },
-    toolExecutionForRun: () => toolExecutor(input.tools ?? [], input.executeTool),
+    tools: toolsForRun(input.tools ?? [], input.executeTool),
     permissions: input.permissions ?? defaultPermissions,
-    eventPublisher: input.eventPublisher ?? {
-      publish: (event) => {
+    events: {
+      publish: ({ event }) => {
         published.push(event);
+        return input.eventPublisher?.publish(event);
       },
     },
     ...(input.observability ? { observability: input.observability } : {}),

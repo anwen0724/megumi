@@ -27,6 +27,7 @@ export const RuntimeEventBaseSchema = z.object({
   schemaVersion: z.literal(RUNTIME_EVENT_SCHEMA_VERSION),
   runId: z.string().min(1).optional(),
   sessionId: z.string().min(1).optional(),
+  workspaceId: z.string().min(1).optional(),
   actionId: z.string().min(1).optional(),
   observationId: z.string().min(1).optional(),
   messageId: z.string().min(1).optional(),

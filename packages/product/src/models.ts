@@ -37,7 +37,6 @@ export type ComposeModelsOptions = {
 
 export type ProductModelConfig = Omit<ResolvedProviderSettings, 'api'> & {
   api: Api;
-  api_key?: string;
 };
 
 export function composeModels(options: ComposeModelsOptions = {}): {
@@ -68,16 +67,12 @@ export function composeModels(options: ComposeModelsOptions = {}): {
         && builtinProvider?.auth.apiKey
         && builtinModel
       ) {
-        await storeApiKey(credentials, config);
         models.setProvider(builtinProvider);
         return modelFromConfig(config, builtinModel);
       }
 
       const implementation = injectedImplementation
         ?? requireCustomProviderImplementation(config);
-      if (!injectedImplementation) {
-        await storeApiKey(credentials, config);
-      }
       const model = modelFromConfig(config);
       models.setProvider(createProvider({
         id: config.provider_id,
@@ -118,20 +113,6 @@ function requireCustomProviderImplementation(
     throw new Error(`Provider ${config.provider_id} requires a base URL.`);
   }
   return implementation;
-}
-
-async function storeApiKey(
-  credentials: CredentialStore,
-  config: ProductModelConfig,
-): Promise<void> {
-  const apiKey = config.api_key?.trim();
-  if (!apiKey) {
-    throw new Error(`Provider ${config.provider_id} requires an API key.`);
-  }
-  await credentials.modify(config.provider_id, async () => ({
-    type: 'api_key',
-    key: apiKey,
-  }));
 }
 
 function storedApiKeyAuth(providerId: string): ApiKeyAuth {

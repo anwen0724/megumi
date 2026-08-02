@@ -5,6 +5,7 @@ import type {
   SettingsFailureResult,
 } from './settings-schema';
 
+import type { SettingsEnvironment } from './settings-environment';
 export const WebSearchProviderSchema = z.enum(['brave', 'tavily', 'exa', 'custom']);
 export type WebSearchProvider = z.infer<typeof WebSearchProviderSchema>;
 
@@ -52,14 +53,12 @@ export const DEFAULT_WEB_SEARCH_API_KEY_ENV: Readonly<Record<Exclude<WebSearchPr
   exa: 'EXA_API_KEY',
 };
 
-type EnvMap = NodeJS.ProcessEnv | Record<string, string | undefined>;
-
 export function resolveWebSearchSettings(
   resolved: WebSearchSettingsResolved,
   file: WebSearchSettingsFileRaw,
-  env: EnvMap,
+  environment: SettingsEnvironment,
 ): ResolvedWebSearchSettings {
-  const credential = readWebSearchApiKey(file, env);
+  const credential = readWebSearchApiKey(file, environment);
   const envName = resolved.api_key_env ?? (resolved.provider && resolved.provider !== 'custom'
     ? DEFAULT_WEB_SEARCH_API_KEY_ENV[resolved.provider]
     : undefined);
@@ -73,14 +72,14 @@ export function resolveWebSearchSettings(
 
 export function readWebSearchApiKey(
   file: WebSearchSettingsFileRaw,
-  env: EnvMap,
+  environment: SettingsEnvironment,
 ): ReadApiKeyResult {
   const direct = file.api_key?.trim();
   if (direct) return { status: 'found', api_key: direct, source: 'settings' };
   const envName = file.api_key_env ?? (file.provider && file.provider !== 'custom'
     ? DEFAULT_WEB_SEARCH_API_KEY_ENV[file.provider]
     : undefined);
-  const fromEnv = envName ? env[envName]?.trim() : undefined;
+  const fromEnv = envName ? environment.readVariable(envName)?.trim() : undefined;
   return fromEnv
     ? { status: 'found', api_key: fromEnv, source: 'environment', env_name: envName }
     : { status: 'missing' };

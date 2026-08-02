@@ -9,9 +9,10 @@ import {
   RefreshCw,
   XCircle,
 } from "lucide-react";
-import type { RunTraceDetail, RunTraceSummary } from "@megumi/observability";
 import type {
   ChatSessionUiDto,
+  ObservabilityRunTraceDetailUiDto,
+  ObservabilityRunTraceSummaryUiDto,
   WorkspaceProjectUiDto,
 } from "@megumi/product/host";
 import { IPC_CHANNELS } from "../../../main/ipc/channels";
@@ -25,13 +26,13 @@ const NO_SESSION_FILTER = "__no_session__";
 
 export function DiagnosticsPanel() {
   const { t } = useTranslation('settings');
-  const [traces, setTraces] = useState<RunTraceSummary[]>([]);
+  const [traces, setTraces] = useState<ObservabilityRunTraceSummaryUiDto[]>([]);
   const [projects, setProjects] = useState<WorkspaceProjectUiDto[]>([]);
   const [sessions, setSessions] = useState<ChatSessionUiDto[]>([]);
   const [runInputById, setRunInputById] = useState<Record<string, string>>({});
   const [projectFilter, setProjectFilter] = useState(ALL_FILTER);
   const [sessionFilter, setSessionFilter] = useState(ALL_FILTER);
-  const [selected, setSelected] = useState<RunTraceDetail>();
+  const [selected, setSelected] = useState<ObservabilityRunTraceDetailUiDto>();
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<'unavailable' | 'exported' | 'exportFailed'>();
 
@@ -401,7 +402,7 @@ function DiagnosticMetric({
   );
 }
 
-function formatContextCapacity(summary: RunTraceSummary): string {
+function formatContextCapacity(summary: ObservabilityRunTraceSummaryUiDto): string {
   if (
     summary.contextUsedTokens === undefined
     || summary.contextWindowTokens === undefined
@@ -417,7 +418,7 @@ function formatContextRatio(ratio: number | undefined): string {
     : rendererI18n.t('settings:diagnostics.contextRatio', { percent: formatPercent(ratio) });
 }
 
-function formatProviderUsage(summary: RunTraceSummary): string {
+function formatProviderUsage(summary: ObservabilityRunTraceSummaryUiDto): string {
   const input = summary.providerInputTokens;
   const output = summary.providerOutputTokens;
   if (input === undefined && output === undefined) return rendererI18n.t('settings:diagnostics.notReported');
@@ -431,7 +432,7 @@ function formatTokens(value: number): string {
 }
 
 async function loadRunInputLabels(
-  traces: readonly RunTraceSummary[],
+  traces: readonly ObservabilityRunTraceSummaryUiDto[],
 ): Promise<Record<string, string>> {
   const runIds = unique(traces.map((trace) => trace.runId));
   if (runIds.length === 0) return {};
@@ -461,12 +462,12 @@ function summarizeUserInput(value: string): string {
   return normalized.length > 80 ? `${normalized.slice(0, 79)}…` : normalized;
 }
 
-function formatRunFallback(_trace: RunTraceSummary): string {
+function formatRunFallback(_trace: ObservabilityRunTraceSummaryUiDto): string {
   return rendererI18n.t('settings:diagnostics.userMessageUnavailable');
 }
 
 function formatRunSource(
-  trace: RunTraceSummary,
+  trace: ObservabilityRunTraceSummaryUiDto,
   projectNameById: ReadonlyMap<string, string>,
   sessionById: ReadonlyMap<string, ChatSessionUiDto>,
 ): string {
@@ -495,11 +496,11 @@ function formatDuration(value: number | undefined): string {
     : `${Math.round(value)} ms`;
 }
 
-function projectFilterValue(trace: RunTraceSummary): string {
+function projectFilterValue(trace: ObservabilityRunTraceSummaryUiDto): string {
   return trace.workspaceId ?? NO_PROJECT_FILTER;
 }
 
-function sessionFilterValue(trace: RunTraceSummary): string {
+function sessionFilterValue(trace: ObservabilityRunTraceSummaryUiDto): string {
   return trace.sessionId ?? NO_SESSION_FILTER;
 }
 

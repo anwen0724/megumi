@@ -1,10 +1,12 @@
-/* Supplies Electron process facts without interpreting Product resource layout. */
+/* Supplies Electron product identity and platform facts to Product composition. */
+
+import type { ProductEnvironment } from '@megumi/product';
 import { app } from 'electron';
 
-export function getElectronProductEnvironment() {
+export function getElectronProductEnvironment(): ProductEnvironment {
   return {
-    isPackaged: app.isPackaged,
-    resourcesPath: process.resourcesPath,
-    cwd: process.cwd(),
+    appVersion: app.getVersion(),
+    platform: process.platform,
+    arch: process.arch,
   };
 }

@@ -1,15 +1,31 @@
-/* Implements Product Home and Observability host ports for headless Node evaluation. */
+/* Implements Product Host Adapters for headless Node evaluation. */
 import { appendFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import fs from 'fs-extra';
 import path from 'node:path';
-import type { InitializeMegumiHomeSyncOptions } from '@megumi/product';
-import type {
-  ProductInputSourceAccess,
-  ProductObservabilityStorage,
-  ProductSessionAttachmentFileSystem,
+import {
+  resolveProductSystemSkillsPath,
+  type InitializeMegumiHomeSyncOptions,
+  type ProductEnvironment,
+  type ProductInputSourceAccess,
+  type ProductObservabilityStorage,
+  type ProductSessionAttachmentFileSystem,
+  type ProductSettingsEnvironment,
 } from '@megumi/product';
-import { resolveProductSystemSkillsPath } from '@megumi/product';
 import { resolveOwnedWorkspacePath } from './scoped-workspace-file-system';
+
+export function createNodeSettingsEnvironment(): ProductSettingsEnvironment {
+  return {
+    readVariable: (name) => process.env[name],
+  };
+}
+
+export function getNodeProductEnvironment(): ProductEnvironment {
+  return {
+    appVersion: 'evaluation',
+    platform: process.platform,
+    arch: process.arch,
+  };
+}
 
 export function createEvaluationHomeOptions(homeRoot: string): InitializeMegumiHomeSyncOptions {
   return {

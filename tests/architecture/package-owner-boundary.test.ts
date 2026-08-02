@@ -53,6 +53,20 @@ describe('Package Owner boundaries', () => {
     expect(hostSource).not.toContain('apps/desktop');
   });
 
+  it('keeps Desktop product-facing code behind Product contracts', () => {
+    const desktopSource = readTypeScriptTree('apps/desktop/src');
+
+    expect(desktopSource).not.toContain('@megumi/observability');
+  });
+  it('keeps Host platform capability creation outside Product source', () => {
+    const productSource = readTypeScriptTree('packages/product/src');
+    const productEntry = fs.readFileSync(path.join(root, 'packages/product/src/index.ts'), 'utf8');
+
+    expect(productSource).not.toMatch(/process\.(?:env|platform)/u);
+    expect(productSource).not.toContain('@megumi/workspace/node');
+    expect(productEntry).not.toContain("from '@megumi/observability'");
+  });
+
   it('keeps per-execution Sandbox scope lifecycle inside Sandbox', () => {
     const productSource = fs.readFileSync(path.join(root, 'packages/product/src/product.ts'), 'utf8');
     expect(productSource).not.toMatch(/\.sandbox\.open\s*\(/u);
@@ -61,7 +75,23 @@ describe('Package Owner boundaries', () => {
     expect(productSource).not.toContain('createNodeSandbox');
     expect(productSource).not.toContain('resolveSandboxBackend');
     expect(productSource).toContain('createSandbox()');
-    expect(productSource).toContain('createSandboxToolExecutor');
+    expect(productSource).not.toContain('createSandboxToolExecutor');
+  });
+
+  it('keeps Run Tool registration and execution routing inside Tools', () => {
+    const productSource = fs.readFileSync(path.join(root, 'packages/product/src/product.ts'), 'utf8');
+    const toolsSource = fs.readFileSync(path.join(root, 'packages/tools/src/tools.ts'), 'utf8');
+    const engineSource = fs.readFileSync(path.join(root, 'packages/engine/src/engine.ts'), 'utf8');
+
+    expect(productSource).not.toContain('createProductToolSnapshots');
+    expect(productSource).not.toContain('toolExecutionForRun');
+    expect(productSource).not.toContain('readProviderApiKey');
+    expect(productSource).not.toContain('createNodeWorkspaceFileSystem');
+    expect(toolsSource).toContain('runRegistrations');
+    expect(toolsSource).toContain('resolveRunTools');
+    expect(toolsSource).toContain('createSandboxToolExecutor');
+    expect(engineSource).not.toContain('ToolExecutor');
+    expect(engineSource).toContain('tools.resolveRunTools');
   });
   it('keeps the generic Sandbox Scope independent from platform implementations', () => {
     const scopeSource = fs.readFileSync(path.join(root, 'packages/sandbox/src/sandbox-scope.ts'), 'utf8');

@@ -22,6 +22,7 @@ import {
   createRunCommandToolDefinition,
   executeRunCommand,
   type ToolProcessAdapter,
+  type ToolProcessDescriptor,
 } from './run-command';
 import { executeSearchText, searchTextToolDefinition } from './search-text';
 import { executeUseSkill, useSkillToolDefinition } from './use-skill';
@@ -63,29 +64,45 @@ const BUILT_IN_TOOL_SOURCE: ToolSource = {
   availabilityStatus: 'available',
 };
 
-export interface CreateToolsRequest {
+export interface ResolveBuiltInToolRegistrationsRequest {
+  readonly process?: ToolProcessDescriptor;
+  readonly skillsAvailable?: boolean;
+  readonly webSearchAvailable?: boolean;
+  readonly webFetchAvailable?: boolean;
+  readonly disabledToolNames?: readonly BuiltInToolName[];
+}
+
+export interface ResolveBuiltInToolRegistrationsResult {
+  readonly catalog: ToolCatalog;
+}
+
+export interface CreateBuiltInToolExecutorRequest {
+  readonly catalog: ToolCatalog;
   readonly workspaceFileAccess: WorkspaceFileAccess;
   readonly process?: ToolProcessAdapter;
   readonly skills?: SkillUse;
   readonly webSearch?: WebSearch;
   readonly webFetch?: WebFetch;
+}
+
+export interface CreateBuiltInToolsRequest extends CreateBuiltInToolExecutorRequest {
   readonly disabledToolNames?: readonly BuiltInToolName[];
 }
 
-export interface CreateToolsResult {
+export interface CreateBuiltInToolsResult {
   readonly catalog: ToolCatalog;
   readonly executor: ToolExecutor;
 }
 
-export function createTools(request: CreateToolsRequest): CreateToolsResult {
-  const context: BuiltInToolContext = {
-    workspaceFileAccess: request.workspaceFileAccess,
+export function resolveBuiltInToolRegistrations(
+  request: ResolveBuiltInToolRegistrationsRequest,
+): ResolveBuiltInToolRegistrationsResult {
+  const availableDefinitions = definitionsFor({
     process: request.process,
-    skills: request.skills,
-    webSearch: request.webSearch,
-    webFetch: request.webFetch,
-  };
-  const availableDefinitions = definitionsFor(context);
+    skillsAvailable: request.skillsAvailable ?? false,
+    webSearchAvailable: request.webSearchAvailable ?? false,
+    webFetchAvailable: request.webFetchAvailable ?? false,
+  });
   const disabled = new Set(request.disabledToolNames ?? []);
   const registrations = availableDefinitions.map((definition): ToolRegistration => ({
     registrationId: `tool-registration-built_in-${definition.name}`,
@@ -96,12 +113,45 @@ export function createTools(request: CreateToolsRequest): CreateToolsResult {
       ? { status: 'disabled', reason: 'Tool is disabled for this Run.' }
       : { status: 'available' },
   }));
-  const catalog = createToolCatalog({ registrations });
-  const adapter = createBuiltInToolAdapter(context);
-  return { catalog, executor: createToolExecutor({ catalog, adapter }) };
+  return { catalog: createToolCatalog({ registrations }) };
 }
 
-function definitionsFor(context: BuiltInToolContext): readonly ToolDefinition[] {
+export function createBuiltInToolExecutor(request: CreateBuiltInToolExecutorRequest): ToolExecutor {
+  const context: BuiltInToolContext = {
+    workspaceFileAccess: request.workspaceFileAccess,
+    process: request.process,
+    skills: request.skills,
+    webSearch: request.webSearch,
+    webFetch: request.webFetch,
+  };
+  return createToolExecutor({
+    catalog: request.catalog,
+    adapter: createBuiltInToolAdapter(context),
+  });
+}
+
+export function createBuiltInTools(request: CreateBuiltInToolsRequest): CreateBuiltInToolsResult {
+  const { catalog } = resolveBuiltInToolRegistrations({
+    process: request.process,
+    skillsAvailable: request.skills !== undefined,
+    webSearchAvailable: request.webSearch !== undefined,
+    webFetchAvailable: request.webFetch !== undefined,
+    disabledToolNames: request.disabledToolNames,
+  });
+  return {
+    catalog,
+    executor: createBuiltInToolExecutor({ ...request, catalog }),
+  };
+}
+
+interface BuiltInToolAvailabilityContext {
+  readonly process?: ToolProcessDescriptor;
+  readonly skillsAvailable: boolean;
+  readonly webSearchAvailable: boolean;
+  readonly webFetchAvailable: boolean;
+}
+
+function definitionsFor(context: BuiltInToolAvailabilityContext): readonly ToolDefinition[] {
   return [
     readFileToolDefinition,
     listDirectoryToolDefinition,
@@ -114,9 +164,9 @@ function definitionsFor(context: BuiltInToolContext): readonly ToolDefinition[] 
     movePathToolDefinition,
     deletePathToolDefinition,
     ...(context.process ? [createRunCommandToolDefinition(context.process)] : []),
-    ...(context.skills ? [useSkillToolDefinition] : []),
-    ...(context.webSearch ? [webSearchToolDefinition] : []),
-    ...(context.webFetch ? [webFetchToolDefinition] : []),
+    ...(context.skillsAvailable ? [useSkillToolDefinition] : []),
+    ...(context.webSearchAvailable ? [webSearchToolDefinition] : []),
+    ...(context.webFetchAvailable ? [webFetchToolDefinition] : []),
   ];
 }
 

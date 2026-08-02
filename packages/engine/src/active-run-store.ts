@@ -94,6 +94,7 @@ export class ActiveRunStore {
   private readonly runIdByToolExecution = new Map<string, string>();
   private readonly activeToolExecutionIdsByRun = new Map<string, Set<string>>();
   private readonly runtimeByRunId = new Map<string, EngineRunRuntime>();
+  private readonly idleWaiters = new Set<() => void>();
 
   constructor(private readonly options: ActiveRunStoreOptions) {
     if (
@@ -183,6 +184,7 @@ export class ActiveRunStore {
       this.runIdBySession.delete(record.run.sessionId);
     }
     record.settle({ status: 'failed', failure: input.failure });
+    this.notifyIdle();
   }
 
   updateRun(run: Run): void {
@@ -217,6 +219,7 @@ export class ActiveRunStore {
         cancelledAt: run.completedAt ?? this.options.clock.now(),
       });
       this.clearActiveToolExecutions(run.runId);
+      this.notifyIdle();
     }
   }
 
@@ -229,6 +232,33 @@ export class ActiveRunStore {
     this.pruneExpired();
     const runId = this.runIdBySession.get(sessionId);
     return runId ? this.runsById.get(runId) : undefined;
+  }
+
+  listActiveRuns(): readonly Run[] {
+    this.pruneExpired();
+    return [...this.runsById.values()]
+      .filter((run) => !isTerminalRunStatus(run.status))
+      .map((run) => snapshot(run));
+  }
+
+  async waitForIdle(timeoutMs: number): Promise<boolean> {
+    if (!Number.isFinite(timeoutMs) || timeoutMs < 0) {
+      throw new TypeError('Engine idle timeout must be a non-negative number.');
+    }
+    if (this.listActiveRuns().length === 0) return true;
+    return new Promise<boolean>((resolve) => {
+      let settled = false;
+      const finish = (idle: boolean) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        this.idleWaiters.delete(onIdle);
+        resolve(idle);
+      };
+      const onIdle = () => finish(true);
+      const timeout = setTimeout(() => finish(false), timeoutMs);
+      this.idleWaiters.add(onIdle);
+    });
   }
 
   getStartedResult(requestId: string): StoredStartResult | undefined {
@@ -435,6 +465,11 @@ export class ActiveRunStore {
 
   getActiveToolExecutionIds(runId: string): readonly string[] {
     return [...(this.activeToolExecutionIdsByRun.get(runId) ?? [])];
+  }
+
+  private notifyIdle(): void {
+    if ([...this.runsById.values()].some((run) => !isTerminalRunStatus(run.status))) return;
+    for (const waiter of [...this.idleWaiters]) waiter();
   }
 
   private pruneExpired(): void {

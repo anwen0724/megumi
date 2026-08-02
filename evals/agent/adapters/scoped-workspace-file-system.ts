@@ -1,27 +1,21 @@
 /* Restricts actual Evaluation file I/O to one owned workspace, including symlinks. */
-import { mkdir, open, readFile, readdir, realpath, stat, writeFile } from 'node:fs/promises';
+import { open, readdir, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import type { ProductToolFileSystem } from '@megumi/product';
+import type { ProductWorkspaceFileSystem } from '@megumi/product';
 
-export async function createScopedWorkspaceFileSystem(workspaceRoot: string): Promise<ProductToolFileSystem> {
+export async function createEvaluationWorkspaceFileSystem(workspaceRoot: string): Promise<ProductWorkspaceFileSystem> {
   const lexicalRoot = path.resolve(workspaceRoot);
   const canonicalRoot = await realpath(lexicalRoot);
   const assertOwnedPath = createOwnedPathResolver(lexicalRoot, canonicalRoot);
 
   return {
-    async readFile(filePath, encoding) {
-      return readFile(await assertOwnedPath(filePath), encoding);
-    },
-    async writeFile(filePath, content, encoding) {
-      await writeFile(await assertOwnedPath(filePath), content, encoding);
-    },
-    async mkdir(directoryPath, options) {
-      return mkdir(await assertOwnedPath(directoryPath), options);
-    },
     async stat(targetPath) {
       return stat(await assertOwnedPath(targetPath));
+    },
+    async realpath(targetPath) {
+      return realpath(await assertOwnedPath(targetPath));
     },
     async readdir(directoryPath, options) {
       return readdir(await assertOwnedPath(directoryPath), options);

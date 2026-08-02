@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SETTINGS,
   createSettings,
+  createRecordSettingsEnvironment,
   type SettingsStore,
 } from '../../../packages/settings/src';
 
@@ -24,7 +25,10 @@ class MemorySettingsStore implements SettingsStore {
 describe('Settings', () => {
   it('resolves Web Search public settings and environment credentials separately', () => {
     const store = new MemorySettingsStore();
-    const settings = createSettings({ store, env: { TAVILY_API_KEY: 'env-secret' } });
+    const settings = createSettings({
+      store,
+      environment: createRecordSettingsEnvironment({ TAVILY_API_KEY: 'env-secret' }),
+    });
     expect(settings.resolveWebSearch()).toEqual({
       status: 'ok',
       settings: { has_api_key: false, credential_source: 'missing' },

@@ -1,4 +1,4 @@
-﻿/* Protects the six Workspace-backed built-in Tools and bounded document behavior. */
+/* Protects the six Workspace-backed built-in Tools and bounded document behavior. */
 
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -6,7 +6,7 @@ import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  createTools,
+  createBuiltInTools,
   ToolExecutionFailure,
   type ToolExecutionResult,
 } from '../../../packages/tools/src';
@@ -59,7 +59,7 @@ describe('Workspace-backed built-in Tools', () => {
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-tool-external-'));
     try {
       const target = path.join(outside, 'external.md');
-      const tools = createTools({
+      const tools = createBuiltInTools({
         workspaceFileAccess: createNodeSandboxFileAccess({
           workspaceRoot: root,
           access: { mode: 'unrestricted' },
@@ -192,7 +192,7 @@ describe('Workspace-backed built-in Tools', () => {
         );
       },
     };
-    const result = await createTools({ workspaceFileAccess }).executor.execute({
+    const result = await createBuiltInTools({ workspaceFileAccess }).executor.execute({
       toolName: 'read_file',
       input: { path: 'C:/outside/file.txt' },
     });
@@ -207,7 +207,7 @@ describe('Workspace-backed built-in Tools', () => {
 });
 
 function fileTools(root: string) {
-  return createTools({ workspaceFileAccess: createLocalWorkspaceFileAccess(root) });
+  return createBuiltInTools({ workspaceFileAccess: createLocalWorkspaceFileAccess(root) });
 }
 
 async function succeeded(pending: Promise<ToolExecutionResult>) {

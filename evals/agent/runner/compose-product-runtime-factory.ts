@@ -1,8 +1,11 @@
 /* Creates the production Evaluation runtime exclusively through Product Composition and Host. */
 import { composeProduct, type ComposeProductOptions } from '@megumi/product';
+import type { BuiltInToolAvailability } from '@megumi/tools';
 import {
   createEvaluationHomeOptions,
   createEvaluationInputSourceAccess,
+  createNodeSettingsEnvironment,
+  getNodeProductEnvironment,
   nodeObservabilityStorage,
   nodeSessionAttachmentFileSystem,
 } from '../adapters/node-product-host-adapters';
@@ -18,7 +21,7 @@ export interface ComposeProductEvaluationFactoryOptions {
   };
   productOverrides?: Partial<Omit<
     ComposeProductOptions,
-    'home' | 'directoryPicker' | 'toolFileSystem' | 'isBuiltInToolAvailable' | 'observabilityStorage'
+    'home' | 'directoryPicker' | 'workspaceFileSystem' | 'builtInToolAvailability' | 'observabilityStorage' | 'settingsEnvironment' | 'productEnvironment'
   >>;
 }
 
@@ -30,6 +33,9 @@ export function createComposeProductEvaluationFactory(
       if (options.requireCredential !== false && !options.credential) {
         throw new Error(`Provider credential is required for Evaluation target ${input.target.targetId}.`);
       }
+      const builtInToolAvailability: BuiltInToolAvailability = {
+        isAvailable: ({ toolName }) => input.isBuiltInToolAvailable(toolName),
+      };
       const product = composeProduct({
         ...options.productOverrides,
         home: createEvaluationHomeOptions(input.homeRoot),
@@ -38,10 +44,11 @@ export function createComposeProductEvaluationFactory(
         },
         observabilityStorage: nodeObservabilityStorage,
         inputSourceAccess: createEvaluationInputSourceAccess(input.workspaceRoot),
+        workspaceFileSystem: input.workspaceFileSystem,
         sessionAttachmentFileSystem: nodeSessionAttachmentFileSystem,
-        toolFileSystem: input.toolFileSystem,
-        isBuiltInToolAvailable: input.isBuiltInToolAvailable,
-        productEnvironment: { appVersion: 'evaluation', platform: process.platform, arch: process.arch },
+        builtInToolAvailability,
+        settingsEnvironment: createNodeSettingsEnvironment(),
+        productEnvironment: getNodeProductEnvironment(),
       });
 
       try {

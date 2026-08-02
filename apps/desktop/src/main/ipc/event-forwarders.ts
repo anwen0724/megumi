@@ -5,13 +5,13 @@ import {
   RuntimeEventSchema,
   type RuntimeEvent,
 } from '@megumi/product/host';
-import type { RuntimeLogger } from '@megumi/product';
+import type { ProductRuntimeLogger } from '@megumi/product';
 import { IPC_CHANNELS } from './channels';
 
 export function forwardRuntimeEvent(
   sender: { send(channel: string, event: RuntimeEvent): void },
   event: RuntimeEvent,
-  options: { logger?: RuntimeLogger } = {},
+  options: { logger?: ProductRuntimeLogger } = {},
 ): void {
   const parsed = RuntimeEventSchema.safeParse(event);
   if (!parsed.success) {
@@ -24,7 +24,7 @@ export function forwardRuntimeEvent(
 export async function forwardRuntimeEvents(
   sender: { send(channel: string, event: RuntimeEvent): void },
   events: AsyncIterable<RuntimeEvent>,
-  options: { logger?: RuntimeLogger } = {},
+  options: { logger?: ProductRuntimeLogger } = {},
 ): Promise<void> {
   for await (const event of events) {
     forwardRuntimeEvent(sender, event, options);

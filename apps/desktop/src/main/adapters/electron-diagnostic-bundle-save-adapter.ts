@@ -2,9 +2,9 @@
 import { dialog } from "electron";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { DiagnosticBundle } from "@megumi/observability";
+import type { DiagnosticBundleDto } from '@megumi/product';
 export async function saveDiagnosticBundle(
-  bundle: DiagnosticBundle,
+  bundle: DiagnosticBundleDto,
 ): Promise<
   | { status: "saved"; directory: string }
   | { status: "cancelled" }

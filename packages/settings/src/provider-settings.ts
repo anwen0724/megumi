@@ -1,5 +1,6 @@
 /* Defines Provider settings and projects model facts owned by @megumi/ai. */
 import { z } from 'zod';
+import type { SettingsEnvironment } from './settings-environment';
 import {
   ModelCapabilitiesSchema,
   ResolvedModelCapabilitiesSchema,
@@ -180,8 +181,6 @@ export type ListAvailableModelsResult =
   | { status: 'ok'; models: AvailableModelOption[] }
   | SettingsFailureResult;
 
-type EnvMap = NodeJS.ProcessEnv | Record<string, string | undefined>;
-
 const providers = builtinProviders();
 export const DEFAULT_UNKNOWN_MODEL_CONTEXT_WINDOW_TOKENS = 256_000;
 
@@ -274,11 +273,13 @@ export function listProviderStatuses(
   resolvedProviders: Record<string, ProviderSettingsResolved>,
   rawProviders: Record<string, ProviderSettingsRaw>,
   fileProviders: Record<string, ProviderSettingsFileRaw>,
-  env: EnvMap,
+  environment: SettingsEnvironment,
 ): ProviderPublicStatus[] {
   return Object.entries(resolvedProviders).map(([providerId, provider]) => {
-    const credential = readProviderApiKey(fileProviders[providerId], env);
-    const envOverrideActive = Boolean(provider.api_key_env && env[provider.api_key_env]?.trim());
+    const credential = readProviderApiKey(fileProviders[providerId], environment);
+    const envOverrideActive = Boolean(
+      provider.api_key_env && environment.readVariable(provider.api_key_env)?.trim(),
+    );
     return ProviderPublicStatusSchema.parse({
       provider_id: providerId,
       display_name: provider.display_name,
@@ -346,12 +347,12 @@ export function resolveProviderConfig(
 
 export function readProviderApiKey(
   provider: ProviderSettingsFileRaw | undefined,
-  env: EnvMap,
+  environment: SettingsEnvironment,
 ): ReadApiKeyResult {
   const direct = provider?.api_key?.trim();
   if (direct) return { status: 'found', api_key: direct, source: 'settings' };
   const envName = provider?.api_key_env ?? undefined;
-  const fromEnv = envName ? env[envName]?.trim() : undefined;
+  const fromEnv = envName ? environment.readVariable(envName)?.trim() : undefined;
   return fromEnv
     ? { status: 'found', api_key: fromEnv, source: 'environment', env_name: envName }
     : { status: 'missing' };

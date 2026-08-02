@@ -4,7 +4,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createBraveWebSearch,
-  createTools,
+  createBuiltInTools,
   createWebFetch,
   createWebSearch,
 } from '../../../packages/tools/src';
@@ -23,7 +23,7 @@ describe('web_search built-in Tool', () => {
         description: 'Current &amp; official <strong>documentation</strong>.',
       }] },
     }), { status: 200, headers: { 'content-type': 'application/json' } }));
-    const tools = createTools({
+    const tools = createBuiltInTools({
       workspaceFileAccess: createLocalWorkspaceFileAccess(process.cwd()),
       webSearch: createBraveWebSearch({ apiKey: 'search-secret', fetch: fetch as typeof globalThis.fetch }),
     });
@@ -65,7 +65,7 @@ describe('web_search built-in Tool', () => {
         init?.signal?.addEventListener('abort', () => reject(new Error('request aborted')), { once: true });
       })
     ));
-    const tools = createTools({
+    const tools = createBuiltInTools({
       workspaceFileAccess: createLocalWorkspaceFileAccess(process.cwd()),
       webSearch: createBraveWebSearch({ apiKey: 'search-secret', fetch: fetch as typeof globalThis.fetch }),
     });
@@ -79,7 +79,7 @@ describe('web_search built-in Tool', () => {
   });
 
   it('normalizes provider authentication failure without exposing the credential', async () => {
-    const tools = createTools({
+    const tools = createBuiltInTools({
       workspaceFileAccess: createLocalWorkspaceFileAccess(process.cwd()),
       webSearch: createBraveWebSearch({
         apiKey: 'search-secret',
@@ -99,7 +99,7 @@ describe('web_search built-in Tool', () => {
 
 describe('web_fetch built-in Tool', () => {
   it('returns a provider-neutral page from an injected network interface', async () => {
-    const tools = createTools({
+    const tools = createBuiltInTools({
       workspaceFileAccess: createLocalWorkspaceFileAccess(process.cwd()),
       webFetch: {
         async fetch({ url }) {
@@ -123,7 +123,7 @@ describe('web_fetch built-in Tool', () => {
   });
 
   it('blocks private and local addresses with a safe structured reason', async () => {
-    const tools = createTools({
+    const tools = createBuiltInTools({
       workspaceFileAccess: createLocalWorkspaceFileAccess(process.cwd()),
       webFetch: createWebFetch(),
     });

@@ -16,6 +16,7 @@ export {
   createRuntimeTraceId as generateRuntimeTraceId,
   normalizeRuntimeError as normalizeHostRuntimeError,
 } from '@megumi/events';
+export { redactHostRuntimeValue } from './runtime-redaction';
 export type {
   AgentRunToolResultCreatedPayload,
   RunCancelledPayload,
@@ -160,7 +161,17 @@ export type {
   ArtifactVersionCreateData,
   ArtifactVersionGetData,
 } from './artifact-host';
-export type { ObservabilityHost, ObservabilityExportResult, DiagnosticBundleSavePort } from './observability-host';
+export type { ObservabilityHost, DiagnosticBundleSavePort } from './observability-host';
+export type {
+  DiagnosticBundleDto,
+  DiagnosticBundleFileDto,
+  ObservabilityAttributesUiDto,
+  ObservabilityExportResult,
+  ObservabilityGetRunTraceUiResult,
+  ObservabilityListRunTracesUiResult,
+  ObservabilityRunTraceDetailUiDto,
+  ObservabilityRunTraceSummaryUiDto,
+} from './observability-contract';
 export { ObservabilityListPayloadSchema, ObservabilityRunPayloadSchema, ObservabilityQueryResultSchema } from './observability-host';
 export {
   WorkspaceListProjectsPayloadSchema,

@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BUILT_IN_TOOL_NAMES,
-  createTools,
+  createBuiltInTools,
   type WorkspaceFileAccess,
 } from '../../../packages/tools/src';
 import { createProcessAdapter } from './tool-test-fixtures';
@@ -22,8 +22,8 @@ describe('built-in Tool Catalog', () => {
         truncated: false,
       }) },
     };
-    const withoutWebSearch = createTools(baseOptions);
-    const withWebSearch = createTools({
+    const withoutWebSearch = createBuiltInTools(baseOptions);
+    const withWebSearch = createBuiltInTools({
       ...baseOptions,
       webSearch: { search: async ({ query }) => ({ query, results: [] }) },
     });
@@ -33,7 +33,7 @@ describe('built-in Tool Catalog', () => {
   });
 
   it('keeps all names, schemas, risk facts, side effects, and execution modes', () => {
-    const tools = createTools({
+    const tools = createBuiltInTools({
       workspaceFileAccess: unusedWorkspaceFileAccess(),
       process: createProcessAdapter(),
       skills: { useSkill: async () => ({ status: 'not_found', skillPath: 'missing' }) } as never,
@@ -60,7 +60,7 @@ describe('built-in Tool Catalog', () => {
   });
 
   it('preserves the confirmed model-visible definition facts', () => {
-    const tools = createTools({
+    const tools = createBuiltInTools({
       workspaceFileAccess: unusedWorkspaceFileAccess(),
       process: createProcessAdapter(),
       skills: { useSkill: async () => ({ status: 'not_found', skillPath: 'missing' }) } as never,

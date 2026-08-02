@@ -32,7 +32,7 @@ const validPolicy: EnginePolicy = {
 
 describe('engine public contracts', () => {
   it('uses the confirmed public operation and result names', () => {
-    const operationNames: (keyof Engine)[] = ['startRun', 'resumeRun', 'cancelRun'];
+    const operationNames: (keyof Engine)[] = ['startRun', 'resumeRun', 'cancelRun', 'getRun', 'shutdown'];
     const startStatuses: StartRunResult['status'][] = [
       'started',
       'already_started',
@@ -62,17 +62,16 @@ describe('engine public contracts', () => {
       'models',
       'context',
       'session',
-      'toolCatalog',
-      'toolExecutionForRun',
+      'tools',
       'permissions',
-      'eventPublisher',
+      'events',
       'observability',
       'ids',
       'clock',
       'policy',
     ];
 
-    expect(operationNames).toEqual(['startRun', 'resumeRun', 'cancelRun']);
+    expect(operationNames).toEqual(['startRun', 'resumeRun', 'cancelRun', 'getRun', 'shutdown']);
     expect(startStatuses).not.toContain('completed');
     expect(resumeStatuses).toContain('already_resolved');
     expect(cancelStatuses).not.toContain('cancelled');

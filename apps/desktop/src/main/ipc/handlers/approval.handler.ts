@@ -6,7 +6,7 @@ import {
   type ProductHostInterface,
 } from '@megumi/product/host';
 import type { RuntimeEvent } from '@megumi/product/host';
-import type { RuntimeLogger } from '@megumi/product';
+import type { ProductRuntimeLogger } from '@megumi/product';
 import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { createIpcRequestHandler } from '../create-request-handler';
 import { forwardRuntimeEvents } from '../event-forwarders';
@@ -19,7 +19,7 @@ export interface ApprovalHandlersService {
 }
 
 export interface RegisterApprovalHandlersOptions {
-  logger?: RuntimeLogger;
+  logger?: ProductRuntimeLogger;
   ipcMain?: DesktopIpcMain;
 }
 
@@ -48,7 +48,7 @@ export function registerApprovalHandlers(
 function scheduleEvents(
   sender: { send(channel: string, event: RuntimeEvent): void },
   events: AsyncIterable<RuntimeEvent>,
-  logger?: RuntimeLogger,
+  logger?: ProductRuntimeLogger,
 ): void {
   setTimeout(() => {
     void forwardRuntimeEvents(sender, events, { logger }).catch((error) => {

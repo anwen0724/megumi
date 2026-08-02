@@ -39,6 +39,7 @@ export interface RunRuntimeEventFactoryInput<TType extends RuntimeEventEnvelopeT
   eventType: TType;
   runId: string;
   sessionId?: string;
+  workspaceId?: string;
   actionId?: string;
   observationId?: string;
   messageId?: string;
@@ -111,6 +112,7 @@ export function createRuntimeEvent<TType extends RuntimeEventEnvelopeType>(
     eventType: input.eventType,
     runId: input.runId,
     ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+    ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
     ...(input.actionId ? { actionId: input.actionId } : {}),
     ...(input.observationId ? { observationId: input.observationId } : {}),
     ...(input.messageId ? { messageId: input.messageId } : {}),

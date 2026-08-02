@@ -36,26 +36,28 @@ export interface CreateToolExecutorRequest {
   readonly adapter: ToolExecutionAdapter;
 }
 
+export function preflightToolExecution(
+  catalog: ToolCatalog,
+  executeRequest: ExecuteToolRequest,
+): ToolExecutionPreflightResult {
+  const registered = catalog.get({ toolName: executeRequest.toolName });
+  if (registered.status === 'not_found') {
+    return {
+      status: 'failed',
+      error: {
+        code: 'unknown_tool',
+        message: `Tool not found: ${executeRequest.toolName}`,
+      },
+    };
+  }
+  const validation = validateToolInput(registered.tool.definition.inputSchema, executeRequest.input);
+  return validation.ok
+    ? { status: 'ready', input: validation.value }
+    : { status: 'failed', error: { code: 'invalid_tool_input', message: validation.errorMessage } };
+}
+
 export function createToolExecutor(request: CreateToolExecutorRequest): ToolExecutor {
-  const preflight = (executeRequest: ExecuteToolRequest): ToolExecutionPreflightResult => {
-    const registered = request.catalog.get({ toolName: executeRequest.toolName });
-    if (registered.status === 'not_found') {
-      return {
-        status: 'failed',
-        error: {
-          code: 'unknown_tool',
-          message: `Tool not found: ${executeRequest.toolName}`,
-        },
-      };
-    }
-    const validation = validateToolInput(registered.tool.definition.inputSchema, executeRequest.input);
-    return validation.ok
-      ? { status: 'ready', input: validation.value }
-      : {
-          status: 'failed',
-          error: { code: 'invalid_tool_input', message: validation.errorMessage },
-        };
-  };
+  const preflight = (executeRequest: ExecuteToolRequest) => preflightToolExecution(request.catalog, executeRequest);
   return {
     preflight,
     async execute(executeRequest, options = {}) {

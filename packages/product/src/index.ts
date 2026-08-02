@@ -4,23 +4,26 @@
 export {
   composeProduct,
   type ComposeProductOptions,
-  type ProductBuiltInToolAvailability,
+  type ProductEnvironment,
   type ProductInputSourceAccess,
   type ProductObservabilityStorage,
   type ProductRuntime,
+  type ProductRuntimeLogger,
   type ProductSessionAttachmentFileSystem,
-  type ResolveModelResult,
+  type ProductSettingsEnvironment,
 } from './product';
 export type { ProductHostInterface } from './host/product-host';
 export type {
   DirectoryPickerPort,
   FileOpenPort,
 } from './host/workspace-contract';
+export type { ProductWorkspaceFileSystem } from './workspace-file-system';
 export type {
   InputAttachmentPickerPort,
   LocalFileAvailabilityPort,
 } from './host/chat-contract';
 export type { DiagnosticBundleSavePort } from './host/observability-host';
+export type { DiagnosticBundleDto } from './host/observability-contract';
 export {
   buildMegumiHomePaths,
   createMegumiHomeReadme,
@@ -36,9 +39,4 @@ export {
   type MegumiHomeResourceLocator,
   type MegumiHomeSyncFileSystem,
 } from './home/home';
-export {
-  noopRuntimeLogger,
-  redactRuntimeValue,
-  type RuntimeLogger,
-} from '@megumi/observability';
 export * from './resources';
