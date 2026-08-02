@@ -37,6 +37,7 @@ export type {
   CancelledActivityItem,
   CompactionActivityItem,
   ErrorActivityItem,
+  PlanActivityItem,
   ProcessDisclosureBlock,
   ProcessDisclosureItem,
   RecoveryActivityItem,

@@ -10,6 +10,7 @@ import type {
   CancelledActivityItem,
   CompactionActivityItem,
   ErrorActivityItem,
+  PlanActivityItem,
   ProcessDisclosureBlock,
   RecoveryActivityItem,
   RetryActivityItem,
@@ -179,6 +180,26 @@ function projectRuntimeTimelineEvent(
     return nextMessages;
   }
 
+  if (event.eventType === 'run.plan.updated') {
+    const payload = event.payload as {
+      toolCallId: string;
+      explanation?: string;
+      plan: PlanActivityItem['plan'];
+    };
+    const assistant = ensureAssistantMessage(nextMessages, event);
+    const process = ensureProcessBlock(assistant, event);
+    process.items = process.items.filter((item) => (
+      !(item.kind === 'tool_activity' && item.toolCallId === payload.toolCallId)
+    ));
+    const item = ensurePlanActivityItem(process, event.runId, payload.toolCallId, event.createdAt);
+    item.explanation = payload.explanation;
+    item.plan = payload.plan.map((step) => ({ ...step }));
+    item.updatedAt = event.createdAt;
+    process.updatedAt = event.createdAt;
+    assistant.updatedAt = event.createdAt;
+    return nextMessages;
+  }
+
   if (event.eventType === 'tool_call.started') {
     const payload = event.payload as { toolCallId?: string; toolExecutionId?: string; toolName?: string; input?: unknown };
     const assistant = ensureAssistantMessage(nextMessages, event);
@@ -198,6 +219,14 @@ function projectRuntimeTimelineEvent(
     const payload = event.payload as { toolCallId?: string; toolExecutionId?: string; toolName?: string; error?: { code?: string; message?: string; details?: Record<string, unknown> } };
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
+    if (event.eventType === 'tool_call.completed' && hasPlanToolCall(process, payload.toolCallId)) {
+      process.items = process.items.filter((item) => (
+        !(item.kind === 'tool_activity' && item.toolCallId === payload.toolCallId)
+      ));
+      process.updatedAt = event.createdAt;
+      assistant.updatedAt = event.createdAt;
+      return nextMessages;
+    }
     const item = ensureToolItem(process, payload.toolCallId ?? event.eventId, event.createdAt);
     item.toolExecutionId = payload.toolExecutionId;
     item.toolName = payload.toolName ?? item.toolName;
@@ -225,6 +254,14 @@ function projectRuntimeTimelineEvent(
     };
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
+    if (payload.kind === 'success' && hasPlanToolCall(process, payload.toolCallId)) {
+      process.items = process.items.filter((item) => (
+        !(item.kind === 'tool_activity' && item.toolCallId === payload.toolCallId)
+      ));
+      process.updatedAt = event.createdAt;
+      assistant.updatedAt = event.createdAt;
+      return nextMessages;
+    }
     const item = ensureToolItem(process, payload.toolCallId ?? event.eventId, event.createdAt);
     item.toolExecutionId = payload.toolExecutionId;
     item.toolName = payload.toolName ?? item.toolName;
@@ -524,6 +561,40 @@ function ensureToolItem(process: ProcessDisclosureBlock, toolCallId: string, cre
   };
   process.items.push(item);
   return item;
+}
+
+function ensurePlanActivityItem(
+  process: ProcessDisclosureBlock,
+  runId: string,
+  toolCallId: string,
+  createdAt: string,
+): PlanActivityItem {
+  const existing = process.items.find(
+    (item): item is PlanActivityItem => item.kind === 'plan_activity',
+  );
+  if (existing) {
+    existing.toolCallId = toolCallId;
+    return existing;
+  }
+  const item: PlanActivityItem = {
+    itemId: `plan:${runId}`,
+    kind: 'plan_activity',
+    toolCallId,
+    plan: [],
+    createdAt,
+    updatedAt: createdAt,
+  };
+  process.items.push(item);
+  return item;
+}
+
+function hasPlanToolCall(
+  process: ProcessDisclosureBlock,
+  toolCallId: string | undefined,
+): boolean {
+  return Boolean(toolCallId && process.items.some(
+    (item) => item.kind === 'plan_activity' && item.toolCallId === toolCallId,
+  ));
 }
 
 function ensureThinkingItem(process: ProcessDisclosureBlock, thinkingId: string, createdAt: string): ThinkingItem {

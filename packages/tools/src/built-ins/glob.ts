@@ -10,10 +10,10 @@ import {
   requireString,
 } from './tool-input';
 import { withFileFailure, type BuiltInToolContext } from './workspace-file-access';
+import { createBuiltInToolHandler, inputString, operation } from './tool-handler';
 
 export const globToolDefinition: ToolDefinition = {
   name: 'glob',
-  title: 'Find files',
   description: 'Find files matching a glob pattern without reading file content.',
   inputSchema: {
     type: 'object',
@@ -39,14 +39,15 @@ export const globToolDefinition: ToolDefinition = {
     required: ['matches', 'offset', 'hasMore'],
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  capabilities: ['project_read'],
-  riskLevel: 'low',
-  sideEffect: 'none',
-  availability: { status: 'available' },
-  executionMode: 'parallel',
-  permissionMetadata: { ruleToolName: 'glob' },
-  modelFacingDescription: 'Find files matching a glob pattern without reading file content.',
 };
+
+export const globToolHandler = createBuiltInToolHandler({
+  toolName: 'glob',
+  operations: (invocation) => [operation(invocation, 'workspace.read', {
+    type: 'workspace.path', id: inputString(invocation, 'cwd', '.'),
+  })],
+  execute: (context, input, options) => executeGlob(context, input, options.signal),
+});
 
 export async function executeGlob(
   context: BuiltInToolContext,

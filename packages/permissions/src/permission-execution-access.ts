@@ -1,6 +1,6 @@
 /* Resolves the minimum executable file, process, and network scope for an allowed ToolCall. */
 import { z } from 'zod';
-import type { ToolExecutionAccess } from '@megumi/tools';
+import type { ToolExecutionAccess } from '@megumi/sandbox';
 import type { EvaluateToolCallRequest, PermissionOperation } from './permission-operation';
 
 export const ToolExecutionAccessSchema: z.ZodType<ToolExecutionAccess> = z.object({

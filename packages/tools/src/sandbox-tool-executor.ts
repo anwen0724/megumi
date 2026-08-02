@@ -1,75 +1,93 @@
-﻿/* Wraps one ToolExecutor with Sandbox scope lifecycle and effect tracking. */
-import {
-  executeSandboxScope,
-  type Sandbox,
-  type SandboxPolicy,
-  type SandboxScope,
-} from '@megumi/sandbox';
-import type {
-  ToolEffectReport,
-  ToolExecutionOptions,
-  ToolExecutionResult,
-} from './tool';
-import type { ToolExecutor } from './tool-executor';
+/* Executes an already-authorized ToolInvocation inside its Sandbox and Workspace Changes boundary. */
 
-export interface CreateSandboxToolExecutorRequest {
-  readonly preflight: ToolExecutor['preflight'];
+import { executeSandboxScope, type Sandbox } from '@megumi/sandbox';
+import type { SkillService } from '@megumi/skills';
+import type { ToolExecutionAccess, ToolExecutionOptions, ToolExecutionResult } from './tool';
+import type { ToolInvocation } from './tool-handler';
+import type { WebFetch } from './built-ins/web-fetch';
+import type { WebSearch } from './built-ins/web-search';
+import type { BuiltInToolContext } from './built-ins/workspace-file-access';
+import { createFailedToolResult } from './tool-result';
+
+export interface ToolExecutionPolicy {
+  readonly maxExecutionTimeMs: number;
+  readonly maxOutputBytes: number;
+  readonly maxProcessCount: number;
+}
+
+export interface ToolWorkspaceChanges {
+  trackToolExecution(request: {
+    readonly scope?: {
+      readonly workspace_id: string;
+      readonly session_id: string;
+      readonly run_id: string;
+      readonly step_id?: string;
+      readonly tool_call_id?: string;
+      readonly tool_execution_id?: string;
+    };
+    readonly execute: () => Promise<ToolExecutionResult>;
+  }): Promise<ToolExecutionResult>;
+}
+
+export async function executeSandboxToolInvocation(request: {
   readonly sandbox: Sandbox;
-  readonly policy: Omit<SandboxPolicy, 'executionAccess'>;
-  readonly createExecutor: (scope: SandboxScope) => Pick<ToolExecutor, 'execute'>;
-  readonly trackExecution?: (
-    execute: () => Promise<ToolExecutionResult>,
-  ) => Promise<ToolExecutionResult>;
-}
-
-export function createSandboxToolExecutor(
-  request: CreateSandboxToolExecutorRequest,
-): Pick<ToolExecutor, 'preflight' | 'execute'> {
-  return {
-    preflight: request.preflight,
-    async execute(toolRequest, options: ToolExecutionOptions = {}) {
-      if (!options.executionAccess) {
-        return sandboxFailure(toolRequest.toolName, 'Tool execution access was not provided.');
-      }
-      const execution = await executeSandboxScope({
-        sandbox: request.sandbox,
-        open: {
-          policy: {
-            ...request.policy,
-            executionAccess: options.executionAccess,
-          },
-          ...(options.signal ? { signal: options.signal } : {}),
-        },
-        async execute(scope) {
-          const execute = () => request.createExecutor(scope).execute(toolRequest, options);
-          return request.trackExecution ? request.trackExecution(execute) : execute();
-        },
-      });
-      if (execution.status === 'unavailable') {
-        return sandboxFailure(toolRequest.toolName, execution.reason);
-      }
-      return execution.status === 'termination_unconfirmed'
-        ? sandboxFailure(
-            toolRequest.toolName,
-            'Sandbox scope could not confirm process termination.',
-            execution.value.effectReport,
-          )
-        : execution.value;
+  readonly executionPolicy: ToolExecutionPolicy;
+  readonly workspaceChanges: ToolWorkspaceChanges;
+  readonly workspaceRoot: string;
+  readonly invocation: ToolInvocation;
+  readonly skills: Pick<SkillService, 'useSkill'>;
+  readonly webSearch?: WebSearch;
+  readonly webFetch: WebFetch;
+  readonly stepId?: string;
+  readonly toolExecutionId?: string;
+  readonly options: ToolExecutionOptions & { readonly executionAccess: ToolExecutionAccess };
+  readonly execute: (context: BuiltInToolContext) => Promise<ToolExecutionResult>;
+}): Promise<ToolExecutionResult> {
+  const execution = await executeSandboxScope({
+    sandbox: request.sandbox,
+    open: {
+      policy: {
+        workspaceRoot: request.workspaceRoot,
+        ...request.executionPolicy,
+        executionAccess: request.options.executionAccess,
+      },
+      ...(request.options.signal ? { signal: request.options.signal } : {}),
     },
-  };
-}
-
-function sandboxFailure(
-  toolName: string,
-  message: string,
-  effectReport?: ToolEffectReport,
-): ToolExecutionResult {
-  return {
-    type: 'failed',
-    toolName,
-    error: { code: 'sandbox_unavailable', message },
-    normalizedResult: { kind: 'error', content: message, isError: true, truncated: false },
-    observation: { summary: message },
-    ...(effectReport ? { effectReport } : {}),
-  };
+    async execute(scope) {
+      const context: BuiltInToolContext = {
+        workspaceFileAccess: scope.files,
+        process: scope.process,
+        skills: request.skills,
+        ...(request.webSearch ? { webSearch: request.webSearch } : {}),
+        webFetch: request.webFetch,
+      };
+      return request.workspaceChanges.trackToolExecution({
+        scope: {
+          workspace_id: request.invocation.workspaceId,
+          session_id: request.invocation.sessionId,
+          run_id: request.invocation.runId,
+          ...(request.stepId ? { step_id: request.stepId } : {}),
+          tool_call_id: request.invocation.toolCallId,
+          ...(request.toolExecutionId ? { tool_execution_id: request.toolExecutionId } : {}),
+        },
+        execute: () => request.execute(context),
+      });
+    },
+  });
+  if (execution.status === 'unavailable') {
+    return createFailedToolResult({
+      toolName: request.invocation.toolName,
+      code: 'sandbox_unavailable',
+      message: execution.reason,
+    });
+  }
+  if (execution.status === 'termination_unconfirmed') {
+    return createFailedToolResult({
+      toolName: request.invocation.toolName,
+      code: 'termination_unconfirmed',
+      message: 'Sandbox scope could not confirm process termination.',
+      ...(execution.value.effectReport ? { effectReport: execution.value.effectReport } : {}),
+    });
+  }
+  return execution.value;
 }

@@ -1,10 +1,14 @@
 /*
- * Resolves trusted Tool Call facts into stable Permission Operations and objective risk facts.
+ * Validates Tool-supplied operation facts and enriches them with Permission-owned
+ * path and command safety facts before policy evaluation.
  */
 import { z } from 'zod';
-import type { JsonObject, JsonValue, RegisteredTool } from '@megumi/tools';
 import {
   JsonValueSchema,
+  type JsonObject,
+  type JsonValue,
+} from '@megumi/ai';
+import {
   PermissionActionIdSchema,
   PermissionFailureSchema,
   PermissionModeSchema,
@@ -36,7 +40,10 @@ export const PermissionOperationSchema = z.object({
     toolIdentity: PermissionToolIdentitySchema,
   }).strict(),
 }).strict().superRefine((operation, context) => {
-  const expected: Record<z.infer<typeof PermissionActionIdSchema>, z.infer<typeof PermissionResourceTypeSchema> | undefined> = {
+  const expected: Record<
+    z.infer<typeof PermissionActionIdSchema>,
+    z.infer<typeof PermissionResourceTypeSchema> | undefined
+  > = {
     'workspace.read': 'workspace.path',
     'workspace.write': 'workspace.path',
     'process.execute': 'process.command',
@@ -47,7 +54,9 @@ export const PermissionOperationSchema = z.object({
   };
   if (operation.resource && operation.resource.type !== expected[operation.action]) {
     context.addIssue({
-      code: 'custom', path: ['resource'], message: `${operation.action} only supports ${expected[operation.action] ?? 'no resource'}`,
+      code: 'custom',
+      path: ['resource'],
+      message: `${operation.action} only supports ${expected[operation.action] ?? 'no resource'}`,
     });
   }
 });
@@ -78,7 +87,7 @@ export interface EvaluateToolCallRequest {
   readonly workspaceId: string;
   readonly toolCallId: string;
   readonly toolInput: JsonValue;
-  readonly registeredTool: RegisteredTool;
+  readonly operations: readonly PermissionOperation[];
   readonly permissionMode: PermissionMode;
   readonly evaluatedAt: string;
 }
@@ -89,7 +98,7 @@ export const EvaluateToolCallRequestSchema: z.ZodType<EvaluateToolCallRequest> =
   workspaceId: z.string().min(1),
   toolCallId: z.string().min(1),
   toolInput: JsonValueSchema,
-  registeredTool: z.custom<RegisteredTool>(isRegisteredTool, 'Invalid registered Tool facts.'),
+  operations: z.array(PermissionOperationSchema).min(1),
   permissionMode: PermissionModeSchema,
   evaluatedAt: z.string().min(1),
 }).strict();
@@ -101,36 +110,26 @@ export interface ResolvedPermissionOperations {
 }
 
 interface WorkspacePathTarget {
-  readonly field: string;
+  readonly key: string;
+  readonly operationIndex: number;
   readonly path: string;
-  readonly action: 'workspace.read' | 'workspace.write';
 }
 
-const PATH_TARGETS: Record<string, readonly { field: string; action: 'workspace.read' | 'workspace.write' }[]> = {
-  read_file: [{ field: 'path', action: 'workspace.read' }],
-  list_directory: [{ field: 'path', action: 'workspace.read' }],
-  glob: [{ field: 'cwd', action: 'workspace.read' }],
-  search_text: [{ field: 'path', action: 'workspace.read' }],
-  write_file: [{ field: 'path', action: 'workspace.write' }],
-  edit_file: [{ field: 'path', action: 'workspace.write' }],
-  create_directory: [{ field: 'path', action: 'workspace.write' }],
-  copy_path: [{ field: 'source', action: 'workspace.read' }, { field: 'destination', action: 'workspace.write' }],
-  move_path: [{ field: 'source', action: 'workspace.write' }, { field: 'destination', action: 'workspace.write' }],
-  delete_path: [{ field: 'path', action: 'workspace.write' }],
-  run_command: [{ field: 'cwd', action: 'workspace.read' }],
-};
-
-export function resolveWorkspacePathTargets(request: EvaluateToolCallRequest): readonly WorkspacePathTarget[] {
-  const builtInName = trustedBuiltInName(request.registeredTool);
-  if (!builtInName) return [];
-  return (PATH_TARGETS[builtInName] ?? []).flatMap((target) => {
-    const value = readString(request.toolInput, [target.field]);
-    const fallback = target.field === 'cwd' ? '.' : undefined;
-    return value || fallback ? [{ ...target, path: value ?? fallback! }] : [];
-  });
+export function resolveWorkspacePathTargets(
+  request: EvaluateToolCallRequest,
+): readonly WorkspacePathTarget[] {
+  return request.operations.flatMap((operation, operationIndex) => (
+    (operation.action === 'workspace.read' || operation.action === 'workspace.write')
+      && operation.resource?.type === 'workspace.path'
+      && operation.resource.id
+      ? [{ key: String(operationIndex), operationIndex, path: operation.resource.id }]
+      : []
+  ));
 }
 
-export function resolveWorkspacePathTarget(request: EvaluateToolCallRequest): string | undefined {
+export function resolveWorkspacePathTarget(
+  request: EvaluateToolCallRequest,
+): string | undefined {
   return resolveWorkspacePathTargets(request)[0]?.path;
 }
 
@@ -138,149 +137,66 @@ export function resolvePermissionOperations(request: {
   readonly evaluation: EvaluateToolCallRequest;
   readonly workspacePaths?: Readonly<Record<string, WorkspacePathPermissionFacts>>;
 }): ResolvedPermissionOperations {
-  const evaluation = request.evaluation;
-  const tool = evaluation.registeredTool;
-  const builtInName = trustedBuiltInName(tool);
-  const toolIdentity: PermissionToolIdentity = {
-    sourceId: tool.identity.sourceId,
-    namespace: tool.identity.namespace,
-    sourceToolName: tool.identity.sourceToolName,
-    registeredToolName: tool.registeredToolName,
-  };
-  const context: PermissionOperation['context'] = {
-    workspaceId: evaluation.workspaceId,
-    sessionId: evaluation.sessionId,
-    runId: evaluation.runId,
-    toolIdentity,
-  };
-  const commonRiskFacts: JsonObject = {
-    toolSideEffect: tool.definition.sideEffect,
-    toolCapabilities: [...tool.definition.capabilities],
-  };
-  const criticalInput = normalizeJsonValue(evaluation.toolInput);
-
-  const pathTargets = resolveWorkspacePathTargets(evaluation);
-
-  if (builtInName === 'run_command') {
-    const command = readString(evaluation.toolInput, ['command']) ?? '';
-    const shellAssessment = classifyShellCommand({ command, shellKind: trustedShellKind(tool) });
-    const cwdTarget = pathTargets.find((target) => target.field === 'cwd');
-    const cwd = cwdTarget ? request.workspacePaths?.[cwdTarget.field] : undefined;
-    return {
-      operations: [
-        {
-          action: 'process.execute',
-          resource: {
-            type: 'process.command',
-            ...(shellAssessment.normalizedCommand ? { id: shellAssessment.normalizedCommand } : {}),
-            attributes: {
-              shellKind: shellAssessment.shellKind,
-              classification: shellAssessment.classification,
-              hasControlOperator: shellAssessment.hasControlOperator,
-              hasRedirection: shellAssessment.hasRedirection,
-              ...(cwd ? { cwd: cwd.workspacePath } : {}),
-            },
-          },
-          context,
-        },
-        ...(cwdTarget ? [workspaceOperation(cwdTarget, cwd, context)] : []),
-      ],
-      criticalInput,
-      riskFacts: {
-        ...commonRiskFacts,
-        shell: shellRiskFacts(shellAssessment),
-        paths: cwd ? { cwd: workspacePathRiskFacts(cwd) } : {},
-      },
-    };
-  }
-
-  if (pathTargets.length > 0) {
-    const operations = pathTargets.map((target) => workspaceOperation(
-      target,
-      request.workspacePaths?.[target.field],
-      context,
-    ));
-    const pathFacts = Object.fromEntries(pathTargets.map((target) => [
-      target.field,
-      request.workspacePaths?.[target.field]
-        ? workspacePathRiskFacts(request.workspacePaths[target.field])
+  const operations = request.evaluation.operations.map((operation, index) => (
+    enrichNetworkOperation(enrichOperation(operation, request.workspacePaths?.[String(index)]))
+  ));
+  const shellOperation = operations.find((operation) => operation.action === 'process.execute');
+  const shellAssessment = shellOperation ? assessShellOperation(shellOperation) : undefined;
+  const pathFacts = Object.fromEntries(
+    resolveWorkspacePathTargets(request.evaluation).map((target) => [
+      target.key,
+      request.workspacePaths?.[target.key]
+        ? workspacePathRiskFacts(request.workspacePaths[target.key])
         : { classified: false },
-    ]));
-    return {
-      operations,
-      criticalInput,
-      riskFacts: {
-        ...commonRiskFacts,
-        paths: pathFacts,
-        ...(pathTargets.length === 1 ? { path: pathFacts[pathTargets[0].field] } : {}),
-      },
-    };
-  }
+    ]),
+  );
+  const networkFetch = operations.find((operation) => operation.action === 'network.fetch');
+  const networkUrl = networkFetch?.resource?.id
+    ? normalizeUrl(networkFetch.resource.id)
+    : undefined;
 
-  if (builtInName === 'web_search') {
-    return {
-      operations: [{ action: 'network.search', resource: { type: 'network.public_web' }, context }],
-      criticalInput,
-      riskFacts: { ...commonRiskFacts, network: { kind: 'publicWebSearch' } },
-    };
-  }
-
-  if (builtInName === 'web_fetch') {
-    const url = normalizeUrl(readString(evaluation.toolInput, ['url']));
-    return {
-      operations: [{
-        action: 'network.fetch',
-        resource: {
-          type: 'network.url',
-          ...(url ? { id: url.id, attributes: { hostname: url.hostname } } : {}),
-        },
-        context,
-      }],
-      criticalInput,
-      riskFacts: {
-        ...commonRiskFacts,
-        network: url
-          ? { kind: 'url', valid: true, hostname: url.hostname }
-          : { kind: 'url', valid: false },
-      },
-    };
-  }
-
-  if (builtInName === 'use_skill') {
-    return {
-      operations: [{ action: 'agent.context.activate', context }],
-      criticalInput,
-      riskFacts: commonRiskFacts,
-    };
-  }
-
-  const stableId = `${tool.identity.sourceId}/${tool.identity.namespace}/${tool.identity.sourceToolName}`;
   return {
-    operations: [{
-      action: 'external.invoke',
-      resource: { type: 'tool.identity', id: stableId },
-      context,
-    }],
-    criticalInput,
-    riskFacts: { ...commonRiskFacts, trustedOperationResolver: false },
+    operations: shellAssessment
+      ? operations.map((operation) => (
+          operation === shellOperation ? enrichShellOperation(operation, shellAssessment) : operation
+        ))
+      : operations,
+    criticalInput: normalizeJsonValue(request.evaluation.toolInput),
+    riskFacts: {
+      operations: operations.map((operation) => ({
+        action: operation.action,
+        resourceType: operation.resource?.type ?? null,
+      })),
+      ...(Object.keys(pathFacts).length > 0 ? {
+        paths: pathFacts,
+        ...(Object.keys(pathFacts).length === 1 ? { path: Object.values(pathFacts)[0] } : {}),
+      } : {}),
+      ...(shellAssessment ? { shell: shellRiskFacts(shellAssessment) } : {}),
+      ...(networkFetch ? {
+        network: networkUrl
+          ? { kind: 'url', valid: true, hostname: networkUrl.hostname }
+          : { kind: 'url', valid: false },
+      } : {}),
+    },
   };
 }
 
-function workspaceOperation(
-  target: WorkspacePathTarget,
+function enrichOperation(
+  operation: PermissionOperation,
   pathFacts: WorkspacePathPermissionFacts | undefined,
-  context: PermissionOperation['context'],
 ): PermissionOperation {
+  if ((operation.action !== 'workspace.read' && operation.action !== 'workspace.write')
+    || operation.resource?.type !== 'workspace.path') return operation;
   const id = pathFacts
     ? (pathFacts.insideWorkspace ? pathFacts.workspacePath : pathFacts.absolutePath)
-    : target.path;
+    : operation.resource.id;
   return {
-    action: target.action,
+    ...operation,
     resource: {
-      type: 'workspace.path',
+      ...operation.resource,
       ...(id ? { id } : {}),
       attributes: {
-        inputField: target.field,
+        ...operation.resource.attributes,
         classified: Boolean(pathFacts),
         ...(pathFacts ? {
           insideWorkspace: pathFacts.insideWorkspace,
@@ -289,46 +205,65 @@ function workspaceOperation(
         } : {}),
       },
     },
-    context,
   };
 }
 
-function trustedBuiltInName(tool: RegisteredTool): string | undefined {
-  if (tool.source.sourceKind !== 'built_in'
-    || tool.source.sourceId !== 'built_in'
-    || tool.source.namespace !== 'megumi'
-    || tool.identity.sourceId !== tool.source.sourceId
-    || tool.identity.namespace !== tool.source.namespace
-    || tool.identity.sourceToolName !== tool.definition.name
-    || tool.registeredToolName !== tool.definition.name) {
-    return undefined;
-  }
-  const ruleToolName = tool.definition.permissionMetadata?.ruleToolName;
-  return typeof ruleToolName === 'string' && ruleToolName === tool.definition.name
-    ? ruleToolName
-    : undefined;
+function assessShellOperation(operation: PermissionOperation): ShellCommandAssessment {
+  const shellKind = operation.resource?.attributes?.shellKind;
+  return classifyShellCommand({
+    command: operation.resource?.id ?? '',
+    shellKind: shellKind === 'powershell' || shellKind === 'cmd' || shellKind === 'posix_shell'
+      ? shellKind
+      : 'unknown',
+  });
 }
 
-function trustedShellKind(tool: RegisteredTool): 'powershell' | 'cmd' | 'posix_shell' | 'unknown' {
-  const value = tool.definition.permissionMetadata?.shellKind;
-  return value === 'powershell' || value === 'cmd' || value === 'posix_shell' ? value : 'unknown';
+function enrichShellOperation(
+  operation: PermissionOperation,
+  assessment: ShellCommandAssessment,
+): PermissionOperation {
+  if (operation.resource?.type !== 'process.command') return operation;
+  return {
+    ...operation,
+    resource: {
+      ...operation.resource,
+      ...(assessment.normalizedCommand ? { id: assessment.normalizedCommand } : {}),
+      attributes: {
+        ...operation.resource.attributes,
+        shellKind: assessment.shellKind,
+        classification: assessment.classification,
+        hasControlOperator: assessment.hasControlOperator,
+        hasRedirection: assessment.hasRedirection,
+      },
+    },
+  };
 }
 
-function readString(input: JsonValue, fields: readonly string[]): string | undefined {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
-  for (const field of fields) {
-    const value = input[field];
-    if (typeof value === 'string' && value.trim()) return value.trim();
-  }
-  return undefined;
+function enrichNetworkOperation(operation: PermissionOperation): PermissionOperation {
+  if (operation.action !== 'network.fetch'
+    || operation.resource?.type !== 'network.url'
+    || !operation.resource.id) return operation;
+  const normalized = normalizeUrl(operation.resource.id);
+  if (!normalized) return operation;
+  return {
+    ...operation,
+    resource: {
+      ...operation.resource,
+      id: normalized.url,
+      attributes: {
+        ...operation.resource.attributes,
+        hostname: normalized.hostname,
+      },
+    },
+  };
 }
 
-function normalizeUrl(value: string | undefined): { id: string; hostname: string } | undefined {
-  if (!value) return undefined;
+function normalizeUrl(value: string): { readonly url: string; readonly hostname: string } | undefined {
   try {
     const url = new URL(value);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined;
-    return { id: url.toString(), hostname: url.hostname.toLowerCase().replace(/\.$/, '') };
+    url.hostname = url.hostname.toLowerCase().replace(/\.$/, '');
+    return { url: url.toString(), hostname: url.hostname };
   } catch {
     return undefined;
   }
@@ -367,25 +302,3 @@ function shellRiskFacts(assessment: ShellCommandAssessment): JsonObject {
     hasRedirection: assessment.hasRedirection,
   };
 }
-
-function isRegisteredTool(value: unknown): value is RegisteredTool {
-  if (!value || typeof value !== 'object') return false;
-  const tool = value as Partial<RegisteredTool>;
-  return tool.status === 'available'
-    && typeof tool.registeredToolName === 'string'
-    && tool.registeredToolName.length > 0
-    && Boolean(tool.identity
-      && typeof tool.identity.sourceId === 'string'
-      && typeof tool.identity.namespace === 'string'
-      && typeof tool.identity.sourceToolName === 'string')
-    && Boolean(tool.source
-      && typeof tool.source.sourceId === 'string'
-      && typeof tool.source.sourceKind === 'string'
-      && typeof tool.source.namespace === 'string')
-    && Boolean(tool.definition
-      && typeof tool.definition.name === 'string'
-      && typeof tool.definition.sideEffect === 'string'
-      && Array.isArray(tool.definition.capabilities));
-}
-
-export { PermissionFailureSchema };

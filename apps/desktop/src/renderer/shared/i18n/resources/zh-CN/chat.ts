@@ -87,6 +87,11 @@ export const chat = {
       streaming: '正在思考',
       completed: '思考完成',
     },
+    plan: {
+      label: '任务计划',
+      empty: '当前计划为空。',
+      status: { pending: '待处理', in_progress: '进行中', completed: '已完成' },
+    },
     tool: {
       requested: '已请求 {{target}}',
       awaiting_approval: '等待审批：{{target}}',

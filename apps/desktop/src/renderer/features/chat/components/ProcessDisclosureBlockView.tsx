@@ -8,6 +8,7 @@ import type {
   ErrorActivityItem,
   ProcessDisclosureBlock,
   ProcessDisclosureItem,
+  PlanActivityItem,
   RecoveryActivityItem,
   RetryActivityItem,
   ThinkingItem,
@@ -16,6 +17,7 @@ import type {
 import { rendererI18n } from '../../../shared/i18n';
 import { cx } from '../../../shared/ui';
 import { TimelineMarkdown } from './TimelineMarkdown';
+import { RunPlanActivityItemView } from './RunPlanActivityItemView';
 
 function formatDuration(start?: string, end?: string, currentTime = Date.now()): string {
   if (!start) return '';
@@ -209,6 +211,7 @@ function ProcessItemView({ item }: { item: ProcessDisclosureItem }) {
   if (item.kind === 'thinking') return <ThinkingItemView item={item} />;
   if (item.kind === 'assistant_text') return <PreludeTextItemView item={item} />;
   if (item.kind === 'tool_activity') return <ToolActivityItemView item={item} />;
+  if (item.kind === 'plan_activity') return <RunPlanActivityItemView item={item as PlanActivityItem} />;
   if (item.kind === 'error_activity') return <ErrorActivityItemView item={item} />;
   if (item.kind === 'cancelled_activity') return <CancelledActivityItemView item={item} />;
   if (item.kind === 'compaction_activity') return <CompactionActivityItemView item={item} />;

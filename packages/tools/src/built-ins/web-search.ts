@@ -6,6 +6,7 @@ import type { RawToolResult, ToolDefinition } from '../tool';
 import { ToolExecutionFailure } from '../tool-result';
 import { inputRecord, optionalPositiveInteger, requireString } from './tool-input';
 import type { BuiltInToolContext } from './workspace-file-access';
+import { createBuiltInToolHandler, operation } from './tool-handler';
 
 const DEFAULT_RESULT_COUNT = 5;
 const MAX_RESULT_COUNT = 20;
@@ -15,7 +16,6 @@ export type WebSearchProvider = 'brave' | 'tavily' | 'exa' | 'custom';
 
 export const webSearchToolDefinition: ToolDefinition = {
   name: 'web_search',
-  title: 'Search the web',
   description: 'Search the web and return structured result summaries and URLs.',
   inputSchema: {
     type: 'object',
@@ -44,13 +44,6 @@ export const webSearchToolDefinition: ToolDefinition = {
     additionalProperties: false,
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
-  capabilities: ['network_access'],
-  riskLevel: 'medium',
-  sideEffect: 'access_network',
-  availability: { status: 'available' },
-  executionMode: 'parallel',
-  permissionMetadata: { ruleToolName: 'web_search' },
-  modelFacingDescription: 'Search the web and return titles, URLs, and short snippets without reading full pages.',
 };
 
 export type WebSearchRequest = { query: string; count: number; signal?: AbortSignal };
@@ -66,6 +59,14 @@ export type WebSearchRuntimeConfig = {
   apiKey: string;
   baseUrl?: string;
 };
+
+export const webSearchToolHandler = createBuiltInToolHandler({
+  toolName: 'web_search',
+  operations: (invocation) => [operation(invocation, 'network.search', {
+    type: 'network.public_web',
+  })],
+  execute: (context, input, options) => executeWebSearch(context, input, options.signal),
+});
 
 export async function executeWebSearch(
   context: BuiltInToolContext,

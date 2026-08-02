@@ -7,10 +7,10 @@ import {
   withFileFailure,
   type BuiltInToolContext,
 } from './workspace-file-access';
+import { createBuiltInToolHandler, inputString, operation } from './tool-handler';
 
 export const writeFileToolDefinition: ToolDefinition = {
   name: 'write_file',
-  title: 'Write file',
   description: 'Create or overwrite a UTF-8 text file with provided text content. Structured PDF and DOCX writing is not supported.',
   inputSchema: {
     type: 'object',
@@ -34,14 +34,15 @@ export const writeFileToolDefinition: ToolDefinition = {
     required: ['path', 'bytesWritten', 'created', 'overwritten'],
   },
   annotations: { destructiveHint: true, idempotentHint: false, openWorldHint: false },
-  capabilities: ['project_write'],
-  riskLevel: 'medium',
-  sideEffect: 'project_file_operation',
-  availability: { status: 'available' },
-  executionMode: 'serial',
-  permissionMetadata: { ruleToolName: 'write_file' },
-  modelFacingDescription: 'Create or overwrite a UTF-8 text file with provided text content. Do not use this tool to write PDF or DOCX files.',
 };
+
+export const writeFileToolHandler = createBuiltInToolHandler({
+  toolName: 'write_file',
+  operations: (invocation) => [operation(invocation, 'workspace.write', {
+    type: 'workspace.path', id: inputString(invocation, 'path'),
+  })],
+  execute: (context, input, options) => executeWriteFile(context, input, options.signal),
+});
 
 export async function executeWriteFile(
   context: BuiltInToolContext,

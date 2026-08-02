@@ -11,10 +11,11 @@ import type {
 } from '@megumi/permissions';
 import {
   type NormalizedToolResult,
-  type RegisteredTool,
+  type ToolInvocation,
   type ToolExecutionAccess,
   type ToolExecutionObservation,
   type ToolExecutionOutputChunk,
+  type ToolExecutionNotification,
   type ToolEffectReport,
   type ToolExecutionResult,
   type Tools,
@@ -72,7 +73,8 @@ export interface ToolCallApprovalContinuation {
   readonly workspaceId: string;
   readonly permissionMode: PermissionMode;
   readonly toolCall: ToolCall;
-  readonly registeredTool: RegisteredTool;
+  readonly invocation: ToolInvocation;
+  readonly operations: readonly PermissionOperation[];
   readonly originalPermissionDecision: Extract<PermissionDecision, { type: 'requires_approval' }>;
   readonly originalApprovalSubject: ApprovalSubject;
   readonly completedToolResults: readonly ToolResult[];
@@ -86,9 +88,8 @@ export interface ProcessToolCallsRequest {
   readonly workspaceId: string;
   readonly permissionMode: PermissionMode;
   readonly toolCalls: readonly ToolCall[];
-  readonly registeredTools: readonly RegisteredTool[];
   readonly permissions: Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>;
-  readonly tools: Pick<Tools, 'preflightToolCall' | 'executeToolCall'>;
+  readonly tools: Pick<Tools, 'routeToolCall' | 'executeToolInvocation'>;
   readonly store: ActiveRunStore;
   readonly ids: Pick<EngineIdFactory, 'createToolExecutionId' | 'createRunApprovalId'>;
   readonly clock: EngineClock;
@@ -105,6 +106,10 @@ export interface ProcessToolCallsRequest {
   readonly onToolExecutionOutput?: (
     execution: ToolExecution,
     output: ToolExecutionOutputChunk,
+  ) => void;
+  readonly onToolExecutionNotification?: (
+    execution: ToolExecution,
+    notification: ToolExecutionNotification,
   ) => void;
 }
 
@@ -134,7 +139,7 @@ export interface ResumeToolCallApprovalRequest {
   readonly decision: ApprovalDecision;
   readonly store: ActiveRunStore;
   readonly permissions: Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>;
-  readonly tools: Pick<Tools, 'preflightToolCall' | 'executeToolCall'>;
+  readonly tools: Pick<Tools, 'routeToolCall' | 'executeToolInvocation'>;
   readonly ids: Pick<EngineIdFactory, 'createToolExecutionId' | 'createRunApprovalId'>;
   readonly clock: EngineClock;
   readonly policy: Pick<
@@ -151,6 +156,10 @@ export interface ResumeToolCallApprovalRequest {
   readonly onToolExecutionOutput?: (
     execution: ToolExecution,
     output: ToolExecutionOutputChunk,
+  ) => void;
+  readonly onToolExecutionNotification?: (
+    execution: ToolExecution,
+    notification: ToolExecutionNotification,
   ) => void;
 }
 
@@ -169,8 +178,9 @@ export type ResumeToolCallApprovalResult =
 
 interface PlannedToolCall {
   readonly call: ToolCall;
-  readonly registeredTool: RegisteredTool;
-  readonly executionAccess: ToolExecutionAccess;
+  readonly invocation: ToolInvocation;
+  readonly executionMode: 'parallel' | 'serial';
+  readonly executionAccess?: ToolExecutionAccess;
 }
 
 interface ExecutedToolCall {
@@ -184,9 +194,6 @@ export async function processToolCalls(
   const calls = [...request.toolCalls]
     .map(snapshotToolCall)
     .sort((left, right) => left.callOrder - right.callOrder);
-  const registeredTools = new Map(
-    request.registeredTools.map((tool) => [tool.registeredToolName, tool]),
-  );
   const toolResults: ToolResult[] = [];
   const toolExecutions: ToolExecution[] = [];
   let parallelWindow: PlannedToolCall[] = [];
@@ -210,37 +217,45 @@ export async function processToolCalls(
       return completedResult(toolResults, toolExecutions);
     }
 
-    const registeredTool = registeredTools.get(call.toolName);
-    if (!registeredTool) {
-      await flushParallelWindow();
-      toolResults.push(failedToolResult(
-        call,
-        'unknown_tool',
-        'Unknown or unavailable tool.',
-        request.clock.now(),
-      ));
-      continue;
-    }
-
-    const preflight = request.tools.preflightToolCall({
+    const routed = request.tools.routeToolCall({
       runId: request.runId,
-      toolName: registeredTool.registeredToolName,
+      sessionId: request.sessionId,
+      workspaceId: request.workspaceId,
+      modelCallId: call.modelCallId,
+      toolCallId: call.toolCallId,
+      toolName: call.toolName,
       input: call.input,
     });
-    if (preflight.status === 'failed') {
+    if (routed.status === 'failed') {
       await flushParallelWindow();
       toolResults.push(failedToolResult(
         call,
-        preflight.error.code,
-        preflight.error.message,
+        routed.error.code,
+        routed.error.message,
         request.clock.now(),
       ));
       continue;
     }
     const preparedCall: ToolCall = {
       ...call,
-      input: snapshotValue(preflight.input),
+      input: snapshotValue(routed.invocation.input),
     };
+
+    if (routed.operations.length === 0) {
+      const plan: PlannedToolCall = {
+        call: preparedCall,
+        invocation: routed.invocation,
+        executionMode: routed.executionMode,
+      };
+      if (plan.executionMode === 'parallel') parallelWindow.push(plan);
+      else {
+        await flushParallelWindow();
+        const executed = await executeToolCall(request, plan);
+        toolResults.push(executed.toolResult);
+        if (executed.toolExecution) toolExecutions.push(executed.toolExecution);
+      }
+      continue;
+    }
 
     let permission;
     try {
@@ -250,7 +265,7 @@ export async function processToolCalls(
         workspaceId: request.workspaceId,
         toolCallId: call.toolCallId,
         toolInput: snapshotValue(preparedCall.input) as JsonValue,
-        registeredTool,
+        operations: routed.operations,
         permissionMode: request.permissionMode,
         evaluatedAt: request.clock.now(),
       });
@@ -297,7 +312,7 @@ export async function processToolCalls(
         }
         return completedResult(toolResults, toolExecutions);
       }
-      const approval = createRunApproval(request, preparedCall, registeredTool, permission.decision);
+      const approval = createRunApproval(request, preparedCall, routed.invocation, permission.decision);
       const remainingToolCalls = calls.slice(index + 1);
       const continuation: ToolCallApprovalContinuation = {
         runId: request.runId,
@@ -305,7 +320,8 @@ export async function processToolCalls(
         workspaceId: request.workspaceId,
         permissionMode: request.permissionMode,
         toolCall: preparedCall,
-        registeredTool,
+        invocation: routed.invocation,
+        operations: routed.operations,
         originalPermissionDecision: permission.decision,
         originalApprovalSubject: permission.approvalSubject,
         completedToolResults: [...toolResults],
@@ -318,6 +334,8 @@ export async function processToolCalls(
           {
             code: 'runtime_protocol_violation',
             message: 'Run already has a pending approval.',
+            retryable: false,
+            cause: { owner: 'engine', code: 'approval_already_pending' },
           },
           toolResults,
           toolExecutions,
@@ -332,7 +350,7 @@ export async function processToolCalls(
       };
     }
 
-if (!permission.executionAccess) {
+    if (!permission.executionAccess) {
       await flushParallelWindow();
       return failedProcessing(
         permissionFailure('Permission allow decision did not provide Tool execution access.'),
@@ -340,9 +358,13 @@ if (!permission.executionAccess) {
         toolExecutions,
       );
     }
-    const plan = { call: preparedCall, registeredTool, executionAccess: permission.executionAccess };
-    const executionMode = registeredTool.definition.executionMode ?? 'serial';
-    if (executionMode === 'parallel') {
+    const plan: PlannedToolCall = {
+      call: preparedCall,
+      invocation: routed.invocation,
+      executionMode: routed.executionMode,
+      executionAccess: permission.executionAccess,
+    };
+    if (plan.executionMode === 'parallel') {
       parallelWindow.push(plan);
       continue;
     }
@@ -380,7 +402,7 @@ export async function resumeToolCallApproval(
       workspaceId: continuation.workspaceId,
       toolCallId: continuation.toolCall.toolCallId,
       toolInput: snapshotValue(continuation.toolCall.input) as JsonValue,
-      registeredTool: continuation.registeredTool,
+      operations: continuation.operations,
       permissionMode: continuation.permissionMode,
       evaluatedAt: request.clock.now(),
     });
@@ -469,10 +491,13 @@ export async function resumeToolCallApproval(
         signal: request.signal,
         onToolExecutionStarted: request.onToolExecutionStarted,
         onToolExecutionFinished: request.onToolExecutionFinished,
+        onToolExecutionOutput: request.onToolExecutionOutput,
+        onToolExecutionNotification: request.onToolExecutionNotification,
       },
       {
         call: continuation.toolCall,
-        registeredTool: continuation.registeredTool,
+        invocation: continuation.invocation,
+        executionMode: 'serial',
         executionAccess: applied.executionAccess!,
       },
     );
@@ -482,6 +507,8 @@ export async function resumeToolCallApproval(
       failure: {
         code: 'tool_system_failed',
         message: 'Approved ToolCall could not start execution.',
+        retryable: false,
+        cause: { owner: 'tools', code: 'approved_tool_start_failed' },
       },
     };
   }
@@ -543,6 +570,7 @@ async function executeToolCall(
     | 'onToolExecutionStarted'
     | 'onToolExecutionFinished'
     | 'onToolExecutionOutput'
+    | 'onToolExecutionNotification'
   >,
   plan: PlannedToolCall,
 ): Promise<ExecutedToolCall> {
@@ -575,16 +603,14 @@ async function executeToolCall(
       timeoutController,
       timeoutMs: request.policy.toolExecutionTimeoutMs,
     });
-    const execution = Promise.resolve(request.tools.executeToolCall({
-      runId: request.runId,
-      toolName: plan.registeredTool.registeredToolName,
-      input: plan.call.input,
-      toolCallId: plan.call.toolCallId,
+    const execution = Promise.resolve(request.tools.executeToolInvocation({
+      invocation: plan.invocation,
       toolExecutionId,
     }, {
       signal,
       onOutput: (output) => request.onToolExecutionOutput?.(runningExecution, output),
-      executionAccess: plan.executionAccess,
+      onNotification: (notification) => request.onToolExecutionNotification?.(runningExecution, notification),
+      ...(plan.executionAccess ? { executionAccess: plan.executionAccess } : {}),
     }))
       .then((result) => ({ type: 'result' as const, result }))
       .catch(() => ({ type: 'thrown' as const }));
@@ -737,20 +763,20 @@ function mapExecutionResult(
 function createRunApproval(
   request: ProcessToolCallsRequest,
   call: ToolCall,
-  registeredTool: RegisteredTool,
+  invocation: ToolInvocation,
   decision: Extract<PermissionDecision, { type: 'requires_approval' }>,
 ): RunApproval {
   return {
     runApprovalId: request.ids.createRunApprovalId(),
     runId: request.runId,
     toolCallId: call.toolCallId,
-    toolName: registeredTool.registeredToolName,
-    toolIdentity: snapshotToolIdentity(registeredTool.identity),
+    toolName: invocation.toolName,
+    toolIdentity: snapshotToolIdentity(invocation.toolIdentity),
     input: snapshotValue(call.input),
     operations: decision.operations.map((operation) => snapshotValue(operation) as PermissionOperation),
     options: decision.options,
     defaultOptionId: decision.defaultOptionId,
-    summary: `${registeredTool.registeredToolName} requires approval.`,
+    summary: `${invocation.toolName} requires approval.`,
     createdAt: request.clock.now(),
     status: 'pending',
   };
@@ -764,7 +790,7 @@ function approvalMatchesContinuation(
   return decision.approvalRequestId === approval.runApprovalId
     && approval.runId === continuation.runId
     && approval.toolCallId === continuation.toolCall.toolCallId
-    && sameToolIdentity(approval.toolIdentity, continuation.registeredTool.identity)
+    && sameToolIdentity(approval.toolIdentity, continuation.invocation.toolIdentity)
     && structurallyEqual(approval.input, continuation.toolCall.input)
     && structurallyEqual(
       approval.operations,
@@ -776,6 +802,8 @@ function permissionFailure(message: string): RunFailure {
   return {
     code: 'permission_failed',
     message,
+    retryable: false,
+    cause: { owner: 'permissions', code: 'permission_evaluation_failed' },
   };
 }
 

@@ -51,6 +51,7 @@ const policy: EnginePolicy = {
   maxToolCallsPerRun: 24,
   maxConcurrentToolExecutions: 4,
   modelCallTimeoutMs: 500,
+  modelCallTerminationTimeoutMs: 100,
   toolExecutionTimeoutMs: 30_000,
   cancellationTimeoutMs: 5_000,
   maxModelCallAttempts: 2,
@@ -104,6 +105,16 @@ function successfulStream(input: {
     reason: input.toolCall ? 'toolUse' : 'stop',
     message,
   });
+  return stream;
+}
+
+function terminalStream(
+  message: AssistantMessage,
+  reason: 'stop' | 'length' | 'toolUse',
+): AssistantMessageEventStream {
+  const stream = new AssistantMessageEventStream();
+  stream.push({ type: 'start', partial: assistantMessage([], 'stop') });
+  stream.push({ type: 'done', reason, message });
   return stream;
 }
 
@@ -283,6 +294,50 @@ describe('executeModelCall', () => {
     });
   });
 
+  it('rejects empty final text instead of committing an empty assistant reply', async () => {
+    const streamSimple = vi.fn<Models['streamSimple']>(() => terminalStream(
+      assistantMessage([{ type: 'text', text: '   ' }], 'stop'),
+      'stop',
+    ));
+    const events = await collectEvents(request(fakeModels(streamSimple), {
+      policy: { ...policy, maxModelCallAttempts: 1 },
+    }));
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'failed',
+      failure: { code: 'empty_response', retryable: true },
+    });
+  });
+
+  it('rejects length-truncated output and never exposes its ToolCall', async () => {
+    const message = assistantMessage([
+      { type: 'text', text: 'partial' },
+      { type: 'toolCall', id: 'tool-call:partial', name: 'write_file', arguments: { path: 'x' } },
+    ], 'length');
+    const streamSimple = vi.fn<Models['streamSimple']>(() => terminalStream(message, 'length'));
+    const events = await collectEvents(request(fakeModels(streamSimple)));
+
+    expect(streamSimple).toHaveBeenCalledOnce();
+    expect(events.at(-1)).toMatchObject({
+      type: 'failed',
+      failure: { code: 'output_truncated', retryable: false },
+    });
+    expect(events.some((event) => 'toolCalls' in event)).toBe(false);
+  });
+
+  it('rejects a terminal reason that disagrees with the final message', async () => {
+    const streamSimple = vi.fn<Models['streamSimple']>(() => terminalStream(
+      assistantMessage([{ type: 'text', text: 'done' }], 'stop'),
+      'toolUse',
+    ));
+    const events = await collectEvents(request(fakeModels(streamSimple)));
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'failed',
+      failure: { code: 'invalid_response', retryable: false },
+    });
+  });
+
   it('does not start or retry when the Run signal is aborted', async () => {
     const controller = new AbortController();
     controller.abort();
@@ -320,7 +375,7 @@ describe('executeModelCall', () => {
     });
   });
 
-  it('recognizes its own timeout as retryable even when a provider ignores abort', async () => {
+  it('does not retry after timeout when provider settlement cannot be confirmed', async () => {
     const neverCompletes = new AssistantMessageEventStream();
     const streams = [neverCompletes, successfulStream({ text: 'after timeout' })];
     const streamSimple = vi.fn<Models['streamSimple']>(() => streams.shift()!);
@@ -328,6 +383,34 @@ describe('executeModelCall', () => {
       policy: {
         ...policy,
         modelCallTimeoutMs: 5,
+        modelCallTerminationTimeoutMs: 5,
+        modelRetryDelayMs: 0,
+      },
+    }));
+
+    expect(streamSimple).toHaveBeenCalledOnce();
+    expect(events.at(-1)).toMatchObject({
+      type: 'failed',
+      failure: { code: 'termination_unconfirmed', retryable: false },
+    });
+    expect(streamSimple.mock.calls[0]?.[2]?.signal?.aborted).toBe(true);
+  });
+
+  it('retries a timeout only after the provider stream confirms settlement', async () => {
+    const first = new AssistantMessageEventStream();
+    const second = successfulStream({ text: 'after timeout' });
+    const streamSimple = vi.fn<Models['streamSimple']>((_model, _context, options) => {
+      if (streamSimple.mock.calls.length === 1) {
+        options?.signal?.addEventListener('abort', () => first.end(), { once: true });
+        return first;
+      }
+      return second;
+    });
+    const events = await collectEvents(request(fakeModels(streamSimple), {
+      policy: {
+        ...policy,
+        modelCallTimeoutMs: 5,
+        modelCallTerminationTimeoutMs: 50,
         modelRetryDelayMs: 0,
       },
     }));
@@ -341,6 +424,5 @@ describe('executeModelCall', () => {
       type: 'completed',
       message: { content: [{ type: 'text', text: 'after timeout' }] },
     });
-    expect(streamSimple.mock.calls[0]?.[2]?.signal?.aborted).toBe(true);
   });
 });

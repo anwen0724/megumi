@@ -13,7 +13,7 @@ import {
 const EXPECTED_RUNTIME_EVENT_ENVELOPE_TYPES = [
   'session.created', 'session.updated', 'session.active_leaf.changed', 'session.branch_marker.created',
   'session.branch_draft.cancelled', 'run.created', 'run.started', 'run.status.changed', 'run.completed',
-  'run.failed', 'run.cancelled', 'run.interrupted', 'run.waiting', 'observation.received',
+  'run.failed', 'run.cancelled', 'run.interrupted', 'run.waiting', 'run.plan.updated', 'observation.received',
   'context.patch.requested', 'context.patch.applied', 'context.patch.rejected', 'context.effective.updated',
   'context.compaction.started', 'context.compaction.completed', 'context.compaction.failed', 'message.delta',
   'message.completed', 'error.raised', 'assistant.output.delta', 'assistant.output.completed',

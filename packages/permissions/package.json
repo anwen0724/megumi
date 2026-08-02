@@ -8,7 +8,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@megumi/tools": "0.1.0",
+    "@megumi/ai": "0.1.0",
+    "@megumi/sandbox": "0.1.0",
     "zod": "^3.25.76"
   }
 }

@@ -2,10 +2,10 @@
 import type { RawToolResult, ToolDefinition } from '../tool';
 import { inputRecord, requireString } from './tool-input';
 import type { BuiltInToolContext } from './workspace-file-access';
+import { createBuiltInToolHandler, operation } from './tool-handler';
 
 export const useSkillToolDefinition: ToolDefinition = {
   name: 'use_skill',
-  title: 'Use skill',
   description: 'Load a skill by its exact skillPath.',
   inputSchema: {
     type: 'object',
@@ -22,14 +22,13 @@ export const useSkillToolDefinition: ToolDefinition = {
     required: ['used', 'name', 'skillPath', 'message'],
   },
   annotations: { readOnlyHint: true, idempotentHint: false, openWorldHint: false },
-  capabilities: ['project_read'],
-  riskLevel: 'low',
-  sideEffect: 'none',
-  availability: { status: 'available' },
-  executionMode: 'serial',
-  permissionMetadata: { ruleToolName: 'use_skill' },
-  modelFacingDescription: 'Load a skill by its exact skillPath.',
 };
+
+export const useSkillToolHandler = createBuiltInToolHandler({
+  toolName: 'use_skill',
+  operations: (invocation) => [operation(invocation, 'agent.context.activate')],
+  execute: (context, input) => executeUseSkill(context, input),
+});
 
 export async function executeUseSkill(
   context: BuiltInToolContext,

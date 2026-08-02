@@ -460,6 +460,7 @@ const PRODUCT_ENGINE_POLICY = {
   maxToolCallsPerRun: 256,
   maxConcurrentToolExecutions: 4,
   modelCallTimeoutMs: 120_000,
+  modelCallTerminationTimeoutMs: 10_000,
   toolExecutionTimeoutMs: 120_000,
   cancellationTimeoutMs: 10_000,
   maxModelCallAttempts: 3,

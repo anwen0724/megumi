@@ -2,33 +2,11 @@
 
 import type { JsonObject, JsonValue } from '@megumi/ai';
 import type { ToolExecutionAccess } from '@megumi/sandbox';
+import type { PlanStep } from './built-ins/update-plan';
 
 export type { ToolExecutionAccess, ToolExecutionFileAccess } from '@megumi/sandbox';
 
 export type JsonSchemaObject = JsonObject;
-
-export type ToolCapability =
-  | 'project_read'
-  | 'project_write'
-  | 'command_run'
-  | 'network_access'
-  | 'browser_access'
-  | 'mcp_tool'
-  | 'secret_read'
-  | 'system_integration'
-  | 'external_app';
-
-export type ToolRiskLevel = 'low' | 'medium' | 'high' | 'critical';
-
-export type ToolSideEffect =
-  | 'none'
-  | 'read_external'
-  | 'project_file_operation'
-  | 'execute_command'
-  | 'access_network'
-  | 'access_secret'
-  | 'modify_external'
-  | 'system_change';
 
 export interface ToolAvailability {
   readonly status: 'available' | 'disabled' | 'unavailable';
@@ -40,10 +18,8 @@ export type ToolExecutionMode = 'parallel' | 'serial';
 
 export interface ToolDefinition {
   readonly name: string;
-  readonly title?: string;
   readonly description: string;
   readonly inputSchema: JsonSchemaObject;
-  readonly inputExamples?: readonly JsonObject[];
   readonly outputSchema?: JsonSchemaObject;
   readonly annotations?: {
     readonly readOnlyHint?: boolean;
@@ -51,14 +27,6 @@ export interface ToolDefinition {
     readonly idempotentHint?: boolean;
     readonly openWorldHint?: boolean;
   };
-  readonly capabilities: readonly ToolCapability[];
-  readonly riskLevel: ToolRiskLevel;
-  readonly sideEffect: ToolSideEffect;
-  readonly availability: ToolAvailability;
-  readonly executionMode?: ToolExecutionMode;
-  readonly permissionMetadata?: JsonObject;
-  readonly modelFacingDescription?: string;
-  readonly metadata?: JsonObject;
 }
 
 export interface ToolSource {
@@ -78,53 +46,23 @@ export interface ToolIdentity {
   readonly sourceToolName: string;
 }
 
-export interface ToolRegistration {
-  readonly registrationId: string;
-  readonly source: ToolSource;
-  readonly definition: ToolDefinition;
-  readonly enabled: boolean;
-  readonly availability: ToolAvailability;
-}
-
-export interface RegisteredTool {
-  readonly identity: ToolIdentity;
-  readonly definition: ToolDefinition;
-  readonly registeredToolName: string;
-  readonly source: ToolSource;
-  readonly status: 'available';
-}
-
-export interface ListToolsRequest {
-  readonly sourceId?: string;
-}
-
-export interface ListToolsResult {
-  readonly tools: readonly RegisteredTool[];
-}
-
-export interface GetToolRequest {
-  readonly toolName: string;
-}
-
-export type GetToolResult =
-  | { readonly status: 'found'; readonly tool: RegisteredTool }
-  | { readonly status: 'not_found'; readonly toolName: string };
-
-export interface ExecuteToolRequest {
-  readonly toolName: string;
-  readonly input: unknown;
-}
-
 export interface ToolExecutionOutputChunk {
   readonly stream: 'stdout' | 'stderr';
   readonly chunk: string;
   readonly truncated: boolean;
 }
 
+export type ToolExecutionNotification = {
+  readonly type: 'plan_updated';
+  readonly explanation?: string;
+  readonly plan: readonly PlanStep[];
+};
+
 
 export interface ToolExecutionOptions {
   readonly signal?: AbortSignal;
   readonly onOutput?: (output: ToolExecutionOutputChunk) => void;
+  readonly onNotification?: (notification: ToolExecutionNotification) => void;
   readonly executionAccess?: ToolExecutionAccess;
 }
 

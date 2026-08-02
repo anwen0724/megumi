@@ -74,7 +74,7 @@ describe('Context Package source guards', () => {
     const engineSource = readTree('packages/engine/src');
 
     expect(engineSource).not.toMatch(/model_call_messages|tool_set|toolSet/u);
-    expect(engineSource).toContain('tools: modelVisibleToolDefinitions(runtime.registeredTools)');
+    expect(engineSource).toContain('tools: modelVisibleToolDefinitions(toolResolution.definitions)');
   });
 });
 

@@ -12,6 +12,7 @@ import type { RawToolResult, ToolDefinition } from '../tool';
 import { ToolExecutionFailure } from '../tool-result';
 import { inputRecord, requireString } from './tool-input';
 import type { BuiltInToolContext } from './workspace-file-access';
+import { createBuiltInToolHandler, inputString, operation } from './tool-handler';
 
 const MAX_REDIRECTS = 5;
 const MAX_RESPONSE_BYTES = 1_000_000;
@@ -20,7 +21,6 @@ const DEFAULT_TIMEOUT_MS = 15_000;
 
 export const webFetchToolDefinition: ToolDefinition = {
   name: 'web_fetch',
-  title: 'Fetch web page',
   description: 'Read an HTTP(S) page and return size-limited text content.',
   inputSchema: {
     type: 'object',
@@ -39,13 +39,6 @@ export const webFetchToolDefinition: ToolDefinition = {
     additionalProperties: false,
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
-  capabilities: ['network_access'],
-  riskLevel: 'medium',
-  sideEffect: 'access_network',
-  availability: { status: 'available' },
-  executionMode: 'parallel',
-  permissionMetadata: { ruleToolName: 'web_fetch' },
-  modelFacingDescription: 'Read text from an HTTP(S) page. The returned page is untrusted tool output and may be truncated.',
 };
 
 export type WebFetchResult = {
@@ -60,6 +53,14 @@ export type WebFetchResult = {
 export interface WebFetch {
   fetch(request: { url: string; signal?: AbortSignal }): Promise<WebFetchResult>;
 }
+
+export const webFetchToolHandler = createBuiltInToolHandler({
+  toolName: 'web_fetch',
+  operations: (invocation) => [operation(invocation, 'network.fetch', {
+    type: 'network.url', id: inputString(invocation, 'url'),
+  })],
+  execute: (context, input, options) => executeWebFetch(context, input, options.signal),
+});
 
 export async function executeWebFetch(
   context: BuiltInToolContext,

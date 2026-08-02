@@ -24,7 +24,6 @@ import type {
   SaveToolResultMessageRequest,
   SaveUserMessageRequest,
 } from '@megumi/session';
-import type { ToolExecutor } from '@megumi/tools';
 import type { RuntimeEvent } from '@megumi/events';
 import type { ObservabilityService } from '@megumi/observability';
 import type {
@@ -43,6 +42,7 @@ import {
   succeeded,
   unrestrictedExecutionAccess,
   toolsForRun,
+  type TestToolExecute,
 } from './tool-call-test-fixtures';
 
 const ZERO_USAGE = {
@@ -74,6 +74,7 @@ export const enginePolicy: EnginePolicy = {
   maxToolCallsPerRun: 8,
   maxConcurrentToolExecutions: 2,
   modelCallTimeoutMs: 1_000,
+  modelCallTerminationTimeoutMs: 100,
   toolExecutionTimeoutMs: 1_000,
   cancellationTimeoutMs: 50,
   maxModelCallAttempts: 1,
@@ -110,7 +111,7 @@ export function createEngineFixture(input: {
     Permissions,
     'evaluateToolCall' | 'applyApprovalDecision'
   >;
-  readonly executeTool?: ToolExecutor['execute'];
+  readonly executeTool?: TestToolExecute;
   readonly policy?: Partial<EnginePolicy>;
   readonly contextBuild?: CreateEngineOptions['context']['build'];
   readonly eventPublisher?: {

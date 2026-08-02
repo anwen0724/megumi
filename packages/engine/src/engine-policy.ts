@@ -9,6 +9,7 @@ export interface EnginePolicy {
   readonly maxToolCallsPerRun: number;
   readonly maxConcurrentToolExecutions: number;
   readonly modelCallTimeoutMs: number;
+  readonly modelCallTerminationTimeoutMs: number;
   readonly toolExecutionTimeoutMs: number;
   readonly cancellationTimeoutMs: number;
   readonly maxModelCallAttempts: number;
@@ -25,6 +26,7 @@ const POSITIVE_INTEGER_FIELDS = [
   'maxToolCallsPerRun',
   'maxConcurrentToolExecutions',
   'modelCallTimeoutMs',
+  'modelCallTerminationTimeoutMs',
   'toolExecutionTimeoutMs',
   'cancellationTimeoutMs',
   'maxModelCallAttempts',

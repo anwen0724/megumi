@@ -18,7 +18,7 @@ import type {
   SessionEntry,
   SessionMessageWithAttachments,
 } from '@megumi/session';
-import type { RegisteredTool } from '@megumi/tools';
+import type { ToolDefinition } from '@megumi/tools';
 import type { SkillSelection } from '@megumi/skills';
 import type {
   ObservabilitySpanName,
@@ -52,6 +52,11 @@ import {
   type Run,
   type RunFailure,
 } from './run';
+import {
+  modelCallFailureToRuntimeError,
+  runFailureToRuntimeError,
+  toolResultErrorToRuntimeError,
+} from './runtime-error-mapping';
 
 const STREAM_DELTA_EVENT_TYPES = new Set<RuntimeEventType>([
   'model_call.text_delta',
@@ -67,7 +72,6 @@ export interface RuntimeEventSegment {
 
 export interface EngineRunRuntime {
   readonly controller: AbortController;
-  readonly registeredTools: readonly RegisteredTool[];
   readonly selectedSkill?: SkillSelection;
   currentRun: CurrentConversationRun;
   eventSequence: number;
@@ -79,6 +83,7 @@ export interface EngineRunRuntime {
   currentSegment?: RuntimeEventSegment;
   activeTask?: Promise<unknown>;
   activeModelCallId?: string;
+  currentToolModelCallId?: string;
   activeModelSpan?: SpanHandle;
   activeModelResponseMessageId?: string;
   currentToolRoundCalls: readonly ToolCall[];
@@ -99,12 +104,10 @@ export function createEngineRunRuntime(input: {
   readonly run: Run;
   readonly userMessage: SessionMessageWithAttachments;
   readonly userEntry: SessionEntry;
-  readonly registeredTools: readonly RegisteredTool[];
   readonly selectedSkill?: SkillSelection;
 }): EngineRunRuntime {
   return {
     controller: new AbortController(),
-    registeredTools: snapshot(input.registeredTools),
     ...(input.selectedSkill ? { selectedSkill: snapshot(input.selectedSkill) } : {}),
     currentRun: currentRunFromSavedUserMessage(
       input.run.runId,
@@ -276,6 +279,8 @@ export async function continueRunAfterApproval(
     const failure: RunFailure = {
       code: 'internal_error',
       message: 'Run approval continuation failed unexpectedly.',
+      retryable: false,
+      cause: { owner: 'engine', code: 'approval_continuation_failed' },
     };
     await failRun(input.dependencies, input.runtime, failure);
     return { status: 'failed', failure };
@@ -340,6 +345,8 @@ async function continueRunAfterApprovalInContext(
     const failure: RunFailure = {
       code: 'runtime_protocol_violation',
       message: `RunApproval could not be resumed: ${result.status}.`,
+      retryable: false,
+      cause: { owner: 'engine', code: 'approval_resume_invalid' },
     };
     await failRun(dependencies, runtime, failure);
     return { status: 'failed', failure };
@@ -351,6 +358,8 @@ async function continueRunAfterApprovalInContext(
       failure: {
         code: 'session_failed',
         message: 'Tool results could not be committed.',
+        retryable: false,
+        cause: { owner: 'session', code: 'tool_result_commit_failed' },
       },
     };
   }
@@ -363,6 +372,7 @@ async function continueRunAfterApprovalInContext(
     const batch = await processToolBatch(dependencies, runtime, result.remainingToolCalls);
     if (batch !== 'completed') return { status: 'continued' };
   }
+  releaseCurrentToolRouter(dependencies, runtime);
   runtime.currentToolRoundCalls = [];
   runtime.activeModelResponseMessageId = undefined;
   launchRunLoop(dependencies, runtime);
@@ -418,6 +428,36 @@ async function executeRunLoop(
         return;
       }
 
+      const modelCallId = dependencies.ids.createModelCallId();
+      let toolResolution;
+      try {
+        toolResolution = dependencies.tools.resolveModelCallTools({
+          runId: run.runId,
+          sessionId: run.sessionId,
+          workspaceId: run.workspaceId,
+          modelCallId,
+        });
+      } catch {
+        await failRun(dependencies, runtime, {
+          code: 'tool_system_failed',
+          message: 'Tool registry is unavailable.',
+          retryable: true,
+          cause: { owner: 'tools', code: 'tool_registry_unavailable' },
+        });
+        return;
+      }
+      if (toolResolution.status === 'failed') {
+        await failRun(dependencies, runtime, {
+          code: 'tool_system_failed',
+          message: toolResolution.failure.message,
+          retryable: true,
+          cause: { owner: 'tools', code: toolResolution.failure.code },
+          details: { toolResolutionCode: toolResolution.failure.code },
+        });
+        return;
+      }
+      runtime.currentToolModelCallId = modelCallId;
+
       const contextSpan = startObservedSpan(dependencies, runtime, 'context.build');
       let context;
       try {
@@ -426,7 +466,7 @@ async function executeRunLoop(
           workspaceId: run.workspaceId,
           currentRun: runtime.currentRun,
           ...(runtime.selectedSkill ? { selectedSkill: runtime.selectedSkill } : {}),
-          tools: modelVisibleToolDefinitions(runtime.registeredTools),
+          tools: modelVisibleToolDefinitions(toolResolution.definitions),
           model: run.model,
           signal: runtime.controller.signal,
         });
@@ -450,12 +490,12 @@ async function executeRunLoop(
           code: 'context_failed',
           message: context.failure.message,
           retryable: context.failure.retryable,
+          cause: { owner: 'context', code: context.failure.code },
         });
         return;
       }
 
       runtime.modelCallCount += 1;
-      const modelCallId = dependencies.ids.createModelCallId();
       runtime.activeModelCallId = modelCallId;
       const modelSpan = startObservedSpan(dependencies, runtime, 'model.call');
       runtime.activeModelSpan = modelSpan;
@@ -488,6 +528,8 @@ async function executeRunLoop(
         await failRun(dependencies, runtime, {
           code: 'runtime_protocol_violation',
           message: 'ModelCall ended without a terminal result.',
+          retryable: false,
+          cause: { owner: 'engine', code: 'model_call_missing_terminal' },
         });
         return;
       }
@@ -505,6 +547,7 @@ async function executeRunLoop(
           code: 'model_call_failed',
           message: terminal.failure.message,
           retryable: terminal.failure.retryable,
+          cause: { owner: 'ai', code: terminal.failure.code },
         });
         return;
       }
@@ -532,6 +575,7 @@ async function executeRunLoop(
 
       const assistantContent = toAssistantContent(terminal.message);
       if (terminal.toolCalls.length === 0) {
+        releaseCurrentToolRouter(dependencies, runtime);
         const reply = dependencies.session.saveAssistantReply({
           message_id: dependencies.ids.createSessionMessageId(),
           session_id: runAfterModelCall.sessionId,
@@ -613,6 +657,7 @@ async function executeRunLoop(
       }
       const batch = await processToolBatch(dependencies, runtime, runtime.pendingToolCalls);
       if (batch !== 'completed') return;
+      releaseCurrentToolRouter(dependencies, runtime);
       runtime.currentToolRoundCalls = [];
       runtime.activeModelResponseMessageId = undefined;
     }
@@ -625,6 +670,8 @@ async function executeRunLoop(
     await failRun(dependencies, runtime, {
       code: 'internal_error',
       message: 'Engine failed unexpectedly.',
+      retryable: false,
+      cause: { owner: 'engine', code: 'unexpected_exception' },
     });
   }
 }
@@ -642,7 +689,6 @@ async function processToolBatch(
     workspaceId: run.workspaceId,
     permissionMode: run.permissionMode,
     toolCalls: calls,
-    registeredTools: runtime.registeredTools,
     permissions: dependencies.permissions,
     tools: dependencies.tools,
     store: dependencies.store,
@@ -750,7 +796,7 @@ function toolExecutionCallbacks(
   runtime: EngineRunRuntime,
 ): Pick<
   Parameters<typeof processToolCalls>[0],
-  'onToolExecutionStarted' | 'onToolExecutionFinished' | 'onToolExecutionOutput'
+  'onToolExecutionStarted' | 'onToolExecutionFinished' | 'onToolExecutionOutput' | 'onToolExecutionNotification'
 > {
   return {
     onToolExecutionStarted: (execution) => {
@@ -773,7 +819,19 @@ function toolExecutionCallbacks(
         delta: output.chunk,
         truncated: output.truncated,
       });
-    },    onToolExecutionFinished: (execution, result) => {
+    },
+    onToolExecutionNotification: (execution, notification) => {
+      const run = dependencies.store.getRun(execution.runId);
+      if (!run || isTerminalRunStatus(run.status)) return;
+      if (notification.type === 'plan_updated') {
+        emitEvent(dependencies, runtime, run, 'run.plan.updated', {
+          toolCallId: execution.toolCallId,
+          ...(notification.explanation ? { explanation: notification.explanation } : {}),
+          plan: notification.plan,
+        });
+      }
+    },
+    onToolExecutionFinished: (execution, result) => {
       endObservedSpan(
         dependencies,
         runtime.toolSpans.get(execution.toolExecutionId),
@@ -806,10 +864,9 @@ function toolExecutionCallbacks(
       }
       emitEvent(dependencies, runtime, run, 'tool.execution.failed', {
         toolExecutionId: execution.toolExecutionId,
-        error: runtimeError({
+        error: toolResultErrorToRuntimeError(result.error ?? {
           code: 'tool_execution_failed',
-          message: result.error?.message ?? 'Tool execution failed.',
-          source: 'tool',
+          message: 'Tool execution failed.',
         }),
         completedAt: execution.completedAt,
       });
@@ -921,11 +978,7 @@ function emitModelCallEvent(
       emitEvent(dependencies, runtime, run, 'retry.failed', {
         retryRequestId,
         retryKind: 'model_call',
-        error: runtimeError({
-          code: event.failure.code === 'aborted' ? 'runtime_cancelled' : 'runtime_unknown',
-          message: event.failure.message,
-          source: event.failure.code === 'aborted' ? 'core' : 'provider',
-        }),
+        error: modelCallFailureToRuntimeError(event.failure),
       });
     }
     emitEvent(dependencies, runtime, run, 'model_call.completed', {
@@ -1038,6 +1091,8 @@ async function convergeCancellation(
   await failRun(dependencies, runtime, {
     code: 'cancellation_failed',
     message: 'Run cancellation did not converge before the configured deadline.',
+    retryable: false,
+    cause: { owner: 'engine', code: 'cancellation_timeout' },
     details: {
       activeModelCall: runtime.activeModelCallId !== undefined,
       activeToolExecutionCount: dependencies.store.getActiveToolExecutionIds(run.runId).length,
@@ -1137,15 +1192,7 @@ async function failRun(
   });
   dependencies.store.updateRun(failed);
   emitEvent(dependencies, runtime, failed, 'run.failed', {
-    error: runtimeError({
-      code: failure.code === 'runtime_protocol_violation'
-        ? 'runtime_protocol_violation'
-        : failure.code === 'cancellation_failed'
-          ? 'runtime_cancelled'
-          : 'runtime_unknown',
-      message: finalFailure.message,
-      source: 'core',
-    }),
+    error: runFailureToRuntimeError(finalFailure),
   });
   finishRuntime(dependencies, runtime, 'error');
 }
@@ -1211,8 +1258,17 @@ function finishRuntime(
     ...runtime.currentRun,
     runItems: [],
   };
-  dependencies.tools.releaseRunTools({ runId: runtime.currentRun.runId });
+  releaseCurrentToolRouter(dependencies, runtime);
   dependencies.store.releaseRunRuntime(runtime.currentRun.runId);
+}
+
+function releaseCurrentToolRouter(
+  dependencies: RunLoopDependencies,
+  runtime: EngineRunRuntime,
+): void {
+  if (!runtime.currentToolModelCallId) return;
+  dependencies.tools.releaseModelCallTools({ modelCallId: runtime.currentToolModelCallId });
+  runtime.currentToolModelCallId = undefined;
 }
 
 function runInRootObservabilityContext<T>(
@@ -1406,11 +1462,11 @@ function currentRunFromSavedUserMessage(
   };
 }
 
-function modelVisibleToolDefinitions(tools: readonly RegisteredTool[]): Tool[] {
-  return tools.map((tool) => ({
-    name: tool.registeredToolName,
-    description: tool.definition.modelFacingDescription ?? tool.definition.description,
-    parameters: snapshot(tool.definition.inputSchema) as Tool['parameters'],
+function modelVisibleToolDefinitions(definitions: readonly ToolDefinition[]): Tool[] {
+  return definitions.map((definition) => ({
+    name: definition.name,
+    description: definition.description,
+    parameters: snapshot(definition.inputSchema) as Tool['parameters'],
   }));
 }
 
@@ -1462,21 +1518,6 @@ function eventVisibility(eventType: RuntimeEventType): 'user' | 'system' | 'debu
   return STREAM_DELTA_EVENT_TYPES.has(eventType) ? 'debug' : 'system';
 }
 
-function runtimeError(input: {
-  readonly code: RuntimeError['code'];
-  readonly message: string;
-  readonly source: RuntimeError['source'];
-  readonly severity?: RuntimeError['severity'];
-}): RuntimeError {
-  return {
-    code: input.code,
-    message: input.message,
-    severity: input.severity ?? 'error',
-    retryable: false,
-    source: input.source,
-  };
-}
-
 function toEventError(error: ToolResult['error']): {
   code: string;
   message: string;
@@ -1494,7 +1535,8 @@ function safeFailure(failure: RunFailure): RunFailure {
   return {
     code: failure.code,
     message: failure.message,
-    ...(failure.retryable === undefined ? {} : { retryable: failure.retryable }),
+    retryable: failure.retryable,
+    ...(failure.cause ? { cause: { ...failure.cause } } : {}),
     ...(failure.details ? { details: snapshot(failure.details) } : {}),
   };
 }
@@ -1506,6 +1548,7 @@ function failureReason(
   | 'context_failed'
   | 'model_call_failed'
   | 'approval_failed'
+  | 'tool_call_failed'
   | 'loop_limit_exceeded'
   | 'runtime_protocol_violation'
   | 'internal_error' {
@@ -1519,15 +1562,16 @@ function failureReason(
     return failure.code;
   }
   if (failure.code === 'permission_failed') return 'approval_failed';
+  if (failure.code === 'tool_system_failed') return 'tool_call_failed';
   return 'internal_error';
 }
 
 function sessionFailure(message: string): RunFailure {
-  return { code: 'session_failed', message };
+  return { code: 'session_failed', message, retryable: false, cause: { owner: 'session', code: 'session_failed' } };
 }
 
 function loopLimitFailure(message: string): RunFailure {
-  return { code: 'loop_limit_exceeded', message };
+  return { code: 'loop_limit_exceeded', message, retryable: false, cause: { owner: 'engine', code: 'loop_limit_exceeded' } };
 }
 
 function toJsonValue(value: unknown): JsonValue {

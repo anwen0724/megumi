@@ -192,7 +192,7 @@ describe('Engine cancellation', () => {
 
     expect(events.at(-1)?.eventType).toBe('run.failed');
     expect(events.at(-1)?.payload).toMatchObject({
-      error: { code: 'runtime_cancelled' },
+      error: { code: 'runtime_cancellation_failed' },
     });
   });
 

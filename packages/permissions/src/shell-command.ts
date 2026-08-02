@@ -1,7 +1,7 @@
 /*
  * Conservatively parses supported Shell Command forms for Permission risk assessment.
  */
-import type { ToolShellKind } from '@megumi/tools';
+export type ToolShellKind = 'powershell' | 'cmd' | 'posix_shell' | 'unknown';
 
 export const SHELL_COMMAND_CLASSIFICATIONS = [
   'read_only',

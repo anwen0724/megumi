@@ -65,6 +65,14 @@ export interface RunCancelRequestedPayload {
   scope: CancelScope;
 }
 export interface RunCancellingPayload { cancelRequestId: string }
+export interface RunPlanUpdatedPayload {
+  toolCallId: string;
+  explanation?: string;
+  plan: readonly {
+    readonly step: string;
+    readonly status: 'pending' | 'in_progress' | 'completed';
+  }[];
+}
 
 export interface RunEventPayloads {
   'run.created': RunCreatedPayload;
@@ -80,6 +88,7 @@ export interface RunEventPayloads {
   'run.resume.failed': RunResumeFailedPayload;
   'run.cancel.requested': RunCancelRequestedPayload;
   'run.cancelling': RunCancellingPayload;
+  'run.plan.updated': RunPlanUpdatedPayload;
 }
 export type RunEventType = keyof RunEventPayloads;
 
@@ -139,6 +148,14 @@ const RunCancelRequestedPayloadSchema = z.object({
   scope: CancelScopeSchema,
 }).strict();
 const RunCancellingPayloadSchema = z.object({ cancelRequestId: z.string().min(1) }).strict();
+const RunPlanUpdatedPayloadSchema = z.object({
+  toolCallId: z.string().min(1),
+  explanation: z.string().optional(),
+  plan: z.array(z.object({
+    step: z.string(),
+    status: z.enum(['pending', 'in_progress', 'completed']),
+  }).strict()),
+}).strict();
 
 export const RunCreatedEventSchema = eventSchema('run.created', RunCreatedPayloadSchema);
 export const RunStartedEventSchema = eventSchema('run.started', RunStartedPayloadSchema);
@@ -153,6 +170,7 @@ export const RunResumedEventSchema = eventSchema('run.resumed', RunResumedPayloa
 export const RunResumeFailedEventSchema = eventSchema('run.resume.failed', RunResumeFailedPayloadSchema);
 export const RunCancelRequestedEventSchema = eventSchema('run.cancel.requested', RunCancelRequestedPayloadSchema);
 export const RunCancellingEventSchema = eventSchema('run.cancelling', RunCancellingPayloadSchema);
+export const RunPlanUpdatedEventSchema = eventSchema('run.plan.updated', RunPlanUpdatedPayloadSchema);
 
 export const RUN_EVENT_SCHEMAS = {
   'run.created': RunCreatedEventSchema,
@@ -168,6 +186,7 @@ export const RUN_EVENT_SCHEMAS = {
   'run.resume.failed': RunResumeFailedEventSchema,
   'run.cancel.requested': RunCancelRequestedEventSchema,
   'run.cancelling': RunCancellingEventSchema,
+  'run.plan.updated': RunPlanUpdatedEventSchema,
 } as const;
 
 export function createRunEvent<TType extends RunEventType>(

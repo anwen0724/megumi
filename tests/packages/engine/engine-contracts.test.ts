@@ -21,6 +21,7 @@ const validPolicy: EnginePolicy = {
   maxToolCallsPerRun: 24,
   maxConcurrentToolExecutions: 4,
   modelCallTimeoutMs: 60_000,
+  modelCallTerminationTimeoutMs: 10_000,
   toolExecutionTimeoutMs: 30_000,
   cancellationTimeoutMs: 5_000,
   maxModelCallAttempts: 2,
@@ -107,6 +108,7 @@ describe('engine policy validation', () => {
     ['maxModelCallsPerRun', 0],
     ['maxConcurrentToolExecutions', 1.5],
     ['modelCallTimeoutMs', -1],
+    ['modelCallTerminationTimeoutMs', 0],
     ['modelRetryDelayMs', -1],
     ['terminalRunRetentionMs', 0],
   ] as const)('rejects invalid %s', (field, value) => {

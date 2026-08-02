@@ -19,7 +19,13 @@ import type { EnginePolicy } from './engine-policy';
 export type ModelCallStatus = 'running' | 'completed' | 'failed' | 'cancelled';
 
 export interface ModelCallFailure {
-  readonly code: ModelFailure['code'] | 'timeout' | 'invalid_response';
+  readonly code:
+    | ModelFailure['code']
+    | 'timeout'
+    | 'empty_response'
+    | 'output_truncated'
+    | 'invalid_response'
+    | 'termination_unconfirmed';
   readonly message: string;
   readonly retryable: boolean;
   readonly retryAfterMs?: number;
@@ -127,7 +133,10 @@ export interface ExecuteModelCallRequest {
   readonly signal: AbortSignal;
   readonly policy: Pick<
     EnginePolicy,
-    'maxModelCallAttempts' | 'modelCallTimeoutMs' | 'modelRetryDelayMs'
+    | 'maxModelCallAttempts'
+    | 'modelCallTimeoutMs'
+    | 'modelCallTerminationTimeoutMs'
+    | 'modelRetryDelayMs'
   >;
   readonly clock: EngineClock;
   /** Test seam for retry timing; production callers use the abort-aware default. */
@@ -281,9 +290,20 @@ async function* runAttempt(
 
       if (outcome.type === 'interrupted') {
         closeIterator(iterator);
+        if (outcome.reason === 'timeout') {
+          const settled = await waitForModelCallSettlement(
+            stream,
+            request.policy.modelCallTerminationTimeoutMs,
+          );
+          return {
+            status: 'failed',
+            failure: settled ? timeoutFailure() : terminationUnconfirmedFailure(),
+            partial: { text: partialText, thinking: partialThinking },
+          };
+        }
         return {
           status: 'failed',
-          failure: outcome.reason === 'timeout' ? timeoutFailure() : abortedFailure(),
+          failure: abortedFailure(),
           partial: { text: partialText, thinking: partialThinking },
         };
       }
@@ -359,18 +379,22 @@ async function* runAttempt(
         };
       }
       if (event.type === 'done') {
-        const toolCalls = completedToolCalls(request.modelCallId, event.message);
-        if (toolCalls.status === 'invalid') {
+        const response = validateCompletedModelResponse(
+          request.modelCallId,
+          event.reason,
+          event.message,
+        );
+        if (response.status === 'invalid') {
           return {
             status: 'failed',
-            failure: toolCalls.failure,
+            failure: response.failure,
             partial: { text: partialText, thinking: partialThinking },
           };
         }
         return {
           status: 'completed',
           message: event.message,
-          toolCalls: toolCalls.toolCalls,
+          toolCalls: response.toolCalls,
         };
       }
       // ToolCall fragments stay inside this attempt. Only the final done message can commit them.
@@ -389,18 +413,57 @@ async function* runAttempt(
   }
 }
 
-function completedToolCalls(
+export function validateCompletedModelResponse(
   modelCallId: string,
+  doneReason: Extract<AssistantMessage['stopReason'], 'stop' | 'length' | 'toolUse'>,
   message: AssistantMessage,
 ):
   | { readonly status: 'valid'; readonly toolCalls: readonly CompletedModelToolCall[] }
   | { readonly status: 'invalid'; readonly failure: ModelCallFailure } {
+  if (message.stopReason !== doneReason) {
+    return {
+      status: 'invalid',
+      failure: invalidResponseFailure('Model terminal reason did not match the final message.'),
+    };
+  }
+
+  if (doneReason === 'length') {
+    return { status: 'invalid', failure: outputTruncatedFailure() };
+  }
+
   const calls = message.content.filter((block): block is ToolCall => block.type === 'toolCall');
+  if (doneReason === 'stop') {
+    if (calls.length > 0) {
+      return {
+        status: 'invalid',
+        failure: invalidResponseFailure('Model stopped normally but included a ToolCall.'),
+      };
+    }
+    if (!hasVisibleAssistantText(message)) {
+      return { status: 'invalid', failure: emptyResponseFailure() };
+    }
+    return { status: 'valid', toolCalls: [] };
+  }
+
+  if (calls.length === 0) {
+    return {
+      status: 'invalid',
+      failure: invalidResponseFailure('Model reported Tool use without a ToolCall.'),
+    };
+  }
+
   const seenIds = new Set<string>();
   const toolCalls: CompletedModelToolCall[] = [];
 
   for (const [callOrder, call] of calls.entries()) {
-    if (!call.id || !call.name || seenIds.has(call.id)) {
+    if (
+      !call.id
+      || !call.name
+      || seenIds.has(call.id)
+      || !call.arguments
+      || typeof call.arguments !== 'object'
+      || Array.isArray(call.arguments)
+    ) {
       return {
         status: 'invalid',
         failure: invalidResponseFailure('Model response contained an invalid ToolCall identity.'),
@@ -417,6 +480,10 @@ function completedToolCalls(
   }
 
   return { status: 'valid', toolCalls };
+}
+
+export function hasVisibleAssistantText(message: AssistantMessage): boolean {
+  return message.content.some((block) => block.type === 'text' && block.text.trim().length > 0);
 }
 
 function failedEvent(
@@ -466,6 +533,30 @@ function timeoutFailure(): ModelCallFailure {
     code: 'timeout',
     message: 'Model call timed out.',
     retryable: true,
+  };
+}
+
+function terminationUnconfirmedFailure(): ModelCallFailure {
+  return {
+    code: 'termination_unconfirmed',
+    message: 'Model call termination could not be confirmed.',
+    retryable: false,
+  };
+}
+
+function emptyResponseFailure(): ModelCallFailure {
+  return {
+    code: 'empty_response',
+    message: 'Model returned no visible response.',
+    retryable: true,
+  };
+}
+
+function outputTruncatedFailure(): ModelCallFailure {
+  return {
+    code: 'output_truncated',
+    message: 'Model output was truncated before completion.',
+    retryable: false,
   };
 }
 
@@ -527,6 +618,23 @@ function closeIterator(iterator: AsyncIterator<AssistantMessageEvent>): void {
     void Promise.resolve(iterator.return()).catch(() => undefined);
   } catch {
     // The provider has already been aborted; iterator cleanup cannot change ModelCall outcome.
+  }
+}
+
+export async function waitForModelCallSettlement(
+  stream: { waitForSettlement(): Promise<void> },
+  timeoutMs: number,
+): Promise<boolean> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      stream.waitForSettlement().then(() => true),
+      new Promise<boolean>((resolve) => {
+        timeout = setTimeout(() => resolve(false), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 }
 

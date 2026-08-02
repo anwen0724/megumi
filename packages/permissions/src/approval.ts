@@ -2,7 +2,7 @@
  * Defines immutable Approval subjects, user decisions, effects, and application validation.
  */
 import { z } from 'zod';
-import type { JsonObject, JsonValue } from '@megumi/tools';
+import type { JsonObject, JsonValue } from '@megumi/ai';
 import {
   JsonValueSchema,
   PermissionFailureSchema,

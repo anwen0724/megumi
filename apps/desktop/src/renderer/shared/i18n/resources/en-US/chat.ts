@@ -83,6 +83,11 @@ export const chat = {
       streaming: 'Thinking',
       completed: 'Thinking complete',
     },
+    plan: {
+      label: 'Task plan',
+      empty: 'The current plan is empty.',
+      status: { pending: 'Pending', in_progress: 'In progress', completed: 'Completed' },
+    },
     tool: {
       requested: 'Requested {{target}}',
       awaiting_approval: 'Waiting for approval: {{target}}',

@@ -1,23 +1,18 @@
-﻿/* Public interface for Tool contracts, Catalog, Executor, and built-in adapter composition. */
+/* Public Tool contracts, model-call routing, execution, and built-in composition. */
 
 export type {
-  ExecuteToolRequest,
-  GetToolRequest,
-  GetToolResult,
   JsonObject,
   JsonSchemaObject,
   JsonValue,
-  ListToolsRequest,
-  ListToolsResult,
   NormalizedToolResult,
-  RegisteredTool,
+  RawToolResult,
   ToolAvailability,
-  ToolCapability,
   ToolDefinition,
   ToolExecutionError,
   ToolExecutionErrorCode,
   ToolExecutionMode,
   ToolExecutionObservation,
+  ToolExecutionNotification,
   ToolExecutionOutputChunk,
   ToolExecutionAccess,
   ToolExecutionFileAccess,
@@ -28,53 +23,38 @@ export type {
   ToolEffectReport,
   ToolIdentity,
   ToolItemFailure,
-  ToolRegistration,
-  ToolRiskLevel,
   ToolRuntimeSource,
-  ToolSideEffect,
   ToolSource,
   ToolSourceKind,
 } from './tool';
-export {
-  createToolCatalog,
-  type CreateToolCatalogRequest,
-  type ToolCatalog,
-} from './tool-catalog';
-export {
-  createToolExecutor,
-  preflightToolExecution,
-  type CreateToolExecutorRequest,
-  type ToolExecutionAdapter,
-  type ToolExecutionPreflightResult,
-  type ToolExecutor,
-} from './tool-executor';
-export {
-  isSuccessfulToolExecutionResult,
-  ToolExecutionFailure,
-} from './tool-result';
+export type {
+  PermissionOperation,
+  RegisteredTool,
+  RouteToolCallResult,
+  ToolHandler,
+  ToolInvocation,
+  ToolRegistration,
+  ToolRouteScope,
+} from './tool-handler';
+export { createToolRegistry, type ToolRegistry } from './tool-registry';
+export { createToolRouter, type ToolRouter } from './tool-router';
+export { isSuccessfulToolExecutionResult, ToolExecutionFailure } from './tool-result';
 export {
   BUILT_IN_TOOL_NAMES,
-  createBuiltInToolExecutor,
-  createBuiltInTools,
-  resolveBuiltInToolRegistrations,
+  createBuiltInToolRegistry,
   type BuiltInToolName,
-  type CreateBuiltInToolExecutorRequest,
-  type CreateBuiltInToolsRequest,
-  type CreateBuiltInToolsResult,
-  type ResolveBuiltInToolRegistrationsRequest,
-  type ResolveBuiltInToolRegistrationsResult,
 } from './built-ins';
 export {
   createTools,
+  type AvailableTool,
   type BuiltInToolAvailability,
   type CreateToolsRequest,
-  type ExecuteRunToolCallRequest,
+  type ExecuteToolInvocationRequest,
   type ListAvailableToolsRequest,
-  type PreflightRunToolCallRequest,
-  type ReleaseRunToolsRequest,
-  type ResolveRunToolsRequest,
-  type ResolveRunToolsResult,
-  type RunToolScope,
+  type ListAvailableToolsResult,
+  type ModelCallToolScope,
+  type ResolveModelCallToolsResult,
+  type RouteModelCallToolRequest,
   type ToolExecutionPolicy,
   type ToolResolutionFailure,
   type Tools,
@@ -101,11 +81,11 @@ export {
   type WebSearchRuntimeConfig,
   type WebSearch,
 } from './built-ins/web-search';
+export { createWebFetch, type WebFetch, type WebFetchResult } from './built-ins/web-fetch';
 export {
-  createWebFetch,
-  type WebFetch,
-  type WebFetchResult,
-} from './built-ins/web-fetch';
-
-export { createSandboxToolExecutor } from './sandbox-tool-executor';
-export type { CreateSandboxToolExecutorRequest } from './sandbox-tool-executor';
+  updatePlanToolDefinition,
+  updatePlanToolHandler,
+  type PlanStep,
+  type PlanStepStatus,
+  type UpdatePlanInput,
+} from './built-ins/update-plan';

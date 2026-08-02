@@ -11,7 +11,7 @@ import {
   type PermissionSettings,
   type PermissionWorkspacePathClassifier,
 } from '../../../packages/permissions/src/index';
-import type { RegisteredTool, ToolShellKind } from '../../../packages/tools/src/index';
+import type { ToolShellKind } from '../../../packages/tools/src/index';
 
 class FakeRuleAccess implements PermissionRuleReader, PermissionRuleWriter {
   readonly writes: unknown[] = [];
@@ -50,67 +50,73 @@ class FakePathClassifier implements PermissionWorkspacePathClassifier {
   }
 }
 
-function registeredTool(name: string, shellKind: ToolShellKind | 'unknown' = 'powershell'): RegisteredTool {
-  const sideEffect = name === 'run_command'
-    ? 'execute_command'
-    : name === 'write_file'
-      ? 'project_file_operation'
-      : name.startsWith('web_')
-        ? 'access_network'
-        : 'none';
+interface TestToolFact {
+  readonly identity: { readonly sourceId: string; readonly namespace: string; readonly sourceToolName: string };
+  readonly registeredToolName: string;
+  readonly shellKind: ToolShellKind | 'unknown';
+}
+
+function registeredTool(name: string, shellKind: ToolShellKind | 'unknown' = 'powershell'): TestToolFact {
   return {
     identity: { sourceId: 'built_in', namespace: 'megumi', sourceToolName: name },
     registeredToolName: name,
-    source: {
-      sourceId: 'built_in', sourceKind: 'built_in', namespace: 'megumi', displayName: 'Built in',
-      configured: true, enabled: true, availabilityStatus: 'available',
-    },
-    definition: {
-      name,
-      description: name,
-      inputSchema: { type: 'object' },
-      capabilities: name === 'run_command' ? ['command_run'] : [],
-      riskLevel: 'low',
-      sideEffect,
-      availability: { status: 'available' },
-      permissionMetadata: {
-        ruleToolName: name,
-        ...(name === 'run_command' ? { shellKind, executionMethod: 'shell' } : {}),
-      },
-    },
-    status: 'available',
+    shellKind,
   };
 }
 
-function externalTool(): RegisteredTool {
+function externalTool(): TestToolFact {
   return {
-    ...registeredTool('create_event'),
     identity: { sourceId: 'mcp:calendar', namespace: 'calendar', sourceToolName: 'create_event' },
     registeredToolName: 'calendar_create_event',
-    source: {
-      sourceId: 'mcp:calendar', sourceKind: 'mcp', namespace: 'calendar', displayName: 'Calendar',
-      configured: true, enabled: true, availabilityStatus: 'available',
-    },
-    definition: {
-      ...registeredTool('create_event').definition,
-      permissionMetadata: undefined,
-      sideEffect: 'modify_external',
-    },
+    shellKind: 'unknown',
   };
 }
 
-function baseRequest(overrides: Partial<EvaluateToolCallRequest> = {}): EvaluateToolCallRequest {
+function baseRequest(overrides: Partial<EvaluateToolCallRequest> & { registeredTool?: TestToolFact } = {}): EvaluateToolCallRequest {
+  const { registeredTool: tool = registeredTool('run_command'), ...values } = overrides;
+  const toolInput = values.toolInput ?? { command: 'npm test' };
   return {
     runId: 'run_1',
     sessionId: 'session_1',
     workspaceId: 'workspace_1',
     toolCallId: 'call_1',
-    toolInput: { command: 'npm test' },
-    registeredTool: registeredTool('run_command'),
+    toolInput,
+    operations: operationsFor(tool, toolInput),
     permissionMode: 'ask',
     evaluatedAt: '2026-07-19T00:00:00.000Z',
-    ...overrides,
+    ...values,
   };
+}
+
+function operationsFor(tool: TestToolFact, input: unknown): EvaluateToolCallRequest['operations'] {
+  const record = input && typeof input === 'object' && !Array.isArray(input) ? input as Record<string, unknown> : {};
+  const context = {
+    workspaceId: 'workspace_1', sessionId: 'session_1', runId: 'run_1',
+    toolIdentity: { ...tool.identity, registeredToolName: tool.registeredToolName },
+  };
+  const path = (key: string, fallback = '.') => typeof record[key] === 'string' ? String(record[key]) : fallback;
+  if (tool.identity.sourceId !== 'built_in') return [{
+    action: 'external.invoke', resource: { type: 'tool.identity', id: tool.registeredToolName }, context,
+  }];
+  if (tool.registeredToolName === 'run_command') return [{
+    action: 'process.execute',
+    resource: { type: 'process.command', id: path('command', ''), attributes: { shellKind: tool.shellKind } },
+    context,
+  }];
+  if (tool.registeredToolName === 'copy_path' || tool.registeredToolName === 'move_path') return [
+    { action: tool.registeredToolName === 'copy_path' ? 'workspace.read' : 'workspace.write', resource: { type: 'workspace.path', id: path('source', '') }, context },
+    { action: 'workspace.write', resource: { type: 'workspace.path', id: path('destination', '') }, context },
+  ];
+  if (['write_file', 'edit_file', 'delete_path', 'create_directory'].includes(tool.registeredToolName)) return [{
+    action: 'workspace.write', resource: { type: 'workspace.path', id: path('path', '') }, context,
+  }];
+  if (['read_file', 'list_directory', 'glob', 'search_text'].includes(tool.registeredToolName)) return [{
+    action: 'workspace.read', resource: { type: 'workspace.path', id: path(tool.registeredToolName === 'glob' ? 'cwd' : 'path') }, context,
+  }];
+  if (tool.registeredToolName === 'web_fetch') return [{
+    action: 'network.fetch', resource: { type: 'network.url', id: path('url', '') }, context,
+  }];
+  return [{ action: 'agent.context.activate', context }];
 }
 
 function createFixture() {

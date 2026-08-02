@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createTools, type BuiltInToolName } from '@megumi/tools';
 
-describe('Tools Run registration', () => {
-  it('keeps one Run registration stable while later availability queries change', () => {
+describe('Tools ModelCall routing', () => {
+  it('keeps one ModelCall view stable while a later ModelCall sees new availability', async () => {
     const disabled = new Set<BuiltInToolName>();
+    const openSandbox = vi.fn(async () => ({ status: 'unavailable' as const, reason: 'Not used.' }));
     const tools = createTools({
       settings: {
         resolveWebSearch: () => ({ status: 'ok', settings: {} }),
@@ -38,7 +39,7 @@ describe('Tools Run registration', () => {
           cpuLimit: false,
           memoryLimit: false,
         }),
-        open: async () => ({ status: 'unavailable', reason: 'Not used.' }),
+        open: openSandbox,
       },
       executionPolicy: {
         maxExecutionTimeMs: 1_000,
@@ -50,34 +51,99 @@ describe('Tools Run registration', () => {
       },
     });
 
-    const first = tools.resolveRunTools({
-      runId: 'run:1', sessionId: 'session:1', workspaceId: 'workspace:1',
+    const first = tools.resolveModelCallTools({
+      runId: 'run:1', sessionId: 'session:1', workspaceId: 'workspace:1', modelCallId: 'model-call:1',
     });
     expect(first.status).toBe('resolved');
     disabled.add('read_file');
 
-    expect(tools.preflightToolCall({
+    const routed = tools.routeToolCall({
       runId: 'run:1',
+      sessionId: 'session:1',
+      workspaceId: 'workspace:1',
+      modelCallId: 'model-call:1',
+      toolCallId: 'call:1',
       toolName: 'read_file',
       input: { path: 'notes.md' },
-    }).status).toBe('ready');
+    });
+    expect(routed.status).toBe('routed');
+    if (routed.status !== 'routed') throw new Error('Expected routed read_file');
+    await expect(tools.executeToolInvocation({
+      invocation: structuredClone(routed.invocation),
+    })).resolves.toMatchObject({
+      type: 'failed', error: { code: 'sandbox_denied' },
+    });
+    expect(openSandbox).not.toHaveBeenCalled();
     expect(tools.listAvailableTools().tools.map((tool) => tool.registeredToolName))
       .not.toContain('read_file');
 
-    const second = tools.resolveRunTools({
-      runId: 'run:2', sessionId: 'session:1', workspaceId: 'workspace:1',
+    const second = tools.resolveModelCallTools({
+      runId: 'run:1', sessionId: 'session:1', workspaceId: 'workspace:1', modelCallId: 'model-call:2',
     });
     expect(second.status).toBe('resolved');
     if (second.status === 'resolved') {
-      expect(second.registeredTools.map((tool) => tool.registeredToolName))
+      expect(second.definitions.map((tool) => tool.name))
         .not.toContain('read_file');
     }
 
-    tools.releaseRunTools({ runId: 'run:1' });
-    expect(tools.preflightToolCall({
+    tools.releaseModelCallTools({ modelCallId: 'model-call:1' });
+    expect(tools.routeToolCall({
       runId: 'run:1',
+      sessionId: 'session:1',
+      workspaceId: 'workspace:1',
+      modelCallId: 'model-call:1',
+      toolCallId: 'call:2',
       toolName: 'read_file',
       input: { path: 'notes.md' },
-    })).toMatchObject({ status: 'failed', error: { code: 'tool_execution_failed' } });
+    })).toMatchObject({ status: 'failed', error: { code: 'unknown_tool' } });
+  });
+
+  it('executes update_plan without Permissions or Sandbox and emits a complete snapshot', async () => {
+    const tools = createTools({
+      settings: {
+        resolveWebSearch: () => ({ status: 'failed' }),
+        readWebSearchApiKey: () => ({ status: 'missing' }),
+      },
+      workspaces: {
+        getWorkspace: () => ({ status: 'found', workspace: { root_path: 'C:/workspace', status: 'available' } }),
+      },
+      workspaceChanges: { trackToolExecution: ({ execute }) => execute() },
+      skills: {
+        createSkillService: () => ({ useSkill: async () => ({ status: 'failed' }) } as never),
+      },
+      sandbox: {
+        capabilities: () => ({
+          platform: 'win32', workspaceEffectObservation: true, fileReadBoundary: true,
+          fileWriteBoundary: true, environmentIsolation: true, networkIsolation: true,
+          processTreeTermination: true, timeLimit: true, outputLimit: true,
+          processCountLimit: true, cpuLimit: false, memoryLimit: false,
+        }),
+        open: async () => ({ status: 'unavailable', reason: 'update_plan must not open Sandbox.' }),
+      },
+      executionPolicy: { maxExecutionTimeMs: 1_000, maxOutputBytes: 20_000, maxProcessCount: 4 },
+      builtInToolAvailability: { isAvailable: () => true },
+    });
+    const scope = {
+      runId: 'run:plan', sessionId: 'session:plan', workspaceId: 'workspace:plan', modelCallId: 'model-call:plan',
+    };
+    expect(tools.resolveModelCallTools(scope).status).toBe('resolved');
+    const routed = tools.routeToolCall({
+      ...scope,
+      toolCallId: 'tool-call:plan',
+      toolName: 'update_plan',
+      input: { plan: [{ step: 'Implement', status: 'in_progress' }] },
+    });
+    expect(routed).toMatchObject({ status: 'routed', operations: [] });
+    if (routed.status !== 'routed') throw new Error('Expected routed update_plan');
+    const notifications: unknown[] = [];
+    const result = await tools.executeToolInvocation(
+      { invocation: routed.invocation },
+      { onNotification: (notification) => notifications.push(notification) },
+    );
+    expect(result).toMatchObject({ type: 'succeeded', toolName: 'update_plan' });
+    expect(notifications).toEqual([{
+      type: 'plan_updated',
+      plan: [{ step: 'Implement', status: 'in_progress' }],
+    }]);
   });
 });

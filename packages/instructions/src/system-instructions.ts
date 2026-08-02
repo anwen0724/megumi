@@ -20,6 +20,16 @@ const SYSTEM_INSTRUCTIONS: readonly Readonly<SystemInstructions[number]>[] = Obj
       'Do not claim success without supporting evidence.',
     ].join(' '),
   }),
+  Object.freeze({
+    instructionId: 'megumi.agent.dynamic-plan',
+    content: [
+      'Use update_plan for complex tasks whose progress benefits from an explicit multi-step plan; do not use it for simple tasks.',
+      'Each update must provide the complete current plan snapshot.',
+      'While unfinished work remains, exactly one step must be in_progress.',
+      'When all work is complete, no step may remain in_progress.',
+      'Keep step text concise and update statuses as work advances.',
+    ].join(' '),
+  }),
 ]);
 
 export function getSystemInstructions(): SystemInstructions {

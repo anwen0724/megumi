@@ -5,10 +5,10 @@ import { fitsNormalizedJson, serializedBytes } from './bounded-page';
 import { extractFileText } from './document-text';
 import { inputRecord, optionalNonNegativeInteger, optionalPositiveInteger, requireString } from './tool-input';
 import { withFileFailure, type BuiltInToolContext } from './workspace-file-access';
+import { createBuiltInToolHandler, inputString, operation } from './tool-handler';
 
 export const readFileToolDefinition: ToolDefinition = {
   name: 'read_file',
-  title: 'Read file',
   description: 'Read a bounded UTF-8 text page from a text, Markdown, DOCX, or PDF file. Continue with nextOffset when hasMore is true.',
   inputSchema: {
     type: 'object',
@@ -33,14 +33,15 @@ export const readFileToolDefinition: ToolDefinition = {
     required: ['path', 'content', 'offset', 'bytesReturned', 'sizeBytes', 'hasMore'],
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  capabilities: ['project_read'],
-  riskLevel: 'low',
-  sideEffect: 'none',
-  availability: { status: 'available' },
-  executionMode: 'parallel',
-  permissionMetadata: { ruleToolName: 'read_file' },
-  modelFacingDescription: 'Read a bounded text page from a text, Markdown, DOCX, or PDF file. If hasMore is true, call read_file again with nextOffset.',
 };
+
+export const readFileToolHandler = createBuiltInToolHandler({
+  toolName: 'read_file',
+  operations: (invocation) => [operation(invocation, 'workspace.read', {
+    type: 'workspace.path', id: inputString(invocation, 'path'),
+  })],
+  execute: (context, input, options) => executeReadFile(context, input, options.signal),
+});
 
 export async function executeReadFile(
   context: BuiltInToolContext,

@@ -9,10 +9,10 @@ import {
   optionalString,
 } from './tool-input';
 import { withFileFailure, type BuiltInToolContext } from './workspace-file-access';
+import { createBuiltInToolHandler, inputString, operation } from './tool-handler';
 
 export const listDirectoryToolDefinition: ToolDefinition = {
   name: 'list_directory',
-  title: 'List directory',
   description: 'List files and directories.',
   inputSchema: {
     type: 'object',
@@ -40,14 +40,15 @@ export const listDirectoryToolDefinition: ToolDefinition = {
     required: ['entries', 'offset', 'hasMore'],
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  capabilities: ['project_read'],
-  riskLevel: 'low',
-  sideEffect: 'none',
-  availability: { status: 'available' },
-  executionMode: 'parallel',
-  permissionMetadata: { ruleToolName: 'list_directory' },
-  modelFacingDescription: 'List files and directories.',
 };
+
+export const listDirectoryToolHandler = createBuiltInToolHandler({
+  toolName: 'list_directory',
+  operations: (invocation) => [operation(invocation, 'workspace.read', {
+    type: 'workspace.path', id: inputString(invocation, 'path', '.'),
+  })],
+  execute: (context, input, options) => executeListDirectory(context, input, options.signal),
+});
 
 export async function executeListDirectory(
   context: BuiltInToolContext,

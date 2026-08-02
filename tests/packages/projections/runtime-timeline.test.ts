@@ -331,6 +331,47 @@ describe('runtime timeline projection', () => {
     expect(tool).not.toHaveProperty('resultSummary');
   });
 
+  it('replaces the Run plan snapshot and suppresses the successful update_plan Tool card', () => {
+    let messages = reduceRuntimeTimelineEvent([], event('run.started', {}, 1));
+    messages = reduceRuntimeTimelineEvent(messages, event('model_call.tool_call', {
+      modelCallId: 'model-call:1',
+      toolCallId: 'tool-call:plan',
+      toolName: 'update_plan',
+      input: { plan: [{ step: 'Inspect', status: 'in_progress' }] },
+    }, 2));
+    messages = reduceRuntimeTimelineEvent(messages, event('run.plan.updated', {
+      toolCallId: 'tool-call:plan',
+      explanation: 'Initial plan',
+      plan: [{ step: 'Inspect', status: 'in_progress' }],
+    }, 3));
+    messages = reduceRuntimeTimelineEvent(messages, event('tool_result.created', {
+      toolCallId: 'tool-call:plan',
+      toolName: 'update_plan',
+      kind: 'success',
+      content: [{ type: 'text', text: 'Plan updated' }],
+    }, 4));
+    messages = reduceRuntimeTimelineEvent(messages, event('run.plan.updated', {
+      toolCallId: 'tool-call:next-plan',
+      plan: [
+        { step: 'Inspect', status: 'completed' },
+        { step: 'Implement', status: 'in_progress' },
+      ],
+    }, 5));
+
+    const assistant = messages.find((message) => message.role === 'assistant');
+    const process = assistant?.blocks.find((block) => block.kind === 'process_disclosure');
+    expect(process?.items.filter((item) => item.kind === 'plan_activity')).toEqual([
+      expect.objectContaining({
+        kind: 'plan_activity',
+        plan: [
+          { step: 'Inspect', status: 'completed' },
+          { step: 'Implement', status: 'in_progress' },
+        ],
+      }),
+    ]);
+    expect(process?.items.some((item) => item.kind === 'tool_activity' && item.toolName === 'update_plan')).toBe(false);
+  });
+
   it('does not project session-scoped compaction into an assistant message', () => {
     const messages = reduceRuntimeTimelineEvent([], event('context.compaction.completed', {
       compactionId: 'compaction:session',

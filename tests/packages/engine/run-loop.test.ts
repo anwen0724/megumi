@@ -101,6 +101,74 @@ describe('Engine run loop', () => {
     expect(events.at(-1)?.eventType).toBe('run.completed');
   });
 
+  it('publishes complete plan snapshots around ordinary Tool work in one Run', async () => {
+    const planTool = registeredTool('update_plan');
+    const lookupTool = registeredTool('lookup');
+    let planUpdate = 0;
+    const executeTool = vi.fn(async ({ toolName }, options) => {
+      if (toolName === 'update_plan') {
+        planUpdate += 1;
+        options?.onNotification?.(planUpdate === 1
+          ? {
+              type: 'plan_updated',
+              explanation: 'Start work',
+              plan: [
+                { step: 'Inspect', status: 'in_progress' },
+                { step: 'Finish', status: 'pending' },
+              ],
+            }
+          : {
+              type: 'plan_updated',
+              plan: [
+                { step: 'Inspect', status: 'completed' },
+                { step: 'Finish', status: 'completed' },
+              ],
+            });
+      }
+      return {
+        type: 'succeeded' as const,
+        toolName,
+        normalizedResult: { kind: 'text' as const, content: `result:${toolName}`, isError: false, truncated: false },
+      };
+    });
+    const fixture = createEngineFixture({
+      tools: [planTool, lookupTool],
+      executeTool,
+      streams: [
+        assistantStream('', { id: 'provider-call:plan:1', name: 'update_plan', arguments: { value: 'start' } }),
+        assistantStream('', { id: 'provider-call:lookup', name: 'lookup', arguments: { value: 'inspect' } }),
+        assistantStream('', { id: 'provider-call:plan:2', name: 'update_plan', arguments: { value: 'complete' } }),
+        assistantStream('final answer'),
+      ],
+    });
+
+    const started = await fixture.engine.startRun(startRequest);
+    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const events = await collectEvents(started.events);
+
+    expect(events.filter((event) => event.eventType === 'run.plan.updated').map((event) => event.payload)).toEqual([
+      expect.objectContaining({
+        toolCallId: 'provider-call:plan:1',
+        explanation: 'Start work',
+        plan: [
+          { step: 'Inspect', status: 'in_progress' },
+          { step: 'Finish', status: 'pending' },
+        ],
+      }),
+      expect.objectContaining({
+        toolCallId: 'provider-call:plan:2',
+        plan: [
+          { step: 'Inspect', status: 'completed' },
+          { step: 'Finish', status: 'completed' },
+        ],
+      }),
+    ]);
+    expect(fixture.writes).toEqual([
+      'user', 'model', 'tool', 'model', 'tool', 'model', 'tool', 'assistant:completed',
+    ]);
+    expect(events.at(-1)?.eventType).toBe('run.completed');
+  });
+
   it('fails with one terminal Assistant Reply when the ModelCall limit is reached', async () => {
     const tool = registeredTool('lookup');
     const fixture = createEngineFixture({

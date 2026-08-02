@@ -21,6 +21,9 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
 	private done = false;
 	private finalResultPromise: Promise<R>;
 	private resolveFinalResult!: (result: R) => void;
+	private settlementPromise: Promise<void>;
+	private resolveSettlement!: () => void;
+	private settled = false;
 	private isComplete: (event: T) => boolean;
 	private extractResult: (event: T) => R;
 
@@ -30,6 +33,9 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
 		this.finalResultPromise = new Promise((resolve) => {
 			this.resolveFinalResult = resolve;
 		});
+		this.settlementPromise = new Promise((resolve) => {
+			this.resolveSettlement = resolve;
+		});
 	}
 
 	push(event: T): void {
@@ -38,6 +44,7 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
 		if (this.isComplete(event)) {
 			this.done = true;
 			this.resolveFinalResult(this.extractResult(event));
+			this.settle();
 		}
 
 		// Deliver to waiting consumer or queue it
@@ -50,6 +57,10 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
 	}
 
 	end(result?: R): void {
+		if (this.done) {
+			this.settle();
+			return;
+		}
 		this.done = true;
 		if (result !== undefined) {
 			this.resolveFinalResult(result);
@@ -59,6 +70,7 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
 			const waiter = this.waiting.shift()!;
 			waiter({ value: undefined as any, done: true });
 		}
+		this.settle();
 	}
 
 	async *[Symbol.asyncIterator](): AsyncIterator<T> {
@@ -77,6 +89,16 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
 
 	result(): Promise<R> {
 		return this.finalResultPromise;
+	}
+
+	waitForSettlement(): Promise<void> {
+		return this.settlementPromise;
+	}
+
+	private settle(): void {
+		if (this.settled) return;
+		this.settled = true;
+		this.resolveSettlement();
 	}
 }
 

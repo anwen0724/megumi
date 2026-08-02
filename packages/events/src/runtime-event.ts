@@ -33,6 +33,7 @@ export const RUNTIME_EVENT_TYPES = [
   'run.cancelled',
   'run.interrupted',
   'run.waiting',
+  'run.plan.updated',
   'observation.received',
   'context.patch.requested',
   'context.patch.applied',

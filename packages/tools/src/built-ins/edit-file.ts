@@ -2,9 +2,10 @@
 import type { RawToolResult, ToolDefinition } from '../tool';
 import { inputRecord, requireString } from './tool-input';
 import { assertTextMutationTarget, toolEffectPath, withFileFailure, type BuiltInToolContext } from './workspace-file-access';
+import { createBuiltInToolHandler, inputString, operation } from './tool-handler';
 
 export const editFileToolDefinition: ToolDefinition = {
-  name: 'edit_file', title: 'Edit file', description: 'Apply ordered exact-text edits to an existing UTF-8 text file.',
+  name: 'edit_file', description: 'Apply ordered exact-text edits to an existing UTF-8 text file.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -14,8 +15,14 @@ export const editFileToolDefinition: ToolDefinition = {
     },
     required: ['path', 'edits'], additionalProperties: false,
   },
-  annotations: { destructiveHint: true, idempotentHint: false, openWorldHint: false }, capabilities: ['project_write'], riskLevel: 'medium', sideEffect: 'project_file_operation', availability: { status: 'available' }, executionMode: 'serial', permissionMetadata: { ruleToolName: 'edit_file' },
+  annotations: { destructiveHint: true, idempotentHint: false, openWorldHint: false },
 };
+
+export const editFileToolHandler = createBuiltInToolHandler({
+  toolName: 'edit_file',
+  operations: (invocation) => [operation(invocation, 'workspace.write', { type: 'workspace.path', id: inputString(invocation, 'path') })],
+  execute: (context, input, options) => executeEditFile(context, input, options.signal),
+});
 
 export async function executeEditFile(context: BuiltInToolContext, input: unknown, signal?: AbortSignal): Promise<RawToolResult> {
   const record = inputRecord(input);

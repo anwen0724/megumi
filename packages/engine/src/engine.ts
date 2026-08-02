@@ -194,10 +194,10 @@ export interface CreateEngineOptions {
   >;
   readonly tools: Pick<
     Tools,
-    | 'resolveRunTools'
-    | 'preflightToolCall'
-    | 'executeToolCall'
-    | 'releaseRunTools'
+    | 'resolveModelCallTools'
+    | 'routeToolCall'
+    | 'executeToolInvocation'
+    | 'releaseModelCallTools'
   >;
   readonly permissions: Pick<
     Permissions,
@@ -232,6 +232,8 @@ export function createEngine(options: CreateEngineOptions): Engine {
           failure: {
             code: 'internal_error',
             message: 'Engine is shutting down and is not accepting new Runs.',
+            retryable: false,
+            cause: { owner: 'engine', code: 'engine_shutting_down' },
           },
         };
       }
@@ -285,38 +287,14 @@ export function createEngine(options: CreateEngineOptions): Engine {
           failure: {
             code: 'runtime_protocol_violation',
             message: 'requestId was reused with different Run input.',
+            retryable: false,
+            cause: { owner: 'engine', code: 'request_id_conflict' },
           },
         };
       }
       if (reserved.status === 'session_busy') {
         return { status: 'session_busy', activeRun: reserved.activeRun };
       }
-
-      let toolRegistration;
-      try {
-        toolRegistration = options.tools.resolveRunTools({
-          runId,
-          sessionId: request.sessionId,
-          workspaceId: request.workspaceId,
-        });
-      } catch {
-        const failure: RunFailure = {
-          code: 'tool_system_failed',
-          message: 'Tool registry is unavailable.',
-        };
-        store.failStart({ requestId: request.requestId, failure });
-        return { status: 'failed', failure };
-      }
-      if (toolRegistration.status === 'failed') {
-        const failure: RunFailure = {
-          code: 'tool_system_failed',
-          message: toolRegistration.failure.message,
-          details: { toolResolutionCode: toolRegistration.failure.code },
-        };
-        store.failStart({ requestId: request.requestId, failure });
-        return { status: 'failed', failure };
-      }
-      const registeredTools = toolRegistration.registeredTools;
 
       const saved = await options.session.saveUserMessage({
         message_id: userMessageId,
@@ -347,8 +325,9 @@ export function createEngine(options: CreateEngineOptions): Engine {
         const failure: RunFailure = {
           code: 'session_failed',
           message: saved.failure.message,
+          retryable: false,
+          cause: { owner: 'session', code: saved.failure.code },
         };
-        options.tools.releaseRunTools({ runId });
         store.failStart({ requestId: request.requestId, failure });
         return { status: 'failed', failure };
       }
@@ -357,7 +336,6 @@ export function createEngine(options: CreateEngineOptions): Engine {
         run,
         userMessage: saved.message,
         userEntry: saved.entry,
-        registeredTools,
         ...(request.selectedSkill ? { selectedSkill: request.selectedSkill } : {}),
       });
       store.setRunRuntime(run.runId, runtime);
@@ -390,6 +368,8 @@ export function createEngine(options: CreateEngineOptions): Engine {
           failure: {
             code: 'internal_error',
             message: 'Engine is shutting down and is not accepting Run resumes.',
+            retryable: false,
+            cause: { owner: 'engine', code: 'engine_shutting_down' },
           },
         };
       }
@@ -412,6 +392,8 @@ export function createEngine(options: CreateEngineOptions): Engine {
           failure: {
             code: 'runtime_protocol_violation',
             message: 'Waiting Run has no active runtime.',
+            retryable: false,
+            cause: { owner: 'engine', code: 'waiting_runtime_missing' },
           },
         };
       }
@@ -480,6 +462,8 @@ export function createEngine(options: CreateEngineOptions): Engine {
           failure: {
             code: 'runtime_protocol_violation',
             message: 'Run disappeared while applying its approval decision.',
+            retryable: false,
+            cause: { owner: 'engine', code: 'approval_run_missing' },
           },
         });
       }, () => {
@@ -488,6 +472,8 @@ export function createEngine(options: CreateEngineOptions): Engine {
           failure: {
             code: 'internal_error',
             message: 'Run approval continuation failed unexpectedly.',
+            retryable: false,
+            cause: { owner: 'engine', code: 'approval_continuation_failed' },
           },
         });
       });
@@ -525,6 +511,8 @@ export function createEngine(options: CreateEngineOptions): Engine {
           failure: {
             code: 'cancellation_failed',
             message: 'Run runtime is unavailable.',
+            retryable: false,
+            cause: { owner: 'engine', code: 'run_runtime_missing' },
           },
         });
         store.updateRun(failed);

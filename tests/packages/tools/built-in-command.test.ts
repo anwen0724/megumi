@@ -6,9 +6,9 @@ import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  createBuiltInTools,
   mapSkillScriptExecutionRequestToRunCommandInput,
 } from '../../../packages/tools/src';
+import { createBuiltInTestHarness } from './built-in-test-harness';
 import { createLocalWorkspaceFileAccess, createProcessAdapter, parsedToolContent } from './tool-test-fixtures';
 
 describe('run_command built-in Tool', () => {
@@ -25,11 +25,11 @@ describe('run_command built-in Tool', () => {
       options.onStdout('output\napiKey=secret-token\n');
       return { exitCode: 0 };
     });
-    const tools = createBuiltInTools({
+    const tools = createBuiltInTestHarness({
       workspaceFileAccess: createLocalWorkspaceFileAccess(root),
       process: createProcessAdapter({ shellKind: 'powershell', run }),
     });
-    expect(tools.catalog.get({ toolName: 'run_command' })).toMatchObject({
+    expect(tools.get('run_command')).toMatchObject({
       status: 'found',
       tool: {
         definition: {
@@ -39,13 +39,14 @@ describe('run_command built-in Tool', () => {
         },
       },
     });
-    expect(tools.catalog.get({ toolName: 'run_command' })).toMatchObject({
-      status: 'found',
-      tool: { definition: { permissionMetadata: {
-        shellKind: 'powershell', executionMethod: 'shell',
-      } } },
-    });
-    const result = await tools.executor.execute({
+    const routed = tools.route({ toolName: 'run_command', input: { command: 'echo hello' } });
+    expect(routed.status).toBe('routed');
+    if (routed.status !== 'routed') throw new Error('Expected routed command');
+    expect(routed.operations).toEqual(expect.arrayContaining([expect.objectContaining({
+        action: 'process.execute',
+        resource: expect.objectContaining({ attributes: { shellKind: 'powershell' } }),
+      })]));
+    const result = await tools.execute({
       toolName: 'run_command', input: { command: 'echo hello' },
     });
     expect(result).toMatchObject({
@@ -69,7 +70,7 @@ describe('run_command built-in Tool', () => {
       options.onStderr('y'.repeat(100_000));
       return { exitCode: 0 };
     });
-    const result = await tools.executor.execute({ toolName: 'run_command', input: { command: 'large' } });
+    const result = await tools.execute({ toolName: 'run_command', input: { command: 'large' } });
     const content = parsedToolContent(result) as { stdoutPreview: string; stderrPreview: string; truncated: boolean };
     expect(Buffer.byteLength(content.stdoutPreview, 'utf8')).toBeLessThanOrEqual(20_000);
     expect(Buffer.byteLength(content.stderrPreview, 'utf8')).toBeLessThanOrEqual(20_000);
@@ -83,7 +84,7 @@ describe('run_command built-in Tool', () => {
       options.onStderr('warning\n');
       return { exitCode: 0, terminationConfirmed: true };
     });
-    const execution = await tools.executor.execute(
+    const execution = await tools.execute(
       { toolName: 'run_command', input: { command: 'inspect' } },
       { onOutput: (output) => outputs.push(output) },
     );
@@ -101,7 +102,7 @@ describe('run_command built-in Tool', () => {
       options.onStderr('compile failed');
       return { exitCode: 2 };
     });
-    await expect(nonZero.executor.execute({
+    await expect(nonZero.execute({
       toolName: 'run_command', input: { command: 'compile' },
     })).resolves.toMatchObject({
       type: 'failed', error: { code: 'command_failed', details: { reason: 'non_zero_exit', exitCode: 2 } },
@@ -113,14 +114,14 @@ describe('run_command built-in Tool', () => {
       })
     );
     const hanging = commandTools(root, hangingRun as never);
-    await expect(hanging.executor.execute({
+    await expect(hanging.execute({
       toolName: 'run_command', input: { command: 'hang', timeoutMs: 1 },
     })).resolves.toMatchObject({
       type: 'failed', error: { code: 'tool_timeout', details: { reason: 'timeout', timeoutMs: 1 } },
     });
 
     const controller = new AbortController();
-    const cancelled = hanging.executor.execute(
+    const cancelled = hanging.execute(
       { toolName: 'run_command', input: { command: 'hang' } },
       { signal: controller.signal },
     );
@@ -128,7 +129,7 @@ describe('run_command built-in Tool', () => {
     await expect(cancelled).resolves.toMatchObject({ type: 'failed', error: { code: 'tool_cancelled' } });
 
     const failed = commandTools(root, async () => { throw new Error(`host path ${root}`); });
-    const failedResult = await failed.executor.execute({ toolName: 'run_command', input: { command: 'missing' } });
+    const failedResult = await failed.execute({ toolName: 'run_command', input: { command: 'missing' } });
     expect(failedResult).toMatchObject({
       type: 'failed', error: { code: 'shell_unavailable', message: 'Command process could not be started.', details: { reason: 'spawn_failed' } },
     });
@@ -166,7 +167,7 @@ describe('run_command built-in Tool', () => {
         approvalSummary: 'Run Skill check',
       },
     });
-    const result = await tools.executor.execute({ toolName: 'run_command', input });
+    const result = await tools.execute({ toolName: 'run_command', input });
     expect(result).toMatchObject({
       type: 'succeeded',
       metadata: {
@@ -188,7 +189,7 @@ function commandTools(
   root: string,
   run: NonNullable<Parameters<typeof createProcessAdapter>[0]>['run'],
 ) {
-  return createBuiltInTools({
+  return createBuiltInTestHarness({
     workspaceFileAccess: createLocalWorkspaceFileAccess(root),
     process: createProcessAdapter({ run }),
   });

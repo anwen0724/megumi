@@ -48,7 +48,7 @@ export type EvaluateToolCallResult =
       readonly operations: readonly PermissionOperation[];
       readonly decision: PermissionDecision;
       readonly approvalSubject: ApprovalSubject;
-      readonly executionAccess?: import('@megumi/tools').ToolExecutionAccess;
+      readonly executionAccess?: import('@megumi/sandbox').ToolExecutionAccess;
     }
   | { readonly status: 'failed'; readonly failure: PermissionFailure };
 
@@ -96,7 +96,7 @@ export function createPermissions(dependencies: CreatePermissionsRequest): Permi
       const workspacePaths: Record<string, Awaited<ReturnType<PermissionWorkspacePathClassifier['classifyWorkspacePath']>>> = {};
       try {
         for (const target of pathTargets) {
-          workspacePaths[target.field] = await dependencies.workspacePathClassifier.classifyWorkspacePath({
+          workspacePaths[target.key] = await dependencies.workspacePathClassifier.classifyWorkspacePath({
             workspaceId: parsed.data.workspaceId,
             targetPath: target.path,
           });

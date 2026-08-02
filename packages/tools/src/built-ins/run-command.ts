@@ -6,6 +6,7 @@ import type { RawToolResult, ToolDefinition, ToolExecutionErrorCode, ToolExecuti
 import { normalizeRawToolContent, ToolExecutionFailure } from '../tool-result';
 import { inputRecord, optionalPositiveInteger, optionalString, requireString } from './tool-input';
 import type { BuiltInToolContext } from './workspace-file-access';
+import { createBuiltInToolHandler, inputString, operation } from './tool-handler';
 
 const MAX_STREAM_CAPTURE_BYTES = 20_000;
 export const RUN_COMMAND_INTERNAL_METADATA = Symbol('run-command-internal-metadata');
@@ -52,7 +53,6 @@ export interface RunCommandToolInput {
 export function createRunCommandToolDefinition(process: ToolProcessDescriptor): ToolDefinition {
   return {
     name: 'run_command',
-    title: 'Run command',
     description: 'Run a command and return redacted output previews.',
     inputSchema: {
       type: 'object',
@@ -80,18 +80,25 @@ export function createRunCommandToolDefinition(process: ToolProcessDescriptor): 
       required: ['exitCode', 'stdoutPreview', 'stderrPreview', 'durationMs', 'truncated'],
     },
     annotations: { destructiveHint: true, idempotentHint: false, openWorldHint: false },
-    capabilities: ['command_run'],
-    riskLevel: 'medium',
-    sideEffect: 'execute_command',
-    availability: { status: 'available' },
-    executionMode: 'serial',
-    permissionMetadata: {
-      ruleToolName: 'run_command',
-      shellKind: process.shellKind,
-      executionMethod: process.executionMethod,
-    },
-    modelFacingDescription: 'Run a command and return redacted output previews.',
   };
+}
+
+export function createRunCommandToolHandler(process: ToolProcessDescriptor) {
+  return createBuiltInToolHandler({
+    toolName: 'run_command',
+    operations: (invocation) => [
+      operation(invocation, 'process.execute', {
+        type: 'process.command',
+        id: inputString(invocation, 'command'),
+        attributes: { shellKind: process.shellKind },
+      }),
+      operation(invocation, 'workspace.read', {
+        type: 'workspace.path',
+        id: inputString(invocation, 'cwd', '.'),
+      }),
+    ],
+    execute: (context, input, options) => executeRunCommand(context, input, options),
+  });
 }
 
 export function mapSkillScriptExecutionRequestToRunCommandInput(request: {

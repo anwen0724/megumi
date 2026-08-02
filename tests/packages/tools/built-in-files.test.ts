@@ -6,10 +6,10 @@ import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  createBuiltInTools,
   ToolExecutionFailure,
   type ToolExecutionResult,
 } from '../../../packages/tools/src';
+import { createBuiltInTestHarness } from './built-in-test-harness';
 import { createNodeSandboxFileAccess } from '../../../packages/sandbox/src';
 import { createLocalWorkspaceFileAccess, parsedToolContent } from './tool-test-fixtures';
 
@@ -27,14 +27,14 @@ describe('Workspace-backed built-in Tools', () => {
 
   it('writes, reads, and edits UTF-8 text through one Executor', async () => {
     const tools = fileTools(root);
-    await succeeded(tools.executor.execute({
+    await succeeded(tools.execute({
       toolName: 'write_file',
       input: { path: 'nested/file.txt', content: 'hello world', overwrite: true },
     }));
-    const read = await succeeded(tools.executor.execute({
+    const read = await succeeded(tools.execute({
       toolName: 'read_file', input: { path: 'nested/file.txt' },
     }));
-    const edit = await succeeded(tools.executor.execute({
+    const edit = await succeeded(tools.execute({
       toolName: 'edit_file',
       input: { path: 'nested/file.txt', edits: [{ oldText: 'hello', newText: 'hi' }] },
     }));
@@ -46,11 +46,11 @@ describe('Workspace-backed built-in Tools', () => {
 
   it('creates, copies, moves, and recoverably deletes through the same Executor', async () => {
     const tools = fileTools(root);
-    await succeeded(tools.executor.execute({ toolName: 'create_directory', input: { path: 'notes' } }));
-    await succeeded(tools.executor.execute({ toolName: 'write_file', input: { path: 'notes/a.md', content: 'alpha' } }));
-    const copied = await succeeded(tools.executor.execute({ toolName: 'copy_path', input: { source: 'notes/a.md', destination: 'notes/b.md' } }));
-    const moved = await succeeded(tools.executor.execute({ toolName: 'move_path', input: { source: 'notes/b.md', destination: 'archive/b.md' } }));
-    const deleted = await succeeded(tools.executor.execute({ toolName: 'delete_path', input: { path: 'archive/b.md' } }));
+    await succeeded(tools.execute({ toolName: 'create_directory', input: { path: 'notes' } }));
+    await succeeded(tools.execute({ toolName: 'write_file', input: { path: 'notes/a.md', content: 'alpha' } }));
+    const copied = await succeeded(tools.execute({ toolName: 'copy_path', input: { source: 'notes/a.md', destination: 'notes/b.md' } }));
+    const moved = await succeeded(tools.execute({ toolName: 'move_path', input: { source: 'notes/b.md', destination: 'archive/b.md' } }));
+    const deleted = await succeeded(tools.execute({ toolName: 'delete_path', input: { path: 'archive/b.md' } }));
     expect(copied.effectReport?.effects).toEqual([{ type: 'copied', source: { location: 'workspace', path: 'notes/a.md' }, destination: { location: 'workspace', path: 'notes/b.md' }, pathType: 'file' }]);
     expect(moved.effectReport?.effects).toEqual([{ type: 'moved', source: { location: 'workspace', path: 'notes/b.md' }, destination: { location: 'workspace', path: 'archive/b.md' }, pathType: 'file' }]);
     expect(deleted.effectReport?.effects).toEqual([{ type: 'deleted', path: { location: 'workspace', path: 'archive/b.md' }, pathType: 'file', recoverable: true }]);
@@ -59,13 +59,13 @@ describe('Workspace-backed built-in Tools', () => {
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-tool-external-'));
     try {
       const target = path.join(outside, 'external.md');
-      const tools = createBuiltInTools({
+      const tools = createBuiltInTestHarness({
         workspaceFileAccess: createNodeSandboxFileAccess({
           workspaceRoot: root,
           access: { mode: 'unrestricted' },
         }),
       });
-      const written = await succeeded(tools.executor.execute({
+      const written = await succeeded(tools.execute({
         toolName: 'write_file',
         input: { path: target, content: 'external' },
       }));
@@ -82,15 +82,15 @@ describe('Workspace-backed built-in Tools', () => {
   it('returns resumable UTF-8 byte pages without splitting a character', async () => {
     await fs.writeFile(path.join(root, 'unicode.txt'), 'ab你cd好ef', 'utf8');
     const tools = fileTools(root);
-    const first = await succeeded(tools.executor.execute({
+    const first = await succeeded(tools.execute({
       toolName: 'read_file', input: { path: 'unicode.txt', offset: 0, limit: 5 },
     }));
-    const second = await succeeded(tools.executor.execute({
+    const second = await succeeded(tools.execute({
       toolName: 'read_file', input: { path: 'unicode.txt', offset: 5, limit: 5 },
     }));
     expect(parsedToolContent(first)).toMatchObject({ content: 'ab你', bytesReturned: 5, nextOffset: 5 });
     expect(parsedToolContent(second)).toMatchObject({ content: 'cd好', bytesReturned: 5, nextOffset: 10 });
-    const invalid = await tools.executor.execute({
+    const invalid = await tools.execute({
       toolName: 'read_file', input: { path: 'unicode.txt', offset: 3, limit: 5 },
     });
     expect(invalid).toMatchObject({ type: 'failed', error: { code: 'tool_execution_failed' } });
@@ -101,17 +101,17 @@ describe('Workspace-backed built-in Tools', () => {
     await fs.outputFile(path.join(root, 'a.ts'), 'needle');
     await fs.outputFile(path.join(root, 'nested', 'b.ts'), 'needle\nneedle');
     const tools = fileTools(root);
-    const listed = await succeeded(tools.executor.execute({
+    const listed = await succeeded(tools.execute({
       toolName: 'list_directory',
       input: { path: '.', maxDepth: 2, includeHidden: false, offset: 1, limit: 1 },
     }));
-    const firstGlob = await succeeded(tools.executor.execute({
+    const firstGlob = await succeeded(tools.execute({
       toolName: 'glob', input: { pattern: '**/*.ts', cwd: '.', offset: 0, limit: 1 },
     }));
-    const secondGlob = await succeeded(tools.executor.execute({
+    const secondGlob = await succeeded(tools.execute({
       toolName: 'glob', input: { pattern: '**/*.ts', cwd: '.', offset: 1, limit: 1 },
     }));
-    const searched = await succeeded(tools.executor.execute({
+    const searched = await succeeded(tools.execute({
       toolName: 'search_text', input: { path: '.', query: 'needle', offset: 1, limit: 1 },
     }));
     expect(parsedToolContent(listed)).toMatchObject({ offset: 1, hasMore: true, nextOffset: 2 });
@@ -128,8 +128,8 @@ describe('Workspace-backed built-in Tools', () => {
     await fs.outputFile(path.join(root, 'b.ts'), 'safe');
     await fs.outputFile(path.join(root, '.env'), 'SECRET=hidden');
     const tools = fileTools(root);
-    const question = await succeeded(tools.executor.execute({ toolName: 'glob', input: { pattern: '?.ts', cwd: '.' } }));
-    const characterSet = await succeeded(tools.executor.execute({ toolName: 'glob', input: { pattern: '[ab].ts', cwd: '.', includeHidden: true } }));
+    const question = await succeeded(tools.execute({ toolName: 'glob', input: { pattern: '?.ts', cwd: '.' } }));
+    const characterSet = await succeeded(tools.execute({ toolName: 'glob', input: { pattern: '[ab].ts', cwd: '.', includeHidden: true } }));
     expect(parsedToolContent(question)).toMatchObject({ matches: ['a.ts', 'b.ts'] });
     expect(parsedToolContent(characterSet)).toMatchObject({ matches: ['a.ts', 'b.ts'], skippedCount: expect.any(Number) });
     expect(JSON.stringify(parsedToolContent(characterSet))).not.toContain('SECRET=hidden');
@@ -138,19 +138,19 @@ describe('Workspace-backed built-in Tools', () => {
     await fs.writeFile(path.join(root, 'notes.docx'), Buffer.from(DOCX_FIXTURE_BASE64, 'base64'));
     await fs.writeFile(path.join(root, 'notes.pdf'), Buffer.from(PDF_FIXTURE_BASE64, 'base64'));
     const tools = fileTools(root);
-    const docx = await succeeded(tools.executor.execute({
+    const docx = await succeeded(tools.execute({
       toolName: 'read_file', input: { path: 'notes.docx' },
     }));
-    const pdf = await succeeded(tools.executor.execute({
+    const pdf = await succeeded(tools.execute({
       toolName: 'read_file', input: { path: 'notes.pdf' },
     }));
-    const search = await succeeded(tools.executor.execute({
+    const search = await succeeded(tools.execute({
       toolName: 'search_text', input: { path: 'notes.pdf', query: 'Physics' },
     }));
     expect(parsedToolContent(docx)).toMatchObject({ content: expect.stringContaining('Force equals mass times acceleration.') });
     expect(parsedToolContent(pdf)).toMatchObject({ content: expect.stringContaining('[Page 1]\nPhysics revision notes') });
     expect(parsedToolContent(search)).toMatchObject({ matches: [{ path: 'notes.pdf', page: 1, preview: 'Physics revision notes' }] });
-    const mutation = await tools.executor.execute({
+    const mutation = await tools.execute({
       toolName: 'edit_file', input: { path: 'notes.docx', edits: [{ oldText: 'Physics', newText: 'Chemistry' }] },
     });
     expect(mutation).toMatchObject({
@@ -161,7 +161,7 @@ describe('Workspace-backed built-in Tools', () => {
 
   it('bounds large file results before normalized fallback', async () => {
     await fs.writeFile(path.join(root, 'large.txt'), 'x'.repeat(50_000), 'utf8');
-    const result = await succeeded(fileTools(root).executor.execute({
+    const result = await succeeded(fileTools(root).execute({
       toolName: 'read_file', input: { path: 'large.txt', limit: 50_000 },
     }));
     const content = parsedToolContent(result) as { hasMore: boolean; nextOffset: number; bytesReturned: number };
@@ -171,7 +171,7 @@ describe('Workspace-backed built-in Tools', () => {
   });
 
   it('returns safe file failure facts without leaking absolute paths', async () => {
-    const result = await fileTools(root).executor.execute({
+    const result = await fileTools(root).execute({
       toolName: 'read_file', input: { path: 'missing.txt' },
     });
     expect(result).toMatchObject({
@@ -192,7 +192,7 @@ describe('Workspace-backed built-in Tools', () => {
         );
       },
     };
-    const result = await createBuiltInTools({ workspaceFileAccess }).executor.execute({
+    const result = await createBuiltInTestHarness({ workspaceFileAccess }).execute({
       toolName: 'read_file',
       input: { path: 'C:/outside/file.txt' },
     });
@@ -207,7 +207,7 @@ describe('Workspace-backed built-in Tools', () => {
 });
 
 function fileTools(root: string) {
-  return createBuiltInTools({ workspaceFileAccess: createLocalWorkspaceFileAccess(root) });
+  return createBuiltInTestHarness({ workspaceFileAccess: createLocalWorkspaceFileAccess(root) });
 }
 
 async function succeeded(pending: Promise<ToolExecutionResult>) {

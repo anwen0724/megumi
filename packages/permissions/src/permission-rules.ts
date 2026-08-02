@@ -2,7 +2,7 @@
  * Owns Permission modes, persisted rules, rule access ports, and internal matching semantics.
  */
 import { z } from 'zod';
-import type { JsonObject, JsonValue } from '@megumi/tools';
+import type { JsonObject, JsonValue } from '@megumi/ai';
 
 export const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() => z.union([
   z.string(),

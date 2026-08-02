@@ -1,7 +1,8 @@
 /*
  * Applies rule precedence, Permission mode defaults, and risk assessment to resolved operations.
  */
-import type { JsonObject, ToolExecutionAccess } from '@megumi/tools';
+import type { JsonObject } from '@megumi/ai';
+import type { ToolExecutionAccess } from '@megumi/sandbox';
 import {
   createApprovalSubject,
   type ApprovalOption,
@@ -219,13 +220,14 @@ function sessionGrantOperation(request: {
   readonly operations: readonly PermissionOperation[];
   readonly safetyAssessment: SafetyAssessment;
 }): PermissionOperation | undefined {
-  const tool = request.evaluation.registeredTool;
+  const identity = request.operations[0]?.context.toolIdentity;
   if (request.safetyAssessment !== 'safe'
     || request.operations.length !== 1
     || request.operations[0].action !== 'workspace.read'
-    || tool.source.sourceKind !== 'built_in'
-    || tool.identity.sourceToolName !== 'read_file'
-    || tool.registeredToolName !== 'read_file') return undefined;
+    || identity?.sourceId !== 'built_in'
+    || identity.namespace !== 'megumi'
+    || identity.sourceToolName !== 'read_file'
+    || identity.registeredToolName !== 'read_file') return undefined;
   return request.operations[0];
 }
 

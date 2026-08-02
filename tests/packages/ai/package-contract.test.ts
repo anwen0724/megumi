@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  AssistantMessageEventStream,
   AssistantContentBlockSchema,
   ContentBlockListSchema,
   JsonObjectSchema,
@@ -20,6 +21,41 @@ import {
 const packageRoot = path.resolve(process.cwd(), 'packages', 'ai');
 
 describe('AI package contract', () => {
+  it.each(['done', 'error', 'end'] as const)(
+    'settles AssistantMessageEventStream after %s termination',
+    async (termination) => {
+      const stream = new AssistantMessageEventStream();
+      const message = {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'done' }],
+        api: 'test-api',
+        provider: 'provider:1',
+        model: 'model:1',
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+        stopReason: termination === 'error' ? 'error' : 'stop',
+        timestamp: 1,
+      } as const;
+
+      const settlement = stream.waitForSettlement();
+      if (termination === 'done') {
+        stream.push({ type: 'done', reason: 'stop', message });
+      } else if (termination === 'error') {
+        stream.fail({ reason: 'error', error: message });
+      } else {
+        stream.end();
+      }
+
+      await expect(settlement).resolves.toBeUndefined();
+    },
+  );
+
   it('keeps the independent publish and build entry points', () => {
     const manifest = JSON.parse(
       fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'),

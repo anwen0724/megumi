@@ -204,6 +204,16 @@ export interface ToolActivityItem extends ProcessDisclosureItemBase {
   error?: { code: string; message: string; details?: Record<string, unknown> };
 }
 
+export interface PlanActivityItem extends ProcessDisclosureItemBase {
+  kind: 'plan_activity';
+  toolCallId: ToolCallId | string;
+  explanation?: string;
+  plan: Array<{
+    step: string;
+    status: 'pending' | 'in_progress' | 'completed';
+  }>;
+}
+
 export interface ErrorActivityItem extends ProcessDisclosureItemBase {
   kind: 'error_activity';
   errorCode?: string;
@@ -242,6 +252,7 @@ export type ProcessDisclosureItem =
   | ThinkingItem
   | AssistantTextItem
   | ToolActivityItem
+  | PlanActivityItem
   | ErrorActivityItem
   | CancelledActivityItem
   | CompactionActivityItem
@@ -466,6 +477,17 @@ export const ToolActivityItemSchema = z
   })
   .strict() satisfies z.ZodType<ToolActivityItem>;
 
+export const PlanActivityItemSchema = z.object({
+  ...ProcessDisclosureItemBaseShape,
+  kind: z.literal('plan_activity'),
+  toolCallId: z.string().min(1),
+  explanation: z.string().optional(),
+  plan: z.array(z.object({
+    step: z.string(),
+    status: z.enum(['pending', 'in_progress', 'completed']),
+  }).strict()),
+}).strict() satisfies z.ZodType<PlanActivityItem>;
+
 export const ErrorActivityItemSchema = z
   .object({
     ...ProcessDisclosureItemBaseShape,
@@ -519,6 +541,7 @@ export const ProcessDisclosureItemSchema = z.discriminatedUnion('kind', [
   ThinkingItemSchema,
   AssistantTextItemSchema,
   ToolActivityItemSchema,
+  PlanActivityItemSchema,
   ErrorActivityItemSchema,
   CancelledActivityItemSchema,
   CompactionActivityItemSchema,

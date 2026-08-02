@@ -59,7 +59,7 @@ function approvalPermissions(input: {
 }): Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'> {
   const evaluateToolCall: Permissions['evaluateToolCall'] = vi.fn(
     async (permissionRequest) => {
-      const decision = permissionRequest.registeredTool.registeredToolName
+      const decision = permissionRequest.operations[0]?.context.toolIdentity.registeredToolName
         === input.approvalToolName
         ? approvalDecisionFor(permissionRequest)
         : allowDecision(permissionRequest);
@@ -197,6 +197,7 @@ describe('ToolCall approval pause', () => {
 describe('resumeToolCallApproval', () => {
   it('applies approval before creating and executing one ToolExecution', async () => {
     const order: string[] = [];
+    const outputs: Array<{ stream: string; chunk: string; truncated: boolean }> = [];
     const applyApprovalDecision = vi.fn(async () => {
       order.push('apply');
       return {
@@ -205,8 +206,10 @@ describe('resumeToolCallApproval', () => {
         executionAccess: unrestrictedExecutionAccess,
       };
     });
-    const executeTool = vi.fn(async ({ toolName }) => {
+    const executeTool = vi.fn(async ({ toolName }, options) => {
       order.push('execute');
+      options?.onOutput?.({ stream: 'stdout', chunk: 'after approval', truncated: false });
+      options?.onOutput?.({ stream: 'stderr', chunk: 'bounded warning', truncated: true });
       return succeeded(toolName);
     });
     const { waiting, store, permissions, processingRequest } = await createWaiting({
@@ -226,10 +229,15 @@ describe('resumeToolCallApproval', () => {
       clock: processingRequest.clock,
       policy,
       signal: processingRequest.signal,
+      onToolExecutionOutput: (_execution, output) => outputs.push(output),
     });
 
     expect(resumed.status).toBe('resumed');
     expect(order).toEqual(['apply', 'execute']);
+    expect(outputs).toEqual([
+      { stream: 'stdout', chunk: 'after approval', truncated: false },
+      { stream: 'stderr', chunk: 'bounded warning', truncated: true },
+    ]);
     expect(applyApprovalDecision).toHaveBeenCalledWith(expect.objectContaining({
       originalPermissionDecision: expect.objectContaining({ type: 'requires_approval' }),
       originalSubject: expect.objectContaining({ toolCallId: 'tool-call:1' }),
@@ -298,7 +306,17 @@ describe('resumeToolCallApproval', () => {
       workspaceId: currentRun.workspaceId,
       toolCallId: 'tool-call:1',
       toolInput: { value: 'approval' },
-      registeredTool: tool,
+      operations: tool.handler.operations({
+        invocationId: 'model-call:1:tool-call:1',
+        runId: currentRun.runId,
+        sessionId: currentRun.sessionId,
+        workspaceId: currentRun.workspaceId,
+        modelCallId: 'model-call:1',
+        toolCallId: 'tool-call:1',
+        toolName: tool.registeredToolName,
+        toolIdentity: { ...tool.identity, registeredToolName: tool.registeredToolName },
+        input: { value: 'approval' },
+      }),
       permissionMode: 'ask',
       evaluatedAt: '2026-07-31T00:00:00.000Z',
     };
@@ -324,7 +342,18 @@ describe('resumeToolCallApproval', () => {
       workspaceId: currentRun.workspaceId,
       permissionMode: 'ask',
       toolCall: toolCall(0, tool.registeredToolName),
-      registeredTool: tool,
+      invocation: {
+        invocationId: 'model-call:1:tool-call:0',
+        runId: currentRun.runId,
+        sessionId: currentRun.sessionId,
+        workspaceId: currentRun.workspaceId,
+        modelCallId: 'model-call:1',
+        toolCallId: 'tool-call:0',
+        toolName: tool.registeredToolName,
+        toolIdentity: { ...tool.identity, registeredToolName: tool.registeredToolName },
+        input: { value: 'approval' },
+      },
+      operations: originalDecision.operations,
       originalPermissionDecision: originalDecision,
       originalApprovalSubject,
       completedToolResults: [],
@@ -341,8 +370,8 @@ describe('resumeToolCallApproval', () => {
       store,
       permissions,
       tools: {
-        preflightToolCall: () => ({ status: 'ready', input: {} }),
-        executeToolCall: executeTool,
+        routeToolCall: () => ({ status: 'failed', error: { code: 'unknown_tool', message: 'unused' } }),
+        executeToolInvocation: executeTool,
       },
       ids: {
         createToolExecutionId: () => 'tool-execution:1',

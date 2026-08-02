@@ -4,10 +4,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createBraveWebSearch,
-  createBuiltInTools,
   createWebFetch,
   createWebSearch,
 } from '../../../packages/tools/src';
+import { createBuiltInTestHarness } from './built-in-test-harness';
 import {
   isAllowedResolvedAddress,
   isPublicIp,
@@ -23,11 +23,11 @@ describe('web_search built-in Tool', () => {
         description: 'Current &amp; official <strong>documentation</strong>.',
       }] },
     }), { status: 200, headers: { 'content-type': 'application/json' } }));
-    const tools = createBuiltInTools({
+    const tools = createBuiltInTestHarness({
       workspaceFileAccess: createLocalWorkspaceFileAccess(process.cwd()),
       webSearch: createBraveWebSearch({ apiKey: 'search-secret', fetch: fetch as typeof globalThis.fetch }),
     });
-    const result = await tools.executor.execute({
+    const result = await tools.execute({
       toolName: 'web_search', input: { query: 'Megumi documentation', count: 3 },
     });
     expect(result).toMatchObject({ type: 'succeeded', normalizedResult: { kind: 'json' } });
@@ -65,12 +65,12 @@ describe('web_search built-in Tool', () => {
         init?.signal?.addEventListener('abort', () => reject(new Error('request aborted')), { once: true });
       })
     ));
-    const tools = createBuiltInTools({
+    const tools = createBuiltInTestHarness({
       workspaceFileAccess: createLocalWorkspaceFileAccess(process.cwd()),
       webSearch: createBraveWebSearch({ apiKey: 'search-secret', fetch: fetch as typeof globalThis.fetch }),
     });
     const controller = new AbortController();
-    const pending = tools.executor.execute(
+    const pending = tools.execute(
       { toolName: 'web_search', input: { query: 'cancel me' } },
       { signal: controller.signal },
     );
@@ -79,14 +79,14 @@ describe('web_search built-in Tool', () => {
   });
 
   it('normalizes provider authentication failure without exposing the credential', async () => {
-    const tools = createBuiltInTools({
+    const tools = createBuiltInTestHarness({
       workspaceFileAccess: createLocalWorkspaceFileAccess(process.cwd()),
       webSearch: createBraveWebSearch({
         apiKey: 'search-secret',
         fetch: vi.fn(async () => new Response('', { status: 401 })) as typeof globalThis.fetch,
       }),
     });
-    const result = await tools.executor.execute({
+    const result = await tools.execute({
       toolName: 'web_search', input: { query: 'Megumi' },
     });
     expect(result).toMatchObject({
@@ -99,7 +99,7 @@ describe('web_search built-in Tool', () => {
 
 describe('web_fetch built-in Tool', () => {
   it('returns a provider-neutral page from an injected network interface', async () => {
-    const tools = createBuiltInTools({
+    const tools = createBuiltInTestHarness({
       workspaceFileAccess: createLocalWorkspaceFileAccess(process.cwd()),
       webFetch: {
         async fetch({ url }) {
@@ -114,7 +114,7 @@ describe('web_fetch built-in Tool', () => {
         },
       },
     });
-    const result = await tools.executor.execute({
+    const result = await tools.execute({
       toolName: 'web_fetch', input: { url: 'https://example.com' },
     });
     expect(JSON.parse(result.normalizedResult.content)).toMatchObject({
@@ -123,11 +123,11 @@ describe('web_fetch built-in Tool', () => {
   });
 
   it('blocks private and local addresses with a safe structured reason', async () => {
-    const tools = createBuiltInTools({
+    const tools = createBuiltInTestHarness({
       workspaceFileAccess: createLocalWorkspaceFileAccess(process.cwd()),
       webFetch: createWebFetch(),
     });
-    await expect(tools.executor.execute({
+    await expect(tools.execute({
       toolName: 'web_fetch', input: { url: 'http://127.0.0.1/private' },
     })).resolves.toMatchObject({
       type: 'failed',

@@ -10,10 +10,10 @@ import {
 } from './tool-input';
 import { extractFileText } from './document-text';
 import { withFileFailure, type BuiltInToolContext } from './workspace-file-access';
+import { createBuiltInToolHandler, inputString, operation } from './tool-handler';
 
 export const searchTextToolDefinition: ToolDefinition = {
   name: 'search_text',
-  title: 'Search text',
   description: 'Search text in readable files, including Markdown, DOCX, and PDF, and return size-limited matches.',
   inputSchema: {
     type: 'object',
@@ -41,14 +41,15 @@ export const searchTextToolDefinition: ToolDefinition = {
     required: ['matches', 'offset', 'hasMore'],
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  capabilities: ['project_read'],
-  riskLevel: 'low',
-  sideEffect: 'none',
-  availability: { status: 'available' },
-  executionMode: 'parallel',
-  permissionMetadata: { ruleToolName: 'search_text' },
-  modelFacingDescription: 'Search text in files, including Markdown, DOCX, and PDF, and return size-limited matches with line or PDF page locations.',
 };
+
+export const searchTextToolHandler = createBuiltInToolHandler({
+  toolName: 'search_text',
+  operations: (invocation) => [operation(invocation, 'workspace.read', {
+    type: 'workspace.path', id: inputString(invocation, 'path', '.'),
+  })],
+  execute: (context, input, options) => executeSearchText(context, input, options.signal),
+});
 
 export async function executeSearchText(
   context: BuiltInToolContext,

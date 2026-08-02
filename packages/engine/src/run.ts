@@ -27,8 +27,14 @@ export type RunFailureCode =
 export interface RunFailure {
   readonly code: RunFailureCode;
   readonly message: string;
-  readonly retryable?: boolean;
+  readonly retryable: boolean;
+  readonly cause?: RunFailureCause;
   readonly details?: Readonly<Record<string, unknown>>;
+}
+
+export interface RunFailureCause {
+  readonly owner: 'ai' | 'context' | 'permissions' | 'tools' | 'session' | 'engine';
+  readonly code: string;
 }
 
 export interface Run {
