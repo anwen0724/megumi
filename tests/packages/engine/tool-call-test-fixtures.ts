@@ -69,7 +69,7 @@ export function registeredTool(
     identity,
     definition: {
       name, description: name,
-      inputSchema: {
+      parameters: {
         type: 'object', properties: { value: { type: 'string' } },
         required: input.required ?? [], additionalProperties: false,
       },

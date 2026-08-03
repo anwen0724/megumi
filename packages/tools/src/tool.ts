@@ -19,7 +19,8 @@ export type ToolExecutionMode = 'parallel' | 'serial';
 export interface ToolDefinition {
   readonly name: string;
   readonly description: string;
-  readonly inputSchema: JsonSchemaObject;
+  readonly parameters: JsonSchemaObject;
+  /** Tools-internal metadata that never enters the model-visible Tool Contract. */
   readonly outputSchema?: JsonSchemaObject;
   readonly annotations?: {
     readonly readOnlyHint?: boolean;

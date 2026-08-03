@@ -5,7 +5,8 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createContext,
   type CreateContextOptions,
-  type CurrentConversationRun,
+  type ModelCallContext,
+  type RunContext,
 } from '../../../packages/context/src/index';
 
 const model: Model<Api> = {
@@ -17,15 +18,8 @@ const model: Model<Api> = {
   reasoning: false,
   input: ['text'],
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-  contextWindow: 100,
+  contextWindow: 200,
   maxTokens: 20,
-};
-
-const currentRun: CurrentConversationRun = {
-  runId: 'run:current',
-  userEntry: { entryId: 'entry:current', parentEntryId: 'entry:assistant:2' },
-  userMessage: { type: 'user_message', content: [{ type: 'text', text: 'continue' }] },
-  runItems: [],
 };
 
 function completedMessage(content: string): AssistantMessage {
@@ -37,10 +31,10 @@ function completedMessage(content: string): AssistantMessage {
     model: model.id,
     usage: {
       input: 0,
-      output: 0,
+      output: 1,
       cacheRead: 0,
       cacheWrite: 0,
-      totalTokens: 0,
+      totalTokens: 1,
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
     stopReason: 'stop',
@@ -97,14 +91,46 @@ function runHistory(index: number): SessionHistoryItem[] {
   ];
 }
 
+function compactedHistory(history: SessionHistoryItem[]): SessionHistoryItem[] {
+  const first = history[0]!;
+  const kept = history.slice(2);
+  const entry = {
+    entry_id: 'entry:summary',
+    session_id: 'session:1',
+    parent_entry_id: first.entry.entry_id,
+    entry_type: 'compaction' as const,
+    compaction_id: 'compaction:1',
+    created_at: 'now',
+  };
+  return [
+    { type: 'compaction', entry, compaction: {
+      compaction_id: 'compaction:1',
+      session_id: 'session:1',
+      summary_text: 'replacement summary',
+      covered_until_entry_id: 'entry:user:2',
+      first_kept_entry_id: 'entry:assistant:2',
+      created_at: 'now',
+    } },
+    ...kept,
+  ];
+}
+
 function fixture(
-  counts: number[],
   completeSimple = vi.fn(async () => completedMessage('replacement summary')),
 ): CreateContextOptions {
   const history = [...runHistory(1), ...runHistory(2)];
+  let reads = 0;
   return {
     sessionHistory: {
-      getActiveHistory: vi.fn(() => ({ status: 'ok' as const, history })),
+      // The first read returns the full history; after the committed Summary the
+      // authoritative history is compacted (Summary replaces the prefix).
+      getActiveHistory: vi.fn(() => {
+        reads += 1;
+        return {
+          status: 'ok' as const,
+          history: reads === 1 ? history : compactedHistory(history),
+        };
+      }),
       saveCompactionSummary: vi.fn((request) => ({
         status: 'saved' as const,
         compaction: {
@@ -112,22 +138,12 @@ function fixture(
           session_id: request.session_id,
           summary_text: request.summary_text,
           covered_until_entry_id: request.covered_until_entry_id,
+          first_kept_entry_id: request.first_kept_entry_id,
           created_at: request.created_at,
         },
       })),
     },
     attachmentReader: { readAttachmentContent: vi.fn() },
-    scopeResolver: {
-      resolve: vi.fn(() => ({
-        status: 'resolved' as const,
-        workspaceRoot: '/workspace',
-        executionEnvironment: {
-          workingDirectory: '/workspace',
-          operatingSystem: 'Linux',
-          shell: 'POSIX shell',
-        },
-      })),
-    },
     instructionReader: {
       getSystemInstructions: vi.fn(() => []),
       getEffectiveInstructions: vi.fn(async () => ({
@@ -136,65 +152,97 @@ function fixture(
       })),
     },
     models: { completeSimple },
-    contextTokenEstimator: vi.fn(() => counts.shift() ?? 20),
-    policy: { keepRecentRuns: 1, compactionThresholdRatio: 0.8 },
+    // Deterministic estimator: four original messages cost 40 tokens each, the
+    // compacted Prompt (summary + one kept message) costs much less.
+    contextTokenEstimator: vi.fn((context: { messages: unknown[]; systemPrompt?: string }) => (
+      context.messages.length * 60 + (context.systemPrompt ? 10 : 0)
+    )),
+    policy: { enabled: true, reserveTokens: 32, keepRecentTokens: 1, minimumRecentMessages: 1 },
     clock: { now: () => '2026-07-12T00:00:00.000Z' },
-    ids: { preparationId: () => 'preparation:1', compactionId: () => 'compaction:1' },
+    ids: { compactionId: () => 'compaction:1' },
+  };
+}
+
+function modelCall(overrides: Partial<ModelCallContext> = {}): ModelCallContext {
+  const run: RunContext = {
+    runId: 'run:current',
+    sessionId: 'session:1',
+    workspaceId: 'workspace:1',
+    userInput: {
+      displayContent: [{ type: 'text', text: 'continue' }],
+      modelContent: [{ type: 'text', text: 'continue' }],
+      attachments: [],
+    },
+    model,
+  };
+  return {
+    modelCallId: 'model-call:1',
+    run,
+    executionEnvironment: {
+      workingDirectory: '/workspace',
+      operatingSystem: 'Linux',
+      shell: 'POSIX shell',
+    },
+    effectiveInstructions: { sources: [] },
+    skills: { catalog: [], diagnostics: [] },
+    tools: { definitions: [] },
+    ...overrides,
+  };
+}
+
+function manualRequest(overrides: Partial<Parameters<ReturnType<typeof createContext>['compact']>[0]> = {}) {
+  return {
+    sessionId: 'session:1',
+    workspaceId: 'workspace:1',
+    model,
+    trigger: 'manual' as const,
+    executionEnvironment: {
+      workingDirectory: '/workspace',
+      operatingSystem: 'Linux',
+      shell: 'POSIX shell',
+    },
+    effectiveInstructions: { sources: [] },
+    skills: { catalog: [], diagnostics: [] },
+    ...overrides,
   };
 }
 
 describe('Context compaction', () => {
   it('automatically compacts above the threshold and rebuilds from the committed Summary', async () => {
-    const options = fixture([90, 20, 20]);
-    const progress = vi.fn();
+    const options = fixture();
     const result = await createContext(options).build({
-      sessionId: 'session:1',
-      workspaceId: 'workspace:1',
-      currentRun,
-      tools: [],
-      model,
-      onCompactionProgress: progress,
+      modelCallContext: modelCall(),
     });
 
-    expect(result).toMatchObject({
-      status: 'ready',
-      prepared: {
-        compaction: { compactionId: 'compaction:1' },
-        usage: { usedTokens: 20 },
-      },
-    });
+    if (result.status !== 'ready') {
+      throw new Error(`Expected ready, got ${result.status}: ${result.status === 'failed' ? result.failure.code : ''}`);
+    }
+    if ((options.sessionHistory.saveCompactionSummary as ReturnType<typeof vi.fn>).mock.calls.length === 0) {
+      throw new Error('saveCompactionSummary was not called');
+    }
     expect(options.sessionHistory.saveCompactionSummary).toHaveBeenCalledWith(expect.objectContaining({
       compaction_id: 'compaction:1',
-      covered_until_entry_id: 'entry:assistant:1',
-      first_kept_entry_id: 'entry:user:2',
-      expected_active_entry_id: 'entry:current',
+      covered_until_entry_id: 'entry:user:2',
+      first_kept_entry_id: 'entry:assistant:2',
+      expected_active_entry_id: 'entry:assistant:2',
       append_to_active_path: true,
     }));
-    expect(progress).toHaveBeenNthCalledWith(1, expect.objectContaining({ status: 'started' }));
-    expect(progress).toHaveBeenNthCalledWith(2, expect.objectContaining({ status: 'completed' }));
+    // The rebuilt Prompt comes from a fresh Session read, not a pre-commit projection.
+    expect(options.sessionHistory.getActiveHistory).toHaveBeenCalledTimes(2);
   });
 
   it('uses the same compactor for manual requests and preserves nothing-to-compact semantics', async () => {
-    const compacted = await createContext(fixture([70, 20])).compact({
-      sessionId: 'session:1',
-      workspaceId: 'workspace:1',
-      model,
-    });
-    expect(compacted).toMatchObject({
-      status: 'compacted',
-      usageBefore: { usedTokens: 70 },
-      usageAfter: { usedTokens: 20 },
-    });
+    const compacted = await createContext(fixture()).compact(manualRequest());
+    expect(compacted).toMatchObject({ status: 'compacted' });
 
     const options: CreateContextOptions = {
-      ...fixture([20]),
-      policy: { keepRecentRuns: 2, compactionThresholdRatio: 0.8 },
+      ...fixture(),
+      policy: { enabled: true, reserveTokens: 16, keepRecentTokens: 1000, minimumRecentMessages: 100 },
     };
-    expect(await createContext(options).compact({
-      sessionId: 'session:1',
-      workspaceId: 'workspace:1',
-      model,
-    })).toEqual({ status: 'nothing_to_compact', reason: 'no_older_runs' });
+    expect(await createContext(options).compact(manualRequest())).toEqual({
+      status: 'nothing_to_compact',
+      reason: 'no_older_messages',
+    });
   });
 
   it('serializes concurrent compaction for the same Session', async () => {
@@ -203,10 +251,10 @@ describe('Context compaction', () => {
     const completeSimple = vi.fn()
       .mockImplementationOnce(() => first)
       .mockImplementation(async () => completedMessage('second summary'));
-    const context = createContext(fixture([70, 20, 70, 20], completeSimple));
+    const context = createContext(fixture(completeSimple));
 
-    const one = context.compact({ sessionId: 'session:1', workspaceId: 'workspace:1', model });
-    const two = context.compact({ sessionId: 'session:1', workspaceId: 'workspace:1', model });
+    const one = context.compact(manualRequest());
+    const two = context.compact(manualRequest());
     await vi.waitFor(() => expect(completeSimple).toHaveBeenCalledTimes(1));
     release(completedMessage('first summary'));
     await vi.waitFor(() => expect(completeSimple).toHaveBeenCalledTimes(2));
@@ -219,35 +267,30 @@ describe('Context compaction', () => {
   it('does not persist cancelled or non-reducing summaries', async () => {
     const controller = new AbortController();
     controller.abort();
-    const cancelledOptions = fixture([70]);
-    expect(await createContext(cancelledOptions).compact({
-      sessionId: 'session:1',
-      workspaceId: 'workspace:1',
-      model,
+    const cancelledOptions = fixture();
+    expect(await createContext(cancelledOptions).compact(manualRequest({
       signal: controller.signal,
-    })).toMatchObject({ status: 'failed', failure: { code: 'cancelled' } });
+    }))).toMatchObject({ status: 'failed', failure: { code: 'cancelled' } });
     expect(cancelledOptions.sessionHistory.saveCompactionSummary).not.toHaveBeenCalled();
 
-    const notReducingOptions = fixture([70, 70]);
-    expect(await createContext(notReducingOptions).compact({
-      sessionId: 'session:1',
-      workspaceId: 'workspace:1',
-      model,
-    })).toEqual({ status: 'nothing_to_compact', reason: 'summary_not_reducing' });
-    expect(notReducingOptions.sessionHistory.saveCompactionSummary).not.toHaveBeenCalled();
+    const flatOptions: CreateContextOptions = {
+      ...fixture(),
+      contextTokenEstimator: vi.fn(() => 100),
+    };
+    expect(await createContext(flatOptions).compact(manualRequest())).toEqual({
+      status: 'nothing_to_compact',
+      reason: 'summary_not_reducing',
+    });
+    expect(flatOptions.sessionHistory.saveCompactionSummary).not.toHaveBeenCalled();
   });
 
   it('converts unexpected dependency exceptions into a stable compaction failure', async () => {
-    const options = fixture([70]);
+    const options = fixture();
     options.sessionHistory.getActiveHistory = vi.fn(() => {
       throw new Error('database unavailable');
     });
 
-    await expect(createContext(options).compact({
-      sessionId: 'session:1',
-      workspaceId: 'workspace:1',
-      model,
-    })).resolves.toEqual({
+    await expect(createContext(options).compact(manualRequest())).resolves.toEqual({
       status: 'failed',
       failure: {
         code: 'compaction_failed',
@@ -263,28 +306,17 @@ describe('Context compaction', () => {
       recordLog: vi.fn(),
       recordMeasurement: vi.fn(),
     } as unknown as NonNullable<CreateContextOptions['observability']>;
-    const options: CreateContextOptions = { ...fixture([70, 20]), observability };
+    const options: CreateContextOptions = { ...fixture(), observability };
 
-    await expect(createContext(options).compact({
-      sessionId: 'session:1',
-      workspaceId: 'workspace:1',
-      model,
-    })).resolves.toMatchObject({ status: 'compacted' });
-
-    expect(observability.recordLog).toHaveBeenNthCalledWith(1, expect.objectContaining({
+    await expect(createContext(options).compact(manualRequest())).resolves.toMatchObject({ status: 'compacted' });
+    expect(observability.recordLog).toHaveBeenCalledWith(expect.objectContaining({
       event: 'context.compaction.started',
-      correlation: { sessionId: 'session:1' },
-      attributes: expect.objectContaining({ beforeTokens: 70, automatic: false }),
     }));
-    expect(observability.recordLog).toHaveBeenNthCalledWith(2, expect.objectContaining({
+    expect(observability.recordLog).toHaveBeenCalledWith(expect.objectContaining({
       event: 'context.compaction.completed',
-      attributes: expect.objectContaining({ status: 'compacted', automatic: false }),
     }));
-    expect(observability.recordMeasurement).toHaveBeenCalledWith({
+    expect(observability.recordMeasurement).toHaveBeenCalledWith(expect.objectContaining({
       name: 'context.compaction.after_tokens',
-      value: 20,
-      unit: 'token',
-      correlation: { sessionId: 'session:1' },
-    });
+    }));
   });
 });

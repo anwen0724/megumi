@@ -13,6 +13,8 @@ export interface SessionMessageAttachment {
   source_type: 'local_file' | 'host_reference';
   source_value: string;
   ordinal: number;
+  /** Document byte size persisted from Input validation; old records may lack it. */
+  size_bytes?: number;
   created_at: string;
 }
 

@@ -15,7 +15,7 @@ import type {
   ChatListSessionsUiResult,
   ChatListTimelineUiResult,
   ChatSendUserInputUiPayload,
-  ChatImageInputCapabilitiesUiResult,
+  ChatInputCapabilitiesUiResult,
   ChatSelectImagesUiResult,
   ChatSelectDocumentsUiResult,
   ChatReadAttachmentImageUiResult,
@@ -275,9 +275,9 @@ export const api = {
     },
     imageInput: {
       capabilities: (
-        request: BusinessRequest<ImageInputCapabilitiesPayload, typeof IPC_CHANNELS.chat.imageInputCapabilitiesGet>,
-      ): Promise<RuntimeIpcResult<ChatImageInputCapabilitiesUiResult, typeof IPC_CHANNELS.chat.imageInputCapabilitiesGet>> =>
-        invokeRuntimeIpc(IPC_CHANNELS.chat.imageInputCapabilitiesGet, request),
+        request: BusinessRequest<ImageInputCapabilitiesPayload, typeof IPC_CHANNELS.chat.inputCapabilitiesGet>,
+      ): Promise<RuntimeIpcResult<ChatInputCapabilitiesUiResult, typeof IPC_CHANNELS.chat.inputCapabilitiesGet>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.chat.inputCapabilitiesGet, request),
       select: (
         request: BusinessRequest<ImageInputSelectPayload, typeof IPC_CHANNELS.chat.imageInputSelect>,
       ): Promise<RuntimeIpcResult<ChatSelectImagesUiResult, typeof IPC_CHANNELS.chat.imageInputSelect>> =>

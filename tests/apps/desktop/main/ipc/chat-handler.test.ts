@@ -52,6 +52,7 @@ function createContextUsageRequest(): RuntimeIpcRequest<SessionContextUsageGetPa
     requestId: 'request-context-usage-1',
     payload: {
       sessionId: 'session-1',
+      modelSelection: { provider_id: 'provider', model_id: 'model' },
     },
     meta: {
       channel: IPC_CHANNELS.chat.sessionContextUsageGet,
@@ -222,6 +223,7 @@ describe('registerChatHandlers', () => {
     });
     expect(getContextUsage).toHaveBeenCalledWith({
       sessionId: 'session-1',
+      modelSelection: { provider_id: 'provider', model_id: 'model' },
     });
   });
 

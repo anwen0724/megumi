@@ -64,6 +64,13 @@
       "when": 1785628800000,
       "tag": "0008_workspace_tool_effects",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1785628800001,
+      "tag": "0009_session_message_metadata",
+      "breakpoints": true
     }
   ]
 }

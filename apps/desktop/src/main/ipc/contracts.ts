@@ -30,7 +30,7 @@ export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.chat.sessionTimelineList,
   IPC_CHANNELS.chat.sessionHydrationGet,
   IPC_CHANNELS.chat.sessionContextUsageGet,
-  IPC_CHANNELS.chat.imageInputCapabilitiesGet,
+  IPC_CHANNELS.chat.inputCapabilitiesGet,
   IPC_CHANNELS.chat.imageInputSelect,
   IPC_CHANNELS.chat.documentInputSelect,
   IPC_CHANNELS.chat.imageInputClipboardRead,

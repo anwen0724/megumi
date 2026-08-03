@@ -5,12 +5,90 @@ import { describe, expect, it, vi } from 'vitest';
 import { registeredTool } from './tool-call-test-fixtures';
 import {
   assistantStream,
+  assistantStreamWithUsage,
   collectEvents,
   createEngineFixture,
   startRequest,
 } from './engine-test-fixtures';
 
-describe('Engine run loop', () => {  it('creates one immutable SkillView per ModelCall with only Workspace and signal facts', async () => {
+describe('Engine run loop', () => {  it('recovers from one Context Overflow per ModelCall with a compaction retry', async () => {
+    const compact = vi.fn(async () => ({
+      status: 'compacted' as const,
+      compactionId: 'compaction:overflow',
+      usageBefore: { tokens: 100, usageTokens: 0, trailingTokens: 100, lastUsageIndex: null },
+      usageAfter: { tokens: 20, usageTokens: 0, trailingTokens: 20, lastUsageIndex: null },
+    }));
+    const fixture = createEngineFixture({
+      contextCompact: compact,
+      streams: [
+        // Overflow: usage fills the Context Window.
+        assistantStreamWithUsage('overflowing', {
+          input: 64_001,
+          output: 1,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 64_002,
+        }),
+        assistantStream('final answer'),
+      ],
+    });
+
+    const started = await fixture.engine.startRun(startRequest);
+    expect(started.status).toBe('started');
+    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const events = await collectEvents(started.events);
+
+    expect(fixture.writes).toEqual(['user', 'assistant:completed']);
+    expect(events.map((event) => event.eventType)).toContain('model_call.projection_reset');
+    expect(events.at(-1)?.eventType).toBe('run.completed');
+    expect(compact).toHaveBeenCalledWith(expect.objectContaining({
+      trigger: 'overflow',
+      sessionId: startRequest.sessionId,
+    }));
+    // The rebuilt Prompt came from the same ModelCallContext; the run completed once.
+    expect(fixture.contextRuns).toHaveLength(2);
+  });
+
+  it('does not retry a second Overflow on the same ModelCall', async () => {
+    const compact = vi.fn(async () => ({
+      status: 'compacted' as const,
+      compactionId: 'compaction:overflow',
+      usageBefore: { tokens: 100, usageTokens: 0, trailingTokens: 100, lastUsageIndex: null },
+      usageAfter: { tokens: 20, usageTokens: 0, trailingTokens: 20, lastUsageIndex: null },
+    }));
+    const fixture = createEngineFixture({
+      contextCompact: compact,
+      streams: [
+        assistantStreamWithUsage('first overflow', {
+          input: 64_001, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 64_002,
+        }),
+        assistantStreamWithUsage('second overflow', {
+          input: 64_001, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 64_002,
+        }),
+      ],
+    });
+
+    const started = await fixture.engine.startRun(startRequest);
+    expect(started.status).toBe('started');
+    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const events = await collectEvents(started.events);
+
+    expect(events.at(-1)?.eventType).toBe('run.failed');
+    expect(fixture.writes).toEqual(['user', 'assistant:failed']);
+    expect(compact).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not start a ModelCall or Context build when the UserMessage save fails', async () => {
+    const fixture = createEngineFixture({ failUserMessageSave: true });
+    const started = await fixture.engine.startRun(startRequest);
+    expect(started.status).toBe('failed');
+    if (started.status !== 'failed') return;
+    expect(started.failure).toMatchObject({ code: 'session_failed' });
+    expect(fixture.contextRuns).toHaveLength(0);
+    expect(fixture.skillViewRequests).toHaveLength(0);
+  });
+
+  it('creates one immutable SkillView per ModelCall with only Workspace and signal facts', async () => {
     const fixture = createEngineFixture({
       streams: [assistantStream('final answer')],
     });
@@ -43,13 +121,15 @@ describe('Engine run loop', () => {  it('creates one immutable SkillView per Mod
 
     expect(fixture.writes).toEqual(['user', 'assistant:completed']);
     expect(fixture.contextRuns).toHaveLength(1);
-    expect(fixture.contextUsageRecords).toEqual([
-      expect.objectContaining({
+    // The ModelCallContext is fixed before each build and never persisted.
+    expect(fixture.contextRuns[0]).toMatchObject({
+      modelCallId: expect.any(String),
+      run: expect.objectContaining({
         sessionId: startRequest.sessionId,
-        runId: started.run.runId,
-        preCallUsage: expect.objectContaining({ contextWindowTokens: 4_096 }),
+        workspaceId: startRequest.workspaceId,
+        userInput: expect.objectContaining({ modelContent: [{ type: 'text', text: 'hello' }] }),
       }),
-    ]);
+    });
     expect(events.at(-1)?.eventType).toBe('run.completed');
   });
 
@@ -91,16 +171,12 @@ describe('Engine run loop', () => {  it('creates one immutable SkillView per Mod
     ]);
     expect(executeTool).toHaveBeenCalledOnce();
     expect(fixture.contextRuns).toHaveLength(2);
+    // The second ModelCall gets its own ModelCallContext; Context reads Session History.
     expect(fixture.contextRuns[1]).toMatchObject({
-      runItems: [
-        { type: 'assistant_message' },
-        { type: 'tool_call', toolName: 'lookup' },
-        {
-          type: 'tool_result',
-          toolName: 'lookup',
-        },
-      ],
+      run: expect.objectContaining({ runId: started.run.runId }),
+      tools: { definitions: [expect.objectContaining({ name: 'lookup' })] },
     });
+    expect(fixture.contextRuns[1]).not.toHaveProperty('runItems');
     expect(events.map((event) => event.eventType)).toContain('tool_result.created');
     expect(events.find((event) => event.eventType === 'tool_result.created')?.payload).toMatchObject({
       summary: 'lookup completed',

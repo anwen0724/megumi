@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from 'react';
 import type {
   ChatGetContextUsageUiResult,
-  ChatImageInputCapabilitiesUiResult,
+  ChatInputCapabilitiesUiResult,
   ProviderPublicStatusUiDto,
 } from '@megumi/product/host';
 import type { InputSuggestionQueryResult } from '@megumi/product/host';
@@ -30,7 +30,7 @@ interface ComposerDockProps {
   onApprovalResolve?: (payload: ToolApprovalResolvePayload) => Promise<ToolApprovalResolveResult>;
   providers?: ProviderPublicStatusUiDto[];
   contextUsage?: ChatGetContextUsageUiResult;
-  imageInputCapabilities?: ChatImageInputCapabilitiesUiResult;
+  imageInputCapabilities?: ChatInputCapabilitiesUiResult;
   initialValue?: string;
   initialAttachments?: ComposerDraftAttachment[];
   onSubmit: (payload: ComposerSubmitPayload) => boolean | void | Promise<boolean | void>;

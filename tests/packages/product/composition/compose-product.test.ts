@@ -110,9 +110,11 @@ describe('composeProduct', () => {
           parameters?: { properties?: Record<string, { description?: string }> };
         }>;
       };
-      expect(firstContext.systemPrompt).toContain(`Working directory: ${workspaceRoot}`);
-      expect(firstContext.systemPrompt).toContain('Operating system:');
-      expect(firstContext.systemPrompt).toContain('Shell:');
+      expect(firstContext.systemPrompt).toContain(`<working_directory>${workspaceRoot}</working_directory>`);
+      expect(firstContext.systemPrompt).toContain('<operating_system>');
+      expect(firstContext.systemPrompt).toContain('<shell>');
+      expect(firstContext.systemPrompt).toContain('<available_skills>');
+      expect(firstContext.systemPrompt).toContain('<name>review</name>');
       const listDirectory = firstContext.tools?.find((tool) => tool.name === 'list_directory');
       expect(listDirectory).toMatchObject({
         description: 'List files and directories.',

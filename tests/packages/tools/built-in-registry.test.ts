@@ -9,7 +9,7 @@ describe('built-in Tool Registry', () => {
     for (const tool of registry.list()) {
       expect(tool.definition.name).toBe(tool.handler.toolName);
       expect(tool.definition.description.length).toBeGreaterThan(0);
-      expect(tool.definition.inputSchema.type).toBe('object');
+      expect(tool.definition.parameters.type).toBe('object');
       expect(tool.definition).not.toHaveProperty('capabilities');
       expect(tool.definition).not.toHaveProperty('riskLevel');
       expect(tool.definition).not.toHaveProperty('sideEffect');

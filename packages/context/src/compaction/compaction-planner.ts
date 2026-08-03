@@ -1,44 +1,74 @@
-/* Calculates the compactable historical prefix without performing IO or calling a Model. */
-import type { ConversationRun, CurrentConversationRun } from '../conversation-run';
+/*
+ * Plans the compactable history prefix by Token and kept-message counts with
+ * ToolCall/ToolResult protocol closure. Works purely on the converted Message
+ * list and maps cut positions back to Session entry facts.
+ */
+
+import type { Message } from '@megumi/ai';
+import type { CompactionPolicy } from '../context-policy';
+
+export interface CompactionMessageSource {
+  readonly entryId: string;
+  readonly message: Message;
+}
 
 export interface CompactionPlan {
-  readonly runs: ConversationRun[];
+  /** The AI messages being replaced by the Summary. */
+  readonly summarizedMessages: readonly Message[];
   readonly coveredUntilEntryId: string;
-  readonly firstKeptEntryId?: string;
+  readonly firstKeptEntryId: string;
+  /** True when a Tool loop had to be partially cut and its context is inside the Summary. */
+  readonly turnPrefixIncluded: boolean;
 }
 
 export type PlanCompactionResult =
   | { readonly status: 'planned'; readonly plan: CompactionPlan }
   | {
       readonly status: 'nothing_to_compact';
-      readonly reason: 'no_historical_runs' | 'no_older_runs';
+      readonly reason: 'no_historical_messages' | 'no_older_messages' | 'summary_not_reducing';
     };
 
 export function planCompaction(input: {
-  readonly historicalRuns: ConversationRun[];
-  readonly keepRecentRuns: number;
-  readonly currentRun?: CurrentConversationRun;
+  readonly sources: readonly CompactionMessageSource[];
+  readonly policy: CompactionPolicy;
+  readonly estimateMessageTokens: (message: Message) => number;
 }): PlanCompactionResult {
-  if (!Number.isInteger(input.keepRecentRuns) || input.keepRecentRuns < 0) {
-    throw new RangeError('keepRecentRuns must be a nonnegative integer.');
+  const sources = input.sources;
+  if (sources.length === 0) {
+    return { status: 'nothing_to_compact', reason: 'no_historical_messages' };
   }
-  if (input.historicalRuns.length === 0) {
-    return { status: 'nothing_to_compact', reason: 'no_historical_runs' };
+
+  // Walk from the newest message backwards, accumulating kept Token and
+  // kept original conversation messages. Compaction Summary messages never
+  // count toward minimumRecentMessages.
+  let keptTokens = 0;
+  let keptConversationMessages = 0;
+  let cutIndex: number | undefined;
+  for (let index = sources.length - 1; index >= 0; index -= 1) {
+    const message = sources[index]!.message;
+    if (!isSummaryMessage(message)) keptConversationMessages += 1;
+    keptTokens += input.estimateMessageTokens(message);
+    if (keptTokens >= input.policy.keepRecentTokens
+      && keptConversationMessages >= input.policy.minimumRecentMessages) {
+      cutIndex = index;
+      break;
+    }
   }
-  const prefixLength = input.historicalRuns.length - input.keepRecentRuns;
-  if (prefixLength <= 0) return { status: 'nothing_to_compact', reason: 'no_older_runs' };
-  const runs = input.historicalRuns.slice(0, prefixLength);
-  const lastCoveredRun = runs[runs.length - 1]!;
-  const firstKeptEntryId = input.historicalRuns[prefixLength]?.source.userEntryId
-    ?? input.currentRun?.userEntry.entryId;
-  return {
-    status: 'planned',
-    plan: {
-      runs,
-      coveredUntilEntryId: lastCoveredRun.source.lastEntryId,
-      ...(firstKeptEntryId ? { firstKeptEntryId } : {}),
-    },
+  if (cutIndex === undefined || cutIndex === 0) {
+    return { status: 'nothing_to_compact', reason: 'no_older_messages' };
+  }
+
+  const closed = closeToolProtocol(sources, cutIndex);
+  const plan: CompactionPlan = {
+    summarizedMessages: sources.slice(0, closed.cutIndex).map((source) => source.message),
+    coveredUntilEntryId: sources[closed.cutIndex - 1]!.entryId,
+    firstKeptEntryId: sources[closed.cutIndex]!.entryId,
+    turnPrefixIncluded: closed.turnPrefixIncluded,
   };
+  if (plan.summarizedMessages.length === 0) {
+    return { status: 'nothing_to_compact', reason: 'no_older_messages' };
+  }
+  return { status: 'planned', plan };
 }
 
 export function validateCompactionReduction(input: {
@@ -53,6 +83,61 @@ export function validateCompactionReduction(input: {
   return input.usageAfterInputTokens < input.usageBeforeInputTokens
     ? { status: 'valid' }
     : { status: 'nothing_to_compact', reason: 'summary_not_reducing' };
+}
+
+/**
+ * Extends the cut so the kept suffix never contains a ToolResult without its
+ * ToolCall, and a cut is never placed directly before a ToolResultMessage.
+ */
+function closeToolProtocol(
+  sources: readonly CompactionMessageSource[],
+  initialCutIndex: number,
+): { cutIndex: number; turnPrefixIncluded: boolean } {
+  let cutIndex = initialCutIndex;
+  let turnPrefixIncluded = false;
+  while (true) {
+    const kept = sources.slice(cutIndex);
+    const keptCallIds = new Set(
+      kept.flatMap((source) => (
+        source.message.role === 'assistant'
+          ? source.message.content.flatMap((block) => block.type === 'toolCall' ? [block.id] : [])
+          : []
+      )),
+    );
+    const orphanIndex = kept.findIndex((source) => (
+      source.message.role === 'toolResult' && !keptCallIds.has(source.message.toolCallId)
+    ));
+    if (orphanIndex === -1) break;
+    const orphan = kept[orphanIndex]!;
+    if (orphan.message.role !== 'toolResult') break;
+    // The kept suffix begins inside a Tool loop: extend the cut to before the
+    // Assistant message that issued the orphaned ToolCall.
+    const toolCallId = orphan.message.toolCallId;
+    let callSourceIndex = -1;
+    for (let index = cutIndex + orphanIndex - 1; index >= 0; index -= 1) {
+      const source = sources[index]!;
+      if (source.message.role === 'assistant'
+        && source.message.content.some((block) => block.type === 'toolCall' && block.id === toolCallId)) {
+        callSourceIndex = index;
+        break;
+      }
+    }
+    if (callSourceIndex < 0) {
+      // No call exists anywhere in the active path: cannot close the protocol.
+      break;
+    }
+    cutIndex = callSourceIndex;
+    turnPrefixIncluded = true;
+  }
+  return { cutIndex, turnPrefixIncluded };
+}
+
+function isSummaryMessage(message: Message): boolean {
+  return message.role === 'user'
+    && typeof message.content !== 'string'
+    && message.content.some((block) => (
+      block.type === 'text' && block.text.includes('compacted into the following summary')
+    ));
 }
 
 function validateTokenCount(value: number, name: string): void {

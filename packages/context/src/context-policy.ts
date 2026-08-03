@@ -1,4 +1,4 @@
-/* Defines the Context window policy applied uniformly to build and compaction. */
+/* Defines the Compaction Policy and Context Window validation shared by build and compaction. */
 import type { Api, Model } from '@megumi/ai';
 
 export interface ContextCapacity {
@@ -7,14 +7,18 @@ export interface ContextCapacity {
   readonly contextWindowTokens: number;
 }
 
-export interface ContextPolicy {
-  readonly compactionThresholdRatio: number;
-  readonly keepRecentRuns: number;
+export interface CompactionPolicy {
+  readonly enabled: boolean;
+  readonly reserveTokens: number;
+  readonly keepRecentTokens: number;
+  readonly minimumRecentMessages: number;
 }
 
-export const DEFAULT_CONTEXT_POLICY: Readonly<ContextPolicy> = Object.freeze({
-  compactionThresholdRatio: 0.8,
-  keepRecentRuns: 3,
+export const DEFAULT_COMPACTION_POLICY: Readonly<CompactionPolicy> = Object.freeze({
+  enabled: true,
+  reserveTokens: 16384,
+  keepRecentTokens: 20000,
+  minimumRecentMessages: 6,
 });
 
 export function contextCapacityFromModel(model: Model<Api>): ContextCapacity {
@@ -25,31 +29,45 @@ export function contextCapacityFromModel(model: Model<Api>): ContextCapacity {
   };
 }
 
-export function resolveContextPolicy(
-  defaults: Partial<ContextPolicy> | undefined,
-  configured: Partial<ContextPolicy> | undefined,
-): ContextPolicy {
+export function resolveCompactionPolicy(
+  defaults: Partial<CompactionPolicy> | undefined,
+  configured: Partial<CompactionPolicy> | undefined,
+): CompactionPolicy {
   const policy = {
-    compactionThresholdRatio: configured?.compactionThresholdRatio
-      ?? defaults?.compactionThresholdRatio
-      ?? DEFAULT_CONTEXT_POLICY.compactionThresholdRatio,
-    keepRecentRuns: configured?.keepRecentRuns
-      ?? defaults?.keepRecentRuns
-      ?? DEFAULT_CONTEXT_POLICY.keepRecentRuns,
+    enabled: configured?.enabled ?? defaults?.enabled ?? DEFAULT_COMPACTION_POLICY.enabled,
+    reserveTokens: configured?.reserveTokens
+      ?? defaults?.reserveTokens
+      ?? DEFAULT_COMPACTION_POLICY.reserveTokens,
+    keepRecentTokens: configured?.keepRecentTokens
+      ?? defaults?.keepRecentTokens
+      ?? DEFAULT_COMPACTION_POLICY.keepRecentTokens,
+    minimumRecentMessages: configured?.minimumRecentMessages
+      ?? defaults?.minimumRecentMessages
+      ?? DEFAULT_COMPACTION_POLICY.minimumRecentMessages,
   };
-  validateContextPolicy(policy);
+  validateCompactionPolicy(policy);
   return policy;
 }
 
-export function validateContextPolicy(policy: ContextPolicy): void {
-  if (
-    !Number.isFinite(policy.compactionThresholdRatio)
-    || policy.compactionThresholdRatio <= 0
-    || policy.compactionThresholdRatio >= 1
-  ) {
-    throw new RangeError('compactionThresholdRatio must be greater than 0 and less than 1.');
+export function validateCompactionPolicy(policy: CompactionPolicy): void {
+  for (const [name, value] of [
+    ['reserveTokens', policy.reserveTokens],
+    ['keepRecentTokens', policy.keepRecentTokens],
+    ['minimumRecentMessages', policy.minimumRecentMessages],
+  ] as const) {
+    if (!Number.isInteger(value) || value < 0) {
+      throw new RangeError(`${name} must be a nonnegative integer.`);
+    }
   }
-  if (!Number.isInteger(policy.keepRecentRuns) || policy.keepRecentRuns < 0) {
-    throw new RangeError('keepRecentRuns must be a nonnegative integer.');
+}
+
+/** Returns a policy failure when the configured policy cannot fit the Model Context Window. */
+export function compactionPolicyFailure(
+  policy: CompactionPolicy,
+  capacity: ContextCapacity,
+): string | undefined {
+  if (policy.reserveTokens >= capacity.contextWindowTokens) {
+    return `reserveTokens ${policy.reserveTokens} leaves no usable Context Window of ${capacity.contextWindowTokens} tokens.`;
   }
+  return undefined;
 }

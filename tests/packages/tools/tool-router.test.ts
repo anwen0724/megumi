@@ -5,7 +5,7 @@ function registration(name: string): ToolRegistration {
   return {
     registrationId: `registration:${name}`,
     source: { sourceId: 'built_in', sourceKind: 'built_in', namespace: 'megumi', displayName: 'Built in', configured: true, enabled: true, availabilityStatus: 'available' },
-    definition: { name, description: name, inputSchema: { type: 'object', properties: { value: { type: 'string' } }, required: ['value'], additionalProperties: false } },
+    definition: { name, description: name, parameters: { type: 'object', properties: { value: { type: 'string' } }, required: ['value'], additionalProperties: false } },
     handler: { toolName: name, operations: () => [], async execute() { return { outputKind: 'text', content: name }; } },
     availability: { status: 'available' },
   };

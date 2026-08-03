@@ -52,11 +52,41 @@ export const SessionUserMessagePayloadSchema = z.object({
   legacy_provenance: LegacyMessageProvenanceSchema.optional(),
 }).strict();
 
+const AiUsageSchema = z.object({
+  input: z.number().int().nonnegative(),
+  output: z.number().int().nonnegative(),
+  cacheRead: z.number().int().nonnegative(),
+  cacheWrite: z.number().int().nonnegative(),
+  cacheWrite1h: z.number().int().nonnegative().optional(),
+  reasoning: z.number().int().nonnegative().optional(),
+  totalTokens: z.number().int().nonnegative(),
+  cost: z.object({
+    input: z.number().nonnegative(),
+    output: z.number().nonnegative(),
+    cacheRead: z.number().nonnegative(),
+    cacheWrite: z.number().nonnegative(),
+    total: z.number().nonnegative(),
+  }).strict(),
+}).strict();
+
 export const SessionModelResponsePayloadSchema = z.object({
   content: z.array(AssistantContentBlockSchema),
   outcome_status: z.enum(['completed', 'incomplete', 'failed']),
   reason_code: z.string().min(1).optional(),
   stop_reason: z.string().min(1).optional(),
+  api: z.string().min(1).optional(),
+  provider: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
+  response_model: z.string().min(1).optional(),
+  response_id: z.string().min(1).optional(),
+  usage: AiUsageSchema.optional(),
+  failure: z.object({
+    code: z.string().min(1),
+    message: z.string().min(1),
+    retryable: z.boolean(),
+    retryAfterMs: z.number().nonnegative().optional(),
+  }).strict().optional(),
+  error_message: z.string().min(1).optional(),
   legacy_provenance: LegacyMessageProvenanceSchema.optional(),
 }).strict();
 
@@ -70,6 +100,8 @@ export const SessionToolResultPayloadSchema = z.object({
     details: z.record(z.string(), z.unknown()).optional(),
   }).strict().optional(),
   content: ContentBlockListSchema,
+  /** Tool-owned usage that never counts toward the main model Context. */
+  usage: AiUsageSchema.optional(),
   legacy_provenance: LegacyMessageProvenanceSchema.optional(),
 }).strict();
 
@@ -77,6 +109,13 @@ export const SessionAssistantReplyPayloadSchema = z.object({
   status: z.enum(ASSISTANT_REPLY_STATUSES),
   content: z.array(AssistantContentBlockSchema),
   reason_code: z.enum(ASSISTANT_REPLY_REASON_CODES).optional(),
+  api: z.string().min(1).optional(),
+  provider: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
+  response_model: z.string().min(1).optional(),
+  response_id: z.string().min(1).optional(),
+  usage: AiUsageSchema.optional(),
+  error_message: z.string().min(1).optional(),
 }).strict().superRefine((payload, context) => {
   if (payload.content.some((block) => block.type === 'toolCall')) {
     context.addIssue({
@@ -122,6 +161,13 @@ export const SessionAssistantReplyMessageSchema = SessionMessageBaseSchema.exten
   status: z.enum(ASSISTANT_REPLY_STATUSES),
   content: z.array(AssistantContentBlockSchema),
   reason_code: z.enum(ASSISTANT_REPLY_REASON_CODES).optional(),
+  api: z.string().min(1).optional(),
+  provider: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
+  response_model: z.string().min(1).optional(),
+  response_id: z.string().min(1).optional(),
+  usage: AiUsageSchema.optional(),
+  error_message: z.string().min(1).optional(),
 }).strict().superRefine((message, context) => {
   const result = SessionAssistantReplyPayloadSchema.safeParse({
     status: message.status,
@@ -150,6 +196,13 @@ export const SessionMessageSchema = z.discriminatedUnion('message_kind', [
     status: z.enum(ASSISTANT_REPLY_STATUSES),
     content: z.array(AssistantContentBlockSchema),
     reason_code: z.enum(ASSISTANT_REPLY_REASON_CODES).optional(),
+    api: z.string().min(1).optional(),
+    provider: z.string().min(1).optional(),
+    model: z.string().min(1).optional(),
+    response_model: z.string().min(1).optional(),
+    response_id: z.string().min(1).optional(),
+    usage: AiUsageSchema.optional(),
+    error_message: z.string().min(1).optional(),
   }).strict(),
 ]);
 

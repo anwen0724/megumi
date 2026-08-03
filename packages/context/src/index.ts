@@ -1,44 +1,34 @@
 /* Exposes only the stable Context caller contracts, policy, results, and creation entry. */
-export {
-  createContext,
-  type BuildContextRequest,
-  type BuildContextResult,
-  type ContextBuilder,
-  type ContextCapabilities,
-  type ContextFailure,
-  type CreateContextOptions,
-  type ContextScopeResolver,
-  type PreparedModelCall,
-} from './context-builder';
+export type {
+  BuildContextRequest,
+  BuildContextResult,
+  ContextBuilder,
+  ContextFailure,
+  ContextFailureCode,
+  ExecutionEnvironment,
+  ModelCallContext,
+  Prompt,
+  RunContext,
+  ToolView,
+} from './context';
+export { createContext, type ContextCapabilities, type CreateContextOptions } from './context-builder';
 export {
   type CompactContextRequest,
   type CompactContextResult,
   type ContextCompactionProgress,
   type ContextCompactor,
+  type CompactionTrigger,
 } from './compaction/context-compactor';
 export {
-  DEFAULT_CONTEXT_POLICY,
+  DEFAULT_COMPACTION_POLICY,
+  type CompactionPolicy,
   type ContextCapacity,
-  type ContextPolicy,
 } from './context-policy';
 export {
-  type ContextUsage,
-  type ContextUsageReader,
-  type ContextUsageRecorder,
-  type ContextUsageSnapshotCache,
-  type GetSessionContextUsageRequest,
-  type GetSessionContextUsageResult,
-  type RecordCompletedModelCallUsageRequest,
-  type RecordCompletedModelCallUsageResult,
-  type SessionContextUsageSnapshot,
+  type ContextUsageEstimate,
+  type DerivedContextUsage,
+  calculateContextTokens,
+  calculatePromptTokens,
+  deriveContextUsage,
+  estimateContextTokens,
 } from './context-usage';
-export {
-  type ContextSourceRef,
-  type ExecutionEnvironment,
-  type VisibleCompactionSummary,
-} from './active-context';
-export {
-  type ConversationItem,
-  type ConversationRun,
-  type CurrentConversationRun,
-} from './conversation-run';

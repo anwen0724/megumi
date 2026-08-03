@@ -370,7 +370,8 @@ export interface AssistantMessage {
 	responseModel?: string; // Concrete `chunk.model` when different from the requested `model` (e.g. OpenRouter `auto` -> `anthropic/...`)
 	responseId?: string; // Provider-specific response/message identifier when the upstream API exposes one
 	diagnostics?: AssistantMessageDiagnostic[]; // Redacted provider/runtime diagnostics for failures and recoveries.
-	usage: Usage;
+	/** Provider-reported usage; absent on records that never captured it. */
+	usage?: Usage;
 	stopReason: StopReason;
 	failure?: ModelFailure;
 	errorMessage?: string;

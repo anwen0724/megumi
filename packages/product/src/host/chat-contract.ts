@@ -26,7 +26,7 @@ export interface ChatHost {
   listRunEvents(request: ChatListRunEventsUiRequest): Promise<ChatListRunEventsUiResult>;
   getSessionHydration(request: ChatGetSessionHydrationUiRequest): Promise<ChatGetSessionHydrationUiResult>;
   getContextUsage(request: ChatGetContextUsageUiRequest): Promise<ChatGetContextUsageUiResult>;
-  getInputCapabilities(): ChatImageInputCapabilitiesUiResult;
+  getInputCapabilities(): ChatInputCapabilitiesUiResult;
   selectImages(): Promise<ChatSelectImagesUiResult>;
   selectDocuments(): Promise<ChatSelectDocumentsUiResult>;
   readClipboardImage(): Promise<ChatSelectImagesUiResult>;
@@ -54,6 +54,7 @@ export const SessionHydrationGetPayloadSchema = z.object({
 }).strict();
 export const SessionContextUsageGetPayloadSchema = z.object({
   sessionId: z.string().min(1),
+  modelSelection: z.object({ provider_id: z.string().min(1), model_id: z.string().min(1) }).strict(),
 }).strict();
 export const SessionMessageSendPayloadSchema = z.object({
   sessionId: z.string().min(1).optional(), projectId: z.string().min(1), text: z.string(),
@@ -90,7 +91,7 @@ export const SessionBranchDraftCancelPayloadSchema = z.object({
 }).strict();
 export const RunListBySessionPayloadSchema = z.object({ sessionId: z.string().min(1) }).strict();
 export const RunEventsListPayloadSchema = z.object({ runId: z.string().min(1) }).strict();
-export const ImageInputCapabilitiesPayloadSchema = z.object({}).strict();
+export const InputCapabilitiesPayloadSchema = z.object({}).strict();
 export const ImageInputSelectPayloadSchema = z.object({}).strict();
 export const DocumentInputSelectPayloadSchema = z.object({}).strict();
 export const ImageInputClipboardReadPayloadSchema = z.object({}).strict();
@@ -119,8 +120,9 @@ const SelectedDocumentUiDtoSchema = z.object({
   referenceId: z.string().min(1),
 }).strict();
 export type SelectedDocumentUiDto = z.infer<typeof SelectedDocumentUiDtoSchema>;
-export type ChatImageInputCapabilitiesUiResult = z.infer<typeof ChatImageInputCapabilitiesUiResultSchema>;
-export const ChatImageInputCapabilitiesUiResultSchema = z.object({
+export type ChatInputCapabilitiesUiResult = z.infer<typeof ChatInputCapabilitiesUiResultSchema>;
+export const ChatInputCapabilitiesUiResultSchema = z.object({
+  maxTextCharacters: z.number().int().positive(),
   allowedMediaTypes: z.array(z.string()),
   maxImageCount: z.number().int().positive(),
   maxImageBytes: z.number().int().positive(),
@@ -508,6 +510,7 @@ export interface ChatListRunEventsUiResult {
 
 export interface ChatGetContextUsageUiRequest {
   sessionId: string;
+  modelSelection: { provider_id: string; model_id: string };
 }
 
 export type ChatContextUsageUiDto = {

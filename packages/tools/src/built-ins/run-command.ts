@@ -51,7 +51,7 @@ export function createRunCommandToolDefinition(process: ToolProcessDescriptor): 
   return {
     name: 'run_command',
     description: 'Run a command and return redacted output previews.',
-    inputSchema: {
+    parameters: {
       type: 'object',
       properties: {
         command: {

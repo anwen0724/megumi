@@ -564,15 +564,15 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 					output.responseId = event.message.id;
 					// Capture initial token usage from message_start event
 					// This ensures we have input token counts even if the stream is aborted early
-					output.usage.input = event.message.usage.input_tokens || 0;
-					output.usage.output = event.message.usage.output_tokens || 0;
-					output.usage.cacheRead = event.message.usage.cache_read_input_tokens || 0;
-					output.usage.cacheWrite = event.message.usage.cache_creation_input_tokens || 0;
-					output.usage.cacheWrite1h = event.message.usage.cache_creation?.ephemeral_1h_input_tokens || 0;
+					output.usage!.input = event.message.usage.input_tokens || 0;
+					output.usage!.output = event.message.usage.output_tokens || 0;
+					output.usage!.cacheRead = event.message.usage.cache_read_input_tokens || 0;
+					output.usage!.cacheWrite = event.message.usage.cache_creation_input_tokens || 0;
+					output.usage!.cacheWrite1h = event.message.usage.cache_creation?.ephemeral_1h_input_tokens || 0;
 					// Anthropic doesn't provide total_tokens, compute from components
-					output.usage.totalTokens =
-						output.usage.input + output.usage.output + output.usage.cacheRead + output.usage.cacheWrite;
-					calculateCost(model, output.usage);
+					output.usage!.totalTokens =
+						output.usage!.input + output.usage!.output + output.usage!.cacheRead + output.usage!.cacheWrite;
+					calculateCost(model, output.usage!);
 				} else if (event.type === "content_block_start") {
 					if (event.content_block.type === "text") {
 						const block: Block = {
@@ -705,16 +705,16 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 					// Preserves input_tokens from message_start when proxies omit it in message_delta.
 					if (event.usage) {
 						if (event.usage.input_tokens != null) {
-							output.usage.input = event.usage.input_tokens;
+							output.usage!.input = event.usage.input_tokens;
 						}
 						if (event.usage.output_tokens != null) {
-							output.usage.output = event.usage.output_tokens;
+							output.usage!.output = event.usage.output_tokens;
 						}
 						if (event.usage.cache_read_input_tokens != null) {
-							output.usage.cacheRead = event.usage.cache_read_input_tokens;
+							output.usage!.cacheRead = event.usage.cache_read_input_tokens;
 						}
 						if (event.usage.cache_creation_input_tokens != null) {
-							output.usage.cacheWrite = event.usage.cache_creation_input_tokens;
+							output.usage!.cacheWrite = event.usage.cache_creation_input_tokens;
 						}
 						// Anthropic reports reasoning tokens in `output_tokens_details.thinking_tokens` on the
 						// final message_delta usage (a subset of output_tokens). SDK 0.91.1 omits the field from
@@ -722,13 +722,13 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 						const thinkingTokens = (event.usage as { output_tokens_details?: { thinking_tokens?: number } })
 							.output_tokens_details?.thinking_tokens;
 						if (thinkingTokens != null) {
-							output.usage.reasoning = thinkingTokens;
+							output.usage!.reasoning = thinkingTokens;
 						}
 					}
 					// Anthropic doesn't provide total_tokens, compute from components
-					output.usage.totalTokens =
-						output.usage.input + output.usage.output + output.usage.cacheRead + output.usage.cacheWrite;
-					calculateCost(model, output.usage);
+					output.usage!.totalTokens =
+						output.usage!.input + output.usage!.output + output.usage!.cacheRead + output.usage!.cacheWrite;
+					calculateCost(model, output.usage!);
 				}
 			}
 

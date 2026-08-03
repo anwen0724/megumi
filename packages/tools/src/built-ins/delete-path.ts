@@ -6,7 +6,7 @@ import { createBuiltInToolHandler, inputString, operation } from './tool-handler
 
 export const deletePathToolDefinition: ToolDefinition = {
   name: 'delete_path', description: 'Move a file or directory to a recoverable Workspace location.',
-  inputSchema: { type: 'object', properties: { path: { type: 'string', description: 'Path to delete.' }, recursive: { type: 'boolean', description: 'Allow a non-empty directory.' } }, required: ['path'], additionalProperties: false },
+  parameters: { type: 'object', properties: { path: { type: 'string', description: 'Path to delete.' }, recursive: { type: 'boolean', description: 'Allow a non-empty directory.' } }, required: ['path'], additionalProperties: false },
   annotations: { destructiveHint: true, idempotentHint: false, openWorldHint: false },
 };
 export const deletePathToolHandler = createBuiltInToolHandler({

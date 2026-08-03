@@ -6,7 +6,7 @@ import { createBuiltInToolHandler, inputString, operation } from './tool-handler
 
 export const movePathToolDefinition: ToolDefinition = {
   name: 'move_path', description: 'Move or rename a file or directory.',
-  inputSchema: { type: 'object', properties: { source: { type: 'string', description: 'Source path.' }, destination: { type: 'string', description: 'Destination path.' }, overwrite: { type: 'boolean', description: 'Replace an existing destination.' } }, required: ['source', 'destination'], additionalProperties: false },
+  parameters: { type: 'object', properties: { source: { type: 'string', description: 'Source path.' }, destination: { type: 'string', description: 'Destination path.' }, overwrite: { type: 'boolean', description: 'Replace an existing destination.' } }, required: ['source', 'destination'], additionalProperties: false },
   annotations: { destructiveHint: true, idempotentHint: false, openWorldHint: false },
 };
 export const movePathToolHandler = createBuiltInToolHandler({

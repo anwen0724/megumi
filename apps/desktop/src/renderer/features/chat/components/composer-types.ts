@@ -2,7 +2,7 @@
 type PermissionModeSelectionSource = 'user' | 'settings' | 'runtime' | string;
 import type {
   ChatGetContextUsageUiResult,
-  ChatImageInputCapabilitiesUiResult,
+  ChatInputCapabilitiesUiResult,
   ProviderPublicStatusUiDto,
 } from '@megumi/product/host';
 import type { InputSuggestionQueryResult } from '@megumi/product/host';
@@ -36,7 +36,7 @@ export interface ComposerProps {
   initialAttachments?: ComposerDraftAttachment[];
   providers?: ProviderPublicStatusUiDto[];
   contextUsage?: ChatGetContextUsageUiResult;
-  imageInputCapabilities?: ChatImageInputCapabilitiesUiResult;
+  imageInputCapabilities?: ChatInputCapabilitiesUiResult;
   seedTextKey?: string | null;
   seedText?: string | null;
   onSubmit: (payload: ComposerSubmitPayload) => boolean | void | Promise<boolean | void>;

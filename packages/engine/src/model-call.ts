@@ -3,6 +3,7 @@
  */
 import {
   classifyModelFailure,
+  isContextOverflow,
   type Api,
   type AssistantMessage,
   type AssistantMessageEvent,
@@ -110,6 +111,13 @@ export type ModelCallEvent =
       readonly createdAt: string;
     }
   | {
+      readonly type: 'context_overflow';
+      readonly modelCallId: string;
+      readonly attemptNumber: number;
+      readonly message: AssistantMessage;
+      readonly createdAt: string;
+    }
+  | {
       readonly type: 'failed';
       readonly modelCall: ModelCall;
       readonly failure: ModelCallFailure;
@@ -130,6 +138,8 @@ export interface ExecuteModelCallRequest {
     ModelsSimpleStreamOptions,
     'signal' | 'sessionId' | 'timeoutMs' | 'maxRetries'
   >;
+  /** Attempt numbering continues across an Overflow recovery on the same logical ModelCall. */
+  readonly startAttemptNumber?: number;
   readonly signal: AbortSignal;
   readonly policy: Pick<
     EnginePolicy,
@@ -178,10 +188,13 @@ export async function* executeModelCall(
     return;
   }
 
-  const maxAttempts = request.policy.maxModelCallAttempts;
+  const firstAttempt = request.startAttemptNumber ?? 1;
+  // An Overflow recovery continues the attempt numbering without consuming the
+  // normal retry budget: the limit is extended by the recovery offset.
+  const maxAttempts = request.policy.maxModelCallAttempts + firstAttempt - 1;
   const wait = request.wait ?? waitForRetry;
 
-  for (let attemptNumber = 1; attemptNumber <= maxAttempts; attemptNumber += 1) {
+  for (let attemptNumber = firstAttempt; attemptNumber <= maxAttempts; attemptNumber += 1) {
     if (request.signal.aborted) {
       yield failedEvent(request, runningCall, abortedFailure(), emptyPartial());
       return;
@@ -208,6 +221,18 @@ export async function* executeModelCall(
 
     if (outcome.status === 'completed') {
       const completedAt = request.clock.now();
+      // Overflow is its own outcome: it never becomes a normal failure and never
+      // consumes a retry attempt. The Engine coordinates one compaction recovery.
+      if (isContextOverflow(outcome.message, request.model.contextWindow)) {
+        yield {
+          type: 'context_overflow',
+          modelCallId: request.modelCallId,
+          attemptNumber,
+          message: outcome.message,
+          createdAt: completedAt,
+        };
+        return;
+      }
       yield {
         type: 'completed',
         modelCall: {

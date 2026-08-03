@@ -4,7 +4,7 @@
  */
 import type { ContextCapabilities } from '@megumi/context';
 import type { Engine, Run } from '@megumi/engine';
-import { DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from '@megumi/input';
+import { DEFAULT_INPUT_POLICY, DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from '@megumi/input';
 import type { Session, SessionAttachmentReader, SessionBranchDrafts, SessionCatalog, SessionHistory, SessionMessageWithAttachments } from '@megumi/session';
 import { sessionMessageText } from '@megumi/session';
 import type { ProjectedRun, RunProjection, SessionTimelineQuery } from '@megumi/projections';
@@ -38,7 +38,17 @@ export function createProductChat(options: {
   workspaces: Pick<WorkspaceCatalog, 'listWorkspaces'>;
   runs: RunProjection;
   timeline: SessionTimelineQuery;
-  context: Pick<ContextCapabilities, 'getSessionUsage'>;
+  context: {
+    deriveUsage(
+      history: readonly import('@megumi/session').SessionHistoryItem[],
+      model: import('@megumi/ai').Model<import('@megumi/ai').Api>,
+    ): import('@megumi/context').DerivedContextUsage;
+    autoCompactPercent: number;
+  };
+  resolveModel: (request: {
+    provider_id: string;
+    model_id: string;
+  }) => Promise<import('@megumi/ai').Model<import('@megumi/ai').Api> | undefined>;
   attachmentPicker?: InputAttachmentPickerPort;
   localFileAvailability?: LocalFileAvailabilityPort;
 }): ProductChat {
@@ -105,13 +115,25 @@ export function createProductChat(options: {
       return { messages: timeline.messages, diagnostics: timeline.diagnostics, runs: runs.map(toChatRun), runtimeEvents: runs.flatMap((run) => options.runs.listEvents({ runId: run.runId })) };
     },
     async getContextUsage(request) {
-      const result = options.context.getSessionUsage({ sessionId: request.sessionId });
-      return result.status === 'available'
-        ? { status: 'available', usage: { usedTokens: result.snapshot.usage.usedTokens, totalTokens: result.snapshot.usage.contextWindowTokens, remainingTokens: result.snapshot.usage.remainingTokens, usedPercent: Math.round(result.snapshot.usage.usedRatio * 100), autoCompactPercent: Math.round(result.snapshot.usage.compactionThresholdRatio * 100), accuracy: result.snapshot.accuracy } }
-        : { status: 'not_available' };
+      const history = options.history.getActiveHistory({ session_id: request.sessionId });
+      if (history.status === 'failed') return { status: 'not_available' };
+      const model = await options.resolveModel(request.modelSelection);
+      if (!model) return { status: 'not_available' };
+      const usage = options.context.deriveUsage(history.history, model);
+      return {
+        status: 'available',
+        usage: {
+          usedTokens: usage.totalTokens,
+          totalTokens: usage.contextWindowTokens,
+          remainingTokens: Math.max(0, usage.contextWindowTokens - usage.totalTokens),
+          usedPercent: Math.min(100, Math.round(usage.usedRatio * 100)),
+          autoCompactPercent: options.context.autoCompactPercent,
+          accuracy: usage.accuracy,
+        },
+      };
     },
     getInputCapabilities() {
-      return { allowedMediaTypes: [...IMAGE_INPUT_POLICY.allowedMediaTypes], maxImageCount: IMAGE_INPUT_POLICY.maxImageCount, maxImageBytes: IMAGE_INPUT_POLICY.maxImageBytes, maxTotalBytes: IMAGE_INPUT_POLICY.maxTotalBytes, allowedDocumentMediaTypes: [...DOCUMENT_INPUT_POLICY.allowedMediaTypes], maxDocumentCount: DOCUMENT_INPUT_POLICY.maxDocumentCount, maxDocumentBytes: DOCUMENT_INPUT_POLICY.maxDocumentBytes };
+      return { maxTextCharacters: DEFAULT_INPUT_POLICY.maxTextCharacters, allowedMediaTypes: [...IMAGE_INPUT_POLICY.allowedMediaTypes], maxImageCount: IMAGE_INPUT_POLICY.maxImageCount, maxImageBytes: IMAGE_INPUT_POLICY.maxImageBytes, maxTotalBytes: IMAGE_INPUT_POLICY.maxTotalBytes, allowedDocumentMediaTypes: [...DOCUMENT_INPUT_POLICY.allowedMediaTypes], maxDocumentCount: DOCUMENT_INPUT_POLICY.maxDocumentCount, maxDocumentBytes: DOCUMENT_INPUT_POLICY.maxDocumentBytes };
     },
     async selectImages() {
       if (!options.attachmentPicker) return pickerFailure('image_picker_unavailable', 'Image picker is unavailable.');

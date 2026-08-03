@@ -11,6 +11,7 @@ export type {
   GetRunRequest,
   GetRunResult,
   EngineIdFactory,
+  EngineWorkspaceSource,
   ResumeRunRequest,
   ResumeRunResult,
   RunApprovalDecision,

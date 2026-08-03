@@ -16,7 +16,6 @@ import type {
 } from '@megumi/permissions';
 import type {
   BuildContextResult,
-  RecordCompletedModelCallUsageRequest,
 } from '@megumi/context';
 import type {
   SaveAssistantReplyRequest,
@@ -102,7 +101,6 @@ export interface EngineFixture {
   readonly options: CreateEngineOptions;
   readonly writes: string[];
   readonly contextRuns: unknown[];
-  readonly contextUsageRecords: RecordCompletedModelCallUsageRequest[];
   readonly published: RuntimeEvent[];
   readonly assistantReplies: SaveAssistantReplyRequest[];
   readonly toolResults: SaveToolResultMessageRequest[];
@@ -119,6 +117,8 @@ export function createEngineFixture(input: {
   readonly executeTool?: TestToolExecute;
   readonly policy?: Partial<EnginePolicy>;
   readonly contextBuild?: CreateEngineOptions['context']['build'];
+  readonly contextCompact?: CreateEngineOptions['context']['compact'];
+  readonly failUserMessageSave?: boolean;
   readonly skillView?: CreateEngineOptions['skills']['createView'];
   readonly eventPublisher?: {
     publish(event: RuntimeEvent): void | Promise<void>;
@@ -128,7 +128,6 @@ export function createEngineFixture(input: {
   const writes: string[] = [];
   const contextRuns: unknown[] = [];
   const skillViewRequests: Array<{ workspaceId?: string; signal?: AbortSignal }> = [];
-  const contextUsageRecords: RecordCompletedModelCallUsageRequest[] = [];
   const published: RuntimeEvent[] = [];
   const assistantReplies: SaveAssistantReplyRequest[] = [];
   const toolResults: SaveToolResultMessageRequest[] = [];
@@ -143,6 +142,9 @@ export function createEngineFixture(input: {
 
   const saveUserMessage = async (request: SaveUserMessageRequest) => {
     writes.push('user');
+    if (input.failUserMessageSave) {
+      return { status: 'failed' as const, failure: { code: 'session_error', message: 'User message save failed.' } };
+    }
     return {
       status: 'saved' as const,
       message: {
@@ -216,38 +218,33 @@ export function createEngineFixture(input: {
     } as Models,
     context: {
       build: input.contextBuild ?? (async (request): Promise<BuildContextResult> => {
-        contextRuns.push(structuredClone(request.currentRun));
-        return {
-          status: 'ready',
-          prepared: {
-            preparationId: `preparation:${contextRuns.length}`,
-            context,
-            usage: {
-              usedTokens: 0,
-              contextWindowTokens: 4_096,
-              remainingTokens: 4_096,
-              usedRatio: 0,
-              compactionThresholdRatio: 0.8,
-            },
-            sourceRefs: [],
-          },
-        };
+        contextRuns.push(structuredClone(request.modelCallContext));
+        return { status: 'ready', prompt: context };
       }),
-      recordCompletedModelCall: (request) => {
-        contextUsageRecords.push(structuredClone(request));
+      compact: input.contextCompact ?? (async () => ({
+        status: 'nothing_to_compact' as const,
+        reason: 'no_historical_messages',
+      })),
+    },
+    scopeResolver: {
+      resolve({ workspaceId }) {
         return {
-          status: 'recorded',
-          snapshot: {
-            sessionId: request.sessionId,
-            runId: request.runId,
-            providerId: request.model.provider,
-            modelId: request.model.id,
-            usage: request.preCallUsage,
-            accuracy: 'estimated',
-            calculatedAt: '2026-07-31T00:00:00.000Z',
+          status: 'resolved' as const,
+          workspaceRoot: `C:/workspace/${workspaceId}`,
+          executionEnvironment: {
+            workingDirectory: `C:/workspace/${workspaceId}`,
+            operatingSystem: 'Windows',
+            shell: 'PowerShell',
           },
         };
       },
+    },
+    instructions: {
+      getSystemInstructions: () => [{ instructionId: 'system', content: 'Base instructions.' }],
+      getEffectiveInstructions: async () => ({
+        status: 'ok' as const,
+        instructions: { sources: [] },
+      }),
     },
     session: {
       saveUserMessage,
@@ -286,12 +283,44 @@ export function createEngineFixture(input: {
     options,
     writes,
     contextRuns,
-    contextUsageRecords,
     published,
     assistantReplies,
     toolResults,
     skillViewRequests,
   };
+}
+
+export function assistantStreamWithUsage(
+  text: string,
+  usage: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+    totalTokens: number;
+  },
+): AssistantMessageEventStream {
+  const stream = new AssistantMessageEventStream();
+  const content: AssistantMessage['content'] = [{ type: 'text', text }];
+  const message: AssistantMessage = {
+    role: 'assistant',
+    content,
+    api: model.api,
+    provider: model.provider,
+    model: model.id,
+    usage: { ...usage, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+    stopReason: 'stop',
+    timestamp: 1,
+  };
+  stream.push({ type: 'start', partial: { ...message, content: [] } });
+  stream.push({
+    type: 'text_delta',
+    contentIndex: 0,
+    delta: text,
+    partial: message,
+  });
+  stream.push({ type: 'done', reason: 'stop', message });
+  return stream;
 }
 
 export function assistantStream(

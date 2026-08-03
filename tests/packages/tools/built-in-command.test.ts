@@ -32,7 +32,7 @@ describe('run_command built-in Tool', () => {
       status: 'found',
       tool: {
         definition: {
-          inputSchema: {
+          parameters: {
             properties: { command: { description: 'A command written for Windows PowerShell.' } },
           },
         },

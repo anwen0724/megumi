@@ -17,7 +17,7 @@ import {
   type DatabaseConnection,
   type ResolveDatabaseMigrationsFolderRequest,
 } from '@megumi/database';
-import { createEngine, type Engine, type EnginePolicy } from '@megumi/engine';
+import { createEngine, type Engine, type EnginePolicy, type EngineWorkspaceSource } from '@megumi/engine';
 import { createRuntimeEventBus, type EventSubscription } from '@megumi/events';
 import { createInputProcessor, type InputSourceAccess } from '@megumi/input';
 import { createInstructionReader } from '@megumi/instructions';
@@ -69,6 +69,7 @@ import {
 } from './home/home';
 import { createProductChat } from './chat';
 import { createProductApproval } from './approval';
+import { deriveContextUsage } from '@megumi/context';
 import { createInputSuggestionQuery } from './input-suggestions';
 import { createInputSubmission } from './input-submission';
 import { composeModels } from './models';
@@ -226,35 +227,30 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
   });
   const instructions = createInstructionReader({ megumiHomePath: homePaths.homePath });
   const sandboxCapabilities = sandbox.capabilities();
+  const scopeResolver: EngineWorkspaceSource = {
+    resolve({ workspaceId }) {
+      const workspace = workspaces.getWorkspace({ workspace_id: workspaceId });
+      return workspace.status === 'found'
+        ? {
+            status: 'resolved',
+            workspaceRoot: workspace.workspace.root_path,
+            executionEnvironment: {
+              workingDirectory: workspace.workspace.root_path,
+              operatingSystem: modelVisibleOperatingSystem(sandboxCapabilities.platform),
+              shell: sandboxCapabilities.shellName ?? 'Unavailable',
+            },
+          }
+        : {
+            status: 'failed',
+            failure: { code: 'workspace_not_found', message: `Workspace ${workspaceId} was not found.` },
+          };
+    },
+  };
   const context = createContext({
     sessionHistory: history,
     attachmentReader: attachments,
-    scopeResolver: {
-      resolve({ workspaceId }) {
-        const workspace = workspaces.getWorkspace({ workspace_id: workspaceId });
-        return workspace.status === 'found'
-          ? {
-              status: 'resolved',
-              workspaceRoot: workspace.workspace.root_path,
-              executionEnvironment: {
-                workingDirectory: workspace.workspace.root_path,
-                operatingSystem: modelVisibleOperatingSystem(sandboxCapabilities.platform),
-                shell: sandboxCapabilities.shellName ?? 'Unavailable',
-              },
-            }
-          : {
-              status: 'failed',
-              failure: { code: 'workspace_not_found', message: `Workspace ${workspaceId} was not found.` },
-            };
-      },
-    },
     instructionReader: instructions,
     models: modelComposition.models,
-    policyProvider: {
-      getPolicy() {
-        return { compactionThresholdRatio: settings.resolve().context.compaction_threshold_ratio };
-      },
-    },
     observability: observability.service,
   });
   const permissions = createPermissions({
@@ -304,10 +300,40 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
   });
 
   const commands: Commands = createCommands({
-    compact: (request, operationOptions) => context.compact({
-      ...request,
-      ...(operationOptions?.signal ? { signal: operationOptions.signal } : {}),
-    }),
+    compact: async (request, operationOptions) => {
+      // Manual /compact resolves the same fixed source facts a ModelCall would use.
+      const scope = scopeResolver.resolve({ workspaceId: request.workspaceId });
+      if (scope.status === 'failed') {
+        return { status: 'failed', failure: { code: scope.failure.code, message: scope.failure.message } };
+      }
+      const effective = await instructions.getEffectiveInstructions(
+        {
+          workspaceRoot: scope.workspaceRoot,
+          workingDirectory: scope.executionEnvironment.workingDirectory,
+        },
+        operationOptions?.signal ? { signal: operationOptions.signal } : undefined,
+      );
+      if (effective.status === 'cancelled') {
+        return { status: 'failed', failure: { code: 'instructions_failed', message: 'Effective Instructions resolution was cancelled.' } };
+      }
+      if (effective.status === 'failed') {
+        return { status: 'failed', failure: { code: 'instructions_failed', message: effective.failure.message } };
+      }
+      const view = await skills.createView({ workspaceId: request.workspaceId });
+      if (view.status === 'failed') {
+        return { status: 'failed', failure: { code: 'skill_view_failed', message: 'Skill View could not be created.' } };
+      }
+      return context.compact({
+        sessionId: request.sessionId,
+        workspaceId: request.workspaceId,
+        model: request.model,
+        trigger: 'manual',
+        executionEnvironment: scope.executionEnvironment,
+        effectiveInstructions: effective.instructions,
+        skills: view.view,
+        ...(operationOptions?.signal ? { signal: operationOptions.signal } : {}),
+      });
+    },
   });
   const input = createInputProcessor<CommandTerminalResult>({
     sourceAccess: options.inputSourceAccess ?? unavailableInputSourceAccess,
@@ -380,6 +406,8 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
   const engine = createEngine({
     models: modelComposition.models,
     context,
+    scopeResolver,
+    instructions,
     session: history,
     tools,
     skills,
@@ -420,7 +448,14 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     workspaces,
     runs: runProjection,
     timeline,
-    context,
+    context: {
+      deriveUsage: (history, model) => deriveContextUsage({ history, model }),
+      autoCompactPercent: Math.round((settings.resolve().context.compaction_threshold_ratio ?? 0.8) * 100),
+    },
+    resolveModel: async (selection) => {
+      const resolved = await resolveModel(selection);
+      return resolved.status === 'ok' ? resolved.model : undefined;
+    },
     ...(options.attachmentPicker ? { attachmentPicker: options.attachmentPicker } : {}),
     ...(options.localFileAvailability ? { localFileAvailability: options.localFileAvailability } : {}),
   });

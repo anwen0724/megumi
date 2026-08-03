@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
-import type { ChatImageInputCapabilitiesUiResult, InputSuggestionQueryResult } from '@megumi/product/host';
+import type { ChatInputCapabilitiesUiResult, InputSuggestionQueryResult } from '@megumi/product/host';
 import { useTranslation } from 'react-i18next';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import { useProviderStore } from '../../../entities/provider/store';
@@ -28,7 +28,7 @@ export function ChatPage() {
   const composerDraft = useChatUiStore((state) => state.composerDraft);
   const setComposerDraft = useChatUiStore((state) => state.setComposerDraft);
   const [composerHeight, setComposerHeight] = useState(FALLBACK_COMPOSER_SPACER_HEIGHT);
-  const [imageInputCapabilities, setImageInputCapabilities] = useState<ChatImageInputCapabilitiesUiResult>();
+  const [imageInputCapabilities, setImageInputCapabilities] = useState<ChatInputCapabilitiesUiResult>();
   const effectiveComposerDockHeight = composerHeight > 0 ? composerHeight : FALLBACK_COMPOSER_SPACER_HEIGHT;
   const bottomSpacerHeight = Math.max(effectiveComposerDockHeight + 24, FALLBACK_COMPOSER_SPACER_HEIGHT);
   const pendingApprovals = useMemo(
@@ -133,7 +133,7 @@ export function ChatPage() {
     const capabilities = window.megumi.session.imageInput?.capabilities;
     if (!capabilities) return undefined;
     void capabilities(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.imageInputCapabilitiesGet, {}),
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.inputCapabilitiesGet, {}),
     ).then((result) => {
       if (!cancelled && result.ok) {
         setImageInputCapabilities(result.data);

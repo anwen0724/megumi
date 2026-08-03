@@ -8,6 +8,7 @@ import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
 import { useRunStore } from '../../../entities/run/store';
 import { useSessionStore } from '../../../entities/session/store';
+import { useModelSelectionStore } from '../../../entities/model-selection';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
 import { showToast } from '../../../shared/ui';
 import { rendererI18n } from '../../../shared/i18n';
@@ -147,9 +148,17 @@ export function useChatPageController() {
         return;
       }
 
+      const modelSelection = useModelSelectionStore.getState().selection;
+      if (!modelSelection) {
+        setContextUsage(undefined);
+        return;
+      }
       const result = await window.megumi.session.contextUsage.get(createRendererRuntimeIpcRequest(
         IPC_CHANNELS.chat.sessionContextUsageGet,
-        { sessionId: effectiveActiveSessionId },
+        {
+          sessionId: effectiveActiveSessionId,
+          modelSelection: { provider_id: modelSelection.providerId, model_id: modelSelection.modelId },
+        },
       ));
       if (cancelled) {
         return;

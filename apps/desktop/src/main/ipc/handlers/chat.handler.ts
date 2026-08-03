@@ -15,7 +15,7 @@ import {
   ChatListSessionsUiResultSchema,
   ChatListTimelineUiResultSchema,
   ChatSendUserInputUiPayloadSchema,
-  ChatImageInputCapabilitiesUiResultSchema,
+  ChatInputCapabilitiesUiResultSchema,
   ChatSelectImagesUiResultSchema,
   ChatSelectDocumentsUiResultSchema,
   ChatReadAttachmentImageUiResultSchema,
@@ -43,7 +43,7 @@ import {
   SessionMessageListRequestSchema,
   SessionMessageSendRequestSchema,
   SessionTimelineListRequestSchema,
-  ImageInputCapabilitiesGetRequestSchema,
+  InputCapabilitiesGetRequestSchema,
   ImageInputSelectRequestSchema,
   DocumentInputSelectRequestSchema,
   ImageInputClipboardReadRequestSchema,
@@ -152,10 +152,10 @@ export function registerChatHandlers(
     mapError: mapChatIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.chat.imageInputCapabilitiesGet, createIpcRequestHandler({
-    channel: IPC_CHANNELS.chat.imageInputCapabilitiesGet,
-    requestSchema: ImageInputCapabilitiesGetRequestSchema,
-    responseSchema: ChatImageInputCapabilitiesUiResultSchema,
+  ipcMain.handle(IPC_CHANNELS.chat.inputCapabilitiesGet, createIpcRequestHandler({
+    channel: IPC_CHANNELS.chat.inputCapabilitiesGet,
+    requestSchema: InputCapabilitiesGetRequestSchema,
+    responseSchema: ChatInputCapabilitiesUiResultSchema,
     logger: options.logger,
     handle: () => service.host.chat.getInputCapabilities(),
     mapError: mapChatIpcError,

@@ -3,7 +3,8 @@
  */
 import type { Api, Model, Models } from '@megumi/ai';
 import type { UserInput } from '@megumi/input';
-import type { ContextBuilder, ContextUsageRecorder } from '@megumi/context';
+import type { ContextBuilder, ContextCompactor, ExecutionEnvironment } from '@megumi/context';
+import type { InstructionReader } from '@megumi/instructions';
 import type { Skills } from '@megumi/skills';
 import type { EventPublisher, RuntimeEvent } from '@megumi/events';
 import type {
@@ -45,6 +46,19 @@ import {
 import type { ToolCallApprovalContinuation } from './tool-call';
 
 export type RunInput = UserInput;
+
+export interface EngineWorkspaceSource {
+  resolve(request: { readonly workspaceId: string }):
+    | {
+        readonly status: 'resolved';
+        readonly workspaceRoot: string;
+        readonly executionEnvironment: ExecutionEnvironment;
+      }
+    | {
+        readonly status: 'failed';
+        readonly failure: { readonly code: string; readonly message: string };
+      };
+}
 
 export interface StartRunRequest {
   readonly requestId: string;
@@ -185,8 +199,12 @@ export interface EngineClock {
 
 export interface CreateEngineOptions {
   readonly models: Models;
-  readonly context: Pick<ContextBuilder, 'build'>
-    & Pick<ContextUsageRecorder, 'recordCompletedModelCall'>;
+  readonly context: Pick<ContextBuilder, 'build'> & Pick<ContextCompactor, 'compact'>;
+  readonly scopeResolver: EngineWorkspaceSource;
+  readonly instructions: Pick<
+    InstructionReader,
+    'getSystemInstructions' | 'getEffectiveInstructions'
+  >;
   readonly session: Pick<
     SessionHistory,
     'saveUserMessage' | 'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'
