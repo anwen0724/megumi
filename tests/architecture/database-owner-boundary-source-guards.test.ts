@@ -44,7 +44,7 @@ describe('Database Owner boundaries', () => {
   it('keeps each business Store in its owning Package', () => {
     expect(read('packages/workspace/src/workspace-store.ts')).toContain('createWorkspaceStore');
     expect(read('packages/session/src/session-store.ts')).toContain('createSessionStore');
-    expect(readTree('packages/skills/src')).toContain('SkillRepository');
+    expect(readTree('packages/skills/src')).toContain('createDatabaseSkillAvailabilityStore');
   });
 });
 

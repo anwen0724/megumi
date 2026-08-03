@@ -10,6 +10,7 @@ import type {
   EnableSkillUiResponse,
   GetSkillDetailUiResponse,
   ListSkillsUiResponse,
+  RefreshSkillsUiResponse,
   WorkspaceOpenFileUiResult,
 } from '@megumi/product/host';
 import type {
@@ -24,6 +25,7 @@ import type {
   SkillEnablePayload,
   SkillGetPayload,
   SkillListPayload,
+  SkillRefreshPayload,
   WorkspaceFileOpenPayload,
 } from '../main/ipc/schemas';
 import type { api } from './api';
@@ -53,3 +55,5 @@ export type SkillDisablePreloadPayload = SkillDisablePayload;
 export type SkillDisablePreloadData = DisableSkillUiResponse;
 export type SkillDeletePreloadPayload = SkillDeletePayload;
 export type SkillDeletePreloadData = DeleteSkillUiResponse;
+export type SkillRefreshPreloadPayload = SkillRefreshPayload;
+export type SkillRefreshPreloadData = RefreshSkillsUiResponse;

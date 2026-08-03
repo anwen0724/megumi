@@ -40,6 +40,5 @@ export {
 export {
   type ConversationItem,
   type ConversationRun,
-  type ConversationRuntimeSource,
   type CurrentConversationRun,
 } from './conversation-run';

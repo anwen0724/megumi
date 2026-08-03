@@ -1,18 +1,17 @@
 {
-    "name":  "@megumi/tools",
-    "version":  "0.1.0",
-    "description":  "Megumi Tool definitions, catalog, execution, and built-in tools",
-    "private":  true,
-    "type":  "module",
-    "exports":  {
-                    ".":  "./src/index.ts"
-                },
-    "dependencies":  {
-                         "@megumi/ai":  "0.1.0",
-                         "@megumi/permissions":  "0.1.0",
-                         "@megumi/skills":  "0.1.0",
-                         "mammoth":  "^1.12.0",
-                         "pdf-parse":  "^2.4.5",
-                         "@megumi/sandbox":  "0.1.0"
-                     }
+  "name": "@megumi/tools",
+  "version": "0.1.0",
+  "description": "Megumi Tool definitions, catalog, execution, and built-in tools",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@megumi/ai": "0.1.0",
+    "@megumi/permissions": "0.1.0",
+    "mammoth": "^1.12.0",
+    "pdf-parse": "^2.4.5",
+    "@megumi/sandbox": "0.1.0"
+  }
 }

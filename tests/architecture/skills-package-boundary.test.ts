@@ -15,12 +15,12 @@ describe('Skills package boundary', () => {
     const source = readTypeScriptTree('packages/skills');
     expect(source).not.toMatch(/packages[\\/]agent|@megumi\/agent|\.\.\/agent/);
     expect(source).not.toMatch(/packages[\\/]product|@megumi\/product|apps[\\/]desktop|electron/);
-    expect(source).not.toMatch(/WorkspaceService|workspaceId|workspace_id/);
+    expect(source).not.toMatch(/WorkspaceService|workspace_id|@megumi[\/]workspace/);
   });
 
   it('uses name and skillPath without legacy Skill identity aliases', () => {
     const source = readTypeScriptTree('packages/skills');
-    expect(source).not.toMatch(/skillId|skill_id|packagePath|activateSkill/);
+    expect(source).not.toMatch(/skillId|skill_id|activateSkill/);
   });
 
   it('is resolvable from every production Vite target through the shared Package aliases', () => {

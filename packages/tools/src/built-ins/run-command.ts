@@ -1,7 +1,6 @@
 /* Defines run_command, its process interface, bounded capture, and safe Skill script mapping. */
 
 import type { JsonObject } from '@megumi/ai';
-import type { SkillScriptExecutionRequest } from '@megumi/skills';
 import type { RawToolResult, ToolDefinition, ToolExecutionErrorCode, ToolExecutionOptions, ToolExecutionOutputChunk } from '../tool';
 import { normalizeRawToolContent, ToolExecutionFailure } from '../tool-result';
 import { inputRecord, optionalPositiveInteger, optionalString, requireString } from './tool-input';
@@ -9,7 +8,6 @@ import type { BuiltInToolContext } from './workspace-file-access';
 import { createBuiltInToolHandler, inputString, operation } from './tool-handler';
 
 const MAX_STREAM_CAPTURE_BYTES = 20_000;
-export const RUN_COMMAND_INTERNAL_METADATA = Symbol('run-command-internal-metadata');
 
 export type ToolShellKind = 'powershell' | 'cmd' | 'posix_shell';
 export type ToolProcessExecutionMethod = 'shell';
@@ -47,7 +45,6 @@ export interface RunCommandToolInput {
   readonly command: string;
   readonly cwd?: string;
   readonly timeoutMs?: number;
-  readonly [RUN_COMMAND_INTERNAL_METADATA]?: JsonObject;
 }
 
 export function createRunCommandToolDefinition(process: ToolProcessDescriptor): ToolDefinition {
@@ -101,25 +98,6 @@ export function createRunCommandToolHandler(process: ToolProcessDescriptor) {
   });
 }
 
-export function mapSkillScriptExecutionRequestToRunCommandInput(request: {
-  readonly execution: SkillScriptExecutionRequest;
-  readonly shellKind: ToolShellKind;
-}): RunCommandToolInput {
-  const execution = request.execution;
-  const command = buildScriptCommand(execution.scriptPath, execution.args, request.shellKind);
-  return {
-    command,
-    cwd: '.',
-    [RUN_COMMAND_INTERNAL_METADATA]: {
-      source: 'skill',
-      skillPath: execution.skillPath,
-      scriptName: execution.scriptName,
-      approvalSummary: execution.approvalSummary,
-      shellKind: request.shellKind,
-    },
-  };
-}
-
 export async function executeRunCommand(
   context: BuiltInToolContext,
   input: unknown,
@@ -133,7 +111,6 @@ export async function executeRunCommand(
     signal: options.signal,
   });
   const timeoutMs = optionalPositiveInteger(record, 'timeoutMs', 60_000);
-  const internalMetadata = (record as Record<PropertyKey, unknown>)[RUN_COMMAND_INTERNAL_METADATA];
   const startedAt = Date.now();
   const result = await runShellCommand({
     command,
@@ -164,7 +141,6 @@ export async function executeRunCommand(
     metadata: {
       shellKind: context.process.shellKind,
       executionMethod: context.process.executionMethod,
-      ...(isInternalMetadata(internalMetadata) ? internalMetadata : {}),
     },
     effectReport: {
       coverage: 'unknown',
@@ -298,40 +274,6 @@ function isStableProcessFailure(error: unknown): error is { readonly code: ToolE
 function processFailure(error: { readonly code: ToolExecutionErrorCode; readonly message: string }): ToolExecutionFailure {
   return new ToolExecutionFailure(error.message, error.code, { reason: 'sandbox_process' });
 }
-function buildScriptCommand(
-  scriptPath: string,
-  args: readonly string[],
-  shellKind: ToolShellKind,
-): string {
-  const values = [scriptPath, ...args];
-  values.forEach(assertSingleLineArgument);
-  if (shellKind === 'powershell') {
-    return `& ${values.map(quotePowerShellArgument).join(' ')}`;
-  }
-  if (shellKind === 'cmd') {
-    return `call ${values.map(quoteCmdArgument).join(' ')}`;
-  }
-  return values.map(quotePosixArgument).join(' ');
-}
-
-function assertSingleLineArgument(value: string): void {
-  if (value.includes('\0') || /[\r\n]/.test(value)) {
-    throw new TypeError('Skill script arguments must be single-line strings without null bytes.');
-  }
-}
-
-function quotePowerShellArgument(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
-}
-
-function quoteCmdArgument(value: string): string {
-  return `"${value.replace(/%/g, '%%').replace(/"/g, '""')}"`;
-}
-
-function quotePosixArgument(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
 function timeoutFailure(timeoutMs: number): ToolExecutionFailure {
   return new ToolExecutionFailure(
     `Command timed out after ${timeoutMs}ms.`,
@@ -346,10 +288,6 @@ function cancelledFailure(): ToolExecutionFailure {
     'tool_cancelled',
     { reason: 'cancelled' },
   );
-}
-
-function isInternalMetadata(value: unknown): value is JsonObject {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
 class BoundedByteCapture {
@@ -382,15 +320,18 @@ function completeUtf8Prefix(content: Buffer): Buffer {
   while (end > 0 && !isCompleteUtf8Prefix(content.subarray(0, end))) end -= 1;
   return content.subarray(0, end);
 }
+
 function isCompleteUtf8Prefix(content: Buffer): boolean {
-  if (content.byteLength === 0) return true;
-  let start = content.byteLength - 1;
-  while (start > 0 && (content[start] & 0xC0) === 0x80) start -= 1;
-  const leading = content[start];
-  const expectedLength = leading < 0x80 ? 1
-    : (leading & 0xE0) === 0xC0 ? 2
-      : (leading & 0xF0) === 0xE0 ? 3
-        : (leading & 0xF8) === 0xF0 ? 4
-          : 1;
-  return content.byteLength - start >= expectedLength;
+  let start = 0;
+  while (start < content.byteLength) {
+    const leading = content[start];
+    const expectedLength = leading < 0x80 ? 1
+      : (leading & 0xE0) === 0xC0 ? 2
+        : (leading & 0xF0) === 0xE0 ? 3
+          : (leading & 0xF8) === 0xF0 ? 4
+            : 1;
+    if (content.byteLength - start < expectedLength) return false;
+    start += expectedLength;
+  }
+  return true;
 }

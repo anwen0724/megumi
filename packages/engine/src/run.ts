@@ -33,7 +33,7 @@ export interface RunFailure {
 }
 
 export interface RunFailureCause {
-  readonly owner: 'ai' | 'context' | 'permissions' | 'tools' | 'session' | 'engine';
+  readonly owner: 'ai' | 'context' | 'permissions' | 'tools' | 'session' | 'skills' | 'engine';
   readonly code: string;
 }
 

@@ -181,7 +181,6 @@ export const chat = {
       editFile: '编辑文件',
       writeFile: '写入文件',
       runCommand: '运行命令',
-      useSkill: '使用 Skill',
       webSearch: '搜索网页',
       webFetch: '读取网页',
     },

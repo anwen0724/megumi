@@ -1,7 +1,6 @@
 /* Executes an already-authorized ToolInvocation inside its Sandbox and Workspace Changes boundary. */
 
 import { executeSandboxScope, type Sandbox } from '@megumi/sandbox';
-import type { SkillService } from '@megumi/skills';
 import type { ToolExecutionAccess, ToolExecutionOptions, ToolExecutionResult } from './tool';
 import type { ToolInvocation } from './tool-handler';
 import type { WebFetch } from './built-ins/web-fetch';
@@ -35,7 +34,6 @@ export async function executeSandboxToolInvocation(request: {
   readonly workspaceChanges: ToolWorkspaceChanges;
   readonly workspaceRoot: string;
   readonly invocation: ToolInvocation;
-  readonly skills: Pick<SkillService, 'useSkill'>;
   readonly webSearch?: WebSearch;
   readonly webFetch: WebFetch;
   readonly stepId?: string;
@@ -57,7 +55,6 @@ export async function executeSandboxToolInvocation(request: {
       const context: BuiltInToolContext = {
         workspaceFileAccess: scope.files,
         process: scope.process,
-        skills: request.skills,
         ...(request.webSearch ? { webSearch: request.webSearch } : {}),
         webFetch: request.webFetch,
       };

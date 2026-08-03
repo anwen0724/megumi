@@ -57,9 +57,6 @@ export function normalizeRawToolResult(input: {
     toolName: input.toolName,
     normalizedResult: normalizeRawToolContent(input.rawResult),
     observation: { summary: `${input.toolName} completed` },
-    ...(input.rawResult.runtimeSources
-      ? { runtimeSources: input.rawResult.runtimeSources.map(cloneRuntimeSource) }
-      : {}),
     ...(input.rawResult.metadata ? { metadata: cloneJsonObject(input.rawResult.metadata) } : {}),
     ...(input.rawResult.effectReport ? { effectReport: cloneEffectReport(input.rawResult.effectReport) } : {}),
   };
@@ -182,11 +179,4 @@ function cloneEffectReport<T>(report: T): T {
 
 function cloneJsonObject(value: JsonObject): JsonObject {
   return JSON.parse(JSON.stringify(value)) as JsonObject;
-}
-
-function cloneRuntimeSource(source: NonNullable<RawToolResult['runtimeSources']>[number]) {
-  return {
-    ...source,
-    ...(source.metadata ? { metadata: cloneJsonObject(source.metadata) } : {}),
-  };
 }

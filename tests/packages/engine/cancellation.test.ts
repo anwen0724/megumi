@@ -18,16 +18,19 @@ describe('Engine cancellation', () => {
   it('cancels a Run whose Context build observes the Run AbortSignal', async () => {
     const fixture = createEngineFixture({
       contextBuild: (request) => new Promise((resolve) => {
-        request.signal?.addEventListener('abort', () => {
-          resolve({
-            status: 'failed',
-            failure: {
-              code: 'cancelled',
-              message: 'cancelled',
-              retryable: false,
-            },
-          });
-        }, { once: true });
+        const resolveCancelled = () => resolve({
+          status: 'failed',
+          failure: {
+            code: 'cancelled',
+            message: 'cancelled',
+            retryable: false,
+          },
+        });
+        if (request.signal?.aborted) {
+          resolveCancelled();
+          return;
+        }
+        request.signal?.addEventListener('abort', resolveCancelled, { once: true });
       }),
     });
     const started = await fixture.engine.startRun(startRequest);

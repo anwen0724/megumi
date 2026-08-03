@@ -12,7 +12,6 @@ import type { WebFetch } from '../../../packages/tools/src/built-ins/web-fetch';
 import type { WebSearch } from '../../../packages/tools/src/built-ins/web-search';
 import type {
   BuiltInToolContext,
-  SkillUse,
   WorkspaceFileAccess,
 } from '../../../packages/tools/src/built-ins/workspace-file-access';
 import {
@@ -25,7 +24,6 @@ import {
 export function createBuiltInTestHarness(request: {
   readonly workspaceFileAccess: WorkspaceFileAccess;
   readonly process?: ToolProcessAdapter;
-  readonly skills?: SkillUse;
   readonly webSearch?: WebSearch;
   readonly webFetch?: WebFetch;
 }) {
@@ -88,7 +86,6 @@ export function createBuiltInTestHarness(request: {
       const context: BuiltInToolContext = {
         workspaceFileAccess: request.workspaceFileAccess,
         ...(request.process ? { process: request.process } : {}),
-        ...(request.skills ? { skills: request.skills } : {}),
         ...(request.webSearch ? { webSearch: request.webSearch } : {}),
         ...(request.webFetch ? { webFetch: request.webFetch } : {}),
       };

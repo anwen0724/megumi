@@ -7,6 +7,7 @@ import {
   EnableSkillUiResponseSchema,
   GetSkillDetailUiResponseSchema,
   ListSkillsUiResponseSchema,
+  RefreshSkillsUiResponseSchema,
   type ProductHostInterface,
 } from '@megumi/product/host';
 import type { ProductRuntimeLogger } from '@megumi/product';
@@ -20,6 +21,7 @@ import {
   SkillEnableRequestSchema,
   SkillGetRequestSchema,
   SkillListRequestSchema,
+  SkillRefreshRequestSchema,
 } from '../schemas';
 
 export interface SkillHandlersService {
@@ -79,6 +81,15 @@ export function registerSkillHandlers(
     responseSchema: DeleteSkillUiResponseSchema,
     logger: options.logger,
     handle: (request) => service.host.skill.deleteSkill(request.payload),
+    mapError: mapSkillIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.skill.refresh, createIpcRequestHandler({
+    channel: IPC_CHANNELS.skill.refresh,
+    requestSchema: SkillRefreshRequestSchema,
+    responseSchema: RefreshSkillsUiResponseSchema,
+    logger: options.logger,
+    handle: (request) => service.host.skill.refreshSkills(request.payload),
     mapError: mapSkillIpcError,
   }));
 }

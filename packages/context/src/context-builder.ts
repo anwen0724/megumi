@@ -11,12 +11,7 @@ import {
 import type { InstructionReader } from '@megumi/instructions';
 import type { ObservabilityService } from '@megumi/observability';
 import type { SessionAttachmentReader, SessionHistory, SessionHistoryItem } from '@megumi/session';
-import type {
-  SkillCatalogItem,
-  SkillSelection,
-  SkillService,
-  UsedSkillContent,
-} from '@megumi/skills';
+import type { SkillView } from '@megumi/skills';
 import {
   assembleActiveContext,
   buildAiContext,
@@ -87,7 +82,7 @@ export interface BuildContextRequest {
   readonly sessionId: string;
   readonly workspaceId: string;
   readonly currentRun: CurrentConversationRun;
-  readonly selectedSkill?: SkillSelection;
+  readonly skillView?: SkillView;
   readonly tools: readonly Tool[];
   readonly model: Model<Api>;
   readonly onCompactionProgress?: (progress: ContextCompactionProgress) => void;
@@ -120,9 +115,6 @@ export interface CreateContextOptions {
   readonly attachmentReader: Pick<SessionAttachmentReader, 'readAttachmentContent'>;
   readonly scopeResolver: ContextScopeResolver;
   readonly instructionReader: InstructionReader;
-  readonly skillServiceFactory?: (
-    input: { readonly workspaceRoot: string },
-  ) => Pick<SkillService, 'getSkillCatalog' | 'useSkill'>;
   readonly models: Pick<Models, 'completeSimple'>;
   readonly contextTokenEstimator?: (context: AiContext) => number;
   readonly usageSnapshotCache?: ContextUsageSnapshotCache;
@@ -276,7 +268,7 @@ class DefaultContext implements ContextCapabilities {
       workspaceId: request.workspaceId,
       throughEntryId: request.currentRun.userEntry.parentEntryId ?? null,
       currentRun: request.currentRun,
-      selectedSkill: request.selectedSkill,
+      skillView: request.skillView,
       tools: request.tools,
       model: request.model,
       ...(request.signal ? { signal: request.signal } : {}),
@@ -336,7 +328,7 @@ class DefaultContext implements ContextCapabilities {
     readonly workspaceId: string;
     readonly throughEntryId?: string | null;
     readonly currentRun?: CurrentConversationRun;
-    readonly selectedSkill?: SkillSelection;
+    readonly skillView?: SkillView;
     readonly tools: readonly Tool[];
     readonly model: Model<Api>;
     readonly signal?: AbortSignal;
@@ -390,13 +382,6 @@ class DefaultContext implements ContextCapabilities {
         effectiveInstructions.failure,
       ));
     }
-    const skills = await this.loadSkills({
-      workspaceRoot: scope.workspaceRoot,
-      selectedSkill: input.selectedSkill,
-      currentRun: input.currentRun,
-      signal: input.signal,
-    });
-    if (skills.status === 'failed') return skills;
     if (input.signal?.aborted) return failed(cancelled());
 
     return {
@@ -411,8 +396,7 @@ class DefaultContext implements ContextCapabilities {
         historicalRuns: buildConversationRuns(historyResult.history),
         systemInstructions: [...systemInstructions],
         effectiveInstructions: effectiveInstructions.instructions,
-        skillCatalog: skills.skillCatalog,
-        usedSkills: skills.usedSkills,
+        skillCatalog: [...(input.skillView?.catalog ?? [])],
         tools: input.tools.map((tool) => ({ ...tool })),
         ...(effectiveSummary(historyResult.history)
           ? { compactionSummary: effectiveSummary(historyResult.history) }
@@ -420,64 +404,6 @@ class DefaultContext implements ContextCapabilities {
         ...(input.currentRun ? { currentRun: input.currentRun } : {}),
       },
     };
-  }
-
-  private async loadSkills(input: {
-    readonly workspaceRoot: string;
-    readonly selectedSkill?: SkillSelection;
-    readonly currentRun?: CurrentConversationRun;
-    readonly signal?: AbortSignal;
-  }): Promise<
-    | {
-        readonly status: 'loaded';
-        readonly skillCatalog: SkillCatalogItem[];
-        readonly usedSkills: UsedSkillContent[];
-      }
-    | { readonly status: 'failed'; readonly failure: ContextFailure }
-  > {
-    const skillService = this.options.skillServiceFactory?.({ workspaceRoot: input.workspaceRoot });
-    if (!skillService) {
-      if (input.selectedSkill) {
-        return failed(ownerFailure(
-          'skill_catalog_failed',
-          'Skill Service is not configured for the selected Skill.',
-          'skills',
-          { code: 'skill_service_unavailable' },
-        ));
-      }
-      return {
-        status: 'loaded',
-        skillCatalog: [],
-        usedSkills: usedSkillsFromCurrentRun(input.currentRun),
-      };
-    }
-    const catalog = await skillService.getSkillCatalog({});
-    if (input.signal?.aborted) return failed(cancelled());
-    if (catalog.status === 'failed') {
-      return failed(ownerFailure(
-        'skill_catalog_failed',
-        catalog.message,
-        'skills',
-        { code: 'skill_catalog_failed', message: catalog.message },
-      ));
-    }
-    const usedSkills = usedSkillsFromCurrentRun(input.currentRun);
-    if (input.selectedSkill) {
-      const selected = await skillService.useSkill({ skillPath: input.selectedSkill.skillPath });
-      if (input.signal?.aborted) return failed(cancelled());
-      if (selected.status !== 'ok') {
-        return failed(ownerFailure(
-          'skill_catalog_failed',
-          selected.status === 'failed'
-            ? selected.message
-            : `Skill ${selected.skillPath} is ${selected.status === 'not_found' ? 'not found' : 'unavailable'}.`,
-          'skills',
-          { code: `skill_${selected.status}` },
-        ));
-      }
-      mergeUsedSkill(usedSkills, selected.skill);
-    }
-    return { status: 'loaded', skillCatalog: catalog.skills, usedSkills };
   }
 
   private async buildModelContext(
@@ -610,29 +536,6 @@ function effectiveSummary(history: SessionHistoryItem[]): VisibleCompactionSumma
     }
   }
   return undefined;
-}
-
-function usedSkillsFromCurrentRun(currentRun: CurrentConversationRun | undefined): UsedSkillContent[] {
-  const usedSkills: UsedSkillContent[] = [];
-  for (const item of currentRun?.runItems ?? []) {
-    if (item.type !== 'tool_result' || item.toolName !== 'use_skill' || item.status !== 'success') {
-      continue;
-    }
-    for (const source of item.runtimeSources ?? []) {
-      if (source.sourceKind !== 'skill') continue;
-      const name = source.metadata?.name;
-      const skillPath = source.metadata?.skillPath;
-      if (typeof name !== 'string' || typeof skillPath !== 'string') continue;
-      mergeUsedSkill(usedSkills, { name, skillPath, content: source.text });
-    }
-  }
-  return usedSkills;
-}
-
-function mergeUsedSkill(usedSkills: UsedSkillContent[], skill: UsedSkillContent): void {
-  const index = usedSkills.findIndex((candidate) => candidate.skillPath === skill.skillPath);
-  if (index >= 0) usedSkills[index] = { ...skill };
-  else usedSkills.push({ ...skill });
 }
 
 function ownerFailure(

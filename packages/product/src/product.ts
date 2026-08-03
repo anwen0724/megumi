@@ -49,7 +49,7 @@ import {
   type SettingsStore,
 } from '@megumi/settings';
 import { createSettingsStore } from '@megumi/settings/store';
-import { composeSkills, type SkillService } from '@megumi/skills';
+import { createSkills, type Skills } from '@megumi/skills';
 import {
   createTools,
   type BuiltInToolAvailability,
@@ -211,14 +211,18 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     entries: { findMessageEntry: (request) => sessionStore.findMessageEntry(request) },
   });
 
-  const skillComposition = composeSkills({ database, homePath: homePaths.homePath });
-  const resolveSkillService = (request: { workspaceId?: string } = {}): SkillService => {
-    if (!request.workspaceId) return skillComposition.createSkillService();
-    const workspace = workspaces.getWorkspace({ workspace_id: request.workspaceId });
-    return workspace.status === 'found'
-      ? skillComposition.createSkillService({ workspaceRoot: workspace.workspace.root_path })
-      : skillComposition.createSkillService();
-  };
+  const skills = createSkills({
+    database,
+    homePath: homePaths.homePath,
+    workspaceRootResolver: {
+      async resolveWorkspaceRoot(request) {
+        const workspace = workspaces.getWorkspace({ workspace_id: request.workspaceId });
+        return workspace.status === 'found'
+          ? path.join(workspace.workspace.root_path, '.megumi', 'skills')
+          : undefined;
+      },
+    },
+  });
   const instructions = createInstructionReader({ megumiHomePath: homePaths.homePath });
   const sandboxCapabilities = sandbox.capabilities();
   const context = createContext({
@@ -244,7 +248,6 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
       },
     },
     instructionReader: instructions,
-    skillServiceFactory: ({ workspaceRoot }) => skillComposition.createSkillService({ workspaceRoot }),
     models: modelComposition.models,
     policyProvider: {
       getPolicy() {
@@ -306,7 +309,7 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     }),
     skillSuggestionProvider: {
       async listSkillSuggestions(request) {
-        const result = await resolveSkillService(request).listSkills({});
+        const result = await skills.list({ workspaceId: request.workspaceId });
         if (result.status === 'failed') return [];
         return result.skills.filter((skill) => skill.available).map((skill): SkillSuggestionDescriptor => ({
           name: skill.name,
@@ -341,7 +344,6 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     settings,
     workspaces,
     workspaceChanges,
-    skills: skillComposition,
     sandbox,
     executionPolicy: {
       maxExecutionTimeMs: PRODUCT_ENGINE_POLICY.toolExecutionTimeoutMs,
@@ -383,6 +385,7 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     context,
     session: history,
     tools,
+    skills,
     permissions,
     events,
     observability: observability.service,
@@ -423,7 +426,7 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
   const approval = createProductApproval(engine);
   const host: ProductHostInterface = {
     chat: createChatHost(chat),
-    skill: createSkillHost({ resolveSkillService }),
+    skill: createSkillHost({ skills }),
     workspace: createWorkspaceHost({
       workspaceService: workspaces,
       workspaceFilesService: workspaceFiles,

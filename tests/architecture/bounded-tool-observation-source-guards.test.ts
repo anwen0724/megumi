@@ -30,7 +30,8 @@ describe('bounded Tool Result source guards', () => {
 
     expect(toolCall).toContain('async function executeToolCall(');
     expect(toolCall).toContain('content: result.normalizedResult.content');
-    expect(toolCall).toContain('runtimeSources: result.runtimeSources');
+    // The Engine mapper never passes raw Runtime Sources into persisted Tool Results.
+    expect(engineSource).not.toContain('runtimeSources');
     expect(engineSource).not.toContain('toolResultFromExecutionResult');
     expect(engineSource).not.toContain('toolResultRuntimeFactFromExecution');
     expect(engineSource).not.toContain('.rawResult');

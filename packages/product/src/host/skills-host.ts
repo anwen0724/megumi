@@ -1,5 +1,11 @@
-/* Maps Desktop-facing Skill management requests to Root-bound SkillService instances. */
-import type { Skill, SkillService } from '@megumi/skills';
+/* Maps Desktop-facing Skill management requests to the long-lived Skills module. */
+import {
+  buildSkillPackageOverview,
+  skillsFailureMessage,
+  type Skill,
+  type Skills,
+  type SkillsFailure,
+} from '@megumi/skills';
 import { z } from 'zod';
 
 export interface SkillHost {
@@ -8,6 +14,7 @@ export interface SkillHost {
   enableSkill(request: EnableSkillUiRequest): Promise<EnableSkillUiResponse>;
   disableSkill(request: DisableSkillUiRequest): Promise<DisableSkillUiResponse>;
   deleteSkill(request: DeleteSkillUiRequest): Promise<DeleteSkillUiResponse>;
+  refreshSkills(request: RefreshSkillsUiRequest): Promise<RefreshSkillsUiResponse>;
 }
 
 export const SkillListPayloadSchema = z.object({ workspaceId: z.string().min(1).optional() }).strict();
@@ -18,6 +25,7 @@ export const SkillGetPayloadSchema = z.object({
 export const SkillEnablePayloadSchema = SkillGetPayloadSchema;
 export const SkillDisablePayloadSchema = SkillGetPayloadSchema;
 export const SkillDeletePayloadSchema = SkillGetPayloadSchema;
+export const SkillRefreshPayloadSchema = SkillListPayloadSchema;
 
 const SkillDiagnosticUiItemSchema = z.object({
   level: z.enum(['info', 'warning', 'error']),
@@ -65,71 +73,94 @@ export const DeleteSkillUiResponseSchema = z.discriminatedUnion('status', [
   }).strict(),
   z.object({ status: z.literal('failed'), failure: z.object({ code: z.string(), message: z.string() }).strict() }).strict(),
 ]);
+export const RefreshSkillsUiResponseSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('ok') }).strict(),
+  z.object({ status: z.literal('failed'), failure: z.object({ code: z.string(), message: z.string() }).strict() }).strict(),
+]);
 
 export function createSkillHost(input: {
-  resolveSkillService(request: { workspaceId?: string }): SkillService;
+  skills: Skills;
 }): SkillHost {
   return {
     async listSkills(request) {
-      const result = await input.resolveSkillService(request).listSkills({});
+      const result = await input.skills.list({ workspaceId: request.workspaceId });
       return result.status === 'failed'
-        ? toSkillFailure(result.message)
+        ? toSkillFailure(result.failure)
         : { status: 'ok', skills: result.skills.map(toSkillListUiItem) };
     },
     async getSkillDetail(request) {
-      const result = await input.resolveSkillService(request).getSkill({ skillPath: request.skillPath });
-      if (result.status === 'not_found') return { status: 'not_found', skillPath: result.skillPath };
-      if (result.status === 'failed') return toSkillFailure(result.message);
+      const result = await input.skills.get({ skillPath: request.skillPath, workspaceId: request.workspaceId });
+      if (result.status === 'failed' && result.failure.code === 'skill_not_found') {
+        return { status: 'not_found', skillPath: request.skillPath };
+      }
+      if (result.status === 'failed') return toSkillFailure(result.failure);
       return { status: 'ok', skill: toSkillDetailUiDto(result.skill) };
     },
     async enableSkill(request) {
-      const result = await input.resolveSkillService(request).enableSkill({ skillPath: request.skillPath });
-      if (result.status === 'not_found') return { status: 'not_found', skillPath: result.skillPath };
-      if (result.status === 'failed') return toSkillFailure(result.message);
+      const result = await input.skills.enable({ skillPath: request.skillPath, workspaceId: request.workspaceId });
+      if (result.status === 'failed' && result.failure.code === 'skill_not_found') {
+        return { status: 'not_found', skillPath: request.skillPath };
+      }
+      if (result.status === 'failed') return toSkillFailure(result.failure);
       return { status: 'ok', skillPath: result.availability.skillPath };
     },
     async disableSkill(request) {
-      const result = await input.resolveSkillService(request).disableSkill({ skillPath: request.skillPath });
-      if (result.status === 'not_found') return { status: 'not_found', skillPath: result.skillPath };
-      if (result.status === 'failed') return toSkillFailure(result.message);
+      const result = await input.skills.disable({ skillPath: request.skillPath, workspaceId: request.workspaceId });
+      if (result.status === 'failed' && result.failure.code === 'skill_not_found') {
+        return { status: 'not_found', skillPath: request.skillPath };
+      }
+      if (result.status === 'failed') return toSkillFailure(result.failure);
       return { status: 'ok', skillPath: result.availability.skillPath };
     },
     async deleteSkill(request) {
-      const result = await input.resolveSkillService(request).deleteSkill({ skillPath: request.skillPath });
-      if (result.status === 'not_found') return { status: 'not_found', skillPath: result.skillPath };
-      if (result.status === 'not_allowed') {
-        return { status: 'not_allowed', skillPath: result.skillPath, reason: result.reason };
+      const result = await input.skills.delete({ skillPath: request.skillPath, workspaceId: request.workspaceId });
+      if (result.status === 'failed' && result.failure.code === 'skill_not_found') {
+        return { status: 'not_found', skillPath: request.skillPath };
       }
-      if (result.status === 'failed') return toSkillFailure(result.message);
+      if (result.status === 'failed' && result.failure.code === 'delete_not_allowed') {
+        return { status: 'not_allowed', skillPath: request.skillPath, reason: result.failure.reason };
+      }
+      if (result.status === 'failed') return toSkillFailure(result.failure);
       return { status: 'ok', skillPath: result.skillPath };
+    },
+    async refreshSkills(request) {
+      const result = await input.skills.refresh({ workspaceId: request.workspaceId });
+      return result.status === 'failed'
+        ? toSkillFailure(result.failure)
+        : { status: 'ok' };
     },
   };
 }
 
 function toSkillListUiItem(skill: Skill): SkillListUiItem {
+  const overview = buildSkillPackageOverview(skill);
   return {
     name: skill.name,
     description: skill.description,
     skillPath: skill.skillPath,
     sourceLabel: skill.source.owner === 'system' ? 'System' : 'User',
     available: skill.available,
-    hasResources: skill.resources.length > 0,
-    hasScripts: skill.scripts.length > 0,
+    hasResources: overview.hasReferences || overview.hasAssets,
+    hasScripts: overview.hasScripts,
     diagnostics: skill.diagnostics.map(({ level, message }) => ({ level, message })),
   };
 }
 
 function toSkillDetailUiDto(skill: Skill): SkillDetailUiDto {
+  const overview = buildSkillPackageOverview(skill);
   return {
     ...toSkillListUiItem(skill),
     content: skill.content,
-    resourcePaths: skill.resources.map((resource) => resource.resourcePath),
-    scriptNames: skill.scripts.map((script) => script.name),
+    resourcePaths: [
+      ...(overview.hasReferences ? ['references/'] : []),
+      ...(overview.hasAssets ? ['assets/'] : []),
+    ],
+    scriptNames: overview.hasScripts ? ['scripts/'] : [],
   };
 }
 
-function toSkillFailure(message: string): { status: 'failed'; failure: { code: string; message: string } } {
-  return { status: 'failed', failure: { code: 'skill_failed', message } };
+function toSkillFailure(failure: SkillsFailure): { status: 'failed'; failure: { code: string; message: string } } {
+  return { status: 'failed', failure: { code: failure.code, message: skillsFailureMessage(failure) } };
 }
 
 export type ListSkillsUiRequest = { workspaceId?: string };
@@ -137,6 +168,7 @@ export type GetSkillDetailUiRequest = { skillPath: string; workspaceId?: string 
 export type EnableSkillUiRequest = { skillPath: string; workspaceId?: string };
 export type DisableSkillUiRequest = { skillPath: string; workspaceId?: string };
 export type DeleteSkillUiRequest = { skillPath: string; workspaceId?: string };
+export type RefreshSkillsUiRequest = { workspaceId?: string };
 export type SkillDiagnosticUiItem = { level: 'info' | 'warning' | 'error'; message: string };
 export type SkillListUiItem = {
   name: string;
@@ -158,3 +190,4 @@ export type DeleteSkillUiResponse =
   | { status: 'not_found'; skillPath: string }
   | { status: 'not_allowed'; skillPath: string; reason: 'system_skill' | 'skill_root' }
   | { status: 'failed'; failure: { code: string; message: string } };
+export type RefreshSkillsUiResponse = { status: 'ok' } | { status: 'failed'; failure: { code: string; message: string } };

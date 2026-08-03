@@ -1,25 +1,27 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createSkillHost } from '../../../../packages/product/src/host/skills-host';
+import type { Skills } from '../../../../packages/skills/src';
 
 describe('SkillHost semantics', () => {
-  it('resolves a root-bound service and projects owner/path without leaking diagnostics internals', async () => {
+  it('projects owner/path and package overview without leaking diagnostics internals', async () => {
     const skillPath = 'C:/workspace/.megumi/skills/review/SKILL.md';
-    const listSkills = vi.fn(async () => ({
+    const list = vi.fn(async () => ({
       status: 'ok' as const,
       skills: [{
         name: 'review',
         description: 'Review code',
         skillPath,
-        source: { owner: 'user' as const, rootPath: 'C:/workspace/.megumi/skills' },
+        packagePath: 'C:/workspace/.megumi/skills/review',
+        source: { owner: 'user' as const, scope: 'workspace' as const, workspaceId: 'workspace:1' },
         available: true,
+        disableModelInvocation: false,
         content: 'Review carefully.',
-        resources: [],
-        scripts: [],
-        diagnostics: [{ level: 'warning' as const, message: 'Safe warning.', internalPath: 'C:/secret' }],
+        diagnostics: [{ level: 'warning' as const, code: 'manifest_name_invalid' as const, message: 'Safe warning.' }],
       }],
+      diagnostics: [],
     }));
-    const resolveSkillService = vi.fn(() => ({ listSkills }));
-    const host = createSkillHost({ resolveSkillService } as never);
+    const skills = { list } as unknown as Skills;
+    const host = createSkillHost({ skills });
 
     await expect(host.listSkills({ workspaceId: 'workspace:1' })).resolves.toEqual({
       status: 'ok',
@@ -34,19 +36,29 @@ describe('SkillHost semantics', () => {
         diagnostics: [{ level: 'warning', message: 'Safe warning.' }],
       }],
     });
-    expect(resolveSkillService).toHaveBeenCalledWith({ workspaceId: 'workspace:1' });
-    expect(listSkills).toHaveBeenCalledWith({});
+    expect(list).toHaveBeenCalledWith({ workspaceId: 'workspace:1' });
   });
 
-  it('addresses Skill detail by skillPath', async () => {
+  it('addresses Skill detail by skillPath and maps stable failures', async () => {
     const skillPath = 'C:/user/review/SKILL.md';
-    const getSkill = vi.fn(async () => ({ status: 'failed' as const, message: 'Skill failed.' }));
-    const host = createSkillHost({ resolveSkillService: () => ({ getSkill }) } as never);
+    const get = vi.fn(async () => ({
+      status: 'failed' as const,
+      failure: { code: 'skill_not_found' as const, skillPath },
+    }));
+    const skills = { get } as unknown as Skills;
+    const host = createSkillHost({ skills });
 
     await expect(host.getSkillDetail({ skillPath })).resolves.toEqual({
-      status: 'failed',
-      failure: { code: 'skill_failed', message: 'Skill failed.' },
+      status: 'not_found',
+      skillPath,
     });
-    expect(getSkill).toHaveBeenCalledWith({ skillPath });
+    expect(get).toHaveBeenCalledWith({ skillPath, workspaceId: undefined });
+  });
+
+  it('exposes a real refresh operation instead of re-listing', async () => {
+    const refresh = vi.fn(async () => ({ status: 'ok' as const, diagnostics: [] }));
+    const host = createSkillHost({ skills: { refresh } as unknown as Skills });
+    await expect(host.refreshSkills({})).resolves.toEqual({ status: 'ok' });
+    expect(refresh).toHaveBeenCalledWith({ workspaceId: undefined });
   });
 });

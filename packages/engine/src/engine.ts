@@ -4,6 +4,7 @@
 import type { Api, Model, Models } from '@megumi/ai';
 import type { UserInput } from '@megumi/input';
 import type { ContextBuilder, ContextUsageRecorder } from '@megumi/context';
+import type { Skills } from '@megumi/skills';
 import type { EventPublisher, RuntimeEvent } from '@megumi/events';
 import type {
   ApprovalDecision,
@@ -199,6 +200,7 @@ export interface CreateEngineOptions {
     | 'executeToolInvocation'
     | 'releaseModelCallTools'
   >;
+  readonly skills: Pick<Skills, 'createView'>;
   readonly permissions: Pick<
     Permissions,
     'evaluateToolCall' | 'applyApprovalDecision'

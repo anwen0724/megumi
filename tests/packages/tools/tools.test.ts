@@ -19,11 +19,6 @@ describe('Tools ModelCall routing', () => {
       workspaceChanges: {
         trackToolExecution: ({ execute }) => execute(),
       },
-      skills: {
-        createSkillService: () => ({
-          useSkill: async () => ({ status: 'failed', failure: { code: 'skill_not_found', message: 'Not used.' } }),
-        } as never),
-      },
       sandbox: {
         capabilities: () => ({
           platform: 'win32',
@@ -108,9 +103,6 @@ describe('Tools ModelCall routing', () => {
         getWorkspace: () => ({ status: 'found', workspace: { root_path: 'C:/workspace', status: 'available' } }),
       },
       workspaceChanges: { trackToolExecution: ({ execute }) => execute() },
-      skills: {
-        createSkillService: () => ({ useSkill: async () => ({ status: 'failed' }) } as never),
-      },
       sandbox: {
         capabilities: () => ({
           platform: 'win32', workspaceEffectObservation: true, fileReadBoundary: true,

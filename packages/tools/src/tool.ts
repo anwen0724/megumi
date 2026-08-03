@@ -13,7 +13,7 @@ export interface ToolAvailability {
   readonly reason?: string;
 }
 
-export type ToolSourceKind = 'built_in' | 'mcp' | 'plugin' | 'project_local' | 'skill';
+export type ToolSourceKind = 'built_in' | 'mcp' | 'plugin' | 'project_local';
 export type ToolExecutionMode = 'parallel' | 'serial';
 
 export interface ToolDefinition {
@@ -72,7 +72,6 @@ export type RawToolResult = {
   readonly isError?: boolean;
   readonly error?: ToolExecutionError;
   readonly metadata?: JsonObject;
-  readonly runtimeSources?: readonly ToolRuntimeSource[];
   readonly effectReport?: ToolEffectReport;
 };
 
@@ -115,14 +114,6 @@ export interface ToolExecutionError {
   readonly details?: JsonObject;
 }
 
-export interface ToolRuntimeSource {
-  readonly sourceId: string;
-  readonly sourceKind: string;
-  readonly text: string;
-  readonly persisted: boolean;
-  readonly metadata?: JsonObject;
-}
-
 export interface ToolItemFailure {
   readonly path: string;
   readonly code: string;
@@ -151,7 +142,6 @@ export type ToolExecutionResult =
       readonly toolName: string;
       readonly normalizedResult: NormalizedToolResult;
       readonly observation?: ToolExecutionObservation;
-      readonly runtimeSources?: readonly ToolRuntimeSource[];
       readonly metadata?: JsonObject;
       readonly effectReport?: ToolEffectReport;
     }

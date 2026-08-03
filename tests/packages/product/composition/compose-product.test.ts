@@ -76,7 +76,7 @@ describe('composeProduct', () => {
         settings: {
           permissions: {
             catalog: {
-              tools: expect.arrayContaining([expect.objectContaining({ registeredToolName: 'use_skill' })]),
+              tools: expect.arrayContaining([expect.objectContaining({ registeredToolName: 'read_file' })]),
             },
           },
         },
@@ -168,10 +168,11 @@ function toolThenReplyStreams(skillPath: string): { streams: ProviderStreams; co
         });
     }
     if (callCount === 2) {
-      return assistantStream(model, 'I will load the selected review method.', {
-        id: 'tool-call:use-review-skill',
-        name: 'use_skill',
-        arguments: { skillPath },
+      // The model reads the Skill package dynamically through the normal file Tool.
+      return assistantStream(model, 'I will read the review Skill package.', {
+        id: 'tool-call:read-review-skill',
+        name: 'read_file',
+        arguments: { path: skillPath },
       });
     }
     return assistantStream(model, 'Product integration reply.');

@@ -20,7 +20,6 @@ import {
   type ToolExecutionResult,
   type Tools,
   type ToolIdentity,
-  type ToolRuntimeSource,
   type JsonValue,
 } from '@megumi/tools';
 import type { EngineClock, EngineIdFactory, RunApproval } from './engine';
@@ -62,7 +61,6 @@ export interface ToolResult {
   readonly content: string;
   readonly normalizedResult?: NormalizedToolResult;
   readonly observation?: ToolExecutionObservation;
-  readonly runtimeSources?: readonly ToolRuntimeSource[];
   readonly effectReport?: ToolEffectReport;
   readonly completedAt: string;
 }
@@ -722,7 +720,6 @@ function mapExecutionResult(
         ...(result.observation
           ? { observation: result.observation }
           : {}),
-        ...(result.runtimeSources ? { runtimeSources: result.runtimeSources } : {}),
         ...(result.effectReport ? { effectReport: result.effectReport } : {}),
         completedAt,
       },

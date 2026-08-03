@@ -177,24 +177,8 @@ describe('Context.build', () => {
     }
   });
 
-  it('loads catalog, selected Skill, and use_skill runtime sources without a Tools dependency', async () => {
-    const options: CreateContextOptions = {
-      ...fixture(20),
-      skillServiceFactory: vi.fn(() => ({
-      getSkillCatalog: vi.fn(async () => ({
-        status: 'ok' as const,
-        skills: [{ name: 'review', description: 'Review', skillPath: '/skills/review/SKILL.md' }],
-      })),
-      useSkill: vi.fn(async () => ({
-        status: 'ok' as const,
-        skill: {
-          name: 'selected',
-          skillPath: '/skills/selected/SKILL.md',
-          content: 'Selected instructions.',
-        },
-      })),
-      })),
-    };
+  it('uses the ModelCall SkillView catalog without re-reading Skill content', async () => {
+    const options = fixture();
     const result = await createContext(options).build({
       sessionId: 'session:1',
       workspaceId: 'workspace:1',
@@ -203,22 +187,14 @@ describe('Context.build', () => {
         runItems: [{
           type: 'tool_result',
           toolCallId: 'call:1',
-          toolName: 'use_skill',
+          toolName: 'read_file',
           status: 'success',
           content: [{ type: 'text', text: 'loaded' }],
-          runtimeSources: [{
-            sourceId: 'skill:dynamic',
-            sourceKind: 'skill',
-            text: 'Dynamic instructions.',
-            persisted: false,
-            metadata: { name: 'dynamic', skillPath: '/skills/dynamic/SKILL.md' },
-          }],
         }],
       },
-      selectedSkill: {
-        type: 'skill',
-        name: 'selected',
-        skillPath: '/skills/selected/SKILL.md',
+      skillView: {
+        catalog: [{ name: 'review', description: 'Review', skillPath: '/skills/review/SKILL.md' }],
+        diagnostics: [],
       },
       tools: [],
       model,
@@ -227,8 +203,10 @@ describe('Context.build', () => {
     expect(result.status).toBe('ready');
     if (result.status === 'ready') {
       const serialized = JSON.stringify(result.prepared.context.messages);
-      expect(serialized).toContain('Selected instructions.');
-      expect(serialized).toContain('Dynamic instructions.');
+      expect(serialized).toContain('skill_catalog');
+      expect(serialized).toContain('/skills/review/SKILL.md');
+      // Explicit Skill body is never re-read by Context; it lives in the saved UserMessage.
+      expect(serialized).not.toContain('Selected instructions.');
     }
   });
 

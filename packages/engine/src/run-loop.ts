@@ -19,7 +19,7 @@ import type {
   SessionMessageWithAttachments,
 } from '@megumi/session';
 import type { ToolDefinition } from '@megumi/tools';
-import type { SkillSelection } from '@megumi/skills';
+import { skillsFailureMessage, type SkillSelection, type SkillView } from '@megumi/skills';
 import type {
   ObservabilitySpanName,
   TraceHandle,
@@ -429,6 +429,31 @@ async function executeRunLoop(
       }
 
       const modelCallId = dependencies.ids.createModelCallId();
+      let skillView: SkillView;
+      try {
+        const viewResult = await dependencies.skills.createView({
+          workspaceId: run.workspaceId,
+          signal: runtime.controller.signal,
+        });
+        if (viewResult.status === 'failed') {
+          await failRun(dependencies, runtime, {
+            code: 'context_failed',
+            message: skillsFailureMessage(viewResult.failure),
+            retryable: false,
+            cause: { owner: 'skills', code: viewResult.failure.code },
+          });
+          return;
+        }
+        skillView = viewResult.view;
+      } catch {
+        await failRun(dependencies, runtime, {
+          code: 'context_failed',
+          message: 'Skill View could not be created.',
+          retryable: false,
+          cause: { owner: 'skills', code: 'skill_view_failed' },
+        });
+        return;
+      }
       let toolResolution;
       try {
         toolResolution = dependencies.tools.resolveModelCallTools({
@@ -465,7 +490,7 @@ async function executeRunLoop(
           sessionId: run.sessionId,
           workspaceId: run.workspaceId,
           currentRun: runtime.currentRun,
-          ...(runtime.selectedSkill ? { selectedSkill: runtime.selectedSkill } : {}),
+          skillView,
           tools: modelVisibleToolDefinitions(toolResolution.definitions),
           model: run.model,
           signal: runtime.controller.signal,
@@ -773,7 +798,6 @@ async function commitNewToolResults(
           ...(result.error
             ? { error: { code: result.error.code, message: result.error.message } }
             : {}),
-          ...(result.runtimeSources ? { runtimeSources: [...result.runtimeSources] } : {}),
         },
       ],
     };

@@ -117,6 +117,7 @@ export type {
   EnableSkillUiResponse,
   GetSkillDetailUiResponse,
   ListSkillsUiResponse,
+  RefreshSkillsUiResponse,
   SkillDetailUiDto,
   SkillHost,
   SkillListUiItem,
@@ -233,11 +234,13 @@ export {
   SkillEnablePayloadSchema,
   SkillDisablePayloadSchema,
   SkillDeletePayloadSchema,
+  SkillRefreshPayloadSchema,
   ListSkillsUiResponseSchema,
   GetSkillDetailUiResponseSchema,
   EnableSkillUiResponseSchema,
   DisableSkillUiResponseSchema,
   DeleteSkillUiResponseSchema,
+  RefreshSkillsUiResponseSchema,
 } from './skills-host';
 export {
   SettingsGetPayloadSchema,

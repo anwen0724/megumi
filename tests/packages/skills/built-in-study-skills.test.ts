@@ -1,12 +1,11 @@
 /*
- * Verifies the product's built-in study Skills as real packages and confirms
- * they remain selectable through the Commands suggestion projection.
+ * Verifies the product's built-in study Skills load as real packages through the
+ * Loader and carry System/global source facts without any run-time protocol fields.
  */
 
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createCommands } from '@megumi/commands';
-import { readSkillPackages } from '@megumi/skills/service/internal/skill-package-reader';
+import { DEFAULT_SKILLS_POLICY, loadSkills } from '@megumi/skills/skill-loader';
 
 const BUILT_IN_SKILLS_ROOT = path.resolve(
   process.cwd(),
@@ -24,22 +23,22 @@ const EXPECTED_STUDY_SKILLS = [
 ] as const;
 
 function readBuiltInSkills() {
-  return readSkillPackages({
-    roots: [{ owner: 'system' as const, rootPath: BUILT_IN_SKILLS_ROOT }],
+  return loadSkills({
+    roots: [{ owner: 'system' as const, scope: 'global' as const, rootPath: BUILT_IN_SKILLS_ROOT }],
+    policy: DEFAULT_SKILLS_POLICY,
   });
 }
 
 describe('built-in study Skills', () => {
   it('provides five distinct task-oriented Skill packages', () => {
-    const skills = readBuiltInSkills();
+    const result = readBuiltInSkills();
 
-    expect(skills.map((skill) => skill.name).sort()).toEqual(EXPECTED_STUDY_SKILLS);
-    for (const skill of skills) {
+    expect(result.skills.map((skill) => skill.name).sort()).toEqual(EXPECTED_STUDY_SKILLS);
+    for (const skill of result.skills) {
       expect(skill).toMatchObject({
-        source: { owner: 'system' },
+        source: { owner: 'system', scope: 'global' },
         available: true,
-        resources: [],
-        scripts: [],
+        disableModelInvocation: false,
         diagnostics: [],
       });
       expect(skill.description.trim().length).toBeGreaterThan(20);
@@ -48,7 +47,7 @@ describe('built-in study Skills', () => {
   });
 
   it('gives each Skill a trigger description and task-specific workflow', () => {
-    const skills = new Map(readBuiltInSkills().map((skill) => [skill.name, skill]));
+    const skills = new Map(readBuiltInSkills().skills.map((skill) => [skill.name, skill]));
 
     expect(skills.get('explain-problem')).toMatchObject({
       description: expect.stringMatching(/题目|知识点/),
@@ -72,32 +71,13 @@ describe('built-in study Skills', () => {
     });
   });
 
-  it('projects every Skill as a selection without creating executable Skill commands', async () => {
-    const skills = readBuiltInSkills();
-    const commands = createCommands({
-      skillSuggestionProvider: {
-        listSkillSuggestions: () => skills.map((skill) => ({
-          name: skill.name,
-          skillPath: skill.skillPath,
-          description: skill.description,
-          sourceLabel: 'System' as const,
-        })),
-      },
-    });
-    const result = await commands.suggest({ draftInput: '/' });
-    expect(commands.list().map((command) => command.name)).toEqual(['compact', 'review']);
-    expect(result).toMatchObject({
-      type: 'suggestions',
-      groups: expect.arrayContaining([expect.objectContaining({
-        id: 'skills',
-        items: EXPECTED_STUDY_SKILLS.map((skillName) => expect.objectContaining({
-          name: skillName,
-          source: expect.objectContaining({ kind: 'skill', name: skillName }),
-          completion: expect.objectContaining({
-            selection: expect.objectContaining({ type: 'skill', name: skillName }),
-          }),
-        })),
-      })]),
-    });
+  it('exposes only model facts: no resources, scripts or execution protocols', () => {
+    for (const skill of readBuiltInSkills().skills) {
+      expect(skill).not.toHaveProperty('resources');
+      expect(skill).not.toHaveProperty('scripts');
+      expect(skill).not.toHaveProperty('skillId');
+      expect(skill.skillPath.endsWith('SKILL.md')).toBe(true);
+      expect(path.isAbsolute(skill.packagePath)).toBe(true);
+    }
   });
 });

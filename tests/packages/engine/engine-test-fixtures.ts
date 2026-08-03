@@ -102,6 +102,7 @@ export interface EngineFixture {
   readonly published: RuntimeEvent[];
   readonly assistantReplies: SaveAssistantReplyRequest[];
   readonly toolResults: SaveToolResultMessageRequest[];
+  readonly skillViewRequests: Array<{ workspaceId?: string; signal?: AbortSignal }>;
 }
 
 export function createEngineFixture(input: {
@@ -114,6 +115,7 @@ export function createEngineFixture(input: {
   readonly executeTool?: TestToolExecute;
   readonly policy?: Partial<EnginePolicy>;
   readonly contextBuild?: CreateEngineOptions['context']['build'];
+  readonly skillView?: CreateEngineOptions['skills']['createView'];
   readonly eventPublisher?: {
     publish(event: RuntimeEvent): void | Promise<void>;
   };
@@ -121,6 +123,7 @@ export function createEngineFixture(input: {
 } = {}): EngineFixture {
   const writes: string[] = [];
   const contextRuns: unknown[] = [];
+  const skillViewRequests: Array<{ workspaceId?: string; signal?: AbortSignal }> = [];
   const contextUsageRecords: RecordCompletedModelCallUsageRequest[] = [];
   const published: RuntimeEvent[] = [];
   const assistantReplies: SaveAssistantReplyRequest[] = [];
@@ -247,6 +250,12 @@ export function createEngineFixture(input: {
       saveAssistantReply,
     },
     tools: toolsForRun(input.tools ?? [], input.executeTool),
+    skills: input.skillView ?? {
+      async createView(request) {
+        skillViewRequests.push({ workspaceId: request.workspaceId, signal: request.signal });
+        return { status: 'ok', view: { catalog: [], diagnostics: [] } };
+      },
+    },
     permissions: input.permissions ?? defaultPermissions,
     events: {
       publish: ({ event }) => {
@@ -275,6 +284,7 @@ export function createEngineFixture(input: {
     published,
     assistantReplies,
     toolResults,
+    skillViewRequests,
   };
 }
 

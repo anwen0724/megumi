@@ -10,7 +10,26 @@ import {
   startRequest,
 } from './engine-test-fixtures';
 
-describe('Engine run loop', () => {
+describe('Engine run loop', () => {  it('creates one immutable SkillView per ModelCall with only Workspace and signal facts', async () => {
+    const fixture = createEngineFixture({
+      streams: [assistantStream('final answer')],
+    });
+
+    const started = await fixture.engine.startRun(startRequest);
+    expect(started.status).toBe('started');
+    if (started.status !== 'started') throw new Error('Expected started Run.');
+    await collectEvents(started.events);
+
+    // createView receives only the Workspace identity and the Run signal; no selection facts.
+    expect(fixture.skillViewRequests).toHaveLength(1);
+    expect(fixture.skillViewRequests[0]).toEqual({
+      workspaceId: startRequest.workspaceId,
+      signal: expect.any(AbortSignal),
+    });
+    expect(fixture.skillViewRequests[0]).not.toHaveProperty('skillSelection');
+  });
+
+
   it('commits one final Assistant Reply and completes the Run', async () => {
     const fixture = createEngineFixture({
       streams: [assistantStream('final answer')],
@@ -46,12 +65,6 @@ describe('Engine run loop', () => {
         truncated: false,
       },
       observation: { summary: 'lookup completed' },
-      runtimeSources: [{
-        sourceId: 'source:1',
-        sourceKind: 'test',
-        text: 'runtime source',
-        persisted: false,
-      }],
     }));
     const fixture = createEngineFixture({
       tools: [tool],
@@ -85,7 +98,6 @@ describe('Engine run loop', () => {
         {
           type: 'tool_result',
           toolName: 'lookup',
-          runtimeSources: [{ sourceId: 'source:1' }],
         },
       ],
     });

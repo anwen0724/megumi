@@ -33,6 +33,7 @@ import type {
   EnableSkillUiResponse,
   GetSkillDetailUiResponse,
   ListSkillsUiResponse,
+  RefreshSkillsUiResponse,
   WorkspaceListProjectsUiResult,
   WorkspaceOpenFileUiResult,
   WorkspaceOpenProjectUiResult,
@@ -75,6 +76,7 @@ import type {
   SkillEnablePayload,
   SkillGetPayload,
   SkillListPayload,
+  SkillRefreshPayload,
   SessionBranchDraftCancelPayload,
   SessionBranchDraftCreatePayload,
   SessionCreatePayload,
@@ -215,6 +217,10 @@ export const api = {
       request: BusinessRequest<SkillDeletePayload, typeof IPC_CHANNELS.skill.delete>,
     ): Promise<RuntimeIpcResult<DeleteSkillUiResponse, typeof IPC_CHANNELS.skill.delete>> =>
       invokeRuntimeIpc(IPC_CHANNELS.skill.delete, request),
+    refresh: (
+      request: BusinessRequest<SkillRefreshPayload, typeof IPC_CHANNELS.skill.refresh>,
+    ): Promise<RuntimeIpcResult<RefreshSkillsUiResponse, typeof IPC_CHANNELS.skill.refresh>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.skill.refresh, request),
   },
   session: {
     create: (

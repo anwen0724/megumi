@@ -11,14 +11,6 @@ import type {
   SessionMessageAttachment,
 } from '@megumi/session';
 
-export interface ConversationRuntimeSource {
-  readonly sourceId: string;
-  readonly sourceKind: string;
-  readonly text: string;
-  readonly persisted: boolean;
-  readonly metadata?: JsonObject;
-}
-
 export type ConversationItem =
   | { readonly type: 'user_message'; readonly content: ContentBlock[] }
   | {
@@ -40,7 +32,6 @@ export type ConversationItem =
       readonly status: 'success' | 'failure' | 'cancelled';
       readonly content: ContentBlock[];
       readonly error?: { readonly code: string; readonly message: string };
-      readonly runtimeSources?: readonly ConversationRuntimeSource[];
     }
   | {
       readonly type: 'context';

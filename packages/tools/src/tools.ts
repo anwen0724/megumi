@@ -1,7 +1,6 @@
 /* Selects one ModelCall Tool view, routes calls, and executes retained invocations. */
 
 import type { Sandbox } from '@megumi/sandbox';
-import type { SkillComposition, SkillService } from '@megumi/skills';
 import {
   BUILT_IN_TOOL_NAMES,
   createBuiltInToolRegistry,
@@ -104,7 +103,6 @@ export interface CreateToolsRequest {
   readonly settings: ToolSettings;
   readonly workspaces: ToolWorkspaceCatalog;
   readonly workspaceChanges: ToolWorkspaceChanges;
-  readonly skills: Pick<SkillComposition, 'createSkillService'>;
   readonly sandbox: Sandbox;
   readonly executionPolicy: ToolExecutionPolicy;
   readonly builtInToolAvailability?: BuiltInToolAvailability;
@@ -114,7 +112,6 @@ interface ModelCallRegistration {
   readonly scope: ModelCallToolScope;
   readonly workspaceRoot: string;
   readonly router: ToolRouter<BuiltInToolContext>;
-  readonly skills: Pick<SkillService, 'useSkill'>;
   readonly webSearch?: WebSearch;
   readonly webFetch: WebFetch;
 }
@@ -150,7 +147,6 @@ export function createTools(request: CreateToolsRequest): Tools {
         scope: { ...scope },
         workspaceRoot: workspace.workspace.root_path,
         router,
-        skills: request.skills.createSkillService({ workspaceRoot: workspace.workspace.root_path }),
         ...(webSearch ? { webSearch } : {}),
         webFetch,
       });
@@ -217,7 +213,6 @@ export function createTools(request: CreateToolsRequest): Tools {
         workspaceChanges: request.workspaceChanges,
         workspaceRoot: registration.workspaceRoot,
         invocation,
-        skills: registration.skills,
         ...(registration.webSearch ? { webSearch: registration.webSearch } : {}),
         webFetch: registration.webFetch,
         ...(input.stepId ? { stepId: input.stepId } : {}),
