@@ -407,7 +407,12 @@ function fromMessageRow(row: SessionMessageRow): SessionMessage {
   };
   const payload = JSON.parse(row.message_json) as unknown;
   if (row.message_kind === 'user_message') {
-    return { ...base, message_kind: row.message_kind, ...SessionUserMessagePayloadSchema.parse(payload) };
+    // Legacy records stored a single `content`; read them as display and model content.
+    const raw = payload as Record<string, unknown>;
+    const normalized = !('display_content' in raw) && 'content' in raw
+      ? { ...raw, display_content: raw.content, model_content: raw.content }
+      : payload;
+    return { ...base, message_kind: row.message_kind, ...SessionUserMessagePayloadSchema.parse(normalized) };
   }
   if (row.message_kind === 'model_response') {
     return { ...base, message_kind: row.message_kind, ...SessionModelResponsePayloadSchema.parse(payload) };
@@ -428,7 +433,9 @@ function fromMessageRow(row: SessionMessageRow): SessionMessage {
 function toMessagePayload(message: SessionMessage): Record<string, unknown> {
   if (message.message_kind === 'user_message') {
     return SessionUserMessagePayloadSchema.parse({
-      content: message.content,
+      display_content: message.display_content,
+      model_content: message.model_content,
+      ...(message.skill_selection ? { skill_selection: message.skill_selection } : {}),
       ...(message.legacy_provenance ? { legacy_provenance: message.legacy_provenance } : {}),
     });
   }

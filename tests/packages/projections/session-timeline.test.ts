@@ -285,7 +285,12 @@ function base(messageId: string) {
 }
 
 function user(messageId: string, text: string): SessionUserMessage {
-  return { ...base(messageId), message_kind: 'user_message', content: [{ type: 'text', text }] };
+  return {
+    ...base(messageId),
+    message_kind: 'user_message',
+    display_content: [{ type: 'text', text }],
+    model_content: [{ type: 'text', text }],
+  };
 }
 
 function reply(

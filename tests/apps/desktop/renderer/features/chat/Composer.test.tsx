@@ -458,19 +458,19 @@ describe('Composer', () => {
   it('renders command suggestions from the provider for slash drafts', async () => {
     render(<TestComposer
       onSubmit={() => undefined}
-      getCommandSuggestions={() => ({
+      getInputSuggestions={() => ({
         type: 'suggestions',
-        draft_input: '/',
-        command_prefix: '',
+        draftInput: '/',
+        queryPrefix: '',
         groups: [{
           id: 'commands',
           label: 'Commands',
           items: [{
+            kind: 'command',
             name: 'review',
             description: 'Evaluate review feedback before implementing changes',
-            source: { kind: 'built_in' },
             match: { field: 'name', value: 'review', prefix: '' },
-            displayInput: '/review ', submitInput: '/review ',
+            replacementInput: '/review ',
           }],
         }, {
           id: 'skills',
@@ -489,19 +489,19 @@ describe('Composer', () => {
   it('floats command suggestions above the composer without taking layout space', async () => {
     render(<TestComposer
       onSubmit={() => undefined}
-      getCommandSuggestions={() => ({
+      getInputSuggestions={() => ({
         type: 'suggestions',
-        draft_input: '/',
-        command_prefix: '',
+        draftInput: '/',
+        queryPrefix: '',
         groups: [{
           id: 'commands',
           label: 'Commands',
           items: [{
+            kind: 'command',
             name: 'review',
             description: 'Evaluate review feedback before implementing changes',
-            source: { kind: 'built_in' },
             match: { field: 'name', value: 'review', prefix: '' },
-            displayInput: '/review ', submitInput: '/review ',
+            replacementInput: '/review ',
           }],
         }],
       })}
@@ -526,19 +526,19 @@ describe('Composer', () => {
     const onSubmit = vi.fn();
     render(<TestComposer
       onSubmit={onSubmit}
-      getCommandSuggestions={() => ({
+      getInputSuggestions={() => ({
         type: 'suggestions',
-        draft_input: '/re',
-        command_prefix: 're',
+        draftInput: '/re',
+        queryPrefix: 're',
         groups: [{
           id: 'commands',
           label: 'Commands',
           items: [{
+            kind: 'command',
             name: 'review',
             description: 'Evaluate review feedback before implementing changes',
-            source: { kind: 'built_in' },
             match: { field: 'name', value: 'review', prefix: 're' },
-            displayInput: '/review ', submitInput: '/review ',
+            replacementInput: '/review ',
           }],
         }],
       })}
@@ -557,24 +557,20 @@ describe('Composer', () => {
     const onSubmit = vi.fn();
     render(<TestComposer
       onSubmit={onSubmit}
-      getCommandSuggestions={() => ({
+      getInputSuggestions={() => ({
         type: 'suggestions',
-        draft_input: '/te',
-        command_prefix: 'te',
+        draftInput: '/te',
+        queryPrefix: 'te',
         groups: [{
           id: 'skills',
           label: 'Skills',
           items: [{
+            kind: 'skill',
             name: 'test',
             description: 'Run project checks',
-            source: { kind: 'skill', name: 'test', skillPath: 'C:/user/checks/SKILL.md' },
-            display: {
-              primary: 'test',
-              secondary: 'Run project checks',
-              badge: 'User',
-            },
+            sourceLabel: 'User',
             match: { field: 'name', value: 'test', prefix: 'te' },
-            displayInput: '/test ', submitInput: '',
+            replacementInput: '',
             selection: { type: 'skill', name: 'test', skillPath: 'C:/user/checks/SKILL.md' },
           }],
         }],
@@ -602,19 +598,19 @@ describe('Composer', () => {
   it('keeps the normal compact input height after choosing a command suggestion', async () => {
     render(<TestComposer
       onSubmit={() => undefined}
-      getCommandSuggestions={() => ({
+      getInputSuggestions={() => ({
         type: 'suggestions',
-        draft_input: '/re',
-        command_prefix: 're',
+        draftInput: '/re',
+        queryPrefix: 're',
         groups: [{
           id: 'commands',
           label: 'Commands',
           items: [{
+            kind: 'command',
             name: 'review',
             description: 'Evaluate review feedback before implementing changes',
-            source: { kind: 'built_in' },
             match: { field: 'name', value: 'review', prefix: 're' },
-            displayInput: '/review ', submitInput: '/review ',
+            replacementInput: '/review ',
           }],
         }],
       })}
@@ -632,29 +628,25 @@ describe('Composer', () => {
     const onSubmit = vi.fn();
     render(<TestComposer
       onSubmit={onSubmit}
-      getCommandSuggestions={({ draft_input }) => {
-        if (/\s/.test(draft_input.slice(1))) {
+      getInputSuggestions={({ draftInput }) => {
+        if (/\s/.test(draftInput.slice(1))) {
           return { type: 'inactive' };
         }
 
         return {
           type: 'suggestions',
-          draft_input,
-          command_prefix: draft_input.slice(1),
+          draftInput,
+          queryPrefix: draftInput.slice(1),
           groups: [{
             id: 'skills',
             label: 'Skills',
             items: [{
+              kind: 'skill',
               name: 'test',
               description: 'Run project checks',
-              source: { kind: 'skill', name: 'test', skillPath: 'C:/user/checks/SKILL.md' },
-              display: {
-                primary: 'test',
-                secondary: 'Run project checks',
-                badge: 'User',
-              },
-              match: { field: 'name', value: 'test', prefix: draft_input.slice(1) },
-              displayInput: '/test ', submitInput: '',
+              sourceLabel: 'User',
+              match: { field: 'name', value: 'test', prefix: draftInput.slice(1) },
+              replacementInput: '',
               selection: { type: 'skill', name: 'test', skillPath: 'C:/user/checks/SKILL.md' },
             }],
           }],
@@ -674,19 +666,19 @@ describe('Composer', () => {
     const onSubmit = vi.fn();
     render(<TestComposer
       onSubmit={onSubmit}
-      getCommandSuggestions={() => ({
+      getInputSuggestions={() => ({
         type: 'suggestions',
-        draft_input: '/re',
-        command_prefix: 're',
+        draftInput: '/re',
+        queryPrefix: 're',
         groups: [{
           id: 'commands',
           label: 'Commands',
           items: [{
+            kind: 'command',
             name: 'review',
             description: 'Evaluate review feedback before implementing changes',
-            source: { kind: 'built_in' },
             match: { field: 'name', value: 'review', prefix: 're' },
-            displayInput: '/review ', submitInput: '/review ',
+            replacementInput: '/review ',
           }],
         }],
       })}
@@ -705,7 +697,7 @@ describe('Composer', () => {
     const onSubmit = vi.fn();
     render(<TestComposer
       onSubmit={onSubmit}
-      getCommandSuggestions={() => ({ type: 'inactive' })}
+      getInputSuggestions={() => ({ type: 'inactive' })}
     />);
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), 'hello');
@@ -719,27 +711,27 @@ describe('Composer', () => {
   it('moves selected command suggestion with ArrowDown and ArrowUp', async () => {
     render(<TestComposer
       onSubmit={() => undefined}
-      getCommandSuggestions={() => ({
+      getInputSuggestions={() => ({
         type: 'suggestions',
-        draft_input: '/',
-        command_prefix: '',
+        draftInput: '/',
+        queryPrefix: '',
         groups: [{
           id: 'commands',
           label: 'Commands',
           items: [
             {
+              kind: 'command',
               name: 'review',
               description: 'Evaluate review feedback before implementing changes',
-              source: { kind: 'built_in' },
               match: { field: 'name', value: 'review', prefix: '' },
-              displayInput: '/review ', submitInput: '/review ',
+              replacementInput: '/review ',
             },
             {
+              kind: 'command',
               name: 'status',
               description: 'Show conversation status',
-              source: { kind: 'built_in' },
               match: { field: 'name', value: 'status', prefix: '' },
-              displayInput: '/status ', submitInput: '/status ',
+              replacementInput: '/status ',
             },
           ],
         }],

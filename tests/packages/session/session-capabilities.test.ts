@@ -133,7 +133,7 @@ describe('Session capabilities', () => {
     const result = await service.saveUserMessage({
       message_id: 'M1',
       session_id: 'S1',
-      content: [{ type: 'text', text: '看图' }],
+      display_content: [{ type: 'text', text: '看图' }], model_content: [{ type: 'text', text: '看图' }],
       attachments: [{
         type: 'image',
         name: 'error.png',
@@ -149,7 +149,7 @@ describe('Session capabilities', () => {
       message: {
         message: {
           message_id: 'M1',
-          message_kind: 'user_message', content: [{ type: 'text', text: '看图' }],
+          message_kind: 'user_message', display_content: [{ type: 'text', text: '看图' }], model_content: [{ type: 'text', text: '看图' }],
         },
         attachments: [{
           attachment_id: 'A1',
@@ -175,7 +175,7 @@ describe('Session capabilities', () => {
     const result = await service.saveUserMessage({
       message_id: 'M-document',
       session_id: 'S1',
-      content: [{ type: 'text', text: '总结文档' }],
+      display_content: [{ type: 'text', text: '总结文档' }], model_content: [{ type: 'text', text: '总结文档' }],
       attachments: [{
         type: 'file',
         name: 'notes.docx',
@@ -219,7 +219,7 @@ describe('Session capabilities', () => {
     await service.saveUserMessage({
       message_id: 'M1',
       session_id: 'S1',
-      content: [{ type: 'text', text: 'hello' }],
+      display_content: [{ type: 'text', text: 'hello' }], model_content: [{ type: 'text', text: 'hello' }],
       created_at: '2026-07-04T00:01:00.000Z',
     });
 
@@ -243,7 +243,7 @@ describe('Session capabilities', () => {
     await service.createSession({ workspace_id: workspaceId, title: 'Session' });
     await service.saveUserMessage({
       message_id: 'M1', session_id: 'S1', run_id: 'R1',
-      content: [{ type: 'text', text: 'hello' }], created_at: '2026-07-04T00:01:00.000Z',
+      display_content: [{ type: 'text', text: 'hello' }], model_content: [{ type: 'text', text: 'hello' }], created_at: '2026-07-04T00:01:00.000Z',
     });
     expect(service.saveAssistantReply({
       message_id: 'A1', session_id: 'S1', run_id: 'R1', status: 'completed',
@@ -265,7 +265,7 @@ describe('Session capabilities', () => {
     service.createSession({ workspace_id: workspaceId, title: 'Session' });
     await service.saveUserMessage({
       message_id: 'U1', session_id: 'S1', run_id: 'R1',
-      content: [{ type: 'text', text: 'question' }],
+      display_content: [{ type: 'text', text: 'question' }], model_content: [{ type: 'text', text: 'question' }],
       created_at: '2026-07-04T00:01:00.000Z',
     });
     service.saveModelResponse({
@@ -304,7 +304,8 @@ describe('Session capabilities', () => {
       message_id: 'M-idempotent',
       session_id: 'S1',
       run_id: 'R-idempotent',
-      content: [{ type: 'text' as const, text: 'same input' }],
+      display_content: [{ type: 'text' as const, text: 'same input' }],
+      model_content: [{ type: 'text' as const, text: 'same input' }],
       created_at: '2026-07-04T00:01:00.000Z',
     };
 
@@ -312,7 +313,7 @@ describe('Session capabilities', () => {
     const repeated = await service.saveUserMessage(request);
     const conflict = await service.saveUserMessage({
       ...request,
-      content: [{ type: 'text', text: 'different input' }],
+      display_content: [{ type: 'text', text: 'different input' }], model_content: [{ type: 'text', text: 'different input' }],
     });
 
     expect(first.status).toBe('saved');
@@ -333,7 +334,8 @@ describe('Session capabilities', () => {
     const request = {
       message_id: 'M-image-idempotent',
       session_id: 'S1',
-      content: [{ type: 'text' as const, text: 'inspect image' }],
+      display_content: [{ type: 'text' as const, text: 'inspect image' }],
+      model_content: [{ type: 'text' as const, text: 'inspect image' }],
       attachments: [{
         type: 'image' as const,
         name: 'image.png',
@@ -399,13 +401,13 @@ describe('Session capabilities', () => {
     const { service, workspaceId } = createService();
     await service.createSession({ workspace_id: workspaceId, title: 'Session' });
     const first = await service.saveUserMessage({
-      message_id: 'M1', session_id: 'S1', content: [{ type: 'text', text: 'first' }],
+      message_id: 'M1', session_id: 'S1', display_content: [{ type: 'text', text: 'first' }], model_content: [{ type: 'text', text: 'first' }],
       created_at: '2026-07-04T00:01:00.000Z',
     });
     expect(first.status).toBe('saved');
     if (first.status !== 'saved') return;
     await service.saveUserMessage({
-      message_id: 'M2', session_id: 'S1', content: [{ type: 'text', text: 'new branch head' }],
+      message_id: 'M2', session_id: 'S1', display_content: [{ type: 'text', text: 'new branch head' }], model_content: [{ type: 'text', text: 'new branch head' }],
       created_at: '2026-07-04T00:02:00.000Z',
     });
 
@@ -425,10 +427,10 @@ describe('Session capabilities', () => {
   it('lists all messages or active path messages only', async () => {
     const { service, workspaceId } = createService();
     await service.createSession({ workspace_id: workspaceId, title: 'Session' });
-    const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', content: [{ type: 'text', text: 'm1' }], created_at: '2026-07-04T00:01:00.000Z' });
+    const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', display_content: [{ type: 'text', text: 'm1' }], model_content: [{ type: 'text', text: 'm1' }], created_at: '2026-07-04T00:01:00.000Z' });
     await service.saveAssistantReply({ message_id: 'M2', session_id: 'S1', run_id: 'R1', status: 'completed', reason_code: 'normal_completion', content: [{ type: 'text', text: 'm2' }], completed_at: '2026-07-04T00:02:00.000Z' });
     await service.switchActiveEntry({ session_id: 'S1', active_entry_id: m1.status === 'saved' ? m1.entry.entry_id : undefined, updated_at: '2026-07-04T00:03:00.000Z' });
-    await service.saveUserMessage({ message_id: 'M3', session_id: 'S1', content: [{ type: 'text', text: 'm3' }], created_at: '2026-07-04T00:04:00.000Z' });
+    await service.saveUserMessage({ message_id: 'M3', session_id: 'S1', display_content: [{ type: 'text', text: 'm3' }], model_content: [{ type: 'text', text: 'm3' }], created_at: '2026-07-04T00:04:00.000Z' });
 
     expect(service.listMessages({ session_id: 'S1' })).toMatchObject({
       status: 'ok',
@@ -452,7 +454,7 @@ describe('Session capabilities', () => {
     service.createSession({ workspace_id: workspaceId, title: 'Session' });
     const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
     const saved = await service.saveUserMessage({
-      message_id: 'M-image', session_id: 'S1', content: [],
+      message_id: 'M-image', session_id: 'S1', display_content: [], model_content: [],
       attachments: [{ type: 'image', name: 'image.png', media_type: 'image/png', byte_length: bytes.byteLength, bytes }],
       created_at: '2026-07-04T00:01:00.000Z',
     });
@@ -462,7 +464,7 @@ describe('Session capabilities', () => {
     });
 
     const failed = await service.saveUserMessage({
-      message_id: 'M-missing', session_id: 'missing', content: [],
+      message_id: 'M-missing', session_id: 'missing', display_content: [], model_content: [],
       attachments: [{ type: 'image', name: 'orphan.png', media_type: 'image/png', byte_length: bytes.byteLength, bytes }],
       created_at: '2026-07-04T00:02:00.000Z',
     });
@@ -475,7 +477,7 @@ describe('Session capabilities', () => {
     await service.createSession({ workspace_id: workspaceId, title: 'Session' });
     await service.saveUserMessage({
       message_id: 'M1', session_id: 'S1', run_id: 'R1',
-      content: [{ type: 'text', text: 'first input' }],
+      display_content: [{ type: 'text', text: 'first input' }], model_content: [{ type: 'text', text: 'first input' }],
       created_at: '2026-07-04T00:01:00.000Z',
     });
     await service.saveAssistantReply({
@@ -486,7 +488,7 @@ describe('Session capabilities', () => {
     });
     await service.saveUserMessage({
       message_id: 'M3', session_id: 'S1', run_id: 'R2',
-      content: [{ type: 'text', text: 'second input' }],
+      display_content: [{ type: 'text', text: 'second input' }], model_content: [{ type: 'text', text: 'second input' }],
       created_at: '2026-07-04T00:03:00.000Z',
     });
 
@@ -502,9 +504,9 @@ describe('Session capabilities', () => {
   it('returns active history with compaction summaries and messages', async () => {
     const { service, workspaceId } = createService();
     await service.createSession({ workspace_id: workspaceId, title: 'Session' });
-    const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', content: [{ type: 'text', text: 'm1' }], created_at: '2026-07-04T00:01:00.000Z' });
+    const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', display_content: [{ type: 'text', text: 'm1' }], model_content: [{ type: 'text', text: 'm1' }], created_at: '2026-07-04T00:01:00.000Z' });
     const firstEntryId = m1.status === 'saved' ? m1.entry.entry_id : 'missing';
-    await service.saveUserMessage({ message_id: 'M2', session_id: 'S1', content: [{ type: 'text', text: 'm2' }], created_at: '2026-07-04T00:02:00.000Z' });
+    await service.saveUserMessage({ message_id: 'M2', session_id: 'S1', display_content: [{ type: 'text', text: 'm2' }], model_content: [{ type: 'text', text: 'm2' }], created_at: '2026-07-04T00:02:00.000Z' });
     await service.saveCompactionSummary({
       compaction_id: 'C1',
       session_id: 'S1',
@@ -525,12 +527,12 @@ describe('Session capabilities', () => {
   it('rejects a compaction when the active head changed after Context loaded history', async () => {
     const { repository, service, workspaceId } = createService();
     await service.createSession({ workspace_id: workspaceId, title: 'Session' });
-    const first = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', content: [{ type: 'text', text: 'm1' }], created_at: '2026-07-04T00:01:00.000Z' });
-    const second = await service.saveUserMessage({ message_id: 'M2', session_id: 'S1', content: [{ type: 'text', text: 'm2' }], created_at: '2026-07-04T00:02:00.000Z' });
+    const first = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', display_content: [{ type: 'text', text: 'm1' }], model_content: [{ type: 'text', text: 'm1' }], created_at: '2026-07-04T00:01:00.000Z' });
+    const second = await service.saveUserMessage({ message_id: 'M2', session_id: 'S1', display_content: [{ type: 'text', text: 'm2' }], model_content: [{ type: 'text', text: 'm2' }], created_at: '2026-07-04T00:02:00.000Z' });
     const firstEntryId = first.status === 'saved' ? first.entry.entry_id : 'missing';
     const expectedHead = second.status === 'saved' ? second.entry.entry_id : 'missing';
 
-    await service.saveUserMessage({ message_id: 'M3', session_id: 'S1', content: [{ type: 'text', text: 'new branch head' }], created_at: '2026-07-04T00:03:00.000Z' });
+    await service.saveUserMessage({ message_id: 'M3', session_id: 'S1', display_content: [{ type: 'text', text: 'new branch head' }], model_content: [{ type: 'text', text: 'new branch head' }], created_at: '2026-07-04T00:03:00.000Z' });
 
     expect(service.saveCompactionSummary({
       compaction_id: 'C-stale',

@@ -20,7 +20,8 @@ describe('buildConversationRuns', () => {
           session_id: 'session:1',
           run_id: 'run:1',
           message_kind: 'user_message',
-          content: [{ type: 'text', text: 'question' }],
+          display_content: [{ type: 'text', text: 'question' }],
+          model_content: [{ type: 'text', text: 'question' }],
           created_at: 'now',
         },
         attachments: [{
@@ -184,7 +185,12 @@ function base(messageId: string, runId: string) {
 }
 
 function user(messageId: string, runId: string, value: string): SessionMessage {
-  return { ...base(messageId, runId), message_kind: 'user_message', content: text(value) };
+  return {
+    ...base(messageId, runId),
+    message_kind: 'user_message',
+    display_content: text(value),
+    model_content: text(value),
+  };
 }
 
 function reply(

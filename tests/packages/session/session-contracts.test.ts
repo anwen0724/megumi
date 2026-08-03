@@ -44,7 +44,7 @@ describe('session contracts v2', () => {
       message_id: 'message:1',
       session_id: 'session:1',
       message_kind: 'user_message',
-      content: [{ type: 'text', text: 'hello' }],
+      display_content: [{ type: 'text', text: 'hello' }], model_content: [{ type: 'text', text: 'hello' }],
       created_at: '2026-07-04T00:00:00.000Z',
       completed_at: '2026-07-04T00:00:00.000Z',
     };

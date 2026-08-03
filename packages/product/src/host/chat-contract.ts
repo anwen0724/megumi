@@ -7,6 +7,7 @@ import {
   type TimelineMessage,
   type TimelineUserMessage,
 } from '@megumi/projections';
+import type { InputSuggestionQueryResult } from '../input-suggestions';
 import { z } from 'zod';
 import type { RunStatus } from '@megumi/engine';
 import { DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from '@megumi/input';
@@ -20,7 +21,7 @@ export interface ChatHost {
   cancelUserInput(request: ChatCancelUserInputUiRequest): Promise<ChatCancelUserInputUiResult>;
   createBranchDraft(request: ChatCreateBranchDraftUiRequest): ChatCreateBranchDraftUiResult;
   cancelBranchDraft(request: ChatCancelBranchDraftUiRequest): ChatCancelBranchDraftUiResult;
-  getCommandSuggestions(request: ChatGetCommandSuggestionsUiRequest): Promise<ChatGetCommandSuggestionsUiResult>;
+  getInputSuggestions(request: ChatGetInputSuggestionsUiRequest): Promise<ChatGetInputSuggestionsUiResult>;
   listRuns(request: ChatListRunsUiRequest): Promise<ChatListRunsUiResult>;
   listRunEvents(request: ChatListRunEventsUiRequest): Promise<ChatListRunEventsUiResult>;
   getSessionHydration(request: ChatGetSessionHydrationUiRequest): Promise<ChatGetSessionHydrationUiResult>;
@@ -34,8 +35,8 @@ export interface ChatHost {
 }
 
 const IsoDateTimeSchema = z.string().datetime();
-export const CommandSuggestionsPayloadSchema = z.object({
-  draft_input: z.string(), workspaceId: z.string().min(1).optional(),
+export const InputSuggestionsPayloadSchema = z.object({
+  draftInput: z.string(), workspaceId: z.string().min(1).optional(),
 }).strict();
 export const SessionCreatePayloadSchema = z.object({
   projectId: z.string().min(1), title: z.string().min(1).optional(),
@@ -180,27 +181,30 @@ export const ChatSendUserInputUiPayloadSchema = z.discriminatedUnion('type', [
     type: z.literal('error'), session: ChatSessionUiDtoSchema.optional(), requestId: z.string(), message: z.string(),
   }).strict(),
 ]);
-const HostCommandSuggestionItemSchema = z.object({
-  name: z.string(), aliases: z.array(z.string()).optional(), description: z.string(), argument_hint: z.string().optional(),
-  source: z.union([
-    z.object({ kind: z.literal('built_in') }).strict(),
-    z.object({ kind: z.literal('skill'), name: z.string(), skillPath: z.string() }).strict(),
-  ]),
-  source_badge: z.string().optional(),
-  display: z.object({ primary: z.string(), secondary: z.string().optional(), badge: z.string().optional() }).strict().optional(),
-  match: z.object({ field: z.enum(['name', 'alias']), value: z.string(), prefix: z.string() }).strict(),
-  displayInput: z.string(), submitInput: z.string(),
-  selection: z.object({ type: z.literal('skill'), name: z.string(), skillPath: z.string() }).strict().optional(),
+const InputSuggestionItemSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('command'), name: z.string(), aliases: z.array(z.string()).optional(),
+    description: z.string(), argumentHint: z.string().optional(),
+    match: z.object({ field: z.enum(['name', 'alias']), value: z.string(), prefix: z.string() }).strict(),
+    replacementInput: z.string(),
+  }).strict(),
+  z.object({
+    kind: z.literal('skill'), name: z.string(), description: z.string(), sourceLabel: z.string().optional(),
+    match: z.object({ field: z.literal('name'), value: z.string(), prefix: z.string() }).strict(),
+    replacementInput: z.string(),
+    selection: z.object({ type: z.literal('skill'), name: z.string(), skillPath: z.string() }).strict(),
+  }).strict(),
+]);
+const InputSuggestionGroupSchema = z.object({
+  id: z.enum(['commands', 'skills']), label: z.string(), items: z.array(InputSuggestionItemSchema),
 }).strict();
 
-export const ChatCommandSuggestionsUiResultSchema = z.object({
+export const ChatGetInputSuggestionsUiResultSchema = z.object({
   suggestions: z.discriminatedUnion('type', [
     z.object({ type: z.literal('inactive') }).strict(),
     z.object({
-      type: z.literal('suggestions'), draft_input: z.string(), command_prefix: z.string(),
-      groups: z.array(z.object({
-        id: z.string(), label: z.string(), items: z.array(HostCommandSuggestionItemSchema),
-      }).strict()),
+      type: z.literal('suggestions'), draftInput: z.string(), queryPrefix: z.string(),
+      groups: z.array(InputSuggestionGroupSchema),
     }).strict(),
   ]),
 }).strict();
@@ -478,38 +482,15 @@ export interface ChatCancelBranchDraftUiResult {
   events?: AsyncIterable<RuntimeEvent>;
 }
 
-export interface ChatGetCommandSuggestionsUiRequest {
-  draft_input: string;
+export interface ChatGetInputSuggestionsUiRequest {
+  draftInput: string;
   workspaceId?: string;
 }
-export interface ChatGetCommandSuggestionsUiResult {
-  suggestions: HostCommandSuggestionResult;
+export interface ChatGetInputSuggestionsUiResult {
+  suggestions: InputSuggestionQueryResult;
 }
 
-export type HostCommandSuggestionResult =
-  | { type: 'inactive' }
-  | {
-      type: 'suggestions';
-      draft_input: string;
-      command_prefix: string;
-      groups: Array<{ id: string; label: string; items: HostCommandSuggestionItem[] }>;
-    };
-
-export type HostCommandSuggestionItem = {
-  name: string;
-  aliases?: string[];
-  description: string;
-  argument_hint?: string;
-  source: { kind: 'built_in' } | { kind: 'skill'; name: string; skillPath: string };
-  source_badge?: string;
-  display?: { primary: string; secondary?: string; badge?: string };
-  match: { field: 'name' | 'alias'; value: string; prefix: string };
-  displayInput: string;
-  submitInput: string;
-  selection?: { type: 'skill'; name: string; skillPath: string };
-};
-export type CommandSuggestionItem = HostCommandSuggestionItem;
-export type CommandSuggestionResult = HostCommandSuggestionResult;
+export type { InputSuggestionQueryItem, InputSuggestionQueryResult } from '../input-suggestions';
 
 export interface ChatListRunsUiRequest {
   sessionId: string;

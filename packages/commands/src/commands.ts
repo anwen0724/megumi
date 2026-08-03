@@ -1,26 +1,24 @@
 /*
  * Defines Commands contracts and composes parsing, catalog lookup, and handlers.
+ * Commands only execute registered built-in commands; unregistered slash text
+ * remains ordinary user input. Suggestions are owned by Product, not Commands.
  */
-import type {
-  InputCommandHandler,
-  InputContext,
-  InputOperationOptions,
-  UserInput,
+import {
+  InputInterpretationError,
+  type InputContext,
+  type InputInterpreter,
+  type InputOperationOptions,
+  type UserInput,
 } from "@megumi/input";
-import type { SkillSelection } from "@megumi/skills";
 import { createBuiltInCommands, type ContextCompactor } from "./built-in-commands";
 import { createCommandCatalog, type CommandCatalog } from "./command-catalog";
-import { createCommandSuggestions } from "./command-suggestions";
 import { parseSlashCommand } from "./slash-command";
-
-export type CommandSource = { readonly kind: "built_in" };
 
 export interface CommandDefinition {
   readonly name: string;
   readonly aliases?: readonly string[];
   readonly description: string;
   readonly argumentHint?: string;
-  readonly source: CommandSource;
   readonly requiresSession?: boolean;
   readonly hiddenFromSuggestions?: boolean;
   readonly handle: CommandHandler;
@@ -52,16 +50,6 @@ export interface HandleCommandRequest {
 
 export type CommandExecutionResult =
   | { readonly type: "not_command"; readonly input: UserInput }
-  | {
-      readonly type: "agent_run";
-      readonly input: UserInput;
-      readonly requestedSkill?: SkillSelection;
-      readonly command: {
-        readonly name: string;
-        readonly source: CommandSource;
-        readonly argumentsInput: string;
-      };
-    }
   | { readonly type: "host_interaction_request"; readonly request: HostInteractionRequest }
   | { readonly type: "completed"; readonly message?: string }
   | { readonly type: "cancelled" }
@@ -81,65 +69,6 @@ export interface CommandListItem {
   readonly aliases?: readonly string[];
   readonly description: string;
   readonly argumentHint?: string;
-  readonly source: CommandSource;
-}
-
-export interface SuggestCommandsRequest {
-  readonly draftInput: string;
-  readonly workspaceId?: string;
-}
-
-export type CommandSuggestionResult =
-  | { readonly type: "inactive" }
-  | {
-      readonly type: "suggestions";
-      readonly draftInput: string;
-      readonly commandPrefix: string;
-      readonly groups: readonly CommandSuggestionGroup[];
-    };
-
-export interface CommandSuggestionGroup {
-  readonly id: string;
-  readonly label: string;
-  readonly items: readonly CommandSuggestionItem[];
-}
-
-export interface CommandSuggestionItem {
-  readonly name: string;
-  readonly aliases?: readonly string[];
-  readonly description: string;
-  readonly argumentHint?: string;
-  readonly source:
-    | CommandSource
-    | { readonly kind: "skill"; readonly name: string; readonly skillPath: string };
-  readonly sourceBadge?: string;
-  readonly display?: {
-    readonly primary: string;
-    readonly secondary?: string;
-    readonly badge?: string;
-  };
-  readonly match: {
-    readonly field: "name" | "alias";
-    readonly value: string;
-    readonly prefix: string;
-  };
-  readonly completion: {
-    readonly replacementInput: string;
-    readonly selection?: SkillSelection;
-  };
-}
-
-export interface SkillSuggestionDescriptor {
-  readonly name: string;
-  readonly skillPath: string;
-  readonly description: string;
-  readonly sourceLabel: "System" | "User";
-}
-
-export interface SkillSuggestionProvider {
-  listSkillSuggestions(request: {
-    readonly workspaceId?: string;
-  }): readonly SkillSuggestionDescriptor[] | Promise<readonly SkillSuggestionDescriptor[]>;
 }
 
 export interface Commands {
@@ -148,13 +77,11 @@ export interface Commands {
     options?: CommandOperationOptions,
   ): Promise<CommandExecutionResult>;
   list(): readonly CommandListItem[];
-  suggest(request: SuggestCommandsRequest): Promise<CommandSuggestionResult>;
 }
 
 export function createCommands(options: {
   readonly definitions?: readonly CommandDefinition[];
   readonly catalog?: CommandCatalog;
-  readonly skillSuggestionProvider?: SkillSuggestionProvider;
   readonly compact?: ContextCompactor["compact"];
 } = {}): Commands {
   const definitions = options.definitions ?? createBuiltInCommands({
@@ -164,7 +91,7 @@ export function createCommands(options: {
   return {
     async handle(request, operationOptions = {}) {
       if (operationOptions.signal?.aborted) return { type: "cancelled" };
-      const parsed = parseSlashCommand(request.input.text);
+      const parsed = parseSlashCommand(userInputText(request.input));
       if (parsed.type !== "command") {
         return { type: "not_command", input: request.input };
       }
@@ -183,36 +110,34 @@ export function createCommands(options: {
     list() {
       return catalog.list();
     },
-    async suggest(request) {
-      const skills = options.skillSuggestionProvider
-        ? await options.skillSuggestionProvider.listSkillSuggestions({
-            ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}),
-          })
-        : [];
-      return createCommandSuggestions({
-        request,
-        commands: catalog.listDefinitions(),
-        skills,
+  };
+}
+
+/** Maps Commands into the fixed Input Interpretation pipeline. */
+export function createCommandInputInterpreter(
+  commands: Commands,
+): InputInterpreter<CommandTerminalResult> {
+  return {
+    async interpret(input, context, options) {
+      const result = await commands.handle({ input, context }, options);
+      if (result.type === "not_command") return { status: "unhandled" };
+      if (result.type === "completed" || result.type === "host_interaction_request") {
+        return { status: "completed", result };
+      }
+      if (result.type === "cancelled") {
+        throw new InputInterpretationError({
+          code: "input_cancelled",
+          message: "Command execution was cancelled.",
+        });
+      }
+      throw new InputInterpretationError({
+        code: "input_interpretation_failed",
+        message: result.message,
       });
     },
   };
 }
 
-export function createInputCommandHandler(
-  commands: Commands,
-): InputCommandHandler<CommandTerminalResult> {
-  return {
-    async handle(input, context, options) {
-      const result = await commands.handle({ input, context }, options);
-      if (result.type === "not_command") return { status: "unhandled" };
-      if (result.type === "agent_run") {
-        return {
-          status: "accepted",
-          input: result.input,
-          ...(result.requestedSkill ? { requestedSkill: result.requestedSkill } : {}),
-        };
-      }
-      return { status: "command_result", result };
-    },
-  };
+export function userInputText(input: UserInput): string {
+  return input.displayContent.map((block) => block.text).join("");
 }

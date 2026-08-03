@@ -67,7 +67,7 @@ describe('Session attachment order', () => {
     expect((await history.saveUserMessage({
       message_id: 'message:order',
       session_id: 'session:order',
-      content: [{ type: 'text', text: 'mixed attachments' }],
+      display_content: [{ type: 'text', text: 'mixed attachments' }], model_content: [{ type: 'text', text: 'mixed attachments' }],
       attachments: [
         file('first.pdf', 'C:/documents/first.pdf'),
         image('second.png', 2),

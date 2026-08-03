@@ -3,7 +3,8 @@
  */
 export {
   createCommands,
-  createInputCommandHandler,
+  createCommandInputInterpreter,
+  userInputText,
   type CommandDefinition,
   type CommandExecutionResult,
   type CommandHandler,
@@ -12,14 +13,7 @@ export {
   type CommandListItem,
   type CommandOperationOptions,
   type Commands,
-  type CommandSource,
-  type CommandSuggestionGroup,
-  type CommandSuggestionItem,
-  type CommandSuggestionResult,
   type CommandTerminalResult,
   type HandleCommandRequest,
   type HostInteractionRequest,
-  type SkillSuggestionDescriptor,
-  type SkillSuggestionProvider,
-  type SuggestCommandsRequest,
 } from "./commands";

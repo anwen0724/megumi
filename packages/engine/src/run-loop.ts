@@ -19,7 +19,8 @@ import type {
   SessionMessageWithAttachments,
 } from '@megumi/session';
 import type { ToolDefinition } from '@megumi/tools';
-import { skillsFailureMessage, type SkillSelection, type SkillView } from '@megumi/skills';
+import { skillsFailureMessage, type SkillView } from '@megumi/skills';
+import type { UserInput } from '@megumi/input';
 import type {
   ObservabilitySpanName,
   TraceHandle,
@@ -72,7 +73,7 @@ export interface RuntimeEventSegment {
 
 export interface EngineRunRuntime {
   readonly controller: AbortController;
-  readonly selectedSkill?: SkillSelection;
+  readonly userInput: UserInput;
   currentRun: CurrentConversationRun;
   eventSequence: number;
   modelCallCount: number;
@@ -104,11 +105,11 @@ export function createEngineRunRuntime(input: {
   readonly run: Run;
   readonly userMessage: SessionMessageWithAttachments;
   readonly userEntry: SessionEntry;
-  readonly selectedSkill?: SkillSelection;
+  readonly userInput: UserInput;
 }): EngineRunRuntime {
   return {
     controller: new AbortController(),
-    ...(input.selectedSkill ? { selectedSkill: snapshot(input.selectedSkill) } : {}),
+    userInput: snapshot(input.userInput),
     currentRun: currentRunFromSavedUserMessage(
       input.run.runId,
       input.userMessage,
@@ -1463,7 +1464,7 @@ function currentRunFromSavedUserMessage(
     userMessage: {
       type: 'user_message',
       content: [
-        ...(saved.message.message_kind === 'user_message' ? saved.message.content : []),
+        ...(saved.message.message_kind === 'user_message' ? saved.message.model_content : []),
         ...saved.attachments.map((attachment) => (
           attachment.type === 'image'
             ? {

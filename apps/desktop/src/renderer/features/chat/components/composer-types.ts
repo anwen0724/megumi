@@ -5,7 +5,7 @@ import type {
   ChatImageInputCapabilitiesUiResult,
   ProviderPublicStatusUiDto,
 } from '@megumi/product/host';
-import type { CommandSuggestionResult } from '@megumi/product/host';
+import type { InputSuggestionQueryResult } from '@megumi/product/host';
 import type { ComposerModel, ComposerPermissionMode } from './composer-options';
 import type {
   ChatComposerDraft,
@@ -46,5 +46,5 @@ export interface ComposerProps {
   onSelectDocuments?: () => Promise<ComposerDraftDocument[]>;
   onPasteImage?: () => Promise<ComposerDraftImage[]>;
   onDraftChange?: (draft: ChatComposerDraft) => void;
-  getCommandSuggestions?: (request: { draft_input: string }) => CommandSuggestionResult | Promise<CommandSuggestionResult>;
+  getInputSuggestions?: (request: { draftInput: string; workspaceId?: string }) => InputSuggestionQueryResult | Promise<InputSuggestionQueryResult>;
 }

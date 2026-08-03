@@ -4,7 +4,7 @@
 import {
   ChatCancelBranchDraftUiPayloadSchema,
   ChatCancelUserInputUiPayloadSchema,
-  ChatCommandSuggestionsUiResultSchema,
+  ChatGetInputSuggestionsUiResultSchema,
   ChatCreateBranchDraftUiPayloadSchema,
   ChatCreateSessionUiResultSchema,
   ChatGetSessionHydrationUiResultSchema,
@@ -30,7 +30,7 @@ import { forwardRuntimeEvents } from '../event-forwarders';
 import { IPC_CHANNELS } from '../channels';
 import type { RuntimeIpcError, RuntimeIpcRequest } from '../contracts';
 import {
-  CommandSuggestionsRequestSchema,
+  InputSuggestionsRequestSchema,
   RunEventsListRequestSchema,
   RunListBySessionRequestSchema,
   SessionBranchDraftCancelRequestSchema,
@@ -49,7 +49,7 @@ import {
   ImageInputClipboardReadRequestSchema,
   AttachmentImageReadRequestSchema,
   AttachmentFileStatusRequestSchema,
-  type CommandSuggestionsPayload,
+  type InputSuggestionsPayload,
   type RunEventsListPayload,
   type RunListBySessionPayload,
   type SessionBranchDraftCancelPayload,
@@ -81,13 +81,13 @@ export function registerChatHandlers(
 ): void {
   const ipcMain = options.ipcMain ?? electronIpcMain;
 
-  ipcMain.handle(IPC_CHANNELS.chat.commandSuggestions, createIpcRequestHandler({
-    channel: IPC_CHANNELS.chat.commandSuggestions,
-    requestSchema: CommandSuggestionsRequestSchema,
-    responseSchema: ChatCommandSuggestionsUiResultSchema,
+  ipcMain.handle(IPC_CHANNELS.chat.inputSuggestions, createIpcRequestHandler({
+    channel: IPC_CHANNELS.chat.inputSuggestions,
+    requestSchema: InputSuggestionsRequestSchema,
+    responseSchema: ChatGetInputSuggestionsUiResultSchema,
     logger: options.logger,
-    handle: (request: RuntimeIpcRequest<CommandSuggestionsPayload, typeof IPC_CHANNELS.chat.commandSuggestions>) =>
-      service.host.chat.getCommandSuggestions(request.payload),
+    handle: (request: RuntimeIpcRequest<InputSuggestionsPayload, typeof IPC_CHANNELS.chat.inputSuggestions>) =>
+      service.host.chat.getInputSuggestions(request.payload),
     mapError: mapChatIpcError,
   }));
 

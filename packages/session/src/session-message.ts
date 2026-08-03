@@ -43,7 +43,12 @@ export const LegacyMessageProvenanceSchema = z.object({
 export type LegacyMessageProvenance = z.infer<typeof LegacyMessageProvenanceSchema>;
 
 export const SessionUserMessagePayloadSchema = z.object({
-  content: ContentBlockListSchema,
+  display_content: ContentBlockListSchema,
+  model_content: ContentBlockListSchema,
+  skill_selection: z.object({
+    name: z.string().min(1),
+    skill_path: z.string().min(1),
+  }).strict().optional(),
   legacy_provenance: LegacyMessageProvenanceSchema.optional(),
 }).strict();
 
@@ -168,7 +173,8 @@ export interface SessionMessageWithAttachments {
 export type SessionMessageContent = ContentBlock[] | AssistantContentBlock[];
 
 export function sessionMessageText(message: SessionMessage): string {
-  return message.content.flatMap((block) => block.type === 'text' ? [block.text] : []).join('');
+  const blocks = message.message_kind === 'user_message' ? message.display_content : message.content;
+  return blocks.flatMap((block) => block.type === 'text' ? [block.text] : []).join('');
 }
 
 export function hasUserVisibleAssistantContent(content: AssistantContentBlock[]): boolean {

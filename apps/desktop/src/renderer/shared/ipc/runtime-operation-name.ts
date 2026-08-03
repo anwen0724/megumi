@@ -19,8 +19,8 @@ export function rendererRuntimeOperationNameFromChannel(channel: BusinessIpcChan
       return 'settings.update';
     case IPC_CHANNELS.settings.completeSetup:
       return 'settings.complete-setup';
-    case IPC_CHANNELS.chat.commandSuggestions:
-      return 'command.suggestions';
+    case IPC_CHANNELS.chat.inputSuggestions:
+      return 'input.suggestions';
     case IPC_CHANNELS.chat.sessionCreate:
       return 'session.create';
     case IPC_CHANNELS.chat.sessionList:

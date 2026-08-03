@@ -3,9 +3,6 @@
  */
 export {
   createInputProcessor,
-  type InputAttachment,
-  type InputCommandHandler,
-  type InputCommandHandlingResult,
   type InputContext,
   type InputFailure,
   type InputOperationOptions,
@@ -16,15 +13,25 @@ export {
   type RawImageInput,
   type RawInputAttachment,
   type RawUserInput,
+  type SkillSelectionResolver,
   type UserInput,
 } from "./input";
+export type { InputAttachment } from "./attachment-input";
 export type { DocumentInput } from "./document-input";
 export type { ImageInput } from "./image-input";
+export {
+  createInputInterpreterPipeline,
+  InputInterpretationError,
+  type InputInterpreter,
+  type InputInterpretation,
+} from "./input-interpreter";
 export {
   DEFAULT_INPUT_POLICY,
   DOCUMENT_INPUT_POLICY,
   IMAGE_INPUT_POLICY,
+  InputPolicyConfigurationError,
   inputCapabilities,
+  validateInputPolicy,
   type DocumentInputPolicy,
   type ImageInputPolicy,
   type InputCapabilities,

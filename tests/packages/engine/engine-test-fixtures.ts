@@ -88,7 +88,11 @@ export const startRequest: StartRunRequest = {
   requestId: 'request:1',
   workspaceId: 'workspace:1',
   sessionId: 'session:1',
-  input: { text: 'hello', attachments: [] },
+  input: {
+    displayContent: [{ type: 'text', text: 'hello' }],
+    modelContent: [{ type: 'text', text: 'hello' }],
+    attachments: [],
+  },
   model,
   permissionMode: 'ask',
 };
@@ -147,7 +151,9 @@ export function createEngineFixture(input: {
           session_id: request.session_id,
           ...(request.run_id ? { run_id: request.run_id } : {}),
           message_kind: 'user_message' as const,
-          content: request.content,
+          display_content: request.display_content,
+          model_content: request.model_content,
+          ...(request.skill_selection ? { skill_selection: request.skill_selection } : {}),
           created_at: request.created_at,
         },
         attachments: [],

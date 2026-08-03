@@ -20,7 +20,6 @@ import type {
 } from '@megumi/session';
 import type { ToolIdentity, Tools } from '@megumi/tools';
 import type { ObservabilityService } from '@megumi/observability';
-import type { SkillSelection } from '@megumi/skills';
 import type { EnginePolicy } from './engine-policy';
 import { validateEnginePolicy } from './engine-policy';
 import { ActiveRunStore } from './active-run-store';
@@ -55,7 +54,6 @@ export interface StartRunRequest {
   readonly input: RunInput;
   readonly model: Model<Api>;
   readonly permissionMode: PermissionMode;
-  readonly selectedSkill?: SkillSelection;
 }
 
 export type StartRunResult =
@@ -251,7 +249,6 @@ export function createEngine(options: CreateEngineOptions): Engine {
         userMessageId,
         model: request.model,
         permissionMode: request.permissionMode,
-        ...(request.selectedSkill ? { selectedSkill: request.selectedSkill } : {}),
         createdAt,
       });
       const reserved = store.reserveStart({
@@ -302,7 +299,14 @@ export function createEngine(options: CreateEngineOptions): Engine {
         message_id: userMessageId,
         session_id: request.sessionId,
         run_id: runId,
-        content: [{ type: 'text', text: request.input.text }],
+        display_content: [...request.input.displayContent],
+        model_content: [...request.input.modelContent],
+        ...(request.input.skillSelection ? {
+          skill_selection: {
+            name: request.input.skillSelection.name,
+            skill_path: request.input.skillSelection.skillPath,
+          },
+        } : {}),
         attachments: request.input.attachments.map((attachment) => (
           attachment.type === 'image'
             ? {
@@ -338,7 +342,7 @@ export function createEngine(options: CreateEngineOptions): Engine {
         run,
         userMessage: saved.message,
         userEntry: saved.entry,
-        ...(request.selectedSkill ? { selectedSkill: request.selectedSkill } : {}),
+        userInput: request.input,
       });
       store.setRunRuntime(run.runId, runtime);
       store.completeStart({

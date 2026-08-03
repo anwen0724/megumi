@@ -1,41 +1,37 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { CommandSuggestionPanel } from '@megumi/desktop/renderer/features/chat/components/CommandSuggestionPanel';
-import type { CommandSuggestionResult } from '@megumi/product/host';
+import { InputSuggestionPanel } from '@megumi/desktop/renderer/features/chat/components/InputSuggestionPanel';
+import type { InputSuggestionQueryResult } from '@megumi/product/host';
 
-describe('CommandSuggestionPanel skill suggestions', () => {
+describe('InputSuggestionPanel skill suggestions', () => {
   it('renders Skill fields and preserves the exact selected skillPath', () => {
     const onChoose = vi.fn();
-    const suggestions: CommandSuggestionResult = {
+    const suggestions: InputSuggestionQueryResult = {
       type: 'suggestions',
-      draft_input: '/bra',
-      command_prefix: 'bra',
+      draftInput: '/bra',
+      queryPrefix: 'bra',
       groups: [{
         id: 'skills',
         label: 'Skills',
         items: [{
+          kind: 'skill',
           name: 'brainstorming',
           description: 'Explore intent before implementation',
-          source: { kind: 'skill', name: 'brainstorming', skillPath: 'C:/system/brainstorming/SKILL.md' },
-          display: {
-            primary: 'brainstorming',
-            secondary: 'Explore intent before implementation',
-            badge: 'System',
-          },
+          sourceLabel: 'System',
           match: {
             field: 'name',
             value: 'brainstorming',
             prefix: 'bra',
           },
-          displayInput: '/brainstorming ', submitInput: '',
+          replacementInput: '',
           selection: { type: 'skill', name: 'brainstorming', skillPath: 'C:/system/brainstorming/SKILL.md' },
         }],
       }],
     };
 
     render(
-      <CommandSuggestionPanel
+      <InputSuggestionPanel
         suggestions={suggestions}
         selectedIndex={0}
         onChoose={onChoose}
@@ -45,25 +41,24 @@ describe('CommandSuggestionPanel skill suggestions', () => {
     expect(screen.getByText('Brainstorming')).toBeInTheDocument();
     expect(screen.getByText('Explore intent before implementation')).toBeInTheDocument();
     expect(screen.getByText('System')).toBeInTheDocument();
-    expect(screen.getByTestId('command-suggestion-icon-skill')).toBeInTheDocument();
+    expect(screen.getByTestId('input-suggestion-icon-skill')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('option', {
       name: 'Brainstorming Explore intent before implementation System',
     }));
 
     expect(onChoose).toHaveBeenCalledWith(expect.objectContaining({
-      displayInput: '/brainstorming ',
-      submitInput: '',
+      kind: 'skill',
       selection: { type: 'skill', name: 'brainstorming', skillPath: 'C:/system/brainstorming/SKILL.md' },
     }));
   });
 
   it('uses stable unique keys for same-name skill suggestions', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const suggestions: CommandSuggestionResult = {
+    const suggestions: InputSuggestionQueryResult = {
       type: 'suggestions',
-      draft_input: '/test',
-      command_prefix: 'test',
+      draftInput: '/test',
+      queryPrefix: 'test',
       groups: [{
         id: 'skills',
         label: 'Skills',
@@ -75,7 +70,7 @@ describe('CommandSuggestionPanel skill suggestions', () => {
     };
 
     render(
-      <CommandSuggestionPanel
+      <InputSuggestionPanel
         suggestions={suggestions}
         selectedIndex={0}
         onChoose={vi.fn()}
@@ -89,10 +84,10 @@ describe('CommandSuggestionPanel skill suggestions', () => {
   });
 
   it('applies a visible accent style to the selected suggestion', () => {
-    const suggestions: CommandSuggestionResult = {
+    const suggestions: InputSuggestionQueryResult = {
       type: 'suggestions',
-      draft_input: '/test',
-      command_prefix: 'test',
+      draftInput: '/test',
+      queryPrefix: 'test',
       groups: [{
         id: 'skills',
         label: 'Skills',
@@ -104,7 +99,7 @@ describe('CommandSuggestionPanel skill suggestions', () => {
     };
 
     render(
-      <CommandSuggestionPanel
+      <InputSuggestionPanel
         suggestions={suggestions}
         selectedIndex={1}
         onChoose={vi.fn()}
@@ -119,10 +114,10 @@ describe('CommandSuggestionPanel skill suggestions', () => {
   });
 
   it('gives pointer-hover suggestions a visible hover highlight', () => {
-    const suggestions: CommandSuggestionResult = {
+    const suggestions: InputSuggestionQueryResult = {
       type: 'suggestions',
-      draft_input: '/test',
-      command_prefix: 'test',
+      draftInput: '/test',
+      queryPrefix: 'test',
       groups: [{
         id: 'skills',
         label: 'Skills',
@@ -131,7 +126,7 @@ describe('CommandSuggestionPanel skill suggestions', () => {
     };
 
     render(
-      <CommandSuggestionPanel
+      <InputSuggestionPanel
         suggestions={suggestions}
         selectedIndex={0}
         onChoose={vi.fn()}
@@ -145,23 +140,18 @@ describe('CommandSuggestionPanel skill suggestions', () => {
 function createSkillSuggestion(
   skillPath: string,
   description: string,
-): Extract<CommandSuggestionResult, { type: 'suggestions' }>['groups'][number]['items'][number] {
+): Extract<InputSuggestionQueryResult, { type: 'suggestions' }>['groups'][number]['items'][number] {
   return {
+    kind: 'skill',
     name: 'test',
     description,
-    source: { kind: 'skill', name: 'test', skillPath },
-    display: {
-      primary: 'test',
-      secondary: description,
-      badge: 'User',
-    },
+    sourceLabel: 'User',
     match: {
       field: 'name',
       value: 'test',
       prefix: 'test',
     },
-    displayInput: '/test ',
-    submitInput: '',
+    replacementInput: '',
     selection: { type: 'skill', name: 'test', skillPath },
   };
 }

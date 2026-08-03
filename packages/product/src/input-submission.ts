@@ -63,18 +63,19 @@ export function createInputSubmission(options: {
               source: { type: attachment.source.type, referenceId: attachment.source.referenceId },
             })),
           } : {}),
+          ...(request.skillSelection ? { skillSelection: request.skillSelection } : {}),
         },
         context: {
           workspaceId: request.projectId,
           ...(existingSession ? { sessionId: existingSession.session.session_id } : {}),
           model: model.model,
-          ...(request.skillSelection ? { selectedSkill: request.skillSelection } : {}),
         },
       });
       if (processed.status === 'failed') return inputError(requestId, processed.failure.message, existingSession?.session);
-      if (processed.status === 'command_result') return commandResult(requestId, processed.result, existingSession?.session);
+      if (processed.status === 'completed') return commandResult(requestId, processed.result, existingSession?.session);
 
-      const session = existingSession?.session ?? createAcceptedSession(options.sessions, request);
+      const acceptedText = processed.input.displayContent.map((block) => block.text).join('');
+      const session = existingSession?.session ?? createAcceptedSession(options.sessions, request, acceptedText);
       if (!session) return inputError(requestId, 'Session could not be created.');
       const branch = resolveBranch(options.branches, session, request.branchMarkerId, requestId);
       if (branch.status === 'failed') return inputError(requestId, branch.message, session);
@@ -86,7 +87,6 @@ export function createInputSubmission(options: {
         input: processed.input,
         model: model.model,
         permissionMode: request.permissionMode ?? 'ask',
-        ...(processed.requestedSkill ? { selectedSkill: processed.requestedSkill } : {}),
       });
       if (request.branchMarkerId && (started.status === 'started' || started.status === 'already_started')) {
         options.branches.commitBranchDraft({
@@ -117,10 +117,11 @@ function resolveExistingSession(
 function createAcceptedSession(
   sessions: Pick<SessionCatalog, 'createSession'>,
   request: ChatSendUserInputUiRequest,
+  acceptedText: string,
 ): Session | undefined {
   const result = sessions.createSession({
     workspace_id: request.projectId,
-    initial_user_text: request.text,
+    initial_user_text: acceptedText,
     ...(request.sessionTitle ? { title: request.sessionTitle } : {}),
   });
   return result.status === 'created' ? result.session : undefined;

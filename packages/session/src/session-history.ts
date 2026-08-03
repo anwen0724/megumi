@@ -25,7 +25,9 @@ export interface SaveUserMessageRequest {
   message_id: string;
   session_id: string;
   run_id?: string;
-  content: ContentBlock[];
+  display_content: ContentBlock[];
+  model_content: ContentBlock[];
+  skill_selection?: { name: string; skill_path: string };
   attachments?: SessionAttachmentImport[];
   parent_entry_id?: string;
   created_at: string;
@@ -179,7 +181,9 @@ class DefaultSessionHistory implements SessionHistory {
       session_id: request.session_id,
       ...(request.run_id ? { run_id: request.run_id } : {}),
       message_kind: 'user_message',
-      content: request.content,
+      display_content: request.display_content,
+      model_content: request.model_content,
+      ...(request.skill_selection ? { skill_selection: request.skill_selection } : {}),
       created_at: request.created_at,
       completed_at: request.created_at,
     };

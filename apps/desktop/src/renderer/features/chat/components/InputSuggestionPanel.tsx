@@ -1,21 +1,21 @@
-// Renders command suggestions supplied by a trusted catalog; this component does not own command discovery.
+// Renders `/` input suggestions supplied by Product; this component does not own discovery.
 import { Package, Terminal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/product/host';
+import type { InputSuggestionQueryItem, InputSuggestionQueryResult } from '@megumi/product/host';
 
-interface CommandSuggestionPanelProps {
-  suggestions: CommandSuggestionResult;
+interface InputSuggestionPanelProps {
+  suggestions: InputSuggestionQueryResult;
   selectedIndex: number;
-  onChoose: (command: CommandSuggestionItem) => void;
+  onChoose: (item: InputSuggestionQueryItem) => void;
   className?: string;
 }
 
-export function CommandSuggestionPanel({
+export function InputSuggestionPanel({
   suggestions,
   selectedIndex,
   onChoose,
   className,
-}: CommandSuggestionPanelProps) {
+}: InputSuggestionPanelProps) {
   const { t } = useTranslation('chat');
   if (suggestions.type === 'inactive') {
     return null;
@@ -31,7 +31,7 @@ export function CommandSuggestionPanel({
 
   return (
     <div
-      data-testid="command-suggestion-panel"
+      data-testid="input-suggestion-panel"
       role="listbox"
       aria-label={t('commands.suggestions')}
       className={[
@@ -46,17 +46,17 @@ export function CommandSuggestionPanel({
               {group.label}
             </div>
           ) : null}
-          {group.items.map((command) => {
+          {group.items.map((item) => {
             const currentIndex = itemIndex;
             itemIndex += 1;
             const selected = currentIndex === selectedIndex;
-            const primary = getSuggestionPrimaryLabel(command);
-            const secondary = command.display?.secondary ?? command.description;
-            const badge = command.display?.badge ?? command.source_badge;
+            const primary = getSuggestionPrimaryLabel(item);
+            const secondary = item.description;
+            const badge = item.kind === 'skill' ? item.sourceLabel : undefined;
 
             return (
               <button
-                key={suggestionKey(group.id, command)}
+                key={suggestionKey(group.id, item)}
                 type="button"
                 role="option"
                 aria-selected={selected}
@@ -69,19 +69,19 @@ export function CommandSuggestionPanel({
                     : '',
                 ].join(' ')}
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={() => onChoose(command)}
+                onClick={() => onChoose(item)}
               >
                 <span
-                  data-testid={`command-suggestion-icon-${command.source.kind === 'skill' ? 'skill' : 'command'}`}
+                  data-testid={`input-suggestion-icon-${item.kind}`}
                   className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--color-text-muted)]"
                   aria-hidden="true"
                 >
-                  {command.source.kind === 'skill'
+                  {item.kind === 'skill'
                     ? <Package size={14} />
                     : <Terminal size={14} />}
                 </span>
                 <span className="shrink-0 font-mono text-[var(--color-text)]">
-                  <CommandName item={command} primary={primary} />
+                  <SuggestionName item={item} primary={primary} />
                 </span>
                 <span className="min-w-0 flex-1 truncate text-xs text-[var(--color-text-muted)]">
                   {secondary}
@@ -100,16 +100,12 @@ export function CommandSuggestionPanel({
   );
 }
 
-function CommandName({ item, primary }: { item: CommandSuggestionItem; primary: string }) {
+function SuggestionName({ item, primary }: { item: InputSuggestionQueryItem; primary: string }) {
   const displayName = primary;
-  if (item.match.field !== 'name') {
+  if (item.kind === 'skill' || item.match.field !== 'name') {
     return <>{displayName}</>;
   }
-
-  const prefixLength = item.source.kind === 'skill'
-    ? 0
-    : item.match.prefix.length + 1;
-
+  const prefixLength = item.match.prefix.length + 1;
   return (
     <>
       <span className="text-[var(--color-accent)]">{displayName.slice(0, prefixLength)}</span>
@@ -118,13 +114,11 @@ function CommandName({ item, primary }: { item: CommandSuggestionItem; primary: 
   );
 }
 
-function getSuggestionPrimaryLabel(item: CommandSuggestionItem): string {
-  const rawName = item.display?.primary ?? item.name;
-  if (item.source.kind !== 'skill') {
-    return `/${rawName}`;
+function getSuggestionPrimaryLabel(item: InputSuggestionQueryItem): string {
+  if (item.kind === 'command') {
+    return `/${item.name}`;
   }
-
-  return humanizeCommandName(rawName);
+  return humanizeCommandName(item.name);
 }
 
 function humanizeCommandName(name: string): string {
@@ -135,9 +129,7 @@ function humanizeCommandName(name: string): string {
     .join(' ');
 }
 
-function suggestionKey(groupId: string, command: CommandSuggestionItem): string {
-  const sourceIdentity = command.source.kind === 'skill'
-    ? command.source.skillPath
-    : command.name;
-  return `${groupId}:${command.source.kind}:${sourceIdentity}:${command.match.field}:${command.match.value}`;
+function suggestionKey(groupId: string, item: InputSuggestionQueryItem): string {
+  const sourceIdentity = item.kind === 'skill' ? item.selection.skillPath : item.name;
+  return `${groupId}:${item.kind}:${sourceIdentity}:${item.match.field}:${item.match.value}`;
 }

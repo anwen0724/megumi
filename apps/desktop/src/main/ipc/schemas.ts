@@ -4,7 +4,7 @@ import * as host from '@megumi/product/host';
 import { createRuntimeIpcRequestSchema } from './contracts';
 import { IPC_CHANNELS } from './channels';
 
-export const CommandSuggestionsRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.commandSuggestions, host.CommandSuggestionsPayloadSchema);
+export const InputSuggestionsRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.inputSuggestions, host.InputSuggestionsPayloadSchema);
 export const SkillListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.skill.list, host.SkillListPayloadSchema);
 export const SkillGetRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.skill.get, host.SkillGetPayloadSchema);
 export const SkillEnableRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.skill.enable, host.SkillEnablePayloadSchema);
@@ -55,7 +55,7 @@ export const ObservabilityListRequestSchema = createRuntimeIpcRequestSchema(IPC_
 export const ObservabilityGetRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.get, host.ObservabilityRunPayloadSchema);
 export const ObservabilityBundleRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.bundle, host.ObservabilityRunPayloadSchema);
 
-export type CommandSuggestionsPayload = z.infer<typeof host.CommandSuggestionsPayloadSchema>;
+export type InputSuggestionsPayload = z.infer<typeof host.InputSuggestionsPayloadSchema>;
 export type SkillListPayload = z.infer<typeof host.SkillListPayloadSchema>;
 export type SkillGetPayload = z.infer<typeof host.SkillGetPayloadSchema>;
 export type SkillEnablePayload = z.infer<typeof host.SkillEnablePayloadSchema>;

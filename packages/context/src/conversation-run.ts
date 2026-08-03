@@ -98,7 +98,7 @@ export function buildConversationRuns(history: SessionHistoryItem[]): Conversati
       },
       userMessage: {
         type: 'user_message',
-        content: [...user.message.content, ...user.attachments.map(attachmentContent)],
+        content: [...user.message.model_content, ...user.attachments.map(attachmentContent)],
       },
       items: responseItems(responses),
     });

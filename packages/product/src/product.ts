@@ -6,9 +6,9 @@ import path from 'node:path';
 import type { Api, Model, ProviderStreams } from '@megumi/ai';
 import {
   createCommands,
-  createInputCommandHandler,
+  createCommandInputInterpreter,
+  type CommandTerminalResult,
   type Commands,
-  type SkillSuggestionDescriptor,
 } from '@megumi/commands';
 import { createContext } from '@megumi/context';
 import {
@@ -69,6 +69,7 @@ import {
 } from './home/home';
 import { createProductChat } from './chat';
 import { createProductApproval } from './approval';
+import { createInputSuggestionQuery } from './input-suggestions';
 import { createInputSubmission } from './input-submission';
 import { composeModels } from './models';
 import { createApprovalHost } from './host/approval-host';
@@ -307,22 +308,18 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
       ...request,
       ...(operationOptions?.signal ? { signal: operationOptions.signal } : {}),
     }),
-    skillSuggestionProvider: {
-      async listSkillSuggestions(request) {
-        const result = await skills.list({ workspaceId: request.workspaceId });
-        if (result.status === 'failed') return [];
-        return result.skills.filter((skill) => skill.available).map((skill): SkillSuggestionDescriptor => ({
-          name: skill.name,
-          skillPath: skill.skillPath,
-          description: skill.description,
-          sourceLabel: skill.source.owner === 'system' ? 'System' : 'User',
-        }));
+  });
+  const input = createInputProcessor<CommandTerminalResult>({
+    sourceAccess: options.inputSourceAccess ?? unavailableInputSourceAccess,
+    interpreters: [createCommandInputInterpreter(commands)],
+    skillSelectionResolver: {
+      resolveSelection(request, operationOptions) {
+        return skills.resolveSelection({
+          ...request,
+          ...(operationOptions?.signal ? { signal: operationOptions.signal } : {}),
+        });
       },
     },
-  });
-  const input = createInputProcessor({
-    sourceAccess: options.inputSourceAccess ?? unavailableInputSourceAccess,
-    commandHandler: createInputCommandHandler(commands),
   });
   const resolveModel: ProductModelResolver = async (request) => {
     const resolved = settings.resolveProvider(request);
@@ -408,10 +405,14 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     branches,
     resolveModel,
   });
+  const suggestions = createInputSuggestionQuery({
+    commands,
+    skills,
+  });
   const chat = createProductChat({
     submission,
     engine,
-    commands,
+    suggestions,
     sessions,
     history,
     attachments,

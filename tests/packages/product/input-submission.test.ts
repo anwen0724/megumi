@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { createInputSubmission } from '../../../packages/product/src/input-submission';
 
 describe('Product InputSubmission', () => {
-  it('calls Input exactly once and does not create Session or Run for a completed Command', async () => {
-    const process = vi.fn(async () => ({ status: 'command_result' as const, result: { type: 'completed' as const, message: 'done' } }));
+  it('calls Input exactly once and does not create Session or Run for a completed result', async () => {
+    const process = vi.fn(async () => ({ status: 'completed' as const, result: { type: 'completed' as const, message: 'done' } }));
     const createSession = vi.fn();
     const startRun = vi.fn();
     const submission = createInputSubmission({
@@ -26,7 +26,17 @@ describe('Product InputSubmission', () => {
   it('resolves Model before Input and creates a new Session only after accepted', async () => {
     const order: string[] = [];
     const resolveModel = vi.fn(async () => { order.push('model'); return { status: 'ok' as const, model: model() }; });
-    const process = vi.fn(async () => { order.push('input'); return { status: 'accepted' as const, input: { text: 'hello', attachments: [] } }; });
+    const process = vi.fn(async () => {
+      order.push('input');
+      return {
+        status: 'accepted' as const,
+        input: {
+          displayContent: [{ type: 'text' as const, text: 'hello' }],
+          modelContent: [{ type: 'text' as const, text: 'hello' }],
+          attachments: [],
+        },
+      };
+    });
     const createSession = vi.fn(() => {
       order.push('session');
       return { status: 'created' as const, session: session() };
@@ -47,6 +57,58 @@ describe('Product InputSubmission', () => {
 
     expect(order).toEqual(['model', 'input', 'session', 'engine']);
     expect(process).toHaveBeenCalledTimes(1);
+  });
+
+  it('forwards an explicit Skill selection into the raw input without any side channel', async () => {
+    const skillSelection = { type: 'skill' as const, name: 'review', skillPath: 'C:/skills/review/SKILL.md' };
+    const process = vi.fn(async () => ({
+      status: 'accepted' as const,
+      input: {
+        displayContent: [{ type: 'text' as const, text: 'task' }],
+        modelContent: [{ type: 'text' as const, text: 'expanded task' }],
+        attachments: [],
+        skillSelection,
+      },
+    }));
+    const startRun = vi.fn(async () => ({
+      status: 'started' as const,
+      run: { runId: 'run:1', sessionId: 'session:1', status: 'running' as const, createdAt: 'now' },
+      userMessage: {
+        message: {
+          message_id: 'm:1',
+          session_id: 'session:1',
+          run_id: 'run:1',
+          message_kind: 'user_message' as const,
+          display_content: [{ type: 'text' as const, text: 'task' }],
+          model_content: [{ type: 'text' as const, text: 'expanded task' }],
+          created_at: 'now',
+          completed_at: 'now',
+        },
+        attachments: [],
+      },
+      userEntry: { entry_id: 'e:1' },
+      events: { [Symbol.asyncIterator]: async function* () {} },
+    }));
+    const submission = createInputSubmission({
+      input: { process },
+      sessions: { getSession: vi.fn(), createSession: vi.fn(() => ({ status: 'created' as const, session: session() })) },
+      branches: { resolveBranchDraft: vi.fn(() => ({ status: 'resolved' as const, branch_draft: { source_entry_id: undefined } })), commitBranchDraft: vi.fn() },
+      engine: { startRun },
+      resolveModel: vi.fn(async () => ({ status: 'ok' as const, model: model() })),
+    });
+
+    await submission.submit({ ...request(), skillSelection });
+
+    expect(process).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({ skillSelection }),
+        context: expect.not.objectContaining({ selectedSkill: expect.anything() }),
+      }),
+    );
+    expect(startRun).toHaveBeenCalledWith(expect.objectContaining({
+      input: expect.objectContaining({ skillSelection, modelContent: [{ type: 'text', text: 'expanded task' }] }),
+    }));
+    expect(startRun.mock.calls[0]?.[0]).not.toHaveProperty('selectedSkill');
   });
 });
 

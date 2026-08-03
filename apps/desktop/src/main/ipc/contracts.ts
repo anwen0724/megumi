@@ -21,7 +21,7 @@ export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.settings.providerDelete,
   IPC_CHANNELS.settings.providerSetApiKey,
   IPC_CHANNELS.settings.providerDeleteApiKey,
-  IPC_CHANNELS.chat.commandSuggestions,
+  IPC_CHANNELS.chat.inputSuggestions,
   IPC_CHANNELS.chat.sessionCreate,
   IPC_CHANNELS.chat.sessionList,
   IPC_CHANNELS.chat.sessionMessageList,

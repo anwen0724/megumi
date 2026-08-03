@@ -3,7 +3,6 @@
  */
 import type { Api, Model } from '@megumi/ai';
 import type { PermissionMode } from '@megumi/permissions';
-import type { SkillSelection } from '@megumi/skills';
 
 export type RunStatus =
   | 'running'
@@ -46,7 +45,6 @@ export interface Run {
   readonly userMessageId: string;
   readonly model: Model<Api>;
   readonly permissionMode: PermissionMode;
-  readonly selectedSkill?: SkillSelection;
   readonly status: RunStatus;
   readonly createdAt: string;
   readonly startedAt: string;
@@ -63,7 +61,6 @@ export interface CreateRunInput {
   readonly userMessageId: string;
   readonly model: Model<Api>;
   readonly permissionMode: PermissionMode;
-  readonly selectedSkill?: SkillSelection;
   readonly createdAt: string;
 }
 

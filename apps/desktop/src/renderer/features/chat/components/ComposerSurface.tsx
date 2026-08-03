@@ -22,7 +22,7 @@ import {
   Terminal,
 } from 'lucide-react';
 import { IconButton } from '../../../shared/ui';
-import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/product/host';
+import type { InputSuggestionQueryItem, InputSuggestionQueryResult } from '@megumi/product/host';
 import type { ChatGetContextUsageUiResult } from '@megumi/product/host';
 import {
   COMPOSER_PERMISSION_MODE_OPTIONS,
@@ -30,7 +30,7 @@ import {
   type ComposerModelOption,
   type ComposerPermissionMode,
 } from './composer-options';
-import { CommandSuggestionPanel } from './CommandSuggestionPanel';
+import { InputSuggestionPanel } from './InputSuggestionPanel';
 import { ComposerSelect } from './ComposerSelect';
 import type { ComposerDraftAttachment } from './composer-types';
 import { formatTokenCount } from '../../../shared/i18n';
@@ -47,8 +47,8 @@ export interface ComposerSurfaceProps {
   permissionModeId: string;
   modelId: string;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
-  commandSuggestions: CommandSuggestionResult;
-  selectedCommandSuggestionIndex: number;
+  inputSuggestions: InputSuggestionQueryResult;
+  selectedInputSuggestionIndex: number;
   selectedCommandCompletion: ComposerCommandCompletionUi | null;
   contextUsage?: ChatGetContextUsageUiResult;
   selectedAttachments: ComposerDraftAttachment[];
@@ -56,7 +56,7 @@ export interface ComposerSurfaceProps {
   canAttachDocuments: boolean;
   imageInputNotice?: string;
   onValueChange: (value: string) => void;
-  onCommandSuggestionChoose: (item: CommandSuggestionItem) => void;
+  onInputSuggestionChoose: (item: InputSuggestionQueryItem) => void;
   onPermissionModeChange: (permissionMode: ComposerPermissionMode) => void;
   onModelChange: (model: ComposerModel) => void;
   onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
@@ -70,7 +70,7 @@ export interface ComposerSurfaceProps {
 }
 export type ComposerCommandCompletionUi = {
   label: string;
-  sourceKind: CommandSuggestionItem['source']['kind'];
+  sourceKind: 'command' | 'skill';
 };
 
 export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>(function ComposerSurface({
@@ -85,8 +85,8 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
   permissionModeId,
   modelId,
   textareaRef,
-  commandSuggestions,
-  selectedCommandSuggestionIndex,
+  inputSuggestions,
+  selectedInputSuggestionIndex,
   selectedCommandCompletion,
   contextUsage,
   selectedAttachments,
@@ -94,7 +94,7 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
   canAttachDocuments,
   imageInputNotice,
   onValueChange,
-  onCommandSuggestionChoose,
+  onInputSuggestionChoose,
   onPermissionModeChange,
   onModelChange,
   onKeyDown,
@@ -122,10 +122,10 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
       onSubmit={onSubmit}
       className="pointer-events-auto relative mx-auto w-full transition-[width,transform,opacity] duration-200 ease-out"
     >
-      <CommandSuggestionPanel
-        suggestions={commandSuggestions}
-        selectedIndex={selectedCommandSuggestionIndex}
-        onChoose={onCommandSuggestionChoose}
+      <InputSuggestionPanel
+        suggestions={inputSuggestions}
+        selectedIndex={selectedInputSuggestionIndex}
+        onChoose={onInputSuggestionChoose}
         className="absolute bottom-full left-0 right-0 z-50 max-h-[min(22rem,calc(100vh-12rem))]"
       />
       <div className="overflow-visible rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-soft)] transition-shadow duration-150">

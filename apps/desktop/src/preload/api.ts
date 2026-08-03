@@ -7,7 +7,7 @@ import type {
   ChatCreateBranchDraftUiResult,
   ChatCreateSessionUiResult,
   ChatGetSessionHydrationUiResult,
-  ChatGetCommandSuggestionsUiResult,
+  ChatGetInputSuggestionsUiResult,
   ChatListMessagesUiResult,
   ChatGetContextUsageUiResult,
   ChatListRunEventsUiResult,
@@ -62,7 +62,7 @@ import type {
   ArtifactStatusUpdatePayload,
   ArtifactVersionCreatePayload,
   ArtifactVersionGetPayload,
-  CommandSuggestionsPayload,
+  InputSuggestionsPayload,
   ProjectOpenPayload,
   ProjectRemovePayload,
   ProviderApiKeyPayload,
@@ -192,9 +192,9 @@ export const api = {
   },
   command: {
     suggestions: (
-      request: BusinessRequest<CommandSuggestionsPayload, typeof IPC_CHANNELS.chat.commandSuggestions>,
-    ): Promise<RuntimeIpcResult<ChatGetCommandSuggestionsUiResult, typeof IPC_CHANNELS.chat.commandSuggestions>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.chat.commandSuggestions, request),
+      request: BusinessRequest<InputSuggestionsPayload, typeof IPC_CHANNELS.chat.inputSuggestions>,
+    ): Promise<RuntimeIpcResult<ChatGetInputSuggestionsUiResult, typeof IPC_CHANNELS.chat.inputSuggestions>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.chat.inputSuggestions, request),
   },
   skill: {
     list: (

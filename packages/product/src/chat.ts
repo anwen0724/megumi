@@ -2,7 +2,6 @@
  * Owns Product Chat queries and interactions outside the single submit chain.
  * The submit chain itself is delegated to the dedicated InputSubmission owner.
  */
-import type { Commands } from '@megumi/commands';
 import type { ContextCapabilities } from '@megumi/context';
 import type { Engine, Run } from '@megumi/engine';
 import { DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from '@megumi/input';
@@ -18,10 +17,11 @@ import type {
   ChatRunUiDto,
   ChatSessionMessageUiDto,
   ChatSessionUiDto,
-  HostCommandSuggestionResult,
+  InputSuggestionQueryResult,
   InputAttachmentPickerPort,
   LocalFileAvailabilityPort,
 } from './host/chat-contract';
+import type { InputSuggestionQuery } from './input-suggestions';
 
 export type ProductChat = Omit<ChatHost, 'sendUserInput'> & {
   submit: InputSubmission['submit'];
@@ -30,7 +30,7 @@ export type ProductChat = Omit<ChatHost, 'sendUserInput'> & {
 export function createProductChat(options: {
   submission: InputSubmission;
   engine: Pick<Engine, 'cancelRun'>;
-  commands: Pick<Commands, 'suggest'>;
+  suggestions: InputSuggestionQuery;
   sessions: SessionCatalog;
   history: SessionHistory;
   attachments: SessionAttachmentReader;
@@ -94,8 +94,8 @@ export function createProductChat(options: {
         ? { payload: { cancelled: true }, events: result.events }
         : { payload: { cancelled: false, reason: result.reason } };
     },
-    async getCommandSuggestions(request) {
-      return { suggestions: toCommandSuggestions(await options.commands.suggest({ draftInput: request.draft_input, ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}) })) };
+    async getInputSuggestions(request) {
+      return { suggestions: await options.suggestions.getInputSuggestions({ draftInput: request.draftInput, ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}) }) };
     },
     async listRuns(request) { return { runs: options.runs.listRuns({ sessionId: request.sessionId }).map(toChatRun) }; },
     async listRunEvents(request) { return { events: [...options.runs.listEvents({ runId: request.runId })] }; },
@@ -151,9 +151,8 @@ function toChatMessage(item: SessionMessageWithAttachments): ChatSessionMessageU
 function toChatRun(run: Run | ProjectedRun): ChatRunUiDto {
   return { runId: run.runId, sessionId: run.sessionId, status: run.status, createdAt: run.createdAt, ...(run.completedAt ? { completedAt: run.completedAt } : {}) };
 }
-function toCommandSuggestions(result: Awaited<ReturnType<Commands['suggest']>>): HostCommandSuggestionResult {
-  if (result.type === 'inactive') return result;
-  return { type: 'suggestions', draft_input: result.draftInput, command_prefix: result.commandPrefix, groups: result.groups.map((group) => ({ id: group.id, label: group.label, items: group.items.map((item) => ({ name: item.name, ...(item.aliases ? { aliases: [...item.aliases] } : {}), description: item.description, ...(item.argumentHint ? { argument_hint: item.argumentHint } : {}), source: item.source, ...(item.sourceBadge ? { source_badge: item.sourceBadge } : {}), ...(item.display ? { display: item.display } : {}), match: item.match, displayInput: `/${item.display?.primary ?? item.name} `, submitInput: item.completion.replacementInput, ...(item.completion.selection ? { selection: item.completion.selection } : {}) })) })) };
+function toCommandSuggestions(result: InputSuggestionQueryResult): InputSuggestionQueryResult {
+  return result;
 }
 function pickerFailure(code: string, message: string) { return { status: 'failed' as const, failure: { code, message } }; }
 function toFailure(failure: { code: string; message: string; retryable?: boolean }): ChatHostFailure {

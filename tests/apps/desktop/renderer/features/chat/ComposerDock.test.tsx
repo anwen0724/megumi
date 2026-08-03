@@ -155,19 +155,19 @@ describe('ComposerDock', () => {
         branchDraft={null}
         onSubmit={vi.fn()}
         onStop={vi.fn()}
-        getCommandSuggestions={() => ({
+        getInputSuggestions={() => ({
           type: 'suggestions',
-          draft_input: '/re',
-          command_prefix: 're',
+          draftInput: '/re',
+          queryPrefix: 're',
           groups: [{
             id: 'commands',
             label: 'Commands',
             items: [{
+              kind: 'command',
               name: 'review',
               description: 'Evaluate review feedback before implementing changes',
-              source: { kind: 'built_in' },
               match: { field: 'name', value: 'review', prefix: 're' },
-              displayInput: '/review ', submitInput: '/review ',
+              replacementInput: '/review ',
             }],
           }],
         })}
