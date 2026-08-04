@@ -2,7 +2,6 @@
  * Protects the public Engine boundary: idempotent start and session exclusion.
  */
 import { describe, expect, it, vi } from 'vitest';
-import type { ApprovalRequestedPayload } from '@megumi/events';
 import { approvalSubjectFor, registeredTool, succeeded, unrestrictedExecutionAccess } from './tool-call-test-fixtures';
 import {
   approvalDecisionFor,
@@ -10,6 +9,7 @@ import {
   collectEvents,
   createEngineFixture,
   neverEndingStream,
+  settleRun,
   startedRun,
   startRequest,
 } from './engine-test-fixtures';
@@ -28,7 +28,7 @@ describe('createEngine', () => {
     if (first.status === 'started' && second.status === 'already_started') {
       expect(second.run.runId).toBe(first.run.runId);
       expect(second.userEntry.entry_id).toBe(first.userEntry.entry_id);
-      await collectEvents(first.events);
+      await settleRun(fixture);
     }
     expect(fixture.writes.filter((write) => write === 'user')).toHaveLength(1);
   });
@@ -50,7 +50,7 @@ describe('createEngine', () => {
     if (first.status === 'started') {
       const cancellation = await fixture.engine.cancelRun({ runId: first.run.runId });
       if (cancellation.status === 'cancellation_requested') {
-        await collectEvents(cancellation.events);
+        await settleRun(fixture);
       }
     }
   });
@@ -70,7 +70,7 @@ describe('createEngine', () => {
       status: 'failed',
       failure: { code: 'runtime_protocol_violation' },
     });
-    if (first.status === 'started') await collectEvents(first.events);
+    if (first.status === 'started') await settleRun(fixture);
   });
 
   it('resumes an Engine-owned pending approval and continues the same Run', async () => {
@@ -114,21 +114,21 @@ describe('createEngine', () => {
     });
 
     const started = await startedRun(fixture);
-    const firstSegment = await collectEvents(started.events);
-    const requested = firstSegment.find((event) => event.eventType === 'approval.requested');
+    await vi.waitFor(() => {
+      expect(fixture.published.some((event) => event.type === 'approval.requested')).toBe(true);
+    });
+    const requested = fixture.published.find((event) => event.type === 'approval.requested');
     if (!requested) throw new Error('Expected approval request event.');
-    const approvalRequest = (requested.payload as ApprovalRequestedPayload).approvalRequest;
-    expect(approvalRequest.options[0]).toHaveProperty('optionId');
     const approval = {
-      approvalRequestId: approvalRequest.approvalRequestId,
-      defaultOptionId: approvalRequest.defaultOptionId,
+      approvalRequestId: requested.payload.approvalRequestId,
+      toolCallId: requested.payload.toolCallId,
     };
 
     const resumed = await fixture.engine.resumeRun({
       runApprovalId: approval.approvalRequestId,
       decision: {
         decision: 'approved',
-        optionId: approval.defaultOptionId,
+        optionId: approval.approvalRequestId,
       },
     });
     expect(resumed.status).toBe('resumed');
@@ -138,26 +138,22 @@ describe('createEngine', () => {
       runApprovalId: approval.approvalRequestId,
       decision: {
         decision: 'approved',
-        optionId: approval.defaultOptionId,
+        optionId: approval.approvalRequestId,
       },
     });
     expect(duplicate.status).toBe('already_resolved');
     expect(fixture.writes).not.toContain('assistant:completed');
 
     releaseExecution();
-    const resumedEvents = await collectEvents(resumed.events);
+    await settleRun(fixture);
 
     expect(applyApprovalDecision).toHaveBeenCalledOnce();
     expect(executeTool).toHaveBeenCalledOnce();
-    expect(resumedEvents.map((event) => event.eventType)).toEqual(expect.arrayContaining([
-      'approval.resolved',
-      'run.resumed',
-      'run.completed',
-    ]));
-    expect(
-      resumedEvents.find((event) => event.eventType === 'run.resumed')?.payload,
-    ).toEqual({ runApprovalId: approval.approvalRequestId });
-    expect(resumedEvents.at(-1)?.eventType).toBe('run.completed');
+    expect(fixture.published.some((event) => (
+      event.type === 'approval.resolved' && event.payload.decision === 'approved'
+    ))).toBe(true);
+    expect(fixture.published.at(-1)?.type).toBe('run.ended');
+    expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'completed' });
   });
 
   it('closes the pending ToolCall when approval application fails', async () => {
@@ -186,18 +182,16 @@ describe('createEngine', () => {
       },
     });
     const started = await startedRun(fixture);
-    const waitingEvents = await collectEvents(started.events);
-    const requested = waitingEvents.find((event) => event.eventType === 'approval.requested');
+    await vi.waitFor(() => {
+      expect(fixture.published.some((event) => event.type === 'approval.requested')).toBe(true);
+    });
+    const requested = fixture.published.find((event) => event.type === 'approval.requested');
     if (!requested) throw new Error('Expected approval request event.');
-    const approvalRequest = (requested.payload as ApprovalRequestedPayload).approvalRequest;
-    const approval = {
-      approvalRequestId: approvalRequest.approvalRequestId,
-      defaultOptionId: approvalRequest.defaultOptionId,
-    };
+    const approvalRequestId = requested.payload.approvalRequestId;
 
     const resumed = await fixture.engine.resumeRun({
-      runApprovalId: approval.approvalRequestId,
-      decision: { decision: 'approved', optionId: approval.defaultOptionId },
+      runApprovalId: approvalRequestId,
+      decision: { decision: 'approved', optionId: approvalRequestId },
     });
     expect(resumed).toMatchObject({
       status: 'failed',
@@ -211,7 +205,8 @@ describe('createEngine', () => {
         error: expect.objectContaining({ code: 'run_failed_before_tool_result' }),
       }),
     ]);
-    expect(fixture.published.at(-1)?.eventType).toBe('run.failed');
+    expect(fixture.published.at(-1)?.type).toBe('run.ended');
+    expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'failed' });
   });
 
   it('owns shutdown by rejecting new Runs and converging active Runs', async () => {

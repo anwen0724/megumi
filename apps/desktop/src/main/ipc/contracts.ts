@@ -2,12 +2,6 @@
  * Desktop IPC request and response envelope contracts.
  */
 import { z } from 'zod';
-import {
-  RuntimeContextSchema,
-  RuntimeIdSchema,
-  RuntimeResultMetaSchema,
-  type RuntimeContext,
-} from '@megumi/product/host';
 import { IPC_CHANNELS } from './channels';
 import { RuntimeIpcErrorSchema, type RuntimeIpcError } from './errors';
 export type { RuntimeIpcError } from './errors';
@@ -72,7 +66,7 @@ export const BusinessIpcChannelSchema = z.enum([...BUSINESS_IPC_CHANNELS] as [
   ...BusinessIpcChannel[],
 ]);
 
-export const RuntimeIpcRequestIdSchema = RuntimeIdSchema;
+export const RuntimeIpcRequestIdSchema = z.string().min(1).max(128);
 
 export const RuntimeIpcRequestMetaSchema = z
   .object({
@@ -82,10 +76,13 @@ export const RuntimeIpcRequestMetaSchema = z
   })
   .strict();
 
-export const RuntimeIpcResponseMetaSchema = RuntimeResultMetaSchema.extend({
-  requestId: RuntimeIpcRequestIdSchema,
-  channel: BusinessIpcChannelSchema,
-}).strict();
+export const RuntimeIpcResponseMetaSchema = z
+  .object({
+    requestId: RuntimeIpcRequestIdSchema,
+    channel: BusinessIpcChannelSchema,
+    handledAt: z.string().datetime(),
+  })
+  .strict();
 
 export interface RuntimeIpcRequest<TPayload, TChannel extends BusinessIpcChannel = BusinessIpcChannel> {
   requestId: string;
@@ -95,7 +92,6 @@ export interface RuntimeIpcRequest<TPayload, TChannel extends BusinessIpcChannel
     createdAt: string;
     source: 'renderer';
   };
-  context?: RuntimeContext;
 }
 
 export interface RuntimeIpcSuccess<TData extends object, TChannel extends BusinessIpcChannel = BusinessIpcChannel> {
@@ -126,7 +122,6 @@ export function createRuntimeIpcRequestSchema<TPayload extends z.ZodTypeAny, TCh
       meta: RuntimeIpcRequestMetaSchema.extend({
         channel: z.literal(channel),
       }).strict(),
-      context: RuntimeContextSchema.optional(),
     })
     .strict();
 }

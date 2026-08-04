@@ -3,7 +3,7 @@
  */
 import type { IpcMainInvokeEvent } from 'electron';
 import type { z } from 'zod';
-import { generateRuntimeDebugId, type RuntimeContext } from '@megumi/product/host';
+import { type IpcError, normalizeIpcError } from '@megumi/product/host';
 import type { ProductRuntimeLogger } from '@megumi/product';
 import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from './contracts';
 import type { RuntimeIpcError } from './errors';
@@ -22,7 +22,6 @@ export interface CreateIpcRequestHandlerOptions<
   handle(
     request: RuntimeIpcRequest<TPayload, TChannel>,
     event: IpcMainInvokeEvent,
-    context: RuntimeContext,
   ): TData | Promise<TData>;
   mapError?(error: unknown): RuntimeIpcError;
 }
@@ -46,24 +45,12 @@ export function createIpcRequestHandler<
       return failureResult(options.channel, requestId, {
         code: 'ipc_invalid_request',
         message: 'IPC request payload is invalid.',
-        severity: 'error',
-        retryable: false,
-        source: 'main',
         details: { validation: JSON.stringify(sanitizeZodIssues(parsed.error)) },
       }, startedAt);
     }
 
-    const context = parsed.data.context ?? {
-      requestId: parsed.data.requestId,
-      traceId: `trace-${parsed.data.requestId}`,
-      debugId: generateRuntimeDebugId(),
-      operationName: parsed.data.meta.channel,
-      source: 'renderer' as const,
-      createdAt: parsed.data.meta.createdAt,
-    };
-
     try {
-      const handled = await options.handle(parsed.data, event, context);
+      const handled = await options.handle(parsed.data, event);
       const validationMode = options.responseValidation ?? 'strict';
       const shouldValidateResponse = validationMode === 'strict'
         || (validationMode === 'dev-only' && process.env.NODE_ENV !== 'production');
@@ -74,11 +61,7 @@ export function createIpcRequestHandler<
         meta: {
           requestId: parsed.data.requestId,
           channel: options.channel,
-          traceId: context.traceId,
-          debugId: context.debugId,
-          operationName: context.operationName,
           handledAt: new Date().toISOString(),
-          durationMs: Date.now() - startedAt,
         },
       };
     } catch (error) {
@@ -89,9 +72,6 @@ export function createIpcRequestHandler<
         options.mapError?.(error) ?? {
           code: 'ipc_handler_failed',
           message: 'IPC handler failed.',
-          severity: 'error',
-          retryable: true,
-          source: 'main',
         },
         startedAt,
       );
@@ -102,17 +82,16 @@ export function createIpcRequestHandler<
 function failureResult<TChannel extends BusinessIpcChannel>(
   channel: TChannel,
   requestId: string,
-  error: RuntimeIpcError,
+  error: IpcError,
   startedAt: number,
 ): RuntimeIpcResult<never, TChannel> {
   return {
     ok: false,
-    data: error,
+    data: normalizeIpcError(error, 'Unexpected IPC failure.'),
     meta: {
       requestId,
       channel,
       handledAt: new Date().toISOString(),
-      durationMs: Date.now() - startedAt,
     },
   };
 }

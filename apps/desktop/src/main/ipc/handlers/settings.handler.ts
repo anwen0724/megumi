@@ -117,8 +117,5 @@ function mapSettingsIpcError(): RuntimeIpcError {
   return {
     code: 'ipc_handler_failed',
     message: 'Settings service failed.',
-    severity: 'error',
-    retryable: true,
-    source: 'main',
   };
 }

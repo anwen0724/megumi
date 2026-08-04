@@ -9,7 +9,6 @@ import type {
   RunFailure,
   RunStatus,
 } from '@megumi/engine';
-import type { RuntimeEvent } from '@megumi/events';
 
 export type ProductApprovalDecision =
   | { decision: 'approved'; optionId: string; reason?: string }
@@ -36,7 +35,6 @@ export type ProductApprovalResult =
 
 export interface ProductApprovalInvocation {
   payload: ProductApprovalResult;
-  events?: AsyncIterable<RuntimeEvent>;
 }
 
 export interface ProductApproval {
@@ -84,7 +82,6 @@ export function createProductApproval(
           approvalRequestId: request.approvalRequestId,
           run: toProductApprovalRun(result.run),
         },
-        events: result.events,
       };
     },
   };

@@ -11,11 +11,8 @@ import type {
   RunContext,
 } from '@megumi/context';
 import {
-  createRuntimeEvent,
-  type RuntimeError,
-  type RuntimeEvent,
-  type RuntimeEventPayloadByType,
-  type RuntimeEventType,
+  type EventPayloadByType,
+  type EventType,
 } from '@megumi/events';
 import type { PermissionMode } from '@megumi/permissions';
 import type {
@@ -57,25 +54,8 @@ import {
   type Run,
   type RunFailure,
 } from './run';
-import {
-  modelCallFailureToRuntimeError,
-  runFailureToRuntimeError,
-  toolResultErrorToRuntimeError,
-} from './runtime-error-mapping';
 import { canonicalJson } from './canonical-json';
 import { raceWithTimeout } from './timeout-utils';
-
-const STREAM_DELTA_EVENT_TYPES = new Set<RuntimeEventType>([
-  'model_call.text_delta',
-  'model.thinking.delta',
-  'assistant.output.delta',
-]);
-
-export interface RuntimeEventSegment {
-  readonly events: AsyncIterable<RuntimeEvent>;
-  push(event: RuntimeEvent): void;
-  close(): void;
-}
 
 export interface EngineRunRuntime {
   readonly controller: AbortController;
@@ -83,18 +63,22 @@ export interface EngineRunRuntime {
   readonly runId: string;
   readonly userEntryId: string;
   lastCommittedEntryId: string;
-  eventSequence: number;
   modelCallCount: number;
   toolRoundCount: number;
   toolCallCount: number;
   readonly toolExecutionIds: Set<string>;
   readonly committedToolCallIds: Set<string>;
-  currentSegment?: RuntimeEventSegment;
+  /** Accumulated streaming output per tool execution (full-snapshot updates). */
+  readonly toolExecutionOutputs: Map<string, string>;
   activeTask?: Promise<unknown>;
   activeModelCallId?: string;
   currentToolModelCallId?: string;
   activeModelSpan?: SpanHandle;
   activeModelResponseMessageId?: string;
+  /** Message id used across the streaming turn; reused when the reply is stored. */
+  activeModelMessageId?: string;
+  /** Accumulated assistant text within the active model call (full-snapshot updates). */
+  activeAssistantText: string;
   currentToolRoundCalls: readonly ToolCall[];
   pendingToolCalls: readonly ToolCall[];
   trace?: TraceHandle;
@@ -121,86 +105,19 @@ export function createEngineRunRuntime(input: {
     runId: input.run.runId,
     userEntryId: input.userEntry.entry_id,
     lastCommittedEntryId: input.userEntry.entry_id,
-    eventSequence: 0,
     modelCallCount: 0,
     toolRoundCount: 0,
     toolCallCount: 0,
     toolExecutionIds: new Set(),
     committedToolCallIds: new Set(),
+    toolExecutionOutputs: new Map(),
     currentToolRoundCalls: [],
     pendingToolCalls: [],
     toolSpans: new Map(),
+    activeAssistantText: '',
     observabilityEnded: false,
     cancelledReplyCommitted: false,
   };
-}
-
-export function createRuntimeEventSegment(capacity: number): RuntimeEventSegment {
-  const queued: RuntimeEvent[] = [];
-  const waiters: Array<(value: IteratorResult<RuntimeEvent>) => void> = [];
-  let closed = false;
-
-  const push = (event: RuntimeEvent) => {
-    if (closed) return;
-    const waiter = waiters.shift();
-    if (waiter) {
-      waiter({ value: event, done: false });
-      return;
-    }
-    if (queued.length >= capacity) {
-      if (STREAM_DELTA_EVENT_TYPES.has(event.eventType as RuntimeEventType)) return;
-      const replaceable = queued.findIndex((candidate) => (
-        STREAM_DELTA_EVENT_TYPES.has(candidate.eventType as RuntimeEventType)
-      ));
-      if (replaceable >= 0) queued.splice(replaceable, 1);
-    }
-    if (queued.length < capacity) queued.push(event);
-  };
-
-  const close = () => {
-    if (closed) return;
-    closed = true;
-    while (waiters.length > 0) {
-      waiters.shift()?.({ value: undefined as never, done: true });
-    }
-  };
-
-  return {
-    push,
-    close,
-    events: {
-      async *[Symbol.asyncIterator]() {
-        while (true) {
-          if (queued.length > 0) {
-            yield queued.shift()!;
-            continue;
-          }
-          if (closed) return;
-          const next = await new Promise<IteratorResult<RuntimeEvent>>((resolve) => {
-            waiters.push(resolve);
-          });
-          if (next.done) return;
-          yield next.value;
-        }
-      },
-    },
-  };
-}
-
-export function eventSegmentCapacity(options: CreateEngineOptions): number {
-  const lifecycleUpperBound = 32
-    + options.policy.maxModelCallsPerRun
-      * (6 + options.policy.maxModelCallAttempts * 5)
-    + options.policy.maxToolCallsPerRun * 9;
-  return Math.max(32, lifecycleUpperBound);
-}
-
-export function attachRuntimeEventSegment(
-  runtime: EngineRunRuntime,
-  segment: RuntimeEventSegment,
-): void {
-  runtime.currentSegment?.close();
-  runtime.currentSegment = segment;
 }
 
 export function emitRunStarted(
@@ -209,9 +126,7 @@ export function emitRunStarted(
   run: Run,
 ): void {
   emitEvent(dependencies, runtime, run, 'run.started', {
-    providerId: String(run.model.provider),
-    modelId: run.model.id,
-    runKind: 'agent',
+    requestId: run.requestId,
   });
 }
 
@@ -324,16 +239,8 @@ async function continueRunAfterApprovalInContext(
       endObservedSpan(dependencies, runtime.approvalSpan, 'ok');
       runtime.approvalSpan = undefined;
       emitEvent(dependencies, runtime, running, 'approval.resolved', {
-        approvalRequestId: approval.runApprovalId,
         toolCallId: approval.toolCallId,
         decision: resolvedApprovalStatus(approval.status),
-        ...(approval.decision?.decision === 'approved'
-          ? { optionId: approval.decision.optionId }
-          : {}),
-        decidedAt: approval.decidedAt ?? dependencies.clock.now(),
-      });
-      emitEvent(dependencies, runtime, running, 'run.resumed', {
-        runApprovalId: approval.runApprovalId,
       });
       input.onRunResumed?.(running);
     },
@@ -391,28 +298,15 @@ export function requestRunCancellation(
   runtime: EngineRunRuntime,
   run: Run,
 ): void {
-  const cancelRequestId = dependencies.ids.createRuntimeEventId();
-  emitEvent(dependencies, runtime, run, 'run.cancel.requested', {
-    cancelRequestId,
-    requestedBy: 'user',
-    reason: 'user_cancelled',
-    scope: 'run',
-  });
-  emitEvent(dependencies, runtime, run, 'run.cancelling', { cancelRequestId });
+  // Cancellation is a transition, not a settled fact: the outcome is told by
+  // run.ended (status: 'cancelled'). A pending approval simply disappears with
+  // the run; the UI discovers it via the pending-approvals query.
   const approval = dependencies.store.getPendingRunApproval(run.runId);
   if (approval) {
-    const cancelled = dependencies.store.cancelPendingRunApproval({
+    dependencies.store.cancelPendingRunApproval({
       runId: run.runId,
       cancelledAt: dependencies.clock.now(),
     });
-    if (cancelled) {
-      emitEvent(dependencies, runtime, run, 'approval.resolved', {
-        approvalRequestId: cancelled.runApprovalId,
-        toolCallId: cancelled.toolCallId,
-        decision: 'cancelled',
-        decidedAt: cancelled.decidedAt ?? dependencies.clock.now(),
-      });
-    }
   }
   runtime.controller.abort();
   void convergeCancellation(dependencies, runtime);
@@ -716,7 +610,8 @@ async function executeRunLoop(
       if (terminal.toolCalls.length === 0) {
         releaseCurrentToolRouter(dependencies, runtime);
         const reply = dependencies.session.saveAssistantReply({
-          message_id: dependencies.ids.createSessionMessageId(),
+          // Reuse the streaming message id, matching the message.update snapshots.
+          message_id: runtime.activeModelMessageId ?? dependencies.ids.createSessionMessageId(),
           session_id: run.sessionId,
           run_id: run.runId,
           parent_entry_id: runtime.lastCommittedEntryId,
@@ -730,13 +625,22 @@ async function executeRunLoop(
           await failRun(dependencies, runtime, sessionFailure(reply.failure.message), false);
           return;
         }
+        // The message is settled now: the snapshot updates are superseded.
+        emitEvent(dependencies, runtime, run, 'message.ended', {
+          role: 'assistant',
+          messageId: reply.message.message_id,
+          content: assistantContent
+            .filter((block) => block.type === 'text')
+            .map((block) => block.text)
+            .join(''),
+        });
         const completed = transitionRun(run, {
           status: 'completed',
           at: dependencies.clock.now(),
         });
         dependencies.store.updateRun(completed);
-        emitEvent(dependencies, runtime, completed, 'run.completed', {
-          assistantMessageId: reply.message.message_id,
+        emitEvent(dependencies, runtime, completed, 'run.ended', {
+          status: 'completed',
         });
         finishRuntime(dependencies, runtime, 'ok');
         return;
@@ -756,7 +660,9 @@ async function executeRunLoop(
       }
 
       const response = dependencies.session.saveModelResponse({
-        message_id: dependencies.ids.createSessionMessageId(),
+        // Reuse the streaming message id so the stored reply matches the id
+        // already seen in message.update snapshots.
+        message_id: runtime.activeModelMessageId ?? dependencies.ids.createSessionMessageId(),
         session_id: run.sessionId,
         run_id: run.runId,
         parent_entry_id: runtime.lastCommittedEntryId,
@@ -771,6 +677,15 @@ async function executeRunLoop(
         return;
       }
       runtime.lastCommittedEntryId = response.entry.entry_id;
+      // The message is settled now: the snapshot updates are superseded.
+      emitEvent(dependencies, runtime, run, 'message.ended', {
+        role: 'assistant',
+        messageId: response.message.message_id,
+        content: assistantContent
+          .filter((block) => block.type === 'text')
+          .map((block) => block.text)
+          .join(''),
+      });
       runtime.toolCallCount += terminal.toolCalls.length;
       runtime.toolRoundCount += 1;
       runtime.activeModelResponseMessageId = response.message.message_id;
@@ -782,14 +697,8 @@ async function executeRunLoop(
         input: call.input,
       }));
       runtime.pendingToolCalls = runtime.currentToolRoundCalls;
-      for (const call of runtime.pendingToolCalls) {
-        emitEvent(dependencies, runtime, run, 'tool_call.requested', {
-          modelCallId: call.modelCallId,
-          toolCallId: call.toolCallId,
-          toolName: call.toolName,
-          input: toJsonValue(call.input),
-        });
-      }
+      // Whether the model decided to call tools is told by turn.ended's
+      // stopReason; per-call details arrive with tool_execution.started.
       const batch = await processToolBatch(dependencies, runtime, runtime.pendingToolCalls);
       if (batch !== 'completed') return;
       releaseCurrentToolRouter(dependencies, runtime);
@@ -874,13 +783,6 @@ async function processToolBatch(
     dependencies.store.updateRun(waiting);
     emitApprovalRequested(dependencies, runtime, waiting, result.approval);
     runtime.approvalSpan = startObservedSpan(dependencies, runtime, 'approval.wait');
-    emitEvent(dependencies, runtime, waiting, 'run.waiting', {
-      approvalRequestId: result.approval.runApprovalId,
-      toolCallId: result.approval.toolCallId,
-      reason: 'approval_required',
-    });
-    runtime.currentSegment?.close();
-    runtime.currentSegment = undefined;
     return 'waiting';
   }
   runtime.pendingToolCalls = [];
@@ -918,15 +820,16 @@ async function commitNewToolResults(
     }
     runtime.committedToolCallIds.add(result.toolCallId);
     runtime.lastCommittedEntryId = saved.entry.entry_id;
-    emitEvent(dependencies, runtime, run, 'tool_result.created', {
-      toolCallId: result.toolCallId,
-      toolName: result.toolName,
-      kind: result.status,
-      content: [{ type: 'text', text: result.content }],
-      ...(result.status === 'success' && result.observation?.summary
-        ? { summary: result.observation.summary }
-        : {}),
-      ...(result.error ? { error: toEventError(result.error) } : {}),
+    // A tool result is a transcript message (role: tool_result), so it gets a
+    // message lifecycle pair. Its content is the tool's output text.
+    emitEvent(dependencies, runtime, run, 'message.started', {
+      role: 'tool_result',
+      messageId: saved.message.message_id,
+    });
+    emitEvent(dependencies, runtime, run, 'message.ended', {
+      role: 'tool_result',
+      messageId: saved.message.message_id,
+      content: result.content,
     });
   }
   return true;
@@ -946,31 +849,29 @@ function toolExecutionCallbacks(
       if (!run || isTerminalRunStatus(run.status)) return;
       const span = startObservedSpan(dependencies, runtime, 'tool.call');
       if (span) runtime.toolSpans.set(execution.toolExecutionId, span);
-      emitEvent(dependencies, runtime, run, 'tool.execution.started', {
-        toolExecutionId: execution.toolExecutionId,
-        startedAt: execution.startedAt,
+      const call = findToolCall(runtime, execution.toolCallId);
+      emitEvent(dependencies, runtime, run, 'tool_execution.started', {
+        toolCallId: execution.toolCallId,
+        toolName: call?.toolName ?? '',
+        args: call ? toJsonValue(call.input) as Record<string, unknown> : {},
       });
     },
     onToolExecutionOutput: (execution, output) => {
       const run = dependencies.store.getRun(execution.runId);
       if (!run || isTerminalRunStatus(run.status)) return;
-      emitEvent(dependencies, runtime, run, 'tool.execution.output', {
-        toolExecutionId: execution.toolExecutionId,
-        stream: output.stream,
-        delta: output.chunk,
-        truncated: output.truncated,
+      const accumulated = (runtime.toolExecutionOutputs.get(execution.toolExecutionId) ?? '') + output.chunk;
+      runtime.toolExecutionOutputs.set(execution.toolExecutionId, accumulated);
+      // Full snapshot: consumers replace, never merge.
+      emitEvent(dependencies, runtime, run, 'tool_execution.update', {
+        toolCallId: execution.toolCallId,
+        output: accumulated,
       });
     },
     onToolExecutionNotification: (execution, notification) => {
       const run = dependencies.store.getRun(execution.runId);
       if (!run || isTerminalRunStatus(run.status)) return;
-      if (notification.type === 'plan_updated') {
-        emitEvent(dependencies, runtime, run, 'run.plan.updated', {
-          toolCallId: execution.toolCallId,
-          ...(notification.explanation ? { explanation: notification.explanation } : {}),
-          plan: notification.plan,
-        });
-      }
+      // Plan updates are an internal transition, not a settled fact; they are
+      // intentionally not part of the event domain.
     },
     onToolExecutionFinished: (execution, result) => {
       endObservedSpan(
@@ -981,35 +882,32 @@ function toolExecutionCallbacks(
           : execution.status === 'cancelled' ? 'cancelled' : 'error',
       );
       runtime.toolSpans.delete(execution.toolExecutionId);
+      runtime.toolExecutionOutputs.delete(execution.toolExecutionId);
       const run = dependencies.store.getRun(execution.runId);
       if (!run || isTerminalRunStatus(run.status)) return;
       if (execution.status === 'succeeded') {
-        emitEvent(dependencies, runtime, run, 'tool.execution.completed', {
-          toolExecutionId: execution.toolExecutionId,
-          completedAt: execution.completedAt,
+        emitEvent(dependencies, runtime, run, 'tool_execution.ended', {
+          toolCallId: execution.toolCallId,
+          status: 'completed',
+          result: result.content,
         });
         return;
       }
       if (execution.status === 'cancelled') {
-        const call = findToolCall(runtime, execution.toolCallId);
-        if (!runtime.activeModelResponseMessageId || !call) return;
-        emitEvent(dependencies, runtime, run, 'tool.execution.cancelled', {
-          assistantMessageId: runtime.activeModelResponseMessageId,
-          toolExecutionId: execution.toolExecutionId,
+        emitEvent(dependencies, runtime, run, 'tool_execution.ended', {
           toolCallId: execution.toolCallId,
-          toolName: result.toolName,
-          callOrder: call.callOrder,
           status: 'cancelled',
         });
         return;
       }
-      emitEvent(dependencies, runtime, run, 'tool.execution.failed', {
-        toolExecutionId: execution.toolExecutionId,
-        error: toolResultErrorToRuntimeError(result.error ?? {
-          code: 'tool_execution_failed',
-          message: 'Tool execution failed.',
-        }),
-        completedAt: execution.completedAt,
+      const error = result.error ?? {
+        code: 'tool_execution_failed',
+        message: 'Tool execution failed.',
+      };
+      emitEvent(dependencies, runtime, run, 'tool_execution.ended', {
+        toolCallId: execution.toolCallId,
+        status: 'failed',
+        error: { message: error.message, code: error.code },
       });
     },
   };
@@ -1024,10 +922,12 @@ function emitModelCallEvent(
 ): void {
   switch (event.type) {
     case 'started':
-      emitEvent(dependencies, runtime, run, 'model_call.started', {
-        modelCallId: event.modelCall.modelCallId,
-        providerId: String(run.model.provider),
-        modelId: run.model.id,
+      // One message id spans the whole streaming turn: it is created here,
+      // used by message.update snapshots, and reused when the reply is stored.
+      runtime.activeModelMessageId = dependencies.ids.createSessionMessageId();
+      runtime.activeAssistantText = '';
+      emitEvent(dependencies, runtime, run, 'turn.started', {
+        messageId: runtime.activeModelMessageId,
       });
       return;
     case 'attempt_started':
@@ -1048,103 +948,78 @@ function emitModelCallEvent(
       });
       return;
     case 'text_delta':
-      emitEvent(dependencies, runtime, run, 'model_call.text_delta', {
-        modelCallId: event.modelCallId,
-        delta: event.delta,
+      runtime.activeAssistantText += event.delta;
+      if (!runtime.activeModelMessageId) return;
+      // Full snapshot: consumers replace, never merge.
+      emitEvent(dependencies, runtime, run, 'message.update', {
+        role: 'assistant',
+        messageId: runtime.activeModelMessageId,
+        content: runtime.activeAssistantText,
       });
       return;
     case 'projection_reset':
-      emitEvent(dependencies, runtime, run, 'model_call.projection_reset', {
-        modelCallId: event.modelCallId,
-        failedAttemptNumber: event.failedAttemptNumber,
-      });
-      return;
     case 'context_overflow':
-      // A recoverable Context overflow is not a ModelCall terminal: flush stale
-      // stream buffers and record a diagnostic before the Engine compacts and retries.
-      emitEvent(dependencies, runtime, run, 'model_call.projection_reset', {
-        modelCallId: event.modelCallId,
-        failedAttemptNumber: event.attemptNumber,
-      });
+      // A recoverable stream reset is not a ModelCall terminal: flush the
+      // accumulated snapshot state and record a diagnostic before the retry.
+      runtime.activeAssistantText = '';
       recordObservedLog(dependencies, runtime, {
-        level: 'warn',
-        event: 'model.call.context_overflow',
+        level: 'info',
+        event: 'model.call.stream_reset',
         attributes: {
           modelCallId: event.modelCallId,
-          attemptNumber: event.attemptNumber,
+          attemptNumber: event.type === 'projection_reset'
+            ? event.failedAttemptNumber
+            : event.attemptNumber,
         },
       });
       return;
     case 'thinking_started':
-      emitEvent(dependencies, runtime, run, 'model.thinking.started', {
-        modelCallId: event.modelCallId,
-      });
-      return;
     case 'thinking_delta':
-      emitEvent(dependencies, runtime, run, 'model.thinking.delta', {
-        modelCallId: event.modelCallId,
-        delta: event.delta,
-      });
-      return;
     case 'thinking_completed':
-      emitEvent(dependencies, runtime, run, 'model.thinking.completed', {
-        modelCallId: event.modelCallId,
-      });
+      // Thinking is not a settled fact in the event domain; diagnostics only.
       return;
     case 'retrying': {
       const retryRequestId = dependencies.ids.createRuntimeEventId();
       retryIds.set(event.nextAttemptNumber, retryRequestId);
-      emitEvent(dependencies, runtime, run, 'retry.started', {
-        retryRequestId,
-        retryKind: 'model_call',
-      });
       return;
     }
     case 'completed':
-      for (const call of event.toolCalls) {
-        emitEvent(dependencies, runtime, run, 'model_call.tool_call', {
-          modelCallId: event.modelCall.modelCallId,
-          toolCallId: call.toolCallId,
-          toolName: call.toolName,
-          input: toJsonValue(call.input),
-        });
-      }
       for (const retryRequestId of retryIds.values()) {
-        emitEvent(dependencies, runtime, run, 'retry.completed', {
-          retryRequestId,
-          retryKind: 'model_call',
+        recordObservedLog(dependencies, runtime, {
+          level: 'info',
+          event: 'model.call.retry.completed',
+          attributes: { retryRequestId },
         });
       }
-      emitEvent(dependencies, runtime, run, 'model_call.completed', {
-        modelCallId: event.modelCall.modelCallId,
-        finishReason: event.toolCalls.length > 0 ? 'tool_calls' : event.message.stopReason,
-        content: event.message.content
-          .filter((block): block is Extract<typeof block, { type: 'text' }> => block.type === 'text')
-          .map((block) => ({ type: 'text' as const, text: block.text })),
+      emitEvent(dependencies, runtime, run, 'turn.ended', {
+        stopReason: event.toolCalls.length > 0 ? 'tool_calls' : 'completed',
+        messageId: runtime.activeModelMessageId ?? '',
+        toolCallIds: event.toolCalls.map((call) => call.toolCallId),
       });
       return;
     case 'failed':
       for (const retryRequestId of retryIds.values()) {
-        emitEvent(dependencies, runtime, run, 'retry.failed', {
-          retryRequestId,
-          retryKind: 'model_call',
-          error: modelCallFailureToRuntimeError(event.failure),
+        recordObservedLog(dependencies, runtime, {
+          level: 'warn',
+          event: 'model.call.retry.failed',
+          attributes: { retryRequestId },
         });
       }
-      emitEvent(dependencies, runtime, run, 'model_call.completed', {
-        modelCallId: event.modelCall.modelCallId,
-        finishReason: event.failure.code === 'aborted' ? 'cancelled' : 'failed',
+      emitEvent(dependencies, runtime, run, 'turn.ended', {
+        stopReason: event.failure.code === 'aborted' ? 'cancelled' : 'error',
+        messageId: runtime.activeModelMessageId ?? '',
+        toolCallIds: [],
       });
   }
 }
 
 function resolvedApprovalStatus(
   status: RunApproval['status'],
-): 'approved' | 'denied' | 'cancelled' {
+): 'approved' | 'rejected' {
   if (status === 'pending') {
     throw new Error('A pending RunApproval cannot emit approval.resolved.');
   }
-  return status;
+  return status === 'approved' ? 'approved' : 'rejected';
 }
 
 function emitApprovalRequested(
@@ -1154,72 +1029,32 @@ function emitApprovalRequested(
   approval: RunApproval,
 ): void {
   emitEvent(dependencies, runtime, run, 'approval.requested', {
-    approvalRequest: {
-      approvalRequestId: approval.runApprovalId,
-      runId: approval.runId,
-      toolCallId: approval.toolCallId,
-      toolName: approval.toolName,
-      toolIdentity: {
-        sourceId: approval.toolIdentity.sourceId,
-        namespace: approval.toolIdentity.namespace,
-        sourceToolName: approval.toolIdentity.sourceToolName,
-      },
-      input: toJsonValue(approval.input),
-      operations: approval.operations.map((operation) => (
-        toJsonValue(operation) as JsonObject
-      )),
-      options: approval.options.map((option) => ({
-        optionId: option.optionId,
-        scope: option.scope,
-        display: { ...option.display },
-        effect: toJsonValue(option.effect) as JsonObject,
-      })),
-      defaultOptionId: approval.defaultOptionId,
-      status: approval.status,
-      createdAt: approval.createdAt,
-      ...(approval.summary ? { summary: approval.summary } : {}),
-      ...(approval.preview
-        ? {
-            preview: {
-              action: approval.preview.action,
-              targets: approval.preview.targets.map((target) => ({ ...target })),
-            },
-          }
-        : {}),
-    },
+    toolCallId: approval.toolCallId,
+    toolName: approval.toolName,
+    reason: approval.summary ?? `Approve ${approval.toolName}`,
+    args: toJsonValue(approval.input) as Record<string, unknown>,
+    approvalRequestId: approval.runApprovalId,
   });
 }
 
-function emitEvent<TType extends RuntimeEventType>(
+/**
+ * Publishes one event to the bus. The bus fills the protocol fields
+ * (id, session-monotonic sequence, createdAt); the run provides ownership.
+ * Delivery is best-effort and never affects the Run outcome.
+ */
+function emitEvent<TType extends EventType>(
   dependencies: RunLoopDependencies,
   runtime: EngineRunRuntime,
   run: Run,
-  eventType: TType,
-  payload: RuntimeEventPayloadByType[TType],
+  type: TType,
+  payload: EventPayloadByType[TType],
 ): void {
-  const event = createRuntimeEvent({
-    eventId: dependencies.ids.createRuntimeEventId(),
-    eventType,
-    runId: run.runId,
-    sessionId: run.sessionId,
-    workspaceId: run.workspaceId,
-    requestId: run.requestId,
-    sequence: ++runtime.eventSequence,
-    createdAt: dependencies.clock.now(),
-    source: eventSource(eventType),
-    visibility: eventVisibility(eventType),
-    persist: 'transient',
+  dependencies.events.publish({
+    type,
     payload,
+    sessionId: run.sessionId,
+    runId: run.runId,
   });
-  runtime.currentSegment?.push(event);
-  try {
-    const publication = dependencies.events.publish({ event });
-    if (publication && typeof publication.then === 'function') {
-      void publication.catch(() => undefined);
-    }
-  } catch {
-    // Live event delivery is diagnostic/projection work and cannot change Run outcome.
-  }
 }
 
 async function convergeCancellation(
@@ -1275,8 +1110,8 @@ async function finishCancellationIfStopped(
     at: dependencies.clock.now(),
   });
   dependencies.store.updateRun(cancelled);
-  emitEvent(dependencies, runtime, cancelled, 'run.cancelled', {
-    reason: 'user_cancelled',
+  emitEvent(dependencies, runtime, cancelled, 'run.ended', {
+    status: 'cancelled',
   });
   finishRuntime(dependencies, runtime, 'cancelled');
 }
@@ -1345,8 +1180,12 @@ async function failRun(
     failure: finalFailure,
   });
   dependencies.store.updateRun(failed);
-  emitEvent(dependencies, runtime, failed, 'run.failed', {
-    error: runFailureToRuntimeError(finalFailure),
+  emitEvent(dependencies, runtime, failed, 'run.ended', {
+    status: 'failed',
+    error: {
+      message: finalFailure.message,
+      code: finalFailure.code,
+    },
   });
   finishRuntime(dependencies, runtime, 'error');
 }
@@ -1383,8 +1222,6 @@ function finishRuntime(
   runtime: EngineRunRuntime,
   status: 'ok' | 'error' | 'cancelled',
 ): void {
-  runtime.currentSegment?.close();
-  runtime.currentSegment = undefined;
   endObservedSpan(dependencies, runtime.approvalSpan, status);
   runtime.approvalSpan = undefined;
   endObservedSpan(dependencies, runtime.activeModelSpan, status);
@@ -1575,24 +1412,6 @@ function toAssistantContent(message: AssistantMessage): AssistantContentBlock[] 
 
 function findToolCall(runtime: EngineRunRuntime, toolCallId: string): ToolCall | undefined {
   return runtime.currentToolRoundCalls.find((call) => call.toolCallId === toolCallId);
-}
-
-function eventSource(eventType: RuntimeEventType): 'core' | 'provider' | 'tool' | 'approval' {
-  if (eventType.startsWith('model') || eventType.startsWith('retry')) return 'provider';
-  if (eventType.startsWith('tool')) return 'tool';
-  if (eventType.startsWith('approval')) return 'approval';
-  return 'core';
-}
-
-function eventVisibility(eventType: RuntimeEventType): 'user' | 'system' | 'debug' {
-  if (
-    eventType === 'run.failed'
-    || eventType === 'run.cancelled'
-    || eventType === 'approval.requested'
-  ) {
-    return 'user';
-  }
-  return STREAM_DELTA_EVENT_TYPES.has(eventType) ? 'debug' : 'system';
 }
 
 function toEventError(error: ToolResult['error']): {

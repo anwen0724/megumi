@@ -98,8 +98,5 @@ function mapSkillIpcError(): RuntimeIpcError {
   return {
     code: 'ipc_handler_failed',
     message: 'Skill service failed.',
-    severity: 'error',
-    retryable: true,
-    source: 'main',
   };
 }

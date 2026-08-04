@@ -85,22 +85,21 @@ export function createProductChat(options: {
     },
     async cancelUserInput(request) {
       const result = await options.engine.cancelRun({ runId: request.runId });
-      if (result.status === 'cancellation_requested') return { payload: { status: 'cancellation_requested', run: toChatRun(result.run) }, events: result.events };
+      if (result.status === 'cancellation_requested') return { payload: { status: 'cancellation_requested', run: toChatRun(result.run) } };
       if (result.status === 'already_cancelling') return { payload: { status: 'cancelling', run: toChatRun(result.run) } };
       if (result.status === 'not_found') return { payload: { status: 'not_found', runId: result.runId } };
       return { payload: { status: 'not_cancellable', run: toChatRun(result.run), reason: 'already_terminal' } };
     },
     createBranchDraft(request) {
-      const result = options.branches.createBranchDraft({ request_id: request.requestId, session_id: request.sessionId, source_message_id: request.messageId, ...(request.runtimeContext ? { runtime_context: request.runtimeContext } : {}) });
+      const result = options.branches.createBranchDraft({ request_id: request.requestId, session_id: request.sessionId, source_message_id: request.messageId });
       return {
         payload: { branchDraft: { branchMarkerId: result.branch_draft.branch_marker_id, sessionId: result.branch_draft.session_id, sourceMessageId: result.branch_draft.source_message_id, createdAt: result.branch_draft.created_at } },
-        events: result.events,
       };
     },
     cancelBranchDraft(request) {
-      const result = options.branches.cancelBranchDraft({ request_id: request.requestId, session_id: request.sessionId, branch_marker_id: request.branchMarkerId, ...(request.runtimeContext ? { runtime_context: request.runtimeContext } : {}) });
+      const result = options.branches.cancelBranchDraft({ request_id: request.requestId, session_id: request.sessionId, branch_marker_id: request.branchMarkerId });
       return result.status === 'cancelled'
-        ? { payload: { cancelled: true }, events: result.events }
+        ? { payload: { cancelled: true } }
         : { payload: { cancelled: false, reason: result.reason } };
     },
     async getInputSuggestions(request) {

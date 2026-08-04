@@ -11,6 +11,7 @@ import {
   createEngineFixture,
   errorOverflowStream,
   lengthOverflowStream,
+  settleRun,
   startedRun,
   startRequest,
 } from './engine-test-fixtures';
@@ -34,11 +35,12 @@ describe('Engine run loop', () => {
     });
 
     const started = await startedRun(fixture);
-    const events = await collectEvents(started.events);
+    await settleRun(fixture);
 
     expect(fixture.writes).toEqual(['user', 'assistant:completed']);
-    expect(events.map((event) => event.eventType)).toContain('model_call.projection_reset');
-    expect(events.at(-1)?.eventType).toBe('run.completed');
+    // projection reset is no longer an event; overflow recovery is told by the run ending.
+    expect(fixture.published.at(-1)?.type).toBe('run.ended');
+    expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'completed' });
     expect(compact).toHaveBeenCalledWith(expect.objectContaining({
       trigger: 'overflow',
       sessionId: startRequest.sessionId,
@@ -62,9 +64,10 @@ describe('Engine run loop', () => {
     });
 
     const started = await startedRun(fixture);
-    const events = await collectEvents(started.events);
+    await settleRun(fixture);
 
-    expect(events.at(-1)?.eventType).toBe('run.failed');
+    expect(fixture.published.at(-1)?.type).toBe('run.ended');
+    expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'failed' });
     expect(fixture.writes).toEqual(['user', 'assistant:failed']);
     expect(compact).toHaveBeenCalledTimes(1);
   });
@@ -80,14 +83,15 @@ describe('Engine run loop', () => {
     });
 
     const started = await startedRun(fixture);
-    const events = await collectEvents(started.events);
+    await settleRun(fixture);
 
     expect(fixture.writes).toEqual(['user', 'assistant:completed']);
-    expect(events.at(-1)?.eventType).toBe('run.completed');
+    expect(fixture.published.at(-1)?.type).toBe('run.ended');
+    expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'completed' });
     expect(compact).toHaveBeenCalledWith(expect.objectContaining({ trigger: 'overflow' }));
     // Exactly one model_call.started for the logical ModelCall; one compaction retry.
-    expect(events.filter((event) => event.eventType === 'model_call.started')).toHaveLength(1);
-    expect(events.filter((event) => event.eventType === 'model_call.completed')).toHaveLength(1);
+    expect(fixture.published.filter((event) => event.type === 'turn.started')).toHaveLength(1);
+    expect(fixture.published.filter((event) => event.type === 'turn.ended')).toHaveLength(1);
   });
 
   it('recovers a silent length-stop Overflow without treating it as output truncation', async () => {
@@ -101,18 +105,19 @@ describe('Engine run loop', () => {
     });
 
     const started = await startedRun(fixture);
-    const events = await collectEvents(started.events);
+    await settleRun(fixture);
 
     expect(fixture.writes).toEqual(['user', 'assistant:completed']);
-    expect(events.at(-1)?.eventType).toBe('run.completed');
+    expect(fixture.published.at(-1)?.type).toBe('run.ended');
+    expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'completed' });
     expect(compact).toHaveBeenCalledWith(expect.objectContaining({ trigger: 'overflow' }));
-    expect(events.some((event) => event.eventType === 'model_call.completed'
-      && event.payload.finishReason === 'failed')).toBe(false);
+    expect(fixture.published.some((event) => event.type === 'turn.ended'
+      && event.payload.stopReason === 'error')).toBe(false);
   });
 
   it('does not issue a second model request when Overflow compaction fails', async () => {
-    const compact = vi.fn(async () => ({
-      status: 'failed' as const,
+    const compact = vi.fn(async (): Promise<import('@megumi/context').CompactContextResult> => ({
+      status: 'failed',
       failure: {
         code: 'compaction_failed',
         message: 'Summary generation failed.',
@@ -129,9 +134,10 @@ describe('Engine run loop', () => {
     });
 
     const started = await startedRun(fixture);
-    const events = await collectEvents(started.events);
+    await settleRun(fixture);
 
-    expect(events.at(-1)?.eventType).toBe('run.failed');
+    expect(fixture.published.at(-1)?.type).toBe('run.ended');
+    expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'failed' });
     expect(fixture.writes).toEqual(['user', 'assistant:failed']);
     expect(compact).toHaveBeenCalledTimes(1);
     expect(fixture.contextRuns).toHaveLength(1);
@@ -153,7 +159,7 @@ describe('Engine run loop', () => {
     });
 
     const started = await startedRun(fixture);
-    await collectEvents(started.events);
+    await settleRun(fixture);
 
     // createView receives only the Workspace identity and the Run signal; no selection facts.
     expect(fixture.skillViewRequests).toHaveLength(1);
@@ -171,7 +177,7 @@ describe('Engine run loop', () => {
     });
 
     const started = await startedRun(fixture);
-    const events = await collectEvents(started.events);
+    await settleRun(fixture);
 
     expect(fixture.writes).toEqual(['user', 'assistant:completed']);
     expect(fixture.contextRuns).toHaveLength(1);
@@ -184,7 +190,8 @@ describe('Engine run loop', () => {
         userInput: expect.objectContaining({ modelContent: [{ type: 'text', text: 'hello' }] }),
       }),
     });
-    expect(events.at(-1)?.eventType).toBe('run.completed');
+    expect(fixture.published.at(-1)?.type).toBe('run.ended');
+    expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'completed' });
   });
 
   it('commits model response and tool result before rebuilding Context', async () => {
@@ -214,7 +221,7 @@ describe('Engine run loop', () => {
     });
 
     const started = await startedRun(fixture);
-    const events = await collectEvents(started.events);
+    await settleRun(fixture);
 
     expect(fixture.writes).toEqual([
       'user',
@@ -230,16 +237,17 @@ describe('Engine run loop', () => {
       tools: { definitions: [expect.objectContaining({ name: 'lookup' })] },
     });
     expect(fixture.contextRuns[1]).not.toHaveProperty('runItems');
-    expect(events.map((event) => event.eventType)).toContain('tool_result.created');
-    expect(events.find((event) => event.eventType === 'tool_result.created')?.payload).toMatchObject({
-      summary: 'lookup completed',
+    expect(fixture.published.some((event) => event.type === 'message.ended' && event.payload.role === 'tool_result')).toBe(true);
+    expect(fixture.published.find((event) => event.type === 'message.ended' && event.payload.role === 'tool_result')?.payload).toMatchObject({
+      messageId: expect.any(String),
     });
     expect(JSON.stringify(fixture.toolResults)).not.toContain('raw output must stay hidden');
     expect(fixture.toolResults[0]).toMatchObject({
       status: 'success',
       content: [{ type: 'text', text: 'tool output' }],
     });
-    expect(events.at(-1)?.eventType).toBe('run.completed');
+    expect(fixture.published.at(-1)?.type).toBe('run.ended');
+    expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'completed' });
   });
 
   it('publishes complete plan snapshots around ordinary Tool work in one Run', async () => {
@@ -284,29 +292,26 @@ describe('Engine run loop', () => {
     });
 
     const started = await startedRun(fixture);
-    const events = await collectEvents(started.events);
+    await settleRun(fixture);
 
-    expect(events.filter((event) => event.eventType === 'run.plan.updated').map((event) => event.payload)).toEqual([
+    // Plan updates are not part of the event domain; the tool results still
+    // flow as transcript messages with their executed content.
+    expect(fixture.published.filter((event) => event.type === 'message.ended' && event.payload.role === 'tool_result').map((event) => event.payload)).toEqual([
       expect.objectContaining({
-        toolCallId: 'provider-call:plan:1',
-        explanation: 'Start work',
-        plan: [
-          { step: 'Inspect', status: 'in_progress' },
-          { step: 'Finish', status: 'pending' },
-        ],
+        content: 'result:update_plan',
       }),
       expect.objectContaining({
-        toolCallId: 'provider-call:plan:2',
-        plan: [
-          { step: 'Inspect', status: 'completed' },
-          { step: 'Finish', status: 'completed' },
-        ],
+        content: 'result:lookup',
+      }),
+      expect.objectContaining({
+        content: 'result:update_plan',
       }),
     ]);
     expect(fixture.writes).toEqual([
       'user', 'model', 'tool', 'model', 'tool', 'model', 'tool', 'assistant:completed',
     ]);
-    expect(events.at(-1)?.eventType).toBe('run.completed');
+    expect(fixture.published.at(-1)?.type).toBe('run.ended');
+    expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'completed' });
   });
 
   it('fails with one terminal Assistant Reply when the ModelCall limit is reached', async () => {
@@ -324,9 +329,10 @@ describe('Engine run loop', () => {
     });
 
     const started = await startedRun(fixture);
-    const events = await collectEvents(started.events);
+    await settleRun(fixture);
 
-    expect(events.at(-1)?.eventType).toBe('run.failed');
+    expect(fixture.published.at(-1)?.type).toBe('run.ended');
+    expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'failed' });
     expect(fixture.assistantReplies).toEqual([
       expect.objectContaining({
         status: 'failed',
@@ -356,9 +362,10 @@ describe('Engine run loop', () => {
     });
 
     const started = await startedRun(fixture);
-    const events = await collectEvents(started.events);
+    await settleRun(fixture);
 
-    expect(events.at(-1)?.eventType).toBe('run.failed');
+    expect(fixture.published.at(-1)?.type).toBe('run.ended');
+    expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'failed' });
     expect(fixture.writes.filter((write) => write === 'model')).toHaveLength(1);
     expect(fixture.toolResults).toHaveLength(1);
     expect(fixture.assistantReplies).toHaveLength(1);
@@ -393,7 +400,7 @@ describe('Engine run loop', () => {
     });
 
     const started = await startedRun(fixture);
-    const events = await collectEvents(started.events);
+    await settleRun(fixture);
 
     expect(fixture.toolResults).toEqual([
       expect.objectContaining({
@@ -403,6 +410,7 @@ describe('Engine run loop', () => {
       }),
     ]);
     expect(fixture.writes.slice(-2)).toEqual(['tool', 'assistant:failed']);
-    expect(events.at(-1)?.eventType).toBe('run.failed');
+    expect(fixture.published.at(-1)?.type).toBe('run.ended');
+    expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'failed' });
   });
 });

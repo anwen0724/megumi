@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import type { ChatRunUiDto } from '@megumi/product/host';
-import type { RuntimeEvent } from '@megumi/product/host';
+import type { AnyEvent } from '@megumi/product/host';
 import { useChatUiStore } from '../../entities/chat-ui/store';
 import { useProjectStore } from '../../entities/project/store';
 import { useRunStore } from '../../entities/run/store';
@@ -17,8 +17,8 @@ import {
 
 const inFlightHydrations = new Map<string, Promise<void>>();
 
-function runtimeEventsByRun(runs: ChatRunUiDto[], runtimeEvents: RuntimeEvent[]): Record<string, RuntimeEvent[]> {
-  const eventsByRun = Object.fromEntries(runs.map((run) => [run.runId, [] as RuntimeEvent[]]));
+function runtimeEventsByRun(runs: ChatRunUiDto[], runtimeEvents: AnyEvent[]): Record<string, AnyEvent[]> {
+  const eventsByRun = Object.fromEntries(runs.map((run) => [run.runId, [] as AnyEvent[]]));
   for (const event of runtimeEvents) {
     if (event.runId && eventsByRun[event.runId]) {
       eventsByRun[event.runId].push(event);

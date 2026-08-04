@@ -18,7 +18,7 @@ import {
   type ResolveDatabaseMigrationsFolderRequest,
 } from '@megumi/database';
 import { createEngine, type Engine, type EnginePolicy, type EngineWorkspaceSource } from '@megumi/engine';
-import { createRuntimeEventBus, type EventSubscription } from '@megumi/events';
+import { createEventBus, type EventSubscription } from '@megumi/events';
 import { createInputProcessor, type InputSourceAccess } from '@megumi/input';
 import { createInstructionReader } from '@megumi/instructions';
 import {
@@ -133,6 +133,14 @@ export interface ProductRuntimeLogger {
 export interface ProductRuntime {
   host: ProductHostInterface;
   logger: ProductRuntimeLogger;
+  /**
+   * Subscribes to the runtime event bus. The desktop shell uses this to
+   * forward events to renderer windows over IPC.
+   */
+  subscribeRuntimeEvents(
+    filter: import('@megumi/events').EventFilter,
+    handler: import('@megumi/events').EventHandler,
+  ): import('@megumi/events').EventSubscription;
   dispose(): Promise<void>;
 }
 
@@ -209,10 +217,6 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     store: sessionStore,
     ...(attachmentContentStore ? { contentStore: attachmentContentStore } : {}),
   });
-  const branches = createSessionBranchDrafts({
-    entries: { findMessageEntry: (request) => sessionStore.findMessageEntry(request) },
-  });
-
   const skills = createSkills({
     database,
     homePath: homePaths.homePath,
@@ -377,26 +381,29 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
       ? { builtInToolAvailability: options.builtInToolAvailability }
       : {}),
   });
-  const events = createRuntimeEventBus({
-    onConsumerError: ({ eventId, eventType, subscriberIndex, error }) => {
+  const events = createEventBus({
+    onConsumerError: ({ eventType, sessionId, sequence, error }) => {
       observability.service.recordLog({
         level: 'warn',
         event: 'runtime_event_consumer_failed',
         attributes: {
-          eventId,
           eventType,
-          subscriberIndex,
-          errorCode: error.code,
-          debugId: error.debugId,
+          sessionId,
+          sequence,
+          errorMessage: error instanceof Error ? error.message : String(error),
         },
       });
     },
   });
   const eventSubscriptions: EventSubscription[] = [
-    events.subscribe({ handler: (event) => runProjection.project(event) }),
-    events.subscribe({ handler: createWorkspaceChangeEventHandler(workspaceChanges) }),
+    events.subscribe({}, (event) => runProjection.project(event)),
   ];
   resources.eventSubscriptions.push(...eventSubscriptions);
+  // The bus is the second producer's entry point too: branch facts publish here.
+  const branches = createSessionBranchDrafts({
+    events,
+    entries: { findMessageEntry: (request) => sessionStore.findMessageEntry(request) },
+  });
   const workspaceChangeFooter = createWorkspaceChangeFooterProjector({ workspaceChanges });
   const timeline = createSessionTimelineQuery({
     sessionHistory: history,
@@ -459,6 +466,17 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     ...(options.attachmentPicker ? { attachmentPicker: options.attachmentPicker } : {}),
     ...(options.localFileAvailability ? { localFileAvailability: options.localFileAvailability } : {}),
   });
+  // The workspace subscriber needs the engine to resolve run -> workspace;
+  // subscribe after engine creation so the closure can reference it.
+  resources.eventSubscriptions.push(
+    events.subscribe(
+      { eventTypes: ['run.ended'] },
+      createWorkspaceChangeEventHandler(workspaceChanges, (runId) => {
+        const result = engine.getRun({ runId });
+        return result.status === 'found' ? result.run.workspaceId : undefined;
+      }),
+    ),
+  );
   const approval = createProductApproval(engine);
   const host: ProductHostInterface = {
     chat: createChatHost(chat),
@@ -485,6 +503,7 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
   return {
     host,
     logger,
+    subscribeRuntimeEvents: (filter, handler) => events.subscribe(filter, handler),
     dispose: () => {
       disposePromise ??= disposeProduct({ engine, eventSubscriptions, observability, database });
       return disposePromise;

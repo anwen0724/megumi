@@ -2,17 +2,14 @@
  * Verifies Product approval continuation and the thin Host forwarding adapter.
  */
 import { describe, expect, it, vi } from 'vitest';
-import type { RuntimeEvent } from '@megumi/events';
 import { createProductApproval } from '../../../../packages/product/src/approval';
 import { createApprovalHost } from '../../../../packages/product/src/host/approval-host';
 
 describe('ApprovalHost', () => {
-  it('maps an approved decision to Engine and returns the resumed event segment', async () => {
-    const event = runtimeEvent();
+  it('maps an approved decision to Engine', async () => {
     const resumeRun = vi.fn(async () => ({
       status: 'resumed' as const,
       run: runFixture('running'),
-      events: asyncEvents([event]),
     }));
     const host = createApprovalHost(createProductApproval({ resumeRun } as never));
 
@@ -41,14 +38,12 @@ describe('ApprovalHost', () => {
         createdAt: '2026-07-10T00:00:00.000Z',
       },
     });
-    await expect(collectAsync(result.events!)).resolves.toEqual([event]);
   });
 
   it('maps a denied decision without inventing decision metadata', async () => {
     const resumeRun = vi.fn(async () => ({
       status: 'resumed' as const,
       run: runFixture('running'),
-      events: asyncEvents([]),
     }));
     const host = createApprovalHost(createProductApproval({ resumeRun } as never));
 
@@ -134,28 +129,3 @@ function runFixture(status: 'running' | 'completed') {
   } as never;
 }
 
-function runtimeEvent(): RuntimeEvent {
-  return {
-    eventId: 'event:1',
-    schemaVersion: 1,
-    eventType: 'run.resumed',
-    runId: 'run:1',
-    sessionId: 'session:1',
-    sequence: 1,
-    createdAt: '2026-07-10T00:00:00.000Z',
-    source: 'core',
-    visibility: 'user',
-    persist: 'transient',
-    payload: { approvalRequestId: 'approval:1' },
-  } as RuntimeEvent;
-}
-
-async function* asyncEvents<T>(events: readonly T[]): AsyncIterable<T> {
-  yield* events;
-}
-
-async function collectAsync<T>(events: AsyncIterable<T>): Promise<T[]> {
-  const result: T[] = [];
-  for await (const event of events) result.push(event);
-  return result;
-}

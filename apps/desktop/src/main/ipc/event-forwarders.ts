@@ -3,14 +3,14 @@
  */
 import {
   RuntimeEventSchema,
-  type RuntimeEvent,
+  type AnyEvent,
 } from '@megumi/product/host';
 import type { ProductRuntimeLogger } from '@megumi/product';
 import { IPC_CHANNELS } from './channels';
 
 export function forwardRuntimeEvent(
-  sender: { send(channel: string, event: RuntimeEvent): void },
-  event: RuntimeEvent,
+  sender: { send(channel: string, event: AnyEvent): void },
+  event: AnyEvent,
   options: { logger?: ProductRuntimeLogger } = {},
 ): void {
   const parsed = RuntimeEventSchema.safeParse(event);
@@ -18,15 +18,5 @@ export function forwardRuntimeEvent(
     options.logger?.warn?.('Dropped invalid runtime event.', { error: parsed.error.message });
     return;
   }
-  sender.send(IPC_CHANNELS.runtime.event, parsed.data as RuntimeEvent);
-}
-
-export async function forwardRuntimeEvents(
-  sender: { send(channel: string, event: RuntimeEvent): void },
-  events: AsyncIterable<RuntimeEvent>,
-  options: { logger?: ProductRuntimeLogger } = {},
-): Promise<void> {
-  for await (const event of events) {
-    forwardRuntimeEvent(sender, event, options);
-  }
+  sender.send(IPC_CHANNELS.runtime.event, parsed.data as AnyEvent);
 }

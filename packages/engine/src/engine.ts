@@ -6,7 +6,7 @@ import type { UserInput } from '@megumi/input';
 import type { ContextBuilder, ContextCompactor, ExecutionEnvironment } from '@megumi/context';
 import type { InstructionReader } from '@megumi/instructions';
 import type { Skills } from '@megumi/skills';
-import type { EventPublisher, RuntimeEvent } from '@megumi/events';
+import type { EventBus } from '@megumi/events';
 import type {
   ApprovalDecision,
   ApprovalOption,
@@ -32,12 +32,9 @@ import {
   type RunFailure,
 } from './run';
 import {
-  attachRuntimeEventSegment,
   continueRunAfterApproval,
   createEngineRunRuntime,
-  createRuntimeEventSegment,
   emitRunStarted,
-  eventSegmentCapacity,
   launchRunLoop,
   requestRunCancellation,
   startRunObservability,
@@ -77,7 +74,6 @@ export type StartRunResult =
       readonly run: Run;
       readonly userMessage: SessionMessageWithAttachments;
       readonly userEntry: SessionEntry;
-      readonly events: AsyncIterable<RuntimeEvent>;
     }
   | {
       readonly status: 'already_started';
@@ -114,7 +110,6 @@ export type ResumeRunResult =
   | {
       readonly status: 'resumed';
       readonly run: Run;
-      readonly events: AsyncIterable<RuntimeEvent>;
     }
   | { readonly status: 'not_found'; readonly runApprovalId: string }
   | { readonly status: 'not_waiting'; readonly run: Run }
@@ -129,7 +124,6 @@ export type CancelRunResult =
   | {
       readonly status: 'cancellation_requested';
       readonly run: Run;
-      readonly events: AsyncIterable<RuntimeEvent>;
     }
   | { readonly status: 'already_cancelling'; readonly run: Run }
   | { readonly status: 'already_terminal'; readonly run: Run }
@@ -219,7 +213,7 @@ export interface CreateEngineOptions {
     Permissions,
     'evaluateToolCall' | 'applyApprovalDecision'
   >;
-  readonly events: EventPublisher;
+  readonly events: EventBus;
   readonly observability?: ObservabilityService;
   readonly ids: EngineIdFactory;
   readonly clock: EngineClock;
@@ -237,8 +231,6 @@ export function createEngine(options: CreateEngineOptions): Engine {
     policy,
     store,
   };
-  const capacity = eventSegmentCapacity(options);
-
   let accepting = true;
   const engine: Engine = {
     async startRun(request): Promise<StartRunResult> {
@@ -364,8 +356,18 @@ export function createEngine(options: CreateEngineOptions): Engine {
           userEntry: saved.entry,
         },
       });
-      const segment = createRuntimeEventSegment(capacity);
-      attachRuntimeEventSegment(runtime, segment);
+      // The user message is the run's input: it precedes run.started and
+      // carries no runId (ordering contract, see events/CONTEXT.md).
+      dependencies.events.publish({
+        type: 'message.started',
+        payload: { role: 'user', messageId: userMessageId },
+        sessionId: request.sessionId,
+      });
+      dependencies.events.publish({
+        type: 'message.ended',
+        payload: { role: 'user', messageId: userMessageId, content: userMessageText(request.input) },
+        sessionId: request.sessionId,
+      });
       startRunObservability(dependencies, runtime, run);
       emitRunStarted(dependencies, runtime, run);
       queueMicrotask(() => launchRunLoop(dependencies, runtime));
@@ -374,7 +376,6 @@ export function createEngine(options: CreateEngineOptions): Engine {
         run,
         userMessage: saved.message,
         userEntry: saved.entry,
-        events: segment.events,
       };
     },
 
@@ -418,8 +419,6 @@ export function createEngine(options: CreateEngineOptions): Engine {
       if (claimed.status === 'already_claimed' || claimed.status === 'already_resolved') {
         return { status: 'already_resolved', run };
       }
-      const segment = createRuntimeEventSegment(capacity);
-      attachRuntimeEventSegment(runtime, segment);
       type ResumeEstablishment =
         | { readonly status: 'resumed'; readonly run: Run }
         | { readonly status: 'not_waiting'; readonly run: Run }
@@ -502,7 +501,6 @@ export function createEngine(options: CreateEngineOptions): Engine {
       return {
         status: 'resumed',
         run: established.run,
-        events: segment.events,
       };
     },
 
@@ -538,13 +536,10 @@ export function createEngine(options: CreateEngineOptions): Engine {
         at: options.clock.now(),
       });
       store.updateRun(cancelling);
-      const segment = createRuntimeEventSegment(capacity);
-      attachRuntimeEventSegment(runtime, segment);
       requestRunCancellation(dependencies, runtime, cancelling);
       return {
         status: 'cancellation_requested',
         run: cancelling,
-        events: segment.events,
       };
     },
 
@@ -567,6 +562,12 @@ export function createEngine(options: CreateEngineOptions): Engine {
     },
   };
   return engine;
+}
+
+function userMessageText(input: RunInput): string {
+  return input.displayContent
+    .map((block) => block.type === 'text' ? block.text : '')
+    .join('');
 }
 
 function shuttingDownFailure(message: string): RunFailure {

@@ -25,7 +25,7 @@ import type {
   SaveToolResultMessageRequest,
   SaveUserMessageRequest,
 } from '@megumi/session';
-import type { RuntimeEvent } from '@megumi/events';
+import { createEventBus, type AnyEvent } from '@megumi/events';
 import type { ObservabilityService } from '@megumi/observability';
 import type {
   CreateEngineOptions,
@@ -103,7 +103,7 @@ export interface EngineFixture {
   readonly options: CreateEngineOptions;
   readonly writes: string[];
   readonly contextRuns: unknown[];
-  readonly published: RuntimeEvent[];
+  readonly published: AnyEvent[];
   readonly assistantReplies: SaveAssistantReplyRequest[];
   readonly toolResults: SaveToolResultMessageRequest[];
   readonly skillViewRequests: Array<{ workspaceId?: string; signal?: AbortSignal }>;
@@ -122,15 +122,14 @@ export function createEngineFixture(input: {
   readonly contextCompact?: CreateEngineOptions['context']['compact'];
   readonly failUserMessageSave?: boolean;
   readonly skillView?: CreateEngineOptions['skills']['createView'];
-  readonly eventPublisher?: {
-    publish(event: RuntimeEvent): void | Promise<void>;
-  };
   readonly observability?: ObservabilityService;
 } = {}): EngineFixture {
   const writes: string[] = [];
   const contextRuns: unknown[] = [];
   const skillViewRequests: Array<{ workspaceId?: string; signal?: AbortSignal }> = [];
-  const published: RuntimeEvent[] = [];
+  const published: AnyEvent[] = [];
+  const eventsBus = createEventBus();
+  eventsBus.subscribe({}, (event) => { published.push(event); });
   const assistantReplies: SaveAssistantReplyRequest[] = [];
   const toolResults: SaveToolResultMessageRequest[] = [];
   const streams = [...(input.streams ?? [assistantStream('done')])];
@@ -261,12 +260,7 @@ export function createEngineFixture(input: {
       },
     },
     permissions: input.permissions ?? defaultPermissions,
-    events: {
-      publish: ({ event }) => {
-        published.push(event);
-        return input.eventPublisher?.publish(event);
-      },
-    },
+    events: eventsBus,
     ...(input.observability ? { observability: input.observability } : {}),
     ids: {
       createRunId: () => `run:${++runNumber}`,
@@ -294,23 +288,23 @@ export function createEngineFixture(input: {
 export async function startedRun(
   fixture: EngineFixture,
   request: StartRunRequest = startRequest,
-): Promise<{ readonly run: Run; readonly events: AsyncIterable<RuntimeEvent> }> {
+): Promise<{ readonly run: Run }> {
   const started = await fixture.engine.startRun(request);
   if (started.status !== 'started') {
     throw new Error(`Expected started Run, got ${started.status}.`);
   }
-  return { run: started.run, events: started.events };
+  return { run: started.run };
 }
 
 export async function requestedCancellation(
   fixture: EngineFixture,
   runId: string,
-): Promise<{ readonly run: Run; readonly events: RuntimeEvent[] }> {
+): Promise<{ readonly run: Run }> {
   const cancellation = await fixture.engine.cancelRun({ runId });
   if (cancellation.status !== 'cancellation_requested') {
     throw new Error(`Expected cancellation request, got ${cancellation.status}.`);
   }
-  return { run: cancellation.run, events: await collectEvents(cancellation.events) };
+  return { run: cancellation.run };
 }
 
 export async function compactedOverflowCompaction(): Promise<Extract<CompactContextResult, { status: 'compacted' }>> {
@@ -504,10 +498,27 @@ export function retryableFailedStream(text: string): AssistantMessageEventStream
   return stream;
 }
 
-export async function collectEvents(events: AsyncIterable<RuntimeEvent>): Promise<RuntimeEvent[]> {
-  const collected: RuntimeEvent[] = [];
-  for await (const event of events) collected.push(event);
-  return collected;
+/** All events published for one run, in bus order. */
+export function collectEvents(fixture: EngineFixture, runId: string): AnyEvent[] {
+  return fixture.published.filter((event) => event.runId === runId);
+}
+
+/** Waits until the run settles (run.ended published) so behavior assertions are safe. */
+export async function settleRun(fixture: EngineFixture, timeoutMs = 2_000): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const deadline = Date.now() + timeoutMs;
+    const check = (): void => {
+      if (fixture.published.some((event) => event.type === 'run.ended')) {
+        resolve();
+        return;
+      }
+      if (Date.now() >= deadline) {
+        throw new Error('Run did not settle within the timeout.');
+      }
+      setTimeout(check, 10);
+    };
+    check();
+  });
 }
 
 export function approvalDecisionFor(

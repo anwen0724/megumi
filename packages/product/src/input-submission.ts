@@ -183,7 +183,6 @@ function mapRunStart(result: StartRunResult, requestId: string, session: Session
         userMessage: toTimelineUserMessage(session.workspace_id, result.userMessage),
         run: toChatRun(result.run),
       },
-      ...(result.status === 'started' ? { events: result.events } : {}),
     };
   }
   return inputError(

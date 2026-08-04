@@ -153,6 +153,7 @@ describe('main runtime logger composition', () => {
       return {
         logger,
         host: mocks.agentHost,
+        subscribeRuntimeEvents: () => ({ unsubscribe: () => undefined }),
         dispose: mocks.agentHost.dispose,
       };
     });

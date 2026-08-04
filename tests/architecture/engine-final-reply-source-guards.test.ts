@@ -37,10 +37,10 @@ describe('Engine final reply source guards', () => {
     expect(modelCall).not.toContain('saveAssistantReply');
     expect(toolCall).not.toContain('saveAssistantReply');
     expect(runLoop.indexOf('dependencies.session.saveAssistantReply({')).toBeLessThan(
-      runLoop.indexOf("'run.completed'"),
+      runLoop.indexOf("'run.ended'"),
     );
     expect(runLoop.lastIndexOf('dependencies.session.saveAssistantReply({')).toBeLessThan(
-      runLoop.lastIndexOf("'run.failed'"),
+      runLoop.lastIndexOf("'run.ended'"),
     );
   });
 });

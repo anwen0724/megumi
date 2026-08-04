@@ -1,9 +1,9 @@
 /*
  * Protects the complete Engine Event to Desktop approval-control projection.
  */
-import { RuntimeEventSchema } from '@megumi/events';
+import { EventSchema } from '@megumi/events';
 import { createRuntimeTimeline, reduceRuntimeTimeline } from '@megumi/projections';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { collectPendingApprovalActivities } from '../../../../../../apps/desktop/src/renderer/features/chat/approval-overlay';
 import {
   approvalDecisionFor,
@@ -46,10 +46,16 @@ describe('approval Runtime flow', () => {
 
     const started = await fixture.engine.startRun(startRequest);
     if (started.status !== 'started') throw new Error('Expected started Run.');
-    const events = await collectEvents(started.events);
-    const approvalEvent = events.find((event) => event.eventType === 'approval.requested');
+
+    // The engine emits asynchronously; wait until the approval fact settles.
+    await vi.waitFor(() => {
+      expect(fixture.published.some((event) => event.type === 'approval.requested')).toBe(true);
+    });
+
+    const events = collectEvents(fixture, started.run.runId);
+    const approvalEvent = events.find((event) => event.type === 'approval.requested');
     expect(approvalEvent).toBeDefined();
-    expect(RuntimeEventSchema.safeParse(approvalEvent).success).toBe(true);
+    expect(EventSchema.safeParse(approvalEvent).success).toBe(true);
 
     const timeline = events.reduce(
       (current, event) => reduceRuntimeTimeline({ timeline: current, event }),
@@ -61,21 +67,10 @@ describe('approval Runtime flow', () => {
         toolName: tool.registeredToolName,
         status: 'awaiting_approval',
         approval: expect.objectContaining({
-          approvalRequestId: expect.stringMatching(/^approval:/),
-          defaultOptionId: expect.stringMatching(/^once:/),
-          options: expect.arrayContaining([
-            expect.objectContaining({
-              optionId: expect.stringMatching(/^once:/),
-              scope: 'once',
-            }),
-          ]),
+          approvalRequestId: expect.any(String),
+          summary: expect.any(String),
         }),
       }),
     ]);
-
-    const cancellation = await fixture.engine.cancelRun({ runId: started.run.runId });
-    if (cancellation.status === 'cancellation_requested') {
-      await collectEvents(cancellation.events);
-    }
   });
 });

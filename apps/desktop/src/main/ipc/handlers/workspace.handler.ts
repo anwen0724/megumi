@@ -103,9 +103,6 @@ function mapWorkspaceIpcError(error: unknown): RuntimeIpcError {
   return {
     code: 'ipc_handler_failed',
     message: 'Workspace service failed.',
-    severity: 'error',
-    retryable: true,
-    source: 'main',
     ...(details ? { details } : {}),
   };
 }

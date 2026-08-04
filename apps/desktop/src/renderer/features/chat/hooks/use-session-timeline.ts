@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import type { SessionMessageSendPayload } from '@megumi/desktop/main/ipc/schemas';
-import type { RuntimeEvent } from '@megumi/product/host';
+import type { AnyEvent } from '@megumi/product/host';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
 import { useRunStore } from '../../../entities/run/store';
@@ -109,7 +109,7 @@ function createSessionMessageSendPayload(
 }
 
 function shouldProcessRuntimeEvent(
-  event: RuntimeEvent,
+  event: AnyEvent,
   activeRunId: string | null,
   processedEventIdsByRun: Map<string, Set<string>>,
 ): boolean {
@@ -118,22 +118,20 @@ function shouldProcessRuntimeEvent(
   }
 
   const processedEventIds = processedEventIdsByRun.get(event.runId) ?? new Set<string>();
-  if (processedEventIds.has(event.eventId)) {
+  if (processedEventIds.has(event.id)) {
     return false;
   }
 
-  processedEventIds.add(event.eventId);
+  processedEventIds.add(event.id);
   processedEventIdsByRun.set(event.runId, processedEventIds);
   return true;
 }
 
-function isTerminalRunEvent(event: RuntimeEvent): boolean {
-  return event.eventType === 'run.completed' ||
-    event.eventType === 'run.failed' ||
-    event.eventType === 'run.cancelled';
+function isTerminalRunEvent(event: AnyEvent): boolean {
+  return event.type === 'run.ended';
 }
 
-async function reconcileTerminalRunTimeline(event: RuntimeEvent, projectId: string, sessionId: string): Promise<void> {
+async function reconcileTerminalRunTimeline(event: AnyEvent, projectId: string, sessionId: string): Promise<void> {
   if (!isTerminalRunEvent(event) || !event.runId) {
     return;
   }
@@ -202,7 +200,6 @@ export function useSessionTimeline() {
   const branchDraftRef = useRef<BranchDraftState | null>(null);
   const branchDraftCreateSequenceRef = useRef(0);
   const activeRunIdRef = useRef<string | null>(null);
-  const activeTraceIdRef = useRef<string | null>(null);
   const runSessionIdRef = useRef<string | null>(null);
   const lastPayloadRef = useRef<ComposerSubmitPayload | null>(null);
   const processedEventIdsByRunRef = useRef<Map<string, Set<string>>>(new Map());
@@ -264,7 +261,7 @@ export function useSessionTimeline() {
       return undefined;
     }
 
-    return window.megumi.runtime.onEvent((event: RuntimeEvent) => {
+    return window.megumi.runtime.onEvent((event: AnyEvent) => {
       if (shouldProcessRuntimeEvent(
         event,
         activeRunIdRef.current,
@@ -280,7 +277,6 @@ export function useSessionTimeline() {
             void reconcileTerminalRunTimeline(event, terminalProjectId, terminalSessionId);
           }
           activeRunIdRef.current = null;
-          activeTraceIdRef.current = null;
           runSessionIdRef.current = null;
         }
       }
@@ -321,7 +317,6 @@ export function useSessionTimeline() {
       { requestId },
     );
     activeRunIdRef.current = null;
-    activeTraceIdRef.current = request.context?.traceId ?? null;
     processedEventIdsByRunRef.current.clear();
 
     const state = useChatUiStore.getState();
@@ -432,8 +427,6 @@ export function useSessionTimeline() {
       const result = await window.megumi.session.message.cancel(
         createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.sessionMessageCancel, {
           runId,
-        }, {
-          traceId: activeTraceIdRef.current ?? undefined,
         }),
       );
 

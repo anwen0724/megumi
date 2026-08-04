@@ -1,6 +1,8 @@
 // Composes the Electron UI shell and connects it to the Product Host Interface.
+import { BrowserWindow } from 'electron';
 import { createElectronMegumiHomeSyncOptions } from '../adapters/electron-home-adapter';
 import { composeProduct } from '@megumi/product';
+import { forwardRuntimeEvent } from '../ipc/event-forwarders';
 import { electronDirectoryPickerAdapter } from '../adapters/electron-directory-picker-adapter';
 import { electronFileOpenAdapter } from '../adapters/electron-file-open-adapter';
 import { electronObservabilityStorageAdapter } from '../adapters/electron-observability-storage-adapter';
@@ -35,6 +37,18 @@ export function composeDesktopMain() {
   const runtimeLogger = product.logger;
   const productHost = product.host;
 
+  // Runtime event bridge: the bus is the single event source; every renderer
+  // window receives the stream over IPC and filters by its active session.
+  const uiEventSubscription = product.subscribeRuntimeEvents({}, (event) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      forwardRuntimeEvent(
+        { send: (channel, payload) => window.webContents.send(channel, payload) },
+        event,
+        { logger: runtimeLogger },
+      );
+    }
+  });
+
   return {
     runtimeLogger,
     workspace: { host: productHost },
@@ -44,6 +58,9 @@ export function composeDesktopMain() {
     approval: { host: productHost },
     artifact: productHost.artifacts,
     observability: { host: productHost },
-    dispose: product.dispose,
+    dispose: async () => {
+      uiEventSubscription.unsubscribe();
+      await product.dispose();
+    },
   };
 }

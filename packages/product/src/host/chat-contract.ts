@@ -1,5 +1,5 @@
 /* Defines the stable, host-neutral Chat protocol used by Product shells. */
-import { RuntimeEventSchema, type RuntimeContext, type RuntimeEvent } from '@megumi/events';
+import { EventSchema, type AnyEvent } from '@megumi/events';
 
 import {
   TimelineMessageSchema,
@@ -236,7 +236,7 @@ export const ChatGetSessionHydrationUiResultSchema = z.object({
   messages: z.array(TimelineMessageSchema),
   diagnostics: z.array(z.object({ messageId: z.string(), code: z.string(), message: z.string() }).strict()).optional(),
   runs: z.array(ChatRunUiDtoSchema),
-  runtimeEvents: z.array(RuntimeEventSchema),
+  runtimeEvents: z.array(EventSchema),
 }).strict();
 export const ChatCancelUserInputUiPayloadSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('cancellation_requested'), run: ChatRunUiDtoSchema }).strict(),
@@ -266,7 +266,7 @@ export const ChatCancelBranchDraftUiPayloadSchema = z.object({
   cancelled: z.boolean(), reason: z.string().optional(),
 }).strict();
 export const ChatListRunsUiResultSchema = z.object({ runs: z.array(ChatRunUiDtoSchema) }).strict();
-export const ChatListRunEventsUiResultSchema = z.object({ events: z.array(RuntimeEventSchema) }).strict();
+export const ChatListRunEventsUiResultSchema = z.object({ events: z.array(EventSchema) }).strict();
 export const ChatGetContextUsageUiResultSchema = z.discriminatedUnion('status', [
   z.object({
     status: z.literal('available'),
@@ -376,7 +376,7 @@ export interface ChatGetSessionHydrationUiResult {
   messages: TimelineMessage[];
   diagnostics?: Array<{ messageId: string; code: string; message: string }>;
   runs: ChatRunUiDto[];
-  runtimeEvents: RuntimeEvent[];
+  runtimeEvents: AnyEvent[];
 }
 
 export interface ChatSendUserInputUiRequest {
@@ -404,7 +404,6 @@ export interface ChatSendUserInputUiRequest {
   };
   permissionMode?: PermissionMode;
   permissionSource?: string;
-  runtimeContext?: RuntimeContext;
 }
 export type ChatSendUserInputUiPayload =
   | {
@@ -435,7 +434,6 @@ export type ChatSendUserInputUiPayload =
     };
 export interface ChatSendUserInputUiResult {
   payload: ChatSendUserInputUiPayload;
-  events?: AsyncIterable<RuntimeEvent>;
 }
 
 export type PermissionMode = 'ask' | 'auto' | 'full_access';
@@ -451,14 +449,12 @@ export type ChatCancelUserInputUiPayload =
   | { status: 'failed'; failure: { code: string; message: string; retryable?: boolean } };
 export interface ChatCancelUserInputUiResult {
   payload: ChatCancelUserInputUiPayload;
-  events?: AsyncIterable<RuntimeEvent>;
 }
 
 export interface ChatCreateBranchDraftUiRequest {
   requestId: string;
   sessionId: string;
   messageId: string;
-  runtimeContext?: RuntimeContext;
 }
 export interface ChatCreateBranchDraftUiResult {
   payload: { branchDraft: {
@@ -467,21 +463,18 @@ export interface ChatCreateBranchDraftUiResult {
     sourceMessageId: string;
     createdAt: string;
   } };
-  events?: AsyncIterable<RuntimeEvent>;
 }
 
 export interface ChatCancelBranchDraftUiRequest {
   requestId: string;
   sessionId: string;
   branchMarkerId: string;
-  runtimeContext?: RuntimeContext;
 }
 export interface ChatCancelBranchDraftUiResult {
   payload: {
     cancelled: boolean;
     reason?: 'branch_has_new_sources' | 'branch_marker_not_active' | 'branch_marker_not_found' | string;
   };
-  events?: AsyncIterable<RuntimeEvent>;
 }
 
 export interface ChatGetInputSuggestionsUiRequest {
@@ -505,7 +498,7 @@ export interface ChatListRunEventsUiRequest {
   runId: string;
 }
 export interface ChatListRunEventsUiResult {
-  events: RuntimeEvent[];
+  events: AnyEvent[];
 }
 
 export interface ChatGetContextUsageUiRequest {

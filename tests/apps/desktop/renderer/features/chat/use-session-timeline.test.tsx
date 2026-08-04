@@ -1,7 +1,7 @@
 ﻿// @vitest-environment jsdom
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { RuntimeEvent } from '@megumi/events';
+import type { AnyEvent } from '@megumi/events';
 import type { TimelineAssistantMessage } from '@megumi/projections';
 import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
@@ -19,29 +19,25 @@ vi.mock('@megumi/desktop/renderer/features/session-history/use-session-history-h
 const createdAt = '2026-05-17T00:00:00.000Z';
 
 function runtimeEvent(
-  eventType: RuntimeEvent['eventType'],
+  eventType: AnyEvent['type'],
   sequence: number,
-  payload: RuntimeEvent['payload'] = {},
-  overrides: Partial<RuntimeEvent> = {},
-): RuntimeEvent {
+  payload: Record<string, unknown>,
+  overrides: Partial<AnyEvent> = {},
+): AnyEvent {
   return {
-    eventId: `event-${sequence}`,
-    schemaVersion: 1,
-    eventType,
+    id: `event-${sequence}`,
+    type: eventType,
     runId: 'run-1',
     sessionId: 'session-1',
     sequence,
     createdAt: `2026-05-17T00:00:${sequence.toString().padStart(2, '0')}.000Z`,
-    source: 'core',
-    visibility: 'user',
-    persist: 'required',
     payload,
     ...overrides,
-  } as RuntimeEvent;
+  } as AnyEvent;
 }
 
 describe('useSessionTimeline', () => {
-  let runtimeEventCallback: ((event: RuntimeEvent) => void) | undefined;
+  let runtimeEventCallback: ((event: AnyEvent) => void) | undefined;
   let hydrateSessionTimeline: ReturnType<typeof vi.fn<(sessionId: string) => Promise<void>>>;
 
   beforeEach(() => {
@@ -92,7 +88,7 @@ describe('useSessionTimeline', () => {
       configurable: true,
       value: {
         runtime: {
-          onEvent: vi.fn((callback: (event: RuntimeEvent) => void) => {
+          onEvent: vi.fn((callback: (event: AnyEvent) => void) => {
             runtimeEventCallback = callback;
             return vi.fn();
           }),
@@ -223,17 +219,24 @@ describe('useSessionTimeline', () => {
     });
 
     await act(async () => {
-      runtimeEventCallback?.(runtimeEvent('model_call.text_delta', 2, {
-        modelCallId: 'model-call-1',
-        delta: '你好，',
+      runtimeEventCallback?.(runtimeEvent('message.update', 2, {
+        role: 'assistant',
+        messageId: 'message-assistant-1',
+        content: '你好，',
       }));
-      runtimeEventCallback?.(runtimeEvent('model_call.text_delta', 3, {
-        modelCallId: 'model-call-1',
-        delta: '我是 Megumi。',
+      runtimeEventCallback?.(runtimeEvent('message.update', 3, {
+        role: 'assistant',
+        messageId: 'message-assistant-1',
+        content: '你好，我是 Megumi。',
       }));
-      runtimeEventCallback?.(runtimeEvent('run.completed', 4, {
-        assistantMessageId: 'message-assistant-1',
+      runtimeEventCallback?.(runtimeEvent('message.ended', 4, {
+        role: 'assistant',
+        messageId: 'message-assistant-1',
+        content: '你好，我是 Megumi。',
       }, { messageId: 'message-assistant-1' }));
+      runtimeEventCallback?.(runtimeEvent('run.ended', 5, {
+        status: 'completed',
+      }));
       await Promise.resolve();
     });
 
