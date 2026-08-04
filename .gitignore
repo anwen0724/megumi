@@ -19,3 +19,6 @@ worktrees/
 docs/
 .codegraph
 evals/reports/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
