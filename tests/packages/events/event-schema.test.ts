@@ -35,7 +35,7 @@ describe('EventSchema', () => {
       completeEvent({ type: 'message.ended', payload: { role: 'assistant', messageId: 'message:2', content: 'hello' } }),
       completeEvent({ type: 'tool_execution.requested', payload: { toolCallId: 'call:1', toolName: 'read_file', args: { path: '/a' }, modelCallId: 'model-call:1' } }),
       completeEvent({ type: 'tool_execution.started', payload: { toolCallId: 'call:1', toolName: 'bash', args: {}, toolExecutionId: 'exec:1' } }),
-      completeEvent({ type: 'tool_execution.ended', payload: { toolCallId: 'call:1', toolExecutionId: 'exec:1', status: 'completed', result: 'ok' } }),
+      completeEvent({ type: 'tool_execution.ended', payload: { toolCallId: 'call:1', toolExecutionId: 'exec:1', status: 'completed', result: 'ok', summary: 'Read 12 characters' } }),
       completeEvent({ type: 'tool_execution.ended', payload: { toolCallId: 'call:1', status: 'denied' } }),
       completeEvent({ type: 'approval.requested', payload: {
         toolCallId: 'call:1', toolName: 'bash',

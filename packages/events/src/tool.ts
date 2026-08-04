@@ -41,6 +41,9 @@ export const ToolExecutionEndedPayloadSchema = z.object({
   status: z.enum(['completed', 'failed', 'cancelled', 'denied']),
   /** Present when status is 'completed'. */
   result: z.unknown().optional(),
+  /** Human-readable result summary (observation.summary); the UI shows this,
+   *  never the raw result payload. */
+  summary: z.string().optional(),
   error: z.object({
     message: z.string().min(1),
     code: z.string().optional(),

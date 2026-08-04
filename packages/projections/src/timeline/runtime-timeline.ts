@@ -204,9 +204,9 @@ function projectRuntimeTimelineEvent(
           ? 'denied'
           : 'failed';
     if (payload.status === 'completed') {
-      item.resultSummary = typeof payload.result === 'string'
-        ? payload.result.slice(0, 500)
-        : undefined;
+      // Show the human-readable summary; the raw result payload (which may be
+      // structured data) is never displayed.
+      item.resultSummary = payload.summary;
     } else {
       delete item.resultSummary;
     }

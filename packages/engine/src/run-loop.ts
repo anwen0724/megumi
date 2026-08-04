@@ -931,6 +931,7 @@ function toolExecutionCallbacks(
           toolExecutionId: execution.toolExecutionId,
           status: 'completed',
           result: result.content,
+          ...(result.observation?.summary ? { summary: result.observation.summary } : {}),
         });
         return;
       }

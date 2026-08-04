@@ -62,7 +62,7 @@ describe('RuntimeTimeline', () => {
       event: event('message.ended', { role: 'assistant', messageId: 'message:1', content: 'hello' }, 5),
     });
 
-    const serialized = JSON.stringify(next.messages);
+    const serialized = JSON.stringify(next);
     expect(serialized).toContain('hello');
     expect(serialized).not.toContain('"hel"');
   });
@@ -87,9 +87,44 @@ describe('RuntimeTimeline', () => {
       event: event('tool_execution.ended', { toolCallId: 'call:1', status: 'completed', result: 'found' }, 5),
     });
 
-    const serialized = JSON.stringify(next.messages);
+    const serialized = JSON.stringify(next);
     expect(serialized).toContain('lookup');
     expect(serialized).toContain('"succeeded"');
+  });
+
+  it('shows the result summary, never the raw result payload', () => {
+    let next = reduceRuntimeTimelineEvent([], event('run.started', {}, 1));
+    next = reduceRuntimeTimelineEvent(next, event('turn.started', { messageId: 'message:1' }, 2));
+    next = reduceRuntimeTimelineEvent(next, event('turn.ended', { stopReason: 'tool_calls', messageId: 'message:1', toolCallIds: ['call:1'] }, 3));
+    next = reduceRuntimeTimelineEvent(next, event('tool_execution.started', { toolCallId: 'call:1', toolName: 'read_file', args: {}, toolExecutionId: 'exec:1' }, 4));
+    next = reduceRuntimeTimelineEvent(next, event('tool_execution.ended', {
+      toolCallId: 'call:1',
+      toolExecutionId: 'exec:1',
+      status: 'completed',
+      result: '{ "path": "/a", "content": "raw data" }',
+      summary: 'Read 12 characters from /a',
+    }, 5));
+
+    const serialized = JSON.stringify(next);
+    expect(serialized).toContain('Read 12 characters from /a');
+    expect(serialized).not.toContain('raw data');
+  });
+
+  it('leaves resultSummary unset when no summary is available', () => {
+    let next = reduceRuntimeTimelineEvent([], event('run.started', {}, 1));
+    next = reduceRuntimeTimelineEvent(next, event('turn.started', { messageId: 'message:1' }, 2));
+    next = reduceRuntimeTimelineEvent(next, event('turn.ended', { stopReason: 'tool_calls', messageId: 'message:1', toolCallIds: ['call:1'] }, 3));
+    next = reduceRuntimeTimelineEvent(next, event('tool_execution.started', { toolCallId: 'call:1', toolName: 'lookup', args: {}, toolExecutionId: 'exec:1' }, 4));
+    next = reduceRuntimeTimelineEvent(next, event('tool_execution.ended', {
+      toolCallId: 'call:1',
+      toolExecutionId: 'exec:1',
+      status: 'completed',
+      result: '{ "path": "/a" }',
+    }, 5));
+
+    const serialized = JSON.stringify(next);
+    expect(serialized).not.toContain('resultSummary');
+    expect(serialized).not.toContain('path');
   });
 
   it('keeps a failed Tool error out of resultSummary', () => {
@@ -112,7 +147,7 @@ describe('RuntimeTimeline', () => {
       event: event('tool_execution.ended', { toolCallId: 'call:1', status: 'failed', error: { message: 'boom', code: 'tool_execution_failed' } }, 5),
     });
 
-    const serialized = JSON.stringify(next.messages);
+    const serialized = JSON.stringify(next);
     expect(serialized).toContain('"failed"');
     expect(serialized).toContain('boom');
     expect(serialized).not.toContain('resultSummary');
@@ -142,7 +177,7 @@ describe('RuntimeTimeline', () => {
       }, 4),
     });
 
-    const serialized = JSON.stringify(next.messages);
+    const serialized = JSON.stringify(next);
     expect(serialized).toContain('"awaiting_approval"');
     expect(serialized).toContain('destructive');
   });
@@ -245,7 +280,7 @@ describe('RuntimeTimeline', () => {
       event: event('session.compaction.started', { trigger: 'manual' }, 2, { runId: undefined }),
     });
 
-    const serialized = JSON.stringify(next.messages);
+    const serialized = JSON.stringify(next);
     expect(serialized).not.toContain('压缩');
   });
 
@@ -257,7 +292,7 @@ describe('RuntimeTimeline', () => {
       event: event('run.ended', { status: 'failed', error: { message: 'boom', code: 'x' } }, 2),
     });
 
-    const serialized = JSON.stringify(next.messages);
+    const serialized = JSON.stringify(next);
     expect(serialized).toContain('"failed"');
     expect(serialized).toContain('boom');
   });
