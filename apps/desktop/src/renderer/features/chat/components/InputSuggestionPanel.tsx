@@ -7,6 +7,8 @@ interface InputSuggestionPanelProps {
   suggestions: InputSuggestionQueryResult;
   selectedIndex: number;
   onChoose: (item: InputSuggestionQueryItem) => void;
+  /** Mouse hover moves the single keyboard selection so both inputs share one highlight. */
+  onHoverIndexChange?: (index: number) => void;
   className?: string;
 }
 
@@ -14,6 +16,7 @@ export function InputSuggestionPanel({
   suggestions,
   selectedIndex,
   onChoose,
+  onHoverIndexChange,
   className,
 }: InputSuggestionPanelProps) {
   const { t } = useTranslation('chat');
@@ -63,12 +66,12 @@ export function InputSuggestionPanel({
                 aria-label={`${primary} ${secondary}${badge ? ` ${badge}` : ''}`}
                 className={[
                   'flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-[var(--color-text)]',
-                  'hover:bg-[var(--color-accent-soft)]',
                   selected
                     ? 'aria-selected:bg-[var(--color-accent-soft)] aria-selected:shadow-[inset_3px_0_0_var(--color-accent)]'
                     : '',
                 ].join(' ')}
                 onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => onHoverIndexChange?.(currentIndex)}
                 onClick={() => onChoose(item)}
               >
                 <span

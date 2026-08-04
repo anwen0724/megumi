@@ -226,6 +226,9 @@ function toTimelineUserMessage(projectId: string, item: SessionMessageWithAttach
     projectId,
     sessionId: message.session_id,
     ...(message.run_id ? { runId: message.run_id } : {}),
+    ...('skill_selection' in message && message.skill_selection
+      ? { skillSelection: { name: message.skill_selection.name, skillPath: message.skill_selection.skill_path } }
+      : {}),
     createdAt: message.created_at,
     ...(message.completed_at ? { updatedAt: message.completed_at } : {}),
     blocks: [{

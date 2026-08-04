@@ -120,7 +120,10 @@ function scanRoot(root: SkillRoot, policy: Readonly<SkillsPolicy>, signal?: Abor
   try {
     realRoot = fs.realpathSync.native(path.resolve(root.rootPath));
   } catch (error) {
-    if (isMissingPathError(error) && hasDirectoryParent(root.rootPath)) {
+    // A Root that simply does not exist (e.g. .megumi/skills before the first
+    // workspace use) is an empty Root, never an error. Only a Root whose
+    // ancestor chain is broken (a parent exists as a file) is unavailable.
+    if (isMissingPathError(error) && !hasBrokenDirectoryAncestor(root.rootPath)) {
       return { status: 'absent', skills: [], diagnostics: [] };
     }
     return {
@@ -219,7 +222,9 @@ function discoverSkillPaths(
       if (isHidden(name) || name === 'node_modules') continue;
       if (excluded.has(name.toLowerCase())) continue;
       const childPath = path.join(current.directory, name);
-      if (ignoreRules.ignores(path.relative(realRoot, childPath))) continue;
+      // The ignore package matches forward-slash relative paths; on Windows the
+      // platform separators are converted so gitignore-style rules apply uniformly.
+      if (ignoreRules.ignores(path.relative(realRoot, childPath).split(path.sep).join('/'))) continue;
       if (entry.isSymbolicLink()) {
         // Only follow directory symlinks that stay inside the Root; escapes are skipped.
         try {
@@ -360,11 +365,21 @@ function isMissingPathError(error: unknown): boolean {
   return (error as NodeJS.ErrnoException).code === 'ENOENT';
 }
 
-function hasDirectoryParent(rootPath: string): boolean {
-  // A Root under a non-directory parent chain is broken, not merely absent.
-  try {
-    return fs.statSync(path.dirname(path.resolve(rootPath))).isDirectory();
-  } catch {
-    return false;
+function hasBrokenDirectoryAncestor(rootPath: string): boolean {
+  // Walks up from the missing Root until it finds an existing ancestor. A
+  // non-directory ancestor (e.g. .megumi/skills under a file) means the Root
+  // exists in a broken state; an all-missing chain is a Root not created yet.
+  let current = path.dirname(path.resolve(rootPath));
+  while (true) {
+    let stats: fs.Stats;
+    try {
+      stats = fs.statSync(current);
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) return false;
+      current = parent;
+      continue;
+    }
+    return !stats.isDirectory();
   }
 }

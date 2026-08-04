@@ -59,6 +59,11 @@ export function planCompaction(input: {
   }
 
   const closed = closeToolProtocol(sources, cutIndex);
+  // Protocol closure can extend the cut back to the very first message; with no
+  // summarized prefix left there is nothing left to compact.
+  if (closed.cutIndex === 0) {
+    return { status: 'nothing_to_compact', reason: 'no_older_messages' };
+  }
   const plan: CompactionPlan = {
     summarizedMessages: sources.slice(0, closed.cutIndex).map((source) => source.message),
     coveredUntilEntryId: sources[closed.cutIndex - 1]!.entryId,
@@ -123,8 +128,11 @@ function closeToolProtocol(
       }
     }
     if (callSourceIndex < 0) {
-      // No call exists anywhere in the active path: cannot close the protocol.
-      break;
+      // The orphaned ToolResult has no call anywhere in the active path (e.g. it
+      // was left over from an older compaction boundary): it must never stay in
+      // the kept suffix, so the cut moves past it.
+      cutIndex = cutIndex + orphanIndex + 1;
+      continue;
     }
     cutIndex = callSourceIndex;
     turnPrefixIncluded = true;

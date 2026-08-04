@@ -166,3 +166,58 @@ export function isContextOverflow(message: AssistantMessage, contextWindow?: num
 export function getOverflowPatterns(): RegExp[] {
 	return [...OVERFLOW_PATTERNS];
 }
+
+/**
+ * Returns the first provider error text that matches the overflow signature,
+ * preferring an already-attached message text and then walking the error chain.
+ *
+ * The engine recovers a provider error-text Overflow by matching this text on
+ * the final AssistantMessage; the stream normalization normally redacts the
+ * raw provider error, so the matched overflow signal is the one exception that
+ * is deliberately preserved.
+ */
+export function overflowErrorMessage(
+	error: unknown,
+	existingMessage?: string,
+): string | undefined {
+	if (existingMessage && isOverflowText(existingMessage)) return existingMessage;
+	for (const candidate of errorChain(error)) {
+		if (typeof candidate === "string" && isOverflowText(candidate)) return candidate;
+		const message = candidate instanceof Error
+			? candidate.message
+			: readString(candidate, "message");
+		if (message && isOverflowText(message)) return message;
+	}
+	return undefined;
+}
+
+function isOverflowText(text: string): boolean {
+	if (NON_OVERFLOW_PATTERNS.some((pattern) => pattern.test(text))) return false;
+	return OVERFLOW_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+function errorChain(error: unknown): unknown[] {
+	const chain: unknown[] = [];
+	let current: unknown = error;
+	const seen = new Set<unknown>();
+	while (current !== undefined && current !== null && !seen.has(current)) {
+		seen.add(current);
+		chain.push(current);
+		const cause = current instanceof Error
+			? current.cause
+			: readRecord(current, "cause");
+		current = cause;
+	}
+	return chain;
+}
+
+function readString(value: unknown, key: string): string | undefined {
+	const record = readRecord(value, key);
+	if (record === undefined) return undefined;
+	return typeof record === "string" ? record : undefined;
+}
+
+function readRecord(value: unknown, key: string): unknown {
+	if (!value || typeof value !== "object") return undefined;
+	return (value as Record<string, unknown>)[key];
+}

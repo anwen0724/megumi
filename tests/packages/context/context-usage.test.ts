@@ -96,4 +96,27 @@ describe('deriveContextUsage', () => {
     expect(derived.accuracy).toBe('estimated');
     expect(derived.cumulativeInputTokens).toBe(0);
   });
+
+  it('includes Compaction Summary Usage in the cumulative totals', () => {
+    const items = history();
+    const withCompaction: SessionHistoryItem[] = [
+      ...items,
+      {
+        type: 'compaction',
+        entry: {
+          entry_id: 'e3', session_id: 's', entry_type: 'compaction',
+          compaction_id: 'c1', created_at: 'now',
+        },
+        compaction: {
+          compaction_id: 'c1', session_id: 's', summary_text: 'summary',
+          covered_until_entry_id: 'e2', usage: usage(50, 10), created_at: 'now',
+        },
+      },
+    ];
+    const derived = deriveContextUsage({ history: withCompaction, model });
+    expect(derived.cumulativeInputTokens).toBe(300 + 50);
+    expect(derived.cumulativeOutputTokens).toBe(100 + 10);
+    // The Summary Usage is never a baseline for the next Prompt estimate.
+    expect(derived.accuracy).toBe('provider_reported');
+  });
 });

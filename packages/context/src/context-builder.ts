@@ -7,7 +7,7 @@
 
 import crypto from 'node:crypto';
 import type { Api, Context as AiContext, Message, Model, Models, Tool } from '@megumi/ai';
-import { estimateContextTokens, estimateMessageTokens } from '@megumi/ai';
+import { capabilitiesFromModel, estimateContextTokens, estimateMessageTokens } from '@megumi/ai';
 import type { EffectiveInstructions, InstructionReader } from '@megumi/instructions';
 import type { ObservabilityService } from '@megumi/observability';
 import type { SessionAttachmentReader, SessionHistory, SessionHistoryItem } from '@megumi/session';
@@ -127,6 +127,7 @@ class DefaultContext implements ContextCapabilities {
           sessionId: request.sessionId,
           history: history.history,
           baseInstructions: base.instructions,
+          model: request.model,
           executionEnvironment: request.executionEnvironment,
           effectiveInstructions: request.effectiveInstructions,
           skills: request.skills,
@@ -199,6 +200,7 @@ class DefaultContext implements ContextCapabilities {
       sessionId: modelCall.run.sessionId,
       history: history.history,
       baseInstructions: base.instructions,
+      model: modelCall.run.model,
       executionEnvironment: modelCall.executionEnvironment,
       effectiveInstructions: modelCall.effectiveInstructions,
       skills: modelCall.skills,
@@ -230,6 +232,7 @@ class DefaultContext implements ContextCapabilities {
           sessionId: modelCall.run.sessionId,
           history: refreshed.history,
           baseInstructions: base.instructions,
+          model: modelCall.run.model,
           executionEnvironment: modelCall.executionEnvironment,
           effectiveInstructions: modelCall.effectiveInstructions,
           skills: modelCall.skills,
@@ -314,6 +317,7 @@ class DefaultContext implements ContextCapabilities {
     readonly sessionId: string;
     readonly history: { items: readonly SessionHistoryItem[]; expectedActiveEntryId: string };
     readonly baseInstructions: readonly { readonly instructionId: string; readonly content: string }[];
+    readonly model: Model<Api>;
     readonly executionEnvironment: ExecutionEnvironment;
     readonly effectiveInstructions: EffectiveInstructions;
     readonly skills: SkillView;
@@ -330,7 +334,7 @@ class DefaultContext implements ContextCapabilities {
     const converted = await buildContextMessages({
       history: input.history.items,
       attachmentReader: this.options.attachmentReader,
-      imageInputSupport: true,
+      imageInputSupport: capabilitiesFromModel(input.model).imageInput === true,
       signal: input.signal,
     });
     if (converted.status === 'failed') return converted;

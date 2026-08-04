@@ -81,6 +81,7 @@ describe('Product InputSubmission', () => {
           message_kind: 'user_message' as const,
           display_content: [{ type: 'text' as const, text: 'task' }],
           model_content: [{ type: 'text' as const, text: 'expanded task' }],
+          skill_selection: { name: 'review', skill_path: 'C:/skills/review/SKILL.md' },
           created_at: 'now',
           completed_at: 'now',
         },
@@ -109,6 +110,15 @@ describe('Product InputSubmission', () => {
       input: expect.objectContaining({ skillSelection, modelContent: [{ type: 'text', text: 'expanded task' }] }),
     }));
     expect(startRun.mock.calls[0]?.[0]).not.toHaveProperty('selectedSkill');
+
+    // The immediate submit response carries the structured selection so the
+    // freshly saved message shows the Skill badge without a Timeline re-query.
+    const response = await submission.submit({ ...request(), skillSelection });
+    if (response.payload.type !== 'agent_run') throw new Error('Expected agent_run payload.');
+    expect(response.payload.userMessage.skillSelection).toEqual({
+      name: 'review',
+      skillPath: 'C:/skills/review/SKILL.md',
+    });
   });
 });
 

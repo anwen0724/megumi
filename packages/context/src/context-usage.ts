@@ -49,10 +49,11 @@ export function deriveContextUsage(input: {
   let cumulativeOutputTokens = 0;
   let cumulativeCost = 0;
   for (const item of input.history) {
-    if (item.type !== 'message') continue;
-    const usage = item.message.message_kind === 'model_response' || item.message.message_kind === 'assistant_reply'
-      ? item.message.usage
-      : item.message.message_kind === 'tool_result' ? item.message.usage : undefined;
+    const usage = item.type === 'message'
+      ? item.message.message_kind === 'model_response' || item.message.message_kind === 'assistant_reply'
+        ? item.message.usage
+        : item.message.message_kind === 'tool_result' ? item.message.usage : undefined
+      : isUsage(item.compaction.usage) ? item.compaction.usage : undefined;
     if (!usage) continue;
     cumulativeInputTokens += usage.input + usage.cacheRead + usage.cacheWrite;
     cumulativeOutputTokens += usage.output;
@@ -70,6 +71,16 @@ export function deriveContextUsage(input: {
     cumulativeCost,
     accuracy: estimate.usageTokens > 0 ? 'provider_reported' : 'estimated',
   };
+}
+
+function isUsage(value: unknown): value is import('@megumi/ai').Usage {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as { input?: unknown; output?: unknown; cacheRead?: unknown; cacheWrite?: unknown; cost?: unknown };
+  return typeof candidate.input === 'number'
+    && typeof candidate.output === 'number'
+    && typeof candidate.cacheRead === 'number'
+    && typeof candidate.cacheWrite === 'number'
+    && typeof candidate.cost === 'object' && candidate.cost !== null;
 }
 
 export type { Message };

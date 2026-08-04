@@ -113,7 +113,8 @@ describe('InputSuggestionPanel skill suggestions', () => {
     expect(options[0]).not.toHaveClass('aria-selected:bg-[var(--color-accent-soft)]');
   });
 
-  it('gives pointer-hover suggestions a visible hover highlight', () => {
+  it('moves the single selection highlight when the pointer hovers another suggestion', () => {
+    const onHoverIndexChange = vi.fn();
     const suggestions: InputSuggestionQueryResult = {
       type: 'suggestions',
       draftInput: '/test',
@@ -121,7 +122,10 @@ describe('InputSuggestionPanel skill suggestions', () => {
       groups: [{
         id: 'skills',
         label: 'Skills',
-        items: [createSkillSuggestion('checks:test', 'Run project checks')],
+        items: [
+          createSkillSuggestion('checks:first', 'First skill'),
+          createSkillSuggestion('checks:second', 'Second skill'),
+        ],
       }],
     };
 
@@ -130,10 +134,15 @@ describe('InputSuggestionPanel skill suggestions', () => {
         suggestions={suggestions}
         selectedIndex={0}
         onChoose={vi.fn()}
+        onHoverIndexChange={onHoverIndexChange}
       />,
     );
 
-    expect(screen.getByRole('option')).toHaveClass('hover:bg-[var(--color-accent-soft)]');
+    // Pointer hover drives the same selectedIndex that keyboard navigation uses,
+    // so there is no independent hover highlight class on the option rows.
+    fireEvent.mouseEnter(screen.getAllByRole('option')[1]!);
+    expect(onHoverIndexChange).toHaveBeenCalledWith(1);
+    expect(screen.getAllByRole('option')[0]).not.toHaveClass('hover:bg-[var(--color-accent-soft)]');
   });
 });
 

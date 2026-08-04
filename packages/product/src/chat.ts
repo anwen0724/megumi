@@ -17,7 +17,6 @@ import type {
   ChatRunUiDto,
   ChatSessionMessageUiDto,
   ChatSessionUiDto,
-  InputSuggestionQueryResult,
   InputAttachmentPickerPort,
   LocalFileAvailabilityPort,
 } from './host/chat-contract';
@@ -172,9 +171,6 @@ function toChatMessage(item: SessionMessageWithAttachments): ChatSessionMessageU
 }
 function toChatRun(run: Run | ProjectedRun): ChatRunUiDto {
   return { runId: run.runId, sessionId: run.sessionId, status: run.status, createdAt: run.createdAt, ...(run.completedAt ? { completedAt: run.completedAt } : {}) };
-}
-function toCommandSuggestions(result: InputSuggestionQueryResult): InputSuggestionQueryResult {
-  return result;
 }
 function pickerFailure(code: string, message: string) { return { status: 'failed' as const, failure: { code, message } }; }
 function toFailure(failure: { code: string; message: string; retryable?: boolean }): ChatHostFailure {

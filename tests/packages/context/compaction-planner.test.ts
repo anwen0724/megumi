@@ -98,6 +98,24 @@ describe('planCompaction', () => {
     expect(plan.plan.turnPrefixIncluded).toBe(true);
   });
 
+  it('returns nothing_to_compact when protocol closure consumes the whole history', () => {
+    // The Token threshold is met at the ToolResult so the initial cut lands
+    // directly before it; closing the protocol extends the cut to the very first
+    // message, which leaves no summarized prefix instead of crashing.
+    const sources = [
+      assistant('e1', 'call', 'call:1'),
+      toolResult('e2', 'call:1'),
+      user('e3', 'b'),
+      user('e4', 'c'),
+    ];
+    const plan = planCompaction({
+      sources,
+      policy: { ...DEFAULT_COMPACTION_POLICY, keepRecentTokens: 1, minimumRecentMessages: 3 },
+      estimateMessageTokens: estimateTokens,
+    });
+    expect(plan).toEqual({ status: 'nothing_to_compact', reason: 'no_older_messages' });
+  });
+
   it('keeps empty and non-reducing outcomes distinct', () => {
     expect(planCompaction({
       sources: [],

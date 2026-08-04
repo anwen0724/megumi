@@ -153,6 +153,25 @@ describe('loadSkills', () => {
     expect(result.skills).toHaveLength(0);
   });
 
+  it('treats a Root whose parent chain does not exist yet as absent, not unavailable', () => {
+    // A workspace .megumi/skills Root before .megumi itself exists must be an
+    // empty Root, never a root_unreadable error that pollutes diagnostics.
+    const missingWorkspace = path.join(createRoot(), 'workspace', '.megumi', 'skills');
+    const result = loadSkills({ roots: [{ owner: 'user', scope: 'workspace', workspaceId: 'w', rootPath: missingWorkspace }], policy: DEFAULT_SKILLS_POLICY });
+    expect(result.scans[0]?.status).toBe('absent');
+    expect(result.scans[0]?.diagnostics).toHaveLength(0);
+    expect(result.skills).toHaveLength(0);
+  });
+
+  it('applies ignore patterns to nested directories with platform separators', () => {
+    const root = createRoot();
+    writeSkill(root, 'visible', 'visible', 'Visible', 'Body');
+    writeSkill(path.join(root, 'generated', 'deep'), 'nested-ignored', 'nested-ignored', 'Ignored', 'Body');
+    fs.writeFileSync(path.join(root, '.gitignore'), 'generated/\n');
+    const result = loadSkills({ roots: [{ owner: 'user', scope: 'global', rootPath: root }], policy: DEFAULT_SKILLS_POLICY });
+    expect(result.skills.map((skill) => skill.name)).toEqual(['visible']);
+  });
+
   it('does not scan inside a package after its SKILL.md is found', () => {
     const root = createRoot();
     const packageDir = path.join(root, 'package');

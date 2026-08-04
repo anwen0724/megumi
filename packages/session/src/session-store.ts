@@ -409,12 +409,23 @@ function fromMessageRow(row: SessionMessageRow): SessionMessage {
   };
   const payload = JSON.parse(row.message_json) as unknown;
   if (row.message_kind === 'user_message') {
-    // Legacy records stored a single `content`; read them as display and model content.
+    // Legacy records stored a single `content`; read them as display and model
+    // content. The legacy key itself is removed so the strict payload schema
+    // still accepts the converted record.
     const raw = payload as Record<string, unknown>;
-    const normalized = !('display_content' in raw) && 'content' in raw
-      ? { ...raw, display_content: raw.content, model_content: raw.content }
-      : payload;
-    return { ...base, message_kind: row.message_kind, ...SessionUserMessagePayloadSchema.parse(normalized) };
+    if (!('display_content' in raw) && 'content' in raw) {
+      const { content: legacyContent, ...rest } = raw;
+      return {
+        ...base,
+        message_kind: row.message_kind,
+        ...SessionUserMessagePayloadSchema.parse({
+          ...rest,
+          display_content: legacyContent,
+          model_content: legacyContent,
+        }),
+      };
+    }
+    return { ...base, message_kind: row.message_kind, ...SessionUserMessagePayloadSchema.parse(payload) };
   }
   if (row.message_kind === 'model_response') {
     return { ...base, message_kind: row.message_kind, ...SessionModelResponsePayloadSchema.parse(payload) };
@@ -447,6 +458,14 @@ function toMessagePayload(message: SessionMessage): Record<string, unknown> {
       outcome_status: message.outcome_status,
       ...(message.reason_code ? { reason_code: message.reason_code } : {}),
       ...(message.stop_reason ? { stop_reason: message.stop_reason } : {}),
+      ...(message.api ? { api: message.api } : {}),
+      ...(message.provider ? { provider: message.provider } : {}),
+      ...(message.model ? { model: message.model } : {}),
+      ...(message.response_model ? { response_model: message.response_model } : {}),
+      ...(message.response_id ? { response_id: message.response_id } : {}),
+      ...(message.usage ? { usage: message.usage } : {}),
+      ...(message.failure ? { failure: message.failure } : {}),
+      ...(message.error_message ? { error_message: message.error_message } : {}),
       ...(message.legacy_provenance ? { legacy_provenance: message.legacy_provenance } : {}),
     });
   }
@@ -457,6 +476,7 @@ function toMessagePayload(message: SessionMessage): Record<string, unknown> {
       status: message.status,
       content: message.content,
       ...(message.error ? { error: message.error } : {}),
+      ...(message.usage ? { usage: message.usage } : {}),
       ...(message.legacy_provenance ? { legacy_provenance: message.legacy_provenance } : {}),
     });
   }
@@ -464,6 +484,13 @@ function toMessagePayload(message: SessionMessage): Record<string, unknown> {
     status: message.status,
     content: message.content,
     ...(message.reason_code ? { reason_code: message.reason_code } : {}),
+    ...(message.api ? { api: message.api } : {}),
+    ...(message.provider ? { provider: message.provider } : {}),
+    ...(message.model ? { model: message.model } : {}),
+    ...(message.response_model ? { response_model: message.response_model } : {}),
+    ...(message.response_id ? { response_id: message.response_id } : {}),
+    ...(message.usage ? { usage: message.usage } : {}),
+    ...(message.error_message ? { error_message: message.error_message } : {}),
   });
 }
 

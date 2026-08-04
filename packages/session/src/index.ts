@@ -32,7 +32,7 @@ export type {
   SessionMessageWithAttachments,
   SessionModelResponseMessage,
   SessionToolResultMessage,
-  SessionUserMessage,
+  UserMessage,
 } from './session-message';
 export {
   createSessionCatalog,

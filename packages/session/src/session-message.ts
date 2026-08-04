@@ -206,12 +206,13 @@ export const SessionMessageSchema = z.discriminatedUnion('message_kind', [
   }).strict(),
 ]);
 
-export type SessionUserMessage = z.infer<typeof SessionUserMessageSchema>;
+/** The persisted user message, named without a Session prefix per the Context Spec. */
+export type UserMessage = z.infer<typeof SessionUserMessageSchema>;
 export type SessionModelResponseMessage = z.infer<typeof SessionModelResponseMessageSchema>;
 export type SessionToolResultMessage = z.infer<typeof SessionToolResultMessageSchema>;
 export type SessionAssistantReplyMessage = z.infer<typeof SessionAssistantReplyMessageSchema>;
 export type SessionMessage =
-  | SessionUserMessage
+  | UserMessage
   | SessionModelResponseMessage
   | SessionToolResultMessage
   | SessionAssistantReplyMessage;

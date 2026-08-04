@@ -421,6 +421,7 @@ export function useComposerController({
     textareaRef,
     inputSuggestions: activeInputSuggestions,
     selectedInputSuggestionIndex,
+    onInputSuggestionHover: setSelectedInputSuggestionIndex,
     selectedCommandCompletion,
     contextUsage,
     selectedAttachments,

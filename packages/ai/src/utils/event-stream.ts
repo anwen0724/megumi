@@ -3,6 +3,7 @@ import {
 	classifyModelFailure,
 	withSafeModelFailure,
 } from "../model-failure.ts";
+import { overflowErrorMessage } from "./overflow.ts";
 
 type AssistantMessageEventInput =
 	| Exclude<AssistantMessageEvent, { type: "error" }>
@@ -130,8 +131,14 @@ export class AssistantMessageEventStream extends EventStream<AssistantMessageEve
 		const safeError = withSafeModelFailure(event.error, failure);
 		// Provider streams reuse one mutable AssistantMessage across partial events.
 		// Normalize that same object so previously emitted partial references cannot
-		// reveal a raw provider error after the terminal catch mutates it.
-		Object.assign(event.error, safeError);
+		// reveal a raw provider error after the terminal catch mutates it. The one
+		// deliberate exception is a provider error text matching the Overflow
+		// signature: the Engine needs that text to recover via compaction.
+		const overflowMessage = overflowErrorMessage(event.cause, event.error.errorMessage);
+		const normalized = overflowMessage === undefined
+			? safeError
+			: { ...safeError, errorMessage: overflowMessage };
+		Object.assign(event.error, normalized);
 		const { cause: _cause, ...publicEvent } = event;
 		super.push({
 			...publicEvent,

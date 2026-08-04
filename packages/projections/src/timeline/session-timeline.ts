@@ -192,10 +192,24 @@ function projectSessionTimelineUserMessage(
     projectId,
     sessionId: message.session_id,
     ...(message.run_id ? { runId: message.run_id } : {}),
+    ...(messageSkillSelection(item)),
     createdAt: message.created_at,
     ...(message.completed_at ? { updatedAt: message.completed_at } : {}),
     ...(historyOrder !== undefined ? { historyOrder } : {}),
     blocks,
+  };
+}
+
+function messageSkillSelection(
+  item: SessionMessageWithAttachments,
+): { skillSelection: { name: string; skillPath: string } } | Record<string, never> {
+  const { message } = item;
+  if (!('skill_selection' in message) || !message.skill_selection) return {};
+  return {
+    skillSelection: {
+      name: message.skill_selection.name,
+      skillPath: message.skill_selection.skill_path,
+    },
   };
 }
 

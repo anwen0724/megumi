@@ -12,7 +12,7 @@ import type { RuntimeEvent } from '@megumi/events';
 import type {
   SessionMessage,
   SessionMessageWithAttachments,
-  SessionUserMessage,
+  UserMessage,
 } from '@megumi/session';
 
 function projectSessionTimelineMessages(input: {
@@ -41,6 +41,27 @@ function reduceRuntimeTimelineEvent(
 }
 
 describe('Session Timeline projection', () => {
+  it('projects the persisted Skill selection onto the user message', () => {
+    const withSelection = item({
+      ...user('U1', 'review this'),
+      skill_selection: { name: 'review-code', skill_path: 'C:/skills/review-code/SKILL.md' },
+    });
+    const withoutSelection = item(user('U2', 'plain task'));
+
+    const projected = projectSessionTimelineMessages({
+      projectId: 'P1',
+      messages: [withSelection, withoutSelection],
+    });
+    const userMessages = projected.filter((message) => message.role === 'user');
+
+    expect(userMessages).toHaveLength(2);
+    expect(userMessages[0]).toMatchObject({
+      role: 'user',
+      skillSelection: { name: 'review-code', skillPath: 'C:/skills/review-code/SKILL.md' },
+    });
+    expect(userMessages[1]).not.toHaveProperty('skillSelection');
+  });
+
   it('keeps persisted attachment ordinal and projects each semantic message once', () => {
     const userMessage = item(user('U1', 'inspect attachments'));
     userMessage.attachments = [
@@ -284,7 +305,7 @@ function base(messageId: string) {
   };
 }
 
-function user(messageId: string, text: string): SessionUserMessage {
+function user(messageId: string, text: string): UserMessage {
   return {
     ...base(messageId),
     message_kind: 'user_message',

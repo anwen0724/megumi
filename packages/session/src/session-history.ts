@@ -81,6 +81,8 @@ export interface SaveToolResultMessageRequest {
   status: 'success' | 'failure' | 'permission_denied' | 'user_rejected' | 'cancelled';
   error?: { code: string; message: string; details?: Record<string, unknown> };
   content: ContentBlock[];
+  /** Tool-owned usage that never counts toward the main model Context. */
+  usage?: import('@megumi/ai').Usage;
   completed_at: string;
 }
 
@@ -222,6 +224,7 @@ class DefaultSessionHistory implements SessionHistory {
             source_type: 'local_file',
             source_value: attachment.local_path,
             ordinal,
+            size_bytes: attachment.size_bytes,
             created_at: request.created_at,
           });
           continue;
@@ -361,6 +364,7 @@ class DefaultSessionHistory implements SessionHistory {
       status: request.status,
       ...(request.error ? { error: request.error } : {}),
       content: request.content,
+      ...(request.usage ? { usage: request.usage } : {}),
       created_at: request.completed_at,
       completed_at: request.completed_at,
     };
@@ -811,6 +815,9 @@ async function sameAttachmentImports(
       if (attachment.source_type !== 'local_file' || attachment.source_value !== candidate.local_path) {
         return false;
       }
+      // sizeBytes is part of the persisted document fact set: a replay that
+      // disagrees on it must not silently reuse the older record.
+      if (attachment.size_bytes !== candidate.size_bytes) return false;
       continue;
     }
     if (attachment.source_type !== 'host_reference' || !contentStore) return false;

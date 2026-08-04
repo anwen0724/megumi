@@ -49,6 +49,7 @@ export interface ComposerSurfaceProps {
   textareaRef: RefObject<HTMLTextAreaElement | null>;
   inputSuggestions: InputSuggestionQueryResult;
   selectedInputSuggestionIndex: number;
+  onInputSuggestionHover: (index: number) => void;
   selectedCommandCompletion: ComposerCommandCompletionUi | null;
   contextUsage?: ChatGetContextUsageUiResult;
   selectedAttachments: ComposerDraftAttachment[];
@@ -95,6 +96,7 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
   imageInputNotice,
   onValueChange,
   onInputSuggestionChoose,
+  onInputSuggestionHover,
   onPermissionModeChange,
   onModelChange,
   onKeyDown,
@@ -126,6 +128,7 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
         suggestions={inputSuggestions}
         selectedIndex={selectedInputSuggestionIndex}
         onChoose={onInputSuggestionChoose}
+        onHoverIndexChange={onInputSuggestionHover}
         className="absolute bottom-full left-0 right-0 z-50 max-h-[min(22rem,calc(100vh-12rem))]"
       />
       <div className="overflow-visible rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-soft)] transition-shadow duration-150">

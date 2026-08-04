@@ -69,6 +69,8 @@ export interface CommandListItem {
   readonly aliases?: readonly string[];
   readonly description: string;
   readonly argumentHint?: string;
+  /** Excludes the command from `/` suggestions without removing it from execution. */
+  readonly hiddenFromSuggestions?: boolean;
 }
 
 export interface Commands {

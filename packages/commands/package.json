@@ -9,7 +9,6 @@
   },
   "dependencies": {
     "@megumi/ai": "0.1.0",
-    "@megumi/input": "0.1.0",
-    "@megumi/skills": "0.1.0"
+    "@megumi/input": "0.1.0"
   }
 }

@@ -149,7 +149,7 @@ async function materializeUserMessageContent(input: {
       content.push(materialized.content);
     } else {
       const path = attachment.source_type === 'local_file' ? attachment.source_value : undefined;
-      if (!path || !attachment.name || attachment.size_bytes === undefined) {
+      if (!path || !attachment.name || !attachment.mime_type || attachment.size_bytes === undefined) {
         return documentAttachmentFailure(
           `Document attachment ${attachment.attachment_id} is missing persisted metadata.`,
         );
@@ -158,7 +158,7 @@ async function materializeUserMessageContent(input: {
         type: 'text',
         text: attachedDocumentBlock({
           name: attachment.name,
-          mediaType: attachment.mime_type ?? '',
+          mediaType: attachment.mime_type,
           path,
           sizeBytes: attachment.size_bytes,
         }),
@@ -324,7 +324,7 @@ function estimateAttachmentContent(attachment: SessionMessageAttachment): TextCo
   if (attachment.type === 'image') {
     return { type: 'image', data: '', mimeType: attachment.mime_type ?? 'image/png' };
   }
-  const path = attachment.source_type === 'local_file' ? attachment.source_value : attachment.source_value;
+  const path = attachment.source_value;
   return {
     type: 'text',
     text: attachedDocumentBlock({
