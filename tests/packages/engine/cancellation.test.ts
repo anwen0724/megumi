@@ -165,9 +165,35 @@ describe('Engine cancellation', () => {
     // disappears instead of lingering in awaiting_approval.
     const resolved = fixture.published.find((event) => event.type === 'approval.resolved');
     expect(resolved?.payload).toMatchObject({
+      approvalRequestId: expect.any(String),
       toolCallId: 'provider-call:1',
       decision: 'cancelled',
+      decidedAt: expect.any(String),
     });
+  });
+
+  it('publishes run.cancel.requested as a fact when cancellation is accepted', async () => {
+    const fixture = createEngineFixture({
+      streams: [neverEndingStream()],
+    });
+    const started = await startedRun(fixture);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await requestedCancellation(fixture, started.run.runId);
+    await settleRun(fixture);
+
+    const requested = fixture.published.find((event) => event.type === 'run.cancel.requested');
+    expect(requested).toBeDefined();
+    expect(requested?.payload).toEqual({
+      requestedBy: 'user',
+      reason: 'user_cancelled',
+      scope: 'run',
+    });
+    expect(requested?.runId).toBe(started.run.runId);
+    // The fact precedes the outcome.
+    expect(requested!.sequence).toBeLessThan(
+      fixture.published.find((event) => event.type === 'run.ended')!.sequence,
+    );
   });
 
   it('fails cancellation after the deadline when provider work ignores abort', async () => {

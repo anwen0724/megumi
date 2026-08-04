@@ -29,7 +29,7 @@ describe('SessionBranchDrafts', () => {
     });
     expect(published).toEqual([
       expect.objectContaining({
-        type: 'branch_marker.created',
+        type: 'session.branch_marker.created',
         sessionId: 'session:1',
         payload: { markerId: 'branch:owner-1' },
       }),
@@ -61,7 +61,7 @@ describe('SessionBranchDrafts', () => {
 
     expect(cancelled.status).toBe('cancelled');
     expect(published.at(-1)).toEqual(expect.objectContaining({
-      type: 'branch_draft.cancelled',
+      type: 'session.branch_draft.cancelled',
       sessionId: 'session:1',
       payload: { draftId: 'branch:owner-1' },
     }));

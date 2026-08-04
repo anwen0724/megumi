@@ -275,13 +275,13 @@ function reportProgress(
   // can render the activity item. Best-effort, like every bus publish.
   if (progress.status === 'started') {
     events.publish({
-      type: 'compaction.started',
+      type: 'session.compaction.started',
       payload: { trigger, compactionId: progress.compactionId },
       sessionId,
     });
   } else if (progress.status === 'completed') {
     events.publish({
-      type: 'compaction.ended',
+      type: 'session.compaction.ended',
       payload: { status: 'completed', compactionId: progress.compactionId },
       sessionId,
     });
@@ -290,7 +290,7 @@ function reportProgress(
     // by the failed variant's own fields instead of the status union.
     const failed = progress as ContextCompactionProgressFailed;
     events.publish({
-      type: 'compaction.ended',
+      type: 'session.compaction.ended',
       payload: {
         status: 'failed',
         compactionId: failed.compactionId,

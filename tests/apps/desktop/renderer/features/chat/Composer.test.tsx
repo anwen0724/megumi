@@ -56,6 +56,7 @@ function TestComposer(props: ComposerProps) {
     <Composer
       providers={defaultProviders}
       imageInputCapabilities={{
+        maxTextCharacters: 10000,
         allowedMediaTypes: ['image/png', 'image/jpeg', 'image/webp'],
         maxImageCount: 5,
         maxImageBytes: 10 * 1024 * 1024,

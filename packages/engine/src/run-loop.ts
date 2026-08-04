@@ -130,6 +130,8 @@ export function emitRunStarted(
 ): void {
   emitEvent(dependencies, runtime, run, 'run.started', {
     requestId: run.requestId,
+    providerId: String(run.model.provider),
+    modelId: run.model.id,
   });
 }
 
@@ -242,8 +244,13 @@ async function continueRunAfterApprovalInContext(
       endObservedSpan(dependencies, runtime.approvalSpan, 'ok');
       runtime.approvalSpan = undefined;
       emitEvent(dependencies, runtime, running, 'approval.resolved', {
+        approvalRequestId: approval.runApprovalId,
         toolCallId: approval.toolCallId,
         decision: resolvedApprovalStatus(approval.status),
+        ...(approval.decision?.decision === 'approved'
+          ? { optionId: approval.decision.optionId }
+          : {}),
+        decidedAt: approval.decidedAt ?? dependencies.clock.now(),
       });
       input.onRunResumed?.(running);
     },
@@ -301,10 +308,15 @@ export function requestRunCancellation(
   runtime: EngineRunRuntime,
   run: Run,
 ): void {
-  // Cancellation is a transition, not a settled fact: the outcome is told by
-  // run.ended (status: 'cancelled'). A pending approval, however, must settle
-  // as cancelled too, or the UI's approval card would linger in
+  // The request itself is a fact (who asked, why, what scope); the outcome is
+  // told by run.ended (status: 'cancelled'). A pending approval, however, must
+  // settle as cancelled too, or the UI's approval card would linger in
   // awaiting_approval after the run is gone.
+  emitEvent(dependencies, runtime, run, 'run.cancel.requested', {
+    requestedBy: 'user',
+    reason: 'user_cancelled',
+    scope: 'run',
+  });
   const approval = dependencies.store.getPendingRunApproval(run.runId);
   if (approval) {
     const cancelled = dependencies.store.cancelPendingRunApproval({
@@ -313,8 +325,10 @@ export function requestRunCancellation(
     });
     if (cancelled) {
       emitEvent(dependencies, runtime, run, 'approval.resolved', {
+        approvalRequestId: cancelled.runApprovalId,
         toolCallId: cancelled.toolCallId,
         decision: 'cancelled',
+        decidedAt: cancelled.decidedAt ?? dependencies.clock.now(),
       });
     }
   }
@@ -652,6 +666,7 @@ async function executeRunLoop(
         dependencies.store.updateRun(completed);
         emitEvent(dependencies, runtime, completed, 'run.ended', {
           status: 'completed',
+          assistantMessageId: reply.message.message_id,
         });
         finishRuntime(dependencies, runtime, 'ok');
         return;
@@ -873,6 +888,7 @@ function toolExecutionCallbacks(
         toolCallId: execution.toolCallId,
         toolName: call?.toolName ?? '',
         args: call ? toJsonValue(call.input) as Record<string, unknown> : {},
+        toolExecutionId: execution.toolExecutionId,
       });
     },
     onToolExecutionOutput: (execution, output) => {
@@ -889,9 +905,9 @@ function toolExecutionCallbacks(
     onToolExecutionNotification: (execution, notification) => {
       const run = dependencies.store.getRun(execution.runId);
       if (!run || isTerminalRunStatus(run.status)) return;
-      // A planning tool (run_command) published its plan of steps: surface it
+      // A planning tool (update_plan) published its plan of steps: surface it
       // so the UI renders the plan activity item.
-      emitEvent(dependencies, runtime, run, 'run.plan.updated', {
+      emitEvent(dependencies, runtime, run, 'tool_execution.plan_updated', {
         toolCallId: execution.toolCallId,
         ...(notification.explanation ? { explanation: notification.explanation } : {}),
         plan: notification.plan.map((step) => ({ step: step.step, status: step.status })),
@@ -912,6 +928,7 @@ function toolExecutionCallbacks(
       if (execution.status === 'succeeded') {
         emitEvent(dependencies, runtime, run, 'tool_execution.ended', {
           toolCallId: execution.toolCallId,
+          toolExecutionId: execution.toolExecutionId,
           status: 'completed',
           result: result.content,
         });
@@ -920,6 +937,7 @@ function toolExecutionCallbacks(
       if (execution.status === 'cancelled') {
         emitEvent(dependencies, runtime, run, 'tool_execution.ended', {
           toolCallId: execution.toolCallId,
+          toolExecutionId: execution.toolExecutionId,
           status: 'cancelled',
         });
         return;
@@ -930,6 +948,7 @@ function toolExecutionCallbacks(
       };
       emitEvent(dependencies, runtime, run, 'tool_execution.ended', {
         toolCallId: execution.toolCallId,
+        toolExecutionId: execution.toolExecutionId,
         status: 'failed',
         error: { message: error.message, code: error.code },
       });
@@ -1041,6 +1060,7 @@ function emitModelCallEvent(
           toolCallId: call.toolCallId,
           toolName: call.toolName,
           args: toJsonValue(call.input) as Record<string, unknown>,
+          modelCallId: call.sourceModelCallId,
         });
       }
       emitEvent(dependencies, runtime, run, 'turn.ended', {
@@ -1058,7 +1078,9 @@ function emitModelCallEvent(
         });
         emitEvent(dependencies, runtime, run, 'turn.retry.failed', {
           attemptNumber,
-          ...(event.failure.message ? { error: { message: event.failure.message } } : {}),
+          ...(event.failure.message ? {
+            error: { message: event.failure.message, ...(event.failure.code ? { code: event.failure.code } : {}) },
+          } : {}),
         });
       }
       retryIds.clear();
@@ -1089,8 +1111,14 @@ function emitApprovalRequested(
   emitEvent(dependencies, runtime, run, 'approval.requested', {
     toolCallId: approval.toolCallId,
     toolName: approval.toolName,
+    toolIdentity: {
+      sourceId: approval.toolIdentity.sourceId,
+      namespace: approval.toolIdentity.namespace,
+      sourceToolName: approval.toolIdentity.sourceToolName,
+    },
     reason: approval.summary ?? `Approve ${approval.toolName}`,
     args: toJsonValue(approval.input) as Record<string, unknown>,
+    operations: approval.operations.map((operation) => toJsonValue(operation) as Record<string, unknown>),
     approvalRequestId: approval.runApprovalId,
     // The UI renders these choices; approving without an option is impossible.
     options: approval.options.map((option) => ({
@@ -1100,6 +1128,14 @@ function emitApprovalRequested(
       description: option.display.description,
     })),
     defaultOptionId: approval.defaultOptionId,
+    ...(approval.preview
+      ? {
+          preview: {
+            action: approval.preview.action,
+            targets: approval.preview.targets.map((target) => ({ ...target })),
+          },
+        }
+      : {}),
   });
 }
 
@@ -1251,6 +1287,8 @@ async function failRun(
     error: {
       message: finalFailure.message,
       code: finalFailure.code,
+      retryable: finalFailure.retryable,
+      ...(finalFailure.cause ? { cause: { ...finalFailure.cause } } : {}),
     },
   });
   finishRuntime(dependencies, runtime, 'error');

@@ -6,7 +6,8 @@
  *  - consumer failures are isolated (best-effort delivery, run never affected)
  */
 import { describe, expect, it } from 'vitest';
-import { createEventBus, type Event } from '../../../packages/events/src/bus';
+import { createEventBus } from '../../../packages/events/src/bus';
+import type { Event } from '../../../packages/events/src/event';
 
 function publishSequence(events: Event[]): number[] {
   return events.map((event) => event.sequence);
@@ -20,8 +21,8 @@ describe('EventBus', () => {
 
     // Two producers interleave on the same session — like engine and session
     // emitting concurrently. The bus is the only counter; producers never coordinate.
-    bus.publish({ type: 'run.started', payload: { requestId: 'req:1' }, sessionId: 'session:1', runId: 'run:1' });
-    bus.publish({ type: 'branch_marker.created', payload: { markerId: 'marker:1' }, sessionId: 'session:1' });
+    bus.publish({ type: 'run.started', payload: { requestId: 'req:1', providerId: 'provider:1', modelId: 'model:1' }, sessionId: 'session:1', runId: 'run:1' });
+    bus.publish({ type: 'session.branch_marker.created', payload: { markerId: 'marker:1' }, sessionId: 'session:1' });
     bus.publish({ type: 'run.ended', payload: { status: 'completed' }, sessionId: 'session:1', runId: 'run:1' });
 
     expect(publishSequence(received)).toEqual([1, 2, 3]);
@@ -36,8 +37,8 @@ describe('EventBus', () => {
     const received: Event[] = [];
     bus.subscribe({}, (event) => { received.push(event); });
 
-    bus.publish({ type: 'run.started', payload: { requestId: 'req:1' }, sessionId: 'session:1', runId: 'run:1' });
-    bus.publish({ type: 'run.started', payload: { requestId: 'req:2' }, sessionId: 'session:2', runId: 'run:2' });
+    bus.publish({ type: 'run.started', payload: { requestId: 'req:1', providerId: 'provider:1', modelId: 'model:1' }, sessionId: 'session:1', runId: 'run:1' });
+    bus.publish({ type: 'run.started', payload: { requestId: 'req:2', providerId: 'provider:1', modelId: 'model:1' }, sessionId: 'session:2', runId: 'run:2' });
 
     expect(received.map((event) => event.sequence)).toEqual([1, 1]);
   });
@@ -69,8 +70,8 @@ describe('EventBus', () => {
     bus.subscribe({ runId: 'run:1' }, (event) => { runOnly.push(event); });
     bus.subscribe({ eventTypes: ['run.ended'] }, (event) => { terminalOnly.push(event); });
 
-    bus.publish({ type: 'run.started', payload: { requestId: 'req:1' }, sessionId: 'session:1', runId: 'run:1' });
-    bus.publish({ type: 'run.started', payload: { requestId: 'req:2' }, sessionId: 'session:2', runId: 'run:2' });
+    bus.publish({ type: 'run.started', payload: { requestId: 'req:1', providerId: 'provider:1', modelId: 'model:1' }, sessionId: 'session:1', runId: 'run:1' });
+    bus.publish({ type: 'run.started', payload: { requestId: 'req:2', providerId: 'provider:1', modelId: 'model:1' }, sessionId: 'session:2', runId: 'run:2' });
     bus.publish({ type: 'run.ended', payload: { status: 'completed' }, sessionId: 'session:1', runId: 'run:1' });
 
     expect(sessionOnly.map((event) => event.type)).toEqual(['run.started', 'run.ended']);
@@ -83,7 +84,7 @@ describe('EventBus', () => {
     const received: Event[] = [];
     bus.subscribe({ sessionId: 'session:1', eventTypes: ['run.ended'] }, (event) => { received.push(event); });
 
-    bus.publish({ type: 'run.started', payload: { requestId: 'req:1' }, sessionId: 'session:1', runId: 'run:1' });
+    bus.publish({ type: 'run.started', payload: { requestId: 'req:1', providerId: 'provider:1', modelId: 'model:1' }, sessionId: 'session:1', runId: 'run:1' });
     bus.publish({ type: 'run.ended', payload: { status: 'completed' }, sessionId: 'session:1', runId: 'run:1' });
     bus.publish({ type: 'run.ended', payload: { status: 'failed', error: { message: 'x' } }, sessionId: 'session:2', runId: 'run:2' });
 
@@ -101,7 +102,7 @@ describe('EventBus', () => {
     bus.subscribe({}, (event) => { received.push(event); });
 
     expect(() => {
-      bus.publish({ type: 'run.started', payload: { requestId: 'req:1' }, sessionId: 'session:1' });
+      bus.publish({ type: 'run.started', payload: { requestId: 'req:1', providerId: 'provider:1', modelId: 'model:1' }, sessionId: 'session:1' });
     }).not.toThrow();
     expect(received).toHaveLength(1);
     expect(diagnostics).toHaveLength(1);
@@ -121,7 +122,7 @@ describe('EventBus', () => {
       bus.subscribe({}, (event) => { late.push(event); });
     });
 
-    bus.publish({ type: 'run.started', payload: { requestId: 'req:1' }, sessionId: 'session:1' });
+    bus.publish({ type: 'run.started', payload: { requestId: 'req:1', providerId: 'provider:1', modelId: 'model:1' }, sessionId: 'session:1' });
     subscription.unsubscribe();
     bus.publish({ type: 'run.ended', payload: { status: 'cancelled' }, sessionId: 'session:1' });
 

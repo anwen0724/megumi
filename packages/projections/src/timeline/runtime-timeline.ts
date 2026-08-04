@@ -279,7 +279,7 @@ function projectRuntimeTimelineEvent(
     return nextMessages;
   }
 
-  if (event.type === 'run.plan.updated') {
+  if (event.type === 'tool_execution.plan_updated') {
     const payload = event.payload;
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
@@ -296,19 +296,19 @@ function projectRuntimeTimelineEvent(
     return nextMessages;
   }
 
-  if (event.type === 'compaction.started' || event.type === 'compaction.ended') {
+  if (event.type === 'session.compaction.started' || event.type === 'session.compaction.ended') {
     const payload = event.payload;
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
     const item = ensureCompactionItem(
       process,
-      event.type === 'compaction.ended' ? event.payload.compactionId : `compaction:${event.id}`,
+      event.type === 'session.compaction.ended' ? event.payload.compactionId : `compaction:${event.id}`,
       event.createdAt,
     );
-    item.status = event.type === 'compaction.ended'
+    item.status = event.type === 'session.compaction.ended'
       ? event.payload.status === 'completed' ? 'completed' : 'failed'
       : 'running';
-    item.label = event.type === 'compaction.ended'
+    item.label = event.type === 'session.compaction.ended'
       ? event.payload.status === 'completed' ? '已完成压缩' : `上下文压缩失败：${event.payload.error?.message ?? ''}`
       : '正在压缩上下文';
     item.updatedAt = event.createdAt;

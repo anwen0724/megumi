@@ -121,7 +121,7 @@ export function createEngineFixture(input: {
   readonly contextBuild?: CreateEngineOptions['context']['build'];
   readonly contextCompact?: CreateEngineOptions['context']['compact'];
   readonly failUserMessageSave?: boolean;
-  readonly skillView?: CreateEngineOptions['skills']['createView'];
+  readonly skillView?: Pick<CreateEngineOptions['skills'], 'createView'>;
   readonly observability?: ObservabilityService;
 } = {}): EngineFixture {
   const writes: string[] = [];
@@ -441,7 +441,7 @@ export function assistantStream(
 export function errorOverflowStream(): AssistantMessageEventStream {
   const stream = new AssistantMessageEventStream();
   const failure = createModelFailure({
-    code: 'invalid_response',
+    code: 'invalid_request',
     retryable: false,
   });
   const message = baseMessage({

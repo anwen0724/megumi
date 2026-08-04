@@ -15,6 +15,7 @@ import {
   ModelCapabilitiesSchema,
   capabilitiesFromModel,
   type Api,
+  type AssistantMessage,
   type Model,
 } from '@megumi/ai';
 
@@ -25,7 +26,7 @@ describe('AI package contract', () => {
     'settles AssistantMessageEventStream after %s termination',
     async (termination) => {
       const stream = new AssistantMessageEventStream();
-      const message = {
+      const message: AssistantMessage = {
         role: 'assistant',
         content: [{ type: 'text', text: 'done' }],
         api: 'test-api',
@@ -41,7 +42,7 @@ describe('AI package contract', () => {
         },
         stopReason: termination === 'error' ? 'error' : 'stop',
         timestamp: 1,
-      } as const;
+      };
 
       const settlement = stream.waitForSettlement();
       if (termination === 'done') {

@@ -32,7 +32,7 @@ function projectSessionTimelineMessages(input: {
 
 function reduceRuntimeTimelineEvent(
   timeline: TimelineMessage[],
-  eventToApply: RuntimeEvent,
+  eventToApply: AnyEvent,
 ): TimelineMessage[] {
   return reduceRuntimeTimeline({
     timeline: createRuntimeTimeline({ messages: timeline }),

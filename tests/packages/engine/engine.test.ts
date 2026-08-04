@@ -63,7 +63,11 @@ describe('createEngine', () => {
     const first = await fixture.engine.startRun(startRequest);
     const conflicting = await fixture.engine.startRun({
       ...startRequest,
-      input: { text: 'different', attachments: [] },
+      input: {
+        displayContent: [{ type: 'text', text: 'different' }],
+        modelContent: [{ type: 'text', text: 'different' }],
+        attachments: [],
+      },
     });
 
     expect(conflicting).toMatchObject({

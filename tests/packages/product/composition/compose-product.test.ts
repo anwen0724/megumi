@@ -3,8 +3,9 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import fs from 'fs-extra';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { composeProduct } from '@megumi/product';
+import type { AnyEvent } from '@megumi/events';
 import { createNodeWorkspaceFileSystem } from '@megumi/workspace/node';
 import {
   AssistantMessageEventStream,
@@ -96,11 +97,18 @@ describe('composeProduct', () => {
       });
 
       expect(result.payload.type).toBe('agent_run');
-      if (result.payload.type !== 'agent_run' || !result.events) return;
-      const events = [];
-      for await (const event of result.events) events.push(event.eventType);
-      expect(events.filter((eventType) => eventType === 'tool.execution.completed')).toHaveLength(2);
-      expect(events).toContain('run.completed');
+      if (result.payload.type !== 'agent_run') return;
+      const payload = result.payload;
+      // The Run executes in the background; poll the persisted run events
+      // until it settles before asserting on the event facts.
+      let events: AnyEvent[] = [];
+      await vi.waitFor(async () => {
+        const snapshot = await product.host.chat.listRunEvents({ runId: payload.run.runId });
+        events = snapshot.events;
+        expect(snapshot.events.some((event) => event.type === 'run.ended')).toBe(true);
+      }, { timeout: 5000 });
+      expect(events.filter((event) => event.type === 'tool_execution.ended')).toHaveLength(2);
+      expect(events.map((event) => event.type)).toContain('run.ended');
 
       const firstContext = modelScript.contexts[0] as {
         systemPrompt?: string;

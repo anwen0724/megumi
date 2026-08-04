@@ -72,10 +72,8 @@ describe('deriveContextUsage', () => {
 
   it('estimates the whole Prompt when no valid Usage exists', () => {
     const item = history()[1]! as Extract<SessionHistoryItem, { type: 'message' }>;
-    const derived = deriveContextUsage({
-      history: [{ ...item, message: { ...item.message, usage: undefined } }],
-      model,
-    });
+    const noUsage = { ...item, message: { ...item.message, usage: undefined } };
+    const derived = deriveContextUsage({ history: [noUsage], model });
     expect(derived.accuracy).toBe('estimated');
     expect(derived.usageTokens).toBe(derived.totalTokens);
   });

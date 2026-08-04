@@ -202,10 +202,10 @@ describe('RuntimeTimeline', () => {
     expect(serialized).toContain('"attemptNumber":2');
   });
 
-  it('renders a plan activity from run.plan.updated', () => {
+  it('renders a plan activity from tool_execution.plan_updated', () => {
     let next = reduceRuntimeTimelineEvent([], event('run.started', {}, 1));
     next = reduceRuntimeTimelineEvent(next, event('turn.started', { messageId: 'message:1' }, 2));
-    next = reduceRuntimeTimelineEvent(next, event('run.plan.updated', {
+    next = reduceRuntimeTimelineEvent(next, event('tool_execution.plan_updated', {
       toolCallId: 'call:1',
       explanation: 'edits files',
       plan: [{ step: 'write a', status: 'pending' }],
@@ -242,7 +242,7 @@ describe('RuntimeTimeline', () => {
     let next = reduceRuntimeTimeline({ timeline, event: event('run.started', {}, 1) });
     next = reduceRuntimeTimeline({
       timeline: next,
-      event: event('compaction.started', { trigger: 'manual' }, 2, { runId: undefined }),
+      event: event('session.compaction.started', { trigger: 'manual' }, 2, { runId: undefined }),
     });
 
     const serialized = JSON.stringify(next.messages);

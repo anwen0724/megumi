@@ -12,6 +12,9 @@ import { z } from 'zod';
 export const RunStartedPayloadSchema = z.object({
   /** Opaque user request identity as accepted by the run. */
   requestId: z.string().min(1),
+  /** The model executing this run. */
+  providerId: z.string().min(1),
+  modelId: z.string().min(1),
 }).strict();
 
 export const RunEndedPayloadSchema = z.object({
@@ -19,27 +22,34 @@ export const RunEndedPayloadSchema = z.object({
   error: z.object({
     message: z.string().min(1),
     code: z.string().optional(),
-  }).optional(),
+    /** Whether the failure can be retried; a consumer may offer a retry. */
+    retryable: z.boolean().optional(),
+    cause: z.object({
+      owner: z.string().min(1),
+      code: z.string().min(1),
+    }).strict().optional(),
+  }).strict().optional(),
+  /** Reference to the settled assistant reply, when the run completed. */
+  assistantMessageId: z.string().min(1).optional(),
 }).strict();
 
-/** A planning tool (run_command) published its plan of steps. */
-export const RunPlanUpdatedPayloadSchema = z.object({
-  toolCallId: z.string().min(1),
-  explanation: z.string().optional(),
-  plan: z.array(z.object({
-    step: z.string(),
-    status: z.enum(['pending', 'in_progress', 'completed']),
-  }).strict()).min(1),
+/** A cancellation was requested for the run; the outcome is told by run.ended.
+ *  The mechanism is the AbortSignal; the event records who asked, why, and
+ *  what scope (the whole run). */
+export const RunCancelRequestedPayloadSchema = z.object({
+  requestedBy: z.enum(['user']),
+  reason: z.enum(['user_cancelled']),
+  scope: z.enum(['run']),
 }).strict();
 
 export type RunStartedPayload = z.infer<typeof RunStartedPayloadSchema>;
 export type RunEndedPayload = z.infer<typeof RunEndedPayloadSchema>;
-export type RunPlanUpdatedPayload = z.infer<typeof RunPlanUpdatedPayloadSchema>;
+export type RunCancelRequestedPayload = z.infer<typeof RunCancelRequestedPayloadSchema>;
 
 export const RunEventSchemas = {
   'run.started': RunStartedPayloadSchema,
+  'run.cancel.requested': RunCancelRequestedPayloadSchema,
   'run.ended': RunEndedPayloadSchema,
-  'run.plan.updated': RunPlanUpdatedPayloadSchema,
 } as const;
 
 export type RunEventPayloadByType = {

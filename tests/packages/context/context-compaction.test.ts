@@ -108,14 +108,13 @@ describe('Context compaction', () => {
     const events = createEventBus();
     const published: AnyEvent[] = [];
     events.subscribe({}, (event) => { published.push(event); });
-    const options = fixture();
-    options.events = events;
+    const options = { ...fixture(), events };
 
     const result = await createContext(options).compact(manualRequest());
     expect(result.status).toBe('compacted');
 
     const types = published.map((event) => event.type);
-    expect(types).toEqual(['compaction.started', 'compaction.ended']);
+    expect(types).toEqual(['session.compaction.started', 'session.compaction.ended']);
     expect(published[0]?.payload).toMatchObject({
       trigger: 'manual',
       compactionId: 'compaction:1',

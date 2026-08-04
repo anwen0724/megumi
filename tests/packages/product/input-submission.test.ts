@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
+import type { StartRunRequest, StartRunResult } from '@megumi/engine';
 import { createInputSubmission } from '../../../packages/product/src/input-submission';
 
 describe('Product InputSubmission', () => {
@@ -41,9 +42,9 @@ describe('Product InputSubmission', () => {
       order.push('session');
       return { status: 'created' as const, session: session() };
     });
-    const startRun = vi.fn(async () => {
+    const startRun = vi.fn(async (): Promise<StartRunResult> => {
       order.push('engine');
-      return { status: 'failed' as const, failure: { code: 'internal_error' as const, message: 'stop after boundary check' } };
+      return { status: 'failed', failure: { code: 'internal_error', message: 'stop after boundary check', retryable: false } };
     });
     const submission = createInputSubmission({
       input: { process },
@@ -70,30 +71,46 @@ describe('Product InputSubmission', () => {
         skillSelection,
       },
     }));
-    const startRun = vi.fn(async () => ({
-      status: 'started' as const,
-      run: { runId: 'run:1', sessionId: 'session:1', status: 'running' as const, createdAt: 'now' },
+    const startRun = vi.fn(async (request: StartRunRequest): Promise<StartRunResult> => ({
+      status: 'started',
+      run: {
+        runId: 'run:1',
+        requestId: request.requestId,
+        workspaceId: request.workspaceId,
+        sessionId: request.sessionId,
+        userMessageId: 'm:1',
+        model: model(),
+        permissionMode: request.permissionMode,
+        status: 'running',
+        createdAt: 'now',
+        startedAt: 'now',
+      },
       userMessage: {
         message: {
           message_id: 'm:1',
           session_id: 'session:1',
           run_id: 'run:1',
-          message_kind: 'user_message' as const,
-          display_content: [{ type: 'text' as const, text: 'task' }],
-          model_content: [{ type: 'text' as const, text: 'expanded task' }],
+          message_kind: 'user_message',
+          display_content: [{ type: 'text', text: 'task' }],
+          model_content: [{ type: 'text', text: 'expanded task' }],
           skill_selection: { name: 'review', skill_path: 'C:/skills/review/SKILL.md' },
           created_at: 'now',
           completed_at: 'now',
         },
         attachments: [],
       },
-      userEntry: { entry_id: 'e:1' },
-      events: { [Symbol.asyncIterator]: async function* () {} },
+      userEntry: {
+        entry_id: 'e:1',
+        session_id: 'session:1',
+        entry_type: 'message',
+        message_id: 'm:1',
+        created_at: 'now',
+      },
     }));
     const submission = createInputSubmission({
       input: { process },
       sessions: { getSession: vi.fn(), createSession: vi.fn(() => ({ status: 'created' as const, session: session() })) },
-      branches: { resolveBranchDraft: vi.fn(() => ({ status: 'resolved' as const, branch_draft: { source_entry_id: undefined } })), commitBranchDraft: vi.fn() },
+      branches: { resolveBranchDraft: vi.fn(() => ({ status: 'resolved' as const, branch_draft: { branch_marker_id: 'branch:1', session_id: 'session:1', source_message_id: 'message:0', source_entry_id: 'entry:0', created_at: 'now' } })), commitBranchDraft: vi.fn() },
       engine: { startRun },
       resolveModel: vi.fn(async () => ({ status: 'ok' as const, model: model() })),
     });

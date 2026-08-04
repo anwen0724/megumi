@@ -14,6 +14,7 @@ import {
 const failure: RunFailure = {
   code: 'context_failed',
   message: 'Context could not be built.',
+  retryable: false,
 };
 
 function runningRun() {

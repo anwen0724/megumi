@@ -5,6 +5,7 @@
  * full behaviour surface (thinking stream, tool requests, approval options,
  * retries, plan updates, permission denials).
  */
+import type { PermissionDecision } from '@megumi/permissions';
 import { describe, expect, it, vi } from 'vitest';
 import type { AnyEvent } from '@megumi/events';
 import {
@@ -138,9 +139,31 @@ describe('Engine RuntimeEvents', () => {
     expect(toolStarted?.payload).toMatchObject({
       toolCallId: 'provider-call:1',
       toolName: 'test-tool',
+      toolExecutionId: expect.any(String),
     });
     const toolEnded = events.find((event) => event.type === 'tool_execution.ended');
-    expect(toolEnded?.payload.status).toBe('completed');
+    expect(toolEnded?.payload).toMatchObject({
+      status: 'completed',
+      toolExecutionId: expect.any(String),
+    });
+  });
+
+  it('carries the full run.started fact: request, model, and kind', async () => {
+    const fixture = createEngineFixture({
+      streams: [assistantStream('answer')],
+    });
+
+    const started = await startedRun(fixture);
+    await vi.waitFor(() => {
+      expect(fixture.published.some((event) => event.type === 'run.ended')).toBe(true);
+    });
+
+    const runStarted = fixture.published.find((event) => event.type === 'run.started');
+    expect(runStarted?.payload).toMatchObject({
+      requestId: started.run.requestId,
+      providerId: 'provider:test',
+      modelId: 'model:test',
+    });
   });
 
   it('streams thinking as full-snapshot message.thinking.update events', async () => {
@@ -192,6 +215,7 @@ describe('Engine RuntimeEvents', () => {
       toolCallId: 'provider-call:1',
       toolName: 'test-tool',
       args: { value: 'x' },
+      modelCallId: expect.any(String),
     });
     expect(requested!.sequence).toBeLessThan(startedAt!.sequence);
   });
@@ -220,15 +244,24 @@ describe('Engine RuntimeEvents', () => {
     expect(requested.payload).toMatchObject({
       toolCallId: 'provider-call:1',
       toolName: 'test-tool',
+      toolIdentity: {
+        sourceId: 'built_in',
+        namespace: 'megumi',
+        sourceToolName: 'test-tool',
+      },
     });
-    const payload = requested.payload as { options: unknown[]; defaultOptionId: string };
+    const payload = requested.payload as {
+      options: unknown[];
+      defaultOptionId: string;
+      operations: unknown[];
+    };
     expect(payload.options.length).toBeGreaterThan(0);
     expect(payload.defaultOptionId).toBe(payload.options[0] && (payload.options[0] as { optionId: string }).optionId);
+    expect(payload.operations.length).toBeGreaterThan(0);
 
     const resumed = await fixture.engine.resumeRun({
       runApprovalId: (requested.payload as { approvalRequestId: string }).approvalRequestId,
       decision: { decision: 'denied' },
-      decidedAt: '2026-07-31T00:00:00.000Z',
     });
     expect(resumed.status).toBe('resumed');
     await vi.waitFor(() => {
@@ -236,6 +269,19 @@ describe('Engine RuntimeEvents', () => {
         (event) => event.type === 'approval.resolved' && event.payload.decision === 'denied',
       )).toBe(true);
     });
+
+    // The resolved fact carries the identity and decision time; a denial has no option.
+    const resolved = fixture.published.find(
+      (event) => event.type === 'approval.resolved' && event.payload.decision === 'denied',
+    )!;
+    expect(resolved.payload).toMatchObject({
+      approvalRequestId: (requested.payload as { approvalRequestId: string }).approvalRequestId,
+      toolCallId: 'provider-call:1',
+      decision: 'denied',
+      // The engine stamps the decision time from its clock.
+      decidedAt: '2026-07-31T00:00:00.000Z',
+    });
+    expect((resolved.payload as { optionId?: string }).optionId).toBeUndefined();
   });
 
   it('publishes turn.retry lifecycle events for a retried model call', async () => {
@@ -256,7 +302,26 @@ describe('Engine RuntimeEvents', () => {
     expect(retryCompleted?.payload).toMatchObject({ attemptNumber: 2 });
   });
 
-  it('publishes run.plan.updated from a plan tool notification', async () => {
+  it('carries the failure code when a retry is exhausted', async () => {
+    const fixture = createEngineFixture({
+      streams: [retryableFailedStream('attempt one'), retryableFailedStream('attempt two')],
+      policy: { maxModelCallAttempts: 2 },
+    });
+
+    const started = await startedRun(fixture);
+    await vi.waitFor(() => {
+      expect(fixture.published.some((event) => event.type === 'run.ended')).toBe(true);
+    });
+
+    const events = collectEvents(fixture, started.run.runId);
+    const retryFailed = events.find((event) => event.type === 'turn.retry.failed');
+    expect(retryFailed?.payload).toMatchObject({
+      attemptNumber: 2,
+      error: { code: 'rate_limited' },
+    });
+  });
+
+  it('publishes tool_execution.plan_updated from a plan tool notification', async () => {
     const tool = registeredTool('run_command');
     const fixture = createEngineFixture({
       tools: [tool],
@@ -280,10 +345,10 @@ describe('Engine RuntimeEvents', () => {
 
     const started = await startedRun(fixture);
     await vi.waitFor(() => {
-      expect(fixture.published.some((event) => event.type === 'run.plan.updated')).toBe(true);
+      expect(fixture.published.some((event) => event.type === 'tool_execution.plan_updated')).toBe(true);
     });
 
-    const plan = fixture.published.find((event) => event.type === 'run.plan.updated')!;
+    const plan = fixture.published.find((event) => event.type === 'tool_execution.plan_updated')!;
     expect(plan.payload).toMatchObject({
       toolCallId: 'provider-call:1',
       explanation: 'do things',
@@ -295,10 +360,10 @@ describe('Engine RuntimeEvents', () => {
     const tool = registeredTool('test-tool');
     const fixture = createEngineFixture({
       tools: [tool],
-      permissions: permissionService(() => ({
+      permissions: permissionService((request): PermissionDecision => ({
         type: 'deny',
-        operations: [],
-        safetyAssessment: 'unsafe',
+        operations: [...request.operations],
+        safetyAssessment: 'prohibited',
         safetySummary: 'Denied.',
         reason: 'Denied in test.',
         denialCode: 'rule_denied',
@@ -346,7 +411,26 @@ describe('Engine RuntimeEvents', () => {
     expect(ended?.type).toBe('run.ended');
     expect(ended?.payload).toMatchObject({
       status: 'failed',
-      error: { code: 'context_failed' },
+      error: { code: 'context_failed', retryable: false },
     });
+  });
+
+  it('carries the settled reply reference on a completed run', async () => {
+    const fixture = createEngineFixture({
+      streams: [assistantStream('answer')],
+    });
+
+    const started = await startedRun(fixture);
+    await vi.waitFor(() => {
+      expect(fixture.published.some((event) => event.type === 'run.ended')).toBe(true);
+    });
+
+    const ended = fixture.published.find(
+      (event) => event.type === 'run.ended' && event.payload.status === 'completed',
+    );
+    expect(ended).toBeDefined();
+    const payload = ended!.payload as { assistantMessageId?: string };
+    expect(typeof payload.assistantMessageId).toBe('string');
+    expect(payload.assistantMessageId!.length).toBeGreaterThan(0);
   });
 });

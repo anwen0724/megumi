@@ -32,7 +32,7 @@ function context() {
   return { workspaceId: "workspace-1" };
 }
 
-function acceptedText(text: string) {
+function acceptedText(text: string): UserInput {
   return {
     displayContent: [{ type: "text", text }],
     modelContent: [{ type: "text", text }],
@@ -167,7 +167,7 @@ describe("InputProcessor", () => {
     const second = vi.fn<InputInterpreter<string>["interpret"]>(async () => ({ status: "unhandled" }));
     const processor = createInputProcessor({
       sourceAccess: sourceAccess(),
-      interpreters: [first, second],
+      interpreters: [first, { interpret: second }],
     });
     const result = await processor.process({
       input: { text: "hello", attachments: [] },

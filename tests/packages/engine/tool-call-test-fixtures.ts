@@ -102,7 +102,7 @@ export function toolCall(callOrder: number, toolName: string, input: unknown = {
 
 export function allowDecision(request: EvaluateToolCallRequest): Extract<PermissionDecision, { type: 'allow' }> {
   return {
-    type: 'allow', operations: request.operations, safetyAssessment: 'safe',
+    type: 'allow', operations: [...request.operations], safetyAssessment: 'safe',
     safetySummary: 'Safe in Engine test.', reason: 'Allowed in test.',
   };
 }

@@ -85,14 +85,19 @@ describe('engine public contracts', () => {
       workspaceId: 'workspace:1',
       sessionId: 'session:1',
       input: {
-        text: 'hello',
+        displayContent: [{ type: 'text', text: 'hello' }],
+        modelContent: [{ type: 'text', text: 'hello' }],
         attachments: [],
       },
       model: {} as StartRunRequest['model'],
       permissionMode: 'ask',
     } satisfies StartRunRequest;
 
-    expect(request.input).toEqual({ text: 'hello', attachments: [] });
+    expect(request.input).toEqual({
+      displayContent: [{ type: 'text', text: 'hello' }],
+      modelContent: [{ type: 'text', text: 'hello' }],
+      attachments: [],
+    });
     expect(request.sessionId).toBe('session:1');
     expect('providerConfig' in request).toBe(false);
   });

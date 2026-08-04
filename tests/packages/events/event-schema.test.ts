@@ -21,7 +21,8 @@ function completeEvent(overrides: Record<string, unknown> = {}) {
 describe('EventSchema', () => {
   it('accepts a complete event from each lifecycle layer', () => {
     const valid = [
-      completeEvent({ type: 'run.started', payload: { requestId: 'req:1' } }),
+      completeEvent({ type: 'run.started', payload: { requestId: 'req:1', providerId: 'provider:1', modelId: 'model:1' } }),
+      completeEvent({ type: 'run.cancel.requested', payload: { requestedBy: 'user', reason: 'user_cancelled', scope: 'run' } }),
       completeEvent({ type: 'run.ended', payload: { status: 'failed', error: { message: 'boom' } } }),
       completeEvent({ type: 'turn.started', payload: { messageId: 'message:1' } }),
       completeEvent({ type: 'turn.ended', payload: { stopReason: 'tool_calls', messageId: 'message:1', toolCallIds: ['call:1'] } }),
@@ -32,28 +33,42 @@ describe('EventSchema', () => {
       completeEvent({ type: 'message.update', payload: { role: 'assistant', messageId: 'message:2', content: 'hel' } }),
       completeEvent({ type: 'message.thinking.update', payload: { messageId: 'message:2', thinking: 'ponder…' } }),
       completeEvent({ type: 'message.ended', payload: { role: 'assistant', messageId: 'message:2', content: 'hello' } }),
-      completeEvent({ type: 'tool_execution.requested', payload: { toolCallId: 'call:1', toolName: 'read_file', args: { path: '/a' } } }),
-      completeEvent({ type: 'tool_execution.started', payload: { toolCallId: 'call:1', toolName: 'bash', args: {} } }),
-      completeEvent({ type: 'tool_execution.ended', payload: { toolCallId: 'call:1', status: 'completed', result: 'ok' } }),
+      completeEvent({ type: 'tool_execution.requested', payload: { toolCallId: 'call:1', toolName: 'read_file', args: { path: '/a' }, modelCallId: 'model-call:1' } }),
+      completeEvent({ type: 'tool_execution.started', payload: { toolCallId: 'call:1', toolName: 'bash', args: {}, toolExecutionId: 'exec:1' } }),
+      completeEvent({ type: 'tool_execution.ended', payload: { toolCallId: 'call:1', toolExecutionId: 'exec:1', status: 'completed', result: 'ok' } }),
       completeEvent({ type: 'tool_execution.ended', payload: { toolCallId: 'call:1', status: 'denied' } }),
       completeEvent({ type: 'approval.requested', payload: {
-        toolCallId: 'call:1', toolName: 'bash', reason: 'dangerous', args: {}, approvalRequestId: 'approval:1',
+        toolCallId: 'call:1', toolName: 'bash',
+        toolIdentity: { sourceId: 'built_in', namespace: 'megumi', sourceToolName: 'bash' },
+        reason: 'dangerous', args: {}, operations: [{ action: 'run' }], approvalRequestId: 'approval:1',
         options: [{ optionId: 'once', scope: 'once', label: 'Once', description: 'this time only' }],
         defaultOptionId: 'once',
       } }),
-      completeEvent({ type: 'approval.resolved', payload: { toolCallId: 'call:1', decision: 'approved' } }),
-      completeEvent({ type: 'approval.resolved', payload: { toolCallId: 'call:1', decision: 'denied' } }),
-      completeEvent({ type: 'approval.resolved', payload: { toolCallId: 'call:1', decision: 'expired' } }),
-      completeEvent({ type: 'approval.resolved', payload: { toolCallId: 'call:1', decision: 'cancelled' } }),
-      completeEvent({ type: 'run.plan.updated', payload: {
+      completeEvent({ type: 'approval.resolved', payload: {
+        approvalRequestId: 'approval:1', toolCallId: 'call:1', decision: 'approved',
+        optionId: 'once', decidedAt: '2026-08-04T00:00:00.000Z',
+      } }),
+      completeEvent({ type: 'approval.resolved', payload: {
+        approvalRequestId: 'approval:1', toolCallId: 'call:1', decision: 'denied',
+        decidedAt: '2026-08-04T00:00:00.000Z',
+      } }),
+      completeEvent({ type: 'approval.resolved', payload: {
+        approvalRequestId: 'approval:1', toolCallId: 'call:1', decision: 'expired',
+        decidedAt: '2026-08-04T00:00:00.000Z',
+      } }),
+      completeEvent({ type: 'approval.resolved', payload: {
+        approvalRequestId: 'approval:1', toolCallId: 'call:1', decision: 'cancelled',
+        decidedAt: '2026-08-04T00:00:00.000Z',
+      } }),
+      completeEvent({ type: 'tool_execution.plan_updated', payload: {
         toolCallId: 'call:1',
         explanation: 'modify file',
         plan: [{ step: 'edit a', status: 'pending' }],
       } }),
-      completeEvent({ type: 'branch_marker.created', payload: { markerId: 'marker:1' } }),
-      completeEvent({ type: 'compaction.started', payload: { trigger: 'manual', compactionId: 'compaction:1' } }),
-      completeEvent({ type: 'compaction.ended', payload: { status: 'completed', compactionId: 'compaction:1' } }),
-      completeEvent({ type: 'compaction.ended', payload: { status: 'failed', compactionId: 'compaction:1', error: { message: 'overflow' } } }),
+      completeEvent({ type: 'session.branch_marker.created', payload: { markerId: 'marker:1' } }),
+      completeEvent({ type: 'session.compaction.started', payload: { trigger: 'manual', compactionId: 'compaction:1' } }),
+      completeEvent({ type: 'session.compaction.ended', payload: { status: 'completed', compactionId: 'compaction:1' } }),
+      completeEvent({ type: 'session.compaction.ended', payload: { status: 'failed', compactionId: 'compaction:1', error: { message: 'overflow' } } }),
     ];
     for (const event of valid) {
       expect(EventSchema.safeParse(event).success, JSON.stringify(event)).toBe(true);
@@ -62,11 +77,16 @@ describe('EventSchema', () => {
 
   it('accepts a session-scoped event without runId', () => {
     const event = completeEvent({
-      type: 'branch_marker.created',
+      type: 'session.branch_marker.created',
       payload: { markerId: 'marker:1' },
       runId: undefined,
     });
     expect(EventSchema.safeParse(event).success).toBe(true);
+  });
+
+  it('rejects an invalid run.cancel.requested payload', () => {
+    const event = completeEvent({ type: 'run.cancel.requested', payload: { requestedBy: 'system' } });
+    expect(EventSchema.safeParse(event).success).toBe(false);
   });
 
   it('rejects an unknown event type', () => {

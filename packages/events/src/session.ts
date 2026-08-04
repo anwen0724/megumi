@@ -45,10 +45,10 @@ export type BranchMarkerCreatedPayload = z.infer<typeof BranchMarkerCreatedPaylo
 export type BranchDraftCancelledPayload = z.infer<typeof BranchDraftCancelledPayloadSchema>;
 
 export const SessionEventSchemas = {
-  'compaction.started': CompactionStartedPayloadSchema,
-  'compaction.ended': CompactionEndedPayloadSchema,
-  'branch_marker.created': BranchMarkerCreatedPayloadSchema,
-  'branch_draft.cancelled': BranchDraftCancelledPayloadSchema,
+  'session.compaction.started': CompactionStartedPayloadSchema,
+  'session.compaction.ended': CompactionEndedPayloadSchema,
+  'session.branch_marker.created': BranchMarkerCreatedPayloadSchema,
+  'session.branch_draft.cancelled': BranchDraftCancelledPayloadSchema,
 } as const;
 
 export type SessionEventPayloadByType = {

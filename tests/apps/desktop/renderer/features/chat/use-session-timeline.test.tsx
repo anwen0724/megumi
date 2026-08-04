@@ -233,7 +233,7 @@ describe('useSessionTimeline', () => {
         role: 'assistant',
         messageId: 'message-assistant-1',
         content: '你好，我是 Megumi。',
-      }, { messageId: 'message-assistant-1' }));
+      }));
       runtimeEventCallback?.(runtimeEvent('run.ended', 5, {
         status: 'completed',
       }));
@@ -283,7 +283,6 @@ describe('useSessionTimeline', () => {
         requestId: 'request-image-1',
         channel: 'session:message:send',
         handledAt: createdAt,
-        durationMs: 1,
       },
     });
     const { result } = renderHook(() => useSessionTimeline());
@@ -435,15 +434,11 @@ describe('useSessionTimeline', () => {
       data: {
         code: 'ipc_handler_failed',
         message: 'Cancel service failed.',
-        severity: 'error',
-        retryable: true,
-        source: 'main',
       },
       meta: {
         requestId: 'request-cancel-1',
         channel: 'session:message:cancel',
         handledAt: createdAt,
-        durationMs: 1,
       },
     });
     const { result } = renderHook(() => useSessionTimeline());

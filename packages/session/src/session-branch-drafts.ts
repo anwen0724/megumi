@@ -99,7 +99,7 @@ export function createSessionBranchDrafts(
       };
       drafts.set(markerId, branchDraft);
       options.events.publish({
-        type: 'branch_marker.created',
+        type: 'session.branch_marker.created',
         payload: { markerId },
         sessionId: request.session_id,
       });
@@ -116,7 +116,7 @@ export function createSessionBranchDrafts(
       }
       drafts.delete(request.branch_marker_id);
       options.events.publish({
-        type: 'branch_draft.cancelled',
+        type: 'session.branch_draft.cancelled',
         payload: { draftId: request.branch_marker_id },
         sessionId: request.session_id,
       });
