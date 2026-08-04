@@ -6,42 +6,29 @@
 import type { ImageContent } from '@megumi/ai';
 import type { SessionAttachmentReader, SessionMessageAttachment } from '@megumi/session';
 import type { ContextFailure } from './context';
+import { cancelledFailure } from './xml-escape';
 
 export type MaterializeImageResult =
   | { readonly status: 'ok'; readonly content: ImageContent | { readonly type: 'text'; readonly text: string } }
   | { readonly status: 'failed'; readonly failure: ContextFailure };
 
-export async function materializeSessionImage(input: {
-  readonly attachment: SessionMessageAttachment;
+export const UNSUPPORTED_IMAGE_TEXT = '[An image was attached, but the selected model cannot view image content.]';
+
+/** Reads a host-referenced image and maps it to provider-neutral ImageContent. */
+export async function readHostImageContent(input: {
+  readonly referenceId: string;
   readonly attachmentReader: Pick<SessionAttachmentReader, 'readAttachmentContent'>;
-  readonly imageInputSupport: boolean;
   readonly signal?: AbortSignal;
-}): Promise<MaterializeImageResult> {
-  if (input.signal?.aborted) return cancelled();
-  if (!input.imageInputSupport) {
-    return {
-      status: 'ok',
-      content: {
-        type: 'text',
-        text: '[An image was attached, but the selected model cannot view image content.]',
-      },
-    };
-  }
-  if (input.attachment.source_type !== 'host_reference' || !input.attachment.mime_type) {
-    return {
-      status: 'failed',
-      failure: {
-        code: 'image_materialization_failed',
-        message: `Image attachment ${input.attachment.attachment_id} has no readable source.`,
-        retryable: false,
-        cause: { owner: 'session' },
-      },
-    };
-  }
+}): Promise<
+  | { readonly status: 'ok'; readonly content: ImageContent }
+  | { readonly status: 'failed'; readonly failure: ContextFailure }
+> {
   const read = await input.attachmentReader.readAttachmentContent({
-    attachment_id: input.attachment.attachment_id,
+    attachment_id: input.referenceId,
   });
-  if (input.signal?.aborted) return cancelled();
+  if (input.signal?.aborted) {
+    return { status: 'failed', failure: cancelledFailure('Context construction was cancelled.') };
+  }
   if (read.status === 'failed') {
     return {
       status: 'failed',
@@ -63,6 +50,38 @@ export async function materializeSessionImage(input: {
   };
 }
 
+export async function materializeSessionImage(input: {
+  readonly attachment: SessionMessageAttachment;
+  readonly attachmentReader: Pick<SessionAttachmentReader, 'readAttachmentContent'>;
+  readonly imageInputSupport: boolean;
+  readonly signal?: AbortSignal;
+}): Promise<MaterializeImageResult> {
+  if (input.signal?.aborted) {
+    return { status: 'failed', failure: cancelledFailure('Context construction was cancelled.') };
+  }
+  if (!input.imageInputSupport) {
+    return { status: 'ok', content: { type: 'text', text: UNSUPPORTED_IMAGE_TEXT } };
+  }
+  if (input.attachment.source_type !== 'host_reference' || !input.attachment.mime_type) {
+    return {
+      status: 'failed',
+      failure: {
+        code: 'image_materialization_failed',
+        message: `Image attachment ${input.attachment.attachment_id} has no readable source.`,
+        retryable: false,
+        cause: { owner: 'session' },
+      },
+    };
+  }
+  const materialized = await readHostImageContent({
+    referenceId: input.attachment.attachment_id,
+    attachmentReader: input.attachmentReader,
+    signal: input.signal,
+  });
+  if (materialized.status === 'failed') return materialized;
+  return { status: 'ok', content: materialized.content };
+}
+
 const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 export function encodeBase64(bytes: Uint8Array): string {
@@ -80,15 +99,4 @@ export function encodeBase64(bytes: Uint8Array): string {
     encoded += remaining > 2 ? BASE64_ALPHABET[third & 0b111111] : '=';
   }
   return encoded;
-}
-
-function cancelled(): { status: 'failed'; failure: ContextFailure } {
-  return {
-    status: 'failed',
-    failure: {
-      code: 'cancelled',
-      message: 'Context construction was cancelled.',
-      retryable: true,
-    },
-  };
 }

@@ -7,6 +7,7 @@
 import type { EffectiveInstructions, SystemInstruction } from '@megumi/instructions';
 import type { SkillView } from '@megumi/skills';
 import type { ExecutionEnvironment } from './context';
+import { escapeXmlAttribute } from './xml-escape';
 
 export interface SystemPromptSources {
   readonly baseInstructions: readonly SystemInstruction[];
@@ -59,13 +60,4 @@ export function renderExecutionEnvironment(environment: ExecutionEnvironment): s
     `  <shell>${escapeXmlAttribute(environment.shell)}</shell>`,
     '</execution_environment>',
   ].join('\n');
-}
-
-function escapeXmlAttribute(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
 }

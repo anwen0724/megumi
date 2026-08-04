@@ -27,8 +27,5 @@ export {
 export {
   type ContextUsageEstimate,
   type DerivedContextUsage,
-  calculateContextTokens,
-  calculatePromptTokens,
   deriveContextUsage,
-  estimateContextTokens,
 } from './context-usage';

@@ -50,14 +50,14 @@ export function resolveCompactionPolicy(
 }
 
 export function validateCompactionPolicy(policy: CompactionPolicy): void {
-  for (const [name, value] of [
-    ['reserveTokens', policy.reserveTokens],
-    ['keepRecentTokens', policy.keepRecentTokens],
-    ['minimumRecentMessages', policy.minimumRecentMessages],
-  ] as const) {
-    if (!Number.isInteger(value) || value < 0) {
-      throw new RangeError(`${name} must be a nonnegative integer.`);
-    }
+  validateTokenCount(policy.reserveTokens, 'reserveTokens');
+  validateTokenCount(policy.keepRecentTokens, 'keepRecentTokens');
+  validateTokenCount(policy.minimumRecentMessages, 'minimumRecentMessages');
+}
+
+export function validateTokenCount(value: number, name: string): void {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new RangeError(`${name} must be a nonnegative integer.`);
   }
 }
 

@@ -18,9 +18,10 @@ import type {
   SessionMessageAttachment,
 } from '@megumi/session';
 import type { ContextFailure } from './context';
-import { encodeBase64, materializeSessionImage } from './image-content';
+import { materializeSessionImage, readHostImageContent, UNSUPPORTED_IMAGE_TEXT } from './image-content';
+import { cancelledFailure, escapeXmlAttribute } from './xml-escape';
 
-const COMPACTION_SUMMARY_PREFIX = 'The conversation history before this point was compacted into the following summary:\n\n<summary>\n';
+export const COMPACTION_SUMMARY_PREFIX = 'The conversation history before this point was compacted into the following summary:\n\n<summary>\n';
 const COMPACTION_SUMMARY_SUFFIX = '\n</summary>';
 
 export type BuildContextMessagesResult =
@@ -34,7 +35,10 @@ export function sessionMessagesToEstimateMessages(
   const messages: Message[] = [];
   for (const item of history) {
     if (item.type === 'compaction') {
-      messages.push(compactionSummaryMessage(item.compaction.summary_text, item.compaction.created_at));
+      messages.push(buildCompactionSummaryMessage(
+        item.compaction.summary_text,
+        timestampOf(item.compaction.created_at),
+      ));
       continue;
     }
     const message = item.message;
@@ -65,9 +69,12 @@ export async function buildContextMessages(input: {
   const messages: Message[] = [];
   const knownToolCallIds = new Set<string>();
   for (const item of input.history) {
-    if (input.signal?.aborted) return { status: 'failed', failure: cancelled() };
+    if (input.signal?.aborted) return { status: 'failed', failure: cancelledFailure('Context construction was cancelled.') };
     if (item.type === 'compaction') {
-      messages.push(compactionSummaryMessage(item.compaction.summary_text, item.compaction.created_at));
+      messages.push(buildCompactionSummaryMessage(
+        item.compaction.summary_text,
+        timestampOf(item.compaction.created_at),
+      ));
       continue;
     }
     const message = item.message;
@@ -137,7 +144,7 @@ async function materializeUserMessageContent(input: {
     else if (block.type === 'json') content.push({ type: 'text', text: JSON.stringify(block.value) });
   }
   for (const attachment of [...input.attachments].sort((left, right) => left.ordinal - right.ordinal)) {
-    if (input.signal?.aborted) return { status: 'failed', failure: cancelled() };
+    if (input.signal?.aborted) return { status: 'failed', failure: cancelledFailure('Context construction was cancelled.') };
     if (attachment.type === 'image') {
       const materialized = await materializeSessionImage({
         attachment,
@@ -179,36 +186,21 @@ async function materializeBlocks(
 > {
   const content: Array<TextContent | ImageContent> = [];
   for (const block of blocks) {
-    if (signal?.aborted) return { status: 'failed', failure: cancelled() };
+    if (signal?.aborted) return { status: 'failed', failure: cancelledFailure('Context construction was cancelled.') };
     if (block.type === 'text') content.push({ type: 'text', text: block.text });
     else if (block.type === 'json') content.push({ type: 'text', text: JSON.stringify(block.value) });
     else if (block.type === 'image' && block.source.type === 'host_reference') {
       if (!imageInputSupport) {
-        content.push({
-          type: 'text',
-          text: '[An image was attached, but the selected model cannot view image content.]',
-        });
+        content.push({ type: 'text', text: UNSUPPORTED_IMAGE_TEXT });
         continue;
       }
-      const read = await attachmentReader.readAttachmentContent({
-        attachment_id: block.source.referenceId,
+      const materialized = await readHostImageContent({
+        referenceId: block.source.referenceId,
+        attachmentReader,
+        signal,
       });
-      if (read.status === 'failed') {
-        return {
-          status: 'failed',
-          failure: {
-            code: 'image_materialization_failed',
-            message: read.failure.message,
-            retryable: false,
-            cause: { owner: 'session', code: read.failure.code },
-          },
-        };
-      }
-      content.push({
-        type: 'image',
-        data: encodeBase64(read.content.bytes),
-        mimeType: read.content.media_type,
-      });
+      if (materialized.status === 'failed') return materialized;
+      content.push(materialized.content);
     }
   }
   return { status: 'ok', content };
@@ -292,17 +284,6 @@ export function buildCompactionSummaryMessage(summary: string, timestamp: number
   };
 }
 
-function compactionSummaryMessage(summary: string, createdAt: string): Message {
-  return {
-    role: 'user',
-    content: [{
-      type: 'text',
-      text: `${COMPACTION_SUMMARY_PREFIX}${summary}${COMPACTION_SUMMARY_SUFFIX}`,
-    }],
-    timestamp: timestampOf(createdAt),
-  };
-}
-
 function attachedDocumentBlock(input: {
   name: string;
   mediaType: string;
@@ -362,21 +343,4 @@ function parseJson(value: string): Record<string, unknown> {
   } catch {
     return { value };
   }
-}
-
-function escapeXmlAttribute(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-function cancelled(): ContextFailure {
-  return {
-    code: 'cancelled',
-    message: 'Context construction was cancelled.',
-    retryable: true,
-  };
 }

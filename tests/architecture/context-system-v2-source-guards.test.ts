@@ -20,6 +20,7 @@ describe('Context Package source guards', () => {
       'image-content.ts',
       'index.ts',
       'system-prompt.ts',
+      'xml-escape.ts',
     ]);
     expect(exists('packages/context/package.json')).toBe(true);
     expect(exists('packages/context/tsconfig.json')).toBe(true);

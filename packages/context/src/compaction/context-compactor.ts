@@ -12,6 +12,7 @@ import type { SkillView } from '@megumi/skills';
 import type { ExecutionEnvironment, ContextFailure } from '../context';
 import type { CompactionPolicy } from '../context-policy';
 import type { ContextUsageEstimate } from '../context-usage';
+import { cancelledFailure } from '../xml-escape';
 import { generateCompactionSummary } from './compaction-summary';
 import {
   planCompaction,
@@ -117,7 +118,7 @@ export async function executeContextCompaction(
     estimateMessageTokens: input.estimateMessageTokens,
   });
   if (plan.status === 'nothing_to_compact') return plan;
-  if (input.signal?.aborted) return failed(cancelled());
+  if (input.signal?.aborted) return failed(cancelledFailure('Context compaction was cancelled.'));
 
   const compactionId = input.createCompactionId();
   const beforeTokens = input.countUsage(input.beforeContext, input.signal).tokens;
@@ -159,11 +160,14 @@ export async function executeContextCompaction(
     timestamp: Date.parse(input.now()),
     ...(input.signal ? { signal: input.signal } : {}),
   });
-  if (generated.status === 'cancelled') return failCompaction(cancelled());
+  if (generated.status === 'cancelled') return failCompaction(cancelledFailure('Context compaction was cancelled.'));
   if (generated.status === 'failed') return failCompaction(modelFailure(generated.failure));
 
   const projected = await input.project(plan.plan, generated.content, input.signal);
   if (projected.status === 'failed') return failCompaction(projected.failure);
+  // The countUsage callback throws on abort; check the signal first so both the
+  // build and compact paths settle on the same cancelled result.
+  if (input.signal?.aborted) return failCompaction(cancelledFailure('Context compaction was cancelled.'));
   const projectedUsage = input.countUsage(projected.context, input.signal);
   const reduction = validateCompactionReduction({
     usageBeforeInputTokens: beforeTokens,
@@ -179,7 +183,7 @@ export async function executeContextCompaction(
     });
     return reduction;
   }
-  if (input.signal?.aborted) return failCompaction(cancelled());
+  if (input.signal?.aborted) return failCompaction(cancelledFailure('Context compaction was cancelled.'));
 
   const saved = input.sessionHistory.saveCompactionSummary({
     compaction_id: compactionId,
@@ -187,7 +191,7 @@ export async function executeContextCompaction(
     summary_text: generated.content,
     covered_until_entry_id: plan.plan.coveredUntilEntryId,
     first_kept_entry_id: plan.plan.firstKeptEntryId,
-    ...(generated.status === 'generated' ? { usage: generated.usage } : {}),
+    usage: generated.usage,
     expected_active_entry_id: input.expectedActiveEntryId,
     created_at: input.now(),
     append_to_active_path: true,
@@ -217,7 +221,7 @@ export async function executeContextCompaction(
     status: 'compacted',
     compactionId,
     usageAfter: projectedUsage,
-    summaryUsage: generated.status === 'generated' ? generated.usage : undefined,
+    summaryUsage: generated.usage,
   };
 }
 
@@ -227,9 +231,7 @@ function modelFailure(error: unknown): ContextFailure {
     : undefined;
   return {
     code: 'compaction_failed',
-    message: typeof candidate?.message === 'string'
-      ? candidate.message
-      : typeof error === 'string' ? error : 'Compaction summary model call failed.',
+    message: resolveFailureMessage(error, candidate),
     retryable: typeof candidate?.retryable === 'boolean' ? candidate.retryable : true,
     cause: {
       owner: 'ai',
@@ -238,12 +240,13 @@ function modelFailure(error: unknown): ContextFailure {
   };
 }
 
-function cancelled(): ContextFailure {
-  return {
-    code: 'cancelled',
-    message: 'Context compaction was cancelled.',
-    retryable: true,
-  };
+function resolveFailureMessage(
+  error: unknown,
+  candidate: { readonly message?: unknown } | undefined,
+): string {
+  if (typeof candidate?.message === 'string') return candidate.message;
+  if (typeof error === 'string') return error;
+  return 'Compaction summary model call failed.';
 }
 
 function failed(failure: ContextFailure): Extract<ExecuteCompactionResult, { status: 'failed' }> {

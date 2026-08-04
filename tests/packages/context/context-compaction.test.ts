@@ -1,95 +1,17 @@
 /* Verifies automatic and manual compaction share one policy, commit path, and per-Session lock. */
-import type { Api, AssistantMessage, Model } from '@megumi/ai';
+import type { AssistantMessage } from '@megumi/ai';
 import type { SessionHistoryItem } from '@megumi/session';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createContext,
   type CreateContextOptions,
-  type ModelCallContext,
-  type RunContext,
 } from '../../../packages/context/src/index';
-
-const model: Model<Api> = {
-  id: 'gpt',
-  name: 'GPT',
-  api: 'openai-completions',
-  provider: 'openai',
-  baseUrl: 'https://api.example.com/v1',
-  reasoning: false,
-  input: ['text'],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-  contextWindow: 200,
-  maxTokens: 20,
-};
-
-function completedMessage(content: string): AssistantMessage {
-  return {
-    role: 'assistant',
-    content: [{ type: 'text', text: content }],
-    api: model.api,
-    provider: model.provider,
-    model: model.id,
-    usage: {
-      input: 0,
-      output: 1,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 1,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
-    stopReason: 'stop',
-    timestamp: 0,
-  };
-}
-
-function runHistory(index: number): SessionHistoryItem[] {
-  return [
-    {
-      type: 'message',
-      entry: {
-        entry_id: `entry:user:${index}`,
-        session_id: 'session:1',
-        ...(index > 1 ? { parent_entry_id: `entry:assistant:${index - 1}` } : {}),
-        entry_type: 'message',
-        message_id: `message:user:${index}`,
-        created_at: 'now',
-      },
-      message: {
-        message_id: `message:user:${index}`,
-        session_id: 'session:1',
-        run_id: `run:${index}`,
-        message_kind: 'user_message',
-        display_content: [{ type: 'text', text: `question ${index}` }],
-        model_content: [{ type: 'text', text: `question ${index}` }],
-        created_at: 'now',
-      },
-      attachments: [],
-    },
-    {
-      type: 'message',
-      entry: {
-        entry_id: `entry:assistant:${index}`,
-        session_id: 'session:1',
-        parent_entry_id: `entry:user:${index}`,
-        entry_type: 'message',
-        message_id: `message:assistant:${index}`,
-        created_at: 'now',
-      },
-      message: {
-        message_id: `message:assistant:${index}`,
-        session_id: 'session:1',
-        run_id: `run:${index}`,
-        message_kind: 'assistant_reply',
-        status: 'completed',
-        reason_code: 'normal_completion',
-        content: [{ type: 'text', text: `answer ${index}` }],
-        created_at: 'now',
-        completed_at: 'now',
-      },
-      attachments: [],
-    },
-  ];
-}
+import {
+  compactingModel,
+  completedMessage,
+  modelCall,
+  runHistory,
+} from './context-test-fixtures';
 
 function compactedHistory(history: SessionHistoryItem[]): SessionHistoryItem[] {
   const first = history[0]!;
@@ -163,38 +85,11 @@ function fixture(
   };
 }
 
-function modelCall(overrides: Partial<ModelCallContext> = {}): ModelCallContext {
-  const run: RunContext = {
-    runId: 'run:current',
-    sessionId: 'session:1',
-    workspaceId: 'workspace:1',
-    userInput: {
-      displayContent: [{ type: 'text', text: 'continue' }],
-      modelContent: [{ type: 'text', text: 'continue' }],
-      attachments: [],
-    },
-    model,
-  };
-  return {
-    modelCallId: 'model-call:1',
-    run,
-    executionEnvironment: {
-      workingDirectory: '/workspace',
-      operatingSystem: 'Linux',
-      shell: 'POSIX shell',
-    },
-    effectiveInstructions: { sources: [] },
-    skills: { catalog: [], diagnostics: [] },
-    tools: { definitions: [] },
-    ...overrides,
-  };
-}
-
 function manualRequest(overrides: Partial<Parameters<ReturnType<typeof createContext>['compact']>[0]> = {}) {
   return {
     sessionId: 'session:1',
     workspaceId: 'workspace:1',
-    model,
+    model: compactingModel,
     trigger: 'manual' as const,
     executionEnvironment: {
       workingDirectory: '/workspace',
@@ -211,7 +106,8 @@ describe('Context compaction', () => {
   it('automatically compacts above the threshold and rebuilds from the committed Summary', async () => {
     const options = fixture();
     const result = await createContext(options).build({
-      modelCallContext: modelCall(),
+      // The small Context Window keeps the threshold below the fixture history.
+      modelCallContext: modelCall({ run: { ...modelCall().run, model: compactingModel } }),
     });
 
     if (result.status !== 'ready') {

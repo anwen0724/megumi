@@ -4,14 +4,12 @@
  * no Snapshot, Recorder or second Usage state exists here.
  */
 
-import type { Api, Model } from '@megumi/ai';
+import type { Api, Model, Usage } from '@megumi/ai';
 import {
-  calculateContextTokens,
   estimateContextTokens,
   type ContextUsageEstimate,
 } from '@megumi/ai';
 import type { SessionHistoryItem } from '@megumi/session';
-import type { Message } from '@megumi/ai';
 import { sessionMessagesToEstimateMessages } from './context-messages';
 
 export type { ContextUsageEstimate };
@@ -19,8 +17,6 @@ export type { ContextUsageEstimate };
 export function calculatePromptTokens(usage: { input: number; cacheRead: number; cacheWrite: number }): number {
   return usage.input + usage.cacheRead + usage.cacheWrite;
 }
-
-export { calculateContextTokens, estimateContextTokens };
 
 export interface DerivedContextUsage {
   readonly usageTokens: number;
@@ -49,17 +45,21 @@ export function deriveContextUsage(input: {
   let cumulativeOutputTokens = 0;
   let cumulativeCost = 0;
   for (const item of input.history) {
-    const usage = item.type === 'message'
-      ? item.message.message_kind === 'model_response' || item.message.message_kind === 'assistant_reply'
-        ? item.message.usage
-        : item.message.message_kind === 'tool_result' ? item.message.usage : undefined
-      : isUsage(item.compaction.usage) ? item.compaction.usage : undefined;
+    let usage: Usage | undefined;
+    if (item.type === 'compaction') {
+      if (isUsage(item.compaction.usage)) usage = item.compaction.usage;
+    } else if (item.message.message_kind === 'model_response'
+      || item.message.message_kind === 'assistant_reply'
+      || item.message.message_kind === 'tool_result') {
+      usage = item.message.usage;
+    }
     if (!usage) continue;
-    cumulativeInputTokens += usage.input + usage.cacheRead + usage.cacheWrite;
+    cumulativeInputTokens += calculatePromptTokens(usage);
     cumulativeOutputTokens += usage.output;
     cumulativeCost += usage.cost.total;
   }
-  const usageTokens = estimate.usageTokens > 0 ? estimate.usageTokens : estimate.tokens;
+  const hasProviderUsage = estimate.usageTokens > 0;
+  const usageTokens = hasProviderUsage ? estimate.usageTokens : estimate.tokens;
   return {
     usageTokens,
     trailingTokens: estimate.trailingTokens,
@@ -69,11 +69,11 @@ export function deriveContextUsage(input: {
     cumulativeInputTokens,
     cumulativeOutputTokens,
     cumulativeCost,
-    accuracy: estimate.usageTokens > 0 ? 'provider_reported' : 'estimated',
+    accuracy: hasProviderUsage ? 'provider_reported' : 'estimated',
   };
 }
 
-function isUsage(value: unknown): value is import('@megumi/ai').Usage {
+function isUsage(value: unknown): value is Usage {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as { input?: unknown; output?: unknown; cacheRead?: unknown; cacheWrite?: unknown; cost?: unknown };
   return typeof candidate.input === 'number'
@@ -82,5 +82,3 @@ function isUsage(value: unknown): value is import('@megumi/ai').Usage {
     && typeof candidate.cacheWrite === 'number'
     && typeof candidate.cost === 'object' && candidate.cost !== null;
 }
-
-export type { Message };

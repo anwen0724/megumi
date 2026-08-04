@@ -29,6 +29,7 @@ import {
 } from './context-policy';
 import type { ContextUsageEstimate } from './context-usage';
 import { buildSystemPrompt } from './system-prompt';
+import { cancelledFailure } from './xml-escape';
 import {
   executeContextCompaction,
   type CompactContextRequest,
@@ -52,6 +53,18 @@ export interface CreateContextOptions {
 }
 
 export type ContextCapabilities = ContextBuilder & ContextCompactor;
+
+type PromptRequestInput = {
+  readonly sessionId: string;
+  readonly history: { items: readonly SessionHistoryItem[]; expectedActiveEntryId: string };
+  readonly baseInstructions: readonly { readonly instructionId: string; readonly content: string }[];
+  readonly model: Model<Api>;
+  readonly executionEnvironment: ExecutionEnvironment;
+  readonly effectiveInstructions: EffectiveInstructions;
+  readonly skills: SkillView;
+  readonly tools: readonly Tool[];
+  readonly signal?: AbortSignal;
+};
 
 export function createContext(options: CreateContextOptions): ContextCapabilities {
   return new DefaultContext(options);
@@ -91,7 +104,7 @@ class DefaultContext implements ContextCapabilities {
       if (span) {
         this.options.observability?.endSpan({
           span,
-          status: result.status === 'ready' ? 'ok' : result.failure.code === 'cancelled' ? 'cancelled' : 'error',
+          status: spanStatus(result),
         });
       }
       if (result.status === 'ready') {
@@ -112,7 +125,7 @@ class DefaultContext implements ContextCapabilities {
   async compact(request: CompactContextRequest): Promise<CompactContextResult> {
     try {
       return await this.withSessionOperation(request.sessionId, async () => {
-        if (request.signal?.aborted) return failed(cancelled());
+        if (request.signal?.aborted) return failed(cancelledFailure('Context operation was cancelled.'));
         const policy = this.resolvePolicy();
         const capacity = contextCapacityFromModel(request.model);
         const policyProblem = compactionPolicyFailure(policy, capacity);
@@ -157,7 +170,9 @@ class DefaultContext implements ContextCapabilities {
           : compacted;
       });
     } catch (error) {
-      if (request.signal?.aborted || isAbortError(error)) return failed(cancelled());
+      if (request.signal?.aborted || isAbortError(error)) {
+        return failed(cancelledFailure('Context operation was cancelled.'));
+      }
       return failed({
         code: 'compaction_failed',
         message: error instanceof Error ? error.message : 'Context compaction failed.',
@@ -167,7 +182,7 @@ class DefaultContext implements ContextCapabilities {
   }
 
   private async buildExclusive(request: BuildContextRequest): Promise<BuildContextResult> {
-    if (request.signal?.aborted) return failed(cancelled());
+    if (request.signal?.aborted) return failed(cancelledFailure('Context operation was cancelled.'));
     const modelCall = request.modelCallContext;
     const policy = this.resolvePolicy();
     const capacity = contextCapacityFromModel(modelCall.run.model);
@@ -196,9 +211,9 @@ class DefaultContext implements ContextCapabilities {
     const base = this.readBaseInstructions();
     if (base.status === 'failed') return base;
 
-    const prompt = await this.buildPromptFromSources({
+    // The two Prompt builds in this method share every input except History.
+    const promptRequest: Omit<PromptRequestInput, 'history'> = {
       sessionId: modelCall.run.sessionId,
-      history: history.history,
       baseInstructions: base.instructions,
       model: modelCall.run.model,
       executionEnvironment: modelCall.executionEnvironment,
@@ -206,7 +221,8 @@ class DefaultContext implements ContextCapabilities {
       skills: modelCall.skills,
       tools: modelCall.tools.definitions,
       signal: request.signal,
-    });
+    };
+    const prompt = await this.buildPromptFromSources({ ...promptRequest, history: history.history });
     if (prompt.status === 'failed') return prompt;
 
     let estimate = this.countUsage(prompt.prompt);
@@ -228,17 +244,7 @@ class DefaultContext implements ContextCapabilities {
         // and rebuild the Prompt from it, never from a pre-commit projection.
         const refreshed = this.readHistory(modelCall.run.sessionId);
         if (refreshed.status === 'failed') return refreshed;
-        const rebuilt = await this.buildPromptFromSources({
-          sessionId: modelCall.run.sessionId,
-          history: refreshed.history,
-          baseInstructions: base.instructions,
-          model: modelCall.run.model,
-          executionEnvironment: modelCall.executionEnvironment,
-          effectiveInstructions: modelCall.effectiveInstructions,
-          skills: modelCall.skills,
-          tools: modelCall.tools.definitions,
-          signal: request.signal,
-        });
+        const rebuilt = await this.buildPromptFromSources({ ...promptRequest, history: refreshed.history });
         if (rebuilt.status === 'failed') return rebuilt;
         estimate = this.countUsage(rebuilt.prompt);
         return this.finalizePrompt(rebuilt.prompt, capacity, estimate);
@@ -313,17 +319,7 @@ class DefaultContext implements ContextCapabilities {
     }
   }
 
-  private async buildPromptFromSources(input: {
-    readonly sessionId: string;
-    readonly history: { items: readonly SessionHistoryItem[]; expectedActiveEntryId: string };
-    readonly baseInstructions: readonly { readonly instructionId: string; readonly content: string }[];
-    readonly model: Model<Api>;
-    readonly executionEnvironment: ExecutionEnvironment;
-    readonly effectiveInstructions: EffectiveInstructions;
-    readonly skills: SkillView;
-    readonly tools: readonly Tool[];
-    readonly signal?: AbortSignal;
-  }): Promise<
+  private async buildPromptFromSources(input: PromptRequestInput): Promise<
     | {
         readonly status: 'ok';
         readonly prompt: Prompt;
@@ -344,17 +340,6 @@ class DefaultContext implements ContextCapabilities {
       skills: input.skills,
       executionEnvironment: input.executionEnvironment,
     });
-    if (!systemPrompt.trim()) {
-      return {
-        status: 'failed',
-        failure: {
-          code: 'base_instructions_failed',
-          message: 'System Prompt could not be materialized without Base Instructions.',
-          retryable: false,
-          cause: { owner: 'instructions' },
-        },
-      };
-    }
     const sources: CompactionMessageSource[] = [];
     let messageIndex = 0;
     for (const item of input.history.items) {
@@ -398,7 +383,9 @@ class DefaultContext implements ContextCapabilities {
       .filter((item) => item.type === 'compaction')
       .at(-1)?.compaction.summary_text;
     const project = async (plan: CompactionPlan, summaryText: string, signal?: AbortSignal) => {
-      if (signal?.aborted) return { status: 'failed' as const, failure: cancelled() };
+      if (signal?.aborted) {
+        return { status: 'failed' as const, failure: cancelledFailure('Context operation was cancelled.') };
+      }
       const keptMessages = input.sources
         .slice(plan.summarizedMessages.length)
         .map((source) => source.message);
@@ -430,7 +417,7 @@ class DefaultContext implements ContextCapabilities {
       estimateMessageTokens,
       project,
       countUsage: (context, signal) => {
-        if (signal?.aborted) throw cancelled();
+        if (signal?.aborted) throw cancelledFailure('Context operation was cancelled.');
         return this.countUsage(context);
       },
       onProgress: input.onProgress,
@@ -463,6 +450,11 @@ class DefaultContext implements ContextCapabilities {
   }
 }
 
+function spanStatus(result: BuildContextResult): 'ok' | 'cancelled' | 'error' {
+  if (result.status === 'ready') return 'ok';
+  return result.failure.code === 'cancelled' ? 'cancelled' : 'error';
+}
+
 function invalidExecutionEnvironment(environment: ExecutionEnvironment): string | undefined {
   if (!environment.workingDirectory || !environment.operatingSystem || !environment.shell) {
     return 'Execution Environment is incomplete.';
@@ -481,14 +473,6 @@ function invalidToolDefinitions(
     return 'Tool Definitions cannot form a valid Prompt tools list.';
   }
   return undefined;
-}
-
-function cancelled(): ContextFailure {
-  return {
-    code: 'cancelled',
-    message: 'Context operation was cancelled.',
-    retryable: true,
-  };
 }
 
 function failed<T extends ContextFailure>(

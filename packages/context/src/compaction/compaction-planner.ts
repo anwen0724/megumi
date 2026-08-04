@@ -6,6 +6,8 @@
 
 import type { Message } from '@megumi/ai';
 import type { CompactionPolicy } from '../context-policy';
+import { validateTokenCount } from '../context-policy';
+import { COMPACTION_SUMMARY_PREFIX } from '../context-messages';
 
 export interface CompactionMessageSource {
   readonly entryId: string;
@@ -114,6 +116,8 @@ function closeToolProtocol(
     ));
     if (orphanIndex === -1) break;
     const orphan = kept[orphanIndex]!;
+    // Unreachable at runtime (the findIndex predicate only matches toolResults),
+    // but required to narrow Message to the toolResult variant for toolCallId.
     if (orphan.message.role !== 'toolResult') break;
     // The kept suffix begins inside a Tool loop: extend the cut to before the
     // Assistant message that issued the orphaned ToolCall.
@@ -144,12 +148,6 @@ function isSummaryMessage(message: Message): boolean {
   return message.role === 'user'
     && typeof message.content !== 'string'
     && message.content.some((block) => (
-      block.type === 'text' && block.text.includes('compacted into the following summary')
+      block.type === 'text' && block.text.includes(COMPACTION_SUMMARY_PREFIX)
     ));
-}
-
-function validateTokenCount(value: number, name: string): void {
-  if (!Number.isInteger(value) || value < 0) {
-    throw new RangeError(`${name} must be a nonnegative integer.`);
-  }
 }
