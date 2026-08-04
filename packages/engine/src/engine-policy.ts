@@ -15,7 +15,6 @@ export interface EnginePolicy {
   readonly maxModelCallAttempts: number;
   readonly modelRetryDelayMs: number;
   readonly maxToolExecutionsPerCall: number;
-  readonly toolRetryDelayMs: number;
   readonly terminalRunRetentionMs: number;
 }
 
@@ -36,7 +35,6 @@ const POSITIVE_INTEGER_FIELDS = [
 
 const NON_NEGATIVE_INTEGER_FIELDS = [
   'modelRetryDelayMs',
-  'toolRetryDelayMs',
 ] as const satisfies readonly (keyof EnginePolicy)[];
 
 /**

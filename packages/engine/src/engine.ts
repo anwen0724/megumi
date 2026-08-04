@@ -44,6 +44,7 @@ import {
   type RunLoopDependencies,
 } from './run-loop';
 import type { ToolCallApprovalContinuation } from './tool-call';
+import { canonicalJson } from './canonical-json';
 
 export type RunInput = UserInput;
 
@@ -201,10 +202,7 @@ export interface CreateEngineOptions {
   readonly models: Models;
   readonly context: Pick<ContextBuilder, 'build'> & Pick<ContextCompactor, 'compact'>;
   readonly scopeResolver: EngineWorkspaceSource;
-  readonly instructions: Pick<
-    InstructionReader,
-    'getSystemInstructions' | 'getEffectiveInstructions'
-  >;
+  readonly instructions: Pick<InstructionReader, 'getEffectiveInstructions'>;
   readonly session: Pick<
     SessionHistory,
     'saveUserMessage' | 'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'
@@ -247,12 +245,7 @@ export function createEngine(options: CreateEngineOptions): Engine {
       if (!accepting) {
         return {
           status: 'failed',
-          failure: {
-            code: 'internal_error',
-            message: 'Engine is shutting down and is not accepting new Runs.',
-            retryable: false,
-            cause: { owner: 'engine', code: 'engine_shutting_down' },
-          },
+          failure: shuttingDownFailure('Engine is shutting down and is not accepting new Runs.'),
         };
       }
       const createdAt = options.clock.now();
@@ -389,12 +382,7 @@ export function createEngine(options: CreateEngineOptions): Engine {
       if (!accepting) {
         return {
           status: 'failed',
-          failure: {
-            code: 'internal_error',
-            message: 'Engine is shutting down and is not accepting Run resumes.',
-            retryable: false,
-            cause: { owner: 'engine', code: 'engine_shutting_down' },
-          },
+          failure: shuttingDownFailure('Engine is shutting down and is not accepting Run resumes.'),
         };
       }
       const record = store.getRunApproval(request.runApprovalId);
@@ -581,19 +569,11 @@ export function createEngine(options: CreateEngineOptions): Engine {
   return engine;
 }
 
-function canonicalJson(value: unknown): string {
-  return JSON.stringify(canonicalValue(value));
-}
-
-function canonicalValue(value: unknown): unknown {
-  if (value instanceof Uint8Array) return { $bytes: [...value] };
-  if (Array.isArray(value)) return value.map(canonicalValue);
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, item]) => [key, canonicalValue(item)]),
-    );
-  }
-  return value;
+function shuttingDownFailure(message: string): RunFailure {
+  return {
+    code: 'internal_error',
+    message,
+    retryable: false,
+    cause: { owner: 'engine', code: 'engine_shutting_down' },
+  };
 }

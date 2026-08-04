@@ -10,6 +10,7 @@ import {
   collectEvents,
   createEngineFixture,
   neverEndingStream,
+  startedRun,
   startRequest,
 } from './engine-test-fixtures';
 
@@ -112,8 +113,7 @@ describe('createEngine', () => {
       executeTool,
     });
 
-    const started = await fixture.engine.startRun(startRequest);
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     const firstSegment = await collectEvents(started.events);
     const requested = firstSegment.find((event) => event.eventType === 'approval.requested');
     if (!requested) throw new Error('Expected approval request event.');
@@ -185,8 +185,7 @@ describe('createEngine', () => {
         }),
       },
     });
-    const started = await fixture.engine.startRun(startRequest);
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     const waitingEvents = await collectEvents(started.events);
     const requested = waitingEvents.find((event) => event.eventType === 'approval.requested');
     if (!requested) throw new Error('Expected approval request event.');
@@ -219,8 +218,7 @@ describe('createEngine', () => {
     const fixture = createEngineFixture({
       streams: [neverEndingStream()],
     });
-    const started = await fixture.engine.startRun(startRequest);
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     await expect(fixture.engine.shutdown({ timeoutMs: 1_000 })).resolves.toEqual({

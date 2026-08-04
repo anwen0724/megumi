@@ -16,6 +16,8 @@ import type {
 } from '@megumi/permissions';
 import type {
   BuildContextResult,
+  CompactContextResult,
+  ContextUsageEstimate,
 } from '@megumi/context';
 import type {
   SaveAssistantReplyRequest,
@@ -29,6 +31,7 @@ import type {
   CreateEngineOptions,
   Engine,
   EnginePolicy,
+  Run,
   StartRunRequest,
 } from '@megumi/engine';
 import { AssistantMessageEventStream } from '../../../packages/ai/src/utils/event-stream';
@@ -79,7 +82,6 @@ export const enginePolicy: EnginePolicy = {
   maxModelCallAttempts: 1,
   modelRetryDelayMs: 0,
   maxToolExecutionsPerCall: 1,
-  toolRetryDelayMs: 0,
   terminalRunRetentionMs: 60_000,
 };
 
@@ -240,7 +242,6 @@ export function createEngineFixture(input: {
       },
     },
     instructions: {
-      getSystemInstructions: () => [{ instructionId: 'system', content: 'Base instructions.' }],
       getEffectiveInstructions: async () => ({
         status: 'ok' as const,
         instructions: { sources: [] },
@@ -290,6 +291,88 @@ export function createEngineFixture(input: {
   };
 }
 
+export async function startedRun(
+  fixture: EngineFixture,
+  request: StartRunRequest = startRequest,
+): Promise<{ readonly run: Run; readonly events: AsyncIterable<RuntimeEvent> }> {
+  const started = await fixture.engine.startRun(request);
+  if (started.status !== 'started') {
+    throw new Error(`Expected started Run, got ${started.status}.`);
+  }
+  return { run: started.run, events: started.events };
+}
+
+export async function requestedCancellation(
+  fixture: EngineFixture,
+  runId: string,
+): Promise<{ readonly run: Run; readonly events: RuntimeEvent[] }> {
+  const cancellation = await fixture.engine.cancelRun({ runId });
+  if (cancellation.status !== 'cancellation_requested') {
+    throw new Error(`Expected cancellation request, got ${cancellation.status}.`);
+  }
+  return { run: cancellation.run, events: await collectEvents(cancellation.events) };
+}
+
+export async function compactedOverflowCompaction(): Promise<Extract<CompactContextResult, { status: 'compacted' }>> {
+  const usageBefore: ContextUsageEstimate = {
+    tokens: 100,
+    usageTokens: 0,
+    trailingTokens: 100,
+    lastUsageIndex: null,
+  };
+  return {
+    status: 'compacted',
+    compactionId: 'compaction:overflow',
+    usageBefore,
+    usageAfter: { tokens: 20, usageTokens: 0, trailingTokens: 20, lastUsageIndex: null },
+  };
+}
+
+function baseMessage(
+  overrides: Omit<AssistantMessage, 'role' | 'api' | 'provider' | 'model' | 'timestamp'>,
+): AssistantMessage {
+  return {
+    role: 'assistant',
+    api: model.api,
+    provider: model.provider,
+    model: model.id,
+    usage: ZERO_USAGE,
+    timestamp: 1,
+    ...overrides,
+  };
+}
+
+function pushAssistantStream(
+  stream: AssistantMessageEventStream,
+  message: AssistantMessage,
+  options: {
+    readonly text?: string;
+    readonly toolCall?: Extract<AssistantMessage['content'][number], { type: 'toolCall' }>;
+    readonly doneReason?: Extract<AssistantMessage['stopReason'], 'stop' | 'length' | 'toolUse'>;
+  } = {},
+): void {
+  stream.push({ type: 'start', partial: { ...message, content: [] } });
+  if (options.text !== undefined) {
+    stream.push({
+      type: 'text_delta',
+      contentIndex: 0,
+      delta: options.text,
+      partial: { ...message, content: [{ type: 'text', text: options.text }] },
+    });
+  }
+  if (options.toolCall) {
+    stream.push({
+      type: 'toolcall_end',
+      contentIndex: 1,
+      toolCall: options.toolCall,
+      partial: message,
+    });
+  }
+  if (options.doneReason) {
+    stream.push({ type: 'done', reason: options.doneReason, message });
+  }
+}
+
 export function assistantStreamWithUsage(
   text: string,
   usage: {
@@ -301,25 +384,12 @@ export function assistantStreamWithUsage(
   },
 ): AssistantMessageEventStream {
   const stream = new AssistantMessageEventStream();
-  const content: AssistantMessage['content'] = [{ type: 'text', text }];
-  const message: AssistantMessage = {
-    role: 'assistant',
-    content,
-    api: model.api,
-    provider: model.provider,
-    model: model.id,
+  const message = baseMessage({
+    content: [{ type: 'text', text }],
     usage: { ...usage, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
     stopReason: 'stop',
-    timestamp: 1,
-  };
-  stream.push({ type: 'start', partial: { ...message, content: [] } });
-  stream.push({
-    type: 'text_delta',
-    contentIndex: 0,
-    delta: text,
-    partial: message,
   });
-  stream.push({ type: 'done', reason: 'stop', message });
+  pushAssistantStream(stream, message, { text, doneReason: 'stop' });
   return stream;
 }
 
@@ -328,78 +398,87 @@ export function assistantStream(
   toolCall?: { readonly id: string; readonly name: string; readonly arguments: unknown },
 ): AssistantMessageEventStream {
   const stream = new AssistantMessageEventStream();
-  const content: AssistantMessage['content'] = [{ type: 'text', text }];
-  if (toolCall) {
-    content.push({
-      type: 'toolCall',
-      id: toolCall.id,
-      name: toolCall.name,
-      arguments: toolCall.arguments as Record<string, unknown>,
-    });
-  }
-  const message: AssistantMessage = {
-    role: 'assistant',
-    content,
-    api: model.api,
-    provider: model.provider,
-    model: model.id,
-    usage: ZERO_USAGE,
+  const toolCallBlock: Extract<AssistantMessage['content'][number], { type: 'toolCall' }> | undefined
+    = toolCall
+      ? {
+          type: 'toolCall',
+          id: toolCall.id,
+          name: toolCall.name,
+          arguments: toolCall.arguments as Record<string, unknown>,
+        }
+      : undefined;
+  const message = baseMessage({
+    content: [
+      { type: 'text', text },
+      ...(toolCallBlock ? [toolCallBlock] : []),
+    ],
     stopReason: toolCall ? 'toolUse' : 'stop',
-    timestamp: 1,
-  };
-  stream.push({ type: 'start', partial: { ...message, content: [] } });
-  stream.push({
-    type: 'text_delta',
-    contentIndex: 0,
-    delta: text,
-    partial: { ...message, content: [{ type: 'text', text }] },
   });
-  if (toolCall) {
-    stream.push({
-      type: 'toolcall_end',
-      contentIndex: 1,
-      toolCall: content[1] as Extract<AssistantMessage['content'][number], { type: 'toolCall' }>,
-      partial: message,
-    });
-  }
-  stream.push({ type: 'done', reason: toolCall ? 'toolUse' : 'stop', message });
+  pushAssistantStream(stream, message, {
+    text,
+    toolCall: toolCallBlock,
+    doneReason: toolCall ? 'toolUse' : 'stop',
+  });
+  return stream;
+}
+
+/** Provider returns a completed response whose error message matches the overflow signature. */
+export function errorOverflowStream(): AssistantMessageEventStream {
+  const stream = new AssistantMessageEventStream();
+  const failure = createModelFailure({
+    code: 'invalid_response',
+    retryable: false,
+  });
+  const message = baseMessage({
+    content: [{ type: 'text', text: 'prompt is too long: 213462 tokens > 200000 maximum' }],
+    stopReason: 'error',
+    failure,
+    errorMessage: 'prompt is too long: 213462 tokens > 200000 maximum',
+  });
+  pushAssistantStream(stream, message);
+  // The provider overflow text arrives as the raw thrown cause; the stream
+  // normalization preserves it because it matches the Overflow signature.
+  stream.push({
+    type: 'error',
+    reason: 'error',
+    failure,
+    error: message,
+    cause: new Error('prompt is too long: 213462 tokens > 200000 maximum'),
+  });
+  return stream;
+}
+
+/** Provider silently truncates the oversized input: length-stop with zero output filling the window. */
+export function lengthOverflowStream(): AssistantMessageEventStream {
+  const stream = new AssistantMessageEventStream();
+  const message = baseMessage({
+    content: [],
+    usage: {
+      input: 4056,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 4056,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason: 'length',
+  });
+  pushAssistantStream(stream, message, { doneReason: 'length' });
   return stream;
 }
 
 export function neverEndingStream(): AssistantMessageEventStream {
   const stream = new AssistantMessageEventStream();
-  const partial: AssistantMessage = {
-    role: 'assistant',
-    content: [],
-    api: model.api,
-    provider: model.provider,
-    model: model.id,
-    usage: ZERO_USAGE,
-    stopReason: 'stop',
-    timestamp: 1,
-  };
-  stream.push({ type: 'start', partial });
+  pushAssistantStream(stream, baseMessage({ content: [], stopReason: 'stop' }));
   return stream;
 }
 
 export function partialNeverEndingStream(text: string): AssistantMessageEventStream {
-  const stream = neverEndingStream();
-  const partial: AssistantMessage = {
-    role: 'assistant',
+  const stream = new AssistantMessageEventStream();
+  pushAssistantStream(stream, baseMessage({
     content: [{ type: 'text', text }],
-    api: model.api,
-    provider: model.provider,
-    model: model.id,
-    usage: ZERO_USAGE,
     stopReason: 'stop',
-    timestamp: 1,
-  };
-  stream.push({
-    type: 'text_delta',
-    contentIndex: 0,
-    delta: text,
-    partial,
-  });
+  }), { text });
   return stream;
 }
 
@@ -409,30 +488,18 @@ export function retryableFailedStream(text: string): AssistantMessageEventStream
     code: 'rate_limited',
     retryable: true,
   });
-  const partial: AssistantMessage = {
-    role: 'assistant',
+  const message = baseMessage({
     content: [{ type: 'text', text }],
-    api: model.api,
-    provider: model.provider,
-    model: model.id,
-    usage: ZERO_USAGE,
     stopReason: 'error',
-    timestamp: 1,
     failure,
     errorMessage: failure.message,
-  };
-  stream.push({ type: 'start', partial: { ...partial, content: [] } });
-  stream.push({
-    type: 'text_delta',
-    contentIndex: 0,
-    delta: text,
-    partial,
   });
+  pushAssistantStream(stream, message, { text });
   stream.push({
     type: 'error',
     reason: 'error',
     failure,
-    error: partial,
+    error: message,
   });
   return stream;
 }

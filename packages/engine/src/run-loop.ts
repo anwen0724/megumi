@@ -62,6 +62,8 @@ import {
   runFailureToRuntimeError,
   toolResultErrorToRuntimeError,
 } from './runtime-error-mapping';
+import { canonicalJson } from './canonical-json';
+import { raceWithTimeout } from './timeout-utils';
 
 const STREAM_DELTA_EVENT_TYPES = new Set<RuntimeEventType>([
   'model_call.text_delta',
@@ -397,7 +399,7 @@ export function requestRunCancellation(
     scope: 'run',
   });
   emitEvent(dependencies, runtime, run, 'run.cancelling', { cancelRequestId });
-  const approval = pendingApprovalForRun(dependencies.store, run.runId);
+  const approval = dependencies.store.getPendingRunApproval(run.runId);
   if (approval) {
     const cancelled = dependencies.store.cancelPendingRunApproval({
       runId: run.runId,
@@ -422,12 +424,9 @@ async function executeRunLoop(
 ): Promise<void> {
   try {
     while (true) {
-      const run = dependencies.store.getRun(runtime.runId);
-      if (!run || isTerminalRunStatus(run.status) || run.status === 'waiting') return;
-      if (run.status === 'cancelling' || runtime.controller.signal.aborted) {
-        await finishCancellationIfStopped(dependencies, runtime);
-        return;
-      }
+      const gate = await nextRunState(dependencies, runtime);
+      if (!gate.proceed) return;
+      let run = gate.run;
       if (runtime.modelCallCount >= dependencies.policy.maxModelCallsPerRun) {
         await failRun(dependencies, runtime, loopLimitFailure('ModelCall limit reached.'));
         return;
@@ -444,10 +443,7 @@ async function executeRunLoop(
 
       // Workspace -> ExecutionEnvironment (fixed before this ModelCall).
       const environmentResult = dependencies.scopeResolver.resolve({ workspaceId: run.workspaceId });
-      if (runtime.controller.signal.aborted) {
-        await finishCancellationIfStopped(dependencies, runtime);
-        return;
-      }
+      if (!(await nextRunState(dependencies, runtime)).proceed) return;
       if (environmentResult.status === 'failed') {
         await failRun(dependencies, runtime, {
           code: 'context_failed',
@@ -468,7 +464,8 @@ async function executeRunLoop(
           },
           { signal: runtime.controller.signal },
         );
-        if (runtime.controller.signal.aborted || instructions.status === 'cancelled') {
+        if (!(await nextRunState(dependencies, runtime)).proceed) return;
+        if (instructions.status === 'cancelled') {
           await finishCancellationIfStopped(dependencies, runtime);
           return;
         }
@@ -587,12 +584,9 @@ async function executeRunLoop(
         return;
       }
       prompt = initialBuild.prompt;
-      const runAfterContext = dependencies.store.getRun(run.runId);
-      if (!runAfterContext || isTerminalRunStatus(runAfterContext.status)) return;
-      if (runAfterContext.status === 'cancelling' || runtime.controller.signal.aborted) {
-        await finishCancellationIfStopped(dependencies, runtime);
-        return;
-      }
+      const afterContext = await nextRunState(dependencies, runtime);
+      if (!afterContext.proceed) return;
+      run = afterContext.run;
 
       runtime.modelCallCount += 1;
       runtime.activeModelCallId = modelCallId;
@@ -714,20 +708,17 @@ async function executeRunLoop(
         return;
       }
 
-      const runAfterModelCall = dependencies.store.getRun(run.runId);
-      if (!runAfterModelCall || isTerminalRunStatus(runAfterModelCall.status)) return;
-      if (runAfterModelCall.status === 'cancelling' || runtime.controller.signal.aborted) {
-        await finishCancellationIfStopped(dependencies, runtime);
-        return;
-      }
+      const afterModelCall = await nextRunState(dependencies, runtime);
+      if (!afterModelCall.proceed) return;
+      run = afterModelCall.run;
 
       const assistantContent = toAssistantContent(terminal.message);
       if (terminal.toolCalls.length === 0) {
         releaseCurrentToolRouter(dependencies, runtime);
         const reply = dependencies.session.saveAssistantReply({
           message_id: dependencies.ids.createSessionMessageId(),
-          session_id: runAfterModelCall.sessionId,
-          run_id: runAfterModelCall.runId,
+          session_id: run.sessionId,
+          run_id: run.runId,
           parent_entry_id: runtime.lastCommittedEntryId,
           status: 'completed',
           content: assistantContent,
@@ -739,7 +730,7 @@ async function executeRunLoop(
           await failRun(dependencies, runtime, sessionFailure(reply.failure.message), false);
           return;
         }
-        const completed = transitionRun(runAfterModelCall, {
+        const completed = transitionRun(run, {
           status: 'completed',
           at: dependencies.clock.now(),
         });
@@ -766,8 +757,8 @@ async function executeRunLoop(
 
       const response = dependencies.session.saveModelResponse({
         message_id: dependencies.ids.createSessionMessageId(),
-        session_id: runAfterModelCall.sessionId,
-        run_id: runAfterModelCall.runId,
+        session_id: run.sessionId,
+        run_id: run.runId,
         parent_entry_id: runtime.lastCommittedEntryId,
         content: assistantContent,
         outcome_status: 'completed',
@@ -818,6 +809,29 @@ async function executeRunLoop(
       cause: { owner: 'engine', code: 'unexpected_exception' },
     });
   }
+}
+
+type NextRunStateResult =
+  | { readonly run: Run; readonly proceed: true }
+  | { readonly proceed: false };
+
+/**
+ * Re-checks the Run before each cross-boundary step: a terminal, waiting or
+ * cancelled Run stops the loop, and a cancelled one converges before returning.
+ */
+async function nextRunState(
+  dependencies: RunLoopDependencies,
+  runtime: EngineRunRuntime,
+): Promise<NextRunStateResult> {
+  const run = dependencies.store.getRun(runtime.runId);
+  if (!run || isTerminalRunStatus(run.status) || run.status === 'waiting') {
+    return { proceed: false };
+  }
+  if (run.status === 'cancelling' || runtime.controller.signal.aborted) {
+    await finishCancellationIfStopped(dependencies, runtime);
+    return { proceed: false };
+  }
+  return { run, proceed: true };
 }
 
 async function processToolBatch(
@@ -904,7 +918,7 @@ async function commitNewToolResults(
     }
     runtime.committedToolCallIds.add(result.toolCallId);
     runtime.lastCommittedEntryId = saved.entry.entry_id;
-      emitEvent(dependencies, runtime, run, 'tool_result.created', {
+    emitEvent(dependencies, runtime, run, 'tool_result.created', {
       toolCallId: result.toolCallId,
       toolName: result.toolName,
       kind: result.status,
@@ -1008,127 +1022,119 @@ function emitModelCallEvent(
   event: ModelCallEvent,
   retryIds: Map<number, string>,
 ): void {
-  if (event.type === 'started') {
-    emitEvent(dependencies, runtime, run, 'model_call.started', {
-      modelCallId: event.modelCall.modelCallId,
-      providerId: String(run.model.provider),
-      modelId: run.model.id,
-    });
-    return;
-  }
-  if (event.type === 'attempt_started') {
-    recordObservedLog(dependencies, runtime, {
-      level: 'info',
-      event: 'model.call.attempt.started',
-      attributes: {
-        modelCallId: event.modelCallId,
-        attemptNumber: event.attemptNumber,
-        maxAttempts: event.maxAttempts,
-      },
-    });
-    recordObservedMeasurement(dependencies, runtime, {
-      name: 'model.call.attempt',
-      value: event.attemptNumber,
-      unit: 'count',
-      attributes: { modelCallId: event.modelCallId },
-    });
-    return;
-  }
-  if (event.type === 'text_delta') {
-    emitEvent(dependencies, runtime, run, 'model_call.text_delta', {
-      modelCallId: event.modelCallId,
-      delta: event.delta,
-    });
-    return;
-  }
-  if (event.type === 'projection_reset') {
-    emitEvent(dependencies, runtime, run, 'model_call.projection_reset', {
-      modelCallId: event.modelCallId,
-      failedAttemptNumber: event.failedAttemptNumber,
-    });
-    return;
-  }
-  if (event.type === 'context_overflow') {
-    // A recoverable Context overflow is not a ModelCall terminal: flush stale
-    // stream buffers and record a diagnostic before the Engine compacts and retries.
-    emitEvent(dependencies, runtime, run, 'model_call.projection_reset', {
-      modelCallId: event.modelCallId,
-      failedAttemptNumber: event.attemptNumber,
-    });
-    recordObservedLog(dependencies, runtime, {
-      level: 'warn',
-      event: 'model.call.context_overflow',
-      attributes: {
-        modelCallId: event.modelCallId,
-        attemptNumber: event.attemptNumber,
-      },
-    });
-    return;
-  }
-  if (event.type === 'thinking_started') {
-    emitEvent(dependencies, runtime, run, 'model.thinking.started', {
-      modelCallId: event.modelCallId,
-    });
-    return;
-  }
-  if (event.type === 'thinking_delta') {
-    emitEvent(dependencies, runtime, run, 'model.thinking.delta', {
-      modelCallId: event.modelCallId,
-      delta: event.delta,
-    });
-    return;
-  }
-  if (event.type === 'thinking_completed') {
-    emitEvent(dependencies, runtime, run, 'model.thinking.completed', {
-      modelCallId: event.modelCallId,
-    });
-    return;
-  }
-  if (event.type === 'retrying') {
-    const retryRequestId = dependencies.ids.createRuntimeEventId();
-    retryIds.set(event.nextAttemptNumber, retryRequestId);
-    emitEvent(dependencies, runtime, run, 'retry.started', {
-      retryRequestId,
-      retryKind: 'model_call',
-    });
-    return;
-  }
-  if (event.type === 'completed') {
-    for (const call of event.toolCalls) {
-      emitEvent(dependencies, runtime, run, 'model_call.tool_call', {
+  switch (event.type) {
+    case 'started':
+      emitEvent(dependencies, runtime, run, 'model_call.started', {
         modelCallId: event.modelCall.modelCallId,
-        toolCallId: call.toolCallId,
-        toolName: call.toolName,
-        input: toJsonValue(call.input),
+        providerId: String(run.model.provider),
+        modelId: run.model.id,
       });
-    }
-    for (const retryRequestId of retryIds.values()) {
-      emitEvent(dependencies, runtime, run, 'retry.completed', {
+      return;
+    case 'attempt_started':
+      recordObservedLog(dependencies, runtime, {
+        level: 'info',
+        event: 'model.call.attempt.started',
+        attributes: {
+          modelCallId: event.modelCallId,
+          attemptNumber: event.attemptNumber,
+          maxAttempts: event.maxAttempts,
+        },
+      });
+      recordObservedMeasurement(dependencies, runtime, {
+        name: 'model.call.attempt',
+        value: event.attemptNumber,
+        unit: 'count',
+        attributes: { modelCallId: event.modelCallId },
+      });
+      return;
+    case 'text_delta':
+      emitEvent(dependencies, runtime, run, 'model_call.text_delta', {
+        modelCallId: event.modelCallId,
+        delta: event.delta,
+      });
+      return;
+    case 'projection_reset':
+      emitEvent(dependencies, runtime, run, 'model_call.projection_reset', {
+        modelCallId: event.modelCallId,
+        failedAttemptNumber: event.failedAttemptNumber,
+      });
+      return;
+    case 'context_overflow':
+      // A recoverable Context overflow is not a ModelCall terminal: flush stale
+      // stream buffers and record a diagnostic before the Engine compacts and retries.
+      emitEvent(dependencies, runtime, run, 'model_call.projection_reset', {
+        modelCallId: event.modelCallId,
+        failedAttemptNumber: event.attemptNumber,
+      });
+      recordObservedLog(dependencies, runtime, {
+        level: 'warn',
+        event: 'model.call.context_overflow',
+        attributes: {
+          modelCallId: event.modelCallId,
+          attemptNumber: event.attemptNumber,
+        },
+      });
+      return;
+    case 'thinking_started':
+      emitEvent(dependencies, runtime, run, 'model.thinking.started', {
+        modelCallId: event.modelCallId,
+      });
+      return;
+    case 'thinking_delta':
+      emitEvent(dependencies, runtime, run, 'model.thinking.delta', {
+        modelCallId: event.modelCallId,
+        delta: event.delta,
+      });
+      return;
+    case 'thinking_completed':
+      emitEvent(dependencies, runtime, run, 'model.thinking.completed', {
+        modelCallId: event.modelCallId,
+      });
+      return;
+    case 'retrying': {
+      const retryRequestId = dependencies.ids.createRuntimeEventId();
+      retryIds.set(event.nextAttemptNumber, retryRequestId);
+      emitEvent(dependencies, runtime, run, 'retry.started', {
         retryRequestId,
         retryKind: 'model_call',
       });
+      return;
     }
-    emitEvent(dependencies, runtime, run, 'model_call.completed', {
-      modelCallId: event.modelCall.modelCallId,
-      finishReason: event.toolCalls.length > 0 ? 'tool_calls' : event.message.stopReason,
-      content: event.message.content
-        .filter((block): block is Extract<typeof block, { type: 'text' }> => block.type === 'text')
-        .map((block) => ({ type: 'text' as const, text: block.text })),
-    });
-    return;
-  }
-  if (event.type === 'failed') {
-    for (const retryRequestId of retryIds.values()) {
-      emitEvent(dependencies, runtime, run, 'retry.failed', {
-        retryRequestId,
-        retryKind: 'model_call',
-        error: modelCallFailureToRuntimeError(event.failure),
+    case 'completed':
+      for (const call of event.toolCalls) {
+        emitEvent(dependencies, runtime, run, 'model_call.tool_call', {
+          modelCallId: event.modelCall.modelCallId,
+          toolCallId: call.toolCallId,
+          toolName: call.toolName,
+          input: toJsonValue(call.input),
+        });
+      }
+      for (const retryRequestId of retryIds.values()) {
+        emitEvent(dependencies, runtime, run, 'retry.completed', {
+          retryRequestId,
+          retryKind: 'model_call',
+        });
+      }
+      emitEvent(dependencies, runtime, run, 'model_call.completed', {
+        modelCallId: event.modelCall.modelCallId,
+        finishReason: event.toolCalls.length > 0 ? 'tool_calls' : event.message.stopReason,
+        content: event.message.content
+          .filter((block): block is Extract<typeof block, { type: 'text' }> => block.type === 'text')
+          .map((block) => ({ type: 'text' as const, text: block.text })),
       });
-    }
-    emitEvent(dependencies, runtime, run, 'model_call.completed', {
-      modelCallId: event.modelCall.modelCallId,
-      finishReason: event.failure.code === 'aborted' ? 'cancelled' : 'failed',
-    });
+      return;
+    case 'failed':
+      for (const retryRequestId of retryIds.values()) {
+        emitEvent(dependencies, runtime, run, 'retry.failed', {
+          retryRequestId,
+          retryKind: 'model_call',
+          error: modelCallFailureToRuntimeError(event.failure),
+        });
+      }
+      emitEvent(dependencies, runtime, run, 'model_call.completed', {
+        modelCallId: event.modelCall.modelCallId,
+        finishReason: event.failure.code === 'aborted' ? 'cancelled' : 'failed',
+      });
   }
 }
 
@@ -1225,7 +1231,11 @@ async function convergeCancellation(
     await finishCancellationIfStopped(dependencies, runtime);
     return;
   }
-  const outcome = await raceWithTimeout(task, dependencies.policy.cancellationTimeoutMs);
+  // The active task swallows its own outcome; a rejection still counts as completion.
+  const outcome = await raceWithTimeout(
+    task.then(() => 'completed' as const, () => 'completed' as const),
+    dependencies.policy.cancellationTimeoutMs,
+  );
   const run = dependencies.store.getRun(runtime.runId);
   if (!run || run.status !== 'cancelling') return;
   if (outcome === 'completed') {
@@ -1448,16 +1458,7 @@ function startObservedSpan(
   try {
     return dependencies.observability.startSpan({
       name,
-      correlation: {
-        ...(runtime.trace ? { traceId: runtime.trace.traceId } : {}),
-        ...(runtime.rootSpan ? { parentSpanId: runtime.rootSpan.spanId } : {}),
-        ...(run ? {
-          runId: run.runId,
-          sessionId: run.sessionId,
-          workspaceId: run.workspaceId,
-          requestId: run.requestId,
-        } : {}),
-      },
+      correlation: observedCorrelation(runtime, run, 'parentSpanId'),
     });
   } catch {
     return undefined;
@@ -1520,10 +1521,14 @@ function recordObservedMeasurement(
   }
 }
 
-function observedCorrelation(runtime: EngineRunRuntime, run: Run | undefined) {
+function observedCorrelation(
+  runtime: EngineRunRuntime,
+  run: Run | undefined,
+  spanKey: 'spanId' | 'parentSpanId' = 'spanId',
+) {
   return {
     ...(runtime.trace ? { traceId: runtime.trace.traceId } : {}),
-    ...(runtime.rootSpan ? { spanId: runtime.rootSpan.spanId } : {}),
+    ...(runtime.rootSpan ? { [spanKey]: runtime.rootSpan.spanId } : {}),
     ...(run ? {
       runId: run.runId,
       sessionId: run.sessionId,
@@ -1531,8 +1536,6 @@ function observedCorrelation(runtime: EngineRunRuntime, run: Run | undefined) {
       requestId: run.requestId,
     } : {}),
   };
-
-;
 }
 
 function assistantMetadata(message: AssistantMessage): {
@@ -1572,13 +1575,6 @@ function toAssistantContent(message: AssistantMessage): AssistantContentBlock[] 
 
 function findToolCall(runtime: EngineRunRuntime, toolCallId: string): ToolCall | undefined {
   return runtime.currentToolRoundCalls.find((call) => call.toolCallId === toolCallId);
-}
-
-function pendingApprovalForRun(
-  store: ActiveRunStore,
-  runId: string,
-): RunApproval | undefined {
-  return store.getPendingRunApproval(runId);
 }
 
 function eventSource(eventType: RuntimeEventType): 'core' | 'provider' | 'tool' | 'approval' {
@@ -1659,51 +1655,6 @@ function toJsonValue(value: unknown): JsonValue {
   return JSON.parse(canonicalJson(value)) as JsonValue;
 }
 
-function canonicalJson(value: unknown): string {
-  return JSON.stringify(canonicalValue(value));
-}
-
-function canonicalValue(value: unknown): unknown {
-  if (value instanceof Uint8Array) return { $bytes: [...value] };
-  if (Array.isArray(value)) return value.map(canonicalValue);
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, item]) => [key, canonicalValue(item)]),
-    );
-  }
-  if (
-    value === null
-    || typeof value === 'string'
-    || typeof value === 'number'
-    || typeof value === 'boolean'
-  ) {
-    return value;
-  }
-  return null;
-}
-
 function snapshot<T>(value: T): T {
   return structuredClone(value);
-}
-
-function raceWithTimeout(
-  task: Promise<unknown>,
-  timeoutMs: number,
-): Promise<'completed' | 'timed_out'> {
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = (result: 'completed' | 'timed_out') => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      resolve(result);
-    };
-    const timeout = setTimeout(() => finish('timed_out'), timeoutMs);
-    void task.then(
-      () => finish('completed'),
-      () => finish('completed'),
-    );
-  });
 }

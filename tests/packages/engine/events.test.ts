@@ -15,6 +15,7 @@ import {
   createEngineFixture,
   enginePolicy,
   retryableFailedStream,
+  startedRun,
   startRequest,
 } from './engine-test-fixtures';
 
@@ -48,8 +49,7 @@ describe('Engine RuntimeEvents', () => {
       streams: [assistantStream('answer')],
     });
 
-    const started = await fixture.engine.startRun(startRequest);
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     const events = await collectEvents(started.events);
 
     expect(events.map((event) => event.sequence)).toEqual(
@@ -76,8 +76,7 @@ describe('Engine RuntimeEvents', () => {
       },
     });
 
-    const started = await fixture.engine.startRun(startRequest);
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     const events = await collectEvents(started.events);
 
     expect(events.at(-1)?.eventType).toBe('run.completed');
@@ -94,8 +93,7 @@ describe('Engine RuntimeEvents', () => {
       },
     });
 
-    const started = await fixture.engine.startRun(startRequest);
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     expect((await collectEvents(started.events)).at(-1)?.eventType).toBe('run.completed');
   });
 
@@ -108,8 +106,7 @@ describe('Engine RuntimeEvents', () => {
       policy: { maxModelCallAttempts: 2 },
     });
 
-    const started = await fixture.engine.startRun(startRequest);
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     const events = await collectEvents(started.events);
     const resetIndex = events.findIndex(
       (event) => event.eventType === 'model_call.projection_reset',
@@ -198,8 +195,7 @@ describe('Engine RuntimeEvents', () => {
         },
       } as unknown as ObservabilityService,
     });
-    const first = await startFailure.engine.startRun(startRequest);
-    if (first.status !== 'started') throw new Error('Expected started Run.');
+    const first = await startedRun(startFailure);
     expect((await collectEvents(first.events)).at(-1)?.eventType).toBe('run.completed');
 
     const finishFailure = createEngineFixture({
@@ -224,11 +220,10 @@ describe('Engine RuntimeEvents', () => {
         },
       } as unknown as ObservabilityService,
     });
-    const second = await finishFailure.engine.startRun({
+    const second = await startedRun(finishFailure, {
       ...startRequest,
       requestId: 'request:2',
     });
-    if (second.status !== 'started') throw new Error('Expected started Run.');
     expect((await collectEvents(second.events)).at(-1)?.eventType).toBe('run.completed');
   });
 
@@ -263,8 +258,7 @@ describe('Engine RuntimeEvents', () => {
       observability,
     });
 
-    const started = await fixture.engine.startRun(startRequest);
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     expect((await collectEvents(started.events)).at(-1)?.eventType).toBe('run.completed');
 
     expect(runInSpanContext).toHaveBeenCalled();

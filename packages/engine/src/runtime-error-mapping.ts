@@ -4,7 +4,7 @@ import type { RuntimeError } from '@megumi/events';
 import type { ContextFailure } from '@megumi/context';
 import type { ToolResultError } from './tool-call';
 import type { ModelCallFailure } from './model-call';
-import type { RunFailure } from './run';
+import type { RunFailure, RunFailureCode } from './run';
 
 export function modelCallFailureToRuntimeError(failure: ModelCallFailure): RuntimeError {
   const code: RuntimeError['code'] = {
@@ -34,16 +34,40 @@ export function contextFailureToRuntimeError(failure: ContextFailure): RuntimeEr
   );
 }
 
+const RUNTIME_CODE_BY_RUN_FAILURE: Record<RunFailureCode, RuntimeError['code']> = {
+  session_failed: 'session_operation_failed',
+  context_failed: 'context_build_failed',
+  model_call_failed: 'runtime_unknown',
+  permission_failed: 'permission_evaluation_failed',
+  tool_system_failed: 'tool_system_failed',
+  loop_limit_exceeded: 'runtime_limit_exceeded',
+  runtime_protocol_violation: 'runtime_protocol_violation',
+  cancellation_failed: 'runtime_cancellation_failed',
+  internal_error: 'runtime_unknown',
+};
+
+const RUNTIME_SOURCE_BY_RUN_FAILURE: Record<RunFailureCode, RuntimeError['source']> = {
+  session_failed: 'core',
+  context_failed: 'core',
+  model_call_failed: 'core',
+  permission_failed: 'approval',
+  tool_system_failed: 'tool',
+  loop_limit_exceeded: 'core',
+  runtime_protocol_violation: 'core',
+  cancellation_failed: 'core',
+  internal_error: 'core',
+};
+
 export function toolResultErrorToRuntimeError(failure: ToolResultError): RuntimeError {
-  const code: RuntimeError['code'] = failure.code === 'invalid_tool_input'
-    ? 'tool_input_invalid'
-    : failure.code === 'path_outside_workspace' || failure.code === 'symlink_escape'
-      ? 'workspace_path_denied'
-      : failure.code === 'sandbox_denied'
-        ? 'security_denied'
-        : failure.code === 'tool_cancelled'
-          ? 'runtime_cancelled'
-          : 'tool_execution_failed';
+  let code: RuntimeError['code'];
+  switch (failure.code) {
+    case 'invalid_tool_input': code = 'tool_input_invalid'; break;
+    case 'path_outside_workspace':
+    case 'symlink_escape': code = 'workspace_path_denied'; break;
+    case 'sandbox_denied': code = 'security_denied'; break;
+    case 'tool_cancelled': code = 'runtime_cancelled'; break;
+    default: code = 'tool_execution_failed';
+  }
   return error(code, failure.message, failure.code !== 'invalid_tool_input', 'tool');
 }
 
@@ -55,25 +79,13 @@ export function runFailureToRuntimeError(failure: RunFailure): RuntimeError {
       retryable: failure.retryable,
     });
   }
-  const code: RuntimeError['code'] = failure.code === 'session_failed'
-    ? 'session_operation_failed'
-    : failure.code === 'context_failed'
-      ? failure.cause?.code === 'context_window_exceeded' ? 'context_budget_exceeded' : 'context_build_failed'
-      : failure.code === 'permission_failed'
-        ? 'permission_evaluation_failed'
-        : failure.code === 'tool_system_failed'
-          ? 'tool_system_failed'
-          : failure.code === 'loop_limit_exceeded'
-            ? 'runtime_limit_exceeded'
-            : failure.code === 'runtime_protocol_violation'
-              ? 'runtime_protocol_violation'
-              : failure.code === 'cancellation_failed'
-                ? 'runtime_cancellation_failed'
-                : 'runtime_unknown';
-  const source: RuntimeError['source'] = failure.code === 'permission_failed'
-    ? 'approval'
-    : failure.code === 'tool_system_failed' ? 'tool' : 'core';
-  return error(code, failure.message, failure.retryable, source);
+  let code: RuntimeError['code'];
+  if (failure.code === 'context_failed' && failure.cause?.code === 'context_window_exceeded') {
+    code = 'context_budget_exceeded';
+  } else {
+    code = RUNTIME_CODE_BY_RUN_FAILURE[failure.code];
+  }
+  return error(code, failure.message, failure.retryable, RUNTIME_SOURCE_BY_RUN_FAILURE[failure.code]);
 }
 
 function error(

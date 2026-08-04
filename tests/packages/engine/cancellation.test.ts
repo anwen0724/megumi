@@ -10,6 +10,8 @@ import {
   partialNeverEndingStream,
   assistantStream,
   approvalDecisionFor,
+  requestedCancellation,
+  startedRun,
   startRequest,
 } from './engine-test-fixtures';
 import { approvalSubjectFor, registeredTool } from './tool-call-test-fixtures';
@@ -33,8 +35,7 @@ describe('Engine cancellation', () => {
         request.signal?.addEventListener('abort', resolveCancelled, { once: true });
       }),
     });
-    const started = await fixture.engine.startRun(startRequest);
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
 
     const cancellation = await fixture.engine.cancelRun({ runId: started.run.runId });
     expect(cancellation.status).toBe('cancellation_requested');
@@ -56,15 +57,10 @@ describe('Engine cancellation', () => {
     const fixture = createEngineFixture({
       streams: [partialNeverEndingStream('partial answer')],
     });
-    const started = await fixture.engine.startRun(startRequest);
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const cancellation = await fixture.engine.cancelRun({ runId: started.run.runId });
-    if (cancellation.status !== 'cancellation_requested') {
-      throw new Error('Expected cancellation request.');
-    }
-    const events = await collectEvents(cancellation.events);
+    const { events } = await requestedCancellation(fixture, started.run.runId);
 
     expect(events.at(-1)?.eventType).toBe('run.cancelled');
     expect(fixture.assistantReplies).toEqual([
@@ -110,15 +106,10 @@ describe('Engine cancellation', () => {
         arguments: { value: 'x' },
       })],
     });
-    const started = await fixture.engine.startRun(startRequest);
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     await vi.waitFor(() => expect(executeTool).toHaveBeenCalledOnce());
 
-    const cancellation = await fixture.engine.cancelRun({ runId: started.run.runId });
-    if (cancellation.status !== 'cancellation_requested') {
-      throw new Error('Expected cancellation request.');
-    }
-    const events = await collectEvents(cancellation.events);
+    const { events } = await requestedCancellation(fixture, started.run.runId);
 
     expect(events.at(-1)?.eventType).toBe('run.cancelled');
     expect(fixture.toolResults).toEqual([
@@ -155,16 +146,11 @@ describe('Engine cancellation', () => {
         }),
       },
     });
-    const started = await fixture.engine.startRun(startRequest);
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     const waitingEvents = await collectEvents(started.events);
     expect(waitingEvents.at(-1)?.eventType).toBe('run.waiting');
 
-    const cancellation = await fixture.engine.cancelRun({ runId: started.run.runId });
-    if (cancellation.status !== 'cancellation_requested') {
-      throw new Error('Expected cancellation request.');
-    }
-    const events = await collectEvents(cancellation.events);
+    const { events } = await requestedCancellation(fixture, started.run.runId);
 
     expect(fixture.toolResults).toEqual([
       expect.objectContaining({
@@ -183,15 +169,10 @@ describe('Engine cancellation', () => {
       contextBuild: () => new Promise(() => {}),
       policy: { cancellationTimeoutMs: 10 },
     });
-    const started = await fixture.engine.startRun(startRequest);
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const cancellation = await fixture.engine.cancelRun({ runId: started.run.runId });
-    if (cancellation.status !== 'cancellation_requested') {
-      throw new Error('Expected cancellation request.');
-    }
-    const events = await collectEvents(cancellation.events);
+    const { events } = await requestedCancellation(fixture, started.run.runId);
 
     expect(events.at(-1)?.eventType).toBe('run.failed');
     expect(events.at(-1)?.payload).toMatchObject({
@@ -205,24 +186,12 @@ describe('Engine cancellation', () => {
       contextBuild: () => new Promise((resolve) => {
         releaseContext = () => resolve({
           status: 'ready',
-          prepared: {
-            preparationId: 'preparation:late',
-            context: { systemPrompt: 'late', messages: [] },
-            usage: {
-              usedTokens: 0,
-              contextWindowTokens: 4_096,
-              remainingTokens: 4_096,
-              usedRatio: 0,
-              compactionThresholdRatio: 0.8,
-            },
-            sourceRefs: [],
-          },
+          prompt: { systemPrompt: 'late', messages: [], tools: [] },
         });
       }),
       policy: { cancellationTimeoutMs: 10 },
     });
-    const started = await fixture.engine.startRun(startRequest);
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const cancellation = await fixture.engine.cancelRun({ runId: started.run.runId });
@@ -253,8 +222,7 @@ describe('Engine cancellation', () => {
         },
       },
     });
-    const started = await fixture.engine.startRun(startRequest);
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     startedRunId = started.run.runId;
     await collectEvents(started.events);
     if (!cancellationPromise) throw new Error('Expected cancellation to be requested.');

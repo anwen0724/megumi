@@ -26,6 +26,7 @@ import type { EngineClock, EngineIdFactory, RunApproval } from './engine';
 import type { EnginePolicy } from './engine-policy';
 import type { RunFailure } from './run';
 import type { ActiveRunStore, ClaimedRunApproval } from './active-run-store';
+import { createInterruption, raceWithTimeout } from './timeout-utils';
 
 export interface ToolCall {
   readonly toolCallId: string;
@@ -196,22 +197,26 @@ export async function processToolCalls(
   const toolExecutions: ToolExecution[] = [];
   let parallelWindow: PlannedToolCall[] = [];
 
+  const record = (executed: ExecutedToolCall) => {
+    toolResults.push(executed.toolResult);
+    if (executed.toolExecution) toolExecutions.push(executed.toolExecution);
+  };
+  const cancelRemaining = (fromIndex: number) => {
+    for (const cancelledCall of calls.slice(fromIndex)) {
+      toolResults.push(cancelledToolResult(cancelledCall, request.clock.now()));
+    }
+  };
   const flushParallelWindow = async () => {
     if (parallelWindow.length === 0) return;
     const completed = await executeParallelWindow(request, parallelWindow);
-    for (const execution of completed) {
-      toolResults.push(execution.toolResult);
-      if (execution.toolExecution) toolExecutions.push(execution.toolExecution);
-    }
+    for (const execution of completed) record(execution);
     parallelWindow = [];
   };
 
   for (const [index, call] of calls.entries()) {
     if (request.signal.aborted) {
       await flushParallelWindow();
-      for (const cancelledCall of calls.slice(index)) {
-        toolResults.push(cancelledToolResult(cancelledCall, request.clock.now()));
-      }
+      cancelRemaining(index);
       return completedResult(toolResults, toolExecutions);
     }
 
@@ -248,9 +253,7 @@ export async function processToolCalls(
       if (plan.executionMode === 'parallel') parallelWindow.push(plan);
       else {
         await flushParallelWindow();
-        const executed = await executeToolCall(request, plan);
-        toolResults.push(executed.toolResult);
-        if (executed.toolExecution) toolExecutions.push(executed.toolExecution);
+        record(await executeToolCall(request, plan));
       }
       continue;
     }
@@ -305,9 +308,7 @@ export async function processToolCalls(
     if (permission.decision.type === 'requires_approval') {
       await flushParallelWindow();
       if (request.signal.aborted) {
-        for (const cancelledCall of calls.slice(index)) {
-          toolResults.push(cancelledToolResult(cancelledCall, request.clock.now()));
-        }
+        cancelRemaining(index);
         return completedResult(toolResults, toolExecutions);
       }
       const approval = createRunApproval(request, preparedCall, routed.invocation, permission.decision);
@@ -368,9 +369,7 @@ export async function processToolCalls(
     }
 
     await flushParallelWindow();
-    const executed = await executeToolCall(request, plan);
-    toolResults.push(executed.toolResult);
-    if (executed.toolExecution) toolExecutions.push(executed.toolExecution);
+    record(await executeToolCall(request, plan));
   }
 
   await flushParallelWindow();
@@ -591,15 +590,16 @@ async function executeToolCall(
   };
   request.store.addActiveToolExecution({ runId: request.runId, toolExecutionId });
   request.onToolExecutionStarted?.(runningExecution);
-  let interruption: ReturnType<typeof createToolInterruption> | undefined;
+  let interruption: ReturnType<typeof createInterruption> | undefined;
 
   try {
     const timeoutController = new AbortController();
     const signal = AbortSignal.any([request.signal, timeoutController.signal]);
-    interruption = createToolInterruption({
+    interruption = createInterruption({
       runSignal: request.signal,
       timeoutController,
       timeoutMs: request.policy.toolExecutionTimeoutMs,
+      abortReason: 'cancelled',
     });
     const execution = Promise.resolve(request.tools.executeToolInvocation({
       invocation: plan.invocation,
@@ -681,15 +681,8 @@ async function executeToolCall(
 }
 
 async function confirmToolExecutionStopped<T>(execution: Promise<T>, timeoutMs: number): Promise<T | 'unconfirmed'> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      execution,
-      new Promise<'unconfirmed'>((resolve) => { timer = setTimeout(() => resolve('unconfirmed'), timeoutMs); }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
+  const outcome = await raceWithTimeout(execution, timeoutMs);
+  return outcome === 'timed_out' ? 'unconfirmed' : outcome;
 }
 function finishExecution(
   request: Pick<ProcessToolCallsRequest, 'onToolExecutionFinished'>,
@@ -941,46 +934,3 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function createToolInterruption(input: {
-  readonly runSignal: AbortSignal;
-  readonly timeoutController: AbortController;
-  readonly timeoutMs: number;
-}): {
-  readonly result: Promise<{
-    readonly type: 'interrupted';
-    readonly reason: 'cancelled' | 'timeout';
-  }>;
-  readonly dispose: () => void;
-} {
-  let settled = false;
-  let resolve!: (result: {
-    readonly type: 'interrupted';
-    readonly reason: 'cancelled' | 'timeout';
-  }) => void;
-  const result = new Promise<{
-    readonly type: 'interrupted';
-    readonly reason: 'cancelled' | 'timeout';
-  }>((complete) => {
-    resolve = complete;
-  });
-  const finish = (reason: 'cancelled' | 'timeout') => {
-    if (settled) return;
-    settled = true;
-    resolve({ type: 'interrupted', reason });
-  };
-  const onAbort = () => finish('cancelled');
-  input.runSignal.addEventListener('abort', onAbort, { once: true });
-  const timeout = setTimeout(() => {
-    finish('timeout');
-    input.timeoutController.abort();
-  }, input.timeoutMs);
-  if (input.runSignal.aborted) finish('cancelled');
-
-  return {
-    result,
-    dispose: () => {
-      clearTimeout(timeout);
-      input.runSignal.removeEventListener('abort', onAbort);
-    },
-  };
-}

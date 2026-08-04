@@ -38,7 +38,7 @@ export const policy: EnginePolicy = {
   maxToolCallsPerRun: 24, maxConcurrentToolExecutions: 2, modelCallTimeoutMs: 60_000,
   modelCallTerminationTimeoutMs: 10_000, toolExecutionTimeoutMs: 100,
   cancellationTimeoutMs: 5_000, maxModelCallAttempts: 2, modelRetryDelayMs: 0,
-  maxToolExecutionsPerCall: 1, toolRetryDelayMs: 0, terminalRunRetentionMs: 60_000,
+  maxToolExecutionsPerCall: 1, terminalRunRetentionMs: 60_000,
 };
 
 export function run(): Run {

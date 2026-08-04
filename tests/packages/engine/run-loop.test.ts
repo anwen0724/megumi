@@ -7,17 +7,17 @@ import {
   assistantStream,
   assistantStreamWithUsage,
   collectEvents,
+  compactedOverflowCompaction,
   createEngineFixture,
+  errorOverflowStream,
+  lengthOverflowStream,
+  startedRun,
   startRequest,
 } from './engine-test-fixtures';
 
-describe('Engine run loop', () => {  it('recovers from one Context Overflow per ModelCall with a compaction retry', async () => {
-    const compact = vi.fn(async () => ({
-      status: 'compacted' as const,
-      compactionId: 'compaction:overflow',
-      usageBefore: { tokens: 100, usageTokens: 0, trailingTokens: 100, lastUsageIndex: null },
-      usageAfter: { tokens: 20, usageTokens: 0, trailingTokens: 20, lastUsageIndex: null },
-    }));
+describe('Engine run loop', () => {
+  it('recovers from one Context Overflow per ModelCall with a compaction retry', async () => {
+    const compact = vi.fn(compactedOverflowCompaction);
     const fixture = createEngineFixture({
       contextCompact: compact,
       streams: [
@@ -33,9 +33,7 @@ describe('Engine run loop', () => {  it('recovers from one Context Overflow per 
       ],
     });
 
-    const started = await fixture.engine.startRun(startRequest);
-    expect(started.status).toBe('started');
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     const events = await collectEvents(started.events);
 
     expect(fixture.writes).toEqual(['user', 'assistant:completed']);
@@ -50,12 +48,7 @@ describe('Engine run loop', () => {  it('recovers from one Context Overflow per 
   });
 
   it('does not retry a second Overflow on the same ModelCall', async () => {
-    const compact = vi.fn(async () => ({
-      status: 'compacted' as const,
-      compactionId: 'compaction:overflow',
-      usageBefore: { tokens: 100, usageTokens: 0, trailingTokens: 100, lastUsageIndex: null },
-      usageAfter: { tokens: 20, usageTokens: 0, trailingTokens: 20, lastUsageIndex: null },
-    }));
+    const compact = vi.fn(compactedOverflowCompaction);
     const fixture = createEngineFixture({
       contextCompact: compact,
       streams: [
@@ -68,14 +61,80 @@ describe('Engine run loop', () => {  it('recovers from one Context Overflow per 
       ],
     });
 
-    const started = await fixture.engine.startRun(startRequest);
-    expect(started.status).toBe('started');
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     const events = await collectEvents(started.events);
 
     expect(events.at(-1)?.eventType).toBe('run.failed');
     expect(fixture.writes).toEqual(['user', 'assistant:failed']);
     expect(compact).toHaveBeenCalledTimes(1);
+  });
+
+  it('recovers a provider error-text Overflow through the same one-time compaction path', async () => {
+    const compact = vi.fn(compactedOverflowCompaction);
+    const fixture = createEngineFixture({
+      contextCompact: compact,
+      streams: [
+        errorOverflowStream(),
+        assistantStream('final answer'),
+      ],
+    });
+
+    const started = await startedRun(fixture);
+    const events = await collectEvents(started.events);
+
+    expect(fixture.writes).toEqual(['user', 'assistant:completed']);
+    expect(events.at(-1)?.eventType).toBe('run.completed');
+    expect(compact).toHaveBeenCalledWith(expect.objectContaining({ trigger: 'overflow' }));
+    // Exactly one model_call.started for the logical ModelCall; one compaction retry.
+    expect(events.filter((event) => event.eventType === 'model_call.started')).toHaveLength(1);
+    expect(events.filter((event) => event.eventType === 'model_call.completed')).toHaveLength(1);
+  });
+
+  it('recovers a silent length-stop Overflow without treating it as output truncation', async () => {
+    const compact = vi.fn(compactedOverflowCompaction);
+    const fixture = createEngineFixture({
+      contextCompact: compact,
+      streams: [
+        lengthOverflowStream(),
+        assistantStream('final answer'),
+      ],
+    });
+
+    const started = await startedRun(fixture);
+    const events = await collectEvents(started.events);
+
+    expect(fixture.writes).toEqual(['user', 'assistant:completed']);
+    expect(events.at(-1)?.eventType).toBe('run.completed');
+    expect(compact).toHaveBeenCalledWith(expect.objectContaining({ trigger: 'overflow' }));
+    expect(events.some((event) => event.eventType === 'model_call.completed'
+      && event.payload.finishReason === 'failed')).toBe(false);
+  });
+
+  it('does not issue a second model request when Overflow compaction fails', async () => {
+    const compact = vi.fn(async () => ({
+      status: 'failed' as const,
+      failure: {
+        code: 'compaction_failed',
+        message: 'Summary generation failed.',
+        retryable: false,
+      },
+    }));
+    const fixture = createEngineFixture({
+      contextCompact: compact,
+      streams: [
+        assistantStreamWithUsage('overflowing', {
+          input: 64_001, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 64_002,
+        }),
+      ],
+    });
+
+    const started = await startedRun(fixture);
+    const events = await collectEvents(started.events);
+
+    expect(events.at(-1)?.eventType).toBe('run.failed');
+    expect(fixture.writes).toEqual(['user', 'assistant:failed']);
+    expect(compact).toHaveBeenCalledTimes(1);
+    expect(fixture.contextRuns).toHaveLength(1);
   });
 
   it('does not start a ModelCall or Context build when the UserMessage save fails', async () => {
@@ -93,9 +152,7 @@ describe('Engine run loop', () => {  it('recovers from one Context Overflow per 
       streams: [assistantStream('final answer')],
     });
 
-    const started = await fixture.engine.startRun(startRequest);
-    expect(started.status).toBe('started');
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     await collectEvents(started.events);
 
     // createView receives only the Workspace identity and the Run signal; no selection facts.
@@ -113,10 +170,7 @@ describe('Engine run loop', () => {  it('recovers from one Context Overflow per 
       streams: [assistantStream('final answer')],
     });
 
-    const started = await fixture.engine.startRun(startRequest);
-    expect(started.status).toBe('started');
-    if (started.status !== 'started') throw new Error('Expected started Run.');
-
+    const started = await startedRun(fixture);
     const events = await collectEvents(started.events);
 
     expect(fixture.writes).toEqual(['user', 'assistant:completed']);
@@ -159,8 +213,7 @@ describe('Engine run loop', () => {  it('recovers from one Context Overflow per 
       ],
     });
 
-    const started = await fixture.engine.startRun(startRequest);
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     const events = await collectEvents(started.events);
 
     expect(fixture.writes).toEqual([
@@ -230,8 +283,7 @@ describe('Engine run loop', () => {  it('recovers from one Context Overflow per 
       ],
     });
 
-    const started = await fixture.engine.startRun(startRequest);
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     const events = await collectEvents(started.events);
 
     expect(events.filter((event) => event.eventType === 'run.plan.updated').map((event) => event.payload)).toEqual([
@@ -271,8 +323,7 @@ describe('Engine run loop', () => {  it('recovers from one Context Overflow per 
       ],
     });
 
-    const started = await fixture.engine.startRun(startRequest);
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     const events = await collectEvents(started.events);
 
     expect(events.at(-1)?.eventType).toBe('run.failed');
@@ -304,8 +355,7 @@ describe('Engine run loop', () => {  it('recovers from one Context Overflow per 
       ],
     });
 
-    const started = await fixture.engine.startRun(startRequest);
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     const events = await collectEvents(started.events);
 
     expect(events.at(-1)?.eventType).toBe('run.failed');
@@ -342,8 +392,7 @@ describe('Engine run loop', () => {  it('recovers from one Context Overflow per 
       },
     });
 
-    const started = await fixture.engine.startRun(startRequest);
-    if (started.status !== 'started') throw new Error('Expected started Run.');
+    const started = await startedRun(fixture);
     const events = await collectEvents(started.events);
 
     expect(fixture.toolResults).toEqual([

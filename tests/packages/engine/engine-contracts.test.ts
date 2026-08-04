@@ -27,7 +27,6 @@ const validPolicy: EnginePolicy = {
   maxModelCallAttempts: 2,
   modelRetryDelayMs: 250,
   maxToolExecutionsPerCall: 1,
-  toolRetryDelayMs: 0,
   terminalRunRetentionMs: 60_000,
 };
 

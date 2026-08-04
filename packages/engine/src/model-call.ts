@@ -16,6 +16,7 @@ import {
 } from '@megumi/ai';
 import type { EngineClock } from './engine';
 import type { EnginePolicy } from './engine-policy';
+import { createInterruption, raceWithTimeout } from './timeout-utils';
 
 export type ModelCallStatus = 'running' | 'completed' | 'failed' | 'cancelled';
 
@@ -165,7 +166,13 @@ interface FailedAttempt {
   readonly partial: ModelCallPartialOutput;
 }
 
-type AttemptOutcome = SuccessfulAttempt | FailedAttempt;
+/** A recoverable Context Overflow: neither a normal completion nor a retryable failure. */
+interface OverflowAttempt {
+  readonly status: 'overflow';
+  readonly message: AssistantMessage;
+}
+
+type AttemptOutcome = SuccessfulAttempt | FailedAttempt | OverflowAttempt;
 type AttemptLiveEvent = Extract<
   ModelCallEvent,
   { type: 'text_delta' | 'thinking_started' | 'thinking_delta' | 'thinking_completed' }
@@ -221,8 +228,8 @@ export async function* executeModelCall(
 
     if (outcome.status === 'completed') {
       const completedAt = request.clock.now();
-      // Overflow is its own outcome: it never becomes a normal failure and never
-      // consumes a retry attempt. The Engine coordinates one compaction recovery.
+      // A normal-looking completion can still report usage that fills the
+      // window (silent usage overflow): route it to the Overflow recovery.
       if (isContextOverflow(outcome.message, request.model.contextWindow)) {
         yield {
           type: 'context_overflow',
@@ -243,6 +250,19 @@ export async function* executeModelCall(
         message: outcome.message,
         toolCalls: outcome.toolCalls,
         createdAt: completedAt,
+      };
+      return;
+    }
+
+    if (outcome.status === 'overflow') {
+      // Overflow never becomes a normal failure and never consumes a retry
+      // attempt. The Engine coordinates one compaction recovery.
+      yield {
+        type: 'context_overflow',
+        modelCallId: request.modelCallId,
+        attemptNumber,
+        message: outcome.message,
+        createdAt: request.clock.now(),
       };
       return;
     }
@@ -289,10 +309,16 @@ async function* runAttempt(
   let partialThinking = '';
   const timeoutController = new AbortController();
   const attemptSignal = AbortSignal.any([request.signal, timeoutController.signal]);
-  const interruption = createAttemptInterruption({
+  const interruption = createInterruption({
     runSignal: request.signal,
     timeoutController,
     timeoutMs: request.policy.modelCallTimeoutMs,
+    abortReason: 'abort',
+  });
+  const fail = (failure: ModelCallFailure): FailedAttempt => ({
+    status: 'failed',
+    failure,
+    partial: { text: partialText, thinking: partialThinking },
   });
 
   let iterator: AsyncIterator<AssistantMessageEvent> | undefined;
@@ -320,36 +346,20 @@ async function* runAttempt(
             stream,
             request.policy.modelCallTerminationTimeoutMs,
           );
-          return {
-            status: 'failed',
-            failure: settled ? timeoutFailure() : terminationUnconfirmedFailure(),
-            partial: { text: partialText, thinking: partialThinking },
-          };
+          return fail(settled ? timeoutFailure() : terminationUnconfirmedFailure());
         }
-        return {
-          status: 'failed',
-          failure: abortedFailure(),
-          partial: { text: partialText, thinking: partialThinking },
-        };
+        return fail(abortedFailure());
       }
 
       if (outcome.type === 'thrown') {
-        return {
-          status: 'failed',
-          failure: fromAiFailure(classifyModelFailure({
-            reason: request.signal.aborted ? 'aborted' : 'error',
-            error: outcome.error,
-          })),
-          partial: { text: partialText, thinking: partialThinking },
-        };
+        return fail(fromAiFailure(classifyModelFailure({
+          reason: request.signal.aborted ? 'aborted' : 'error',
+          error: outcome.error,
+        })));
       }
 
       if (outcome.value.done) {
-        return {
-          status: 'failed',
-          failure: invalidResponseFailure('Model stream ended without a terminal event.'),
-          partial: { text: partialText, thinking: partialThinking },
-        };
+        return fail(invalidResponseFailure('Model stream ended without a terminal event.'));
       }
 
       const event = outcome.value.value;
@@ -394,27 +404,31 @@ async function* runAttempt(
         continue;
       }
       if (event.type === 'error') {
-        return {
-          status: 'failed',
-          failure: fromAiFailure(classifyModelFailure({
-            reason: event.reason,
-            failure: event.failure,
-          })),
-          partial: { text: partialText, thinking: partialThinking },
-        };
+        // A provider error whose full message matches the overflow signature is a
+        // recoverable Context Overflow, not an ordinary ModelCall failure: the
+        // Engine compacts once and retries on the same logical ModelCall.
+        if (isContextOverflow(event.error, request.model.contextWindow)) {
+          return { status: 'overflow', message: event.error };
+        }
+        return fail(fromAiFailure(classifyModelFailure({
+          reason: event.reason,
+          failure: event.failure,
+        })));
       }
       if (event.type === 'done') {
+        // Silent length-stop overflow (input filled the window, nothing left to
+        // generate) must reach the Overflow recovery instead of being mapped to
+        // an ordinary output_truncated failure.
+        if (event.reason === 'length' && isContextOverflow(event.message, request.model.contextWindow)) {
+          return { status: 'overflow', message: event.message };
+        }
         const response = validateCompletedModelResponse(
           request.modelCallId,
           event.reason,
           event.message,
         );
         if (response.status === 'invalid') {
-          return {
-            status: 'failed',
-            failure: response.failure,
-            partial: { text: partialText, thinking: partialThinking },
-          };
+          return fail(response.failure);
         }
         return {
           status: 'completed',
@@ -425,14 +439,10 @@ async function* runAttempt(
       // ToolCall fragments stay inside this attempt. Only the final done message can commit them.
     }
   } catch (error) {
-    return {
-      status: 'failed',
-      failure: fromAiFailure(classifyModelFailure({
-        reason: request.signal.aborted ? 'aborted' : 'error',
-        error,
-      })),
-      partial: { text: partialText, thinking: partialThinking },
-    };
+    return fail(fromAiFailure(classifyModelFailure({
+      reason: request.signal.aborted ? 'aborted' : 'error',
+      error,
+    })));
   } finally {
     interruption.dispose();
   }
@@ -597,46 +607,6 @@ function emptyPartial(): ModelCallPartialOutput {
   return { text: '', thinking: '' };
 }
 
-function createAttemptInterruption(input: {
-  readonly runSignal: AbortSignal;
-  readonly timeoutController: AbortController;
-  readonly timeoutMs: number;
-}): {
-  readonly result: Promise<{ readonly type: 'interrupted'; readonly reason: 'abort' | 'timeout' }>;
-  readonly dispose: () => void;
-} {
-  let settled = false;
-  let resolve!: (
-    result: { readonly type: 'interrupted'; readonly reason: 'abort' | 'timeout' },
-  ) => void;
-  const result = new Promise<{ readonly type: 'interrupted'; readonly reason: 'abort' | 'timeout' }>(
-    (complete) => {
-      resolve = complete;
-    },
-  );
-  const finish = (reason: 'abort' | 'timeout') => {
-    if (settled) return;
-    settled = true;
-    resolve({ type: 'interrupted', reason });
-  };
-  const onAbort = () => finish('abort');
-  input.runSignal.addEventListener('abort', onAbort, { once: true });
-  const timeout = setTimeout(() => {
-    finish('timeout');
-    input.timeoutController.abort();
-  }, input.timeoutMs);
-
-  if (input.runSignal.aborted) finish('abort');
-
-  return {
-    result,
-    dispose: () => {
-      clearTimeout(timeout);
-      input.runSignal.removeEventListener('abort', onAbort);
-    },
-  };
-}
-
 function closeIterator(iterator: AsyncIterator<AssistantMessageEvent>): void {
   if (!iterator.return) return;
   try {
@@ -650,17 +620,8 @@ export async function waitForModelCallSettlement(
   stream: { waitForSettlement(): Promise<void> },
   timeoutMs: number,
 ): Promise<boolean> {
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      stream.waitForSettlement().then(() => true),
-      new Promise<boolean>((resolve) => {
-        timeout = setTimeout(() => resolve(false), timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timeout) clearTimeout(timeout);
-  }
+  const settled = await raceWithTimeout(stream.waitForSettlement().then(() => true), timeoutMs);
+  return settled !== 'timed_out';
 }
 
 function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {

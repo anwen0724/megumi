@@ -505,7 +505,6 @@ const PRODUCT_ENGINE_POLICY = {
   maxModelCallAttempts: 3,
   modelRetryDelayMs: 1_000,
   maxToolExecutionsPerCall: 1,
-  toolRetryDelayMs: 500,
   terminalRunRetentionMs: 300_000,
 } satisfies EnginePolicy;
 
