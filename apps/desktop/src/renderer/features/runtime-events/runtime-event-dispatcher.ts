@@ -42,6 +42,23 @@ function setLastErrorForSession(sessionId: string | null, lastError: string | nu
 function applyToolEvent(event: AnyEvent, targetSessionId: string | null): void {
   const store = useToolCallStore.getState();
 
+  if (event.type === 'tool_execution.requested') {
+    // The model asked for the tool: create the entry immediately with its name
+    // and arguments; started/settled events fill in the rest.
+    const payload = event.payload;
+    const existing = store.findByToolCallId(payload.toolCallId);
+    store.upsertToolCall({
+      ...existing,
+      toolCallId: payload.toolCallId,
+      runId: event.runId ?? existing?.runId ?? '',
+      toolName: payload.toolName,
+      status: existing?.status ?? 'created',
+      requestedAt: existing?.requestedAt ?? event.createdAt,
+      input: payload.args,
+    });
+    return;
+  }
+
   if (event.type === 'tool_execution.started') {
     const payload = event.payload;
     const existing = store.findByToolCallId(payload.toolCallId);
@@ -68,7 +85,9 @@ function applyToolEvent(event: AnyEvent, targetSessionId: string | null): void {
           ? 'succeeded'
           : payload.status === 'cancelled'
             ? 'cancelled'
-            : 'failed',
+            : payload.status === 'denied'
+              ? 'rejected'
+              : 'failed',
         error: payload.error,
         resultPreview: payload.status === 'completed'
           ? typeof payload.result === 'string' ? payload.result : payload.result

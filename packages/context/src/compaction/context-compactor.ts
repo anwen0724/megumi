@@ -9,6 +9,7 @@ import type { EffectiveInstructions } from '@megumi/instructions';
 import type { ObservabilityService } from '@megumi/observability';
 import type { SessionHistory } from '@megumi/session';
 import type { SkillView } from '@megumi/skills';
+import type { EventBus } from '@megumi/events';
 import type { ExecutionEnvironment, ContextFailure } from '../context';
 import type { CompactionPolicy } from '../context-policy';
 import type { ContextUsageEstimate } from '../context-usage';
@@ -54,6 +55,8 @@ export interface CompactContextRequest {
   readonly effectiveInstructions: EffectiveInstructions;
   readonly skills: SkillView;
   readonly onProgress?: (progress: ContextCompactionProgress) => void;
+  /** Optional bus: compaction lifecycle facts are published here. */
+  readonly events?: EventBus;
   readonly signal?: AbortSignal;
 }
 
@@ -97,6 +100,8 @@ export interface ExecuteCompactionInput {
   >;
   readonly countUsage: (context: AiContext, signal?: AbortSignal) => ContextUsageEstimate;
   readonly onProgress?: (progress: ContextCompactionProgress) => void;
+  /** Optional bus: compaction lifecycle facts are published here. */
+  readonly events?: EventBus;
   readonly signal?: AbortSignal;
 }
 
@@ -128,7 +133,7 @@ export async function executeContextCompaction(
     summarizedMessageCount: plan.plan.summarizedMessages.length,
     ...(plan.plan.firstKeptEntryId ? { firstKeptEntryId: plan.plan.firstKeptEntryId } : {}),
   };
-  reportProgress(input.onProgress, { status: 'started', ...progressBase });
+  reportProgress(input.onProgress, { status: 'started', ...progressBase }, input.sessionId, input.trigger, input.events);
   input.observability?.recordLog({
     level: 'info',
     event: 'context.compaction.started',
@@ -147,7 +152,7 @@ export async function executeContextCompaction(
       tokensBefore: progressBase.tokensBefore,
       code: failure.code,
       message: failure.message,
-    });
+    }, input.sessionId, input.trigger, input.events);
     return failed(failure);
   };
 
@@ -180,7 +185,7 @@ export async function executeContextCompaction(
       tokensBefore: beforeTokens,
       code: reduction.reason,
       message: 'Generated summary did not reduce Context usage.',
-    });
+    }, input.sessionId, input.trigger, input.events);
     return reduction;
   }
   if (input.signal?.aborted) return failCompaction(cancelledFailure('Context compaction was cancelled.'));
@@ -204,7 +209,7 @@ export async function executeContextCompaction(
       cause: { owner: 'session', code: saved.failure.code },
     });
   }
-  reportProgress(input.onProgress, { status: 'completed', ...progressBase });
+  reportProgress(input.onProgress, { status: 'completed', ...progressBase }, input.sessionId, input.trigger, input.events);
   input.observability?.recordLog({
     level: 'info',
     event: 'context.compaction.completed',
@@ -256,10 +261,42 @@ function failed(failure: ContextFailure): Extract<ExecuteCompactionResult, { sta
 function reportProgress(
   reporter: ((progress: ContextCompactionProgress) => void) | undefined,
   progress: ContextCompactionProgress,
+  sessionId: string,
+  trigger: CompactionTrigger,
+  events?: EventBus,
 ): void {
   try {
     reporter?.(progress);
   } catch {
     // Progress is diagnostic output and must not change Context business execution.
+  }
+  if (!events) return;
+  // Compaction is a session-scoped fact: publish the lifecycle pair so the UI
+  // can render the activity item. Best-effort, like every bus publish.
+  if (progress.status === 'started') {
+    events.publish({
+      type: 'compaction.started',
+      payload: { trigger, compactionId: progress.compactionId },
+      sessionId,
+    });
+  } else if (progress.status === 'completed') {
+    events.publish({
+      type: 'compaction.ended',
+      payload: { status: 'completed', compactionId: progress.compactionId },
+      sessionId,
+    });
+  } else {
+    // ContextCompactionProgressStarted.status includes 'completed', so narrow
+    // by the failed variant's own fields instead of the status union.
+    const failed = progress as ContextCompactionProgressFailed;
+    events.publish({
+      type: 'compaction.ended',
+      payload: {
+        status: 'failed',
+        compactionId: failed.compactionId,
+        error: { message: failed.message, code: failed.code },
+      },
+      sessionId,
+    });
   }
 }

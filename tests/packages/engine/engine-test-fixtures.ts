@@ -387,6 +387,27 @@ export function assistantStreamWithUsage(
   return stream;
 }
 
+/** Provider streams a thinking block first, then the answer text. */
+export function assistantThinkingStream(
+  thinking: string,
+  text: string,
+): AssistantMessageEventStream {
+  const stream = new AssistantMessageEventStream();
+  const message = baseMessage({
+    content: [{ type: 'text', text }],
+    stopReason: 'stop',
+  });
+  stream.push({ type: 'start', partial: { ...message, content: [] } });
+  stream.push({ type: 'thinking_start', contentIndex: 0, partial: { ...message, content: [] } });
+  stream.push({ type: 'thinking_delta', contentIndex: 0, delta: thinking, partial: { ...message, content: [] } });
+  stream.push({ type: 'thinking_end', contentIndex: 0, content: thinking, partial: { ...message, content: [] } });
+  stream.push({ type: 'text_start', contentIndex: 0, partial: { ...message, content: [] } });
+  stream.push({ type: 'text_delta', contentIndex: 0, delta: text, partial: message });
+  stream.push({ type: 'text_end', contentIndex: 0, content: text, partial: message });
+  stream.push({ type: 'done', reason: 'stop', message });
+  return stream;
+}
+
 export function assistantStream(
   text: string,
   toolCall?: { readonly id: string; readonly name: string; readonly arguments: unknown },

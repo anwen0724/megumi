@@ -8,6 +8,7 @@
 import crypto from 'node:crypto';
 import type { Api, Context as AiContext, Message, Model, Models, Tool } from '@megumi/ai';
 import { capabilitiesFromModel, estimateContextTokens, estimateMessageTokens } from '@megumi/ai';
+import type { EventBus } from '@megumi/events';
 import type { EffectiveInstructions, InstructionReader } from '@megumi/instructions';
 import type { ObservabilityService } from '@megumi/observability';
 import type { SessionAttachmentReader, SessionHistory, SessionHistoryItem } from '@megumi/session';
@@ -50,6 +51,8 @@ export interface CreateContextOptions {
   readonly policyProvider?: { getPolicy(): Partial<CompactionPolicy> };
   readonly clock?: { now(): string };
   readonly ids?: { compactionId(): string };
+  /** Optional bus: compaction lifecycle facts are published here. */
+  readonly events?: EventBus;
 }
 
 export type ContextCapabilities = ContextBuilder & ContextCompactor;
@@ -158,6 +161,7 @@ class DefaultContext implements ContextCapabilities {
           model: request.model,
           trigger: request.trigger,
           onProgress: request.onProgress,
+          events: request.events,
           signal: request.signal,
         });
         return compacted.status === 'compacted'
@@ -377,6 +381,7 @@ class DefaultContext implements ContextCapabilities {
     readonly model: Model<Api>;
     readonly trigger: import('./compaction/context-compactor').CompactionTrigger;
     readonly onProgress?: (progress: import('./compaction/context-compactor').ContextCompactionProgress) => void;
+    readonly events?: EventBus;
     readonly signal?: AbortSignal;
   }): Promise<ExecuteCompactionResult> {
     const previousSummary = input.history.items
@@ -421,6 +426,7 @@ class DefaultContext implements ContextCapabilities {
         return this.countUsage(context);
       },
       onProgress: input.onProgress,
+      events: this.options.events,
       signal: input.signal,
     });
   }

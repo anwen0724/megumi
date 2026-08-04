@@ -1,17 +1,26 @@
 /*
  * Verifies the Engine's Runtime Event emission against the new domain model:
- * the run lifecycle, the streaming turn/message pair, session ownership, and
- * the ordering contract (user message precedes run.started, no runId).
+ * the run lifecycle, the streaming turn/message pair, session ownership, the
+ * ordering contract (user message precedes run.started, no runId), and the
+ * full behaviour surface (thinking stream, tool requests, approval options,
+ * retries, plan updates, permission denials).
  */
 import { describe, expect, it, vi } from 'vitest';
 import type { AnyEvent } from '@megumi/events';
 import {
+  approvalDecisionFor,
   assistantStream,
+  assistantThinkingStream,
   collectEvents,
   createEngineFixture,
+  retryableFailedStream,
   startedRun,
 } from './engine-test-fixtures';
-import { registeredTool } from './tool-call-test-fixtures';
+import {
+  permissionService,
+  registeredTool,
+  succeeded,
+} from './tool-call-test-fixtures';
 
 describe('Engine RuntimeEvents', () => {
   it('emits the run lifecycle with session ownership and the ordering contract', async () => {
@@ -132,6 +141,187 @@ describe('Engine RuntimeEvents', () => {
     });
     const toolEnded = events.find((event) => event.type === 'tool_execution.ended');
     expect(toolEnded?.payload.status).toBe('completed');
+  });
+
+  it('streams thinking as full-snapshot message.thinking.update events', async () => {
+    const fixture = createEngineFixture({
+      streams: [assistantThinkingStream('ponder xyz', 'answer')],
+    });
+
+    const started = await startedRun(fixture);
+    await vi.waitFor(() => {
+      expect(fixture.published.some((event) => event.type === 'run.ended')).toBe(true);
+    });
+
+    const updates = fixture.published.filter(
+      (event): event is typeof event & { payload: { messageId: string; thinking: string } } =>
+        event.type === 'message.thinking.update',
+    );
+    expect(updates.length).toBeGreaterThan(0);
+    const last = updates.at(-1)!;
+    expect(last.payload.thinking).toContain('ponder xyz');
+    expect(last.payload.messageId).toBeTruthy();
+    // Snapshot semantics: a thinking delta replaces the previous snapshot.
+    expect(updates[0]?.payload.thinking).toBe(updates.at(-1)?.payload.thinking);
+  });
+
+  it('publishes tool_execution.requested when the model asks for a tool, before it starts', async () => {
+    const tool = registeredTool('test-tool');
+    const fixture = createEngineFixture({
+      tools: [tool],
+      streams: [
+        assistantStream('tool', {
+          id: 'provider-call:1',
+          name: tool.registeredToolName,
+          arguments: { value: 'x' },
+        }),
+        assistantStream('final answer'),
+      ],
+    });
+
+    const started = await startedRun(fixture);
+    await vi.waitFor(() => {
+      expect(fixture.published.some((event) => event.type === 'tool_execution.ended')).toBe(true);
+    });
+
+    const events = collectEvents(fixture, started.run.runId);
+    const requested = events.find((event) => event.type === 'tool_execution.requested');
+    const startedAt = events.find((event) => event.type === 'tool_execution.started');
+    expect(requested).toBeDefined();
+    expect(requested?.payload).toMatchObject({
+      toolCallId: 'provider-call:1',
+      toolName: 'test-tool',
+      args: { value: 'x' },
+    });
+    expect(requested!.sequence).toBeLessThan(startedAt!.sequence);
+  });
+
+  it('publishes approval.requested with options and settles a denial', async () => {
+    const tool = registeredTool('test-tool');
+    const fixture = createEngineFixture({
+      tools: [tool],
+      permissions: permissionService((request) => approvalDecisionFor(request)),
+      streams: [
+        assistantStream('tool', {
+          id: 'provider-call:1',
+          name: tool.registeredToolName,
+          arguments: { value: 'x' },
+        }),
+        assistantStream('final answer'),
+      ],
+    });
+
+    const started = await startedRun(fixture);
+    await vi.waitFor(() => {
+      expect(fixture.published.some((event) => event.type === 'approval.requested')).toBe(true);
+    });
+
+    const requested = fixture.published.find((event) => event.type === 'approval.requested')!;
+    expect(requested.payload).toMatchObject({
+      toolCallId: 'provider-call:1',
+      toolName: 'test-tool',
+    });
+    const payload = requested.payload as { options: unknown[]; defaultOptionId: string };
+    expect(payload.options.length).toBeGreaterThan(0);
+    expect(payload.defaultOptionId).toBe(payload.options[0] && (payload.options[0] as { optionId: string }).optionId);
+
+    const resumed = await fixture.engine.resumeRun({
+      runApprovalId: (requested.payload as { approvalRequestId: string }).approvalRequestId,
+      decision: { decision: 'denied' },
+      decidedAt: '2026-07-31T00:00:00.000Z',
+    });
+    expect(resumed.status).toBe('resumed');
+    await vi.waitFor(() => {
+      expect(fixture.published.some(
+        (event) => event.type === 'approval.resolved' && event.payload.decision === 'denied',
+      )).toBe(true);
+    });
+  });
+
+  it('publishes turn.retry lifecycle events for a retried model call', async () => {
+    const fixture = createEngineFixture({
+      streams: [retryableFailedStream('attempt one'), assistantStream('answer')],
+      policy: { maxModelCallAttempts: 2 },
+    });
+
+    const started = await startedRun(fixture);
+    await vi.waitFor(() => {
+      expect(fixture.published.some((event) => event.type === 'run.ended')).toBe(true);
+    });
+
+    const events = collectEvents(fixture, started.run.runId);
+    const retryStarted = events.find((event) => event.type === 'turn.retry.started');
+    const retryCompleted = events.find((event) => event.type === 'turn.retry.completed');
+    expect(retryStarted?.payload).toMatchObject({ attemptNumber: 2, retryKind: 'model_call' });
+    expect(retryCompleted?.payload).toMatchObject({ attemptNumber: 2 });
+  });
+
+  it('publishes run.plan.updated from a plan tool notification', async () => {
+    const tool = registeredTool('run_command');
+    const fixture = createEngineFixture({
+      tools: [tool],
+      executeTool: async ({ toolName }, options) => {
+        options?.onNotification?.({
+          type: 'plan_updated',
+          explanation: 'do things',
+          plan: [{ step: 'first', status: 'pending' }],
+        });
+        return succeeded(toolName);
+      },
+      streams: [
+        assistantStream('tool', {
+          id: 'provider-call:1',
+          name: 'run_command',
+          arguments: { value: 'x' },
+        }),
+        assistantStream('final answer'),
+      ],
+    });
+
+    const started = await startedRun(fixture);
+    await vi.waitFor(() => {
+      expect(fixture.published.some((event) => event.type === 'run.plan.updated')).toBe(true);
+    });
+
+    const plan = fixture.published.find((event) => event.type === 'run.plan.updated')!;
+    expect(plan.payload).toMatchObject({
+      toolCallId: 'provider-call:1',
+      explanation: 'do things',
+      plan: [{ step: 'first', status: 'pending' }],
+    });
+  });
+
+  it('settles a permission-denied tool call as tool_execution.ended denied', async () => {
+    const tool = registeredTool('test-tool');
+    const fixture = createEngineFixture({
+      tools: [tool],
+      permissions: permissionService(() => ({
+        type: 'deny',
+        operations: [],
+        safetyAssessment: 'unsafe',
+        safetySummary: 'Denied.',
+        reason: 'Denied in test.',
+        denialCode: 'rule_denied',
+      })),
+      streams: [
+        assistantStream('tool', {
+          id: 'provider-call:1',
+          name: tool.registeredToolName,
+          arguments: { value: 'x' },
+        }),
+        assistantStream('final answer'),
+      ],
+    });
+
+    const started = await startedRun(fixture);
+    await vi.waitFor(() => {
+      expect(fixture.published.some(
+        (event) => event.type === 'tool_execution.ended' && event.payload.status === 'denied',
+      )).toBe(true);
+    });
+
+    const events = collectEvents(fixture, started.run.runId);
+    expect(events.some((event) => event.type === 'run.ended' && event.payload.status === 'completed')).toBe(true);
   });
 
   it('settles a failed run as run.ended with the failure', async () => {

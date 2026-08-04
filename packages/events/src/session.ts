@@ -12,13 +12,21 @@
 import { z } from 'zod';
 
 export const CompactionStartedPayloadSchema = z.object({
-  /** Trigger of the compaction, for diagnostics. */
-  trigger: z.enum(['threshold', 'manual']),
+  /** Trigger of the compaction, matching the context package's CompactionTrigger. */
+  trigger: z.enum(['threshold', 'overflow', 'manual']),
+  /** Identity shared with compaction.ended/.failed; the UI keys on it. */
+  compactionId: z.string().min(1),
 }).strict();
 
 export const CompactionEndedPayloadSchema = z.object({
+  /** How the compaction ended — the status is the outcome, like tool_execution.ended. */
+  status: z.enum(['completed', 'failed']),
   /** Reference to the stored compaction summary. */
   compactionId: z.string().min(1),
+  error: z.object({
+    message: z.string().min(1),
+    code: z.string().optional(),
+  }).optional(),
 }).strict();
 
 export const BranchMarkerCreatedPayloadSchema = z.object({

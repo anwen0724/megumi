@@ -23,12 +23,36 @@ export const TurnEndedPayloadSchema = z.object({
   toolCallIds: z.array(z.string().min(1)),
 }).strict();
 
+/** A failed model call attempt is being retried (attemptNumber is 1-based). */
+export const TurnRetryStartedPayloadSchema = z.object({
+  attemptNumber: z.number().int().positive(),
+  retryKind: z.enum(['model_call']),
+}).strict();
+
+export const TurnRetryCompletedPayloadSchema = z.object({
+  attemptNumber: z.number().int().positive(),
+}).strict();
+
+export const TurnRetryFailedPayloadSchema = z.object({
+  attemptNumber: z.number().int().positive(),
+  error: z.object({
+    message: z.string().min(1),
+    code: z.string().optional(),
+  }).optional(),
+}).strict();
+
 export type TurnStartedPayload = z.infer<typeof TurnStartedPayloadSchema>;
 export type TurnEndedPayload = z.infer<typeof TurnEndedPayloadSchema>;
+export type TurnRetryStartedPayload = z.infer<typeof TurnRetryStartedPayloadSchema>;
+export type TurnRetryCompletedPayload = z.infer<typeof TurnRetryCompletedPayloadSchema>;
+export type TurnRetryFailedPayload = z.infer<typeof TurnRetryFailedPayloadSchema>;
 
 export const TurnEventSchemas = {
   'turn.started': TurnStartedPayloadSchema,
   'turn.ended': TurnEndedPayloadSchema,
+  'turn.retry.started': TurnRetryStartedPayloadSchema,
+  'turn.retry.completed': TurnRetryCompletedPayloadSchema,
+  'turn.retry.failed': TurnRetryFailedPayloadSchema,
 } as const;
 
 export type TurnEventPayloadByType = {

@@ -335,6 +335,7 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
         executionEnvironment: scope.executionEnvironment,
         effectiveInstructions: effective.instructions,
         skills: view.view,
+        events,
         ...(operationOptions?.signal ? { signal: operationOptions.signal } : {}),
       });
     },

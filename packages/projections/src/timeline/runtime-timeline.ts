@@ -5,7 +5,10 @@ import type {
   CancelledActivityItem,
   CompactionActivityItem,
   ErrorActivityItem,
+  PlanActivityItem,
   ProcessDisclosureBlock,
+  RetryActivityItem,
+  ThinkingItem,
   TimelineAssistantMessage,
   TimelineMessage,
   ToolActivityItem,
@@ -92,6 +95,20 @@ function projectRuntimeTimelineEvent(
     return nextMessages;
   }
 
+  if (event.type === 'message.thinking.update') {
+    const payload = event.payload;
+    const assistant = ensureAssistantMessage(nextMessages, event);
+    const process = ensureProcessBlock(assistant, event);
+    // Full snapshot: replace, never merge.
+    const item = ensureThinkingItem(process, payload.messageId, event.createdAt);
+    item.text = payload.thinking;
+    item.status = 'streaming';
+    item.updatedAt = event.createdAt;
+    process.updatedAt = event.createdAt;
+    assistant.updatedAt = event.createdAt;
+    return nextMessages;
+  }
+
   if (event.type === 'message.ended' && event.payload.role === 'assistant') {
     const assistant = ensureAssistantMessage(nextMessages, event);
     assistant.messageId = event.payload.messageId;
@@ -102,6 +119,16 @@ function projectRuntimeTimelineEvent(
       answer.text = event.payload.content;
       answer.status = 'completed';
       answer.updatedAt = event.createdAt;
+    }
+    // The settled message closes any streaming thinking item too.
+    for (const block of assistant.blocks) {
+      if (block.kind !== 'process_disclosure') continue;
+      for (const item of block.items) {
+        if (item.kind === 'thinking' && item.status !== 'completed') {
+          item.status = 'completed';
+          item.updatedAt = event.createdAt;
+        }
+      }
     }
     assistant.updatedAt = event.createdAt;
     return nextMessages;
@@ -124,6 +151,20 @@ function projectRuntimeTimelineEvent(
       item.status = 'requested';
       item.updatedAt = event.createdAt;
     }
+    process.updatedAt = event.createdAt;
+    assistant.updatedAt = event.createdAt;
+    return nextMessages;
+  }
+
+  if (event.type === 'tool_execution.requested') {
+    const payload = event.payload;
+    const assistant = ensureAssistantMessage(nextMessages, event);
+    const process = ensureProcessBlock(assistant, event);
+    const item = ensureToolItem(process, payload.toolCallId, event.createdAt);
+    item.toolName = payload.toolName;
+    item.inputSummary = summarizeToolTarget(payload.toolName, payload.args);
+    item.status = 'requested';
+    item.updatedAt = event.createdAt;
     process.updatedAt = event.createdAt;
     assistant.updatedAt = event.createdAt;
     return nextMessages;
@@ -159,7 +200,9 @@ function projectRuntimeTimelineEvent(
       ? 'succeeded'
       : payload.status === 'cancelled'
         ? 'cancelled'
-        : 'failed';
+        : payload.status === 'denied'
+          ? 'denied'
+          : 'failed';
     if (payload.status === 'completed') {
       item.resultSummary = typeof payload.result === 'string'
         ? payload.result.slice(0, 500)
@@ -185,10 +228,17 @@ function projectRuntimeTimelineEvent(
     item.toolName = payload.toolName;
     item.status = 'awaiting_approval';
     item.approval = {
-      approvalRequestId: event.id,
-      defaultOptionId: '',
+      // The engine identity, not the event id: resolving the approval later
+      // looks it up by this value.
+      approvalRequestId: payload.approvalRequestId,
+      defaultOptionId: payload.defaultOptionId,
       summary: payload.reason,
-      options: [],
+      options: payload.options.map((option) => ({
+        optionId: option.optionId,
+        scope: option.scope,
+        label: option.label,
+        description: option.description ?? '',
+      })),
     };
     item.updatedAt = event.createdAt;
     process.updatedAt = event.createdAt;
@@ -209,6 +259,43 @@ function projectRuntimeTimelineEvent(
     return nextMessages;
   }
 
+  if (event.type === 'turn.retry.started' || event.type === 'turn.retry.completed' || event.type === 'turn.retry.failed') {
+    const payload = event.payload;
+    const assistant = ensureAssistantMessage(nextMessages, event);
+    const process = ensureProcessBlock(assistant, event);
+    const item = ensureRetryItem(process, payload.attemptNumber, event.createdAt);
+    item.status = event.type === 'turn.retry.completed'
+      ? 'completed'
+      : event.type === 'turn.retry.failed'
+        ? 'failed'
+        : 'started';
+    item.label = retryLabel(event.type, payload.attemptNumber);
+    item.reason = event.type === 'turn.retry.failed'
+      ? (event.payload as { error?: { message?: string } }).error?.message
+      : undefined;
+    item.updatedAt = event.createdAt;
+    process.updatedAt = event.createdAt;
+    assistant.updatedAt = event.createdAt;
+    return nextMessages;
+  }
+
+  if (event.type === 'run.plan.updated') {
+    const payload = event.payload;
+    const assistant = ensureAssistantMessage(nextMessages, event);
+    const process = ensureProcessBlock(assistant, event);
+    // The plan replaces the tool activity for the same tool call.
+    process.items = process.items.filter((item) => (
+      !(item.kind === 'tool_activity' && item.toolCallId === payload.toolCallId)
+    ));
+    const item = ensurePlanActivityItem(process, event.runId ?? event.id, payload.toolCallId, event.createdAt);
+    item.explanation = payload.explanation;
+    item.plan = payload.plan.map((step) => ({ ...step }));
+    item.updatedAt = event.createdAt;
+    process.updatedAt = event.createdAt;
+    assistant.updatedAt = event.createdAt;
+    return nextMessages;
+  }
+
   if (event.type === 'compaction.started' || event.type === 'compaction.ended') {
     const payload = event.payload;
     const assistant = ensureAssistantMessage(nextMessages, event);
@@ -218,8 +305,12 @@ function projectRuntimeTimelineEvent(
       event.type === 'compaction.ended' ? event.payload.compactionId : `compaction:${event.id}`,
       event.createdAt,
     );
-    item.status = event.type === 'compaction.ended' ? 'completed' : 'running';
-    item.label = event.type === 'compaction.ended' ? '已完成压缩' : '正在压缩上下文';
+    item.status = event.type === 'compaction.ended'
+      ? event.payload.status === 'completed' ? 'completed' : 'failed'
+      : 'running';
+    item.label = event.type === 'compaction.ended'
+      ? event.payload.status === 'completed' ? '已完成压缩' : `上下文压缩失败：${event.payload.error?.message ?? ''}`
+      : '正在压缩上下文';
     item.updatedAt = event.createdAt;
     process.updatedAt = event.createdAt;
     assistant.updatedAt = event.createdAt;
@@ -350,6 +441,76 @@ function hasCompletedAnswerBlock(assistant: TimelineAssistantMessage): boolean {
   return assistant.blocks.some(
     (block) => block.kind === 'answer_text' && block.status === 'completed',
   );
+}
+
+function ensureThinkingItem(process: ProcessDisclosureBlock, thinkingId: string, createdAt: string): ThinkingItem {
+  const existing = process.items.find(
+    (item): item is ThinkingItem => item.kind === 'thinking' && item.thinkingId === thinkingId,
+  );
+  if (existing) return existing;
+  const item: ThinkingItem = {
+    itemId: `thinking:${thinkingId}`,
+    kind: 'thinking',
+    thinkingId,
+    status: 'streaming',
+    text: '',
+    format: 'plain',
+    createdAt,
+    updatedAt: createdAt,
+  };
+  process.items.push(item);
+  return item;
+}
+
+function ensureRetryItem(process: ProcessDisclosureBlock, attemptNumber: number, createdAt: string): RetryActivityItem {
+  const retryAttemptId = `retry:${attemptNumber}`;
+  const existing = process.items.find(
+    (item): item is RetryActivityItem => item.kind === 'retry_activity' && item.retryAttemptId === retryAttemptId,
+  );
+  if (existing) return existing;
+  const item: RetryActivityItem = {
+    itemId: retryAttemptId,
+    kind: 'retry_activity',
+    retryAttemptId,
+    attemptNumber,
+    status: 'started',
+    label: retryLabel('turn.retry.started', attemptNumber),
+    createdAt,
+    updatedAt: createdAt,
+  };
+  process.items.push(item);
+  return item;
+}
+
+function retryLabel(eventType: 'turn.retry.started' | 'turn.retry.completed' | 'turn.retry.failed', attemptNumber: number): string {
+  if (eventType === 'turn.retry.completed') return `Model call retry ${attemptNumber} completed`;
+  if (eventType === 'turn.retry.failed') return `Model call retry ${attemptNumber} failed`;
+  return `Model call retry ${attemptNumber} started`;
+}
+
+function ensurePlanActivityItem(
+  process: ProcessDisclosureBlock,
+  runId: string,
+  toolCallId: string,
+  createdAt: string,
+): PlanActivityItem {
+  const existing = process.items.find(
+    (item): item is PlanActivityItem => item.kind === 'plan_activity',
+  );
+  if (existing) {
+    existing.toolCallId = toolCallId;
+    return existing;
+  }
+  const item: PlanActivityItem = {
+    itemId: `plan:${runId}`,
+    kind: 'plan_activity',
+    toolCallId,
+    plan: [],
+    createdAt,
+    updatedAt: createdAt,
+  };
+  process.items.push(item);
+  return item;
 }
 
 function ensureToolItem(process: ProcessDisclosureBlock, toolCallId: string, createdAt: string): ToolActivityItem {

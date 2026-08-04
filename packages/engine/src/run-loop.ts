@@ -79,6 +79,8 @@ export interface EngineRunRuntime {
   activeModelMessageId?: string;
   /** Accumulated assistant text within the active model call (full-snapshot updates). */
   activeAssistantText: string;
+  /** Accumulated thinking within the active model call (full-snapshot updates). */
+  activeThinking: string;
   currentToolRoundCalls: readonly ToolCall[];
   pendingToolCalls: readonly ToolCall[];
   trace?: TraceHandle;
@@ -115,6 +117,7 @@ export function createEngineRunRuntime(input: {
     pendingToolCalls: [],
     toolSpans: new Map(),
     activeAssistantText: '',
+    activeThinking: '',
     observabilityEnded: false,
     cancelledReplyCommitted: false,
   };
@@ -299,14 +302,21 @@ export function requestRunCancellation(
   run: Run,
 ): void {
   // Cancellation is a transition, not a settled fact: the outcome is told by
-  // run.ended (status: 'cancelled'). A pending approval simply disappears with
-  // the run; the UI discovers it via the pending-approvals query.
+  // run.ended (status: 'cancelled'). A pending approval, however, must settle
+  // as cancelled too, or the UI's approval card would linger in
+  // awaiting_approval after the run is gone.
   const approval = dependencies.store.getPendingRunApproval(run.runId);
   if (approval) {
-    dependencies.store.cancelPendingRunApproval({
+    const cancelled = dependencies.store.cancelPendingRunApproval({
       runId: run.runId,
       cancelledAt: dependencies.clock.now(),
     });
+    if (cancelled) {
+      emitEvent(dependencies, runtime, run, 'approval.resolved', {
+        toolCallId: cancelled.toolCallId,
+        decision: 'cancelled',
+      });
+    }
   }
   runtime.controller.abort();
   void convergeCancellation(dependencies, runtime);
@@ -548,6 +558,7 @@ async function executeRunLoop(
           executionEnvironment: modelCallContext.executionEnvironment,
           effectiveInstructions: modelCallContext.effectiveInstructions,
           skills: modelCallContext.skills,
+          events: dependencies.events,
           signal: runtime.controller.signal,
         });
         if (compacted.status !== 'compacted') {
@@ -831,6 +842,14 @@ async function commitNewToolResults(
       messageId: saved.message.message_id,
       content: result.content,
     });
+    // Denied calls never created a tool execution, so no execution callback
+    // settles them; publish the outcome here so the UI shows the denial.
+    if (result.status === 'permission_denied' || result.status === 'user_rejected') {
+      emitEvent(dependencies, runtime, run, 'tool_execution.ended', {
+        toolCallId: result.toolCallId,
+        status: 'denied',
+      });
+    }
   }
   return true;
 }
@@ -870,8 +889,13 @@ function toolExecutionCallbacks(
     onToolExecutionNotification: (execution, notification) => {
       const run = dependencies.store.getRun(execution.runId);
       if (!run || isTerminalRunStatus(run.status)) return;
-      // Plan updates are an internal transition, not a settled fact; they are
-      // intentionally not part of the event domain.
+      // A planning tool (run_command) published its plan of steps: surface it
+      // so the UI renders the plan activity item.
+      emitEvent(dependencies, runtime, run, 'run.plan.updated', {
+        toolCallId: execution.toolCallId,
+        ...(notification.explanation ? { explanation: notification.explanation } : {}),
+        plan: notification.plan.map((step) => ({ step: step.step, status: step.status })),
+      });
     },
     onToolExecutionFinished: (execution, result) => {
       endObservedSpan(
@@ -962,6 +986,7 @@ function emitModelCallEvent(
       // A recoverable stream reset is not a ModelCall terminal: flush the
       // accumulated snapshot state and record a diagnostic before the retry.
       runtime.activeAssistantText = '';
+      runtime.activeThinking = '';
       recordObservedLog(dependencies, runtime, {
         level: 'info',
         event: 'model.call.stream_reset',
@@ -974,21 +999,48 @@ function emitModelCallEvent(
       });
       return;
     case 'thinking_started':
+      runtime.activeThinking = '';
+      return;
     case 'thinking_delta':
+      runtime.activeThinking += event.delta;
+      if (!runtime.activeModelMessageId) return;
+      // Full snapshot: consumers replace, never merge.
+      emitEvent(dependencies, runtime, run, 'message.thinking.update', {
+        messageId: runtime.activeModelMessageId,
+        thinking: runtime.activeThinking,
+      });
+      return;
     case 'thinking_completed':
-      // Thinking is not a settled fact in the event domain; diagnostics only.
+      // The settled state is told by message.ended; nothing further to publish.
       return;
     case 'retrying': {
       const retryRequestId = dependencies.ids.createRuntimeEventId();
       retryIds.set(event.nextAttemptNumber, retryRequestId);
+      emitEvent(dependencies, runtime, run, 'turn.retry.started', {
+        attemptNumber: event.nextAttemptNumber,
+        retryKind: 'model_call',
+      });
       return;
     }
     case 'completed':
-      for (const retryRequestId of retryIds.values()) {
+      for (const attemptNumber of retryIds.keys()) {
         recordObservedLog(dependencies, runtime, {
           level: 'info',
           event: 'model.call.retry.completed',
-          attributes: { retryRequestId },
+          attributes: { retryAttemptNumber: attemptNumber },
+        });
+        emitEvent(dependencies, runtime, run, 'turn.retry.completed', {
+          attemptNumber,
+        });
+      }
+      retryIds.clear();
+      // The model asked for tools: publish each request immediately so the UI
+      // shows the tool with its name and arguments before execution starts.
+      for (const call of event.toolCalls) {
+        emitEvent(dependencies, runtime, run, 'tool_execution.requested', {
+          toolCallId: call.toolCallId,
+          toolName: call.toolName,
+          args: toJsonValue(call.input) as Record<string, unknown>,
         });
       }
       emitEvent(dependencies, runtime, run, 'turn.ended', {
@@ -998,13 +1050,18 @@ function emitModelCallEvent(
       });
       return;
     case 'failed':
-      for (const retryRequestId of retryIds.values()) {
+      for (const attemptNumber of retryIds.keys()) {
         recordObservedLog(dependencies, runtime, {
           level: 'warn',
           event: 'model.call.retry.failed',
-          attributes: { retryRequestId },
+          attributes: { retryAttemptNumber: attemptNumber },
+        });
+        emitEvent(dependencies, runtime, run, 'turn.retry.failed', {
+          attemptNumber,
+          ...(event.failure.message ? { error: { message: event.failure.message } } : {}),
         });
       }
+      retryIds.clear();
       emitEvent(dependencies, runtime, run, 'turn.ended', {
         stopReason: event.failure.code === 'aborted' ? 'cancelled' : 'error',
         messageId: runtime.activeModelMessageId ?? '',
@@ -1015,11 +1072,12 @@ function emitModelCallEvent(
 
 function resolvedApprovalStatus(
   status: RunApproval['status'],
-): 'approved' | 'rejected' {
+): 'approved' | 'denied' | 'cancelled' {
   if (status === 'pending') {
     throw new Error('A pending RunApproval cannot emit approval.resolved.');
   }
-  return status === 'approved' ? 'approved' : 'rejected';
+  // cancelled is a distinct outcome: the run was cancelled while pending.
+  return status;
 }
 
 function emitApprovalRequested(
@@ -1034,6 +1092,14 @@ function emitApprovalRequested(
     reason: approval.summary ?? `Approve ${approval.toolName}`,
     args: toJsonValue(approval.input) as Record<string, unknown>,
     approvalRequestId: approval.runApprovalId,
+    // The UI renders these choices; approving without an option is impossible.
+    options: approval.options.map((option) => ({
+      optionId: option.optionId,
+      scope: option.scope,
+      label: option.display.label,
+      description: option.display.description,
+    })),
+    defaultOptionId: approval.defaultOptionId,
   });
 }
 

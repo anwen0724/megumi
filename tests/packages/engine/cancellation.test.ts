@@ -161,6 +161,13 @@ describe('Engine cancellation', () => {
       }),
     ]);
     expect(fixture.writes.slice(-2)).toEqual(['tool', 'assistant:cancelled']);
+    // The pending approval settles as cancelled so the UI's approval card
+    // disappears instead of lingering in awaiting_approval.
+    const resolved = fixture.published.find((event) => event.type === 'approval.resolved');
+    expect(resolved?.payload).toMatchObject({
+      toolCallId: 'provider-call:1',
+      decision: 'cancelled',
+    });
   });
 
   it('fails cancellation after the deadline when provider work ignores abort', async () => {

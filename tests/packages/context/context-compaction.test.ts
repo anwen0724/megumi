@@ -1,5 +1,6 @@
 /* Verifies automatic and manual compaction share one policy, commit path, and per-Session lock. */
 import type { AssistantMessage } from '@megumi/ai';
+import { createEventBus, type AnyEvent } from '@megumi/events';
 import type { SessionHistoryItem } from '@megumi/session';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -103,6 +104,30 @@ function manualRequest(overrides: Partial<Parameters<ReturnType<typeof createCon
 }
 
 describe('Context compaction', () => {
+  it('publishes compaction lifecycle events to the bus when an events bus is wired', async () => {
+    const events = createEventBus();
+    const published: AnyEvent[] = [];
+    events.subscribe({}, (event) => { published.push(event); });
+    const options = fixture();
+    options.events = events;
+
+    const result = await createContext(options).compact(manualRequest());
+    expect(result.status).toBe('compacted');
+
+    const types = published.map((event) => event.type);
+    expect(types).toEqual(['compaction.started', 'compaction.ended']);
+    expect(published[0]?.payload).toMatchObject({
+      trigger: 'manual',
+      compactionId: 'compaction:1',
+    });
+    expect(published[0]?.sessionId).toBe('session:1');
+    expect(published[0]?.runId).toBeUndefined();
+    expect(published[1]?.payload).toMatchObject({
+      status: 'completed',
+      compactionId: 'compaction:1',
+    });
+  });
+
   it('automatically compacts above the threshold and rebuilds from the committed Summary', async () => {
     const options = fixture();
     const result = await createContext(options).build({

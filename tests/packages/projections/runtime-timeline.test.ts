@@ -131,12 +131,110 @@ describe('RuntimeTimeline', () => {
     });
     next = reduceRuntimeTimeline({
       timeline: next,
-      event: event('approval.requested', { toolCallId: 'call:1', toolName: 'rm', reason: 'destructive', args: {}, approvalRequestId: 'approval:1' }, 4),
+      event: event('approval.requested', {
+        toolCallId: 'call:1',
+        toolName: 'rm',
+        reason: 'destructive',
+        args: {},
+        approvalRequestId: 'approval:1',
+        options: [{ optionId: 'once', scope: 'once', label: 'Once', description: 'allow once' }],
+        defaultOptionId: 'once',
+      }, 4),
     });
 
     const serialized = JSON.stringify(next.messages);
     expect(serialized).toContain('"awaiting_approval"');
     expect(serialized).toContain('destructive');
+  });
+
+  it('streams thinking as a thinking item with full-snapshot replaces', () => {
+    let next = reduceRuntimeTimelineEvent([], event('run.started', {}, 1));
+    next = reduceRuntimeTimelineEvent(next, event('turn.started', { messageId: 'message:1' }, 2));
+    next = reduceRuntimeTimelineEvent(next, event('message.thinking.update', { messageId: 'message:1', thinking: 'ponder' }, 3));
+    next = reduceRuntimeTimelineEvent(next, event('message.thinking.update', { messageId: 'message:1', thinking: 'ponder deep' }, 4));
+
+    const serialized = JSON.stringify(next);
+    expect(serialized).toContain('"kind":"thinking"');
+    expect(serialized).toContain('ponder deep');
+    expect(serialized).not.toContain('"text":"ponder"');
+    expect(serialized).toContain('"streaming"');
+  });
+
+  it('settles the thinking item when the assistant message ends', () => {
+    let next = reduceRuntimeTimelineEvent([], event('run.started', {}, 1));
+    next = reduceRuntimeTimelineEvent(next, event('turn.started', { messageId: 'message:1' }, 2));
+    next = reduceRuntimeTimelineEvent(next, event('message.thinking.update', { messageId: 'message:1', thinking: 'ponder' }, 3));
+    next = reduceRuntimeTimelineEvent(next, event('message.ended', { role: 'assistant', messageId: 'message:1', content: 'answer' }, 4));
+
+    const serialized = JSON.stringify(next);
+    expect(serialized).toContain('"kind":"thinking"');
+    expect(serialized).toContain('"completed"');
+  });
+
+  it('surfaces tool_execution.requested with the tool name before execution starts', () => {
+    let next = reduceRuntimeTimelineEvent([], event('run.started', {}, 1));
+    next = reduceRuntimeTimelineEvent(next, event('turn.started', { messageId: 'message:1' }, 2));
+    next = reduceRuntimeTimelineEvent(next, event('turn.ended', { stopReason: 'tool_calls', messageId: 'message:1', toolCallIds: ['call:1'] }, 3));
+    next = reduceRuntimeTimelineEvent(next, event('tool_execution.requested', { toolCallId: 'call:1', toolName: 'lookup', args: { value: 'x' } }, 4));
+
+    const serialized = JSON.stringify(next);
+    expect(serialized).toContain('lookup');
+    expect(serialized).toContain('"requested"');
+  });
+
+  it('marks a permission-denied tool execution as denied', () => {
+    let next = reduceRuntimeTimelineEvent([], event('run.started', {}, 1));
+    next = reduceRuntimeTimelineEvent(next, event('turn.started', { messageId: 'message:1' }, 2));
+    next = reduceRuntimeTimelineEvent(next, event('turn.ended', { stopReason: 'tool_calls', messageId: 'message:1', toolCallIds: ['call:1'] }, 3));
+    next = reduceRuntimeTimelineEvent(next, event('tool_execution.ended', { toolCallId: 'call:1', status: 'denied' }, 4));
+
+    const serialized = JSON.stringify(next);
+    expect(serialized).toContain('"denied"');
+  });
+
+  it('tracks model call retries as retry activity', () => {
+    let next = reduceRuntimeTimelineEvent([], event('run.started', {}, 1));
+    next = reduceRuntimeTimelineEvent(next, event('turn.started', { messageId: 'message:1' }, 2));
+    next = reduceRuntimeTimelineEvent(next, event('turn.retry.started', { attemptNumber: 2, retryKind: 'model_call' }, 3));
+
+    const serialized = JSON.stringify(next);
+    expect(serialized).toContain('"kind":"retry_activity"');
+    expect(serialized).toContain('"attemptNumber":2');
+  });
+
+  it('renders a plan activity from run.plan.updated', () => {
+    let next = reduceRuntimeTimelineEvent([], event('run.started', {}, 1));
+    next = reduceRuntimeTimelineEvent(next, event('turn.started', { messageId: 'message:1' }, 2));
+    next = reduceRuntimeTimelineEvent(next, event('run.plan.updated', {
+      toolCallId: 'call:1',
+      explanation: 'edits files',
+      plan: [{ step: 'write a', status: 'pending' }],
+    }, 3));
+
+    const serialized = JSON.stringify(next);
+    expect(serialized).toContain('"kind":"plan_activity"');
+    expect(serialized).toContain('edits files');
+    expect(serialized).toContain('write a');
+  });
+
+  it('carries the approval options and the engine approval identity', () => {
+    let next = reduceRuntimeTimelineEvent([], event('run.started', {}, 1));
+    next = reduceRuntimeTimelineEvent(next, event('turn.started', { messageId: 'message:1' }, 2));
+    next = reduceRuntimeTimelineEvent(next, event('approval.requested', {
+      toolCallId: 'call:1',
+      toolName: 'rm',
+      reason: 'destructive',
+      args: {},
+      approvalRequestId: 'approval:1',
+      options: [{ optionId: 'once', scope: 'once', label: 'Once', description: 'allow once' }],
+      defaultOptionId: 'once',
+    }, 3));
+
+    const serialized = JSON.stringify(next);
+    expect(serialized).toContain('"approvalRequestId":"approval:1"');
+    expect(serialized).toContain('"defaultOptionId":"once"');
+    expect(serialized).toContain('"optionId":"once"');
+    expect(serialized).toContain('"scope":"once"');
   });
 
   it('does not project session-scoped compaction into a Run timeline', () => {

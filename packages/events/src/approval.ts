@@ -12,6 +12,14 @@
 
 import { z } from 'zod';
 
+export const ApprovalOptionSchema = z.object({
+  optionId: z.string().min(1),
+  /** How long the approved permission lasts. */
+  scope: z.enum(['once', 'session']),
+  label: z.string().min(1),
+  description: z.string().optional(),
+}).strict();
+
 export const ApprovalRequestedPayloadSchema = z.object({
   toolCallId: z.string().min(1),
   toolName: z.string().min(1),
@@ -20,11 +28,19 @@ export const ApprovalRequestedPayloadSchema = z.object({
   args: z.record(z.string(), z.unknown()),
   /** Engine-side approval identity, used to resolve the approval later. */
   approvalRequestId: z.string().min(1),
+  /** The permission scopes the user may grant; the UI renders them as choices. */
+  options: z.array(ApprovalOptionSchema),
+  /** The pre-selected option; matches one of options[].optionId. */
+  defaultOptionId: z.string().min(1),
 }).strict();
+
+export type ApprovalOption = z.infer<typeof ApprovalOptionSchema>;
 
 export const ApprovalResolvedPayloadSchema = z.object({
   toolCallId: z.string().min(1),
-  decision: z.enum(['approved', 'rejected']),
+  /** How the approval was settled: expired covers a timed-out approval; cancelled
+   *  covers a run cancelled while the approval was pending. */
+  decision: z.enum(['approved', 'denied', 'expired', 'cancelled']),
 }).strict();
 
 export type ApprovalRequestedPayload = z.infer<typeof ApprovalRequestedPayloadSchema>;

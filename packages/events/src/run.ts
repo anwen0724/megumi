@@ -22,12 +22,24 @@ export const RunEndedPayloadSchema = z.object({
   }).optional(),
 }).strict();
 
+/** A planning tool (run_command) published its plan of steps. */
+export const RunPlanUpdatedPayloadSchema = z.object({
+  toolCallId: z.string().min(1),
+  explanation: z.string().optional(),
+  plan: z.array(z.object({
+    step: z.string(),
+    status: z.enum(['pending', 'in_progress', 'completed']),
+  }).strict()).min(1),
+}).strict();
+
 export type RunStartedPayload = z.infer<typeof RunStartedPayloadSchema>;
 export type RunEndedPayload = z.infer<typeof RunEndedPayloadSchema>;
+export type RunPlanUpdatedPayload = z.infer<typeof RunPlanUpdatedPayloadSchema>;
 
 export const RunEventSchemas = {
   'run.started': RunStartedPayloadSchema,
   'run.ended': RunEndedPayloadSchema,
+  'run.plan.updated': RunPlanUpdatedPayloadSchema,
 } as const;
 
 export type RunEventPayloadByType = {

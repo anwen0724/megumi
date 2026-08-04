@@ -29,6 +29,13 @@ export const MessageUpdatePayloadSchema = z.object({
   content: z.string(),
 }).strict();
 
+/** Full latest snapshot of the assistant's thinking while it streams. */
+export const MessageThinkingUpdatePayloadSchema = z.object({
+  messageId: z.string().min(1),
+  /** Complete thinking as of now — replace the previous snapshot. */
+  thinking: z.string(),
+}).strict();
+
 export const MessageEndedPayloadSchema = z.object({
   role: MessageRoleSchema,
   messageId: z.string().min(1),
@@ -43,6 +50,7 @@ export type MessageEndedPayload = z.infer<typeof MessageEndedPayloadSchema>;
 export const MessageEventSchemas = {
   'message.started': MessageStartedPayloadSchema,
   'message.update': MessageUpdatePayloadSchema,
+  'message.thinking.update': MessageThinkingUpdatePayloadSchema,
   'message.ended': MessageEndedPayloadSchema,
 } as const;
 
