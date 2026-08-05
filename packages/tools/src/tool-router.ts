@@ -1,6 +1,6 @@
 /* Freezes one ModelCall Tool view and routes its calls back to original handlers. */
 
-import type { JsonValue } from '@megumi/ai';
+import type { JsonValue } from './json';
 import type {
   PermissionOperation,
   RegisteredTool,
@@ -38,7 +38,7 @@ export function createToolRouter<TContext>(request: {
     route(call) {
       const registered = selected.get(call.toolName);
       if (!registered) return failed('unknown_tool', `Tool not found in this ModelCall: ${call.toolName}`);
-      const validation = validateToolInput(registered.definition.inputSchema, call.input);
+      const validation = validateToolInput(registered.definition.parameters, call.input);
       if (!validation.ok) return failed('invalid_tool_input', validation.errorMessage);
       const invocation: ToolInvocation = Object.freeze({
         invocationId: `${request.scope.modelCallId}:${call.toolCallId}`,

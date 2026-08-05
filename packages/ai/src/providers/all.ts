@@ -3,18 +3,24 @@ import { MODELS } from "../models.generated.ts";
 import { type CreateModelsOptions, createModels, type MutableModels, type Provider } from "../models.ts";
 import type { Api, Model } from "../types.ts";
 import { anthropicProvider } from "./anthropic.ts";
+import modelDataManifest from "./data/.manifest.json" with { type: "json" };
 import { deepseekProvider } from "./deepseek.ts";
 import { googleProvider } from "./google.ts";
 import { huggingfaceProvider } from "./huggingface.ts";
 import { minimaxProvider } from "./minimax.ts";
+import { minimaxCnProvider } from "./minimax-cn.ts";
 import { moonshotaiProvider } from "./moonshotai.ts";
+import { moonshotaiCnProvider } from "./moonshotai-cn.ts";
 import { openaiProvider } from "./openai.ts";
 import { openaiCodexProvider } from "./openai-codex.ts";
 import { openrouterProvider } from "./openrouter.ts";
 import { openrouterImagesProvider } from "./openrouter-images.ts";
 import { qwenTokenPlanProvider } from "./qwen-token-plan.ts";
+import { qwenTokenPlanCnProvider } from "./qwen-token-plan-cn.ts";
 
-/** Providers present in the generated built-in catalog. */
+/** Providers present in the generated catalog. `KnownProvider` additionally
+ * includes purely dynamic providers (e.g. "radius") that have no static
+ * catalog entry. */
 export type BuiltinProvider = keyof typeof MODELS;
 
 type BuiltinModelApi<
@@ -35,9 +41,10 @@ export function getBuiltinProviders(): BuiltinProvider[] {
 	return Object.keys(MODELS) as BuiltinProvider[];
 }
 
-/** URL of a generated provider catalog, used to compare its mtime with remote catalogs during development. */
-export function getBuiltinModelDataUrl(provider: BuiltinProvider): URL {
-	return new URL(`./data/${provider}.json`, import.meta.url);
+/** Generation timestamp shared by all built-in provider catalogs. */
+export function getBuiltinModelDataGeneratedAt(): number | undefined {
+	const generatedAt = Date.parse(modelDataManifest.generatedAt);
+	return Number.isNaN(generatedAt) ? undefined : generatedAt;
 }
 
 export function getBuiltinModels<TProvider extends BuiltinProvider>(
@@ -57,11 +64,14 @@ export function builtinProviders(): Provider[] {
 		googleProvider(),
 		huggingfaceProvider(),
 		minimaxProvider(),
+		minimaxCnProvider(),
 		moonshotaiProvider(),
+		moonshotaiCnProvider(),
 		openaiProvider(),
 		openaiCodexProvider(),
 		openrouterProvider(),
 		qwenTokenPlanProvider(),
+		qwenTokenPlanCnProvider(),
 	];
 }
 

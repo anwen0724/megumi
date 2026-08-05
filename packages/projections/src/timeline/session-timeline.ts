@@ -192,10 +192,24 @@ function projectSessionTimelineUserMessage(
     projectId,
     sessionId: message.session_id,
     ...(message.run_id ? { runId: message.run_id } : {}),
+    ...(messageSkillSelection(item)),
     createdAt: message.created_at,
     ...(message.completed_at ? { updatedAt: message.completed_at } : {}),
     ...(historyOrder !== undefined ? { historyOrder } : {}),
     blocks,
+  };
+}
+
+function messageSkillSelection(
+  item: SessionMessageWithAttachments,
+): { skillSelection: { name: string; skillPath: string } } | Record<string, never> {
+  const { message } = item;
+  if (!('skill_selection' in message) || !message.skill_selection) return {};
+  return {
+    skillSelection: {
+      name: message.skill_selection.name,
+      skillPath: message.skill_selection.skill_path,
+    },
   };
 }
 
@@ -308,7 +322,7 @@ function projectProcessItems(
           kind: 'tool_activity',
           toolCallId: block.id,
           toolName: block.name,
-          inputSummary: summarizeToolTarget(block.name, parseToolArguments(block.argumentsText)),
+          inputSummary: summarizeToolTarget(block.name, block.arguments),
           ...(result ? {
             ...(result.status === 'success' ? {} : { resultSummary: result.error?.message ?? sessionMessageText(result) }),
             status: result.status === 'success'
@@ -342,12 +356,4 @@ function processStatus(
   const hasIncompleteToolCall = modelResponses.some((message) => message.content.some((block) =>
     block.type === 'toolCall' && !resultIds.has(block.id)));
   return hasIncompleteToolCall ? 'incomplete' : 'completed';
-}
-
-function parseToolArguments(argumentsText: string): unknown {
-  try {
-    return JSON.parse(argumentsText);
-  } catch {
-    return undefined;
-  }
 }

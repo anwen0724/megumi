@@ -53,6 +53,8 @@ function toListItem(command: CommandDefinition): CommandListItem {
     ...(command.aliases ? { aliases: [...command.aliases] } : {}),
     description: command.description,
     ...(command.argumentHint ? { argumentHint: command.argumentHint } : {}),
-    source: command.source,
+    ...(command.hiddenFromSuggestions !== undefined
+      ? { hiddenFromSuggestions: command.hiddenFromSuggestions }
+      : {}),
   };
 }

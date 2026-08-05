@@ -1,4 +1,4 @@
-﻿# @megumi/ai
+# @megumi/ai
 
 Unified LLM API with provider collections, automatic auth resolution, token and cost tracking, and simple context persistence and hand-off to other models mid-session.
 
@@ -47,23 +47,45 @@ Unified LLM API with provider collections, automatic auth resolution, token and 
 - [Browser Usage](#browser-usage)
 - [Bundling and Tree Shaking](#bundling-and-tree-shaking)
 - [OAuth Providers](#oauth-providers)
+  - [Vertex AI](#vertex-ai)
   - [CLI Login](#cli-login)
   - [Programmatic OAuth](#programmatic-oauth)
+- [Migrating from the Old Global API](#migrating-from-the-old-global-api)
 - [Development](#development)
 - [License](#license)
 
 ## Supported Providers
 
 - **OpenAI**
+- **Ant Ling**
+- **Azure OpenAI (Responses)**
 - **OpenAI Codex** (ChatGPT Plus/Pro subscription, requires OAuth, see below)
 - **DeepSeek**
+- **NVIDIA NIM**
 - **Anthropic**
 - **Google**
+- **Vertex AI** (Gemini via Vertex AI)
+- **Mistral**
+- **Groq**
+- **Cerebras**
+- **Cloudflare AI Gateway**
+- **Cloudflare Workers AI**
+- **xAI**
 - **OpenRouter**
+- **Vercel AI Gateway**
+- **ZAI Coding Plan (Global)** (with separate China provider)
 - **MiniMax** (with separate China provider)
+- **Together AI**
+- **Baseten**
 - **Hugging Face**
 - **Moonshot AI** (with separate China provider)
-- **Qwen Token Plan** (with separate China provider)
+- **GitHub Copilot** (requires OAuth, see below)
+- **Amazon Bedrock**
+- **OpenCode Zen**
+- **OpenCode Go**
+- **Fireworks** (uses OpenAI- and Anthropic-compatible APIs)
+- **Kimi For Coding** (Moonshot AI subscription endpoint, uses Anthropic-compatible API)
+- **Xiaomi MiMo** (defaults to API billing endpoint, with separate Token Plan providers for `cn`/`ams`/`sgp` regions)
 - **Any OpenAI-compatible API**: Ollama, vLLM, LM Studio, etc.
 
 ## Installation
@@ -208,7 +230,7 @@ Snippets in the rest of this README assume a `models` collection set up like thi
 
 A **provider** is the runtime unit: it owns its model catalog, its auth (API key resolution, OAuth flows), and its stream behavior. A `Models` collection holds providers and routes every request to the provider that owns the model.
 
-Providers internally share **API implementations** (the wire protocols): Anthropic and MiniMax use `anthropic-messages`; OpenAI and OpenAI Codex use Responses APIs; Google uses `google-generative-ai`; DeepSeek, OpenRouter, Hugging Face, Moonshot, and Qwen use `openai-completions`.
+Providers internally share **API implementations** (the wire protocols): Anthropic models use `anthropic-messages`, OpenAI uses `openai-responses`, while xAI, Groq, Cerebras, OpenRouter, and most others share `openai-completions`. Mixed-API providers (GitHub Copilot, OpenCode Zen) dispatch per model.
 
 ### Provider Factories
 
@@ -218,6 +240,7 @@ For apps that only need specific providers, there is one factory per built-in pr
 import { anthropicProvider } from '@megumi/ai/providers/anthropic';
 import { openaiProvider } from '@megumi/ai/providers/openai';
 import { openrouterProvider } from '@megumi/ai/providers/openrouter';
+import { amazonBedrockProvider } from '@megumi/ai/providers/amazon-bedrock';
 // ...one module per provider in the Supported Providers list
 
 const models = createModels();
@@ -290,8 +313,8 @@ Providers may have dynamic model lists (a llama.cpp server, a live OpenRouter li
 
 ```typescript
 // getModels() returns the last-known list (empty before the first refresh)
-await models.refresh('llamacpp');        // fetch one provider's list; rejects on failure
-await models.refresh();                  // refresh all providers concurrently, best-effort
+await models.refresh({ providers: ['llamacpp'] }); // refresh one provider
+await models.refresh();                            // refresh all providers concurrently, best-effort
 const fresh = models.getModel('llamacpp', 'qwen3-30b');
 ```
 
@@ -329,6 +352,8 @@ if (modelAuth) {
 
 Both overloads resolve credentials, refresh expired OAuth when necessary, and may return an auth-derived `apiKey`, `headers`, or `baseUrl`. `getAuth()` resolves `undefined` for unconfigured providers and rejects with `ModelsError` when something is actually broken (`"oauth"`: token refresh failed, credential preserved for re-login; `"auth"`: key resolution or credential store failure). Request paths surface the same failures as stream errors.
 
+`getAuth()`, `checkAuth()`, `getAvailable()`, login, and logout accept optional caller cancellation through their existing options or interaction objects and remain unbounded when no signal is supplied. Provider `login`, `ApiKeyAuth.check`, `ApiKeyAuth.resolve`, and `OAuthAuth.refresh` implementations always receive a concrete signal and must honor it for blocking work.
+
 ### Transforming Request Headers
 
 `Models.stream()`, `complete()`, `streamSimple()`, and `completeSimple()` accept a Models-only `transformHeaders` option. It runs once after provider auth, `model.headers`, and explicit `options.headers` have been merged, but before provider dispatch:
@@ -355,7 +380,7 @@ Header names are merged case-insensitively. Explicit headers override auth/model
 
 ### Credential Store
 
-Stored credentials (API keys entered interactively, OAuth tokens) live in a `CredentialStore` — one type-tagged credential per provider. Megumi AI ships an in-memory default; apps inject persistent storage:
+Stored credentials (API keys entered interactively, OAuth tokens) live in a `CredentialStore` — one type-tagged credential per provider. pi-ai ships an in-memory default; apps inject persistent storage:
 
 ```typescript
 import { createModels, type CredentialStore } from '@megumi/ai';
@@ -365,14 +390,18 @@ const models = createModels({ credentials: myFileBackedStore });
 // const models = builtinModels({ credentials: myFileBackedStore });
 ```
 
-The contract is small: `read(providerId)`, `list()` for non-secret `{ providerId, type }` metadata, `modify(providerId, fn)` (the only write path — a serialized read-modify-write), and `delete(providerId)`. Enumeration must not resolve secrets or execute configured key commands. OAuth token refresh runs inside `modify`, so concurrent requests and processes cannot double-refresh a rotated token. A stored credential *owns* its provider: environment variables are only consulted when nothing is stored, and a failed refresh never silently falls back to an env key.
+The contract is small: `read(providerId)`, `list()` for non-secret `{ providerId, type }` metadata, `modify(providerId, fn)` (the only write path — a serialized read-modify-write), and `delete(providerId)`. Each operation accepts optional cancellation options. Enumeration must not resolve secrets or execute configured key commands. OAuth token refresh runs inside `modify`, so concurrent requests and processes cannot double-refresh a rotated token. A stored credential *owns* its provider: environment variables are only consulted when nothing is stored, and a failed refresh never silently falls back to an env key.
 
-API-key credentials use the same discriminator as the credential store and can carry provider-scoped env/config values:
+API-key credentials use the same discriminator as pi's `auth.json` and can carry provider-scoped env/config values:
 
 ```typescript
 const credential = {
   type: 'api_key',
   key: '...',
+  env: {
+    CLOUDFLARE_ACCOUNT_ID: 'account-id',
+    CLOUDFLARE_GATEWAY_ID: 'gateway-id'
+  }
 } as const;
 ```
 
@@ -383,16 +412,41 @@ Built-in providers resolve these env vars (Node.js; in browsers pass `apiKey` ex
 | Provider | Environment Variable(s) |
 |----------|------------------------|
 | OpenAI | `OPENAI_API_KEY` |
+| Ant Ling | `ANT_LING_API_KEY` |
+| Azure OpenAI | `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_BASE_URL` (e.g. `https://{resource}.ai.azure.com`) or `AZURE_OPENAI_RESOURCE_NAME`. Supports `*.openai.azure.com`, `*.cognitiveservices.azure.com` and `*.ai.azure.com`; root endpoints auto-normalize to `/openai/v1`. Optional: `AZURE_OPENAI_API_VERSION` (default `v1`), `AZURE_OPENAI_DEPLOYMENT_NAME_MAP`. |
 | Anthropic | `ANTHROPIC_API_KEY` or `ANTHROPIC_OAUTH_TOKEN` |
 | DeepSeek | `DEEPSEEK_API_KEY` |
+| NVIDIA NIM | `NVIDIA_API_KEY` |
 | Google | `GEMINI_API_KEY` |
+| Vertex AI | `GOOGLE_CLOUD_API_KEY` or `GOOGLE_CLOUD_PROJECT` (or `GCLOUD_PROJECT`) + `GOOGLE_CLOUD_LOCATION` + ADC |
+| Mistral | `MISTRAL_API_KEY` |
+| Groq | `GROQ_API_KEY` |
+| Cerebras | `CEREBRAS_API_KEY` |
+| Cloudflare AI Gateway | `CLOUDFLARE_API_KEY` + `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_GATEWAY_ID` |
+| Cloudflare Workers AI | `CLOUDFLARE_API_KEY` + `CLOUDFLARE_ACCOUNT_ID` |
+| xAI | `XAI_API_KEY` |
+| Fireworks | `FIREWORKS_API_KEY` |
+| Together AI | `TOGETHER_API_KEY` |
+| Baseten | `BASETEN_API_KEY` |
 | OpenRouter | `OPENROUTER_API_KEY` |
+| Vercel AI Gateway | `AI_GATEWAY_API_KEY` |
+| ZAI Coding Plan (Global) | `ZAI_API_KEY` |
+| ZAI Coding Plan (China) | `ZAI_CODING_CN_API_KEY` |
 | MiniMax (Global) | `MINIMAX_API_KEY` |
 | MiniMax (China) | `MINIMAX_CN_API_KEY` |
 | Moonshot AI / Moonshot AI (China) | `MOONSHOT_API_KEY` |
 | Hugging Face | `HF_TOKEN` |
+| OpenCode Zen / OpenCode Go | `OPENCODE_API_KEY` |
+| Kimi For Coding | `KIMI_API_KEY` |
 | Qwen Token Plan | `QWEN_TOKEN_PLAN_API_KEY` |
 | Qwen Token Plan (China) | `QWEN_TOKEN_PLAN_CN_API_KEY` |
+| Xiaomi MiMo (API billing) | `XIAOMI_API_KEY` |
+| Xiaomi MiMo Token Plan (China) | `XIAOMI_TOKEN_PLAN_CN_API_KEY` |
+| Xiaomi MiMo Token Plan (Amsterdam) | `XIAOMI_TOKEN_PLAN_AMS_API_KEY` |
+| Xiaomi MiMo Token Plan (Singapore) | `XIAOMI_TOKEN_PLAN_SGP_API_KEY` |
+| GitHub Copilot | `COPILOT_GITHUB_TOKEN` |
+
+Amazon Bedrock resolves ambient AWS credentials (`AWS_PROFILE`, access key pairs, `AWS_BEARER_TOKEN_BEDROCK`, ECS task roles, web identity tokens); its provider-owned login flow supports bearer tokens, AWS profiles, and the existing credential chain. Vertex AI resolves either an explicit key or gcloud Application Default Credentials plus project/location, with a provider-owned login flow for API keys, ADC, and service-account files.
 
 ## Tools
 
@@ -425,6 +479,40 @@ const bookMeetingTool: Tool = {
     endTime: Type.String({ format: 'date-time' }),
     attendees: Type.Array(Type.String({ format: 'email' }), { minItems: 1 })
   })
+};
+```
+
+### Constrained Sampling for Tools
+
+Tools can opt in to provider-side constrained sampling. For JSON-schema tools, `strict: 'prefer'` uses provider-side strict schema enforcement when supported and otherwise falls back to normal tool calling. `strict: 'require'` fails the request when the active provider/model cannot honor it. Set `constrainedSampling: false` to explicitly opt out; it behaves the same as omitting the field.
+
+```typescript
+const strictTool: Tool = {
+  name: 'edit_file',
+  description: 'Edit a file',
+  parameters: Type.Object({
+    path: Type.String(),
+    content: Type.String()
+  }, { additionalProperties: false }),
+  constrainedSampling: { type: 'json_schema', strict: 'prefer' }
+};
+```
+
+Strict JSON-schema constrained sampling is supported for OpenAI, Anthropic, supported Amazon Bedrock Converse models, Mistral, and Gemini 3 tool calls through the Google Generative AI and Vertex adapters. Google uses `VALIDATED` function-calling mode (or `ANY` when explicitly requested); earlier Gemini versions fall back for `strict: 'prefer'` and reject `strict: 'require'` because they do not enforce required parameters. Bedrock strict-tool capability is generated from model structured-output metadata; custom Bedrock models can override `compat.supportsStrictMode`. OpenAI Responses and Chat Completions can also emit grammar-constrained custom tools with OpenAI Lark or regex grammar variants. If multiple OpenAI variants are supplied, Lark is preferred over regex. Grammar constraints are enforced when the active model supports grammar tools; otherwise the tool falls back to normal function/JSON-schema handling. Grammar tool capability is model metadata: the generated catalog sets `compat.supportsOpenAIGrammarTools` for GPT-5+ models on endpoints that pass OpenAI custom tools through (OpenAI, OpenAI Codex, Azure OpenAI Responses, GitHub Copilot, opencode, and Cloudflare AI Gateway). OpenAI rejects `type: "custom"` tools for pre-GPT-5 models, and gateways that normalize tool schemas (e.g. OpenRouter) mangle them, so the flag stays off elsewhere. Custom model definitions can opt in via `compat`. Grammar-capable models reject grammar configurations without a non-empty supported variant. Native grammar tools must have an object parameter schema with exactly one required string property:
+
+```typescript
+const patchTool: Tool = {
+  name: 'apply_patch',
+  description: 'Apply a patch',
+  parameters: Type.Object({
+    input: Type.String()
+  }, { additionalProperties: false }),
+  constrainedSampling: {
+    type: 'grammar',
+    variants: {
+      openai_lark: 'start: /.+/s'
+    }
+  }
 };
 ```
 
@@ -573,7 +661,7 @@ All streaming events emitted during assistant message generation:
 | `done` | Stream complete | `reason`: Stop reason ("stop", "length", "toolUse"), `message`: Final assistant message |
 | `error` | Error occurred | `reason`: Error type ("error" or "aborted"), `error`: AssistantMessage with partial content |
 
-Streaming events for different content blocks are not guaranteed to be contiguous. Providers may emit deltas for text, thinking, and tool calls in the same upstream chunk, and Megumi AI may surface corresponding events interleaved, for example `text_start`, `text_delta`, `toolcall_start`, `text_delta`, `toolcall_delta`. Consumers must use `contentIndex` to associate each delta/end event with its block and must not assume that a block's `*_start`/`*_delta`/`*_end` sequence is uninterrupted by events for other blocks.
+Streaming events for different content blocks are not guaranteed to be contiguous. Providers may emit deltas for text, thinking, and tool calls in the same upstream chunk, and pi may surface corresponding events interleaved, for example `text_start`, `text_delta`, `toolcall_start`, `text_delta`, `toolcall_delta`. Consumers must use `contentIndex` to associate each delta/end event with its block and must not assume that a block's `*_start`/`*_delta`/`*_end` sequence is uninterrupted by events for other blocks.
 
 ## Image Input
 
@@ -642,6 +730,19 @@ for (const block of result.output) {
 
 Like the chat side, you can build the collection from parts: `createImagesModels({ credentials?, authContext? })`, the `openrouterImagesProvider()` factory from `@megumi/ai/providers/openrouter-images`, and `createImagesProvider({ id, auth, models, refreshModels?, api })` for custom image providers (with `imagesModels.refresh(provider?)` for dynamic lists). Failures never reject — they return an `AssistantImages` with `stopReason: "error"`. The collection's provider-scoped `getAuth(providerId)` works exactly like the chat-side one.
 
+The old global API (`getImageModel()` / `getImageModels()` / `getImageProviders()` / `generateImages()`) remains available on the [compat entrypoint](#migrating-from-the-old-global-api):
+
+```typescript
+import { getImageModel, generateImages } from '@megumi/ai/compat';
+
+const model = getImageModel('openrouter', 'google/gemini-2.5-flash-image');
+const result = await generateImages(model, {
+  input: [{ type: 'text', text: 'Generate a red circle on a plain white background.' }]
+}, {
+  apiKey: process.env.OPENROUTER_API_KEY
+});
+```
+
 Some models also support image input:
 
 ```typescript
@@ -686,7 +787,7 @@ Many models support thinking/reasoning capabilities where they can show their in
 const model = models.getModel('anthropic', 'claude-sonnet-4-5')!;
 // or models.getModel('openai', 'gpt-5-mini');
 // or models.getModel('google', 'gemini-2.5-flash');
-// or models.getModel('deepseek', 'deepseek-reasoner');
+// or models.getModel('xai', 'grok-4.5');
 
 // Check if model supports reasoning
 if (model.reasoning) {
@@ -775,7 +876,8 @@ for await (const event of s) {
 
 Every `AssistantMessage` includes a `stopReason` field that indicates how the generation ended:
 
-- `"stop"` - Normal completion, the model finished its response
+- `"pending"` - Only present in partial messages when we do not know what the stop reason will be
+- `"stop"` - This is the final message the model will produce this turn
 - `"length"` - Output hit the maximum token limit
 - `"toolUse"` - Model is calling tools and expects tool results
 - `"error"` - An error occurred during generation
@@ -968,7 +1070,7 @@ const tenantGateway = createProvider({
 });
 ```
 
-Dynamic model lists use `fetchModels`. `Models.refresh()` refreshes every configured dynamic provider, passing its effective API-key or refreshed OAuth credential. A `ModelsStore` persists dynamic catalogs; both stores default to in-memory implementations.
+Dynamic model lists use `fetchModels`. `Models.refresh()` refreshes every configured dynamic provider, passing its effective API-key or refreshed OAuth credential. A `ModelsStore` persists dynamic catalogs; both stores default to in-memory implementations. Its `read`, `write`, and `delete` operations accept optional cancellation, and `Models` binds those waits to the provider refresh signal.
 
 ```typescript
 const models = createModels({ credentials, modelsStore });
@@ -986,13 +1088,17 @@ if (result.aborted) console.log('refresh cancelled');
 for (const [provider, error] of result.errors) console.error(provider, error);
 ```
 
-Use `models.refresh({ allowNetwork: false })` to restore persisted catalogs without network access, or `models.refresh({ force: true })` to bypass provider freshness checks. Model reads stay synchronous and return the last restored or refreshed list.
+`Models.refresh()` is unbounded when its optional signal is omitted. Providers always receive a concrete `RefreshModelsContext.signal` and must honor it for network requests and other blocking work. When a caller supplies a signal, `Models.refresh()` returns promptly with `aborted: true` after cancellation even if a custom provider fails to cooperate; the provider must still honor the signal to stop its underlying work.
+
+Use `models.refresh({ providers: ['openrouter'] })` to restrict work to selected providers, `models.refresh({ allowNetwork: false })` to restore persisted catalogs without network access, or `models.refresh({ force: true })` to bypass provider freshness checks. Model reads stay synchronous and return the last restored or refreshed list.
+
+`createProvider()` handles dynamic publication and persistence automatically. Handwritten `Provider.refreshModels()` implementations receive the read-only `context.stored` snapshot and publish through `context.publish({ persist?, update? })`. Omit `persist` to leave storage unchanged, pass a `ModelsStoreEntry` to write it, or pass `persist: null` to delete it. Publication is generation-checked; put synchronous in-memory catalog changes in `update` rather than mutating state before publication.
 
 Custom models can carry `headers` (e.g. proxies behind bot detection) and `compat` flags. `Models.getAuth(model)` includes those model headers, and stream methods merge them before explicit request headers and `transformHeaders`. See [OpenAI Compatibility Settings](#openai-compatibility-settings).
 
 Some OpenAI-compatible servers do not understand the `developer` role used for reasoning-capable models. For those providers, set `compat.supportsDeveloperRole` to `false` so the system prompt is sent as a `system` message instead. If the server also does not support `reasoning_effort`, set `compat.supportsReasoningEffort` to `false` too. This commonly applies to Ollama, vLLM, SGLang, and similar OpenAI-compatible servers.
 
-Use model-level `thinkingLevelMap` to describe model-specific thinking controls. Keys are Megumi AI thinking levels (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`). Missing standard levels through `high` use provider defaults; `xhigh` and `max` are opt-in and require a non-null map entry. String values are sent to the provider, `null` marks a level unsupported, and maps may skip levels.
+Use model-level `thinkingLevelMap` to describe model-specific thinking controls. Keys are pi thinking levels (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`). Missing standard levels through `high` use provider defaults; `xhigh` and `max` are opt-in and require a non-null map entry. String values are sent to the provider, `null` marks a level unsupported, and maps may skip levels.
 
 ```typescript
 const ollamaReasoningModel: Model<'openai-completions'> = {
@@ -1042,9 +1148,13 @@ Built-in API implementations live under `./api/<api-id>`:
 | `openai-completions` | `OpenAICompletionsOptions` |
 | `openai-responses` | `OpenAIResponsesOptions` |
 | `openai-codex-responses` | `OpenAICodexResponsesOptions` |
+| `azure-openai-responses` | `AzureOpenAIResponsesOptions` |
 | `google-generative-ai` | `GoogleOptions` |
+| `google-vertex` | `GoogleVertexOptions` |
+| `mistral-conversations` | `MistralOptions` |
+| `bedrock-converse-stream` | `BedrockOptions` |
 
-Importing an implementation module loads its SDK. The `./api/<id>.lazy` wrappers (used by the provider factories) defer that load to the first request when the runtime or bundler supports dynamic import chunking. Use `@megumi/ai/api/<api-id>` for direct API implementation imports.
+Importing an implementation module loads its SDK. The `./api/<id>.lazy` wrappers (used by the provider factories) defer that load to the first request when the runtime or bundler supports dynamic import chunking. Legacy raw API subpaths from older releases (`./anthropic`, `./google`, `./mistral`, `./openai-completions`, ...) were removed; use `@megumi/ai/api/<api-id>`.
 
 ### OpenAI Compatibility Settings
 
@@ -1057,6 +1167,7 @@ interface OpenAICompletionsCompat {
   supportsReasoningEffort?: boolean; // Whether provider supports `reasoning_effort` (default: true)
   supportsUsageInStreaming?: boolean; // Whether provider supports `stream_options: { include_usage: true }` (default: true)
   supportsStrictMode?: boolean;      // Whether provider supports `strict` in tool definitions (default: true)
+  supportsOpenAIGrammarTools?: boolean; // Whether to emit OpenAI custom Lark/regex grammar tools; false falls back to normal function tools (default: false; the generated catalog enables it for capable models)
   sendSessionAffinityHeaders?: boolean; // Send session-affinity data from `sessionId` (default: false)
   sessionAffinityFormat?: 'openai' | 'openai-nosession' | 'openrouter'; // Format for session affinity: 'openai' uses `prompt_cache_key`, `session_id`, `x-client-request-id`, and `x-session-affinity`; 'openai-nosession' uses `prompt_cache_key`, `x-client-request-id`, and `x-session-affinity`; 'openrouter' uses `x-session-id` (default: auto-detected)
   maxTokensField?: 'max_completion_tokens' | 'max_tokens';  // Which field name to use (default: max_completion_tokens)
@@ -1064,8 +1175,9 @@ interface OpenAICompletionsCompat {
   requiresAssistantAfterToolResult?: boolean; // Whether tool results must be followed by an assistant message (default: false)
   requiresThinkingAsText?: boolean;  // Whether thinking blocks must be converted to text (default: false)
   requiresReasoningContentOnAssistantMessages?: boolean; // Whether all replayed assistant messages must include empty reasoning_content when reasoning is enabled (default: auto-detected for DeepSeek)
-  thinkingFormat?: 'openai' | 'openrouter' | 'deepseek' | 'together' | 'zai' | 'qwen' | 'chat-template' | 'qwen-chat-template' | 'string-thinking' | 'ant-ling'; // Format for reasoning param: 'openai' uses reasoning_effort, 'openrouter' uses reasoning: { effort }, 'deepseek' uses thinking: { type } plus reasoning_effort when supported, 'together' uses reasoning: { enabled } plus reasoning_effort when supported, 'zai' uses thinking: { type }, 'qwen' uses enable_thinking, 'chat-template' uses configurable chat_template_kwargs, 'qwen-chat-template' uses chat_template_kwargs.enable_thinking and preserve_thinking, 'string-thinking' uses top-level thinking, 'ant-ling' uses reasoning: { effort } only for mapped efforts (default: openai)
-  chatTemplateKwargs?: Record<string, string | number | boolean | null | { '$var': 'thinking.enabled' | 'thinking.effort'; omitWhenOff?: boolean }>; // chat_template_kwargs values; use $var for Megumi-controlled thinking values
+  thinkingFormat?: 'openai' | 'openrouter' | 'deepseek' | 'together' | 'baseten' | 'zai' | 'qwen' | 'chat-template' | 'qwen-chat-template' | 'string-thinking' | 'ant-ling'; // Format for reasoning param: 'openai' uses reasoning_effort, 'openrouter' uses reasoning: { effort }, 'deepseek' uses thinking: { type } plus reasoning_effort when supported, 'together' uses reasoning: { enabled } plus reasoning_effort when supported, 'baseten' uses configurable chat_template_args plus reasoning_effort when supported, 'zai' uses thinking: { type }, 'qwen' uses enable_thinking, 'chat-template' uses configurable chat_template_kwargs, 'qwen-chat-template' uses chat_template_kwargs.enable_thinking and preserve_thinking, 'string-thinking' uses top-level thinking, 'ant-ling' uses reasoning: { effort } only for mapped efforts (default: openai)
+  chatTemplateKwargs?: Record<string, string | number | boolean | null | { '$var': 'thinking.enabled' | 'thinking.effort'; omitWhenOff?: boolean }>; // chat_template_kwargs values; use $var for pi-controlled thinking values
+  chatTemplateArgs?: Record<string, string | number | boolean | null | { '$var': 'thinking.enabled' | 'thinking.effort'; omitWhenOff?: boolean }>; // chat_template_args values for thinkingFormat: 'baseten'; use $var for pi-controlled thinking values
   cacheControlFormat?: 'anthropic';  // Anthropic-style cache_control on system prompt, last tool, and last user/assistant text content
   openRouterRouting?: OpenRouterRouting; // OpenRouter routing preferences (default: {})
   vercelGatewayRouting?: VercelGatewayRouting; // Vercel AI Gateway routing preferences (default: {})
@@ -1075,6 +1187,8 @@ interface OpenAIResponsesCompat {
   supportsDeveloperRole?: boolean;   // Whether provider supports `developer` role vs `system` (default: true)
   sessionAffinityFormat?: 'openai' | 'openai-nosession' | 'openrouter'; // Session-affinity header format: 'openai' sends `session_id` and `x-client-request-id`; 'openai-nosession' sends `x-client-request-id`; 'openrouter' sends `x-session-id`. Does not affect the `prompt_cache_key` body param (default: auto-detected)
   supportsLongCacheRetention?: boolean; // Whether provider supports `prompt_cache_retention: "24h"` (default: true)
+  supportsStrictMode?: boolean;      // Whether provider supports strict JSON-schema function tools (default: false; enabled in metadata for built-in OpenAI models)
+  supportsOpenAIGrammarTools?: boolean; // Whether to emit OpenAI custom Lark/regex grammar tools; false falls back to normal function tools (default: false; the generated catalog enables it for capable models)
 }
 ```
 
@@ -1271,8 +1385,9 @@ const response = await models.complete(model, {
 
 Browser compatibility notes:
 
+- Amazon Bedrock (`bedrock-converse-stream`) is not supported in browser environments. It can still appear in model lists; calls fail at runtime.
 - OAuth login flows are Node-only. They are lazy-loaded behind bundler-opaque imports, so registering an OAuth-capable provider does not pull Node-only code into a browser bundle — only actually logging in would.
-- Use a server-side proxy or backend service if you need OAuth-based auth from a web app.
+- Use a server-side proxy or backend service if you need Bedrock or OAuth-based auth from a web app.
 
 ## Bundling and Tree Shaking
 
@@ -1292,8 +1407,10 @@ Rules:
 - `@megumi/ai/providers/<provider>` imports that provider's catalog and lazy API wrapper only.
 - `@megumi/ai/providers/all` imports every built-in provider factory and all catalogs. Use it only when you want the full built-in set.
 - With code splitting, provider SDKs stay in lazy chunks and load on first request.
-- Without code splitting, bundlers fold reachable lazy API implementations into the single bundle. A single-provider bundle then includes that provider's SDK; `providers/all` includes all statically visible SDKs.
+- Without code splitting, bundlers fold reachable lazy API implementations into the single bundle. A single-provider bundle then includes that provider's SDK; `providers/all` includes all statically visible SDKs. Bedrock is the exception: its AWS SDK implementation is loaded through a bundler-opaque Node-only import.
 - Importing `@megumi/ai/api/<api-id>` directly loads that API implementation and its SDK immediately.
+
+Avoid `@megumi/ai/compat` in new bundled apps; it preserves the old global API and imports the full built-in catalog surface.
 
 For single-file Node ESM bundles, some SDK dependencies may still use dynamic CommonJS `require()` internally. If you see errors such as `Dynamic require of "child_process" is not supported`, add a Node `require` shim to the bundle. With esbuild:
 
@@ -1303,19 +1420,42 @@ esbuild app.js --bundle --platform=node --format=esm \
   --outfile=app.bundle.js
 ```
 
-This is only for Node bundles.
+This is only for Node bundles; it is not a browser or Cloudflare Workers workaround.
+
+Bedrock is Node-only. Add it like any other provider:
+
+```typescript
+import { createModels } from '@megumi/ai';
+import { amazonBedrockProvider } from '@megumi/ai/providers/amazon-bedrock';
+
+const models = createModels();
+models.setProvider(amazonBedrockProvider());
+```
+
+In normal Node package usage and code-split bundles, Bedrock loads its AWS SDK implementation lazily. For a standalone single-file bundle that must include Bedrock support, register the implementation module explicitly:
+
+```typescript
+import { setBedrockProviderModule } from '@megumi/ai/api/bedrock-converse-stream.lazy';
+import { bedrockProviderModule } from '@megumi/ai/bedrock-provider';
+
+setBedrockProviderModule(bedrockProviderModule);
+```
+
+That explicit override bundles the AWS SDK. Without it, Bedrock's opaque runtime import expects the package's Bedrock implementation file to be available at runtime.
 
 ### Provider-Scoped Environment Overrides
 
-Pass `env` in stream options to scope provider configuration to a request. Values in `env` are used before process environment variables for provider auth and configuration such as API keys, `MEGUMI_AI_CACHE_RETENTION`, and `HTTP_PROXY`/`HTTPS_PROXY`.
+Pass `env` in stream options to scope provider configuration to a request. Values in `env` are used before process environment variables for provider auth and configuration such as Cloudflare account IDs, Azure OpenAI settings, Vertex project/location, Bedrock settings, `PI_CACHE_RETENTION`, and `HTTP_PROXY`/`HTTPS_PROXY`.
 
 ```typescript
 const models = builtinModels();
-const model = models.getModel('deepseek', 'deepseek-chat')!;
+const model = models.getModel('cloudflare-ai-gateway', 'workers-ai/@cf/moonshotai/kimi-k2.6')!;
 
 const response = await models.complete(model, context, {
   env: {
-	DEEPSEEK_API_KEY: '...'
+    CLOUDFLARE_API_KEY: '...',
+    CLOUDFLARE_ACCOUNT_ID: 'account-id',
+    CLOUDFLARE_GATEWAY_ID: 'gateway-id'
   }
 });
 ```
@@ -1328,8 +1468,10 @@ Several providers support OAuth authentication instead of static API keys:
 
 - **Anthropic** (Claude Pro/Max subscription)
 - **OpenAI Codex** (ChatGPT Plus/Pro subscription, access to GPT-5.x Codex models)
+- **GitHub Copilot** (Copilot subscription)
+- **OpenRouter** (OAuth PKCE that mints a user-controlled API key)
 
-Each of these providers carries an `OAuthAuth` on `provider.auth.oauth` with three operations: `login(interaction)` uses the provider-neutral `AuthInteraction.prompt()`/`notify()` protocol and returns a credential, `refresh(credential)` exchanges the refresh token, and `toAuth(credential)` derives request auth. Refresh is automatic: `models.getAuth(providerId)` and request paths refresh expired tokens under a credential-store lock, so concurrent requests and processes cannot double-refresh.
+Each of these providers carries an `OAuthAuth` on `provider.auth.oauth` with three operations: `login(interaction)` uses the provider-neutral `AuthInteraction.prompt()`/`notify()` protocol and returns a credential, `refresh(credential, signal)` refreshes expiring credentials when applicable, and `toAuth(credential)` derives request auth (GitHub Copilot's per-account base URL comes from here). Provider login interactions and refresh calls always carry a concrete abort signal. Refresh is automatic: `models.getAuth(providerId)` and request paths refresh expired tokens under a credential-store lock, so concurrent requests and processes cannot double-refresh. OpenRouter's OAuth flow instead returns a permanent API key, so its refresh operation is a no-op.
 
 ```typescript
 import { createModels } from '@megumi/ai';
@@ -1365,6 +1507,28 @@ await models.complete(model, context);
 await models.logout('anthropic');
 ```
 
+### Vertex AI
+
+Vertex AI models support either a Google Cloud API key or Application Default Credentials (ADC). Its provider-owned API-key login flow can configure either method:
+
+- **API key**: Set `GOOGLE_CLOUD_API_KEY` or pass `apiKey` in the call options.
+- **Local development (ADC)**: Run `gcloud auth application-default login`
+- **CI/Production (ADC)**: Set `GOOGLE_APPLICATION_CREDENTIALS` to point to a service account JSON key file
+
+When using ADC, also set `GOOGLE_CLOUD_PROJECT` (or `GCLOUD_PROJECT`) and `GOOGLE_CLOUD_LOCATION`. You can also pass `project`/`location` in the call options. When using `GOOGLE_CLOUD_API_KEY`, `project` and `location` are not required.
+
+```bash
+# Local (uses your user credentials)
+gcloud auth application-default login
+export GOOGLE_CLOUD_PROJECT="my-project"
+export GOOGLE_CLOUD_LOCATION="us-central1"
+
+# CI/Production (service account key file)
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
+```
+
+Official docs: [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials)
+
 ### CLI Login
 
 The quickest way to authenticate:
@@ -1379,11 +1543,39 @@ Credentials are saved to `auth.json` in the current directory.
 
 ### Programmatic OAuth
 
-Built-in login and refresh flows are private provider implementations. Use provider-owned `OAuthAuth`, which composes with `CredentialStore` and gets locked auto-refresh through `Models`.
+Built-in login and refresh flows are private provider implementations. Use provider-owned `OAuthAuth`, which composes with `CredentialStore` and gets locked auto-refresh through `Models`. The `@megumi/ai/oauth` entry point retains only type declarations required by coding-agent extension OAuth compatibility.
 
 Provider notes:
 
-**OpenAI Codex**: Requires a ChatGPT Plus or Pro subscription. Provides access to GPT-5.x Codex models with extended context windows and reasoning capabilities. The library automatically handles session-based prompt caching when `sessionId` is provided in stream options. You can set `transport` in stream options to `"sse"`, `"websocket"`, or `"auto"` for Codex Responses transport selection. When using WebSocket with a `sessionId`, connections are reused per session and expire after 5 minutes of inactivity.
+**OpenAI Codex**: Requires a ChatGPT Plus or Pro subscription. Provides access to GPT-5.x Codex models with extended context windows and reasoning capabilities. The library automatically handles session-based prompt caching when `sessionId` is provided in stream options unless `cacheRetention` is `"none"`. You can set `transport` in stream options to `"sse"`, `"websocket"`, or `"auto"` for Codex Responses transport selection. When using WebSocket with a `sessionId` and cache retention enabled, connections are reused per session and expire after 5 minutes of inactivity.
+
+**Azure OpenAI (Responses)**: Uses the Responses API only. Set `AZURE_OPENAI_API_KEY` and either `AZURE_OPENAI_BASE_URL` or `AZURE_OPENAI_RESOURCE_NAME`. `AZURE_OPENAI_BASE_URL` supports both `https://<resource>.openai.azure.com` and `https://<resource>.cognitiveservices.azure.com`; root endpoints are normalized to `.../openai/v1` automatically. Use `AZURE_OPENAI_API_VERSION` (defaults to `v1`) to override the API version if needed. Deployment names are treated as model IDs by default, override with `azureDeploymentName` or `AZURE_OPENAI_DEPLOYMENT_NAME_MAP` using comma-separated `model-id=deployment` pairs (for example `gpt-4o-mini=my-deployment,gpt-4o=prod`). Legacy deployment-based URLs are intentionally unsupported.
+
+**GitHub Copilot**: If you get "The requested model is not supported" error, enable the model manually in VS Code: open Copilot Chat, click the model selector, select the model (warning icon), and click "Enable".
+
+## Migrating from the Old Global API
+
+Older versions exposed a global API: `stream()`/`complete()` dispatching on `model.api` via a global registry, sync `getModel()`/`getModels()`/`getProviders()` catalog reads, `registerApiProvider()`, `getEnvApiKey()`, and per-API lazy stream functions. That surface lives unchanged on the **compat entrypoint**:
+
+```typescript
+// Before
+import { getModel, complete } from '@megumi/ai';
+
+// After (verbatim behavior, one import-path change)
+import { getModel, complete } from '@megumi/ai/compat';
+```
+
+Compat is a strict superset of the root entrypoint, so a file can switch its import path wholesale. It will be removed in a future release; migrate to `createModels()` + provider factories:
+
+| Old | New |
+|-----|-----|
+| `getModel('openai', 'gpt-4o-mini')` | `models.getModel('openai', 'gpt-4o-mini')` or `getBuiltinModel()` from `providers/all` |
+| `getModels('anthropic')` / `getProviders()` | `models.getModels('anthropic')` / `models.getProviders()` or `getBuiltin*` |
+| `stream(model, ctx, opts)` (env-key injection) | `models.stream(model, ctx, opts)` (provider auth resolution) |
+| `registerApiProvider({ api, stream, streamSimple })` | `createProvider({ id, auth, models, api })` + `models.setProvider()` |
+| `getEnvApiKey('openai')` | `await models.getAuth(model.provider)` |
+| `streamAnthropic(model, ctx, opts)` | `stream` from `@megumi/ai/api/anthropic-messages`, or a provider in a collection |
+| `registerFauxProvider()` | `fauxProvider()` + `models.setProvider()` |
 
 ## Development
 
@@ -1393,15 +1585,15 @@ Adding a new LLM provider requires changes across multiple files. The layered la
 
 #### 1. Core Types (`src/types.ts`)
 
-- Add the API identifier to `KnownApi`, if it is a new API
-- Add the provider name to `KnownProvider`
+- Add the API identifier to `KnownApi` (for example `"bedrock-converse-stream"`), if it is a new API
+- Add the provider name to `KnownProvider` (for example `"amazon-bedrock"`)
 - Add the options type to `ApiOptionsMap`
 
 #### 2. API Implementation (`src/api/<api-id>.ts`, only for a new API)
 
-Create a new API implementation file that exports exactly `stream` and `streamSimple`, plus:
+Create a new API implementation file (for example `bedrock-converse-stream.ts`) that exports exactly `stream` and `streamSimple`, plus:
 
-- An options interface extending `StreamOptions`
+- An options interface extending `StreamOptions` (for example `BedrockOptions`)
 - Message conversion functions to transform `Context` to provider format
 - Tool conversion if the provider supports tools
 - Response parsing to emit standardized events (`text`, `tool_call`, `thinking`, `usage`, `stop`)
@@ -1418,17 +1610,44 @@ Add a lazy wrapper `src/api/<api-id>.lazy.ts` (`<name>Api()` via `lazyApi()`) so
 #### 4. Provider Factory (`src/providers/<id>.ts`)
 
 - `createProvider()` wiring catalog + auth + the lazy API wrapper
-- Auth: `envApiKeyAuth` for standard key providers, a custom `ApiKeyAuth` for non-standard credentials, and `lazyOAuth` where an OAuth flow exists
+- Auth: `envApiKeyAuth` for standard key providers, a custom `ApiKeyAuth` for ambient auth (AWS profiles, ADC), `lazyOAuth` where an OAuth flow exists
 - Register the factory in `src/providers/all.ts`
-- If it is a new API, add the package subpath export in `package.json`.
+- If it is a new API: register it in the builtin list in `src/compat.ts` and add the package subpath export in `package.json`
 
-#### 5. Tests
+#### 5. Tests (`test/`)
 
-Add focused tests that protect the new provider's confirmed streaming, authentication, tool-use, cancellation, usage, and cross-provider replay semantics.
+Create or update test files to cover the new provider:
 
-#### 6. Megumi Integration
+- `stream.test.ts` - Basic streaming and tool use
+- `tokens.test.ts` - Token usage reporting
+- `abort.test.ts` - Request cancellation
+- `empty.test.ts` - Empty message handling
+- `context-overflow.test.ts` - Context limit errors
+- `image-limits.test.ts` - Image support (if applicable)
+- `unicode-surrogate.test.ts` - Unicode handling
+- `tool-call-without-result.test.ts` - Orphaned tool calls
+- `image-tool-result.test.ts` - Images in tool results
+- `total-tokens.test.ts` - Token counting accuracy
+- `cross-provider-handoff.test.ts` - Cross-provider context replay
+- `providers.test.ts` - Provider listing and auth resolution
 
-Expose the provider through Megumi's product composition and configuration surfaces without moving provider protocol rules outside this package.
+For `cross-provider-handoff.test.ts`, add at least one provider/model pair. If the provider exposes multiple model families (for example GPT and Claude), add at least one pair per family.
+
+For providers with non-standard auth (AWS, Google Vertex), create a utility like `bedrock-utils.ts` with credential detection helpers.
+
+#### 6. Coding Agent Integration (`../coding-agent/`)
+
+Update `src/core/model-resolver.ts`:
+
+- Add a default model ID for the provider in `DEFAULT_MODELS`
+
+Update `src/cli/args.ts`:
+
+- Add environment variable documentation in the help text
+
+Update `README.md`:
+
+- Add the provider to the providers section with setup instructions
 
 #### 7. Documentation
 
@@ -1437,6 +1656,15 @@ Update `packages/ai/README.md`:
 - Add to the Supported Providers table
 - Document any provider-specific options or authentication requirements
 - Add environment variable to the Environment Variables section
+
+#### 8. Changelog
+
+Add an entry to `packages/ai/CHANGELOG.md` under `## [Unreleased]`:
+
+```markdown
+### Added
+- Added support for [Provider Name] provider ([#PR](link) by [@author](link))
+```
 
 ## License
 

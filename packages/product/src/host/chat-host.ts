@@ -15,7 +15,7 @@ export function createChatHost(chat: ProductChat): ChatHost {
     cancelUserInput: (request) => chat.cancelUserInput(request),
     createBranchDraft: (request) => chat.createBranchDraft(request),
     cancelBranchDraft: (request) => chat.cancelBranchDraft(request),
-    getCommandSuggestions: (request) => chat.getCommandSuggestions(request),
+    getInputSuggestions: (request) => chat.getInputSuggestions(request),
     listRuns: (request) => chat.listRuns(request),
     listRunEvents: (request) => chat.listRunEvents(request),
     getSessionHydration: (request) => chat.getSessionHydration(request),

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { RuntimeEvent } from '@megumi/product/host';
+import type { AnyEvent } from '@megumi/product/host';
 import {
   reduceRuntimeTimelineEvent,
   type AnswerTextBlock,
@@ -49,7 +49,7 @@ export interface RuntimeTimelineStoreState {
   sessions: Record<string, RuntimeTimelineSessionState>;
   hydrationBySessionKey: Record<string, SessionTimelineHydrationState>;
   setActiveSession(projectId: string | null, sessionId: string | null): void;
-  dispatch(event: RuntimeEvent): void;
+  dispatch(event: AnyEvent): void;
   flushStream(projectId: string, sessionId: string, streamId: string): void;
   addPendingUserMessage(
     projectId: string,
@@ -80,7 +80,7 @@ export interface RuntimeTimelineStoreState {
     messages: TimelineMessage[],
   ): void;
   hydrateCommittedMessages(projectId: string, sessionId: string, messages: TimelineMessage[]): void;
-  hydrateSessionTimeline(projectId: string, sessionId: string, messages: TimelineMessage[], events: RuntimeEvent[]): void;
+  hydrateSessionTimeline(projectId: string, sessionId: string, messages: TimelineMessage[], events: AnyEvent[]): void;
   getHydrationState(projectId: string, sessionId: string): SessionTimelineHydrationState | undefined;
   isSessionTimelineFresh(projectId: string, sessionId: string, sessionUpdatedAt: string): boolean;
   markSessionTimelineHydrating(projectId: string, sessionId: string, sessionUpdatedAt: string): void;
@@ -396,13 +396,13 @@ function emptySession(projectId: string, sessionId: string): RuntimeTimelineSess
 
 function projectRuntimeEvent(
   session: RuntimeTimelineSessionState,
-  event: RuntimeEvent,
+  event: AnyEvent,
 ): RuntimeTimelineSessionState {
-  if (session.appliedEventIds[event.eventId]) {
+  if (session.appliedEventIds[event.id]) {
     return session;
   }
 
-  const streamId = event.runId ?? event.eventId;
+  const streamId = event.runId ?? event.id;
   const currentStream = session.streamsById[streamId] ?? {
     streamId,
     runId: event.runId ?? streamId,
@@ -426,7 +426,7 @@ function projectRuntimeEvent(
     },
     appliedEventIds: {
       ...session.appliedEventIds,
-      [event.eventId]: true,
+      [event.id]: true,
     },
   };
 }
@@ -436,11 +436,11 @@ export const useRuntimeTimelineStore = create<RuntimeTimelineStoreState>((set, g
     return get().activeProjectId ?? 'runtime';
   }
 
-  function eventSessionId(event: RuntimeEvent): string {
+  function eventSessionId(event: AnyEvent): string {
     return event.sessionId ?? get().activeSessionId ?? 'session:unknown';
   }
 
-  function applyProjectedEvent(event: RuntimeEvent): void {
+  function applyProjectedEvent(event: AnyEvent): void {
     set((state) => {
       const projectId = eventProjectId();
       const sessionId = eventSessionId(event);
@@ -674,10 +674,12 @@ export const useRuntimeTimelineStore = create<RuntimeTimelineStoreState>((set, g
   };
 });
 
-function statusFromEvent(event: RuntimeEvent, current: RuntimeTimelineStatus): RuntimeTimelineStatus {
+function statusFromEvent(event: AnyEvent, current: RuntimeTimelineStatus): RuntimeTimelineStatus {
   if (current === 'needs_replay') return current;
-  if (event.eventType === 'run.completed') return 'completed';
-  if (event.eventType === 'run.failed') return 'failed';
-  if (event.eventType === 'run.cancelled') return 'cancelled';
+  if (event.type === 'run.ended') {
+    if (event.payload.status === 'completed') return 'completed';
+    if (event.payload.status === 'failed') return 'failed';
+    if (event.payload.status === 'cancelled') return 'cancelled';
+  }
   return 'running';
 }

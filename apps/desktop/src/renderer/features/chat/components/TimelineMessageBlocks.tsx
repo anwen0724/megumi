@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
 import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
 import { useTranslation } from 'react-i18next';
-import { FileText } from 'lucide-react';
+import { FileText, Package } from 'lucide-react';
 
 function UserBlockView({ block }: { block: UserTimelineBlock }) {
   if (block.kind === 'user_attachment') {
@@ -121,6 +121,15 @@ export function TimelineMessageBlocks({ message }: { message: CanonicalTimelineM
   if (message.role === 'user') {
     return (
       <>
+        {message.skillSelection ? (
+          <span
+            data-testid="timeline-user-skill-selection"
+            className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md bg-[var(--color-accent-soft)] px-2 text-xs font-medium text-[var(--color-accent)]"
+          >
+            <Package size={12} aria-hidden="true" />
+            {message.skillSelection.name}
+          </span>
+        ) : null}
         {message.blocks.map((block) => (
           <RecoverableErrorBoundary
             key={block.blockId}

@@ -66,7 +66,7 @@ describe('SessionStore', () => {
       message_id: 'M1',
       session_id: 'S1',
       message_kind: 'user_message',
-      content: [{ type: 'text', text: '看图' }],
+      display_content: [{ type: 'text', text: '看图' }], model_content: [{ type: 'text', text: '看图' }],
       created_at: '2026-07-04T00:01:00.000Z',
       completed_at: '2026-07-04T00:01:00.000Z',
     });
@@ -97,7 +97,7 @@ describe('SessionStore', () => {
 
     expect(repository.listMessagesBySessionId('S1')).toEqual([
       expect.objectContaining({
-        message_kind: 'user_message', content: [{ type: 'text', text: '看图' }],
+        message_kind: 'user_message', display_content: [{ type: 'text', text: '看图' }], model_content: [{ type: 'text', text: '看图' }],
       }),
     ]);
     expect(repository.listAttachmentsByMessageIds(['M1'])).toHaveLength(1);

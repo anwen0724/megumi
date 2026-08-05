@@ -32,7 +32,7 @@ const succeeded: ToolExecutionResult = {
 describe('Sandbox Tool invocation execution', () => {
   it('opens, tracks, executes, and closes one scope outside Product', async () => {
     const close = vi.fn(async () => ({ status: 'closed' as const }));
-    const scope = { capabilities: {} as SandboxCapabilities, files: {}, process: {}, close } as SandboxScope;
+    const scope = { capabilities: {} as SandboxCapabilities, files: {}, process: {}, close } as unknown as SandboxScope;
     const sandbox: Sandbox = {
       capabilities: () => ({} as SandboxCapabilities),
       open: vi.fn(async () => ({ status: 'opened' as const, scope })),
@@ -46,7 +46,6 @@ describe('Sandbox Tool invocation execution', () => {
       workspaceChanges: { trackToolExecution },
       workspaceRoot: 'C:/workspace',
       invocation,
-      skills: { useSkill: vi.fn() } as never,
       webFetch: { fetch: vi.fn() } as never,
       options: { executionAccess: access },
       execute,
@@ -70,7 +69,6 @@ describe('Sandbox Tool invocation execution', () => {
       workspaceChanges: { trackToolExecution: async ({ execute }) => execute() },
       workspaceRoot: 'C:/workspace',
       invocation,
-      skills: { useSkill: vi.fn() } as never,
       webFetch: { fetch: vi.fn() } as never,
       options: { executionAccess: access },
       execute: async () => succeeded,

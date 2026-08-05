@@ -9,9 +9,11 @@
   "include": ["src/**/*.ts"],
   "references": [
     { "path": "../ai" },
+    { "path": "../input" },
     { "path": "../instructions" },
     { "path": "../observability" },
     { "path": "../session" },
-    { "path": "../skills" }
+    { "path": "../skills" },
+    { "path": "../tools" }
   ]
 }

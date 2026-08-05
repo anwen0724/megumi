@@ -38,7 +38,7 @@ export const policy: EnginePolicy = {
   maxToolCallsPerRun: 24, maxConcurrentToolExecutions: 2, modelCallTimeoutMs: 60_000,
   modelCallTerminationTimeoutMs: 10_000, toolExecutionTimeoutMs: 100,
   cancellationTimeoutMs: 5_000, maxModelCallAttempts: 2, modelRetryDelayMs: 0,
-  maxToolExecutionsPerCall: 1, toolRetryDelayMs: 0, terminalRunRetentionMs: 60_000,
+  maxToolExecutionsPerCall: 1, terminalRunRetentionMs: 60_000,
 };
 
 export function run(): Run {
@@ -69,7 +69,7 @@ export function registeredTool(
     identity,
     definition: {
       name, description: name,
-      inputSchema: {
+      parameters: {
         type: 'object', properties: { value: { type: 'string' } },
         required: input.required ?? [], additionalProperties: false,
       },
@@ -102,7 +102,7 @@ export function toolCall(callOrder: number, toolName: string, input: unknown = {
 
 export function allowDecision(request: EvaluateToolCallRequest): Extract<PermissionDecision, { type: 'allow' }> {
   return {
-    type: 'allow', operations: request.operations, safetyAssessment: 'safe',
+    type: 'allow', operations: [...request.operations], safetyAssessment: 'safe',
     safetySummary: 'Safe in Engine test.', reason: 'Allowed in test.',
   };
 }

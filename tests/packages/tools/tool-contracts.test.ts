@@ -4,7 +4,7 @@ import * as PublicTools from '../../../packages/tools/src';
 
 const definition: ToolDefinition = {
   name: 'echo', description: 'Echo one string.',
-  inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false },
+  parameters: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false },
 };
 
 function registration(name = 'echo'): ToolRegistration {
@@ -28,7 +28,7 @@ describe('Tool public contracts', () => {
   });
 
   it('keeps ToolDefinition limited to model-visible fields', () => {
-    expect(Object.keys(definition)).toEqual(['name', 'description', 'inputSchema']);
+    expect(Object.keys(definition)).toEqual(['name', 'description', 'parameters']);
   });
 
   it('rejects duplicate names and Definition/Handler mismatches', () => {

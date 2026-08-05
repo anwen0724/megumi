@@ -10,7 +10,7 @@ import { createBuiltInToolHandler, inputString, operation } from './tool-handler
 export const readFileToolDefinition: ToolDefinition = {
   name: 'read_file',
   description: 'Read a bounded UTF-8 text page from a text, Markdown, DOCX, or PDF file. Continue with nextOffset when hasMore is true.',
-  inputSchema: {
+  parameters: {
     type: 'object',
     properties: {
       path: {

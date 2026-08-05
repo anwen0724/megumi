@@ -177,7 +177,6 @@ export const chat = {
       editFile: 'Edit file',
       writeFile: 'Write file',
       runCommand: 'Run command',
-      useSkill: 'Use skill',
       webSearch: 'Web search',
       webFetch: 'Read web page',
     },

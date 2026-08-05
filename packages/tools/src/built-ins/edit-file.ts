@@ -6,7 +6,7 @@ import { createBuiltInToolHandler, inputString, operation } from './tool-handler
 
 export const editFileToolDefinition: ToolDefinition = {
   name: 'edit_file', description: 'Apply ordered exact-text edits to an existing UTF-8 text file.',
-  inputSchema: {
+  parameters: {
     type: 'object',
     properties: {
       path: { type: 'string', description: 'File path.' },

@@ -1,5 +1,5 @@
 import type { ChatRunUiDto, ChatSessionUiDto } from '@megumi/product/host';
-import type { RuntimeEvent } from '@megumi/product/host';
+import type { AnyEvent } from '@megumi/product/host';
 import type { AnswerTextBlock, TimelineMessage } from '@megumi/product/host';
 
 export interface TimelineHistoryMessage {
@@ -45,13 +45,13 @@ export function chatMessagesFromTimelineMessages(messages: TimelineMessage[]): T
 
 export function hydratedRuntimeEventsForRuns(
   runs: Array<Pick<ChatRunUiDto, 'runId'>>,
-  eventsByRun: Record<string, RuntimeEvent[]>,
-): RuntimeEvent[] {
+  eventsByRun: Record<string, AnyEvent[]>,
+): AnyEvent[] {
   const runIds = new Set(runs.map((run) => run.runId));
   return Object.entries(eventsByRun)
     .filter(([runId]) => runIds.has(runId))
     .flatMap(([, events]) => events)
-    .filter((event) => event.eventType !== 'assistant.output.delta')
+    .filter((event) => event.type !== 'message.update')
     .sort((left, right) => {
       const createdAtOrder = left.createdAt.localeCompare(right.createdAt);
       return createdAtOrder === 0 ? left.sequence - right.sequence : createdAtOrder;

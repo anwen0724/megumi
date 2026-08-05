@@ -3,7 +3,7 @@
  * from the formal Runtime Event stream.
  */
 
-import type { RuntimeEvent } from '@megumi/events';
+import type { AnyEvent } from '@megumi/events';
 
 const DEFAULT_MAX_RUNS = 256;
 const DEFAULT_MAX_EVENTS_PER_RUN = 512;
@@ -11,15 +11,12 @@ const DEFAULT_TERMINAL_RETENTION_MS = 300_000;
 
 export type ProjectedRunStatus =
   | 'running'
-  | 'waiting'
-  | 'cancelling'
   | 'completed'
   | 'failed'
   | 'cancelled';
 
 export interface ProjectedRun {
   readonly runId: string;
-  readonly workspaceId?: string;
   readonly sessionId: string;
   readonly status: ProjectedRunStatus;
   readonly createdAt: string;
@@ -27,10 +24,10 @@ export interface ProjectedRun {
 }
 
 export interface RunProjection {
-  project(event: RuntimeEvent): void;
+  project(event: AnyEvent): void;
   getRun(request: { readonly runId: string }): ProjectedRun | undefined;
   listRuns(request: { readonly sessionId: string }): readonly ProjectedRun[];
-  listEvents(request: { readonly runId: string }): readonly RuntimeEvent[];
+  listEvents(request: { readonly runId: string }): readonly AnyEvent[];
   isRunLive(request: { readonly runId: string }): boolean;
 }
 
@@ -45,7 +42,7 @@ export function createRunProjection(
   options: CreateRunProjectionRequest = {},
 ): RunProjection {
   const runsById = new Map<string, ProjectedRun>();
-  const eventsByRunId = new Map<string, RuntimeEvent[]>();
+  const eventsByRunId = new Map<string, AnyEvent[]>();
   const terminalRecordedAt = new Map<string, number>();
   const nowMs = options.nowMs ?? Date.now;
 
@@ -70,7 +67,7 @@ export function createRunProjection(
   }
 
   return {
-    project(event) {
+    project(event: AnyEvent) {
       if (!event.runId) return;
       const events = eventsByRunId.get(event.runId) ?? [];
       events.push(structuredClone(event));
@@ -78,12 +75,11 @@ export function createRunProjection(
       if (events.length > maxEvents) events.splice(0, events.length - maxEvents);
       eventsByRunId.set(event.runId, events);
 
-      const status = statusFromRuntimeEvent(event.eventType);
+      const status = statusFromEvent(event);
       if (status && event.sessionId) {
         const current = runsById.get(event.runId);
         const projected: ProjectedRun = {
           runId: event.runId,
-          ...(event.workspaceId ? { workspaceId: event.workspaceId } : {}),
           sessionId: event.sessionId,
           status,
           createdAt: current?.createdAt ?? event.createdAt,
@@ -127,14 +123,12 @@ function isTerminal(status: ProjectedRunStatus): boolean {
   return status === 'completed' || status === 'failed' || status === 'cancelled';
 }
 
-function statusFromRuntimeEvent(
-  eventType: RuntimeEvent['eventType'],
-): ProjectedRunStatus | undefined {
-  if (eventType === 'run.started' || eventType === 'run.resumed') return 'running';
-  if (eventType === 'run.waiting') return 'waiting';
-  if (eventType === 'run.cancelling' || eventType === 'run.cancel.requested') return 'cancelling';
-  if (eventType === 'run.completed') return 'completed';
-  if (eventType === 'run.failed') return 'failed';
-  if (eventType === 'run.cancelled') return 'cancelled';
+function statusFromEvent(event: AnyEvent): ProjectedRunStatus | undefined {
+  if (event.type === 'run.started') return 'running';
+  if (event.type === 'run.ended') {
+    // run.ended carries the outcome as its payload status.
+    const outcome = event.payload as { status?: ProjectedRunStatus };
+    return outcome.status;
+  }
   return undefined;
 }

@@ -1,4 +1,3 @@
-import type { RuntimeEvent } from '@megumi/events';
 import { z } from 'zod';
 import type { ProductApproval } from '../approval';
 
@@ -114,5 +113,4 @@ export type ApprovalHostResult =
 
 export interface ApprovalHostInvocation {
   payload: ApprovalHostResult;
-  events?: AsyncIterable<RuntimeEvent>;
 }

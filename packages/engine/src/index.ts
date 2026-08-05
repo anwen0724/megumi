@@ -1,5 +1,7 @@
 /*
- * Stable public entrypoint for the Engine package.
+ * Stable public entrypoint for the Engine package: the Engine interface, its
+ * request/result contracts, the Run read-only results and the creation entry.
+ * Internal loop, ActiveRun and attempt work data are never exported.
  */
 export { createEngine } from './engine';
 export type {
@@ -11,8 +13,8 @@ export type {
   GetRunRequest,
   GetRunResult,
   EngineIdFactory,
-  ResumeRunRequest,
-  ResumeRunResult,
+  ResolveApprovalRequest,
+  ResolveApprovalResult,
   RunApprovalDecision,
   RunApproval,
   RunApprovalStatus,

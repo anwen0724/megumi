@@ -1,5 +1,4 @@
-import { readFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 describe('project hardening guards', () => {
@@ -26,24 +25,12 @@ describe('project hardening guards', () => {
   });
 
   it('has no WorkspaceStore reference in renderer source', () => {
-    // Use ripgrep instead of PowerShell recursion so this guard remains stable
-    // when it runs concurrently with the full Vitest suite.
-    const result = spawnSync('rg', [
-      '--fixed-strings',
-      '--line-number',
-      '--glob',
-      '*.ts',
-      '--glob',
-      '*.tsx',
-      'WorkspaceStore',
-      'apps/desktop/src/renderer',
-    ], {
-      encoding: 'utf8',
-    });
-
-    expect(result.stderr).toBe('');
-    expect(result.status).toBe(1);
-    expect(result.stdout.trim()).toBe('');
+    // Node recursion keeps this guard stable without depending on external
+    // tools being installed on the PATH.
+    const rendererRoot = 'apps/desktop/src/renderer';
+    const matches = listTypeScriptFiles(rendererRoot)
+      .filter((filePath) => readFileSync(filePath, 'utf8').includes('WorkspaceStore'));
+    expect(matches).toEqual([]);
   });
 
   it('uses no local-workspace sentinel in session timeline', () => {
@@ -73,4 +60,18 @@ describe('project hardening guards', () => {
     expect(projectTypesSource).not.toContain('type?:');
     expect(projectTypesSource).not.toContain('context?:');
   });
+
+
+function listTypeScriptFiles(directory: string): string[] {
+  const output: string[] = [];
+  const visit = (current: string) => {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const absolutePath = `${current}/${entry.name}`;
+      if (entry.isDirectory()) visit(absolutePath);
+      else if (/\.(ts|tsx)$/.test(entry.name)) output.push(absolutePath);
+    }
+  };
+  visit(directory);
+  return output;
+}
 });

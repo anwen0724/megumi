@@ -1,155 +1,84 @@
-/* Owns transient Session usage snapshots and provider-reported usage reconciliation. */
-import type { Api, Model } from '@megumi/ai';
+/*
+ * Owns transient Context token estimation and the Usage facts derived from
+ * Session History. Session History is the only authoritative Usage source;
+ * no Snapshot, Recorder or second Usage state exists here.
+ */
+
+import type { Api, Model, Usage } from '@megumi/ai';
 import {
-  contextCapacityFromModel,
-  type ContextCapacity,
-  type ContextPolicy,
-} from './context-policy';
+  estimateContextTokens,
+  type ContextUsageEstimate,
+} from '@megumi/ai/utils/estimate';
+import type { SessionHistoryItem } from '@megumi/session';
+import { sessionMessagesToEstimateMessages } from './context-messages';
 
-export interface ContextUsage {
-  readonly usedTokens: number;
+export type { ContextUsageEstimate };
+
+export function calculatePromptTokens(usage: { input: number; cacheRead: number; cacheWrite: number }): number {
+  return usage.input + usage.cacheRead + usage.cacheWrite;
+}
+
+export interface DerivedContextUsage {
+  readonly usageTokens: number;
+  readonly trailingTokens: number;
+  readonly totalTokens: number;
   readonly contextWindowTokens: number;
-  readonly remainingTokens: number;
   readonly usedRatio: number;
-  readonly compactionThresholdRatio: number;
-}
-
-export interface SessionContextUsageSnapshot {
-  readonly sessionId: string;
-  readonly runId: string;
-  readonly providerId: string;
-  readonly modelId: string;
-  readonly usage: ContextUsage;
+  readonly cumulativeInputTokens: number;
+  readonly cumulativeOutputTokens: number;
+  readonly cumulativeCost: number;
   readonly accuracy: 'provider_reported' | 'estimated';
-  readonly calculatedAt: string;
 }
 
-export interface GetSessionContextUsageRequest {
-  readonly sessionId: string;
-}
-
-export type GetSessionContextUsageResult =
-  | { readonly status: 'available'; readonly snapshot: SessionContextUsageSnapshot }
-  | { readonly status: 'not_available' };
-
-export interface RecordCompletedModelCallUsageRequest {
-  readonly sessionId: string;
-  readonly runId: string;
+/**
+ * Derives the current Session usage from Session History and the selected Model.
+ * It never triggers a Context build and never pretends to be the next ModelCall's
+ * exact Prompt budget.
+ */
+export function deriveContextUsage(input: {
+  readonly history: readonly SessionHistoryItem[];
   readonly model: Model<Api>;
-  readonly preCallUsage: ContextUsage;
-  readonly providerInputTokens?: number;
-}
-
-export type RecordCompletedModelCallUsageResult =
-  | { readonly status: 'recorded'; readonly snapshot: SessionContextUsageSnapshot }
-  | {
-      readonly status: 'failed';
-      readonly failure: {
-        readonly code: 'usage_snapshot_invalid';
-        readonly message: string;
-        readonly retryable: false;
-      };
-    };
-
-export interface ContextUsageReader {
-  getSessionUsage(request: GetSessionContextUsageRequest): GetSessionContextUsageResult;
-}
-
-export interface ContextUsageRecorder {
-  recordCompletedModelCall(
-    request: RecordCompletedModelCallUsageRequest,
-  ): RecordCompletedModelCallUsageResult;
-}
-
-export interface ContextUsageSnapshotCache {
-  get(sessionId: string): SessionContextUsageSnapshot | undefined;
-  set(sessionId: string, snapshot: SessionContextUsageSnapshot): void;
-}
-
-export function calculateContextUsage(input: {
-  readonly inputTokens: number;
-  readonly capacity: ContextCapacity;
-  readonly policy: ContextPolicy;
-}): ContextUsage {
-  if (!Number.isInteger(input.inputTokens) || input.inputTokens < 0) {
-    throw new RangeError('inputTokens must be a nonnegative integer.');
+}): DerivedContextUsage {
+  const messages = sessionMessagesToEstimateMessages(input.history);
+  const estimate = estimateContextTokens(messages);
+  let cumulativeInputTokens = 0;
+  let cumulativeOutputTokens = 0;
+  let cumulativeCost = 0;
+  for (const item of input.history) {
+    let usage: Usage | undefined;
+    if (item.type === 'compaction') {
+      if (isUsage(item.compaction.usage)) usage = item.compaction.usage;
+    } else if (item.message.message_kind === 'model_response'
+      || item.message.message_kind === 'assistant_reply'
+      || item.message.message_kind === 'tool_result') {
+      usage = item.message.usage;
+    }
+    if (!usage) continue;
+    cumulativeInputTokens += calculatePromptTokens(usage);
+    cumulativeOutputTokens += usage.output;
+    cumulativeCost += usage.cost.total;
   }
-  if (!Number.isInteger(input.capacity.contextWindowTokens) || input.capacity.contextWindowTokens <= 0) {
-    throw new RangeError('contextWindowTokens must be a positive integer.');
-  }
-  if (
-    !Number.isFinite(input.policy.compactionThresholdRatio)
-    || input.policy.compactionThresholdRatio <= 0
-    || input.policy.compactionThresholdRatio >= 1
-  ) {
-    throw new RangeError('compactionThresholdRatio must be greater than 0 and less than 1.');
-  }
-  if (!Number.isInteger(input.policy.keepRecentRuns) || input.policy.keepRecentRuns < 0) {
-    throw new RangeError('keepRecentRuns must be a nonnegative integer.');
-  }
-  return Object.freeze({
-    usedTokens: input.inputTokens,
-    contextWindowTokens: input.capacity.contextWindowTokens,
-    remainingTokens: input.capacity.contextWindowTokens - input.inputTokens,
-    usedRatio: input.inputTokens / input.capacity.contextWindowTokens,
-    compactionThresholdRatio: input.policy.compactionThresholdRatio,
-  });
+  const hasProviderUsage = estimate.usageTokens > 0;
+  const usageTokens = hasProviderUsage ? estimate.usageTokens : estimate.tokens;
+  return {
+    usageTokens,
+    trailingTokens: estimate.trailingTokens,
+    totalTokens: estimate.tokens,
+    contextWindowTokens: input.model.contextWindow,
+    usedRatio: estimate.tokens / input.model.contextWindow,
+    cumulativeInputTokens,
+    cumulativeOutputTokens,
+    cumulativeCost,
+    accuracy: hasProviderUsage ? 'provider_reported' : 'estimated',
+  };
 }
 
-export function recordContextUsage(input: {
-  readonly request: RecordCompletedModelCallUsageRequest;
-  readonly policy: ContextPolicy;
-  readonly cache: ContextUsageSnapshotCache;
-  readonly now: () => string;
-}): RecordCompletedModelCallUsageResult {
-  if (!isValidUsageRequest(input.request)) {
-    return {
-      status: 'failed',
-      failure: {
-        code: 'usage_snapshot_invalid',
-        message: 'Completed Model Call usage snapshot input is invalid.',
-        retryable: false,
-      },
-    };
-  }
-  const usage = input.request.providerInputTokens === undefined
-    ? input.request.preCallUsage
-    : calculateContextUsage({
-        inputTokens: input.request.providerInputTokens,
-        capacity: contextCapacityFromModel(input.request.model),
-        policy: input.policy,
-      });
-  const snapshot: SessionContextUsageSnapshot = Object.freeze({
-    sessionId: input.request.sessionId,
-    runId: input.request.runId,
-    providerId: input.request.model.provider,
-    modelId: input.request.model.id,
-    usage,
-    accuracy: input.request.providerInputTokens === undefined ? 'estimated' : 'provider_reported',
-    calculatedAt: input.now(),
-  });
-  input.cache.set(input.request.sessionId, snapshot);
-  return { status: 'recorded', snapshot };
-}
-
-function isValidUsageRequest(request: RecordCompletedModelCallUsageRequest): boolean {
-  const usage = request.preCallUsage;
-  const validUsage = Number.isInteger(usage.usedTokens) && usage.usedTokens >= 0
-    && Number.isInteger(request.model.contextWindow) && request.model.contextWindow > 0
-    && usage.contextWindowTokens === request.model.contextWindow
-    && usage.remainingTokens === usage.contextWindowTokens - usage.usedTokens
-    && usage.usedRatio === usage.usedTokens / usage.contextWindowTokens
-    && Number.isFinite(usage.compactionThresholdRatio)
-    && usage.compactionThresholdRatio > 0
-    && usage.compactionThresholdRatio < 1;
-  const validProvider = request.providerInputTokens === undefined
-    || (Number.isInteger(request.providerInputTokens) && request.providerInputTokens >= 0);
-  return Boolean(
-    request.sessionId
-    && request.runId
-    && request.model.provider
-    && request.model.id
-    && validUsage
-    && validProvider,
-  );
+function isUsage(value: unknown): value is Usage {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as { input?: unknown; output?: unknown; cacheRead?: unknown; cacheWrite?: unknown; cost?: unknown };
+  return typeof candidate.input === 'number'
+    && typeof candidate.output === 'number'
+    && typeof candidate.cacheRead === 'number'
+    && typeof candidate.cacheWrite === 'number'
+    && typeof candidate.cost === 'object' && candidate.cost !== null;
 }

@@ -6,11 +6,11 @@ import path from 'node:path';
 import type { Api, Model, ProviderStreams } from '@megumi/ai';
 import {
   createCommands,
-  createInputCommandHandler,
+  createCommandInputInterpreter,
+  type CommandTerminalResult,
   type Commands,
-  type SkillSuggestionDescriptor,
 } from '@megumi/commands';
-import { createContext } from '@megumi/context';
+import { createContext, type ContextWorkspaceSource } from '@megumi/context';
 import {
   createDatabase,
   migrateDatabase,
@@ -18,7 +18,7 @@ import {
   type ResolveDatabaseMigrationsFolderRequest,
 } from '@megumi/database';
 import { createEngine, type Engine, type EnginePolicy } from '@megumi/engine';
-import { createRuntimeEventBus, type EventSubscription } from '@megumi/events';
+import { createEventBus, type EventSubscription } from '@megumi/events';
 import { createInputProcessor, type InputSourceAccess } from '@megumi/input';
 import { createInstructionReader } from '@megumi/instructions';
 import {
@@ -49,7 +49,7 @@ import {
   type SettingsStore,
 } from '@megumi/settings';
 import { createSettingsStore } from '@megumi/settings/store';
-import { composeSkills, type SkillService } from '@megumi/skills';
+import { createSkills, type Skills } from '@megumi/skills';
 import {
   createTools,
   type BuiltInToolAvailability,
@@ -69,6 +69,8 @@ import {
 } from './home/home';
 import { createProductChat } from './chat';
 import { createProductApproval } from './approval';
+import { deriveContextUsage } from '@megumi/context';
+import { createInputSuggestionQuery } from './input-suggestions';
 import { createInputSubmission } from './input-submission';
 import { composeModels } from './models';
 import { createApprovalHost } from './host/approval-host';
@@ -131,6 +133,14 @@ export interface ProductRuntimeLogger {
 export interface ProductRuntime {
   host: ProductHostInterface;
   logger: ProductRuntimeLogger;
+  /**
+   * Subscribes to the runtime event bus. The desktop shell uses this to
+   * forward events to renderer windows over IPC.
+   */
+  subscribeRuntimeEvents(
+    filter: import('@megumi/events').EventFilter,
+    handler: import('@megumi/events').EventHandler,
+  ): import('@megumi/events').EventSubscription;
   dispose(): Promise<void>;
 }
 
@@ -207,50 +217,47 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     store: sessionStore,
     ...(attachmentContentStore ? { contentStore: attachmentContentStore } : {}),
   });
-  const branches = createSessionBranchDrafts({
-    entries: { findMessageEntry: (request) => sessionStore.findMessageEntry(request) },
+  const skills = createSkills({
+    database,
+    homePath: homePaths.homePath,
+    workspaceRootResolver: {
+      async resolveWorkspaceRoot(request) {
+        const workspace = workspaces.getWorkspace({ workspace_id: request.workspaceId });
+        return workspace.status === 'found'
+          ? path.join(workspace.workspace.root_path, '.megumi', 'skills')
+          : undefined;
+      },
+    },
   });
-
-  const skillComposition = composeSkills({ database, homePath: homePaths.homePath });
-  const resolveSkillService = (request: { workspaceId?: string } = {}): SkillService => {
-    if (!request.workspaceId) return skillComposition.createSkillService();
-    const workspace = workspaces.getWorkspace({ workspace_id: request.workspaceId });
-    return workspace.status === 'found'
-      ? skillComposition.createSkillService({ workspaceRoot: workspace.workspace.root_path })
-      : skillComposition.createSkillService();
-  };
   const instructions = createInstructionReader({ megumiHomePath: homePaths.homePath });
   const sandboxCapabilities = sandbox.capabilities();
+  // Context resolves its own prompt sources; Product only wires the seams.
+  const workspaceSource: ContextWorkspaceSource = {
+    async readWorkspace({ workspaceId }) {
+      const workspace = workspaces.getWorkspace({ workspace_id: workspaceId });
+      return workspace.status === 'found'
+        ? {
+            status: 'ok',
+            workspaceRoot: workspace.workspace.root_path,
+            environment: {
+              workingDirectory: workspace.workspace.root_path,
+              operatingSystem: modelVisibleOperatingSystem(sandboxCapabilities.platform),
+              shell: sandboxCapabilities.shellName ?? 'Unavailable',
+            },
+          }
+        : {
+            status: 'failed',
+            failure: { code: 'workspace_not_found', message: `Workspace ${workspaceId} was not found.` },
+          };
+    },
+  };
   const context = createContext({
     sessionHistory: history,
     attachmentReader: attachments,
-    scopeResolver: {
-      resolve({ workspaceId }) {
-        const workspace = workspaces.getWorkspace({ workspace_id: workspaceId });
-        return workspace.status === 'found'
-          ? {
-              status: 'resolved',
-              workspaceRoot: workspace.workspace.root_path,
-              executionEnvironment: {
-                workingDirectory: workspace.workspace.root_path,
-                operatingSystem: modelVisibleOperatingSystem(sandboxCapabilities.platform),
-                shell: sandboxCapabilities.shellName ?? 'Unavailable',
-              },
-            }
-          : {
-              status: 'failed',
-              failure: { code: 'workspace_not_found', message: `Workspace ${workspaceId} was not found.` },
-            };
-      },
-    },
+    workspaceSource,
     instructionReader: instructions,
-    skillServiceFactory: ({ workspaceRoot }) => skillComposition.createSkillService({ workspaceRoot }),
+    skills,
     models: modelComposition.models,
-    policyProvider: {
-      getPolicy() {
-        return { compactionThresholdRatio: settings.resolve().context.compaction_threshold_ratio };
-      },
-    },
     observability: observability.service,
   });
   const permissions = createPermissions({
@@ -300,26 +307,29 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
   });
 
   const commands: Commands = createCommands({
-    compact: (request, operationOptions) => context.compact({
-      ...request,
-      ...(operationOptions?.signal ? { signal: operationOptions.signal } : {}),
-    }),
-    skillSuggestionProvider: {
-      async listSkillSuggestions(request) {
-        const result = await resolveSkillService(request).listSkills({});
-        if (result.status === 'failed') return [];
-        return result.skills.filter((skill) => skill.available).map((skill): SkillSuggestionDescriptor => ({
-          name: skill.name,
-          skillPath: skill.skillPath,
-          description: skill.description,
-          sourceLabel: skill.source.owner === 'system' ? 'System' : 'User',
-        }));
-      },
+    compact: async (request, operationOptions) => {
+      // Manual /compact delegates all source resolution to Context.
+      return context.compact({
+        sessionId: request.sessionId,
+        workspaceId: request.workspaceId,
+        model: request.model,
+        trigger: 'manual',
+        events,
+        ...(operationOptions?.signal ? { signal: operationOptions.signal } : {}),
+      });
     },
   });
-  const input = createInputProcessor({
+  const input = createInputProcessor<CommandTerminalResult>({
     sourceAccess: options.inputSourceAccess ?? unavailableInputSourceAccess,
-    commandHandler: createInputCommandHandler(commands),
+    interpreters: [createCommandInputInterpreter(commands)],
+    skillSelectionResolver: {
+      resolveSelection(request, operationOptions) {
+        return skills.resolveSelection({
+          ...request,
+          ...(operationOptions?.signal ? { signal: operationOptions.signal } : {}),
+        });
+      },
+    },
   });
   const resolveModel: ProductModelResolver = async (request) => {
     const resolved = settings.resolveProvider(request);
@@ -341,7 +351,6 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     settings,
     workspaces,
     workspaceChanges,
-    skills: skillComposition,
     sandbox,
     executionPolicy: {
       maxExecutionTimeMs: PRODUCT_ENGINE_POLICY.toolExecutionTimeoutMs,
@@ -352,26 +361,29 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
       ? { builtInToolAvailability: options.builtInToolAvailability }
       : {}),
   });
-  const events = createRuntimeEventBus({
-    onConsumerError: ({ eventId, eventType, subscriberIndex, error }) => {
+  const events = createEventBus({
+    onConsumerError: ({ eventType, sessionId, sequence, error }) => {
       observability.service.recordLog({
         level: 'warn',
         event: 'runtime_event_consumer_failed',
         attributes: {
-          eventId,
           eventType,
-          subscriberIndex,
-          errorCode: error.code,
-          debugId: error.debugId,
+          sessionId,
+          sequence,
+          errorMessage: error instanceof Error ? error.message : String(error),
         },
       });
     },
   });
   const eventSubscriptions: EventSubscription[] = [
-    events.subscribe({ handler: (event) => runProjection.project(event) }),
-    events.subscribe({ handler: createWorkspaceChangeEventHandler(workspaceChanges) }),
+    events.subscribe({}, (event) => runProjection.project(event)),
   ];
   resources.eventSubscriptions.push(...eventSubscriptions);
+  // The bus is the second producer's entry point too: branch facts publish here.
+  const branches = createSessionBranchDrafts({
+    events,
+    entries: { findMessageEntry: (request) => sessionStore.findMessageEntry(request) },
+  });
   const workspaceChangeFooter = createWorkspaceChangeFooterProjector({ workspaceChanges });
   const timeline = createSessionTimelineQuery({
     sessionHistory: history,
@@ -405,10 +417,14 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     branches,
     resolveModel,
   });
+  const suggestions = createInputSuggestionQuery({
+    commands,
+    skills,
+  });
   const chat = createProductChat({
     submission,
     engine,
-    commands,
+    suggestions,
     sessions,
     history,
     attachments,
@@ -416,14 +432,32 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     workspaces,
     runs: runProjection,
     timeline,
-    context,
+    context: {
+      deriveUsage: (history, model) => deriveContextUsage({ history, model }),
+      autoCompactPercent: Math.round((settings.resolve().context.compaction_threshold_ratio ?? 0.8) * 100),
+    },
+    resolveModel: async (selection) => {
+      const resolved = await resolveModel(selection);
+      return resolved.status === 'ok' ? resolved.model : undefined;
+    },
     ...(options.attachmentPicker ? { attachmentPicker: options.attachmentPicker } : {}),
     ...(options.localFileAvailability ? { localFileAvailability: options.localFileAvailability } : {}),
   });
+  // The workspace subscriber needs the engine to resolve run -> workspace;
+  // subscribe after engine creation so the closure can reference it.
+  resources.eventSubscriptions.push(
+    events.subscribe(
+      { eventTypes: ['run.ended'] },
+      createWorkspaceChangeEventHandler(workspaceChanges, (runId) => {
+        const result = engine.getRun({ runId });
+        return result.status === 'found' ? result.run.workspaceId : undefined;
+      }),
+    ),
+  );
   const approval = createProductApproval(engine);
   const host: ProductHostInterface = {
     chat: createChatHost(chat),
-    skill: createSkillHost({ resolveSkillService }),
+    skill: createSkillHost({ skills }),
     workspace: createWorkspaceHost({
       workspaceService: workspaces,
       workspaceFilesService: workspaceFiles,
@@ -446,6 +480,7 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
   return {
     host,
     logger,
+    subscribeRuntimeEvents: (filter, handler) => events.subscribe(filter, handler),
     dispose: () => {
       disposePromise ??= disposeProduct({ engine, eventSubscriptions, observability, database });
       return disposePromise;
@@ -460,13 +495,14 @@ const PRODUCT_ENGINE_POLICY = {
   maxToolCallsPerRun: 256,
   maxConcurrentToolExecutions: 4,
   modelCallTimeoutMs: 120_000,
-  modelCallTerminationTimeoutMs: 10_000,
   toolExecutionTimeoutMs: 120_000,
   cancellationTimeoutMs: 10_000,
   maxModelCallAttempts: 3,
   modelRetryDelayMs: 1_000,
   maxToolExecutionsPerCall: 1,
-  toolRetryDelayMs: 500,
+  maxContextOverflowRecoveries: 1,
+  providerRequestMaxRetries: 2,
+  providerRequestMaxRetryDelayMs: 60_000,
   terminalRunRetentionMs: 300_000,
 } satisfies EnginePolicy;
 

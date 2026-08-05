@@ -3,8 +3,8 @@
  */
 import { z } from 'zod';
 import {
-  RuntimeErrorSchema as RuntimeIpcErrorSchema,
-  type RuntimeError as RuntimeIpcError,
+  IpcErrorSchema as RuntimeIpcErrorSchema,
+  type IpcError as RuntimeIpcError,
 } from '@megumi/product/host';
 
 export { RuntimeIpcErrorSchema, type RuntimeIpcError };

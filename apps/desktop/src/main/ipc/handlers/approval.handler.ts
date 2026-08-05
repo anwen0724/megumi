@@ -5,11 +5,11 @@ import {
   ApprovalResolveResultSchema,
   type ProductHostInterface,
 } from '@megumi/product/host';
-import type { RuntimeEvent } from '@megumi/product/host';
+
 import type { ProductRuntimeLogger } from '@megumi/product';
 import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { createIpcRequestHandler } from '../create-request-handler';
-import { forwardRuntimeEvents } from '../event-forwarders';
+
 import { IPC_CHANNELS } from '../channels';
 import type { RuntimeIpcError } from '../contracts';
 import { ApprovalResolveRequestSchema } from '../schemas';
@@ -36,33 +36,16 @@ export function registerApprovalHandlers(
     logger: options.logger,
     handle: async (request, event) => {
       const result = await service.host.approval.resolve(request.payload);
-      if (result.events) {
-        scheduleEvents(event.sender, result.events, options.logger);
-      }
       return result.payload;
     },
     mapError: mapApprovalIpcError,
   }));
 }
 
-function scheduleEvents(
-  sender: { send(channel: string, event: RuntimeEvent): void },
-  events: AsyncIterable<RuntimeEvent>,
-  logger?: ProductRuntimeLogger,
-): void {
-  setTimeout(() => {
-    void forwardRuntimeEvents(sender, events, { logger }).catch((error) => {
-      logger?.warn?.('Runtime event forwarding failed.', { error: String(error) });
-    });
-  }, 0);
-}
 
 function mapApprovalIpcError(): RuntimeIpcError {
   return {
     code: 'ipc_handler_failed',
     message: 'Approval service failed.',
-    severity: 'error',
-    retryable: true,
-    source: 'main',
   };
 }

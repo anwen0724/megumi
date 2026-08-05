@@ -82,7 +82,7 @@ describe('Package Owner boundaries', () => {
     const productSource = fs.readFileSync(path.join(root, 'packages/product/src/product.ts'), 'utf8');
     const toolsSource = fs.readFileSync(path.join(root, 'packages/tools/src/tools.ts'), 'utf8');
     const engineSource = fs.readFileSync(path.join(root, 'packages/engine/src/engine.ts'), 'utf8');
-    const runLoopSource = fs.readFileSync(path.join(root, 'packages/engine/src/run-loop.ts'), 'utf8');
+    const runLoopSource = fs.readFileSync(path.join(root, 'packages/engine/src/agent-loop.ts'), 'utf8');
 
     expect(productSource).not.toContain('createProductToolSnapshots');
     expect(productSource).not.toContain('toolExecutionForRun');

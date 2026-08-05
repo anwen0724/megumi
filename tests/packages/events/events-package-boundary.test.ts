@@ -3,10 +3,11 @@ import { describe, expect, it } from 'vitest';
 import * as PublicEvents from '../../../packages/events/src/index';
 
 describe('Events package boundary', () => {
-  it('exports the canonical Publisher and Event Bus creation seam', () => {
-    expect(PublicEvents.createRuntimeEventBus).toBeTypeOf('function');
-    expect(PublicEvents.RuntimeEventSchema).toBeDefined();
-    expect(PublicEvents.RuntimeErrorSchema).toBeDefined();
+  it('exports the canonical bus creation seam and schema', () => {
+    expect(PublicEvents.createEventBus).toBeTypeOf('function');
+    expect(PublicEvents.EventSchema).toBeDefined();
+    // The runtime error protocol moved to @megumi/runtime-protocol.
+    expect(PublicEvents).not.toHaveProperty('RuntimeErrorSchema');
   });
 
   it('keeps internal sequence, stream, exception, and legacy Service forms private', () => {
@@ -15,6 +16,7 @@ describe('Events package boundary', () => {
       'coalesceTextDeltaRuntimeEvents',
       'RuntimeException',
       'RuntimeEventBusService',
+      'createRuntimeEventBus',
     ]) {
       expect(PublicEvents).not.toHaveProperty(exportName);
     }

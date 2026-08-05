@@ -2,10 +2,10 @@
 type PermissionModeSelectionSource = 'user' | 'settings' | 'runtime' | string;
 import type {
   ChatGetContextUsageUiResult,
-  ChatImageInputCapabilitiesUiResult,
+  ChatInputCapabilitiesUiResult,
   ProviderPublicStatusUiDto,
 } from '@megumi/product/host';
-import type { CommandSuggestionResult } from '@megumi/product/host';
+import type { InputSuggestionQueryResult } from '@megumi/product/host';
 import type { ComposerModel, ComposerPermissionMode } from './composer-options';
 import type {
   ChatComposerDraft,
@@ -36,7 +36,7 @@ export interface ComposerProps {
   initialAttachments?: ComposerDraftAttachment[];
   providers?: ProviderPublicStatusUiDto[];
   contextUsage?: ChatGetContextUsageUiResult;
-  imageInputCapabilities?: ChatImageInputCapabilitiesUiResult;
+  imageInputCapabilities?: ChatInputCapabilitiesUiResult;
   seedTextKey?: string | null;
   seedText?: string | null;
   onSubmit: (payload: ComposerSubmitPayload) => boolean | void | Promise<boolean | void>;
@@ -46,5 +46,5 @@ export interface ComposerProps {
   onSelectDocuments?: () => Promise<ComposerDraftDocument[]>;
   onPasteImage?: () => Promise<ComposerDraftImage[]>;
   onDraftChange?: (draft: ChatComposerDraft) => void;
-  getCommandSuggestions?: (request: { draft_input: string }) => CommandSuggestionResult | Promise<CommandSuggestionResult>;
+  getInputSuggestions?: (request: { draftInput: string; workspaceId?: string }) => InputSuggestionQueryResult | Promise<InputSuggestionQueryResult>;
 }

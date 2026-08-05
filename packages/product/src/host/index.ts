@@ -2,33 +2,23 @@
  * Renderer-safe public Product Host Interface exports.
  * Host factory implementations remain internal to Product Composition.
  */
-import type { RuntimeEvent } from '@megumi/events';
+import type { AnyEvent } from '@megumi/events';
 import { createRuntimeTimeline, reduceRuntimeTimeline } from '@megumi/projections';
 
 export {
-  RuntimeContextSchema,
-  RuntimeErrorSchema,
-  RuntimeEventSchema,
-  RuntimeIdSchema,
-  RuntimeResultMetaSchema,
-  createRuntimeContext as buildRuntimeContext,
-  createRuntimeDebugId as generateRuntimeDebugId,
-  createRuntimeTraceId as generateRuntimeTraceId,
-  normalizeRuntimeError as normalizeHostRuntimeError,
-} from '@megumi/events';
-export { redactHostRuntimeValue } from './runtime-redaction';
+  IPC_ERROR_CODES,
+  IpcErrorCodeSchema,
+  IpcErrorSchema,
+  normalizeIpcError,
+  sanitizeIpcError,
+} from './ipc-error';
 export type {
-  AgentRunToolResultCreatedPayload,
-  RunCancelledPayload,
-  RunFailedPayload,
-  RuntimeContext,
-  RuntimeError,
-  RuntimeEvent,
-  ToolCallCompletedPayload,
-  ToolCallFailedPayload,
-  ToolCallRequestedPayload,
-  ToolCallStartedPayload,
-} from '@megumi/events';
+  IpcError,
+  IpcErrorCode,
+} from './ipc-error';
+export { EventSchema as RuntimeEventSchema } from '@megumi/events';
+export { redactHostRuntimeValue } from './runtime-redaction';
+export type { AnyEvent } from '@megumi/events';
 export { TimelineMessageSchema } from '@megumi/projections';
 export type {
   AnswerTextBlock,
@@ -54,7 +44,7 @@ export type {
 
 export function reduceRuntimeTimelineEvent(
   messages: import('@megumi/projections').TimelineMessage[],
-  event: RuntimeEvent,
+  event: AnyEvent,
 ): import('@megumi/projections').TimelineMessage[] {
   return reduceRuntimeTimeline({
     timeline: createRuntimeTimeline({ messages }),
@@ -83,7 +73,7 @@ export type {
   ChatCancelUserInputUiPayload,
   ChatCreateBranchDraftUiResult,
   ChatCreateSessionUiResult,
-  ChatGetCommandSuggestionsUiResult,
+  ChatGetInputSuggestionsUiResult,
   ChatGetContextUsageUiResult,
   ChatGetSessionHydrationUiResult,
   ChatHost,
@@ -96,14 +86,14 @@ export type {
   ChatSendUserInputUiPayload,
   ChatSendUserInputUiResult,
   ChatSessionUiDto,
-  CommandSuggestionItem,
-  CommandSuggestionResult,
+  InputSuggestionQueryItem,
+  InputSuggestionQueryResult,
   PermissionMode,
   InputAttachmentPickerPort,
   LocalFileAvailabilityPort,
   SelectedImageUiDto,
   SelectedDocumentUiDto,
-  ChatImageInputCapabilitiesUiResult,
+  ChatInputCapabilitiesUiResult,
   ChatSelectImagesUiResult,
   ChatSelectDocumentsUiResult,
   ChatReadAttachmentImageUiRequest,
@@ -117,6 +107,7 @@ export type {
   EnableSkillUiResponse,
   GetSkillDetailUiResponse,
   ListSkillsUiResponse,
+  RefreshSkillsUiResponse,
   SkillDetailUiDto,
   SkillHost,
   SkillListUiItem,
@@ -189,7 +180,7 @@ export {
   WorkspaceOpenFileUiResultSchema,
 } from './workspace-contract';
 export {
-  CommandSuggestionsPayloadSchema,
+  InputSuggestionsPayloadSchema,
   SessionCreatePayloadSchema,
   SessionListPayloadSchema,
   SessionMessageListPayloadSchema,
@@ -202,19 +193,19 @@ export {
   SessionBranchDraftCancelPayloadSchema,
   RunListBySessionPayloadSchema,
   RunEventsListPayloadSchema,
-  ImageInputCapabilitiesPayloadSchema,
+  InputCapabilitiesPayloadSchema,
   ImageInputSelectPayloadSchema,
   DocumentInputSelectPayloadSchema,
   ImageInputClipboardReadPayloadSchema,
   AttachmentImageReadPayloadSchema,
   AttachmentFileStatusPayloadSchema,
-  ChatImageInputCapabilitiesUiResultSchema,
+  ChatInputCapabilitiesUiResultSchema,
   ChatSelectImagesUiResultSchema,
   ChatSelectDocumentsUiResultSchema,
   ChatReadAttachmentImageUiResultSchema,
   ChatGetAttachmentFileStatusUiResultSchema,
   ChatSendUserInputUiPayloadSchema,
-  ChatCommandSuggestionsUiResultSchema,
+  ChatGetInputSuggestionsUiResultSchema,
   ChatCreateSessionUiResultSchema,
   ChatListSessionsUiResultSchema,
   ChatListMessagesUiResultSchema,
@@ -233,11 +224,13 @@ export {
   SkillEnablePayloadSchema,
   SkillDisablePayloadSchema,
   SkillDeletePayloadSchema,
+  SkillRefreshPayloadSchema,
   ListSkillsUiResponseSchema,
   GetSkillDetailUiResponseSchema,
   EnableSkillUiResponseSchema,
   DisableSkillUiResponseSchema,
   DeleteSkillUiResponseSchema,
+  RefreshSkillsUiResponseSchema,
 } from './skills-host';
 export {
   SettingsGetPayloadSchema,

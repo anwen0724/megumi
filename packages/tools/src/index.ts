@@ -23,7 +23,6 @@ export type {
   ToolEffectReport,
   ToolIdentity,
   ToolItemFailure,
-  ToolRuntimeSource,
   ToolSource,
   ToolSourceKind,
 } from './tool';
@@ -59,9 +58,8 @@ export {
   type ToolResolutionFailure,
   type Tools,
 } from './tools';
-export type { SkillUse, WorkspaceFileAccess } from './built-ins/workspace-file-access';
+export type { WorkspaceFileAccess } from './built-ins/workspace-file-access';
 export {
-  mapSkillScriptExecutionRequestToRunCommandInput,
   type RunCommandToolInput,
   type ToolProcessAdapter,
   type ToolProcessDescriptor,

@@ -3,8 +3,9 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import fs from 'fs-extra';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { composeProduct } from '@megumi/product';
+import type { AnyEvent } from '@megumi/events';
 import { createNodeWorkspaceFileSystem } from '@megumi/workspace/node';
 import {
   AssistantMessageEventStream,
@@ -76,7 +77,7 @@ describe('composeProduct', () => {
         settings: {
           permissions: {
             catalog: {
-              tools: expect.arrayContaining([expect.objectContaining({ registeredToolName: 'use_skill' })]),
+              tools: expect.arrayContaining([expect.objectContaining({ registeredToolName: 'read_file' })]),
             },
           },
         },
@@ -96,11 +97,18 @@ describe('composeProduct', () => {
       });
 
       expect(result.payload.type).toBe('agent_run');
-      if (result.payload.type !== 'agent_run' || !result.events) return;
-      const events = [];
-      for await (const event of result.events) events.push(event.eventType);
-      expect(events.filter((eventType) => eventType === 'tool.execution.completed')).toHaveLength(2);
-      expect(events).toContain('run.completed');
+      if (result.payload.type !== 'agent_run') return;
+      const payload = result.payload;
+      // The Run executes in the background; poll the persisted run events
+      // until it settles before asserting on the event facts.
+      let events: AnyEvent[] = [];
+      await vi.waitFor(async () => {
+        const snapshot = await product.host.chat.listRunEvents({ runId: payload.run.runId });
+        events = snapshot.events;
+        expect(snapshot.events.some((event) => event.type === 'run.ended')).toBe(true);
+      }, { timeout: 5000 });
+      expect(events.filter((event) => event.type === 'tool_execution.ended')).toHaveLength(2);
+      expect(events.map((event) => event.type)).toContain('run.ended');
 
       const firstContext = modelScript.contexts[0] as {
         systemPrompt?: string;
@@ -110,9 +118,11 @@ describe('composeProduct', () => {
           parameters?: { properties?: Record<string, { description?: string }> };
         }>;
       };
-      expect(firstContext.systemPrompt).toContain(`Working directory: ${workspaceRoot}`);
-      expect(firstContext.systemPrompt).toContain('Operating system:');
-      expect(firstContext.systemPrompt).toContain('Shell:');
+      expect(firstContext.systemPrompt).toContain(`<working_directory>${workspaceRoot}</working_directory>`);
+      expect(firstContext.systemPrompt).toContain('<operating_system>');
+      expect(firstContext.systemPrompt).toContain('<shell>');
+      expect(firstContext.systemPrompt).toContain('<available_skills>');
+      expect(firstContext.systemPrompt).toContain('<name>review</name>');
       const listDirectory = firstContext.tools?.find((tool) => tool.name === 'list_directory');
       expect(listDirectory).toMatchObject({
         description: 'List files and directories.',
@@ -168,10 +178,11 @@ function toolThenReplyStreams(skillPath: string): { streams: ProviderStreams; co
         });
     }
     if (callCount === 2) {
-      return assistantStream(model, 'I will load the selected review method.', {
-        id: 'tool-call:use-review-skill',
-        name: 'use_skill',
-        arguments: { skillPath },
+      // The model reads the Skill package dynamically through the normal file Tool.
+      return assistantStream(model, 'I will read the review Skill package.', {
+        id: 'tool-call:read-review-skill',
+        name: 'read_file',
+        arguments: { path: skillPath },
       });
     }
     return assistantStream(model, 'Product integration reply.');

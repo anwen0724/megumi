@@ -4,7 +4,7 @@
 import {
   ChatCancelBranchDraftUiPayloadSchema,
   ChatCancelUserInputUiPayloadSchema,
-  ChatCommandSuggestionsUiResultSchema,
+  ChatGetInputSuggestionsUiResultSchema,
   ChatCreateBranchDraftUiPayloadSchema,
   ChatCreateSessionUiResultSchema,
   ChatGetSessionHydrationUiResultSchema,
@@ -15,22 +15,22 @@ import {
   ChatListSessionsUiResultSchema,
   ChatListTimelineUiResultSchema,
   ChatSendUserInputUiPayloadSchema,
-  ChatImageInputCapabilitiesUiResultSchema,
+  ChatInputCapabilitiesUiResultSchema,
   ChatSelectImagesUiResultSchema,
   ChatSelectDocumentsUiResultSchema,
   ChatReadAttachmentImageUiResultSchema,
   ChatGetAttachmentFileStatusUiResultSchema,
   type ProductHostInterface,
 } from '@megumi/product/host';
-import type { RuntimeEvent } from '@megumi/product/host';
+
 import type { ProductRuntimeLogger } from '@megumi/product';
 import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { createIpcRequestHandler } from '../create-request-handler';
-import { forwardRuntimeEvents } from '../event-forwarders';
+
 import { IPC_CHANNELS } from '../channels';
 import type { RuntimeIpcError, RuntimeIpcRequest } from '../contracts';
 import {
-  CommandSuggestionsRequestSchema,
+  InputSuggestionsRequestSchema,
   RunEventsListRequestSchema,
   RunListBySessionRequestSchema,
   SessionBranchDraftCancelRequestSchema,
@@ -43,13 +43,13 @@ import {
   SessionMessageListRequestSchema,
   SessionMessageSendRequestSchema,
   SessionTimelineListRequestSchema,
-  ImageInputCapabilitiesGetRequestSchema,
+  InputCapabilitiesGetRequestSchema,
   ImageInputSelectRequestSchema,
   DocumentInputSelectRequestSchema,
   ImageInputClipboardReadRequestSchema,
   AttachmentImageReadRequestSchema,
   AttachmentFileStatusRequestSchema,
-  type CommandSuggestionsPayload,
+  type InputSuggestionsPayload,
   type RunEventsListPayload,
   type RunListBySessionPayload,
   type SessionBranchDraftCancelPayload,
@@ -81,13 +81,13 @@ export function registerChatHandlers(
 ): void {
   const ipcMain = options.ipcMain ?? electronIpcMain;
 
-  ipcMain.handle(IPC_CHANNELS.chat.commandSuggestions, createIpcRequestHandler({
-    channel: IPC_CHANNELS.chat.commandSuggestions,
-    requestSchema: CommandSuggestionsRequestSchema,
-    responseSchema: ChatCommandSuggestionsUiResultSchema,
+  ipcMain.handle(IPC_CHANNELS.chat.inputSuggestions, createIpcRequestHandler({
+    channel: IPC_CHANNELS.chat.inputSuggestions,
+    requestSchema: InputSuggestionsRequestSchema,
+    responseSchema: ChatGetInputSuggestionsUiResultSchema,
     logger: options.logger,
-    handle: (request: RuntimeIpcRequest<CommandSuggestionsPayload, typeof IPC_CHANNELS.chat.commandSuggestions>) =>
-      service.host.chat.getCommandSuggestions(request.payload),
+    handle: (request: RuntimeIpcRequest<InputSuggestionsPayload, typeof IPC_CHANNELS.chat.inputSuggestions>) =>
+      service.host.chat.getInputSuggestions(request.payload),
     mapError: mapChatIpcError,
   }));
 
@@ -152,10 +152,10 @@ export function registerChatHandlers(
     mapError: mapChatIpcError,
   }));
 
-  ipcMain.handle(IPC_CHANNELS.chat.imageInputCapabilitiesGet, createIpcRequestHandler({
-    channel: IPC_CHANNELS.chat.imageInputCapabilitiesGet,
-    requestSchema: ImageInputCapabilitiesGetRequestSchema,
-    responseSchema: ChatImageInputCapabilitiesUiResultSchema,
+  ipcMain.handle(IPC_CHANNELS.chat.inputCapabilitiesGet, createIpcRequestHandler({
+    channel: IPC_CHANNELS.chat.inputCapabilitiesGet,
+    requestSchema: InputCapabilitiesGetRequestSchema,
+    responseSchema: ChatInputCapabilitiesUiResultSchema,
     logger: options.logger,
     handle: () => service.host.chat.getInputCapabilities(),
     mapError: mapChatIpcError,
@@ -217,14 +217,11 @@ export function registerChatHandlers(
     handle: async (
       request: RuntimeIpcRequest<SessionMessageSendPayload, typeof IPC_CHANNELS.chat.sessionMessageSend>,
       event,
-      context,
     ) => {
       const result = await service.host.chat.sendUserInput({
         requestId: request.requestId,
         ...request.payload,
-        runtimeContext: context,
       });
-      scheduleEvents(event.sender, result.events, options.logger);
       return result.payload;
     },
     mapError: mapChatIpcError,
@@ -240,7 +237,6 @@ export function registerChatHandlers(
       event,
     ) => {
       const result = await service.host.chat.cancelUserInput(request.payload);
-      scheduleEvents(event.sender, result.events, options.logger);
       return result.payload;
     },
     mapError: mapChatIpcError,
@@ -251,13 +247,11 @@ export function registerChatHandlers(
     requestSchema: SessionBranchDraftCreateRequestSchema,
     responseSchema: ChatCreateBranchDraftUiPayloadSchema,
     logger: options.logger,
-    handle: (request: RuntimeIpcRequest<SessionBranchDraftCreatePayload, typeof IPC_CHANNELS.chat.branchDraftCreate>, event, context) => {
+    handle: (request: RuntimeIpcRequest<SessionBranchDraftCreatePayload, typeof IPC_CHANNELS.chat.branchDraftCreate>, event) => {
       const result = service.host.chat.createBranchDraft({
         requestId: request.requestId,
         ...request.payload,
-        runtimeContext: context,
       });
-      scheduleEvents(event.sender, result.events, options.logger);
       return result.payload;
     },
     mapError: mapChatIpcError,
@@ -268,13 +262,11 @@ export function registerChatHandlers(
     requestSchema: SessionBranchDraftCancelRequestSchema,
     responseSchema: ChatCancelBranchDraftUiPayloadSchema,
     logger: options.logger,
-    handle: (request: RuntimeIpcRequest<SessionBranchDraftCancelPayload, typeof IPC_CHANNELS.chat.branchDraftCancel>, event, context) => {
+    handle: (request: RuntimeIpcRequest<SessionBranchDraftCancelPayload, typeof IPC_CHANNELS.chat.branchDraftCancel>, event) => {
       const result = service.host.chat.cancelBranchDraft({
         requestId: request.requestId,
         ...request.payload,
-        runtimeContext: context,
       });
-      scheduleEvents(event.sender, result.events, options.logger);
       return result.payload;
     },
     mapError: mapChatIpcError,
@@ -306,21 +298,6 @@ function mapChatIpcError(): RuntimeIpcError {
   return {
     code: 'ipc_handler_failed',
     message: 'Chat service failed.',
-    severity: 'error',
-    retryable: true,
-    source: 'main',
   };
 }
 
-function scheduleEvents(
-  sender: { send(channel: string, event: RuntimeEvent): void },
-  events: AsyncIterable<RuntimeEvent> | undefined,
-  logger?: ProductRuntimeLogger,
-): void {
-  if (!events) return;
-  setTimeout(() => {
-    void forwardRuntimeEvents(sender, events, { logger }).catch((error) => {
-      logger?.warn?.('Runtime event forwarding failed.', { error: String(error) });
-    });
-  }, 0);
-}

@@ -1,17 +1,11 @@
-/* Owns in-process Session branch draft lifecycle and stable branch events. */
-import {
-  createSessionBranchDraftCancelledEvent,
-  createSessionBranchMarkerCreatedEvent,
-  type RuntimeContext,
-  type RuntimeEvent,
-} from '@megumi/events';
+/* Owns in-process Session branch draft lifecycle and branch facts on the bus. */
+import type { EventBus } from '@megumi/events';
 import type { SessionEntry } from './session-entry-graph';
 
 export interface CreateSessionBranchDraftRequest {
   request_id: string;
   session_id: string;
   source_message_id: string;
-  runtime_context?: RuntimeContext;
 }
 
 export interface SessionBranchDraft {
@@ -25,18 +19,16 @@ export interface SessionBranchDraft {
 export interface CreateSessionBranchDraftResult {
   status: 'created';
   branch_draft: SessionBranchDraft;
-  events: AsyncIterable<RuntimeEvent>;
 }
 
 export interface CancelSessionBranchDraftRequest {
   request_id: string;
   session_id: string;
   branch_marker_id: string;
-  runtime_context?: RuntimeContext;
 }
 
 export type CancelSessionBranchDraftResult =
-  | { status: 'cancelled'; events: AsyncIterable<RuntimeEvent> }
+  | { status: 'cancelled' }
   | { status: 'not_cancelled'; reason: 'branch_marker_not_found' | 'branch_marker_not_active' };
 
 export interface ResolveSessionBranchDraftRequest {
@@ -68,9 +60,10 @@ export interface SessionBranchDrafts {
 }
 
 export interface CreateSessionBranchDraftsOptions {
+  /** The event bus; branch facts are published here (session-scoped, no runId). */
+  events: EventBus;
   ids?: {
     branchMarkerId?: () => string;
-    eventId?: () => string;
   };
   clock?: { now(): string };
   entries?: {
@@ -86,12 +79,11 @@ interface CommittedDraftState {
 const MAX_COMMITTED_DRAFTS = 256;
 
 export function createSessionBranchDrafts(
-  options: CreateSessionBranchDraftsOptions = {},
+  options: CreateSessionBranchDraftsOptions,
 ): SessionBranchDrafts {
   const drafts = new Map<string, SessionBranchDraft>();
   const committedDrafts = new Map<string, CommittedDraftState>();
   const branchMarkerId = options.ids?.branchMarkerId ?? (() => `branch:${crypto.randomUUID()}`);
-  const eventId = options.ids?.eventId ?? (() => `event:${crypto.randomUUID()}`);
   const now = options.clock?.now ?? (() => new Date().toISOString());
 
   return {
@@ -106,25 +98,14 @@ export function createSessionBranchDrafts(
         created_at: createdAt,
       };
       drafts.set(markerId, branchDraft);
-      const event = createSessionBranchMarkerCreatedEvent({
-        eventId: eventId(),
+      options.events.publish({
+        type: 'session.branch_marker.created',
+        payload: { markerId },
         sessionId: request.session_id,
-        requestId: request.request_id,
-        ...(request.runtime_context ? { context: request.runtime_context } : {}),
-        sequence: 1,
-        createdAt,
-        payload: {
-          branchMarkerId: markerId,
-          branchMarkerSourceEntryId: branchDraft.source_entry_id,
-          targetLeafSourceEntryId: branchDraft.source_entry_id,
-          selectedSourceRef: { sourceId: request.source_message_id, sourceKind: 'message' },
-          reason: 'branch',
-        },
       });
       return {
         status: 'created',
         branch_draft: branchDraft,
-        events: asyncEvents([event]),
       };
     },
     cancelBranchDraft(request) {
@@ -134,21 +115,12 @@ export function createSessionBranchDrafts(
         return { status: 'not_cancelled', reason: 'branch_marker_not_active' };
       }
       drafts.delete(request.branch_marker_id);
-      const event = createSessionBranchDraftCancelledEvent({
-        eventId: eventId(),
+      options.events.publish({
+        type: 'session.branch_draft.cancelled',
+        payload: { draftId: request.branch_marker_id },
         sessionId: request.session_id,
-        requestId: request.request_id,
-        ...(request.runtime_context ? { context: request.runtime_context } : {}),
-        sequence: 1,
-        createdAt: now(),
-        payload: {
-          branchMarkerId: request.branch_marker_id,
-          branchMarkerSourceEntryId: draft.source_entry_id,
-          restoredLeafSourceEntryId: draft.source_entry_id,
-          reason: 'branch_cancelled',
-        },
       });
-      return { status: 'cancelled', events: asyncEvents([event]) };
+      return { status: 'cancelled' };
     },
     resolveBranchDraft(request) {
       const draft = drafts.get(request.branch_marker_id);
@@ -210,8 +182,4 @@ function pruneCommittedDrafts(committedDrafts: Map<string, CommittedDraftState>)
     if (!oldestMarkerId) return;
     committedDrafts.delete(oldestMarkerId);
   }
-}
-
-async function* asyncEvents<T>(events: T[]): AsyncIterable<T> {
-  yield* events;
 }

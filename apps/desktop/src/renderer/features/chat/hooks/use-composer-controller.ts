@@ -1,6 +1,6 @@
 // Owns Composer interaction state and builds the host-neutral submit payload.
 import { type FormEvent, type KeyboardEvent, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { CommandSuggestionItem, CommandSuggestionResult } from '@megumi/product/host';
+import type { InputSuggestionQueryItem, InputSuggestionQueryResult } from '@megumi/product/host';
 import {
   getComposerModelOptionsForProviders,
   modelOptionValue,
@@ -23,10 +23,11 @@ import { useModelSelectionStore } from '../../../entities/model-selection';
 const COMPOSER_TEXTAREA_COMPACT_HEIGHT = 56;
 const COMPOSER_TEXTAREA_MAX_HEIGHT = 160;
 
-type SelectedCommandCompletion = Pick<CommandSuggestionItem, 'displayInput' | 'submitInput'> & {
+type SelectedCommandCompletion = {
   label: string;
-  sourceKind: CommandSuggestionItem['source']['kind'];
-  selection?: NonNullable<CommandSuggestionItem['selection']>;
+  sourceKind: 'command' | 'skill';
+  replacementInput: string;
+  selection?: { type: 'skill'; name: string; skillPath: string };
 };
 
 function createComposerSubmitPayload(input: {
@@ -52,7 +53,7 @@ function resolveSubmitMessage(rawValue: string, completion: SelectedCommandCompl
     return rawValue.trim();
   }
 
-  return completion.selection ? rawValue.trim() : `${completion.submitInput}${rawValue}`.trim();
+  return completion.selection ? rawValue.trim() : `${completion.replacementInput}${rawValue}`.trim();
 }
 
 export function useComposerController({
@@ -71,14 +72,14 @@ export function useComposerController({
   onSelectDocuments,
   onPasteImage,
   onDraftChange,
-  getCommandSuggestions,
+  getInputSuggestions,
 }: ComposerProps) {
   const permissionModeId = useId();
   const modelId = useId();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [value, setValue] = useState(initialValue);
   const [selectedCommandCompletion, setSelectedCommandCompletion] = useState<SelectedCommandCompletion | null>(null);
-  const [selectedCommandSuggestionIndex, setSelectedCommandSuggestionIndex] = useState(0);
+  const [selectedInputSuggestionIndex, setSelectedInputSuggestionIndex] = useState(0);
   const permissionMode = usePermissionModeStore((state) => state.mode);
   const persistPermissionMode = usePermissionModeStore((state) => state.persistMode);
   const modelSelection = useModelSelectionStore((state) => state.selection);
@@ -128,15 +129,15 @@ export function useComposerController({
     && selectedCommandCompletion === null;
   const showStop = status === 'sending' || status === 'running' || status === 'waiting-approval';
   const canStop = showStop && Boolean(onStop);
-  const [commandSuggestions, setCommandSuggestions] = useState<CommandSuggestionResult>({ type: 'inactive' });
-  const activeCommandSuggestions = commandSuggestions.type === 'suggestions' && commandSuggestions.draft_input === value
-    ? commandSuggestions
+  const [inputSuggestions, setInputSuggestions] = useState<InputSuggestionQueryResult>({ type: 'inactive' });
+  const activeInputSuggestions = inputSuggestions.type === 'suggestions' && inputSuggestions.draftInput === value
+    ? inputSuggestions
     : { type: 'inactive' as const };
-  const visibleCommandSuggestionItems = activeCommandSuggestions.type === 'suggestions'
-    ? activeCommandSuggestions.groups.flatMap((group) => group.items)
+  const visibleInputSuggestionItems = activeInputSuggestions.type === 'suggestions'
+    ? activeInputSuggestions.groups.flatMap((group) => group.items)
     : [];
-  const hasCommandSuggestionSelection = visibleCommandSuggestionItems.length > 0
-    && selectedCommandSuggestionIndex >= 0;
+  const hasInputSuggestionSelection = visibleInputSuggestionItems.length > 0
+    && selectedInputSuggestionIndex >= 0;
 
   useEffect(() => {
     if (seedTextKey && seedText !== null && seedText !== undefined) {
@@ -180,44 +181,44 @@ export function useComposerController({
   }, [selectedCommandCompletion, value]);
 
   useEffect(() => {
-    if (selectedCommandCompletion || !getCommandSuggestions || !value.trimStart().startsWith('/')) {
-      setCommandSuggestions({ type: 'inactive' });
+    if (selectedCommandCompletion || !getInputSuggestions || !value.trimStart().startsWith('/')) {
+      setInputSuggestions({ type: 'inactive' });
       return undefined;
     }
 
     let cancelled = false;
 
     try {
-      void Promise.resolve(getCommandSuggestions({ draft_input: value }))
+      void Promise.resolve(getInputSuggestions({ draftInput: value }))
         .then((suggestions) => {
           if (!cancelled) {
-            setCommandSuggestions(suggestions);
+            setInputSuggestions(suggestions);
           }
         })
         .catch(() => {
           if (!cancelled) {
-            setCommandSuggestions({ type: 'inactive' });
+            setInputSuggestions({ type: 'inactive' });
           }
         });
     } catch {
-      setCommandSuggestions({ type: 'inactive' });
+      setInputSuggestions({ type: 'inactive' });
     }
 
     return () => {
       cancelled = true;
     };
-  }, [getCommandSuggestions, selectedCommandCompletion, value]);
+  }, [getInputSuggestions, selectedCommandCompletion, value]);
 
   useEffect(() => {
-    if (visibleCommandSuggestionItems.length === 0) {
-      setSelectedCommandSuggestionIndex(0);
+    if (visibleInputSuggestionItems.length === 0) {
+      setSelectedInputSuggestionIndex(0);
       return;
     }
 
-    setSelectedCommandSuggestionIndex((index) => (
-      index >= visibleCommandSuggestionItems.length ? 0 : Math.max(0, index)
+    setSelectedInputSuggestionIndex((index) => (
+      index >= visibleInputSuggestionItems.length ? 0 : Math.max(0, index)
     ));
-  }, [visibleCommandSuggestionItems.length]);
+  }, [visibleInputSuggestionItems.length]);
 
   async function submitDraft() {
     if (!canSend) return;
@@ -338,16 +339,15 @@ export function useComposerController({
     ));
   }
 
-  function applyCommandSuggestion(item: CommandSuggestionItem) {
+  function applyInputSuggestion(item: InputSuggestionQueryItem) {
     setValue('');
     setSelectedCommandCompletion({
-      displayInput: item.displayInput,
-      submitInput: item.submitInput,
-      label: getCommandChipLabel(item),
-      sourceKind: item.source.kind,
-      ...(item.selection ? { selection: item.selection } : {}),
+      replacementInput: item.replacementInput,
+      label: getInputSuggestionLabel(item),
+      sourceKind: item.kind,
+      ...(item.kind === 'skill' ? { selection: item.selection } : {}),
     });
-    setSelectedCommandSuggestionIndex(0);
+    setSelectedInputSuggestionIndex(0);
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -359,27 +359,27 @@ export function useComposerController({
       return;
     }
 
-    if (event.key === 'ArrowDown' && visibleCommandSuggestionItems.length > 0) {
+    if (event.key === 'ArrowDown' && visibleInputSuggestionItems.length > 0) {
       event.preventDefault();
-      setSelectedCommandSuggestionIndex((index) => (
-        index + 1 >= visibleCommandSuggestionItems.length ? 0 : index + 1
+      setSelectedInputSuggestionIndex((index) => (
+        index + 1 >= visibleInputSuggestionItems.length ? 0 : index + 1
       ));
       return;
     }
 
-    if (event.key === 'ArrowUp' && visibleCommandSuggestionItems.length > 0) {
+    if (event.key === 'ArrowUp' && visibleInputSuggestionItems.length > 0) {
       event.preventDefault();
-      setSelectedCommandSuggestionIndex((index) => (
-        index <= 0 ? visibleCommandSuggestionItems.length - 1 : index - 1
+      setSelectedInputSuggestionIndex((index) => (
+        index <= 0 ? visibleInputSuggestionItems.length - 1 : index - 1
       ));
       return;
     }
 
-    if (!isComposing && (event.key === 'Enter' || event.key === 'Tab') && hasCommandSuggestionSelection) {
+    if (!isComposing && (event.key === 'Enter' || event.key === 'Tab') && hasInputSuggestionSelection) {
       event.preventDefault();
-      const item = visibleCommandSuggestionItems[selectedCommandSuggestionIndex];
+      const item = visibleInputSuggestionItems[selectedInputSuggestionIndex];
       if (item) {
-        applyCommandSuggestion(item);
+        applyInputSuggestion(item);
       }
       return;
     }
@@ -402,8 +402,8 @@ export function useComposerController({
     void submitDraft();
   }
 
-  function chooseCommandSuggestion(item: CommandSuggestionItem) {
-    applyCommandSuggestion(item);
+  function chooseInputSuggestion(item: InputSuggestionQueryItem) {
+    applyInputSuggestion(item);
     textareaRef.current?.focus();
   }
 
@@ -419,8 +419,9 @@ export function useComposerController({
     permissionModeId,
     modelId,
     textareaRef,
-    commandSuggestions: activeCommandSuggestions,
-    selectedCommandSuggestionIndex,
+    inputSuggestions: activeInputSuggestions,
+    selectedInputSuggestionIndex,
+    onInputSuggestionHover: setSelectedInputSuggestionIndex,
     selectedCommandCompletion,
     contextUsage,
     selectedAttachments,
@@ -428,7 +429,7 @@ export function useComposerController({
     canAttachDocuments,
     imageInputNotice,
     onValueChange: handleValueChange,
-    onCommandSuggestionChoose: chooseCommandSuggestion,
+    onInputSuggestionChoose: chooseInputSuggestion,
     onPermissionModeChange: (mode) => { void persistPermissionMode(mode); },
     onModelChange: (nextModel) => {
       const option = modelOptions.find((candidate) => candidate.value === nextModel);
@@ -449,9 +450,8 @@ export function useComposerController({
   };
 }
 
-function getCommandChipLabel(item: CommandSuggestionItem): string {
-  const rawName = item.display?.primary ?? item.name;
-  return rawName
+function getInputSuggestionLabel(item: InputSuggestionQueryItem): string {
+  return item.name
     .split(/[-_\s]+/)
     .filter(Boolean)
     .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)

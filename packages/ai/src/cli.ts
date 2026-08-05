@@ -48,6 +48,7 @@ async function login(providerId: string): Promise<void> {
 	const rl = createInterface({ input: process.stdin, output: process.stdout });
 	try {
 		const credential = await provider.auth.oauth.login({
+			signal: new AbortController().signal,
 			prompt: (authPrompt) => answerPrompt(rl, authPrompt),
 			notify: (event) => {
 				switch (event.type) {
@@ -81,7 +82,7 @@ async function main(): Promise<void> {
 	if (!command || command === "help" || command === "--help" || command === "-h") {
 		const providerList = PROVIDERS.map((provider) => `  ${provider.id.padEnd(20)} ${provider.name}`).join("\n");
 		console.log(
-			`Usage: npx @megumi/ai <command> [provider]\n\nCommands:\n  login [provider]  Login to an OAuth provider\n  list              List available providers\n\nProviders:\n${providerList}`,
+			`Usage: npx @earendil-works/pi-ai <command> [provider]\n\nCommands:\n  login [provider]  Login to an OAuth provider\n  list              List available providers\n\nProviders:\n${providerList}`,
 		);
 		return;
 	}

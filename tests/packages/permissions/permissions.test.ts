@@ -216,6 +216,48 @@ describe('Permissions', () => {
       },
     });
   });
+  it('treats Skill file reads as ordinary external reads without any elevation', async () => {
+    const fixture = createFixture();
+    // An explicit allow rule keeps the decision inside ordinary Permissions rules.
+    fixture.ruleAccess.settings = {
+      mode: 'auto',
+      allow: [{
+        source: 'user',
+        target: {
+          kind: 'operation',
+          action: 'workspace.read',
+          resource: { type: 'workspace.path', matcher: { operator: 'exact', value: 'C:/skills/review/SKILL.md' } },
+        },
+      }],
+      ask: [],
+      deny: [],
+    };
+    const evaluated = await fixture.permissions.evaluateToolCall(baseRequest({
+      registeredTool: registeredTool('read_file'),
+      toolInput: { path: '../skills/review/SKILL.md' },
+      permissionMode: 'auto',
+    }));
+    expect(evaluated).toMatchObject({
+      status: 'ok',
+      decision: { type: 'allow' },
+      operations: [expect.objectContaining({ action: 'workspace.read' })],
+    });
+    if (evaluated.status !== 'ok') return;
+    // The operation is a plain workspace.read: no Skill markers reach Permissions.
+    expect(JSON.stringify(evaluated.operations)).not.toContain('skillPackageRoot');
+    expect(evaluated.operations[0]?.resource?.attributes).not.toHaveProperty('skillPackageRoot');
+    // The grant covers exactly the requested external target, never a package directory.
+    expect(evaluated.executionAccess).toEqual({
+      fileSystem: {
+        mode: 'workspace_and_paths',
+        readablePaths: ['C:/skills/review/SKILL.md'],
+        writablePaths: [],
+      },
+      process: 'sandboxed',
+      network: 'denied',
+    });
+  });
+
   it('keeps prohibited operations approvable while full access remains explicit', async () => {
     const fixture = createFixture();
     expect(await fixture.permissions.evaluateToolCall(baseRequest({

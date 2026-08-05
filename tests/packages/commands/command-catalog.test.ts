@@ -10,9 +10,9 @@ const handle: CommandDefinition["handle"] = async ({ input }) => ({ type: "not_c
 describe("CommandCatalog", () => {
   it("keeps the first unambiguous definition", () => {
     const catalog = createCommandCatalog([
-      { name: "first", aliases: ["f"], description: "first", source: { kind: "built_in" }, handle },
-      { name: "second", aliases: ["f"], description: "second", source: { kind: "built_in" }, handle },
-      { name: "first", description: "duplicate", source: { kind: "built_in" }, handle },
+      { name: "first", aliases: ["f"], description: "first", handle },
+      { name: "second", aliases: ["f"], description: "second", handle },
+      { name: "first", description: "duplicate", handle },
     ]);
     expect(catalog.list().map((command) => command.name)).toEqual(["first"]);
     expect(catalog.resolve("f")?.name).toBe("first");

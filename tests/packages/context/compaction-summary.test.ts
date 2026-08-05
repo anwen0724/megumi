@@ -1,6 +1,6 @@
-/* Verifies rolling Summary requests preserve prior Summary and exact structured Run facts. */
+/* Verifies rolling Summary requests preserve prior Summary and exact structured Message facts. */
 import { describe, expect, it } from 'vitest';
-import type { ConversationRun } from '../../../packages/context/src/conversation-run';
+import type { Message } from '@megumi/ai';
 import {
   buildCompactionSummaryRequest,
   COMPACTION_SUMMARY_SYSTEM_PROMPT,
@@ -8,24 +8,26 @@ import {
 
 describe('buildCompactionSummaryRequest', () => {
   it('includes the prior Summary and renders attachments without embedding binary image content', () => {
-    const run: ConversationRun = {
-      source: {
-        runId: 'run:1',
-        userEntryId: 'entry:user',
-        userMessageId: 'message:user',
-        lastEntryId: 'entry:user',
-        responseMessageRefs: [],
-      },
-      userMessage: {
-        type: 'user_message',
+    const messages: Message[] = [
+      {
+        role: 'user',
         content: [
-          { type: 'file', path: '/workspace/report.pdf', name: 'report.pdf' },
-          { type: 'image', source: { type: 'base64', mediaType: 'image/png', data: 'binary' } },
+          { type: 'text', text: 'task with /workspace/report.pdf' },
+          { type: 'image', data: 'binary', mimeType: 'image/png' },
         ],
+        timestamp: 0,
       },
-      items: [],
-    };
-    const request = buildCompactionSummaryRequest({ previousSummary: 'old facts', runs: [run] });
+      {
+        role: 'assistant',
+        content: [{ type: 'toolCall', id: 'call:1', name: 'read_file', arguments: { path: '/workspace/report.pdf' } }],
+        api: 'openai-completions',
+        provider: 'openai',
+        model: 'gpt',
+        stopReason: 'toolUse',
+        timestamp: 0,
+      },
+    ];
+    const request = buildCompactionSummaryRequest({ previousSummary: 'old facts', messages });
     expect(request.systemPrompt).toBe(COMPACTION_SUMMARY_SYSTEM_PROMPT);
     expect(request.input).toContain('old facts');
     expect(request.input).toContain('/workspace/report.pdf');

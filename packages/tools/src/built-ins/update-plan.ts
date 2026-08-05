@@ -19,7 +19,7 @@ export interface UpdatePlanInput {
 export const updatePlanToolDefinition: ToolDefinition = {
   name: 'update_plan',
   description: 'Update the current task plan with a complete ordered snapshot of its steps and statuses.',
-  inputSchema: {
+  parameters: {
     type: 'object',
     properties: {
       explanation: { type: 'string', description: 'Optional reason for this plan update.' },

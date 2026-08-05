@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron';
-import { generateRuntimeDebugId, type RuntimeEvent } from '@megumi/product/host';
+import type { AnyEvent } from '@megumi/product/host';
 import type {
   ApprovalHostResult,
   ChatCancelBranchDraftUiResult,
@@ -7,7 +7,7 @@ import type {
   ChatCreateBranchDraftUiResult,
   ChatCreateSessionUiResult,
   ChatGetSessionHydrationUiResult,
-  ChatGetCommandSuggestionsUiResult,
+  ChatGetInputSuggestionsUiResult,
   ChatListMessagesUiResult,
   ChatGetContextUsageUiResult,
   ChatListRunEventsUiResult,
@@ -15,7 +15,7 @@ import type {
   ChatListSessionsUiResult,
   ChatListTimelineUiResult,
   ChatSendUserInputUiPayload,
-  ChatImageInputCapabilitiesUiResult,
+  ChatInputCapabilitiesUiResult,
   ChatSelectImagesUiResult,
   ChatSelectDocumentsUiResult,
   ChatReadAttachmentImageUiResult,
@@ -33,6 +33,7 @@ import type {
   EnableSkillUiResponse,
   GetSkillDetailUiResponse,
   ListSkillsUiResponse,
+  RefreshSkillsUiResponse,
   WorkspaceListProjectsUiResult,
   WorkspaceOpenFileUiResult,
   WorkspaceOpenProjectUiResult,
@@ -51,7 +52,6 @@ import type {
 } from '@megumi/product/host';
 import { IPC_CHANNELS } from '../main/ipc/channels';
 import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from '../main/ipc/contracts';
-import type { RuntimeIpcError } from '../main/ipc/errors';
 import type {
   ApprovalResolvePayload,
   ArtifactGetPayload,
@@ -61,7 +61,7 @@ import type {
   ArtifactStatusUpdatePayload,
   ArtifactVersionCreatePayload,
   ArtifactVersionGetPayload,
-  CommandSuggestionsPayload,
+  InputSuggestionsPayload,
   ProjectOpenPayload,
   ProjectRemovePayload,
   ProviderApiKeyPayload,
@@ -75,6 +75,7 @@ import type {
   SkillEnablePayload,
   SkillGetPayload,
   SkillListPayload,
+  SkillRefreshPayload,
   SessionBranchDraftCancelPayload,
   SessionBranchDraftCreatePayload,
   SessionCreatePayload,
@@ -110,32 +111,19 @@ async function invokeRuntimeIpc<TPayload, TData extends object, TChannel extends
   try {
     return await ipcRenderer.invoke(channel, request) as RuntimeIpcResult<TData, TChannel>;
   } catch {
-    const debugId = request.context?.debugId ?? generateRuntimeDebugId();
-
     return {
       ok: false,
-      data: createPreloadInvokeError(debugId),
+      data: {
+        code: 'ipc_invoke_failed',
+        message: 'Megumi could not reach the main process.',
+      },
       meta: {
         requestId: request.requestId,
         channel,
-        traceId: request.context?.traceId,
-        debugId,
-        operationName: request.context?.operationName,
         handledAt: new Date().toISOString(),
       },
     };
   }
-}
-
-function createPreloadInvokeError(debugId: string): RuntimeIpcError {
-  return {
-    code: 'ipc_invoke_failed',
-    message: 'Megumi could not reach the main process.',
-    severity: 'error',
-    retryable: true,
-    source: 'preload',
-    debugId,
-  };
 }
 
 export const api = {
@@ -190,9 +178,9 @@ export const api = {
   },
   command: {
     suggestions: (
-      request: BusinessRequest<CommandSuggestionsPayload, typeof IPC_CHANNELS.chat.commandSuggestions>,
-    ): Promise<RuntimeIpcResult<ChatGetCommandSuggestionsUiResult, typeof IPC_CHANNELS.chat.commandSuggestions>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.chat.commandSuggestions, request),
+      request: BusinessRequest<InputSuggestionsPayload, typeof IPC_CHANNELS.chat.inputSuggestions>,
+    ): Promise<RuntimeIpcResult<ChatGetInputSuggestionsUiResult, typeof IPC_CHANNELS.chat.inputSuggestions>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.chat.inputSuggestions, request),
   },
   skill: {
     list: (
@@ -215,6 +203,10 @@ export const api = {
       request: BusinessRequest<SkillDeletePayload, typeof IPC_CHANNELS.skill.delete>,
     ): Promise<RuntimeIpcResult<DeleteSkillUiResponse, typeof IPC_CHANNELS.skill.delete>> =>
       invokeRuntimeIpc(IPC_CHANNELS.skill.delete, request),
+    refresh: (
+      request: BusinessRequest<SkillRefreshPayload, typeof IPC_CHANNELS.skill.refresh>,
+    ): Promise<RuntimeIpcResult<RefreshSkillsUiResponse, typeof IPC_CHANNELS.skill.refresh>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.skill.refresh, request),
   },
   session: {
     create: (
@@ -269,9 +261,9 @@ export const api = {
     },
     imageInput: {
       capabilities: (
-        request: BusinessRequest<ImageInputCapabilitiesPayload, typeof IPC_CHANNELS.chat.imageInputCapabilitiesGet>,
-      ): Promise<RuntimeIpcResult<ChatImageInputCapabilitiesUiResult, typeof IPC_CHANNELS.chat.imageInputCapabilitiesGet>> =>
-        invokeRuntimeIpc(IPC_CHANNELS.chat.imageInputCapabilitiesGet, request),
+        request: BusinessRequest<ImageInputCapabilitiesPayload, typeof IPC_CHANNELS.chat.inputCapabilitiesGet>,
+      ): Promise<RuntimeIpcResult<ChatInputCapabilitiesUiResult, typeof IPC_CHANNELS.chat.inputCapabilitiesGet>> =>
+        invokeRuntimeIpc(IPC_CHANNELS.chat.inputCapabilitiesGet, request),
       select: (
         request: BusinessRequest<ImageInputSelectPayload, typeof IPC_CHANNELS.chat.imageInputSelect>,
       ): Promise<RuntimeIpcResult<ChatSelectImagesUiResult, typeof IPC_CHANNELS.chat.imageInputSelect>> =>
@@ -380,8 +372,8 @@ export const api = {
     createBundle: (request: BusinessRequest<ObservabilityRunPayload, typeof IPC_CHANNELS.observability.bundle>): Promise<RuntimeIpcResult<ObservabilityExportResult, typeof IPC_CHANNELS.observability.bundle>> => invokeRuntimeIpc(IPC_CHANNELS.observability.bundle, request),
   },
   runtime: {
-    onEvent: (callback: (event: RuntimeEvent) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, runtimeEvent: RuntimeEvent) => {
+    onEvent: (callback: (event: AnyEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, runtimeEvent: AnyEvent) => {
         callback(runtimeEvent);
       };
 

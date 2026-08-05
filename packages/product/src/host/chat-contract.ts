@@ -1,5 +1,5 @@
 /* Defines the stable, host-neutral Chat protocol used by Product shells. */
-import { RuntimeEventSchema, type RuntimeContext, type RuntimeEvent } from '@megumi/events';
+import { EventSchema, type AnyEvent } from '@megumi/events';
 
 import {
   TimelineMessageSchema,
@@ -7,6 +7,7 @@ import {
   type TimelineMessage,
   type TimelineUserMessage,
 } from '@megumi/projections';
+import type { InputSuggestionQueryResult } from '../input-suggestions';
 import { z } from 'zod';
 import type { RunStatus } from '@megumi/engine';
 import { DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from '@megumi/input';
@@ -20,12 +21,12 @@ export interface ChatHost {
   cancelUserInput(request: ChatCancelUserInputUiRequest): Promise<ChatCancelUserInputUiResult>;
   createBranchDraft(request: ChatCreateBranchDraftUiRequest): ChatCreateBranchDraftUiResult;
   cancelBranchDraft(request: ChatCancelBranchDraftUiRequest): ChatCancelBranchDraftUiResult;
-  getCommandSuggestions(request: ChatGetCommandSuggestionsUiRequest): Promise<ChatGetCommandSuggestionsUiResult>;
+  getInputSuggestions(request: ChatGetInputSuggestionsUiRequest): Promise<ChatGetInputSuggestionsUiResult>;
   listRuns(request: ChatListRunsUiRequest): Promise<ChatListRunsUiResult>;
   listRunEvents(request: ChatListRunEventsUiRequest): Promise<ChatListRunEventsUiResult>;
   getSessionHydration(request: ChatGetSessionHydrationUiRequest): Promise<ChatGetSessionHydrationUiResult>;
   getContextUsage(request: ChatGetContextUsageUiRequest): Promise<ChatGetContextUsageUiResult>;
-  getInputCapabilities(): ChatImageInputCapabilitiesUiResult;
+  getInputCapabilities(): ChatInputCapabilitiesUiResult;
   selectImages(): Promise<ChatSelectImagesUiResult>;
   selectDocuments(): Promise<ChatSelectDocumentsUiResult>;
   readClipboardImage(): Promise<ChatSelectImagesUiResult>;
@@ -34,8 +35,8 @@ export interface ChatHost {
 }
 
 const IsoDateTimeSchema = z.string().datetime();
-export const CommandSuggestionsPayloadSchema = z.object({
-  draft_input: z.string(), workspaceId: z.string().min(1).optional(),
+export const InputSuggestionsPayloadSchema = z.object({
+  draftInput: z.string(), workspaceId: z.string().min(1).optional(),
 }).strict();
 export const SessionCreatePayloadSchema = z.object({
   projectId: z.string().min(1), title: z.string().min(1).optional(),
@@ -53,6 +54,7 @@ export const SessionHydrationGetPayloadSchema = z.object({
 }).strict();
 export const SessionContextUsageGetPayloadSchema = z.object({
   sessionId: z.string().min(1),
+  modelSelection: z.object({ provider_id: z.string().min(1), model_id: z.string().min(1) }).strict(),
 }).strict();
 export const SessionMessageSendPayloadSchema = z.object({
   sessionId: z.string().min(1).optional(), projectId: z.string().min(1), text: z.string(),
@@ -89,7 +91,7 @@ export const SessionBranchDraftCancelPayloadSchema = z.object({
 }).strict();
 export const RunListBySessionPayloadSchema = z.object({ sessionId: z.string().min(1) }).strict();
 export const RunEventsListPayloadSchema = z.object({ runId: z.string().min(1) }).strict();
-export const ImageInputCapabilitiesPayloadSchema = z.object({}).strict();
+export const InputCapabilitiesPayloadSchema = z.object({}).strict();
 export const ImageInputSelectPayloadSchema = z.object({}).strict();
 export const DocumentInputSelectPayloadSchema = z.object({}).strict();
 export const ImageInputClipboardReadPayloadSchema = z.object({}).strict();
@@ -118,8 +120,9 @@ const SelectedDocumentUiDtoSchema = z.object({
   referenceId: z.string().min(1),
 }).strict();
 export type SelectedDocumentUiDto = z.infer<typeof SelectedDocumentUiDtoSchema>;
-export type ChatImageInputCapabilitiesUiResult = z.infer<typeof ChatImageInputCapabilitiesUiResultSchema>;
-export const ChatImageInputCapabilitiesUiResultSchema = z.object({
+export type ChatInputCapabilitiesUiResult = z.infer<typeof ChatInputCapabilitiesUiResultSchema>;
+export const ChatInputCapabilitiesUiResultSchema = z.object({
+  maxTextCharacters: z.number().int().positive(),
   allowedMediaTypes: z.array(z.string()),
   maxImageCount: z.number().int().positive(),
   maxImageBytes: z.number().int().positive(),
@@ -180,27 +183,30 @@ export const ChatSendUserInputUiPayloadSchema = z.discriminatedUnion('type', [
     type: z.literal('error'), session: ChatSessionUiDtoSchema.optional(), requestId: z.string(), message: z.string(),
   }).strict(),
 ]);
-const HostCommandSuggestionItemSchema = z.object({
-  name: z.string(), aliases: z.array(z.string()).optional(), description: z.string(), argument_hint: z.string().optional(),
-  source: z.union([
-    z.object({ kind: z.literal('built_in') }).strict(),
-    z.object({ kind: z.literal('skill'), name: z.string(), skillPath: z.string() }).strict(),
-  ]),
-  source_badge: z.string().optional(),
-  display: z.object({ primary: z.string(), secondary: z.string().optional(), badge: z.string().optional() }).strict().optional(),
-  match: z.object({ field: z.enum(['name', 'alias']), value: z.string(), prefix: z.string() }).strict(),
-  displayInput: z.string(), submitInput: z.string(),
-  selection: z.object({ type: z.literal('skill'), name: z.string(), skillPath: z.string() }).strict().optional(),
+const InputSuggestionItemSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('command'), name: z.string(), aliases: z.array(z.string()).optional(),
+    description: z.string(), argumentHint: z.string().optional(),
+    match: z.object({ field: z.enum(['name', 'alias']), value: z.string(), prefix: z.string() }).strict(),
+    replacementInput: z.string(),
+  }).strict(),
+  z.object({
+    kind: z.literal('skill'), name: z.string(), description: z.string(), sourceLabel: z.string().optional(),
+    match: z.object({ field: z.literal('name'), value: z.string(), prefix: z.string() }).strict(),
+    replacementInput: z.string(),
+    selection: z.object({ type: z.literal('skill'), name: z.string(), skillPath: z.string() }).strict(),
+  }).strict(),
+]);
+const InputSuggestionGroupSchema = z.object({
+  id: z.enum(['commands', 'skills']), label: z.string(), items: z.array(InputSuggestionItemSchema),
 }).strict();
 
-export const ChatCommandSuggestionsUiResultSchema = z.object({
+export const ChatGetInputSuggestionsUiResultSchema = z.object({
   suggestions: z.discriminatedUnion('type', [
     z.object({ type: z.literal('inactive') }).strict(),
     z.object({
-      type: z.literal('suggestions'), draft_input: z.string(), command_prefix: z.string(),
-      groups: z.array(z.object({
-        id: z.string(), label: z.string(), items: z.array(HostCommandSuggestionItemSchema),
-      }).strict()),
+      type: z.literal('suggestions'), draftInput: z.string(), queryPrefix: z.string(),
+      groups: z.array(InputSuggestionGroupSchema),
     }).strict(),
   ]),
 }).strict();
@@ -230,7 +236,7 @@ export const ChatGetSessionHydrationUiResultSchema = z.object({
   messages: z.array(TimelineMessageSchema),
   diagnostics: z.array(z.object({ messageId: z.string(), code: z.string(), message: z.string() }).strict()).optional(),
   runs: z.array(ChatRunUiDtoSchema),
-  runtimeEvents: z.array(RuntimeEventSchema),
+  runtimeEvents: z.array(EventSchema),
 }).strict();
 export const ChatCancelUserInputUiPayloadSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('cancellation_requested'), run: ChatRunUiDtoSchema }).strict(),
@@ -260,7 +266,7 @@ export const ChatCancelBranchDraftUiPayloadSchema = z.object({
   cancelled: z.boolean(), reason: z.string().optional(),
 }).strict();
 export const ChatListRunsUiResultSchema = z.object({ runs: z.array(ChatRunUiDtoSchema) }).strict();
-export const ChatListRunEventsUiResultSchema = z.object({ events: z.array(RuntimeEventSchema) }).strict();
+export const ChatListRunEventsUiResultSchema = z.object({ events: z.array(EventSchema) }).strict();
 export const ChatGetContextUsageUiResultSchema = z.discriminatedUnion('status', [
   z.object({
     status: z.literal('available'),
@@ -370,7 +376,7 @@ export interface ChatGetSessionHydrationUiResult {
   messages: TimelineMessage[];
   diagnostics?: Array<{ messageId: string; code: string; message: string }>;
   runs: ChatRunUiDto[];
-  runtimeEvents: RuntimeEvent[];
+  runtimeEvents: AnyEvent[];
 }
 
 export interface ChatSendUserInputUiRequest {
@@ -398,7 +404,6 @@ export interface ChatSendUserInputUiRequest {
   };
   permissionMode?: PermissionMode;
   permissionSource?: string;
-  runtimeContext?: RuntimeContext;
 }
 export type ChatSendUserInputUiPayload =
   | {
@@ -429,7 +434,6 @@ export type ChatSendUserInputUiPayload =
     };
 export interface ChatSendUserInputUiResult {
   payload: ChatSendUserInputUiPayload;
-  events?: AsyncIterable<RuntimeEvent>;
 }
 
 export type PermissionMode = 'ask' | 'auto' | 'full_access';
@@ -445,14 +449,12 @@ export type ChatCancelUserInputUiPayload =
   | { status: 'failed'; failure: { code: string; message: string; retryable?: boolean } };
 export interface ChatCancelUserInputUiResult {
   payload: ChatCancelUserInputUiPayload;
-  events?: AsyncIterable<RuntimeEvent>;
 }
 
 export interface ChatCreateBranchDraftUiRequest {
   requestId: string;
   sessionId: string;
   messageId: string;
-  runtimeContext?: RuntimeContext;
 }
 export interface ChatCreateBranchDraftUiResult {
   payload: { branchDraft: {
@@ -461,55 +463,29 @@ export interface ChatCreateBranchDraftUiResult {
     sourceMessageId: string;
     createdAt: string;
   } };
-  events?: AsyncIterable<RuntimeEvent>;
 }
 
 export interface ChatCancelBranchDraftUiRequest {
   requestId: string;
   sessionId: string;
   branchMarkerId: string;
-  runtimeContext?: RuntimeContext;
 }
 export interface ChatCancelBranchDraftUiResult {
   payload: {
     cancelled: boolean;
     reason?: 'branch_has_new_sources' | 'branch_marker_not_active' | 'branch_marker_not_found' | string;
   };
-  events?: AsyncIterable<RuntimeEvent>;
 }
 
-export interface ChatGetCommandSuggestionsUiRequest {
-  draft_input: string;
+export interface ChatGetInputSuggestionsUiRequest {
+  draftInput: string;
   workspaceId?: string;
 }
-export interface ChatGetCommandSuggestionsUiResult {
-  suggestions: HostCommandSuggestionResult;
+export interface ChatGetInputSuggestionsUiResult {
+  suggestions: InputSuggestionQueryResult;
 }
 
-export type HostCommandSuggestionResult =
-  | { type: 'inactive' }
-  | {
-      type: 'suggestions';
-      draft_input: string;
-      command_prefix: string;
-      groups: Array<{ id: string; label: string; items: HostCommandSuggestionItem[] }>;
-    };
-
-export type HostCommandSuggestionItem = {
-  name: string;
-  aliases?: string[];
-  description: string;
-  argument_hint?: string;
-  source: { kind: 'built_in' } | { kind: 'skill'; name: string; skillPath: string };
-  source_badge?: string;
-  display?: { primary: string; secondary?: string; badge?: string };
-  match: { field: 'name' | 'alias'; value: string; prefix: string };
-  displayInput: string;
-  submitInput: string;
-  selection?: { type: 'skill'; name: string; skillPath: string };
-};
-export type CommandSuggestionItem = HostCommandSuggestionItem;
-export type CommandSuggestionResult = HostCommandSuggestionResult;
+export type { InputSuggestionQueryItem, InputSuggestionQueryResult } from '../input-suggestions';
 
 export interface ChatListRunsUiRequest {
   sessionId: string;
@@ -522,11 +498,12 @@ export interface ChatListRunEventsUiRequest {
   runId: string;
 }
 export interface ChatListRunEventsUiResult {
-  events: RuntimeEvent[];
+  events: AnyEvent[];
 }
 
 export interface ChatGetContextUsageUiRequest {
   sessionId: string;
+  modelSelection: { provider_id: string; model_id: string };
 }
 
 export type ChatContextUsageUiDto = {

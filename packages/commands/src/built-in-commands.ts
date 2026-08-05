@@ -1,5 +1,5 @@
 /*
- * Creates the two built-in commands with explicit composition-time dependencies.
+ * Creates the built-in commands with explicit composition-time dependencies.
  */
 import type { Api, Model } from "@megumi/ai";
 import type { CommandDefinition } from "./commands";
@@ -29,7 +29,6 @@ export function createBuiltInCommands(options: {
     {
       name: "compact",
       description: "Compact the current session context",
-      source: { kind: "built_in" },
       requiresSession: true,
       async handle({ context }, operationOptions) {
         if (operationOptions?.signal?.aborted) return { type: "cancelled" };
@@ -54,22 +53,6 @@ export function createBuiltInCommands(options: {
           return { type: "completed", message: `Context compaction skipped: ${result.reason}` };
         }
         return { type: "completed", message: "Context compacted." };
-      },
-    },
-    {
-      name: "review",
-      description: "Evaluate review feedback before implementing changes",
-      source: { kind: "built_in" },
-      async handle({ invocation, input }) {
-        return {
-          type: "agent_run",
-          input,
-          command: {
-            name: invocation.name,
-            source: { kind: "built_in" },
-            argumentsInput: invocation.argumentsInput,
-          },
-        };
       },
     },
   ];

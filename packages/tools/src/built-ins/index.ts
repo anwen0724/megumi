@@ -17,7 +17,6 @@ import {
   type ToolProcessDescriptor,
 } from './run-command';
 import { searchTextToolDefinition, searchTextToolHandler } from './search-text';
-import { useSkillToolDefinition, useSkillToolHandler } from './use-skill';
 import { updatePlanToolDefinition, updatePlanToolHandler } from './update-plan';
 import { webFetchToolDefinition, webFetchToolHandler } from './web-fetch';
 import { webSearchToolDefinition, webSearchToolHandler } from './web-search';
@@ -27,7 +26,7 @@ import { writeFileToolDefinition, writeFileToolHandler } from './write-file';
 export const BUILT_IN_TOOL_NAMES = [
   'read_file', 'list_directory', 'glob', 'search_text', 'edit_file', 'write_file',
   'create_directory', 'copy_path', 'move_path', 'delete_path', 'run_command',
-  'use_skill', 'web_search', 'web_fetch', 'update_plan',
+  'web_search', 'web_fetch', 'update_plan',
 ] as const;
 
 export type BuiltInToolName = (typeof BUILT_IN_TOOL_NAMES)[number];
@@ -65,7 +64,6 @@ export function createBuiltInToolRegistry(request: {
       handler: createRunCommandToolHandler(request.process),
       executionMode: 'serial' as const,
     }] : []),
-    { definition: useSkillToolDefinition, handler: useSkillToolHandler, executionMode: 'serial' },
     { definition: webSearchToolDefinition, handler: webSearchToolHandler },
     { definition: webFetchToolDefinition, handler: webFetchToolHandler },
     { definition: updatePlanToolDefinition, handler: updatePlanToolHandler, executionMode: 'serial' },

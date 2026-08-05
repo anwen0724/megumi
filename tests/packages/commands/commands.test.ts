@@ -1,68 +1,62 @@
 /*
- * Protects explicit command handling and Input integration.
+ * Protects explicit command handling and Input Interpretation integration.
  */
 import { describe, expect, it, vi } from "vitest";
-import { createCommands, createInputCommandHandler } from "@megumi/commands";
+import { createCommands, createCommandInputInterpreter } from "@megumi/commands";
 import * as PublicCommands from "@megumi/commands";
 
-const input = {
-  text: "/review feedback",
-  attachments: [{
-    draftAttachmentId: "image-1",
-    type: "image" as const,
-    name: "screen.png",
-    mediaType: "image/png" as const,
-    byteLength: 8,
-    bytes: new Uint8Array([1]),
-  }],
+const model = {
+  id: "model-1",
+  name: "Model",
+  api: "openai-responses",
+  provider: "openai",
+  baseUrl: "https://example.test",
+  reasoning: false,
+  input: ["text" as const],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 1000,
+  maxTokens: 100,
 };
+
+function userInput(text: string) {
+  return {
+    displayContent: [{ type: "text" as const, text }],
+    modelContent: [{ type: "text" as const, text }],
+    attachments: [],
+  };
+}
 
 describe("Commands", () => {
   it("keeps built-in implementation details out of the default public entry", () => {
     expect(PublicCommands).not.toHaveProperty("createBuiltInCommands");
   });
 
-  it("passes /review into Agent execution without losing attachments", async () => {
-    const result = await createCommands().handle({
-      input,
+  it("does not register /review and treats it as ordinary user input", async () => {
+    const commands = createCommands();
+    expect(commands.list().map((command) => command.name)).toEqual(["compact"]);
+    await expect(commands.handle({
+      input: userInput("/review feedback"),
       context: { workspaceId: "workspace-1" },
-    });
-    expect(result).toMatchObject({
-      type: "agent_run",
-      input: { text: "/review feedback", attachments: [{ draftAttachmentId: "image-1" }] },
-      command: { name: "review", argumentsInput: "feedback" },
-    });
+    })).resolves.toMatchObject({ type: "not_command" });
   });
 
   it("treats unknown slash names and a bare slash as ordinary input", async () => {
     const commands = createCommands();
     await expect(commands.handle({
-      input: { text: "/unknown task", attachments: [] },
+      input: userInput("/unknown task"),
       context: { workspaceId: "workspace-1" },
-    })).resolves.toMatchObject({ type: "not_command", input: { text: "/unknown task" } });
+    })).resolves.toMatchObject({ type: "not_command" });
     await expect(commands.handle({
-      input: { text: "/", attachments: [] },
+      input: userInput("/"),
       context: { workspaceId: "workspace-1" },
-    })).resolves.toMatchObject({ type: "not_command", input: { text: "/" } });
+    })).resolves.toMatchObject({ type: "not_command" });
   });
 
   it("uses the explicitly composed Context compactor and does not start Engine", async () => {
     const compact = vi.fn(async () => ({ status: "compacted" as const }));
     const commands = createCommands({ compact });
-    const model = {
-      id: "model-1",
-      name: "Model",
-      api: "openai-responses",
-      provider: "openai",
-      baseUrl: "https://example.test",
-      reasoning: false,
-      input: ["text" as const],
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow: 1000,
-      maxTokens: 100,
-    };
     const result = await commands.handle({
-      input: { text: "/compact", attachments: [] },
+      input: userInput("/compact"),
       context: { workspaceId: "workspace-1", sessionId: "session-1", model },
     });
     expect(result).toEqual({ type: "completed", message: "Context compacted." });
@@ -77,7 +71,7 @@ describe("Commands", () => {
     const controller = new AbortController();
     controller.abort();
     await expect(createCommands().handle({
-      input: { text: "/review", attachments: [] },
+      input: userInput("/compact"),
       context: { workspaceId: "workspace-1" },
     }, { signal: controller.signal })).resolves.toEqual({ type: "cancelled" });
   });
@@ -92,22 +86,11 @@ describe("Commands", () => {
       failure: { code: "cancelled"; message: string };
     }>((resolve) => { finish = resolve; }));
     const pending = createCommands({ compact }).handle({
-      input: { text: "/compact", attachments: [] },
+      input: userInput("/compact"),
       context: {
         workspaceId: "workspace-1",
         sessionId: "session-1",
-        model: {
-          id: "model-1",
-          name: "Model",
-          api: "openai-responses",
-          provider: "openai",
-          baseUrl: "https://example.test",
-          reasoning: false,
-          input: ["text"],
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          contextWindow: 1000,
-          maxTokens: 100,
-        },
+        model,
       },
     });
     await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce());
@@ -121,22 +104,11 @@ describe("Commands", () => {
 
   it("preserves compact host-interaction, no-op, and error branches", async () => {
     const compactInput = {
-      input: { text: "/compact", attachments: [] },
+      input: userInput("/compact"),
       context: {
         workspaceId: "workspace-1",
         sessionId: "session-1",
-        model: {
-          id: "model-1",
-          name: "Model",
-          api: "openai-responses",
-          provider: "openai",
-          baseUrl: "https://example.test",
-          reasoning: false,
-          input: ["text" as const],
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          contextWindow: 1000,
-          maxTokens: 100,
-        },
+        model,
       },
     };
     await expect(createCommands().handle(compactInput)).resolves.toEqual({
@@ -157,11 +129,18 @@ describe("Commands", () => {
     }).handle(compactInput)).resolves.toEqual({ type: "error", message: "Summary failed." });
   });
 
-  it("adapts only handled Commands to the generic Input hook", async () => {
-    const handler = createInputCommandHandler(createCommands());
-    await expect(handler.handle(
-      { text: "/unknown", attachments: [] },
+  it("adapts only handled Commands to the Input Interpretation pipeline", async () => {
+    const interpreter = createCommandInputInterpreter(createCommands());
+    await expect(interpreter.interpret(
+      userInput("/unknown"),
       { workspaceId: "workspace-1" },
     )).resolves.toEqual({ status: "unhandled" });
+    await expect(interpreter.interpret(
+      userInput("/compact"),
+      { workspaceId: "workspace-1", sessionId: "session-1", model },
+    )).resolves.toEqual({
+      status: "completed",
+      result: { type: "host_interaction_request", request: { kind: "context_compaction" } },
+    });
   });
 });

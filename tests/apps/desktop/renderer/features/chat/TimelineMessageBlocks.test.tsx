@@ -217,6 +217,22 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(text.compareDocumentPosition(time!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
+  it('renders the persisted Skill selection as a badge above the user text', () => {
+    render(<TimelineMessage message={{
+      ...userMessage(),
+      skillSelection: { name: 'review-code', skillPath: 'C:/skills/review-code/SKILL.md' },
+    }} />);
+
+    const badge = screen.getByTestId('timeline-user-skill-selection');
+    expect(badge).toHaveTextContent('review-code');
+    expect(screen.getByText('你是谁')).toBeInTheDocument();
+  });
+
+  it('renders no Skill badge when the user message has no selection', () => {
+    render(<TimelineMessage message={userMessage()} />);
+    expect(screen.queryByTestId('timeline-user-skill-selection')).not.toBeInTheDocument();
+  });
+
   it('keeps assistant content width stable without widening user bubbles', () => {
     const { rerender } = render(<TimelineMessage message={assistantMessage({
       blocks: [{

@@ -1,10 +1,10 @@
 import { useLayoutEffect, useRef } from 'react';
 import type {
   ChatGetContextUsageUiResult,
-  ChatImageInputCapabilitiesUiResult,
+  ChatInputCapabilitiesUiResult,
   ProviderPublicStatusUiDto,
 } from '@megumi/product/host';
-import type { CommandSuggestionResult } from '@megumi/product/host';
+import type { InputSuggestionQueryResult } from '@megumi/product/host';
 import type { ToolActivityItem } from '@megumi/product/host';
 import type { ToolApprovalResolvePayload, ToolApprovalResolveResult } from '../../../entities/approval';
 import { ApprovalStack } from '../components/ApprovalStack';
@@ -30,13 +30,13 @@ interface ComposerDockProps {
   onApprovalResolve?: (payload: ToolApprovalResolvePayload) => Promise<ToolApprovalResolveResult>;
   providers?: ProviderPublicStatusUiDto[];
   contextUsage?: ChatGetContextUsageUiResult;
-  imageInputCapabilities?: ChatImageInputCapabilitiesUiResult;
+  imageInputCapabilities?: ChatInputCapabilitiesUiResult;
   initialValue?: string;
   initialAttachments?: ComposerDraftAttachment[];
   onSubmit: (payload: ComposerSubmitPayload) => boolean | void | Promise<boolean | void>;
   onStop: () => void;
   onHeightChange?: (height: number) => void;
-  getCommandSuggestions?: (request: { draft_input: string }) => CommandSuggestionResult | Promise<CommandSuggestionResult>;
+  getInputSuggestions?: (request: { draftInput: string; workspaceId?: string }) => InputSuggestionQueryResult | Promise<InputSuggestionQueryResult>;
   onSelectImages?: () => Promise<ComposerDraftImage[]>;
   onSelectDocuments?: () => Promise<ComposerDraftDocument[]>;
   onPasteImage?: () => Promise<ComposerDraftImage[]>;
@@ -56,7 +56,7 @@ export function ComposerDock({
   onSubmit,
   onStop,
   onHeightChange,
-  getCommandSuggestions,
+  getInputSuggestions,
   onSelectImages,
   onSelectDocuments,
   onPasteImage,
@@ -79,7 +79,7 @@ export function ComposerDock({
     onPasteImage,
     onDraftChange,
     onChooseContext: () => undefined,
-    getCommandSuggestions,
+    getInputSuggestions,
   });
   const hasOverlayContent = Boolean(branchDraft) || approvalRequests.length > 0;
 

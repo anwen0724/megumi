@@ -118,6 +118,7 @@ function workspaceChangeSet(overrides: Partial<WorkspaceChangeSet>): WorkspaceCh
     session_id: 'session-1',
     run_id: 'run-1',
     status: 'finalized',
+    effect_coverage: 'complete',
     changed_file_count: 1,
     created_at: '2026-06-06T10:00:00.000Z',
     finalized_at: '2026-06-06T10:00:01.000Z',
@@ -139,6 +140,8 @@ function workspaceChangedFile(overrides: Partial<WorkspaceChangedFile>): Workspa
     change_set_id: 'workspace-change-set-1',
     workspace_path: 'src/app.ts',
     change_kind: 'modified',
+    effect_type: 'modified',
+    path_type: 'file',
     created_at: '2026-06-06T10:00:00.000Z',
     ...overrides,
   };

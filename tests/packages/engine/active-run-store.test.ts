@@ -18,6 +18,7 @@ const fingerprint: StartRequestFingerprint = {
 const failure: RunFailure = {
   code: 'session_failed',
   message: 'User message was not saved.',
+  retryable: false,
 };
 
 function createMutableClock(initial: string): EngineClock & { set(value: string): void } {
@@ -51,7 +52,8 @@ function startedResult(run: ReturnType<typeof createTestRun>) {
       message_id: run.userMessageId,
       session_id: run.sessionId,
       message_kind: 'user_message',
-      content: [{ type: 'text', text: 'hello' }],
+      display_content: [{ type: 'text', text: 'hello' }],
+      model_content: [{ type: 'text', text: 'hello' }],
       created_at: run.createdAt,
       completed_at: run.createdAt,
     },

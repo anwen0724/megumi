@@ -1,10 +1,13 @@
 /*
- * Defines the stable Engine boundary and its owner-provided composition dependencies.
+ * Defines the stable Engine boundary: Run creation, approval resolution,
+ * cancellation, queries and shutdown over the single ActiveRunStore and one
+ * runAgentLoop() call per Run. The Engine owns Run lifecycle settlement; the
+ * Agent Loop owns the model/tool execution flow.
  */
 import type { Api, Model, Models } from '@megumi/ai';
 import type { UserInput } from '@megumi/input';
-import type { ContextBuilder, ContextUsageRecorder } from '@megumi/context';
-import type { EventPublisher, RuntimeEvent } from '@megumi/events';
+import type { ContextBuilder, ContextCompactor } from '@megumi/context';
+import type { EventBus, EventPayloadByType, EventType } from '@megumi/events';
 import type {
   ApprovalDecision,
   ApprovalOption,
@@ -14,12 +17,11 @@ import type {
 } from '@megumi/permissions';
 import type {
   SessionEntry,
-  SessionMessageWithAttachments,
   SessionHistory,
+  SessionMessageWithAttachments,
 } from '@megumi/session';
 import type { ToolIdentity, Tools } from '@megumi/tools';
 import type { ObservabilityService } from '@megumi/observability';
-import type { SkillSelection } from '@megumi/skills';
 import type { EnginePolicy } from './engine-policy';
 import { validateEnginePolicy } from './engine-policy';
 import { ActiveRunStore } from './active-run-store';
@@ -30,19 +32,7 @@ import {
   type Run,
   type RunFailure,
 } from './run';
-import {
-  attachRuntimeEventSegment,
-  continueRunAfterApproval,
-  createEngineRunRuntime,
-  createRuntimeEventSegment,
-  emitRunStarted,
-  eventSegmentCapacity,
-  launchRunLoop,
-  requestRunCancellation,
-  startRunObservability,
-  type RunLoopDependencies,
-} from './run-loop';
-import type { ToolCallApprovalContinuation } from './tool-call';
+import { runAgentLoop, type AgentLoopDependencies, type AgentLoopResult } from './agent-loop';
 
 export type RunInput = UserInput;
 
@@ -54,7 +44,6 @@ export interface StartRunRequest {
   readonly input: RunInput;
   readonly model: Model<Api>;
   readonly permissionMode: PermissionMode;
-  readonly selectedSkill?: SkillSelection;
 }
 
 export type StartRunResult =
@@ -63,7 +52,6 @@ export type StartRunResult =
       readonly run: Run;
       readonly userMessage: SessionMessageWithAttachments;
       readonly userEntry: SessionEntry;
-      readonly events: AsyncIterable<RuntimeEvent>;
     }
   | {
       readonly status: 'already_started';
@@ -80,8 +68,8 @@ export type StartRunResult =
       readonly failure: RunFailure;
     };
 
-export interface ResumeRunRequest {
-  readonly runApprovalId: string;
+export interface ResolveApprovalRequest {
+  readonly approvalId: string;
   readonly decision: RunApprovalDecision;
 }
 
@@ -96,15 +84,11 @@ export type RunApprovalDecision =
       readonly reason?: string;
     };
 
-export type ResumeRunResult =
-  | {
-      readonly status: 'resumed';
-      readonly run: Run;
-      readonly events: AsyncIterable<RuntimeEvent>;
-    }
-  | { readonly status: 'not_found'; readonly runApprovalId: string }
-  | { readonly status: 'not_waiting'; readonly run: Run }
-  | { readonly status: 'already_resolved'; readonly run: Run }
+export type ResolveApprovalResult =
+  | { readonly status: 'accepted'; readonly run: Run }
+  | { readonly status: 'not_found'; readonly approvalId: string }
+  | { readonly status: 'not_waiting'; readonly approvalId: string; readonly run: Run }
+  | { readonly status: 'already_resolved'; readonly approvalId: string; readonly run: Run }
   | { readonly status: 'failed'; readonly failure: RunFailure };
 
 export interface CancelRunRequest {
@@ -115,7 +99,6 @@ export type CancelRunResult =
   | {
       readonly status: 'cancellation_requested';
       readonly run: Run;
-      readonly events: AsyncIterable<RuntimeEvent>;
     }
   | { readonly status: 'already_cancelling'; readonly run: Run }
   | { readonly status: 'already_terminal'; readonly run: Run }
@@ -139,7 +122,7 @@ export type ShutdownEngineResult =
 
 export interface Engine {
   startRun(request: StartRunRequest): Promise<StartRunResult>;
-  resumeRun(request: ResumeRunRequest): Promise<ResumeRunResult>;
+  resolveApproval(request: ResolveApprovalRequest): Promise<ResolveApprovalResult>;
   cancelRun(request: CancelRunRequest): Promise<CancelRunResult>;
   getRun(request: GetRunRequest): GetRunResult;
   shutdown(request: ShutdownEngineRequest): Promise<ShutdownEngineResult>;
@@ -186,8 +169,7 @@ export interface EngineClock {
 
 export interface CreateEngineOptions {
   readonly models: Models;
-  readonly context: Pick<ContextBuilder, 'build'>
-    & Pick<ContextUsageRecorder, 'recordCompletedModelCall'>;
+  readonly context: Pick<ContextBuilder, 'build'> & Pick<ContextCompactor, 'compact'>;
   readonly session: Pick<
     SessionHistory,
     'saveUserMessage' | 'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'
@@ -203,7 +185,7 @@ export interface CreateEngineOptions {
     Permissions,
     'evaluateToolCall' | 'applyApprovalDecision'
   >;
-  readonly events: EventPublisher;
+  readonly events: EventBus;
   readonly observability?: ObservabilityService;
   readonly ids: EngineIdFactory;
   readonly clock: EngineClock;
@@ -216,25 +198,74 @@ export function createEngine(options: CreateEngineOptions): Engine {
     clock: options.clock,
     terminalRunRetentionMs: policy.terminalRunRetentionMs,
   });
-  const dependencies: RunLoopDependencies = {
+  const dependencies: AgentLoopDependencies = {
     ...options,
     policy,
-    store,
   };
-  const capacity = eventSegmentCapacity(options);
-
   let accepting = true;
+
+  const settleLoopResult = (runId: string, result: AgentLoopResult): void => {
+    const active = store.getActiveRun(runId);
+    if (!active || isTerminalRunStatus(active.run.status)) return;
+    const at = options.clock.now();
+    // Cancellation may win the settle race: a cancelling Run always converges
+    // as cancelled, never as completed or failed.
+    if (active.run.status === 'cancelling') {
+      const cancelled = transitionRun(active.run, { status: 'cancelled', at });
+      store.updateRun(cancelled);
+      publish(cancelled, 'run.ended', { status: 'cancelled' });
+      return;
+    }
+    if (result.status === 'completed') {
+      const completed = transitionRun(active.run, { status: 'completed', at });
+      store.updateRun(completed);
+      publish(completed, 'run.ended', {
+        status: 'completed',
+        assistantMessageId: result.assistantMessageId,
+      });
+      return;
+    }
+    if (result.status === 'failed') {
+      const failed = transitionRun(active.run, { status: 'failed', at, failure: result.failure });
+      store.updateRun(failed);
+      publish(failed, 'run.ended', {
+        status: 'failed',
+        error: {
+          message: result.failure.message,
+          code: result.failure.code,
+          retryable: result.failure.retryable,
+          ...(result.failure.cause ? { cause: { ...result.failure.cause } } : {}),
+        },
+      });
+      return;
+    }
+    // Cancelled: the Run is already cancelling (cancelRun/shutdown own the
+    // running|waiting -> cancelling transition).
+    const cancelled = transitionRun(active.run, { status: 'cancelled', at });
+    store.updateRun(cancelled);
+    publish(cancelled, 'run.ended', { status: 'cancelled' });
+  };
+
+  const publish = <TType extends EventType>(
+    run: Run,
+    type: TType,
+    payload: EventPayloadByType[TType],
+    omitRunId = false,
+  ): void => {
+    options.events.publish({
+      type,
+      payload,
+      sessionId: run.sessionId,
+      ...(omitRunId ? {} : { runId: run.runId }),
+    });
+  };
+
   const engine: Engine = {
     async startRun(request): Promise<StartRunResult> {
       if (!accepting) {
         return {
           status: 'failed',
-          failure: {
-            code: 'internal_error',
-            message: 'Engine is shutting down and is not accepting new Runs.',
-            retryable: false,
-            cause: { owner: 'engine', code: 'engine_shutting_down' },
-          },
+          failure: shuttingDownFailure('Engine is shutting down and is not accepting new Runs.'),
         };
       }
       const createdAt = options.clock.now();
@@ -249,7 +280,6 @@ export function createEngine(options: CreateEngineOptions): Engine {
         userMessageId,
         model: request.model,
         permissionMode: request.permissionMode,
-        ...(request.selectedSkill ? { selectedSkill: request.selectedSkill } : {}),
         createdAt,
       });
       const reserved = store.reserveStart({
@@ -300,7 +330,14 @@ export function createEngine(options: CreateEngineOptions): Engine {
         message_id: userMessageId,
         session_id: request.sessionId,
         run_id: runId,
-        content: [{ type: 'text', text: request.input.text }],
+        display_content: [...request.input.displayContent],
+        model_content: [...request.input.modelContent],
+        ...(request.input.skillSelection ? {
+          skill_selection: {
+            name: request.input.skillSelection.name,
+            skill_path: request.input.skillSelection.skillPath,
+          },
+        } : {}),
         attachments: request.input.attachments.map((attachment) => (
           attachment.type === 'image'
             ? {
@@ -332,13 +369,18 @@ export function createEngine(options: CreateEngineOptions): Engine {
         return { status: 'failed', failure };
       }
 
-      const runtime = createEngineRunRuntime({
-        run,
-        userMessage: saved.message,
-        userEntry: saved.entry,
-        ...(request.selectedSkill ? { selectedSkill: request.selectedSkill } : {}),
+      const abortController = new AbortController();
+      let resolveCompletion!: () => void;
+      const completion = new Promise<void>((resolve) => {
+        resolveCompletion = resolve;
       });
-      store.setRunRuntime(run.runId, runtime);
+      const activeRun = {
+        run,
+        abortController,
+        completion,
+        pendingApproval: undefined,
+      };
+      store.attachActiveRun(activeRun);
       store.completeStart({
         requestId: request.requestId,
         result: {
@@ -347,151 +389,83 @@ export function createEngine(options: CreateEngineOptions): Engine {
           userEntry: saved.entry,
         },
       });
-      const segment = createRuntimeEventSegment(capacity);
-      attachRuntimeEventSegment(runtime, segment);
-      startRunObservability(dependencies, runtime, run);
-      emitRunStarted(dependencies, runtime, run);
-      queueMicrotask(() => launchRunLoop(dependencies, runtime));
+
+      // The user message is the run's input: it precedes run.started and
+      // carries no runId (ordering contract, see events/CONTEXT.md).
+      publish(run, 'message.started', {
+        role: 'user',
+        messageId: userMessageId,
+      }, true);
+      publish(run, 'message.ended', {
+        role: 'user',
+        messageId: userMessageId,
+        content: userMessageText(request.input),
+      }, true);
+      publish(run, 'run.started', {
+        requestId: run.requestId,
+        providerId: String(run.model.provider),
+        modelId: run.model.id,
+      });
+
+      const loopTask = runAgentLoop({
+        run,
+        userInput: request.input,
+        userEntry: saved.entry,
+        signal: abortController.signal,
+        transitionRunStatus: (status) => {
+          const current = store.getActiveRun(runId);
+          if (!current || isTerminalRunStatus(current.run.status)) return;
+          if (current.run.status === 'waiting' && status === 'running') {
+            store.updateRun(transitionRun(current.run, { status: 'running', at: options.clock.now() }));
+          } else if (current.run.status === 'running' && status === 'waiting') {
+            store.updateRun(transitionRun(current.run, { status: 'waiting', at: options.clock.now() }));
+          }
+        },
+        awaitApproval: (request) => store.beginApprovalWait({
+          runId,
+          approval: request.approval,
+        }),
+      }, dependencies);
+      void loopTask.then((result) => {
+        settleLoopResult(runId, result);
+        resolveCompletion();
+      }, () => {
+        const current = store.getActiveRun(runId);
+        if (!current || isTerminalRunStatus(current.run.status)) {
+          resolveCompletion();
+          return;
+        }
+        settleLoopResult(runId, {
+          status: 'failed',
+          failure: {
+            code: 'internal_error',
+            message: 'Run execution failed unexpectedly.',
+            retryable: false,
+            cause: { owner: 'engine', code: 'unexpected_exception' },
+          },
+        });
+        resolveCompletion();
+      });
+
       return {
         status: 'started',
         run,
         userMessage: saved.message,
         userEntry: saved.entry,
-        events: segment.events,
       };
     },
 
-    async resumeRun(request): Promise<ResumeRunResult> {
-      if (!accepting) {
-        return {
-          status: 'failed',
-          failure: {
-            code: 'internal_error',
-            message: 'Engine is shutting down and is not accepting Run resumes.',
-            retryable: false,
-            cause: { owner: 'engine', code: 'engine_shutting_down' },
-          },
-        };
-      }
-      const record = store.getRunApproval(request.runApprovalId);
-      if (!record) {
-        return { status: 'not_found', runApprovalId: request.runApprovalId };
-      }
-      const run = store.getRun(record.approval.runId);
-      if (!run) {
-        return { status: 'not_found', runApprovalId: request.runApprovalId };
-      }
-      if (record.approval.status !== 'pending') {
-        return { status: 'already_resolved', run };
-      }
-      if (run.status !== 'waiting') return { status: 'not_waiting', run };
-      const runtime = store.getRunRuntime(run.runId);
-      if (!runtime) {
-        return {
-          status: 'failed',
-          failure: {
-            code: 'runtime_protocol_violation',
-            message: 'Waiting Run has no active runtime.',
-            retryable: false,
-            cause: { owner: 'engine', code: 'waiting_runtime_missing' },
-          },
-        };
-      }
-      const claimed = store.claimRunApproval<ToolCallApprovalContinuation>(
-        request.runApprovalId,
-      );
-      if (claimed.status === 'not_found') {
-        return { status: 'not_found', runApprovalId: request.runApprovalId };
-      }
-      if (claimed.status === 'already_claimed' || claimed.status === 'already_resolved') {
-        return { status: 'already_resolved', run };
-      }
-      const segment = createRuntimeEventSegment(capacity);
-      attachRuntimeEventSegment(runtime, segment);
-      type ResumeEstablishment =
-        | { readonly status: 'resumed'; readonly run: Run }
-        | { readonly status: 'not_waiting'; readonly run: Run }
-        | { readonly status: 'failed'; readonly failure: RunFailure };
-      let settleEstablishment!: (result: ResumeEstablishment) => void;
-      let establishmentSettled = false;
-      const establishment = new Promise<ResumeEstablishment>((resolve) => {
-        settleEstablishment = (result) => {
-          if (establishmentSettled) return;
-          establishmentSettled = true;
-          resolve(result);
-        };
+    async resolveApproval(request): Promise<ResolveApprovalResult> {
+      const resolved = store.resolveApproval({
+        approvalId: request.approvalId,
+        decision: toApprovalDecision(request.decision, request.approvalId, options.clock.now()),
       });
-      const task = continueRunAfterApproval({
-        dependencies,
-        runtime,
-        runApprovalId: request.runApprovalId,
-        claimedApproval: claimed.record,
-        onRunResumed: (resumedRun) => {
-          settleEstablishment({ status: 'resumed', run: resumedRun });
-        },
-        decision: request.decision.decision === 'approved'
-          ? {
-              approvalRequestId: request.runApprovalId,
-              decision: 'approved',
-              optionId: request.decision.optionId,
-              decidedBy: 'user',
-              decidedAt: options.clock.now(),
-              ...(request.decision.reason ? { reason: request.decision.reason } : {}),
-            }
-          : {
-              approvalRequestId: request.runApprovalId,
-              decision: 'denied',
-              decidedBy: 'user',
-              decidedAt: options.clock.now(),
-              ...(request.decision.reason ? { reason: request.decision.reason } : {}),
-            },
-      });
-      runtime.activeTask = task;
-      void task.then((outcome) => {
-        if (outcome.status === 'failed') {
-          settleEstablishment({ status: 'failed', failure: outcome.failure });
-          return;
-        }
-        const current = store.getRun(run.runId);
-        if (current) {
-          settleEstablishment({ status: 'not_waiting', run: current });
-          return;
-        }
-        settleEstablishment({
-          status: 'failed',
-          failure: {
-            code: 'runtime_protocol_violation',
-            message: 'Run disappeared while applying its approval decision.',
-            retryable: false,
-            cause: { owner: 'engine', code: 'approval_run_missing' },
-          },
-        });
-      }, () => {
-        settleEstablishment({
-          status: 'failed',
-          failure: {
-            code: 'internal_error',
-            message: 'Run approval continuation failed unexpectedly.',
-            retryable: false,
-            cause: { owner: 'engine', code: 'approval_continuation_failed' },
-          },
-        });
-      });
-      void task.finally(() => {
-        if (runtime.activeTask === task) runtime.activeTask = undefined;
-      }).catch(() => undefined);
-      const established = await establishment;
-      if (established.status === 'failed') {
-        return { status: 'failed', failure: established.failure };
+      if (resolved.status === 'accepted') return { status: 'accepted', run: resolved.run };
+      if (resolved.status === 'not_found') return { status: 'not_found', approvalId: request.approvalId };
+      if (resolved.status === 'not_waiting') {
+        return { status: 'not_waiting', approvalId: request.approvalId, run: resolved.run };
       }
-      if (established.status === 'not_waiting') {
-        return { status: 'not_waiting', run: established.run };
-      }
-      return {
-        status: 'resumed',
-        run: established.run,
-        events: segment.events,
-      };
+      return { status: 'already_resolved', approvalId: request.approvalId, run: resolved.run };
     },
 
     async cancelRun(request): Promise<CancelRunResult> {
@@ -503,8 +477,8 @@ export function createEngine(options: CreateEngineOptions): Engine {
       if (run.status === 'cancelling') {
         return { status: 'already_cancelling', run };
       }
-      const runtime = store.getRunRuntime(run.runId);
-      if (!runtime) {
+      const active = store.getActiveRun(request.runId);
+      if (!active) {
         const failed = transitionRun(run, {
           status: 'failed',
           at: options.clock.now(),
@@ -516,23 +490,25 @@ export function createEngine(options: CreateEngineOptions): Engine {
           },
         });
         store.updateRun(failed);
-        return {
-          status: 'already_terminal',
-          run: failed,
-        };
+        return { status: 'already_terminal', run: failed };
       }
       const cancelling = transitionRun(run, {
         status: 'cancelling',
         at: options.clock.now(),
       });
       store.updateRun(cancelling);
-      const segment = createRuntimeEventSegment(capacity);
-      attachRuntimeEventSegment(runtime, segment);
-      requestRunCancellation(dependencies, runtime, cancelling);
+      publish(cancelling, 'run.cancel.requested', {
+        requestedBy: 'user',
+        reason: 'user_cancelled',
+        scope: 'run',
+      });
+      // A pending approval wait must settle as cancelled so the Agent Loop
+      // wakes and converges in place.
+      store.cancelPendingApproval(run.runId);
+      active.abortController.abort();
       return {
         status: 'cancellation_requested',
         run: cancelling,
-        events: segment.events,
       };
     },
 
@@ -557,19 +533,52 @@ export function createEngine(options: CreateEngineOptions): Engine {
   return engine;
 }
 
-function canonicalJson(value: unknown): string {
-  return JSON.stringify(canonicalValue(value));
+function toApprovalDecision(
+  decision: RunApprovalDecision,
+  approvalId: string,
+  decidedAt: string,
+): ApprovalDecision {
+  return decision.decision === 'approved'
+    ? {
+        approvalRequestId: approvalId,
+        decision: 'approved',
+        optionId: decision.optionId,
+        decidedBy: 'user',
+        decidedAt,
+        ...(decision.reason ? { reason: decision.reason } : {}),
+      }
+    : {
+        approvalRequestId: approvalId,
+        decision: 'denied',
+        decidedBy: 'user',
+        decidedAt,
+        ...(decision.reason ? { reason: decision.reason } : {}),
+      };
 }
 
-function canonicalValue(value: unknown): unknown {
-  if (value instanceof Uint8Array) return { $bytes: [...value] };
-  if (Array.isArray(value)) return value.map(canonicalValue);
+function userMessageText(input: RunInput): string {
+  return input.displayContent
+    .map((block) => block.type === 'text' ? block.text : '')
+    .join('');
+}
+
+/** Stable canonical serialization for request-id idempotency fingerprints. */
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, item]) => [key, canonicalValue(item)]),
-    );
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right));
+    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(',')}}`;
   }
-  return value;
+  return JSON.stringify(value);
+}
+
+function shuttingDownFailure(message: string): RunFailure {
+  return {
+    code: 'internal_error',
+    message,
+    retryable: false,
+    cause: { owner: 'engine', code: 'engine_shutting_down' },
+  };
 }

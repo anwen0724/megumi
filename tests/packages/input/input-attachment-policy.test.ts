@@ -103,7 +103,8 @@ describe("Input attachment policy", () => {
 
     const excessiveTotal = createInputProcessor({
       sourceAccess: access(PNG),
-      policy: policy({ maxTotalBytes: PNG.byteLength }),
+      // The total budget stays >= the per-image budget; two images still exceed it.
+      policy: policy({ maxTotalBytes: PNG.byteLength + 2 }),
     });
     await expect(excessiveTotal.process({
       input: { text: "", attachments: [image("image-1"), image("image-2")] },
@@ -166,6 +167,7 @@ function policy(
   documentOverrides: Partial<InputPolicy["document"]> = {},
 ): InputPolicy {
   return {
+    maxTextCharacters: 200_000,
     image: {
       allowedMediaTypes: ["image/png", "image/jpeg", "image/webp"],
       maxImageCount: 5,

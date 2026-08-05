@@ -103,7 +103,6 @@ function localizedApprovalToolName(t: TFunction<'chat'>, toolName: string, fallb
   if (toolName === 'edit_file') return t('approvals.toolNames.editFile');
   if (toolName === 'write_file') return t('approvals.toolNames.writeFile');
   if (toolName === 'run_command') return t('approvals.toolNames.runCommand');
-  if (toolName === 'use_skill') return t('approvals.toolNames.useSkill');
   if (toolName === 'web_search') return t('approvals.toolNames.webSearch');
   if (toolName === 'web_fetch') return t('approvals.toolNames.webFetch');
   return fallback ?? toolName;

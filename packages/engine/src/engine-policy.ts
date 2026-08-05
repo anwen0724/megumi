@@ -9,13 +9,17 @@ export interface EnginePolicy {
   readonly maxToolCallsPerRun: number;
   readonly maxConcurrentToolExecutions: number;
   readonly modelCallTimeoutMs: number;
-  readonly modelCallTerminationTimeoutMs: number;
   readonly toolExecutionTimeoutMs: number;
   readonly cancellationTimeoutMs: number;
   readonly maxModelCallAttempts: number;
   readonly modelRetryDelayMs: number;
   readonly maxToolExecutionsPerCall: number;
-  readonly toolRetryDelayMs: number;
+  /** Context Overflow compaction recoveries allowed per logical ModelCall. */
+  readonly maxContextOverflowRecoveries: number;
+  /** Provider Request Retry budget passed to the AI adapter. */
+  readonly providerRequestMaxRetries: number;
+  /** Provider Request Retry delay cap passed to the AI adapter. */
+  readonly providerRequestMaxRetryDelayMs: number;
   readonly terminalRunRetentionMs: number;
 }
 
@@ -26,7 +30,6 @@ const POSITIVE_INTEGER_FIELDS = [
   'maxToolCallsPerRun',
   'maxConcurrentToolExecutions',
   'modelCallTimeoutMs',
-  'modelCallTerminationTimeoutMs',
   'toolExecutionTimeoutMs',
   'cancellationTimeoutMs',
   'maxModelCallAttempts',
@@ -36,7 +39,9 @@ const POSITIVE_INTEGER_FIELDS = [
 
 const NON_NEGATIVE_INTEGER_FIELDS = [
   'modelRetryDelayMs',
-  'toolRetryDelayMs',
+  'maxContextOverflowRecoveries',
+  'providerRequestMaxRetries',
+  'providerRequestMaxRetryDelayMs',
 ] as const satisfies readonly (keyof EnginePolicy)[];
 
 /**

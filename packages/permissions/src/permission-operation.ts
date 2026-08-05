@@ -3,11 +3,7 @@
  * path and command safety facts before policy evaluation.
  */
 import { z } from 'zod';
-import {
-  JsonValueSchema,
-  type JsonObject,
-  type JsonValue,
-} from '@megumi/ai';
+import { JsonValueSchema, type JsonObject, type JsonValue } from './json';
 import {
   PermissionActionIdSchema,
   PermissionFailureSchema,

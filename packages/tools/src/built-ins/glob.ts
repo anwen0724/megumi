@@ -15,7 +15,7 @@ import { createBuiltInToolHandler, inputString, operation } from './tool-handler
 export const globToolDefinition: ToolDefinition = {
   name: 'glob',
   description: 'Find files matching a glob pattern without reading file content.',
-  inputSchema: {
+  parameters: {
     type: 'object',
     properties: {
       pattern: { type: 'string', description: 'Glob pattern using *, **, ?, or character sets.' },

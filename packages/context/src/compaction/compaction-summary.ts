@@ -1,17 +1,16 @@
 /* Builds and executes the provider-neutral request that replaces a rolling Context Summary. */
-import type { Api, Context as AiContext, Model, Models } from '@megumi/ai';
-import { conversationItemsFromRun, type ConversationRun } from '../conversation-run';
+import type { Api, Context as AiContext, Message, Model, Models } from '@megumi/ai';
 
 export const COMPACTION_SUMMARY_SYSTEM_PROMPT = `You are updating the rolling context summary for an ongoing agent session.
 
 Your input contains:
 1. The previous compaction summary, if one exists.
-2. A continuous prefix of historical conversation runs being compacted now.
+2. A continuous prefix of historical conversation being compacted now.
 
 Produce one replacement summary that preserves the information required to continue the task correctly.
 
 Requirements:
-- Merge the previous summary with newly compacted runs.
+- Merge the previous summary with newly compacted history.
 - Preserve confirmed requirements, constraints, decisions, and their necessary reasons.
 - Preserve completed work, current state, exact paths, symbols, commands, identifiers, numbers, and errors.
 - Preserve failed approaches and explicitly rejected decisions when they affect future work.
@@ -27,13 +26,10 @@ Requirements:
 Use the following sections only when they contain useful information:
 
 Goal
-Confirmed Requirements and Constraints
-Key Facts and Design Decisions
-Completed Work
-Current State
-Exact References
-Failures and Rejected Approaches
-Open Questions
+Constraints and Preferences
+Progress
+Key Decisions
+Important Context
 Next Steps`;
 
 export interface CompactionSummaryModelRequest {
@@ -43,11 +39,11 @@ export interface CompactionSummaryModelRequest {
 
 export function buildCompactionSummaryRequest(input: {
   readonly previousSummary?: string;
-  readonly runs: ConversationRun[];
+  readonly messages: readonly Message[];
 }): CompactionSummaryModelRequest {
   return {
     systemPrompt: COMPACTION_SUMMARY_SYSTEM_PROMPT,
-    input: `<previous_summary>\n${input.previousSummary ?? ''}\n</previous_summary>\n\n<conversation_runs>\n${input.runs.map(renderRun).join('\n\n')}\n</conversation_runs>`,
+    input: `<previous_summary>\n${input.previousSummary ?? ''}\n</previous_summary>\n\n<conversation>\n${input.messages.map(renderMessage).join('\n\n')}\n</conversation>`,
   };
 }
 
@@ -56,11 +52,11 @@ export async function generateCompactionSummary(input: {
   readonly model: Model<Api>;
   readonly sessionId: string;
   readonly previousSummary?: string;
-  readonly runs: ConversationRun[];
+  readonly messages: readonly Message[];
   readonly timestamp: number;
   readonly signal?: AbortSignal;
 }): Promise<
-  | { readonly status: 'generated'; readonly content: string }
+  | { readonly status: 'generated'; readonly content: string; readonly usage?: import('@megumi/ai').Usage }
   | { readonly status: 'cancelled' }
   | { readonly status: 'failed'; readonly failure: unknown }
 > {
@@ -75,42 +71,36 @@ export async function generateCompactionSummary(input: {
       ...(input.signal ? { signal: input.signal } : {}),
     });
     if (input.signal?.aborted || generated.stopReason === 'aborted') return { status: 'cancelled' };
-    if (generated.stopReason === 'error') {
-      return { status: 'failed', failure: generated.failure ?? generated.errorMessage };
+    if (generated.stopReason === 'error' || generated.stopReason === 'length') {
+      return { status: 'failed', failure: generated.errorMessage ?? 'Summary generation failed.' };
     }
     const content = generated.content
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
       .join('');
     return content.trim().length > 0
-      ? { status: 'generated', content }
+      ? { status: 'generated', content, usage: generated.usage }
       : { status: 'failed', failure: new Error('Compaction summary model returned empty content.') };
   } catch (error) {
     return input.signal?.aborted ? { status: 'cancelled' } : { status: 'failed', failure: error };
   }
 }
 
-function renderRun(run: ConversationRun): string {
+function renderMessage(message: Message): string {
+  const renderContent = (content: Message['content']): unknown => {
+    if (typeof content === 'string') return content;
+    return content.map((block) => {
+      if (block.type === 'text') return { type: 'text', text: block.text };
+      if (block.type === 'image') return { type: 'text', text: '[Image attachment included as structured content below]' };
+      if (block.type === 'thinking') return { type: 'thinking', thinking: block.thinking };
+      return { type: 'toolCall', id: block.id, name: block.name, arguments: block.arguments };
+    });
+  };
   return JSON.stringify({
-    conversation: conversationItemsFromRun(run).map((item) => {
-      if (item.type !== 'user_message' && item.type !== 'assistant_message' && item.type !== 'tool_result') {
-        return item;
-      }
-      return {
-        ...item,
-        content: item.content.map((block) => {
-          if (block.type === 'image') {
-            return { type: 'text' as const, text: '[Image attachment included as structured content below]' };
-          }
-          if (block.type === 'file') {
-            return {
-              type: 'text' as const,
-              text: `[File attachment: ${block.name ?? block.path} at ${block.path}]`,
-            };
-          }
-          return block;
-        }),
-      };
-    }),
+    role: message.role,
+    ...(message.role === 'toolResult'
+      ? { toolCallId: message.toolCallId, toolName: message.toolName, isError: message.isError }
+      : {}),
+    content: renderContent(message.content),
   });
 }

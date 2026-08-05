@@ -18,9 +18,6 @@ import {
 const mapError = () => ({
   code: "ipc_handler_failed" as const,
   message: "Diagnostics query failed.",
-  severity: "error" as const,
-  retryable: true,
-  source: "main" as const,
 });
 export function registerObservabilityHandlers(
   service: {

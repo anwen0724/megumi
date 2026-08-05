@@ -24,8 +24,37 @@ export interface DocumentInputPolicy {
 }
 
 export interface InputPolicy {
+  readonly maxTextCharacters: number;
   readonly image: ImageInputPolicy;
   readonly document: DocumentInputPolicy;
+}
+
+export class InputPolicyConfigurationError extends Error {
+  constructor(problems: readonly string[]) {
+    super(`Input Policy is invalid: ${problems.join(' ')}`);
+    this.name = 'InputPolicyConfigurationError';
+  }
+}
+
+export function validateInputPolicy(policy: InputPolicy): string[] {
+  const problems: string[] = [];
+  const entries: Array<[string, number]> = [
+    ['maxTextCharacters', policy.maxTextCharacters],
+    ['image.maxImageCount', policy.image.maxImageCount],
+    ['image.maxImageBytes', policy.image.maxImageBytes],
+    ['image.maxTotalBytes', policy.image.maxTotalBytes],
+    ['document.maxDocumentCount', policy.document.maxDocumentCount],
+    ['document.maxDocumentBytes', policy.document.maxDocumentBytes],
+  ];
+  for (const [label, value] of entries) {
+    if (!Number.isInteger(value) || value <= 0) {
+      problems.push(`${label} must be a positive integer, got ${String(value)}.`);
+    }
+  }
+  if (policy.image.maxTotalBytes < policy.image.maxImageBytes) {
+    problems.push('image.maxTotalBytes must be >= image.maxImageBytes.');
+  }
+  return problems;
 }
 
 export const IMAGE_INPUT_POLICY: ImageInputPolicy = Object.freeze({
@@ -47,11 +76,13 @@ export const DOCUMENT_INPUT_POLICY: DocumentInputPolicy = Object.freeze({
 });
 
 export const DEFAULT_INPUT_POLICY: InputPolicy = Object.freeze({
+  maxTextCharacters: 200_000,
   image: IMAGE_INPUT_POLICY,
   document: DOCUMENT_INPUT_POLICY,
 });
 
 export interface InputCapabilities {
+  readonly maxTextCharacters: number;
   readonly allowedImageMediaTypes: readonly SupportedImageMediaType[];
   readonly maxImageCount: number;
   readonly maxImageBytes: number;
@@ -63,6 +94,7 @@ export interface InputCapabilities {
 
 export function inputCapabilities(policy: InputPolicy = DEFAULT_INPUT_POLICY): InputCapabilities {
   return {
+    maxTextCharacters: policy.maxTextCharacters,
     allowedImageMediaTypes: [...policy.image.allowedMediaTypes],
     maxImageCount: policy.image.maxImageCount,
     maxImageBytes: policy.image.maxImageBytes,

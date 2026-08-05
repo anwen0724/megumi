@@ -4,12 +4,13 @@ import * as host from '@megumi/product/host';
 import { createRuntimeIpcRequestSchema } from './contracts';
 import { IPC_CHANNELS } from './channels';
 
-export const CommandSuggestionsRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.commandSuggestions, host.CommandSuggestionsPayloadSchema);
+export const InputSuggestionsRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.inputSuggestions, host.InputSuggestionsPayloadSchema);
 export const SkillListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.skill.list, host.SkillListPayloadSchema);
 export const SkillGetRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.skill.get, host.SkillGetPayloadSchema);
 export const SkillEnableRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.skill.enable, host.SkillEnablePayloadSchema);
 export const SkillDisableRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.skill.disable, host.SkillDisablePayloadSchema);
 export const SkillDeleteRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.skill.delete, host.SkillDeletePayloadSchema);
+export const SkillRefreshRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.skill.refresh, host.SkillRefreshPayloadSchema);
 export const SessionCreateRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.sessionCreate, host.SessionCreatePayloadSchema);
 export const SessionListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.sessionList, host.SessionListPayloadSchema);
 export const SessionMessageListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.sessionMessageList, host.SessionMessageListPayloadSchema);
@@ -18,7 +19,7 @@ export const SessionHydrationGetRequestSchema = createRuntimeIpcRequestSchema(IP
 export const SessionMessageSendRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.sessionMessageSend, host.SessionMessageSendPayloadSchema);
 export const SessionMessageCancelRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.sessionMessageCancel, host.SessionMessageCancelPayloadSchema);
 export const SessionContextUsageGetRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.sessionContextUsageGet, host.SessionContextUsageGetPayloadSchema);
-export const ImageInputCapabilitiesGetRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.imageInputCapabilitiesGet, host.ImageInputCapabilitiesPayloadSchema);
+export const InputCapabilitiesGetRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.inputCapabilitiesGet, host.InputCapabilitiesPayloadSchema);
 export const ImageInputSelectRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.imageInputSelect, host.ImageInputSelectPayloadSchema);
 export const DocumentInputSelectRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.documentInputSelect, host.DocumentInputSelectPayloadSchema);
 export const ImageInputClipboardReadRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.chat.imageInputClipboardRead, host.ImageInputClipboardReadPayloadSchema);
@@ -54,18 +55,19 @@ export const ObservabilityListRequestSchema = createRuntimeIpcRequestSchema(IPC_
 export const ObservabilityGetRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.get, host.ObservabilityRunPayloadSchema);
 export const ObservabilityBundleRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.bundle, host.ObservabilityRunPayloadSchema);
 
-export type CommandSuggestionsPayload = z.infer<typeof host.CommandSuggestionsPayloadSchema>;
+export type InputSuggestionsPayload = z.infer<typeof host.InputSuggestionsPayloadSchema>;
 export type SkillListPayload = z.infer<typeof host.SkillListPayloadSchema>;
 export type SkillGetPayload = z.infer<typeof host.SkillGetPayloadSchema>;
 export type SkillEnablePayload = z.infer<typeof host.SkillEnablePayloadSchema>;
 export type SkillDisablePayload = z.infer<typeof host.SkillDisablePayloadSchema>;
 export type SkillDeletePayload = z.infer<typeof host.SkillDeletePayloadSchema>;
+export type SkillRefreshPayload = z.infer<typeof host.SkillRefreshPayloadSchema>;
 export type SessionCreatePayload = z.infer<typeof host.SessionCreatePayloadSchema>;
 export type SessionMessageListPayload = z.infer<typeof host.SessionMessageListPayloadSchema>;
 export type SessionTimelineListPayload = z.infer<typeof host.SessionTimelineListPayloadSchema>;
 export type SessionHydrationGetPayload = z.infer<typeof host.SessionHydrationGetPayloadSchema>;
 export type SessionContextUsageGetPayload = z.infer<typeof host.SessionContextUsageGetPayloadSchema>;
-export type ImageInputCapabilitiesPayload = z.infer<typeof host.ImageInputCapabilitiesPayloadSchema>;
+export type ImageInputCapabilitiesPayload = z.infer<typeof host.InputCapabilitiesPayloadSchema>;
 export type ImageInputSelectPayload = z.infer<typeof host.ImageInputSelectPayloadSchema>;
 export type DocumentInputSelectPayload = z.infer<typeof host.DocumentInputSelectPayloadSchema>;
 export type ImageInputClipboardReadPayload = z.infer<typeof host.ImageInputClipboardReadPayloadSchema>;

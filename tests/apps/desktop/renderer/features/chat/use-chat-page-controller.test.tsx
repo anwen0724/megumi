@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatUiStore } from '@megumi/desktop/renderer/entities/chat-ui/store';
 import { useProjectStore } from '@megumi/desktop/renderer/entities/project/store';
 import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
+import { useModelSelectionStore } from '@megumi/desktop/renderer/entities/model-selection';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useChatPageController } from '@megumi/desktop/renderer/features/chat/hooks/use-chat-page-controller';
 import { useRuntimeTimelineStore } from '@megumi/desktop/renderer/features/runtime-timeline';
@@ -20,6 +21,10 @@ describe('useChatPageController', () => {
     useToastStore.getState().clearToasts();
     useRuntimeTimelineStore.getState().reset();
     useRunStore.getState().resetRuns();
+    useModelSelectionStore.setState({
+      selection: { providerId: 'provider', modelId: 'model' },
+      persistSelection: useModelSelectionStore.getState().persistSelection,
+    });
     useChatUiStore.setState({
       activeSessionId: 'session-1',
       agentStatus: 'waiting-approval',
@@ -134,6 +139,7 @@ describe('useChatPageController', () => {
       expect(window.megumi.session.contextUsage.get).toHaveBeenCalledWith(expect.objectContaining({
         payload: {
           sessionId: 'session-1',
+          modelSelection: { provider_id: 'provider', model_id: 'model' },
         },
       }));
     });
@@ -186,6 +192,7 @@ describe('useChatPageController', () => {
       expect(window.megumi.session.contextUsage.get).toHaveBeenCalledWith(expect.objectContaining({
         payload: {
           sessionId: 'session-1',
+          modelSelection: { provider_id: 'provider', model_id: 'model' },
         },
       }));
     });
@@ -201,6 +208,7 @@ describe('useChatPageController', () => {
       expect(window.megumi.session.contextUsage.get).toHaveBeenCalledWith(expect.objectContaining({
         payload: {
           sessionId: 'session-2',
+          modelSelection: { provider_id: 'provider', model_id: 'model' },
         },
       }));
     });

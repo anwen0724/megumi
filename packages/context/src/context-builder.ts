@@ -1,142 +1,80 @@
-/* Coordinates Context sources, model capacity, image materialization, compaction, and usage state. */
-import {
-  capabilitiesFromModel,
-  estimateContextTokens,
-  type Api,
-  type Context as AiContext,
-  type Model,
-  type Models,
-  type Tool,
-} from '@megumi/ai';
-import type { InstructionReader } from '@megumi/instructions';
+/*
+ * Coordinates one Context build: Workspace, Instructions and Skills source
+ * resolution, Session history reading, System Prompt and message
+ * materialization, Token estimation and the shared Compaction path. Context
+ * never creates or modifies UserMessage and resolves its own prompt sources
+ * through the assembly seams injected at creation.
+ */
+
+import crypto from 'node:crypto';
+import type { Api, Context as AiContext, Message, Model, Models } from '@megumi/ai';
+import { estimateContextTokens, estimateMessageTokens } from '@megumi/ai/utils/estimate';
+import type { EventBus } from '@megumi/events';
+import type { EffectiveInstructions, InstructionReader } from '@megumi/instructions';
 import type { ObservabilityService } from '@megumi/observability';
 import type { SessionAttachmentReader, SessionHistory, SessionHistoryItem } from '@megumi/session';
+import type { Skills, SkillView } from '@megumi/skills';
+import type { ToolDefinition } from '@megumi/tools';
 import type {
-  SkillCatalogItem,
-  SkillSelection,
-  SkillService,
-  UsedSkillContent,
-} from '@megumi/skills';
+  BuildContextRequest,
+  BuildContextResult,
+  ContextBuilder,
+  ContextFailure,
+  ContextWorkspaceSource,
+  ExecutionEnvironment,
+  Prompt,
+} from './context';
+import { buildContextMessages, buildCompactionSummaryMessage } from './context-messages';
 import {
-  assembleActiveContext,
-  buildAiContext,
-  type ActiveContextFacts,
-  type ContextSourceRef,
-  type ExecutionEnvironment,
-  type VisibleCompactionSummary,
-} from './active-context';
+  compactionPolicyFailure,
+  contextCapacityFromModel,
+  resolveCompactionPolicy,
+  type CompactionPolicy,
+} from './context-policy';
+import type { ContextUsageEstimate } from './context-usage';
+import { buildSystemPrompt } from './system-prompt';
+import { cancelledFailure } from './xml-escape';
 import {
   executeContextCompaction,
   type CompactContextRequest,
   type CompactContextResult,
-  type ContextCompactionProgress,
   type ContextCompactor,
+  type ExecuteCompactionResult,
 } from './compaction/context-compactor';
-import {
-  contextCapacityFromModel,
-  resolveContextPolicy,
-  type ContextPolicy,
-} from './context-policy';
-import {
-  calculateContextUsage,
-  recordContextUsage,
-  type ContextUsage,
-  type ContextUsageReader,
-  type ContextUsageRecorder,
-  type ContextUsageSnapshotCache,
-  type GetSessionContextUsageRequest,
-  type GetSessionContextUsageResult,
-  type RecordCompletedModelCallUsageRequest,
-  type RecordCompletedModelCallUsageResult,
-  type SessionContextUsageSnapshot,
-} from './context-usage';
-import { buildConversationRuns, type CurrentConversationRun } from './conversation-run';
-import { materializeActiveContextImages } from './image-content';
-
-export interface ContextFailure {
-  readonly code:
-    | 'session_history_failed'
-    | 'instruction_load_failed'
-    | 'skill_catalog_failed'
-    | 'active_context_failed'
-    | 'token_count_failed'
-    | 'usage_snapshot_invalid'
-    | 'compaction_failed'
-    | 'compaction_persist_failed'
-    | 'context_window_exceeded'
-    | 'context_build_failed'
-    | 'image_materialization_failed'
-    | 'cancelled';
-  readonly message: string;
-  readonly retryable: boolean;
-  readonly cause?: {
-    readonly owner: 'session' | 'instructions' | 'skills' | 'tools' | 'ai';
-    readonly code?: string;
-  };
-}
-
-export interface PreparedModelCall {
-  readonly preparationId: string;
-  readonly context: AiContext;
-  readonly usage: ContextUsage;
-  readonly sourceRefs: ContextSourceRef[];
-  readonly compaction?: { readonly compactionId: string };
-}
-
-export interface BuildContextRequest {
-  readonly sessionId: string;
-  readonly workspaceId: string;
-  readonly currentRun: CurrentConversationRun;
-  readonly selectedSkill?: SkillSelection;
-  readonly tools: readonly Tool[];
-  readonly model: Model<Api>;
-  readonly onCompactionProgress?: (progress: ContextCompactionProgress) => void;
-  readonly signal?: AbortSignal;
-}
-
-export type BuildContextResult =
-  | { readonly status: 'ready'; readonly prepared: PreparedModelCall }
-  | { readonly status: 'failed'; readonly failure: ContextFailure };
-
-export interface ContextBuilder {
-  build(request: BuildContextRequest): Promise<BuildContextResult>;
-}
-
-export interface ContextScopeResolver {
-  resolve(request: { readonly workspaceId: string }):
-    | {
-        readonly status: 'resolved';
-        readonly workspaceRoot: string;
-        readonly executionEnvironment: ExecutionEnvironment;
-      }
-    | {
-        readonly status: 'failed';
-        readonly failure: { readonly code: string; readonly message: string };
-      };
-}
+import type { CompactionMessageSource, CompactionPlan } from './compaction/compaction-planner';
 
 export interface CreateContextOptions {
   readonly sessionHistory: Pick<SessionHistory, 'getActiveHistory' | 'saveCompactionSummary'>;
   readonly attachmentReader: Pick<SessionAttachmentReader, 'readAttachmentContent'>;
-  readonly scopeResolver: ContextScopeResolver;
+  /** Workspace seam: Context resolves the Workspace root and execution environment itself. */
+  readonly workspaceSource: ContextWorkspaceSource;
   readonly instructionReader: InstructionReader;
-  readonly skillServiceFactory?: (
-    input: { readonly workspaceRoot: string },
-  ) => Pick<SkillService, 'getSkillCatalog' | 'useSkill'>;
+  /** Skills seam: Context creates the SkillView it needs for one build. */
+  readonly skills: Pick<Skills, 'createView'>;
   readonly models: Pick<Models, 'completeSimple'>;
-  readonly contextTokenEstimator?: (context: AiContext) => number;
-  readonly usageSnapshotCache?: ContextUsageSnapshotCache;
+  readonly contextTokenEstimator?: (prompt: Prompt | AiContext) => number;
   readonly observability?: ObservabilityService;
-  readonly policy?: Partial<ContextPolicy>;
-  readonly policyProvider?: { getPolicy(): Partial<ContextPolicy> };
+  readonly policy?: Partial<CompactionPolicy>;
+  readonly policyProvider?: { getPolicy(): Partial<CompactionPolicy> };
   readonly clock?: { now(): string };
-  readonly ids?: { preparationId(): string; compactionId(): string };
+  readonly ids?: { compactionId(): string };
+  /** Optional bus: compaction lifecycle facts are published here. */
+  readonly events?: EventBus;
 }
 
-export type ContextCapabilities = ContextBuilder
-  & ContextCompactor
-  & ContextUsageReader
-  & ContextUsageRecorder;
+export type ContextCapabilities = ContextBuilder & ContextCompactor;
+
+type PromptRequestInput = {
+  readonly sessionId: string;
+  readonly history: { items: readonly SessionHistoryItem[]; expectedActiveEntryId: string };
+  readonly baseInstructions: readonly { readonly instructionId: string; readonly content: string }[];
+  readonly model: Model<Api>;
+  readonly executionEnvironment: ExecutionEnvironment;
+  readonly effectiveInstructions: EffectiveInstructions;
+  readonly skills: SkillView;
+  readonly tools: readonly ToolDefinition[];
+  readonly signal?: AbortSignal;
+};
 
 export function createContext(options: CreateContextOptions): ContextCapabilities {
   return new DefaultContext(options);
@@ -144,60 +82,47 @@ export function createContext(options: CreateContextOptions): ContextCapabilitie
 
 class DefaultContext implements ContextCapabilities {
   private readonly clock: { now(): string };
-  private readonly ids: { preparationId(): string; compactionId(): string };
-  private readonly usageSnapshotCache: ContextUsageSnapshotCache;
+  private readonly ids: { compactionId(): string };
   private readonly sessionOperationTails = new Map<string, Promise<void>>();
 
   constructor(private readonly options: CreateContextOptions) {
-    resolveContextPolicy(options.policy, options.policyProvider?.getPolicy());
     this.clock = options.clock ?? { now: () => new Date().toISOString() };
     this.ids = options.ids ?? {
-      preparationId: () => `context-preparation:${crypto.randomUUID()}`,
       compactionId: () => `context-compaction:${crypto.randomUUID()}`,
     };
-    this.usageSnapshotCache = options.usageSnapshotCache
-      ?? new Map<string, SessionContextUsageSnapshot>();
   }
 
   async build(request: BuildContextRequest): Promise<BuildContextResult> {
     const span = this.options.observability?.startSpan({
       name: 'context.build',
-      correlation: { sessionId: request.sessionId, workspaceId: request.workspaceId },
+      correlation: { sessionId: request.modelCallContext.run.sessionId },
     });
     const operation = async (): Promise<BuildContextResult> => {
       let result: BuildContextResult;
       try {
         result = await this.withSessionOperation(
-          request.sessionId,
+          request.modelCallContext.run.sessionId,
           () => this.buildExclusive(request),
         );
       } catch (error) {
         result = failed({
           code: 'context_build_failed',
-          message: messageOf(error),
+          message: error instanceof Error ? error.message : 'Context build failed.',
           retryable: false,
         });
       }
       if (span) {
         this.options.observability?.endSpan({
           span,
-          status: result.status === 'ready'
-            ? 'ok'
-            : result.failure.code === 'cancelled' ? 'cancelled' : 'error',
+          status: spanStatus(result),
         });
       }
       if (result.status === 'ready') {
         this.options.observability?.recordMeasurement({
           name: 'context.used_tokens',
-          value: result.prepared.usage.usedTokens,
+          value: estimateContextTokens(result.prompt.messages).tokens,
           unit: 'token',
-          correlation: { sessionId: request.sessionId },
-        });
-        this.options.observability?.recordMeasurement({
-          name: 'context.window_tokens',
-          value: result.prepared.usage.contextWindowTokens,
-          unit: 'token',
-          correlation: { sessionId: request.sessionId },
+          correlation: { sessionId: request.modelCallContext.run.sessionId },
         });
       }
       return result;
@@ -210,372 +135,412 @@ class DefaultContext implements ContextCapabilities {
   async compact(request: CompactContextRequest): Promise<CompactContextResult> {
     try {
       return await this.withSessionOperation(request.sessionId, async () => {
-        if (request.signal?.aborted) return failed(cancelled());
-        const policy = this.resolvePolicy();
-        const facts = await this.loadFacts({
-          sessionId: request.sessionId,
+        if (request.signal?.aborted) return failed(cancelledFailure('Context operation was cancelled.'));
+        const sources = await this.resolveSources({
           workspaceId: request.workspaceId,
-          tools: [],
-          model: request.model,
-          ...(request.signal ? { signal: request.signal } : {}),
+          signal: request.signal,
         });
-        if (facts.status === 'failed') return facts;
-        const built = await this.buildModelContext(facts.facts, request.model, request.signal);
-        if (built.status === 'failed') return built;
-        const before = this.countUsage(built.built.context, request.model, policy, request.signal);
-        if (before.status === 'failed') return before;
-        const compacted = await this.executeCompaction({
-          facts: facts.facts,
-          usageBefore: before.usage,
+        if (sources.status === 'cancelled') return failed(cancelledFailure('Context operation was cancelled.'));
+        if (sources.status === 'failed') return sources;
+        const policy = this.resolvePolicy();
+        const capacity = contextCapacityFromModel(request.model);
+        const policyProblem = compactionPolicyFailure(policy, capacity);
+        if (policyProblem) {
+          return failed({ code: 'policy_invalid', message: policyProblem, retryable: false });
+        }
+        const history = this.readHistory(request.sessionId);
+        if (history.status === 'failed') return history;
+        const base = this.readBaseInstructions();
+        if (base.status === 'failed') return base;
+        const prompt = await this.buildPromptFromSources({
+          sessionId: request.sessionId,
+          history: history.history,
+          baseInstructions: base.instructions,
           model: request.model,
+          executionEnvironment: sources.executionEnvironment,
+          effectiveInstructions: sources.effectiveInstructions,
+          skills: sources.skills,
+          tools: [],
+          signal: request.signal,
+        });
+        if (prompt.status === 'failed') return prompt;
+        const usageBefore = this.countUsage(prompt.prompt);
+        const compacted = await this.executeCompaction({
+          sessionId: request.sessionId,
+          history: history.history,
+          sources: prompt.sources,
+          prompt: prompt.prompt,
           policy,
-          automatic: false,
-          ...(request.onProgress ? { onProgress: request.onProgress } : {}),
-          ...(request.signal ? { signal: request.signal } : {}),
+          model: request.model,
+          trigger: request.trigger,
+          onProgress: request.onProgress,
+          events: request.events,
+          signal: request.signal,
         });
         return compacted.status === 'compacted'
           ? {
               status: 'compacted',
               compactionId: compacted.compactionId,
-              usageBefore: before.usage,
+              usageBefore,
               usageAfter: compacted.usageAfter,
             }
           : compacted;
       });
     } catch (error) {
-      if (request.signal?.aborted || isAbortError(error)) return failed(cancelled());
+      if (request.signal?.aborted || isAbortError(error)) {
+        return failed(cancelledFailure('Context operation was cancelled.'));
+      }
       return failed({
         code: 'compaction_failed',
-        message: messageOf(error),
+        message: error instanceof Error ? error.message : 'Context compaction failed.',
         retryable: false,
       });
     }
-  }
-
-  getSessionUsage(request: GetSessionContextUsageRequest): GetSessionContextUsageResult {
-    const snapshot = this.usageSnapshotCache.get(request.sessionId);
-    return snapshot ? { status: 'available', snapshot } : { status: 'not_available' };
-  }
-
-  recordCompletedModelCall(
-    request: RecordCompletedModelCallUsageRequest,
-  ): RecordCompletedModelCallUsageResult {
-    return recordContextUsage({
-      request,
-      policy: this.resolvePolicy(),
-      cache: this.usageSnapshotCache,
-      now: () => this.clock.now(),
-    });
   }
 
   private async buildExclusive(request: BuildContextRequest): Promise<BuildContextResult> {
-    if (request.signal?.aborted) return failed(cancelled());
-    const policy = this.resolvePolicy();
-    const loaded = await this.loadFacts({
-      sessionId: request.sessionId,
-      workspaceId: request.workspaceId,
-      throughEntryId: request.currentRun.userEntry.parentEntryId ?? null,
-      currentRun: request.currentRun,
-      selectedSkill: request.selectedSkill,
-      tools: request.tools,
-      model: request.model,
-      ...(request.signal ? { signal: request.signal } : {}),
+    if (request.signal?.aborted) return failed(cancelledFailure('Context operation was cancelled.'));
+    const modelCall = request.modelCallContext;
+    const sources = await this.resolveSources({
+      workspaceId: modelCall.run.workspaceId,
+      signal: request.signal,
     });
-    if (loaded.status === 'failed') return loaded;
-    if (request.signal?.aborted) return failed(cancelled());
+    if (sources.status === 'cancelled') return failed(cancelledFailure('Context operation was cancelled.'));
+    if (sources.status === 'failed') return sources;
+    const policy = this.resolvePolicy();
+    const capacity = contextCapacityFromModel(modelCall.run.model);
+    const policyProblem = compactionPolicyFailure(policy, capacity);
+    if (policyProblem) {
+      return failed({ code: 'policy_invalid', message: policyProblem, retryable: false });
+    }
+    const environmentProblem = invalidExecutionEnvironment(sources.executionEnvironment);
+    if (environmentProblem) {
+      return failed({
+        code: 'execution_environment_invalid',
+        message: environmentProblem,
+        retryable: false,
+      });
+    }
+    const toolProblem = invalidToolDefinitions(modelCall.tools);
+    if (toolProblem) {
+      return failed({
+        code: 'tool_definitions_invalid',
+        message: toolProblem,
+        retryable: false,
+      });
+    }
+    const history = this.readHistory(modelCall.run.sessionId);
+    if (history.status === 'failed') return history;
+    const base = this.readBaseInstructions();
+    if (base.status === 'failed') return base;
 
-    let facts = loaded.facts;
-    let buildResult = await this.buildModelContext(facts, request.model, request.signal);
-    if (buildResult.status === 'failed') return buildResult;
-    let built = buildResult.built;
-    let usageResult = this.countUsage(built.context, request.model, policy, request.signal);
-    if (usageResult.status === 'failed') return usageResult;
-    let usage = usageResult.usage;
-    let compactionId: string | undefined;
+    // The two Prompt builds in this method share every input except History.
+    const promptRequest: Omit<PromptRequestInput, 'history'> = {
+      sessionId: modelCall.run.sessionId,
+      baseInstructions: base.instructions,
+      model: modelCall.run.model,
+      executionEnvironment: sources.executionEnvironment,
+      effectiveInstructions: sources.effectiveInstructions,
+      skills: sources.skills,
+      tools: modelCall.tools,
+      signal: request.signal,
+    };
+    const prompt = await this.buildPromptFromSources({ ...promptRequest, history: history.history });
+    if (prompt.status === 'failed') return prompt;
 
-    if (usage.usedRatio >= policy.compactionThresholdRatio) {
+    let estimate = this.countUsage(prompt.prompt);
+    if (policy.enabled
+      && estimate.tokens > capacity.contextWindowTokens - policy.reserveTokens) {
       const compacted = await this.executeCompaction({
-        facts,
-        usageBefore: usage,
-        model: request.model,
+        sessionId: modelCall.run.sessionId,
+        history: history.history,
+        sources: prompt.sources,
+        prompt: prompt.prompt,
         policy,
-        automatic: true,
-        ...(request.onCompactionProgress ? { onProgress: request.onCompactionProgress } : {}),
-        ...(request.signal ? { signal: request.signal } : {}),
+        model: modelCall.run.model,
+        trigger: 'threshold',
+        signal: request.signal,
       });
       if (compacted.status === 'failed') return compacted;
       if (compacted.status === 'compacted') {
-        facts = compacted.facts;
-        compactionId = compacted.compactionId;
-        // The saved Summary is now a Session fact; rebuilding prevents returning a pre-commit projection.
-        buildResult = await this.buildModelContext(facts, request.model, request.signal);
-        if (buildResult.status === 'failed') return buildResult;
-        built = buildResult.built;
-        usageResult = this.countUsage(built.context, request.model, policy, request.signal);
-        if (usageResult.status === 'failed') return usageResult;
-        usage = usageResult.usage;
+        // The Summary is now a Session fact: re-read the authoritative history
+        // and rebuild the Prompt from it, never from a pre-commit projection.
+        const refreshed = this.readHistory(modelCall.run.sessionId);
+        if (refreshed.status === 'failed') return refreshed;
+        const rebuilt = await this.buildPromptFromSources({ ...promptRequest, history: refreshed.history });
+        if (rebuilt.status === 'failed') return rebuilt;
+        estimate = this.countUsage(rebuilt.prompt);
+        return this.finalizePrompt(rebuilt.prompt, capacity, estimate);
       }
     }
+    return this.finalizePrompt(prompt.prompt, capacity, estimate);
+  }
 
-    if (request.signal?.aborted) return failed(cancelled());
-    if (usage.usedTokens >= usage.contextWindowTokens) return failed(windowExceeded(usage));
+  private finalizePrompt(
+    prompt: Prompt,
+    capacity: { contextWindowTokens: number },
+    estimate: ContextUsageEstimate,
+  ): BuildContextResult {
+    if (estimate.tokens >= capacity.contextWindowTokens) {
+      return failed({
+        code: 'context_window_exceeded',
+        message: `Context uses ${estimate.tokens} tokens for a ${capacity.contextWindowTokens}-token Context Window.`,
+        retryable: false,
+      });
+    }
+    return { status: 'ready', prompt };
+  }
+
+  private readHistory(sessionId: string):
+    | { status: 'ok'; history: { items: readonly SessionHistoryItem[]; expectedActiveEntryId: string } }
+    | { status: 'failed'; failure: ContextFailure } {
+    const result = this.options.sessionHistory.getActiveHistory({ session_id: sessionId });
+    if (result.status === 'failed') {
+      return {
+        status: 'failed',
+        failure: {
+          code: 'session_history_failed',
+          message: result.failure.message,
+          retryable: true,
+          cause: { owner: 'session', code: result.failure.code },
+        },
+      };
+    }
+    const lastEntryId = result.history.at(-1)?.entry.entry_id;
+    if (!lastEntryId) {
+      return {
+        status: 'failed',
+        failure: {
+          code: 'session_history_failed',
+          message: 'Session active history is empty.',
+          retryable: false,
+          cause: { owner: 'session' },
+        },
+      };
+    }
     return {
-      status: 'ready',
-      prepared: {
-        preparationId: this.ids.preparationId(),
-        context: built.context,
-        usage,
-        sourceRefs: built.sourceRefs,
-        ...(compactionId ? { compaction: { compactionId } } : {}),
-      },
+      status: 'ok',
+      history: { items: result.history, expectedActiveEntryId: lastEntryId },
     };
   }
 
-  private async loadFacts(input: {
-    readonly sessionId: string;
+  private readBaseInstructions():
+    | { status: 'ok'; instructions: ReturnType<InstructionReader['getSystemInstructions']> }
+    | { status: 'failed'; failure: ContextFailure } {
+    try {
+      return { status: 'ok', instructions: this.options.instructionReader.getSystemInstructions() };
+    } catch (error) {
+      return {
+        status: 'failed',
+        failure: {
+          code: 'base_instructions_failed',
+          message: error instanceof Error ? error.message : 'Base Instructions could not be read.',
+          retryable: true,
+          cause: { owner: 'instructions' },
+        },
+      };
+    }
+  }
+
+  /**
+   * Resolves the Workspace, Effective Instructions and SkillView sources one
+   * build or compaction needs. Shared by build() and compact() so both paths
+   * use the same fixed order and failure ownership.
+   */
+  private async resolveSources(input: {
     readonly workspaceId: string;
-    readonly throughEntryId?: string | null;
-    readonly currentRun?: CurrentConversationRun;
-    readonly selectedSkill?: SkillSelection;
-    readonly tools: readonly Tool[];
-    readonly model: Model<Api>;
     readonly signal?: AbortSignal;
   }): Promise<
-    | { readonly status: 'loaded'; readonly facts: ActiveContextFacts }
+    | {
+        readonly status: 'ok';
+        readonly workspaceRoot: string;
+        readonly executionEnvironment: ExecutionEnvironment;
+        readonly effectiveInstructions: EffectiveInstructions;
+        readonly skills: SkillView;
+      }
     | { readonly status: 'failed'; readonly failure: ContextFailure }
+    | { readonly status: 'cancelled' }
   > {
-    const historyResult = this.options.sessionHistory.getActiveHistory({
-      session_id: input.sessionId,
-      ...(input.throughEntryId !== undefined
-        ? { through_entry_id: input.throughEntryId }
-        : {}),
+    const workspace = await this.options.workspaceSource.readWorkspace({
+      workspaceId: input.workspaceId,
+      signal: input.signal,
     });
-    if (input.signal?.aborted) return failed(cancelled());
-    if (historyResult.status === 'failed') {
-      return failed(ownerFailure(
-        'session_history_failed',
-        'Session history could not be loaded.',
-        'session',
-        historyResult.failure,
-      ));
+    if (workspace.status === 'cancelled') return { status: 'cancelled' };
+    if (workspace.status === 'failed') {
+      return {
+        status: 'failed',
+        failure: {
+          code: 'workspace_failed',
+          message: workspace.failure.message,
+          retryable: true,
+          cause: { owner: 'workspace', code: workspace.failure.code },
+        },
+      };
     }
 
-    const scope = this.options.scopeResolver.resolve({ workspaceId: input.workspaceId });
-    if (input.signal?.aborted) return failed(cancelled());
-    if (scope.status === 'failed') {
-      return failed(ownerFailure(
-        'instruction_load_failed',
-        scope.failure.message,
-        'instructions',
-        scope.failure,
-      ));
-    }
-    const systemInstructions = this.options.instructionReader.getSystemInstructions();
-    if (input.signal?.aborted) return failed(cancelled());
-    const effectiveInstructions = await this.options.instructionReader.getEffectiveInstructions(
+    const instructions = await this.options.instructionReader.getEffectiveInstructions(
       {
-        workspaceRoot: scope.workspaceRoot,
-        workingDirectory: scope.executionEnvironment.workingDirectory,
+        workspaceRoot: workspace.workspaceRoot,
+        workingDirectory: workspace.environment.workingDirectory,
       },
       input.signal ? { signal: input.signal } : undefined,
     );
-    if (input.signal?.aborted || effectiveInstructions.status === 'cancelled') {
-      return failed(cancelled());
+    if (instructions.status === 'cancelled') return { status: 'cancelled' };
+    if (instructions.status === 'failed') {
+      return {
+        status: 'failed',
+        failure: {
+          code: 'effective_instructions_failed',
+          message: instructions.failure.message,
+          retryable: true,
+          cause: { owner: 'instructions', code: instructions.failure.code },
+        },
+      };
     }
-    if (effectiveInstructions.status === 'failed') {
-      return failed(ownerFailure(
-        'instruction_load_failed',
-        effectiveInstructions.failure.message,
-        'instructions',
-        effectiveInstructions.failure,
-      ));
-    }
-    const skills = await this.loadSkills({
-      workspaceRoot: scope.workspaceRoot,
-      selectedSkill: input.selectedSkill,
-      currentRun: input.currentRun,
+
+    const view = await this.options.skills.createView({
+      workspaceId: input.workspaceId,
       signal: input.signal,
     });
-    if (skills.status === 'failed') return skills;
-    if (input.signal?.aborted) return failed(cancelled());
+    if (view.status === 'failed') {
+      return {
+        status: 'failed',
+        failure: {
+          code: 'skill_view_failed',
+          message: 'Skill View could not be created.',
+          retryable: false,
+          cause: { owner: 'skills', code: view.failure.code },
+        },
+      };
+    }
 
     return {
-      status: 'loaded',
-      facts: {
-        sessionId: input.sessionId,
-        executionEnvironment: { ...scope.executionEnvironment },
-        expectedActiveEntryId: input.currentRun?.lastEntryId
-          ?? input.currentRun?.userEntry.entryId
-          ?? historyResult.history.at(-1)?.entry.entry_id
-          ?? null,
-        historicalRuns: buildConversationRuns(historyResult.history),
-        systemInstructions: [...systemInstructions],
-        effectiveInstructions: effectiveInstructions.instructions,
-        skillCatalog: skills.skillCatalog,
-        usedSkills: skills.usedSkills,
-        tools: input.tools.map((tool) => ({ ...tool })),
-        ...(effectiveSummary(historyResult.history)
-          ? { compactionSummary: effectiveSummary(historyResult.history) }
-          : {}),
-        ...(input.currentRun ? { currentRun: input.currentRun } : {}),
-      },
+      status: 'ok',
+      workspaceRoot: workspace.workspaceRoot,
+      executionEnvironment: workspace.environment,
+      effectiveInstructions: instructions.instructions,
+      skills: view.view,
     };
   }
 
-  private async loadSkills(input: {
-    readonly workspaceRoot: string;
-    readonly selectedSkill?: SkillSelection;
-    readonly currentRun?: CurrentConversationRun;
-    readonly signal?: AbortSignal;
-  }): Promise<
+  private async buildPromptFromSources(input: PromptRequestInput): Promise<
     | {
-        readonly status: 'loaded';
-        readonly skillCatalog: SkillCatalogItem[];
-        readonly usedSkills: UsedSkillContent[];
+        readonly status: 'ok';
+        readonly prompt: Prompt;
+        readonly sources: readonly CompactionMessageSource[];
       }
     | { readonly status: 'failed'; readonly failure: ContextFailure }
   > {
-    const skillService = this.options.skillServiceFactory?.({ workspaceRoot: input.workspaceRoot });
-    if (!skillService) {
-      if (input.selectedSkill) {
-        return failed(ownerFailure(
-          'skill_catalog_failed',
-          'Skill Service is not configured for the selected Skill.',
-          'skills',
-          { code: 'skill_service_unavailable' },
-        ));
-      }
-      return {
-        status: 'loaded',
-        skillCatalog: [],
-        usedSkills: usedSkillsFromCurrentRun(input.currentRun),
-      };
-    }
-    const catalog = await skillService.getSkillCatalog({});
-    if (input.signal?.aborted) return failed(cancelled());
-    if (catalog.status === 'failed') {
-      return failed(ownerFailure(
-        'skill_catalog_failed',
-        catalog.message,
-        'skills',
-        { code: 'skill_catalog_failed', message: catalog.message },
-      ));
-    }
-    const usedSkills = usedSkillsFromCurrentRun(input.currentRun);
-    if (input.selectedSkill) {
-      const selected = await skillService.useSkill({ skillPath: input.selectedSkill.skillPath });
-      if (input.signal?.aborted) return failed(cancelled());
-      if (selected.status !== 'ok') {
-        return failed(ownerFailure(
-          'skill_catalog_failed',
-          selected.status === 'failed'
-            ? selected.message
-            : `Skill ${selected.skillPath} is ${selected.status === 'not_found' ? 'not found' : 'unavailable'}.`,
-          'skills',
-          { code: `skill_${selected.status}` },
-        ));
-      }
-      mergeUsedSkill(usedSkills, selected.skill);
-    }
-    return { status: 'loaded', skillCatalog: catalog.skills, usedSkills };
-  }
-
-  private async buildModelContext(
-    facts: ActiveContextFacts,
-    model: Model<Api>,
-    signal?: AbortSignal,
-  ): Promise<
-    | {
-        readonly status: 'built';
-        readonly built: { readonly context: AiContext; readonly sourceRefs: ContextSourceRef[] };
-      }
-    | { readonly status: 'failed'; readonly failure: ContextFailure }
-  > {
-    const active = assembleActiveContext(facts);
-    const materialized = await materializeActiveContextImages({
-      activeContext: active.activeContext,
+    const converted = await buildContextMessages({
+      history: input.history.items,
       attachmentReader: this.options.attachmentReader,
-      imageInputSupport: capabilitiesFromModel(model).imageInput,
-      ...(signal ? { signal } : {}),
+      imageInputSupport: input.model.input.includes('image'),
+      signal: input.signal,
     });
-    if (materialized.status === 'failed') return materialized;
-    try {
-      return {
-        status: 'built',
-        built: {
-          context: buildAiContext(materialized.activeContext),
-          sourceRefs: active.sourceRefs,
-        },
-      };
-    } catch (error) {
-      return failed({
-        code: 'context_build_failed',
-        message: messageOf(error),
-        retryable: false,
-        cause: { owner: 'ai' },
-      });
+    if (converted.status === 'failed') return converted;
+    const systemPrompt = buildSystemPrompt({
+      baseInstructions: input.baseInstructions,
+      effectiveInstructions: input.effectiveInstructions,
+      skills: input.skills,
+      executionEnvironment: input.executionEnvironment,
+    });
+    const sources: CompactionMessageSource[] = [];
+    let messageIndex = 0;
+    for (const item of input.history.items) {
+      if (item.type === 'message') {
+        sources.push({ entryId: item.entry.entry_id, message: converted.messages[messageIndex]! });
+        messageIndex += 1;
+      }
     }
+    return {
+      status: 'ok',
+      prompt: {
+        systemPrompt,
+        messages: converted.messages,
+        tools: [...input.tools],
+      },
+      sources,
+    };
   }
 
-  private countUsage(
-    context: AiContext,
-    model: Model<Api>,
-    policy: ContextPolicy,
-    signal?: AbortSignal,
-  ): { readonly status: 'counted'; readonly usage: ContextUsage }
-    | { readonly status: 'failed'; readonly failure: ContextFailure } {
-    if (signal?.aborted) return failed(cancelled());
-    try {
-      const inputTokens = this.options.contextTokenEstimator?.(context)
-        ?? estimateContextTokens(context).tokens;
-      return {
-        status: 'counted',
-        usage: calculateContextUsage({
-          inputTokens,
-          capacity: contextCapacityFromModel(model),
-          policy,
-        }),
-      };
-    } catch (error) {
-      return failed({
-        code: 'token_count_failed',
-        message: messageOf(error),
-        retryable: false,
-        cause: { owner: 'ai' },
-      });
+  private countUsage(prompt: Prompt | AiContext): ContextUsageEstimate {
+    const estimator = this.options.contextTokenEstimator;
+    if (estimator) {
+      const tokens = estimator(prompt);
+      return { tokens, usageTokens: 0, trailingTokens: tokens, lastUsageIndex: null };
     }
+    return estimateContextTokens(prompt.messages);
   }
 
   private executeCompaction(input: {
-    readonly facts: ActiveContextFacts;
-    readonly usageBefore: ContextUsage;
+    readonly sessionId: string;
+    readonly history: { items: readonly SessionHistoryItem[]; expectedActiveEntryId: string };
+    readonly sources: readonly CompactionMessageSource[];
+    readonly prompt: Prompt;
+    readonly policy: CompactionPolicy;
     readonly model: Model<Api>;
-    readonly policy: ContextPolicy;
-    readonly automatic: boolean;
-    readonly onProgress?: (progress: ContextCompactionProgress) => void;
+    readonly trigger: import('./compaction/context-compactor').CompactionTrigger;
+    readonly onProgress?: (progress: import('./compaction/context-compactor').ContextCompactionProgress) => void;
+    readonly events?: EventBus;
     readonly signal?: AbortSignal;
-  }) {
+  }): Promise<ExecuteCompactionResult> {
+    const previousSummary = input.history.items
+      .filter((item) => item.type === 'compaction')
+      .at(-1)?.compaction.summary_text;
+    const project = async (plan: CompactionPlan, summaryText: string, signal?: AbortSignal) => {
+      if (signal?.aborted) {
+        return { status: 'failed' as const, failure: cancelledFailure('Context operation was cancelled.') };
+      }
+      const keptMessages = input.sources
+        .slice(plan.summarizedMessages.length)
+        .map((source) => source.message);
+      return {
+        status: 'built' as const,
+        // Shallow copies at the AI boundary: the compaction projection is a
+        // mutable Context for the summary call, never the readonly Prompt.
+        context: {
+          systemPrompt: input.prompt.systemPrompt,
+          messages: [
+            buildCompactionSummaryMessage(summaryText, Date.parse(this.clock.now())),
+            ...keptMessages,
+          ],
+          tools: [...input.prompt.tools],
+        },
+      };
+    };
     return executeContextCompaction({
-      ...input,
+      sessionId: input.sessionId,
+      trigger: input.trigger,
+      sources: input.sources,
+      // Shallow copy at the AI boundary: compaction consumes a mutable Context.
+      beforeContext: {
+        systemPrompt: input.prompt.systemPrompt,
+        messages: [...input.prompt.messages],
+        tools: [...input.prompt.tools],
+      },
+      expectedActiveEntryId: input.history.expectedActiveEntryId,
+      previousSummary,
+      policy: input.policy,
+      model: input.model,
       models: this.options.models,
       sessionHistory: this.options.sessionHistory,
       observability: this.options.observability,
       now: () => this.clock.now(),
       createCompactionId: () => this.ids.compactionId(),
-      project: async (facts, signal) => {
-        const result = await this.buildModelContext(facts, input.model, signal);
-        return result.status === 'built'
-          ? { status: 'built' as const, context: result.built.context }
-          : result;
+      estimateMessageTokens,
+      project,
+      countUsage: (context, signal) => {
+        if (signal?.aborted) throw cancelledFailure('Context operation was cancelled.');
+        return this.countUsage(context);
       },
-      countUsage: (context, model, policy, signal) => (
-        this.countUsage(context, model, policy, signal)
-      ),
+      onProgress: input.onProgress,
+      events: this.options.events,
+      signal: input.signal,
     });
   }
 
-  private resolvePolicy(): ContextPolicy {
-    return resolveContextPolicy(this.options.policy, this.options.policyProvider?.getPolicy());
+  private resolvePolicy(): CompactionPolicy {
+    return resolveCompactionPolicy(this.options.policy, this.options.policyProvider?.getPolicy());
   }
 
   private async withSessionOperation<T>(
@@ -599,80 +564,35 @@ class DefaultContext implements ContextCapabilities {
   }
 }
 
-function effectiveSummary(history: SessionHistoryItem[]): VisibleCompactionSummary | undefined {
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    const item = history[index]!;
-    if (item.type === 'compaction') {
-      return {
-        compactionId: item.compaction.compaction_id,
-        content: item.compaction.summary_text,
-      };
-    }
+function spanStatus(result: BuildContextResult): 'ok' | 'cancelled' | 'error' {
+  if (result.status === 'ready') return 'ok';
+  return result.failure.code === 'cancelled' ? 'cancelled' : 'error';
+}
+
+function invalidExecutionEnvironment(environment: ExecutionEnvironment): string | undefined {
+  if (!environment.workingDirectory || !environment.operatingSystem || !environment.shell) {
+    return 'Execution Environment is incomplete.';
   }
   return undefined;
 }
 
-function usedSkillsFromCurrentRun(currentRun: CurrentConversationRun | undefined): UsedSkillContent[] {
-  const usedSkills: UsedSkillContent[] = [];
-  for (const item of currentRun?.runItems ?? []) {
-    if (item.type !== 'tool_result' || item.toolName !== 'use_skill' || item.status !== 'success') {
-      continue;
-    }
-    for (const source of item.runtimeSources ?? []) {
-      if (source.sourceKind !== 'skill') continue;
-      const name = source.metadata?.name;
-      const skillPath = source.metadata?.skillPath;
-      if (typeof name !== 'string' || typeof skillPath !== 'string') continue;
-      mergeUsedSkill(usedSkills, { name, skillPath, content: source.text });
-    }
+function invalidToolDefinitions(
+  definitions: readonly { name?: unknown; description?: unknown; parameters?: unknown }[],
+): string | undefined {
+  if (definitions.some((definition) => (
+    typeof definition.name !== 'string' || definition.name.length === 0
+    || typeof definition.description !== 'string'
+    || typeof definition.parameters !== 'object' || definition.parameters === null
+  ))) {
+    return 'Tool Definitions cannot form a valid Prompt tools list.';
   }
-  return usedSkills;
-}
-
-function mergeUsedSkill(usedSkills: UsedSkillContent[], skill: UsedSkillContent): void {
-  const index = usedSkills.findIndex((candidate) => candidate.skillPath === skill.skillPath);
-  if (index >= 0) usedSkills[index] = { ...skill };
-  else usedSkills.push({ ...skill });
-}
-
-function ownerFailure(
-  code: ContextFailure['code'],
-  message: string,
-  owner: NonNullable<ContextFailure['cause']>['owner'],
-  failure: { readonly code?: string; readonly message?: string },
-): ContextFailure {
-  return {
-    code,
-    message,
-    retryable: true,
-    cause: { owner, ...(failure.code ? { code: failure.code } : {}) },
-  };
-}
-
-function windowExceeded(usage: ContextUsage): ContextFailure {
-  return {
-    code: 'context_window_exceeded',
-    message: `Context uses ${usage.usedTokens} tokens for a ${usage.contextWindowTokens}-token Context Window.`,
-    retryable: false,
-  };
-}
-
-function cancelled(): ContextFailure {
-  return {
-    code: 'cancelled',
-    message: 'Context operation was cancelled.',
-    retryable: true,
-  };
+  return undefined;
 }
 
 function failed<T extends ContextFailure>(
   failure: T,
 ): { readonly status: 'failed'; readonly failure: T } {
   return { status: 'failed', failure };
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : 'Context operation failed.';
 }
 
 function isAbortError(error: unknown): boolean {

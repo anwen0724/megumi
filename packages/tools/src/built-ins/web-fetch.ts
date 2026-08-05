@@ -22,7 +22,7 @@ const DEFAULT_TIMEOUT_MS = 15_000;
 export const webFetchToolDefinition: ToolDefinition = {
   name: 'web_fetch',
   description: 'Read an HTTP(S) page and return size-limited text content.',
-  inputSchema: {
+  parameters: {
     type: 'object',
     properties: { url: { type: 'string', minLength: 1, description: 'HTTP(S) URL to read.' } },
     required: ['url'],

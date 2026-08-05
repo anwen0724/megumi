@@ -9,7 +9,7 @@ interface NodeOsModule {
 }
 
 // Variable specifier so browser bundlers do not try to resolve node builtins.
-const importNodeModule = (specifier: string): Promise<unknown> => import(/* @vite-ignore */ specifier);
+const importNodeModule = (specifier: string): Promise<unknown> => import(specifier);
 
 function getProcessEnv(): Record<string, string | undefined> | undefined {
 	const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;

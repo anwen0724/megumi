@@ -1,18 +1,12 @@
 /* Reduces live Runtime Events into a host-neutral Timeline read model. */
-import type {
-  ApprovalRequestedPayload,
-  ApprovalResolvedPayload,
-  RuntimeEvent,
-} from '@megumi/events';
+import type { AnyEvent } from '@megumi/events';
 import type {
   AnswerTextBlock,
-  AssistantTextItem,
   CancelledActivityItem,
   CompactionActivityItem,
   ErrorActivityItem,
   PlanActivityItem,
   ProcessDisclosureBlock,
-  RecoveryActivityItem,
   RetryActivityItem,
   ThinkingItem,
   TimelineAssistantMessage,
@@ -32,7 +26,7 @@ export interface CreateRuntimeTimelineRequest {
 
 export interface ReduceRuntimeTimelineRequest {
   readonly timeline: RuntimeTimeline;
-  readonly event: RuntimeEvent;
+  readonly event: AnyEvent;
 }
 
 export function createRuntimeTimeline(
@@ -47,7 +41,7 @@ export function createRuntimeTimeline(
 export function reduceRuntimeTimeline(
   request: ReduceRuntimeTimelineRequest,
 ): RuntimeTimeline {
-  if (request.timeline.appliedEventIds[request.event.eventId]) {
+  if (request.timeline.appliedEventIds[request.event.id]) {
     return request.timeline;
   }
 
@@ -55,14 +49,14 @@ export function reduceRuntimeTimeline(
     messages: projectRuntimeTimelineEvent(request.timeline.messages, request.event),
     appliedEventIds: {
       ...request.timeline.appliedEventIds,
-      [request.event.eventId]: true,
+      [request.event.id]: true,
     },
   };
 }
 
 function projectRuntimeTimelineEvent(
   messages: TimelineMessage[],
-  event: RuntimeEvent,
+  event: AnyEvent,
 ): TimelineMessage[] {
   const nextMessages = cloneMessages(messages);
 
@@ -70,109 +64,105 @@ function projectRuntimeTimelineEvent(
     return nextMessages;
   }
 
-  if (event.eventType === 'run.started') {
+  if (event.type === 'run.started') {
     const assistant = ensureAssistantMessage(nextMessages, event);
     ensureProcessBlock(assistant, event).status = 'running';
     assistant.updatedAt = event.createdAt;
     return nextMessages;
   }
 
-  if (event.eventType === 'model_call.started') {
+  if (event.type === 'turn.started') {
     const assistant = ensureAssistantMessage(nextMessages, event);
-    const process = ensureProcessBlock(assistant, event);
-    process.status = 'running';
-    process.updatedAt = event.createdAt;
+    ensureProcessBlock(assistant, event).status = 'running';
     assistant.updatedAt = event.createdAt;
     return nextMessages;
   }
 
-  if (event.eventType === 'model_call.text_delta') {
-    const payload = event.payload as { modelCallId?: string; delta?: string };
+  if (event.type === 'message.update') {
+    const payload = event.payload;
     const assistant = ensureAssistantMessage(nextMessages, event);
     if (hasCompletedAnswerBlock(assistant)) {
       assistant.updatedAt = event.createdAt;
       return nextMessages;
     }
-    const answer = ensureAnswerBlock(assistant, event, payload.modelCallId ?? event.runId);
-    answer.text += payload.delta ?? '';
+    // Full snapshot: replace, never merge.
+    const answer = ensureAnswerBlock(assistant, event, payload.messageId);
+    answer.text = payload.content;
     answer.status = 'streaming';
     answer.updatedAt = event.createdAt;
+    assistant.messageId = payload.messageId;
     assistant.updatedAt = event.createdAt;
     return nextMessages;
   }
 
-  if (event.eventType === 'model_call.projection_reset') {
-    const payload = event.payload as { modelCallId?: string };
+  if (event.type === 'message.thinking.update') {
+    const payload = event.payload;
     const assistant = ensureAssistantMessage(nextMessages, event);
-    const modelCallId = payload.modelCallId ?? event.runId;
-    assistant.blocks = assistant.blocks.filter((block) => (
-      block.kind !== 'answer_text'
-      || (block.textId !== `text:${modelCallId}` && block.runId !== modelCallId)
-      || block.status === 'completed'
-    ));
-    const process = assistant.blocks.find(
-      (block): block is ProcessDisclosureBlock => block.kind === 'process_disclosure',
+    const process = ensureProcessBlock(assistant, event);
+    // Full snapshot: replace, never merge.
+    const item = ensureThinkingItem(process, payload.messageId, event.createdAt);
+    item.text = payload.thinking;
+    item.status = 'streaming';
+    item.updatedAt = event.createdAt;
+    process.updatedAt = event.createdAt;
+    assistant.updatedAt = event.createdAt;
+    return nextMessages;
+  }
+
+  if (event.type === 'message.ended' && event.payload.role === 'assistant') {
+    const assistant = ensureAssistantMessage(nextMessages, event);
+    assistant.messageId = event.payload.messageId;
+    const answer = assistant.blocks.find(
+      (block): block is AnswerTextBlock => block.kind === 'answer_text',
     );
-    if (process) {
-      process.items = process.items.filter((item) => (
-        item.kind !== 'thinking' || item.thinkingId !== modelCallId
-      ));
-      process.updatedAt = event.createdAt;
+    if (answer && answer.status !== 'completed') {
+      answer.text = event.payload.content;
+      answer.status = 'completed';
+      answer.updatedAt = event.createdAt;
+    }
+    // The settled message closes any streaming thinking item too.
+    for (const block of assistant.blocks) {
+      if (block.kind !== 'process_disclosure') continue;
+      for (const item of block.items) {
+        if (item.kind === 'thinking' && item.status !== 'completed') {
+          item.status = 'completed';
+          item.updatedAt = event.createdAt;
+        }
+      }
     }
     assistant.updatedAt = event.createdAt;
     return nextMessages;
   }
 
-  if (event.eventType === 'model.thinking.started') {
-    const payload = event.payload as { modelCallId?: string };
+  if (event.type === 'message.ended' && event.payload.role === 'tool_result') {
+    // The transcript records the tool output; the activity item was settled by
+    // tool_execution.ended, so only keep the assistant message fresh.
+    const assistant = ensureAssistantMessage(nextMessages, event);
+    assistant.updatedAt = event.createdAt;
+    return nextMessages;
+  }
+
+  if (event.type === 'turn.ended') {
+    // The turn's tool calls are now known: surface them as requested items.
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
-    const item = ensureThinkingItem(process, payload.modelCallId ?? event.eventId, event.createdAt);
-    item.status = 'streaming';
-    item.updatedAt = event.createdAt;
+    for (const toolCallId of event.payload.toolCallIds) {
+      const item = ensureToolItem(process, toolCallId, event.createdAt);
+      item.status = 'requested';
+      item.updatedAt = event.createdAt;
+    }
     process.updatedAt = event.createdAt;
     assistant.updatedAt = event.createdAt;
     return nextMessages;
   }
 
-  if (event.eventType === 'model.thinking.delta') {
-    const payload = event.payload as { modelCallId?: string; delta?: string };
+  if (event.type === 'tool_execution.requested') {
+    const payload = event.payload;
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
-    const item = ensureThinkingItem(process, payload.modelCallId ?? event.eventId, event.createdAt);
-    item.text += payload.delta ?? '';
-    item.status = 'streaming';
-    item.updatedAt = event.createdAt;
-    process.updatedAt = event.createdAt;
-    assistant.updatedAt = event.createdAt;
-    return nextMessages;
-  }
-
-  if (event.eventType === 'model.thinking.completed') {
-    const payload = event.payload as { modelCallId?: string };
-    const assistant = ensureAssistantMessage(nextMessages, event);
-    const process = ensureProcessBlock(assistant, event);
-    const item = ensureThinkingItem(process, payload.modelCallId ?? event.eventId, event.createdAt);
-    item.status = 'completed';
-    item.updatedAt = event.createdAt;
-    process.updatedAt = event.createdAt;
-    assistant.updatedAt = event.createdAt;
-    return nextMessages;
-  }
-
-  if (event.eventType === 'model_call.tool_call') {
-    const payload = event.payload as {
-      toolCallId?: string;
-      toolName?: string;
-      input?: unknown;
-      modelCallId?: string;
-    };
-    const assistant = ensureAssistantMessage(nextMessages, event);
-    moveAnswerIntoProcess(assistant, event, payload.modelCallId ?? event.runId);
-    const process = ensureProcessBlock(assistant, event);
-    const item = ensureToolItem(process, payload.toolCallId ?? event.eventId, event.createdAt);
-    item.toolName = payload.toolName ?? 'unknown_tool';
-    item.inputSummary = summarizeToolTarget(item.toolName, payload.input);
+    const item = ensureToolItem(process, payload.toolCallId, event.createdAt);
+    item.toolName = payload.toolName;
+    item.inputSummary = summarizeToolTarget(payload.toolName, payload.args);
     item.status = 'requested';
     item.updatedAt = event.createdAt;
     process.updatedAt = event.createdAt;
@@ -180,34 +170,13 @@ function projectRuntimeTimelineEvent(
     return nextMessages;
   }
 
-  if (event.eventType === 'run.plan.updated') {
-    const payload = event.payload as {
-      toolCallId: string;
-      explanation?: string;
-      plan: PlanActivityItem['plan'];
-    };
+  if (event.type === 'tool_execution.started') {
+    const payload = event.payload;
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
-    process.items = process.items.filter((item) => (
-      !(item.kind === 'tool_activity' && item.toolCallId === payload.toolCallId)
-    ));
-    const item = ensurePlanActivityItem(process, event.runId, payload.toolCallId, event.createdAt);
-    item.explanation = payload.explanation;
-    item.plan = payload.plan.map((step) => ({ ...step }));
-    item.updatedAt = event.createdAt;
-    process.updatedAt = event.createdAt;
-    assistant.updatedAt = event.createdAt;
-    return nextMessages;
-  }
-
-  if (event.eventType === 'tool_call.started') {
-    const payload = event.payload as { toolCallId?: string; toolExecutionId?: string; toolName?: string; input?: unknown };
-    const assistant = ensureAssistantMessage(nextMessages, event);
-    const process = ensureProcessBlock(assistant, event);
-    const item = ensureToolItem(process, payload.toolCallId ?? event.eventId, event.createdAt);
-    item.toolExecutionId = payload.toolExecutionId;
-    item.toolName = payload.toolName ?? item.toolName;
-    item.inputSummary = item.inputSummary ?? summarizeToolTarget(item.toolName, payload.input);
+    const item = ensureToolItem(process, payload.toolCallId, event.createdAt);
+    item.toolName = payload.toolName;
+    item.inputSummary = summarizeToolTarget(payload.toolName, payload.args);
     item.status = 'running';
     item.updatedAt = event.createdAt;
     process.updatedAt = event.createdAt;
@@ -215,70 +184,34 @@ function projectRuntimeTimelineEvent(
     return nextMessages;
   }
 
-  if (event.eventType === 'tool_call.completed' || event.eventType === 'tool_call.failed') {
-    const payload = event.payload as { toolCallId?: string; toolExecutionId?: string; toolName?: string; error?: { code?: string; message?: string; details?: Record<string, unknown> } };
+  if (event.type === 'tool_execution.update') {
+    // Streaming output is transient; refresh timestamps only.
     const assistant = ensureAssistantMessage(nextMessages, event);
-    const process = ensureProcessBlock(assistant, event);
-    if (event.eventType === 'tool_call.completed' && hasPlanToolCall(process, payload.toolCallId)) {
-      process.items = process.items.filter((item) => (
-        !(item.kind === 'tool_activity' && item.toolCallId === payload.toolCallId)
-      ));
-      process.updatedAt = event.createdAt;
-      assistant.updatedAt = event.createdAt;
-      return nextMessages;
-    }
-    const item = ensureToolItem(process, payload.toolCallId ?? event.eventId, event.createdAt);
-    item.toolExecutionId = payload.toolExecutionId;
-    item.toolName = payload.toolName ?? item.toolName;
-    item.status = event.eventType === 'tool_call.completed' ? 'succeeded' : 'failed';
-    if (event.eventType === 'tool_call.failed') delete item.resultSummary;
-    item.error = payload.error?.code && payload.error.message
-      ? { code: payload.error.code, message: payload.error.message, ...(payload.error.details ? { details: payload.error.details } : {}) }
-      : item.error;
-    item.approval = undefined;
-    item.updatedAt = event.createdAt;
-    process.updatedAt = event.createdAt;
     assistant.updatedAt = event.createdAt;
     return nextMessages;
   }
 
-  if (event.eventType === 'tool_result.created') {
-    const payload = event.payload as {
-      toolCallId?: string;
-      toolExecutionId?: string;
-      toolName?: string;
-      kind?: string;
-      summary?: string;
-      content?: Array<{ type?: string; text?: string }>;
-      error?: { code?: string; message?: string; details?: Record<string, unknown> };
-    };
+  if (event.type === 'tool_execution.ended') {
+    const payload = event.payload;
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
-    if (payload.kind === 'success' && hasPlanToolCall(process, payload.toolCallId)) {
-      process.items = process.items.filter((item) => (
-        !(item.kind === 'tool_activity' && item.toolCallId === payload.toolCallId)
-      ));
-      process.updatedAt = event.createdAt;
-      assistant.updatedAt = event.createdAt;
-      return nextMessages;
-    }
-    const item = ensureToolItem(process, payload.toolCallId ?? event.eventId, event.createdAt);
-    item.toolExecutionId = payload.toolExecutionId;
-    item.toolName = payload.toolName ?? item.toolName;
-    item.status = payload.kind === 'success'
+    const item = ensureToolItem(process, payload.toolCallId, event.createdAt);
+    item.status = payload.status === 'completed'
       ? 'succeeded'
-      : payload.kind === 'permission_denied' || payload.kind === 'user_rejected'
-        ? 'denied'
-        : payload.kind === 'cancelled'
-          ? 'cancelled'
+      : payload.status === 'cancelled'
+        ? 'cancelled'
+        : payload.status === 'denied'
+          ? 'denied'
           : 'failed';
-    if (payload.kind === 'success' && payload.summary) {
+    if (payload.status === 'completed') {
+      // Show the human-readable summary; the raw result payload (which may be
+      // structured data) is never displayed.
       item.resultSummary = payload.summary;
     } else {
       delete item.resultSummary;
     }
     item.error = payload.error?.code && payload.error.message
-      ? { code: payload.error.code, message: payload.error.message, ...(payload.error.details ? { details: payload.error.details } : {}) }
+      ? { code: payload.error.code, message: payload.error.message }
       : undefined;
     item.approval = undefined;
     item.updatedAt = event.createdAt;
@@ -287,22 +220,24 @@ function projectRuntimeTimelineEvent(
     return nextMessages;
   }
 
-  if (event.eventType === 'approval.requested') {
-    const approval = (event.payload as ApprovalRequestedPayload).approvalRequest;
+  if (event.type === 'approval.requested') {
+    const payload = event.payload;
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
-    const item = ensureToolItem(process, approval.toolCallId, event.createdAt);
-    item.toolName = approval.toolName;
+    const item = ensureToolItem(process, payload.toolCallId, event.createdAt);
+    item.toolName = payload.toolName;
     item.status = 'awaiting_approval';
     item.approval = {
-      approvalRequestId: approval.approvalRequestId,
-      defaultOptionId: approval.defaultOptionId,
-      ...(approval.summary ? { summary: approval.summary } : {}),
-      options: approval.options.map((option) => ({
+      // The engine identity, not the event id: resolving the approval later
+      // looks it up by this value.
+      approvalRequestId: payload.approvalRequestId,
+      defaultOptionId: payload.defaultOptionId,
+      summary: payload.reason,
+      options: payload.options.map((option) => ({
         optionId: option.optionId,
         scope: option.scope,
-        label: option.display.label,
-        description: option.display.description,
+        label: option.label,
+        description: option.description ?? '',
       })),
     };
     item.updatedAt = event.createdAt;
@@ -311,8 +246,8 @@ function projectRuntimeTimelineEvent(
     return nextMessages;
   }
 
-  if (event.eventType === 'approval.resolved') {
-    const payload = event.payload as ApprovalResolvedPayload;
+  if (event.type === 'approval.resolved') {
+    const payload = event.payload;
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
     const item = ensureToolItem(process, payload.toolCallId, event.createdAt);
@@ -324,91 +259,75 @@ function projectRuntimeTimelineEvent(
     return nextMessages;
   }
 
-  if (event.eventType === 'context.compaction.started'
-    || event.eventType === 'context.compaction.completed'
-    || event.eventType === 'context.compaction.failed') {
-    const payload = event.payload as { compactionId?: string; error?: { message?: string } };
+  if (event.type === 'turn.retry.started' || event.type === 'turn.retry.completed' || event.type === 'turn.retry.failed') {
+    const payload = event.payload;
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
-    const item = ensureCompactionItem(process, payload.compactionId ?? event.eventId, event.createdAt);
-    item.status = event.eventType === 'context.compaction.completed'
+    const item = ensureRetryItem(process, payload.attemptNumber, event.createdAt);
+    item.status = event.type === 'turn.retry.completed'
       ? 'completed'
-      : event.eventType === 'context.compaction.failed'
+      : event.type === 'turn.retry.failed'
         ? 'failed'
-        : 'running';
-    item.label = compactionLabel(event.eventType, payload.error?.message);
+        : 'started';
+    item.label = retryLabel(event.type, payload.attemptNumber);
+    item.reason = event.type === 'turn.retry.failed'
+      ? (event.payload as { error?: { message?: string } }).error?.message
+      : undefined;
     item.updatedAt = event.createdAt;
     process.updatedAt = event.createdAt;
     assistant.updatedAt = event.createdAt;
     return nextMessages;
   }
 
-  if (event.eventType === 'retry.started'
-    || event.eventType === 'retry.completed'
-    || event.eventType === 'retry.failed') {
-    const payload = event.payload as { retryRequestId?: string; error?: { message?: string } };
-    const retryRequestId = payload.retryRequestId ?? event.eventId;
+  if (event.type === 'tool_execution.plan_updated') {
+    const payload = event.payload;
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
-    const item = ensureRetryItem(process, retryRequestId, event.createdAt);
-    item.status = retryStatusFromEvent(event.eventType);
-    item.label = retryLabel(event.eventType, item.attemptNumber);
-    item.reason = payload.error?.message;
+    // The plan replaces the tool activity for the same tool call.
+    process.items = process.items.filter((item) => (
+      !(item.kind === 'tool_activity' && item.toolCallId === payload.toolCallId)
+    ));
+    const item = ensurePlanActivityItem(process, event.runId ?? event.id, payload.toolCallId, event.createdAt);
+    item.explanation = payload.explanation;
+    item.plan = payload.plan.map((step) => ({ ...step }));
     item.updatedAt = event.createdAt;
     process.updatedAt = event.createdAt;
     assistant.updatedAt = event.createdAt;
     return nextMessages;
   }
 
-  if (event.eventType === 'run.interrupted'
-    || event.eventType === 'run.resume.requested'
-    || event.eventType === 'run.resume.failed') {
+  if (event.type === 'session.compaction.started' || event.type === 'session.compaction.ended') {
+    const payload = event.payload;
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
-    const item = ensureRecoveryItem(process, `recovery:${event.eventType}:${event.eventId}`, event.createdAt);
-    item.status = recoveryStatusFromEvent(event.eventType);
-    item.label = recoveryLabel(event.eventType, (event.payload as { error?: { message?: string } }).error?.message);
+    const item = ensureCompactionItem(
+      process,
+      event.type === 'session.compaction.ended' ? event.payload.compactionId : `compaction:${event.id}`,
+      event.createdAt,
+    );
+    item.status = event.type === 'session.compaction.ended'
+      ? event.payload.status === 'completed' ? 'completed' : 'failed'
+      : 'running';
+    item.label = event.type === 'session.compaction.ended'
+      ? event.payload.status === 'completed' ? '已完成压缩' : `上下文压缩失败：${event.payload.error?.message ?? ''}`
+      : '正在压缩上下文';
     item.updatedAt = event.createdAt;
     process.updatedAt = event.createdAt;
     assistant.updatedAt = event.createdAt;
     return nextMessages;
   }
 
-  if (event.eventType === 'model_call.completed') {
-    const assistant = ensureAssistantMessage(nextMessages, event);
-    assistant.updatedAt = event.createdAt;
-    return nextMessages;
-  }
-
-  if (event.eventType === 'run.completed') {
-    const payload = event.payload as { assistantMessageId?: string };
-    const assistant = ensureAssistantMessage(nextMessages, event);
-    assistant.messageId = event.messageId ?? payload.assistantMessageId ?? assistant.messageId;
-    const process = ensureProcessBlock(assistant, event);
-    const answer = assistant.blocks.find((block): block is AnswerTextBlock => block.kind === 'answer_text');
-    process.status = 'completed';
-    process.endedAt = event.createdAt;
-    process.updatedAt = event.createdAt;
-    if (answer) {
-      answer.status = 'completed';
-      answer.updatedAt = event.createdAt;
-    }
-    assistant.updatedAt = event.createdAt;
-    return nextMessages;
-  }
-
-  if (event.eventType === 'run.failed' || event.eventType === 'run.cancelled') {
+  if (event.type === 'run.ended') {
+    const payload = event.payload;
     const assistant = ensureAssistantMessage(nextMessages, event);
     const process = ensureProcessBlock(assistant, event);
-    if (event.eventType === 'run.failed') {
-      const payload = event.payload as { error?: { code?: string; message?: string; retryable?: boolean } };
-      const errorMessage = payload.error?.message ?? 'Run failed.';
+    if (payload.status === 'failed') {
       process.items.push({
-        itemId: `error:${event.eventId}`,
+        itemId: `error:${event.id}`,
         kind: 'error_activity',
         errorCode: payload.error?.code,
-        errorMessage,
-        recoverable: payload.error?.retryable,
+        errorMessage: payload.error?.message ?? 'Run failed.',
+        recoverable: false,
         createdAt: event.createdAt,
         updatedAt: event.createdAt,
       });
@@ -418,12 +337,12 @@ function projectRuntimeTimelineEvent(
       const answer = existingAnswer ?? ensureAnswerBlock(assistant, event, event.runId);
       answer.status = 'failed';
       answer.updatedAt = event.createdAt;
-    } else {
-      const payload = event.payload as { reason?: string; error?: { message?: string } };
+      process.status = 'failed';
+    } else if (payload.status === 'cancelled') {
       process.items.push({
-        itemId: `cancelled:${event.eventId}`,
+        itemId: `cancelled:${event.id}`,
         kind: 'cancelled_activity',
-        reason: payload.reason ?? payload.error?.message,
+        reason: 'user_cancelled',
         createdAt: event.createdAt,
         updatedAt: event.createdAt,
       });
@@ -433,8 +352,10 @@ function projectRuntimeTimelineEvent(
       const answer = existingAnswer ?? ensureAnswerBlock(assistant, event, event.runId);
       answer.status = 'cancelled';
       answer.updatedAt = event.createdAt;
+      process.status = 'cancelled';
+    } else {
+      process.status = 'completed';
     }
-    process.status = event.eventType === 'run.failed' ? 'failed' : 'cancelled';
     process.endedAt = event.createdAt;
     process.updatedAt = event.createdAt;
     assistant.updatedAt = event.createdAt;
@@ -448,22 +369,19 @@ function cloneMessages(messages: TimelineMessage[]): TimelineMessage[] {
   return JSON.parse(JSON.stringify(messages)) as TimelineMessage[];
 }
 
-function ensureAssistantMessage(messages: TimelineMessage[], event: RuntimeEvent): TimelineAssistantMessage {
+function ensureAssistantMessage(messages: TimelineMessage[], event: AnyEvent): TimelineAssistantMessage {
   const existing = messages.find(
     (message): message is TimelineAssistantMessage =>
       message.role === 'assistant' && message.runId === event.runId,
   );
-  if (existing) {
-    if (event.messageId) existing.messageId = event.messageId;
-    return existing;
-  }
+  if (existing) return existing;
 
   const assistant: TimelineAssistantMessage = {
-    messageId: event.messageId ?? `assistant:${event.runId}`,
+    messageId: `assistant:${event.runId}`,
     role: 'assistant',
     projectId: 'runtime',
     sessionId: event.sessionId ?? 'session:unknown',
-    runId: event.runId ?? event.eventId,
+    runId: event.runId ?? event.id,
     createdAt: event.createdAt,
     updatedAt: event.createdAt,
     turnOrder: 1,
@@ -473,13 +391,13 @@ function ensureAssistantMessage(messages: TimelineMessage[], event: RuntimeEvent
   return assistant;
 }
 
-function ensureProcessBlock(assistant: TimelineAssistantMessage, event: RuntimeEvent): ProcessDisclosureBlock {
+function ensureProcessBlock(assistant: TimelineAssistantMessage, event: AnyEvent): ProcessDisclosureBlock {
   const existing = assistant.blocks.find((block): block is ProcessDisclosureBlock => block.kind === 'process_disclosure');
   if (existing) return existing;
   const block: ProcessDisclosureBlock = {
     blockId: `process:${event.runId}`,
     kind: 'process_disclosure',
-    runId: event.runId ?? event.eventId,
+    runId: event.runId ?? event.id,
     status: 'running',
     startedAt: event.createdAt,
     createdAt: event.createdAt,
@@ -492,7 +410,7 @@ function ensureProcessBlock(assistant: TimelineAssistantMessage, event: RuntimeE
 
 function ensureAnswerBlock(
   assistant: TimelineAssistantMessage,
-  event: RuntimeEvent,
+  event: AnyEvent,
   textId: string,
 ): AnswerTextBlock {
   const existing = findAnswerBlock(assistant, textId);
@@ -500,7 +418,7 @@ function ensureAnswerBlock(
   const block: AnswerTextBlock = {
     blockId: `answer:${event.runId}`,
     kind: 'answer_text',
-    runId: event.runId ?? event.eventId,
+    runId: event.runId ?? event.id,
     textId: `text:${textId}`,
     status: 'streaming',
     text: '',
@@ -519,48 +437,55 @@ function findAnswerBlock(assistant: TimelineAssistantMessage, textId: string): A
   );
 }
 
-function moveAnswerIntoProcess(assistant: TimelineAssistantMessage, event: RuntimeEvent, textId: string): void {
-  const answer = findAnswerBlock(assistant, textId);
-  if (!answer || !answer.text || answer.status === 'completed') return;
-
-  const process = ensureProcessBlock(assistant, event);
-  const item: AssistantTextItem = {
-    itemId: `prelude:${textId}`,
-    kind: 'assistant_text',
-    textId: `prelude:${textId}`,
-    phase: 'prelude',
-    status: 'completed',
-    text: answer.text,
-    format: 'markdown',
-    createdAt: answer.createdAt,
-    updatedAt: event.createdAt,
-  };
-  process.items.push(item);
-  assistant.blocks = assistant.blocks.filter((block) => block !== answer);
-}
-
 function hasCompletedAnswerBlock(assistant: TimelineAssistantMessage): boolean {
   return assistant.blocks.some(
     (block) => block.kind === 'answer_text' && block.status === 'completed',
   );
 }
 
-function ensureToolItem(process: ProcessDisclosureBlock, toolCallId: string, createdAt: string): ToolActivityItem {
+function ensureThinkingItem(process: ProcessDisclosureBlock, thinkingId: string, createdAt: string): ThinkingItem {
   const existing = process.items.find(
-    (item): item is ToolActivityItem => item.kind === 'tool_activity' && item.toolCallId === toolCallId,
+    (item): item is ThinkingItem => item.kind === 'thinking' && item.thinkingId === thinkingId,
   );
   if (existing) return existing;
-  const item: ToolActivityItem = {
-    itemId: `tool:${toolCallId}`,
-    kind: 'tool_activity',
-    toolCallId,
-    toolName: 'unknown_tool',
-    status: 'requested',
+  const item: ThinkingItem = {
+    itemId: `thinking:${thinkingId}`,
+    kind: 'thinking',
+    thinkingId,
+    status: 'streaming',
+    text: '',
+    format: 'plain',
     createdAt,
     updatedAt: createdAt,
   };
   process.items.push(item);
   return item;
+}
+
+function ensureRetryItem(process: ProcessDisclosureBlock, attemptNumber: number, createdAt: string): RetryActivityItem {
+  const retryAttemptId = `retry:${attemptNumber}`;
+  const existing = process.items.find(
+    (item): item is RetryActivityItem => item.kind === 'retry_activity' && item.retryAttemptId === retryAttemptId,
+  );
+  if (existing) return existing;
+  const item: RetryActivityItem = {
+    itemId: retryAttemptId,
+    kind: 'retry_activity',
+    retryAttemptId,
+    attemptNumber,
+    status: 'started',
+    label: retryLabel('turn.retry.started', attemptNumber),
+    createdAt,
+    updatedAt: createdAt,
+  };
+  process.items.push(item);
+  return item;
+}
+
+function retryLabel(eventType: 'turn.retry.started' | 'turn.retry.completed' | 'turn.retry.failed', attemptNumber: number): string {
+  if (eventType === 'turn.retry.completed') return `Model call retry ${attemptNumber} completed`;
+  if (eventType === 'turn.retry.failed') return `Model call retry ${attemptNumber} failed`;
+  return `Model call retry ${attemptNumber} started`;
 }
 
 function ensurePlanActivityItem(
@@ -588,27 +513,17 @@ function ensurePlanActivityItem(
   return item;
 }
 
-function hasPlanToolCall(
-  process: ProcessDisclosureBlock,
-  toolCallId: string | undefined,
-): boolean {
-  return Boolean(toolCallId && process.items.some(
-    (item) => item.kind === 'plan_activity' && item.toolCallId === toolCallId,
-  ));
-}
-
-function ensureThinkingItem(process: ProcessDisclosureBlock, thinkingId: string, createdAt: string): ThinkingItem {
+function ensureToolItem(process: ProcessDisclosureBlock, toolCallId: string, createdAt: string): ToolActivityItem {
   const existing = process.items.find(
-    (item): item is ThinkingItem => item.kind === 'thinking' && item.thinkingId === thinkingId,
+    (item): item is ToolActivityItem => item.kind === 'tool_activity' && item.toolCallId === toolCallId,
   );
   if (existing) return existing;
-  const item: ThinkingItem = {
-    itemId: `thinking:${thinkingId}`,
-    kind: 'thinking',
-    thinkingId,
-    status: 'streaming',
-    text: '',
-    format: 'plain',
+  const item: ToolActivityItem = {
+    itemId: `tool:${toolCallId}`,
+    kind: 'tool_activity',
+    toolCallId,
+    toolName: 'unknown_tool',
+    status: 'requested',
     createdAt,
     updatedAt: createdAt,
   };
@@ -632,80 +547,4 @@ function ensureCompactionItem(process: ProcessDisclosureBlock, compactionId: str
   };
   process.items.push(item);
   return item;
-}
-
-function ensureRetryItem(process: ProcessDisclosureBlock, retryRequestId: string, createdAt: string): RetryActivityItem {
-  const existing = process.items.find(
-    (item): item is RetryActivityItem => item.kind === 'retry_activity' && item.retryAttemptId === retryRequestId,
-  );
-  if (existing) return existing;
-  const item: RetryActivityItem = {
-    itemId: `retry:${retryRequestId}`,
-    kind: 'retry_activity',
-    retryAttemptId: retryRequestId,
-    attemptNumber: retryAttemptNumber(retryRequestId),
-    status: 'started',
-    label: 'Model call retry started',
-    createdAt,
-    updatedAt: createdAt,
-  };
-  process.items.push(item);
-  return item;
-}
-
-function ensureRecoveryItem(process: ProcessDisclosureBlock, itemId: string, createdAt: string): RecoveryActivityItem {
-  const existing = process.items.find(
-    (item): item is RecoveryActivityItem => item.kind === 'recovery_activity' && item.itemId === itemId,
-  );
-  if (existing) return existing;
-  const item: RecoveryActivityItem = {
-    itemId,
-    kind: 'recovery_activity',
-    status: 'interrupted',
-    label: 'Run recovery event',
-    createdAt,
-    updatedAt: createdAt,
-  };
-  process.items.push(item);
-  return item;
-}
-
-function compactionLabel(eventType: RuntimeEvent['eventType'], failureMessage: string | undefined): string {
-  if (eventType === 'context.compaction.completed') return '已完成压缩';
-  if (eventType === 'context.compaction.failed') return failureMessage ? `上下文压缩失败：${failureMessage}` : '上下文压缩失败';
-  return '正在压缩上下文';
-}
-
-function retryStatusFromEvent(eventType: RuntimeEvent['eventType']): RetryActivityItem['status'] {
-  if (eventType === 'retry.completed') return 'completed';
-  if (eventType === 'retry.failed') return 'failed';
-  return 'started';
-}
-
-function retryLabel(eventType: RuntimeEvent['eventType'], attemptNumber: number): string {
-  if (eventType === 'retry.completed') return `Model call retry ${attemptNumber} completed`;
-  if (eventType === 'retry.failed') return `Model call retry ${attemptNumber} failed`;
-  return `Model call retry ${attemptNumber} started`;
-}
-
-function retryAttemptNumber(retryRequestId: string): number {
-  const last = retryRequestId.split(':').at(-1);
-  const parsed = Number.parseInt(last ?? '', 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
-}
-
-function recoveryStatusFromEvent(eventType: RuntimeEvent['eventType']): RecoveryActivityItem['status'] {
-  if (eventType === 'run.interrupted') return 'interrupted';
-  if (eventType === 'run.resume.failed') return 'marked_cancelled';
-  return 'manual_retry_requested';
-}
-
-function recoveryLabel(eventType: RuntimeEvent['eventType'], failureMessage: string | undefined): string {
-  if (eventType === 'run.interrupted') return 'Run was interrupted';
-  if (eventType === 'run.resume.requested') return 'Run resume requested';
-  return failureMessage ? `Run resume failed: ${failureMessage}` : 'Run resume failed';
-}
-
-function isRecord(input: unknown): input is Record<string, unknown> {
-  return typeof input === 'object' && input !== null && !Array.isArray(input);
 }

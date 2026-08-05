@@ -59,7 +59,7 @@ describe('composer source guard', () => {
   it('keeps shortcut hints and running draft explanations out of persistent composer copy', () => {
     const composer = readSource('apps/desktop/src/renderer/features/chat/components/Composer.tsx');
     const composerSurface = readSource('apps/desktop/src/renderer/features/chat/components/ComposerSurface.tsx');
-    const commandSuggestionPanel = readSource('apps/desktop/src/renderer/features/chat/components/CommandSuggestionPanel.tsx');
+    const commandSuggestionPanel = readSource('apps/desktop/src/renderer/features/chat/components/InputSuggestionPanel.tsx');
     const composerCopy = readJsxTextAndStringProps(`${composer}\n${composerSurface}\n${commandSuggestionPanel}`);
 
     expect(`${composer}\n${composerSurface}\n${commandSuggestionPanel}`).not.toMatch(/Shift\s*\+\s*Enter|Alt\s*\+\s*Enter/i);
@@ -130,20 +130,19 @@ describe('composer source guard', () => {
   });
 
   it('keeps command suggestion UI presentation-only until a trusted catalog is wired in', () => {
-    const commandPanel = readSource('apps/desktop/src/renderer/features/chat/components/CommandSuggestionPanel.tsx');
+    const commandPanel = readSource('apps/desktop/src/renderer/features/chat/components/InputSuggestionPanel.tsx');
 
     expect(commandPanel).not.toContain('BUILT_IN_INPUT_COMMAND_REGISTRY');
     expect(commandPanel).not.toContain('listInputCommandSuggestions');
     expect(commandPanel).not.toContain('InputPreprocessingResult');
     expect(commandPanel).not.toContain("kind: 'prompt_template'");
-    expect(commandPanel).not.toContain("kind: 'skill'");
   });
 
   it('keeps renderer command suggestions off core command implementation details', () => {
     const rendererSources = [
       readSource('apps/desktop/src/renderer/features/chat/components/Composer.tsx'),
       readSource('apps/desktop/src/renderer/features/chat/components/ComposerSurface.tsx'),
-      readSource('apps/desktop/src/renderer/features/chat/components/CommandSuggestionPanel.tsx'),
+      readSource('apps/desktop/src/renderer/features/chat/components/InputSuggestionPanel.tsx'),
       readSource('apps/desktop/src/renderer/features/chat/hooks/use-composer-controller.ts'),
       readSource('apps/desktop/src/renderer/features/chat/layout/ComposerDock.tsx'),
     ].join('\n');

@@ -6,6 +6,9 @@ export type {
 export {
   ASSISTANT_REPLY_REASON_CODES,
   ASSISTANT_REPLY_STATUSES,
+  SessionAssistantContentListSchema,
+  SessionAssistantContentSchema,
+  SessionImageContentSchema,
   LegacyMessageProvenanceSchema,
   SESSION_MESSAGE_KINDS,
   SessionAssistantReplyMessageSchema,
@@ -17,13 +20,20 @@ export {
   SessionToolResultPayloadSchema,
   SessionUserMessagePayloadSchema,
   SessionUserMessageSchema,
+  SessionTextContentSchema,
+  SessionThinkingContentSchema,
+  SessionToolCallSchema,
+  SessionUserContentListSchema,
+  SessionUserContentSchema,
   hasUserVisibleAssistantContent,
   isLegacySessionMessage,
   sessionMessageText,
 } from './session-message';
 export type {
+  SessionAssistantContent,
   AssistantReplyReasonCode,
   AssistantReplyStatus,
+  SessionImageContent,
   LegacyMessageProvenance,
   SessionAssistantReplyMessage,
   SessionMessage,
@@ -32,7 +42,11 @@ export type {
   SessionMessageWithAttachments,
   SessionModelResponseMessage,
   SessionToolResultMessage,
-  SessionUserMessage,
+  SessionTextContent,
+  SessionThinkingContent,
+  SessionToolCall,
+  SessionUserContent,
+  UserMessage,
 } from './session-message';
 export {
   createSessionCatalog,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
-import type { ChatImageInputCapabilitiesUiResult, CommandSuggestionResult } from '@megumi/product/host';
+import type { ChatInputCapabilitiesUiResult, InputSuggestionQueryResult } from '@megumi/product/host';
 import { useTranslation } from 'react-i18next';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import { useProviderStore } from '../../../entities/provider/store';
@@ -28,23 +28,23 @@ export function ChatPage() {
   const composerDraft = useChatUiStore((state) => state.composerDraft);
   const setComposerDraft = useChatUiStore((state) => state.setComposerDraft);
   const [composerHeight, setComposerHeight] = useState(FALLBACK_COMPOSER_SPACER_HEIGHT);
-  const [imageInputCapabilities, setImageInputCapabilities] = useState<ChatImageInputCapabilitiesUiResult>();
+  const [imageInputCapabilities, setImageInputCapabilities] = useState<ChatInputCapabilitiesUiResult>();
   const effectiveComposerDockHeight = composerHeight > 0 ? composerHeight : FALLBACK_COMPOSER_SPACER_HEIGHT;
   const bottomSpacerHeight = Math.max(effectiveComposerDockHeight + 24, FALLBACK_COMPOSER_SPACER_HEIGHT);
   const pendingApprovals = useMemo(
     () => collectPendingApprovalActivities(controller.timelineMessages),
     [controller.timelineMessages],
   );
-  const getCommandSuggestions = useCallback(async (
-    request: { draft_input: string },
-  ): Promise<CommandSuggestionResult> => {
+  const getInputSuggestions = useCallback(async (
+    request: { draftInput: string },
+  ): Promise<InputSuggestionQueryResult> => {
     try {
       const payload = {
         ...request,
         ...(controller.currentProjectId ? { workspaceId: controller.currentProjectId } : {}),
       };
       const result = await window.megumi.command.suggestions(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.commandSuggestions, payload),
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.inputSuggestions, payload),
       );
 
       return result.ok ? result.data.suggestions : { type: 'inactive' };
@@ -133,7 +133,7 @@ export function ChatPage() {
     const capabilities = window.megumi.session.imageInput?.capabilities;
     if (!capabilities) return undefined;
     void capabilities(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.imageInputCapabilitiesGet, {}),
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.inputCapabilitiesGet, {}),
     ).then((result) => {
       if (!cancelled && result.ok) {
         setImageInputCapabilities(result.data);
@@ -206,7 +206,7 @@ export function ChatPage() {
             onSubmit={controller.handleSubmit}
             onStop={controller.handleStop}
             onHeightChange={setComposerHeight}
-            getCommandSuggestions={getCommandSuggestions}
+            getInputSuggestions={getInputSuggestions}
             onSelectImages={selectImages}
             onSelectDocuments={selectDocuments}
             onPasteImage={pasteImage}
@@ -259,7 +259,7 @@ export function ChatPage() {
                 onPasteImage={pasteImage}
                 onDraftChange={setComposerDraft}
                 onChooseContext={() => undefined}
-                getCommandSuggestions={getCommandSuggestions}
+                getInputSuggestions={getInputSuggestions}
               />
             </div>
           </div>

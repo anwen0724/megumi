@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { RuntimeEvent } from '@megumi/product/host';
+import type { AnyEvent } from '@megumi/product/host';
 
 export type RendererRunStatus =
   | 'running'
@@ -19,29 +19,27 @@ export interface RendererRunSummary {
 interface RunState {
   activeRunId: string | null;
   runs: Record<string, RendererRunSummary>;
-  eventsByRun: Record<string, RuntimeEvent[]>;
+  eventsByRun: Record<string, AnyEvent[]>;
   lastError: string | null;
   setActiveRun: (runId: string | null) => void;
-  applyRuntimeEvent: (event: RuntimeEvent) => void;
+  applyRuntimeEvent: (event: AnyEvent) => void;
   resetRuns: () => void;
 }
 
-function statusFromEvent(event: RuntimeEvent): RendererRunStatus | null {
-  if (event.eventType === 'run.started') return 'running';
-  if (event.eventType === 'run.waiting') return 'waiting';
-  if (event.eventType === 'run.cancelling') return 'cancelling';
-  if (event.eventType === 'run.completed') return 'completed';
-  if (event.eventType === 'run.failed') return 'failed';
-  if (event.eventType === 'run.cancelled') return 'cancelled';
-  if (event.eventType === 'run.status.changed') {
-    const to = (event.payload as { to?: RendererRunStatus }).to;
-    return to ?? null;
+function statusFromEvent(event: AnyEvent): RendererRunStatus | null {
+  if (event.type === 'run.started') return 'running';
+  if (event.type === 'approval.requested') return 'waiting';
+  if (event.type === 'run.ended') {
+    const status = event.payload.status;
+    if (status === 'completed') return 'completed';
+    if (status === 'failed') return 'failed';
+    if (status === 'cancelled') return 'cancelled';
   }
   return null;
 }
 
-function upsertEvent(events: RuntimeEvent[], event: RuntimeEvent): RuntimeEvent[] {
-  if (events.some((item) => item.eventId === event.eventId)) {
+function upsertEvent(events: AnyEvent[], event: AnyEvent): AnyEvent[] {
+  if (events.some((item) => item.id === event.id)) {
     return events;
   }
   return [...events, event].sort((left, right) => left.sequence - right.sequence);
@@ -81,8 +79,8 @@ export const useRunStore = create<RunState>((set) => ({
         ...state.eventsByRun,
         [event.runId]: upsertEvent(state.eventsByRun[event.runId] ?? [], event),
       },
-      lastError: event.eventType === 'run.failed'
-        ? ((event.payload as { error?: { message?: string } }).error?.message ?? 'Run failed.')
+      lastError: event.type === 'run.ended' && event.payload.status === 'failed'
+        ? event.payload.error?.message ?? 'Run failed.'
         : state.lastError,
     };
   }),

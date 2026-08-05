@@ -1,20 +1,17 @@
 /*
- * Verifies Product approval continuation and the thin Host forwarding adapter.
+ * Verifies Product approval resolution and the thin Host forwarding adapter.
  */
 import { describe, expect, it, vi } from 'vitest';
-import type { RuntimeEvent } from '@megumi/events';
 import { createProductApproval } from '../../../../packages/product/src/approval';
 import { createApprovalHost } from '../../../../packages/product/src/host/approval-host';
 
 describe('ApprovalHost', () => {
-  it('maps an approved decision to Engine and returns the resumed event segment', async () => {
-    const event = runtimeEvent();
-    const resumeRun = vi.fn(async () => ({
-      status: 'resumed' as const,
-      run: runFixture('running'),
-      events: asyncEvents([event]),
+  it('maps an approved decision to Engine', async () => {
+    const resolveApproval = vi.fn(async () => ({
+      status: 'accepted' as const,
+      run: runFixture('waiting'),
     }));
-    const host = createApprovalHost(createProductApproval({ resumeRun } as never));
+    const host = createApprovalHost(createProductApproval({ resolveApproval } as never));
 
     const result = await host.resolve({
       approvalRequestId: 'approval:1',
@@ -23,34 +20,34 @@ describe('ApprovalHost', () => {
       reason: 'Needed for this task.',
     });
 
-    expect(resumeRun).toHaveBeenCalledWith({
-      runApprovalId: 'approval:1',
+    expect(resolveApproval).toHaveBeenCalledWith({
+      approvalId: 'approval:1',
       decision: {
         decision: 'approved',
         optionId: 'allow_once',
         reason: 'Needed for this task.',
       },
     });
+    // Desktop keeps the previous success behavior: an accepted decision reads
+    // as 'resumed' with the run facts.
     expect(result.payload).toEqual({
       status: 'resumed',
       approvalRequestId: 'approval:1',
       run: {
         runId: 'run:1',
         sessionId: 'session:1',
-        status: 'running',
+        status: 'waiting',
         createdAt: '2026-07-10T00:00:00.000Z',
       },
     });
-    await expect(collectAsync(result.events!)).resolves.toEqual([event]);
   });
 
   it('maps a denied decision without inventing decision metadata', async () => {
-    const resumeRun = vi.fn(async () => ({
-      status: 'resumed' as const,
-      run: runFixture('running'),
-      events: asyncEvents([]),
+    const resolveApproval = vi.fn(async () => ({
+      status: 'accepted' as const,
+      run: runFixture('waiting'),
     }));
-    const host = createApprovalHost(createProductApproval({ resumeRun } as never));
+    const host = createApprovalHost(createProductApproval({ resolveApproval } as never));
 
     await host.resolve({
       approvalRequestId: 'approval:1',
@@ -58,19 +55,19 @@ describe('ApprovalHost', () => {
       reason: 'Not allowed.',
     });
 
-    expect(resumeRun).toHaveBeenCalledWith({
-      runApprovalId: 'approval:1',
+    expect(resolveApproval).toHaveBeenCalledWith({
+      approvalId: 'approval:1',
       decision: { decision: 'denied', reason: 'Not allowed.' },
     });
   });
 
   it.each([
     [
-      { status: 'not_found' as const, runApprovalId: 'approval:missing' },
+      { status: 'not_found' as const, approvalId: 'approval:missing' },
       { status: 'not_found', approvalRequestId: 'approval:missing' },
     ],
     [
-      { status: 'not_waiting' as const, run: runFixture('completed') },
+      { status: 'not_waiting' as const, approvalId: 'approval:1', run: runFixture('completed') },
       {
         status: 'not_waiting',
         approvalRequestId: 'approval:1',
@@ -78,7 +75,7 @@ describe('ApprovalHost', () => {
       },
     ],
     [
-      { status: 'already_resolved' as const, run: runFixture('completed') },
+      { status: 'already_resolved' as const, approvalId: 'approval:1', run: runFixture('completed') },
       {
         status: 'not_waiting',
         approvalRequestId: 'approval:1',
@@ -104,9 +101,9 @@ describe('ApprovalHost', () => {
         },
       },
     ],
-  ])('projects Engine resume result %s', async (engineResult, expectedPayload) => {
+  ])('projects Engine approval result %s', async (engineResult, expectedPayload) => {
     const host = createApprovalHost(createProductApproval({
-      resumeRun: vi.fn(async () => engineResult),
+      resolveApproval: vi.fn(async () => engineResult),
     } as never));
 
     const result = await host.resolve({
@@ -118,7 +115,7 @@ describe('ApprovalHost', () => {
   });
 });
 
-function runFixture(status: 'running' | 'completed') {
+function runFixture(status: 'waiting' | 'completed') {
   return {
     runId: 'run:1',
     requestId: 'request:1',
@@ -132,30 +129,4 @@ function runFixture(status: 'running' | 'completed') {
     startedAt: '2026-07-10T00:00:00.000Z',
     ...(status === 'completed' ? { completedAt: '2026-07-10T00:01:00.000Z' } : {}),
   } as never;
-}
-
-function runtimeEvent(): RuntimeEvent {
-  return {
-    eventId: 'event:1',
-    schemaVersion: 1,
-    eventType: 'run.resumed',
-    runId: 'run:1',
-    sessionId: 'session:1',
-    sequence: 1,
-    createdAt: '2026-07-10T00:00:00.000Z',
-    source: 'core',
-    visibility: 'user',
-    persist: 'transient',
-    payload: { approvalRequestId: 'approval:1' },
-  } as RuntimeEvent;
-}
-
-async function* asyncEvents<T>(events: readonly T[]): AsyncIterable<T> {
-  yield* events;
-}
-
-async function collectAsync<T>(events: AsyncIterable<T>): Promise<T[]> {
-  const result: T[] = [];
-  for await (const event of events) result.push(event);
-  return result;
 }

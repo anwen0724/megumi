@@ -2,10 +2,9 @@
  * Owns Product Chat queries and interactions outside the single submit chain.
  * The submit chain itself is delegated to the dedicated InputSubmission owner.
  */
-import type { Commands } from '@megumi/commands';
 import type { ContextCapabilities } from '@megumi/context';
 import type { Engine, Run } from '@megumi/engine';
-import { DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from '@megumi/input';
+import { DEFAULT_INPUT_POLICY, DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from '@megumi/input';
 import type { Session, SessionAttachmentReader, SessionBranchDrafts, SessionCatalog, SessionHistory, SessionMessageWithAttachments } from '@megumi/session';
 import { sessionMessageText } from '@megumi/session';
 import type { ProjectedRun, RunProjection, SessionTimelineQuery } from '@megumi/projections';
@@ -18,10 +17,10 @@ import type {
   ChatRunUiDto,
   ChatSessionMessageUiDto,
   ChatSessionUiDto,
-  HostCommandSuggestionResult,
   InputAttachmentPickerPort,
   LocalFileAvailabilityPort,
 } from './host/chat-contract';
+import type { InputSuggestionQuery } from './input-suggestions';
 
 export type ProductChat = Omit<ChatHost, 'sendUserInput'> & {
   submit: InputSubmission['submit'];
@@ -30,7 +29,7 @@ export type ProductChat = Omit<ChatHost, 'sendUserInput'> & {
 export function createProductChat(options: {
   submission: InputSubmission;
   engine: Pick<Engine, 'cancelRun'>;
-  commands: Pick<Commands, 'suggest'>;
+  suggestions: InputSuggestionQuery;
   sessions: SessionCatalog;
   history: SessionHistory;
   attachments: SessionAttachmentReader;
@@ -38,7 +37,17 @@ export function createProductChat(options: {
   workspaces: Pick<WorkspaceCatalog, 'listWorkspaces'>;
   runs: RunProjection;
   timeline: SessionTimelineQuery;
-  context: Pick<ContextCapabilities, 'getSessionUsage'>;
+  context: {
+    deriveUsage(
+      history: readonly import('@megumi/session').SessionHistoryItem[],
+      model: import('@megumi/ai').Model<import('@megumi/ai').Api>,
+    ): import('@megumi/context').DerivedContextUsage;
+    autoCompactPercent: number;
+  };
+  resolveModel: (request: {
+    provider_id: string;
+    model_id: string;
+  }) => Promise<import('@megumi/ai').Model<import('@megumi/ai').Api> | undefined>;
   attachmentPicker?: InputAttachmentPickerPort;
   localFileAvailability?: LocalFileAvailabilityPort;
 }): ProductChat {
@@ -76,26 +85,25 @@ export function createProductChat(options: {
     },
     async cancelUserInput(request) {
       const result = await options.engine.cancelRun({ runId: request.runId });
-      if (result.status === 'cancellation_requested') return { payload: { status: 'cancellation_requested', run: toChatRun(result.run) }, events: result.events };
+      if (result.status === 'cancellation_requested') return { payload: { status: 'cancellation_requested', run: toChatRun(result.run) } };
       if (result.status === 'already_cancelling') return { payload: { status: 'cancelling', run: toChatRun(result.run) } };
       if (result.status === 'not_found') return { payload: { status: 'not_found', runId: result.runId } };
       return { payload: { status: 'not_cancellable', run: toChatRun(result.run), reason: 'already_terminal' } };
     },
     createBranchDraft(request) {
-      const result = options.branches.createBranchDraft({ request_id: request.requestId, session_id: request.sessionId, source_message_id: request.messageId, ...(request.runtimeContext ? { runtime_context: request.runtimeContext } : {}) });
+      const result = options.branches.createBranchDraft({ request_id: request.requestId, session_id: request.sessionId, source_message_id: request.messageId });
       return {
         payload: { branchDraft: { branchMarkerId: result.branch_draft.branch_marker_id, sessionId: result.branch_draft.session_id, sourceMessageId: result.branch_draft.source_message_id, createdAt: result.branch_draft.created_at } },
-        events: result.events,
       };
     },
     cancelBranchDraft(request) {
-      const result = options.branches.cancelBranchDraft({ request_id: request.requestId, session_id: request.sessionId, branch_marker_id: request.branchMarkerId, ...(request.runtimeContext ? { runtime_context: request.runtimeContext } : {}) });
+      const result = options.branches.cancelBranchDraft({ request_id: request.requestId, session_id: request.sessionId, branch_marker_id: request.branchMarkerId });
       return result.status === 'cancelled'
-        ? { payload: { cancelled: true }, events: result.events }
+        ? { payload: { cancelled: true } }
         : { payload: { cancelled: false, reason: result.reason } };
     },
-    async getCommandSuggestions(request) {
-      return { suggestions: toCommandSuggestions(await options.commands.suggest({ draftInput: request.draft_input, ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}) })) };
+    async getInputSuggestions(request) {
+      return { suggestions: await options.suggestions.getInputSuggestions({ draftInput: request.draftInput, ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}) }) };
     },
     async listRuns(request) { return { runs: options.runs.listRuns({ sessionId: request.sessionId }).map(toChatRun) }; },
     async listRunEvents(request) { return { events: [...options.runs.listEvents({ runId: request.runId })] }; },
@@ -105,13 +113,25 @@ export function createProductChat(options: {
       return { messages: timeline.messages, diagnostics: timeline.diagnostics, runs: runs.map(toChatRun), runtimeEvents: runs.flatMap((run) => options.runs.listEvents({ runId: run.runId })) };
     },
     async getContextUsage(request) {
-      const result = options.context.getSessionUsage({ sessionId: request.sessionId });
-      return result.status === 'available'
-        ? { status: 'available', usage: { usedTokens: result.snapshot.usage.usedTokens, totalTokens: result.snapshot.usage.contextWindowTokens, remainingTokens: result.snapshot.usage.remainingTokens, usedPercent: Math.round(result.snapshot.usage.usedRatio * 100), autoCompactPercent: Math.round(result.snapshot.usage.compactionThresholdRatio * 100), accuracy: result.snapshot.accuracy } }
-        : { status: 'not_available' };
+      const history = options.history.getActiveHistory({ session_id: request.sessionId });
+      if (history.status === 'failed') return { status: 'not_available' };
+      const model = await options.resolveModel(request.modelSelection);
+      if (!model) return { status: 'not_available' };
+      const usage = options.context.deriveUsage(history.history, model);
+      return {
+        status: 'available',
+        usage: {
+          usedTokens: usage.totalTokens,
+          totalTokens: usage.contextWindowTokens,
+          remainingTokens: Math.max(0, usage.contextWindowTokens - usage.totalTokens),
+          usedPercent: Math.min(100, Math.round(usage.usedRatio * 100)),
+          autoCompactPercent: options.context.autoCompactPercent,
+          accuracy: usage.accuracy,
+        },
+      };
     },
     getInputCapabilities() {
-      return { allowedMediaTypes: [...IMAGE_INPUT_POLICY.allowedMediaTypes], maxImageCount: IMAGE_INPUT_POLICY.maxImageCount, maxImageBytes: IMAGE_INPUT_POLICY.maxImageBytes, maxTotalBytes: IMAGE_INPUT_POLICY.maxTotalBytes, allowedDocumentMediaTypes: [...DOCUMENT_INPUT_POLICY.allowedMediaTypes], maxDocumentCount: DOCUMENT_INPUT_POLICY.maxDocumentCount, maxDocumentBytes: DOCUMENT_INPUT_POLICY.maxDocumentBytes };
+      return { maxTextCharacters: DEFAULT_INPUT_POLICY.maxTextCharacters, allowedMediaTypes: [...IMAGE_INPUT_POLICY.allowedMediaTypes], maxImageCount: IMAGE_INPUT_POLICY.maxImageCount, maxImageBytes: IMAGE_INPUT_POLICY.maxImageBytes, maxTotalBytes: IMAGE_INPUT_POLICY.maxTotalBytes, allowedDocumentMediaTypes: [...DOCUMENT_INPUT_POLICY.allowedMediaTypes], maxDocumentCount: DOCUMENT_INPUT_POLICY.maxDocumentCount, maxDocumentBytes: DOCUMENT_INPUT_POLICY.maxDocumentBytes };
     },
     async selectImages() {
       if (!options.attachmentPicker) return pickerFailure('image_picker_unavailable', 'Image picker is unavailable.');
@@ -150,10 +170,6 @@ function toChatMessage(item: SessionMessageWithAttachments): ChatSessionMessageU
 }
 function toChatRun(run: Run | ProjectedRun): ChatRunUiDto {
   return { runId: run.runId, sessionId: run.sessionId, status: run.status, createdAt: run.createdAt, ...(run.completedAt ? { completedAt: run.completedAt } : {}) };
-}
-function toCommandSuggestions(result: Awaited<ReturnType<Commands['suggest']>>): HostCommandSuggestionResult {
-  if (result.type === 'inactive') return result;
-  return { type: 'suggestions', draft_input: result.draftInput, command_prefix: result.commandPrefix, groups: result.groups.map((group) => ({ id: group.id, label: group.label, items: group.items.map((item) => ({ name: item.name, ...(item.aliases ? { aliases: [...item.aliases] } : {}), description: item.description, ...(item.argumentHint ? { argument_hint: item.argumentHint } : {}), source: item.source, ...(item.sourceBadge ? { source_badge: item.sourceBadge } : {}), ...(item.display ? { display: item.display } : {}), match: item.match, displayInput: `/${item.display?.primary ?? item.name} `, submitInput: item.completion.replacementInput, ...(item.completion.selection ? { selection: item.completion.selection } : {}) })) })) };
 }
 function pickerFailure(code: string, message: string) { return { status: 'failed' as const, failure: { code, message } }; }
 function toFailure(failure: { code: string; message: string; retryable?: boolean }): ChatHostFailure {

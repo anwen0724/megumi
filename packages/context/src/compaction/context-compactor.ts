@@ -1,20 +1,33 @@
-/* Coordinates automatic and manual Context compaction through one serializable operation. */
-import type { Api, Context as AiContext, Model, Models } from '@megumi/ai';
+/*
+ * Coordinates Threshold, Overflow and Manual compaction through one shared
+ * implementation: planning, Summary generation, commit validation and Session
+ * submission are identical for every trigger.
+ */
+
+import type { Api, Context as AiContext, Message, Model, Models, Usage } from '@megumi/ai';
 import type { ObservabilityService } from '@megumi/observability';
 import type { SessionHistory } from '@megumi/session';
-import type { ActiveContextFacts } from '../active-context';
-import type { ContextFailure } from '../context-builder';
-import type { ContextPolicy } from '../context-policy';
-import type { ContextUsage } from '../context-usage';
+import type { EventBus } from '@megumi/events';
+import type { ContextFailure } from '../context';
+import type { CompactionPolicy } from '../context-policy';
+import type { ContextUsageEstimate } from '../context-usage';
+import { cancelledFailure } from '../xml-escape';
 import { generateCompactionSummary } from './compaction-summary';
-import { planCompaction, validateCompactionReduction } from './compaction-planner';
+import {
+  planCompaction,
+  validateCompactionReduction,
+  type CompactionMessageSource,
+  type CompactionPlan,
+} from './compaction-planner';
+
+export type CompactionTrigger = 'threshold' | 'overflow' | 'manual';
 
 export interface ContextCompactionProgressStarted {
   readonly status: 'started' | 'completed';
   readonly compactionId: string;
   readonly tokensBefore: number;
-  readonly summarizedSourceCount: number;
-  readonly firstKeptSourceId?: string;
+  readonly summarizedMessageCount: number;
+  readonly firstKeptEntryId?: string;
   readonly previousCompactionId?: string;
 }
 
@@ -35,7 +48,10 @@ export interface CompactContextRequest {
   readonly sessionId: string;
   readonly workspaceId: string;
   readonly model: Model<Api>;
+  readonly trigger: CompactionTrigger;
   readonly onProgress?: (progress: ContextCompactionProgress) => void;
+  /** Optional bus: compaction lifecycle facts are published here. */
+  readonly events?: EventBus;
   readonly signal?: AbortSignal;
 }
 
@@ -43,12 +59,12 @@ export type CompactContextResult =
   | {
       readonly status: 'compacted';
       readonly compactionId: string;
-      readonly usageBefore: ContextUsage;
-      readonly usageAfter: ContextUsage;
+      readonly usageBefore: ContextUsageEstimate;
+      readonly usageAfter: ContextUsageEstimate;
     }
   | {
       readonly status: 'nothing_to_compact';
-      readonly reason: 'no_historical_runs' | 'no_older_runs' | 'summary_not_reducing';
+      readonly reason: 'no_historical_messages' | 'no_older_messages' | 'summary_not_reducing';
     }
   | { readonly status: 'failed'; readonly failure: ContextFailure };
 
@@ -57,28 +73,30 @@ export interface ContextCompactor {
 }
 
 export interface ExecuteCompactionInput {
-  readonly facts: ActiveContextFacts;
-  readonly usageBefore: ContextUsage;
+  readonly sessionId: string;
+  readonly trigger: CompactionTrigger;
+  readonly sources: readonly CompactionMessageSource[];
+  /** The Prompt whose tokens are the before-baseline; compared like-for-like with the projection. */
+  readonly beforeContext: AiContext;
+  readonly expectedActiveEntryId: string;
+  readonly previousSummary?: string;
+  readonly policy: CompactionPolicy;
   readonly model: Model<Api>;
-  readonly policy: ContextPolicy;
-  readonly automatic: boolean;
   readonly models: Pick<Models, 'completeSimple'>;
   readonly sessionHistory: Pick<SessionHistory, 'saveCompactionSummary'>;
   readonly observability?: ObservabilityService;
   readonly now: () => string;
   readonly createCompactionId: () => string;
-  readonly project: (facts: ActiveContextFacts, signal?: AbortSignal) => Promise<
+  readonly estimateMessageTokens: (message: Message) => number;
+  /** Builds the Prompt with the generated Summary placed at its history position. */
+  readonly project: (plan: CompactionPlan, summaryText: string, signal?: AbortSignal) => Promise<
     | { readonly status: 'built'; readonly context: AiContext }
     | { readonly status: 'failed'; readonly failure: ContextFailure }
   >;
-  readonly countUsage: (
-    context: AiContext,
-    model: Model<Api>,
-    policy: ContextPolicy,
-    signal?: AbortSignal,
-  ) => { readonly status: 'counted'; readonly usage: ContextUsage }
-    | { readonly status: 'failed'; readonly failure: ContextFailure };
+  readonly countUsage: (context: AiContext, signal?: AbortSignal) => ContextUsageEstimate;
   readonly onProgress?: (progress: ContextCompactionProgress) => void;
+  /** Optional bus: compaction lifecycle facts are published here. */
+  readonly events?: EventBus;
   readonly signal?: AbortSignal;
 }
 
@@ -86,154 +104,95 @@ export type ExecuteCompactionResult =
   | {
       readonly status: 'compacted';
       readonly compactionId: string;
-      readonly usageAfter: ContextUsage;
-      readonly facts: ActiveContextFacts;
+      readonly usageAfter: ContextUsageEstimate;
+      readonly summaryUsage?: Usage;
     }
   | Extract<CompactContextResult, { status: 'nothing_to_compact' | 'failed' }>;
 
 export async function executeContextCompaction(
   input: ExecuteCompactionInput,
 ): Promise<ExecuteCompactionResult> {
-  const observability = input.observability;
-  const traced = Boolean(observability?.getCurrentTrace());
-  const span = traced
-    ? observability?.startSpan({
-        name: 'context.compact',
-        correlation: { sessionId: input.facts.sessionId },
-      })
-    : undefined;
-  if (!traced) {
-    observability?.recordLog({
-      level: 'info',
-      event: 'context.compaction.started',
-      correlation: { sessionId: input.facts.sessionId },
-      attributes: { beforeTokens: input.usageBefore.usedTokens, automatic: input.automatic },
-    });
-  }
-  const operation = async () => {
-    const result = await executeCore(input);
-    const status = result.status === 'failed'
-      ? result.failure.code === 'cancelled' ? 'cancelled' : 'error'
-      : 'ok';
-    if (span) {
-      observability?.endSpan({
-        span,
-        status,
-        attributes: {
-          beforeTokens: input.usageBefore.usedTokens,
-          automatic: input.automatic,
-          ...(result.status === 'compacted' ? { afterTokens: result.usageAfter.usedTokens } : {}),
-        },
-      });
-    }
-    if (!traced) {
-      observability?.recordLog({
-        level: result.status === 'failed' ? 'warn' : 'info',
-        event: result.status === 'compacted'
-          ? 'context.compaction.completed'
-          : 'context.compaction.finished',
-        correlation: { sessionId: input.facts.sessionId },
-        attributes: { status: result.status, automatic: input.automatic },
-      });
-      if (result.status === 'compacted') {
-        observability?.recordMeasurement({
-          name: 'context.compaction.after_tokens',
-          value: result.usageAfter.usedTokens,
-          unit: 'token',
-          correlation: { sessionId: input.facts.sessionId },
-        });
-      }
-    }
-    return result;
-  };
-  return span ? observability!.runInSpanContext(span, operation) : operation();
-}
-
-async function executeCore(input: ExecuteCompactionInput): Promise<ExecuteCompactionResult> {
   const plan = planCompaction({
-    historicalRuns: input.facts.historicalRuns,
-    keepRecentRuns: input.policy.keepRecentRuns,
-    ...(input.facts.currentRun ? { currentRun: input.facts.currentRun } : {}),
+    sources: input.sources,
+    policy: input.policy,
+    estimateMessageTokens: input.estimateMessageTokens,
   });
   if (plan.status === 'nothing_to_compact') return plan;
-  if (input.signal?.aborted) return failed(cancelled());
+  if (input.signal?.aborted) return failed(cancelledFailure('Context compaction was cancelled.'));
 
   const compactionId = input.createCompactionId();
+  const beforeTokens = input.countUsage(input.beforeContext, input.signal).tokens;
   const progressBase = {
     compactionId,
-    tokensBefore: input.usageBefore.usedTokens,
-    summarizedSourceCount: plan.plan.runs.length,
-    ...(plan.plan.firstKeptEntryId
-      ? { firstKeptSourceId: plan.plan.firstKeptEntryId }
-      : {}),
-    ...(input.facts.compactionSummary
-      ? { previousCompactionId: input.facts.compactionSummary.compactionId }
-      : {}),
+    tokensBefore: beforeTokens,
+    summarizedMessageCount: plan.plan.summarizedMessages.length,
+    ...(plan.plan.firstKeptEntryId ? { firstKeptEntryId: plan.plan.firstKeptEntryId } : {}),
   };
-  reportProgress(input.onProgress, { status: 'started', ...progressBase });
+  reportProgress(input.onProgress, { status: 'started', ...progressBase }, input.sessionId, input.trigger, input.events);
+  input.observability?.recordLog({
+    level: 'info',
+    event: 'context.compaction.started',
+    correlation: { sessionId: input.sessionId },
+    attributes: {
+      beforeTokens,
+      trigger: input.trigger,
+      keptMessages: plan.plan.summarizedMessages.length,
+      firstKeptEntryId: plan.plan.firstKeptEntryId,
+    },
+  });
   const failCompaction = (failure: ContextFailure): Extract<ExecuteCompactionResult, { status: 'failed' }> => {
     reportProgress(input.onProgress, {
       status: 'failed',
       compactionId,
-      tokensBefore: input.usageBefore.usedTokens,
+      tokensBefore: progressBase.tokensBefore,
       code: failure.code,
       message: failure.message,
-      ...(input.facts.compactionSummary
-        ? { previousCompactionId: input.facts.compactionSummary.compactionId }
-        : {}),
-    });
+    }, input.sessionId, input.trigger, input.events);
     return failed(failure);
   };
 
   const generated = await generateCompactionSummary({
     models: input.models,
     model: input.model,
-    sessionId: input.facts.sessionId,
-    previousSummary: input.facts.compactionSummary?.content,
-    runs: plan.plan.runs,
+    sessionId: input.sessionId,
+    previousSummary: input.previousSummary,
+    messages: plan.plan.summarizedMessages,
     timestamp: Date.parse(input.now()),
     ...(input.signal ? { signal: input.signal } : {}),
   });
-  if (generated.status === 'cancelled') return failCompaction(cancelled());
+  if (generated.status === 'cancelled') return failCompaction(cancelledFailure('Context compaction was cancelled.'));
   if (generated.status === 'failed') return failCompaction(modelFailure(generated.failure));
 
-  const compactedFacts: ActiveContextFacts = {
-    ...input.facts,
-    historicalRuns: input.facts.historicalRuns.slice(plan.plan.runs.length),
-    compactionSummary: { compactionId, content: generated.content },
-  };
-  const projected = await input.project(compactedFacts, input.signal);
+  const projected = await input.project(plan.plan, generated.content, input.signal);
   if (projected.status === 'failed') return failCompaction(projected.failure);
-  const projectedUsage = input.countUsage(
-    projected.context,
-    input.model,
-    input.policy,
-    input.signal,
-  );
-  if (projectedUsage.status === 'failed') return failCompaction(projectedUsage.failure);
+  // The countUsage callback throws on abort; check the signal first so both the
+  // build and compact paths settle on the same cancelled result.
+  if (input.signal?.aborted) return failCompaction(cancelledFailure('Context compaction was cancelled.'));
+  const projectedUsage = input.countUsage(projected.context, input.signal);
   const reduction = validateCompactionReduction({
-    usageBeforeInputTokens: input.usageBefore.usedTokens,
-    usageAfterInputTokens: projectedUsage.usage.usedTokens,
+    usageBeforeInputTokens: beforeTokens,
+    usageAfterInputTokens: projectedUsage.tokens,
   });
   if (reduction.status === 'nothing_to_compact') {
     reportProgress(input.onProgress, {
       status: 'failed',
       compactionId,
-      tokensBefore: input.usageBefore.usedTokens,
+      tokensBefore: beforeTokens,
       code: reduction.reason,
       message: 'Generated summary did not reduce Context usage.',
-    });
+    }, input.sessionId, input.trigger, input.events);
     return reduction;
   }
-  if (input.signal?.aborted) return failCompaction(cancelled());
+  if (input.signal?.aborted) return failCompaction(cancelledFailure('Context compaction was cancelled.'));
 
   const saved = input.sessionHistory.saveCompactionSummary({
     compaction_id: compactionId,
-    session_id: input.facts.sessionId,
+    session_id: input.sessionId,
     summary_text: generated.content,
     covered_until_entry_id: plan.plan.coveredUntilEntryId,
-    ...(plan.plan.firstKeptEntryId ? { first_kept_entry_id: plan.plan.firstKeptEntryId } : {}),
-    expected_active_entry_id: input.facts.expectedActiveEntryId,
+    first_kept_entry_id: plan.plan.firstKeptEntryId,
+    usage: generated.usage,
+    expected_active_entry_id: input.expectedActiveEntryId,
     created_at: input.now(),
     append_to_active_path: true,
   });
@@ -245,12 +204,24 @@ async function executeCore(input: ExecuteCompactionInput): Promise<ExecuteCompac
       cause: { owner: 'session', code: saved.failure.code },
     });
   }
-  reportProgress(input.onProgress, { status: 'completed', ...progressBase });
+  reportProgress(input.onProgress, { status: 'completed', ...progressBase }, input.sessionId, input.trigger, input.events);
+  input.observability?.recordLog({
+    level: 'info',
+    event: 'context.compaction.completed',
+    correlation: { sessionId: input.sessionId },
+    attributes: { beforeTokens, afterTokens: projectedUsage.tokens, trigger: input.trigger },
+  });
+  input.observability?.recordMeasurement({
+    name: 'context.compaction.after_tokens',
+    value: projectedUsage.tokens,
+    unit: 'token',
+    correlation: { sessionId: input.sessionId },
+  });
   return {
     status: 'compacted',
     compactionId,
-    usageAfter: projectedUsage.usage,
-    facts: compactedFacts,
+    usageAfter: projectedUsage,
+    summaryUsage: generated.usage,
   };
 }
 
@@ -260,9 +231,7 @@ function modelFailure(error: unknown): ContextFailure {
     : undefined;
   return {
     code: 'compaction_failed',
-    message: typeof candidate?.message === 'string'
-      ? candidate.message
-      : typeof error === 'string' ? error : 'Compaction summary model call failed.',
+    message: resolveFailureMessage(error, candidate),
     retryable: typeof candidate?.retryable === 'boolean' ? candidate.retryable : true,
     cause: {
       owner: 'ai',
@@ -271,12 +240,13 @@ function modelFailure(error: unknown): ContextFailure {
   };
 }
 
-function cancelled(): ContextFailure {
-  return {
-    code: 'cancelled',
-    message: 'Context compaction was cancelled.',
-    retryable: true,
-  };
+function resolveFailureMessage(
+  error: unknown,
+  candidate: { readonly message?: unknown } | undefined,
+): string {
+  if (typeof candidate?.message === 'string') return candidate.message;
+  if (typeof error === 'string') return error;
+  return 'Compaction summary model call failed.';
 }
 
 function failed(failure: ContextFailure): Extract<ExecuteCompactionResult, { status: 'failed' }> {
@@ -286,10 +256,42 @@ function failed(failure: ContextFailure): Extract<ExecuteCompactionResult, { sta
 function reportProgress(
   reporter: ((progress: ContextCompactionProgress) => void) | undefined,
   progress: ContextCompactionProgress,
+  sessionId: string,
+  trigger: CompactionTrigger,
+  events?: EventBus,
 ): void {
   try {
     reporter?.(progress);
   } catch {
     // Progress is diagnostic output and must not change Context business execution.
+  }
+  if (!events) return;
+  // Compaction is a session-scoped fact: publish the lifecycle pair so the UI
+  // can render the activity item. Best-effort, like every bus publish.
+  if (progress.status === 'started') {
+    events.publish({
+      type: 'session.compaction.started',
+      payload: { trigger, compactionId: progress.compactionId },
+      sessionId,
+    });
+  } else if (progress.status === 'completed') {
+    events.publish({
+      type: 'session.compaction.ended',
+      payload: { status: 'completed', compactionId: progress.compactionId },
+      sessionId,
+    });
+  } else {
+    // ContextCompactionProgressStarted.status includes 'completed', so narrow
+    // by the failed variant's own fields instead of the status union.
+    const failed = progress as ContextCompactionProgressFailed;
+    events.publish({
+      type: 'session.compaction.ended',
+      payload: {
+        status: 'failed',
+        compactionId: failed.compactionId,
+        error: { message: failed.message, code: failed.code },
+      },
+      sessionId,
+    });
   }
 }

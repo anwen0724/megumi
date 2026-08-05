@@ -11,9 +11,11 @@ import {
   SessionModelResponsePayloadSchema,
   SessionToolResultPayloadSchema,
   SessionUserMessagePayloadSchema,
+  type SessionAssistantContent,
   type SessionMessage,
   type SessionMessageKind,
 } from './session-message';
+import { normalizeLegacyAssistantContent, normalizeLegacyUserMessagePayload } from './legacy-content-normalizer';
 import type { Session } from './session';
 
 type Nullable<T> = T | null;
@@ -171,10 +173,10 @@ class DatabaseSessionStore implements SessionStore {
     const insert = this.database.prepare({ sql: `
       INSERT INTO session_message_attachments (
         attachment_id, message_id, session_id, type, name, mime_type,
-        source_type, source_value, created_at, ordinal
+        source_type, source_value, created_at, ordinal, size_bytes
       ) VALUES (
         @attachment_id, @message_id, @session_id, @type, @name, @mime_type,
-        @source_type, @source_value, @created_at, @ordinal
+        @source_type, @source_value, @created_at, @ordinal, @size_bytes
       )
     ` });
     for (const attachment of attachments) insert.run(toAttachmentRow(attachment));
@@ -272,10 +274,10 @@ class DatabaseSessionStore implements SessionStore {
     this.database.prepare({ sql: `
       INSERT INTO session_compactions (
         compaction_id, session_id, summary_text, covered_until_entry_id,
-        first_kept_entry_id, created_at
+        first_kept_entry_id, usage, created_at
       ) VALUES (
         @compaction_id, @session_id, @summary_text, @covered_until_entry_id,
-        @first_kept_entry_id, @created_at
+        @first_kept_entry_id, @usage, @created_at
       )
     ` }).run(toCompactionRow(compaction));
     return compaction;
@@ -338,6 +340,7 @@ type SessionMessageAttachmentRow = DatabaseRow & {
   source_value: string;
   created_at: string;
   ordinal: number;
+  size_bytes: Nullable<number>;
 };
 
 type SessionEntryRow = DatabaseRow & {
@@ -356,6 +359,7 @@ type SessionCompactionRow = DatabaseRow & {
   summary_text: string;
   covered_until_entry_id: string;
   first_kept_entry_id: Nullable<string>;
+  usage: Nullable<string>;
   created_at: string;
 };
 
@@ -405,12 +409,17 @@ function fromMessageRow(row: SessionMessageRow): SessionMessage {
     created_at: row.created_at,
     ...(row.completed_at ? { completed_at: row.completed_at } : {}),
   };
-  const payload = JSON.parse(row.message_json) as unknown;
+  const payload = JSON.parse(row.message_json) as Record<string, unknown>;
   if (row.message_kind === 'user_message') {
-    return { ...base, message_kind: row.message_kind, ...SessionUserMessagePayloadSchema.parse(payload) };
+    return { ...base, message_kind: row.message_kind, ...SessionUserMessagePayloadSchema.parse(
+      normalizeLegacyUserMessagePayload(payload),
+    ) };
   }
   if (row.message_kind === 'model_response') {
-    return { ...base, message_kind: row.message_kind, ...SessionModelResponsePayloadSchema.parse(payload) };
+    return { ...base, message_kind: row.message_kind, ...SessionModelResponsePayloadSchema.parse({
+      ...payload,
+      content: normalizeLegacyAssistantContent(payload.content as SessionAssistantContent[]),
+    }) };
   }
   if (row.message_kind === 'tool_result') {
     return { ...base, message_kind: row.message_kind, ...SessionToolResultPayloadSchema.parse(payload) };
@@ -419,7 +428,10 @@ function fromMessageRow(row: SessionMessageRow): SessionMessage {
     return SessionAssistantReplyMessageSchema.parse({
       ...base,
       message_kind: row.message_kind,
-      ...SessionAssistantReplyPayloadSchema.parse(payload),
+      ...SessionAssistantReplyPayloadSchema.parse({
+        ...payload,
+        content: normalizeLegacyAssistantContent(payload.content as SessionAssistantContent[]),
+      }),
     });
   }
   throw new Error(`Session message ${row.message_id} has unsupported message_kind.`);
@@ -428,7 +440,9 @@ function fromMessageRow(row: SessionMessageRow): SessionMessage {
 function toMessagePayload(message: SessionMessage): Record<string, unknown> {
   if (message.message_kind === 'user_message') {
     return SessionUserMessagePayloadSchema.parse({
-      content: message.content,
+      display_content: message.display_content,
+      model_content: message.model_content,
+      ...(message.skill_selection ? { skill_selection: message.skill_selection } : {}),
       ...(message.legacy_provenance ? { legacy_provenance: message.legacy_provenance } : {}),
     });
   }
@@ -438,6 +452,14 @@ function toMessagePayload(message: SessionMessage): Record<string, unknown> {
       outcome_status: message.outcome_status,
       ...(message.reason_code ? { reason_code: message.reason_code } : {}),
       ...(message.stop_reason ? { stop_reason: message.stop_reason } : {}),
+      ...(message.api ? { api: message.api } : {}),
+      ...(message.provider ? { provider: message.provider } : {}),
+      ...(message.model ? { model: message.model } : {}),
+      ...(message.response_model ? { response_model: message.response_model } : {}),
+      ...(message.response_id ? { response_id: message.response_id } : {}),
+      ...(message.usage ? { usage: message.usage } : {}),
+      ...(message.failure ? { failure: message.failure } : {}),
+      ...(message.error_message ? { error_message: message.error_message } : {}),
       ...(message.legacy_provenance ? { legacy_provenance: message.legacy_provenance } : {}),
     });
   }
@@ -448,6 +470,7 @@ function toMessagePayload(message: SessionMessage): Record<string, unknown> {
       status: message.status,
       content: message.content,
       ...(message.error ? { error: message.error } : {}),
+      ...(message.usage ? { usage: message.usage } : {}),
       ...(message.legacy_provenance ? { legacy_provenance: message.legacy_provenance } : {}),
     });
   }
@@ -455,6 +478,13 @@ function toMessagePayload(message: SessionMessage): Record<string, unknown> {
     status: message.status,
     content: message.content,
     ...(message.reason_code ? { reason_code: message.reason_code } : {}),
+    ...(message.api ? { api: message.api } : {}),
+    ...(message.provider ? { provider: message.provider } : {}),
+    ...(message.model ? { model: message.model } : {}),
+    ...(message.response_model ? { response_model: message.response_model } : {}),
+    ...(message.response_id ? { response_id: message.response_id } : {}),
+    ...(message.usage ? { usage: message.usage } : {}),
+    ...(message.error_message ? { error_message: message.error_message } : {}),
   });
 }
 
@@ -468,6 +498,7 @@ function toAttachmentRow(attachment: SessionMessageAttachment): SessionMessageAt
     mime_type: attachment.mime_type ?? null,
     source_type: attachment.source_type,
     source_value: attachment.source_value,
+    size_bytes: attachment.size_bytes ?? null,
     ordinal: attachment.ordinal,
     created_at: attachment.created_at,
   };
@@ -484,6 +515,7 @@ function fromAttachmentRow(row: SessionMessageAttachmentRow): SessionMessageAtta
     source_type: row.source_type,
     source_value: row.source_value,
     ordinal: row.ordinal,
+    ...(row.size_bytes !== null && row.size_bytes !== undefined ? { size_bytes: row.size_bytes } : {}),
     created_at: row.created_at,
   };
 }
@@ -519,6 +551,7 @@ function toCompactionRow(compaction: SessionCompactionSummary): SessionCompactio
     summary_text: compaction.summary_text,
     covered_until_entry_id: compaction.covered_until_entry_id,
     first_kept_entry_id: compaction.first_kept_entry_id ?? null,
+    usage: compaction.usage ? JSON.stringify(compaction.usage) : null,
     created_at: compaction.created_at,
   };
 }
@@ -530,6 +563,14 @@ function fromCompactionRow(row: SessionCompactionRow): SessionCompactionSummary 
     summary_text: row.summary_text,
     covered_until_entry_id: row.covered_until_entry_id,
     ...(row.first_kept_entry_id ? { first_kept_entry_id: row.first_kept_entry_id } : {}),
+    ...(row.usage ? { usage: JSON.parse(row.usage) as unknown } : {}),
     created_at: row.created_at,
   };
 }
+
+/**
+ * Converts legacy persisted assistant content to the current schema: ToolCall
+ * arguments were historically stored as an `argumentsText` JSON string and are
+ * read back as the `arguments` object. Historical rows stay untouched; only
+ * the read projection normalizes them.
+ */

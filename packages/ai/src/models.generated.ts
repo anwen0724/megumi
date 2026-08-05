@@ -5,15 +5,15 @@ import { ANTHROPIC_MODELS } from "./providers/anthropic.models.ts";
 import { DEEPSEEK_MODELS } from "./providers/deepseek.models.ts";
 import { GOOGLE_MODELS } from "./providers/google.models.ts";
 import { HUGGINGFACE_MODELS } from "./providers/huggingface.models.ts";
-import { MINIMAX_MODELS } from "./providers/minimax.models.ts";
 import { MINIMAX_CN_MODELS } from "./providers/minimax-cn.models.ts";
-import { MOONSHOTAI_MODELS } from "./providers/moonshotai.models.ts";
+import { MINIMAX_MODELS } from "./providers/minimax.models.ts";
 import { MOONSHOTAI_CN_MODELS } from "./providers/moonshotai-cn.models.ts";
-import { OPENAI_MODELS } from "./providers/openai.models.ts";
+import { MOONSHOTAI_MODELS } from "./providers/moonshotai.models.ts";
 import { OPENAI_CODEX_MODELS } from "./providers/openai-codex.models.ts";
+import { OPENAI_MODELS } from "./providers/openai.models.ts";
 import { OPENROUTER_MODELS } from "./providers/openrouter.models.ts";
-import { QWEN_TOKEN_PLAN_MODELS } from "./providers/qwen-token-plan.models.ts";
 import { QWEN_TOKEN_PLAN_CN_MODELS } from "./providers/qwen-token-plan-cn.models.ts";
+import { QWEN_TOKEN_PLAN_MODELS } from "./providers/qwen-token-plan.models.ts";
 
 export const MODELS: {
 	readonly "anthropic": typeof ANTHROPIC_MODELS;

@@ -77,6 +77,7 @@ export const sessionMessageAttachments = sqliteTable('session_message_attachment
   sourceType: text('source_type').notNull(),
   sourceValue: text('source_value').notNull(),
   ordinal: integer('ordinal').notNull(),
+  sizeBytes: integer('size_bytes'),
   createdAt: text('created_at').notNull(),
 }, (table) => [
   index('idx_session_message_attachments_message').on(table.messageId),
@@ -90,6 +91,7 @@ export const sessionCompactions = sqliteTable('session_compactions', {
   summaryText: text('summary_text').notNull(),
   coveredUntilEntryId: text('covered_until_entry_id'),
   firstKeptEntryId: text('first_kept_entry_id'),
+  usage: text('usage'),
   createdAt: text('created_at').notNull(),
 }, (table) => [
   index('idx_session_compactions_session_created').on(table.sessionId, table.createdAt),

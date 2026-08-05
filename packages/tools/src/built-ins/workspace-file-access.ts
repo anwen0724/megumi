@@ -2,7 +2,6 @@
 
 import path from 'node:path';
 import type { SandboxFileAccess } from '@megumi/sandbox';
-import type { UseSkillRequest, UseSkillResponse } from '@megumi/skills';
 import type { ToolEffectPath, ToolExecutionErrorCode } from '../tool';
 import { ToolExecutionFailure } from '../tool-result';
 import type { ToolProcessAdapter } from './run-command';
@@ -11,14 +10,9 @@ import type { WebSearch } from './web-search';
 
 export type WorkspaceFileAccess = SandboxFileAccess;
 
-export interface SkillUse {
-  useSkill(request: UseSkillRequest): Promise<UseSkillResponse>;
-}
-
 export interface BuiltInToolContext {
   readonly workspaceFileAccess: WorkspaceFileAccess;
   readonly process?: ToolProcessAdapter;
-  readonly skills?: SkillUse;
   readonly webSearch?: WebSearch;
   readonly webFetch?: WebFetch;
 }

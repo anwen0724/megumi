@@ -129,8 +129,5 @@ function mapArtifactIpcError(): RuntimeIpcError {
   return {
     code: 'ipc_handler_failed',
     message: 'Artifact service failed.',
-    severity: 'error',
-    retryable: true,
-    source: 'main',
   };
 }

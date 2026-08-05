@@ -1,4 +1,4 @@
-/* Protects run_command metadata, bounded capture, cancellation, and Skill script mapping. */
+/* Protects run_command metadata, bounded capture, and cancellation. */
 
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,7 +6,6 @@ import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  mapSkillScriptExecutionRequestToRunCommandInput,
 } from '../../../packages/tools/src';
 import { createBuiltInTestHarness } from './built-in-test-harness';
 import { createLocalWorkspaceFileAccess, createProcessAdapter, parsedToolContent } from './tool-test-fixtures';
@@ -33,7 +32,7 @@ describe('run_command built-in Tool', () => {
       status: 'found',
       tool: {
         definition: {
-          inputSchema: {
+          parameters: {
             properties: { command: { description: 'A command written for Windows PowerShell.' } },
           },
         },
@@ -134,54 +133,6 @@ describe('run_command built-in Tool', () => {
       type: 'failed', error: { code: 'shell_unavailable', message: 'Command process could not be started.', details: { reason: 'spawn_failed' } },
     });
     expect(JSON.stringify(failedResult)).not.toContain(root);
-  });
-
-  it.each([
-    ['powershell', "& 'C:\\skills\\review check.ps1' '--name' 'A''B'"],
-    ['cmd', 'call "C:\\skills\\review check.ps1" "--name" "A\'B"'],
-    ['posix_shell', "'C:\\skills\\review check.ps1' '--name' 'A'\\''B'"],
-  ] as const)('maps Skill scripts safely for %s', (shellKind, expectedCommand) => {
-    const mapped = mapSkillScriptExecutionRequestToRunCommandInput({
-      shellKind,
-      execution: {
-        skillPath: 'C:/skills/review/SKILL.md',
-        scriptName: 'check',
-        scriptPath: 'C:\\skills\\review check.ps1',
-        args: ['--name', "A'B"],
-        approvalSummary: 'Run review check',
-      },
-    });
-    expect(mapped.command).toBe(expectedCommand);
-  });
-
-  it('preserves prepared Skill script identity in safe execution metadata', async () => {
-    const run = vi.fn(async () => ({ exitCode: 0 }));
-    const tools = commandTools(root, run);
-    const input = mapSkillScriptExecutionRequestToRunCommandInput({
-      shellKind: 'powershell',
-      execution: {
-        skillPath: 'C:/skills/check/SKILL.md',
-        scriptName: 'check',
-        scriptPath: 'C:/skills/check/scripts/check.ps1',
-        args: ['--watch'],
-        approvalSummary: 'Run Skill check',
-      },
-    });
-    const result = await tools.execute({ toolName: 'run_command', input });
-    expect(result).toMatchObject({
-      type: 'succeeded',
-      metadata: {
-        source: 'skill',
-        skillPath: 'C:/skills/check/SKILL.md',
-        scriptName: 'check',
-        approvalSummary: 'Run Skill check',
-        shellKind: 'powershell',
-      },
-    });
-    expect(run).toHaveBeenCalledWith(
-      expect.objectContaining({ command: "& 'C:/skills/check/scripts/check.ps1' '--watch'" }),
-      expect.any(Object),
-    );
   });
 });
 

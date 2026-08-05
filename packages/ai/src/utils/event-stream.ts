@@ -1,18 +1,4 @@
 import type { AssistantMessage, AssistantMessageEvent } from "../types.ts";
-import {
-	classifyModelFailure,
-	withSafeModelFailure,
-} from "../model-failure.ts";
-
-type AssistantMessageEventInput =
-	| Exclude<AssistantMessageEvent, { type: "error" }>
-	| {
-			type: "error";
-			reason: "aborted" | "error";
-			error: AssistantMessage;
-			failure?: AssistantMessage["failure"];
-			cause?: unknown;
-	  };
 
 // Generic event stream class for async iteration
 export class EventStream<T, R = T> implements AsyncIterable<T> {
@@ -21,9 +7,6 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
 	private done = false;
 	private finalResultPromise: Promise<R>;
 	private resolveFinalResult!: (result: R) => void;
-	private settlementPromise: Promise<void>;
-	private resolveSettlement!: () => void;
-	private settled = false;
 	private isComplete: (event: T) => boolean;
 	private extractResult: (event: T) => R;
 
@@ -33,9 +16,6 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
 		this.finalResultPromise = new Promise((resolve) => {
 			this.resolveFinalResult = resolve;
 		});
-		this.settlementPromise = new Promise((resolve) => {
-			this.resolveSettlement = resolve;
-		});
 	}
 
 	push(event: T): void {
@@ -44,7 +24,6 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
 		if (this.isComplete(event)) {
 			this.done = true;
 			this.resolveFinalResult(this.extractResult(event));
-			this.settle();
 		}
 
 		// Deliver to waiting consumer or queue it
@@ -57,10 +36,6 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
 	}
 
 	end(result?: R): void {
-		if (this.done) {
-			this.settle();
-			return;
-		}
 		this.done = true;
 		if (result !== undefined) {
 			this.resolveFinalResult(result);
@@ -70,7 +45,6 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
 			const waiter = this.waiting.shift()!;
 			waiter({ value: undefined as any, done: true });
 		}
-		this.settle();
 	}
 
 	async *[Symbol.asyncIterator](): AsyncIterator<T> {
@@ -90,16 +64,6 @@ export class EventStream<T, R = T> implements AsyncIterable<T> {
 	result(): Promise<R> {
 		return this.finalResultPromise;
 	}
-
-	waitForSettlement(): Promise<void> {
-		return this.settlementPromise;
-	}
-
-	private settle(): void {
-		if (this.settled) return;
-		this.settled = true;
-		this.resolveSettlement();
-	}
 }
 
 export class AssistantMessageEventStream extends EventStream<AssistantMessageEvent, AssistantMessage> {
@@ -115,38 +79,6 @@ export class AssistantMessageEventStream extends EventStream<AssistantMessageEve
 				throw new Error("Unexpected event type for final result");
 			},
 		);
-	}
-
-	override push(event: AssistantMessageEventInput): void {
-		if (event.type !== "error") {
-			super.push(event);
-			return;
-		}
-		const failure = classifyModelFailure({
-			reason: event.reason,
-			failure: event.failure ?? event.error.failure,
-			error: event.cause,
-		});
-		const safeError = withSafeModelFailure(event.error, failure);
-		// Provider streams reuse one mutable AssistantMessage across partial events.
-		// Normalize that same object so previously emitted partial references cannot
-		// reveal a raw provider error after the terminal catch mutates it.
-		Object.assign(event.error, safeError);
-		const { cause: _cause, ...publicEvent } = event;
-		super.push({
-			...publicEvent,
-			failure,
-			error: event.error,
-		});
-	}
-
-	fail(input: {
-		reason: "aborted" | "error";
-		error: AssistantMessage;
-		cause?: unknown;
-		failure?: AssistantMessage["failure"];
-	}): void {
-		this.push({ type: "error", ...input });
 	}
 }
 

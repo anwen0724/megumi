@@ -62,6 +62,23 @@ export function SkillSettingsPanel() {
     setStatus('failed');
   }
 
+  async function refreshSkills() {
+    const api = window.megumi?.skill;
+    if (!api?.refresh) {
+      await loadSkills();
+      return;
+    }
+    const result = await api.refresh(createRendererRuntimeIpcRequest(
+      IPC_CHANNELS.skill.refresh,
+      { ...(workspaceId ? { workspaceId } : {}) },
+    ));
+    if (!result.ok || result.data.status === 'failed') {
+      await loadSkills();
+      return;
+    }
+    await loadSkills();
+  }
+
   useEffect(() => {
     setMenuPath(undefined);
     setSelectedPath(undefined);
@@ -213,7 +230,7 @@ export function SkillSettingsPanel() {
               </button>
             ))}
           </div>
-          <Button variant="ghost" size="sm" onClick={() => void loadSkills()} disabled={status === 'loading'}>
+          <Button variant="ghost" size="sm" onClick={() => void refreshSkills()} disabled={status === 'loading'}>
             <RefreshCw size={14} aria-hidden="true" className={status === 'loading' ? 'animate-spin' : undefined} />
             {t('skills.refresh')}
           </Button>

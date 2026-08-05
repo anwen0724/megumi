@@ -15,7 +15,7 @@ import { createBuiltInToolHandler, inputString, operation } from './tool-handler
 export const searchTextToolDefinition: ToolDefinition = {
   name: 'search_text',
   description: 'Search text in readable files, including Markdown, DOCX, and PDF, and return size-limited matches.',
-  inputSchema: {
+  parameters: {
     type: 'object',
     properties: {
       query: { type: 'string', description: 'Literal text to search for.' },

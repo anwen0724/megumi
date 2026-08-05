@@ -129,6 +129,8 @@ export interface TimelineUserMessage extends TimelineMessageBase {
   role: 'user';
   runId?: RunId | string;
   clientMessageId?: string;
+  /** Structured Skill selection persisted with the message; shown by the UI, never part of the model text. */
+  skillSelection?: { name: string; skillPath: string };
   blocks: UserTimelineBlock[];
 }
 
@@ -584,6 +586,10 @@ export const TimelineUserMessageSchema = z
     role: z.literal('user'),
     runId: z.string().min(1).optional(),
     clientMessageId: TimelineIdSchema.optional(),
+    skillSelection: z.object({
+      name: z.string().min(1),
+      skillPath: z.string().min(1),
+    }).strict().optional(),
     blocks: z.array(UserTimelineBlockSchema).min(1),
   })
   .strict() satisfies z.ZodType<TimelineUserMessage>;

@@ -1,11 +1,14 @@
 /*
- * Owns in-process Run identity, per-Session exclusion, and bounded terminal summaries.
+ * Owns the only mutable per-Run runtime record: the ActiveRun. It keeps the
+ * Run snapshot, the root AbortController, the single Agent Loop completion
+ * and at most one pending approval wait. Request-id idempotency, per-Session
+ * exclusion, and bounded terminal results live here too; no router, resume
+ * state, stream buffer or loop position ever does.
  */
 import type { SessionEntry, SessionMessageWithAttachments } from '@megumi/session';
 import type { ApprovalDecision } from '@megumi/permissions';
 import type { EngineClock, RunApproval } from './engine';
 import type { Run, RunFailure } from './run';
-import type { EngineRunRuntime } from './run-loop';
 import { isTerminalRunStatus } from './run';
 
 export interface StartRequestFingerprint {
@@ -52,33 +55,38 @@ interface StartedRecord {
 
 type RequestRecord = PendingStartRecord | StartedRecord;
 
-export interface StoredRunApproval<TContinuation = unknown> {
+export type ApprovalResolution =
+  | { readonly status: 'approved'; readonly decision: ApprovalDecision }
+  | { readonly status: 'denied'; readonly decision: ApprovalDecision }
+  | { readonly status: 'cancelled' };
+
+/** The one pending approval wait of an ActiveRun; settled exactly once. */
+export interface PendingApproval {
+  readonly approvalId: string;
   readonly approval: RunApproval;
-  readonly continuation?: TContinuation;
-  readonly claimed: boolean;
+  readonly promise: Promise<ApprovalResolution>;
+  readonly settle: (resolution: ApprovalResolution) => void;
+  settled: boolean;
 }
 
-interface MutableRunApprovalRecord<TContinuation = unknown> {
-  approval: RunApproval;
-  continuation?: TContinuation;
-  claimed: boolean;
+/**
+ * The only mutable per-Run runtime record. It never holds a Tool Router,
+ * resume state for pending calls, stream output, attempt state
+ * or any Agent Loop execution position.
+ */
+export interface ActiveRun {
+  run: Run;
+  readonly abortController: AbortController;
+  /** Settled exactly once when the single Agent Loop call converges. */
+  readonly completion: Promise<void>;
+  pendingApproval?: PendingApproval;
 }
 
-export interface ClaimedRunApproval<TContinuation> extends StoredRunApproval<TContinuation> {
-  readonly continuation: TContinuation;
-  readonly claimed: true;
-}
-
-export type PutRunApprovalResult =
-  | { readonly status: 'stored' }
-  | { readonly status: 'already_exists'; readonly approval: RunApproval }
-  | { readonly status: 'run_already_waiting'; readonly approval: RunApproval };
-
-export type ClaimRunApprovalResult<TContinuation = unknown> =
-  | { readonly status: 'claimed'; readonly record: ClaimedRunApproval<TContinuation> }
+export type ResolveApprovalResult =
+  | { readonly status: 'accepted'; readonly run: Run }
   | { readonly status: 'not_found' }
-  | { readonly status: 'already_claimed'; readonly approval: RunApproval }
-  | { readonly status: 'already_resolved'; readonly approval: RunApproval };
+  | { readonly status: 'not_waiting'; readonly run: Run }
+  | { readonly status: 'already_resolved'; readonly run: Run };
 
 export interface ActiveRunStoreOptions {
   readonly clock: EngineClock;
@@ -87,13 +95,11 @@ export interface ActiveRunStoreOptions {
 
 export class ActiveRunStore {
   private readonly requestRecords = new Map<string, RequestRecord>();
-  private readonly runsById = new Map<string, Run>();
+  /** Runs reserved but not yet attached to an ActiveRun (start establishment in flight). */
+  private readonly pendingRuns = new Map<string, Run>();
+  private readonly activeRuns = new Map<string, ActiveRun>();
+  private readonly terminalRuns = new Map<string, Run>();
   private readonly runIdBySession = new Map<string, string>();
-  private readonly runApprovals = new Map<string, MutableRunApprovalRecord>();
-  private readonly pendingApprovalIdByRun = new Map<string, string>();
-  private readonly runIdByToolExecution = new Map<string, string>();
-  private readonly activeToolExecutionIdsByRun = new Map<string, Set<string>>();
-  private readonly runtimeByRunId = new Map<string, EngineRunRuntime>();
   private readonly idleWaiters = new Set<() => void>();
 
   constructor(private readonly options: ActiveRunStoreOptions) {
@@ -123,9 +129,9 @@ export class ActiveRunStore {
 
     const activeRunId = this.runIdBySession.get(input.fingerprint.sessionId);
     if (activeRunId) {
-      const activeRun = this.runsById.get(activeRunId);
-      if (activeRun && !isTerminalRunStatus(activeRun.status)) {
-        return { status: 'session_busy', activeRun };
+      const run = this.findLiveRun(activeRunId);
+      if (run && !isTerminalRunStatus(run.status)) {
+        return { status: 'session_busy', activeRun: run };
       }
       this.runIdBySession.delete(input.fingerprint.sessionId);
     }
@@ -142,7 +148,7 @@ export class ActiveRunStore {
       completion,
       settle,
     });
-    this.runsById.set(input.run.runId, input.run);
+    this.pendingRuns.set(input.run.runId, input.run);
     this.runIdBySession.set(input.run.sessionId, input.run.runId);
     return { status: 'reserved', run: input.run };
   }
@@ -165,7 +171,6 @@ export class ActiveRunStore {
       result: input.result,
     };
     this.requestRecords.set(input.requestId, startedRecord);
-    this.runsById.set(input.result.run.runId, input.result.run);
     record.settle({ status: 'started', result: input.result });
   }
 
@@ -179,7 +184,7 @@ export class ActiveRunStore {
     }
 
     this.requestRecords.delete(input.requestId);
-    this.runsById.delete(record.run.runId);
+    this.pendingRuns.delete(record.run.runId);
     if (this.runIdBySession.get(record.run.sessionId) === record.run.runId) {
       this.runIdBySession.delete(record.run.sessionId);
     }
@@ -187,17 +192,60 @@ export class ActiveRunStore {
     this.notifyIdle();
   }
 
+  /** Registers the single ActiveRun for a started Run. */
+  attachActiveRun(activeRun: ActiveRun): void {
+    const run = activeRun.run;
+    const existing = this.activeRuns.get(run.runId);
+    if (existing) {
+      throw new Error(`Run already has an ActiveRun: ${run.runId}.`);
+    }
+    this.pendingRuns.delete(run.runId);
+    this.activeRuns.set(run.runId, activeRun);
+    this.runIdBySession.set(run.sessionId, run.runId);
+  }
+
+  getActiveRun(runId: string): ActiveRun | undefined {
+    return this.activeRuns.get(runId);
+  }
+
   updateRun(run: Run): void {
     this.pruneExpired();
-    const previous = this.runsById.get(run.runId);
-    if (!previous) {
-      throw new Error(`Run not found: ${run.runId}.`);
+    const active = this.activeRuns.get(run.runId);
+    if (!active) {
+      // A reserved Run may settle directly to a terminal result without a loop.
+      const pending = this.pendingRuns.get(run.runId);
+      if (pending) {
+        const requestRecord = this.requestRecords.get(run.requestId);
+        if (requestRecord?.status === 'started') {
+          const expiresAtMs = isTerminalRunStatus(run.status)
+            ? this.nowMs() + this.options.terminalRunRetentionMs
+            : undefined;
+          this.requestRecords.set(run.requestId, {
+            ...requestRecord,
+            result: { ...requestRecord.result, run },
+            ...(expiresAtMs === undefined ? {} : { expiresAtMs }),
+          });
+        }
+        if (isTerminalRunStatus(run.status)) {
+          this.pendingRuns.delete(run.runId);
+          this.terminalRuns.set(run.runId, run);
+          this.notifyIdle();
+        } else {
+          this.pendingRuns.set(run.runId, run);
+        }
+        return;
+      }
+      const previous = this.terminalRuns.get(run.runId);
+      if (previous && isTerminalRunStatus(run.status)) {
+        this.terminalRuns.set(run.runId, run);
+      }
+      return;
     }
-    if (previous.requestId !== run.requestId || previous.sessionId !== run.sessionId) {
+    if (active.run.requestId !== run.requestId || active.run.sessionId !== run.sessionId) {
       throw new Error('Updated Run identity does not match the stored Run.');
     }
 
-    this.runsById.set(run.runId, run);
+    active.run = run;
     const requestRecord = this.requestRecords.get(run.requestId);
     if (requestRecord?.status === 'started') {
       const expiresAtMs = isTerminalRunStatus(run.status)
@@ -214,31 +262,32 @@ export class ActiveRunStore {
       if (this.runIdBySession.get(run.sessionId) === run.runId) {
         this.runIdBySession.delete(run.sessionId);
       }
-      this.cancelPendingRunApproval({
-        runId: run.runId,
-        cancelledAt: run.completedAt ?? this.options.clock.now(),
-      });
-      this.clearActiveToolExecutions(run.runId);
+      this.settlePendingApprovalCancelled(run);
+      this.activeRuns.delete(run.runId);
+      this.terminalRuns.set(run.runId, run);
       this.notifyIdle();
     }
   }
 
   getRun(runId: string): Run | undefined {
     this.pruneExpired();
-    return this.runsById.get(runId);
+    const live = this.findLiveRun(runId);
+    if (live) return snapshot(live);
+    const terminal = this.terminalRuns.get(runId);
+    return terminal ? snapshot(terminal) : undefined;
   }
 
-  getActiveRunForSession(sessionId: string): Run | undefined {
-    this.pruneExpired();
-    const runId = this.runIdBySession.get(sessionId);
-    return runId ? this.runsById.get(runId) : undefined;
+  private findLiveRun(runId: string): Run | undefined {
+    const active = this.activeRuns.get(runId);
+    if (active) return active.run;
+    return this.pendingRuns.get(runId);
   }
 
   listActiveRuns(): readonly Run[] {
     this.pruneExpired();
-    return [...this.runsById.values()]
-      .filter((run) => !isTerminalRunStatus(run.status))
-      .map((run) => snapshot(run));
+    return [...this.activeRuns.values()]
+      .map((active) => snapshot(active.run))
+      .filter((run) => !isTerminalRunStatus(run.status));
   }
 
   async waitForIdle(timeoutMs: number): Promise<boolean> {
@@ -267,208 +316,85 @@ export class ActiveRunStore {
     return record?.status === 'started' ? record.result : undefined;
   }
 
-  setRunRuntime(runId: string, runtime: EngineRunRuntime): void {
-    const run = this.getRun(runId);
-    if (!run || isTerminalRunStatus(run.status)) {
-      throw new Error(`Cannot store runtime for inactive Run ${runId}.`);
-    }
-    if (this.runtimeByRunId.has(runId)) {
-      throw new Error(`Run runtime already exists: ${runId}.`);
-    }
-    this.runtimeByRunId.set(runId, runtime);
-  }
-
-  getRunRuntime(runId: string): EngineRunRuntime | undefined {
-    return this.runtimeByRunId.get(runId);
-  }
-
-  releaseRunRuntime(runId: string): boolean {
-    return this.runtimeByRunId.delete(runId);
-  }
-
-  putRunApproval<TContinuation>(input: {
+  /**
+   * Registers the one pending approval wait of an ActiveRun and returns its
+   * promise. The Agent Loop awaits it in place; the Engine settles it.
+   */
+  beginApprovalWait(input: {
+    readonly runId: string;
     readonly approval: RunApproval;
-    readonly continuation: TContinuation;
-  }): PutRunApprovalResult {
-    const run = this.getRun(input.approval.runId);
-    if (!run || isTerminalRunStatus(run.status)) {
-      throw new Error(`Cannot store approval for inactive Run ${input.approval.runId}.`);
+  }): Promise<ApprovalResolution> {
+    const active = this.activeRuns.get(input.runId);
+    if (!active || isTerminalRunStatus(active.run.status)) {
+      throw new Error(`Cannot wait for approval on inactive Run ${input.runId}.`);
     }
-    if (input.approval.status !== 'pending') {
-      throw new Error('A new RunApproval must be pending.');
+    // The Run transitions running -> waiting right before registering the wait.
+    if (active.run.status !== 'running' && active.run.status !== 'waiting') {
+      throw new Error(`Run ${input.runId} is not running and cannot wait for approval.`);
     }
-
-    const existingById = this.runApprovals.get(input.approval.runApprovalId);
-    if (existingById) {
-      return {
-        status: 'already_exists',
-        approval: snapshot(existingById.approval),
-      };
-    }
-    const existingPendingId = this.pendingApprovalIdByRun.get(input.approval.runId);
-    if (existingPendingId) {
-      const existing = this.runApprovals.get(existingPendingId);
-      if (existing?.approval.status === 'pending') {
-        return {
-          status: 'run_already_waiting',
-          approval: snapshot(existing.approval),
-        };
-      }
-      this.pendingApprovalIdByRun.delete(input.approval.runId);
+    if (active.pendingApproval && !active.pendingApproval.settled) {
+      throw new Error(`Run ${input.runId} already has a pending approval.`);
     }
 
-    this.runApprovals.set(input.approval.runApprovalId, {
+    let settle!: (resolution: ApprovalResolution) => void;
+    const promise = new Promise<ApprovalResolution>((resolve) => {
+      settle = resolve;
+    });
+    active.pendingApproval = {
+      approvalId: input.approval.runApprovalId,
       approval: snapshot(input.approval),
-      continuation: snapshot(input.continuation),
-      claimed: false,
-    });
-    this.pendingApprovalIdByRun.set(input.approval.runId, input.approval.runApprovalId);
-    return { status: 'stored' };
-  }
-
-  getRunApproval<TContinuation = unknown>(
-    runApprovalId: string,
-  ): StoredRunApproval<TContinuation> | undefined {
-    const record = this.runApprovals.get(runApprovalId);
-    return record
-      ? {
-          approval: snapshot(record.approval),
-          ...(record.continuation === undefined
-            ? {}
-            : { continuation: snapshot(record.continuation) as TContinuation }),
-          claimed: record.claimed,
-        }
-      : undefined;
-  }
-
-  getPendingRunApproval(runId: string): RunApproval | undefined {
-    const runApprovalId = this.pendingApprovalIdByRun.get(runId);
-    if (!runApprovalId) return undefined;
-    const record = this.runApprovals.get(runApprovalId);
-    return record?.approval.status === 'pending'
-      ? snapshot(record.approval)
-      : undefined;
-  }
-
-  claimRunApproval<TContinuation = unknown>(
-    runApprovalId: string,
-  ): ClaimRunApprovalResult<TContinuation> {
-    const record = this.runApprovals.get(runApprovalId);
-    if (!record) return { status: 'not_found' };
-    if (record.approval.status !== 'pending') {
-      return {
-        status: 'already_resolved',
-        approval: snapshot(record.approval),
-      };
-    }
-    if (record.claimed) {
-      return {
-        status: 'already_claimed',
-        approval: snapshot(record.approval),
-      };
-    }
-    if (record.continuation === undefined) {
-      throw new Error(`Pending RunApproval has no continuation: ${runApprovalId}.`);
-    }
-    record.claimed = true;
-    return {
-      status: 'claimed',
-      record: {
-        approval: snapshot(record.approval),
-        continuation: snapshot(record.continuation) as TContinuation,
-        claimed: true,
-      },
+      promise,
+      settle,
+      settled: false,
     };
+    return promise;
   }
 
-  releaseRunApprovalClaim(runApprovalId: string): boolean {
-    const record = this.runApprovals.get(runApprovalId);
-    if (!record || record.approval.status !== 'pending' || !record.claimed) return false;
-    record.claimed = false;
+  /** Settles the pending approval wait; returns whether the decision was accepted. */
+  resolveApproval(input: {
+    readonly approvalId: string;
+    readonly decision: ApprovalDecision;
+  }): ResolveApprovalResult {
+    const active = [...this.activeRuns.values()].find(
+      (candidate) => candidate.pendingApproval?.approvalId === input.approvalId,
+    );
+    if (!active || !active.pendingApproval) return { status: 'not_found' };
+    const pending = active.pendingApproval;
+    if (pending.settled) return { status: 'already_resolved', run: snapshot(active.run) };
+    if (active.run.status !== 'waiting') return { status: 'not_waiting', run: snapshot(active.run) };
+
+    pending.settled = true;
+    pending.settle(
+      input.decision.decision === 'approved'
+        ? { status: 'approved', decision: snapshot(input.decision) }
+        : { status: 'denied', decision: snapshot(input.decision) },
+    );
+    return { status: 'accepted', run: snapshot(active.run) };
+  }
+
+  /** Settles the pending approval wait as cancelled, e.g. when the Run is cancelled. */
+  cancelPendingApproval(runId: string): boolean {
+    const active = this.activeRuns.get(runId);
+    const pending = active?.pendingApproval;
+    if (!pending || pending.settled) return false;
+    pending.settled = true;
+    pending.settle({ status: 'cancelled' });
     return true;
   }
 
-  resolveRunApproval(input: {
-    readonly runApprovalId: string;
-    readonly status: Exclude<RunApproval['status'], 'pending'>;
-    readonly decidedAt: string;
-    readonly decision?: ApprovalDecision;
-  }): RunApproval {
-    const record = this.runApprovals.get(input.runApprovalId);
-    if (!record) throw new Error(`RunApproval not found: ${input.runApprovalId}.`);
-    if (record.approval.status !== 'pending') {
-      throw new Error(`RunApproval already resolved: ${input.runApprovalId}.`);
-    }
-    if (!record.claimed) {
-      throw new Error(`RunApproval must be claimed before resolution: ${input.runApprovalId}.`);
-    }
-
-    record.approval = {
-      ...record.approval,
-      status: input.status,
-      decidedAt: input.decidedAt,
-      ...(input.decision ? { decision: snapshot(input.decision) } : {}),
-    };
-    record.claimed = false;
-    record.continuation = undefined;
-    if (this.pendingApprovalIdByRun.get(record.approval.runId) === input.runApprovalId) {
-      this.pendingApprovalIdByRun.delete(record.approval.runId);
-    }
-    return snapshot(record.approval);
-  }
-
-  cancelPendingRunApproval(input: {
-    readonly runId: string;
-    readonly cancelledAt: string;
-  }): RunApproval | undefined {
-    const runApprovalId = this.pendingApprovalIdByRun.get(input.runId);
-    if (!runApprovalId) return undefined;
-    const record = this.runApprovals.get(runApprovalId);
-    if (!record || record.approval.status !== 'pending') {
-      this.pendingApprovalIdByRun.delete(input.runId);
-      return undefined;
-    }
-    record.claimed = true;
-    return this.resolveRunApproval({
-      runApprovalId,
-      status: 'cancelled',
-      decidedAt: input.cancelledAt,
-    });
-  }
-
-  addActiveToolExecution(input: {
-    readonly runId: string;
-    readonly toolExecutionId: string;
-  }): void {
-    const run = this.getRun(input.runId);
-    if (!run || isTerminalRunStatus(run.status)) {
-      throw new Error(`Cannot start ToolExecution for inactive Run ${input.runId}.`);
-    }
-    if (this.runIdByToolExecution.has(input.toolExecutionId)) {
-      throw new Error(`ToolExecution already active: ${input.toolExecutionId}.`);
-    }
-    const executions = this.activeToolExecutionIdsByRun.get(input.runId) ?? new Set<string>();
-    executions.add(input.toolExecutionId);
-    this.activeToolExecutionIdsByRun.set(input.runId, executions);
-    this.runIdByToolExecution.set(input.toolExecutionId, input.runId);
-  }
-
-  removeActiveToolExecution(toolExecutionId: string): boolean {
-    const runId = this.runIdByToolExecution.get(toolExecutionId);
-    if (!runId) return false;
-    this.runIdByToolExecution.delete(toolExecutionId);
-    const executions = this.activeToolExecutionIdsByRun.get(runId);
-    executions?.delete(toolExecutionId);
-    if (executions?.size === 0) this.activeToolExecutionIdsByRun.delete(runId);
-    return true;
-  }
-
-  getActiveToolExecutionIds(runId: string): readonly string[] {
-    return [...(this.activeToolExecutionIdsByRun.get(runId) ?? [])];
+  /** Cancels the pending approval wait when the Run reaches a terminal state. */
+  private settlePendingApprovalCancelled(run: Run): void {
+    const active = this.activeRuns.get(run.runId);
+    const pending = active?.pendingApproval;
+    if (!pending || pending.settled) return;
+    pending.settled = true;
+    pending.settle({ status: 'cancelled' });
   }
 
   private notifyIdle(): void {
-    if ([...this.runsById.values()].some((run) => !isTerminalRunStatus(run.status))) return;
+    if ([...this.activeRuns.values()].some((active) => !isTerminalRunStatus(active.run.status))) {
+      return;
+    }
     for (const waiter of [...this.idleWaiters]) waiter();
   }
 
@@ -483,26 +409,7 @@ export class ActiveRunStore {
         continue;
       }
       this.requestRecords.delete(requestId);
-      this.runsById.delete(record.result.run.runId);
-      this.deleteRunRuntimeRecords(record.result.run.runId);
-    }
-  }
-
-  private clearActiveToolExecutions(runId: string): void {
-    const executions = this.activeToolExecutionIdsByRun.get(runId);
-    if (!executions) return;
-    for (const toolExecutionId of executions) {
-      this.runIdByToolExecution.delete(toolExecutionId);
-    }
-    this.activeToolExecutionIdsByRun.delete(runId);
-  }
-
-  private deleteRunRuntimeRecords(runId: string): void {
-    this.clearActiveToolExecutions(runId);
-    this.runtimeByRunId.delete(runId);
-    this.pendingApprovalIdByRun.delete(runId);
-    for (const [runApprovalId, record] of this.runApprovals) {
-      if (record.approval.runId === runId) this.runApprovals.delete(runApprovalId);
+      this.terminalRuns.delete(record.result.run.runId);
     }
   }
 

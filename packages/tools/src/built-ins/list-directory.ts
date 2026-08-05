@@ -14,7 +14,7 @@ import { createBuiltInToolHandler, inputString, operation } from './tool-handler
 export const listDirectoryToolDefinition: ToolDefinition = {
   name: 'list_directory',
   description: 'List files and directories.',
-  inputSchema: {
+  parameters: {
     type: 'object',
     properties: {
       path: {

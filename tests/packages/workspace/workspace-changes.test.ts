@@ -120,7 +120,7 @@ function scope() { return { workspace_id: 'workspace:one', session_id: 'session:
 
 interface FakeWorkspaceStore extends WorkspaceStore { changeSets: WorkspaceChangeSet[]; files: WorkspaceChangedFile[] }
 function fakeStore(options: { failChangedFileWrite?: boolean } = {}): FakeWorkspaceStore {
-  const store = {
+  const store: FakeWorkspaceStore = {
     changeSets: [] as WorkspaceChangeSet[], files: [] as WorkspaceChangedFile[],
     upsertWorkspace: vi.fn(), findWorkspaceById: vi.fn(), findWorkspaceByRootPathKey: vi.fn(), listWorkspaces: vi.fn(() => []),
     updateWorkspaceStatus: vi.fn(), deleteWorkspace: vi.fn(() => 'not_found' as const),
@@ -150,6 +150,6 @@ function fakeStore(options: { failChangedFileWrite?: boolean } = {}): FakeWorksp
     listChangedFilesByChangeSetId(id: string) { return store.files.filter((file) => file.change_set_id === id); },
     listChangedFilesByRunId(runId: string) { const ids = new Set(store.changeSets.filter((item) => item.run_id === runId).map((item) => item.change_set_id)); return store.files.filter((file) => ids.has(file.change_set_id)); },
     getChangeSummary(id: string) { const change_set = store.changeSets.find((item) => item.change_set_id === id); return change_set ? { change_set, files: store.files.filter((file) => file.change_set_id === id) } : undefined; },
-  } satisfies FakeWorkspaceStore;
+  };
   return store;
 }
