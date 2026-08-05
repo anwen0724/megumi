@@ -11,9 +11,11 @@ import {
   SessionModelResponsePayloadSchema,
   SessionToolResultPayloadSchema,
   SessionUserMessagePayloadSchema,
+  type SessionAssistantContent,
   type SessionMessage,
   type SessionMessageKind,
 } from './session-message';
+import { normalizeLegacyAssistantContent, normalizeLegacyUserMessagePayload } from './legacy-content-normalizer';
 import type { Session } from './session';
 
 type Nullable<T> = T | null;
@@ -407,28 +409,17 @@ function fromMessageRow(row: SessionMessageRow): SessionMessage {
     created_at: row.created_at,
     ...(row.completed_at ? { completed_at: row.completed_at } : {}),
   };
-  const payload = JSON.parse(row.message_json) as unknown;
+  const payload = JSON.parse(row.message_json) as Record<string, unknown>;
   if (row.message_kind === 'user_message') {
-    // Legacy records stored a single `content`; read them as display and model
-    // content. The legacy key itself is removed so the strict payload schema
-    // still accepts the converted record.
-    const raw = payload as Record<string, unknown>;
-    if (!('display_content' in raw) && 'content' in raw) {
-      const { content: legacyContent, ...rest } = raw;
-      return {
-        ...base,
-        message_kind: row.message_kind,
-        ...SessionUserMessagePayloadSchema.parse({
-          ...rest,
-          display_content: legacyContent,
-          model_content: legacyContent,
-        }),
-      };
-    }
-    return { ...base, message_kind: row.message_kind, ...SessionUserMessagePayloadSchema.parse(payload) };
+    return { ...base, message_kind: row.message_kind, ...SessionUserMessagePayloadSchema.parse(
+      normalizeLegacyUserMessagePayload(payload),
+    ) };
   }
   if (row.message_kind === 'model_response') {
-    return { ...base, message_kind: row.message_kind, ...SessionModelResponsePayloadSchema.parse(payload) };
+    return { ...base, message_kind: row.message_kind, ...SessionModelResponsePayloadSchema.parse({
+      ...payload,
+      content: normalizeLegacyAssistantContent(payload.content as SessionAssistantContent[]),
+    }) };
   }
   if (row.message_kind === 'tool_result') {
     return { ...base, message_kind: row.message_kind, ...SessionToolResultPayloadSchema.parse(payload) };
@@ -437,7 +428,10 @@ function fromMessageRow(row: SessionMessageRow): SessionMessage {
     return SessionAssistantReplyMessageSchema.parse({
       ...base,
       message_kind: row.message_kind,
-      ...SessionAssistantReplyPayloadSchema.parse(payload),
+      ...SessionAssistantReplyPayloadSchema.parse({
+        ...payload,
+        content: normalizeLegacyAssistantContent(payload.content as SessionAssistantContent[]),
+      }),
     });
   }
   throw new Error(`Session message ${row.message_id} has unsupported message_kind.`);
@@ -573,3 +567,10 @@ function fromCompactionRow(row: SessionCompactionRow): SessionCompactionSummary 
     created_at: row.created_at,
   };
 }
+
+/**
+ * Converts legacy persisted assistant content to the current schema: ToolCall
+ * arguments were historically stored as an `argumentsText` JSON string and are
+ * read back as the `arguments` object. Historical rows stay untouched; only
+ * the read projection normalizes them.
+ */
