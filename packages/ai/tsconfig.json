@@ -6,6 +6,6 @@
     "outDir": "./dist/types",
     "tsBuildInfoFile": "./dist/types/.tsbuildinfo"
   },
-  "include": ["src/**/*.ts", "src/**/*.json"],
+  "include": ["src/**/*.ts", "src/**/*.json", "src/providers/data/.manifest.json"],
   "exclude": ["node_modules", "dist"]
 }

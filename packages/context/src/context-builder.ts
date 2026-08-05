@@ -7,7 +7,7 @@
 
 import crypto from 'node:crypto';
 import type { Api, Context as AiContext, Message, Model, Models, Tool } from '@megumi/ai';
-import { capabilitiesFromModel, estimateContextTokens, estimateMessageTokens } from '@megumi/ai';
+import { estimateContextTokens, estimateMessageTokens } from '@megumi/ai/utils/estimate';
 import type { EventBus } from '@megumi/events';
 import type { EffectiveInstructions, InstructionReader } from '@megumi/instructions';
 import type { ObservabilityService } from '@megumi/observability';
@@ -334,7 +334,7 @@ class DefaultContext implements ContextCapabilities {
     const converted = await buildContextMessages({
       history: input.history.items,
       attachmentReader: this.options.attachmentReader,
-      imageInputSupport: capabilitiesFromModel(input.model).imageInput === true,
+      imageInputSupport: input.model.input.includes('image'),
       signal: input.signal,
     });
     if (converted.status === 'failed') return converted;

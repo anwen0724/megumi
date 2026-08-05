@@ -1,6 +1,6 @@
 /* Normalizes internal adapter output into bounded, redacted public Tool results. */
 
-import type { JsonObject } from '@megumi/ai';
+import type { JsonObject } from './json';
 import type {
   NormalizedToolResult,
   RawToolResult,

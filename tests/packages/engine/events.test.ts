@@ -317,7 +317,7 @@ describe('Engine RuntimeEvents', () => {
     const retryFailed = events.find((event) => event.type === 'turn.retry.failed');
     expect(retryFailed?.payload).toMatchObject({
       attemptNumber: 2,
-      error: { code: 'rate_limited' },
+      error: { code: 'provider_error' },
     });
   });
 

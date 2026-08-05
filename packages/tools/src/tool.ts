@@ -1,6 +1,6 @@
 ﻿/* Defines stable Tool facts and execution contracts shared across Package seams. */
 
-import type { JsonObject, JsonValue } from '@megumi/ai';
+import type { JsonObject, JsonValue } from './json';
 import type { ToolExecutionAccess } from '@megumi/sandbox';
 import type { PlanStep } from './built-ins/update-plan';
 

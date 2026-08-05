@@ -1,5 +1,4 @@
 /* Owns Session semantic message commits, active history, and compaction facts. */
-import type { AssistantContentBlock, ContentBlock } from '@megumi/ai';
 import type {
   SessionAttachmentContentStore,
   SessionAttachmentImport,
@@ -15,8 +14,10 @@ import {
 import type {
   AssistantReplyReasonCode,
   AssistantReplyStatus,
+  SessionAssistantContent,
   SessionMessage,
   SessionMessageWithAttachments,
+  SessionUserContent,
 } from './session-message';
 import { sessionFailure, type SessionFailure } from './session';
 import type { SessionStore } from './session-store';
@@ -25,8 +26,8 @@ export interface SaveUserMessageRequest {
   message_id: string;
   session_id: string;
   run_id?: string;
-  display_content: ContentBlock[];
-  model_content: ContentBlock[];
+  display_content: SessionUserContent[];
+  model_content: SessionUserContent[];
   skill_selection?: { name: string; skill_path: string };
   attachments?: SessionAttachmentImport[];
   parent_entry_id?: string;
@@ -38,7 +39,7 @@ export interface SaveModelResponseRequest {
   session_id: string;
   run_id: string;
   parent_entry_id?: string;
-  content: AssistantContentBlock[];
+  content: SessionAssistantContent[];
   outcome_status: 'completed' | 'incomplete' | 'failed';
   reason_code?: string;
   stop_reason?: string;
@@ -59,7 +60,7 @@ export interface SaveAssistantReplyRequest {
   run_id: string;
   parent_entry_id?: string;
   status: AssistantReplyStatus;
-  content: AssistantContentBlock[];
+  content: SessionAssistantContent[];
   reason_code?: AssistantReplyReasonCode;
   api?: string;
   provider?: string;
@@ -80,7 +81,7 @@ export interface SaveToolResultMessageRequest {
   tool_name: string;
   status: 'success' | 'failure' | 'permission_denied' | 'user_rejected' | 'cancelled';
   error?: { code: string; message: string; details?: Record<string, unknown> };
-  content: ContentBlock[];
+  content: SessionUserContent[];
   /** Tool-owned usage that never counts toward the main model Context. */
   usage?: import('@megumi/ai').Usage;
   completed_at: string;

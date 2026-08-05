@@ -114,7 +114,7 @@ describe('Session Timeline projection', () => {
         stop_reason: 'tool_calls',
         content: [
           { type: 'text', text: 'I will inspect it.' },
-          { type: 'toolCall', id: 'T1', name: 'read_file', argumentsText: '{"path":"README.md"}' },
+          { type: 'toolCall', id: 'T1', name: 'read_file', arguments: { path: 'README.md' } },
         ],
       }),
       item({
@@ -273,7 +273,7 @@ describe('Session Timeline projection', () => {
         item(user('U1', 'fetch')),
         item({
           ...base('M1'), message_kind: 'model_response', outcome_status: 'completed', stop_reason: 'tool_calls',
-          content: [{ type: 'toolCall', id: 'T1', name: 'web_fetch', argumentsText: '{"url":"https://example.com"}' }],
+          content: [{ type: 'toolCall', id: 'T1', name: 'web_fetch', arguments: { url: 'https://example.com' } }],
         }),
         item({
           ...base('T1-result'), message_kind: 'tool_result', tool_call_id: 'T1', tool_name: 'web_fetch',

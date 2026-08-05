@@ -1,6 +1,6 @@
 /* Freezes one ModelCall Tool view and routes its calls back to original handlers. */
 
-import type { JsonValue } from '@megumi/ai';
+import type { JsonValue } from './json';
 import type {
   PermissionOperation,
   RegisteredTool,

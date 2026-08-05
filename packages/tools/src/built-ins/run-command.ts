@@ -1,6 +1,6 @@
 /* Defines run_command, its process interface, bounded capture, and safe Skill script mapping. */
 
-import type { JsonObject } from '@megumi/ai';
+import type { JsonObject } from '../json';
 import type { RawToolResult, ToolDefinition, ToolExecutionErrorCode, ToolExecutionOptions, ToolExecutionOutputChunk } from '../tool';
 import { normalizeRawToolContent, ToolExecutionFailure } from '../tool-result';
 import { inputRecord, optionalPositiveInteger, optionalString, requireString } from './tool-input';

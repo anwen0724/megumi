@@ -1,6 +1,10 @@
 /* Defines secret-free public Settings models and the internal settings.json schema. */
 import { z } from 'zod';
-import type { JsonObject } from '@megumi/ai';
+import type { JsonValue } from '@megumi/ai';
+
+/** JSON object alias owned by the Settings package; the AI package no longer exports it. */
+export type JsonObject = { [key: string]: JsonValue };
+
 import {
   ProviderApiSchema,
   ProviderSettingsFileRawSchema,

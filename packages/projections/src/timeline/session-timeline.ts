@@ -322,7 +322,7 @@ function projectProcessItems(
           kind: 'tool_activity',
           toolCallId: block.id,
           toolName: block.name,
-          inputSummary: summarizeToolTarget(block.name, parseToolArguments(block.argumentsText)),
+          inputSummary: summarizeToolTarget(block.name, block.arguments),
           ...(result ? {
             ...(result.status === 'success' ? {} : { resultSummary: result.error?.message ?? sessionMessageText(result) }),
             status: result.status === 'success'
@@ -356,12 +356,4 @@ function processStatus(
   const hasIncompleteToolCall = modelResponses.some((message) => message.content.some((block) =>
     block.type === 'toolCall' && !resultIds.has(block.id)));
   return hasIncompleteToolCall ? 'incomplete' : 'completed';
-}
-
-function parseToolArguments(argumentsText: string): unknown {
-  try {
-    return JSON.parse(argumentsText);
-  } catch {
-    return undefined;
-  }
 }

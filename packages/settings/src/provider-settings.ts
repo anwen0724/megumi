@@ -7,7 +7,7 @@ import {
   UNKNOWN_MODEL_CAPABILITIES,
   capabilitiesFromModel,
   type ResolvedModelCapabilities,
-} from '@megumi/ai';
+} from './model-capability';
 import { builtinProviders } from '@megumi/ai/providers/all';
 import type {
   ReadApiKeyResult,

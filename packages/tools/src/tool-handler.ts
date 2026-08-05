@@ -1,6 +1,6 @@
 /* Defines the internal binding and routed invocation used by the Tool runtime. */
 
-import type { JsonValue } from '@megumi/ai';
+import type { JsonValue } from './json';
 import type { PermissionOperation } from '@megumi/permissions';
 import type {
   RawToolResult,

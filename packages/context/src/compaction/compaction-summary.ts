@@ -72,7 +72,7 @@ export async function generateCompactionSummary(input: {
     });
     if (input.signal?.aborted || generated.stopReason === 'aborted') return { status: 'cancelled' };
     if (generated.stopReason === 'error' || generated.stopReason === 'length') {
-      return { status: 'failed', failure: generated.failure ?? generated.errorMessage };
+      return { status: 'failed', failure: generated.errorMessage ?? 'Summary generation failed.' };
     }
     const content = generated.content
       .filter((block) => block.type === 'text')

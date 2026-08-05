@@ -1,7 +1,7 @@
 /*
  * Applies rule precedence, Permission mode defaults, and risk assessment to resolved operations.
  */
-import type { JsonObject } from '@megumi/ai';
+import type { JsonObject } from './json';
 import type { ToolExecutionAccess } from '@megumi/sandbox';
 import {
   createApprovalSubject,

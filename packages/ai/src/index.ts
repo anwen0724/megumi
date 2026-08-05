@@ -1,9 +1,9 @@
 export type { Static, TSchema } from "typebox";
 export { Type } from "typebox";
 
-// Core only, side-effect free: no generated catalogs, provider factories,
-// API implementations, or OAuth implementations. Provider factories live
-// under "@megumi/ai/providers/*" and API implementations under
+// Core only, side-effect free: no generated catalogs, no provider factories,
+// no api-registry, no OAuth implementations, no compat. Provider factories
+// live under "@megumi/ai/providers/*" and API implementations under
 // "@megumi/ai/api/*".
 export type { AnthropicEffort, AnthropicOptions, AnthropicThinkingDisplay } from "./api/anthropic-messages.ts";
 export type { GoogleOptions } from "./api/google-generative-ai.ts";
@@ -16,20 +16,22 @@ export * from "./auth/context.ts";
 export * from "./auth/credential-store.ts";
 export * from "./auth/helpers.ts";
 export * from "./auth/types.ts";
+export type {
+	OAuthAuthInfo,
+	OAuthDeviceCodeInfo,
+	OAuthLoginCallbacks,
+	OAuthPrompt,
+	OAuthSelectOption,
+	OAuthSelectPrompt,
+} from "./compat/extension-oauth-types.ts";
 export * from "./images-models.ts";
-export * from "./json.ts";
-export * from "./message-content.ts";
-export * from "./model-capability.ts";
 export * from "./models.ts";
-export * from "./model-failure.ts";
 export * from "./models-store.ts";
 export * from "./providers/faux.ts";
 export * from "./session-resources.ts";
 export * from "./types.ts";
 export * from "./utils/diagnostics.ts";
-export * from "./utils/estimate.ts";
 export * from "./utils/event-stream.ts";
-export { AssistantMessageEventStream } from "./utils/event-stream.ts";
 export * from "./utils/json-parse.ts";
 export * from "./utils/overflow.ts";
 export * from "./utils/retry.ts";

@@ -16,6 +16,7 @@ import type {
   SessionHistoryItem,
   SessionMessage,
   SessionMessageAttachment,
+  SessionUserContent,
 } from '@megumi/session';
 import type { ContextFailure } from './context';
 import { materializeSessionImage, readHostImageContent, UNSUPPORTED_IMAGE_TEXT } from './image-content';
@@ -129,7 +130,7 @@ export async function buildContextMessages(input: {
 }
 
 async function materializeUserMessageContent(input: {
-  readonly blocks: readonly import('@megumi/ai').ContentBlock[];
+  readonly blocks: readonly SessionUserContent[];
   readonly attachments: readonly SessionMessageAttachment[];
   readonly attachmentReader: Pick<SessionAttachmentReader, 'readAttachmentContent'>;
   readonly imageInputSupport: boolean;
@@ -141,7 +142,7 @@ async function materializeUserMessageContent(input: {
   const content: Array<TextContent | ImageContent> = [];
   for (const block of input.blocks) {
     if (block.type === 'text') content.push({ type: 'text', text: block.text });
-    else if (block.type === 'json') content.push({ type: 'text', text: JSON.stringify(block.value) });
+    else content.push({ type: 'image', data: block.data, mimeType: block.mimeType });
   }
   for (const attachment of [...input.attachments].sort((left, right) => left.ordinal - right.ordinal)) {
     if (input.signal?.aborted) return { status: 'failed', failure: cancelledFailure('Context construction was cancelled.') };
@@ -176,7 +177,7 @@ async function materializeUserMessageContent(input: {
 }
 
 async function materializeBlocks(
-  blocks: readonly import('@megumi/ai').ContentBlock[],
+  blocks: readonly SessionUserContent[],
   attachmentReader: Pick<SessionAttachmentReader, 'readAttachmentContent'>,
   imageInputSupport: boolean,
   signal?: AbortSignal,
@@ -188,20 +189,8 @@ async function materializeBlocks(
   for (const block of blocks) {
     if (signal?.aborted) return { status: 'failed', failure: cancelledFailure('Context construction was cancelled.') };
     if (block.type === 'text') content.push({ type: 'text', text: block.text });
-    else if (block.type === 'json') content.push({ type: 'text', text: JSON.stringify(block.value) });
-    else if (block.type === 'image' && block.source.type === 'host_reference') {
-      if (!imageInputSupport) {
-        content.push({ type: 'text', text: UNSUPPORTED_IMAGE_TEXT });
-        continue;
-      }
-      const materialized = await readHostImageContent({
-        referenceId: block.source.referenceId,
-        attachmentReader,
-        signal,
-      });
-      if (materialized.status === 'failed') return materialized;
-      content.push(materialized.content);
-    }
+    else if (imageInputSupport) content.push({ type: 'image', data: block.data, mimeType: block.mimeType });
+    else content.push({ type: 'text', text: UNSUPPORTED_IMAGE_TEXT });
   }
   return { status: 'ok', content };
 }
@@ -220,7 +209,7 @@ function assistantMessageFromSession(
       type: 'toolCall' as const,
       id: block.id,
       name: block.name,
-      arguments: parseJson(block.argumentsText),
+      arguments: block.arguments,
     };
   });
   // 'unknown' is inert: it never matches the current Model and never forms a
@@ -233,14 +222,13 @@ function assistantMessageFromSession(
     model: message.model ?? 'unknown',
     ...(message.response_model ? { responseModel: message.response_model } : {}),
     ...(message.response_id ? { responseId: message.response_id } : {}),
-    ...(message.usage ? { usage: message.usage } : {}),
+    usage: message.usage ?? ZERO_USAGE,
     ...(message.error_message ? { errorMessage: message.error_message } : {}),
     timestamp: timestampOf(createdAt),
   };
   if (message.message_kind === 'model_response') {
     return {
       ...base,
-      ...(message.failure ? { failure: message.failure as AssistantMessage['failure'] } : {}),
       stopReason: (message.stop_reason as AssistantMessage['stopReason']) ?? 'stop',
     };
   }
@@ -255,16 +243,9 @@ function toolResultMessageFromSession(
     role: 'toolResult',
     toolCallId: message.tool_call_id,
     toolName: message.tool_name,
-    content: message.content.flatMap((block) => {
-      if (block.type === 'text') return [{ type: 'text' as const, text: block.text }];
-      if (block.type === 'json') return [{ type: 'text' as const, text: JSON.stringify(block.value) }];
-      if (block.type === 'file') {
-        return [{
-          type: 'text' as const,
-          text: `[File attachment: ${block.name ?? block.path} at ${block.path}]`,
-        }];
-      }
-      return [];
+    content: message.content.map((block) => {
+      if (block.type === 'text') return { type: 'text' as const, text: block.text };
+      return { type: 'image' as const, data: block.data, mimeType: block.mimeType };
     }),
     ...(message.error ? { details: { error: message.error } } : {}),
     ...(message.usage ? { usage: message.usage } : {}),
@@ -283,6 +264,15 @@ export function buildCompactionSummaryMessage(summary: string, timestamp: number
     timestamp,
   };
 }
+
+const ZERO_USAGE = {
+  input: 0,
+  output: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+  totalTokens: 0,
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+} as const;
 
 function attachedDocumentBlock(input: {
   name: string;

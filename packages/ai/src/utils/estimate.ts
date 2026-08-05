@@ -75,7 +75,6 @@ function getLastAssistantUsageInfo(messages: readonly Message[]): { usage: Usage
 				usageAppliesToPrefix &&
 				assistant.stopReason !== "aborted" &&
 				assistant.stopReason !== "error" &&
-				assistant.usage !== undefined &&
 				calculateContextTokens(assistant.usage) > 0
 			) {
 				usageInfo = { usage: assistant.usage, index: i };

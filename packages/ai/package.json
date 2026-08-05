@@ -22,6 +22,10 @@
 			"types": "./dist/api/*.d.ts",
 			"import": "./dist/api/*.js"
 		},
+		"./utils/*": {
+			"types": "./dist/utils/*.d.ts",
+			"import": "./dist/utils/*.js"
+		},
 		"./bun-oauth": {
 			"types": "./dist/bun-oauth.d.ts",
 			"import": "./dist/bun-oauth.js"
@@ -50,8 +54,7 @@
 		"@google/genai": "1.52.0",
 		"openai": "6.26.0",
 		"partial-json": "0.1.7",
-		"typebox": "1.1.38",
-		"zod": "^3.25.76"
+		"typebox": "1.3.7"
 	},
 	"keywords": [
 		"ai",

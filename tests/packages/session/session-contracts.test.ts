@@ -60,7 +60,7 @@ describe('session contracts v2', () => {
       content: [
         { type: 'thinking', thinking: 'inspect first' },
         { type: 'text', text: 'Checking.' },
-        { type: 'toolCall', id: 'T1', name: 'read_file', argumentsText: '{"path":"a.ts"}' },
+        { type: 'toolCall', id: 'T1', name: 'read_file', arguments: { path: 'a.ts' } },
       ],
       outcome_status: 'completed',
       stop_reason: 'tool_use',
@@ -97,7 +97,7 @@ describe('session contracts v2', () => {
     }).success).toBe(false);
     expect(SessionAssistantReplyPayloadSchema.safeParse({
       status: 'failed',
-      content: [{ type: 'toolCall', id: 'T1', name: 'read_file', argumentsText: '{}' }],
+      content: [{ type: 'toolCall', id: 'T1', name: 'read_file', arguments: {} }],
     }).success).toBe(false);
     expect(SessionAssistantReplyPayloadSchema.safeParse({
       status: 'cancelled',

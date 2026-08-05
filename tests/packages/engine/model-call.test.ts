@@ -3,7 +3,6 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import {
-  createModelFailure,
   type Api,
   type AssistantMessage,
   type Context,
@@ -120,9 +119,7 @@ function terminalStream(
 function failedStream(input: {
   partialText: string;
   retryable: boolean;
-  retryAfterMs?: number;
   toolCall?: { id: string; name: string; arguments: Record<string, unknown> };
-  code?: 'rate_limited' | 'unknown';
 }): AssistantMessageEventStream {
   const stream = new AssistantMessageEventStream();
   const partialContent: AssistantMessage['content'] = [
@@ -145,14 +142,11 @@ function failedStream(input: {
       partial,
     });
   }
-  const failure = createModelFailure({
-    code: input.code ?? 'rate_limited',
-    retryable: input.retryable,
-    ...(input.retryAfterMs === undefined ? {} : { retryAfterMs: input.retryAfterMs }),
-  });
-  partial.failure = failure;
-  partial.errorMessage = failure.message;
-  stream.push({ type: 'error', reason: 'error', failure, error: partial });
+  // Retryability comes from the terminal message text via the AI classifier.
+  partial.errorMessage = input.retryable
+    ? 'The model provider rate limit was reached.'
+    : 'Model call failed.';
+  stream.push({ type: 'error', reason: 'error', error: partial });
   return stream;
 }
 
@@ -239,7 +233,6 @@ describe('executeModelCall', () => {
       failedStream({
         partialText: 'stale text',
         retryable: true,
-        retryAfterMs: 25,
         toolCall: staleToolCall,
       }),
       successfulStream({ text: 'fresh text', toolCall: freshToolCall }),
@@ -253,7 +246,7 @@ describe('executeModelCall', () => {
     }));
 
     expect(streamSimple).toHaveBeenCalledTimes(2);
-    expect(waits).toEqual([25]);
+    expect(waits).toEqual([policy.modelRetryDelayMs]);
     const resetIndex = events.findIndex((event) => event.type === 'projection_reset');
     const retryIndex = events.findIndex((event) => event.type === 'retrying');
     const secondAttemptIndex = events.findIndex(
@@ -276,11 +269,10 @@ describe('executeModelCall', () => {
     expect(JSON.stringify(events.at(-1))).not.toContain('tool-call:stale');
   });
 
-  it('does not retry unknown failures by parsing their message', async () => {
+  it('does not retry provider errors the AI classifier marks non-retryable', async () => {
     const streamSimple = vi.fn<Models['streamSimple']>(() => failedStream({
       partialText: 'HTTP 503 retry me',
       retryable: false,
-      code: 'unknown',
     }));
     const events = await collectEvents(request(fakeModels(streamSimple)));
 
@@ -288,7 +280,7 @@ describe('executeModelCall', () => {
     expect(events.some((event) => event.type === 'retrying')).toBe(false);
     expect(events.at(-1)).toMatchObject({
       type: 'failed',
-      failure: { code: 'unknown', retryable: false },
+      failure: { code: 'provider_error', retryable: false },
       partial: { text: 'HTTP 503 retry me' },
     });
   });
@@ -374,15 +366,16 @@ describe('executeModelCall', () => {
     });
   });
 
-  it('does not retry after timeout when provider settlement cannot be confirmed', async () => {
+  it('times out the attempt and never waits for provider settlement', async () => {
+    // The adapter owns settlement: a timeout aborts the attempt signal and
+    // fails the ModelCall without a second settlement protocol.
     const neverCompletes = new AssistantMessageEventStream();
-    const streams = [neverCompletes, successfulStream({ text: 'after timeout' })];
-    const streamSimple = vi.fn<Models['streamSimple']>(() => streams.shift()!);
+    const streamSimple = vi.fn<Models['streamSimple']>(() => neverCompletes);
     const events = await collectEvents(request(fakeModels(streamSimple), {
       policy: {
         ...policy,
         modelCallTimeoutMs: 5,
-        modelCallTerminationTimeoutMs: 5,
+        maxModelCallAttempts: 1,
         modelRetryDelayMs: 0,
       },
     }));
@@ -390,12 +383,12 @@ describe('executeModelCall', () => {
     expect(streamSimple).toHaveBeenCalledOnce();
     expect(events.at(-1)).toMatchObject({
       type: 'failed',
-      failure: { code: 'termination_unconfirmed', retryable: false },
+      failure: { code: 'timeout', retryable: true },
     });
     expect(streamSimple.mock.calls[0]?.[2]?.signal?.aborted).toBe(true);
   });
 
-  it('retries a timeout only after the provider stream confirms settlement', async () => {
+  it('retries a timeout with the ModelCall retry policy', async () => {
     const first = new AssistantMessageEventStream();
     const second = successfulStream({ text: 'after timeout' });
     const streamSimple = vi.fn<Models['streamSimple']>((_model, _context, options) => {
@@ -409,7 +402,6 @@ describe('executeModelCall', () => {
       policy: {
         ...policy,
         modelCallTimeoutMs: 5,
-        modelCallTerminationTimeoutMs: 50,
         modelRetryDelayMs: 0,
       },
     }));

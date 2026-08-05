@@ -2,32 +2,31 @@
  * Executes one Engine-owned ModelCall through Models with isolated retry buffers.
  */
 import {
-  classifyModelFailure,
   isContextOverflow,
+  isRetryableAssistantError,
   type Api,
   type AssistantMessage,
   type AssistantMessageEvent,
   type Context,
   type Model,
-  type ModelFailure,
   type Models,
   type ModelsSimpleStreamOptions,
   type ToolCall,
 } from '@megumi/ai';
 import type { EngineClock } from './engine';
 import type { EnginePolicy } from './engine-policy';
-import { createInterruption, raceWithTimeout } from './timeout-utils';
+import { createInterruption } from './timeout-utils';
 
 export type ModelCallStatus = 'running' | 'completed' | 'failed' | 'cancelled';
 
 export interface ModelCallFailure {
   readonly code:
-    | ModelFailure['code']
+    | 'aborted'
     | 'timeout'
     | 'empty_response'
     | 'output_truncated'
     | 'invalid_response'
-    | 'termination_unconfirmed';
+    | 'provider_error';
   readonly message: string;
   readonly retryable: boolean;
   readonly retryAfterMs?: number;
@@ -341,21 +340,16 @@ async function* runAttempt(
 
       if (outcome.type === 'interrupted') {
         closeIterator(iterator);
+        // The run root signal or the model call timeout aborts the attempt
+        // stream; the adapter settles it into a terminal event on its own.
         if (outcome.reason === 'timeout') {
-          const settled = await waitForModelCallSettlement(
-            stream,
-            request.policy.modelCallTerminationTimeoutMs,
-          );
-          return fail(settled ? timeoutFailure() : terminationUnconfirmedFailure());
+          return fail(timeoutFailure());
         }
         return fail(abortedFailure());
       }
 
       if (outcome.type === 'thrown') {
-        return fail(fromAiFailure(classifyModelFailure({
-          reason: request.signal.aborted ? 'aborted' : 'error',
-          error: outcome.error,
-        })));
+        return fail(failureFromThrownError(request.signal.aborted ? 'aborted' : 'error', outcome.error));
       }
 
       if (outcome.value.done) {
@@ -410,10 +404,7 @@ async function* runAttempt(
         if (isContextOverflow(event.error, request.model.contextWindow)) {
           return { status: 'overflow', message: event.error };
         }
-        return fail(fromAiFailure(classifyModelFailure({
-          reason: event.reason,
-          failure: event.failure,
-        })));
+        return fail(failureFromErrorEvent(event.reason, event.error));
       }
       if (event.type === 'done') {
         // Silent length-stop overflow (input filled the window, nothing left to
@@ -439,10 +430,7 @@ async function* runAttempt(
       // ToolCall fragments stay inside this attempt. Only the final done message can commit them.
     }
   } catch (error) {
-    return fail(fromAiFailure(classifyModelFailure({
-      reason: request.signal.aborted ? 'aborted' : 'error',
-      error,
-    })));
+    return fail(failureFromThrownError(request.signal.aborted ? 'aborted' : 'error', error));
   } finally {
     interruption.dispose();
   }
@@ -450,7 +438,7 @@ async function* runAttempt(
 
 export function validateCompletedModelResponse(
   modelCallId: string,
-  doneReason: Extract<AssistantMessage['stopReason'], 'stop' | 'length' | 'toolUse'>,
+  doneReason: Extract<AssistantMessage['stopReason'], 'stop' | 'length' | 'toolUse' | 'deferred'>,
   message: AssistantMessage,
 ):
   | { readonly status: 'valid'; readonly toolCalls: readonly CompletedModelToolCall[] }
@@ -464,6 +452,10 @@ export function validateCompletedModelResponse(
 
   if (doneReason === 'length') {
     return { status: 'invalid', failure: outputTruncatedFailure() };
+  }
+
+  if (doneReason === 'deferred') {
+    return { status: 'invalid', failure: invalidResponseFailure('Deferred responses are not supported.') };
   }
 
   const calls = message.content.filter((block): block is ToolCall => block.type === 'toolCall');
@@ -542,17 +534,48 @@ function failedEvent(
   };
 }
 
-function fromAiFailure(failure: ModelFailure): ModelCallFailure {
+/**
+ * Maps a terminal error AssistantMessage to an Engine ModelCall failure. The
+ * terminal message is the authority: retryability comes from the AI package's
+ * classifier, and the Engine no longer re-classifies provider error text.
+ */
+function failureFromErrorEvent(reason: 'aborted' | 'error', message: AssistantMessage): ModelCallFailure {
+  if (reason === 'aborted' || message.stopReason === 'aborted') return abortedFailure();
   return {
-    code: failure.code,
-    message: failure.message,
-    retryable: failure.code !== 'aborted' && failure.code !== 'unknown' && failure.retryable,
-    ...(failure.retryAfterMs === undefined ? {} : { retryAfterMs: failure.retryAfterMs }),
+    code: 'provider_error',
+    message: message.errorMessage ?? 'Model call failed.',
+    retryable: isRetryableAssistantError(message),
   };
 }
 
+/** Maps an unexpected stream throw (an adapter contract violation) to a failure. */
+function failureFromThrownError(reason: 'aborted' | 'error', error: unknown): ModelCallFailure {
+  if (reason === 'aborted') return abortedFailure();
+  const message: AssistantMessage = {
+    role: 'assistant',
+    content: [],
+    api: 'unknown',
+    provider: 'unknown',
+    model: 'unknown',
+    usage: ZERO_USAGE,
+    stopReason: 'error',
+    errorMessage: error instanceof Error ? error.message : String(error),
+    timestamp: Date.now(),
+  };
+  return failureFromErrorEvent('error', message);
+}
+
+const ZERO_USAGE = {
+  input: 0,
+  output: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+  totalTokens: 0,
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+} as const;
+
 function isRetryableFailure(failure: ModelCallFailure): boolean {
-  return failure.retryable && failure.code !== 'unknown' && failure.code !== 'aborted';
+  return failure.retryable && failure.code !== 'aborted';
 }
 
 function abortedFailure(): ModelCallFailure {
@@ -568,14 +591,6 @@ function timeoutFailure(): ModelCallFailure {
     code: 'timeout',
     message: 'Model call timed out.',
     retryable: true,
-  };
-}
-
-function terminationUnconfirmedFailure(): ModelCallFailure {
-  return {
-    code: 'termination_unconfirmed',
-    message: 'Model call termination could not be confirmed.',
-    retryable: false,
   };
 }
 
@@ -614,14 +629,6 @@ function closeIterator(iterator: AsyncIterator<AssistantMessageEvent>): void {
   } catch {
     // The provider has already been aborted; iterator cleanup cannot change ModelCall outcome.
   }
-}
-
-export async function waitForModelCallSettlement(
-  stream: { waitForSettlement(): Promise<void> },
-  timeoutMs: number,
-): Promise<boolean> {
-  const settled = await raceWithTimeout(stream.waitForSettlement().then(() => true), timeoutMs);
-  return settled !== 'timed_out';
 }
 
 function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {

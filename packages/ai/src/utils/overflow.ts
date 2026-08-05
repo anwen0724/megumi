@@ -80,11 +80,13 @@ const NON_OVERFLOW_PATTERNS = [
 /**
  * Check if an assistant message represents a context overflow error.
  *
- * This handles two cases:
+ * This handles three cases:
  * 1. Error-based overflow: Most providers return stopReason "error" with a
  *    specific error message pattern.
  * 2. Silent overflow: Some providers accept overflow requests and return
  *    successfully. For these, we check if usage.input exceeds the context window.
+ * 3. Length-stop overflow: Xiaomi MiMo can return "length" with zero output when
+ *    the input fills the context window.
  *
  * ## Reliability by Provider
  *
@@ -140,7 +142,7 @@ export function isContextOverflow(message: AssistantMessage, contextWindow?: num
 	}
 
 	// Case 2: Silent overflow (z.ai style) - successful but usage exceeds context
-	if (contextWindow && message.stopReason === "stop" && message.usage) {
+	if (contextWindow && message.stopReason === "stop") {
 		const inputTokens = message.usage.input + message.usage.cacheRead;
 		if (inputTokens > contextWindow) {
 			return true;
@@ -150,7 +152,7 @@ export function isContextOverflow(message: AssistantMessage, contextWindow?: num
 	// Case 3: Length-stop overflow (Xiaomi MiMo style) - server truncates oversized input
 	// to fit the context window, leaving no room for output. Returns stopReason "length"
 	// with output=0 and input+cacheRead filling the context window.
-	if (contextWindow && message.stopReason === "length" && message.usage?.output === 0) {
+	if (contextWindow && message.stopReason === "length" && message.usage.output === 0) {
 		const inputTokens = message.usage.input + message.usage.cacheRead;
 		if (inputTokens >= contextWindow * 0.99) {
 			return true;
@@ -161,63 +163,18 @@ export function isContextOverflow(message: AssistantMessage, contextWindow?: num
 }
 
 /**
+ * Check whether a length stop ended below the caller or model's intended output limit.
+ * Such responses may be caused by context pressure or provider-side truncation, so callers
+ * can make one bounded compact-and-retry attempt. `desiredMaxOutput` must be the original
+ * limit before any context-based clamping.
+ */
+export function isRecoverableLength(message: AssistantMessage, desiredMaxOutput: number): boolean {
+	return message.stopReason === "length" && desiredMaxOutput > 0 && message.usage.output < desiredMaxOutput;
+}
+
+/**
  * Get the overflow patterns for testing purposes.
  */
 export function getOverflowPatterns(): RegExp[] {
 	return [...OVERFLOW_PATTERNS];
-}
-
-/**
- * Returns the first provider error text that matches the overflow signature,
- * preferring an already-attached message text and then walking the error chain.
- *
- * The engine recovers a provider error-text Overflow by matching this text on
- * the final AssistantMessage; the stream normalization normally redacts the
- * raw provider error, so the matched overflow signal is the one exception that
- * is deliberately preserved.
- */
-export function overflowErrorMessage(
-	error: unknown,
-	existingMessage?: string,
-): string | undefined {
-	if (existingMessage && isOverflowText(existingMessage)) return existingMessage;
-	for (const candidate of errorChain(error)) {
-		if (typeof candidate === "string" && isOverflowText(candidate)) return candidate;
-		const message = candidate instanceof Error
-			? candidate.message
-			: readString(candidate, "message");
-		if (message && isOverflowText(message)) return message;
-	}
-	return undefined;
-}
-
-function isOverflowText(text: string): boolean {
-	if (NON_OVERFLOW_PATTERNS.some((pattern) => pattern.test(text))) return false;
-	return OVERFLOW_PATTERNS.some((pattern) => pattern.test(text));
-}
-
-function errorChain(error: unknown): unknown[] {
-	const chain: unknown[] = [];
-	let current: unknown = error;
-	const seen = new Set<unknown>();
-	while (current !== undefined && current !== null && !seen.has(current)) {
-		seen.add(current);
-		chain.push(current);
-		const cause = current instanceof Error
-			? current.cause
-			: readRecord(current, "cause");
-		current = cause;
-	}
-	return chain;
-}
-
-function readString(value: unknown, key: string): string | undefined {
-	const record = readRecord(value, key);
-	if (record === undefined) return undefined;
-	return typeof record === "string" ? record : undefined;
-}
-
-function readRecord(value: unknown, key: string): unknown {
-	if (!value || typeof value !== "object") return undefined;
-	return (value as Record<string, unknown>)[key];
 }

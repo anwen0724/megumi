@@ -8,7 +8,7 @@ import type { Api, Model, Usage } from '@megumi/ai';
 import {
   estimateContextTokens,
   type ContextUsageEstimate,
-} from '@megumi/ai';
+} from '@megumi/ai/utils/estimate';
 import type { SessionHistoryItem } from '@megumi/session';
 import { sessionMessagesToEstimateMessages } from './context-messages';
 

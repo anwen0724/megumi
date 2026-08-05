@@ -27,7 +27,11 @@ import type {
   TraceHandle,
   SpanHandle,
 } from '@megumi/observability';
-import type { AssistantContentBlock, JsonObject, JsonValue } from '@megumi/ai';
+import type { SessionAssistantContent } from '@megumi/session';
+
+/** JSON value aliases owned by the Engine package; the AI package no longer exports them. */
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+export type JsonObject = { [key: string]: JsonValue };
 import type {
   ApprovalDecision,
 } from '@megumi/permissions';
@@ -1500,7 +1504,7 @@ function assistantMetadata(message: AssistantMessage): {
   };
 }
 
-function toAssistantContent(message: AssistantMessage): AssistantContentBlock[] {
+function toAssistantContent(message: AssistantMessage): SessionAssistantContent[] {
   return message.content.map((block) => {
     if (block.type === 'text') return { type: 'text', text: block.text };
     if (block.type === 'thinking') {
@@ -1510,7 +1514,7 @@ function toAssistantContent(message: AssistantMessage): AssistantContentBlock[] 
       type: 'toolCall',
       id: block.id,
       name: block.name,
-      argumentsText: canonicalJson(block.arguments),
+      arguments: block.arguments as Record<string, unknown>,
     };
   });
 }

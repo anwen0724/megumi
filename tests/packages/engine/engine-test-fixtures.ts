@@ -8,7 +8,6 @@ import type {
   Model,
   Models,
 } from '@megumi/ai';
-import { createModelFailure } from '@megumi/ai';
 import type {
   EvaluateToolCallRequest,
   PermissionDecision,
@@ -440,25 +439,16 @@ export function assistantStream(
 /** Provider returns a completed response whose error message matches the overflow signature. */
 export function errorOverflowStream(): AssistantMessageEventStream {
   const stream = new AssistantMessageEventStream();
-  const failure = createModelFailure({
-    code: 'invalid_request',
-    retryable: false,
-  });
   const message = baseMessage({
     content: [{ type: 'text', text: 'prompt is too long: 213462 tokens > 200000 maximum' }],
     stopReason: 'error',
-    failure,
     errorMessage: 'prompt is too long: 213462 tokens > 200000 maximum',
   });
   pushAssistantStream(stream, message);
-  // The provider overflow text arrives as the raw thrown cause; the stream
-  // normalization preserves it because it matches the Overflow signature.
   stream.push({
     type: 'error',
     reason: 'error',
-    failure,
     error: message,
-    cause: new Error('prompt is too long: 213462 tokens > 200000 maximum'),
   });
   return stream;
 }
@@ -499,21 +489,15 @@ export function partialNeverEndingStream(text: string): AssistantMessageEventStr
 
 export function retryableFailedStream(text: string): AssistantMessageEventStream {
   const stream = new AssistantMessageEventStream();
-  const failure = createModelFailure({
-    code: 'rate_limited',
-    retryable: true,
-  });
   const message = baseMessage({
     content: [{ type: 'text', text }],
     stopReason: 'error',
-    failure,
-    errorMessage: failure.message,
+    errorMessage: 'The model provider rate limit was reached.',
   });
   pushAssistantStream(stream, message, { text });
   stream.push({
     type: 'error',
     reason: 'error',
-    failure,
     error: message,
   });
   return stream;
