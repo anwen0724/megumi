@@ -475,6 +475,26 @@ export function partialNeverEndingStream(text: string): AssistantMessageEventStr
   return stream;
 }
 
+/** Streams thinking first, then text, then never settles; abort settles it. */
+export function partialThinkingStream(thinking: string, text: string): AssistantMessageEventStream {
+  const stream = new AssistantMessageEventStream();
+  const message = baseMessage({
+    content: [
+      ...(thinking ? [{ type: 'thinking' as const, thinking }] : []),
+      ...(text ? [{ type: 'text' as const, text }] : []),
+    ],
+    stopReason: 'stop',
+  });
+  stream.push({ type: 'start', partial: { ...message, content: [] } });
+  if (thinking) {
+    stream.push({ type: 'thinking_delta', contentIndex: 0, delta: thinking, partial: { ...message, content: [{ type: 'thinking', thinking }] } });
+  }
+  if (text) {
+    stream.push({ type: 'text_delta', contentIndex: thinking ? 1 : 0, delta: text, partial: message });
+  }
+  return stream;
+}
+
 export function retryableFailedStream(text: string): AssistantMessageEventStream {
   const stream = new AssistantMessageEventStream();
   const message = baseMessage({

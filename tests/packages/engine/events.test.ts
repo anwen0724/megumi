@@ -436,4 +436,69 @@ describe('Engine RuntimeEvents', () => {
     expect(typeof payload.assistantMessageId).toBe('string');
     expect(payload.assistantMessageId!.length).toBeGreaterThan(0);
   });
+
+  it('orders one Turn as started, message, settlement, tools, turn.ended, run.ended', async () => {
+    const tool = registeredTool('test-tool');
+    const fixture = createEngineFixture({
+      tools: [tool],
+      streams: [
+        assistantStream('tool', {
+          id: 'provider-call:1',
+          name: tool.registeredToolName,
+          arguments: { value: 'x' },
+        }),
+        assistantStream('final answer'),
+      ],
+    });
+    const started = await startedRun(fixture);
+    await vi.waitFor(() => {
+      expect(fixture.published.some((event) => event.type === 'run.ended')).toBe(true);
+    });
+
+    const types = collectEvents(fixture, started.run.runId).map((event) => event.type);
+    const order = (name: string) => types.indexOf(name);
+    const turnStarted = order('turn.started');
+    const messageStarted = order('message.started');
+    const messageUpdate = order('message.update');
+    const messageEnded = order('message.ended');
+    const toolEnded = order('tool_execution.ended');
+    const turnEnded = order('turn.ended');
+    const runEnded = order('run.ended');
+
+    // The turn opens before its message; the assistant message settles before
+    // the tool batch; the turn ends only after the whole batch settled.
+    expect(turnStarted).toBeGreaterThan(-1);
+    expect(turnStarted).toBeLessThan(messageStarted);
+    expect(messageStarted).toBeLessThan(messageUpdate);
+    expect(messageUpdate).toBeLessThan(messageEnded);
+    expect(messageEnded).toBeLessThan(toolEnded);
+    expect(toolEnded).toBeLessThan(turnEnded);
+    expect(turnEnded).toBeLessThan(runEnded);
+
+    // tool_execution.requested precedes the execution start.
+    const requested = types.indexOf('tool_execution.requested');
+    const toolStarted = types.indexOf('tool_execution.started');
+    expect(requested).toBeGreaterThan(-1);
+    expect(requested).toBeLessThan(toolStarted);
+  });
+
+  it('closes started message and turn lifecycles on failure', async () => {
+    const fixture = createEngineFixture({
+      streams: [retryableFailedStream('boom')],
+      policy: { maxModelCallAttempts: 1 },
+    });
+    const started = await startedRun(fixture);
+    await vi.waitFor(() => {
+      expect(fixture.published.some((event) => event.type === 'run.ended')).toBe(true);
+    });
+
+    const events = collectEvents(fixture, started.run.runId);
+    expect(events.filter((event) => event.type === 'message.started')).toHaveLength(1);
+    expect(events.filter((event) => event.type === 'message.ended')).toHaveLength(1);
+    expect(events.filter((event) => event.type === 'turn.started')).toHaveLength(1);
+    expect(events.filter((event) => event.type === 'turn.ended')).toHaveLength(1);
+    expect(events.find((event) => event.type === 'turn.ended')?.payload).toMatchObject({
+      stopReason: 'error',
+    });
+  });
 });

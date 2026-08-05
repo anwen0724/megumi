@@ -287,6 +287,12 @@ async function runTurn(
       return cancelledResult();
     }
     if (modelOutcome.status === 'failed') {
+      // A started message lifecycle always gets its closing event.
+      emitEvent(dependencies, runtime, 'message.ended', {
+        role: 'assistant',
+        messageId: runtime.activeModelMessageId ?? '',
+        content: runtime.activeAssistantText,
+      });
       emitEvent(dependencies, runtime, 'turn.ended', {
         stopReason: 'error',
         messageId: runtime.activeModelMessageId ?? '',
@@ -426,9 +432,8 @@ async function consumeModelCall(
   let overflowRecoveries = 0;
   const retriedAttempts: number[] = [];
 
-  const recoverOverflow = async (): Promise<ModelCallOutcome | 'recovered'> => {
-    // A recoverable stream reset clears the projected text and thinking before
-    // the next attempt; the same Turn, Message and ModelCall identities stay.
+  /** Clears the projected text/thinking snapshots before a recoverable attempt. */
+  const resetProjection = (): void => {
     runtime.activeAssistantText = '';
     runtime.activeThinking = '';
     emitEvent(dependencies, runtime, 'message.update', {
@@ -445,6 +450,12 @@ async function consumeModelCall(
       event: 'model.call.stream_reset',
       attributes: { modelCallId, attemptNumber },
     });
+  };
+
+  const recoverOverflow = async (): Promise<ModelCallOutcome | 'recovered'> => {
+    // A recoverable stream reset clears the projected text and thinking before
+    // the next attempt; the same Turn, Message and ModelCall identities stay.
+    resetProjection();
     const compacted = await dependencies.context.compact({
       sessionId: input.run.sessionId,
       workspaceId: input.run.workspaceId,
@@ -529,6 +540,7 @@ async function consumeModelCall(
       const validated = validateCompletedResponse(modelCallId, attempt.message);
       if (validated.status === 'invalid') {
         if (validated.failure.retryable && attemptNumber < maxAttempts && !input.signal.aborted) {
+          resetProjection();
           retriedAttempts.push(attemptNumber + 1);
           publishRetryStarted(dependencies, runtime, attemptNumber + 1, maxAttempts);
           await waitForRetry(dependencies.policy.modelRetryDelayMs, input.signal);
@@ -567,6 +579,7 @@ async function consumeModelCall(
 
     if (attempt.status === 'failed') {
       if (attempt.retryable && attemptNumber < maxAttempts && !input.signal.aborted) {
+        resetProjection();
         retriedAttempts.push(attemptNumber + 1);
         publishRetryStarted(dependencies, runtime, attemptNumber + 1, maxAttempts);
         await waitForRetry(dependencies.policy.modelRetryDelayMs, input.signal);

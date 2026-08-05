@@ -8,6 +8,7 @@ import {
   createEngineFixture,
   neverEndingStream,
   partialNeverEndingStream,
+  partialThinkingStream,
   assistantStream,
   approvalDecisionFor,
   requestedCancellation,
@@ -263,6 +264,54 @@ describe('Engine cancellation', () => {
     ]);
     expect(fixture.assistantReplies).not.toEqual([
       expect.objectContaining({ status: 'completed' }),
+    ]);
+  });
+
+  it('saves the cancelled reply with its Text and Thinking as separate content blocks', async () => {
+    const fixture = createEngineFixture({
+      streams: [partialThinkingStream('ponder xyz', 'partial answer')],
+    });
+    const started = await startedRun(fixture);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await requestedCancellation(fixture, started.run.runId);
+    await settleRun(fixture);
+
+    expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'cancelled' });
+    expect(fixture.assistantReplies).toEqual([
+      expect.objectContaining({
+        status: 'cancelled',
+        reason_code: 'user_cancelled',
+        content: [
+          { type: 'thinking', thinking: 'ponder xyz' },
+          { type: 'text', text: 'partial answer' },
+        ],
+      }),
+    ]);
+    // Thinking never leaks into the user-visible message.ended content.
+    const ended = fixture.published.find(
+      (event) => event.type === 'message.ended' && event.payload.role === 'assistant',
+    );
+    expect((ended?.payload as { content: string }).content).not.toContain('ponder xyz');
+    expect((ended?.payload as { content: string }).content).toBe('partial answer');
+  });
+
+  it('saves a thinking-only cancelled reply without dropping it', async () => {
+    const fixture = createEngineFixture({
+      streams: [partialThinkingStream('ponder only', '')],
+    });
+    const started = await startedRun(fixture);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await requestedCancellation(fixture, started.run.runId);
+    await settleRun(fixture);
+
+    expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'cancelled' });
+    expect(fixture.assistantReplies).toEqual([
+      expect.objectContaining({
+        status: 'cancelled',
+        content: [{ type: 'thinking', thinking: 'ponder only' }],
+      }),
     ]);
   });
 });

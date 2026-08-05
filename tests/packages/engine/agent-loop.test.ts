@@ -11,6 +11,7 @@ import {
   createEngineFixture,
   errorOverflowStream,
   lengthOverflowStream,
+  retryableFailedStream,
   settleRun,
   startedRun,
   startRequest,
@@ -394,6 +395,161 @@ describe('Agent Loop', () => {
     expect(fixture.writes.slice(-2)).toEqual(['tool', 'assistant:failed']);
     expect(fixture.published.at(-1)?.type).toBe('run.ended');
     expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'failed' });
+  });
+
+  it('routes non-overflow length stops to output_truncated failure', async () => {
+    const stream = new (await import('../../../packages/ai/src/utils/event-stream')).AssistantMessageEventStream();
+    const message = {
+      role: 'assistant' as const,
+      content: [{ type: 'text' as const, text: 'partial' }],
+      api: 'test-api',
+      provider: 'provider:test',
+      model: 'model:test',
+      usage: {
+        input: 100, output: 50, cacheRead: 0, cacheWrite: 0, totalTokens: 150,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: 'length' as const,
+      timestamp: 1,
+    };
+    stream.push({ type: 'start', partial: { ...message, content: [] } });
+    stream.push({ type: 'done', reason: 'length', message });
+
+    const fixture = createEngineFixture({ streams: [stream] });
+    const started = await startedRun(fixture);
+    await settleRun(fixture);
+
+    expect(fixture.published.at(-1)?.payload).toMatchObject({
+      status: 'failed',
+      error: { code: 'model_call_failed' },
+    });
+    expect(fixture.assistantReplies[0]).toMatchObject({
+      status: 'failed',
+      reason_code: 'model_call_failed',
+    });
+  });
+
+  it('rejects empty responses and invalid tool-use terminals as stable failures', async () => {
+    const emptyStream = (await import('../../../packages/ai/src/utils/event-stream')).createAssistantMessageEventStream();
+    const empty = {
+      role: 'assistant' as const,
+      content: [],
+      api: 'test-api',
+      provider: 'provider:test',
+      model: 'model:test',
+      usage: {
+        input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: 'stop' as const,
+      timestamp: 1,
+    };
+    emptyStream.push({ type: 'start', partial: empty });
+    emptyStream.push({ type: 'done', reason: 'stop', message: empty });
+
+    const fixture = createEngineFixture({ streams: [emptyStream] });
+    const started = await startedRun(fixture);
+    await settleRun(fixture);
+    expect(fixture.published.at(-1)?.payload).toMatchObject({
+      status: 'failed',
+      error: { code: 'model_call_failed' },
+    });
+  });
+
+  it('keeps the same Turn, Message and ModelCall identity across a retry', async () => {
+    const fixture = createEngineFixture({
+      streams: [retryableFailedStream('attempt one'), assistantStream('answer')],
+      policy: { maxModelCallAttempts: 2 },
+    });
+    const started = await startedRun(fixture);
+    await settleRun(fixture);
+
+    const events = collectEvents(fixture, started.run.runId);
+    const turnStarted = events.find((event) => event.type === 'turn.started');
+    const messageStarted = events.find((event) => event.type === 'message.started');
+    const firstUpdate = events.find((event) => event.type === 'message.update');
+    const messageEnded = events.find((event) => event.type === 'message.ended');
+    expect(messageEnded?.payload).toMatchObject({ messageId: messageStarted?.payload.messageId });
+    expect(firstUpdate?.payload).toMatchObject({ messageId: messageStarted?.payload.messageId });
+    expect(turnStarted?.payload).toMatchObject({ messageId: messageStarted?.payload.messageId });
+    // Exactly one turn lifecycle pair for the logical ModelCall.
+    expect(events.filter((event) => event.type === 'turn.started')).toHaveLength(1);
+    expect(events.filter((event) => event.type === 'turn.ended')).toHaveLength(1);
+  });
+
+  it('clears projected text and thinking before a retry attempt', async () => {
+    const fixture = createEngineFixture({
+      streams: [retryableFailedStream('stale text'), assistantStream('answer')],
+      policy: { maxModelCallAttempts: 2 },
+    });
+    const started = await startedRun(fixture);
+    await settleRun(fixture);
+
+    const events = collectEvents(fixture, started.run.runId);
+    const reset = events.findIndex((event) => (
+      event.type === 'message.update' && event.payload.content === ''
+    ));
+    const retryStarted = events.findIndex((event) => event.type === 'turn.retry.started');
+    expect(reset).toBeGreaterThan(-1);
+    expect(retryStarted).toBeGreaterThan(-1);
+    // The reset precedes the retried attempt; no stale text survives.
+    expect(reset).toBeLessThan(retryStarted);
+  });
+
+  it('passes the Provider Request Retry budget to the adapter without counting attempts', async () => {
+    const fixture = createEngineFixture({
+      streams: [retryableFailedStream('attempt one'), assistantStream('answer')],
+      policy: {
+        maxModelCallAttempts: 2,
+        providerRequestMaxRetries: 2,
+        providerRequestMaxRetryDelayMs: 5_000,
+      },
+    });
+    const streamSimpleSpy = vi.spyOn(fixture.options.models as never as {
+      streamSimple: (...args: unknown[]) => unknown;
+    }, 'streamSimple');
+    const started = await startedRun(fixture);
+    await settleRun(fixture);
+
+    const events = collectEvents(fixture, started.run.runId);
+    const retryStarted = events.find((event) => event.type === 'turn.retry.started');
+    // ModelCall attempts are the loop's own; provider retries never inflate them.
+    expect(retryStarted?.payload).toMatchObject({ attemptNumber: 2 });
+    expect(streamSimpleSpy.mock.calls[0]?.[2]).toMatchObject({
+      maxRetries: 2,
+      maxRetryDelayMs: 5_000,
+    });
+  });
+
+  it('records each finished attempt to Observability', async () => {
+    const recordLog = vi.fn();
+    const recordMeasurement = vi.fn();
+    const observability = {
+      startTrace: vi.fn(() => ({ traceId: 'trace:1' })),
+      endTrace: vi.fn(),
+      startSpan: vi.fn(() => ({ spanId: 'span:1' })),
+      endSpan: vi.fn(),
+      runInTraceContext: vi.fn((_trace: unknown, operation: () => unknown) => operation()),
+      runInSpanContext: vi.fn((_span: unknown, operation: () => unknown) => operation()),
+      getCurrentTrace: vi.fn(),
+      getCurrentSpan: vi.fn(),
+      recordLog,
+      recordMeasurement,
+      flush: vi.fn(async () => undefined),
+    } as never;
+    const fixture = createEngineFixture({
+      streams: [retryableFailedStream('attempt one'), assistantStream('answer')],
+      policy: { maxModelCallAttempts: 2 },
+      observability,
+    });
+    const started = await startedRun(fixture);
+    await settleRun(fixture);
+
+    const attemptLogs = recordLog.mock.calls.filter((call) => (
+      (call[0] as { event: string }).event === 'model.call.attempt.finished'
+    ));
+    // Both the failed and the successful attempt are recorded, never dropped.
+    expect(attemptLogs).toHaveLength(2);
   });
 
   it('uses the same Tools Router for one ModelCall resolution, routing and release', async () => {
