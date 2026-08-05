@@ -208,6 +208,14 @@ export function createEngine(options: CreateEngineOptions): Engine {
     const active = store.getActiveRun(runId);
     if (!active || isTerminalRunStatus(active.run.status)) return;
     const at = options.clock.now();
+    // Cancellation may win the settle race: a cancelling Run always converges
+    // as cancelled, never as completed or failed.
+    if (active.run.status === 'cancelling') {
+      const cancelled = transitionRun(active.run, { status: 'cancelled', at });
+      store.updateRun(cancelled);
+      publish(cancelled, 'run.ended', { status: 'cancelled' });
+      return;
+    }
     if (result.status === 'completed') {
       const completed = transitionRun(active.run, { status: 'completed', at });
       store.updateRun(completed);

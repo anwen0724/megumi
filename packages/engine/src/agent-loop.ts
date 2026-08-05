@@ -809,11 +809,59 @@ async function executeToolCallBatch(
   const recordResult = (result: ToolResult) => {
     results.push(result);
   };
+  // Parallel-mode calls accumulate into a window executed concurrently under
+  // the confirmed concurrency limit; results commit in model call order.
+  let parallelWindow: Array<{ call: CompletedToolCall; invocation: ToolInvocation }> = [];
+
+  const closeWith = (result: (call: CompletedToolCall) => ToolResult, fromIndex: number) => {
+    for (const remaining of calls.slice(fromIndex)) {
+      recordResult(result(remaining));
+    }
+  };
+
+  const flushParallelWindow = async (): Promise<'completed' | 'cancelled'> => {
+    if (parallelWindow.length === 0) return 'completed';
+    const window = [...parallelWindow];
+    parallelWindow = [];
+    if (input.signal.aborted) {
+      for (const { call } of window) recordResult(cancelledToolResult(call, dependencies.clock.now()));
+      return 'cancelled';
+    }
+    const concurrency = Math.max(1, dependencies.policy.maxConcurrentToolExecutions);
+    const outcomes: Array<{ call: CompletedToolCall; outcome: ToolCallOutcome }> = [];
+    for (let index = 0; index < window.length; index += concurrency) {
+      const batch = window.slice(index, index + concurrency);
+      outcomes.push(...await Promise.all(batch.map(async (entry) => ({
+        call: entry.call,
+        outcome: await executeToolCallWithPermissions(
+          input, dependencies, runtime, modelCallId, entry.call, entry.invocation, [], undefined,
+        ),
+      }))));
+    }
+    for (const { call, outcome } of outcomes) {
+      if (outcome.kind === 'cancelled') {
+        recordResult(cancelledToolResult(call, dependencies.clock.now()));
+        continue;
+      }
+      if (outcome.kind === 'failed') {
+        recordResult(closedToolResult(call, dependencies.clock.now()));
+        continue;
+      }
+      recordResult(outcome.result);
+    }
+    if (input.signal.aborted) return 'cancelled';
+    return 'completed';
+  };
 
   for (const [index, call] of calls.entries()) {
     if (input.signal.aborted) {
-      for (const remaining of calls.slice(index)) {
-        recordResult(cancelledToolResult(remaining, dependencies.clock.now()));
+      const flushed = await flushParallelWindow();
+      closeWith((remaining) => cancelledToolResult(remaining, dependencies.clock.now()), index);
+      if (flushed === 'cancelled') {
+        for (const pending of parallelWindow) {
+          recordResult(cancelledToolResult(pending.call, dependencies.clock.now()));
+        }
+        parallelWindow = [];
       }
       await commitToolResults(input, dependencies, runtime, results);
       return 'cancelled';
@@ -829,6 +877,7 @@ async function executeToolCallBatch(
       input: call.input,
     });
     if (routed.status === 'failed') {
+      await flushParallelWindow();
       recordResult({
         toolCallId: call.toolCallId,
         toolName: call.toolName,
@@ -839,6 +888,20 @@ async function executeToolCallBatch(
         completedAt: dependencies.clock.now(),
       });
       continue;
+    }
+
+    // Parallel execution mode runs the call in the shared window; anything
+    // needing permission evaluation (or serial mode) flushes it first.
+    if (routed.operations.length === 0 && routed.executionMode === 'parallel') {
+      parallelWindow.push({ call, invocation: routed.invocation });
+      continue;
+    }
+
+    const flushed = await flushParallelWindow();
+    if (flushed === 'cancelled') {
+      closeWith((remaining) => cancelledToolResult(remaining, dependencies.clock.now()), index);
+      await commitToolResults(input, dependencies, runtime, results);
+      return 'cancelled';
     }
 
     const executed = await executeToolCallWithPermissions(
@@ -853,9 +916,7 @@ async function executeToolCallBatch(
     );
     if (executed.kind === 'cancelled') {
       recordResult(cancelledToolResult(call, dependencies.clock.now()));
-      for (const remaining of calls.slice(index + 1)) {
-        recordResult(cancelledToolResult(remaining, dependencies.clock.now()));
-      }
+      closeWith((remaining) => cancelledToolResult(remaining, dependencies.clock.now()), index + 1);
       await commitToolResults(input, dependencies, runtime, results);
       return 'cancelled';
     }
@@ -863,18 +924,17 @@ async function executeToolCallBatch(
       // A Run failure closes every not-yet-settled ToolCall of this batch with
       // a model-visible failed ToolResult before the Run ends.
       recordResult(closedToolResult(call, dependencies.clock.now()));
-      for (const remaining of calls.slice(index + 1)) {
-        recordResult(closedToolResult(remaining, dependencies.clock.now()));
-      }
+      closeWith((remaining) => closedToolResult(remaining, dependencies.clock.now()), index + 1);
       await commitToolResults(input, dependencies, runtime, results);
       return { status: 'failed', failure: executed.failure };
     }
     recordResult(executed.result);
   }
 
+  const flushed = await flushParallelWindow();
   await commitToolResults(input, dependencies, runtime, results);
   // Cancellation may win after the last call of the batch settled.
-  if (input.signal.aborted) return 'cancelled';
+  if (flushed === 'cancelled' || input.signal.aborted) return 'cancelled';
   return 'completed';
 }
 

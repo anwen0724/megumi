@@ -283,14 +283,6 @@ export class ActiveRunStore {
     return this.pendingRuns.get(runId);
   }
 
-  getActiveRunForSession(sessionId: string): Run | undefined {
-    this.pruneExpired();
-    const runId = this.runIdBySession.get(sessionId);
-    if (!runId) return undefined;
-    const active = this.activeRuns.get(runId);
-    return active ? snapshot(active.run) : undefined;
-  }
-
   listActiveRuns(): readonly Run[] {
     this.pruneExpired();
     return [...this.activeRuns.values()]

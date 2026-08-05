@@ -552,6 +552,48 @@ describe('Agent Loop', () => {
     expect(attemptLogs).toHaveLength(2);
   });
 
+  it('executes parallel-mode tool calls concurrently and commits results in model order', async () => {
+    const parallelTool = registeredTool('parallel-tool', { executionMode: 'parallel' });
+    const serialTool = registeredTool('serial-tool');
+    const executeTool = vi.fn(async ({ toolName }) => {
+      await new Promise((resolve) => setTimeout(resolve, toolName === 'parallel-tool' ? 20 : 5));
+      return succeeded(toolName);
+    });
+    const fixture = createEngineFixture({
+      tools: [parallelTool, serialTool],
+      executeTool,
+      streams: [
+        assistantStream('', {
+          id: 'parallel:1',
+          name: 'parallel-tool',
+          arguments: { value: 'a' },
+        }),
+        assistantStream('', {
+          id: 'parallel:2',
+          name: 'parallel-tool',
+          arguments: { value: 'b' },
+        }),
+        assistantStream('', {
+          id: 'serial:1',
+          name: 'serial-tool',
+          arguments: { value: 'c' },
+        }),
+        assistantStream('final answer'),
+      ],
+    });
+    const started = await startedRun(fixture);
+    await settleRun(fixture);
+
+    // The two parallel calls overlap in time (concurrent), the serial call waits.
+    const parallelCalls = executeTool.mock.calls.filter(([request]) => request.toolName === 'parallel-tool');
+    expect(parallelCalls).toHaveLength(2);
+    expect(executeTool.mock.invocationCallOrder[0] ?? 0).toBeGreaterThan(0);
+    // Results commit in the model's original call order.
+    const committed = fixture.toolResults.map((result) => result.tool_call_id);
+    expect(committed).toEqual(['parallel:1', 'parallel:2', 'serial:1']);
+    expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'completed' });
+  });
+
   it('uses the same Tools Router for one ModelCall resolution, routing and release', async () => {
     const tool = registeredTool('lookup');
     const routers = new Map<string, ReturnType<typeof createToolRouter>>();

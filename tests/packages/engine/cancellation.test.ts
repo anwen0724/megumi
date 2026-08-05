@@ -314,4 +314,22 @@ describe('Engine cancellation', () => {
       }),
     ]);
   });
+
+  it('stays convergent when cancellation lands after the Run settled', async () => {
+    // The settle path guards against a cancelling Run converging as completed:
+    // regardless of who wins, the Run reaches one terminal state and shutdown
+    // never hangs on an unsettled completion.
+    const fixture = createEngineFixture({
+      streams: [assistantStream('answer')],
+    });
+    const started = await startedRun(fixture);
+    await settleRun(fixture);
+    expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'completed' });
+
+    const cancellation = await fixture.engine.cancelRun({ runId: started.run.runId });
+    expect(['already_terminal', 'cancellation_requested']).toContain(cancellation.status);
+    await expect(fixture.engine.shutdown({ timeoutMs: 1_000 })).resolves.toEqual({
+      status: 'shut_down',
+    });
+  });
 });
