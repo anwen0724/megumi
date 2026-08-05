@@ -116,6 +116,29 @@ describe('Agent Loop', () => {
       && event.payload.stopReason === 'error')).toBe(false);
   });
 
+  it('fails on the first Overflow when the policy allows no compaction recovery', async () => {
+    const compact = vi.fn(compactedOverflowCompaction);
+    const fixture = createEngineFixture({
+      contextCompact: compact,
+      policy: { maxContextOverflowRecoveries: 0 },
+      streams: [
+        assistantStreamWithUsage('overflowing', {
+          input: 64_001, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 64_002,
+        }),
+        assistantStream('final answer'),
+      ],
+    });
+
+    const started = await startedRun(fixture);
+    await settleRun(fixture);
+
+    expect(compact).not.toHaveBeenCalled();
+    expect(fixture.published.at(-1)?.payload).toMatchObject({
+      status: 'failed',
+      error: { code: 'context_failed' },
+    });
+  });
+
   it('does not issue a second model request when Overflow compaction fails', async () => {
     const compact = vi.fn(async (): Promise<import('@megumi/context').CompactContextResult> => ({
       status: 'failed',

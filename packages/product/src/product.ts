@@ -500,6 +500,7 @@ const PRODUCT_ENGINE_POLICY = {
   maxModelCallAttempts: 3,
   modelRetryDelayMs: 1_000,
   maxToolExecutionsPerCall: 1,
+  maxContextOverflowRecoveries: 1,
   providerRequestMaxRetries: 2,
   providerRequestMaxRetryDelayMs: 60_000,
   terminalRunRetentionMs: 300_000,

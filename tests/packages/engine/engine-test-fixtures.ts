@@ -80,6 +80,7 @@ export const enginePolicy: EnginePolicy = {
   maxModelCallAttempts: 1,
   modelRetryDelayMs: 0,
   maxToolExecutionsPerCall: 1,
+  maxContextOverflowRecoveries: 1,
   providerRequestMaxRetries: 0,
   providerRequestMaxRetryDelayMs: 0,
   terminalRunRetentionMs: 60_000,

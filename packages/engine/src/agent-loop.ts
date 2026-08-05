@@ -520,9 +520,9 @@ async function consumeModelCall(
 
     if (attempt.status === 'completed') {
       if (isContextOverflow(attempt.message, input.run.model.contextWindow)) {
-        // One compaction recovery per logical ModelCall; a second Overflow
-        // ends the Run instead of compacting again.
-        if (overflowRecoveries >= 1) {
+        // Compaction recoveries are bounded by the confirmed Engine Policy;
+        // exhausting them ends the Run instead of compacting again.
+        if (overflowRecoveries >= dependencies.policy.maxContextOverflowRecoveries) {
           return {
             status: 'failed',
             failure: {
@@ -559,9 +559,9 @@ async function consumeModelCall(
     }
 
     if (attempt.status === 'overflow') {
-      // One compaction recovery per logical ModelCall; a second Overflow
-      // ends the Run instead of compacting again.
-      if (overflowRecoveries >= 1) {
+      // Compaction recoveries are bounded by the confirmed Engine Policy;
+      // exhausting them ends the Run instead of compacting again.
+      if (overflowRecoveries >= dependencies.policy.maxContextOverflowRecoveries) {
         return {
           status: 'failed',
           failure: {
