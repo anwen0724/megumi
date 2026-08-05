@@ -8,7 +8,7 @@
 [![使用 TypeScript 构建](https://img.shields.io/badge/构建-TypeScript-3178c6)](https://www.typescriptlang.org/)
 [![许可证：MIT](https://img.shields.io/badge/许可证-MIT-4c7a68)](./LICENSE)
 
-![Megumi 桌面界面](./assets/screenshots/chat-timeline.png)
+![Megumi 桌面界面](./assets/screenshots/startup-screen.png)
 
 ## 关于 Megumi
 

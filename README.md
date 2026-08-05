@@ -8,7 +8,7 @@
 [![Built with TypeScript](https://img.shields.io/badge/built_with-TypeScript-3178c6)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-4c7a68)](./LICENSE)
 
-![Megumi desktop interface](./assets/screenshots/chat-timeline.png)
+![Megumi desktop interface](./assets/screenshots/startup-screen.png)
 
 ## About Megumi
 
