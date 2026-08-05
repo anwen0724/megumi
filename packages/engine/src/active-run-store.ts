@@ -2,8 +2,8 @@
  * Owns the only mutable per-Run runtime record: the ActiveRun. It keeps the
  * Run snapshot, the root AbortController, the single Agent Loop completion
  * and at most one pending approval wait. Request-id idempotency, per-Session
- * exclusion, and bounded terminal results live here too; no router,
- * continuation, stream buffer or loop position ever does.
+ * exclusion, and bounded terminal results live here too; no router, resume
+ * state, stream buffer or loop position ever does.
  */
 import type { SessionEntry, SessionMessageWithAttachments } from '@megumi/session';
 import type { ApprovalDecision } from '@megumi/permissions';
@@ -71,7 +71,7 @@ export interface PendingApproval {
 
 /**
  * The only mutable per-Run runtime record. It never holds a Tool Router,
- * a Tool Call continuation, remaining calls, stream output, attempt state
+ * resume state for pending calls, stream output, attempt state
  * or any Agent Loop execution position.
  */
 export interface ActiveRun {
