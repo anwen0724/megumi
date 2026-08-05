@@ -5,12 +5,10 @@
  */
 
 import type { Api, Context as AiContext, Message, Model, Models, Usage } from '@megumi/ai';
-import type { EffectiveInstructions } from '@megumi/instructions';
 import type { ObservabilityService } from '@megumi/observability';
 import type { SessionHistory } from '@megumi/session';
-import type { SkillView } from '@megumi/skills';
 import type { EventBus } from '@megumi/events';
-import type { ExecutionEnvironment, ContextFailure } from '../context';
+import type { ContextFailure } from '../context';
 import type { CompactionPolicy } from '../context-policy';
 import type { ContextUsageEstimate } from '../context-usage';
 import { cancelledFailure } from '../xml-escape';
@@ -51,9 +49,6 @@ export interface CompactContextRequest {
   readonly workspaceId: string;
   readonly model: Model<Api>;
   readonly trigger: CompactionTrigger;
-  readonly executionEnvironment: ExecutionEnvironment;
-  readonly effectiveInstructions: EffectiveInstructions;
-  readonly skills: SkillView;
   readonly onProgress?: (progress: ContextCompactionProgress) => void;
   /** Optional bus: compaction lifecycle facts are published here. */
   readonly events?: EventBus;

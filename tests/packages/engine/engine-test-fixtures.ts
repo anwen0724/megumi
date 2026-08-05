@@ -4,7 +4,6 @@
 import type {
   Api,
   AssistantMessage,
-  Context,
   Model,
   Models,
 } from '@megumi/ai';
@@ -17,6 +16,7 @@ import type {
   BuildContextResult,
   CompactContextResult,
   ContextUsageEstimate,
+  Prompt,
 } from '@megumi/context';
 import type {
   SaveAssistantReplyRequest,
@@ -105,7 +105,6 @@ export interface EngineFixture {
   readonly published: AnyEvent[];
   readonly assistantReplies: SaveAssistantReplyRequest[];
   readonly toolResults: SaveToolResultMessageRequest[];
-  readonly skillViewRequests: Array<{ workspaceId?: string; signal?: AbortSignal }>;
 }
 
 export function createEngineFixture(input: {
@@ -120,12 +119,10 @@ export function createEngineFixture(input: {
   readonly contextBuild?: CreateEngineOptions['context']['build'];
   readonly contextCompact?: CreateEngineOptions['context']['compact'];
   readonly failUserMessageSave?: boolean;
-  readonly skillView?: Pick<CreateEngineOptions['skills'], 'createView'>;
   readonly observability?: ObservabilityService;
 } = {}): EngineFixture {
   const writes: string[] = [];
   const contextRuns: unknown[] = [];
-  const skillViewRequests: Array<{ workspaceId?: string; signal?: AbortSignal }> = [];
   const published: AnyEvent[] = [];
   const eventsBus = createEventBus();
   eventsBus.subscribe({}, (event) => { published.push(event); });
@@ -207,7 +204,7 @@ export function createEngineFixture(input: {
     }),
   };
 
-  const context: Context = { systemPrompt: 'test', messages: [] };
+  const context: Prompt = { systemPrompt: 'test', messages: [], tools: [] };
   const options: CreateEngineOptions = {
     models: {
       streamSimple: (() => {
@@ -226,25 +223,6 @@ export function createEngineFixture(input: {
         reason: 'no_historical_messages',
       })),
     },
-    scopeResolver: {
-      resolve({ workspaceId }) {
-        return {
-          status: 'resolved' as const,
-          workspaceRoot: `C:/workspace/${workspaceId}`,
-          executionEnvironment: {
-            workingDirectory: `C:/workspace/${workspaceId}`,
-            operatingSystem: 'Windows',
-            shell: 'PowerShell',
-          },
-        };
-      },
-    },
-    instructions: {
-      getEffectiveInstructions: async () => ({
-        status: 'ok' as const,
-        instructions: { sources: [] },
-      }),
-    },
     session: {
       saveUserMessage,
       saveModelResponse,
@@ -252,12 +230,6 @@ export function createEngineFixture(input: {
       saveAssistantReply,
     },
     tools: toolsForRun(input.tools ?? [], input.executeTool),
-    skills: input.skillView ?? {
-      async createView(request) {
-        skillViewRequests.push({ workspaceId: request.workspaceId, signal: request.signal });
-        return { status: 'ok', view: { catalog: [], diagnostics: [] } };
-      },
-    },
     permissions: input.permissions ?? defaultPermissions,
     events: eventsBus,
     ...(input.observability ? { observability: input.observability } : {}),
@@ -280,7 +252,6 @@ export function createEngineFixture(input: {
     published,
     assistantReplies,
     toolResults,
-    skillViewRequests,
   };
 }
 

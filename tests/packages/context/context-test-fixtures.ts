@@ -3,9 +3,10 @@
  * the shared Model, ModelCallContext and history shapes used by both the
  * build and compaction test files.
  */
+import { vi } from 'vitest';
 import type { Api, AssistantMessage, Model } from '@megumi/ai';
 import type { SessionHistoryItem } from '@megumi/session';
-import type { ModelCallContext, RunContext } from '../../../packages/context/src/index';
+import type { CreateContextOptions, ModelCallContext, RunContext } from '../../../packages/context/src/index';
 
 export const model: Model<Api> = {
   id: 'gpt',
@@ -158,16 +159,22 @@ export function modelCall(overrides: Partial<ModelCallContext> = {}): ModelCallC
   return {
     modelCallId: 'model-call:1',
     run,
-    executionEnvironment: {
-      workingDirectory: '/workspace/packages/app',
-      operatingSystem: 'Linux',
-      shell: 'POSIX shell',
-    },
-    effectiveInstructions: {
-      sources: [{ sourceId: 'agents', sourcePath: '/workspace/AGENTS.md', content: 'rules' }],
-    },
-    skills: { catalog: [], diagnostics: [] },
-    tools: { definitions: [] },
+    tools: [],
     ...overrides,
+  };
+}
+
+/** Default Workspace source resolution used by Context build/compaction tests. */
+export function workspaceSource(): CreateContextOptions['workspaceSource'] {
+  return {
+    readWorkspace: vi.fn(async () => ({
+      status: 'ok' as const,
+      workspaceRoot: '/workspace',
+      environment: {
+        workingDirectory: '/workspace/packages/app',
+        operatingSystem: 'Linux',
+        shell: 'POSIX shell',
+      },
+    })),
   };
 }

@@ -3,7 +3,6 @@
  * model/tool loop, approval continuation, and cancellation convergence.
  */
 import type { Api, AssistantMessage, Model, Tool } from '@megumi/ai';
-import type { EffectiveInstructions } from '@megumi/instructions';
 import type {
   ContextFailure,
   ModelCallContext,
@@ -20,7 +19,6 @@ import type {
   SessionMessageWithAttachments,
 } from '@megumi/session';
 import type { ToolDefinition } from '@megumi/tools';
-import { skillsFailureMessage, type SkillView } from '@megumi/skills';
 import type { UserInput } from '@megumi/input';
 import type {
   ObservabilitySpanName,
@@ -363,82 +361,8 @@ async function executeRunLoop(
         model: run.model,
       };
 
-      // Workspace -> ExecutionEnvironment (fixed before this ModelCall).
-      const environmentResult = dependencies.scopeResolver.resolve({ workspaceId: run.workspaceId });
-      if (!(await nextRunState(dependencies, runtime)).proceed) return;
-      if (environmentResult.status === 'failed') {
-        await failRun(dependencies, runtime, {
-          code: 'context_failed',
-          message: environmentResult.failure.message,
-          retryable: true,
-          cause: { owner: 'workspace', code: environmentResult.failure.code },
-        });
-        return;
-      }
-
-      // Instructions -> EffectiveInstructions (fixed before this ModelCall).
-      let effectiveInstructions: EffectiveInstructions;
-      try {
-        const instructions = await dependencies.instructions.getEffectiveInstructions(
-          {
-            workspaceRoot: environmentResult.workspaceRoot,
-            workingDirectory: environmentResult.executionEnvironment.workingDirectory,
-          },
-          { signal: runtime.controller.signal },
-        );
-        if (!(await nextRunState(dependencies, runtime)).proceed) return;
-        if (instructions.status === 'cancelled') {
-          await finishCancellationIfStopped(dependencies, runtime);
-          return;
-        }
-        if (instructions.status === 'failed') {
-          await failRun(dependencies, runtime, {
-            code: 'context_failed',
-            message: instructions.failure.message,
-            retryable: true,
-            cause: { owner: 'instructions', code: instructions.failure.code },
-          });
-          return;
-        }
-        effectiveInstructions = instructions.instructions;
-      } catch (error) {
-        await failRun(dependencies, runtime, {
-          code: 'context_failed',
-          message: error instanceof Error ? error.message : 'Effective Instructions could not be resolved.',
-          retryable: true,
-          cause: { owner: 'instructions', code: 'instructions_resolution_failed' },
-        });
-        return;
-      }
-
-      // Skills -> SkillView (fixed before this ModelCall).
-      let skillView: SkillView;
-      try {
-        const viewResult = await dependencies.skills.createView({
-          workspaceId: run.workspaceId,
-          signal: runtime.controller.signal,
-        });
-        if (viewResult.status === 'failed') {
-          await failRun(dependencies, runtime, {
-            code: 'context_failed',
-            message: skillsFailureMessage(viewResult.failure),
-            retryable: false,
-            cause: { owner: 'skills', code: viewResult.failure.code },
-          });
-          return;
-        }
-        skillView = viewResult.view;
-      } catch {
-        await failRun(dependencies, runtime, {
-          code: 'context_failed',
-          message: 'Skill View could not be created.',
-          retryable: false,
-          cause: { owner: 'skills', code: 'skill_view_failed' },
-        });
-        return;
-      }
-
-      // Tools -> ToolView (fixed before this ModelCall).
+      // Tools -> Tool Definitions (fixed before this ModelCall). Context
+      // resolves its Workspace, Instructions and Skills sources itself.
       let toolResolution;
       try {
         toolResolution = dependencies.tools.resolveModelCallTools({
@@ -471,10 +395,7 @@ async function executeRunLoop(
       const modelCallContext: ModelCallContext = {
         modelCallId,
         run: runContext,
-        executionEnvironment: environmentResult.executionEnvironment,
-        effectiveInstructions,
-        skills: skillView,
-        tools: { definitions: toolResolution.definitions },
+        tools: toolResolution.definitions,
       };
 
       const buildPrompt = async (): Promise<
@@ -497,6 +418,11 @@ async function executeRunLoop(
       let prompt: Prompt;
       const initialBuild = await buildPrompt();
       if (initialBuild.status === 'failed') {
+        // A cancelled Context build converges as cancellation, not failure.
+        if (initialBuild.failure.code === 'cancelled' || runtime.controller.signal.aborted) {
+          await finishCancellationIfStopped(dependencies, runtime);
+          return;
+        }
         await failRun(dependencies, runtime, {
           code: 'context_failed',
           message: initialBuild.failure.message,
@@ -527,7 +453,13 @@ async function executeRunLoop(
           sessionId: run.sessionId,
           models: dependencies.models,
           model: run.model,
-          context: prompt,
+          // Shallow copies at the AI boundary: the stream consumes the same
+          // Message and Tool Definition objects the Prompt was built from.
+          context: {
+            systemPrompt: prompt.systemPrompt,
+            messages: [...prompt.messages],
+            tools: [...prompt.tools],
+          },
           ...(startAttemptNumber > 1 ? { startAttemptNumber } : {}),
           signal: runtime.controller.signal,
           policy: dependencies.policy,
@@ -573,9 +505,6 @@ async function executeRunLoop(
           workspaceId: run.workspaceId,
           model: run.model,
           trigger: 'overflow',
-          executionEnvironment: modelCallContext.executionEnvironment,
-          effectiveInstructions: modelCallContext.effectiveInstructions,
-          skills: modelCallContext.skills,
           events: dependencies.events,
           signal: runtime.controller.signal,
         });

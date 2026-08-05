@@ -1,13 +1,12 @@
 /*
  * Defines the fixed Context main chain: RunContext facts that stay constant
- * inside one Run, ModelCallContext facts fixed before one model call, and the
+ * inside one Run, ModelCallContext facts fixed before one model call, the
+ * assembly seams Context uses to resolve its own prompt sources, and the
  * provider-neutral Prompt result of Context.build.
  */
 
-import type { Api, Context as AiContext, Model } from '@megumi/ai';
-import type { EffectiveInstructions } from '@megumi/instructions';
+import type { Api, Message, Model } from '@megumi/ai';
 import type { UserInput } from '@megumi/input';
-import type { SkillView } from '@megumi/skills';
 import type { ToolDefinition } from '@megumi/tools';
 
 export interface ExecutionEnvironment {
@@ -16,9 +15,16 @@ export interface ExecutionEnvironment {
   readonly shell: string;
 }
 
-export interface ToolView {
-  /** Model-visible Tool Definitions; the Tool Router stays with Tools. */
-  readonly definitions: readonly ToolDefinition[];
+/** Assembly-time Workspace seam: Context resolves Workspace facts itself. */
+export interface ContextWorkspaceSource {
+  readWorkspace(request: {
+    readonly workspaceId: string;
+    readonly signal?: AbortSignal;
+  }): Promise<
+    | { readonly status: 'ok'; readonly workspaceRoot: string; readonly environment: ExecutionEnvironment }
+    | { readonly status: 'failed'; readonly failure: { readonly code: string; readonly message: string } }
+    | { readonly status: 'cancelled' }
+  >;
 }
 
 /** Facts that stay constant for the whole accepted Run. */
@@ -34,14 +40,15 @@ export interface RunContext {
 export interface ModelCallContext {
   readonly modelCallId: string;
   readonly run: RunContext;
-  readonly executionEnvironment: ExecutionEnvironment;
-  readonly effectiveInstructions: EffectiveInstructions;
-  readonly skills: SkillView;
-  readonly tools: ToolView;
+  readonly tools: readonly ToolDefinition[];
 }
 
-/** The final provider-neutral Prompt; Context directly reuses @megumi/ai Context. */
-export type Prompt = AiContext;
+/** The final provider-neutral Prompt; Context owns its three required parts. */
+export interface Prompt {
+  readonly systemPrompt: string;
+  readonly messages: readonly Message[];
+  readonly tools: readonly ToolDefinition[];
+}
 
 export interface BuildContextRequest {
   readonly modelCallContext: ModelCallContext;
@@ -55,6 +62,9 @@ export type BuildContextResult =
 export type ContextFailureCode =
   | 'session_history_failed'
   | 'base_instructions_failed'
+  | 'effective_instructions_failed'
+  | 'skill_view_failed'
+  | 'workspace_failed'
   | 'execution_environment_invalid'
   | 'tool_definitions_invalid'
   | 'image_materialization_failed'
@@ -72,7 +82,7 @@ export interface ContextFailure {
   readonly message: string;
   readonly retryable: boolean;
   readonly cause?: {
-    readonly owner: 'session' | 'instructions' | 'skills' | 'tools' | 'ai';
+    readonly owner: 'session' | 'workspace' | 'instructions' | 'skills' | 'tools' | 'ai';
     readonly code?: string;
   };
 }

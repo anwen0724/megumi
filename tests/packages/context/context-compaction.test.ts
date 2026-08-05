@@ -12,6 +12,7 @@ import {
   completedMessage,
   modelCall,
   runHistory,
+  workspaceSource,
 } from './context-test-fixtures';
 
 function compactedHistory(history: SessionHistoryItem[]): SessionHistoryItem[] {
@@ -67,12 +68,16 @@ function fixture(
       })),
     },
     attachmentReader: { readAttachmentContent: vi.fn() },
+    workspaceSource: workspaceSource(),
     instructionReader: {
       getSystemInstructions: vi.fn(() => []),
       getEffectiveInstructions: vi.fn(async () => ({
         status: 'ok' as const,
         instructions: { sources: [] },
       })),
+    },
+    skills: {
+      createView: vi.fn(async () => ({ status: 'ok' as const, view: { catalog: [], diagnostics: [] } })),
     },
     models: { completeSimple },
     // Deterministic estimator: four original messages cost 40 tokens each, the
@@ -92,13 +97,6 @@ function manualRequest(overrides: Partial<Parameters<ReturnType<typeof createCon
     workspaceId: 'workspace:1',
     model: compactingModel,
     trigger: 'manual' as const,
-    executionEnvironment: {
-      workingDirectory: '/workspace',
-      operatingSystem: 'Linux',
-      shell: 'POSIX shell',
-    },
-    effectiveInstructions: { sources: [] },
-    skills: { catalog: [], diagnostics: [] },
     ...overrides,
   };
 }

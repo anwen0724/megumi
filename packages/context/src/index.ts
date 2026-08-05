@@ -5,11 +5,11 @@ export type {
   ContextBuilder,
   ContextFailure,
   ContextFailureCode,
+  ContextWorkspaceSource,
   ExecutionEnvironment,
   ModelCallContext,
   Prompt,
   RunContext,
-  ToolView,
 } from './context';
 export { createContext, type ContextCapabilities, type CreateContextOptions } from './context-builder';
 export {

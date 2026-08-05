@@ -3,9 +3,7 @@
  */
 import type { Api, Model, Models } from '@megumi/ai';
 import type { UserInput } from '@megumi/input';
-import type { ContextBuilder, ContextCompactor, ExecutionEnvironment } from '@megumi/context';
-import type { InstructionReader } from '@megumi/instructions';
-import type { Skills } from '@megumi/skills';
+import type { ContextBuilder, ContextCompactor } from '@megumi/context';
 import type { EventBus } from '@megumi/events';
 import type {
   ApprovalDecision,
@@ -44,19 +42,6 @@ import type { ToolCallApprovalContinuation } from './tool-call';
 import { canonicalJson } from './canonical-json';
 
 export type RunInput = UserInput;
-
-export interface EngineWorkspaceSource {
-  resolve(request: { readonly workspaceId: string }):
-    | {
-        readonly status: 'resolved';
-        readonly workspaceRoot: string;
-        readonly executionEnvironment: ExecutionEnvironment;
-      }
-    | {
-        readonly status: 'failed';
-        readonly failure: { readonly code: string; readonly message: string };
-      };
-}
 
 export interface StartRunRequest {
   readonly requestId: string;
@@ -195,8 +180,6 @@ export interface EngineClock {
 export interface CreateEngineOptions {
   readonly models: Models;
   readonly context: Pick<ContextBuilder, 'build'> & Pick<ContextCompactor, 'compact'>;
-  readonly scopeResolver: EngineWorkspaceSource;
-  readonly instructions: Pick<InstructionReader, 'getEffectiveInstructions'>;
   readonly session: Pick<
     SessionHistory,
     'saveUserMessage' | 'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'
@@ -208,7 +191,6 @@ export interface CreateEngineOptions {
     | 'executeToolInvocation'
     | 'releaseModelCallTools'
   >;
-  readonly skills: Pick<Skills, 'createView'>;
   readonly permissions: Pick<
     Permissions,
     'evaluateToolCall' | 'applyApprovalDecision'

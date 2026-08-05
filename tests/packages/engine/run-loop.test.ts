@@ -150,24 +150,6 @@ describe('Engine run loop', () => {
     if (started.status !== 'failed') return;
     expect(started.failure).toMatchObject({ code: 'session_failed' });
     expect(fixture.contextRuns).toHaveLength(0);
-    expect(fixture.skillViewRequests).toHaveLength(0);
-  });
-
-  it('creates one immutable SkillView per ModelCall with only Workspace and signal facts', async () => {
-    const fixture = createEngineFixture({
-      streams: [assistantStream('final answer')],
-    });
-
-    const started = await startedRun(fixture);
-    await settleRun(fixture);
-
-    // createView receives only the Workspace identity and the Run signal; no selection facts.
-    expect(fixture.skillViewRequests).toHaveLength(1);
-    expect(fixture.skillViewRequests[0]).toEqual({
-      workspaceId: startRequest.workspaceId,
-      signal: expect.any(AbortSignal),
-    });
-    expect(fixture.skillViewRequests[0]).not.toHaveProperty('skillSelection');
   });
 
 
@@ -234,7 +216,7 @@ describe('Engine run loop', () => {
     // The second ModelCall gets its own ModelCallContext; Context reads Session History.
     expect(fixture.contextRuns[1]).toMatchObject({
       run: expect.objectContaining({ runId: started.run.runId }),
-      tools: { definitions: [expect.objectContaining({ name: 'lookup' })] },
+      tools: [expect.objectContaining({ name: 'lookup' })],
     });
     expect(fixture.contextRuns[1]).not.toHaveProperty('runItems');
     expect(fixture.published.some((event) => event.type === 'message.ended' && event.payload.role === 'tool_result')).toBe(true);

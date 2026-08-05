@@ -1,23 +1,26 @@
 /*
- * Coordinates one Context build: Session history reading, System Prompt and
- * message materialization, Token estimation and the shared Compaction path.
- * Context never creates or modifies UserMessage and never re-reads Skills,
- * Tools, Instructions or the Workspace after the ModelCallContext is fixed.
+ * Coordinates one Context build: Workspace, Instructions and Skills source
+ * resolution, Session history reading, System Prompt and message
+ * materialization, Token estimation and the shared Compaction path. Context
+ * never creates or modifies UserMessage and resolves its own prompt sources
+ * through the assembly seams injected at creation.
  */
 
 import crypto from 'node:crypto';
-import type { Api, Context as AiContext, Message, Model, Models, Tool } from '@megumi/ai';
+import type { Api, Context as AiContext, Message, Model, Models } from '@megumi/ai';
 import { estimateContextTokens, estimateMessageTokens } from '@megumi/ai/utils/estimate';
 import type { EventBus } from '@megumi/events';
 import type { EffectiveInstructions, InstructionReader } from '@megumi/instructions';
 import type { ObservabilityService } from '@megumi/observability';
 import type { SessionAttachmentReader, SessionHistory, SessionHistoryItem } from '@megumi/session';
-import type { SkillView } from '@megumi/skills';
+import type { Skills, SkillView } from '@megumi/skills';
+import type { ToolDefinition } from '@megumi/tools';
 import type {
   BuildContextRequest,
   BuildContextResult,
   ContextBuilder,
   ContextFailure,
+  ContextWorkspaceSource,
   ExecutionEnvironment,
   Prompt,
 } from './context';
@@ -43,9 +46,13 @@ import type { CompactionMessageSource, CompactionPlan } from './compaction/compa
 export interface CreateContextOptions {
   readonly sessionHistory: Pick<SessionHistory, 'getActiveHistory' | 'saveCompactionSummary'>;
   readonly attachmentReader: Pick<SessionAttachmentReader, 'readAttachmentContent'>;
+  /** Workspace seam: Context resolves the Workspace root and execution environment itself. */
+  readonly workspaceSource: ContextWorkspaceSource;
   readonly instructionReader: InstructionReader;
+  /** Skills seam: Context creates the SkillView it needs for one build. */
+  readonly skills: Pick<Skills, 'createView'>;
   readonly models: Pick<Models, 'completeSimple'>;
-  readonly contextTokenEstimator?: (context: AiContext) => number;
+  readonly contextTokenEstimator?: (prompt: Prompt | AiContext) => number;
   readonly observability?: ObservabilityService;
   readonly policy?: Partial<CompactionPolicy>;
   readonly policyProvider?: { getPolicy(): Partial<CompactionPolicy> };
@@ -65,7 +72,7 @@ type PromptRequestInput = {
   readonly executionEnvironment: ExecutionEnvironment;
   readonly effectiveInstructions: EffectiveInstructions;
   readonly skills: SkillView;
-  readonly tools: readonly Tool[];
+  readonly tools: readonly ToolDefinition[];
   readonly signal?: AbortSignal;
 };
 
@@ -113,7 +120,7 @@ class DefaultContext implements ContextCapabilities {
       if (result.status === 'ready') {
         this.options.observability?.recordMeasurement({
           name: 'context.used_tokens',
-          value: estimateContextTokens(result.prompt).tokens,
+          value: estimateContextTokens(result.prompt.messages).tokens,
           unit: 'token',
           correlation: { sessionId: request.modelCallContext.run.sessionId },
         });
@@ -129,6 +136,12 @@ class DefaultContext implements ContextCapabilities {
     try {
       return await this.withSessionOperation(request.sessionId, async () => {
         if (request.signal?.aborted) return failed(cancelledFailure('Context operation was cancelled.'));
+        const sources = await this.resolveSources({
+          workspaceId: request.workspaceId,
+          signal: request.signal,
+        });
+        if (sources.status === 'cancelled') return failed(cancelledFailure('Context operation was cancelled.'));
+        if (sources.status === 'failed') return sources;
         const policy = this.resolvePolicy();
         const capacity = contextCapacityFromModel(request.model);
         const policyProblem = compactionPolicyFailure(policy, capacity);
@@ -144,9 +157,9 @@ class DefaultContext implements ContextCapabilities {
           history: history.history,
           baseInstructions: base.instructions,
           model: request.model,
-          executionEnvironment: request.executionEnvironment,
-          effectiveInstructions: request.effectiveInstructions,
-          skills: request.skills,
+          executionEnvironment: sources.executionEnvironment,
+          effectiveInstructions: sources.effectiveInstructions,
+          skills: sources.skills,
           tools: [],
           signal: request.signal,
         });
@@ -188,13 +201,19 @@ class DefaultContext implements ContextCapabilities {
   private async buildExclusive(request: BuildContextRequest): Promise<BuildContextResult> {
     if (request.signal?.aborted) return failed(cancelledFailure('Context operation was cancelled.'));
     const modelCall = request.modelCallContext;
+    const sources = await this.resolveSources({
+      workspaceId: modelCall.run.workspaceId,
+      signal: request.signal,
+    });
+    if (sources.status === 'cancelled') return failed(cancelledFailure('Context operation was cancelled.'));
+    if (sources.status === 'failed') return sources;
     const policy = this.resolvePolicy();
     const capacity = contextCapacityFromModel(modelCall.run.model);
     const policyProblem = compactionPolicyFailure(policy, capacity);
     if (policyProblem) {
       return failed({ code: 'policy_invalid', message: policyProblem, retryable: false });
     }
-    const environmentProblem = invalidExecutionEnvironment(modelCall.executionEnvironment);
+    const environmentProblem = invalidExecutionEnvironment(sources.executionEnvironment);
     if (environmentProblem) {
       return failed({
         code: 'execution_environment_invalid',
@@ -202,7 +221,7 @@ class DefaultContext implements ContextCapabilities {
         retryable: false,
       });
     }
-    const toolProblem = invalidToolDefinitions(modelCall.tools.definitions);
+    const toolProblem = invalidToolDefinitions(modelCall.tools);
     if (toolProblem) {
       return failed({
         code: 'tool_definitions_invalid',
@@ -220,10 +239,10 @@ class DefaultContext implements ContextCapabilities {
       sessionId: modelCall.run.sessionId,
       baseInstructions: base.instructions,
       model: modelCall.run.model,
-      executionEnvironment: modelCall.executionEnvironment,
-      effectiveInstructions: modelCall.effectiveInstructions,
-      skills: modelCall.skills,
-      tools: modelCall.tools.definitions,
+      executionEnvironment: sources.executionEnvironment,
+      effectiveInstructions: sources.effectiveInstructions,
+      skills: sources.skills,
+      tools: modelCall.tools,
       signal: request.signal,
     };
     const prompt = await this.buildPromptFromSources({ ...promptRequest, history: history.history });
@@ -323,6 +342,87 @@ class DefaultContext implements ContextCapabilities {
     }
   }
 
+  /**
+   * Resolves the Workspace, Effective Instructions and SkillView sources one
+   * build or compaction needs. Shared by build() and compact() so both paths
+   * use the same fixed order and failure ownership.
+   */
+  private async resolveSources(input: {
+    readonly workspaceId: string;
+    readonly signal?: AbortSignal;
+  }): Promise<
+    | {
+        readonly status: 'ok';
+        readonly workspaceRoot: string;
+        readonly executionEnvironment: ExecutionEnvironment;
+        readonly effectiveInstructions: EffectiveInstructions;
+        readonly skills: SkillView;
+      }
+    | { readonly status: 'failed'; readonly failure: ContextFailure }
+    | { readonly status: 'cancelled' }
+  > {
+    const workspace = await this.options.workspaceSource.readWorkspace({
+      workspaceId: input.workspaceId,
+      signal: input.signal,
+    });
+    if (workspace.status === 'cancelled') return { status: 'cancelled' };
+    if (workspace.status === 'failed') {
+      return {
+        status: 'failed',
+        failure: {
+          code: 'workspace_failed',
+          message: workspace.failure.message,
+          retryable: true,
+          cause: { owner: 'workspace', code: workspace.failure.code },
+        },
+      };
+    }
+
+    const instructions = await this.options.instructionReader.getEffectiveInstructions(
+      {
+        workspaceRoot: workspace.workspaceRoot,
+        workingDirectory: workspace.environment.workingDirectory,
+      },
+      input.signal ? { signal: input.signal } : undefined,
+    );
+    if (instructions.status === 'cancelled') return { status: 'cancelled' };
+    if (instructions.status === 'failed') {
+      return {
+        status: 'failed',
+        failure: {
+          code: 'effective_instructions_failed',
+          message: instructions.failure.message,
+          retryable: true,
+          cause: { owner: 'instructions', code: instructions.failure.code },
+        },
+      };
+    }
+
+    const view = await this.options.skills.createView({
+      workspaceId: input.workspaceId,
+      signal: input.signal,
+    });
+    if (view.status === 'failed') {
+      return {
+        status: 'failed',
+        failure: {
+          code: 'skill_view_failed',
+          message: 'Skill View could not be created.',
+          retryable: false,
+          cause: { owner: 'skills', code: view.failure.code },
+        },
+      };
+    }
+
+    return {
+      status: 'ok',
+      workspaceRoot: workspace.workspaceRoot,
+      executionEnvironment: workspace.environment,
+      effectiveInstructions: instructions.instructions,
+      skills: view.view,
+    };
+  }
+
   private async buildPromptFromSources(input: PromptRequestInput): Promise<
     | {
         readonly status: 'ok';
@@ -363,13 +463,13 @@ class DefaultContext implements ContextCapabilities {
     };
   }
 
-  private countUsage(context: AiContext): ContextUsageEstimate {
+  private countUsage(prompt: Prompt | AiContext): ContextUsageEstimate {
     const estimator = this.options.contextTokenEstimator;
     if (estimator) {
-      const tokens = estimator(context);
+      const tokens = estimator(prompt);
       return { tokens, usageTokens: 0, trailingTokens: tokens, lastUsageIndex: null };
     }
-    return estimateContextTokens(context);
+    return estimateContextTokens(prompt.messages);
   }
 
   private executeCompaction(input: {
@@ -396,12 +496,15 @@ class DefaultContext implements ContextCapabilities {
         .map((source) => source.message);
       return {
         status: 'built' as const,
+        // Shallow copies at the AI boundary: the compaction projection is a
+        // mutable Context for the summary call, never the readonly Prompt.
         context: {
-          ...input.prompt,
+          systemPrompt: input.prompt.systemPrompt,
           messages: [
             buildCompactionSummaryMessage(summaryText, Date.parse(this.clock.now())),
             ...keptMessages,
           ],
+          tools: [...input.prompt.tools],
         },
       };
     };
@@ -409,7 +512,12 @@ class DefaultContext implements ContextCapabilities {
       sessionId: input.sessionId,
       trigger: input.trigger,
       sources: input.sources,
-      beforeContext: input.prompt,
+      // Shallow copy at the AI boundary: compaction consumes a mutable Context.
+      beforeContext: {
+        systemPrompt: input.prompt.systemPrompt,
+        messages: [...input.prompt.messages],
+        tools: [...input.prompt.tools],
+      },
       expectedActiveEntryId: input.history.expectedActiveEntryId,
       previousSummary,
       policy: input.policy,

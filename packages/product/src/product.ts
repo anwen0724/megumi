@@ -10,14 +10,14 @@ import {
   type CommandTerminalResult,
   type Commands,
 } from '@megumi/commands';
-import { createContext } from '@megumi/context';
+import { createContext, type ContextWorkspaceSource } from '@megumi/context';
 import {
   createDatabase,
   migrateDatabase,
   type DatabaseConnection,
   type ResolveDatabaseMigrationsFolderRequest,
 } from '@megumi/database';
-import { createEngine, type Engine, type EnginePolicy, type EngineWorkspaceSource } from '@megumi/engine';
+import { createEngine, type Engine, type EnginePolicy } from '@megumi/engine';
 import { createEventBus, type EventSubscription } from '@megumi/events';
 import { createInputProcessor, type InputSourceAccess } from '@megumi/input';
 import { createInstructionReader } from '@megumi/instructions';
@@ -231,14 +231,15 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
   });
   const instructions = createInstructionReader({ megumiHomePath: homePaths.homePath });
   const sandboxCapabilities = sandbox.capabilities();
-  const scopeResolver: EngineWorkspaceSource = {
-    resolve({ workspaceId }) {
+  // Context resolves its own prompt sources; Product only wires the seams.
+  const workspaceSource: ContextWorkspaceSource = {
+    async readWorkspace({ workspaceId }) {
       const workspace = workspaces.getWorkspace({ workspace_id: workspaceId });
       return workspace.status === 'found'
         ? {
-            status: 'resolved',
+            status: 'ok',
             workspaceRoot: workspace.workspace.root_path,
-            executionEnvironment: {
+            environment: {
               workingDirectory: workspace.workspace.root_path,
               operatingSystem: modelVisibleOperatingSystem(sandboxCapabilities.platform),
               shell: sandboxCapabilities.shellName ?? 'Unavailable',
@@ -253,7 +254,9 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
   const context = createContext({
     sessionHistory: history,
     attachmentReader: attachments,
+    workspaceSource,
     instructionReader: instructions,
+    skills,
     models: modelComposition.models,
     observability: observability.service,
   });
@@ -305,36 +308,12 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
 
   const commands: Commands = createCommands({
     compact: async (request, operationOptions) => {
-      // Manual /compact resolves the same fixed source facts a ModelCall would use.
-      const scope = scopeResolver.resolve({ workspaceId: request.workspaceId });
-      if (scope.status === 'failed') {
-        return { status: 'failed', failure: { code: scope.failure.code, message: scope.failure.message } };
-      }
-      const effective = await instructions.getEffectiveInstructions(
-        {
-          workspaceRoot: scope.workspaceRoot,
-          workingDirectory: scope.executionEnvironment.workingDirectory,
-        },
-        operationOptions?.signal ? { signal: operationOptions.signal } : undefined,
-      );
-      if (effective.status === 'cancelled') {
-        return { status: 'failed', failure: { code: 'instructions_failed', message: 'Effective Instructions resolution was cancelled.' } };
-      }
-      if (effective.status === 'failed') {
-        return { status: 'failed', failure: { code: 'instructions_failed', message: effective.failure.message } };
-      }
-      const view = await skills.createView({ workspaceId: request.workspaceId });
-      if (view.status === 'failed') {
-        return { status: 'failed', failure: { code: 'skill_view_failed', message: 'Skill View could not be created.' } };
-      }
+      // Manual /compact delegates all source resolution to Context.
       return context.compact({
         sessionId: request.sessionId,
         workspaceId: request.workspaceId,
         model: request.model,
         trigger: 'manual',
-        executionEnvironment: scope.executionEnvironment,
-        effectiveInstructions: effective.instructions,
-        skills: view.view,
         events,
         ...(operationOptions?.signal ? { signal: operationOptions.signal } : {}),
       });
@@ -414,11 +393,8 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
   const engine = createEngine({
     models: modelComposition.models,
     context,
-    scopeResolver,
-    instructions,
     session: history,
     tools,
-    skills,
     permissions,
     events,
     observability: observability.service,

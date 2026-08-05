@@ -83,6 +83,40 @@ describe('Context Package source guards', () => {
     expect(contextSource).not.toContain('ContextContent');
     expect(contextSource).not.toContain('PromptItem');
   });
+
+  it('keeps ModelCallContext to only execution identities and Tool Definitions', () => {
+    const contextSource = read('packages/context/src/context.ts');
+    expect(contextSource).toMatch(/ModelCallContext/);
+    expect(contextSource).toContain('modelCallId');
+    expect(contextSource).toContain('readonly tools: readonly ToolDefinition[]');
+    // Dynamic prompt sources are no longer carried into ModelCallContext.
+    expect(contextSource).not.toMatch(/executionEnvironment[?]?:/u);
+    expect(contextSource).not.toContain('effectiveInstructions');
+    expect(contextSource).not.toContain('SkillView');
+    expect(contextSource).not.toContain('ToolView');
+  });
+
+  it('keeps the Prompt as the explicit three-part Context output', () => {
+    const contextSource = read('packages/context/src/context.ts');
+    expect(contextSource).toContain('readonly systemPrompt: string');
+    expect(contextSource).toContain('readonly messages: readonly Message[]');
+    expect(contextSource).toContain('readonly tools: readonly ToolDefinition[]');
+    // The Prompt is not the AI Context alias.
+    expect(contextSource).not.toMatch(/export type Prompt = AiContext/u);
+  });
+
+  it('keeps Workspace, Instructions and Skills source resolution inside Context', () => {
+    const contextSource = readTree('packages/context/src');
+    expect(contextSource).toContain('ContextWorkspaceSource');
+    expect(contextSource).toContain('resolveSources');
+    expect(contextSource).toContain("readWorkspace({");
+    expect(contextSource).toContain('getEffectiveInstructions(');
+    expect(contextSource).toContain('skills.createView(');
+    // Engine and Product no longer read these sources for Context.
+    expect(read('packages/engine/src/run-loop.ts')).not.toContain('scopeResolver');
+    expect(read('packages/engine/src/run-loop.ts')).not.toMatch(/getEffectiveInstructions|createView/u);
+    expect(read('packages/product/src/product.ts')).not.toContain('scopeResolver');
+  });
 });
 
 function exists(relativePath: string): boolean {
