@@ -2,178 +2,137 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-**一个面向 Windows 的个人桌面 Agent。**
+**一个本地桌面 Agent 系统，通过统一执行循环连接模型、上下文、工具、权限与持久化会话。**
 
-打开真实代码库，接入你自己的模型供应商，让 Megumi 检查文件、修改代码、运行命令并验证结果；整个过程都会显示在可追踪的会话时间线中。
-
-[![状态：预览版](https://img.shields.io/badge/状态-预览版-d8a24a)](#项目状态)
-[![平台：Windows](https://img.shields.io/badge/平台-Windows-5f6b7a)](#开发)
-[![许可证：MIT](https://img.shields.io/badge/许可证-MIT-4c7a68)](./LICENSE)
+[![平台：Windows](https://img.shields.io/badge/平台-Windows-5f6b7a)](#快速开始)
 [![使用 TypeScript 构建](https://img.shields.io/badge/构建-TypeScript-3178c6)](https://www.typescriptlang.org/)
+[![许可证：MIT](https://img.shields.io/badge/许可证-MIT-4c7a68)](./LICENSE)
 
-**本地工作区 · BYOK 模型 · 可见工具执行 · 审批控制 · English / 简体中文界面**
+![Megumi 桌面界面](./assets/screenshots/chat-timeline.png)
 
-![Megumi——个人桌面 Agent](./assets/social-preview.png)
+## 关于 Megumi
 
-## 为什么是 Megumi
+Megumi 是一个以桌面应用形态提供的开源 Agent 系统。它提供 Agent 在本地工作区中运行所需的基础能力：接收用户输入、组织模型上下文、流式调用模型、执行工具调用、应用权限规则、记录会话历史，并持续进行模型与工具之间的循环，直至本次运行得到确定结果。
 
-Megumi 是一个在本地桌面应用中与你协作的个人 Agent。
+系统不绑定单一模型供应商。用户选择模型供应商和具体模型，Megumi 提供执行循环以及围绕模型调用建立的完整运行环境，让一次模型请求成为受控制、可观察的 Agent 执行。
 
-你不需要在聊天窗口、终端、编辑器和文件浏览器之间来回切换，而是可以在一个可见会话中和 agent 协作：让它理解代码库、检查相关文件、修改代码、运行验证命令，并解释发生了什么。
+Megumi 采用本地优先的方式。工作区、设置、会话和运行诊断保存在本地；只有模型请求以及为该请求选择的上下文会发送给用户配置的模型供应商。
 
-Megumi 的设计原则：
+## 运行原理
 
-- 本地工作区是一等公民。
-- 模型供应商由你自己选择。
-- Agent 的动作会在运行过程中可见。
-- 文件写入和命令执行会经过权限策略，并在需要时请求审批。
-- 会话、设置、产品数据和日志默认保存在本地。
-- Agent run 产生的工作区文件改动会在对话中追踪。
-- 桌面界面支持 English 和简体中文切换。
+```mermaid
+flowchart LR
+    U["用户输入"] --> I["Input"]
+    I --> E["Engine / Agent Loop"]
+    E --> C["Context"]
+    C --> A["AI 模型"]
+    A --> E
+    E --> T["Tools"]
+    T --> P["Permissions"]
+    P --> S["Sandbox"]
+    S --> W["本地工作区"]
+    E --> H["Session"]
+    E --> V["Events"]
+```
 
-## 它能做什么
+- **Engine** 负责 Run 生命周期以及模型与工具之间的执行循环。
+- **Context** 使用 Instructions、会话历史、工作区事实、Skills 和当前模型调用可用的工具，构建供应商无关的 Prompt。
+- **AI** 为支持的模型协议提供统一调用接口，并将模型流式输出交回 Engine。
+- **Tools、Permissions 与 Sandbox** 负责路由行动、判断行动是否允许或需要审批，并强制执行真实影响范围。
+- **Session 与 Events** 保存语义会话历史，并发布桌面界面使用的实时执行过程。
 
-当前预览版提供以下能力：
+## 快速开始
 
-- 理解代码库：探索项目结构、读取相关文件、追踪实现路径，并解释系统如何组合在一起。
-- 规划改动：拆解工程任务，分析取舍，并在编辑前提出实现步骤。
-- 修改代码：实现功能、修复 bug、重构模块、更新测试，并在需要时调整文档。
-- 使用工具：搜索文件、检查代码、编辑工作区、运行命令、执行测试并收集诊断信息。
-- 系统化调试：阅读错误、复现失败、追踪根因、应用有针对性的修复，并验证结果。
-- 审查工作：总结改动、识别风险、指出缺失测试，并帮助准备代码审查。
-- 管理上下文：为每次模型调用组合项目指令、当前会话历史、本次 run 的工具结果、滚动摘要和选定工具集合。
-- 审批后执行：在敏感文件写入、命令执行或其它高影响操作前请求确认。
-- 延续历史工作：恢复本地会话历史、切换分支，并在长对话中执行上下文压缩，同时不把纯运行时执行状态持久化为业务事实。
-- 使用图片输入：当所选模型支持图片能力时，可从本地文件或剪贴板附加图片。
-- 诊断运行过程：查看本地 activity、Context 使用量、Provider usage、错误信息和脱敏诊断包。
+Megumi 当前提供 Windows 桌面应用。
 
-## 项目状态
+1. 从 [GitHub Releases](https://github.com/anwen0724/megumi/releases) 下载安装程序。
+2. 启动 Megumi 并打开一个本地工作区。
+3. 在设置中配置模型供应商和凭据。
+4. 选择模型并开始会话。
 
-Megumi 正在持续开发，目前处于 Windows 早期预览阶段。预览安装包通过 [GitHub Releases](https://github.com/anwen0724/megumi/releases) 发布。如果 Releases 中暂时没有安装包，可以按照下方步骤从源码启动。
+## 模型配置
 
-当前 Windows 构建尚未签名，因此安装时可能触发 Windows SmartScreen 的“Unknown publisher”提示。继续安装前请先核对 Release Notes 和源码。
+Megumi 通过以下 API 协议接入模型供应商：
 
-## 在 Windows 上安装
+- OpenAI Completions
+- OpenAI Responses
+- OpenAI Codex Responses
+- Anthropic Messages
+- Google Generative AI
 
-1. 打开 [GitHub Releases](https://github.com/anwen0724/megumi/releases)。
-2. 从最新 Release 下载 `Megumi-<version> Setup.exe`。
-3. 运行安装程序。如果出现 SmartScreen，请先阅读发布者警告，再决定是否继续。
-4. 启动 Megumi，选择语言和主题，添加本地项目，并配置模型供应商。
+应用内提供内置供应商和模型目录。自定义供应商可以使用受支持的 API 协议、Base URL、Model ID 和 Credential 进行配置。
 
-Megumi 当前以 Windows 为正式目标平台。仓库虽然包含其它平台的 Electron Forge maker，但 macOS 和 Linux 暂未进入受支持的公开发布流程。
-
-## 配置模型供应商
-
-Megumi 使用用户自己配置的模型供应商。
-
-在 Settings 中添加供应商时，需要配置：
-
-- provider name
-- protocol
-- base URL
-- API key
-- model IDs
-
-Megumi 当前通过 OpenAI-compatible Adapter 提供 DeepSeek 与 OpenAI 模型目录，也支持配置自定义 OpenAI-compatible 地址和模型 ID。Anthropic 协议 Adapter 尚未实现。
-
-Provider settings 会保存在本地 Megumi home 目录下。
-
-## 本地优先数据
-
-Megumi 的本地应用数据保存在：
+本地应用数据保存在：
 
 ```text
 ~/.megumi
 ```
 
-其中包括本地设置、会话、业务数据库文件、日志和 provider 配置。
-
-工作区操作发生在你的本机。Prompt 和相关工作区上下文只会发送给你配置的模型供应商。
-
-## 开发
+## 从源码构建
 
 环境要求：
 
 - Windows 10 或 Windows 11
-- 当前维护中的 Node.js LTS 版本和 npm
+- 当前 Node.js LTS 版本和 npm
 - Git
 
-安装依赖：
+安装依赖并启动桌面应用：
 
 ```bash
 npm ci
-```
-
-启动桌面应用：
-
-```bash
 npm start
 ```
 
-运行测试：
+执行项目检查：
 
 ```bash
+npm run typecheck:packages
+npm run typecheck:product
 npm test
 ```
 
-类型检查：
-
-```bash
-npx tsc --noEmit
-```
-
-生成未安装的应用目录：
+构建未打包应用目录或 Windows 安装程序：
 
 ```bash
 npm run package
-```
-
-生成 Windows 安装包：
-
-```bash
 npm run make
 ```
 
-Electron Forge 会把构建产物写入 `out/`。Windows 下可分发的 Squirrel 安装程序位于 `out/make/squirrel.windows/x64/`。
-
-发布 Release 前至少运行：
-
-```bash
-npm test
-npx tsc --noEmit
-npm run make
-```
+Electron Forge 将构建输出写入 `out/`。
 
 ## 仓库结构
 
 ```text
-apps/desktop            Electron 桌面应用
-packages/product        产品装配、Host 接口、Home 和生命周期
-packages/engine         Run、ModelCall、ToolCall、批准和取消执行
-packages/input          用户输入规范化和附件处理
-packages/commands       显式命令和建议
-packages/session        Session 历史、Entry、附件和分支
-packages/context        有界模型 Context、压缩和用量
-packages/instructions   System 和 Workspace 指令来源
-packages/tools          Tool Catalog、执行、内置工具和结果规范化
-packages/permissions    Permission 规则、决策和批准
-packages/workspace      Workspace 生命周期、路径、文件和变更事实
-packages/settings       Settings Schema、存储和解析
-packages/database       Database 连接、Schema、Migration 和事务
-packages/events         Runtime Event、Schema、Sequence 和错误
-packages/projections    Session、Runtime 和 Workspace 只读视图
-packages/ai             Provider-neutral Model 和 Provider 协议 Adapter
-packages/skills         Skill 发现、使用、资源和可用性
-packages/observability  Trace、Log、Measurement 和诊断
-tests                   Vitest 测试套件
+apps/desktop           Electron 桌面宿主与用户界面
+
+packages/
+├── product            产品装配、Host 接口与整体生命周期
+├── engine             Run 生命周期与 Agent Loop
+├── input              用户输入与附件处理
+├── commands           显式命令识别与处理
+├── context            Prompt 构建、上下文预算与压缩
+├── ai                 供应商无关模型接口与 Provider Adapter
+├── tools              工具注册、路由与执行
+├── permissions        行动授权与审批判断
+├── sandbox            文件、进程与网络的强制执行边界
+├── session            语义历史、Entry 与会话分支
+├── workspace          工作区访问与变更记录
+├── instructions       基础指令与有效指令来源
+├── skills             Skill 发现、加载与选择
+├── settings           产品配置与模型供应商凭据
+├── database           数据库 Schema、迁移与事务
+├── events             Runtime Event 协议与 EventBus
+├── projections        从运行和会话事实生成的读取模型
+└── observability      Trace、Log、Measurement 与诊断
+
+tests/                 自动化测试与架构守卫
+assets/                项目公开展示与 README 资源
 ```
 
-## 贡献
+## 致谢
 
-欢迎贡献。
+Megumi 的模型供应商接入层基于 [`pi` 的 AI Package](https://github.com/earendil-works/pi)，并根据 Megumi 支持的供应商范围和桌面装配方式进行了适配。
 
-请保持改动聚焦，不要提交本地运行数据、密钥或私有文档，并在提交 PR 前运行测试。
+## 许可证
 
-## License
-
-MIT License.
+Megumi 使用 [MIT License](./LICENSE)。
