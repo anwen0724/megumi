@@ -75,12 +75,13 @@ export const enginePolicy: EnginePolicy = {
   maxToolCallsPerRun: 8,
   maxConcurrentToolExecutions: 2,
   modelCallTimeoutMs: 1_000,
-  modelCallTerminationTimeoutMs: 100,
   toolExecutionTimeoutMs: 1_000,
   cancellationTimeoutMs: 50,
   maxModelCallAttempts: 1,
   modelRetryDelayMs: 0,
   maxToolExecutionsPerCall: 1,
+  providerRequestMaxRetries: 0,
+  providerRequestMaxRetryDelayMs: 0,
   terminalRunRetentionMs: 60_000,
 };
 
@@ -207,9 +208,24 @@ export function createEngineFixture(input: {
   const context: Prompt = { systemPrompt: 'test', messages: [], tools: [] };
   const options: CreateEngineOptions = {
     models: {
-      streamSimple: (() => {
+      // Adapter contract wiring: cancellation settles the fake stream with an
+      // aborted terminal so the single Agent Loop always converges.
+      streamSimple: ((_model, _prompt, streamOptions) => {
         const stream = streams.shift();
         if (!stream) throw new Error('No model stream configured.');
+        const settleAborted = () => {
+          const aborted = baseMessage({
+            content: [],
+            stopReason: 'aborted',
+            errorMessage: 'Request was aborted',
+          });
+          stream.push({ type: 'error', reason: 'aborted', error: aborted });
+          stream.end(aborted);
+        };
+        if (streamOptions?.signal) {
+          if (streamOptions.signal.aborted) settleAborted();
+          else streamOptions.signal.addEventListener('abort', settleAborted, { once: true });
+        }
         return stream;
       }) as Models['streamSimple'],
     } as Models,
@@ -369,8 +385,8 @@ export function assistantThinkingStream(
   });
   stream.push({ type: 'start', partial: { ...message, content: [] } });
   stream.push({ type: 'thinking_start', contentIndex: 0, partial: { ...message, content: [] } });
-  stream.push({ type: 'thinking_delta', contentIndex: 0, delta: thinking, partial: { ...message, content: [] } });
-  stream.push({ type: 'thinking_end', contentIndex: 0, content: thinking, partial: { ...message, content: [] } });
+  stream.push({ type: 'thinking_delta', contentIndex: 0, delta: thinking, partial: { ...message, content: [{ type: 'thinking', thinking }] } });
+  stream.push({ type: 'thinking_end', contentIndex: 0, content: thinking, partial: { ...message, content: [{ type: 'thinking', thinking }] } });
   stream.push({ type: 'text_start', contentIndex: 0, partial: { ...message, content: [] } });
   stream.push({ type: 'text_delta', contentIndex: 0, delta: text, partial: message });
   stream.push({ type: 'text_end', contentIndex: 0, content: text, partial: message });
@@ -443,6 +459,7 @@ export function lengthOverflowStream(): AssistantMessageEventStream {
   return stream;
 }
 
+/** A stream that starts but never settles; cancellation settles it via the fixture adapter wiring. */
 export function neverEndingStream(): AssistantMessageEventStream {
   const stream = new AssistantMessageEventStream();
   pushAssistantStream(stream, baseMessage({ content: [], stopReason: 'stop' }));

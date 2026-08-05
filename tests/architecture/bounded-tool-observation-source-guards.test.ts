@@ -24,16 +24,14 @@ describe('bounded Tool Result source guards', () => {
   });
 
   it('routes direct and approval-resumed execution through one Engine mapper without rawResult', () => {
-    const toolCall = read('packages/engine/src/tool-call.ts');
-    const runLoop = read('packages/engine/src/run-loop.ts');
-    const engineSource = `${toolCall}\n${runLoop}`;
+    const agentLoop = read('packages/engine/src/agent-loop.ts');
 
-    expect(toolCall).toContain('async function executeToolCall(');
-    expect(toolCall).toContain('content: result.normalizedResult.content');
+    expect(agentLoop).toContain('async function executeToolInvocation(');
+    expect(agentLoop).toContain('content: executionResult.normalizedResult.content');
     // The Engine mapper never passes raw Runtime Sources into persisted Tool Results.
-    expect(engineSource).not.toContain('runtimeSources');
-    expect(engineSource).not.toContain('toolResultFromExecutionResult');
-    expect(engineSource).not.toContain('toolResultRuntimeFactFromExecution');
-    expect(engineSource).not.toContain('.rawResult');
+    expect(agentLoop).not.toContain('runtimeSources');
+    expect(agentLoop).not.toContain('toolResultFromExecutionResult');
+    expect(agentLoop).not.toContain('toolResultRuntimeFactFromExecution');
+    expect(agentLoop).not.toContain('.rawResult');
   });
 });

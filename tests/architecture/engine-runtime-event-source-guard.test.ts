@@ -23,7 +23,7 @@ const RUNTIME_EVENT_BROADCASTER_FILE = ['runtime', 'event', 'broadcaster'].join(
 
 describe('Engine RuntimeEvent source boundary', () => {
   it('publishes formal RuntimeEvents through the bus without a dynamic normalization layer', () => {
-    const runLoop = readSource('packages/engine/src/run-loop.ts');
+    const runLoop = readSource('packages/engine/src/agent-loop.ts');
 
     expect(runLoop).toContain('events.publish({');
     expect(runLoop).not.toContain(NORMALIZE_RUNTIME_EVENT_PAYLOAD);
@@ -36,7 +36,7 @@ describe('Engine RuntimeEvent source boundary', () => {
   });
 
   it('does not derive Engine RuntimeEvent types from internal operation names', () => {
-    const runLoop = readSource('packages/engine/src/run-loop.ts');
+    const runLoop = readSource('packages/engine/src/agent-loop.ts');
 
     expect(runLoop).not.toContain('`model_call.${event.type}`');
     expect(runLoop).not.toContain('`tool_execution.${');
@@ -65,7 +65,7 @@ describe('Engine RuntimeEvent source boundary', () => {
 
   it('does not use a second runtime event UI live path', () => {
     const productionFiles = [
-      'packages/engine/src/run-loop.ts',
+      'packages/engine/src/agent-loop.ts',
       'apps/desktop/src/main/shell-composition/desktop-main-composition.ts',
       'apps/desktop/src/main/index.ts',
     ];

@@ -2,7 +2,7 @@
  * Protects Engine's Context-model-Session-tool loop and semantic commit order.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { registeredTool } from './tool-call-test-fixtures';
+import { createToolRouter, registeredTool, succeeded } from './tool-call-test-fixtures';
 import {
   assistantStream,
   assistantStreamWithUsage,
@@ -16,7 +16,7 @@ import {
   startRequest,
 } from './engine-test-fixtures';
 
-describe('Engine run loop', () => {
+describe('Agent Loop', () => {
   it('recovers from one Context Overflow per ModelCall with a compaction retry', async () => {
     const compact = vi.fn(compactedOverflowCompaction);
     const fixture = createEngineFixture({
@@ -394,5 +394,56 @@ describe('Engine run loop', () => {
     expect(fixture.writes.slice(-2)).toEqual(['tool', 'assistant:failed']);
     expect(fixture.published.at(-1)?.type).toBe('run.ended');
     expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'failed' });
+  });
+
+  it('uses the same Tools Router for one ModelCall resolution, routing and release', async () => {
+    const tool = registeredTool('lookup');
+    const routers = new Map<string, ReturnType<typeof createToolRouter>>();
+    const resolve = (scope: { modelCallId: string; runId: string; sessionId: string; workspaceId: string }) => {
+      let router = routers.get(scope.modelCallId);
+      if (!router) {
+        router = createToolRouter({ scope, tools: [tool] });
+        routers.set(scope.modelCallId, router);
+      }
+      return router;
+    };
+    const fixture = createEngineFixture({
+      tools: [tool],
+      executeTool: async ({ toolName }) => succeeded(toolName),
+    });
+    // Replace the fixture tools with a router-tracked implementation.
+    const engineOptions = fixture.options as CreateEngineOptions & { tools: unknown };
+    engineOptions.tools = {
+      resolveModelCallTools: (scope) => ({ status: 'resolved', definitions: resolve(scope).definitions() }),
+      routeToolCall: (call) => resolve(call).route(call),
+      executeToolInvocation: (input, options) => {
+        const router = resolve({
+          runId: input.invocation.runId,
+          sessionId: input.invocation.sessionId,
+          workspaceId: input.invocation.workspaceId,
+          modelCallId: input.invocation.modelCallId,
+        });
+        return router.route({
+          runId: input.invocation.runId,
+          sessionId: input.invocation.sessionId,
+          workspaceId: input.invocation.workspaceId,
+          modelCallId: input.invocation.modelCallId,
+          toolCallId: input.invocation.toolCallId,
+          toolName: input.invocation.toolName,
+          input: input.invocation.input,
+        }).status === 'failed'
+          ? Promise.reject(new Error('route failed'))
+          : Promise.resolve(succeeded(input.invocation.toolName));
+      },
+      releaseModelCallTools: ({ modelCallId }) => { routers.delete(modelCallId); },
+    } as never;
+
+    const started = await startedRun(fixture);
+    await settleRun(fixture);
+
+    // The single model call created one router, routed through it, and
+    // released it when the turn settled.
+    expect(routers.size).toBe(0);
+    expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'completed' });
   });
 });

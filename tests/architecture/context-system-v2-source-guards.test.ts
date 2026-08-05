@@ -113,8 +113,8 @@ describe('Context Package source guards', () => {
     expect(contextSource).toContain('getEffectiveInstructions(');
     expect(contextSource).toContain('skills.createView(');
     // Engine and Product no longer read these sources for Context.
-    expect(read('packages/engine/src/run-loop.ts')).not.toContain('scopeResolver');
-    expect(read('packages/engine/src/run-loop.ts')).not.toMatch(/getEffectiveInstructions|createView/u);
+    expect(read('packages/engine/src/agent-loop.ts')).not.toContain('scopeResolver');
+    expect(read('packages/engine/src/agent-loop.ts')).not.toMatch(/getEffectiveInstructions|createView/u);
     expect(read('packages/product/src/product.ts')).not.toContain('scopeResolver');
   });
 });

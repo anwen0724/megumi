@@ -259,11 +259,11 @@ describe('Engine RuntimeEvents', () => {
     expect(payload.defaultOptionId).toBe(payload.options[0] && (payload.options[0] as { optionId: string }).optionId);
     expect(payload.operations.length).toBeGreaterThan(0);
 
-    const resumed = await fixture.engine.resumeRun({
-      runApprovalId: (requested.payload as { approvalRequestId: string }).approvalRequestId,
+    const approvalResolution = await fixture.engine.resolveApproval({
+      approvalId: (requested.payload as { approvalRequestId: string }).approvalRequestId,
       decision: { decision: 'denied' },
     });
-    expect(resumed.status).toBe('resumed');
+    expect(approvalResolution.status).toBe('accepted');
     await vi.waitFor(() => {
       expect(fixture.published.some(
         (event) => event.type === 'approval.resolved' && event.payload.decision === 'denied',
@@ -317,7 +317,7 @@ describe('Engine RuntimeEvents', () => {
     const retryFailed = events.find((event) => event.type === 'turn.retry.failed');
     expect(retryFailed?.payload).toMatchObject({
       attemptNumber: 2,
-      error: { code: 'provider_error' },
+      error: { code: 'model_call_failed' },
     });
   });
 
@@ -383,6 +383,9 @@ describe('Engine RuntimeEvents', () => {
       expect(fixture.published.some(
         (event) => event.type === 'tool_execution.ended' && event.payload.status === 'denied',
       )).toBe(true);
+    });
+    await vi.waitFor(() => {
+      expect(fixture.published.some((event) => event.type === 'run.ended')).toBe(true);
     });
 
     const events = collectEvents(fixture, started.run.runId);

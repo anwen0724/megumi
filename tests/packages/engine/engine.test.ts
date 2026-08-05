@@ -77,7 +77,7 @@ describe('createEngine', () => {
     if (first.status === 'started') await settleRun(fixture);
   });
 
-  it('resumes an Engine-owned pending approval and continues the same Run', async () => {
+  it('resolves an Engine-owned pending approval and continues the same Run in place', async () => {
     const tool = registeredTool('approval-tool');
     let releaseExecution!: () => void;
     const executionGate = new Promise<void>((resolve) => {
@@ -128,25 +128,26 @@ describe('createEngine', () => {
       toolCallId: requested.payload.toolCallId,
     };
 
-    const resumed = await fixture.engine.resumeRun({
-      runApprovalId: approval.approvalRequestId,
+    const resumed = await fixture.engine.resolveApproval({
+      approvalId: approval.approvalRequestId,
       decision: {
         decision: 'approved',
         optionId: approval.approvalRequestId,
       },
     });
-    expect(resumed.status).toBe('resumed');
-    if (resumed.status !== 'resumed') throw new Error('Expected resumed Run.');
-    expect(resumed.run.status).toBe('running');
-    const duplicate = await fixture.engine.resumeRun({
-      runApprovalId: approval.approvalRequestId,
+    expect(resumed.status).toBe('accepted');
+    if (resumed.status !== 'accepted') throw new Error('Expected accepted approval.');
+    // The original Agent Loop keeps waiting; the decision is applied in place.
+    expect(resumed.run.status).toBe('waiting');
+    expect(fixture.writes).not.toContain('assistant:completed');
+    const duplicate = await fixture.engine.resolveApproval({
+      approvalId: approval.approvalRequestId,
       decision: {
         decision: 'approved',
         optionId: approval.approvalRequestId,
       },
     });
     expect(duplicate.status).toBe('already_resolved');
-    expect(fixture.writes).not.toContain('assistant:completed');
 
     releaseExecution();
     await settleRun(fixture);
@@ -193,14 +194,14 @@ describe('createEngine', () => {
     if (!requested) throw new Error('Expected approval request event.');
     const approvalRequestId = requested.payload.approvalRequestId;
 
-    const resumed = await fixture.engine.resumeRun({
-      runApprovalId: approvalRequestId,
+    const resolved = await fixture.engine.resolveApproval({
+      approvalId: approvalRequestId,
       decision: { decision: 'approved', optionId: approvalRequestId },
     });
-    expect(resumed).toMatchObject({
-      status: 'failed',
-      failure: { code: 'permission_failed' },
-    });
+    // The decision is accepted; applying it fails inside the Agent Loop, which
+    // closes the pending ToolCall and fails the Run.
+    expect(resolved).toMatchObject({ status: 'accepted' });
+    await settleRun(fixture);
 
     expect(fixture.toolResults).toEqual([
       expect.objectContaining({
@@ -231,5 +232,24 @@ describe('createEngine', () => {
       ...startRequest,
       requestId: 'request:after-shutdown',
     })).resolves.toMatchObject({ status: 'failed' });
+  });
+
+  it('keeps shutdown idempotent across repeated calls', async () => {
+    const fixture = createEngineFixture({
+      streams: [assistantStream('answer')],
+    });
+    const started = await startedRun(fixture);
+    await settleRun(fixture);
+
+    await expect(fixture.engine.shutdown({ timeoutMs: 1_000 })).resolves.toEqual({
+      status: 'shut_down',
+    });
+    await expect(fixture.engine.shutdown({ timeoutMs: 1_000 })).resolves.toEqual({
+      status: 'shut_down',
+    });
+    expect(fixture.engine.getRun({ runId: started.run.runId })).toMatchObject({
+      status: 'found',
+      run: { status: 'completed' },
+    });
   });
 });

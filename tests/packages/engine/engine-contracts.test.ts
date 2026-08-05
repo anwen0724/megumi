@@ -7,7 +7,7 @@ import type {
   CreateEngineOptions,
   Engine,
   EnginePolicy,
-  ResumeRunResult,
+  ResolveApprovalResult,
   RunApprovalStatus,
   StartRunRequest,
   StartRunResult,
@@ -21,26 +21,33 @@ const validPolicy: EnginePolicy = {
   maxToolCallsPerRun: 24,
   maxConcurrentToolExecutions: 4,
   modelCallTimeoutMs: 60_000,
-  modelCallTerminationTimeoutMs: 10_000,
   toolExecutionTimeoutMs: 30_000,
   cancellationTimeoutMs: 5_000,
   maxModelCallAttempts: 2,
   modelRetryDelayMs: 250,
   maxToolExecutionsPerCall: 1,
+  providerRequestMaxRetries: 2,
+  providerRequestMaxRetryDelayMs: 60_000,
   terminalRunRetentionMs: 60_000,
 };
 
 describe('engine public contracts', () => {
   it('uses the confirmed public operation and result names', () => {
-    const operationNames: (keyof Engine)[] = ['startRun', 'resumeRun', 'cancelRun', 'getRun', 'shutdown'];
+    const operationNames: (keyof Engine)[] = [
+      'startRun',
+      'resolveApproval',
+      'cancelRun',
+      'getRun',
+      'shutdown',
+    ];
     const startStatuses: StartRunResult['status'][] = [
       'started',
       'already_started',
       'session_busy',
       'failed',
     ];
-    const resumeStatuses: ResumeRunResult['status'][] = [
-      'resumed',
+    const approvalStatuses: ResolveApprovalResult['status'][] = [
+      'accepted',
       'not_found',
       'not_waiting',
       'already_resolved',
@@ -52,7 +59,7 @@ describe('engine public contracts', () => {
       'already_terminal',
       'not_found',
     ];
-    const approvalStatuses: RunApprovalStatus[] = [
+    const runApprovalStatuses: RunApprovalStatus[] = [
       'pending',
       'approved',
       'denied',
@@ -71,9 +78,10 @@ describe('engine public contracts', () => {
       'policy',
     ];
 
-    expect(operationNames).toEqual(['startRun', 'resumeRun', 'cancelRun', 'getRun', 'shutdown']);
+    expect(operationNames).toEqual(['startRun', 'resolveApproval', 'cancelRun', 'getRun', 'shutdown']);
     expect(startStatuses).not.toContain('completed');
-    expect(resumeStatuses).toContain('already_resolved');
+    expect(approvalStatuses).toContain('accepted');
+    expect(approvalStatuses).not.toContain('resumed');
     expect(cancelStatuses).not.toContain('cancelled');
     expect(dependencyNames).toContain('models');
     expect(dependencyNames).not.toContain('settings');
@@ -112,7 +120,9 @@ describe('engine policy validation', () => {
     ['maxModelCallsPerRun', 0],
     ['maxConcurrentToolExecutions', 1.5],
     ['modelCallTimeoutMs', -1],
-    ['modelCallTerminationTimeoutMs', 0],
+    ['providerRequestMaxRetries', -1],
+    ['providerRequestMaxRetries', 1.5],
+    ['providerRequestMaxRetryDelayMs', -1],
     ['modelRetryDelayMs', -1],
     ['terminalRunRetentionMs', 0],
   ] as const)('rejects invalid %s', (field, value) => {

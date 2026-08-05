@@ -20,8 +20,8 @@ describe('Engine final reply source guards', () => {
 
   it('does not introduce a model-callable finalization tool or persisted Run outcome', () => {
     const source = [
-      read('packages/engine/src/run-loop.ts'),
-      read('packages/engine/src/tool-call.ts'),
+      read('packages/engine/src/agent-loop.ts'),
+      read('packages/engine/src/agent-loop.ts'),
       read('packages/database/src/database-schema.ts'),
     ].join('\n');
     expect(source).not.toContain('submit_final_reply');
@@ -29,18 +29,15 @@ describe('Engine final reply source guards', () => {
     expect(source).not.toMatch(/assistant[_-]?reply[_-]?draft/i);
   });
 
-  it('keeps final reply commit inside Engine and before terminal lifecycle events', () => {
-    const runLoop = read('packages/engine/src/run-loop.ts');
-    const modelCall = read('packages/engine/src/model-call.ts');
-    const toolCall = read('packages/engine/src/tool-call.ts');
-    expect(runLoop).toContain('dependencies.session.saveAssistantReply({');
-    expect(modelCall).not.toContain('saveAssistantReply');
-    expect(toolCall).not.toContain('saveAssistantReply');
-    expect(runLoop.indexOf('dependencies.session.saveAssistantReply({')).toBeLessThan(
-      runLoop.indexOf("'run.ended'"),
-    );
-    expect(runLoop.lastIndexOf('dependencies.session.saveAssistantReply({')).toBeLessThan(
-      runLoop.lastIndexOf("'run.ended'"),
-    );
+  it('keeps final reply commit inside Engine and terminal facts in the Engine owner', () => {
+    const agentLoop = read('packages/engine/src/agent-loop.ts');
+    const engine = read('packages/engine/src/engine.ts');
+    // The Agent Loop owns the semantic reply commits (completed, cancelled,
+    // failed); the Engine owns the single run.ended terminal fact.
+    expect(agentLoop).toContain('dependencies.session.saveAssistantReply({');
+    expect(engine).toContain("'run.ended'");
+    expect(agentLoop).not.toContain("'run.ended'");
+    // Event ordering (reply commit before run.ended) is protected by the
+    // Engine RuntimeEvents behavior tests.
   });
 });

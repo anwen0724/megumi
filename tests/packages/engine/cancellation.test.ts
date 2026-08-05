@@ -196,7 +196,9 @@ describe('Engine cancellation', () => {
     );
   });
 
-  it('fails cancellation after the deadline when provider work ignores abort', async () => {
+  it('reports unconverged Runs when provider work ignores abort', async () => {
+    // The Engine never fakes convergence: a provider stream that ignores its
+    // AbortSignal keeps the Run active, and shutdown says so honestly.
     const fixture = createEngineFixture({
       streams: [neverEndingStream()],
       contextBuild: () => new Promise(() => {}),
@@ -205,17 +207,16 @@ describe('Engine cancellation', () => {
     const started = await startedRun(fixture);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    await requestedCancellation(fixture, started.run.runId);
-    await settleRun(fixture);
-
-    expect(fixture.published.at(-1)?.type).toBe('run.ended');
-    expect(fixture.published.at(-1)?.payload).toMatchObject({
-      status: 'failed',
-      error: { code: 'cancellation_failed' },
-    });
+    const cancellation = await fixture.engine.cancelRun({ runId: started.run.runId });
+    expect(cancellation.status).toBe('cancellation_requested');
+    const shutdown = await fixture.engine.shutdown({ timeoutMs: 50 });
+    expect(shutdown.status).toBe('timed_out');
+    if (shutdown.status === 'timed_out') {
+      expect(shutdown.activeRuns.map((run) => run.runId)).toContain(started.run.runId);
+    }
   });
 
-  it('does not start a ModelCall when an ignored Context build returns after cancellation failed', async () => {
+  it('does not start a ModelCall or Turn when an ignored Context build returns after cancellation', async () => {
     let releaseContext!: () => void;
     const fixture = createEngineFixture({
       contextBuild: () => new Promise((resolve) => {
@@ -236,7 +237,7 @@ describe('Engine cancellation', () => {
     collectEvents(fixture, cancellation.run.runId);
 
     releaseContext();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await settleRun(fixture);
 
     expect(fixture.published.some((event) => event.type === 'turn.started')).toBe(false);
     // Cancellation converged with a cancelled reply committed, never a ModelCall.

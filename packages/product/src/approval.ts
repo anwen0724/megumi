@@ -1,5 +1,5 @@
 /*
- * Owns the Product approval continuation entry over Engine resume semantics.
+ * Owns the Product approval entry over Engine approval resolution semantics.
  * Host adapters only validate, translate, and forward approval requests here.
  */
 import type {
@@ -42,12 +42,12 @@ export interface ProductApproval {
 }
 
 export function createProductApproval(
-  engine: Pick<Engine, 'resumeRun'>,
+  engine: Pick<Engine, 'resolveApproval'>,
 ): ProductApproval {
   return {
     async resolve(request) {
-      const result = await engine.resumeRun({
-        runApprovalId: request.approvalRequestId,
+      const result = await engine.resolveApproval({
+        approvalId: request.approvalRequestId,
         decision: toEngineApprovalDecision(request.decision),
       });
       if (result.status === 'failed') {
@@ -63,7 +63,7 @@ export function createProductApproval(
         return {
           payload: {
             status: 'not_found',
-            approvalRequestId: result.runApprovalId,
+            approvalRequestId: result.approvalId,
           },
         };
       }
