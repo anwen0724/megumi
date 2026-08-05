@@ -16,8 +16,6 @@ Megumi is an open-source Agent system delivered as a desktop application. It pro
 
 The system is provider-neutral. You choose the model provider and model, while Megumi supplies the execution loop and the surrounding capabilities that turn a model call into a controlled, observable Agent run.
 
-Megumi is local-first. Workspaces, settings, sessions, and runtime diagnostics are stored on the local machine. Model requests and the context selected for those requests are sent to the provider configured by the user.
-
 ## How It Works
 
 ```mermaid
