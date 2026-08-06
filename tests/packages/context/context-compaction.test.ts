@@ -392,4 +392,80 @@ describe('Context compaction', () => {
       },
     });
   });
+
+  it('serializes build() and compact() for the same Session', async () => {
+    let release!: (message: AssistantMessage) => void;
+    const first = new Promise<AssistantMessage>((resolve) => { release = resolve; });
+    const completeSimple = vi.fn()
+      .mockImplementationOnce(() => first)
+      .mockImplementation(async () => completedMessage('second summary'));
+    const context = createContext(fixture(completeSimple));
+
+    const built = context.build({
+      modelCallContext: modelCall({ run: { ...modelCall().run, model: compactingModel } }),
+    });
+    const compacted = context.compact(manualRequest());
+    // Only the build's compaction Summary call may be in flight; the compact
+    // waits on the same-Session gate.
+    await vi.waitFor(() => expect(completeSimple).toHaveBeenCalledTimes(1));
+    release(completedMessage('first summary'));
+    await vi.waitFor(() => expect(completeSimple).toHaveBeenCalledTimes(2));
+    await expect(Promise.all([built, compacted])).resolves.toEqual([
+      expect.objectContaining({ status: 'ready' }),
+      expect.objectContaining({ status: 'compacted' }),
+    ]);
+  });
+
+  it('releases the per-Session operation tail after operations settle', async () => {
+    const options = fixture();
+    const context = createContext(options);
+    // Serialized operations settle cleanly one after another.
+    await expect(context.compact(manualRequest())).resolves.toMatchObject({ status: 'compacted' });
+    await expect(context.compact(manualRequest())).resolves.toMatchObject({ status: 'compacted' });
+    // The Session is free again: a mixed build + compact pair starts without
+    // any residue from the earlier operations.
+    const buildResult = context.build({
+      modelCallContext: modelCall({ run: { ...modelCall().run, model: compactingModel } }),
+    });
+    const compactResult = context.compact(manualRequest());
+    await expect(Promise.all([buildResult, compactResult])).resolves.toEqual([
+      expect.objectContaining({ status: 'ready' }),
+      expect.objectContaining({ status: 'compacted' }),
+    ]);
+  });
+
+  it('runs operations for different Sessions in parallel', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const completeSimple = vi.fn(async (_model: unknown, _context: unknown, options: { sessionId: string }) => {
+      if (options.sessionId === 'session:1') {
+        await gate;
+        return completedMessage('first summary');
+      }
+      return completedMessage('second summary');
+    });
+    const context = createContext(fixture(completeSimple));
+
+    const one = context.compact(manualRequest({ sessionId: 'session:1' }));
+    const two = context.compact(manualRequest({ sessionId: 'session:2' }));
+    // Session 2's compaction completes while Session 1's Summary call is still
+    // blocked: different Sessions are never serialized by a global lock.
+    await expect(two).resolves.toMatchObject({ status: 'compacted' });
+    release();
+    await expect(one).resolves.toMatchObject({ status: 'compacted' });
+  });
+
+  it('does not keep cross-operation Prompt, history or plan state', async () => {
+    const options = fixture();
+    const context = createContext(options);
+    await context.compact(manualRequest());
+    // A fresh build after manual compaction re-reads the authoritative history
+    // and settles with its own state; no prior Prompt or plan leaks in.
+    const result = await context.build({ modelCallContext: modelCall() });
+    expect(result.status).toBe('ready');
+    // The only Session write across both operations is the Summary commit.
+    expect(options.sessionHistory.saveCompactionSummary).toHaveBeenCalledTimes(1);
+    const historyReads = (options.sessionHistory.getActiveHistory as ReturnType<typeof vi.fn>).mock.calls;
+    expect(historyReads).toHaveLength(2);
+  });
 });

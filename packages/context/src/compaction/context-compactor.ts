@@ -88,7 +88,7 @@ export async function executeContextCompaction(
     ...(plan.plan.firstKeptEntryId ? { firstKeptEntryId: plan.plan.firstKeptEntryId } : {}),
   };
   reportProgress(input.onProgress, { status: 'started', ...progressBase }, input.sessionId, input.trigger, input.events);
-  input.observability?.recordLog({
+  recordCompactionLog(input.observability, {
     level: 'info',
     event: 'context.compaction.started',
     correlation: { sessionId: input.sessionId },
@@ -163,13 +163,13 @@ export async function executeContextCompaction(
     }));
   }
   reportProgress(input.onProgress, { status: 'completed', ...progressBase }, input.sessionId, input.trigger, input.events);
-  input.observability?.recordLog({
+  recordCompactionLog(input.observability, {
     level: 'info',
     event: 'context.compaction.completed',
     correlation: { sessionId: input.sessionId },
     attributes: { beforeTokens, afterTokens: projectedUsage.tokens, trigger: input.trigger },
   });
-  input.observability?.recordMeasurement({
+  recordCompactionMeasurement(input.observability, {
     name: 'context.compaction.after_tokens',
     value: projectedUsage.tokens,
     unit: 'token',
@@ -241,6 +241,33 @@ async function projectCandidate(
 
 function failed(failure: ContextFailure): Extract<ExecuteCompactionResult, { status: 'failed' }> {
   return { status: 'failed', failure };
+}
+
+// Observability is diagnostic: compaction logs and measurements are best-effort
+// and must never change the compaction outcome.
+
+function recordCompactionLog(
+  observability: ObservabilityService | undefined,
+  request: Parameters<ObservabilityService['recordLog']>[0],
+): void {
+  if (!observability) return;
+  try {
+    observability.recordLog(request);
+  } catch {
+    // Diagnostics never own the compaction outcome.
+  }
+}
+
+function recordCompactionMeasurement(
+  observability: ObservabilityService | undefined,
+  request: Parameters<ObservabilityService['recordMeasurement']>[0],
+): void {
+  if (!observability) return;
+  try {
+    observability.recordMeasurement(request);
+  } catch {
+    // Diagnostics never own the compaction outcome.
+  }
 }
 
 function reportProgress(

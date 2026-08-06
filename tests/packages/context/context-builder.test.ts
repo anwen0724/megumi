@@ -3,15 +3,19 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createContext,
   type CreateContextOptions,
+  type Prompt,
 } from '../../../packages/context/src/index';
 import { calculatePromptUsage } from '../../../packages/context/src/context-usage-calculator';
 import {
+  compactingModel,
   completedMessage,
   history,
   model,
   modelCall,
+  runHistory,
   workspaceSource,
 } from './context-test-fixtures';
+import type { SessionHistoryItem } from '@megumi/session';
 
 function fixture(tokens = 50): CreateContextOptions {
   return {
@@ -284,5 +288,116 @@ describe('Context.build', () => {
         retryable: false,
       },
     });
+  });
+
+  it('keeps the business result when Observability throws', async () => {
+    const throwingObservability = {
+      startSpan: vi.fn(() => { throw new Error('span broken'); }),
+      endSpan: vi.fn(() => { throw new Error('span broken'); }),
+      runInSpanContext: vi.fn(() => { throw new Error('span broken'); }),
+      recordMeasurement: vi.fn(() => { throw new Error('measurement broken'); }),
+    } as unknown as NonNullable<CreateContextOptions['observability']>;
+    const result = await createContext({ ...fixture(), observability: throwingObservability }).build({
+      modelCallContext: modelCall(),
+    });
+    expect(result.status).toBe('ready');
+  });
+
+  it('ends the main Span with the matching status for failure and cancellation', async () => {
+    const ended: Array<{ status: string }> = [];
+    const observability = {
+      startSpan: vi.fn(() => ({ spanId: 'span:1' })),
+      endSpan: vi.fn((input: { status: string }) => { ended.push(input); }),
+      runInSpanContext: vi.fn(async (_span: unknown, operation: () => Promise<unknown>) => operation()),
+      recordMeasurement: vi.fn(),
+    } as unknown as NonNullable<CreateContextOptions['observability']>;
+
+    const failedOptions = { ...fixture(), observability };
+    failedOptions.sessionHistory.getActiveHistory = vi.fn(() => {
+      throw new Error('database unavailable');
+    });
+    await createContext(failedOptions).build({ modelCallContext: modelCall() });
+
+    const controller = new AbortController();
+    controller.abort();
+    await createContext({ ...fixture(), observability }).build({
+      modelCallContext: modelCall(),
+      signal: controller.signal,
+    });
+    expect(ended.map((entry) => entry.status)).toEqual(['error', 'cancelled']);
+  });
+
+  it('re-reads the authoritative Session after automatic compaction and rebuilds the final Prompt', async () => {
+    const order: string[] = [];
+    let reads = 0;
+    const fullHistory = [...runHistory(1), ...runHistory(2)];
+    const compactedHistory: SessionHistoryItem[] = [
+      {
+        type: 'compaction',
+        entry: {
+          entry_id: 'entry:summary',
+          session_id: 'session:1',
+          parent_entry_id: 'entry:user:1',
+          entry_type: 'compaction',
+          compaction_id: 'compaction:1',
+          created_at: 'now',
+        },
+        compaction: {
+          compaction_id: 'compaction:1',
+          session_id: 'session:1',
+          summary_text: 'replacement summary',
+          covered_until_entry_id: 'entry:user:2',
+          first_kept_entry_id: 'entry:assistant:2',
+          created_at: 'now',
+        },
+      },
+      ...fullHistory.slice(2),
+    ];
+    const options: CreateContextOptions = {
+      ...fixture(),
+      sessionHistory: {
+        getActiveHistory: vi.fn(() => {
+          reads += 1;
+          order.push('resolve');
+          return {
+            status: 'ok' as const,
+            history: reads === 1 ? fullHistory : compactedHistory,
+          };
+        }),
+        saveCompactionSummary: vi.fn(() => {
+          order.push('save');
+          return { status: 'saved' as const, compaction: {
+            compaction_id: 'compaction:1',
+            session_id: 'session:1',
+            summary_text: 'replacement summary',
+            covered_until_entry_id: 'entry:user:2',
+            first_kept_entry_id: 'entry:assistant:2',
+            created_at: 'now',
+          } };
+        }),
+      },
+      contextTokenEstimator: vi.fn((prompt: Prompt) => {
+        order.push('estimate');
+        return prompt.messages.length * 60 + (prompt.systemPrompt ? 10 : 0);
+      }),
+      policy: { enabled: true, reserveTokens: 32, keepRecentTokens: 1, minimumRecentMessages: 1 },
+    };
+    const result = await createContext(options).build({
+      modelCallContext: modelCall({ run: { ...modelCall().run, model: compactingModel } }),
+    });
+    expect(result.status).toBe('ready');
+    if (result.status !== 'ready') return;
+    // The fixed rebuild order: Resolver -> Prompt -> Usage -> Policy ->
+    // Compaction -> Resolver -> Prompt -> Usage.
+    expect(order.filter((entry) => entry === 'resolve')).toHaveLength(2);
+    expect(order.indexOf('save')).toBeGreaterThan(order.indexOf('resolve'));
+    expect(order.lastIndexOf('resolve')).toBeGreaterThan(order.indexOf('save'));
+    expect(order.indexOf('estimate')).toBeLessThan(order.indexOf('save'));
+    expect(order.lastIndexOf('estimate')).toBeGreaterThan(order.lastIndexOf('resolve'));
+    // The final Prompt comes from the re-read authoritative history: the
+    // committed Summary plus the genuinely kept messages.
+    expect(result.prompt.messages.map((message) => message.role)).toEqual(['user', 'user', 'assistant']);
+    expect(JSON.stringify(result.prompt.messages)).toContain('replacement summary');
+    expect(JSON.stringify(result.prompt.messages)).toContain('answer 2');
   });
 });

@@ -9,7 +9,7 @@
 import crypto from 'node:crypto';
 import type { Api, Model, Models } from '@megumi/ai';
 import type { EventBus } from '@megumi/events';
-import type { ObservabilityService } from '@megumi/observability';
+import type { ObservabilityService, SpanHandle } from '@megumi/observability';
 import type { SessionHistory, SessionAttachmentReader } from '@megumi/session';
 import type { Skills } from '@megumi/skills';
 import type {
@@ -94,10 +94,7 @@ class DefaultContext implements ContextCapabilities {
   }
 
   async build(request: BuildContextRequest): Promise<BuildContextResult> {
-    const span = this.options.observability?.startSpan({
-      name: 'context.build',
-      correlation: { sessionId: request.modelCallContext.run.sessionId },
-    });
+    const span = startContextSpan(this.options.observability, request.modelCallContext.run.sessionId);
     const operation = async (): Promise<BuildContextResult> => {
       let result: BuildContextResult;
       try {
@@ -111,27 +108,27 @@ class DefaultContext implements ContextCapabilities {
           message: error instanceof Error ? error.message : 'Context build failed.',
         }));
       }
-      if (span) {
-        this.options.observability?.endSpan({
-          span,
-          status: spanStatus(result),
-        });
-      }
+      endContextSpan(this.options.observability, span, spanStatus(result));
       if (result.status === 'ready') {
         // The Measurement uses the same complete-Prompt usage result as the
         // Context Window decisions.
-        this.options.observability?.recordMeasurement({
-          name: 'context.used_tokens',
-          value: this.countUsage(result.prompt).tokens,
-          unit: 'token',
-          correlation: { sessionId: request.modelCallContext.run.sessionId },
-        });
+        recordUsedTokensMeasurement(
+          this.options.observability,
+          this.countUsage(result.prompt).tokens,
+          request.modelCallContext.run.sessionId,
+        );
       }
       return result;
     };
-    return span
-      ? this.options.observability!.runInSpanContext(span, operation)
-      : operation();
+    if (!span) return operation();
+    try {
+      return await this.options.observability!.runInSpanContext(span, operation);
+    } catch {
+      // The span-context wrapper failed before delivering a result; operation
+      // never throws (failures and diagnostics are settled inside it), so this
+      // fallback runs the Context build exactly once outside the wrapper.
+      return operation();
+    }
   }
 
   async compact(request: CompactContextRequest): Promise<CompactContextResult> {
@@ -148,12 +145,6 @@ class DefaultContext implements ContextCapabilities {
           signal: request.signal,
         });
         if (resolved.status === 'failed') return resolved;
-        const policy = this.resolvePolicy();
-        const capacity = contextCapacityFromModel(request.model);
-        const policyProblem = compactionPolicyFailure(policy, capacity);
-        if (policyProblem) {
-          return buildFailedContextResult(buildPolicyContextFailure(policyProblem));
-        }
         const built = await this.promptBuilder.build({ context: resolved.context, signal: request.signal });
         if (built.status === 'failed') return built;
         const usageBefore = this.countUsage(built.prompt);
@@ -162,7 +153,7 @@ class DefaultContext implements ContextCapabilities {
           context: resolved.context,
           materialized: built.materializedHistory,
           prompt: built.prompt,
-          policy,
+          policy: this.resolvePolicy(),
           model: request.model,
           trigger: request.trigger,
           onProgress: request.onProgress,
@@ -331,6 +322,55 @@ class DefaultContext implements ContextCapabilities {
 function spanStatus(result: BuildContextResult): 'ok' | 'cancelled' | 'error' {
   if (result.status === 'ready') return 'ok';
   return result.failure.code === 'cancelled' ? 'cancelled' : 'error';
+}
+
+// Observability is diagnostic: every call below is best-effort and must never
+// change the Context business result.
+
+function startContextSpan(
+  observability: ObservabilityService | undefined,
+  sessionId: string,
+): SpanHandle | undefined {
+  if (!observability) return undefined;
+  try {
+    return observability.startSpan({
+      name: 'context.build',
+      correlation: { sessionId },
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+function endContextSpan(
+  observability: ObservabilityService | undefined,
+  span: SpanHandle | undefined,
+  status: 'ok' | 'cancelled' | 'error',
+): void {
+  if (!observability || !span) return;
+  try {
+    observability.endSpan({ span, status });
+  } catch {
+    // Diagnostics never own the Context outcome.
+  }
+}
+
+function recordUsedTokensMeasurement(
+  observability: ObservabilityService | undefined,
+  tokens: number,
+  sessionId: string,
+): void {
+  if (!observability) return;
+  try {
+    observability.recordMeasurement({
+      name: 'context.used_tokens',
+      value: tokens,
+      unit: 'token',
+      correlation: { sessionId },
+    });
+  } catch {
+    // Diagnostics never own the Context outcome.
+  }
 }
 
 function isAbortError(error: unknown): boolean {
