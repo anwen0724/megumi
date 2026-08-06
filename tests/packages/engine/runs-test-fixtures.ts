@@ -136,7 +136,6 @@ export function createRunsFixture(input: {
   let executionNumber = 0;
   let approvalNumber = 0;
   let messageNumber = 0;
-  let eventNumber = 0;
   let entryNumber = 0;
 
   const saveUserMessage = async (request: SaveUserMessageRequest) => {
@@ -258,7 +257,6 @@ export function createRunsFixture(input: {
       createToolExecutionId: () => `tool-execution:${++executionNumber}`,
       createRunApprovalId: () => `approval:${++approvalNumber}`,
       createSessionMessageId: () => `message:${++messageNumber}`,
-      createRuntimeEventId: () => `event:${++eventNumber}`,
     },
     clock: { now: () => '2026-07-31T00:00:00.000Z' },
     policy: { ...runPolicy, ...input.policy },
