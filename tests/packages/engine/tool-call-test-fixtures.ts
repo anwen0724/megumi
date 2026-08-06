@@ -5,7 +5,6 @@ import type {
   ApprovalSubject,
   EvaluateToolCallRequest,
   PermissionDecision,
-  PermissionMode,
   Permissions,
 } from '@megumi/permissions';
 import {
@@ -16,10 +15,6 @@ import {
   type ToolExecutionResult,
   type Tools,
 } from '@megumi/tools';
-import type { EnginePolicy, Run } from '@megumi/engine';
-import { ActiveRunStore } from '../../../packages/engine/src/active-run-store';
-import { createRun } from '../../../packages/engine/src/run';
-import type { ProcessToolCallsRequest, ToolCall } from '../../../packages/engine/src/tool-call';
 
 export type TestToolExecute = (
   request: { readonly toolName: string; readonly input: unknown },
@@ -32,33 +27,6 @@ export const restrictedExecutionAccess: ToolExecutionAccess = {
 export const unrestrictedExecutionAccess: ToolExecutionAccess = {
   fileSystem: { mode: 'unrestricted' }, process: 'unrestricted', network: 'unrestricted',
 };
-export const now = '2026-07-31T00:00:00.000Z';
-export const policy: EnginePolicy = {
-  maxModelCallsPerRun: 8, maxToolRoundsPerRun: 6, maxToolCallsPerModelCall: 8,
-  maxToolCallsPerRun: 24, maxConcurrentToolExecutions: 2, modelCallTimeoutMs: 60_000,
-  modelCallTerminationTimeoutMs: 10_000, toolExecutionTimeoutMs: 100,
-  cancellationTimeoutMs: 5_000, maxModelCallAttempts: 2, modelRetryDelayMs: 0,
-  maxToolExecutionsPerCall: 1, terminalRunRetentionMs: 60_000,
-};
-
-export function run(): Run {
-  return createRun({
-    runId: 'run:1', requestId: 'request:1', workspaceId: 'workspace:1', sessionId: 'session:1',
-    userMessageId: 'message:1', model: {} as Parameters<typeof createRun>[0]['model'],
-    permissionMode: 'ask', createdAt: now,
-  });
-}
-
-export function storeForRun(currentRun = run()): ActiveRunStore {
-  const store = new ActiveRunStore({ clock: { now: () => now }, terminalRunRetentionMs: policy.terminalRunRetentionMs });
-  store.reserveStart({
-    requestId: currentRun.requestId,
-    fingerprint: { workspaceId: currentRun.workspaceId, sessionId: currentRun.sessionId, inputDigest: 'sha256:input' },
-    run: currentRun,
-  });
-  return store;
-}
-
 export function registeredTool(
   name: string,
   input: { executionMode?: 'parallel' | 'serial'; required?: string[]; idempotentHint?: boolean } = {},
@@ -94,10 +62,6 @@ export function registeredTool(
     availability: { status: 'available' },
     executionMode: input.executionMode ?? 'serial',
   };
-}
-
-export function toolCall(callOrder: number, toolName: string, input: unknown = { value: toolName }): ToolCall {
-  return { toolCallId: `tool-call:${callOrder}`, modelCallId: 'model-call:1', callOrder, toolName, input };
 }
 
 export function allowDecision(request: EvaluateToolCallRequest): Extract<PermissionDecision, { type: 'allow' }> {
@@ -166,30 +130,5 @@ export function toolsForRun(
       toolName: input.invocation.toolName, input: input.invocation.input,
     }, options),
     releaseModelCallTools: ({ modelCallId }) => { routers.delete(modelCallId); },
-  };
-}
-
-export function request(input: {
-  calls: readonly ToolCall[];
-  tools: readonly RegisteredTool[];
-  store?: ActiveRunStore;
-  permissions?: Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>;
-  executeTool?: TestToolExecute;
-  signal?: AbortSignal;
-  overridePolicy?: Partial<EnginePolicy>;
-  onExecutionId?: (id: string) => void;
-}): ProcessToolCallsRequest {
-  let executionNumber = 0;
-  let approvalNumber = 0;
-  return {
-    runId: 'run:1', sessionId: 'session:1', workspaceId: 'workspace:1', permissionMode: 'ask' satisfies PermissionMode,
-    toolCalls: input.calls, permissions: input.permissions ?? permissionService(),
-    tools: toolsForRun(input.tools, input.executeTool), store: input.store ?? storeForRun(),
-    ids: {
-      createToolExecutionId: () => { const id = `tool-execution:${++executionNumber}`; input.onExecutionId?.(id); return id; },
-      createRunApprovalId: () => `approval:${++approvalNumber}`,
-    },
-    clock: { now: () => now }, policy: { ...policy, ...input.overridePolicy },
-    signal: input.signal ?? new AbortController().signal,
   };
 }

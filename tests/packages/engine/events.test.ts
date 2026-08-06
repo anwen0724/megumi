@@ -13,10 +13,10 @@ import {
   assistantStream,
   assistantThinkingStream,
   collectEvents,
-  createEngineFixture,
+  createRunsFixture,
   retryableFailedStream,
   startedRun,
-} from './engine-test-fixtures';
+} from './runs-test-fixtures';
 import {
   permissionService,
   registeredTool,
@@ -25,7 +25,7 @@ import {
 
 describe('Engine RuntimeEvents', () => {
   it('emits the run lifecycle with session ownership and the ordering contract', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [assistantStream('answer')],
     });
 
@@ -49,7 +49,7 @@ describe('Engine RuntimeEvents', () => {
   });
 
   it('emits the user message before run.started, without a runId', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [assistantStream('answer')],
     });
 
@@ -71,7 +71,7 @@ describe('Engine RuntimeEvents', () => {
   });
 
   it('streams the assistant answer as full-snapshot message updates', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [assistantStream('answer')],
     });
 
@@ -102,7 +102,7 @@ describe('Engine RuntimeEvents', () => {
 
   it('publishes turn and tool lifecycle events for a tool round', async () => {
     const tool = registeredTool('test-tool');
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       tools: [tool],
       streams: [
         assistantStream('tool', {
@@ -149,7 +149,7 @@ describe('Engine RuntimeEvents', () => {
   });
 
   it('carries the full run.started fact: request, model, and kind', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [assistantStream('answer')],
     });
 
@@ -167,7 +167,7 @@ describe('Engine RuntimeEvents', () => {
   });
 
   it('streams thinking as full-snapshot message.thinking.update events', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [assistantThinkingStream('ponder xyz', 'answer')],
     });
 
@@ -190,7 +190,7 @@ describe('Engine RuntimeEvents', () => {
 
   it('publishes tool_execution.requested when the model asks for a tool, before it starts', async () => {
     const tool = registeredTool('test-tool');
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       tools: [tool],
       streams: [
         assistantStream('tool', {
@@ -222,7 +222,7 @@ describe('Engine RuntimeEvents', () => {
 
   it('publishes approval.requested with options and settles a denial', async () => {
     const tool = registeredTool('test-tool');
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       tools: [tool],
       permissions: permissionService((request) => approvalDecisionFor(request)),
       streams: [
@@ -259,7 +259,7 @@ describe('Engine RuntimeEvents', () => {
     expect(payload.defaultOptionId).toBe(payload.options[0] && (payload.options[0] as { optionId: string }).optionId);
     expect(payload.operations.length).toBeGreaterThan(0);
 
-    const approvalResolution = await fixture.engine.resolveApproval({
+    const approvalResolution = await fixture.runs.resolveApproval({
       approvalId: (requested.payload as { approvalRequestId: string }).approvalRequestId,
       decision: { decision: 'denied' },
     });
@@ -285,7 +285,7 @@ describe('Engine RuntimeEvents', () => {
   });
 
   it('publishes turn.retry lifecycle events for a retried model call', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [retryableFailedStream('attempt one'), assistantStream('answer')],
       policy: { maxModelCallAttempts: 2 },
     });
@@ -303,7 +303,7 @@ describe('Engine RuntimeEvents', () => {
   });
 
   it('carries the failure code when a retry is exhausted', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [retryableFailedStream('attempt one'), retryableFailedStream('attempt two')],
       policy: { maxModelCallAttempts: 2 },
     });
@@ -323,7 +323,7 @@ describe('Engine RuntimeEvents', () => {
 
   it('publishes tool_execution.plan_updated from a plan tool notification', async () => {
     const tool = registeredTool('run_command');
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       tools: [tool],
       executeTool: async ({ toolName }, options) => {
         options?.onNotification?.({
@@ -358,7 +358,7 @@ describe('Engine RuntimeEvents', () => {
 
   it('settles a permission-denied tool call as tool_execution.ended denied', async () => {
     const tool = registeredTool('test-tool');
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       tools: [tool],
       permissions: permissionService((request): PermissionDecision => ({
         type: 'deny',
@@ -393,7 +393,7 @@ describe('Engine RuntimeEvents', () => {
   });
 
   it('settles a failed run as run.ended with the failure', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [assistantStream('answer')],
       contextBuild: async () => ({
         status: 'failed',
@@ -419,7 +419,7 @@ describe('Engine RuntimeEvents', () => {
   });
 
   it('carries the settled reply reference on a completed run', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [assistantStream('answer')],
     });
 
@@ -439,7 +439,7 @@ describe('Engine RuntimeEvents', () => {
 
   it('orders one Turn as started, message, settlement, tools, turn.ended, run.ended', async () => {
     const tool = registeredTool('test-tool');
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       tools: [tool],
       streams: [
         assistantStream('tool', {
@@ -483,7 +483,7 @@ describe('Engine RuntimeEvents', () => {
   });
 
   it('closes started message and turn lifecycles on failure', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [retryableFailedStream('boom')],
       policy: { maxModelCallAttempts: 1 },
     });

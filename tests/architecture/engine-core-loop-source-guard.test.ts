@@ -1,7 +1,7 @@
 /*
  * Guards the single Agent Loop architecture: the target Engine file set, the
  * absence of the old execution chain and continuation machinery, the purity
- * of ActiveRun, and the Engine public surface.
+ * of RunRegistry, and the Run public surface.
  */
 // @vitest-environment node
 import fs from 'node:fs';
@@ -14,17 +14,19 @@ describe('Engine core loop source guards', () => {
   it('keeps exactly the target Engine file set', () => {
     const files = listFiles('packages/engine/src');
     expect(files).toEqual([
-      'active-run-store.ts',
       'agent-loop.ts',
-      'engine-policy.ts',
-      'engine.ts',
       'index.ts',
+      'run-policy.ts',
+      'run-registry.ts',
       'run.ts',
     ]);
   });
 
-  it('removes the old execution and shallow helper files', () => {
+  it('removes the old Engine object and shallow helper files', () => {
     for (const removed of [
+      'engine.ts',
+      'engine-policy.ts',
+      'active-run-store.ts',
       'run-loop.ts',
       'model-call.ts',
       'tool-call.ts',
@@ -37,15 +39,18 @@ describe('Engine core loop source guards', () => {
 
   it('keeps exactly one model/tool alternating execution loop', () => {
     const agentLoop = read('packages/engine/src/agent-loop.ts');
-    const engine = read('packages/engine/src/engine.ts');
-    const rest = [engine, read('packages/engine/src/active-run-store.ts'), read('packages/engine/src/run.ts')].join('\n');
+    const rest = [
+      read('packages/engine/src/run.ts'),
+      read('packages/engine/src/run-registry.ts'),
+      read('packages/engine/src/run-policy.ts'),
+    ].join('\n');
 
     expect(agentLoop).toContain('export async function runAgentLoop(');
     expect(agentLoop).toContain('dependencies.context.build(');
     expect(agentLoop).toContain('dependencies.models.streamSimple(');
     expect(agentLoop).toContain('executeToolCallBatch(');
-    // No second loop implementation or state machine anywhere else; the Engine
-    // may only call runAgentLoop once per Run.
+    // No second loop implementation or state machine anywhere else; the Run
+    // operation entry may only call runAgentLoop once per Run.
     expect(rest).not.toMatch(/async function runTurn|async function consumeModelCall|async function\* executeRunLoop/u);
     expect(agentLoop).not.toContain('launchRunLoop');
   });
@@ -58,11 +63,15 @@ describe('Engine core loop source guards', () => {
     expect(source).not.toContain('continueRunAfterApproval');
     expect(source).not.toContain('launchRunLoop');
     expect(source).not.toContain('resumeRun');
+    expect(source).not.toContain('createEngine');
+    expect(source).not.toContain('interface Engine');
+    expect(source).not.toContain('EnginePolicy');
+    expect(source).not.toContain('ActiveRunStore');
   });
 
-  it('keeps ActiveRun to run facts, abort, completion and one pending approval', () => {
-    const store = read('packages/engine/src/active-run-store.ts');
-    expect(store).toContain('export interface ActiveRun {');
+  it('keeps RunRegistry to run facts, abort, completion and one pending approval', () => {
+    const store = read('packages/engine/src/run-registry.ts');
+    expect(store).toContain('export class RunRegistry {');
     for (const forbidden of [
       'toolRouter',
       'router:',
@@ -79,7 +88,7 @@ describe('Engine core loop source guards', () => {
   });
 
   it('keeps the Engine free of Workspace, Instructions and Skills imports', () => {
-    const engineSource = [read('packages/engine/src/engine.ts'), read('packages/engine/src/agent-loop.ts')].join('\n');
+    const engineSource = [read('packages/engine/src/run.ts'), read('packages/engine/src/agent-loop.ts')].join('\n');
     expect(engineSource).not.toMatch(/@megumi\/(?:workspace|instructions|skills)(?:\/|['"])/u);
     expect(engineSource).not.toMatch(/executionEnvironment|effectiveInstructions|SkillView/u);
   });
@@ -87,8 +96,8 @@ describe('Engine core loop source guards', () => {
   it('does not export the Agent Loop or internal run records from the public entry', () => {
     const index = read('packages/engine/src/index.ts');
     expect(index).not.toMatch(/runAgentLoop|AgentLoop|runAgentLoop/u);
-    expect(index).not.toMatch(/export[^{]*ActiveRun|ActiveRunStore|PendingApproval/u);
-    expect(index).toContain('export { createEngine }');
+    expect(index).not.toMatch(/export[^{]*RunRegistry|PendingApproval/u);
+    expect(index).toContain('export { createRuns }');
     expect(index).toContain("export type {");
   });
 });

@@ -3,7 +3,7 @@
  * The submit chain itself is delegated to the dedicated InputSubmission owner.
  */
 import type { ContextCapabilities } from '@megumi/context';
-import type { Engine, Run } from '@megumi/engine';
+import type { Run, Runs } from '@megumi/engine';
 import { DEFAULT_INPUT_POLICY, DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from '@megumi/input';
 import type { Session, SessionAttachmentReader, SessionBranchDrafts, SessionCatalog, SessionHistory, SessionMessageWithAttachments } from '@megumi/session';
 import { sessionMessageText } from '@megumi/session';
@@ -28,14 +28,14 @@ export type ProductChat = Omit<ChatHost, 'sendUserInput'> & {
 
 export function createProductChat(options: {
   submission: InputSubmission;
-  engine: Pick<Engine, 'cancelRun'>;
+  runs: Pick<Runs, 'cancel'>;
   suggestions: InputSuggestionQuery;
   sessions: SessionCatalog;
   history: SessionHistory;
   attachments: SessionAttachmentReader;
   branches: SessionBranchDrafts;
   workspaces: Pick<WorkspaceCatalog, 'listWorkspaces'>;
-  runs: RunProjection;
+  runProjection: RunProjection;
   timeline: SessionTimelineQuery;
   context: {
     deriveUsage(
@@ -84,7 +84,7 @@ export function createProductChat(options: {
       return options.timeline.list({ workspaceId: request.projectId, sessionId: request.sessionId, ...(request.runId ? { runId: request.runId } : {}) });
     },
     async cancelUserInput(request) {
-      const result = await options.engine.cancelRun({ runId: request.runId });
+      const result = await options.runs.cancel({ runId: request.runId });
       if (result.status === 'cancellation_requested') return { payload: { status: 'cancellation_requested', run: toChatRun(result.run) } };
       if (result.status === 'already_cancelling') return { payload: { status: 'cancelling', run: toChatRun(result.run) } };
       if (result.status === 'not_found') return { payload: { status: 'not_found', runId: result.runId } };
@@ -105,12 +105,12 @@ export function createProductChat(options: {
     async getInputSuggestions(request) {
       return { suggestions: await options.suggestions.getInputSuggestions({ draftInput: request.draftInput, ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}) }) };
     },
-    async listRuns(request) { return { runs: options.runs.listRuns({ sessionId: request.sessionId }).map(toChatRun) }; },
-    async listRunEvents(request) { return { events: [...options.runs.listEvents({ runId: request.runId })] }; },
+    async listRuns(request) { return { runs: options.runProjection.listRuns({ sessionId: request.sessionId }).map(toChatRun) }; },
+    async listRunEvents(request) { return { events: [...options.runProjection.listEvents({ runId: request.runId })] }; },
     async getSessionHydration(request) {
       const timeline = options.timeline.list({ workspaceId: request.projectId, sessionId: request.sessionId });
-      const runs = options.runs.listRuns({ sessionId: request.sessionId });
-      return { messages: timeline.messages, diagnostics: timeline.diagnostics, runs: runs.map(toChatRun), runtimeEvents: runs.flatMap((run) => options.runs.listEvents({ runId: run.runId })) };
+      const runs = options.runProjection.listRuns({ sessionId: request.sessionId });
+      return { messages: timeline.messages, diagnostics: timeline.diagnostics, runs: runs.map(toChatRun), runtimeEvents: runs.flatMap((run) => options.runProjection.listEvents({ runId: run.runId })) };
     },
     async getContextUsage(request) {
       const history = options.history.getActiveHistory({ session_id: request.sessionId });

@@ -12,7 +12,7 @@ describe('Product InputSubmission', () => {
       input: { process },
       sessions: { getSession: vi.fn(), createSession },
       branches: { resolveBranchDraft: vi.fn(), commitBranchDraft: vi.fn() },
-      engine: { startRun },
+      runs: { start: startRun },
       resolveModel: vi.fn(async () => ({ status: 'ok' as const, model: model() })),
     });
 
@@ -43,20 +43,20 @@ describe('Product InputSubmission', () => {
       return { status: 'created' as const, session: session() };
     });
     const startRun = vi.fn(async (): Promise<StartRunResult> => {
-      order.push('engine');
+      order.push('runs');
       return { status: 'failed', failure: { code: 'internal_error', message: 'stop after boundary check', retryable: false } };
     });
     const submission = createInputSubmission({
       input: { process },
       sessions: { getSession: vi.fn(), createSession },
       branches: { resolveBranchDraft: vi.fn(), commitBranchDraft: vi.fn() },
-      engine: { startRun },
+      runs: { start: startRun },
       resolveModel,
     });
 
     await submission.submit(request());
 
-    expect(order).toEqual(['model', 'input', 'session', 'engine']);
+    expect(order).toEqual(['model', 'input', 'session', 'runs']);
     expect(process).toHaveBeenCalledTimes(1);
   });
 
@@ -111,7 +111,7 @@ describe('Product InputSubmission', () => {
       input: { process },
       sessions: { getSession: vi.fn(), createSession: vi.fn(() => ({ status: 'created' as const, session: session() })) },
       branches: { resolveBranchDraft: vi.fn(() => ({ status: 'resolved' as const, branch_draft: { branch_marker_id: 'branch:1', session_id: 'session:1', source_message_id: 'message:0', source_entry_id: 'entry:0', created_at: 'now' } })), commitBranchDraft: vi.fn() },
-      engine: { startRun },
+      runs: { start: startRun },
       resolveModel: vi.fn(async () => ({ status: 'ok' as const, model: model() })),
     });
 

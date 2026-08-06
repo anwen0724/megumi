@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { CancelRunResult } from '@megumi/engine';
 import {
   collectEvents,
-  createEngineFixture,
+  createRunsFixture,
   neverEndingStream,
   partialNeverEndingStream,
   partialThinkingStream,
@@ -15,12 +15,12 @@ import {
   settleRun,
   startedRun,
   startRequest,
-} from './engine-test-fixtures';
+} from './runs-test-fixtures';
 import { approvalSubjectFor, registeredTool } from './tool-call-test-fixtures';
 
 describe('Engine cancellation', () => {
   it('cancels a Run whose Context build observes the Run AbortSignal', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       contextBuild: (request) => new Promise((resolve) => {
         const resolveCancelled = () => resolve({
           status: 'failed',
@@ -39,7 +39,7 @@ describe('Engine cancellation', () => {
     });
     const started = await startedRun(fixture);
 
-    const cancellation = await fixture.engine.cancelRun({ runId: started.run.runId });
+    const cancellation = await fixture.runs.cancel({ runId: started.run.runId });
     expect(cancellation.status).toBe('cancellation_requested');
     if (cancellation.status !== 'cancellation_requested') {
       throw new Error('Expected cancellation request.');
@@ -51,7 +51,7 @@ describe('Engine cancellation', () => {
   });
 
   it('commits valid streamed text as the cancelled Assistant Reply', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [partialNeverEndingStream('partial answer')],
     });
     const started = await startedRun(fixture);
@@ -95,7 +95,7 @@ describe('Engine cancellation', () => {
         },
       }), { once: true });
     }));
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       tools: [tool],
       executeTool,
       streams: [assistantStream('using tool', {
@@ -122,7 +122,7 @@ describe('Engine cancellation', () => {
 
   it('closes every persisted waiting ToolCall before cancelling the Run', async () => {
     const tool = registeredTool('approval-tool');
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       tools: [tool],
       streams: [assistantStream('waiting', {
         id: 'provider-call:1',
@@ -174,7 +174,7 @@ describe('Engine cancellation', () => {
   });
 
   it('publishes run.cancel.requested as a fact when cancellation is accepted', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [neverEndingStream()],
     });
     const started = await startedRun(fixture);
@@ -200,7 +200,7 @@ describe('Engine cancellation', () => {
   it('reports unconverged Runs when provider work ignores abort', async () => {
     // The Engine never fakes convergence: a provider stream that ignores its
     // AbortSignal keeps the Run active, and shutdown says so honestly.
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [neverEndingStream()],
       contextBuild: () => new Promise(() => {}),
       policy: { cancellationTimeoutMs: 10 },
@@ -208,9 +208,9 @@ describe('Engine cancellation', () => {
     const started = await startedRun(fixture);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const cancellation = await fixture.engine.cancelRun({ runId: started.run.runId });
+    const cancellation = await fixture.runs.cancel({ runId: started.run.runId });
     expect(cancellation.status).toBe('cancellation_requested');
-    const shutdown = await fixture.engine.shutdown({ timeoutMs: 50 });
+    const shutdown = await fixture.runs.shutdown({ timeoutMs: 50 });
     expect(shutdown.status).toBe('timed_out');
     if (shutdown.status === 'timed_out') {
       expect(shutdown.activeRuns.map((run) => run.runId)).toContain(started.run.runId);
@@ -219,7 +219,7 @@ describe('Engine cancellation', () => {
 
   it('does not start a ModelCall or Turn when an ignored Context build returns after cancellation', async () => {
     let releaseContext!: () => void;
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       contextBuild: () => new Promise((resolve) => {
         releaseContext = () => resolve({
           status: 'ready',
@@ -231,7 +231,7 @@ describe('Engine cancellation', () => {
     const started = await startedRun(fixture);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const cancellation = await fixture.engine.cancelRun({ runId: started.run.runId });
+    const cancellation = await fixture.runs.cancel({ runId: started.run.runId });
     if (cancellation.status !== 'cancellation_requested') {
       throw new Error('Expected cancellation request.');
     }
@@ -246,12 +246,12 @@ describe('Engine cancellation', () => {
   });
 
   it('does not commit a completed model reply after cancellation wins the async boundary', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [assistantStream('completed before cancellation callback')],
     });
     const started = await startedRun(fixture);
 
-    const cancellation = await fixture.engine.cancelRun({ runId: started.run.runId });
+    const cancellation = await fixture.runs.cancel({ runId: started.run.runId });
     if (cancellation.status !== 'cancellation_requested') {
       throw new Error('Expected cancellation request.');
     }
@@ -268,7 +268,7 @@ describe('Engine cancellation', () => {
   });
 
   it('saves the cancelled reply with its Text and Thinking as separate content blocks', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [partialThinkingStream('ponder xyz', 'partial answer')],
     });
     const started = await startedRun(fixture);
@@ -297,7 +297,7 @@ describe('Engine cancellation', () => {
   });
 
   it('saves a thinking-only cancelled reply without dropping it', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [partialThinkingStream('ponder only', '')],
     });
     const started = await startedRun(fixture);
@@ -319,16 +319,16 @@ describe('Engine cancellation', () => {
     // The settle path guards against a cancelling Run converging as completed:
     // regardless of who wins, the Run reaches one terminal state and shutdown
     // never hangs on an unsettled completion.
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [assistantStream('answer')],
     });
     const started = await startedRun(fixture);
     await settleRun(fixture);
     expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'completed' });
 
-    const cancellation = await fixture.engine.cancelRun({ runId: started.run.runId });
+    const cancellation = await fixture.runs.cancel({ runId: started.run.runId });
     expect(['already_terminal', 'cancellation_requested']).toContain(cancellation.status);
-    await expect(fixture.engine.shutdown({ timeoutMs: 1_000 })).resolves.toEqual({
+    await expect(fixture.runs.shutdown({ timeoutMs: 1_000 })).resolves.toEqual({
       status: 'shut_down',
     });
   });

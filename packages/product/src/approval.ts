@@ -3,8 +3,8 @@
  * Host adapters only validate, translate, and forward approval requests here.
  */
 import type {
-  Engine,
   Run,
+  Runs,
   RunApprovalDecision,
   RunFailure,
   RunStatus,
@@ -42,11 +42,11 @@ export interface ProductApproval {
 }
 
 export function createProductApproval(
-  engine: Pick<Engine, 'resolveApproval'>,
+  runs: Pick<Runs, 'resolveApproval'>,
 ): ProductApproval {
   return {
     async resolve(request) {
-      const result = await engine.resolveApproval({
+      const result = await runs.resolveApproval({
         approvalId: request.approvalRequestId,
         decision: toEngineApprovalDecision(request.decision),
       });

@@ -7,7 +7,7 @@
  */
 import type { SessionEntry, SessionMessageWithAttachments } from '@megumi/session';
 import type { ApprovalDecision } from '@megumi/permissions';
-import type { EngineClock, RunApproval } from './engine';
+import type { RunApproval, RunClock } from './run';
 import type { Run, RunFailure } from './run';
 import { isTerminalRunStatus } from './run';
 
@@ -88,12 +88,12 @@ export type ResolveApprovalResult =
   | { readonly status: 'not_waiting'; readonly run: Run }
   | { readonly status: 'already_resolved'; readonly run: Run };
 
-export interface ActiveRunStoreOptions {
-  readonly clock: EngineClock;
+export interface RunRegistryOptions {
+  readonly clock: RunClock;
   readonly terminalRunRetentionMs: number;
 }
 
-export class ActiveRunStore {
+export class RunRegistry {
   private readonly requestRecords = new Map<string, RequestRecord>();
   /** Runs reserved but not yet attached to an ActiveRun (start establishment in flight). */
   private readonly pendingRuns = new Map<string, Run>();
@@ -102,7 +102,7 @@ export class ActiveRunStore {
   private readonly runIdBySession = new Map<string, string>();
   private readonly idleWaiters = new Set<() => void>();
 
-  constructor(private readonly options: ActiveRunStoreOptions) {
+  constructor(private readonly options: RunRegistryOptions) {
     if (
       !Number.isInteger(options.terminalRunRetentionMs)
       || options.terminalRunRetentionMs <= 0
@@ -159,10 +159,10 @@ export class ActiveRunStore {
   }): void {
     const record = this.requestRecords.get(input.requestId);
     if (!record || record.status !== 'pending') {
-      throw new Error(`No pending Engine start for request ${input.requestId}.`);
+      throw new Error(`No pending Run start for request ${input.requestId}.`);
     }
     if (record.run.runId !== input.result.run.runId) {
-      throw new Error('Completed Engine start does not match its reserved Run.');
+      throw new Error('Completed Run start does not match its reserved Run.');
     }
 
     const startedRecord: StartedRecord = {
@@ -180,7 +180,7 @@ export class ActiveRunStore {
   }): void {
     const record = this.requestRecords.get(input.requestId);
     if (!record || record.status !== 'pending') {
-      throw new Error(`No pending Engine start for request ${input.requestId}.`);
+      throw new Error(`No pending Run start for request ${input.requestId}.`);
     }
 
     this.requestRecords.delete(input.requestId);
@@ -259,13 +259,22 @@ export class ActiveRunStore {
     }
 
     if (isTerminalRunStatus(run.status)) {
+      // Terminal settlement releases every held resource independently: a
+      // failure while cancelling a pending approval must not skip releasing
+      // the Session occupancy or dropping the active record.
+      let cleanupError: unknown;
+      try {
+        this.settlePendingApprovalCancelled(run);
+      } catch (error) {
+        cleanupError = error;
+      }
       if (this.runIdBySession.get(run.sessionId) === run.runId) {
         this.runIdBySession.delete(run.sessionId);
       }
-      this.settlePendingApprovalCancelled(run);
       this.activeRuns.delete(run.runId);
       this.terminalRuns.set(run.runId, run);
       this.notifyIdle();
+      if (cleanupError !== undefined) throw cleanupError;
     }
   }
 
@@ -292,7 +301,7 @@ export class ActiveRunStore {
 
   async waitForIdle(timeoutMs: number): Promise<boolean> {
     if (!Number.isFinite(timeoutMs) || timeoutMs < 0) {
-      throw new TypeError('Engine idle timeout must be a non-negative number.');
+      throw new TypeError('Run idle timeout must be a non-negative number.');
     }
     if (this.listActiveRuns().length === 0) return true;
     return new Promise<boolean>((resolve) => {
@@ -318,7 +327,7 @@ export class ActiveRunStore {
 
   /**
    * Registers the one pending approval wait of an ActiveRun and returns its
-   * promise. The Agent Loop awaits it in place; the Engine settles it.
+   * promise. The Agent Loop awaits it in place; the Run operation entry settles it.
    */
   beginApprovalWait(input: {
     readonly runId: string;
@@ -416,7 +425,7 @@ export class ActiveRunStore {
   private nowMs(): number {
     const value = Date.parse(this.options.clock.now());
     if (!Number.isFinite(value)) {
-      throw new Error('EngineClock.now() must return a valid timestamp.');
+      throw new Error('RunClock.now() must return a valid timestamp.');
     }
     return value;
   }

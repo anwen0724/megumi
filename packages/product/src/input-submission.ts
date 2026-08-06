@@ -3,7 +3,7 @@
  * It creates no Session until Input accepts the submission for an Agent Run.
  */
 import type { CommandTerminalResult } from '@megumi/commands';
-import type { Engine, Run, StartRunResult } from '@megumi/engine';
+import type { Run, Runs, StartRunResult } from '@megumi/engine';
 import type { InputProcessor } from '@megumi/input';
 import type {
   Session,
@@ -33,7 +33,7 @@ export type ProductModelResolver = (request: {
 >;
 
 export function createInputSubmission(options: {
-  engine: Pick<Engine, 'startRun'>;
+  runs: Pick<Runs, 'start'>;
   input: Pick<InputProcessor<CommandTerminalResult>, 'process'>;
   sessions: Pick<SessionCatalog, 'getSession' | 'createSession'>;
   branches: Pick<SessionBranchDrafts, 'resolveBranchDraft' | 'commitBranchDraft'>;
@@ -79,7 +79,7 @@ export function createInputSubmission(options: {
       if (!session) return inputError(requestId, 'Session could not be created.');
       const branch = resolveBranch(options.branches, session, request.branchMarkerId, requestId);
       if (branch.status === 'failed') return inputError(requestId, branch.message, session);
-      const started = await options.engine.startRun({
+      const started = await options.runs.start({
         requestId,
         workspaceId: request.projectId,
         sessionId: session.session_id,

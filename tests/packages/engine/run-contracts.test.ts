@@ -1,20 +1,20 @@
 /*
- * Verifies the stable Engine contract shapes and policy validation boundary.
+ * Verifies the stable Run contract shapes and policy validation boundary.
  */
 import { describe, expect, it } from 'vitest';
 import type {
   CancelRunResult,
-  CreateEngineOptions,
-  Engine,
-  EnginePolicy,
+  CreateRunsOptions,
   ResolveApprovalResult,
   RunApprovalStatus,
+  RunPolicy,
+  Runs,
   StartRunRequest,
   StartRunResult,
 } from '@megumi/engine';
-import { validateEnginePolicy } from '../../../packages/engine/src/engine-policy';
+import { validateRunPolicy } from '../../../packages/engine/src/run-policy';
 
-const validPolicy: EnginePolicy = {
+const validPolicy: RunPolicy = {
   maxModelCallsPerRun: 8,
   maxToolRoundsPerRun: 6,
   maxToolCallsPerModelCall: 8,
@@ -32,13 +32,13 @@ const validPolicy: EnginePolicy = {
   terminalRunRetentionMs: 60_000,
 };
 
-describe('engine public contracts', () => {
+describe('run public contracts', () => {
   it('uses the confirmed public operation and result names', () => {
-    const operationNames: (keyof Engine)[] = [
-      'startRun',
+    const operationNames: (keyof Runs)[] = [
+      'start',
       'resolveApproval',
-      'cancelRun',
-      'getRun',
+      'cancel',
+      'get',
       'shutdown',
     ];
     const startStatuses: StartRunResult['status'][] = [
@@ -66,7 +66,7 @@ describe('engine public contracts', () => {
       'denied',
       'cancelled',
     ];
-    const dependencyNames: (keyof CreateEngineOptions)[] = [
+    const dependencyNames: (keyof CreateRunsOptions)[] = [
       'models',
       'context',
       'session',
@@ -79,7 +79,7 @@ describe('engine public contracts', () => {
       'policy',
     ];
 
-    expect(operationNames).toEqual(['startRun', 'resolveApproval', 'cancelRun', 'getRun', 'shutdown']);
+    expect(operationNames).toEqual(['start', 'resolveApproval', 'cancel', 'get', 'shutdown']);
     expect(startStatuses).not.toContain('completed');
     expect(approvalStatuses).toContain('accepted');
     expect(approvalStatuses).not.toContain('resumed');
@@ -112,9 +112,9 @@ describe('engine public contracts', () => {
   });
 });
 
-describe('engine policy validation', () => {
+describe('run policy validation', () => {
   it('accepts a fully resolved policy', () => {
-    expect(validateEnginePolicy(validPolicy)).toEqual(validPolicy);
+    expect(validateRunPolicy(validPolicy)).toEqual(validPolicy);
   });
 
   it.each([
@@ -129,8 +129,8 @@ describe('engine policy validation', () => {
     ['modelRetryDelayMs', -1],
     ['terminalRunRetentionMs', 0],
   ] as const)('rejects invalid %s', (field, value) => {
-    expect(() => validateEnginePolicy({ ...validPolicy, [field]: value })).toThrow(
-      `Invalid EnginePolicy.${field}`,
+    expect(() => validateRunPolicy({ ...validPolicy, [field]: value })).toThrow(
+      `Invalid RunPolicy.${field}`,
     );
   });
 });

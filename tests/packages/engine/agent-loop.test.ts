@@ -8,20 +8,20 @@ import {
   assistantStreamWithUsage,
   collectEvents,
   compactedOverflowCompaction,
-  createEngineFixture,
+  createRunsFixture,
   errorOverflowStream,
   lengthOverflowStream,
   retryableFailedStream,
   settleRun,
   startedRun,
   startRequest,
-} from './engine-test-fixtures';
+} from './runs-test-fixtures';
 
 describe('Agent Loop', () => {
   it('recovers from one Context Overflow per ModelCall with a compaction retry', async () => {
     const tool = registeredTool('lookup');
     const compact = vi.fn(compactedOverflowCompaction);
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       contextCompact: compact,
       tools: [tool],
       streams: [
@@ -57,7 +57,7 @@ describe('Agent Loop', () => {
 
   it('does not retry a second Overflow on the same ModelCall', async () => {
     const compact = vi.fn(compactedOverflowCompaction);
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       contextCompact: compact,
       streams: [
         assistantStreamWithUsage('first overflow', {
@@ -80,7 +80,7 @@ describe('Agent Loop', () => {
 
   it('recovers a provider error-text Overflow through the same one-time compaction path', async () => {
     const compact = vi.fn(compactedOverflowCompaction);
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       contextCompact: compact,
       streams: [
         errorOverflowStream(),
@@ -102,7 +102,7 @@ describe('Agent Loop', () => {
 
   it('recovers a silent length-stop Overflow without treating it as output truncation', async () => {
     const compact = vi.fn(compactedOverflowCompaction);
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       contextCompact: compact,
       streams: [
         lengthOverflowStream(),
@@ -123,7 +123,7 @@ describe('Agent Loop', () => {
 
   it('fails on the first Overflow when the policy allows no compaction recovery', async () => {
     const compact = vi.fn(compactedOverflowCompaction);
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       contextCompact: compact,
       policy: { maxContextOverflowRecoveries: 0 },
       streams: [
@@ -153,7 +153,7 @@ describe('Agent Loop', () => {
         retryable: false,
       },
     }));
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       contextCompact: compact,
       streams: [
         assistantStreamWithUsage('overflowing', {
@@ -173,8 +173,8 @@ describe('Agent Loop', () => {
   });
 
   it('does not start a ModelCall or Context build when the UserMessage save fails', async () => {
-    const fixture = createEngineFixture({ failUserMessageSave: true });
-    const started = await fixture.engine.startRun(startRequest);
+    const fixture = createRunsFixture({ failUserMessageSave: true });
+    const started = await fixture.runs.start(startRequest);
     expect(started.status).toBe('failed');
     if (started.status !== 'failed') return;
     expect(started.failure).toMatchObject({ code: 'session_failed' });
@@ -183,7 +183,7 @@ describe('Agent Loop', () => {
 
 
   it('commits one final Assistant Reply and completes the Run', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [assistantStream('final answer')],
     });
 
@@ -218,7 +218,7 @@ describe('Agent Loop', () => {
       },
       observation: { summary: 'lookup completed' },
     }));
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       tools: [tool],
       executeTool,
       streams: [
@@ -291,7 +291,7 @@ describe('Agent Loop', () => {
         normalizedResult: { kind: 'text' as const, content: `result:${toolName}`, isError: false, truncated: false },
       };
     });
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       tools: [planTool, lookupTool],
       executeTool,
       streams: [
@@ -327,7 +327,7 @@ describe('Agent Loop', () => {
 
   it('fails with one terminal Assistant Reply when the ModelCall limit is reached', async () => {
     const tool = registeredTool('lookup');
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       tools: [tool],
       policy: { maxModelCallsPerRun: 1 },
       streams: [
@@ -355,7 +355,7 @@ describe('Agent Loop', () => {
 
   it('fails before committing a disallowed next tool round', async () => {
     const tool = registeredTool('lookup');
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       tools: [tool],
       policy: { maxToolRoundsPerRun: 1 },
       streams: [
@@ -388,7 +388,7 @@ describe('Agent Loop', () => {
 
   it('closes persisted ToolCalls when Permissions cannot evaluate them', async () => {
     const tool = registeredTool('protected-tool');
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       tools: [tool],
       streams: [assistantStream('checking permission', {
         id: 'provider-call:1',
@@ -443,7 +443,7 @@ describe('Agent Loop', () => {
     stream.push({ type: 'start', partial: { ...message, content: [] } });
     stream.push({ type: 'done', reason: 'length', message });
 
-    const fixture = createEngineFixture({ streams: [stream] });
+    const fixture = createRunsFixture({ streams: [stream] });
     const started = await startedRun(fixture);
     await settleRun(fixture);
 
@@ -475,7 +475,7 @@ describe('Agent Loop', () => {
     emptyStream.push({ type: 'start', partial: empty });
     emptyStream.push({ type: 'done', reason: 'stop', message: empty });
 
-    const fixture = createEngineFixture({ streams: [emptyStream] });
+    const fixture = createRunsFixture({ streams: [emptyStream] });
     const started = await startedRun(fixture);
     await settleRun(fixture);
     expect(fixture.published.at(-1)?.payload).toMatchObject({
@@ -485,7 +485,7 @@ describe('Agent Loop', () => {
   });
 
   it('keeps the same Turn, Message and ModelCall identity across a retry', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [retryableFailedStream('attempt one'), assistantStream('answer')],
       policy: { maxModelCallAttempts: 2 },
     });
@@ -506,7 +506,7 @@ describe('Agent Loop', () => {
   });
 
   it('clears projected text and thinking before a retry attempt', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [retryableFailedStream('stale text'), assistantStream('answer')],
       policy: { maxModelCallAttempts: 2 },
     });
@@ -525,7 +525,7 @@ describe('Agent Loop', () => {
   });
 
   it('passes the Provider Request Retry budget to the adapter without counting attempts', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [retryableFailedStream('attempt one'), assistantStream('answer')],
       policy: {
         maxModelCallAttempts: 2,
@@ -565,7 +565,7 @@ describe('Agent Loop', () => {
       recordMeasurement,
       flush: vi.fn(async () => undefined),
     } as never;
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [retryableFailedStream('attempt one'), assistantStream('answer')],
       policy: { maxModelCallAttempts: 2 },
       observability,
@@ -587,7 +587,7 @@ describe('Agent Loop', () => {
       await new Promise((resolve) => setTimeout(resolve, toolName === 'parallel-tool' ? 20 : 5));
       return succeeded(toolName);
     });
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       tools: [parallelTool, serialTool],
       executeTool,
       streams: [
@@ -633,7 +633,7 @@ describe('Agent Loop', () => {
       }
       return router;
     };
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       tools: [tool],
       executeTool: async ({ toolName }) => succeeded(toolName),
     });

@@ -17,7 +17,7 @@ import {
   type DatabaseConnection,
   type ResolveDatabaseMigrationsFolderRequest,
 } from '@megumi/database';
-import { createEngine, type Engine, type EnginePolicy } from '@megumi/engine';
+import { createRuns, type RunPolicy, type Runs } from '@megumi/engine';
 import { createEventBus, type EventSubscription } from '@megumi/events';
 import { createInputProcessor, type InputSourceAccess } from '@megumi/input';
 import { createInstructionReader } from '@megumi/instructions';
@@ -176,7 +176,7 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
   const logger = createObservabilityRuntimeLogger(observability.service);
 
   const runProjection = createRunProjection({
-    terminalRetentionMs: PRODUCT_ENGINE_POLICY.terminalRunRetentionMs,
+    terminalRetentionMs: PRODUCT_RUN_POLICY.terminalRunRetentionMs,
   });
   const database = openDatabase(homePaths, options);
   resources.database = database;
@@ -372,7 +372,7 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     workspaceChanges,
     sandbox,
     executionPolicy: {
-      maxExecutionTimeMs: PRODUCT_ENGINE_POLICY.toolExecutionTimeoutMs,
+      maxExecutionTimeMs: PRODUCT_RUN_POLICY.toolExecutionTimeoutMs,
       maxOutputBytes: 20_000,
       maxProcessCount: 16,
     },
@@ -395,7 +395,7 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     isRunLive: (runId) => runProjection.isRunLive({ runId }),
     workspaceChangeFooterProjector: workspaceChangeFooter,
   });
-  const engine = createEngine({
+  const runs = createRuns({
     models: modelComposition.models,
     context,
     session: history,
@@ -412,11 +412,11 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
       createRuntimeEventId: () => `event:${crypto.randomUUID()}`,
     },
     clock: { now: () => new Date().toISOString() },
-    policy: PRODUCT_ENGINE_POLICY,
+    policy: PRODUCT_RUN_POLICY,
   });
 
   const submission = createInputSubmission({
-    engine,
+    runs,
     input,
     sessions,
     branches,
@@ -428,14 +428,14 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
   });
   const chat = createProductChat({
     submission,
-    engine,
+    runs,
     suggestions,
     sessions,
     history,
     attachments,
     branches,
     workspaces,
-    runs: runProjection,
+    runProjection: runProjection,
     timeline,
     context: {
       deriveUsage: (history, model) => deriveContextUsage({ history, model }),
@@ -454,12 +454,12 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     events.subscribe(
       { eventTypes: ['run.ended'] },
       createWorkspaceChangeEventHandler(workspaceChanges, (runId) => {
-        const result = engine.getRun({ runId });
+        const result = runs.get({ runId });
         return result.status === 'found' ? result.run.workspaceId : undefined;
       }),
     ),
   );
-  const approval = createProductApproval(engine);
+  const approval = createProductApproval(runs);
   const host: ProductHostInterface = {
     chat: createChatHost(chat),
     skill: createSkillHost({ skills }),
@@ -487,13 +487,13 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     logger,
     subscribeRuntimeEvents: (filter, handler) => events.subscribe(filter, handler),
     dispose: () => {
-      disposePromise ??= disposeProduct({ engine, eventSubscriptions, observability, database });
+      disposePromise ??= disposeProduct({ runs, eventSubscriptions, observability, database });
       return disposePromise;
     },
   };
 }
 
-const PRODUCT_ENGINE_POLICY = {
+const PRODUCT_RUN_POLICY = {
   maxModelCallsPerRun: 80,
   maxToolRoundsPerRun: 50,
   maxToolCallsPerModelCall: 32,
@@ -509,7 +509,7 @@ const PRODUCT_ENGINE_POLICY = {
   providerRequestMaxRetries: 2,
   providerRequestMaxRetryDelayMs: 60_000,
   terminalRunRetentionMs: 300_000,
-} satisfies EnginePolicy;
+} satisfies RunPolicy;
 
 function openDatabase(homePaths: MegumiHomePaths, options: ComposeProductOptions): DatabaseConnection {
   const database = createDatabase({ filename: path.join(homePaths.sqlitePath, 'megumi.sqlite') });
@@ -555,29 +555,29 @@ function rollbackProductStartup(resources: ProductResources): void {
 }
 
 interface ProductDisposeFailure {
-  readonly resource: 'engine' | 'events' | 'observability' | 'database';
+  readonly resource: 'runs' | 'events' | 'observability' | 'database';
   readonly error: unknown;
 }
 
 async function disposeProduct(input: {
-  engine: Engine;
+  runs: Runs;
   eventSubscriptions: readonly EventSubscription[];
   observability: { flush(): Promise<void> };
   database: DatabaseConnection;
 }): Promise<void> {
   const failures: ProductDisposeFailure[] = [];
   try {
-    const result = await input.engine.shutdown({
-      timeoutMs: PRODUCT_ENGINE_POLICY.cancellationTimeoutMs + 2_000,
+    const result = await input.runs.shutdown({
+      timeoutMs: PRODUCT_RUN_POLICY.cancellationTimeoutMs + 2_000,
     });
     if (result.status === 'timed_out') {
       failures.push({
-        resource: 'engine',
+        resource: 'runs',
         error: new Error(`Engine shutdown timed out with ${result.activeRuns.length} active Run(s).`),
       });
     }
   } catch (error) {
-    failures.push({ resource: 'engine', error });
+    failures.push({ resource: 'runs', error });
   }
 
   for (const subscription of input.eventSubscriptions) {

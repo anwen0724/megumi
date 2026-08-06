@@ -1,30 +1,31 @@
 /*
- * Stable public entrypoint for the Engine package: the Engine interface, its
- * request/result contracts, the Run read-only results and the creation entry.
- * Internal loop, ActiveRun and attempt work data are never exported.
+ * Stable public entrypoint for the Engine package: the Runs operation
+ * interface, its request/result contracts, the Run read-only results, the
+ * creation entry and the caller-facing RunPolicy type. The Agent Loop, Run
+ * Registry, internal runners, the committer and the loop observer are never
+ * exported.
  */
-export { createEngine } from './engine';
+export { createRuns } from './run';
 export type {
   CancelRunRequest,
   CancelRunResult,
-  CreateEngineOptions,
-  Engine,
-  EngineClock,
+  CreateRunsOptions,
   GetRunRequest,
   GetRunResult,
-  EngineIdFactory,
   ResolveApprovalRequest,
   ResolveApprovalResult,
   RunApprovalDecision,
   RunApproval,
   RunApprovalStatus,
   RunInput,
+  RunClock,
+  Runs,
   StartRunRequest,
   StartRunResult,
-  ShutdownEngineRequest,
-  ShutdownEngineResult,
-} from './engine';
-export type { EnginePolicy } from './engine-policy';
+  ShutdownRunsRequest,
+  ShutdownRunsResult,
+} from './run';
+export type { RunPolicy } from './run-policy';
 export type {
   Run,
   RunFailure,

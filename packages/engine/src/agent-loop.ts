@@ -27,10 +27,9 @@ import type {
 import type { SessionAssistantContent, SessionEntry } from '@megumi/session';
 import type { ToolIdentity, ToolInvocation, Tools, ToolExecutionAccess } from '@megumi/tools';
 import type { ContextCapabilities, Prompt, RunContext } from '@megumi/context';
-import type { EngineClock, EngineIdFactory, RunApproval } from './engine';
-import type { EnginePolicy } from './engine-policy';
-import type { Run, RunFailure } from './run';
-import type { ApprovalResolution } from './active-run-store';
+import type { RunApproval, RunClock, Run, RunFailure } from './run';
+import type { RunPolicy } from './run-policy';
+import type { ApprovalResolution } from './run-registry';
 
 export interface AgentLoopInput {
   readonly run: Run;
@@ -57,9 +56,15 @@ export interface AgentLoopDependencies {
   >;
   readonly events: EventBus;
   readonly observability?: ObservabilityService;
-  readonly ids: EngineIdFactory;
-  readonly clock: EngineClock;
-  readonly policy: EnginePolicy;
+  /** The ID creation subset this loop needs; never the full public ids object. */
+  readonly ids: {
+    createModelCallId(): string;
+    createToolExecutionId(): string;
+    createRunApprovalId(): string;
+    createSessionMessageId(): string;
+  };
+  readonly clock: RunClock;
+  readonly policy: RunPolicy;
 }
 
 export type AgentLoopResult =

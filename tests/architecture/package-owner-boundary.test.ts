@@ -81,7 +81,7 @@ describe('Package Owner boundaries', () => {
   it('keeps ModelCall Tool routing and execution inside Tools', () => {
     const productSource = fs.readFileSync(path.join(root, 'packages/product/src/product.ts'), 'utf8');
     const toolsSource = fs.readFileSync(path.join(root, 'packages/tools/src/tools.ts'), 'utf8');
-    const engineSource = fs.readFileSync(path.join(root, 'packages/engine/src/engine.ts'), 'utf8');
+    const engineSource = fs.readFileSync(path.join(root, 'packages/engine/src/run.ts'), 'utf8');
     const runLoopSource = fs.readFileSync(path.join(root, 'packages/engine/src/agent-loop.ts'), 'utf8');
 
     expect(productSource).not.toContain('createProductToolSnapshots');

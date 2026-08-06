@@ -3,11 +3,11 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { SessionEntry, SessionMessageWithAttachments } from '@megumi/session';
-import type { EngineClock, RunFailure } from '@megumi/engine';
+import type { RunClock, RunFailure } from '@megumi/engine';
 import {
-  ActiveRunStore,
+  RunRegistry,
   type StartRequestFingerprint,
-} from '../../../packages/engine/src/active-run-store';
+} from '../../../packages/engine/src/run-registry';
 import { createRun, transitionRun } from '../../../packages/engine/src/run';
 
 const fingerprint: StartRequestFingerprint = {
@@ -21,7 +21,7 @@ const failure: RunFailure = {
   retryable: false,
 };
 
-function createMutableClock(initial: string): EngineClock & { set(value: string): void } {
+function createMutableClock(initial: string): RunClock & { set(value: string): void } {
   let current = initial;
   return {
     now: () => current,
@@ -69,10 +69,10 @@ function startedResult(run: ReturnType<typeof createTestRun>) {
   return { run, userMessage, userEntry };
 }
 
-describe('ActiveRunStore', () => {
+describe('RunRegistry', () => {
   it('shares one pending establishment result for the same requestId', async () => {
     const clock = createMutableClock('2026-07-31T00:00:00.000Z');
-    const store = new ActiveRunStore({ clock, terminalRunRetentionMs: 1_000 });
+    const store = new RunRegistry({ clock, terminalRunRetentionMs: 1_000 });
     const run = createTestRun({
       runId: 'run:1',
       requestId: 'request:1',
@@ -107,7 +107,7 @@ describe('ActiveRunStore', () => {
 
   it('rejects a changed request fingerprint and permits retry after failed establishment', async () => {
     const clock = createMutableClock('2026-07-31T00:00:00.000Z');
-    const store = new ActiveRunStore({ clock, terminalRunRetentionMs: 1_000 });
+    const store = new RunRegistry({ clock, terminalRunRetentionMs: 1_000 });
     const run = createTestRun({
       runId: 'run:1',
       requestId: 'request:1',
@@ -133,7 +133,7 @@ describe('ActiveRunStore', () => {
 
   it('allows one non-terminal Run per Session and concurrent Runs across Sessions', () => {
     const clock = createMutableClock('2026-07-31T00:00:00.000Z');
-    const store = new ActiveRunStore({ clock, terminalRunRetentionMs: 1_000 });
+    const store = new RunRegistry({ clock, terminalRunRetentionMs: 1_000 });
     const first = createTestRun({
       runId: 'run:1',
       requestId: 'request:1',
@@ -170,7 +170,7 @@ describe('ActiveRunStore', () => {
 
   it('retains terminal summaries for the configured duration and releases the Session', () => {
     const clock = createMutableClock('2026-07-31T00:00:00.000Z');
-    const store = new ActiveRunStore({ clock, terminalRunRetentionMs: 1_000 });
+    const store = new RunRegistry({ clock, terminalRunRetentionMs: 1_000 });
     const run = createTestRun({
       runId: 'run:1',
       requestId: 'request:1',

@@ -7,21 +7,21 @@ import {
   approvalDecisionFor,
   assistantStream,
   collectEvents,
-  createEngineFixture,
+  createRunsFixture,
   neverEndingStream,
   settleRun,
   startedRun,
   startRequest,
-} from './engine-test-fixtures';
+} from './runs-test-fixtures';
 
-describe('createEngine', () => {
+describe('createRuns', () => {
   it('returns the same accepted Run for an identical requestId', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [assistantStream('done')],
     });
 
-    const first = await fixture.engine.startRun(startRequest);
-    const second = await fixture.engine.startRun(startRequest);
+    const first = await fixture.runs.start(startRequest);
+    const second = await fixture.runs.start(startRequest);
 
     expect(first.status).toBe('started');
     expect(second.status).toBe('already_started');
@@ -34,13 +34,13 @@ describe('createEngine', () => {
   });
 
   it('rejects a second active Run in the same Session', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [neverEndingStream()],
       policy: { cancellationTimeoutMs: 10 },
     });
 
-    const first = await fixture.engine.startRun(startRequest);
-    const second = await fixture.engine.startRun({
+    const first = await fixture.runs.start(startRequest);
+    const second = await fixture.runs.start({
       ...startRequest,
       requestId: 'request:2',
     });
@@ -48,7 +48,7 @@ describe('createEngine', () => {
     expect(first.status).toBe('started');
     expect(second.status).toBe('session_busy');
     if (first.status === 'started') {
-      const cancellation = await fixture.engine.cancelRun({ runId: first.run.runId });
+      const cancellation = await fixture.runs.cancel({ runId: first.run.runId });
       if (cancellation.status === 'cancellation_requested') {
         await settleRun(fixture);
       }
@@ -56,12 +56,12 @@ describe('createEngine', () => {
   });
 
   it('treats requestId reuse with different input as a protocol failure', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [assistantStream('done')],
     });
 
-    const first = await fixture.engine.startRun(startRequest);
-    const conflicting = await fixture.engine.startRun({
+    const first = await fixture.runs.start(startRequest);
+    const conflicting = await fixture.runs.start({
       ...startRequest,
       input: {
         displayContent: [{ type: 'text', text: 'different' }],
@@ -92,7 +92,7 @@ describe('createEngine', () => {
       effect: { type: 'none' as const },
       executionAccess: unrestrictedExecutionAccess,
     }));
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       tools: [tool],
       streams: [
         assistantStream('needs approval', {
@@ -128,7 +128,7 @@ describe('createEngine', () => {
       toolCallId: requested.payload.toolCallId,
     };
 
-    const resumed = await fixture.engine.resolveApproval({
+    const resumed = await fixture.runs.resolveApproval({
       approvalId: approval.approvalRequestId,
       decision: {
         decision: 'approved',
@@ -140,7 +140,7 @@ describe('createEngine', () => {
     // The original Agent Loop keeps waiting; the decision is applied in place.
     expect(resumed.run.status).toBe('waiting');
     expect(fixture.writes).not.toContain('assistant:completed');
-    const duplicate = await fixture.engine.resolveApproval({
+    const duplicate = await fixture.runs.resolveApproval({
       approvalId: approval.approvalRequestId,
       decision: {
         decision: 'approved',
@@ -163,7 +163,7 @@ describe('createEngine', () => {
 
   it('closes the pending ToolCall when approval application fails', async () => {
     const tool = registeredTool('approval-tool');
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       tools: [tool],
       streams: [assistantStream('needs approval', {
         id: 'provider-call:1',
@@ -194,7 +194,7 @@ describe('createEngine', () => {
     if (!requested) throw new Error('Expected approval request event.');
     const approvalRequestId = requested.payload.approvalRequestId;
 
-    const resolved = await fixture.engine.resolveApproval({
+    const resolved = await fixture.runs.resolveApproval({
       approvalId: approvalRequestId,
       decision: { decision: 'approved', optionId: approvalRequestId },
     });
@@ -215,39 +215,39 @@ describe('createEngine', () => {
   });
 
   it('owns shutdown by rejecting new Runs and converging active Runs', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [neverEndingStream()],
     });
     const started = await startedRun(fixture);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    await expect(fixture.engine.shutdown({ timeoutMs: 1_000 })).resolves.toEqual({
+    await expect(fixture.runs.shutdown({ timeoutMs: 1_000 })).resolves.toEqual({
       status: 'shut_down',
     });
-    expect(fixture.engine.getRun({ runId: started.run.runId })).toMatchObject({
+    expect(fixture.runs.get({ runId: started.run.runId })).toMatchObject({
       status: 'found',
       run: { status: 'cancelled' },
     });
-    await expect(fixture.engine.startRun({
+    await expect(fixture.runs.start({
       ...startRequest,
       requestId: 'request:after-shutdown',
     })).resolves.toMatchObject({ status: 'failed' });
   });
 
   it('keeps shutdown idempotent across repeated calls', async () => {
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       streams: [assistantStream('answer')],
     });
     const started = await startedRun(fixture);
     await settleRun(fixture);
 
-    await expect(fixture.engine.shutdown({ timeoutMs: 1_000 })).resolves.toEqual({
+    await expect(fixture.runs.shutdown({ timeoutMs: 1_000 })).resolves.toEqual({
       status: 'shut_down',
     });
-    await expect(fixture.engine.shutdown({ timeoutMs: 1_000 })).resolves.toEqual({
+    await expect(fixture.runs.shutdown({ timeoutMs: 1_000 })).resolves.toEqual({
       status: 'shut_down',
     });
-    expect(fixture.engine.getRun({ runId: started.run.runId })).toMatchObject({
+    expect(fixture.runs.get({ runId: started.run.runId })).toMatchObject({
       status: 'found',
       run: { status: 'completed' },
     });

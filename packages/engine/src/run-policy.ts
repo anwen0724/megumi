@@ -1,8 +1,8 @@
 /*
- * Defines the resolved execution limits shared by an Engine and all of its Runs.
+ * Defines the resolved execution limits shared by the Run execution base and all of its Runs.
  */
 
-export interface EnginePolicy {
+export interface RunPolicy {
   readonly maxModelCallsPerRun: number;
   readonly maxToolRoundsPerRun: number;
   readonly maxToolCallsPerModelCall: number;
@@ -35,34 +35,34 @@ const POSITIVE_INTEGER_FIELDS = [
   'maxModelCallAttempts',
   'maxToolExecutionsPerCall',
   'terminalRunRetentionMs',
-] as const satisfies readonly (keyof EnginePolicy)[];
+] as const satisfies readonly (keyof RunPolicy)[];
 
 const NON_NEGATIVE_INTEGER_FIELDS = [
   'modelRetryDelayMs',
   'maxContextOverflowRecoveries',
   'providerRequestMaxRetries',
   'providerRequestMaxRetryDelayMs',
-] as const satisfies readonly (keyof EnginePolicy)[];
+] as const satisfies readonly (keyof RunPolicy)[];
 
 /**
  * Engine accepts only a complete, already-resolved policy. Product composition owns defaults.
  */
-export function validateEnginePolicy(policy: EnginePolicy): EnginePolicy {
+export function validateRunPolicy(policy: RunPolicy): RunPolicy {
   for (const field of POSITIVE_INTEGER_FIELDS) {
     if (!Number.isInteger(policy[field]) || policy[field] <= 0) {
-      throw new TypeError(`Invalid EnginePolicy.${field}: expected a positive integer.`);
+      throw new TypeError(`Invalid RunPolicy.${field}: expected a positive integer.`);
     }
   }
 
   for (const field of NON_NEGATIVE_INTEGER_FIELDS) {
     if (!Number.isInteger(policy[field]) || policy[field] < 0) {
-      throw new TypeError(`Invalid EnginePolicy.${field}: expected a non-negative integer.`);
+      throw new TypeError(`Invalid RunPolicy.${field}: expected a non-negative integer.`);
     }
   }
 
   if (policy.maxToolExecutionsPerCall !== 1) {
     throw new TypeError(
-      'Invalid EnginePolicy.maxToolExecutionsPerCall: V2 requires exactly one execution per ToolCall.',
+      'Invalid RunPolicy.maxToolExecutionsPerCall: V2 requires exactly one execution per ToolCall.',
     );
   }
 

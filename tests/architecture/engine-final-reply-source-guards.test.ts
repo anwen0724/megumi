@@ -31,11 +31,11 @@ describe('Engine final reply source guards', () => {
 
   it('keeps final reply commit inside Engine and terminal facts in the Engine owner', () => {
     const agentLoop = read('packages/engine/src/agent-loop.ts');
-    const engine = read('packages/engine/src/engine.ts');
+    const runEntry = read('packages/engine/src/run.ts');
     // The Agent Loop owns the semantic reply commits (completed, cancelled,
-    // failed); the Engine owns the single run.ended terminal fact.
+    // failed); the Run operation entry owns the single run.ended terminal fact.
     expect(agentLoop).toContain('dependencies.session.saveAssistantReply({');
-    expect(engine).toContain("'run.ended'");
+    expect(runEntry).toContain("'run.ended'");
     expect(agentLoop).not.toContain("'run.ended'");
     // Event ordering (reply commit before run.ended) is protected by the
     // Engine RuntimeEvents behavior tests.

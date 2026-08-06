@@ -9,9 +9,9 @@ import {
   approvalDecisionFor,
   assistantStream,
   collectEvents,
-  createEngineFixture,
+  createRunsFixture,
   startRequest,
-} from '../../../../../packages/engine/engine-test-fixtures';
+} from '../../../../../packages/engine/runs-test-fixtures';
 import {
   approvalSubjectFor,
   registeredTool,
@@ -20,7 +20,7 @@ import {
 describe('approval Runtime flow', () => {
   it('projects an Engine approval event into a resolvable Desktop approval activity', async () => {
     const tool = registeredTool('approval-tool');
-    const fixture = createEngineFixture({
+    const fixture = createRunsFixture({
       tools: [tool],
       streams: [assistantStream('needs approval', {
         id: 'provider-call:1',
@@ -44,7 +44,7 @@ describe('approval Runtime flow', () => {
       },
     });
 
-    const started = await fixture.engine.startRun(startRequest);
+    const started = await fixture.runs.start(startRequest);
     if (started.status !== 'started') throw new Error('Expected started Run.');
 
     // The engine emits asynchronously; wait until the approval fact settles.

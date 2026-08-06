@@ -27,14 +27,14 @@ import type {
 import { createEventBus, type AnyEvent } from '@megumi/events';
 import type { ObservabilityService } from '@megumi/observability';
 import type {
-  CreateEngineOptions,
-  Engine,
-  EnginePolicy,
+  CreateRunsOptions,
   Run,
+  RunPolicy,
+  Runs,
   StartRunRequest,
 } from '@megumi/engine';
 import { AssistantMessageEventStream } from '../../../packages/ai/src/utils/event-stream';
-import { createEngine } from '../../../packages/engine/src/engine';
+import { createRuns } from '@megumi/engine';
 import {
   allowDecision,
   approvalSubjectFor,
@@ -68,7 +68,7 @@ export const model: Model<Api> = {
   maxTokens: 512,
 };
 
-export const enginePolicy: EnginePolicy = {
+export const runPolicy: RunPolicy = {
   maxModelCallsPerRun: 4,
   maxToolRoundsPerRun: 3,
   maxToolCallsPerModelCall: 4,
@@ -99,9 +99,9 @@ export const startRequest: StartRunRequest = {
   permissionMode: 'ask',
 };
 
-export interface EngineFixture {
-  readonly engine: Engine;
-  readonly options: CreateEngineOptions;
+export interface RunsFixture {
+  readonly runs: Runs;
+  readonly options: CreateRunsOptions;
   readonly writes: string[];
   readonly contextRuns: unknown[];
   readonly published: AnyEvent[];
@@ -109,7 +109,7 @@ export interface EngineFixture {
   readonly toolResults: SaveToolResultMessageRequest[];
 }
 
-export function createEngineFixture(input: {
+export function createRunsFixture(input: {
   readonly streams?: AssistantMessageEventStream[];
   readonly tools?: ReturnType<typeof registeredTool>[];
   readonly permissions?: Pick<
@@ -117,12 +117,12 @@ export function createEngineFixture(input: {
     'evaluateToolCall' | 'applyApprovalDecision'
   >;
   readonly executeTool?: TestToolExecute;
-  readonly policy?: Partial<EnginePolicy>;
-  readonly contextBuild?: CreateEngineOptions['context']['build'];
-  readonly contextCompact?: CreateEngineOptions['context']['compact'];
+  readonly policy?: Partial<RunPolicy>;
+  readonly contextBuild?: CreateRunsOptions['context']['build'];
+  readonly contextCompact?: CreateRunsOptions['context']['compact'];
   readonly failUserMessageSave?: boolean;
   readonly observability?: ObservabilityService;
-} = {}): EngineFixture {
+} = {}): RunsFixture {
   const writes: string[] = [];
   const contextRuns: unknown[] = [];
   const published: AnyEvent[] = [];
@@ -207,7 +207,7 @@ export function createEngineFixture(input: {
   };
 
   const context: Prompt = { systemPrompt: 'test', messages: [], tools: [] };
-  const options: CreateEngineOptions = {
+  const options: CreateRunsOptions = {
     models: {
       // Adapter contract wiring: cancellation settles the fake stream with an
       // aborted terminal so the single Agent Loop always converges.
@@ -261,10 +261,10 @@ export function createEngineFixture(input: {
       createRuntimeEventId: () => `event:${++eventNumber}`,
     },
     clock: { now: () => '2026-07-31T00:00:00.000Z' },
-    policy: { ...enginePolicy, ...input.policy },
+    policy: { ...runPolicy, ...input.policy },
   };
   return {
-    engine: createEngine(options),
+    runs: createRuns(options),
     options,
     writes,
     contextRuns,
@@ -275,10 +275,10 @@ export function createEngineFixture(input: {
 }
 
 export async function startedRun(
-  fixture: EngineFixture,
+  fixture: RunsFixture,
   request: StartRunRequest = startRequest,
 ): Promise<{ readonly run: Run }> {
-  const started = await fixture.engine.startRun(request);
+  const started = await fixture.runs.start(request);
   if (started.status !== 'started') {
     throw new Error(`Expected started Run, got ${started.status}.`);
   }
@@ -286,10 +286,10 @@ export async function startedRun(
 }
 
 export async function requestedCancellation(
-  fixture: EngineFixture,
+  fixture: RunsFixture,
   runId: string,
 ): Promise<{ readonly run: Run }> {
-  const cancellation = await fixture.engine.cancelRun({ runId });
+  const cancellation = await fixture.runs.cancel({ runId });
   if (cancellation.status !== 'cancellation_requested') {
     throw new Error(`Expected cancellation request, got ${cancellation.status}.`);
   }
@@ -515,12 +515,12 @@ export function retryableFailedStream(text: string): AssistantMessageEventStream
 }
 
 /** All events published for one run, in bus order. */
-export function collectEvents(fixture: EngineFixture, runId: string): AnyEvent[] {
+export function collectEvents(fixture: RunsFixture, runId: string): AnyEvent[] {
   return fixture.published.filter((event) => event.runId === runId);
 }
 
 /** Waits until the run settles (run.ended published) so behavior assertions are safe. */
-export async function settleRun(fixture: EngineFixture, timeoutMs = 2_000): Promise<void> {
+export async function settleRun(fixture: RunsFixture, timeoutMs = 2_000): Promise<void> {
   await new Promise<void>((resolve) => {
     const deadline = Date.now() + timeoutMs;
     const check = (): void => {
