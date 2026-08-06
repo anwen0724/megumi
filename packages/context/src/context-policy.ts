@@ -72,6 +72,31 @@ export function compactionPolicyFailure(
   return undefined;
 }
 
+/**
+ * Resolves the Policy from defaults and configured values and validates it
+ * against the Model Context Window without throwing on illegal Token counts.
+ * build() and compact() share this single Policy entry; the caller converts
+ * the invalid message into the stable policy_invalid failure.
+ */
+export function resolveCompactionPolicyProblem(input: {
+  readonly defaults?: Partial<CompactionPolicy>;
+  readonly configured?: Partial<CompactionPolicy>;
+  readonly capacity: ContextCapacity;
+}): { readonly status: 'ok'; readonly policy: CompactionPolicy } | { readonly status: 'invalid'; readonly message: string } {
+  try {
+    const policy = resolveCompactionPolicy(input.defaults, input.configured);
+    const problem = compactionPolicyFailure(policy, input.capacity);
+    return problem
+      ? { status: 'invalid', message: problem }
+      : { status: 'ok', policy };
+  } catch (error) {
+    return {
+      status: 'invalid',
+      message: error instanceof Error ? error.message : 'Compaction Policy configuration is invalid.',
+    };
+  }
+}
+
 /** True when the estimated full-Prompt tokens cross the automatic compaction threshold. */
 export function shouldAutoCompact(input: {
   readonly policy: CompactionPolicy;

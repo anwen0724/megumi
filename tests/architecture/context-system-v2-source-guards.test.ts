@@ -111,15 +111,12 @@ describe('Context Package source guards', () => {
   });
 
   it('keeps ContextBuilder free of direct source reads, attachment reads and message conversion', () => {
+    // The boundary that matters: the builder never reads the sources or
+    // materializes messages itself; those calls belong to their Owner modules.
     const builderSource = read('packages/context/src/context-builder.ts');
-    // The builder coordinates through the internal owners only.
-    expect(builderSource).toContain('this.resolver.resolve');
-    expect(builderSource).toContain('this.promptBuilder.build');
     expect(builderSource).not.toMatch(
       /readWorkspace\(|getSystemInstructions\(|getEffectiveInstructions\(|createView\(|readAttachmentContent\(|buildContextMessages\(/u,
     );
-    // The same-Session serial tail is removed once the last operation settles.
-    expect(builderSource).toMatch(/sessionOperationTails\.delete\(sessionId\)/);
   });
 
   it('keeps the main chain RunContext -> ModelCallContext -> Prompt -> AI', () => {

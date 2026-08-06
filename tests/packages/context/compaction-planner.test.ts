@@ -61,11 +61,14 @@ describe('planCompaction', () => {
     expect(plan.plan.turnPrefixMessages).toEqual([]);
   });
 
-  it('never cuts directly before a ToolResult and keeps the loop closed', () => {
+  it('never cuts an ordinary User -> Assistant Turn', () => {
+    // The budget would keep only the trailing Assistant: the cut moves to the
+    // Turn's UserMessage instead.
     const sources = [
       user('e1', 'a'),
-      assistant('e2', 'call', 'call:1'),
-      toolResult('e3', 'call:1'),
+      assistant('e2', 'b'),
+      user('e3', 'c'),
+      assistant('e4', 'd'),
     ];
     const plan = planCompaction({
       sources,
@@ -74,20 +77,21 @@ describe('planCompaction', () => {
     });
     expect(plan.status).toBe('planned');
     if (plan.status !== 'planned') return;
-    // The walk would cut before the trailing ToolResult; closure keeps the whole loop.
-    expect(plan.plan.summarizedMessages).toHaveLength(1);
-    expect(plan.plan.firstKeptEntryId).toBe('e2');
-    // The ToolCall pulled into the kept suffix is the Turn Prefix.
-    expect(plan.plan.turnPrefixMessages).toEqual([assistant('e2', 'call', 'call:1').message]);
+    expect(plan.plan.summarizedMessages).toEqual([user('e1', 'a').message, assistant('e2', 'b').message]);
+    expect(plan.plan.coveredUntilEntryId).toBe('e2');
+    expect(plan.plan.firstKeptEntryId).toBe('e3');
+    // User 3 is the extra message kept because of the Turn move.
+    expect(plan.plan.turnPrefixMessages).toEqual([user('e3', 'c').message]);
   });
 
-  it('moves a mid-loop cut before the issuing ToolCall and marks the turn prefix', () => {
+  it('moves a mid-Turn cut across multiple ordinary Turns into the correct Turn Prefix', () => {
     const sources = [
       user('e1', 'a'),
-      assistant('e2', 'call', 'call:1'),
-      toolResult('e3', 'call:1'),
-      user('e4', 'b'),
-      user('e5', 'c'),
+      assistant('e2', 'b'),
+      user('e3', 'c'),
+      assistant('e4', 'd'),
+      user('e5', 'e'),
+      assistant('e6', 'f'),
     ];
     const plan = planCompaction({
       sources,
@@ -96,18 +100,57 @@ describe('planCompaction', () => {
     });
     expect(plan.status).toBe('planned');
     if (plan.status !== 'planned') return;
-    // e3 is a ToolResult directly after the cut candidate: closure extends to e2.
-    expect(plan.plan.firstKeptEntryId).toBe('e2');
-    // The Turn Prefix holds the partially-cut Tool loop: it is never part of
-    // the replaced entries and stays in the kept suffix.
-    expect(plan.plan.turnPrefixMessages).toEqual([assistant('e2', 'call', 'call:1').message]);
-    expect(plan.plan.summarizedMessages).toEqual([user('e1', 'a').message]);
-    expect(plan.plan.coveredUntilEntryId).toBe('e1');
-    expect(plan.plan.firstKeptEntryId).toBe('e2');
-    // The Turn Prefix carries the ToolCall whose loop closure kept it open.
-    const prefix = plan.plan.turnPrefixMessages[0]!;
-    expect(prefix.role).toBe('assistant');
-    expect(prefix.content).toContainEqual(expect.objectContaining({ type: 'toolCall', id: 'call:1' }));
+    // The budget cut lands on Assistant 4; the final cut moves to User 3.
+    expect(plan.plan.summarizedMessages).toEqual([user('e1', 'a').message, assistant('e2', 'b').message]);
+    expect(plan.plan.coveredUntilEntryId).toBe('e2');
+    expect(plan.plan.firstKeptEntryId).toBe('e3');
+    expect(plan.plan.turnPrefixMessages).toEqual([user('e3', 'c').message]);
+  });
+
+  it('keeps the whole Turn when its UserMessage is the first compactable entry', () => {
+    // Moving the cut to User 1 would leave no summarized prefix: nothing is compacted.
+    const sources = [
+      user('e1', 'a'),
+      assistant('e2', 'b'),
+    ];
+    const plan = planCompaction({
+      sources,
+      policy: { ...DEFAULT_COMPACTION_POLICY, keepRecentTokens: 1, minimumRecentMessages: 1 },
+      estimateMessageTokens: estimateTokens,
+    });
+    expect(plan).toEqual({ status: 'nothing_to_compact', reason: 'no_older_messages' });
+  });
+
+  it('keeps ToolCall and ToolResult together inside the last Turn', () => {
+    const sources = [
+      user('e1', 'a'),
+      assistant('e2', 'b'),
+      user('e3', 'c'),
+      assistant('e4', 'call', 'call:1'),
+      toolResult('e5', 'call:1'),
+      user('e6', 'd'),
+      assistant('e7', 'e'),
+    ];
+    const plan = planCompaction({
+      sources,
+      policy: { ...DEFAULT_COMPACTION_POLICY, keepRecentTokens: 1, minimumRecentMessages: 3 },
+      estimateMessageTokens: estimateTokens,
+    });
+    expect(plan.status).toBe('planned');
+    if (plan.status !== 'planned') return;
+    // The budget cut lands on the ToolResult; tool closure moves it to the
+    // ToolCall and Turn closure then to User 3, keeping the loop closed.
+    expect(plan.plan.summarizedMessages).toEqual([user('e1', 'a').message, assistant('e2', 'b').message]);
+    expect(plan.plan.coveredUntilEntryId).toBe('e2');
+    expect(plan.plan.firstKeptEntryId).toBe('e3');
+    expect(plan.plan.turnPrefixMessages).toEqual([
+      user('e3', 'c').message,
+      assistant('e4', 'call', 'call:1').message,
+    ]);
+    // Neither the ToolCall nor its ToolResult enters the Summary.
+    const summarized = plan.plan.summarizedMessages;
+    expect(summarized.some((message) => message.role === 'toolResult')).toBe(false);
+    expect(JSON.stringify(summarized)).not.toContain('call:1');
   });
 
   it('returns nothing_to_compact when protocol closure consumes the whole history', () => {

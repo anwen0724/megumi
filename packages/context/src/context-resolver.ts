@@ -92,6 +92,11 @@ export function createContextResolver(dependencies: ContextResolverDependencies)
         workspaceId: request.workspaceId,
         signal: request.signal,
       });
+      // Cancellation converges to the stable cancelled failure: either the
+      // request signal aborted while the Skills read was in flight, or Skills
+      // itself reported the cancelled code.
+      if (request.signal?.aborted) return cancelledResult();
+      if (view.status === 'failed' && view.failure.code === 'cancelled') return cancelledResult();
       if (view.status === 'failed') {
         return buildFailedContextResult(buildSourceContextFailure({
           code: 'skill_view_failed',

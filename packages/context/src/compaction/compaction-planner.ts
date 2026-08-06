@@ -61,19 +61,24 @@ export function planCompaction(input: {
     return { status: 'nothing_to_compact', reason: 'no_older_messages' };
   }
 
-  const closed = closeToolProtocol(sources, cutIndex);
+  const protocolClosed = closeToolProtocol(sources, cutIndex);
   // Protocol closure can extend the cut back to the very first message; with no
   // summarized prefix left there is nothing left to compact.
-  if (closed.cutIndex === 0) {
+  if (protocolClosed === 0) {
+    return { status: 'nothing_to_compact', reason: 'no_older_messages' };
+  }
+  const turnClosed = closeTurnBoundary(sources, protocolClosed);
+  if (turnClosed === 0) {
     return { status: 'nothing_to_compact', reason: 'no_older_messages' };
   }
   const plan: CompactionPlan = {
-    summarizedMessages: sources.slice(0, closed.cutIndex).map((source) => source.message),
-    // The messages closure pulled into the kept suffix between the original cut
-    // and the closed cut; they remain in the candidate Prompt as Turn Prefix.
-    turnPrefixMessages: sources.slice(closed.cutIndex, cutIndex).map((source) => source.message),
-    coveredUntilEntryId: sources[closed.cutIndex - 1]!.entryId,
-    firstKeptEntryId: sources[closed.cutIndex]!.entryId,
+    summarizedMessages: sources.slice(0, turnClosed).map((source) => source.message),
+    // The messages pulled into the kept suffix between the original budget cut
+    // and the final cut (Tool protocol closure and Turn boundary closure); they
+    // remain in the candidate Prompt as Turn Prefix.
+    turnPrefixMessages: sources.slice(turnClosed, cutIndex).map((source) => source.message),
+    coveredUntilEntryId: sources[turnClosed - 1]!.entryId,
+    firstKeptEntryId: sources[turnClosed]!.entryId,
   };
   if (plan.summarizedMessages.length === 0) {
     return { status: 'nothing_to_compact', reason: 'no_older_messages' };
@@ -102,7 +107,7 @@ export function validateCompactionReduction(input: {
 function closeToolProtocol(
   sources: readonly CompactionMessageSource[],
   initialCutIndex: number,
-): { cutIndex: number } {
+): number {
   let cutIndex = initialCutIndex;
   while (true) {
     const kept = sources.slice(cutIndex);
@@ -142,5 +147,26 @@ function closeToolProtocol(
     }
     cutIndex = callSourceIndex;
   }
-  return { cutIndex };
+  return cutIndex;
+}
+
+/**
+ * Extends the cut so the kept suffix never starts with an Assistant or
+ * ToolResult message when the corresponding UserMessage exists in the
+ * compactable history: a Turn starts at a UserMessage, so a mid-Turn cut moves
+ * to that UserMessage. When no UserMessage precedes the cut (the Turn started
+ * inside an older Summary), the cut stays and Tool protocol closure already
+ * guarantees closed loops.
+ */
+function closeTurnBoundary(
+  sources: readonly CompactionMessageSource[],
+  initialCutIndex: number,
+): number {
+  if (initialCutIndex >= sources.length) return initialCutIndex;
+  const firstKept = sources[initialCutIndex]!.message;
+  if (firstKept.role === 'user') return initialCutIndex;
+  for (let index = initialCutIndex - 1; index >= 0; index -= 1) {
+    if (sources[index]!.message.role === 'user') return index;
+  }
+  return initialCutIndex;
 }

@@ -18,7 +18,9 @@ import {
 
 function compactedHistory(history: SessionHistoryItem[]): SessionHistoryItem[] {
   const first = history[0]!;
-  const kept = history.slice(2);
+  // The committed Summary replaces the prefix up to the last summarized Turn;
+  // the kept suffix starts at the Turn the budget cut moved to.
+  const kept = history.slice(6);
   const entry = {
     entry_id: 'entry:summary',
     session_id: 'session:1',
@@ -32,8 +34,8 @@ function compactedHistory(history: SessionHistoryItem[]): SessionHistoryItem[] {
       compaction_id: 'compaction:1',
       session_id: 'session:1',
       summary_text: 'replacement summary',
-      covered_until_entry_id: 'entry:user:2',
-      first_kept_entry_id: 'entry:assistant:2',
+      covered_until_entry_id: 'entry:assistant:3',
+      first_kept_entry_id: 'entry:user:4',
       created_at: 'now',
     } },
     ...kept,
@@ -43,7 +45,15 @@ function compactedHistory(history: SessionHistoryItem[]): SessionHistoryItem[] {
 function fixture(
   completeSimple = vi.fn(async () => completedMessage('replacement summary')),
 ): CreateContextOptions {
-  const history = [...runHistory(1), ...runHistory(2)];
+  // Five ordinary Turns: enough for two consecutive compactions without ever
+  // cutting a Turn (each compaction keeps at least two Turns).
+  const history = [
+    ...runHistory(1),
+    ...runHistory(2),
+    ...runHistory(3),
+    ...runHistory(4),
+    ...runHistory(5),
+  ];
   let reads = 0;
   return {
     sessionHistory: {
@@ -81,12 +91,13 @@ function fixture(
       createView: vi.fn(async () => ({ status: 'ok' as const, view: { catalog: [], diagnostics: [] } })),
     },
     models: { completeSimple },
-    // Deterministic estimator: four original messages cost 40 tokens each, the
-    // compacted Prompt (summary + one kept message) costs much less.
+    // Deterministic estimator: ten original messages cost 30 tokens each, the
+    // compacted Prompt (summary + kept Turns) costs much less and still fits
+    // the small Context Window after the commit.
     contextTokenEstimator: vi.fn((prompt: Prompt) => (
-      prompt.messages.length * 60 + (prompt.systemPrompt ? 10 : 0)
+      prompt.messages.length * 30 + (prompt.systemPrompt ? 10 : 0)
     )),
-    policy: { enabled: true, reserveTokens: 32, keepRecentTokens: 1, minimumRecentMessages: 1 },
+    policy: { enabled: true, reserveTokens: 32, keepRecentTokens: 1, minimumRecentMessages: 3 },
     clock: { now: () => '2026-07-12T00:00:00.000Z' },
     ids: { compactionId: () => 'compaction:1' },
   };
@@ -143,9 +154,9 @@ describe('Context compaction', () => {
     }
     expect(options.sessionHistory.saveCompactionSummary).toHaveBeenCalledWith(expect.objectContaining({
       compaction_id: 'compaction:1',
-      covered_until_entry_id: 'entry:user:2',
-      first_kept_entry_id: 'entry:assistant:2',
-      expected_active_entry_id: 'entry:assistant:2',
+      covered_until_entry_id: 'entry:assistant:3',
+      first_kept_entry_id: 'entry:user:4',
+      expected_active_entry_id: 'entry:assistant:5',
       append_to_active_path: true,
     }));
     // The rebuilt Prompt comes from a fresh Session read, not a pre-commit projection.
@@ -191,13 +202,14 @@ describe('Context compaction', () => {
 
     const one = context.compact(manualRequest());
     const two = context.compact(manualRequest());
+    // Only the first compaction's Summary call may be in flight: the second
+    // waits on the same-Session gate.
     await vi.waitFor(() => expect(completeSimple).toHaveBeenCalledTimes(1));
     release(completedMessage('first summary'));
-    await vi.waitFor(() => expect(completeSimple).toHaveBeenCalledTimes(2));
-    await expect(Promise.all([one, two])).resolves.toEqual([
-      expect.objectContaining({ status: 'compacted' }),
-      expect.objectContaining({ status: 'compacted' }),
-    ]);
+    await expect(one).resolves.toMatchObject({ status: 'compacted' });
+    // The second compaction runs only after the first settled; with a single
+    // kept Turn left it legitimately has nothing to compact.
+    await expect(two).resolves.toMatchObject({ status: 'nothing_to_compact' });
   });
 
   it('does not persist cancelled or non-reducing summaries', async () => {
@@ -248,12 +260,57 @@ describe('Context compaction', () => {
     expect(observability.recordLog).toHaveBeenCalledWith(expect.objectContaining({
       event: 'context.compaction.started',
     }));
+    // The started log reports the messages that truly stay in the candidate
+    // Prompt: the kept compactable history including the Turn Prefix.
+    expect(observability.recordLog).toHaveBeenCalledWith(expect.objectContaining({
+      event: 'context.compaction.started',
+      attributes: expect.objectContaining({ keptMessages: 4 }),
+    }));
     expect(observability.recordLog).toHaveBeenCalledWith(expect.objectContaining({
       event: 'context.compaction.completed',
     }));
     expect(observability.recordMeasurement).toHaveBeenCalledWith(expect.objectContaining({
       name: 'context.compaction.after_tokens',
     }));
+  });
+
+  it('determines one createdAt for the whole compaction transaction', async () => {
+    let tick = 0;
+    const now = vi.fn(() => `2026-07-12T00:00:${String(10 + tick++).padStart(2, '0')}.000Z`);
+    const options = { ...fixture(), clock: { now } };
+    const context = createContext(options);
+
+    const result = await context.compact(manualRequest());
+    expect(result.status).toBe('compacted');
+    // The clock is read exactly once: Summary request, projection and commit
+    // all share the same createdAt.
+    expect(now).toHaveBeenCalledTimes(1);
+    const createdAt = '2026-07-12T00:00:10.000Z';
+
+    // The Summary model request timestamp comes from the same createdAt.
+    const completeSimple = options.models.completeSimple as ReturnType<typeof vi.fn>;
+    const summaryRequest = completeSimple.mock.calls[0]![1] as { messages: Array<{ timestamp: number }> };
+    expect(summaryRequest.messages[0]!.timestamp).toBe(Date.parse(createdAt));
+
+    // The commit uses the same createdAt.
+    expect(options.sessionHistory.saveCompactionSummary).toHaveBeenCalledWith(expect.objectContaining({
+      created_at: createdAt,
+    }));
+
+    // The projected candidate Prompt carries the Summary with the same timestamp.
+    const estimator = options.contextTokenEstimator as ReturnType<typeof vi.fn>;
+    const prompts = estimator.mock.calls.map((call) => call[0] as Prompt);
+    const projected = prompts.find((prompt) => {
+      const first = prompt.messages[0];
+      return first !== undefined
+        && first.role === 'user'
+        && typeof first.content !== 'string'
+        && first.content.some((block) => (
+          block.type === 'text' && block.text.includes('compacted into the following summary')
+        ));
+    });
+    expect(projected).toBeDefined();
+    expect(projected!.messages[0]!.timestamp).toBe(Date.parse(createdAt));
   });
 
   it('runs Overflow, Threshold and Manual compaction through the same transaction', async () => {
@@ -268,9 +325,9 @@ describe('Context compaction', () => {
         : await createContext(options).compact(manualRequest({ trigger }));
       expect(result.status, trigger).toBe(trigger === 'threshold' ? 'ready' : 'compacted');
       expect(options.sessionHistory.saveCompactionSummary).toHaveBeenCalledWith(expect.objectContaining({
-        covered_until_entry_id: 'entry:user:2',
-        first_kept_entry_id: 'entry:assistant:2',
-        expected_active_entry_id: 'entry:assistant:2',
+        covered_until_entry_id: 'entry:assistant:3',
+        first_kept_entry_id: 'entry:user:4',
+        expected_active_entry_id: 'entry:assistant:5',
         append_to_active_path: true,
       }));
     }
@@ -298,6 +355,8 @@ describe('Context compaction', () => {
         },
       },
       ...runHistory(2),
+      ...runHistory(3),
+      ...runHistory(4),
     ];
     const secondSummary: SessionHistoryItem[] = [
       {
@@ -314,16 +373,17 @@ describe('Context compaction', () => {
           compaction_id: 'compaction:1',
           session_id: 'session:1',
           summary_text: 'replacement summary',
-          covered_until_entry_id: 'entry:user:2',
-          first_kept_entry_id: 'entry:assistant:2',
+          covered_until_entry_id: 'entry:assistant:3',
+          first_kept_entry_id: 'entry:user:4',
           created_at: 'now',
         },
       },
-      ...runHistory(2).slice(1),
+      ...runHistory(4),
     ];
     let reads = 0;
     const options: CreateContextOptions = {
       ...fixture(),
+      policy: { enabled: true, reserveTokens: 32, keepRecentTokens: 1, minimumRecentMessages: 2 },
       sessionHistory: {
         getActiveHistory: vi.fn(() => {
           reads += 1;
@@ -350,14 +410,15 @@ describe('Context compaction', () => {
     });
     expect(result.status).toBe('ready');
     if (result.status !== 'ready') return;
-    // The second compaction replaces only User 3 and keeps Assistant 3: the
-    // Summary entry never shifts the mapping and the last message survives.
+    // The second compaction replaces the User 2 and User 3 Turns and keeps the
+    // User 4 Turn: the Summary entry never shifts the mapping and the last
+    // message survives.
     expect(options.sessionHistory.saveCompactionSummary).toHaveBeenCalledWith(expect.objectContaining({
-      covered_until_entry_id: 'entry:user:2',
-      first_kept_entry_id: 'entry:assistant:2',
+      covered_until_entry_id: 'entry:assistant:3',
+      first_kept_entry_id: 'entry:user:4',
     }));
-    expect(result.prompt.messages.map((message) => message.role)).toEqual(['user', 'assistant']);
-    expect(JSON.stringify(result.prompt.messages[1])).toContain('answer 2');
+    expect(result.prompt.messages.map((message) => message.role)).toEqual(['user', 'user', 'assistant']);
+    expect(JSON.stringify(result.prompt.messages[2])).toContain('answer 4');
   });
 
   it('returns the rebuilt Prompt messages after the committed Summary', async () => {
@@ -368,10 +429,11 @@ describe('Context compaction', () => {
     expect(result.status).toBe('ready');
     if (result.status !== 'ready') return;
     // The final Prompt is materialized from the authoritative compacted history:
-    // Summary + the genuinely kept messages.
-    expect(result.prompt.messages.map((message) => message.role)).toEqual(['user', 'user', 'assistant']);
+    // Summary + the genuinely kept Turns.
+    expect(result.prompt.messages.map((message) => message.role))
+      .toEqual(['user', 'user', 'assistant', 'user', 'assistant']);
     expect(JSON.stringify(result.prompt.messages)).toContain('replacement summary');
-    expect(JSON.stringify(result.prompt.messages)).toContain('answer 2');
+    expect(JSON.stringify(result.prompt.messages)).toContain('answer 5');
   });
 
   it('builds candidate and final Prompts through the same System Prompt and Tool rules', async () => {
@@ -424,11 +486,10 @@ describe('Context compaction', () => {
     // waits on the same-Session gate.
     await vi.waitFor(() => expect(completeSimple).toHaveBeenCalledTimes(1));
     release(completedMessage('first summary'));
-    await vi.waitFor(() => expect(completeSimple).toHaveBeenCalledTimes(2));
-    await expect(Promise.all([built, compacted])).resolves.toEqual([
-      expect.objectContaining({ status: 'ready' }),
-      expect.objectContaining({ status: 'compacted' }),
-    ]);
+    await expect(built).resolves.toMatchObject({ status: 'ready' });
+    // The compact runs only after the build settled; with a single kept Turn
+    // left it legitimately has nothing to compact.
+    await expect(compacted).resolves.toMatchObject({ status: 'nothing_to_compact' });
   });
 
   it('releases the per-Session operation tail after operations settle', async () => {
@@ -436,7 +497,7 @@ describe('Context compaction', () => {
     const context = createContext(options);
     // Serialized operations settle cleanly one after another.
     await expect(context.compact(manualRequest())).resolves.toMatchObject({ status: 'compacted' });
-    await expect(context.compact(manualRequest())).resolves.toMatchObject({ status: 'compacted' });
+    await expect(context.compact(manualRequest())).resolves.toMatchObject({ status: 'nothing_to_compact' });
     // The Session is free again: a mixed build + compact pair starts without
     // any residue from the earlier operations.
     const buildResult = context.build({
@@ -445,7 +506,7 @@ describe('Context compaction', () => {
     const compactResult = context.compact(manualRequest());
     await expect(Promise.all([buildResult, compactResult])).resolves.toEqual([
       expect.objectContaining({ status: 'ready' }),
-      expect.objectContaining({ status: 'compacted' }),
+      expect.objectContaining({ status: 'nothing_to_compact' }),
     ]);
   });
 
@@ -463,9 +524,9 @@ describe('Context compaction', () => {
 
     const one = context.compact(manualRequest({ sessionId: 'session:1' }));
     const two = context.compact(manualRequest({ sessionId: 'session:2' }));
-    // Session 2's compaction completes while Session 1's Summary call is still
+    // Session 2's operation settles while Session 1's Summary call is still
     // blocked: different Sessions are never serialized by a global lock.
-    await expect(two).resolves.toMatchObject({ status: 'compacted' });
+    await expect(two).resolves.toMatchObject({ status: 'nothing_to_compact' });
     release();
     await expect(one).resolves.toMatchObject({ status: 'compacted' });
   });

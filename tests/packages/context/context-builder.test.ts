@@ -303,6 +303,92 @@ describe('Context.build', () => {
     expect(result.status).toBe('ready');
   });
 
+  it('executes the business operation exactly once when Observability wraps it and then throws', async () => {
+    const options = fixture();
+    let reads = 0;
+    options.sessionHistory.getActiveHistory = vi.fn(() => {
+      reads += 1;
+      return { status: 'ok' as const, history: history() };
+    });
+    const observability = {
+      startSpan: vi.fn(() => ({ spanId: 'span:1' })),
+      endSpan: vi.fn(),
+      runInSpanContext: vi.fn(async (_span: unknown, operation: () => Promise<unknown>) => {
+        // The wrapper starts the business operation, then breaks.
+        const started = operation();
+        started.catch(() => undefined);
+        throw new Error('span context broken after starting the operation');
+      }),
+      recordMeasurement: vi.fn(),
+    } as unknown as NonNullable<CreateContextOptions['observability']>;
+
+    const result = await createContext({ ...options, observability }).build({ modelCallContext: modelCall() });
+    // The first business result wins; the source reads and build ran once.
+    expect(result.status).toBe('ready');
+    expect(reads).toBe(1);
+    expect(options.workspaceSource.readWorkspace).toHaveBeenCalledTimes(1);
+  });
+
+  it('converges Skills cancellation to the stable cancelled failure', async () => {
+    // createView reports the cancelled code: the failure is a cancellation.
+    const cancelledViewOptions = fixture();
+    cancelledViewOptions.skills.createView = vi.fn(async () => ({
+      status: 'failed' as const,
+      failure: { code: 'cancelled' as const },
+    }));
+    expect(await createContext(cancelledViewOptions).build({ modelCallContext: modelCall() }))
+      .toMatchObject({ status: 'failed', failure: { code: 'cancelled' } });
+
+    // The request signal is aborted while the Skills read is in flight.
+    const controller = new AbortController();
+    const abortedOptions = fixture();
+    abortedOptions.skills.createView = vi.fn(async () => {
+      controller.abort();
+      return { status: 'ok' as const, view: { catalog: [], diagnostics: [] } };
+    });
+    expect(await createContext(abortedOptions).build({
+      modelCallContext: modelCall(),
+      signal: controller.signal,
+    })).toMatchObject({ status: 'failed', failure: { code: 'cancelled' } });
+
+    // Non-cancelled Skills failures keep their owner and original code.
+    const brokenOptions = fixture();
+    brokenOptions.skills.createView = vi.fn(async () => ({
+      status: 'failed' as const,
+      failure: { code: 'skill_unavailable' as const, skillPath: '/skills/review/SKILL.md' },
+    }));
+    expect(await createContext(brokenOptions).build({ modelCallContext: modelCall() })).toMatchObject({
+      status: 'failed',
+      failure: {
+        code: 'skill_view_failed',
+        cause: { owner: 'skills', code: 'skill_unavailable' },
+      },
+    });
+  });
+
+  it('returns policy_invalid for illegal Compaction Policy configurations on build and compact', async () => {
+    const illegalPolicies: Array<Partial<NonNullable<CreateContextOptions['policy']>>> = [
+      { reserveTokens: -1 },
+      { reserveTokens: 1.5 },
+      { keepRecentTokens: Number.NaN },
+      { minimumRecentMessages: -3 },
+    ];
+    for (const illegal of illegalPolicies) {
+      const options = fixture();
+      options.policy = illegal;
+      expect(await createContext(options).build({ modelCallContext: modelCall() }), JSON.stringify(illegal))
+        .toMatchObject({ status: 'failed', failure: { code: 'policy_invalid' } });
+      expect(await createContext(options).compact({
+        sessionId: 'session:1',
+        workspaceId: 'workspace:1',
+        model: compactingModel,
+        trigger: 'manual',
+        tools: [],
+      }), JSON.stringify(illegal)).toMatchObject({ status: 'failed', failure: { code: 'policy_invalid' } });
+      expect(options.models.completeSimple, JSON.stringify(illegal)).not.toHaveBeenCalled();
+    }
+  });
+
   it('ends the main Span with the matching status for failure and cancellation', async () => {
     const ended: Array<{ status: string }> = [];
     const observability = {

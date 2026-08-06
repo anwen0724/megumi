@@ -12,6 +12,7 @@ import type { EventBus } from '@megumi/events';
 import type { ObservabilityService, SpanHandle } from '@megumi/observability';
 import type { SessionHistory, SessionAttachmentReader } from '@megumi/session';
 import type { Skills } from '@megumi/skills';
+import type { ToolDefinition } from '@megumi/tools';
 import type {
   BuildContextRequest,
   BuildContextResult,
@@ -21,6 +22,7 @@ import type {
   ContextBuilder,
   ContextCompactionProgress,
   ContextCompactor,
+  ContextFailure,
   ContextWorkspaceSource,
   Prompt,
 } from './context';
@@ -31,12 +33,12 @@ import {
   buildUnexpectedContextFailure,
 } from './context-failure-factory';
 import {
-  compactionPolicyFailure,
   contextCapacityFromModel,
   finalContextWindowProblem,
-  resolveCompactionPolicy,
+  resolveCompactionPolicyProblem,
   shouldAutoCompact,
   type CompactionPolicy,
+  type ContextCapacity,
 } from './context-policy';
 import { createContextResolver, type ContextResolver, type ResolvedContext } from './context-resolver';
 import { calculatePromptUsage, type ContextUsageEstimate } from './context-usage-calculator';
@@ -121,45 +123,41 @@ class DefaultContext implements ContextCapabilities {
       return result;
     };
     if (!span) return operation();
+    // The business operation runs strictly once: runInSpanContext receives a
+    // memoized wrapper, so repeated invocations (or a wrapper that throws after
+    // starting the operation) all resolve the same business Promise. Observability
+    // never owns the business outcome and can never re-run it.
+    let operationPromise: Promise<BuildContextResult> | undefined;
+    const runOnce = (): Promise<BuildContextResult> => {
+      operationPromise ??= operation();
+      return operationPromise;
+    };
     try {
-      return await this.options.observability!.runInSpanContext(span, operation);
+      return await this.options.observability!.runInSpanContext(span, runOnce);
     } catch {
-      // The span-context wrapper failed before delivering a result; operation
-      // never throws (failures and diagnostics are settled inside it), so this
-      // fallback runs the Context build exactly once outside the wrapper.
-      return operation();
+      // The wrapper failed before delivering a result; runOnce either starts the
+      // operation here or returns the already-started business Promise.
+      return runOnce();
     }
   }
 
   async compact(request: CompactContextRequest): Promise<CompactContextResult> {
     try {
       return await this.withSessionOperation(request.sessionId, async () => {
-        if (request.signal?.aborted) {
-          return buildFailedContextResult(buildCancelledContextFailure('Context operation was cancelled.'));
-        }
-        const resolved = await this.resolver.resolve({
+        const prepared = await this.buildResolvedPrompt({
           sessionId: request.sessionId,
           workspaceId: request.workspaceId,
           model: request.model,
           tools: request.tools,
           signal: request.signal,
         });
-        if (resolved.status === 'failed') return resolved;
-        const policy = this.resolvePolicy();
-        const capacity = contextCapacityFromModel(request.model);
-        const policyProblem = compactionPolicyFailure(policy, capacity);
-        if (policyProblem) {
-          return buildFailedContextResult(buildPolicyContextFailure(policyProblem));
-        }
-        const built = await this.promptBuilder.build({ context: resolved.context, signal: request.signal });
-        if (built.status === 'failed') return built;
-        const usageBefore = this.countUsage(built.prompt);
+        if (prepared.status === 'failed') return prepared;
         const compacted = await this.executeCompaction({
           sessionId: request.sessionId,
-          context: resolved.context,
-          materialized: built.materializedHistory,
-          prompt: built.prompt,
-          policy,
+          context: prepared.resolved,
+          materialized: prepared.materialized,
+          prompt: prepared.prompt,
+          policy: prepared.policy,
           model: request.model,
           trigger: request.trigger,
           onProgress: request.onProgress,
@@ -169,7 +167,7 @@ class DefaultContext implements ContextCapabilities {
           ? {
               status: 'compacted',
               compactionId: compacted.compactionId,
-              usageBefore,
+              usageBefore: prepared.estimate,
               usageAfter: compacted.usageAfter,
             }
           : compacted;
@@ -186,40 +184,28 @@ class DefaultContext implements ContextCapabilities {
   }
 
   private async buildExclusive(request: BuildContextRequest): Promise<BuildContextResult> {
-    if (request.signal?.aborted) {
-      return buildFailedContextResult(buildCancelledContextFailure('Context operation was cancelled.'));
-    }
     const modelCall = request.modelCallContext;
-    const resolved = await this.resolver.resolve({
+    const prepared = await this.buildResolvedPrompt({
       sessionId: modelCall.run.sessionId,
       workspaceId: modelCall.run.workspaceId,
       model: modelCall.run.model,
       tools: modelCall.tools,
       signal: request.signal,
     });
-    if (resolved.status === 'failed') return resolved;
-    const policy = this.resolvePolicy();
-    const capacity = contextCapacityFromModel(modelCall.run.model);
-    const policyProblem = compactionPolicyFailure(policy, capacity);
-    if (policyProblem) {
-      return buildFailedContextResult(buildPolicyContextFailure(policyProblem));
-    }
+    if (prepared.status === 'failed') return prepared;
 
-    const built = await this.promptBuilder.build({ context: resolved.context, signal: request.signal });
-    if (built.status === 'failed') return built;
-
-    let estimate = this.countUsage(built.prompt);
+    let estimate = prepared.estimate;
     if (shouldAutoCompact({
-      policy,
+      policy: prepared.policy,
       promptTokens: estimate.tokens,
-      contextWindowTokens: capacity.contextWindowTokens,
+      contextWindowTokens: prepared.capacity.contextWindowTokens,
     })) {
       const compacted = await this.executeCompaction({
         sessionId: modelCall.run.sessionId,
-        context: resolved.context,
-        materialized: built.materializedHistory,
-        prompt: built.prompt,
-        policy,
+        context: prepared.resolved,
+        materialized: prepared.materialized,
+        prompt: prepared.prompt,
+        policy: prepared.policy,
         model: modelCall.run.model,
         trigger: 'threshold',
         signal: request.signal,
@@ -228,7 +214,7 @@ class DefaultContext implements ContextCapabilities {
       if (compacted.status === 'compacted') {
         // The Summary is now a Session fact: re-read the authoritative history
         // and rebuild the Prompt from it, never from a pre-commit projection.
-        const refreshed = await this.resolver.resolve({
+        const refreshed = await this.buildResolvedPrompt({
           sessionId: modelCall.run.sessionId,
           workspaceId: modelCall.run.workspaceId,
           model: modelCall.run.model,
@@ -236,13 +222,70 @@ class DefaultContext implements ContextCapabilities {
           signal: request.signal,
         });
         if (refreshed.status === 'failed') return refreshed;
-        const rebuilt = await this.promptBuilder.build({ context: refreshed.context, signal: request.signal });
-        if (rebuilt.status === 'failed') return rebuilt;
-        estimate = this.countUsage(rebuilt.prompt);
-        return this.finalizePrompt(rebuilt.prompt, capacity, estimate);
+        estimate = refreshed.estimate;
+        return this.finalizePrompt(refreshed.prompt, prepared.capacity, estimate);
       }
     }
-    return this.finalizePrompt(built.prompt, capacity, estimate);
+    return this.finalizePrompt(prepared.prompt, prepared.capacity, estimate);
+  }
+
+  /**
+   * The shared pre-flow for build() and compact(): resolve the complete
+   * ResolvedContext, resolve and validate the Compaction Policy, build the
+   * Prompt and calculate the complete-Prompt usage. Both operations receive the
+   * same cancellation, Policy failure and Prompt building semantics through
+   * this single entry; the operations still own their own orchestration after
+   * it.
+   */
+  private async buildResolvedPrompt(input: {
+    readonly sessionId: string;
+    readonly workspaceId: string;
+    readonly model: Model<Api>;
+    readonly tools: readonly ToolDefinition[];
+    readonly signal?: AbortSignal;
+  }): Promise<
+    | {
+        readonly status: 'ok';
+        readonly resolved: ResolvedContext;
+        readonly prompt: Prompt;
+        readonly materialized: MaterializedHistory;
+        readonly policy: CompactionPolicy;
+        readonly capacity: ContextCapacity;
+        readonly estimate: ContextUsageEstimate;
+      }
+    | { readonly status: 'failed'; readonly failure: ContextFailure }
+  > {
+    if (input.signal?.aborted) {
+      return buildFailedContextResult(buildCancelledContextFailure('Context operation was cancelled.'));
+    }
+    const resolved = await this.resolver.resolve({
+      sessionId: input.sessionId,
+      workspaceId: input.workspaceId,
+      model: input.model,
+      tools: input.tools,
+      signal: input.signal,
+    });
+    if (resolved.status === 'failed') return resolved;
+    const capacity = contextCapacityFromModel(input.model);
+    const policyResult = resolveCompactionPolicyProblem({
+      defaults: this.options.policy,
+      configured: this.options.policyProvider?.getPolicy(),
+      capacity,
+    });
+    if (policyResult.status === 'invalid') {
+      return buildFailedContextResult(buildPolicyContextFailure(policyResult.message));
+    }
+    const built = await this.promptBuilder.build({ context: resolved.context, signal: input.signal });
+    if (built.status === 'failed') return built;
+    return {
+      status: 'ok',
+      resolved: resolved.context,
+      prompt: built.prompt,
+      materialized: built.materializedHistory,
+      policy: policyResult.policy,
+      capacity,
+      estimate: this.countUsage(built.prompt),
+    };
   }
 
   private finalizePrompt(
@@ -298,10 +341,6 @@ class DefaultContext implements ContextCapabilities {
       onProgress: input.onProgress,
       signal: input.signal,
     });
-  }
-
-  private resolvePolicy(): CompactionPolicy {
-    return resolveCompactionPolicy(this.options.policy, this.options.policyProvider?.getPolicy());
   }
 
   private async withSessionOperation<T>(

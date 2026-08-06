@@ -101,12 +101,19 @@ export interface ContextBuilder {
 export type CompactionTrigger = 'threshold' | 'overflow' | 'manual';
 
 export interface ContextCompactionProgressStarted {
-  readonly status: 'started' | 'completed';
+  readonly status: 'started';
   readonly compactionId: string;
   readonly tokensBefore: number;
   readonly summarizedMessageCount: number;
   readonly firstKeptEntryId?: string;
-  readonly previousCompactionId?: string;
+}
+
+export interface ContextCompactionProgressCompleted {
+  readonly status: 'completed';
+  readonly compactionId: string;
+  readonly tokensBefore: number;
+  readonly summarizedMessageCount: number;
+  readonly firstKeptEntryId?: string;
 }
 
 export interface ContextCompactionProgressFailed {
@@ -115,11 +122,11 @@ export interface ContextCompactionProgressFailed {
   readonly tokensBefore: number;
   readonly code: string;
   readonly message: string;
-  readonly previousCompactionId?: string;
 }
 
 export type ContextCompactionProgress =
   | ContextCompactionProgressStarted
+  | ContextCompactionProgressCompleted
   | ContextCompactionProgressFailed;
 
 export interface CompactContextRequest {

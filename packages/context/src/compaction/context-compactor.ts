@@ -12,7 +12,7 @@ import { estimateMessageTokens } from '@megumi/ai/utils/estimate';
 import type { EventBus } from '@megumi/events';
 import type { ObservabilityService } from '@megumi/observability';
 import type { SessionHistory } from '@megumi/session';
-import type { ContextFailure, ContextCompactionProgress, ContextCompactionProgressFailed, CompactionTrigger, CompactContextResult } from '../context';
+import type { ContextFailure, ContextCompactionProgress, CompactionTrigger, CompactContextResult } from '../context';
 import type { CompactionPolicy } from '../context-policy';
 import type { ContextUsageEstimate } from '../context-usage-calculator';
 import {
@@ -80,6 +80,9 @@ export async function executeContextCompaction(
   if (input.signal?.aborted) return failed(buildCancelledContextFailure('Context compaction was cancelled.'));
 
   const compactionId = input.createCompactionId();
+  // The clock is read exactly once per transaction: the Summary request, the
+  // in-memory projection and the final commit all share this createdAt.
+  const createdAt = input.now();
   const beforeTokens = input.calculatePromptUsage(input.prompt).tokens;
   const progressBase = {
     compactionId,
@@ -95,7 +98,7 @@ export async function executeContextCompaction(
     attributes: {
       beforeTokens,
       trigger: input.trigger,
-      keptMessages: plan.plan.summarizedMessages.length,
+      keptMessages: keptCompactableMessageCount(input, plan.plan),
       firstKeptEntryId: plan.plan.firstKeptEntryId,
     },
   });
@@ -117,13 +120,13 @@ export async function executeContextCompaction(
     previousSummary: input.materialized.previousSummary,
     messages: plan.plan.summarizedMessages,
     turnPrefixMessages: plan.plan.turnPrefixMessages,
-    timestamp: Date.parse(input.now()),
+    timestamp: Date.parse(createdAt),
     ...(input.signal ? { signal: input.signal } : {}),
   });
   if (generated.status === 'cancelled') return failCompaction(buildCancelledContextFailure('Context compaction was cancelled.'));
   if (generated.status === 'failed') return failCompaction(buildSummaryModelContextFailure(generated.failure));
 
-  const projected = await projectCandidate(input, compactionId, plan.plan, generated.content, generated.usage);
+  const projected = await projectCandidate(input, compactionId, createdAt, plan.plan, generated.content, generated.usage);
   if (projected.status === 'failed') return failCompaction(projected.failure);
   // The countUsage path throws on abort; check the signal first so both the
   // build and compact paths settle on the same cancelled result.
@@ -153,7 +156,7 @@ export async function executeContextCompaction(
     first_kept_entry_id: plan.plan.firstKeptEntryId,
     usage: generated.usage,
     expected_active_entry_id: input.materialized.expectedActiveEntryId,
-    created_at: input.now(),
+    created_at: createdAt,
     append_to_active_path: true,
   });
   if (saved.status === 'failed') {
@@ -193,6 +196,7 @@ export async function executeContextCompaction(
 async function projectCandidate(
   input: ExecuteCompactionInput,
   compactionId: string,
+  createdAt: string,
   plan: CompactionPlan,
   summaryText: string,
   summaryUsage: Usage | undefined,
@@ -210,6 +214,9 @@ async function projectCandidate(
   }
   const projectedContext: ResolvedContext = {
     ...input.context,
+    // The projection mirrors the to-be-committed facts exactly: same id, time
+    // and coverage. It is a pre-commit validation only and is never returned
+    // or written to long-term state.
     activeSessionHistory: [
       {
         type: 'compaction',
@@ -219,7 +226,7 @@ async function projectCandidate(
           parent_entry_id: history[coveredIndex]!.entry.entry_id,
           entry_type: 'compaction',
           compaction_id: compactionId,
-          created_at: input.now(),
+          created_at: createdAt,
         },
         compaction: {
           compaction_id: compactionId,
@@ -227,7 +234,7 @@ async function projectCandidate(
           summary_text: summaryText,
           covered_until_entry_id: plan.coveredUntilEntryId,
           first_kept_entry_id: plan.firstKeptEntryId,
-          created_at: input.now(),
+          created_at: createdAt,
           ...(summaryUsage ? { usage: summaryUsage } : {}),
         },
       },
@@ -237,6 +244,14 @@ async function projectCandidate(
   const built = await input.promptBuilder.build({ context: projectedContext, signal: input.signal });
   if (built.status === 'failed') return built;
   return { status: 'built', prompt: built.prompt };
+}
+
+/** The compactable history messages that genuinely stay in the candidate Prompt. */
+function keptCompactableMessageCount(
+  input: ExecuteCompactionInput,
+  plan: CompactionPlan,
+): number {
+  return input.materialized.compactableSources.length - plan.summarizedMessages.length;
 }
 
 function failed(failure: ContextFailure): Extract<ExecuteCompactionResult, { status: 'failed' }> {
@@ -284,31 +299,31 @@ function reportProgress(
   }
   if (!events) return;
   // Compaction is a session-scoped fact: publish the lifecycle pair so the UI
-  // can render the activity item. Best-effort, like every bus publish.
+  // can render the activity item. Best-effort, like every bus publish. The
+  // discriminated status union narrows each variant without assertions.
   if (progress.status === 'started') {
     events.publish({
       type: 'session.compaction.started',
       payload: { trigger, compactionId: progress.compactionId },
       sessionId,
     });
-  } else if (progress.status === 'completed') {
+    return;
+  }
+  if (progress.status === 'completed') {
     events.publish({
       type: 'session.compaction.ended',
       payload: { status: 'completed', compactionId: progress.compactionId },
       sessionId,
     });
-  } else {
-    // ContextCompactionProgressStarted.status includes 'completed', so narrow
-    // by the failed variant's own fields instead of the status union.
-    const failedProgress = progress as ContextCompactionProgressFailed;
-    events.publish({
-      type: 'session.compaction.ended',
-      payload: {
-        status: 'failed',
-        compactionId: failedProgress.compactionId,
-        error: { message: failedProgress.message, code: failedProgress.code },
-      },
-      sessionId,
-    });
+    return;
   }
+  events.publish({
+    type: 'session.compaction.ended',
+    payload: {
+      status: 'failed',
+      compactionId: progress.compactionId,
+      error: { message: progress.message, code: progress.code },
+    },
+    sessionId,
+  });
 }
