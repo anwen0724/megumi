@@ -10,7 +10,7 @@ import {
   type ContextUsageEstimate,
 } from '@megumi/ai/utils/estimate';
 import type { SessionHistoryItem } from '@megumi/session';
-import { sessionMessagesToEstimateMessages } from './context-messages';
+import { sessionMessagesToEstimateMessages } from './prompt/context-message-builder';
 
 export type { ContextUsageEstimate };
 

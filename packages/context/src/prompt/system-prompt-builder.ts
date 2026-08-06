@@ -6,8 +6,8 @@
 
 import type { EffectiveInstructions, SystemInstruction } from '@megumi/instructions';
 import type { SkillView } from '@megumi/skills';
-import type { ExecutionEnvironment } from './context';
-import { escapeXmlAttribute } from './xml-escape';
+import type { ExecutionEnvironment } from '../context';
+import { escapeXmlAttribute } from './prompt-markup-formatter';
 
 export interface SystemPromptSources {
   readonly baseInstructions: readonly SystemInstruction[];

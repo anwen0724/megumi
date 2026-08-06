@@ -28,4 +28,4 @@ export {
   type ContextUsageEstimate,
   type DerivedContextUsage,
   deriveContextUsage,
-} from './context-usage';
+} from './context-usage-calculator';

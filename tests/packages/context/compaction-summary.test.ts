@@ -4,7 +4,7 @@ import type { Message } from '@megumi/ai';
 import {
   buildCompactionSummaryRequest,
   COMPACTION_SUMMARY_SYSTEM_PROMPT,
-} from '../../../packages/context/src/compaction/compaction-summary';
+} from '../../../packages/context/src/compaction/compaction-summary-generator';
 
 describe('buildCompactionSummaryRequest', () => {
   it('includes the prior Summary and renders attachments without embedding binary image content', () => {

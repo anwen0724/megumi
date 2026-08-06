@@ -1,12 +1,14 @@
 /*
  * Materializes Session-owned image facts into provider-neutral AI ImageContent
- * and checks the selected Model's image capability first.
+ * and checks the selected Model's image capability first. Handles cancellation,
+ * attachment read failures and invalid image data; document attachments and
+ * full User Message construction are owned by the Context Message Builder.
  */
 
 import type { ImageContent } from '@megumi/ai';
 import type { SessionAttachmentReader, SessionMessageAttachment } from '@megumi/session';
-import type { ContextFailure } from './context';
-import { cancelledFailure } from './xml-escape';
+import type { ContextFailure } from '../context';
+import { buildCancelledContextFailure, buildFailedContextResult, buildSourceContextFailure } from '../context-failure-factory';
 
 export type MaterializeImageResult =
   | { readonly status: 'ok'; readonly content: ImageContent | { readonly type: 'text'; readonly text: string } }
@@ -27,18 +29,16 @@ export async function readHostImageContent(input: {
     attachment_id: input.referenceId,
   });
   if (input.signal?.aborted) {
-    return { status: 'failed', failure: cancelledFailure('Context construction was cancelled.') };
+    return buildFailedContextResult(buildCancelledContextFailure('Context construction was cancelled.'));
   }
   if (read.status === 'failed') {
-    return {
-      status: 'failed',
-      failure: {
-        code: 'image_materialization_failed',
-        message: read.failure.message,
-        retryable: false,
-        cause: { owner: 'session', code: read.failure.code },
-      },
-    };
+    return buildFailedContextResult(buildSourceContextFailure({
+      code: 'image_materialization_failed',
+      message: read.failure.message,
+      retryable: false,
+      owner: 'session',
+      sourceCode: read.failure.code,
+    }));
   }
   return {
     status: 'ok',
@@ -57,21 +57,18 @@ export async function materializeSessionImage(input: {
   readonly signal?: AbortSignal;
 }): Promise<MaterializeImageResult> {
   if (input.signal?.aborted) {
-    return { status: 'failed', failure: cancelledFailure('Context construction was cancelled.') };
+    return buildFailedContextResult(buildCancelledContextFailure('Context construction was cancelled.'));
   }
   if (!input.imageInputSupport) {
     return { status: 'ok', content: { type: 'text', text: UNSUPPORTED_IMAGE_TEXT } };
   }
   if (input.attachment.source_type !== 'host_reference' || !input.attachment.mime_type) {
-    return {
-      status: 'failed',
-      failure: {
-        code: 'image_materialization_failed',
-        message: `Image attachment ${input.attachment.attachment_id} has no readable source.`,
-        retryable: false,
-        cause: { owner: 'session' },
-      },
-    };
+    return buildFailedContextResult(buildSourceContextFailure({
+      code: 'image_materialization_failed',
+      message: `Image attachment ${input.attachment.attachment_id} has no readable source.`,
+      retryable: false,
+      owner: 'session',
+    }));
   }
   const materialized = await readHostImageContent({
     referenceId: input.attachment.attachment_id,

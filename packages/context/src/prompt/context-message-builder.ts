@@ -1,7 +1,9 @@
 /*
- * Converts the Session active path into provider-neutral AI Messages: saved
- * UserMessage.modelContent plus persisted attachments, real Assistant metadata,
- * ToolResult facts and Compaction Summaries, with ToolCall/ToolResult closure.
+ * Converts the Session active path into provider-neutral AI Messages in one
+ * pass, forming the exact Session Entry -> AI Message mapping (compactableSources)
+ * and the previous Summary fact at the same time. Compaction Summary items enter
+ * messages but never compactableSources, so later compaction planning never
+ * shifts by array index and the last ordinary message is never missed.
  */
 
 import type {
@@ -18,15 +20,30 @@ import type {
   SessionMessageAttachment,
   SessionUserContent,
 } from '@megumi/session';
-import type { ContextFailure } from './context';
-import { materializeSessionImage, readHostImageContent, UNSUPPORTED_IMAGE_TEXT } from './image-content';
-import { cancelledFailure, escapeXmlAttribute } from './xml-escape';
+import type { ContextFailure } from '../context';
+import { buildCancelledContextFailure, buildFailedContextResult, buildSourceContextFailure } from '../context-failure-factory';
+import { materializeSessionImage, readHostImageContent, UNSUPPORTED_IMAGE_TEXT } from './image-content-builder';
+import { formatAttachedDocumentBlock } from './prompt-markup-formatter';
 
 export const COMPACTION_SUMMARY_PREFIX = 'The conversation history before this point was compacted into the following summary:\n\n<summary>\n';
 const COMPACTION_SUMMARY_SUFFIX = '\n</summary>';
 
+/** One Session Entry identity paired with the AI Message materialized from it. */
+export interface CompactionMessageSource {
+  readonly entryId: string;
+  readonly message: Message;
+}
+
+/** The history facts Prompt building and compaction share from one materialization. */
+export interface MaterializedHistory {
+  readonly messages: readonly Message[];
+  readonly compactableSources: readonly CompactionMessageSource[];
+  readonly previousSummary?: string;
+  readonly expectedActiveEntryId: string;
+}
+
 export type BuildContextMessagesResult =
-  | { readonly status: 'ok'; readonly messages: Message[] }
+  | { readonly status: 'ok'; readonly materialized: MaterializedHistory }
   | { readonly status: 'failed'; readonly failure: ContextFailure };
 
 /** Lightweight history conversion for token estimation without reading image bytes. */
@@ -68,10 +85,17 @@ export async function buildContextMessages(input: {
   readonly signal?: AbortSignal;
 }): Promise<BuildContextMessagesResult> {
   const messages: Message[] = [];
+  const sources: CompactionMessageSource[] = [];
+  let previousSummary: string | undefined;
   const knownToolCallIds = new Set<string>();
   for (const item of input.history) {
-    if (input.signal?.aborted) return { status: 'failed', failure: cancelledFailure('Context construction was cancelled.') };
+    if (input.signal?.aborted) {
+      return buildFailedContextResult(buildCancelledContextFailure('Context construction was cancelled.'));
+    }
     if (item.type === 'compaction') {
+      // The Summary is a Session fact inside messages but never a compactable
+      // source: planning operates on ordinary conversation entries only.
+      previousSummary = item.compaction.summary_text;
       messages.push(buildCompactionSummaryMessage(
         item.compaction.summary_text,
         timestampOf(item.compaction.created_at),
@@ -97,15 +121,12 @@ export async function buildContextMessages(input: {
       messages.push(converted);
     } else if (message.message_kind === 'tool_result') {
       if (!knownToolCallIds.has(message.tool_call_id)) {
-        return {
-          status: 'failed',
-          failure: {
-            code: 'protocol_closure_failed',
-            message: `ToolResult ${message.tool_call_id} has no matching ToolCall in the active history.`,
-            retryable: false,
-            cause: { owner: 'session' },
-          },
-        };
+        return buildFailedContextResult(buildSourceContextFailure({
+          code: 'protocol_closure_failed',
+          message: `ToolResult ${message.tool_call_id} has no matching ToolCall in the active history.`,
+          retryable: false,
+          owner: 'session',
+        }));
       }
       const content = await materializeBlocks(
         message.content,
@@ -125,8 +146,17 @@ export async function buildContextMessages(input: {
         timestamp: timestampOf(message.created_at),
       });
     }
+    sources.push({ entryId: item.entry.entry_id, message: messages[messages.length - 1]! });
   }
-  return { status: 'ok', messages };
+  return {
+    status: 'ok',
+    materialized: {
+      messages,
+      compactableSources: sources,
+      ...(previousSummary ? { previousSummary } : {}),
+      expectedActiveEntryId: input.history.at(-1)?.entry.entry_id ?? '',
+    },
+  };
 }
 
 async function materializeUserMessageContent(input: {
@@ -145,7 +175,9 @@ async function materializeUserMessageContent(input: {
     else content.push({ type: 'image', data: block.data, mimeType: block.mimeType });
   }
   for (const attachment of [...input.attachments].sort((left, right) => left.ordinal - right.ordinal)) {
-    if (input.signal?.aborted) return { status: 'failed', failure: cancelledFailure('Context construction was cancelled.') };
+    if (input.signal?.aborted) {
+      return buildFailedContextResult(buildCancelledContextFailure('Context construction was cancelled.'));
+    }
     if (attachment.type === 'image') {
       const materialized = await materializeSessionImage({
         attachment,
@@ -158,13 +190,16 @@ async function materializeUserMessageContent(input: {
     } else {
       const path = attachment.source_type === 'local_file' ? attachment.source_value : undefined;
       if (!path || !attachment.name || !attachment.mime_type || attachment.size_bytes === undefined) {
-        return documentAttachmentFailure(
-          `Document attachment ${attachment.attachment_id} is missing persisted metadata.`,
-        );
+        return buildFailedContextResult(buildSourceContextFailure({
+          code: 'document_attachment_failed',
+          message: `Document attachment ${attachment.attachment_id} is missing persisted metadata.`,
+          retryable: false,
+          owner: 'session',
+        }));
       }
       content.push({
         type: 'text',
-        text: attachedDocumentBlock({
+        text: formatAttachedDocumentBlock({
           name: attachment.name,
           mediaType: attachment.mime_type,
           path,
@@ -187,7 +222,9 @@ async function materializeBlocks(
 > {
   const content: Array<TextContent | ImageContent> = [];
   for (const block of blocks) {
-    if (signal?.aborted) return { status: 'failed', failure: cancelledFailure('Context construction was cancelled.') };
+    if (signal?.aborted) {
+      return buildFailedContextResult(buildCancelledContextFailure('Context construction was cancelled.'));
+    }
     if (block.type === 'text') content.push({ type: 'text', text: block.text });
     else if (imageInputSupport) content.push({ type: 'image', data: block.data, mimeType: block.mimeType });
     else content.push({ type: 'text', text: UNSUPPORTED_IMAGE_TEXT });
@@ -274,23 +311,6 @@ const ZERO_USAGE = {
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 } as const;
 
-function attachedDocumentBlock(input: {
-  name: string;
-  mediaType: string;
-  path: string;
-  sizeBytes: number;
-}): string {
-  return [
-    `<attached_document`,
-    `  name="${escapeXmlAttribute(input.name)}"`,
-    `  media_type="${escapeXmlAttribute(input.mediaType)}"`,
-    `  path="${escapeXmlAttribute(input.path)}"`,
-    `  size_bytes="${input.sizeBytes}">`,
-    'This document was attached by the user. Use the available file tools to read it when needed.',
-    '</attached_document>',
-  ].join('\n');
-}
-
 function estimateAttachmentContent(attachment: SessionMessageAttachment): TextContent | ImageContent {
   if (attachment.type === 'image') {
     return { type: 'image', data: '', mimeType: attachment.mime_type ?? 'image/png' };
@@ -298,7 +318,7 @@ function estimateAttachmentContent(attachment: SessionMessageAttachment): TextCo
   const path = attachment.source_value;
   return {
     type: 'text',
-    text: attachedDocumentBlock({
+    text: formatAttachedDocumentBlock({
       name: attachment.name ?? attachment.attachment_id,
       mediaType: attachment.mime_type ?? 'application/octet-stream',
       path,
@@ -307,30 +327,7 @@ function estimateAttachmentContent(attachment: SessionMessageAttachment): TextCo
   };
 }
 
-function documentAttachmentFailure(message: string): { status: 'failed'; failure: ContextFailure } {
-  return {
-    status: 'failed',
-    failure: {
-      code: 'document_attachment_failed',
-      message,
-      retryable: false,
-      cause: { owner: 'session' },
-    },
-  };
-}
-
 function timestampOf(createdAt: string): number {
   const parsed = Date.parse(createdAt);
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function parseJson(value: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
-      : { value: parsed };
-  } catch {
-    return { value };
-  }
 }

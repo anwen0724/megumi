@@ -1,18 +1,15 @@
 /*
  * Plans the compactable history prefix by Token and kept-message counts with
  * ToolCall/ToolResult protocol closure. Works purely on the converted Message
- * list and maps cut positions back to Session entry facts.
+ * list and maps cut positions back to Session entry facts. Compaction Summary
+ * messages never enter compactableSources, so planning sees ordinary entries
+ * only.
  */
 
 import type { Message } from '@megumi/ai';
 import type { CompactionPolicy } from '../context-policy';
 import { validateTokenCount } from '../context-policy';
-import { COMPACTION_SUMMARY_PREFIX } from '../context-messages';
-
-export interface CompactionMessageSource {
-  readonly entryId: string;
-  readonly message: Message;
-}
+import type { CompactionMessageSource } from '../prompt/context-message-builder';
 
 export interface CompactionPlan {
   /** The AI messages being replaced by the Summary. */
@@ -40,15 +37,15 @@ export function planCompaction(input: {
     return { status: 'nothing_to_compact', reason: 'no_historical_messages' };
   }
 
-  // Walk from the newest message backwards, accumulating kept Token and
-  // kept original conversation messages. Compaction Summary messages never
-  // count toward minimumRecentMessages.
+  // Walk from the newest message backwards, accumulating kept Token and kept
+  // original conversation messages. compactableSources contains ordinary
+  // conversation entries only, so every kept source counts toward the minimum.
   let keptTokens = 0;
   let keptConversationMessages = 0;
   let cutIndex: number | undefined;
   for (let index = sources.length - 1; index >= 0; index -= 1) {
     const message = sources[index]!.message;
-    if (!isSummaryMessage(message)) keptConversationMessages += 1;
+    keptConversationMessages += 1;
     keptTokens += input.estimateMessageTokens(message);
     if (keptTokens >= input.policy.keepRecentTokens
       && keptConversationMessages >= input.policy.minimumRecentMessages) {
@@ -142,12 +139,4 @@ function closeToolProtocol(
     turnPrefixIncluded = true;
   }
   return { cutIndex, turnPrefixIncluded };
-}
-
-function isSummaryMessage(message: Message): boolean {
-  return message.role === 'user'
-    && typeof message.content !== 'string'
-    && message.content.some((block) => (
-      block.type === 'text' && block.text.includes(COMPACTION_SUMMARY_PREFIX)
-    ));
 }

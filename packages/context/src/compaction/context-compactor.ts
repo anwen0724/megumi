@@ -10,13 +10,13 @@ import type { SessionHistory } from '@megumi/session';
 import type { EventBus } from '@megumi/events';
 import type { ContextFailure } from '../context';
 import type { CompactionPolicy } from '../context-policy';
-import type { ContextUsageEstimate } from '../context-usage';
-import { cancelledFailure } from '../xml-escape';
-import { generateCompactionSummary } from './compaction-summary';
+import type { ContextUsageEstimate } from '../context-usage-calculator';
+import { buildCancelledContextFailure } from '../context-failure-factory';
+import { generateCompactionSummary } from './compaction-summary-generator';
+import type { CompactionMessageSource } from '../prompt/context-message-builder';
 import {
   planCompaction,
   validateCompactionReduction,
-  type CompactionMessageSource,
   type CompactionPlan,
 } from './compaction-planner';
 
@@ -118,7 +118,7 @@ export async function executeContextCompaction(
     estimateMessageTokens: input.estimateMessageTokens,
   });
   if (plan.status === 'nothing_to_compact') return plan;
-  if (input.signal?.aborted) return failed(cancelledFailure('Context compaction was cancelled.'));
+  if (input.signal?.aborted) return failed(buildCancelledContextFailure('Context compaction was cancelled.'));
 
   const compactionId = input.createCompactionId();
   const beforeTokens = input.countUsage(input.beforeContext, input.signal).tokens;
@@ -160,14 +160,14 @@ export async function executeContextCompaction(
     timestamp: Date.parse(input.now()),
     ...(input.signal ? { signal: input.signal } : {}),
   });
-  if (generated.status === 'cancelled') return failCompaction(cancelledFailure('Context compaction was cancelled.'));
+  if (generated.status === 'cancelled') return failCompaction(buildCancelledContextFailure('Context compaction was cancelled.'));
   if (generated.status === 'failed') return failCompaction(modelFailure(generated.failure));
 
   const projected = await input.project(plan.plan, generated.content, input.signal);
   if (projected.status === 'failed') return failCompaction(projected.failure);
   // The countUsage callback throws on abort; check the signal first so both the
   // build and compact paths settle on the same cancelled result.
-  if (input.signal?.aborted) return failCompaction(cancelledFailure('Context compaction was cancelled.'));
+  if (input.signal?.aborted) return failCompaction(buildCancelledContextFailure('Context compaction was cancelled.'));
   const projectedUsage = input.countUsage(projected.context, input.signal);
   const reduction = validateCompactionReduction({
     usageBeforeInputTokens: beforeTokens,
@@ -183,7 +183,7 @@ export async function executeContextCompaction(
     }, input.sessionId, input.trigger, input.events);
     return reduction;
   }
-  if (input.signal?.aborted) return failCompaction(cancelledFailure('Context compaction was cancelled.'));
+  if (input.signal?.aborted) return failCompaction(buildCancelledContextFailure('Context compaction was cancelled.'));
 
   const saved = input.sessionHistory.saveCompactionSummary({
     compaction_id: compactionId,

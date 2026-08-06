@@ -10,17 +10,20 @@ describe('Context Package source guards', () => {
   it('provides the confirmed Context Package files', () => {
     expect(listFiles('packages/context/src')).toEqual([
       'compaction/compaction-planner.ts',
-      'compaction/compaction-summary.ts',
+      'compaction/compaction-summary-generator.ts',
       'compaction/context-compactor.ts',
       'context-builder.ts',
-      'context-messages.ts',
+      'context-failure-factory.ts',
       'context-policy.ts',
-      'context-usage.ts',
+      'context-resolver.ts',
+      'context-usage-calculator.ts',
       'context.ts',
-      'image-content.ts',
       'index.ts',
-      'system-prompt.ts',
-      'xml-escape.ts',
+      'prompt/context-message-builder.ts',
+      'prompt/image-content-builder.ts',
+      'prompt/prompt-builder.ts',
+      'prompt/prompt-markup-formatter.ts',
+      'prompt/system-prompt-builder.ts',
     ]);
     expect(exists('packages/context/package.json')).toBe(true);
     expect(exists('packages/context/tsconfig.json')).toBe(true);
@@ -108,7 +111,7 @@ describe('Context Package source guards', () => {
   it('keeps Workspace, Instructions and Skills source resolution inside Context', () => {
     const contextSource = readTree('packages/context/src');
     expect(contextSource).toContain('ContextWorkspaceSource');
-    expect(contextSource).toContain('resolveSources');
+    expect(contextSource).toContain('ContextResolver');
     expect(contextSource).toContain("readWorkspace({");
     expect(contextSource).toContain('getEffectiveInstructions(');
     expect(contextSource).toContain('skills.createView(');
