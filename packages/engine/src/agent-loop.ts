@@ -11,14 +11,13 @@ import type { UserInput } from '@megumi/input';
 import type { ObservabilityService, ObservabilitySpanName, SpanHandle, TraceHandle } from '@megumi/observability';
 import type {
   ApprovalDecision,
-  ApprovalSubject,
   PermissionDecision,
   PermissionMode,
   PermissionOperation,
   Permissions,
 } from '@megumi/permissions';
 import type { SessionAssistantContent, SessionEntry } from '@megumi/session';
-import type { ToolIdentity, ToolInvocation, Tools, ToolExecutionAccess } from '@megumi/tools';
+import type { ToolIdentity, ToolInvocation, Tools } from '@megumi/tools';
 import type { ContextCapabilities, Prompt, RunContext } from '@megumi/context';
 import type { RunApproval, RunClock, Run, RunFailure } from './run';
 import type { RunPolicy } from './run-policy';
@@ -34,8 +33,12 @@ import {
   createSessionMessageCommitter,
   type AssistantReplyMetadata,
   type SessionMessageCommitter,
-  type SessionToolResultCommit,
 } from './session-message-committer';
+import {
+  runToolCallBatch,
+  type ToolCallFailure,
+  type ToolResult,
+} from './tool-call-runner';
 
 export interface AgentLoopInput {
   readonly run: Run;
@@ -93,12 +96,7 @@ interface LoopRuntime {
   rootSpan?: SpanHandle;
   modelSpan?: SpanHandle;
   approvalSpan?: SpanHandle;
-  readonly toolSpans: Map<string, SpanHandle>;
   observabilityEnded: boolean;
-}
-
-interface ToolResult extends SessionToolResultCommit {
-  readonly summary?: string;
 }
 
 export async function runAgentLoop(
@@ -118,7 +116,6 @@ export async function runAgentLoop(
     toolRoundCount: 0,
     toolCallCount: 0,
     projection: { text: '', thinking: '' },
-    toolSpans: new Map(),
     observabilityEnded: false,
   };
   startLoopObservability(dependencies, runtime);
@@ -385,8 +382,94 @@ async function runTurn(
       });
     }
 
-    const batch = await executeToolCallBatch(input, dependencies, runtime, modelCallId, modelOutcome.toolCalls);
-    if (batch === 'cancelled') {
+    const batch = await runToolCallBatch({
+      runId: input.run.runId,
+      sessionId: input.run.sessionId,
+      workspaceId: input.run.workspaceId,
+      permissionMode: input.run.permissionMode,
+      modelCallId,
+      calls: modelOutcome.toolCalls,
+      signal: input.signal,
+      tools: dependencies.tools,
+      permissions: dependencies.permissions,
+      policy: dependencies.policy,
+      ids: dependencies.ids,
+      clock: dependencies.clock,
+      events: {
+        runId: input.run.runId,
+        sessionId: input.run.sessionId,
+        publish: (type, payload) => emitEvent(dependencies, runtime, type, payload),
+      },
+      observation: {
+        startSpan: () => startObservedSpan(dependencies, runtime, 'tool.call'),
+        endSpan: (span, status) => endObservedSpan(dependencies, span, status),
+      },
+      // The Agent Loop owns the whole approval lifecycle: it applies the
+      // waiting/running transitions, publishes the lifecycle facts, and waits
+      // on the Run's pending approval promise in place.
+      requestApproval: async (approvalRequest) => {
+        const approval = createRunApproval(
+          dependencies,
+          input.run,
+          approvalRequest.call,
+          approvalRequest.invocation,
+          approvalRequest.decision,
+        );
+        input.transitionRunStatus('waiting');
+        // Register the wait before announcing it so an immediate resolveApproval
+        // always finds the pending approval.
+        const approvalWait = input.awaitApproval({ approval });
+        emitApprovalRequested(dependencies, runtime, approval);
+        const approvalSpan = startObservedSpan(dependencies, runtime, 'approval.wait');
+        runtime.approvalSpan = approvalSpan;
+        let resolution: ApprovalResolution;
+        try {
+          resolution = await approvalWait;
+        } finally {
+          endObservedSpan(dependencies, approvalSpan, 'ok');
+          runtime.approvalSpan = undefined;
+        }
+        if (resolution.status === 'cancelled') {
+          emitApprovalResolved(dependencies, runtime, approval, 'cancelled');
+          return resolution;
+        }
+        input.transitionRunStatus('running');
+        emitApprovalResolved(
+          dependencies,
+          runtime,
+          approval,
+          resolution.status,
+          resolution.status === 'approved' && resolution.decision.decision === 'approved'
+            ? resolution.decision.optionId
+            : undefined,
+        );
+        return resolution;
+      },
+    });
+    const committed = await commitToolResults(input, dependencies, runtime, batch.results);
+    if (committed !== 'committed') {
+      // A Session commit failure stops the execution; cancellation wins when
+      // the signal is aborted.
+      if (input.signal.aborted) {
+        await commitCancelledReply(input, dependencies, runtime, {
+          text: runtime.projection.text,
+          thinking: runtime.projection.thinking,
+        });
+        emitEvent(dependencies, runtime, 'turn.ended', {
+          stopReason: 'cancelled',
+          messageId: messageId,
+          toolCallIds: modelOutcome.toolCalls.map((call) => call.toolCallId),
+        });
+        return cancelledResult();
+      }
+      emitEvent(dependencies, runtime, 'turn.ended', {
+        stopReason: 'error',
+        messageId: messageId,
+        toolCallIds: modelOutcome.toolCalls.map((call) => call.toolCallId),
+      });
+      return await failRun(committed.failure);
+    }
+    if (batch.status === 'cancelled') {
       await commitCancelledReply(input, dependencies, runtime, {
         text: runtime.projection.text,
         thinking: runtime.projection.thinking,
@@ -398,13 +481,13 @@ async function runTurn(
       });
       return cancelledResult();
     }
-    if (typeof batch === 'object') {
+    if (batch.status === 'failed') {
       emitEvent(dependencies, runtime, 'turn.ended', {
         stopReason: 'error',
         messageId: messageId,
         toolCallIds: modelOutcome.toolCalls.map((call) => call.toolCallId),
       });
-      return await failRun(batch.failure);
+      return await failRun(toolCallRunFailure(batch.failure));
     }
     emitEvent(dependencies, runtime, 'turn.ended', {
       stopReason: 'tool_calls',
@@ -417,496 +500,6 @@ async function runTurn(
   }
 }
 
-
-async function executeToolCallBatch(
-  input: AgentLoopInput,
-  dependencies: AgentLoopDependencies,
-  runtime: LoopRuntime,
-  modelCallId: string,
-  calls: readonly CompletedToolCall[],
-): Promise<'completed' | 'cancelled' | { readonly status: 'failed'; readonly failure: RunFailure }> {
-  const results: ToolResult[] = [];
-  const recordResult = (result: ToolResult) => {
-    results.push(result);
-  };
-  // Parallel-mode calls accumulate into a window executed concurrently under
-  // the confirmed concurrency limit; results commit in model call order.
-  let parallelWindow: Array<{ call: CompletedToolCall; invocation: ToolInvocation }> = [];
-
-  const closeWith = (result: (call: CompletedToolCall) => ToolResult, fromIndex: number) => {
-    for (const remaining of calls.slice(fromIndex)) {
-      recordResult(result(remaining));
-    }
-  };
-
-  const flushParallelWindow = async (): Promise<'completed' | 'cancelled'> => {
-    if (parallelWindow.length === 0) return 'completed';
-    const window = [...parallelWindow];
-    parallelWindow = [];
-    if (input.signal.aborted) {
-      for (const { call } of window) recordResult(cancelledToolResult(call, dependencies.clock.now()));
-      return 'cancelled';
-    }
-    const concurrency = Math.max(1, dependencies.policy.maxConcurrentToolExecutions);
-    const outcomes: Array<{ call: CompletedToolCall; outcome: ToolCallOutcome }> = [];
-    for (let index = 0; index < window.length; index += concurrency) {
-      const batch = window.slice(index, index + concurrency);
-      outcomes.push(...await Promise.all(batch.map(async (entry) => ({
-        call: entry.call,
-        outcome: await executeToolCallWithPermissions(
-          input, dependencies, runtime, modelCallId, entry.call, entry.invocation, [], undefined,
-        ),
-      }))));
-    }
-    for (const { call, outcome } of outcomes) {
-      if (outcome.kind === 'cancelled') {
-        recordResult(cancelledToolResult(call, dependencies.clock.now()));
-        continue;
-      }
-      if (outcome.kind === 'failed') {
-        recordResult(closedToolResult(call, dependencies.clock.now()));
-        continue;
-      }
-      recordResult(outcome.result);
-    }
-    if (input.signal.aborted) return 'cancelled';
-    return 'completed';
-  };
-
-  for (const [index, call] of calls.entries()) {
-    if (input.signal.aborted) {
-      const flushed = await flushParallelWindow();
-      closeWith((remaining) => cancelledToolResult(remaining, dependencies.clock.now()), index);
-      if (flushed === 'cancelled') {
-        for (const pending of parallelWindow) {
-          recordResult(cancelledToolResult(pending.call, dependencies.clock.now()));
-        }
-        parallelWindow = [];
-      }
-      const committed = await commitToolResults(input, dependencies, runtime, results);
-      if (committed !== 'committed') {
-        return input.signal.aborted ? 'cancelled' : committed;
-      }
-      return 'cancelled';
-    }
-
-    const routed = dependencies.tools.routeToolCall({
-      runId: input.run.runId,
-      sessionId: input.run.sessionId,
-      workspaceId: input.run.workspaceId,
-      modelCallId,
-      toolCallId: call.toolCallId,
-      toolName: call.toolName,
-      input: call.input,
-    });
-    if (routed.status === 'failed') {
-      await flushParallelWindow();
-      recordResult({
-        toolCallId: call.toolCallId,
-        toolName: call.toolName,
-        callOrder: call.callOrder,
-        status: 'failure',
-        error: { code: routed.error.code, message: routed.error.message },
-        content: routed.error.message,
-        completedAt: dependencies.clock.now(),
-      });
-      continue;
-    }
-
-    // Parallel execution mode runs the call in the shared window; anything
-    // needing permission evaluation (or serial mode) flushes it first.
-    if (routed.operations.length === 0 && routed.executionMode === 'parallel') {
-      parallelWindow.push({ call, invocation: routed.invocation });
-      continue;
-    }
-
-    const flushed = await flushParallelWindow();
-    if (flushed === 'cancelled') {
-      closeWith((remaining) => cancelledToolResult(remaining, dependencies.clock.now()), index);
-      const committed = await commitToolResults(input, dependencies, runtime, results);
-      if (committed !== 'committed') {
-        return input.signal.aborted ? 'cancelled' : committed;
-      }
-      return 'cancelled';
-    }
-
-    const executed = await executeToolCallWithPermissions(
-      input,
-      dependencies,
-      runtime,
-      modelCallId,
-      call,
-      routed.invocation,
-      routed.operations,
-      undefined,
-    );
-    if (executed.kind === 'cancelled') {
-      recordResult(cancelledToolResult(call, dependencies.clock.now()));
-      closeWith((remaining) => cancelledToolResult(remaining, dependencies.clock.now()), index + 1);
-      const committed = await commitToolResults(input, dependencies, runtime, results);
-      if (committed !== 'committed') {
-        return input.signal.aborted ? 'cancelled' : committed;
-      }
-      return 'cancelled';
-    }
-    if (executed.kind === 'failed') {
-      // A Run failure closes every not-yet-settled ToolCall of this batch with
-      // a model-visible failed ToolResult before the Run ends.
-      recordResult(closedToolResult(call, dependencies.clock.now()));
-      closeWith((remaining) => closedToolResult(remaining, dependencies.clock.now()), index + 1);
-      const committed = await commitToolResults(input, dependencies, runtime, results);
-      if (committed !== 'committed') {
-        return input.signal.aborted ? 'cancelled' : committed;
-      }
-      return { status: 'failed', failure: executed.failure };
-    }
-    recordResult(executed.result);
-  }
-
-  const flushed = await flushParallelWindow();
-  const committed = await commitToolResults(input, dependencies, runtime, results);
-  if (committed !== 'committed') {
-    return input.signal.aborted ? 'cancelled' : committed;
-  }
-  // Cancellation may win after the last call of the batch settled.
-  if (flushed === 'cancelled' || input.signal.aborted) return 'cancelled';
-  return 'completed';
-}
-
-type ToolCallOutcome =
-  | { readonly kind: 'result'; readonly result: ToolResult }
-  | { readonly kind: 'cancelled' }
-  | { readonly kind: 'failed'; readonly failure: RunFailure };
-
-async function executeToolCallWithPermissions(
-  input: AgentLoopInput,
-  dependencies: AgentLoopDependencies,
-  runtime: LoopRuntime,
-  modelCallId: string,
-  call: CompletedToolCall,
-  invocation: ToolInvocation,
-  operations: readonly PermissionOperation[],
-  executionAccess: ToolExecutionAccess | undefined,
-): Promise<ToolCallOutcome> {
-  if (operations.length === 0) {
-    return {
-      kind: 'result',
-      result: await executeToolInvocation(input, dependencies, runtime, call, invocation, executionAccess),
-    };
-  }
-
-  let permission;
-  try {
-    permission = await dependencies.permissions.evaluateToolCall({
-      runId: input.run.runId,
-      sessionId: input.run.sessionId,
-      workspaceId: input.run.workspaceId,
-      toolCallId: call.toolCallId,
-      toolInput: snapshotValue(call.input) as import('@megumi/ai').JsonValue,
-      operations,
-      permissionMode: input.run.permissionMode,
-      evaluatedAt: dependencies.clock.now(),
-    });
-  } catch {
-    return { kind: 'failed', failure: permissionFailure('Permission evaluation failed.') };
-  }
-  if (permission.status === 'failed') {
-    return { kind: 'failed', failure: permissionFailure(permission.failure.message) };
-  }
-  if (permission.decision.type === 'deny') {
-    return {
-      kind: 'result',
-      result: {
-        toolCallId: call.toolCallId,
-        toolName: call.toolName,
-        callOrder: call.callOrder,
-        status: 'permission_denied',
-        error: { code: permission.decision.denialCode, message: permission.decision.reason },
-        content: permission.decision.reason,
-        completedAt: dependencies.clock.now(),
-      },
-    };
-  }
-
-  if (permission.decision.type === 'requires_approval') {
-    if (input.signal.aborted) return { kind: 'cancelled' };
-    const approval = createRunApproval(dependencies, input.run, call, invocation, permission.decision);
-    input.transitionRunStatus('waiting');
-    // Register the wait before announcing it so an immediate resolveApproval
-    // always finds the pending approval.
-    const approvalWait = input.awaitApproval({ approval });
-    emitApprovalRequested(dependencies, runtime, approval);
-    const approvalSpan = startObservedSpan(dependencies, runtime, 'approval.wait');
-    runtime.approvalSpan = approvalSpan;
-    let resolution: ApprovalResolution;
-    try {
-      resolution = await approvalWait;
-    } finally {
-      endObservedSpan(dependencies, approvalSpan, 'ok');
-      runtime.approvalSpan = undefined;
-    }
-    if (resolution.status === 'cancelled') {
-      emitApprovalResolved(dependencies, runtime, approval, 'cancelled');
-      return { kind: 'cancelled' };
-    }
-
-    const applied = await applyApprovalDecision(
-      dependencies,
-      runtime,
-      call,
-      operations,
-      { decision: permission.decision, approvalSubject: permission.approvalSubject },
-      resolution.decision,
-    );
-    if (applied.status === 'failed') {
-      return { kind: 'failed', failure: permissionFailure('Approval decision could not be applied.') };
-    }
-    input.transitionRunStatus('running');
-    emitApprovalResolved(
-      dependencies,
-      runtime,
-      approval,
-      resolution.status,
-      resolution.status === 'approved' && resolution.decision.decision === 'approved'
-        ? resolution.decision.optionId
-        : undefined,
-    );
-    if (resolution.status === 'denied') {
-      return {
-        kind: 'result',
-        result: {
-          toolCallId: call.toolCallId,
-          toolName: call.toolName,
-          callOrder: call.callOrder,
-          status: 'user_rejected',
-          error: { code: 'user_rejected', message: 'Tool call was rejected by the user.' },
-          content: 'Tool call was rejected by the user.',
-          completedAt: dependencies.clock.now(),
-        },
-      };
-    }
-    return {
-      kind: 'result',
-      result: await executeToolInvocation(input, dependencies, runtime, call, invocation, applied.executionAccess),
-    };
-  }
-
-  if (!permission.executionAccess) {
-    return { kind: 'failed', failure: permissionFailure('Permission allow decision did not provide Tool execution access.') };
-  }
-  return {
-    kind: 'result',
-    result: await executeToolInvocation(input, dependencies, runtime, call, invocation, permission.executionAccess),
-  };
-}
-
-async function applyApprovalDecision(
-  dependencies: AgentLoopDependencies,
-  runtime: LoopRuntime,
-  call: CompletedToolCall,
-  operations: readonly PermissionOperation[],
-  original: {
-    readonly decision: Extract<PermissionDecision, { type: 'requires_approval' }>;
-    readonly approvalSubject: ApprovalSubject;
-  },
-  decision: ApprovalDecision,
-): Promise<{ readonly status: 'applied'; readonly executionAccess?: ToolExecutionAccess } | { readonly status: 'failed' }> {
-  try {
-    const current = await dependencies.permissions.evaluateToolCall({
-      runId: runtime.run.runId,
-      sessionId: runtime.run.sessionId,
-      workspaceId: runtime.run.workspaceId,
-      toolCallId: call.toolCallId,
-      toolInput: snapshotValue(call.input) as import('@megumi/ai').JsonValue,
-      operations,
-      permissionMode: runtime.run.permissionMode,
-      evaluatedAt: dependencies.clock.now(),
-    });
-    if (current.status === 'failed') throw new Error(current.failure.message);
-    const applied = await dependencies.permissions.applyApprovalDecision({
-      originalPermissionDecision: original.decision,
-      originalSubject: original.approvalSubject,
-      currentSubject: current.approvalSubject,
-      decision,
-      sessionId: runtime.run.sessionId,
-      appliedAt: dependencies.clock.now(),
-      permissionMode: runtime.run.permissionMode,
-    });
-    if (applied.status !== 'applied') return { status: 'failed' };
-    return { status: 'applied', ...(applied.executionAccess ? { executionAccess: applied.executionAccess } : {}) };
-  } catch {
-    return { status: 'failed' };
-  }
-}
-
-async function executeToolInvocation(
-  input: AgentLoopInput,
-  dependencies: AgentLoopDependencies,
-  runtime: LoopRuntime,
-  call: CompletedToolCall,
-  invocation: ToolInvocation,
-  executionAccess: ToolExecutionAccess | undefined,
-): Promise<ToolResult> {
-  const toolExecutionId = dependencies.ids.createToolExecutionId();
-  const startedAt = dependencies.clock.now();
-  const span = startObservedSpan(dependencies, runtime, 'tool.call');
-  if (span) runtime.toolSpans.set(toolExecutionId, span);
-
-  emitEvent(dependencies, runtime, 'tool_execution.started', {
-    toolCallId: call.toolCallId,
-    toolName: call.toolName,
-    args: toJsonValue(call.input) as Record<string, unknown>,
-    toolExecutionId,
-  });
-
-  let accumulatedOutput = '';
-  let planNotification: import('@megumi/tools').ToolExecutionNotification | undefined;
-  let result;
-  try {
-    const timeoutController = new AbortController();
-    const executionSignal = AbortSignal.any([input.signal, timeoutController.signal]);
-    const timeout = setTimeout(() => timeoutController.abort(), dependencies.policy.toolExecutionTimeoutMs);
-    const cancelTimer = () => clearTimeout(timeout);
-    try {
-      result = await Promise.resolve(dependencies.tools.executeToolInvocation({
-        invocation,
-        toolExecutionId,
-      }, {
-        signal: executionSignal,
-        onOutput: (output) => {
-          accumulatedOutput += output.chunk;
-          emitEvent(dependencies, runtime, 'tool_execution.update', {
-            toolCallId: call.toolCallId,
-            output: accumulatedOutput,
-          });
-        },
-        onNotification: (notification) => {
-          planNotification = notification;
-          emitEvent(dependencies, runtime, 'tool_execution.plan_updated', {
-            toolCallId: call.toolCallId,
-            ...(notification.explanation ? { explanation: notification.explanation } : {}),
-            plan: notification.plan.map((step) => ({ step: step.step, status: step.status })),
-          });
-        },
-        ...(executionAccess ? { executionAccess } : {}),
-      })).catch((error: unknown) => ({ type: 'thrown' as const, error }));
-    } finally {
-      cancelTimer();
-    }
-  } catch {
-    result = { type: 'thrown', error: new Error('Tool execution failed to start.') };
-  }
-
-  const completedAt = dependencies.clock.now();
-  if (span) {
-    endObservedSpan(dependencies, span, input.signal.aborted ? 'cancelled' : 'ok');
-    runtime.toolSpans.delete(toolExecutionId);
-  }
-
-  if (result && 'type' in result && result.type === 'thrown') {
-    return {
-      toolCallId: call.toolCallId,
-      toolName: call.toolName,
-      callOrder: call.callOrder,
-      status: 'failure',
-      error: { code: 'tool_execution_failed', message: 'Tool execution failed.' },
-      content: 'Tool execution failed.',
-      completedAt,
-    };
-  }
-
-  const executionResult = result as import('@megumi/tools').ToolExecutionResult;
-  if (input.signal.aborted && !executionResult) {
-    return cancelledToolResult(call, completedAt);
-  }
-
-  if (executionResult.type === 'succeeded') {
-    const toolResult: ToolResult = {
-      toolCallId: call.toolCallId,
-      toolName: executionResult.toolName,
-      callOrder: call.callOrder,
-      status: 'success',
-      content: executionResult.normalizedResult.content,
-      ...(executionResult.observation?.summary ? { summary: executionResult.observation.summary } : {}),
-      completedAt,
-    };
-    emitToolExecutionEnded(dependencies, runtime, toolResult, toolExecutionId, 'completed');
-    return toolResult;
-  }
-
-  if (executionResult.error.code === 'tool_cancelled') {
-    emitToolExecutionEnded(dependencies, runtime, {
-      toolCallId: call.toolCallId,
-      toolName: call.toolName,
-      callOrder: call.callOrder,
-      status: 'cancelled',
-      content: executionResult.normalizedResult.content,
-      completedAt,
-    }, toolExecutionId, 'cancelled');
-    return {
-      toolCallId: call.toolCallId,
-      toolName: call.toolName,
-      callOrder: call.callOrder,
-      status: 'cancelled',
-      error: { code: 'tool_cancelled', message: 'Tool call was cancelled.' },
-      content: executionResult.normalizedResult.content,
-      completedAt,
-    };
-  }
-
-  emitToolExecutionEnded(dependencies, runtime, {
-    toolCallId: call.toolCallId,
-    toolName: executionResult.toolName ?? call.toolName,
-    callOrder: call.callOrder,
-    status: 'failure',
-    error: executionResult.error,
-    content: executionResult.normalizedResult.content,
-    completedAt,
-  }, toolExecutionId, 'failed');
-  return {
-    toolCallId: call.toolCallId,
-    toolName: executionResult.toolName ?? call.toolName,
-    callOrder: call.callOrder,
-    status: 'failure',
-    error: executionResult.error,
-    content: executionResult.normalizedResult.content,
-    completedAt,
-  };
-}
-
-function emitToolExecutionEnded(
-  dependencies: AgentLoopDependencies,
-  runtime: LoopRuntime,
-  result: ToolResult,
-  toolExecutionId: string,
-  status: 'completed' | 'failed' | 'cancelled',
-): void {
-  if (status === 'completed') {
-    emitEvent(dependencies, runtime, 'tool_execution.ended', {
-      toolCallId: result.toolCallId,
-      toolExecutionId,
-      status: 'completed',
-      result: result.content,
-      ...(result.summary ? { summary: result.summary } : {}),
-    });
-    return;
-  }
-  if (status === 'cancelled') {
-    emitEvent(dependencies, runtime, 'tool_execution.ended', {
-      toolCallId: result.toolCallId,
-      toolExecutionId,
-      status: 'cancelled',
-    });
-    return;
-  }
-  const error = result.error ?? { code: 'tool_execution_failed', message: 'Tool execution failed.' };
-  emitEvent(dependencies, runtime, 'tool_execution.ended', {
-    toolCallId: result.toolCallId,
-    toolExecutionId,
-    status: 'failed',
-    error: { message: error.message, code: error.code },
-  });
-}
 
 async function commitToolResults(
   input: AgentLoopInput,
@@ -1093,10 +686,6 @@ function endLoopObservability(
   runtime.modelSpan = undefined;
   endObservedSpan(dependencies, runtime.approvalSpan, status);
   runtime.approvalSpan = undefined;
-  for (const span of runtime.toolSpans.values()) {
-    endObservedSpan(dependencies, span, status);
-  }
-  runtime.toolSpans.clear();
   try {
     endObservedSpan(dependencies, runtime.rootSpan, status);
     if (runtime.trace) {
@@ -1251,6 +840,16 @@ function modelCallRunFailure(failure: ModelCallFailure): RunFailure {
   };
 }
 
+/** Converts a ToolCall batch failure to a RunFailure only when the loop terminates the Run. */
+function toolCallRunFailure(failure: ToolCallFailure): RunFailure {
+  return {
+    code: failure.code,
+    message: failure.message,
+    retryable: false,
+    cause: { owner: failure.owner, code: failure.causeCode },
+  };
+}
+
 function toAssistantContent(message: AssistantMessage): SessionAssistantContent[] {
   return message.content.map((block) => {
     if (block.type === 'text') return { type: 'text', text: block.text };
@@ -1264,42 +863,6 @@ function toAssistantContent(message: AssistantMessage): SessionAssistantContent[
       arguments: block.arguments as Record<string, unknown>,
     };
   });
-}
-
-function assistantMetadata(message: AssistantMessage): AssistantReplyMetadata {
-  return {
-    api: message.api,
-    provider: message.provider,
-    model: message.model,
-    ...(message.responseModel ? { response_model: message.responseModel } : {}),
-    ...(message.responseId ? { response_id: message.responseId } : {}),
-    ...(message.usage ? { usage: message.usage } : {}),
-    ...(message.errorMessage ? { error_message: message.errorMessage } : {}),
-  };
-}
-
-function cancelledToolResult(call: CompletedToolCall, completedAt: string): ToolResult {
-  return {
-    toolCallId: call.toolCallId,
-    toolName: call.toolName,
-    callOrder: call.callOrder,
-    status: 'cancelled',
-    error: { code: 'tool_cancelled', message: 'Tool call was cancelled.' },
-    content: 'Tool call was cancelled.',
-    completedAt,
-  };
-}
-
-function closedToolResult(call: CompletedToolCall, completedAt: string): ToolResult {
-  return {
-    toolCallId: call.toolCallId,
-    toolName: call.toolName,
-    callOrder: call.callOrder,
-    status: 'failure',
-    error: { code: 'run_failed_before_tool_result', message: 'Run failed before ToolCall produced a result.' },
-    content: 'Run failed before ToolCall produced a result.',
-    completedAt,
-  };
 }
 
 function failureReason(
@@ -1329,6 +892,18 @@ function failureReason(
 
 function snapshotToolIdentity(identity: ToolIdentity): ToolIdentity {
   return { ...identity };
+}
+
+function assistantMetadata(message: AssistantMessage): AssistantReplyMetadata {
+  return {
+    api: message.api,
+    provider: message.provider,
+    model: message.model,
+    ...(message.responseModel ? { response_model: message.responseModel } : {}),
+    ...(message.responseId ? { response_id: message.responseId } : {}),
+    ...(message.usage ? { usage: message.usage } : {}),
+    ...(message.errorMessage ? { error_message: message.errorMessage } : {}),
+  };
 }
 
 function snapshotValue(value: unknown): unknown {
