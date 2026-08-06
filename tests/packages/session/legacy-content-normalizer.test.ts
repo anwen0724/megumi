@@ -40,7 +40,7 @@ describe('legacy content normalizer', () => {
         id: 'call:1',
         name: 'list_directory',
         argumentsText: '{"limit":30,"path":"C:\\\\Users\\\\anwen"}',
-      },
+      } as never,
     ]);
     expect(normalized).toEqual([
       { type: 'text', text: 'answer' },
@@ -66,7 +66,7 @@ describe('legacy content normalizer', () => {
         id: 'call:3',
         name: 'broken',
         argumentsText: 'not-json{',
-      },
+      } as never,
     ])).toEqual([
       {
         type: 'toolCall',

@@ -456,7 +456,7 @@ describe('Engine RuntimeEvents', () => {
     });
 
     const types = collectEvents(fixture, started.run.runId).map((event) => event.type);
-    const order = (name: string) => types.indexOf(name);
+    const order = (name: (typeof types)[number]) => types.indexOf(name);
     const turnStarted = order('turn.started');
     const messageStarted = order('message.started');
     const messageUpdate = order('message.update');

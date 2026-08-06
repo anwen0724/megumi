@@ -24,6 +24,10 @@ const conversation: Message[] = [
     provider: 'openai',
     model: 'gpt',
     stopReason: 'toolUse',
+    usage: {
+      input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
     timestamp: 0,
   },
 ];
@@ -36,6 +40,10 @@ const turnPrefix: Message[] = [
     provider: 'openai',
     model: 'gpt',
     stopReason: 'toolUse',
+    usage: {
+      input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
     timestamp: 1,
   },
   {
@@ -86,7 +94,7 @@ describe('generateCompactionSummary', () => {
   };
 
   it('feeds the Turn Prefix into the model request', async () => {
-    const completeSimple = vi.fn(async () => ({
+    const completeSimple = vi.fn(async (_model: unknown, _request: unknown, _options: unknown) => ({
       content: [{ type: 'text', text: 'new summary' }],
       stopReason: 'stop' as const,
     }));

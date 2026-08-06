@@ -4,8 +4,8 @@ import type { Message } from '@megumi/ai';
 import {
   planCompaction,
   validateCompactionReduction,
-  type CompactionMessageSource,
 } from '../../../packages/context/src/compaction/compaction-planner';
+import type { CompactionMessageSource } from '../../../packages/context/src/prompt/context-message-builder';
 import { DEFAULT_COMPACTION_POLICY } from '../../../packages/context/src/index';
 
 function source(entryId: string, message: Message): CompactionMessageSource {
@@ -26,6 +26,10 @@ function assistant(entryId: string, text: string, toolCallId?: string): Compacti
     provider: 'openai',
     model: 'gpt',
     stopReason: toolCallId ? 'toolUse' : 'stop',
+    usage: {
+      input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
     timestamp: 0,
   });
 }

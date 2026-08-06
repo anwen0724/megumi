@@ -92,7 +92,7 @@ describe('ContextResolver', () => {
     deps.sessionHistory.getActiveHistory = vi.fn(() => ({
       status: 'failed' as const,
       failure: { code: 'history_unreadable', message: 'unreadable' },
-    }));
+    })) as never;
     expect(await createContextResolver(deps).resolve({
       sessionId: 'session:1', workspaceId: 'workspace:1', model, tools,
     })).toMatchObject({
@@ -116,7 +116,7 @@ describe('ContextResolver', () => {
     deps.instructionReader.getEffectiveInstructions = vi.fn(async () => ({
       status: 'failed' as const,
       failure: { code: 'instruction_source_read_failed', message: 'unreadable', sourcePath: '/workspace/AGENTS.md' },
-    }));
+    })) as never;
     expect(await createContextResolver(deps).resolve({
       sessionId: 'session:1', workspaceId: 'workspace:1', model, tools,
     })).toMatchObject({
@@ -133,13 +133,13 @@ describe('ContextResolver', () => {
     }));
     deps.skills.createView = vi.fn(async () => ({
       status: 'failed' as const,
-      failure: { code: 'skill_view_broken', message: 'broken view' },
-    }));
+      failure: { code: 'skills_unavailable' as const, message: 'broken view' },
+    })) as never;
     expect(await createContextResolver(deps).resolve({
       sessionId: 'session:1', workspaceId: 'workspace:1', model, tools,
     })).toMatchObject({
       status: 'failed',
-      failure: { code: 'skill_view_failed', cause: { owner: 'skills', code: 'skill_view_broken' } },
+      failure: { code: 'skill_view_failed', cause: { owner: 'skills', code: 'skills_unavailable' } },
     });
   });
 

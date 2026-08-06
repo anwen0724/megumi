@@ -1,6 +1,6 @@
 // @vitest-environment node
+import { AssistantMessageEventStream } from '../../../../packages/ai/src/utils/event-stream';
 import {
-  AssistantMessageEventStream,
   InMemoryCredentialStore,
   type ProviderStreams,
 } from '@megumi/ai';

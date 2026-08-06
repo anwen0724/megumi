@@ -9,7 +9,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  AssistantMessageEventStream,
   createModels,
   createProvider,
   fauxAssistantMessage,
@@ -18,6 +17,9 @@ import {
   type AssistantMessage,
   type Model,
 } from '@megumi/ai';
+// The stream class is a value; it is exported as a type from the package entry
+// and imported from its defining module when constructed in tests.
+import { AssistantMessageEventStream } from '../../../packages/ai/src/utils/event-stream';
 
 const packageRoot = path.resolve(process.cwd(), 'packages', 'ai');
 
@@ -141,7 +143,7 @@ describe('AI package contract', () => {
     models.setProvider(handle.provider);
     handle.setResponses([fauxAssistantMessage('a slow response that gets aborted')]);
 
-    const stream = models.streamSimple(handle.getModel('abortable'), { messages: [] }, {
+    const stream = models.streamSimple(handle.getModel('abortable') as Model<Api>, { messages: [] }, {
       signal: controller.signal,
     });
     controller.abort();
@@ -161,7 +163,7 @@ describe('AI package contract', () => {
     models.setProvider(handle.provider);
     handle.setResponses([fauxAssistantMessage('this response streams slowly and will be cut short by the timeout')]);
 
-    const stream = models.streamSimple(handle.getModel('slow'), { messages: [] }, {
+    const stream = models.streamSimple(handle.getModel('slow') as Model<Api>, { messages: [] }, {
       signal: AbortSignal.timeout(20),
     });
 

@@ -77,7 +77,7 @@ describe('AI package trimmed scope', () => {
       .map((provider) => provider.id)
       .sort();
     expect(ids).toEqual([...EXPECTED_PROVIDERS].sort());
-    const catalogProviders = new Set(getBuiltinProviders());
+    const catalogProviders = new Set(getBuiltinProviders()) as Set<string>;
     for (const model of models.getModels()) {
       expect(catalogProviders.has(model.provider)).toBe(true);
     }

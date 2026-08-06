@@ -2,7 +2,7 @@
 import type { AssistantMessage } from '@megumi/ai';
 import { createEventBus, type AnyEvent } from '@megumi/events';
 import type { SessionHistoryItem } from '@megumi/session';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, type Mock } from 'vitest';
 import {
   createContext,
   type CreateContextOptions,
@@ -43,7 +43,7 @@ function compactedHistory(history: SessionHistoryItem[]): SessionHistoryItem[] {
 }
 
 function fixture(
-  completeSimple = vi.fn(async () => completedMessage('replacement summary')),
+  completeSimple: Mock<(...args: any[]) => Promise<AssistantMessage>> = vi.fn(async () => completedMessage('replacement summary')),
 ): CreateContextOptions {
   // Five ordinary Turns: enough for two consecutive compactions without ever
   // cutting a Turn (each compaction keeps at least two Turns).
@@ -168,7 +168,7 @@ describe('Context compaction', () => {
     expect(compacted).toMatchObject({ status: 'compacted' });
 
     const invalidPolicy = fixture();
-    invalidPolicy.policy = {
+    (invalidPolicy as { policy: unknown }).policy = {
       enabled: true,
       reserveTokens: 101,
       keepRecentTokens: 1,

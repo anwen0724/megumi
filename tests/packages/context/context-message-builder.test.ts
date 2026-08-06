@@ -88,7 +88,8 @@ function summaryThenConversation(): SessionHistoryItem[] {
 
 async function materialize(
   history: SessionHistoryItem[],
-  attachmentReader: { readAttachmentContent: ReturnType<typeof vi.fn> } = { readAttachmentContent: vi.fn() },
+  attachmentReader: Pick<import('@megumi/session').SessionAttachmentReader, 'readAttachmentContent'>
+    = { readAttachmentContent: vi.fn() },
 ) {
   const result = await buildContextMessages({
     history,

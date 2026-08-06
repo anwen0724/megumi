@@ -310,17 +310,20 @@ export async function compactedOverflowCompaction(): Promise<Extract<CompactCont
 }
 
 function baseMessage(
-  overrides: Omit<AssistantMessage, 'role' | 'api' | 'provider' | 'model' | 'timestamp'>,
+  overrides: Partial<Omit<AssistantMessage, 'role' | 'api' | 'provider' | 'model' | 'timestamp'>>,
 ): AssistantMessage {
+  // A caller-provided usage wins over the zero default; the merge happens
+  // through an explicit default so no property is specified twice.
+  const { usage: usageOverride, ...rest } = overrides;
   return {
     role: 'assistant',
     api: model.api,
     provider: model.provider,
     model: model.id,
-    usage: ZERO_USAGE,
+    usage: usageOverride ?? ZERO_USAGE,
     timestamp: 1,
-    ...overrides,
-  };
+    ...rest,
+  } as AssistantMessage;
 }
 
 function pushAssistantStream(

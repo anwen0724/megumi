@@ -155,11 +155,11 @@ describe('Context.build', () => {
       failure: { code: 'workspace_failed', cause: { owner: 'workspace', code: 'workspace_not_found' } },
     });
 
-    options.workspaceSource = workspaceSource();
+    (options as { workspaceSource: unknown }).workspaceSource = workspaceSource();
     options.instructionReader.getEffectiveInstructions = vi.fn(async () => ({
       status: 'failed' as const,
       failure: {
-        code: 'instruction_source_read_failed',
+        code: 'instruction_source_read_failed' as const,
         message: 'unreadable',
         sourcePath: '/workspace/AGENTS.md',
       },
@@ -180,13 +180,13 @@ describe('Context.build', () => {
     }));
     options.skills.createView = vi.fn(async () => ({
       status: 'failed' as const,
-      failure: { code: 'skill_view_failed', message: 'broken view' },
+      failure: { code: 'skills_unavailable' as const, message: 'broken view' },
     }));
     expect(await createContext(options).build({
       modelCallContext: modelCall(),
     })).toMatchObject({
       status: 'failed',
-      failure: { code: 'skill_view_failed', cause: { owner: 'skills', code: 'skill_view_failed' } },
+      failure: { code: 'skill_view_failed', cause: { owner: 'skills', code: 'skills_unavailable' } },
     });
   });
 
@@ -242,7 +242,7 @@ describe('Context.build', () => {
           ordinal: 0, created_at: 'now',
         }],
       }],
-    }));
+    }) as never);
     expect(await createContext(imageOptions).build({ modelCallContext: modelCall() })).toMatchObject({
       status: 'failed',
       failure: { code: 'image_materialization_failed' },
@@ -262,7 +262,7 @@ describe('Context.build', () => {
         },
         attachments: [],
       }],
-    }));
+    }) as never);
     expect(await createContext(protocolOptions).build({ modelCallContext: modelCall() })).toMatchObject({
       status: 'failed',
       failure: { code: 'protocol_closure_failed' },
@@ -375,7 +375,7 @@ describe('Context.build', () => {
     ];
     for (const illegal of illegalPolicies) {
       const options = fixture();
-      options.policy = illegal;
+      (options as { policy: unknown }).policy = illegal;
       expect(await createContext(options).build({ modelCallContext: modelCall() }), JSON.stringify(illegal))
         .toMatchObject({ status: 'failed', failure: { code: 'policy_invalid' } });
       expect(await createContext(options).compact({

@@ -688,7 +688,7 @@ describe('Session capabilities', () => {
     });
     service.saveModelResponse({
       message_id: 'M1', session_id: 'S1', run_id: 'R1',
-      content: [{ type: 'toolCall', id: 'call:1', name: 'read_file', argumentsText: '{"path":"a"}' }],
+      content: [{ type: 'toolCall', id: 'call:1', name: 'read_file', arguments: { path: 'a' } }],
       outcome_status: 'completed', stop_reason: 'tool_use',
       completed_at: '2026-07-04T00:02:00.000Z',
     });
