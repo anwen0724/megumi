@@ -41,7 +41,25 @@ describe('Context Package source guards', () => {
     ]) {
       expect(publicIndex).toContain(required);
     }
-    expect(publicIndex).not.toMatch(/ContextService|context-service|compaction-planner|compaction-summary|image-content|context-messages/u);
+    // Internal owners never leave the Package boundary: no Resolver, Prompt
+    // sub-builders, plans, materialized history or Summary generator.
+    for (const internal of [
+      'ContextResolver',
+      'ResolvedContext',
+      'ResolveContextRequest',
+      'PromptBuilder',
+      'MaterializedHistory',
+      'CompactionPlan',
+      'CompactionMessageSource',
+      'compaction-summary-generator',
+      'context-resolver',
+      'prompt-builder',
+      'context-message-builder',
+      'compaction-planner',
+    ]) {
+      expect(publicIndex).not.toContain(internal);
+    }
+    expect(publicIndex).not.toMatch(/ContextService|context-service/u);
   });
 
   it('does not recreate repository, ports, DTO, or Service layers', () => {
@@ -51,8 +69,23 @@ describe('Context Package source guards', () => {
       'packages/context/src/domain/dto',
       'packages/context/src/service',
       'packages/context/src/services',
+      'packages/context/src/utils',
+      'packages/context/src/helpers',
+      'packages/context/src/managers',
+      'packages/context/src/types',
     ]) {
       expect(exists(forbidden), forbidden).toBe(false);
+    }
+    // Old files and forwarders are fully replaced by the target structure.
+    for (const legacy of [
+      'packages/context/src/context-messages.ts',
+      'packages/context/src/system-prompt.ts',
+      'packages/context/src/image-content.ts',
+      'packages/context/src/xml-escape.ts',
+      'packages/context/src/context-usage.ts',
+      'packages/context/src/compaction/compaction-summary.ts',
+    ]) {
+      expect(exists(legacy), legacy).toBe(false);
     }
   });
 
@@ -131,6 +164,52 @@ describe('Context Package source guards', () => {
     expect(read('packages/engine/src/agent-loop.ts')).not.toContain('scopeResolver');
     expect(read('packages/engine/src/agent-loop.ts')).not.toMatch(/getEffectiveInstructions|createView/u);
     expect(read('packages/product/src/product.ts')).not.toContain('scopeResolver');
+  });
+
+  it('keeps the internal dependency directions one-way', () => {
+    // The Resolver owns source reads and never imports Prompt, Policy or Compaction.
+    const resolverSource = read('packages/context/src/context-resolver.ts');
+    expect(resolverSource).not.toMatch(/from ['"][^'"]*(prompt\/|context-policy|compaction)[^'"]*['"]/u);
+    expect(resolverSource).not.toContain('PromptBuilder');
+    // The PromptBuilder depends on the resolved context and message materialization only.
+    const promptBuilderSource = read('packages/context/src/prompt/prompt-builder.ts');
+    expect(promptBuilderSource).not.toMatch(/from ['"][^'"]*(context-policy|compaction)[^'"]*['"]/u);
+    expect(promptBuilderSource).not.toMatch(/from ['"][^'"]*ModelCallContext['"]/u);
+    expect(promptBuilderSource).not.toMatch(/from ['"][^'"]*Model<Api>['"]/u);
+    expect(promptBuilderSource).not.toMatch(/from ['"][^'"]*@megumi\/ai['"]/u);
+    // The Compactor never depends on ContextBuilder.
+    const compactorSource = read('packages/context/src/compaction/context-compactor.ts');
+    expect(compactorSource).not.toMatch(/from ['"][^'"]*context-builder['"]/u);
+    // Engine and Product never deep-import Context internals.
+    const engineSource = readTree('packages/engine/src');
+    const productSource = readTree('packages/product/src');
+    expect(engineSource).not.toMatch(/@megumi\/context\/(?!['"])/u);
+    expect(productSource).not.toMatch(/@megumi\/context\/(?!['"])/u);
+  });
+
+  it('keeps usage calculation on the complete Prompt and the compaction request bus-free', () => {
+    const contextSource = readTree('packages/context/src');
+    // The Usage entry never falls back to estimating only prompt.messages.
+    expect(contextSource).not.toMatch(/estimateContextTokens\(prompt\.messages\)/u);
+    expect(contextSource).not.toMatch(/estimateContextTokens\(result\.prompt\.messages\)/u);
+    expect(contextSource).toContain('estimateContextTokens(');
+    // The compaction request no longer carries an EventBus; the bus is a
+    // creation-time dependency only.
+    const requestContract = read('packages/context/src/context.ts');
+    expect(requestContract).toMatch(/interface CompactContextRequest/u);
+    expect(requestContract).not.toMatch(/CompactContextRequest[\s\S]*events/u);
+    expect(requestContract).toContain('readonly tools: readonly ToolDefinition[]');
+  });
+
+  it('keeps ResolvedContext limited to Prompt-building facts', () => {
+    const resolverSource = read('packages/context/src/context-resolver.ts');
+    const resolvedBlock = resolverSource.match(/interface ResolvedContext \{[\s\S]*?\}/u)?.[0] ?? '';
+    // No run identities, user input, full Model object or operation controls
+    // inside the resolved facts (the resolve Request may carry them).
+    expect(resolvedBlock).not.toMatch(/runId|modelCallId|userInput/u);
+    expect(resolvedBlock).not.toMatch(/model[?]?:|signal[?]?:/u);
+    expect(resolvedBlock).toContain('readonly imageInputSupport: boolean');
+    expect(resolvedBlock).toContain('readonly tools: readonly ToolDefinition[]');
   });
 });
 
