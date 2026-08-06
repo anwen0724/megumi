@@ -26,6 +26,7 @@ import {
   type ModelCallFailure,
   type ModelCallOutcome,
   type ModelCallProjection,
+  type RebuildPromptResult,
 } from './model-call-runner';
 import {
   createSessionMessageCommitter,
@@ -93,6 +94,10 @@ interface LoopRuntime {
   projection: ModelCallProjection;
   /** The run-scoped Observability resource handle. */
   readonly observer: LoopObserver;
+  /** A started assistant Message lifecycle that still needs its one ended event. */
+  messageLifecycleOpen: boolean;
+  /** A started Turn lifecycle that still needs its one ended event. */
+  turnLifecycleOpen: boolean;
 }
 
 export async function runAgentLoop(
@@ -106,7 +111,6 @@ export async function runAgentLoop(
       userEntry: input.userEntry,
       session: dependencies.session,
       ids: dependencies.ids,
-      clock: dependencies.clock,
     }),
     modelCallCount: 0,
     toolRoundCount: 0,
@@ -116,6 +120,8 @@ export async function runAgentLoop(
       run: input.run,
       observability: dependencies.observability,
     }),
+    messageLifecycleOpen: false,
+    turnLifecycleOpen: false,
   };
   runtime.observer.start();
   // A Run failure settles one terminal Assistant Reply with the failure reason
@@ -132,32 +138,64 @@ export async function runAgentLoop(
         completedAt: dependencies.clock.now(),
       });
       if (reply.status === 'failed') return failedResult(sessionFailure(reply.failure.message));
+      // The failed Reply is a new real Session Message: it gets the complete
+      // lifecycle pair matching that fact.
+      emitEvent(dependencies, runtime, 'message.started', {
+        role: 'assistant',
+        messageId: reply.messageId,
+      });
+      emitEvent(dependencies, runtime, 'message.ended', {
+        role: 'assistant',
+        messageId: reply.messageId,
+        content: '',
+      });
     }
     return failedResult(failure);
   };
+  let finalResult: AgentLoopResult | undefined;
   try {
-    if (input.signal.aborted) return cancelledResult();
-    for (;;) {
-      if (input.signal.aborted) return cancelledResult();
-      if (runtime.modelCallCount >= dependencies.policy.maxModelCallsPerRun) {
-        return await failRun(loopLimitFailure('ModelCall limit reached.'));
+    if (input.signal.aborted) {
+      finalResult = cancelledResult();
+    } else {
+      for (;;) {
+        if (input.signal.aborted) {
+          finalResult = cancelledResult();
+          break;
+        }
+        if (runtime.modelCallCount >= dependencies.policy.maxModelCallsPerRun) {
+          finalResult = await failRun(loopLimitFailure('ModelCall limit reached.'));
+          break;
+        }
+        const outcome = await runTurn(input, dependencies, runtime, failRun);
+        if (outcome === 'next') continue;
+        finalResult = outcome;
+        break;
       }
-
-      const outcome = await runTurn(input, dependencies, runtime, failRun);
-      if (outcome === 'next') continue;
-      return outcome;
     }
   } catch (error) {
-    if (input.signal.aborted) return cancelledResult();
-    return await failRun({
-      code: 'internal_error',
-      message: error instanceof Error ? error.message : 'Engine failed unexpectedly.',
-      retryable: false,
-      cause: { owner: 'engine', code: 'unexpected_exception' },
-    });
+    if (input.signal.aborted) {
+      closeMessageLifecycle(dependencies, runtime, runtime.activeModelMessageId ?? '', runtime.projection.text);
+      closeTurnLifecycle(dependencies, runtime, 'cancelled', runtime.activeModelMessageId ?? '', []);
+      finalResult = cancelledResult();
+    } else {
+      closeMessageLifecycle(dependencies, runtime, runtime.activeModelMessageId ?? '', runtime.projection.text);
+      closeTurnLifecycle(dependencies, runtime, 'error', runtime.activeModelMessageId ?? '', []);
+      finalResult = await failRun({
+        code: 'internal_error',
+        message: error instanceof Error ? error.message : 'Engine failed unexpectedly.',
+        retryable: false,
+        cause: { owner: 'engine', code: 'unexpected_exception' },
+      });
+    }
   } finally {
-    runtime.observer.end('ok');
+    // The Run Observer ends with the real AgentLoopResult, never a constant.
+    runtime.observer.end(
+      finalResult?.status === 'completed' ? 'ok'
+        : finalResult?.status === 'failed' ? 'error'
+        : 'cancelled',
+    );
   }
+  return finalResult!;
 }
 
 async function runTurn(
@@ -200,34 +238,40 @@ async function runTurn(
   }
 
   try {
-    const buildPrompt = async (): Promise<Prompt> => {
+    // The first Prompt build and every Overflow rebuild share the same
+    // Context failure contract: original code, message and retryable facts.
+    const buildPrompt = async (): Promise<RebuildPromptResult> => {
       const built = await dependencies.context.build({
         modelCallContext: { modelCallId, run: runContext, tools: toolResolution.definitions },
         signal: input.signal,
       });
       if (built.status === 'failed') {
-        throw new ContextBuildFailure(built.failure.code, built.failure.message, built.failure.retryable);
+        return {
+          status: 'failed',
+          failure: {
+            code: built.failure.code,
+            message: built.failure.message,
+            retryable: built.failure.retryable,
+          },
+        };
       }
-      return built.prompt;
+      return { status: 'ready', prompt: built.prompt };
     };
     let prompt: Prompt;
-    try {
-      prompt = await buildPrompt();
-    } catch (error) {
+    const firstBuild = await buildPrompt();
+    if (firstBuild.status === 'failed') {
       if (input.signal.aborted) {
         await commitCancelledReply(input, dependencies, runtime, { text: '', thinking: '' });
         return cancelledResult();
       }
-      if (error instanceof ContextBuildFailure) {
-        return await failRun({
-          code: 'context_failed',
-          message: error.message,
-          retryable: error.retryable,
-          cause: { owner: 'context', code: error.code },
-        });
-      }
-      throw error;
+      return await failRun({
+        code: 'context_failed',
+        message: firstBuild.failure.message,
+        retryable: firstBuild.failure.retryable,
+        cause: { owner: 'context', code: firstBuild.failure.code },
+      });
     }
+    prompt = firstBuild.prompt;
 
     // Cancellation may win during the build: converge without starting a Turn
     // or a ModelCall, but still settle the cancelled reply for the Run.
@@ -246,10 +290,12 @@ async function runTurn(
       role: 'assistant',
       messageId: runtime.activeModelMessageId,
     });
+    runtime.turnLifecycleOpen = true;
+    runtime.messageLifecycleOpen = true;
     runtime.modelCallCount += 1;
 
-    const modelSpan = runtime.observer.startSpan('model.call');
-    let modelOutcome: ModelCallOutcome;
+    const modelSpan = runtime.observer.startSpan('model.call', { modelCallId });
+    let modelOutcome: ModelCallOutcome | undefined;
     try {
       modelOutcome = await runModelCall({
         runId: input.run.runId,
@@ -263,8 +309,6 @@ async function runTurn(
         signal: input.signal,
         projection: runtime.projection,
         events: {
-          runId: input.run.runId,
-          sessionId: input.run.sessionId,
           publish: (type, payload) => emitEvent(dependencies, runtime, type, payload),
         },
         observation: {
@@ -277,34 +321,34 @@ async function runTurn(
         clock: dependencies.clock,
       });
     } finally {
-      runtime.observer.endSpan(modelSpan, input.signal.aborted ? 'cancelled' : 'ok');
+      // The ModelCall span ends with the real ModelCall outcome.
+      runtime.observer.endSpan(
+        modelSpan,
+        modelOutcome === undefined
+          ? (input.signal.aborted ? 'cancelled' : 'error')
+          : modelOutcome.status === 'completed' ? 'ok'
+          : modelOutcome.status === 'failed' ? 'error'
+          : 'cancelled',
+      );
     }
 
     if (modelOutcome.status === 'cancelled') {
       await commitCancelledReply(input, dependencies, runtime, modelOutcome.partial);
-      emitEvent(dependencies, runtime, 'turn.ended', {
-        stopReason: 'cancelled',
-        messageId: runtime.activeModelMessageId ?? '',
-        toolCallIds: [],
-      });
+      closeTurnLifecycle(dependencies, runtime, 'cancelled', runtime.activeModelMessageId ?? '', []);
       return cancelledResult();
     }
     if (modelOutcome.status === 'failed') {
-      // A started message lifecycle always gets its closing event.
-      emitEvent(dependencies, runtime, 'message.ended', {
-        role: 'assistant',
-        messageId: runtime.activeModelMessageId ?? '',
-        content: runtime.projection.text,
-      });
-      emitEvent(dependencies, runtime, 'turn.ended', {
-        stopReason: 'error',
-        messageId: runtime.activeModelMessageId ?? '',
-        toolCallIds: [],
-      });
+      // A started message lifecycle always gets exactly one closing event.
+      closeMessageLifecycle(dependencies, runtime, runtime.activeModelMessageId ?? '', runtime.projection.text);
+      closeTurnLifecycle(dependencies, runtime, 'error', runtime.activeModelMessageId ?? '', []);
       return await failRun(modelCallRunFailure(modelOutcome.failure));
     }
 
     const assistantContent = toAssistantContent(modelOutcome.message);
+    const assistantText = assistantContent
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('');
     const messageId = runtime.activeModelMessageId ?? dependencies.ids.createSessionMessageId();
 
     if (modelOutcome.toolCalls.length === 0) {
@@ -319,21 +363,12 @@ async function runTurn(
         completedAt: dependencies.clock.now(),
       });
       if (reply.status === 'failed') {
+        closeMessageLifecycle(dependencies, runtime, messageId, assistantText);
+        closeTurnLifecycle(dependencies, runtime, 'error', messageId, []);
         return await failRun(sessionFailure(reply.failure.message));
       }
-      emitEvent(dependencies, runtime, 'message.ended', {
-        role: 'assistant',
-        messageId: reply.messageId,
-        content: assistantContent
-          .filter((block) => block.type === 'text')
-          .map((block) => block.text)
-          .join(''),
-      });
-      emitEvent(dependencies, runtime, 'turn.ended', {
-        stopReason: 'completed',
-        messageId: reply.messageId,
-        toolCallIds: [],
-      });
+      closeMessageLifecycle(dependencies, runtime, reply.messageId, assistantText);
+      closeTurnLifecycle(dependencies, runtime, 'completed', reply.messageId, []);
       return { status: 'completed', assistantMessageId: reply.messageId };
     }
 
@@ -341,9 +376,13 @@ async function runTurn(
       modelOutcome.toolCalls.length > dependencies.policy.maxToolCallsPerModelCall
       || runtime.toolCallCount + modelOutcome.toolCalls.length > dependencies.policy.maxToolCallsPerRun
     ) {
+      closeMessageLifecycle(dependencies, runtime, messageId, assistantText);
+      closeTurnLifecycle(dependencies, runtime, 'error', messageId, []);
       return await failRun(loopLimitFailure('ToolCall limit reached.'));
     }
     if (runtime.toolRoundCount >= dependencies.policy.maxToolRoundsPerRun) {
+      closeMessageLifecycle(dependencies, runtime, messageId, assistantText);
+      closeTurnLifecycle(dependencies, runtime, 'error', messageId, []);
       return await failRun(loopLimitFailure('Tool round limit reached.'));
     }
 
@@ -357,16 +396,11 @@ async function runTurn(
       completedAt: dependencies.clock.now(),
     });
     if (response.status === 'failed') {
+      closeMessageLifecycle(dependencies, runtime, messageId, assistantText);
+      closeTurnLifecycle(dependencies, runtime, 'error', messageId, []);
       return await failRun(sessionFailure(response.failure.message));
     }
-    emitEvent(dependencies, runtime, 'message.ended', {
-      role: 'assistant',
-      messageId: response.messageId,
-      content: assistantContent
-        .filter((block) => block.type === 'text')
-        .map((block) => block.text)
-        .join(''),
-    });
+    closeMessageLifecycle(dependencies, runtime, response.messageId, assistantText);
     runtime.toolCallCount += modelOutcome.toolCalls.length;
     runtime.toolRoundCount += 1;
 
@@ -384,12 +418,10 @@ async function runTurn(
       ids: dependencies.ids,
       clock: dependencies.clock,
       events: {
-        runId: input.run.runId,
-        sessionId: input.run.sessionId,
         publish: (type, payload) => emitEvent(dependencies, runtime, type, payload),
       },
       observation: {
-        startSpan: () => runtime.observer.startSpan('tool.call'),
+        startSpan: (attributes) => runtime.observer.startSpan('tool.call', attributes),
         endSpan: (span, status) => runtime.observer.endSpan(span, status),
       },
       // The Agent Loop owns the whole approval lifecycle: it applies the
@@ -408,12 +440,20 @@ async function runTurn(
         // always finds the pending approval.
         const approvalWait = input.awaitApproval({ approval });
         emitApprovalRequested(dependencies, runtime, approval);
-        const approvalSpan = runtime.observer.startSpan('approval.wait');
-        let resolution: ApprovalResolution;
+        const approvalSpan = runtime.observer.startSpan('approval.wait', {
+          approvalId: approval.runApprovalId,
+          toolCallId: approval.toolCallId,
+        });
+        let resolution: ApprovalResolution | undefined;
         try {
           resolution = await approvalWait;
         } finally {
-          runtime.observer.endSpan(approvalSpan, 'ok');
+          // The Approval span ends with the real resolution; a cancelled wait
+          // is recorded as cancelled, not ok.
+          runtime.observer.endSpan(
+            approvalSpan,
+            resolution?.status === 'cancelled' ? 'cancelled' : 'ok',
+          );
         }
         if (resolution.status === 'cancelled') {
           emitApprovalResolved(dependencies, runtime, approval, 'cancelled');
@@ -441,18 +481,16 @@ async function runTurn(
           text: runtime.projection.text,
           thinking: runtime.projection.thinking,
         });
-        emitEvent(dependencies, runtime, 'turn.ended', {
-          stopReason: 'cancelled',
-          messageId: messageId,
-          toolCallIds: modelOutcome.toolCalls.map((call) => call.toolCallId),
-        });
+        closeTurnLifecycle(
+          dependencies, runtime, 'cancelled', messageId,
+          modelOutcome.toolCalls.map((call) => call.toolCallId),
+        );
         return cancelledResult();
       }
-      emitEvent(dependencies, runtime, 'turn.ended', {
-        stopReason: 'error',
-        messageId: messageId,
-        toolCallIds: modelOutcome.toolCalls.map((call) => call.toolCallId),
-      });
+      closeTurnLifecycle(
+        dependencies, runtime, 'error', messageId,
+        modelOutcome.toolCalls.map((call) => call.toolCallId),
+      );
       return await failRun(committed.failure);
     }
     if (batch.status === 'cancelled') {
@@ -460,29 +498,40 @@ async function runTurn(
         text: runtime.projection.text,
         thinking: runtime.projection.thinking,
       });
-      emitEvent(dependencies, runtime, 'turn.ended', {
-        stopReason: 'cancelled',
-        messageId: messageId,
-        toolCallIds: modelOutcome.toolCalls.map((call) => call.toolCallId),
-      });
+      closeTurnLifecycle(
+        dependencies, runtime, 'cancelled', messageId,
+        modelOutcome.toolCalls.map((call) => call.toolCallId),
+      );
       return cancelledResult();
     }
     if (batch.status === 'failed') {
-      emitEvent(dependencies, runtime, 'turn.ended', {
-        stopReason: 'error',
-        messageId: messageId,
-        toolCallIds: modelOutcome.toolCalls.map((call) => call.toolCallId),
-      });
+      closeTurnLifecycle(
+        dependencies, runtime, 'error', messageId,
+        modelOutcome.toolCalls.map((call) => call.toolCallId),
+      );
       return await failRun(toolCallRunFailure(batch.failure));
     }
-    emitEvent(dependencies, runtime, 'turn.ended', {
-      stopReason: 'tool_calls',
-      messageId: messageId,
-      toolCallIds: modelOutcome.toolCalls.map((call) => call.toolCallId),
-    });
+    closeTurnLifecycle(
+      dependencies, runtime, 'tool_calls', messageId,
+      modelOutcome.toolCalls.map((call) => call.toolCallId),
+    );
     return 'next';
   } finally {
-    dependencies.tools.releaseModelCallTools({ modelCallId });
+    // The ModelCall Tools route must always be released; a release failure is
+    // only a diagnostic and never overrides the already determined business
+    // result or saves a second terminal Reply.
+    try {
+      dependencies.tools.releaseModelCallTools({ modelCallId });
+    } catch (error) {
+      runtime.observer.recordLog({
+        level: 'error',
+        event: 'tool.router.release_failed',
+        attributes: {
+          modelCallId,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
   }
 }
 
@@ -498,11 +547,9 @@ async function commitToolResults(
     runId: input.run.runId,
     results,
   });
-  if (committed.status === 'failed') {
-    // The Agent Loop decides how the Run converges; a failed commit only
-    // reports the Session error back.
-    return { status: 'failed', failure: sessionFailure(committed.failure.message) };
-  }
+  // Every really saved ToolResult is a real Session fact: it always gets its
+  // own message.started/message.ended pair, even when a later commit fails.
+  // Unsaved results never publish Message events.
   const byId = new Map(results.map((result) => [result.toolCallId, result]));
   for (const item of committed.items) {
     const result = byId.get(item.toolCallId);
@@ -515,6 +562,11 @@ async function commitToolResults(
       messageId: item.messageId,
       content: result?.content ?? '',
     });
+  }
+  if (committed.status === 'failed') {
+    // The Agent Loop decides how the Run converges; a failed commit only
+    // reports the Session error back after the real facts were published.
+    return { status: 'failed', failure: sessionFailure(committed.failure.message) };
   }
   return 'committed';
 }
@@ -540,11 +592,28 @@ async function commitCancelledReply(
     completedAt: dependencies.clock.now(),
   });
   if (reply.status === 'saved') {
-    emitEvent(dependencies, runtime, 'message.ended', {
-      role: 'assistant',
-      messageId: reply.messageId,
-      content: partial.text,
-    });
+    if (runtime.messageLifecycleOpen) {
+      // Streaming identity: its started event was already published; close it
+      // exactly once with the projected content.
+      closeMessageLifecycle(dependencies, runtime, reply.messageId, partial.text);
+    } else if (runtime.activeModelMessageId === undefined) {
+      // Fresh identity (the Turn never started): the new real Session Message
+      // gets the complete lifecycle pair.
+      emitEvent(dependencies, runtime, 'message.started', {
+        role: 'assistant',
+        messageId: reply.messageId,
+      });
+      emitEvent(dependencies, runtime, 'message.ended', {
+        role: 'assistant',
+        messageId: reply.messageId,
+        content: partial.text,
+      });
+    }
+    // A streaming identity whose lifecycle already ended (tool batch cancel)
+    // must not get a second ended event.
+  } else {
+    // Nothing was saved; close any still-open streaming lifecycle instead.
+    closeMessageLifecycle(dependencies, runtime, runtime.activeModelMessageId ?? '', partial.text);
   }
 }
 
@@ -625,6 +694,43 @@ function emitApprovalResolved(
 // ---------------------------------------------------------------------------
 // Events, failures and helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Closes an open assistant Message lifecycle exactly once. The Agent Loop is
+ * the only place these decisions live; runners and the committer never emit
+ * them.
+ */
+function closeMessageLifecycle(
+  dependencies: AgentLoopDependencies,
+  runtime: LoopRuntime,
+  messageId: string,
+  content: string,
+): void {
+  if (!runtime.messageLifecycleOpen) return;
+  runtime.messageLifecycleOpen = false;
+  emitEvent(dependencies, runtime, 'message.ended', {
+    role: 'assistant',
+    messageId,
+    content,
+  });
+}
+
+/** Closes an open Turn lifecycle exactly once. */
+function closeTurnLifecycle(
+  dependencies: AgentLoopDependencies,
+  runtime: LoopRuntime,
+  stopReason: 'completed' | 'tool_calls' | 'error' | 'cancelled',
+  messageId: string,
+  toolCallIds: readonly string[],
+): void {
+  if (!runtime.turnLifecycleOpen) return;
+  runtime.turnLifecycleOpen = false;
+  emitEvent(dependencies, runtime, 'turn.ended', {
+    stopReason,
+    messageId,
+    toolCallIds: [...toolCallIds],
+  });
+}
 
 function emitEvent<TType extends EventType>(
   dependencies: AgentLoopDependencies,
@@ -764,13 +870,3 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-class ContextBuildFailure extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    readonly retryable: boolean,
-  ) {
-    super(message);
-    this.name = 'ContextBuildFailure';
-  }
-}

@@ -493,8 +493,17 @@ describe('Engine RuntimeEvents', () => {
     });
 
     const events = collectEvents(fixture, started.run.runId);
-    expect(events.filter((event) => event.type === 'message.started')).toHaveLength(1);
-    expect(events.filter((event) => event.type === 'message.ended')).toHaveLength(1);
+    // The streamed assistant Message and the persisted failed Reply each get
+    // exactly one started/ended pair; the Turn closes once with error.
+    const messageStarts = events.filter((event) => event.type === 'message.started');
+    const messageEnds = events.filter((event) => event.type === 'message.ended');
+    expect(messageStarts).toHaveLength(2);
+    expect(messageEnds).toHaveLength(2);
+    // The failed Reply is a real Session Message: its lifecycle pair matches
+    // the reply identity, and every ended has a matching started.
+    const endedIds = messageEnds.map((event) => event.payload.messageId);
+    const startedIds = messageStarts.map((event) => event.payload.messageId);
+    expect(endedIds.sort()).toEqual(startedIds.sort());
     expect(events.filter((event) => event.type === 'turn.started')).toHaveLength(1);
     expect(events.filter((event) => event.type === 'turn.ended')).toHaveLength(1);
     expect(events.find((event) => event.type === 'turn.ended')?.payload).toMatchObject({

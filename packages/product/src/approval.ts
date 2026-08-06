@@ -48,7 +48,7 @@ export function createProductApproval(
     async resolve(request) {
       const result = await runs.resolveApproval({
         approvalId: request.approvalRequestId,
-        decision: toEngineApprovalDecision(request.decision),
+        decision: toRunApprovalDecision(request.decision),
       });
       if (result.status === 'failed') {
         return {
@@ -87,7 +87,7 @@ export function createProductApproval(
   };
 }
 
-function toEngineApprovalDecision(
+function toRunApprovalDecision(
   decision: ProductApprovalDecision,
 ): RunApprovalDecision {
   return decision.decision === 'approved'

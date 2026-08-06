@@ -18,6 +18,7 @@ import { approvalDecisionFor } from './runs-test-fixtures';
 import {
   permissionService,
   registeredTool,
+  restrictedExecutionAccess,
   succeeded,
   toolsForRun,
   type RegisteredTool,
@@ -35,6 +36,7 @@ function call(order: number, toolName: string, input: unknown = { value: toolNam
 
 function createBatchHarness(input: {
   tools?: RegisteredTool[];
+  toolsOverride?: RunToolCallBatchRequest['tools'];
   permissions?: Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>;
   executeTool?: TestToolExecute;
   requestApproval?: (approvalInput: RequestApprovalInput) => Promise<ApprovalResolution>;
@@ -54,7 +56,7 @@ function createBatchHarness(input: {
     modelCallId: 'model-call:1',
     calls: input.calls ?? [],
     signal: abortController.signal,
-    tools: toolsForRun(input.tools ?? [], input.executeTool),
+    tools: input.toolsOverride ?? toolsForRun(input.tools ?? [], input.executeTool),
     permissions: input.permissions ?? permissionService(),
     policy,
     ids: { createToolExecutionId: () => `tool-execution:${++executionNumber}` },
@@ -92,19 +94,19 @@ describe('ToolCall Runner', () => {
     const tools = toolsForRun([tool], async ({ toolName }) => succeeded(toolName));
     const harness = createBatchHarness({
       tools: [tool],
+      toolsOverride: {
+        ...tools,
+        routeToolCall: (route) => {
+          routedIds.push(route.modelCallId);
+          return tools.routeToolCall(route);
+        },
+        executeToolInvocation: (input, options) => {
+          executedIds.push(input.invocation.modelCallId);
+          return tools.executeToolInvocation(input, options);
+        },
+      },
       calls: [call(0, 'lookup'), call(1, 'lookup')],
     });
-    harness.request.tools = {
-      ...tools,
-      routeToolCall: (route) => {
-        routedIds.push(route.modelCallId);
-        return tools.routeToolCall(route);
-      },
-      executeToolInvocation: (input, options) => {
-        executedIds.push(input.invocation.modelCallId);
-        return tools.executeToolInvocation(input, options);
-      },
-    };
 
     const outcome = await harness.run();
 
@@ -171,7 +173,7 @@ describe('ToolCall Runner', () => {
       executeTool: async ({ toolName }) => ({
         type: 'failed',
         toolName,
-        error: { code: 'tool_failed', message: 'boom' },
+        error: { code: 'tool_execution_failed', message: 'boom' },
         normalizedResult: { kind: 'error', content: 'boom', isError: true, truncated: false },
       }),
       calls: [call(0, 'protected-tool')],
@@ -181,19 +183,19 @@ describe('ToolCall Runner', () => {
       results: [{
         toolCallId: 'call:0',
         status: 'failure',
-        error: { code: 'tool_failed' },
+        error: { code: 'tool_execution_failed' },
       }],
     });
   });
 
   it('requests approval only through requestApproval and converts a denied decision', async () => {
     const tool = registeredTool('approval-tool');
-    const requestApproval = vi.fn(async () => ({
-      status: 'denied',
+    const requestApproval = vi.fn(async (_approvalInput: RequestApprovalInput) => ({
+      status: 'denied' as const,
       decision: {
         approvalRequestId: 'approval:1',
-        decision: 'denied',
-        decidedBy: 'user',
+        decision: 'denied' as const,
+        decidedBy: 'user' as const,
         decidedAt: '2026-07-31T00:00:00.000Z',
       },
     }));
@@ -217,7 +219,7 @@ describe('ToolCall Runner', () => {
     // The approval request flowed through the callback with the call facts;
     // the runner never touches Run state or the registry.
     expect(requestApproval).toHaveBeenCalledOnce();
-    expect(requestApproval.mock.calls[0]?.[0]).toMatchObject({
+    expect((requestApproval.mock.calls[0]?.[0] as RequestApprovalInput | undefined)).toMatchObject({
       call: { toolCallId: 'call:0' },
       decision: { type: 'requires_approval' },
     });
@@ -255,9 +257,100 @@ describe('ToolCall Runner', () => {
     ]);
   });
 
+  it('converges as cancelled when cancellation lands during permission evaluation', async () => {
+    const tool = registeredTool('protected-tool');
+    let settlePermission!: (value: unknown) => void;
+    const permissionGate = new Promise((resolve) => {
+      settlePermission = resolve;
+    });
+    const evaluateToolCall = vi.fn(async () => {
+      await permissionGate;
+      return {
+        status: 'ok',
+        operations: [],
+        decision: { type: 'allow', operations: [], safetyAssessment: 'safe', safetySummary: 'Safe.', reason: 'Allowed.' },
+        approvalSubject: { version: 1, toolCallId: 'call:0', toolIdentity: {}, operations: [], safetyAssessment: 'safe', riskFacts: {}, fingerprint: 'f' },
+        executionAccess: restrictedExecutionAccess,
+      };
+    });
+    const executeTool = vi.fn();
+    const harness = createBatchHarness({
+      tools: [tool],
+      permissions: {
+        evaluateToolCall: evaluateToolCall as never,
+        applyApprovalDecision: vi.fn(),
+      },
+      executeTool,
+      calls: [call(0, 'protected-tool')],
+    });
+    const running = harness.run();
+    await vi.waitFor(() => {
+      expect(evaluateToolCall).toHaveBeenCalled();
+    });
+    harness.abort();
+    settlePermission({ status: 'ok' });
+
+    const outcome = await running;
+
+    expect(outcome.status).toBe('cancelled');
+    if (outcome.status !== 'cancelled') return;
+    // The stale permission result never started a new execution.
+    expect(executeTool).not.toHaveBeenCalled();
+    expect(harness.events.some((event) => event.type === 'tool_execution.started')).toBe(false);
+    expect(outcome.results).toEqual([
+      expect.objectContaining({ toolCallId: 'call:0', status: 'cancelled' }),
+    ]);
+  });
+
+  it('converges as cancelled when cancellation lands after the approval resolved', async () => {
+    const tool = registeredTool('approval-tool');
+    let settleApproval!: (resolution: ApprovalResolution) => void;
+    const approvalGate = new Promise<ApprovalResolution>((resolve) => {
+      settleApproval = resolve;
+    });
+    const executeTool = vi.fn();
+    const harness = createBatchHarness({
+      tools: [tool],
+      permissions: permissionService((request) => approvalDecisionFor(request)),
+      requestApproval: vi.fn(async () => approvalGate),
+      executeTool,
+      calls: [call(0, 'approval-tool')],
+    });
+    const running = harness.run();
+    await vi.waitFor(() => {
+      expect(harness.requestApproval).toHaveBeenCalled();
+    });
+    harness.abort();
+    // The user approved, but cancellation won before the original call stack
+    // resumed: the approved execution must not start.
+    settleApproval({
+      status: 'approved',
+      decision: {
+        approvalRequestId: 'approval:1',
+        decision: 'approved',
+        optionId: 'once:call:0',
+        decidedBy: 'user',
+        decidedAt: '2026-07-31T00:00:00.000Z',
+      },
+    });
+
+    const outcome = await running;
+
+    expect(outcome.status).toBe('cancelled');
+    if (outcome.status !== 'cancelled') return;
+    expect(executeTool).not.toHaveBeenCalled();
+    expect(harness.events.some((event) => event.type === 'tool_execution.started')).toBe(false);
+    expect(outcome.results).toEqual([
+      expect.objectContaining({ toolCallId: 'call:0', status: 'cancelled' }),
+    ]);
+  });
+
   it('converges as cancelled when the tool execution observes the abort', async () => {
     const tool = registeredTool('slow-tool');
-    const executeTool = vi.fn(async (_request: { toolName: string }, options?: { signal?: AbortSignal }) => new Promise((resolve) => {
+    const executeTool = vi.fn(async (
+      _request: { toolName: string },
+      options?: { signal?: AbortSignal },
+    ): Promise<import('@megumi/tools').ToolExecutionResult> => new Promise((resolve) => {
       options?.signal?.addEventListener('abort', () => resolve({
         type: 'failed',
         toolName: 'slow-tool',

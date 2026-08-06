@@ -10,6 +10,7 @@ import type { Prompt } from '@megumi/context';
 import { AssistantMessageEventStream } from '../../../packages/ai/src/utils/event-stream';
 import {
   runModelCall,
+  type RebuildPromptResult,
   type RunModelCallRequest,
 } from '../../../packages/engine/src/model-call-runner';
 import {
@@ -41,7 +42,7 @@ const zeroUsage = {
 };
 
 function baseMessage(
-  overrides: Omit<AssistantMessage, 'role' | 'api' | 'provider' | 'model' | 'timestamp'>,
+  overrides: Partial<Omit<AssistantMessage, 'role' | 'api' | 'provider' | 'model' | 'timestamp'>>,
 ): AssistantMessage {
   return {
     role: 'assistant',
@@ -51,13 +52,13 @@ function baseMessage(
     usage: zeroUsage,
     timestamp: 1,
     ...overrides,
-  };
+  } as AssistantMessage;
 }
 
 function createHarness(input: {
   streams?: AssistantMessageEventStream[];
-  contextCompact?: ReturnType<typeof vi.fn>;
-  buildPrompt?: () => Promise<Prompt>;
+  contextCompact?: (request: import('@megumi/context').CompactContextRequest) => Promise<import('@megumi/context').CompactContextResult>;
+  buildPrompt?: () => Promise<RebuildPromptResult>;
   policy?: Partial<typeof policy>;
   runnerModel?: Model<Api>;
 } = {}) {
@@ -85,14 +86,14 @@ function createHarness(input: {
       return stream;
     }) as never,
   };
-  const compact = input.contextCompact ?? vi.fn(async () => ({
-    status: 'nothing_to_compact' as const,
-    reason: 'no_historical_messages',
-  }));
-  const buildPrompt = input.buildPrompt ?? vi.fn(async (): Promise<Prompt> => ({
-    systemPrompt: 'rebuilt',
-    messages: [],
-    tools: [],
+  const compact: (request: import('@megumi/context').CompactContextRequest) => Promise<import('@megumi/context').CompactContextResult>
+    = input.contextCompact ?? (async () => ({
+      status: 'nothing_to_compact' as const,
+      reason: 'no_historical_messages',
+    }));
+  const buildPrompt = input.buildPrompt ?? vi.fn(async (): Promise<RebuildPromptResult> => ({
+    status: 'ready',
+    prompt: { systemPrompt: 'rebuilt', messages: [], tools: [] },
   }));
   const prompt: Prompt = { systemPrompt: 'test', messages: [], tools: [] };
   const abortController = new AbortController();
@@ -171,7 +172,6 @@ describe('ModelCall Runner', () => {
     lengthStream.push({ type: 'start', partial: baseMessage({ content: [], stopReason: 'length' }) });
     lengthStream.push({ type: 'done', reason: 'length', message: baseMessage({
       content: [{ type: 'text', text: 'partial' }],
-      usage: { input: 100, output: 50, cacheRead: 0, cacheWrite: 0, totalTokens: 150, cost: zeroUsage.cost },
       stopReason: 'length',
     }) });
     const truncated = await createHarness({ streams: [lengthStream] }).run();
@@ -247,6 +247,37 @@ describe('ModelCall Runner', () => {
     expect(harness.events.filter((event) => event.type === 'message.started')).toHaveLength(0);
   });
 
+  it('converts a failed Prompt rebuild after compaction into a Context failure', async () => {
+    const compact = vi.fn(compactedOverflowCompaction);
+    const buildPrompt = vi.fn(async () => ({
+      status: 'failed' as const,
+      failure: { code: 'context_build_failed', message: 'Prompt rebuild failed.', retryable: false },
+    }));
+    const harness = createHarness({
+      contextCompact: compact,
+      buildPrompt,
+      streams: [assistantStreamWithUsage('overflowing', {
+        input: 64_001, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 64_002,
+      })],
+    });
+    const outcome = await harness.run();
+
+    // The known Context failure keeps its code and message; it never becomes
+    // a generic internal error.
+    expect(outcome).toMatchObject({
+      status: 'failed',
+      failure: {
+        code: 'context_failed',
+        owner: 'context',
+        causeCode: 'context_build_failed',
+        message: 'Prompt rebuild failed.',
+        retryable: false,
+      },
+    });
+    expect(compact).toHaveBeenCalledTimes(1);
+    expect(buildPrompt).toHaveBeenCalledTimes(1);
+  });
+
   it('returns the current attempt projection when cancelled', async () => {
     const harness = createHarness({ streams: [partialNeverEndingStream('partial answer')] });
     const running = harness.run();
@@ -300,10 +331,11 @@ describe('ModelCall Runner', () => {
   });
 
   it('preserves the Context compaction failure code', async () => {
-    const compact = vi.fn(async () => ({
-      status: 'failed' as const,
-      failure: { code: 'compaction_failed', message: 'Summary generation failed.', retryable: false },
-    }));
+    const compact: (request: import('@megumi/context').CompactContextRequest) => Promise<import('@megumi/context').CompactContextResult>
+      = async () => ({
+        status: 'failed' as const,
+        failure: { code: 'compaction_failed', message: 'Summary generation failed.', retryable: false },
+      });
     const harness = createHarness({
       contextCompact: compact,
       streams: [errorOverflowStream()],

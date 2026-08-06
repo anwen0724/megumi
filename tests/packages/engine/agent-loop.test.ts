@@ -2,6 +2,7 @@
  * Protects Engine's Context-model-Session-tool loop and semantic commit order.
  */
 import { describe, expect, it, vi } from 'vitest';
+import type { CreateRunsOptions } from '@megumi/engine';
 import { createToolRouter, registeredTool, succeeded } from './tool-call-test-fixtures';
 import {
   assistantStream,
@@ -195,8 +196,8 @@ describe('Agent Loop', () => {
     });
     // A failed model-response commit must stop the execution: no ToolCall runs
     // and no next Context build uses unpersisted facts.
-    fixture.options.session.saveModelResponse = async () => ({
-      status: 'failed',
+    fixture.options.session.saveModelResponse = () => ({
+      status: 'failed' as const,
       failure: { code: 'session_error', message: 'Model response failed.' },
     });
 
@@ -210,8 +211,120 @@ describe('Agent Loop', () => {
     });
     expect(fixture.writes).toEqual(['user']);
     expect(fixture.contextRuns).toHaveLength(1);
+    // The started Turn and Message still close exactly once on the commit failure.
+    const events = collectEvents(fixture, started.run.runId);
+    expect(events.filter((event) => event.type === 'message.started')).toHaveLength(1);
+    expect(events.filter((event) => event.type === 'message.ended')).toHaveLength(1);
+    expect(events.filter((event) => event.type === 'turn.ended')).toHaveLength(1);
+    expect(events.find((event) => event.type === 'turn.ended')?.payload).toMatchObject({
+      stopReason: 'error',
+    });
   });
 
+
+  it('closes the started message and turn when the final reply commit fails', async () => {
+    const fixture = createRunsFixture({
+      streams: [assistantStream('final answer')],
+    });
+    fixture.options.session.saveAssistantReply = () => ({
+      status: 'failed' as const,
+      failure: { code: 'session_error', message: 'Final reply failed.' },
+    });
+
+    const started = await startedRun(fixture);
+    await settleRun(fixture);
+
+    expect(fixture.published.at(-1)?.payload).toMatchObject({
+      status: 'failed',
+      error: { code: 'session_failed' },
+    });
+    const events = collectEvents(fixture, started.run.runId);
+    // The streamed assistant Message and its Turn close exactly once; the
+    // failed commit saved nothing, so no extra Reply lifecycle appears.
+    expect(events.filter((event) => event.type === 'message.started')).toHaveLength(1);
+    expect(events.filter((event) => event.type === 'message.ended')).toHaveLength(1);
+    expect(events.filter((event) => event.type === 'turn.ended')).toHaveLength(1);
+    expect(events.find((event) => event.type === 'turn.ended')?.payload).toMatchObject({
+      stopReason: 'error',
+    });
+  });
+
+  it('publishes real partial ToolResult facts before a later commit failure stops the Run', async () => {
+    const tool = registeredTool('lookup');
+    const fixture = createRunsFixture({
+      tools: [tool],
+      streams: [
+        assistantStream('', {
+          id: 'call:1',
+          name: tool.registeredToolName,
+          arguments: { value: 'x' },
+        }),
+        assistantStream('', {
+          id: 'call:2',
+          name: tool.registeredToolName,
+          arguments: { value: 'y' },
+        }),
+      ],
+    });
+    // The first ToolResult saves, the second fails.
+    let toolSaves = 0;
+    fixture.options.session.saveToolResultMessage = (request) => {
+      toolSaves += 1;
+      if (toolSaves === 2) {
+        return {
+          status: 'failed' as const,
+          failure: { code: 'session_error', message: 'Second tool result failed.' },
+        };
+      }
+      return {
+        status: 'saved' as const,
+        message: {
+          message_id: request.message_id,
+          session_id: request.session_id,
+          run_id: request.run_id,
+          message_kind: 'tool_result',
+          tool_call_id: request.tool_call_id,
+          tool_name: request.tool_name,
+          status: request.status,
+          content: request.content,
+          created_at: request.completed_at,
+          completed_at: request.completed_at,
+        },
+        entry: {
+          entry_id: `entry:tool:${request.message_id}`,
+          session_id: request.session_id,
+          entry_type: 'message',
+          message_id: request.message_id,
+          created_at: request.completed_at,
+        },
+      };
+    };
+
+    const started = await startedRun(fixture);
+    await settleRun(fixture);
+
+    expect(fixture.published.at(-1)?.payload).toMatchObject({
+      status: 'failed',
+      error: { code: 'session_failed' },
+    });
+    const events = collectEvents(fixture, started.run.runId);
+    const toolResultStarts = events.filter(
+      (event) => event.type === 'message.started' && event.payload.role === 'tool_result',
+    );
+    const toolResultEnds = events.filter(
+      (event) => event.type === 'message.ended' && event.payload.role === 'tool_result',
+    );
+    // Only the really saved first ToolResult got its Message lifecycle pair.
+    expect(toolResultStarts).toHaveLength(1);
+    expect(toolResultEnds).toHaveLength(1);
+    expect(toolResultStarts[0]?.payload).toMatchObject({ messageId: expect.any(String) });
+    expect(toolResultEnds[0]?.payload).toMatchObject({ content: 'result:lookup' });
+    // Each started Turn closes exactly once: the first with tool_calls, the
+    // second with error after the commit failure.
+    const turnEnds = events.filter((event) => event.type === 'turn.ended');
+    expect(turnEnds).toHaveLength(2);
+    expect(turnEnds.map((event) => event.payload.stopReason).sort()).toEqual(['error', 'tool_calls']);
+  });
 
   it('commits one final Assistant Reply and completes the Run', async () => {
     const fixture = createRunsFixture({
@@ -415,6 +528,25 @@ describe('Agent Loop', () => {
       status: 'failed',
       reason_code: 'loop_limit_exceeded',
     });
+    // The second Turn had already started its Message when the round limit
+    // hit: every started assistant Message (turn one, turn two and the failed
+    // Reply) closes exactly once, and the second Turn ends with error.
+    const events = collectEvents(fixture, started.run.runId);
+    const assistantStarts = events.filter(
+      (event): event is typeof event & { payload: { role: 'assistant'; messageId: string } } =>
+        event.type === 'message.started' && event.payload.role === 'assistant',
+    );
+    const assistantEnds = events.filter(
+      (event): event is typeof event & { payload: { role: 'assistant'; messageId: string } } =>
+        event.type === 'message.ended' && event.payload.role === 'assistant',
+    );
+    expect(assistantStarts).toHaveLength(3);
+    expect(assistantEnds).toHaveLength(3);
+    expect(assistantEnds.map((event) => event.payload.messageId).sort())
+      .toEqual(assistantStarts.map((event) => event.payload.messageId).sort());
+    expect(events.filter((event) => event.type === 'turn.ended')).toHaveLength(2);
+    const turnEnds = events.filter((event) => event.type === 'turn.ended');
+    expect(turnEnds.map((event) => event.payload.stopReason).sort()).toEqual(['error', 'tool_calls']);
   });
 
   it('closes persisted ToolCalls when Permissions cannot evaluate them', async () => {
@@ -536,25 +668,6 @@ describe('Agent Loop', () => {
     expect(events.filter((event) => event.type === 'turn.ended')).toHaveLength(1);
   });
 
-  it('clears projected text and thinking before a retry attempt', async () => {
-    const fixture = createRunsFixture({
-      streams: [retryableFailedStream('stale text'), assistantStream('answer')],
-      policy: { maxModelCallAttempts: 2 },
-    });
-    const started = await startedRun(fixture);
-    await settleRun(fixture);
-
-    const events = collectEvents(fixture, started.run.runId);
-    const reset = events.findIndex((event) => (
-      event.type === 'message.update' && event.payload.content === ''
-    ));
-    const retryStarted = events.findIndex((event) => event.type === 'turn.retry.started');
-    expect(reset).toBeGreaterThan(-1);
-    expect(retryStarted).toBeGreaterThan(-1);
-    // The reset precedes the retried attempt; no stale text survives.
-    expect(reset).toBeLessThan(retryStarted);
-  });
-
   it('passes the Provider Request Retry budget to the adapter without counting attempts', async () => {
     const fixture = createRunsFixture({
       streams: [retryableFailedStream('attempt one'), assistantStream('answer')],
@@ -609,6 +722,100 @@ describe('Agent Loop', () => {
     ));
     // Both the failed and the successful attempt are recorded, never dropped.
     expect(attemptLogs).toHaveLength(2);
+    // Attempt, usage, duration and retry are recorded as Measurements with
+    // their real units; the retry measurement only fires for the retried call.
+    const measurements = recordMeasurement.mock.calls.map((call) => call[0] as { name: string; unit: string });
+    const names = measurements.map((measurement) => measurement.name);
+    expect(names).toContain('model.call.attempt');
+    expect(names).toContain('model.call.usage');
+    expect(names).toContain('model.call.duration_ms');
+    expect(names).toContain('model.call.retry');
+    expect(measurements.find((m) => m.name === 'model.call.usage')?.unit).toBe('token');
+    expect(measurements.find((m) => m.name === 'model.call.duration_ms')?.unit).toBe('ms');
+    const attemptMeasurements = measurements.filter((m) => m.name === 'model.call.attempt');
+    expect(attemptMeasurements.map((m) => m.unit)).toEqual(['count', 'count']);
+  });
+
+  it('ends Run, ModelCall and ToolCall spans with real statuses and identity facts', async () => {
+    const startSpan = vi.fn(() => ({ spanId: 'span:1' }));
+    const endSpan = vi.fn();
+    const endTrace = vi.fn();
+    const observability = {
+      startTrace: vi.fn(() => ({ traceId: 'trace:1' })),
+      endTrace,
+      startSpan,
+      endSpan,
+      runInTraceContext: vi.fn((_trace: unknown, operation: () => unknown) => operation()),
+      runInSpanContext: vi.fn(),
+      getCurrentTrace: vi.fn(),
+      getCurrentSpan: vi.fn(),
+      recordLog: vi.fn(),
+      recordMeasurement: vi.fn(),
+      flush: vi.fn(async () => undefined),
+    } as never;
+    const tool = registeredTool('lookup');
+    const fixture = createRunsFixture({
+      tools: [tool],
+      streams: [
+        assistantStream('', { id: 'call:1', name: 'lookup', arguments: { value: 'x' } }),
+        assistantStream('final answer'),
+      ],
+      observability,
+    });
+    await startedRun(fixture);
+    await settleRun(fixture);
+
+    // The ModelCall span carries its modelCallId; the ToolCall span carries
+    // modelCallId and toolCallId.
+    expect(startSpan).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'model.call',
+      attributes: expect.objectContaining({ modelCallId: expect.any(String) }),
+    }));
+    expect(startSpan).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'tool.call',
+      attributes: expect.objectContaining({
+        modelCallId: expect.any(String),
+        toolCallId: 'call:1',
+      }),
+    }));
+    // Every span and the trace end ok for a completed Run.
+    expect(endSpan.mock.calls.every((call) => (call[0] as { status: string }).status === 'ok')).toBe(true);
+    expect(endTrace).toHaveBeenCalledWith(expect.objectContaining({ status: 'ok' }));
+  });
+
+  it('ends the Run trace as cancelled and error for their real outcomes', async () => {
+    const endTrace = vi.fn();
+    const observability = {
+      startTrace: vi.fn(() => ({ traceId: 'trace:1' })),
+      endTrace,
+      startSpan: vi.fn(() => ({ spanId: 'span:1' })),
+      endSpan: vi.fn(),
+      runInTraceContext: vi.fn((_trace: unknown, operation: () => unknown) => operation()),
+      runInSpanContext: vi.fn(),
+      getCurrentTrace: vi.fn(),
+      getCurrentSpan: vi.fn(),
+      recordLog: vi.fn(),
+      recordMeasurement: vi.fn(),
+      flush: vi.fn(async () => undefined),
+    } as never;
+
+    const cancelledFixture = createRunsFixture({
+      streams: [neverEndingStream()],
+      observability,
+    });
+    const cancelled = await startedRun(cancelledFixture);
+    await requestedCancellation(cancelledFixture, cancelled.run.runId);
+    await settleRun(cancelledFixture);
+    expect(endTrace).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'cancelled' }));
+
+    const failedFixture = createRunsFixture({
+      streams: [retryableFailedStream('boom')],
+      policy: { maxModelCallAttempts: 1 },
+      observability,
+    });
+    await startedRun(failedFixture);
+    await settleRun(failedFixture);
+    expect(endTrace).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'error' }));
   });
 
   it('executes parallel-mode tool calls concurrently and commits results in model order', async () => {
@@ -669,11 +876,20 @@ describe('Agent Loop', () => {
       executeTool: async ({ toolName }) => succeeded(toolName),
     });
     // Replace the fixture tools with a router-tracked implementation.
-    const engineOptions = fixture.options as CreateEngineOptions & { tools: unknown };
-    engineOptions.tools = {
-      resolveModelCallTools: (scope) => ({ status: 'resolved', definitions: resolve(scope).definitions() }),
-      routeToolCall: (call) => resolve(call).route(call),
-      executeToolInvocation: (input, options) => {
+    const runOptions = fixture.options as CreateRunsOptions & { tools: unknown };
+    runOptions.tools = {
+      resolveModelCallTools: (scope: { modelCallId: string; runId: string; sessionId: string; workspaceId: string }) => (
+        { status: 'resolved', definitions: resolve(scope).definitions() }
+      ),
+      routeToolCall: (call: { runId: string; sessionId: string; workspaceId: string; modelCallId: string; toolCallId: string; toolName: string; input: unknown }) => (
+        resolve(call).route(call)
+      ),
+      executeToolInvocation: (input: {
+        invocation: {
+          runId: string; sessionId: string; workspaceId: string; modelCallId: string;
+          toolCallId: string; toolName: string; input: unknown;
+        };
+      }) => {
         const router = resolve({
           runId: input.invocation.runId,
           sessionId: input.invocation.sessionId,
@@ -681,10 +897,6 @@ describe('Agent Loop', () => {
           modelCallId: input.invocation.modelCallId,
         });
         return router.route({
-          runId: input.invocation.runId,
-          sessionId: input.invocation.sessionId,
-          workspaceId: input.invocation.workspaceId,
-          modelCallId: input.invocation.modelCallId,
           toolCallId: input.invocation.toolCallId,
           toolName: input.invocation.toolName,
           input: input.invocation.input,
@@ -692,7 +904,7 @@ describe('Agent Loop', () => {
           ? Promise.reject(new Error('route failed'))
           : Promise.resolve(succeeded(input.invocation.toolName));
       },
-      releaseModelCallTools: ({ modelCallId }) => { routers.delete(modelCallId); },
+      releaseModelCallTools: ({ modelCallId }: { modelCallId: string }) => { routers.delete(modelCallId); },
     } as never;
 
     const started = await startedRun(fixture);
@@ -716,12 +928,14 @@ describe('Agent Loop', () => {
       return router;
     };
     const trackedTools = {
-      resolveModelCallTools: (scope: { modelCallId: string }) => ({
+      resolveModelCallTools: (scope: { modelCallId: string; runId: string; sessionId: string; workspaceId: string }) => ({
         status: 'resolved' as const,
         definitions: resolve(scope).definitions(),
       }),
-      routeToolCall: (call: { modelCallId: string }) => resolve(call).route(call),
-      executeToolInvocation: (input: { invocation: { modelCallId: string } }) => (
+      routeToolCall: (call: { modelCallId: string; runId: string; sessionId: string; workspaceId: string; toolCallId: string; toolName: string; input: unknown }) => (
+        resolve(call).route(call)
+      ),
+      executeToolInvocation: (input: { invocation: { runId: string; sessionId: string; workspaceId: string; modelCallId: string; toolCallId: string; toolName: string; input: unknown } }) => (
         Promise.resolve(succeeded('lookup'))
       ),
       releaseModelCallTools: ({ modelCallId }: { modelCallId: string }) => { routers.delete(modelCallId); },
@@ -777,18 +991,18 @@ describe('Agent Loop', () => {
     expect(fixture.writes).toEqual(['user', 'assistant:completed']);
   });
 
-  it('still converges and ends Observability when Tool route release fails', async () => {
-    const endTrace = vi.fn();
+  it('keeps the completed Run outcome when Tool route release fails and records the cleanup error', async () => {
+    const recordLog = vi.fn();
     const observability = {
       startTrace: vi.fn(() => ({ traceId: 'trace:1' })),
-      endTrace,
+      endTrace: vi.fn(),
       startSpan: vi.fn(() => ({ spanId: 'span:1' })),
       endSpan: vi.fn(),
       runInTraceContext: vi.fn((_trace: unknown, operation: () => unknown) => operation()),
       runInSpanContext: vi.fn(),
       getCurrentTrace: vi.fn(),
       getCurrentSpan: vi.fn(),
-      recordLog: vi.fn(),
+      recordLog,
       recordMeasurement: vi.fn(),
       flush: vi.fn(async () => undefined),
     } as never;
@@ -796,18 +1010,65 @@ describe('Agent Loop', () => {
       streams: [assistantStream('answer')],
       observability,
     });
-    // A failing route release must not skip the remaining cleanup attempts.
+    // A failing route release is only a diagnostic: it must not overwrite the
+    // completed business result or add a second terminal Reply.
     fixture.options.tools.releaseModelCallTools = () => { throw new Error('release failed'); };
 
     const started = await startedRun(fixture);
     await settleRun(fixture);
 
-    // The failure follows the current semantics (internal error), and the
-    // run-scoped Observability still ended exactly once.
-    expect(fixture.published.at(-1)?.payload).toMatchObject({
-      status: 'failed',
-      error: { code: 'internal_error' },
+    expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'completed' });
+    // Exactly one terminal Reply matching the real business result.
+    expect(fixture.assistantReplies).toEqual([
+      expect.objectContaining({ status: 'completed' }),
+    ]);
+    expect(recordLog).toHaveBeenCalledWith(expect.objectContaining({
+      level: 'error',
+      event: 'tool.router.release_failed',
+    }));
+  });
+
+  it('keeps the failed and cancelled Run outcomes when Tool route release fails', async () => {
+    const recordLog = vi.fn();
+    const observability = {
+      startTrace: vi.fn(() => ({ traceId: 'trace:1' })),
+      endTrace: vi.fn(),
+      startSpan: vi.fn(() => ({ spanId: 'span:1' })),
+      endSpan: vi.fn(),
+      runInTraceContext: vi.fn((_trace: unknown, operation: () => unknown) => operation()),
+      runInSpanContext: vi.fn(),
+      getCurrentTrace: vi.fn(),
+      getCurrentSpan: vi.fn(),
+      recordLog,
+      recordMeasurement: vi.fn(),
+      flush: vi.fn(async () => undefined),
+    } as never;
+
+    // Failed business result stays failed with its own error code.
+    const failedFixture = createRunsFixture({
+      streams: [retryableFailedStream('boom')],
+      policy: { maxModelCallAttempts: 1 },
+      observability,
     });
-    expect(endTrace).toHaveBeenCalledTimes(1);
+    failedFixture.options.tools.releaseModelCallTools = () => { throw new Error('release failed'); };
+    await startedRun(failedFixture);
+    await settleRun(failedFixture);
+    expect(failedFixture.published.at(-1)?.payload).toMatchObject({
+      status: 'failed',
+      error: { code: 'model_call_failed' },
+    });
+    expect(failedFixture.assistantReplies).toHaveLength(1);
+
+    // Cancelled business result stays cancelled.
+    const cancelledFixture = createRunsFixture({
+      streams: [neverEndingStream()],
+      observability,
+    });
+    cancelledFixture.options.tools.releaseModelCallTools = () => { throw new Error('release failed'); };
+    const cancelled = await startedRun(cancelledFixture);
+    await requestedCancellation(cancelledFixture, cancelled.run.runId);
+    await settleRun(cancelledFixture);
+    expect(cancelledFixture.published.at(-1)?.payload).toMatchObject({ status: 'cancelled' });
+    expect(cancelledFixture.assistantReplies).toHaveLength(1);
   });
 });

@@ -46,17 +46,16 @@ export type ApprovalResolution =
   | { readonly status: 'denied'; readonly decision: ApprovalDecision }
   | { readonly status: 'cancelled' };
 
-/** The narrowed Runtime Event publish the runner needs, with fixed correlation. */
+/** The narrowed Runtime Event publish the runner needs; correlation is fixed by the loop. */
 export interface ToolCallEventSource {
-  readonly runId: string;
-  readonly sessionId: string;
   publish<TType extends EventType>(type: TType, payload: EventPayloadByType[TType]): void;
 }
 
 /** The narrowed best-effort span surface the runner needs. */
 export interface ToolCallObservation {
-  startSpan(): SpanHandle | undefined;
-  endSpan(span: SpanHandle | undefined, status: 'ok' | 'cancelled'): void;
+  /** Opens a tool.call span carrying the modelCallId and toolCallId facts. */
+  startSpan(attributes?: Record<string, unknown>): SpanHandle | undefined;
+  endSpan(span: SpanHandle | undefined, status: 'ok' | 'error' | 'cancelled'): void;
 }
 
 export interface RequestApprovalInput {
@@ -260,6 +259,11 @@ async function executeToolCallWithPermissions(
   } catch {
     return { kind: 'failed', failure: permissionFailure('Permission evaluation failed.') };
   }
+  // Cancellation may win while Permissions were evaluating: never start new
+  // work from a stale permission decision.
+  if (request.signal.aborted) {
+    return { kind: 'cancelled' };
+  }
   if (permission.status === 'failed') {
     return { kind: 'failed', failure: permissionFailure(permission.failure.message) };
   }
@@ -292,6 +296,11 @@ async function executeToolCallWithPermissions(
     if (resolution.status === 'cancelled') {
       return { kind: 'cancelled' };
     }
+    // Cancellation may win right after the approval resolved but before the
+    // original call stack resumed: do not start the approved execution.
+    if (request.signal.aborted) {
+      return { kind: 'cancelled' };
+    }
 
     const applied = await applyApprovalDecision(
       request,
@@ -302,6 +311,9 @@ async function executeToolCallWithPermissions(
     );
     if (applied.status === 'failed') {
       return { kind: 'failed', failure: permissionFailure('Approval decision could not be applied.') };
+    }
+    if (request.signal.aborted) {
+      return { kind: 'cancelled' };
     }
     if (resolution.status === 'denied') {
       const result: ToolResult = {
@@ -378,9 +390,16 @@ async function executeToolInvocation(
   invocation: ToolInvocation,
   executionAccess: ToolExecutionAccess | undefined,
 ): Promise<ToolResult> {
+  // Last cancellation guard: never create an execution identity, a span or a
+  // tool_execution.started fact once the Run is cancelled.
+  if (request.signal.aborted) {
+    return cancelledToolResult(call, request.clock.now());
+  }
   const toolExecutionId = request.ids.createToolExecutionId();
-  const startedAt = request.clock.now();
-  const span = request.observation.startSpan();
+  const span = request.observation.startSpan({
+    modelCallId: request.modelCallId,
+    toolCallId: call.toolCallId,
+  });
 
   request.events.publish('tool_execution.started', {
     toolCallId: call.toolCallId,
@@ -428,10 +447,10 @@ async function executeToolInvocation(
   }
 
   const completedAt = request.clock.now();
-  request.observation.endSpan(span, request.signal.aborted ? 'cancelled' : 'ok');
 
+  let toolResult: ToolResult;
   if (result && 'type' in result && result.type === 'thrown') {
-    return {
+    toolResult = {
       toolCallId: call.toolCallId,
       toolName: call.toolName,
       callOrder: call.callOrder,
@@ -440,65 +459,54 @@ async function executeToolInvocation(
       content: 'Tool execution failed.',
       completedAt,
     };
+  } else {
+    const executionResult = result as import('@megumi/tools').ToolExecutionResult;
+    if (request.signal.aborted && !executionResult) {
+      toolResult = cancelledToolResult(call, completedAt);
+    } else if (executionResult.type === 'succeeded') {
+      toolResult = {
+        toolCallId: call.toolCallId,
+        toolName: executionResult.toolName,
+        callOrder: call.callOrder,
+        status: 'success',
+        content: executionResult.normalizedResult.content,
+        ...(executionResult.observation?.summary ? { summary: executionResult.observation.summary } : {}),
+        completedAt,
+      };
+      emitToolExecutionEnded(request, toolResult, toolExecutionId, 'completed');
+    } else if (executionResult.error.code === 'tool_cancelled') {
+      toolResult = {
+        toolCallId: call.toolCallId,
+        toolName: call.toolName,
+        callOrder: call.callOrder,
+        status: 'cancelled',
+        error: { code: 'tool_cancelled', message: 'Tool call was cancelled.' },
+        content: executionResult.normalizedResult.content,
+        completedAt,
+      };
+      emitToolExecutionEnded(request, toolResult, toolExecutionId, 'cancelled');
+    } else {
+      toolResult = {
+        toolCallId: call.toolCallId,
+        toolName: executionResult.toolName ?? call.toolName,
+        callOrder: call.callOrder,
+        status: 'failure',
+        error: executionResult.error,
+        content: executionResult.normalizedResult.content,
+        completedAt,
+      };
+      emitToolExecutionEnded(request, toolResult, toolExecutionId, 'failed');
+    }
   }
+  // The ToolCall span ends with the real ToolResult status.
+  request.observation.endSpan(span, spanStatusFor(toolResult));
+  return toolResult;
+}
 
-  const executionResult = result as import('@megumi/tools').ToolExecutionResult;
-  if (request.signal.aborted && !executionResult) {
-    return cancelledToolResult(call, completedAt);
-  }
-
-  if (executionResult.type === 'succeeded') {
-    const toolResult: ToolResult = {
-      toolCallId: call.toolCallId,
-      toolName: executionResult.toolName,
-      callOrder: call.callOrder,
-      status: 'success',
-      content: executionResult.normalizedResult.content,
-      ...(executionResult.observation?.summary ? { summary: executionResult.observation.summary } : {}),
-      completedAt,
-    };
-    emitToolExecutionEnded(request, toolResult, toolExecutionId, 'completed');
-    return toolResult;
-  }
-
-  if (executionResult.error.code === 'tool_cancelled') {
-    emitToolExecutionEnded(request, {
-      toolCallId: call.toolCallId,
-      toolName: call.toolName,
-      callOrder: call.callOrder,
-      status: 'cancelled',
-      content: executionResult.normalizedResult.content,
-      completedAt,
-    }, toolExecutionId, 'cancelled');
-    return {
-      toolCallId: call.toolCallId,
-      toolName: call.toolName,
-      callOrder: call.callOrder,
-      status: 'cancelled',
-      error: { code: 'tool_cancelled', message: 'Tool call was cancelled.' },
-      content: executionResult.normalizedResult.content,
-      completedAt,
-    };
-  }
-
-  emitToolExecutionEnded(request, {
-    toolCallId: call.toolCallId,
-    toolName: executionResult.toolName ?? call.toolName,
-    callOrder: call.callOrder,
-    status: 'failure',
-    error: executionResult.error,
-    content: executionResult.normalizedResult.content,
-    completedAt,
-  }, toolExecutionId, 'failed');
-  return {
-    toolCallId: call.toolCallId,
-    toolName: executionResult.toolName ?? call.toolName,
-    callOrder: call.callOrder,
-    status: 'failure',
-    error: executionResult.error,
-    content: executionResult.normalizedResult.content,
-    completedAt,
-  };
+function spanStatusFor(result: ToolResult): 'ok' | 'error' | 'cancelled' {
+  if (result.status === 'success') return 'ok';
+  if (result.status === 'failure') return 'error';
+  return 'cancelled';
 }
 
 function emitToolExecutionEnded(

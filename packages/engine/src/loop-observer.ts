@@ -1,12 +1,18 @@
 /*
  * Owns the Agent Loop's Observability access: the Run trace and root span,
- * ModelCall/ToolCall/Approval spans, attempt and limit measurements, logs
- * and the run/session/call correlation fields. Every operation is
- * best-effort: observation failures never change the Agent Loop or Run
- * outcome, and the observer never holds business state the loop needs to
- * continue.
+ * ModelCall/ToolCall/Approval spans, attempt/usage/duration/retry/limit
+ * measurements, logs and the run/session/call correlation fields. Every
+ * operation is best-effort: observation failures never change the Agent Loop
+ * or Run outcome, and the observer never holds business state the loop needs
+ * to continue.
  */
-import type { ObservabilityService, ObservabilitySpanName, SpanHandle, TraceHandle } from '@megumi/observability';
+import type {
+  MeasurementUnit,
+  ObservabilityService,
+  ObservabilitySpanName,
+  SpanHandle,
+  TraceHandle,
+} from '@megumi/observability';
 import type { Run } from './run';
 
 export interface CreateLoopObserverOptions {
@@ -17,9 +23,10 @@ export interface CreateLoopObserverOptions {
 export interface LoopObserver {
   /** Opens the Run trace and root span; never throws. */
   start(): void;
-  /** Closes every open span, the root span and the trace; never throws. */
+  /** Closes every open span, the root span and the trace with the real Run outcome; never throws. */
   end(status: 'ok' | 'error' | 'cancelled'): void;
-  startSpan(name: ObservabilitySpanName): SpanHandle | undefined;
+  /** Opens a span with the caller's identity facts (modelCallId, toolCallId, ...). */
+  startSpan(name: ObservabilitySpanName, attributes?: Record<string, unknown>): SpanHandle | undefined;
   endSpan(span: SpanHandle | undefined, status: 'ok' | 'error' | 'cancelled'): void;
   recordLog(input: {
     readonly level: 'info' | 'warn' | 'error';
@@ -29,7 +36,7 @@ export interface LoopObserver {
   recordMeasurement(input: {
     readonly name: string;
     readonly value: number;
-    readonly unit: 'count';
+    readonly unit: MeasurementUnit;
     readonly attributes?: Record<string, unknown>;
   }): void;
 }
@@ -89,10 +96,10 @@ export function createLoopObserver(options: CreateLoopObserverOptions): LoopObse
       }
     },
 
-    startSpan(name) {
+    startSpan(name, attributes) {
       if (!service || ended) return undefined;
       try {
-        const span = service.startSpan({ name, correlation: correlation() });
+        const span = service.startSpan({ name, correlation: correlation(), ...(attributes ? { attributes } : {}) });
         openSpans.add(span);
         return span;
       } catch {

@@ -16,6 +16,9 @@ import {
   type Tools,
 } from '@megumi/tools';
 
+export { createToolRouter };
+export type { RegisteredTool };
+
 export type TestToolExecute = (
   request: { readonly toolName: string; readonly input: unknown },
   options?: ToolExecutionOptions,

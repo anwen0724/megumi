@@ -16,6 +16,7 @@ import {
   type Model,
   type Models,
 } from '@megumi/ai';
+import type { MeasurementUnit } from '@megumi/observability';
 import type { EventPayloadByType, EventType } from '@megumi/events';
 import type { ContextCompactor, Prompt } from '@megumi/context';
 import type { RunClock } from './run';
@@ -58,10 +59,19 @@ export type ModelCallOutcome =
   | { readonly status: 'failed'; readonly failure: ModelCallFailure }
   | { readonly status: 'cancelled'; readonly partial: { readonly text: string; readonly thinking: string } };
 
-/** The narrowed Runtime Event publish the runner needs, with fixed correlation. */
+/**
+ * A Prompt (re)build result: Context failures keep their original code,
+ * message and retryable facts instead of being converted to generic errors.
+ */
+export type RebuildPromptResult =
+  | { readonly status: 'ready'; readonly prompt: Prompt }
+  | {
+      readonly status: 'failed';
+      readonly failure: { readonly code: string; readonly message: string; readonly retryable: boolean };
+    };
+
+/** The narrowed Runtime Event publish the runner needs; correlation is fixed by the loop. */
 export interface ModelCallEventSource {
-  readonly runId: string;
-  readonly sessionId: string;
   publish<TType extends EventType>(type: TType, payload: EventPayloadByType[TType]): void;
 }
 
@@ -75,7 +85,7 @@ export interface ModelCallObservation {
   recordMeasurement(input: {
     readonly name: string;
     readonly value: number;
-    readonly unit: 'count';
+    readonly unit: MeasurementUnit;
     readonly attributes?: Record<string, unknown>;
   }): void;
 }
@@ -89,8 +99,11 @@ export interface RunModelCallRequest {
   /** The Assistant Message identity the streaming updates are published under. */
   readonly messageId: string;
   readonly prompt: Prompt;
-  /** Rebuilds the Prompt after Context Overflow compaction; never re-resolves Tools. */
-  readonly buildPrompt: () => Promise<Prompt>;
+  /**
+   * Rebuilds the Prompt after Context Overflow compaction; never re-resolves
+   * Tools. A failed rebuild keeps its Context failure facts.
+   */
+  readonly buildPrompt: () => Promise<RebuildPromptResult>;
   readonly signal: AbortSignal;
   readonly projection: ModelCallProjection;
   readonly events: ModelCallEventSource;
@@ -177,24 +190,27 @@ export async function runModelCall(
       };
     }
     try {
-      prompt = await request.buildPrompt();
+      const rebuilt = await request.buildPrompt();
+      if (rebuilt.status === 'failed') {
+        // A failed rebuild keeps the original Context failure facts; only the
+        // Agent Loop decides whether the Run ends.
+        return {
+          status: 'failed',
+          failure: {
+            code: 'context_failed',
+            message: rebuilt.failure.message,
+            retryable: rebuilt.failure.retryable,
+            owner: 'context',
+            causeCode: rebuilt.failure.code,
+          },
+        };
+      }
+      prompt = rebuilt.prompt;
     } catch (error) {
       if (request.signal.aborted) {
         return {
           status: 'cancelled',
           partial: { text: request.projection.text, thinking: request.projection.thinking },
-        };
-      }
-      if (error instanceof ContextBuildFailure) {
-        return {
-          status: 'failed',
-          failure: {
-            code: 'context_failed',
-            message: error.message,
-            retryable: error.retryable,
-            owner: 'context',
-            causeCode: error.code,
-          },
         };
       }
       throw error;
@@ -226,6 +242,12 @@ export async function runModelCall(
         // Compaction recoveries are bounded by the confirmed Run Policy;
         // exhausting them ends the Run instead of compacting again.
         if (overflowRecoveries >= request.policy.maxContextOverflowRecoveries) {
+          request.observation.recordMeasurement({
+            name: 'model.call.limit',
+            value: 1,
+            unit: 'count',
+            attributes: { modelCallId: request.modelCallId, limitKind: 'overflow_recovery' },
+          });
           return {
             status: 'failed',
             failure: {
@@ -269,6 +291,12 @@ export async function runModelCall(
       // Compaction recoveries are bounded by the confirmed Run Policy;
       // exhausting them ends the Run instead of compacting again.
       if (overflowRecoveries >= request.policy.maxContextOverflowRecoveries) {
+        request.observation.recordMeasurement({
+          name: 'model.call.limit',
+          value: 1,
+          unit: 'count',
+          attributes: { modelCallId: request.modelCallId, limitKind: 'overflow_recovery' },
+        });
         return {
           status: 'failed',
           failure: {
@@ -294,6 +322,12 @@ export async function runModelCall(
         attemptNumber += 1;
         continue;
       }
+      request.observation.recordMeasurement({
+        name: 'model.call.limit',
+        value: 1,
+        unit: 'count',
+        attributes: { modelCallId: request.modelCallId, limitKind: 'attempt' },
+      });
       publishRetryFailed(request, retriedAttempts, {
         code: attempt.failure.code,
         message: attempt.failure.message,
@@ -371,6 +405,7 @@ async function runStreamAttempt(
     // Every finished attempt records its usage, stop reason and duration to
     // Observability; retried attempts are never dropped.
     if (terminal) {
+      const durationMs = Date.parse(request.clock.now()) - Date.parse(startedAt);
       request.observation.recordLog({
         level: 'info',
         event: 'model.call.attempt.finished',
@@ -380,8 +415,25 @@ async function runStreamAttempt(
           stopReason: terminal.stopReason,
           inputTokens: terminal.usage.input,
           outputTokens: terminal.usage.output,
-          durationMs: Date.parse(request.clock.now()) - Date.parse(startedAt),
+          durationMs,
         },
+      });
+      request.observation.recordMeasurement({
+        name: 'model.call.usage',
+        value: terminal.usage.input + terminal.usage.output,
+        unit: 'token',
+        attributes: {
+          modelCallId: request.modelCallId,
+          attemptNumber,
+          inputTokens: terminal.usage.input,
+          outputTokens: terminal.usage.output,
+        },
+      });
+      request.observation.recordMeasurement({
+        name: 'model.call.duration_ms',
+        value: durationMs,
+        unit: 'ms',
+        attributes: { modelCallId: request.modelCallId, attemptNumber },
       });
     }
   }
@@ -533,6 +585,12 @@ function publishRetryStarted(
     event: 'model.call.retry.scheduled',
     attributes: { nextAttemptNumber, maxAttempts },
   });
+  request.observation.recordMeasurement({
+    name: 'model.call.retry',
+    value: 1,
+    unit: 'count',
+    attributes: { modelCallId: request.modelCallId, nextAttemptNumber },
+  });
   request.events.publish('turn.retry.started', {
     attemptNumber: nextAttemptNumber,
     retryKind: 'model_call',
@@ -599,15 +657,4 @@ function thinkingText(message: AssistantMessage): string {
     .filter((block) => block.type === 'thinking')
     .map((block) => block.thinking)
     .join('');
-}
-
-class ContextBuildFailure extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    readonly retryable: boolean,
-  ) {
-    super(message);
-    this.name = 'ContextBuildFailure';
-  }
 }

@@ -234,6 +234,28 @@ describe('createRuns', () => {
     })).resolves.toMatchObject({ status: 'failed' });
   });
 
+  it('does not form an unhandled rejection when terminal settlement fails', async () => {
+    const fixture = createRunsFixture({
+      streams: [assistantStream('answer')],
+    });
+    const started = await startedRun(fixture);
+    // Make only the run.ended publish throw so the settlement step fails after
+    // the terminal transition was already recorded; the loop itself keeps
+    // publishing its other facts normally.
+    const originalPublish = fixture.options.events.publish;
+    fixture.options.events.publish = ((event: Parameters<typeof originalPublish>[0]) => {
+      if (event.type === 'run.ended') throw new Error('publish down');
+      return originalPublish(event);
+    }) as never;
+
+    // The Run still reaches its terminal state and the completion settles:
+    // an unhandled rejection would fail this test via vitest.
+    await vi.waitFor(() => {
+      const found = fixture.runs.get({ runId: started.run.runId });
+      expect(found.status === 'found' ? found.run.status : undefined).toBe('completed');
+    });
+  });
+
   it('keeps shutdown idempotent across repeated calls', async () => {
     const fixture = createRunsFixture({
       streams: [assistantStream('answer')],

@@ -8,7 +8,6 @@
  */
 import type { SessionHistory, SessionEntry, SessionAssistantContent, AssistantReplyReasonCode } from '@megumi/session';
 import type { Usage } from '@megumi/ai';
-import type { RunClock } from './run';
 
 /** Assistant reply metadata passthrough kept identical to the Session save contract. */
 export interface AssistantReplyMetadata {
@@ -44,7 +43,12 @@ export interface CommittedToolResult {
 
 export type CommitToolResultsResult =
   | { readonly status: 'saved'; readonly items: readonly CommittedToolResult[] }
-  | { readonly status: 'failed'; readonly failure: { readonly message: string } };
+  | {
+      readonly status: 'failed';
+      readonly failure: { readonly message: string };
+      /** The items really saved before the failure: they are real Session facts. */
+      readonly items: readonly CommittedToolResult[];
+    };
 
 export interface SessionMessageCommitter {
   commitModelResponse(input: {
@@ -82,7 +86,6 @@ export interface CreateSessionMessageCommitterOptions {
     'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'
   >;
   readonly ids: { createSessionMessageId(): string };
-  readonly clock: RunClock;
 }
 
 export function createSessionMessageCommitter(
@@ -130,7 +133,13 @@ export function createSessionMessageCommitter(
           completed_at: result.completedAt,
         });
         if (saved.status === 'failed') {
-          return { status: 'failed', failure: { message: saved.failure.message } };
+          // The chain stays on the last real successful commit; the partial
+          // successes are still returned because they are real Session facts.
+          return {
+            status: 'failed',
+            failure: { message: saved.failure.message },
+            items: [...items],
+          };
         }
         lastCommittedEntryId = saved.entry.entry_id;
         items.push({

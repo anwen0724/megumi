@@ -409,7 +409,6 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
       createToolExecutionId: () => `tool-execution:${crypto.randomUUID()}`,
       createRunApprovalId: () => `run-approval:${crypto.randomUUID()}`,
       createSessionMessageId: () => `message:${crypto.randomUUID()}`,
-      createRuntimeEventId: () => `event:${crypto.randomUUID()}`,
     },
     clock: { now: () => new Date().toISOString() },
     policy: PRODUCT_RUN_POLICY,

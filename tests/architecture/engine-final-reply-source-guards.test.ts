@@ -19,9 +19,11 @@ describe('Engine final reply source guards', () => {
   });
 
   it('does not introduce a model-callable finalization tool or persisted Run outcome', () => {
+    // Scan every file that owns final Reply semantics, never the same file twice.
     const source = [
       read('packages/engine/src/agent-loop.ts'),
-      read('packages/engine/src/agent-loop.ts'),
+      read('packages/engine/src/run.ts'),
+      read('packages/engine/src/session-message-committer.ts'),
       read('packages/database/src/database-schema.ts'),
     ].join('\n');
     expect(source).not.toContain('submit_final_reply');

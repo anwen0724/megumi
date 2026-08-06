@@ -6,6 +6,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type {
   SaveAssistantReplyRequest,
+  SaveMessageResult,
   SaveModelResponseRequest,
   SaveToolResultMessageRequest,
   SessionEntry,
@@ -33,7 +34,10 @@ function createRecordingCommitter(overrides: {
   let modelCalls = 0;
   let replyCalls = 0;
   let messageNumber = 0;
-  const savedMessage = (request: SaveModelResponseRequest | SaveToolResultMessageRequest | SaveAssistantReplyRequest, entryId: string) => ({
+  const savedMessage = (
+    request: SaveModelResponseRequest | SaveToolResultMessageRequest | SaveAssistantReplyRequest,
+    entryId: string,
+  ): SaveMessageResult => ({
     status: 'saved' as const,
     message: {
       message_id: request.message_id,
@@ -50,17 +54,17 @@ function createRecordingCommitter(overrides: {
     },
   });
   const session = {
-    saveModelResponse: vi.fn(async (request: SaveModelResponseRequest) => (
+    saveModelResponse: vi.fn((request: SaveModelResponseRequest) => (
       overrides.failModelResponse
         ? { status: 'failed' as const, failure: { code: 'session_error', message: 'Model response failed.' } }
         : savedMessage(request, `entry:model:${++modelCalls}`)
     )),
-    saveToolResultMessage: vi.fn(async (request: SaveToolResultMessageRequest) => (
+    saveToolResultMessage: vi.fn((request: SaveToolResultMessageRequest) => (
       overrides.failToolResultAt === toolCalls
         ? { status: 'failed' as const, failure: { code: 'session_error', message: 'Tool result failed.' } }
         : savedMessage(request, `entry:tool:${++toolCalls}`)
     )),
-    saveAssistantReply: vi.fn(async (request: SaveAssistantReplyRequest) => (
+    saveAssistantReply: vi.fn((request: SaveAssistantReplyRequest) => (
       overrides.failAssistantReply
         ? { status: 'failed' as const, failure: { code: 'session_error', message: 'Assistant reply failed.' } }
         : savedMessage(request, `entry:reply:${++replyCalls}`)
@@ -180,7 +184,7 @@ describe('SessionMessageCommitter', () => {
     });
   });
 
-  it('stops a tool batch at the first failed commit and keeps the chain before it', async () => {
+  it('keeps the partial successes when a later commit fails and stops the batch', async () => {
     const { committer, session } = createRecordingCommitter({ failToolResultAt: 1 });
 
     const failed = await committer.commitToolResults({
@@ -193,9 +197,14 @@ describe('SessionMessageCommitter', () => {
       ],
     });
     expect(failed.status).toBe('failed');
+    if (failed.status !== 'failed') return;
     // The first result persisted, the second failed, and the batch stopped
     // there: the third result was never attempted.
     expect(session.saveToolResultMessage).toHaveBeenCalledTimes(2);
+    // The really saved item is still reported; the chain stayed on its Entry.
+    expect(failed.items).toEqual([
+      expect.objectContaining({ toolCallId: 'call:1', messageId: 'message:1' }),
+    ]);
   });
 
   it('creates and reuses assistant message identities as requested by the loop', async () => {

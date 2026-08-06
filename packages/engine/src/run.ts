@@ -314,7 +314,6 @@ export interface CreateRunsOptions {
     createToolExecutionId(): string;
     createRunApprovalId(): string;
     createSessionMessageId(): string;
-    createRuntimeEventId(): string;
   };
   readonly clock: RunClock;
   readonly policy: RunPolicy;
@@ -556,22 +555,33 @@ export function createRuns(options: CreateRunsOptions): Runs {
       }, dependencies);
       // The unique Agent Loop settles the ActiveRun completion on every path:
       // normal return, unexpected throw, or a settlement step that fails again.
-      // The finally guarantees shutdown never waits on an unsettled promise.
+      // Each settlement attempt is guarded so a second failure never forms an
+      // unhandled rejection and never overwrites already recorded terminal
+      // facts; the finally guarantees resolveCompletion runs exactly once.
+      const settleSafely = (settle: () => void): void => {
+        try {
+          settle();
+        } catch (error) {
+          recordSettlementFailure(options, error);
+        }
+      };
       void loopTask.then(
         (result) => {
-          settleLoopResult(runId, result);
+          settleSafely(() => settleLoopResult(runId, result));
         },
         () => {
-          const current = store.getActiveRun(runId);
-          if (!current || isTerminalRunStatus(current.run.status)) return;
-          settleLoopResult(runId, {
-            status: 'failed',
-            failure: {
-              code: 'internal_error',
-              message: 'Run execution failed unexpectedly.',
-              retryable: false,
-              cause: { owner: 'engine', code: 'unexpected_exception' },
-            },
+          settleSafely(() => {
+            const current = store.getActiveRun(runId);
+            if (!current || isTerminalRunStatus(current.run.status)) return;
+            settleLoopResult(runId, {
+              status: 'failed',
+              failure: {
+                code: 'internal_error',
+                message: 'Run execution failed unexpectedly.',
+                retryable: false,
+                cause: { owner: 'engine', code: 'unexpected_exception' },
+              },
+            });
           });
         },
       ).finally(() => {
@@ -712,4 +722,17 @@ function shuttingDownFailure(message: string): RunFailure {
     retryable: false,
     cause: { owner: 'engine', code: 'engine_shutting_down' },
   };
+}
+
+/** Records a terminal-settlement failure as a diagnostic; never changes Run outcome. */
+function recordSettlementFailure(options: CreateRunsOptions, error: unknown): void {
+  try {
+    options.observability?.recordLog({
+      level: 'error',
+      event: 'run.settlement_failed',
+      attributes: { errorMessage: error instanceof Error ? error.message : String(error) },
+    });
+  } catch {
+    // Diagnostics never change Run outcome.
+  }
 }
