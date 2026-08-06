@@ -30,6 +30,12 @@ import type { ContextCapabilities, Prompt, RunContext } from '@megumi/context';
 import type { RunApproval, RunClock, Run, RunFailure } from './run';
 import type { RunPolicy } from './run-policy';
 import type { ApprovalResolution } from './run-registry';
+import {
+  createSessionMessageCommitter,
+  type AssistantReplyMetadata,
+  type SessionMessageCommitter,
+  type SessionToolResultCommit,
+} from './session-message-committer';
 
 export interface AgentLoopInput {
   readonly run: Run;
@@ -75,7 +81,8 @@ export type AgentLoopResult =
 interface LoopRuntime {
   readonly run: Run;
   readonly userInput: UserInput;
-  lastCommittedEntryId: string;
+  /** The single Session Entry chain owner; the loop only decides commit timing. */
+  readonly committer: SessionMessageCommitter;
   modelCallCount: number;
   toolRoundCount: number;
   toolCallCount: number;
@@ -110,15 +117,8 @@ type AttemptOutcome =
   | { readonly status: 'failed'; readonly failure: RunFailure; readonly retryable: boolean }
   | { readonly status: 'aborted'; readonly partial: { readonly text: string; readonly thinking: string } };
 
-interface ToolResult {
-  readonly toolCallId: string;
-  readonly toolName: string;
-  readonly callOrder: number;
-  readonly status: 'success' | 'failure' | 'permission_denied' | 'user_rejected' | 'cancelled';
-  readonly error?: { readonly code: string; readonly message: string };
-  readonly content: string;
+interface ToolResult extends SessionToolResultCommit {
   readonly summary?: string;
-  readonly completedAt: string;
 }
 
 export async function runAgentLoop(
@@ -128,7 +128,12 @@ export async function runAgentLoop(
   const runtime: LoopRuntime = {
     run: input.run,
     userInput: input.userInput,
-    lastCommittedEntryId: input.userEntry.entry_id,
+    committer: createSessionMessageCommitter({
+      userEntry: input.userEntry,
+      session: dependencies.session,
+      ids: dependencies.ids,
+      clock: dependencies.clock,
+    }),
     modelCallCount: 0,
     toolRoundCount: 0,
     toolCallCount: 0,
@@ -143,18 +148,15 @@ export async function runAgentLoop(
   const failRun = async (failure: RunFailure): Promise<AgentLoopResult> => {
     if (input.signal.aborted) return cancelledResult();
     if (failure.code !== 'session_failed') {
-      const reply = dependencies.session.saveAssistantReply({
-        message_id: dependencies.ids.createSessionMessageId(),
-        session_id: input.run.sessionId,
-        run_id: input.run.runId,
-        parent_entry_id: runtime.lastCommittedEntryId,
+      const reply = await runtime.committer.commitAssistantReply({
+        sessionId: input.run.sessionId,
+        runId: input.run.runId,
         status: 'failed',
         content: [],
-        reason_code: failureReason(failure),
-        completed_at: dependencies.clock.now(),
+        reasonCode: failureReason(failure),
+        completedAt: dependencies.clock.now(),
       });
       if (reply.status === 'failed') return failedResult(sessionFailure(reply.failure.message));
-      runtime.lastCommittedEntryId = reply.entry.entry_id;
     }
     return failedResult(failure);
   };
@@ -172,7 +174,6 @@ export async function runAgentLoop(
     }
   } catch (error) {
     if (input.signal.aborted) return cancelledResult();
-    if (error instanceof SessionCommitFailure) return failedResult(sessionFailure(error.message));
     return await failRun({
       code: 'internal_error',
       message: error instanceof Error ? error.message : 'Engine failed unexpectedly.',
@@ -310,24 +311,22 @@ async function runTurn(
     const messageId = runtime.activeModelMessageId ?? dependencies.ids.createSessionMessageId();
 
     if (modelOutcome.toolCalls.length === 0) {
-      const reply = dependencies.session.saveAssistantReply({
-        message_id: messageId,
-        session_id: input.run.sessionId,
-        run_id: input.run.runId,
-        parent_entry_id: runtime.lastCommittedEntryId,
+      const reply = await runtime.committer.commitAssistantReply({
+        sessionId: input.run.sessionId,
+        runId: input.run.runId,
         status: 'completed',
         content: assistantContent,
-        reason_code: 'normal_completion',
-        ...assistantMetadata(modelOutcome.message),
-        completed_at: dependencies.clock.now(),
+        reasonCode: 'normal_completion',
+        messageId,
+        metadata: assistantMetadata(modelOutcome.message),
+        completedAt: dependencies.clock.now(),
       });
       if (reply.status === 'failed') {
         return await failRun(sessionFailure(reply.failure.message));
       }
-      runtime.lastCommittedEntryId = reply.entry.entry_id;
       emitEvent(dependencies, runtime, 'message.ended', {
         role: 'assistant',
-        messageId: reply.message.message_id,
+        messageId: reply.messageId,
         content: assistantContent
           .filter((block) => block.type === 'text')
           .map((block) => block.text)
@@ -335,10 +334,10 @@ async function runTurn(
       });
       emitEvent(dependencies, runtime, 'turn.ended', {
         stopReason: 'completed',
-        messageId: reply.message.message_id,
+        messageId: reply.messageId,
         toolCallIds: [],
       });
-      return { status: 'completed', assistantMessageId: reply.message.message_id };
+      return { status: 'completed', assistantMessageId: reply.messageId };
     }
 
     if (
@@ -351,24 +350,21 @@ async function runTurn(
       return await failRun(loopLimitFailure('Tool round limit reached.'));
     }
 
-    const response = dependencies.session.saveModelResponse({
-      message_id: messageId,
-      session_id: input.run.sessionId,
-      run_id: input.run.runId,
-      parent_entry_id: runtime.lastCommittedEntryId,
+    const response = await runtime.committer.commitModelResponse({
+      sessionId: input.run.sessionId,
+      runId: input.run.runId,
+      messageId,
       content: assistantContent,
-      outcome_status: 'completed',
-      stop_reason: modelOutcome.message.stopReason,
-      ...assistantMetadata(modelOutcome.message),
-      completed_at: dependencies.clock.now(),
+      stopReason: modelOutcome.message.stopReason,
+      metadata: assistantMetadata(modelOutcome.message),
+      completedAt: dependencies.clock.now(),
     });
     if (response.status === 'failed') {
       return await failRun(sessionFailure(response.failure.message));
     }
-    runtime.lastCommittedEntryId = response.entry.entry_id;
     emitEvent(dependencies, runtime, 'message.ended', {
       role: 'assistant',
-      messageId: response.message.message_id,
+      messageId: response.messageId,
       content: assistantContent
         .filter((block) => block.type === 'text')
         .map((block) => block.text)
@@ -870,7 +866,10 @@ async function executeToolCallBatch(
         }
         parallelWindow = [];
       }
-      await commitToolResults(input, dependencies, runtime, results);
+      const committed = await commitToolResults(input, dependencies, runtime, results);
+      if (committed !== 'committed') {
+        return input.signal.aborted ? 'cancelled' : committed;
+      }
       return 'cancelled';
     }
 
@@ -907,7 +906,10 @@ async function executeToolCallBatch(
     const flushed = await flushParallelWindow();
     if (flushed === 'cancelled') {
       closeWith((remaining) => cancelledToolResult(remaining, dependencies.clock.now()), index);
-      await commitToolResults(input, dependencies, runtime, results);
+      const committed = await commitToolResults(input, dependencies, runtime, results);
+      if (committed !== 'committed') {
+        return input.signal.aborted ? 'cancelled' : committed;
+      }
       return 'cancelled';
     }
 
@@ -924,7 +926,10 @@ async function executeToolCallBatch(
     if (executed.kind === 'cancelled') {
       recordResult(cancelledToolResult(call, dependencies.clock.now()));
       closeWith((remaining) => cancelledToolResult(remaining, dependencies.clock.now()), index + 1);
-      await commitToolResults(input, dependencies, runtime, results);
+      const committed = await commitToolResults(input, dependencies, runtime, results);
+      if (committed !== 'committed') {
+        return input.signal.aborted ? 'cancelled' : committed;
+      }
       return 'cancelled';
     }
     if (executed.kind === 'failed') {
@@ -932,14 +937,20 @@ async function executeToolCallBatch(
       // a model-visible failed ToolResult before the Run ends.
       recordResult(closedToolResult(call, dependencies.clock.now()));
       closeWith((remaining) => closedToolResult(remaining, dependencies.clock.now()), index + 1);
-      await commitToolResults(input, dependencies, runtime, results);
+      const committed = await commitToolResults(input, dependencies, runtime, results);
+      if (committed !== 'committed') {
+        return input.signal.aborted ? 'cancelled' : committed;
+      }
       return { status: 'failed', failure: executed.failure };
     }
     recordResult(executed.result);
   }
 
   const flushed = await flushParallelWindow();
-  await commitToolResults(input, dependencies, runtime, results);
+  const committed = await commitToolResults(input, dependencies, runtime, results);
+  if (committed !== 'committed') {
+    return input.signal.aborted ? 'cancelled' : committed;
+  }
   // Cancellation may win after the last call of the batch settled.
   if (flushed === 'cancelled' || input.signal.aborted) return 'cancelled';
   return 'completed';
@@ -1285,41 +1296,38 @@ async function commitToolResults(
   dependencies: AgentLoopDependencies,
   runtime: LoopRuntime,
   results: readonly ToolResult[],
-): Promise<boolean> {
-  for (const result of [...results].sort((left, right) => left.callOrder - right.callOrder)) {
-    const saved = dependencies.session.saveToolResultMessage({
-      message_id: dependencies.ids.createSessionMessageId(),
-      session_id: input.run.sessionId,
-      run_id: input.run.runId,
-      parent_entry_id: runtime.lastCommittedEntryId,
-      tool_call_id: result.toolCallId,
-      tool_name: result.toolName,
-      status: result.status,
-      ...(result.error ? { error: result.error } : {}),
-      content: [{ type: 'text', text: result.content }],
-      completed_at: result.completedAt,
-    });
-    if (saved.status === 'failed') {
-      throw new SessionCommitFailure(saved.failure.message);
-    }
-    runtime.lastCommittedEntryId = saved.entry.entry_id;
+): Promise<'committed' | { readonly status: 'failed'; readonly failure: RunFailure }> {
+  const committed = await runtime.committer.commitToolResults({
+    sessionId: input.run.sessionId,
+    runId: input.run.runId,
+    results,
+  });
+  if (committed.status === 'failed') {
+    // The Agent Loop decides how the Run converges; a failed commit only
+    // reports the Session error back.
+    return { status: 'failed', failure: sessionFailure(committed.failure.message) };
+  }
+  const byId = new Map(results.map((result) => [result.toolCallId, result]));
+  for (const item of committed.items) {
+    const result = byId.get(item.toolCallId);
     emitEvent(dependencies, runtime, 'message.started', {
       role: 'tool_result',
-      messageId: saved.message.message_id,
+      messageId: item.messageId,
     });
     emitEvent(dependencies, runtime, 'message.ended', {
       role: 'tool_result',
-      messageId: saved.message.message_id,
-      content: result.content,
+      messageId: item.messageId,
+      content: result?.content ?? '',
     });
-    if (result.status === 'permission_denied' || result.status === 'user_rejected') {
+    if (result && (result.status === 'permission_denied' || result.status === 'user_rejected')) {
       emitEvent(dependencies, runtime, 'tool_execution.ended', {
-        toolCallId: result.toolCallId,
+        toolCallId: item.toolCallId,
         status: 'denied',
       });
+
     }
   }
-  return true;
+  return 'committed';
 }
 
 async function commitCancelledReply(
@@ -1331,23 +1339,21 @@ async function commitCancelledReply(
   const content: SessionAssistantContent[] = [];
   if (partial.thinking) content.push({ type: 'thinking', thinking: partial.thinking });
   if (partial.text) content.push({ type: 'text', text: partial.text });
-  const reply = dependencies.session.saveAssistantReply({
-    // Reuse the streaming identity when a message lifecycle was started;
-    // otherwise settle a fresh cancelled reply for the Run.
-    message_id: runtime.activeModelMessageId ?? dependencies.ids.createSessionMessageId(),
-    session_id: input.run.sessionId,
-    run_id: input.run.runId,
-    parent_entry_id: runtime.lastCommittedEntryId,
+  const reply = await runtime.committer.commitAssistantReply({
+    sessionId: input.run.sessionId,
+    runId: input.run.runId,
     status: 'cancelled',
     content,
-    reason_code: 'user_cancelled',
-    completed_at: dependencies.clock.now(),
+    reasonCode: 'user_cancelled',
+    // Reuse the streaming identity when a message lifecycle was started;
+    // otherwise the committer settles a fresh cancelled reply for the Run.
+    messageId: runtime.activeModelMessageId,
+    completedAt: dependencies.clock.now(),
   });
   if (reply.status === 'saved') {
-    runtime.lastCommittedEntryId = reply.entry.entry_id;
     emitEvent(dependencies, runtime, 'message.ended', {
       role: 'assistant',
-      messageId: reply.message.message_id,
+      messageId: reply.messageId,
       content: partial.text,
     });
   }
@@ -1709,15 +1715,7 @@ function toAssistantContent(message: AssistantMessage): SessionAssistantContent[
   });
 }
 
-function assistantMetadata(message: AssistantMessage): {
-  api?: string;
-  provider?: string;
-  model?: string;
-  response_model?: string;
-  response_id?: string;
-  usage?: import('@megumi/ai').Usage;
-  error_message?: string;
-} {
+function assistantMetadata(message: AssistantMessage): AssistantReplyMetadata {
   return {
     api: message.api,
     provider: message.provider,
@@ -1826,12 +1824,5 @@ class ContextBuildFailure extends Error {
   ) {
     super(message);
     this.name = 'ContextBuildFailure';
-  }
-}
-
-class SessionCommitFailure extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'SessionCommitFailure';
   }
 }

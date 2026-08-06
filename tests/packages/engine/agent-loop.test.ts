@@ -181,6 +181,35 @@ describe('Agent Loop', () => {
     expect(fixture.contextRuns).toHaveLength(0);
   });
 
+  it('stops the Run when a Session commit fails after the model response', async () => {
+    const tool = registeredTool('lookup');
+    const fixture = createRunsFixture({
+      tools: [tool],
+      streams: [assistantStream('checking', {
+        id: 'provider-call:1',
+        name: tool.registeredToolName,
+        arguments: { value: 'x' },
+      })],
+    });
+    // A failed model-response commit must stop the execution: no ToolCall runs
+    // and no next Context build uses unpersisted facts.
+    fixture.options.session.saveModelResponse = async () => ({
+      status: 'failed',
+      failure: { code: 'session_error', message: 'Model response failed.' },
+    });
+
+    const started = await startedRun(fixture);
+    await settleRun(fixture);
+
+    expect(fixture.published.at(-1)?.type).toBe('run.ended');
+    expect(fixture.published.at(-1)?.payload).toMatchObject({
+      status: 'failed',
+      error: { code: 'session_failed' },
+    });
+    expect(fixture.writes).toEqual(['user']);
+    expect(fixture.contextRuns).toHaveLength(1);
+  });
+
 
   it('commits one final Assistant Reply and completes the Run', async () => {
     const fixture = createRunsFixture({
