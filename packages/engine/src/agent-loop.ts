@@ -461,7 +461,9 @@ async function consumeModelCall(
       workspaceId: input.run.workspaceId,
       model: input.run.model,
       trigger: 'overflow',
-      events: dependencies.events,
+      // The current ModelCall Tool Definitions are already resolved; compaction
+      // must not re-resolve them and the bus was injected at Context creation.
+      tools: prompt.tools,
       signal: input.signal,
     });
     if (compacted.status !== 'compacted') {

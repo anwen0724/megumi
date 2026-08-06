@@ -14,10 +14,14 @@ import type { CompactionMessageSource } from '../prompt/context-message-builder'
 export interface CompactionPlan {
   /** The AI messages being replaced by the Summary. */
   readonly summarizedMessages: readonly Message[];
+  /**
+   * The Tool-loop messages pulled into the kept suffix by protocol closure.
+   * They stay in the candidate Prompt and are also fed to the Summary
+   * generator as the current Turn Prefix; empty on clean Turn boundaries.
+   */
+  readonly turnPrefixMessages: readonly Message[];
   readonly coveredUntilEntryId: string;
   readonly firstKeptEntryId: string;
-  /** True when a Tool loop had to be partially cut and its context is inside the Summary. */
-  readonly turnPrefixIncluded: boolean;
 }
 
 export type PlanCompactionResult =
@@ -65,9 +69,11 @@ export function planCompaction(input: {
   }
   const plan: CompactionPlan = {
     summarizedMessages: sources.slice(0, closed.cutIndex).map((source) => source.message),
+    // The messages closure pulled into the kept suffix between the original cut
+    // and the closed cut; they remain in the candidate Prompt as Turn Prefix.
+    turnPrefixMessages: sources.slice(closed.cutIndex, cutIndex).map((source) => source.message),
     coveredUntilEntryId: sources[closed.cutIndex - 1]!.entryId,
     firstKeptEntryId: sources[closed.cutIndex]!.entryId,
-    turnPrefixIncluded: closed.turnPrefixIncluded,
   };
   if (plan.summarizedMessages.length === 0) {
     return { status: 'nothing_to_compact', reason: 'no_older_messages' };
@@ -96,9 +102,8 @@ export function validateCompactionReduction(input: {
 function closeToolProtocol(
   sources: readonly CompactionMessageSource[],
   initialCutIndex: number,
-): { cutIndex: number; turnPrefixIncluded: boolean } {
+): { cutIndex: number } {
   let cutIndex = initialCutIndex;
-  let turnPrefixIncluded = false;
   while (true) {
     const kept = sources.slice(cutIndex);
     const keptCallIds = new Set(
@@ -136,7 +141,6 @@ function closeToolProtocol(
       continue;
     }
     cutIndex = callSourceIndex;
-    turnPrefixIncluded = true;
   }
-  return { cutIndex, turnPrefixIncluded };
+  return { cutIndex };
 }

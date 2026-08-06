@@ -110,6 +110,17 @@ describe('composeProduct', () => {
       expect(events.filter((event) => event.type === 'tool_execution.ended')).toHaveLength(2);
       expect(events.map((event) => event.type)).toContain('run.ended');
 
+      // Manual /compact runs through Product with the tools-less request and no
+      // per-request bus; the command still completes through Context.compact.
+      const compacted = await product.host.chat.sendUserInput({
+        projectId: opened.project.projectId,
+        sessionId: session.session.id,
+        text: '/compact',
+        modelSelection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
+        permissionMode: 'full_access',
+      });
+      expect(compacted.payload.type).toBe('completed');
+
       const firstContext = modelScript.contexts[0] as {
         systemPrompt?: string;
         tools?: Array<{

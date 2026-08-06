@@ -7,17 +7,20 @@
  */
 
 import crypto from 'node:crypto';
-import type { Api, Context as AiContext, Message, Model, Models } from '@megumi/ai';
-import { estimateMessageTokens } from '@megumi/ai/utils/estimate';
+import type { Api, Model, Models } from '@megumi/ai';
 import type { EventBus } from '@megumi/events';
 import type { ObservabilityService } from '@megumi/observability';
 import type { SessionHistory, SessionAttachmentReader } from '@megumi/session';
 import type { Skills } from '@megumi/skills';
-import type { ToolDefinition } from '@megumi/tools';
 import type {
   BuildContextRequest,
   BuildContextResult,
+  CompactContextRequest,
+  CompactContextResult,
+  CompactionTrigger,
   ContextBuilder,
+  ContextCompactionProgress,
+  ContextCompactor,
   ContextWorkspaceSource,
   Prompt,
 } from './context';
@@ -35,20 +38,14 @@ import {
   shouldAutoCompact,
   type CompactionPolicy,
 } from './context-policy';
-import { createContextResolver, type ContextResolver } from './context-resolver';
+import { createContextResolver, type ContextResolver, type ResolvedContext } from './context-resolver';
 import { calculatePromptUsage, type ContextUsageEstimate } from './context-usage-calculator';
 import { createPromptBuilder, type PromptBuilder } from './prompt/prompt-builder';
-import { buildCompactionSummaryMessage, type MaterializedHistory } from './prompt/context-message-builder';
+import type { MaterializedHistory } from './prompt/context-message-builder';
 import {
   executeContextCompaction,
-  type CompactContextRequest,
-  type CompactContextResult,
-  type CompactionTrigger,
-  type ContextCompactionProgress,
-  type ContextCompactor,
   type ExecuteCompactionResult,
 } from './compaction/context-compactor';
-import type { CompactionPlan } from './compaction/compaction-planner';
 
 export interface CreateContextOptions {
   readonly sessionHistory: Pick<SessionHistory, 'getActiveHistory' | 'saveCompactionSummary'>;
@@ -147,7 +144,7 @@ class DefaultContext implements ContextCapabilities {
           sessionId: request.sessionId,
           workspaceId: request.workspaceId,
           model: request.model,
-          tools: [],
+          tools: request.tools,
           signal: request.signal,
         });
         if (resolved.status === 'failed') return resolved;
@@ -162,6 +159,7 @@ class DefaultContext implements ContextCapabilities {
         const usageBefore = this.countUsage(built.prompt);
         const compacted = await this.executeCompaction({
           sessionId: request.sessionId,
+          context: resolved.context,
           materialized: built.materializedHistory,
           prompt: built.prompt,
           policy,
@@ -221,6 +219,7 @@ class DefaultContext implements ContextCapabilities {
     })) {
       const compacted = await this.executeCompaction({
         sessionId: modelCall.run.sessionId,
+        context: resolved.context,
         materialized: built.materializedHistory,
         prompt: built.prompt,
         policy,
@@ -274,6 +273,7 @@ class DefaultContext implements ContextCapabilities {
 
   private executeCompaction(input: {
     readonly sessionId: string;
+    readonly context: ResolvedContext;
     readonly materialized: MaterializedHistory;
     readonly prompt: Prompt;
     readonly policy: CompactionPolicy;
@@ -282,65 +282,23 @@ class DefaultContext implements ContextCapabilities {
     readonly onProgress?: (progress: ContextCompactionProgress) => void;
     readonly signal?: AbortSignal;
   }): Promise<ExecuteCompactionResult> {
-    const project = async (plan: CompactionPlan, summaryText: string, signal?: AbortSignal) => {
-      if (signal?.aborted) {
-        return { status: 'failed' as const, failure: buildCancelledContextFailure('Context operation was cancelled.') };
-      }
-      const keptMessages = input.materialized.compactableSources
-        .slice(plan.summarizedMessages.length)
-        .map((source) => source.message);
-      return {
-        status: 'built' as const,
-        // Shallow copies at the AI boundary: the compaction projection is a
-        // mutable Context for the summary call, never the readonly Prompt.
-        context: {
-          systemPrompt: input.prompt.systemPrompt,
-          messages: [
-            buildCompactionSummaryMessage(summaryText, Date.parse(this.clock.now())),
-            ...keptMessages,
-          ],
-          tools: [...input.prompt.tools],
-        },
-      };
-    };
     return executeContextCompaction({
       sessionId: input.sessionId,
       trigger: input.trigger,
-      sources: input.materialized.compactableSources,
-      // Shallow copy at the AI boundary: compaction consumes a mutable Context.
-      beforeContext: {
-        systemPrompt: input.prompt.systemPrompt,
-        messages: [...input.prompt.messages],
-        tools: [...input.prompt.tools],
-      },
-      expectedActiveEntryId: input.materialized.expectedActiveEntryId,
-      previousSummary: input.materialized.previousSummary,
+      context: input.context,
+      prompt: input.prompt,
+      materialized: input.materialized,
       policy: input.policy,
       model: input.model,
       models: this.options.models,
       sessionHistory: this.options.sessionHistory,
+      promptBuilder: this.promptBuilder,
+      calculatePromptUsage: (prompt) => this.countUsage(prompt),
       observability: this.options.observability,
       now: () => this.clock.now(),
       createCompactionId: () => this.ids.compactionId(),
-      estimateMessageTokens,
-      project,
-      countUsage: (context, signal) => {
-        if (signal?.aborted) throw buildCancelledContextFailure('Context operation was cancelled.');
-        // The projection is an AI-shaped Context; route it through the one
-        // complete-Prompt usage entry so build and compaction share the rule.
-        // The projection tools always originated from Prompt.tools, so the
-        // generic AI Tool type is narrowed back at this boundary.
-        return calculatePromptUsage({
-          prompt: {
-            systemPrompt: context.systemPrompt ?? '',
-            messages: context.messages,
-            tools: (context.tools ?? []) as unknown as readonly ToolDefinition[],
-          },
-          estimator: this.options.contextTokenEstimator,
-        });
-      },
-      onProgress: input.onProgress,
       events: this.options.events,
+      onProgress: input.onProgress,
       signal: input.signal,
     });
   }

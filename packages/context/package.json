@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@megumi/ai": "0.1.0",
+    "@megumi/events": "0.1.0",
     "@megumi/instructions": "0.1.0",
     "@megumi/observability": "0.1.0",
     "@megumi/session": "0.1.0",

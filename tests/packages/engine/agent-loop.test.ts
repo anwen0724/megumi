@@ -19,9 +19,11 @@ import {
 
 describe('Agent Loop', () => {
   it('recovers from one Context Overflow per ModelCall with a compaction retry', async () => {
+    const tool = registeredTool('lookup');
     const compact = vi.fn(compactedOverflowCompaction);
     const fixture = createEngineFixture({
       contextCompact: compact,
+      tools: [tool],
       streams: [
         // Overflow: usage fills the Context Window.
         assistantStreamWithUsage('overflowing', {
@@ -45,6 +47,9 @@ describe('Agent Loop', () => {
     expect(compact).toHaveBeenCalledWith(expect.objectContaining({
       trigger: 'overflow',
       sessionId: startRequest.sessionId,
+      // Overflow compaction receives the already-resolved ModelCall Tools; a
+      // per-request EventBus no longer exists in the Contract.
+      tools: expect.arrayContaining([expect.objectContaining({ name: 'lookup' })]),
     }));
     // The rebuilt Prompt came from the same ModelCallContext; the run completed once.
     expect(fixture.contextRuns).toHaveLength(2);

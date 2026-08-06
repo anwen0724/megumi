@@ -233,7 +233,9 @@ export function createEngineFixture(input: {
     context: {
       build: input.contextBuild ?? (async (request): Promise<BuildContextResult> => {
         contextRuns.push(structuredClone(request.modelCallContext));
-        return { status: 'ready', prompt: context };
+        // The built Prompt carries the resolved ModelCall Tool Definitions so
+        // Overflow compaction receives the same tools without re-resolution.
+        return { status: 'ready', prompt: { ...context, tools: [...request.modelCallContext.tools] } };
       }),
       compact: input.contextCompact ?? (async () => ({
         status: 'nothing_to_compact' as const,

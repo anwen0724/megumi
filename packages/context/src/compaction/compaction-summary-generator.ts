@@ -6,6 +6,7 @@ export const COMPACTION_SUMMARY_SYSTEM_PROMPT = `You are updating the rolling co
 Your input contains:
 1. The previous compaction summary, if one exists.
 2. A continuous prefix of historical conversation being compacted now.
+3. The current turn prefix: the beginning of the turn that stays in the conversation after compaction.
 
 Produce one replacement summary that preserves the information required to continue the task correctly.
 
@@ -40,10 +41,20 @@ export interface CompactionSummaryModelRequest {
 export function buildCompactionSummaryRequest(input: {
   readonly previousSummary?: string;
   readonly messages: readonly Message[];
+  readonly turnPrefixMessages?: readonly Message[];
 }): CompactionSummaryModelRequest {
+  const sections = [
+    `<previous_summary>\n${input.previousSummary ?? ''}\n</previous_summary>`,
+    `<conversation>\n${input.messages.map(renderMessage).join('\n\n')}\n</conversation>`,
+  ];
+  if (input.turnPrefixMessages && input.turnPrefixMessages.length > 0) {
+    sections.push(
+      `<current_turn_prefix>\n${input.turnPrefixMessages.map(renderMessage).join('\n\n')}\n</current_turn_prefix>`,
+    );
+  }
   return {
     systemPrompt: COMPACTION_SUMMARY_SYSTEM_PROMPT,
-    input: `<previous_summary>\n${input.previousSummary ?? ''}\n</previous_summary>\n\n<conversation>\n${input.messages.map(renderMessage).join('\n\n')}\n</conversation>`,
+    input: sections.join('\n\n'),
   };
 }
 
@@ -53,6 +64,7 @@ export async function generateCompactionSummary(input: {
   readonly sessionId: string;
   readonly previousSummary?: string;
   readonly messages: readonly Message[];
+  readonly turnPrefixMessages?: readonly Message[];
   readonly timestamp: number;
   readonly signal?: AbortSignal;
 }): Promise<

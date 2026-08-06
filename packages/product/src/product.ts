@@ -201,6 +201,23 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
   });
   const workspaceChanges = createWorkspaceChanges({ store: workspaceStore });
 
+  // The bus is injected into Context once at creation: compaction lifecycle
+  // facts publish here without per-request buses.
+  const events = createEventBus({
+    onConsumerError: ({ eventType, sessionId, sequence, error }) => {
+      observability.service.recordLog({
+        level: 'warn',
+        event: 'runtime_event_consumer_failed',
+        attributes: {
+          eventType,
+          sessionId,
+          sequence,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        },
+      });
+    },
+  });
+
   const sessionStore = createSessionStore({ database });
   const attachmentContentStore = options.sessionAttachmentFileSystem
     ? createSessionAttachmentFileStore({
@@ -259,6 +276,7 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     skills,
     models: modelComposition.models,
     observability: observability.service,
+    events,
   });
   const permissions = createPermissions({
     ruleReader: {
@@ -308,13 +326,14 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
 
   const commands: Commands = createCommands({
     compact: async (request, operationOptions) => {
-      // Manual /compact delegates all source resolution to Context.
+      // Manual /compact delegates all source resolution to Context and always
+      // compacts the tools-less Prompt; the bus was injected at creation.
       return context.compact({
         sessionId: request.sessionId,
         workspaceId: request.workspaceId,
         model: request.model,
         trigger: 'manual',
-        events,
+        tools: [],
         ...(operationOptions?.signal ? { signal: operationOptions.signal } : {}),
       });
     },
@@ -360,20 +379,6 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     ...(options.builtInToolAvailability
       ? { builtInToolAvailability: options.builtInToolAvailability }
       : {}),
-  });
-  const events = createEventBus({
-    onConsumerError: ({ eventType, sessionId, sequence, error }) => {
-      observability.service.recordLog({
-        level: 'warn',
-        event: 'runtime_event_consumer_failed',
-        attributes: {
-          eventType,
-          sessionId,
-          sequence,
-          errorMessage: error instanceof Error ? error.message : String(error),
-        },
-      });
-    },
   });
   const eventSubscriptions: EventSubscription[] = [
     events.subscribe({}, (event) => runProjection.project(event)),

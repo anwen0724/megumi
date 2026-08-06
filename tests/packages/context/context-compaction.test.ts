@@ -98,6 +98,8 @@ function manualRequest(overrides: Partial<Parameters<ReturnType<typeof createCon
     workspaceId: 'workspace:1',
     model: compactingModel,
     trigger: 'manual' as const,
+    // Manual compaction always compacts the tools-less Prompt.
+    tools: [] as const,
     ...overrides,
   };
 }
@@ -237,5 +239,157 @@ describe('Context compaction', () => {
     expect(observability.recordMeasurement).toHaveBeenCalledWith(expect.objectContaining({
       name: 'context.compaction.after_tokens',
     }));
+  });
+
+  it('runs Overflow, Threshold and Manual compaction through the same transaction', async () => {
+    // Every trigger settles through the same commit shape: same Summary fields,
+    // same optimistic entry and same progress events.
+    for (const trigger of ['manual', 'overflow', 'threshold'] as const) {
+      const options = fixture();
+      const result = trigger === 'threshold'
+        ? await createContext(options).build({
+            modelCallContext: modelCall({ run: { ...modelCall().run, model: compactingModel } }),
+          })
+        : await createContext(options).compact(manualRequest({ trigger }));
+      expect(result.status, trigger).toBe(trigger === 'threshold' ? 'ready' : 'compacted');
+      expect(options.sessionHistory.saveCompactionSummary).toHaveBeenCalledWith(expect.objectContaining({
+        covered_until_entry_id: 'entry:user:2',
+        first_kept_entry_id: 'entry:assistant:2',
+        expected_active_entry_id: 'entry:assistant:2',
+        append_to_active_path: true,
+      }));
+    }
+  });
+
+  it('compacts again after an existing Summary without shifting Entry to Message mapping', async () => {
+    const historyWithSummary: SessionHistoryItem[] = [
+      {
+        type: 'compaction',
+        entry: {
+          entry_id: 'entry:summary:1',
+          session_id: 'session:1',
+          parent_entry_id: 'entry:assistant:1',
+          entry_type: 'compaction',
+          compaction_id: 'compaction:0',
+          created_at: 'now',
+        },
+        compaction: {
+          compaction_id: 'compaction:0',
+          session_id: 'session:1',
+          summary_text: 'earlier summary',
+          covered_until_entry_id: 'entry:assistant:1',
+          first_kept_entry_id: 'entry:user:2',
+          created_at: 'now',
+        },
+      },
+      ...runHistory(2),
+    ];
+    const secondSummary: SessionHistoryItem[] = [
+      {
+        type: 'compaction',
+        entry: {
+          entry_id: 'entry:summary:2',
+          session_id: 'session:1',
+          parent_entry_id: 'entry:user:2',
+          entry_type: 'compaction',
+          compaction_id: 'compaction:1',
+          created_at: 'now',
+        },
+        compaction: {
+          compaction_id: 'compaction:1',
+          session_id: 'session:1',
+          summary_text: 'replacement summary',
+          covered_until_entry_id: 'entry:user:2',
+          first_kept_entry_id: 'entry:assistant:2',
+          created_at: 'now',
+        },
+      },
+      ...runHistory(2).slice(1),
+    ];
+    let reads = 0;
+    const options: CreateContextOptions = {
+      ...fixture(),
+      sessionHistory: {
+        getActiveHistory: vi.fn(() => {
+          reads += 1;
+          return {
+            status: 'ok' as const,
+            history: reads === 1 ? historyWithSummary : secondSummary,
+          };
+        }),
+        saveCompactionSummary: vi.fn((request) => ({
+          status: 'saved' as const,
+          compaction: {
+            compaction_id: request.compaction_id,
+            session_id: request.session_id,
+            summary_text: request.summary_text,
+            covered_until_entry_id: request.covered_until_entry_id,
+            first_kept_entry_id: request.first_kept_entry_id,
+            created_at: request.created_at,
+          },
+        })),
+      },
+    };
+    const result = await createContext(options).build({
+      modelCallContext: modelCall({ run: { ...modelCall().run, model: compactingModel } }),
+    });
+    expect(result.status).toBe('ready');
+    if (result.status !== 'ready') return;
+    // The second compaction replaces only User 3 and keeps Assistant 3: the
+    // Summary entry never shifts the mapping and the last message survives.
+    expect(options.sessionHistory.saveCompactionSummary).toHaveBeenCalledWith(expect.objectContaining({
+      covered_until_entry_id: 'entry:user:2',
+      first_kept_entry_id: 'entry:assistant:2',
+    }));
+    expect(result.prompt.messages.map((message) => message.role)).toEqual(['user', 'assistant']);
+    expect(JSON.stringify(result.prompt.messages[1])).toContain('answer 2');
+  });
+
+  it('returns the rebuilt Prompt messages after the committed Summary', async () => {
+    const options = fixture();
+    const result = await createContext(options).build({
+      modelCallContext: modelCall({ run: { ...modelCall().run, model: compactingModel } }),
+    });
+    expect(result.status).toBe('ready');
+    if (result.status !== 'ready') return;
+    // The final Prompt is materialized from the authoritative compacted history:
+    // Summary + the genuinely kept messages.
+    expect(result.prompt.messages.map((message) => message.role)).toEqual(['user', 'user', 'assistant']);
+    expect(JSON.stringify(result.prompt.messages)).toContain('replacement summary');
+    expect(JSON.stringify(result.prompt.messages)).toContain('answer 2');
+  });
+
+  it('builds candidate and final Prompts through the same System Prompt and Tool rules', async () => {
+    const options = fixture();
+    const estimator = options.contextTokenEstimator as ReturnType<typeof vi.fn>;
+    const result = await createContext(options).build({
+      modelCallContext: modelCall({ run: { ...modelCall().run, model: compactingModel } }),
+    });
+    expect(result.status).toBe('ready');
+    if (result.status !== 'ready') return;
+    const systemPrompt = result.prompt.systemPrompt;
+    // Every usage estimate (before, candidate and final) was computed from a
+    // Prompt sharing the same System Prompt and the same Tool list.
+    const prompts = estimator.mock.calls.map((call) => call[0] as Prompt);
+    expect(prompts.length).toBeGreaterThanOrEqual(2);
+    for (const prompt of prompts) {
+      expect(prompt.systemPrompt).toBe(systemPrompt);
+      expect(prompt.tools).toEqual(result.prompt.tools);
+    }
+  });
+
+  it('never overwrites new history when the optimistic entry conflicts', async () => {
+    const options = fixture();
+    options.sessionHistory.saveCompactionSummary = vi.fn(() => ({
+      status: 'failed' as const,
+      failure: { code: 'active_entry_conflict', message: 'history changed' },
+    }));
+    expect(await createContext(options).compact(manualRequest())).toMatchObject({
+      status: 'failed',
+      failure: {
+        code: 'compaction_persist_failed',
+        cause: { owner: 'session', code: 'active_entry_conflict' },
+      },
+    });
   });
 });

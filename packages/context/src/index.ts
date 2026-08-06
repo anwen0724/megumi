@@ -2,7 +2,12 @@
 export type {
   BuildContextRequest,
   BuildContextResult,
+  CompactContextRequest,
+  CompactContextResult,
+  CompactionTrigger,
   ContextBuilder,
+  ContextCompactionProgress,
+  ContextCompactor,
   ContextFailure,
   ContextFailureCode,
   ContextWorkspaceSource,
@@ -12,13 +17,6 @@ export type {
   RunContext,
 } from './context';
 export { createContext, type ContextCapabilities, type CreateContextOptions } from './context-builder';
-export {
-  type CompactContextRequest,
-  type CompactContextResult,
-  type ContextCompactionProgress,
-  type ContextCompactor,
-  type CompactionTrigger,
-} from './compaction/context-compactor';
 export {
   DEFAULT_COMPACTION_POLICY,
   type CompactionPolicy,

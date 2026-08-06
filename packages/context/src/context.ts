@@ -1,13 +1,16 @@
 /*
  * Defines the fixed Context main chain: RunContext facts that stay constant
  * inside one Run, ModelCallContext facts fixed before one model call, the
- * assembly seams Context uses to resolve its own prompt sources, and the
- * provider-neutral Prompt result of Context.build.
+ * assembly seams Context uses to resolve its own prompt sources, the
+ * provider-neutral Prompt result of Context.build and the public build and
+ * compaction Contracts. No source reads, Prompt assembly or compaction
+ * algorithms live here.
  */
 
 import type { Api, Message, Model } from '@megumi/ai';
 import type { UserInput } from '@megumi/input';
 import type { ToolDefinition } from '@megumi/tools';
+import type { ContextUsageEstimate } from './context-usage-calculator';
 
 export interface ExecutionEnvironment {
   readonly workingDirectory: string;
@@ -89,4 +92,60 @@ export interface ContextFailure {
 
 export interface ContextBuilder {
   build(request: BuildContextRequest): Promise<BuildContextResult>;
+}
+
+// ---------------------------------------------------------------------------
+// Compaction public Contract
+// ---------------------------------------------------------------------------
+
+export type CompactionTrigger = 'threshold' | 'overflow' | 'manual';
+
+export interface ContextCompactionProgressStarted {
+  readonly status: 'started' | 'completed';
+  readonly compactionId: string;
+  readonly tokensBefore: number;
+  readonly summarizedMessageCount: number;
+  readonly firstKeptEntryId?: string;
+  readonly previousCompactionId?: string;
+}
+
+export interface ContextCompactionProgressFailed {
+  readonly status: 'failed';
+  readonly compactionId: string;
+  readonly tokensBefore: number;
+  readonly code: string;
+  readonly message: string;
+  readonly previousCompactionId?: string;
+}
+
+export type ContextCompactionProgress =
+  | ContextCompactionProgressStarted
+  | ContextCompactionProgressFailed;
+
+export interface CompactContextRequest {
+  readonly sessionId: string;
+  readonly workspaceId: string;
+  readonly model: Model<Api>;
+  /** The Tool Definitions of the Prompt being compacted; manual compaction passes an empty list. */
+  readonly tools: readonly ToolDefinition[];
+  readonly trigger: CompactionTrigger;
+  readonly onProgress?: (progress: ContextCompactionProgress) => void;
+  readonly signal?: AbortSignal;
+}
+
+export type CompactContextResult =
+  | {
+      readonly status: 'compacted';
+      readonly compactionId: string;
+      readonly usageBefore: ContextUsageEstimate;
+      readonly usageAfter: ContextUsageEstimate;
+    }
+  | {
+      readonly status: 'nothing_to_compact';
+      readonly reason: 'no_historical_messages' | 'no_older_messages' | 'summary_not_reducing';
+    }
+  | { readonly status: 'failed'; readonly failure: ContextFailure };
+
+export interface ContextCompactor {
+  compact(request: CompactContextRequest): Promise<CompactContextResult>;
 }
