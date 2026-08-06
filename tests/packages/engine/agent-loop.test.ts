@@ -11,6 +11,8 @@ import {
   createRunsFixture,
   errorOverflowStream,
   lengthOverflowStream,
+  neverEndingStream,
+  requestedCancellation,
   retryableFailedStream,
   settleRun,
   startedRun,
@@ -700,5 +702,112 @@ describe('Agent Loop', () => {
     // released it when the turn settled.
     expect(routers.size).toBe(0);
     expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'completed' });
+  });
+
+  it('releases the ModelCall Tools router on the failure and cancellation paths', async () => {
+    const tool = registeredTool('lookup');
+    const routers = new Map<string, ReturnType<typeof createToolRouter>>();
+    const resolve = (scope: { modelCallId: string; runId: string; sessionId: string; workspaceId: string }) => {
+      let router = routers.get(scope.modelCallId);
+      if (!router) {
+        router = createToolRouter({ scope, tools: [tool] });
+        routers.set(scope.modelCallId, router);
+      }
+      return router;
+    };
+    const trackedTools = {
+      resolveModelCallTools: (scope: { modelCallId: string }) => ({
+        status: 'resolved' as const,
+        definitions: resolve(scope).definitions(),
+      }),
+      routeToolCall: (call: { modelCallId: string }) => resolve(call).route(call),
+      executeToolInvocation: (input: { invocation: { modelCallId: string } }) => (
+        Promise.resolve(succeeded('lookup'))
+      ),
+      releaseModelCallTools: ({ modelCallId }: { modelCallId: string }) => { routers.delete(modelCallId); },
+    };
+
+    // Failure path: a retry-exhausted ModelCall still releases the router.
+    const failedFixture = createRunsFixture({
+      streams: [retryableFailedStream('boom')],
+      policy: { maxModelCallAttempts: 1 },
+    });
+    (failedFixture.options as never as { tools: unknown }).tools = trackedTools;
+    await startedRun(failedFixture);
+    await settleRun(failedFixture);
+    expect(failedFixture.published.at(-1)?.payload).toMatchObject({ status: 'failed' });
+    expect(routers.size).toBe(0);
+
+    // Cancellation path: an aborted stream still releases the router.
+    const cancelledFixture = createRunsFixture({
+      streams: [neverEndingStream()],
+    });
+    (cancelledFixture.options as never as { tools: unknown }).tools = trackedTools;
+    const cancelled = await startedRun(cancelledFixture);
+    await requestedCancellation(cancelledFixture, cancelled.run.runId);
+    await settleRun(cancelledFixture);
+    expect(cancelledFixture.published.at(-1)?.payload).toMatchObject({ status: 'cancelled' });
+    expect(routers.size).toBe(0);
+  });
+
+  it('keeps the Run outcome unchanged when Observability operations throw', async () => {
+    const failingObservability = {
+      startTrace: vi.fn(() => { throw new Error('observability down'); }),
+      endTrace: vi.fn(),
+      startSpan: vi.fn(() => { throw new Error('observability down'); }),
+      endSpan: vi.fn(() => { throw new Error('observability down'); }),
+      runInTraceContext: vi.fn(),
+      runInSpanContext: vi.fn(),
+      getCurrentTrace: vi.fn(),
+      getCurrentSpan: vi.fn(),
+      recordLog: vi.fn(() => { throw new Error('observability down'); }),
+      recordMeasurement: vi.fn(() => { throw new Error('observability down'); }),
+      flush: vi.fn(async () => undefined),
+    } as never;
+    const fixture = createRunsFixture({
+      streams: [assistantStream('answer')],
+      observability: failingObservability,
+    });
+
+    const started = await startedRun(fixture);
+    await settleRun(fixture);
+
+    // Diagnostics never own Run outcome: the Run still completed normally.
+    expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'completed' });
+    expect(fixture.writes).toEqual(['user', 'assistant:completed']);
+  });
+
+  it('still converges and ends Observability when Tool route release fails', async () => {
+    const endTrace = vi.fn();
+    const observability = {
+      startTrace: vi.fn(() => ({ traceId: 'trace:1' })),
+      endTrace,
+      startSpan: vi.fn(() => ({ spanId: 'span:1' })),
+      endSpan: vi.fn(),
+      runInTraceContext: vi.fn((_trace: unknown, operation: () => unknown) => operation()),
+      runInSpanContext: vi.fn(),
+      getCurrentTrace: vi.fn(),
+      getCurrentSpan: vi.fn(),
+      recordLog: vi.fn(),
+      recordMeasurement: vi.fn(),
+      flush: vi.fn(async () => undefined),
+    } as never;
+    const fixture = createRunsFixture({
+      streams: [assistantStream('answer')],
+      observability,
+    });
+    // A failing route release must not skip the remaining cleanup attempts.
+    fixture.options.tools.releaseModelCallTools = () => { throw new Error('release failed'); };
+
+    const started = await startedRun(fixture);
+    await settleRun(fixture);
+
+    // The failure follows the current semantics (internal error), and the
+    // run-scoped Observability still ended exactly once.
+    expect(fixture.published.at(-1)?.payload).toMatchObject({
+      status: 'failed',
+      error: { code: 'internal_error' },
+    });
+    expect(endTrace).toHaveBeenCalledTimes(1);
   });
 });

@@ -23,15 +23,15 @@ describe('bounded Tool Result source guards', () => {
     expect(definitions).toContain("query: { type: 'string', description: 'Literal text to search for.' }");
   });
 
-  it('routes direct and approval-resumed execution through one Engine mapper without rawResult', () => {
-    const agentLoop = read('packages/engine/src/agent-loop.ts');
+  it('routes direct and approval-resumed execution through one ToolCall mapper without rawResult', () => {
+    const toolRunner = read('packages/engine/src/tool-call-runner.ts');
 
-    expect(agentLoop).toContain('async function executeToolInvocation(');
-    expect(agentLoop).toContain('content: executionResult.normalizedResult.content');
-    // The Engine mapper never passes raw Runtime Sources into persisted Tool Results.
-    expect(agentLoop).not.toContain('runtimeSources');
-    expect(agentLoop).not.toContain('toolResultFromExecutionResult');
-    expect(agentLoop).not.toContain('toolResultRuntimeFactFromExecution');
-    expect(agentLoop).not.toContain('.rawResult');
+    expect(toolRunner).toContain('async function executeToolInvocation(');
+    expect(toolRunner).toContain('content: executionResult.normalizedResult.content');
+    // The ToolCall mapper never passes raw Runtime Sources into persisted Tool Results.
+    expect(toolRunner).not.toContain('runtimeSources');
+    expect(toolRunner).not.toContain('toolResultFromExecutionResult');
+    expect(toolRunner).not.toContain('toolResultRuntimeFactFromExecution');
+    expect(toolRunner).not.toContain('.rawResult');
   });
 });

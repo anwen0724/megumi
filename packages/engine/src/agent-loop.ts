@@ -8,7 +8,7 @@
 import type { AssistantMessage, Models } from '@megumi/ai';
 import type { EventBus, EventPayloadByType, EventType } from '@megumi/events';
 import type { UserInput } from '@megumi/input';
-import type { ObservabilityService, ObservabilitySpanName, SpanHandle, TraceHandle } from '@megumi/observability';
+import type { ObservabilityService } from '@megumi/observability';
 import type {
   ApprovalDecision,
   PermissionDecision,
@@ -39,6 +39,7 @@ import {
   type ToolCallFailure,
   type ToolResult,
 } from './tool-call-runner';
+import { createLoopObserver, type LoopObserver } from './loop-observer';
 
 export interface AgentLoopInput {
   readonly run: Run;
@@ -92,11 +93,8 @@ interface LoopRuntime {
   activeModelMessageId?: string;
   /** The current ModelCall's streamed projection; the ModelCall Runner owns its updates. */
   projection: ModelCallProjection;
-  trace?: TraceHandle;
-  rootSpan?: SpanHandle;
-  modelSpan?: SpanHandle;
-  approvalSpan?: SpanHandle;
-  observabilityEnded: boolean;
+  /** The run-scoped Observability resource handle. */
+  readonly observer: LoopObserver;
 }
 
 export async function runAgentLoop(
@@ -116,9 +114,12 @@ export async function runAgentLoop(
     toolRoundCount: 0,
     toolCallCount: 0,
     projection: { text: '', thinking: '' },
-    observabilityEnded: false,
+    observer: createLoopObserver({
+      run: input.run,
+      observability: dependencies.observability,
+    }),
   };
-  startLoopObservability(dependencies, runtime);
+  runtime.observer.start();
   // A Run failure settles one terminal Assistant Reply with the failure reason
   // (session failures commit nothing; the Session owns the error already).
   const failRun = async (failure: RunFailure): Promise<AgentLoopResult> => {
@@ -157,7 +158,7 @@ export async function runAgentLoop(
       cause: { owner: 'engine', code: 'unexpected_exception' },
     });
   } finally {
-    endLoopObservability(dependencies, runtime, 'ok');
+    runtime.observer.end('ok');
   }
 }
 
@@ -249,8 +250,7 @@ async function runTurn(
     });
     runtime.modelCallCount += 1;
 
-    const modelSpan = startObservedSpan(dependencies, runtime, 'model.call');
-    runtime.modelSpan = modelSpan;
+    const modelSpan = runtime.observer.startSpan('model.call');
     let modelOutcome: ModelCallOutcome;
     try {
       modelOutcome = await runModelCall({
@@ -270,8 +270,8 @@ async function runTurn(
           publish: (type, payload) => emitEvent(dependencies, runtime, type, payload),
         },
         observation: {
-          recordLog: (log) => recordObservedLog(dependencies, runtime, log),
-          recordMeasurement: (measurement) => recordObservedMeasurement(dependencies, runtime, measurement),
+          recordLog: (log) => runtime.observer.recordLog(log),
+          recordMeasurement: (measurement) => runtime.observer.recordMeasurement(measurement),
         },
         models: dependencies.models,
         context: dependencies.context,
@@ -279,8 +279,7 @@ async function runTurn(
         clock: dependencies.clock,
       });
     } finally {
-      endObservedSpan(dependencies, modelSpan, input.signal.aborted ? 'cancelled' : 'ok');
-      runtime.modelSpan = undefined;
+      runtime.observer.endSpan(modelSpan, input.signal.aborted ? 'cancelled' : 'ok');
     }
 
     if (modelOutcome.status === 'cancelled') {
@@ -401,8 +400,8 @@ async function runTurn(
         publish: (type, payload) => emitEvent(dependencies, runtime, type, payload),
       },
       observation: {
-        startSpan: () => startObservedSpan(dependencies, runtime, 'tool.call'),
-        endSpan: (span, status) => endObservedSpan(dependencies, span, status),
+        startSpan: () => runtime.observer.startSpan('tool.call'),
+        endSpan: (span, status) => runtime.observer.endSpan(span, status),
       },
       // The Agent Loop owns the whole approval lifecycle: it applies the
       // waiting/running transitions, publishes the lifecycle facts, and waits
@@ -420,14 +419,12 @@ async function runTurn(
         // always finds the pending approval.
         const approvalWait = input.awaitApproval({ approval });
         emitApprovalRequested(dependencies, runtime, approval);
-        const approvalSpan = startObservedSpan(dependencies, runtime, 'approval.wait');
-        runtime.approvalSpan = approvalSpan;
+        const approvalSpan = runtime.observer.startSpan('approval.wait');
         let resolution: ApprovalResolution;
         try {
           resolution = await approvalWait;
         } finally {
-          endObservedSpan(dependencies, approvalSpan, 'ok');
-          runtime.approvalSpan = undefined;
+          runtime.observer.endSpan(approvalSpan, 'ok');
         }
         if (resolution.status === 'cancelled') {
           emitApprovalResolved(dependencies, runtime, approval, 'cancelled');
@@ -641,140 +638,6 @@ function emitApprovalResolved(
     ...(decision === 'approved' && optionId ? { optionId } : {}),
     decidedAt: dependencies.clock.now(),
   });
-}
-
-// ---------------------------------------------------------------------------
-// Observability
-// ---------------------------------------------------------------------------
-
-function startLoopObservability(
-  dependencies: AgentLoopDependencies,
-  runtime: LoopRuntime,
-): void {
-  if (!dependencies.observability) return;
-  try {
-    const trace = dependencies.observability.startTrace({
-      traceId: runtime.run.runId,
-      name: 'agent_run',
-      runId: runtime.run.runId,
-      sessionId: runtime.run.sessionId,
-      workspaceId: runtime.run.workspaceId,
-      requestId: runtime.run.requestId,
-      attributes: {
-        providerId: String(runtime.run.model.provider),
-        modelId: runtime.run.model.id,
-      },
-    });
-    const rootSpan = dependencies.observability.runInTraceContext(trace, () => (
-      dependencies.observability!.startSpan({ name: 'agent_run' })
-    ));
-    runtime.trace = trace;
-    runtime.rootSpan = rootSpan;
-  } catch {
-    // Diagnostics never own Run outcome.
-  }
-}
-
-function endLoopObservability(
-  dependencies: AgentLoopDependencies,
-  runtime: LoopRuntime,
-  status: 'ok' | 'error' | 'cancelled',
-): void {
-  if (!dependencies.observability || runtime.observabilityEnded) return;
-  runtime.observabilityEnded = true;
-  endObservedSpan(dependencies, runtime.modelSpan, status);
-  runtime.modelSpan = undefined;
-  endObservedSpan(dependencies, runtime.approvalSpan, status);
-  runtime.approvalSpan = undefined;
-  try {
-    endObservedSpan(dependencies, runtime.rootSpan, status);
-    if (runtime.trace) {
-      dependencies.observability.endTrace({ trace: runtime.trace, status });
-    }
-  } catch {
-    // Diagnostics never own Run outcome.
-  }
-}
-
-function startObservedSpan(
-  dependencies: AgentLoopDependencies,
-  runtime: LoopRuntime,
-  name: ObservabilitySpanName,
-): SpanHandle | undefined {
-  if (!dependencies.observability) return undefined;
-  try {
-    return dependencies.observability.startSpan({
-      name,
-      correlation: observedCorrelation(runtime),
-    });
-  } catch {
-    return undefined;
-  }
-}
-
-function endObservedSpan(
-  dependencies: AgentLoopDependencies,
-  span: SpanHandle | undefined,
-  status: 'ok' | 'error' | 'cancelled',
-): void {
-  if (!dependencies.observability || !span) return;
-  try {
-    dependencies.observability.endSpan({ span, status });
-  } catch {
-    // Diagnostics never own Run outcome.
-  }
-}
-
-function recordObservedLog(
-  dependencies: AgentLoopDependencies,
-  runtime: LoopRuntime,
-  input: {
-    readonly level: 'info' | 'warn' | 'error';
-    readonly event: string;
-    readonly attributes?: Record<string, unknown>;
-  },
-): void {
-  if (!dependencies.observability) return;
-  try {
-    dependencies.observability.recordLog({
-      ...input,
-      correlation: observedCorrelation(runtime),
-    });
-  } catch {
-    // Diagnostics never own Run outcome.
-  }
-}
-
-function recordObservedMeasurement(
-  dependencies: AgentLoopDependencies,
-  runtime: LoopRuntime,
-  input: {
-    readonly name: string;
-    readonly value: number;
-    readonly unit: 'count';
-    readonly attributes?: Record<string, unknown>;
-  },
-): void {
-  if (!dependencies.observability) return;
-  try {
-    dependencies.observability.recordMeasurement({
-      ...input,
-      correlation: observedCorrelation(runtime),
-    });
-  } catch {
-    // Diagnostics never own Run outcome.
-  }
-}
-
-function observedCorrelation(runtime: LoopRuntime) {
-  return {
-    ...(runtime.trace ? { traceId: runtime.trace.traceId } : {}),
-    ...(runtime.rootSpan ? { spanId: runtime.rootSpan.spanId } : {}),
-    runId: runtime.run.runId,
-    sessionId: runtime.run.sessionId,
-    workspaceId: runtime.run.workspaceId,
-    requestId: runtime.run.requestId,
-  };
 }
 
 // ---------------------------------------------------------------------------

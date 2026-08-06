@@ -16,11 +16,13 @@ describe('Engine core loop source guards', () => {
     expect(files).toEqual([
       'agent-loop.ts',
       'index.ts',
+      'loop-observer.ts',
       'model-call-runner.ts',
       'run-policy.ts',
       'run-registry.ts',
       'run.ts',
       'session-message-committer.ts',
+      'tool-call-runner.ts',
     ]);
   });
 
@@ -50,8 +52,8 @@ describe('Engine core loop source guards', () => {
 
     expect(agentLoop).toContain('export async function runAgentLoop(');
     expect(agentLoop).toContain('dependencies.context.build(');
-    expect(agentLoop).toContain('executeToolCallBatch(');
     expect(agentLoop).toContain('runModelCall({');
+    expect(agentLoop).toContain('runToolCallBatch({');
     // The model stream consumption lives in its deep module; no second loop
     // implementation or state machine exists anywhere else.
     expect(modelRunner).toContain('export async function runModelCall(');
