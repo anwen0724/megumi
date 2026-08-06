@@ -74,7 +74,6 @@ function createRecordingCommitter(overrides: {
     userEntry,
     session,
     ids: { createSessionMessageId: () => `message:${++messageNumber}` },
-    clock: { now: () => '2026-07-31T00:00:00.000Z' },
   });
   return { committer, session };
 }

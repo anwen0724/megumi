@@ -109,8 +109,6 @@ function createHarness(input: {
     signal: abortController.signal,
     projection: { text: '', thinking: '' },
     events: {
-      runId: 'run:1',
-      sessionId: 'session:1',
       publish: <TType extends EventType>(type: TType, payload: EventPayloadByType[TType]) => {
         events.push({
           type,

@@ -62,8 +62,6 @@ function createBatchHarness(input: {
     ids: { createToolExecutionId: () => `tool-execution:${++executionNumber}` },
     clock: { now: () => '2026-07-31T00:00:00.000Z' },
     events: {
-      runId: 'run:1',
-      sessionId: 'session:1',
       publish: <TType extends import('@megumi/events').EventType>(
         type: TType,
         payload: import('@megumi/events').EventPayloadByType[TType],
