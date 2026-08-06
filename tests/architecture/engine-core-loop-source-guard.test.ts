@@ -16,9 +16,11 @@ describe('Engine core loop source guards', () => {
     expect(files).toEqual([
       'agent-loop.ts',
       'index.ts',
+      'model-call-runner.ts',
       'run-policy.ts',
       'run-registry.ts',
       'run.ts',
+      'session-message-committer.ts',
     ]);
   });
 
@@ -39,6 +41,7 @@ describe('Engine core loop source guards', () => {
 
   it('keeps exactly one model/tool alternating execution loop', () => {
     const agentLoop = read('packages/engine/src/agent-loop.ts');
+    const modelRunner = read('packages/engine/src/model-call-runner.ts');
     const rest = [
       read('packages/engine/src/run.ts'),
       read('packages/engine/src/run-registry.ts'),
@@ -47,17 +50,19 @@ describe('Engine core loop source guards', () => {
 
     expect(agentLoop).toContain('export async function runAgentLoop(');
     expect(agentLoop).toContain('dependencies.context.build(');
-    expect(agentLoop).toContain('dependencies.models.streamSimple(');
     expect(agentLoop).toContain('executeToolCallBatch(');
-    // No second loop implementation or state machine anywhere else; the Run
-    // operation entry may only call runAgentLoop once per Run.
+    expect(agentLoop).toContain('runModelCall({');
+    // The model stream consumption lives in its deep module; no second loop
+    // implementation or state machine exists anywhere else.
+    expect(modelRunner).toContain('export async function runModelCall(');
+    expect(modelRunner).toContain('models.streamSimple(');
     expect(rest).not.toMatch(/async function runTurn|async function consumeModelCall|async function\* executeRunLoop/u);
     expect(agentLoop).not.toContain('launchRunLoop');
   });
 
   it('removes ModelCallEvent, AgentEvent and the approval continuation machinery', () => {
     const source = readTree('packages/engine/src');
-    expect(source).not.toContain('ModelCallEvent');
+    expect(source).not.toMatch(/\bModelCallEvent\b/u);
     expect(source).not.toContain('AgentEvent');
     expect(source).not.toContain('ToolCallApprovalContinuation');
     expect(source).not.toContain('continueRunAfterApproval');

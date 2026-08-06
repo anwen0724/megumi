@@ -5,14 +5,7 @@
  * across calls: all tool batches, attempts, stream snapshots and observation
  * handles are local to this function invocation.
  */
-import {
-  isContextOverflow,
-  isRetryableAssistantError,
-  type Api,
-  type AssistantMessage,
-  type Model,
-  type Models,
-} from '@megumi/ai';
+import type { AssistantMessage, Models } from '@megumi/ai';
 import type { EventBus, EventPayloadByType, EventType } from '@megumi/events';
 import type { UserInput } from '@megumi/input';
 import type { ObservabilityService, ObservabilitySpanName, SpanHandle, TraceHandle } from '@megumi/observability';
@@ -30,6 +23,13 @@ import type { ContextCapabilities, Prompt, RunContext } from '@megumi/context';
 import type { RunApproval, RunClock, Run, RunFailure } from './run';
 import type { RunPolicy } from './run-policy';
 import type { ApprovalResolution } from './run-registry';
+import {
+  runModelCall,
+  type CompletedToolCall,
+  type ModelCallFailure,
+  type ModelCallOutcome,
+  type ModelCallProjection,
+} from './model-call-runner';
 import {
   createSessionMessageCommitter,
   type AssistantReplyMetadata,
@@ -87,8 +87,8 @@ interface LoopRuntime {
   toolRoundCount: number;
   toolCallCount: number;
   activeModelMessageId?: string;
-  activeAssistantText: string;
-  activeThinking: string;
+  /** The current ModelCall's streamed projection; the ModelCall Runner owns its updates. */
+  projection: ModelCallProjection;
   trace?: TraceHandle;
   rootSpan?: SpanHandle;
   modelSpan?: SpanHandle;
@@ -96,26 +96,6 @@ interface LoopRuntime {
   readonly toolSpans: Map<string, SpanHandle>;
   observabilityEnded: boolean;
 }
-
-interface CompletedToolCall {
-  readonly toolCallId: string;
-  /** The logical ModelCall that produced this ToolCall. */
-  readonly sourceModelCallId: string;
-  readonly callOrder: number;
-  readonly toolName: string;
-  readonly input: unknown;
-}
-
-type ModelCallOutcome =
-  | { readonly status: 'completed'; readonly message: AssistantMessage; readonly toolCalls: readonly CompletedToolCall[] }
-  | { readonly status: 'failed'; readonly failure: RunFailure }
-  | { readonly status: 'cancelled'; readonly partial: { readonly text: string; readonly thinking: string } };
-
-type AttemptOutcome =
-  | { readonly status: 'completed'; readonly message: AssistantMessage }
-  | { readonly status: 'overflow'; readonly message: AssistantMessage }
-  | { readonly status: 'failed'; readonly failure: RunFailure; readonly retryable: boolean }
-  | { readonly status: 'aborted'; readonly partial: { readonly text: string; readonly thinking: string } };
 
 interface ToolResult extends SessionToolResultCommit {
   readonly summary?: string;
@@ -137,8 +117,7 @@ export async function runAgentLoop(
     modelCallCount: 0,
     toolRoundCount: 0,
     toolCallCount: 0,
-    activeAssistantText: '',
-    activeThinking: '',
+    projection: { text: '', thinking: '' },
     toolSpans: new Map(),
     observabilityEnded: false,
   };
@@ -264,8 +243,8 @@ async function runTurn(
     // One message identity spans the whole streaming Turn and is reused when
     // the reply is stored.
     runtime.activeModelMessageId = dependencies.ids.createSessionMessageId();
-    runtime.activeAssistantText = '';
-    runtime.activeThinking = '';
+    runtime.projection.text = '';
+    runtime.projection.thinking = '';
     emitEvent(dependencies, runtime, 'turn.started', { messageId: runtime.activeModelMessageId });
     emitEvent(dependencies, runtime, 'message.started', {
       role: 'assistant',
@@ -277,7 +256,31 @@ async function runTurn(
     runtime.modelSpan = modelSpan;
     let modelOutcome: ModelCallOutcome;
     try {
-      modelOutcome = await consumeModelCall(input, dependencies, runtime, modelCallId, buildPrompt, prompt);
+      modelOutcome = await runModelCall({
+        runId: input.run.runId,
+        sessionId: input.run.sessionId,
+        workspaceId: input.run.workspaceId,
+        model: input.run.model,
+        modelCallId,
+        messageId: runtime.activeModelMessageId ?? '',
+        prompt,
+        buildPrompt,
+        signal: input.signal,
+        projection: runtime.projection,
+        events: {
+          runId: input.run.runId,
+          sessionId: input.run.sessionId,
+          publish: (type, payload) => emitEvent(dependencies, runtime, type, payload),
+        },
+        observation: {
+          recordLog: (log) => recordObservedLog(dependencies, runtime, log),
+          recordMeasurement: (measurement) => recordObservedMeasurement(dependencies, runtime, measurement),
+        },
+        models: dependencies.models,
+        context: dependencies.context,
+        policy: dependencies.policy,
+        clock: dependencies.clock,
+      });
     } finally {
       endObservedSpan(dependencies, modelSpan, input.signal.aborted ? 'cancelled' : 'ok');
       runtime.modelSpan = undefined;
@@ -297,14 +300,14 @@ async function runTurn(
       emitEvent(dependencies, runtime, 'message.ended', {
         role: 'assistant',
         messageId: runtime.activeModelMessageId ?? '',
-        content: runtime.activeAssistantText,
+        content: runtime.projection.text,
       });
       emitEvent(dependencies, runtime, 'turn.ended', {
         stopReason: 'error',
         messageId: runtime.activeModelMessageId ?? '',
         toolCallIds: [],
       });
-      return await failRun(modelOutcome.failure);
+      return await failRun(modelCallRunFailure(modelOutcome.failure));
     }
 
     const assistantContent = toAssistantContent(modelOutcome.message);
@@ -385,8 +388,8 @@ async function runTurn(
     const batch = await executeToolCallBatch(input, dependencies, runtime, modelCallId, modelOutcome.toolCalls);
     if (batch === 'cancelled') {
       await commitCancelledReply(input, dependencies, runtime, {
-        text: runtime.activeAssistantText,
-        thinking: runtime.activeThinking,
+        text: runtime.projection.text,
+        thinking: runtime.projection.thinking,
       });
       emitEvent(dependencies, runtime, 'turn.ended', {
         stopReason: 'cancelled',
@@ -414,392 +417,6 @@ async function runTurn(
   }
 }
 
-/**
- * Consumes the AI model stream directly: one attempt streams through
- * `event.partial` snapshots, and the terminal `result()` is the only settled
- * message. Context Overflow recovery and ModelCall Retry stay in this loop's
- * explicit control with the same logical identities.
- */
-async function consumeModelCall(
-  input: AgentLoopInput,
-  dependencies: AgentLoopDependencies,
-  runtime: LoopRuntime,
-  modelCallId: string,
-  buildPrompt: () => Promise<Prompt>,
-  initialPrompt: Prompt,
-): Promise<ModelCallOutcome> {
-  let prompt = initialPrompt;
-  let attemptNumber = 1;
-  let overflowRecoveries = 0;
-  const retriedAttempts: number[] = [];
-
-  /** Clears the projected text/thinking snapshots before a recoverable attempt. */
-  const resetProjection = (): void => {
-    runtime.activeAssistantText = '';
-    runtime.activeThinking = '';
-    emitEvent(dependencies, runtime, 'message.update', {
-      role: 'assistant',
-      messageId: runtime.activeModelMessageId ?? '',
-      content: '',
-    });
-    emitEvent(dependencies, runtime, 'message.thinking.update', {
-      messageId: runtime.activeModelMessageId ?? '',
-      thinking: '',
-    });
-    recordObservedLog(dependencies, runtime, {
-      level: 'info',
-      event: 'model.call.stream_reset',
-      attributes: { modelCallId, attemptNumber },
-    });
-  };
-
-  const recoverOverflow = async (): Promise<ModelCallOutcome | 'recovered'> => {
-    // A recoverable stream reset clears the projected text and thinking before
-    // the next attempt; the same Turn, Message and ModelCall identities stay.
-    resetProjection();
-    const compacted = await dependencies.context.compact({
-      sessionId: input.run.sessionId,
-      workspaceId: input.run.workspaceId,
-      model: input.run.model,
-      trigger: 'overflow',
-      // The current ModelCall Tool Definitions are already resolved; compaction
-      // must not re-resolve them and the bus was injected at Context creation.
-      tools: prompt.tools,
-      signal: input.signal,
-    });
-    if (compacted.status !== 'compacted') {
-      return {
-        status: 'failed',
-        failure: {
-          code: 'context_failed',
-          message: compacted.status === 'failed'
-            ? compacted.failure.message
-            : 'ModelCall overflowed and compaction had nothing to compact.',
-          retryable: false,
-          cause: { owner: 'context', code: compacted.status === 'failed' ? compacted.failure.code : 'compaction_failed' },
-        },
-      };
-    }
-    if (input.signal.aborted) {
-      return { status: 'cancelled', partial: { text: runtime.activeAssistantText, thinking: runtime.activeThinking } };
-    }
-    try {
-      prompt = await buildPrompt();
-    } catch (error) {
-      if (input.signal.aborted) {
-        return { status: 'cancelled', partial: { text: runtime.activeAssistantText, thinking: runtime.activeThinking } };
-      }
-      if (error instanceof ContextBuildFailure) {
-        return {
-          status: 'failed',
-          failure: {
-            code: 'context_failed',
-            message: error.message,
-            retryable: error.retryable,
-            cause: { owner: 'context', code: error.code },
-          },
-        };
-      }
-      throw error;
-    }
-    overflowRecoveries += 1;
-    attemptNumber += 1;
-    return 'recovered';
-  };
-
-  for (;;) {
-    if (input.signal.aborted) {
-      return { status: 'cancelled', partial: { text: runtime.activeAssistantText, thinking: runtime.activeThinking } };
-    }
-    const maxAttempts = dependencies.policy.maxModelCallAttempts + overflowRecoveries;
-    recordObservedMeasurement(dependencies, runtime, {
-      name: 'model.call.attempt',
-      value: attemptNumber,
-      unit: 'count',
-      attributes: { modelCallId },
-    });
-
-    const attempt = await runStreamAttempt(input, dependencies, runtime, modelCallId, prompt, attemptNumber);
-
-    if (attempt.status === 'completed') {
-      if (isContextOverflow(attempt.message, input.run.model.contextWindow)) {
-        // Compaction recoveries are bounded by the confirmed Engine Policy;
-        // exhausting them ends the Run instead of compacting again.
-        if (overflowRecoveries >= dependencies.policy.maxContextOverflowRecoveries) {
-          return {
-            status: 'failed',
-            failure: {
-              code: 'context_failed',
-              message: 'ModelCall overflowed the Context Window even after compaction recovery.',
-              retryable: false,
-              cause: { owner: 'context', code: 'context_window_exceeded' },
-            },
-          };
-        }
-        const recovered = await recoverOverflow();
-        if (recovered !== 'recovered') return recovered;
-        continue;
-      }
-      const validated = validateCompletedResponse(modelCallId, attempt.message);
-      if (validated.status === 'invalid') {
-        if (validated.failure.retryable && attemptNumber < maxAttempts && !input.signal.aborted) {
-          resetProjection();
-          retriedAttempts.push(attemptNumber + 1);
-          publishRetryStarted(dependencies, runtime, attemptNumber + 1, maxAttempts);
-          await waitForRetry(dependencies.policy.modelRetryDelayMs, input.signal);
-          attemptNumber += 1;
-          continue;
-        }
-        publishRetryFailed(dependencies, runtime, retriedAttempts, validated.failure);
-        return { status: 'failed', failure: modelCallFailure(validated.failure) };
-      }
-      publishRetryCompleted(dependencies, runtime, retriedAttempts);
-      return {
-        status: 'completed',
-        message: attempt.message,
-        toolCalls: validated.toolCalls,
-      };
-    }
-
-    if (attempt.status === 'overflow') {
-      // Compaction recoveries are bounded by the confirmed Engine Policy;
-      // exhausting them ends the Run instead of compacting again.
-      if (overflowRecoveries >= dependencies.policy.maxContextOverflowRecoveries) {
-        return {
-          status: 'failed',
-          failure: {
-            code: 'context_failed',
-            message: 'ModelCall overflowed the Context Window even after compaction recovery.',
-            retryable: false,
-            cause: { owner: 'context', code: 'context_window_exceeded' },
-          },
-        };
-      }
-      const recovered = await recoverOverflow();
-      if (recovered !== 'recovered') return recovered;
-      continue;
-    }
-
-    if (attempt.status === 'failed') {
-      if (attempt.retryable && attemptNumber < maxAttempts && !input.signal.aborted) {
-        resetProjection();
-        retriedAttempts.push(attemptNumber + 1);
-        publishRetryStarted(dependencies, runtime, attemptNumber + 1, maxAttempts);
-        await waitForRetry(dependencies.policy.modelRetryDelayMs, input.signal);
-        attemptNumber += 1;
-        continue;
-      }
-      publishRetryFailed(dependencies, runtime, retriedAttempts, {
-        code: attempt.failure.code,
-        message: attempt.failure.message,
-      });
-      return { status: 'failed', failure: attempt.failure };
-    }
-
-    return { status: 'cancelled', partial: attempt.partial };
-  }
-}
-
-async function runStreamAttempt(
-  input: AgentLoopInput,
-  dependencies: AgentLoopDependencies,
-  runtime: LoopRuntime,
-  modelCallId: string,
-  prompt: Prompt,
-  attemptNumber: number,
-): Promise<AttemptOutcome> {
-  const startedAt = dependencies.clock.now();
-  let terminal: AssistantMessage | undefined;
-  const stream = dependencies.models.streamSimple(input.run.model, {
-    systemPrompt: prompt.systemPrompt,
-    messages: [...prompt.messages],
-    tools: [...prompt.tools],
-  }, {
-    signal: input.signal,
-    sessionId: input.run.sessionId,
-    timeoutMs: dependencies.policy.modelCallTimeoutMs,
-    maxRetries: dependencies.policy.providerRequestMaxRetries,
-    maxRetryDelayMs: dependencies.policy.providerRequestMaxRetryDelayMs,
-  });
-
-  try {
-    for await (const event of stream) {
-      if (event.type === 'start') continue;
-      if (event.type === 'text_delta' || event.type === 'text_end') {
-        const text = contentText(event.partial);
-        runtime.activeAssistantText = text;
-        if (runtime.activeModelMessageId) {
-          // Full snapshot: consumers replace, never merge.
-          emitEvent(dependencies, runtime, 'message.update', {
-            role: 'assistant',
-            messageId: runtime.activeModelMessageId,
-            content: text,
-          });
-        }
-        continue;
-      }
-      if (event.type === 'thinking_delta' || event.type === 'thinking_end') {
-        const thinking = thinkingText(event.partial);
-        runtime.activeThinking = thinking;
-        if (runtime.activeModelMessageId) {
-          // Full snapshot: consumers replace, never merge.
-          emitEvent(dependencies, runtime, 'message.thinking.update', {
-            messageId: runtime.activeModelMessageId,
-            thinking,
-          });
-        }
-        continue;
-      }
-      if (event.type === 'done') {
-        terminal = event.message;
-        continue;
-      }
-      if (event.type === 'error') {
-        terminal = event.error;
-        continue;
-      }
-    }
-  } finally {
-    // Every finished attempt records its usage, stop reason and duration to
-    // Observability; retried attempts are never dropped.
-    if (terminal) {
-      recordObservedLog(dependencies, runtime, {
-        level: 'info',
-        event: 'model.call.attempt.finished',
-        attributes: {
-          modelCallId,
-          attemptNumber,
-          stopReason: terminal.stopReason,
-          inputTokens: terminal.usage.input,
-          outputTokens: terminal.usage.output,
-          durationMs: Date.parse(dependencies.clock.now()) - Date.parse(startedAt),
-        },
-      });
-    }
-  }
-
-  if (!terminal) {
-    return {
-      status: 'failed',
-      failure: modelCallFailure({
-        code: 'invalid_response',
-        message: 'Model stream ended without a terminal event.',
-        retryable: false,
-      }),
-      retryable: false,
-    };
-  }
-
-  if (terminal.stopReason === 'aborted' || input.signal.aborted) {
-    return {
-      status: 'aborted',
-      partial: { text: runtime.activeAssistantText, thinking: runtime.activeThinking },
-    };
-  }
-  if (terminal.stopReason === 'error') {
-    if (isContextOverflow(terminal, input.run.model.contextWindow)) {
-      return { status: 'overflow', message: terminal };
-    }
-    const retryable = isRetryableAssistantError(terminal);
-    return {
-      status: 'failed',
-      failure: {
-        code: 'model_call_failed',
-        message: terminal.errorMessage ?? 'Model call failed.',
-        retryable,
-        cause: { owner: 'ai', code: 'provider_error' },
-      },
-      retryable,
-    };
-  }
-  return { status: 'completed', message: terminal };
-}
-
-interface ValidatedResponse {
-  readonly status: 'valid';
-  readonly toolCalls: readonly CompletedToolCall[];
-}
-
-type ValidationFailure = {
-  readonly code: 'empty_response' | 'output_truncated' | 'invalid_response';
-  readonly message: string;
-  readonly retryable: boolean;
-};
-
-function validateCompletedResponse(
-  modelCallId: string,
-  message: AssistantMessage,
-): { readonly status: 'valid'; readonly toolCalls: readonly CompletedToolCall[] } | { readonly status: 'invalid'; readonly failure: ValidationFailure } {
-  if (message.stopReason === 'length') {
-    return {
-      status: 'invalid',
-      failure: { code: 'output_truncated', message: 'Model output was truncated before completion.', retryable: false },
-    };
-  }
-  if (message.stopReason === 'deferred') {
-    return {
-      status: 'invalid',
-      failure: { code: 'invalid_response', message: 'Deferred responses are not supported.', retryable: false },
-    };
-  }
-
-  const calls = message.content.filter((block): block is Extract<AssistantMessage['content'][number], { type: 'toolCall' }> => (
-    block.type === 'toolCall'
-  ));
-  if (message.stopReason === 'stop') {
-    if (calls.length > 0) {
-      return {
-        status: 'invalid',
-        failure: { code: 'invalid_response', message: 'Model stopped normally but included a ToolCall.', retryable: false },
-      };
-    }
-    if (!hasVisibleAssistantText(message)) {
-      return {
-        status: 'invalid',
-        failure: { code: 'empty_response', message: 'Model returned no visible response.', retryable: true },
-      };
-    }
-    return { status: 'valid', toolCalls: [] };
-  }
-
-  if (calls.length === 0) {
-    return {
-      status: 'invalid',
-      failure: { code: 'invalid_response', message: 'Model reported Tool use without a ToolCall.', retryable: false },
-    };
-  }
-
-  const seenIds = new Set<string>();
-  const toolCalls: CompletedToolCall[] = [];
-  for (const [callOrder, call] of calls.entries()) {
-    if (
-      !call.id
-      || !call.name
-      || seenIds.has(call.id)
-      || !call.arguments
-      || typeof call.arguments !== 'object'
-      || Array.isArray(call.arguments)
-    ) {
-      return {
-        status: 'invalid',
-        failure: { code: 'invalid_response', message: 'Model response contained an invalid ToolCall identity.', retryable: false },
-      };
-    }
-    seenIds.add(call.id);
-    toolCalls.push({
-      toolCallId: call.id,
-      sourceModelCallId: modelCallId,
-      callOrder,
-      toolName: call.name,
-      input: call.arguments,
-    });
-  }
-  return { status: 'valid', toolCalls };
-}
-
-function hasVisibleAssistantText(message: AssistantMessage): boolean {
-  return message.content.some((block) => block.type === 'text' && block.text.trim().length > 0);
-}
 
 async function executeToolCallBatch(
   input: AgentLoopInput,
@@ -1433,73 +1050,6 @@ function emitApprovalResolved(
   });
 }
 
-function publishRetryStarted(
-  dependencies: AgentLoopDependencies,
-  runtime: LoopRuntime,
-  nextAttemptNumber: number,
-  maxAttempts: number,
-): void {
-  recordObservedLog(dependencies, runtime, {
-    level: 'info',
-    event: 'model.call.retry.scheduled',
-    attributes: { nextAttemptNumber, maxAttempts },
-  });
-  emitEvent(dependencies, runtime, 'turn.retry.started', {
-    attemptNumber: nextAttemptNumber,
-    retryKind: 'model_call',
-  });
-}
-
-function publishRetryCompleted(
-  dependencies: AgentLoopDependencies,
-  runtime: LoopRuntime,
-  retriedAttempts: readonly number[],
-): void {
-  for (const attemptNumber of retriedAttempts) {
-    recordObservedLog(dependencies, runtime, {
-      level: 'info',
-      event: 'model.call.retry.completed',
-      attributes: { retryAttemptNumber: attemptNumber },
-    });
-    emitEvent(dependencies, runtime, 'turn.retry.completed', { attemptNumber });
-  }
-}
-
-function publishRetryFailed(
-  dependencies: AgentLoopDependencies,
-  runtime: LoopRuntime,
-  retriedAttempts: readonly number[],
-  failure: { readonly code?: string; readonly message: string },
-): void {
-  for (const attemptNumber of retriedAttempts) {
-    recordObservedLog(dependencies, runtime, {
-      level: 'warn',
-      event: 'model.call.retry.failed',
-      attributes: { retryAttemptNumber: attemptNumber },
-    });
-    emitEvent(dependencies, runtime, 'turn.retry.failed', {
-      attemptNumber,
-      error: { message: failure.message, ...(failure.code ? { code: failure.code } : {}) },
-    });
-  }
-}
-
-async function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {
-  if (delayMs <= 0 || signal.aborted) return;
-  await new Promise<void>((resolve) => {
-    const timeout = setTimeout(() => {
-      signal.removeEventListener('abort', onAbort);
-      resolve();
-    }, delayMs);
-    const onAbort = () => {
-      clearTimeout(timeout);
-      resolve();
-    };
-    signal.addEventListener('abort', onAbort, { once: true });
-    if (signal.aborted) onAbort();
-  });
-}
-
 // ---------------------------------------------------------------------------
 // Observability
 // ---------------------------------------------------------------------------
@@ -1691,12 +1241,13 @@ function permissionFailure(message: string): RunFailure {
   };
 }
 
-function modelCallFailure(failure: { readonly code: string; readonly message: string; readonly retryable: boolean }): RunFailure {
+/** Converts a ModelCall failure to a RunFailure only when the loop terminates the Run. */
+function modelCallRunFailure(failure: ModelCallFailure): RunFailure {
   return {
-    code: 'model_call_failed',
+    code: failure.code,
     message: failure.message,
     retryable: failure.retryable,
-    cause: { owner: 'ai', code: failure.code },
+    cause: { owner: failure.owner, code: failure.causeCode },
   };
 }
 
@@ -1725,20 +1276,6 @@ function assistantMetadata(message: AssistantMessage): AssistantReplyMetadata {
     ...(message.usage ? { usage: message.usage } : {}),
     ...(message.errorMessage ? { error_message: message.errorMessage } : {}),
   };
-}
-
-function contentText(message: AssistantMessage): string {
-  return message.content
-    .filter((block) => block.type === 'text')
-    .map((block) => block.text)
-    .join('');
-}
-
-function thinkingText(message: AssistantMessage): string {
-  return message.content
-    .filter((block) => block.type === 'thinking')
-    .map((block) => block.thinking)
-    .join('');
 }
 
 function cancelledToolResult(call: CompletedToolCall, completedAt: string): ToolResult {
