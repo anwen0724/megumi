@@ -1,8 +1,12 @@
-/* Verifies Usage is derived from Session History with provider-reported baselines. */
+/* Verifies Usage: full-Prompt calculation and Session-derived display usage. */
 import type { Api, Model } from '@megumi/ai';
-import { describe, expect, it } from 'vitest';
+import { estimateMessageTokens, estimateTextTokens } from '@megumi/ai/utils/estimate';
+import { describe, expect, it, vi } from 'vitest';
 import { deriveContextUsage } from '../../../packages/context/src/index';
+import { calculatePromptUsage } from '../../../packages/context/src/context-usage-calculator';
+import type { Prompt } from '../../../packages/context/src/index';
 import type { SessionHistoryItem } from '@megumi/session';
+import type { ToolDefinition } from '@megumi/tools';
 
 const model: Model<Api> = {
   id: 'gpt',
@@ -55,6 +59,95 @@ function history(): SessionHistoryItem[] {
     },
   ];
 }
+
+const readFileTool: ToolDefinition = {
+  name: 'read_file',
+  description: 'Read a file',
+  parameters: { type: 'object' },
+};
+
+/** Full Prompt without any provider-reported Usage baseline. */
+function promptWithoutBaseline(): Prompt {
+  return {
+    systemPrompt: 'system prompt',
+    messages: [
+      { role: 'user', content: [{ type: 'text', text: 'task' }], timestamp: 1 },
+      {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'answer' }],
+        api: 'openai-completions',
+        provider: 'openai',
+        model: 'gpt',
+        usage: usage(0, 0),
+        stopReason: 'stop',
+        timestamp: 2,
+      },
+    ],
+    tools: [readFileTool],
+  };
+}
+
+describe('calculatePromptUsage', () => {
+  it('counts System Prompt, Messages and Tool Definitions without a provider baseline', () => {
+    const prompt = promptWithoutBaseline();
+    const result = calculatePromptUsage({ prompt });
+    // The default path estimates the complete Prompt: systemPrompt + messages + tools.
+    const expected = estimateTextTokens(prompt.systemPrompt)
+      + prompt.messages.reduce((sum, message) => sum + estimateMessageTokens(message), 0)
+      + estimateTextTokens(JSON.stringify(prompt.tools));
+    expect(result.tokens).toBe(expected);
+    expect(result.usageTokens).toBe(0);
+    expect(result.trailingTokens).toBe(result.tokens);
+    // The System Prompt and Tools are inside the estimate, not only the messages.
+    expect(result.tokens).toBeGreaterThan(estimateMessageTokens(prompt.messages[0]!)
+      + estimateMessageTokens(prompt.messages[1]!));
+  });
+
+  it('passes the complete Prompt to a custom estimator', () => {
+    const estimator = vi.fn(() => 42);
+    const prompt = promptWithoutBaseline();
+    const result = calculatePromptUsage({ prompt, estimator });
+    expect(estimator).toHaveBeenCalledTimes(1);
+    expect(estimator).toHaveBeenCalledWith(prompt);
+    expect(result).toMatchObject({ tokens: 42, usageTokens: 0, trailingTokens: 42 });
+  });
+
+  it('respects the AI estimator semantics when a provider Usage baseline exists', () => {
+    const prompt: Prompt = {
+      systemPrompt: 'system prompt that was already part of the baseline prefix',
+      messages: [
+        { role: 'user', content: [{ type: 'text', text: 'task' }], timestamp: 1 },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'answer' }],
+          api: 'openai-completions',
+          provider: 'openai',
+          model: 'gpt',
+          usage: usage(300, 100),
+          stopReason: 'stop',
+          timestamp: 2,
+        },
+        {
+          role: 'toolResult',
+          toolCallId: 'call:1',
+          toolName: 'read_file',
+          content: [{ type: 'text', text: 'ok' }],
+          addedToolNames: ['read_file'],
+          isError: false,
+          timestamp: 3,
+        },
+      ],
+      tools: [readFileTool],
+    };
+    const result = calculatePromptUsage({ prompt });
+    // The baseline covers the already-computed prefix (System Prompt included);
+    // only the trailing message and the newly-added Tool are estimated.
+    expect(result.usageTokens).toBe(400);
+    expect(result.tokens).toBeGreaterThan(400);
+    expect(result.tokens).toBe(result.usageTokens + result.trailingTokens);
+    expect(result.trailingTokens).toBeGreaterThan(estimateMessageTokens(prompt.messages[2]!));
+  });
+});
 
 describe('deriveContextUsage', () => {
   it('uses the valid Assistant Usage as the baseline and sums cumulative facts', () => {

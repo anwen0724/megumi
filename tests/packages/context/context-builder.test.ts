@@ -4,6 +4,7 @@ import {
   createContext,
   type CreateContextOptions,
 } from '../../../packages/context/src/index';
+import { calculatePromptUsage } from '../../../packages/context/src/context-usage-calculator';
 import {
   completedMessage,
   history,
@@ -182,6 +183,106 @@ describe('Context.build', () => {
     })).toMatchObject({
       status: 'failed',
       failure: { code: 'skill_view_failed', cause: { owner: 'skills', code: 'skill_view_failed' } },
+    });
+  });
+
+  it('records the used_tokens Measurement from the same full-Prompt usage calculation', async () => {
+    const observability = {
+      startSpan: vi.fn(() => ({ spanId: 'span:1' })),
+      endSpan: vi.fn(),
+      runInSpanContext: vi.fn(async (_span: unknown, operation: () => Promise<unknown>) => operation()),
+      recordMeasurement: vi.fn(),
+    } as unknown as NonNullable<CreateContextOptions['observability']>;
+    const options = { ...fixture(50), observability };
+    const result = await createContext(options).build({ modelCallContext: modelCall() });
+    expect(result.status).toBe('ready');
+    if (result.status !== 'ready') return;
+    const expected = calculatePromptUsage({
+      prompt: result.prompt,
+      estimator: options.contextTokenEstimator,
+    }).tokens;
+    expect(observability.recordMeasurement).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'context.used_tokens',
+      value: expected,
+    }));
+  });
+
+  it('never degrades known source, attachment, protocol and policy failures into a generic build failure', async () => {
+    // Source failure stays under its owner.
+    const sourceOptions = fixture();
+    sourceOptions.sessionHistory.getActiveHistory = vi.fn(() => ({
+      status: 'failed' as const,
+      failure: { code: 'history_unreadable', message: 'unreadable' },
+    }));
+    expect(await createContext(sourceOptions).build({ modelCallContext: modelCall() })).toMatchObject({
+      status: 'failed',
+      failure: { code: 'session_history_failed' },
+    });
+
+    // Attachment materialization failure keeps its stable code.
+    const imageOptions = fixture();
+    imageOptions.sessionHistory.getActiveHistory = vi.fn(() => ({
+      status: 'ok' as const,
+      history: [{
+        type: 'message' as const,
+        entry: { entry_id: 'entry:user', session_id: 's', entry_type: 'message', message_id: 'm1', created_at: 'now' },
+        message: {
+          message_id: 'm1', session_id: 's', run_id: 'r1', message_kind: 'user_message',
+          display_content: [{ type: 'text', text: 'look' }],
+          model_content: [{ type: 'text', text: 'look' }],
+          created_at: 'now',
+        },
+        attachments: [{
+          attachment_id: 'att:1', message_id: 'm1', session_id: 's', type: 'image',
+          mime_type: 'image/png', source_type: 'host_reference', source_value: 'stored/x.png',
+          ordinal: 0, created_at: 'now',
+        }],
+      }],
+    }));
+    expect(await createContext(imageOptions).build({ modelCallContext: modelCall() })).toMatchObject({
+      status: 'failed',
+      failure: { code: 'image_materialization_failed' },
+    });
+
+    // Protocol closure failure keeps its stable code.
+    const protocolOptions = fixture();
+    protocolOptions.sessionHistory.getActiveHistory = vi.fn(() => ({
+      status: 'ok' as const,
+      history: [{
+        type: 'message' as const,
+        entry: { entry_id: 'entry:tool', session_id: 's', entry_type: 'message', message_id: 'm2', created_at: 'now' },
+        message: {
+          message_id: 'm2', session_id: 's', run_id: 'r1', message_kind: 'tool_result',
+          tool_call_id: 'call:missing', tool_name: 'read_file', status: 'success',
+          content: [{ type: 'text', text: 'ok' }], created_at: 'now',
+        },
+        attachments: [],
+      }],
+    }));
+    expect(await createContext(protocolOptions).build({ modelCallContext: modelCall() })).toMatchObject({
+      status: 'failed',
+      failure: { code: 'protocol_closure_failed' },
+    });
+
+    // Policy failure stays a configuration failure.
+    expect(await createContext({ ...fixture(), policy: { reserveTokens: 500 } }).build({
+      modelCallContext: modelCall({ run: { ...modelCall().run, model: { ...model, contextWindow: 100 } } }),
+    })).toMatchObject({ status: 'failed', failure: { code: 'policy_invalid' } });
+  });
+
+  it('converts unexpected dependency exceptions into the stable unknown build failure', async () => {
+    const options = fixture();
+    options.sessionHistory.getActiveHistory = vi.fn(() => {
+      throw new Error('database unavailable');
+    });
+
+    await expect(createContext(options).build({ modelCallContext: modelCall() })).resolves.toEqual({
+      status: 'failed',
+      failure: {
+        code: 'context_build_failed',
+        message: 'database unavailable',
+        retryable: false,
+      },
     });
   });
 });

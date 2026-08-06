@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createContext,
   type CreateContextOptions,
+  type Prompt,
 } from '../../../packages/context/src/index';
 import {
   compactingModel,
@@ -82,8 +83,8 @@ function fixture(
     models: { completeSimple },
     // Deterministic estimator: four original messages cost 40 tokens each, the
     // compacted Prompt (summary + one kept message) costs much less.
-    contextTokenEstimator: vi.fn((context: { messages: unknown[]; systemPrompt?: string }) => (
-      context.messages.length * 60 + (context.systemPrompt ? 10 : 0)
+    contextTokenEstimator: vi.fn((prompt: Prompt) => (
+      prompt.messages.length * 60 + (prompt.systemPrompt ? 10 : 0)
     )),
     policy: { enabled: true, reserveTokens: 32, keepRecentTokens: 1, minimumRecentMessages: 1 },
     clock: { now: () => '2026-07-12T00:00:00.000Z' },

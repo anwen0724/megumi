@@ -8,31 +8,35 @@
 
 import crypto from 'node:crypto';
 import type { Api, Context as AiContext, Message, Model, Models } from '@megumi/ai';
-import { estimateContextTokens, estimateMessageTokens } from '@megumi/ai/utils/estimate';
+import { estimateMessageTokens } from '@megumi/ai/utils/estimate';
 import type { EventBus } from '@megumi/events';
 import type { ObservabilityService } from '@megumi/observability';
 import type { SessionHistory, SessionAttachmentReader } from '@megumi/session';
 import type { Skills } from '@megumi/skills';
+import type { ToolDefinition } from '@megumi/tools';
 import type {
   BuildContextRequest,
   BuildContextResult,
   ContextBuilder,
-  ContextFailure,
   ContextWorkspaceSource,
   Prompt,
 } from './context';
 import {
   buildCancelledContextFailure,
   buildFailedContextResult,
+  buildPolicyContextFailure,
+  buildUnexpectedContextFailure,
 } from './context-failure-factory';
 import {
   compactionPolicyFailure,
   contextCapacityFromModel,
+  finalContextWindowProblem,
   resolveCompactionPolicy,
+  shouldAutoCompact,
   type CompactionPolicy,
 } from './context-policy';
 import { createContextResolver, type ContextResolver } from './context-resolver';
-import type { ContextUsageEstimate } from './context-usage-calculator';
+import { calculatePromptUsage, type ContextUsageEstimate } from './context-usage-calculator';
 import { createPromptBuilder, type PromptBuilder } from './prompt/prompt-builder';
 import { buildCompactionSummaryMessage, type MaterializedHistory } from './prompt/context-message-builder';
 import {
@@ -55,7 +59,7 @@ export interface CreateContextOptions {
   /** Skills seam: Context creates the SkillView it needs for one build. */
   readonly skills: Pick<Skills, 'createView'>;
   readonly models: Pick<Models, 'completeSimple'>;
-  readonly contextTokenEstimator?: (prompt: Prompt | AiContext) => number;
+  readonly contextTokenEstimator?: (prompt: Prompt) => number;
   readonly observability?: ObservabilityService;
   readonly policy?: Partial<CompactionPolicy>;
   readonly policyProvider?: { getPolicy(): Partial<CompactionPolicy> };
@@ -105,11 +109,10 @@ class DefaultContext implements ContextCapabilities {
           () => this.buildExclusive(request),
         );
       } catch (error) {
-        result = buildFailedContextResult({
+        result = buildFailedContextResult(buildUnexpectedContextFailure({
           code: 'context_build_failed',
           message: error instanceof Error ? error.message : 'Context build failed.',
-          retryable: false,
-        });
+        }));
       }
       if (span) {
         this.options.observability?.endSpan({
@@ -118,9 +121,11 @@ class DefaultContext implements ContextCapabilities {
         });
       }
       if (result.status === 'ready') {
+        // The Measurement uses the same complete-Prompt usage result as the
+        // Context Window decisions.
         this.options.observability?.recordMeasurement({
           name: 'context.used_tokens',
-          value: estimateContextTokens(result.prompt.messages).tokens,
+          value: this.countUsage(result.prompt).tokens,
           unit: 'token',
           correlation: { sessionId: request.modelCallContext.run.sessionId },
         });
@@ -150,7 +155,7 @@ class DefaultContext implements ContextCapabilities {
         const capacity = contextCapacityFromModel(request.model);
         const policyProblem = compactionPolicyFailure(policy, capacity);
         if (policyProblem) {
-          return buildFailedContextResult({ code: 'policy_invalid', message: policyProblem, retryable: false });
+          return buildFailedContextResult(buildPolicyContextFailure(policyProblem));
         }
         const built = await this.promptBuilder.build({ context: resolved.context, signal: request.signal });
         if (built.status === 'failed') return built;
@@ -178,11 +183,10 @@ class DefaultContext implements ContextCapabilities {
       if (request.signal?.aborted || isAbortError(error)) {
         return buildFailedContextResult(buildCancelledContextFailure('Context operation was cancelled.'));
       }
-      return buildFailedContextResult({
+      return buildFailedContextResult(buildUnexpectedContextFailure({
         code: 'compaction_failed',
         message: error instanceof Error ? error.message : 'Context compaction failed.',
-        retryable: false,
-      });
+      }));
     }
   }
 
@@ -203,15 +207,18 @@ class DefaultContext implements ContextCapabilities {
     const capacity = contextCapacityFromModel(modelCall.run.model);
     const policyProblem = compactionPolicyFailure(policy, capacity);
     if (policyProblem) {
-      return buildFailedContextResult({ code: 'policy_invalid', message: policyProblem, retryable: false });
+      return buildFailedContextResult(buildPolicyContextFailure(policyProblem));
     }
 
     const built = await this.promptBuilder.build({ context: resolved.context, signal: request.signal });
     if (built.status === 'failed') return built;
 
     let estimate = this.countUsage(built.prompt);
-    if (policy.enabled
-      && estimate.tokens > capacity.contextWindowTokens - policy.reserveTokens) {
+    if (shouldAutoCompact({
+      policy,
+      promptTokens: estimate.tokens,
+      contextWindowTokens: capacity.contextWindowTokens,
+    })) {
       const compacted = await this.executeCompaction({
         sessionId: modelCall.run.sessionId,
         materialized: built.materializedHistory,
@@ -247,23 +254,22 @@ class DefaultContext implements ContextCapabilities {
     capacity: { contextWindowTokens: number },
     estimate: ContextUsageEstimate,
   ): BuildContextResult {
-    if (estimate.tokens >= capacity.contextWindowTokens) {
+    const problem = finalContextWindowProblem({
+      promptTokens: estimate.tokens,
+      contextWindowTokens: capacity.contextWindowTokens,
+    });
+    if (problem) {
       return buildFailedContextResult({
         code: 'context_window_exceeded',
-        message: `Context uses ${estimate.tokens} tokens for a ${capacity.contextWindowTokens}-token Context Window.`,
+        message: problem,
         retryable: false,
       });
     }
     return { status: 'ready', prompt };
   }
 
-  private countUsage(prompt: Prompt | AiContext): ContextUsageEstimate {
-    const estimator = this.options.contextTokenEstimator;
-    if (estimator) {
-      const tokens = estimator(prompt);
-      return { tokens, usageTokens: 0, trailingTokens: tokens, lastUsageIndex: null };
-    }
-    return estimateContextTokens(prompt.messages);
+  private countUsage(prompt: Prompt): ContextUsageEstimate {
+    return calculatePromptUsage({ prompt, estimator: this.options.contextTokenEstimator });
   }
 
   private executeCompaction(input: {
@@ -320,7 +326,18 @@ class DefaultContext implements ContextCapabilities {
       project,
       countUsage: (context, signal) => {
         if (signal?.aborted) throw buildCancelledContextFailure('Context operation was cancelled.');
-        return this.countUsage(context);
+        // The projection is an AI-shaped Context; route it through the one
+        // complete-Prompt usage entry so build and compaction share the rule.
+        // The projection tools always originated from Prompt.tools, so the
+        // generic AI Tool type is narrowed back at this boundary.
+        return calculatePromptUsage({
+          prompt: {
+            systemPrompt: context.systemPrompt ?? '',
+            messages: context.messages,
+            tools: (context.tools ?? []) as unknown as readonly ToolDefinition[],
+          },
+          estimator: this.options.contextTokenEstimator,
+        });
       },
       onProgress: input.onProgress,
       events: this.options.events,

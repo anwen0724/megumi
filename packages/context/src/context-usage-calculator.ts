@@ -1,7 +1,8 @@
 /*
- * Owns transient Context token estimation and the Usage facts derived from
- * Session History. Session History is the only authoritative Usage source;
- * no Snapshot, Recorder or second Usage state exists here.
+ * Owns Context usage calculation: the exact next-Prompt estimate that includes
+ * System Prompt, Messages and Tool Definitions, and the Session-derived display
+ * usage. Session History is the only authoritative Usage source; no Snapshot,
+ * Recorder or second Usage state exists here.
  */
 
 import type { Api, Model, Usage } from '@megumi/ai';
@@ -10,12 +11,35 @@ import {
   type ContextUsageEstimate,
 } from '@megumi/ai/utils/estimate';
 import type { SessionHistoryItem } from '@megumi/session';
+import type { Prompt } from './context';
 import { sessionMessagesToEstimateMessages } from './prompt/context-message-builder';
 
 export type { ContextUsageEstimate };
 
 export function calculatePromptTokens(usage: { input: number; cacheRead: number; cacheWrite: number }): number {
   return usage.input + usage.cacheRead + usage.cacheWrite;
+}
+
+/**
+ * Calculates the complete next-ModelCall Prompt usage: System Prompt, Messages
+ * and Tool Definitions all enter the result. A custom estimator receives the
+ * full Prompt; the default path delegates to the AI estimator with the Prompt
+ * in its accepted Context shape.
+ */
+export function calculatePromptUsage(input: {
+  readonly prompt: Prompt;
+  readonly estimator?: (prompt: Prompt) => number;
+}): ContextUsageEstimate {
+  const { prompt, estimator } = input;
+  if (estimator) {
+    const tokens = estimator(prompt);
+    return { tokens, usageTokens: 0, trailingTokens: tokens, lastUsageIndex: null };
+  }
+  return estimateContextTokens({
+    systemPrompt: prompt.systemPrompt,
+    messages: [...prompt.messages],
+    tools: [...prompt.tools],
+  });
 }
 
 export interface DerivedContextUsage {

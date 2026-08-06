@@ -11,7 +11,11 @@ import type { EventBus } from '@megumi/events';
 import type { ContextFailure } from '../context';
 import type { CompactionPolicy } from '../context-policy';
 import type { ContextUsageEstimate } from '../context-usage-calculator';
-import { buildCancelledContextFailure } from '../context-failure-factory';
+import {
+  buildCancelledContextFailure,
+  buildCompactionPersistContextFailure,
+  buildSummaryModelContextFailure,
+} from '../context-failure-factory';
 import { generateCompactionSummary } from './compaction-summary-generator';
 import type { CompactionMessageSource } from '../prompt/context-message-builder';
 import {
@@ -161,7 +165,7 @@ export async function executeContextCompaction(
     ...(input.signal ? { signal: input.signal } : {}),
   });
   if (generated.status === 'cancelled') return failCompaction(buildCancelledContextFailure('Context compaction was cancelled.'));
-  if (generated.status === 'failed') return failCompaction(modelFailure(generated.failure));
+  if (generated.status === 'failed') return failCompaction(buildSummaryModelContextFailure(generated.failure));
 
   const projected = await input.project(plan.plan, generated.content, input.signal);
   if (projected.status === 'failed') return failCompaction(projected.failure);
@@ -197,12 +201,10 @@ export async function executeContextCompaction(
     append_to_active_path: true,
   });
   if (saved.status === 'failed') {
-    return failCompaction({
-      code: 'compaction_persist_failed',
+    return failCompaction(buildCompactionPersistContextFailure({
       message: saved.failure.message,
-      retryable: true,
-      cause: { owner: 'session', code: saved.failure.code },
-    });
+      sourceCode: saved.failure.code,
+    }));
   }
   reportProgress(input.onProgress, { status: 'completed', ...progressBase }, input.sessionId, input.trigger, input.events);
   input.observability?.recordLog({
@@ -223,30 +225,6 @@ export async function executeContextCompaction(
     usageAfter: projectedUsage,
     summaryUsage: generated.usage,
   };
-}
-
-function modelFailure(error: unknown): ContextFailure {
-  const candidate = typeof error === 'object' && error !== null
-    ? error as { code?: unknown; message?: unknown; retryable?: unknown }
-    : undefined;
-  return {
-    code: 'compaction_failed',
-    message: resolveFailureMessage(error, candidate),
-    retryable: typeof candidate?.retryable === 'boolean' ? candidate.retryable : true,
-    cause: {
-      owner: 'ai',
-      ...(typeof candidate?.code === 'string' ? { code: candidate.code } : {}),
-    },
-  };
-}
-
-function resolveFailureMessage(
-  error: unknown,
-  candidate: { readonly message?: unknown } | undefined,
-): string {
-  if (typeof candidate?.message === 'string') return candidate.message;
-  if (typeof error === 'string') return error;
-  return 'Compaction summary model call failed.';
 }
 
 function failed(failure: ContextFailure): Extract<ExecuteCompactionResult, { status: 'failed' }> {

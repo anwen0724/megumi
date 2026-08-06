@@ -71,3 +71,24 @@ export function compactionPolicyFailure(
   }
   return undefined;
 }
+
+/** True when the estimated full-Prompt tokens cross the automatic compaction threshold. */
+export function shouldAutoCompact(input: {
+  readonly policy: CompactionPolicy;
+  readonly promptTokens: number;
+  readonly contextWindowTokens: number;
+}): boolean {
+  return input.policy.enabled
+    && input.promptTokens > input.contextWindowTokens - input.policy.reserveTokens;
+}
+
+/** The failure message when the final Prompt does not fit the Model Context Window. */
+export function finalContextWindowProblem(input: {
+  readonly promptTokens: number;
+  readonly contextWindowTokens: number;
+}): string | undefined {
+  if (input.promptTokens >= input.contextWindowTokens) {
+    return `Context uses ${input.promptTokens} tokens for a ${input.contextWindowTokens}-token Context Window.`;
+  }
+  return undefined;
+}
