@@ -4,7 +4,7 @@
  * isolates attempts, executes ModelCall Retry and Context Overflow recovery
  * through the loop-provided Prompt rebuild callback, and publishes the model
  * stream and retry facts. Attempts, retries and stream buffers are internal
- * work data: the runner never reads or writes RunStatus, never decides
+ * work data: the runner never reads or writes the Run status, never decides
  * whether the loop continues or the Run ends, and never creates new Turn,
  * Message or ModelCall identities.
  */

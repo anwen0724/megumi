@@ -100,6 +100,36 @@ describe('Engine core loop source guards', () => {
     expect(engineSource).not.toMatch(/executionEnvironment|effectiveInstructions|SkillView/u);
   });
 
+  it('keeps the runners, committer and observer free of Registry, RunStatus and state transitions', () => {
+    const internals = [
+      read('packages/engine/src/model-call-runner.ts'),
+      read('packages/engine/src/tool-call-runner.ts'),
+      read('packages/engine/src/session-message-committer.ts'),
+      read('packages/engine/src/loop-observer.ts'),
+    ].join('\n');
+    expect(internals).not.toContain("from './run-registry'");
+    expect(internals).not.toMatch(/RunStatus|transitionRunStatus|transitionRun\(/u);
+    expect(internals).not.toContain('runAgentLoop(');
+    // Approval lifecycle facts only ever come from the Agent Loop; the ToolCall
+    // Runner requests approval through the callback and never publishes them.
+    expect(internals).not.toContain("'approval.requested'");
+    expect(internals).not.toContain("'approval.resolved'");
+    expect(internals).not.toContain('export function requestApproval');
+  });
+
+  it('keeps the Agent Loop as the sole owner of the turn orchestration and cleanup order', () => {
+    const agentLoop = read('packages/engine/src/agent-loop.ts');
+    // The loop directly owns the cycle, the turn stages and the release order.
+    expect(agentLoop).toMatch(/for \(;;\)/u);
+    expect(agentLoop).toMatch(/runModelCall\(\{\s*[\s\S]*?runToolCallBatch\(\{/u);
+    // The ModelCall Tools release wraps Context, ModelCall and ToolCall batch.
+    expect(agentLoop).toContain('dependencies.tools.releaseModelCallTools({ modelCallId });');
+    const finallyIndex = agentLoop.lastIndexOf('} finally {');
+    const releaseIndex = agentLoop.indexOf('releaseModelCallTools({ modelCallId })');
+    expect(finallyIndex).toBeGreaterThan(-1);
+    expect(releaseIndex).toBeGreaterThan(finallyIndex);
+  });
+
   it('does not export the Agent Loop or internal run records from the public entry', () => {
     const index = read('packages/engine/src/index.ts');
     expect(index).not.toMatch(/runAgentLoop|AgentLoop|runAgentLoop/u);

@@ -10,9 +10,7 @@ import type { EventBus, EventPayloadByType, EventType } from '@megumi/events';
 import type { UserInput } from '@megumi/input';
 import type { ObservabilityService } from '@megumi/observability';
 import type {
-  ApprovalDecision,
   PermissionDecision,
-  PermissionMode,
   PermissionOperation,
   Permissions,
 } from '@megumi/permissions';
@@ -372,15 +370,6 @@ async function runTurn(
     runtime.toolCallCount += modelOutcome.toolCalls.length;
     runtime.toolRoundCount += 1;
 
-    for (const call of modelOutcome.toolCalls) {
-      emitEvent(dependencies, runtime, 'tool_execution.requested', {
-        toolCallId: call.toolCallId,
-        toolName: call.toolName,
-        args: toJsonValue(call.input) as Record<string, unknown>,
-        modelCallId: call.sourceModelCallId,
-      });
-    }
-
     const batch = await runToolCallBatch({
       runId: input.run.runId,
       sessionId: input.run.sessionId,
@@ -526,13 +515,6 @@ async function commitToolResults(
       messageId: item.messageId,
       content: result?.content ?? '',
     });
-    if (result && (result.status === 'permission_denied' || result.status === 'user_rejected')) {
-      emitEvent(dependencies, runtime, 'tool_execution.ended', {
-        toolCallId: item.toolCallId,
-        status: 'denied',
-      });
-
-    }
   }
   return 'committed';
 }
@@ -681,15 +663,6 @@ function loopLimitFailure(message: string): RunFailure {
     message,
     retryable: false,
     cause: { owner: 'engine', code: 'loop_limit_exceeded' },
-  };
-}
-
-function permissionFailure(message: string): RunFailure {
-  return {
-    code: 'permission_failed',
-    message,
-    retryable: false,
-    cause: { owner: 'permissions', code: 'permission_evaluation_failed' },
   };
 }
 

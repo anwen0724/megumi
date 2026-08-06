@@ -3,7 +3,7 @@
  * every call through the current modelCallId, asks Permissions, requests
  * approval only through the loop-provided requestApproval() callback, runs
  * the serial/parallel window under the confirmed concurrency limit and forms
- * the complete model-ordered ToolResult[]. It never reads or writes RunStatus,
+ * the complete model-ordered ToolResult[]. It never reads or writes the Run status,
  * never saves Session messages, never decides whether the loop continues or
  * the Run ends, and never holds Tool registration, Permissions or Sandbox
  * rules.
@@ -91,6 +91,16 @@ export interface RunToolCallBatchRequest {
 export async function runToolCallBatch(
   request: RunToolCallBatchRequest,
 ): Promise<ToolCallBatchOutcome> {
+  // The model's ToolCall requests are batch facts: publish them before any
+  // routing or execution starts.
+  for (const call of request.calls) {
+    request.events.publish('tool_execution.requested', {
+      toolCallId: call.toolCallId,
+      toolName: call.toolName,
+      args: toJsonValue(call.input) as Record<string, unknown>,
+      modelCallId: call.sourceModelCallId,
+    });
+  }
   const results: ToolResult[] = [];
   const recordResult = (result: ToolResult) => {
     results.push(result);
@@ -254,18 +264,20 @@ async function executeToolCallWithPermissions(
     return { kind: 'failed', failure: permissionFailure(permission.failure.message) };
   }
   if (permission.decision.type === 'deny') {
-    return {
-      kind: 'result',
-      result: {
-        toolCallId: call.toolCallId,
-        toolName: call.toolName,
-        callOrder: call.callOrder,
-        status: 'permission_denied',
-        error: { code: permission.decision.denialCode, message: permission.decision.reason },
-        content: permission.decision.reason,
-        completedAt: request.clock.now(),
-      },
+    const result: ToolResult = {
+      toolCallId: call.toolCallId,
+      toolName: call.toolName,
+      callOrder: call.callOrder,
+      status: 'permission_denied',
+      error: { code: permission.decision.denialCode, message: permission.decision.reason },
+      content: permission.decision.reason,
+      completedAt: request.clock.now(),
     };
+    request.events.publish('tool_execution.ended', {
+      toolCallId: call.toolCallId,
+      status: 'denied',
+    });
+    return { kind: 'result', result };
   }
 
   if (permission.decision.type === 'requires_approval') {
@@ -292,18 +304,20 @@ async function executeToolCallWithPermissions(
       return { kind: 'failed', failure: permissionFailure('Approval decision could not be applied.') };
     }
     if (resolution.status === 'denied') {
-      return {
-        kind: 'result',
-        result: {
-          toolCallId: call.toolCallId,
-          toolName: call.toolName,
-          callOrder: call.callOrder,
-          status: 'user_rejected',
-          error: { code: 'user_rejected', message: 'Tool call was rejected by the user.' },
-          content: 'Tool call was rejected by the user.',
-          completedAt: request.clock.now(),
-        },
+      const result: ToolResult = {
+        toolCallId: call.toolCallId,
+        toolName: call.toolName,
+        callOrder: call.callOrder,
+        status: 'user_rejected',
+        error: { code: 'user_rejected', message: 'Tool call was rejected by the user.' },
+        content: 'Tool call was rejected by the user.',
+        completedAt: request.clock.now(),
       };
+      request.events.publish('tool_execution.ended', {
+        toolCallId: call.toolCallId,
+        status: 'denied',
+      });
+      return { kind: 'result', result };
     }
     return {
       kind: 'result',
