@@ -23,7 +23,7 @@ import type {
 import type { ContextFailure } from '../context';
 import { buildCancelledContextFailure, buildFailedContextResult, buildSourceContextFailure } from '../context-failure-factory';
 import { materializeSessionImage, readHostImageContent, UNSUPPORTED_IMAGE_TEXT } from './image-content-builder';
-import { formatAttachedDocumentBlock } from './prompt-markup-formatter';
+import { escapeXmlAttribute } from './prompt-markup-formatter';
 
 export const COMPACTION_SUMMARY_PREFIX = 'The conversation history before this point was compacted into the following summary:\n\n<summary>\n';
 const COMPACTION_SUMMARY_SUFFIX = '\n</summary>';
@@ -199,7 +199,7 @@ async function materializeUserMessageContent(input: {
       }
       content.push({
         type: 'text',
-        text: formatAttachedDocumentBlock({
+        text: buildAttachedDocumentBlock({
           name: attachment.name,
           mediaType: attachment.mime_type,
           path,
@@ -318,7 +318,7 @@ function estimateAttachmentContent(attachment: SessionMessageAttachment): TextCo
   const path = attachment.source_value;
   return {
     type: 'text',
-    text: formatAttachedDocumentBlock({
+    text: buildAttachedDocumentBlock({
       name: attachment.name ?? attachment.attachment_id,
       mediaType: attachment.mime_type ?? 'application/octet-stream',
       path,
@@ -330,4 +330,21 @@ function estimateAttachmentContent(attachment: SessionMessageAttachment): TextCo
 function timestampOf(createdAt: string): number {
   const parsed = Date.parse(createdAt);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function buildAttachedDocumentBlock(input: {
+  readonly name: string;
+  readonly mediaType: string;
+  readonly path: string;
+  readonly sizeBytes: number;
+}): string {
+  return [
+    '<attached_document',
+    `  name="${escapeXmlAttribute(input.name)}"`,
+    `  media_type="${escapeXmlAttribute(input.mediaType)}"`,
+    `  path="${escapeXmlAttribute(input.path)}"`,
+    `  size_bytes="${input.sizeBytes}">`,
+    'This document was attached by the user. Use the available file tools to read it when needed.',
+    '</attached_document>',
+  ].join('\n');
 }

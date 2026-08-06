@@ -145,6 +145,12 @@ class DefaultContext implements ContextCapabilities {
           signal: request.signal,
         });
         if (resolved.status === 'failed') return resolved;
+        const policy = this.resolvePolicy();
+        const capacity = contextCapacityFromModel(request.model);
+        const policyProblem = compactionPolicyFailure(policy, capacity);
+        if (policyProblem) {
+          return buildFailedContextResult(buildPolicyContextFailure(policyProblem));
+        }
         const built = await this.promptBuilder.build({ context: resolved.context, signal: request.signal });
         if (built.status === 'failed') return built;
         const usageBefore = this.countUsage(built.prompt);
@@ -153,7 +159,7 @@ class DefaultContext implements ContextCapabilities {
           context: resolved.context,
           materialized: built.materializedHistory,
           prompt: built.prompt,
-          policy: this.resolvePolicy(),
+          policy,
           model: request.model,
           trigger: request.trigger,
           onProgress: request.onProgress,

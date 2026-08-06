@@ -156,6 +156,21 @@ describe('Context compaction', () => {
     const compacted = await createContext(fixture()).compact(manualRequest());
     expect(compacted).toMatchObject({ status: 'compacted' });
 
+    const invalidPolicy = fixture();
+    invalidPolicy.policy = {
+      enabled: true,
+      reserveTokens: 101,
+      keepRecentTokens: 1,
+      minimumRecentMessages: 1,
+    };
+    expect(await createContext(invalidPolicy).compact(manualRequest({
+      model: { ...compactingModel, contextWindow: 100 },
+    }))).toMatchObject({
+      status: 'failed',
+      failure: { code: 'policy_invalid' },
+    });
+    expect(invalidPolicy.models.completeSimple).not.toHaveBeenCalled();
+
     const options: CreateContextOptions = {
       ...fixture(),
       policy: { enabled: true, reserveTokens: 16, keepRecentTokens: 1000, minimumRecentMessages: 100 },
