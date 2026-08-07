@@ -6,9 +6,16 @@ import {
 } from './instruction-files';
 import { getSystemInstructions } from './system-instructions';
 
+/** 指令内容分组：稳定组标识 + 有序条目（条目呈现为段落或 bullet）。 */
+export interface InstructionGroup {
+  readonly groupId: string;
+  readonly items: readonly string[];
+}
+
+/** 一条段级指令：稳定标识 + 内容分组（指令 → 组 → 条目三层，便于读取与管理）。 */
 export interface SystemInstruction {
   readonly instructionId: string;
-  readonly content: string;
+  readonly groups: readonly InstructionGroup[];
 }
 
 export type SystemInstructions = SystemInstruction[];
@@ -53,7 +60,7 @@ export type GetEffectiveInstructionsResult =
   | { readonly status: 'cancelled' };
 
 export interface InstructionReader {
-  getSystemInstructions(): SystemInstructions;
+  getSystemInstructions(): Promise<SystemInstructions>;
   getEffectiveInstructions(
     request: GetEffectiveInstructionsRequest,
     options?: InstructionOperationOptions,
@@ -80,7 +87,7 @@ class DefaultInstructionReader implements InstructionReader {
     private readonly source: InstructionSource,
   ) {}
 
-  getSystemInstructions(): SystemInstructions {
+  getSystemInstructions(): Promise<SystemInstructions> {
     return getSystemInstructions();
   }
 

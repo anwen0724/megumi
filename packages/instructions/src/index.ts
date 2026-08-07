@@ -7,6 +7,7 @@ export {
   type EffectiveInstructions,
   type GetEffectiveInstructionsRequest,
   type GetEffectiveInstructionsResult,
+  type InstructionGroup,
   type InstructionOperationOptions,
   type InstructionReader,
   type SystemInstruction,
