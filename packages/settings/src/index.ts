@@ -26,7 +26,6 @@ export {
   SetupSettingsRawSchema,
   SetupSettingsResolvedSchema,
   UpdateSettingsRequestSchema,
-  createSettingsJsonSchema,
 } from './settings-schema';
 export type {
   CompleteSetupRequest,
@@ -39,7 +38,6 @@ export type {
   SettingsFailureCode,
   SettingsFailureResult,
   SettingsFailureSource,
-  SettingsJsonSchemaObject,
   SettingsLanguage,
   SettingsRaw,
   SettingsResolved,
@@ -50,6 +48,10 @@ export type {
   UpdateSettingsResult,
   WriteApiKeyResult,
 } from './settings-schema';
+export {
+  createSettingsJsonSchema,
+  type SettingsJsonSchemaObject,
+} from './settings-json-schema';
 export {
   AvailableModelOptionSchema,
   DeleteProviderApiKeyRequestSchema,
