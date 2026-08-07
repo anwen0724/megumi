@@ -377,7 +377,7 @@ export function ProviderSettingsPanel() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full min-h-0 flex-col space-y-6">
       <SettingsPageHeader
         title={t('provider.title')}
         description={t('provider.description')}
@@ -389,8 +389,8 @@ export function ProviderSettingsPanel() {
         </p>
       ) : null}
 
-      <div className="grid min-h-[28rem] gap-4 lg:grid-cols-[minmax(15rem,0.8fr)_minmax(24rem,1.55fr)]">
-        <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(15rem,0.8fr)_minmax(24rem,1.55fr)]">
+        <section className="flex min-h-0 flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-base font-semibold text-[var(--color-text)]">{t('provider.providers')}</h2>
             <Button type="button" size="sm" variant="secondary" onClick={startAddProvider} disabled={isSaving}>
@@ -410,7 +410,7 @@ export function ProviderSettingsPanel() {
             />
           </label>
 
-          <div className="mt-4 max-h-[min(24rem,45vh)] space-y-2 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">
+          <div className="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">
             {isCreating ? (
               <ProviderListItem
                 entry={{ source: 'draft', providerId: newProviderId, displayName: selectedForm.provider || t('provider.newProvider'), protocol: selectedForm.protocol }}
@@ -438,7 +438,7 @@ export function ProviderSettingsPanel() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+        <section className="flex min-h-0 flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
           {selectedEntry || isCreating ? (
             <>
               <div className="flex items-start justify-between gap-4">

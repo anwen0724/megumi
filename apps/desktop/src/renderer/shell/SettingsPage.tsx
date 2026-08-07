@@ -159,9 +159,9 @@ export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize 
           <section
             role="tabpanel"
             aria-label={t(`categories.${activeCategory.id}.label`)}
-            className="min-w-0 overflow-y-auto px-8 py-8"
+            className="min-w-0 h-full overflow-y-auto px-8 py-8"
           >
-            <div className="mx-auto max-w-5xl">
+            <div className="mx-auto h-full max-w-5xl">
               {category === 'appearance' ? (
                 <div className="space-y-6">
                   <SettingsPageHeader
