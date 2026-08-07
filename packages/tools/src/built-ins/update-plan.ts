@@ -18,7 +18,8 @@ export interface UpdatePlanInput {
 
 export const updatePlanToolDefinition: ToolDefinition = {
   name: 'update_plan',
-  description: 'Update the current task plan with a complete ordered snapshot of its steps and statuses.',
+  description: 'Update the current task plan with a complete ordered snapshot of its steps and statuses. Each update replaces the entire plan.',
+  promptSnippet: 'Update the current task plan snapshot.',
   parameters: {
     type: 'object',
     properties: {

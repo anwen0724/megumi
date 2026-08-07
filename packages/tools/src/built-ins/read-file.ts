@@ -9,7 +9,8 @@ import { createBuiltInToolHandler, inputString, operation } from './tool-handler
 
 export const readFileToolDefinition: ToolDefinition = {
   name: 'read_file',
-  description: 'Read a bounded UTF-8 text page from a text, Markdown, DOCX, or PDF file. Continue with nextOffset when hasMore is true.',
+  description: 'Read a bounded UTF-8 text page from a text, Markdown, DOCX, or PDF file. Pages are limited to 12,000 bytes by default; when hasMore is true, continue with nextOffset to read the remaining pages. Use limit to request a smaller page, offset to resume from a byte offset.',
+  promptSnippet: 'Read a bounded text page from a text, Markdown, DOCX, or PDF file.',
   parameters: {
     type: 'object',
     properties: {

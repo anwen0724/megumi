@@ -12,6 +12,7 @@ import { createBuiltInToolHandler, inputString, operation } from './tool-handler
 export const writeFileToolDefinition: ToolDefinition = {
   name: 'write_file',
   description: 'Create or overwrite a UTF-8 text file with provided text content. Structured PDF and DOCX writing is not supported.',
+  promptSnippet: 'Create or overwrite a UTF-8 text file.',
   parameters: {
     type: 'object',
     properties: {

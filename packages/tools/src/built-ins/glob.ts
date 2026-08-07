@@ -14,7 +14,8 @@ import { createBuiltInToolHandler, inputString, operation } from './tool-handler
 
 export const globToolDefinition: ToolDefinition = {
   name: 'glob',
-  description: 'Find files matching a glob pattern without reading file content.',
+  description: 'Find files matching a glob pattern without reading file content. Returns up to 500 matches per page by default; when hasMore is true, continue with nextOffset.',
+  promptSnippet: 'Find files matching a glob pattern.',
   parameters: {
     type: 'object',
     properties: {

@@ -50,7 +50,9 @@ export interface RunCommandToolInput {
 export function createRunCommandToolDefinition(process: ToolProcessDescriptor): ToolDefinition {
   return {
     name: 'run_command',
-    description: 'Run a command and return redacted output previews.',
+    description: 'Run a command and return output previews. Captures up to 20,000 bytes per stream (stdout and stderr).',
+  promptSnippet: 'Run a command and return redacted output previews.',
+  promptGuidelines: ['Command output is redacted; sensitive values are replaced before they reach you.'],
     parameters: {
       type: 'object',
       properties: {

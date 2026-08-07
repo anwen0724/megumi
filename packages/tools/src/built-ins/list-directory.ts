@@ -13,7 +13,8 @@ import { createBuiltInToolHandler, inputString, operation } from './tool-handler
 
 export const listDirectoryToolDefinition: ToolDefinition = {
   name: 'list_directory',
-  description: 'List files and directories.',
+  description: 'List files and directories. Returns up to 100 entries per page by default; when hasMore is true, continue with nextOffset. Use limit, offset, maxDepth, and includeHidden to control the traversal.',
+  promptSnippet: 'List files and directories.',
   parameters: {
     type: 'object',
     properties: {

@@ -6,6 +6,7 @@ import { createBuiltInToolHandler, inputString, operation } from './tool-handler
 
 export const createDirectoryToolDefinition: ToolDefinition = {
   name: 'create_directory', description: 'Create a directory.',
+  promptSnippet: 'Create a directory.',
   parameters: { type: 'object', properties: { path: { type: 'string', description: 'Directory path.' }, recursive: { type: 'boolean', description: 'Create missing parent directories.' } }, required: ['path'], additionalProperties: false },
   annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: false },
 };

@@ -5,7 +5,8 @@ import { assertTextMutationTarget, toolEffectPath, withFileFailure, type BuiltIn
 import { createBuiltInToolHandler, inputString, operation } from './tool-handler';
 
 export const editFileToolDefinition: ToolDefinition = {
-  name: 'edit_file', description: 'Apply ordered exact-text edits to an existing UTF-8 text file.',
+  name: 'edit_file', description: 'Apply ordered exact-text edits to an existing UTF-8 text file. Each edit must match unique text exactly.',
+  promptSnippet: 'Apply exact-text edits to an existing file.',
   parameters: {
     type: 'object',
     properties: {

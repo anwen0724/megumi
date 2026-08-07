@@ -16,7 +16,8 @@ export type WebSearchProvider = 'brave' | 'tavily' | 'exa' | 'custom';
 
 export const webSearchToolDefinition: ToolDefinition = {
   name: 'web_search',
-  description: 'Search the web and return structured result summaries and URLs.',
+  description: 'Search the web and return structured result summaries and URLs. Returns up to 5 results by default (maximum 20).',
+  promptSnippet: 'Search the web and return result summaries.',
   parameters: {
     type: 'object',
     properties: {

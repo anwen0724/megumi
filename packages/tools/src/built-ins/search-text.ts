@@ -14,7 +14,8 @@ import { createBuiltInToolHandler, inputString, operation } from './tool-handler
 
 export const searchTextToolDefinition: ToolDefinition = {
   name: 'search_text',
-  description: 'Search text in readable files, including Markdown, DOCX, and PDF, and return size-limited matches.',
+  description: 'Search text in readable files, including Markdown, DOCX, and PDF. Returns up to 100 matches per page by default, with file path, line, and preview; when hasMore is true, continue with nextOffset.',
+  promptSnippet: 'Search text in readable files.',
   parameters: {
     type: 'object',
     properties: {
