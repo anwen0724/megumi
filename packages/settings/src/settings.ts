@@ -10,7 +10,6 @@ import {
   type DeleteApiKeyResult,
   type ReadApiKeyResult,
   type SettingsFailureResult,
-  type SettingsFailure,
   type SettingsFileRaw,
   type SettingsRaw,
   type SettingsResolved,
@@ -96,8 +95,8 @@ export interface CreateSettingsRequest {
 }
 
 export interface Settings {
-  read(): SettingsRaw;
-  resolve(): SettingsResolved;
+  read(): { status: 'ok'; settings: SettingsRaw } | SettingsFailureResult;
+  resolve(): { status: 'ok'; settings: SettingsResolved } | SettingsFailureResult;
   update(request: UpdateSettingsRequest): UpdateSettingsResult;
   completeSetup(request: CompleteSetupRequest): CompleteSetupResult;
 
@@ -110,7 +109,9 @@ export interface Settings {
   resolveProvider(request: ResolveProviderSettingsRequest): ResolveProviderSettingsResult;
   resolveModel(request: ResolveModelSettingsRequest): ResolveModelSettingsResult;
 
-  resolvePermissions(request?: ResolvePermissionSettingsRequest): PermissionSettings;
+  resolvePermissions(
+    request?: ResolvePermissionSettingsRequest,
+  ): { status: 'ok'; settings: PermissionSettings } | SettingsFailureResult;
   addPermissionRules(request: AddPermissionRulesRequest): AddPermissionRulesResult;
   changePermissionRules(request: ChangePermissionRulesRequest): ChangePermissionRulesResult;
   resolveWebSearch(): ResolveWebSearchSettingsResult;
@@ -121,16 +122,6 @@ export interface Settings {
   readWebSearchApiKey(request: ReadWebSearchApiKeyRequest): ReadApiKeyResult;
   writeWebSearchApiKey(request: WriteWebSearchApiKeyRequest): WriteApiKeyResult;
   deleteWebSearchApiKey(request: DeleteWebSearchApiKeyRequest): DeleteApiKeyResult;
-}
-
-export class SettingsOperationError extends Error {
-  readonly failure: SettingsFailure;
-
-  constructor(failure: SettingsFailure) {
-    super(failure.message);
-    this.name = 'SettingsOperationError';
-    this.failure = failure;
-  }
 }
 
 export function createSettings(request: CreateSettingsRequest): Settings {
@@ -144,19 +135,19 @@ class DefaultSettings implements Settings {
     this.environment = request.environment ?? emptySettingsEnvironment;
   }
 
-  read(): SettingsRaw {
+  read(): { status: 'ok'; settings: SettingsRaw } | SettingsFailureResult {
     try {
-      return publicRawFromFile(this.readFile());
+      return { status: 'ok', settings: publicRawFromFile(this.readFile()) };
     } catch {
-      throw operationError('settings_read_failed', 'Settings could not be read.');
+      return failure('settings_read_failed', 'Settings could not be read.');
     }
   }
 
-  resolve(): SettingsResolved {
+  resolve(): { status: 'ok'; settings: SettingsResolved } | SettingsFailureResult {
     try {
-      return resolvePublicSettings(publicRawFromFile(this.readFile()));
+      return { status: 'ok', settings: resolvePublicSettings(publicRawFromFile(this.readFile())) };
     } catch {
-      throw operationError('settings_resolution_failed', 'Settings could not be resolved.');
+      return failure('settings_resolution_failed', 'Settings could not be resolved.');
     }
   }
 
@@ -226,8 +217,10 @@ class DefaultSettings implements Settings {
   }
 
   listAvailableModels(): ListAvailableModelsResult {
+    const resolved = this.resolve();
+    if (resolved.status === 'failed') return resolved;
     try {
-      return { status: 'ok', models: listAvailableModelsFromProviders(this.resolve().providers) };
+      return { status: 'ok', models: listAvailableModelsFromProviders(resolved.settings.providers) };
     } catch {
       return failure('settings_read_failed', 'Available models could not be read.');
     }
@@ -236,14 +229,12 @@ class DefaultSettings implements Settings {
   getProvider(request: GetProviderSettingsRequest): GetProviderSettingsResult {
     const parsed = GetProviderSettingsRequestSchema.safeParse(request);
     if (!parsed.success) return failure('provider_request_invalid', 'Provider settings request is invalid.');
-    try {
-      const provider = this.resolve().providers[parsed.data.provider_id];
-      return provider
-        ? { status: 'ok', provider }
-        : failure('provider_unknown', 'Provider settings were not found.');
-    } catch {
-      return failure('settings_read_failed', 'Provider settings could not be read.');
-    }
+    const resolved = this.resolve();
+    if (resolved.status === 'failed') return resolved;
+    const provider = resolved.settings.providers[parsed.data.provider_id];
+    return provider
+      ? { status: 'ok', provider }
+      : failure('provider_unknown', 'Provider settings were not found.');
   }
 
   updateProvider(request: UpdateProviderSettingsRequest): UpdateProviderSettingsResult {
@@ -277,43 +268,40 @@ class DefaultSettings implements Settings {
   resolveProvider(request: ResolveProviderSettingsRequest): ResolveProviderSettingsResult {
     const parsed = ResolveProviderSettingsRequestSchema.safeParse(request);
     if (!parsed.success) return failure('provider_request_invalid', 'Provider resolution request is invalid.');
-    try {
-      const result = resolveProviderConfig(this.resolve().providers, parsed.data);
-      if (result.status === 'error') return domainFailure(result.settingsCode, result.message);
-      return result;
-    } catch {
-      return failure('settings_read_failed', 'Provider settings could not be resolved.');
-    }
+    const resolved = this.resolve();
+    if (resolved.status === 'failed') return resolved;
+    const result = resolveProviderConfig(resolved.settings.providers, parsed.data);
+    if (result.status === 'error') return domainFailure(result.settingsCode, result.message);
+    return result;
   }
 
   resolveModel(request: ResolveModelSettingsRequest): ResolveModelSettingsResult {
     const parsed = ResolveModelSettingsRequestSchema.safeParse(request);
     if (!parsed.success) return failure('model_request_invalid', 'Model settings request is invalid.');
-    try {
-      const resolved = this.resolve();
-      const result = resolveModelConfig(resolved.providers, resolved.context, parsed.data);
-      return result.status === 'error' ? domainFailure(result.settingsCode, result.message) : result;
-    } catch {
-      return failure('settings_read_failed', 'Model settings could not be resolved.');
-    }
+    const resolved = this.resolve();
+    if (resolved.status === 'failed') return resolved;
+    const result = resolveModelConfig(resolved.settings.providers, resolved.settings.context, parsed.data);
+    return result.status === 'error' ? domainFailure(result.settingsCode, result.message) : result;
   }
 
-  resolvePermissions(request: ResolvePermissionSettingsRequest = {}): PermissionSettings {
+  resolvePermissions(
+    request: ResolvePermissionSettingsRequest = {},
+  ): { status: 'ok'; settings: PermissionSettings } | SettingsFailureResult {
     const parsed = ResolvePermissionSettingsRequestSchema.safeParse(request);
-    if (!parsed.success) throw operationError('permission_settings_request_invalid', 'Permission settings request is invalid.');
-    return resolvePermissionSettings(this.resolve().permissions, parsed.data);
+    if (!parsed.success) {
+      return failure('permission_settings_request_invalid', 'Permission settings request is invalid.');
+    }
+    const resolved = this.resolve();
+    if (resolved.status === 'failed') return resolved;
+    return { status: 'ok', settings: resolvePermissionSettings(resolved.settings.permissions, parsed.data) };
   }
 
   addPermissionRules(request: AddPermissionRulesRequest): AddPermissionRulesResult {
     const parsed = AddPermissionRulesRequestSchema.safeParse(request);
     if (!parsed.success) return failure('permission_rule_invalid', 'Permission rule is invalid.');
-    let raw: SettingsRaw;
-    try {
-      raw = this.read();
-    } catch {
-      return failure('settings_read_failed', 'Permission settings could not be read.');
-    }
-    const patch = addPermissionRulesPatch(raw, parsed.data);
+    const read = this.read();
+    if (read.status === 'failed') return read;
+    const patch = addPermissionRulesPatch(read.settings, parsed.data);
     if (patch.status === 'error') return domainFailure(patch.settingsCode, patch.message);
     const updated = this.update({ patch: patch.patch });
     return updated.status === 'failed'
@@ -324,13 +312,9 @@ class DefaultSettings implements Settings {
   changePermissionRules(request: ChangePermissionRulesRequest): ChangePermissionRulesResult {
     const parsed = ChangePermissionRulesRequestSchema.safeParse(request);
     if (!parsed.success) return failure('permission_rule_invalid', 'Permission rule change is invalid.');
-    let raw: SettingsRaw;
-    try {
-      raw = this.read();
-    } catch {
-      return failure('settings_read_failed', 'Permission settings could not be read.');
-    }
-    const patch = changePermissionRulesPatch(raw, parsed.data);
+    const read = this.read();
+    if (read.status === 'failed') return read;
+    const patch = changePermissionRulesPatch(read.settings, parsed.data);
     if (patch.status === 'error') return domainFailure(patch.settingsCode, patch.message);
     const updated = this.update({ patch: patch.patch });
     return updated.status === 'failed'
@@ -460,10 +444,6 @@ class DefaultSettings implements Settings {
   private now(): string {
     return this.request.now?.() ?? new Date().toISOString();
   }
-}
-
-function operationError(settingsCode: string, message: string): SettingsOperationError {
-  return new SettingsOperationError(failure(settingsCode, message).failure);
 }
 
 function failure(settingsCode: string, message: string): SettingsFailureResult {

@@ -74,9 +74,15 @@ describe('Settings', () => {
       providers: { local: { api_key: 'secret' } },
     };
     const settings = createSettings({ store });
-    expect(settings.read()).toEqual({ memory: { enabled: true }, providers: { local: {} } });
-    expect(settings.resolve()).toMatchObject({ ...DEFAULT_SETTINGS, memory: { enabled: true } });
-    expect(settings.resolve()).not.toHaveProperty('compaction');
+    const read = settings.read();
+    expect(read.status).toBe('ok');
+    if (read.status !== 'ok') return;
+    expect(read.settings).toEqual({ memory: { enabled: true }, providers: { local: {} } });
+    const resolved = settings.resolve();
+    expect(resolved.status).toBe('ok');
+    if (resolved.status !== 'ok') return;
+    expect(resolved.settings).toMatchObject({ ...DEFAULT_SETTINGS, memory: { enabled: true } });
+    expect(resolved.settings).not.toHaveProperty('compaction');
   });
 
   it('rejects removed compaction settings and materializes Context defaults', () => {
@@ -245,8 +251,10 @@ describe('Settings', () => {
       rule('session', 'session_1'),
     ] } };
     const settings = createSettings({ store });
-    expect(settings.resolvePermissions({ workspace_id: 'workspace_1', session_id: 'session_1' }).allow)
-      .toEqual([
+    const resolved = settings.resolvePermissions({ workspace_id: 'workspace_1', session_id: 'session_1' });
+    expect(resolved.status).toBe('ok');
+    if (resolved.status !== 'ok') return;
+    expect(resolved.settings.allow).toEqual([
         rule('user', undefined, 'read_file'),
         rule('workspace', 'workspace_1', 'write_file'),
         rule('session', 'session_1'),

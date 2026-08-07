@@ -2,7 +2,12 @@
  * Validates no transport concerns; it forwards Settings Host requests to the
  * Settings capability and applies the mappings defined by settings-contract.
  */
-import type { Settings, SettingsThemeName } from '@megumi/settings';
+import type {
+  Settings,
+  SettingsFailureResult,
+  SettingsResolved,
+  SettingsThemeName,
+} from '@megumi/settings';
 import {
   fromPermissionRuleUi,
   toHostFailure,
@@ -45,18 +50,21 @@ export function createSettingsHost(
   return {
     async get() {
       const resolved = settings.resolve();
+      if (resolved.status === 'failed') {
+        return { status: 'failed', failure: toHostFailure(resolved.failure) };
+      }
       const webSearch = settings.resolveWebSearch();
       if (webSearch.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(webSearch.failure) };
       }
-      return { status: 'ok', settings: toSettingsUiResolved(resolved, webSearch.settings, permissionOptions) };
+      return { status: 'ok', settings: toSettingsUiResolved(resolved.settings, webSearch.settings, permissionOptions) };
     },
 
     async update(patch) {
       const rawPatch = toSettingsRawPatch(patch);
       let result = Object.keys(rawPatch).length > 0
         ? settings.update({ patch: rawPatch })
-        : { status: 'updated' as const, settings: settings.resolve() };
+        : resolveUpdatedSettings(settings);
       if (result.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(result.failure) };
       }
@@ -186,6 +194,15 @@ export function createSettingsHost(
       return readUpdatedProvider(settings, request.providerId);
     },
   };
+}
+
+function resolveUpdatedSettings(
+  settings: Settings,
+): { status: 'updated'; settings: SettingsResolved } | SettingsFailureResult {
+  const resolved = settings.resolve();
+  return resolved.status === 'ok'
+    ? { status: 'updated', settings: resolved.settings }
+    : resolved;
 }
 
 function readUpdatedProvider(settings: Settings, providerId: string): EmptyUiResult {

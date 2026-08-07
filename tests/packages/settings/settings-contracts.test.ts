@@ -14,7 +14,10 @@ import {
 describe('Settings contracts', () => {
   it('accepts sparse secret-free raw settings and resolves defaults', () => {
     expect(SettingsRawSchema.parse({})).toEqual({});
-    expect(createSettings({ store: memoryStore() }).resolve()).toEqual(DEFAULT_SETTINGS);
+    const resolved = createSettings({ store: memoryStore() }).resolve();
+    expect(resolved.status).toBe('ok');
+    if (resolved.status !== 'ok') return;
+    expect(resolved.settings).toEqual(DEFAULT_SETTINGS);
     expect(SettingsRawSchema.safeParse({
       providers: { deepseek: { api_key: 'must-not-be-public' } },
     }).success).toBe(false);

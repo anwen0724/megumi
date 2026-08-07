@@ -6,7 +6,6 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_SETTINGS,
-  SettingsOperationError,
   createSettings,
 } from '../../../packages/settings/src';
 import {
@@ -32,8 +31,14 @@ describe('settings.json store', () => {
 
   it('returns defaults when settings.json is missing', async () => {
     const { settings } = await createFixture();
-    expect(settings.resolve()).toEqual(DEFAULT_SETTINGS);
-    expect(settings.read()).toEqual({});
+    const resolved = settings.resolve();
+    expect(resolved.status).toBe('ok');
+    if (resolved.status !== 'ok') return;
+    expect(resolved.settings).toEqual(DEFAULT_SETTINGS);
+    const read = settings.read();
+    expect(read.status).toBe('ok');
+    if (read.status !== 'ok') return;
+    expect(read.settings).toEqual({});
   });
 
   it('merges partial raw settings with defaults', async () => {
@@ -42,7 +47,10 @@ describe('settings.json store', () => {
       theme: 'sage-mist',
       memory: { enabled: true },
     }), 'utf8');
-    expect(settings.resolve()).toMatchObject({
+    const resolved = settings.resolve();
+    expect(resolved.status).toBe('ok');
+    if (resolved.status !== 'ok') return;
+    expect(resolved.settings).toMatchObject({
       theme: 'sage-mist',
       memory: { enabled: true },
     });
@@ -160,7 +168,8 @@ describe('settings.json store', () => {
   it('does not overwrite invalid JSON and reports a stable parse error', async () => {
     const { settings, settingsPath, store } = await createFixture();
     await writeFile(settingsPath, '{', 'utf8');
-    expect(() => settings.resolve()).toThrow(SettingsOperationError);
+    const result = settings.resolve();
+    expect(result).toMatchObject({ status: 'failed', failure: { retryable: false } });
     expect(() => store.read()).toThrow(SettingsStoreParseError);
     expect(await readFile(settingsPath, 'utf8')).toBe('{');
   });

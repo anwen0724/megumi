@@ -45,6 +45,7 @@ import { createSessionStore } from '@megumi/session/store';
 import {
   createSettings,
   createSettingsCredentialStore,
+  type Settings,
   type SettingsEnvironment,
   type SettingsStore,
 } from '@megumi/settings';
@@ -281,13 +282,13 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
   const permissions = createPermissions({
     ruleReader: {
       resolvePermissionRules(request) {
-        return {
-          status: 'resolved',
-          permissionSettings: settings.resolvePermissions({
-            workspace_id: request.workspaceId,
-            session_id: request.sessionId,
-          }),
-        };
+        const resolved = settings.resolvePermissions({
+          workspace_id: request.workspaceId,
+          session_id: request.sessionId,
+        });
+        return resolved.status === 'ok'
+          ? { status: 'resolved', permissionSettings: resolved.settings }
+          : { status: 'failed', failure: resolved.failure };
       },
     },
     ruleWriter: {
@@ -438,7 +439,7 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     timeline,
     context: {
       deriveUsage: (history, model) => deriveContextUsage({ history, model }),
-      autoCompactPercent: Math.round((settings.resolve().context.compaction_threshold_ratio ?? 0.8) * 100),
+      autoCompactPercent: autoCompactPercent(settings),
     },
     resolveModel: async (selection) => {
       const resolved = await resolveModel(selection);
@@ -530,6 +531,15 @@ function modelVisibleOperatingSystem(platform: NodeJS.Platform): string {
   if (platform === 'darwin') return 'macOS';
   if (platform === 'linux') return 'Linux';
   return platform;
+}
+
+/** The UI-facing auto-compact percentage falls back to the default when settings cannot be read. */
+function autoCompactPercent(settings: Settings): number {
+  const resolved = settings.resolve();
+  const ratio = resolved.status === 'ok'
+    ? resolved.settings.context.compaction_threshold_ratio
+    : 0.8;
+  return Math.round((ratio ?? 0.8) * 100);
 }
 
 interface ProductResources {

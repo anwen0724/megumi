@@ -7,7 +7,6 @@ export {
 } from './settings-environment';
 
 export {
-  SettingsOperationError,
   createSettings,
 } from './settings';
 export type {

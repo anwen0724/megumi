@@ -41,6 +41,17 @@ describe('SettingsHost semantics', () => {
     expect(result.status).toBe('ok');
     expect(JSON.stringify(result)).not.toContain('secret-value');
   });
+
+  it('reports unreadable settings as a structured failure instead of throwing', async () => {
+    const host = createSettingsHost(createSettings({ store: memoryStore({ providers: 'not-an-object' }) }));
+
+    const result = await host.get();
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      failure: expect.objectContaining({ retryable: false }),
+    });
+  });
 });
 
 function memoryStore(initial: Record<string, unknown> = {}): SettingsStore {
