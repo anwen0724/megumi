@@ -31,7 +31,9 @@ function fixture(tokens = 50): CreateContextOptions {
     },
     workspaceSource: workspaceSource(),
     instructionReader: {
-      getSystemInstructions: vi.fn(() => [{ instructionId: 'system', content: 'system' }]),
+      getSystemInstructions: vi.fn(async () => [
+        { instructionId: 'megumi.system.identity', groups: [{ groupId: 'identity', items: ['system'] }] },
+      ]),
       getEffectiveInstructions: vi.fn(async () => ({
         status: 'ok' as const,
         instructions: {

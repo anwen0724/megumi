@@ -26,7 +26,7 @@ export interface ResolveContextRequest {
 export interface ResolvedContext {
   readonly activeSessionHistory: readonly SessionHistoryItem[];
   readonly expectedActiveEntryId: string;
-  readonly baseInstructions: readonly SystemInstruction[];
+  readonly systemInstructions: readonly SystemInstruction[];
   readonly effectiveInstructions: EffectiveInstructions;
   readonly skillView: SkillView;
   readonly executionEnvironment: ExecutionEnvironment;
@@ -55,8 +55,8 @@ export function createContextResolver(dependencies: ContextResolverDependencies)
       if (request.signal?.aborted) return cancelledResult();
       const history = readActiveHistory(dependencies, request.sessionId);
       if (history.status === 'failed') return history;
-      const base = readBaseInstructions(dependencies);
-      if (base.status === 'failed') return base;
+      const system = await readSystemInstructions(dependencies);
+      if (system.status === 'failed') return system;
       const workspace = await dependencies.workspaceSource.readWorkspace({
         workspaceId: request.workspaceId,
         signal: request.signal,
@@ -127,7 +127,7 @@ export function createContextResolver(dependencies: ContextResolverDependencies)
         context: {
           activeSessionHistory: history.history.items,
           expectedActiveEntryId: history.history.expectedActiveEntryId,
-          baseInstructions: base.instructions,
+          systemInstructions: system.instructions,
           effectiveInstructions: instructions.instructions,
           skillView: view.view,
           executionEnvironment: workspace.environment,
@@ -170,13 +170,14 @@ function readActiveHistory(
   };
 }
 
-function readBaseInstructions(
+async function readSystemInstructions(
   dependencies: ContextResolverDependencies,
-):
-  | { status: 'ok'; instructions: ReturnType<InstructionReader['getSystemInstructions']> }
-  | { status: 'failed'; failure: ContextFailure } {
+): Promise<
+  | { status: 'ok'; instructions: Awaited<ReturnType<InstructionReader['getSystemInstructions']>> }
+  | { status: 'failed'; failure: ContextFailure }
+> {
   try {
-    return { status: 'ok', instructions: dependencies.instructionReader.getSystemInstructions() };
+    return { status: 'ok', instructions: await dependencies.instructionReader.getSystemInstructions() };
   } catch (error) {
     return buildFailedContextResult(buildSourceContextFailure({
       code: 'base_instructions_failed',

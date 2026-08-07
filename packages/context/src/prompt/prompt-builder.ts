@@ -38,10 +38,11 @@ export function createPromptBuilder(dependencies: PromptBuilderDependencies): Pr
       });
       if (converted.status === 'failed') return converted;
       const systemPrompt = buildSystemPrompt({
-        baseInstructions: request.context.baseInstructions,
+        systemInstructions: request.context.systemInstructions,
         effectiveInstructions: request.context.effectiveInstructions,
         skills: request.context.skillView,
         executionEnvironment: request.context.executionEnvironment,
+        tools: request.context.tools,
       });
       return {
         status: 'built',

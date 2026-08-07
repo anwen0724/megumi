@@ -12,7 +12,9 @@ function dependencies() {
     },
     workspaceSource: workspace,
     instructionReader: {
-      getSystemInstructions: vi.fn(() => [{ instructionId: 'system', content: 'system' }]),
+      getSystemInstructions: vi.fn(async () => [
+        { instructionId: 'megumi.system.identity', groups: [{ groupId: 'identity', items: ['system'] }] },
+      ]),
       getEffectiveInstructions: vi.fn(async () => ({
         status: 'ok' as const,
         instructions: {
@@ -46,7 +48,9 @@ describe('ContextResolver', () => {
     expect(result.context.activeSessionHistory.map((item) => item.entry.entry_id))
       .toEqual(['entry:user', 'entry:assistant']);
     expect(result.context.expectedActiveEntryId).toBe('entry:assistant');
-    expect(result.context.baseInstructions).toEqual([{ instructionId: 'system', content: 'system' }]);
+    expect(result.context.systemInstructions).toEqual([
+      { instructionId: 'megumi.system.identity', groups: [{ groupId: 'identity', items: ['system'] }] },
+    ]);
     expect(result.context.effectiveInstructions).toEqual({
       sources: [{ sourceId: 'agents', sourcePath: '/workspace/AGENTS.md', content: 'rules' }],
     });

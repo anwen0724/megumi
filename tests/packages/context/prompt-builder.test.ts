@@ -13,7 +13,13 @@ function resolveContext(tools: readonly ToolDefinition[]) {
     },
     workspaceSource: workspace,
     instructionReader: {
-      getSystemInstructions: vi.fn(() => [{ instructionId: 'system', content: 'system' }]),
+      getSystemInstructions: vi.fn(async () => [
+        { instructionId: 'megumi.system.identity', groups: [{ groupId: 'identity', items: ['system'] }] },
+        {
+          instructionId: 'megumi.system.guidance',
+          groups: [{ groupId: 'communication', items: ['Be concise in your responses.'] }],
+        },
+      ]),
       getEffectiveInstructions: vi.fn(async () => ({
         status: 'ok' as const,
         instructions: {
@@ -64,14 +70,22 @@ describe('PromptBuilder', () => {
     if (result.status !== 'built') return;
 
     const text = result.prompt.systemPrompt;
-    const base = text.indexOf('system');
+    const identity = text.indexOf('system');
+    const guidance = text.indexOf('Behavior guidelines:');
     const effective = text.indexOf('<effective_instructions>');
+    const availableTools = text.indexOf('<available_tools>');
     const environment = text.indexOf('<execution_environment>');
-    // Base Instructions, Effective Instructions, Skill Catalog, Execution Environment.
-    expect(base).toBeGreaterThanOrEqual(0);
-    expect(effective).toBeGreaterThan(base);
-    expect(environment).toBeGreaterThan(effective);
+    // Identity paragraph, Behavior guidelines, Effective Instructions,
+    // Available tools, Skill Catalog, Execution Environment.
+    expect(identity).toBeGreaterThanOrEqual(0);
+    expect(guidance).toBeGreaterThan(identity);
+    expect(effective).toBeGreaterThan(guidance);
+    expect(availableTools).toBeGreaterThan(effective);
+    expect(environment).toBeGreaterThan(availableTools);
     expect(text.indexOf('<available_skills>')).toBe(-1);
+    // The guidance section renders as a bullet list without group markers.
+    expect(text).toContain('- Be concise in your responses.');
+    expect(text).not.toContain('communication');
   });
 
   it('neither needs a ModelCallContext nor a full Model object', async () => {

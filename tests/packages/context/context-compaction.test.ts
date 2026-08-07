@@ -81,7 +81,7 @@ function fixture(
     attachmentReader: { readAttachmentContent: vi.fn() },
     workspaceSource: workspaceSource(),
     instructionReader: {
-      getSystemInstructions: vi.fn(() => []),
+      getSystemInstructions: vi.fn(async () => []),
       getEffectiveInstructions: vi.fn(async () => ({
         status: 'ok' as const,
         instructions: { sources: [] },
