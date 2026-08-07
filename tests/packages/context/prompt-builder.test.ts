@@ -102,6 +102,38 @@ describe('PromptBuilder', () => {
     expect(result.status).toBe('built');
   });
 
+  it('folds, truncates, and omits the available tools section per the snippet rules', async () => {
+    const longDescription = 'x'.repeat(200);
+    const resolved = await resolveContext([
+      {
+        name: 'run_command',
+        description: `Run a command\n  with   odd spacing ${longDescription}`,
+        parameters: { type: 'object' },
+      },
+    ]);
+    if (resolved.status !== 'resolved') return;
+    const result = await createPromptBuilder({
+      attachmentReader: { readAttachmentContent: vi.fn() },
+    }).build({ context: resolved.context });
+    if (result.status !== 'built') return;
+
+    const text = result.prompt.systemPrompt;
+    // Newlines and repeated whitespace are folded into one line.
+    expect(text).toContain('- run_command: Run a command with odd spacing');
+    expect(text).not.toContain('\n  with');
+    // The snippet is truncated to 120 characters with an ellipsis.
+    expect(text).toContain(`- run_command: Run a command with odd spacing ${'x'.repeat(120 - 31)}...`);
+
+    const empty = await resolveContext([]);
+    if (empty.status !== 'resolved') return;
+    const emptyResult = await createPromptBuilder({
+      attachmentReader: { readAttachmentContent: vi.fn() },
+    }).build({ context: empty.context });
+    if (emptyResult.status !== 'built') return;
+    // The whole section is omitted when no tools are available.
+    expect(emptyResult.prompt.systemPrompt).not.toContain('<available_tools>');
+  });
+
   it('returns MaterializedHistory for the compaction projection', async () => {
     const resolved = await resolveContext([]);
     if (resolved.status !== 'resolved') return;
