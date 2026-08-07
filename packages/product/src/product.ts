@@ -292,8 +292,8 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
       },
     },
     ruleWriter: {
-      addPermissionRules(request) {
-        const result = settings.addPermissionRules({
+      recordSessionPermissionGrant(request) {
+        const result = settings.recordSessionPermissionGrant({
           session_id: request.sessionId,
           rules: [...request.rules],
           applied_at: request.appliedAt,

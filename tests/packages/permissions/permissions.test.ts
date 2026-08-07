@@ -24,7 +24,7 @@ class FakeRuleAccess implements PermissionRuleReader, PermissionRuleWriter {
       : { status: 'resolved' as const, permissionSettings: this.settings };
   }
 
-  async addPermissionRules(request: unknown) {
+  async recordSessionPermissionGrant(request: unknown) {
     this.writes.push(request);
     return this.failure
       ? { status: 'failed' as const, failure: this.failure }

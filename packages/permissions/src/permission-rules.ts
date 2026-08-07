@@ -133,7 +133,7 @@ export type AddPermissionRulesResult =
   | { readonly status: 'failed'; readonly failure: PermissionFailure };
 
 export interface PermissionRuleWriter {
-  addPermissionRules(request: {
+  recordSessionPermissionGrant(request: {
     readonly sessionId: string;
     readonly rules: readonly PermissionRule[];
     readonly appliedAt: string;

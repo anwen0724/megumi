@@ -2,7 +2,7 @@
 /* Verifies strict Settings persistence contracts for action permissions. */
 import { describe, expect, it } from 'vitest';
 import {
-  AddPermissionRulesRequestSchema,
+  RecordSessionPermissionGrantRequestSchema,
   PermissionRulesRawSchema,
   PermissionSettingsSchema,
 } from '../../../packages/settings/src';
@@ -25,8 +25,8 @@ describe('permission settings contracts', () => {
   });
 
   it('requires an atomic non-empty session batch and rejects unknown fields', () => {
-    expect(AddPermissionRulesRequestSchema.parse({ session_id: 'session_1', rules: [rule] }).rules).toHaveLength(1);
-    expect(AddPermissionRulesRequestSchema.safeParse({ session_id: 'session_1', rules: [] }).success).toBe(false);
-    expect(AddPermissionRulesRequestSchema.safeParse({ session_id: 'session_1', rules: [rule], scope: 'session' }).success).toBe(false);
+    expect(RecordSessionPermissionGrantRequestSchema.parse({ session_id: 'session_1', rules: [rule] }).rules).toHaveLength(1);
+    expect(RecordSessionPermissionGrantRequestSchema.safeParse({ session_id: 'session_1', rules: [] }).success).toBe(false);
+    expect(RecordSessionPermissionGrantRequestSchema.safeParse({ session_id: 'session_1', rules: [rule], scope: 'session' }).success).toBe(false);
   });
 });

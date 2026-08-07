@@ -63,13 +63,13 @@ import {
   type ResolveModelSettingsResult,
 } from './model-settings';
 import {
-  AddPermissionRulesRequestSchema,
+  RecordSessionPermissionGrantRequestSchema,
   ChangePermissionRulesRequestSchema,
   ResolvePermissionSettingsRequestSchema,
   addPermissionRulesPatch,
   changePermissionRulesPatch,
   resolvePermissionSettings,
-  type AddPermissionRulesRequest,
+  type RecordSessionPermissionGrantRequest,
   type AddPermissionRulesResult,
   type ChangePermissionRulesRequest,
   type ChangePermissionRulesResult,
@@ -112,7 +112,7 @@ export interface Settings {
   resolvePermissions(
     request?: ResolvePermissionSettingsRequest,
   ): { status: 'ok'; settings: PermissionSettings } | SettingsFailureResult;
-  addPermissionRules(request: AddPermissionRulesRequest): AddPermissionRulesResult;
+  recordSessionPermissionGrant(request: RecordSessionPermissionGrantRequest): AddPermissionRulesResult;
   changePermissionRules(request: ChangePermissionRulesRequest): ChangePermissionRulesResult;
   resolveWebSearch(): ResolveWebSearchSettingsResult;
 
@@ -296,8 +296,8 @@ class DefaultSettings implements Settings {
     return { status: 'ok', settings: resolvePermissionSettings(resolved.settings.permissions, parsed.data) };
   }
 
-  addPermissionRules(request: AddPermissionRulesRequest): AddPermissionRulesResult {
-    const parsed = AddPermissionRulesRequestSchema.safeParse(request);
+  recordSessionPermissionGrant(request: RecordSessionPermissionGrantRequest): AddPermissionRulesResult {
+    const parsed = RecordSessionPermissionGrantRequestSchema.safeParse(request);
     if (!parsed.success) return failure('permission_rule_invalid', 'Permission rule is invalid.');
     const read = this.read();
     if (read.status === 'failed') return read;

@@ -31,12 +31,12 @@ export const ResolvePermissionSettingsRequestSchema = z.object({
 }).strict();
 export type ResolvePermissionSettingsRequest = z.infer<typeof ResolvePermissionSettingsRequestSchema>;
 
-export const AddPermissionRulesRequestSchema = z.object({
+export const RecordSessionPermissionGrantRequestSchema = z.object({
   rules: z.array(PermissionRuleSchema).min(1),
   session_id: z.string().min(1),
   applied_at: z.string().min(1).optional(),
 }).strict();
-export type AddPermissionRulesRequest = z.infer<typeof AddPermissionRulesRequestSchema>;
+export type RecordSessionPermissionGrantRequest = z.infer<typeof RecordSessionPermissionGrantRequestSchema>;
 
 export const PermissionRuleEffectSchema = z.enum(['allow', 'ask', 'deny']);
 export type PermissionRuleEffect = z.infer<typeof PermissionRuleEffectSchema>;
@@ -68,7 +68,7 @@ export function resolvePermissionSettings(
 
 export function addPermissionRulesPatch(
   current: SettingsRaw,
-  request: AddPermissionRulesRequest,
+  request: RecordSessionPermissionGrantRequest,
 ): { status: 'patch'; patch: SettingsRaw } | { status: 'error'; settingsCode: string; message: string } {
   if (request.rules.some((rule) => rule.source !== 'session')) {
     return domainError('permission_rule_source_unsupported', 'Only session permission rule writes are supported.');

@@ -261,9 +261,9 @@ describe('Settings', () => {
       ]);
 
     const sessionRule = rule('session', 'session_1');
-    expect(settings.addPermissionRules({ session_id: 'session_1', rules: [sessionRule, sessionRule] }).status)
+    expect(settings.recordSessionPermissionGrant({ session_id: 'session_1', rules: [sessionRule, sessionRule] }).status)
       .toBe('saved');
-    expect(settings.addPermissionRules({ session_id: 'session_2', rules: [sessionRule] })).toMatchObject({
+    expect(settings.recordSessionPermissionGrant({ session_id: 'session_2', rules: [sessionRule] })).toMatchObject({
       status: 'failed',
       failure: { details: { settings_code: 'permission_session_mismatch' } },
     });
@@ -276,7 +276,7 @@ describe('Settings', () => {
     const store = new MemorySettingsStore();
     store.writeFailure = new Error('disk unavailable');
     const settings = createSettings({ store });
-    const result = settings.addPermissionRules({ session_id: 'session_1', rules: [{
+    const result = settings.recordSessionPermissionGrant({ session_id: 'session_1', rules: [{
       source: 'session',
       source_id: 'session_1',
       target: { kind: 'tool', tool_identity: { source_id: 'built_in', namespace: 'megumi', source_tool_name: 'run_command' } },

@@ -110,7 +110,7 @@ export type {
   ResolveModelSettingsResult,
 } from './model-settings';
 export {
-  AddPermissionRulesRequestSchema,
+  RecordSessionPermissionGrantRequestSchema,
   ChangePermissionRulesRequestSchema,
   PermissionRuleEffectSchema,
   PermissionRuleSchema,
@@ -119,7 +119,7 @@ export {
   ResolvePermissionSettingsRequestSchema,
 } from './permission-settings';
 export type {
-  AddPermissionRulesRequest,
+  RecordSessionPermissionGrantRequest,
   AddPermissionRulesResult,
   ChangePermissionRulesRequest,
   ChangePermissionRulesResult,

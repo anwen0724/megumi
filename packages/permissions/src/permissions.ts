@@ -149,7 +149,7 @@ export function createPermissions(dependencies: CreatePermissionsRequest): Permi
         return result;
       }
       try {
-        const saved = await dependencies.ruleWriter.addPermissionRules({
+        const saved = await dependencies.ruleWriter.recordSessionPermissionGrant({
           sessionId: parsed.data.sessionId,
           rules: [result.effect.rule],
           appliedAt: parsed.data.appliedAt,
