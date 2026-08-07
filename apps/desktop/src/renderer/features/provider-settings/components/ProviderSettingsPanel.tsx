@@ -467,8 +467,8 @@ export function ProviderSettingsPanel() {
                 </div>
               </div>
 
-              <form id="provider-settings-form" className="mt-5 overflow-hidden rounded-lg border border-[var(--color-border)]" onSubmit={(event) => void handleSettingsSubmit(event)}>
-                <FormGroup title={t('provider.connection')}>
+              <form id="provider-settings-form" className="mt-5 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-[var(--color-border)]" onSubmit={(event) => void handleSettingsSubmit(event)}>
+                <FormGroup title={t('provider.connection')} className="shrink-0">
                   <FieldRow label={t('provider.provider')}>
                     <input aria-label={t('provider.provider')} value={selectedForm.provider} onChange={(event) => updateForm({ provider: event.target.value })} className={fieldClassName} placeholder={t('provider.providerPlaceholder')} disabled={selectedEntry?.source === 'quick' || selectedEntry?.source === 'saved'} />
                   </FieldRow>
@@ -489,7 +489,7 @@ export function ProviderSettingsPanel() {
                   </FieldRow>
                 </FormGroup>
 
-                <FormGroup title={t('provider.authentication')} bordered>
+                <FormGroup title={t('provider.authentication')} bordered className="shrink-0">
                   <FieldRow label={t('provider.apiKey')}>
                     <div className="relative">
                       <input
@@ -512,8 +512,8 @@ export function ProviderSettingsPanel() {
                   </FieldRow>
                 </FormGroup>
 
-                <FormGroup title={t('provider.models')} bordered>
-                  <div className="max-h-[min(24rem,40vh)] overflow-y-auto overscroll-contain rounded-md border border-[var(--color-border)] bg-[var(--color-app-bg)]/35 [scrollbar-gutter:stable]">
+                <FormGroup title={t('provider.models')} bordered className="flex min-h-0 flex-1 flex-col">
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-md border border-[var(--color-border)] bg-[var(--color-app-bg)]/35 [scrollbar-gutter:stable]">
                     {selectedForm.models.map((model, index) => (
                       <div key={model.modelId} className={cx('flex items-center gap-3 px-3 py-2.5', index > 0 ? 'border-t border-[var(--color-border)]' : undefined)}>
                         <div className="min-w-0 flex-1">
@@ -720,9 +720,9 @@ function FieldRow({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function FormGroup({ title, bordered = false, children }: { title: string; bordered?: boolean; children: ReactNode }) {
+function FormGroup({ title, bordered = false, className, children }: { title: string; bordered?: boolean; className?: string; children: ReactNode }) {
   return (
-    <section className={cx('space-y-3 p-4', bordered ? 'border-t border-[var(--color-border)]' : undefined)}>
+    <section className={cx('space-y-3 p-4', bordered ? 'border-t border-[var(--color-border)]' : undefined, className)}>
       <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-subtle)]">{title}</h3>
       {children}
     </section>
