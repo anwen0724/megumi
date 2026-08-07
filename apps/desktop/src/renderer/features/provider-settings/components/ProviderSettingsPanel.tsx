@@ -532,7 +532,7 @@ export function ProviderSettingsPanel() {
                       <p className="px-3 py-5 text-center text-sm text-[var(--color-text-muted)]">{t('provider.noModels')}</p>
                     ) : null}
                   </div>
-                  <Button type="button" size="sm" variant="secondary" onClick={startAddModel}>
+                  <Button type="button" size="sm" variant="secondary" onClick={startAddModel} className="self-start">
                     <Plus size={14} aria-hidden="true" /> {t('provider.addModel')}
                   </Button>
                 </FormGroup>
