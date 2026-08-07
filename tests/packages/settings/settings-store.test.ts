@@ -108,6 +108,55 @@ describe('settings.json store', () => {
     });
   });
 
+  it('migrates legacy provider protocol and models array and persists the normalized file', async () => {
+    const { store, settingsPath } = await createFixture();
+    await writeFile(settingsPath, JSON.stringify({
+      providers: {
+        deepseek: { protocol: 'openai-compatible', models: ['deepseek-chat'] },
+      },
+    }), 'utf8');
+    expect(store.read()).toMatchObject({
+      providers: { deepseek: { api: 'openai-completions', models: { 'deepseek-chat': {} } } },
+    });
+    expect(JSON.parse(await readFile(settingsPath, 'utf8'))).toMatchObject({
+      providers: { deepseek: { api: 'openai-completions', models: { 'deepseek-chat': {} } } },
+    });
+  });
+
+  it('migrates the legacy AppSettings shape to the settings.json file model', async () => {
+    const { store, settingsPath } = await createFixture();
+    await writeFile(settingsPath, JSON.stringify({
+      language: 'zh-CN',
+      providers: {
+        anthropic: { enabled: true, protocol: 'anthropic', displayName: 'Anthropic', apiKey: 'sk-test' },
+      },
+    }), 'utf8');
+    expect(store.read()).toMatchObject({
+      language: 'zh-CN',
+      providers: {
+        anthropic: {
+          enabled: true,
+          api: 'anthropic-messages',
+          display_name: 'Anthropic',
+          api_key: 'sk-test',
+        },
+      },
+    });
+  });
+
+  it('leaves already normalized settings.json untouched', async () => {
+    const { store, settingsPath } = await createFixture();
+    await writeFile(settingsPath, JSON.stringify({
+      theme: 'sage-mist',
+      providers: { deepseek: { enabled: true, api: 'openai-completions' } },
+    }), 'utf8');
+    expect(store.read()).toMatchObject({ theme: 'sage-mist' });
+    expect(JSON.parse(await readFile(settingsPath, 'utf8'))).toEqual({
+      theme: 'sage-mist',
+      providers: { deepseek: { enabled: true, api: 'openai-completions' } },
+    });
+  });
+
   it('does not overwrite invalid JSON and reports a stable parse error', async () => {
     const { settings, settingsPath, store } = await createFixture();
     await writeFile(settingsPath, '{', 'utf8');

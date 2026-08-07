@@ -451,10 +451,8 @@ class DefaultSettings implements Settings {
   }
 
   private readFile(): SettingsFileRaw {
-    const migrated = migrateLegacyProviderApis(this.request.store.read());
-    const parsed = SettingsFileRawSchema.parse(migrated.value);
-    if (migrated.changed) this.request.store.write(parsed);
-    return parsed;
+    // Legacy normalization and write-back live in the file layer (store).
+    return SettingsFileRawSchema.parse(this.request.store.read());
   }
 
   private now(): string {
@@ -560,28 +558,6 @@ function materializeFileForWrite(file: SettingsFileRaw): SettingsFileRaw {
 function withoutWebSearchSecret(search: WebSearchSettingsFileRaw) {
   const { api_key: _secret, ...publicSearch } = search;
   return publicSearch;
-}
-
-function migrateLegacyProviderApis(value: unknown): { value: unknown; changed: boolean } {
-  if (!isRecord(value) || !isRecord(value.providers)) return { value, changed: false };
-  let changed = false;
-  const providers = Object.fromEntries(Object.entries(value.providers).map(([id, entry]) => {
-    if (!isRecord(entry)) return [id, entry];
-    const provider = { ...entry };
-    if (provider.api === undefined && provider.protocol === 'openai-compatible') {
-      provider.api = 'openai-completions';
-      changed = true;
-    } else if (provider.api === undefined && provider.protocol === 'anthropic') {
-      provider.api = 'anthropic-messages';
-      changed = true;
-    }
-    if ('protocol' in provider) {
-      delete provider.protocol;
-      changed = true;
-    }
-    return [id, provider];
-  }));
-  return changed ? { value: { ...value, providers }, changed: true } : { value, changed: false };
 }
 
 function operationError(settingsCode: string, message: string): SettingsOperationError {
