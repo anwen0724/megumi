@@ -53,10 +53,10 @@ export const ProviderSettingsRawSchema = z.object({
 export type ProviderSettingsRaw = z.infer<typeof ProviderSettingsRawSchema>;
 
 // This schema is internal to Settings persistence and is intentionally absent
-// from the Package entrypoint.
+// from the Package entrypoint. Provider files may carry user-added fields.
 export const ProviderSettingsFileRawSchema = ProviderSettingsRawSchema.extend({
   api_key: z.string().min(1).nullable().optional(),
-}).strict();
+}).passthrough();
 export type ProviderSettingsFileRaw = z.infer<typeof ProviderSettingsFileRawSchema>;
 
 export const ProviderSettingsResolvedSchema = z.object({

@@ -52,6 +52,27 @@ describe('SettingsHost semantics', () => {
       failure: expect.objectContaining({ retryable: false }),
     });
   });
+
+  it('reports unknown file keys as diagnostics on the ok response', async () => {
+    const host = createSettingsHost(createSettings({
+      store: memoryStore({
+        theme: 'sage-mist',
+        custom_field: true,
+        providers: { deepseek: { enabled: true, api: 'openai-completions', extra: 1 } },
+        web: { search: { provider: 'tavily', note: 'x' } },
+      }),
+    }));
+
+    const result = await host.get();
+
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
+    expect(result.unknownKeys).toEqual([
+      'custom_field',
+      'providers.deepseek.extra',
+      'web.search.note',
+    ]);
+  });
 });
 
 function memoryStore(initial: Record<string, unknown> = {}): SettingsStore {

@@ -19,6 +19,7 @@ import {
 } from './settings-schema';
 
 import {
+  collectUnknownFileKeys,
   definedObject,
   materializeFileForWrite,
   mergeFileWithPublicPatch,
@@ -112,6 +113,7 @@ export interface Settings {
   resolvePermissions(
     request?: ResolvePermissionSettingsRequest,
   ): { status: 'ok'; settings: PermissionSettings } | SettingsFailureResult;
+  getFileDiagnostics(): { status: 'ok'; unknownKeys: string[] } | SettingsFailureResult;
   recordSessionPermissionGrant(request: RecordSessionPermissionGrantRequest): AddPermissionRulesResult;
   changePermissionRules(request: ChangePermissionRulesRequest): ChangePermissionRulesResult;
   resolveWebSearch(): ResolveWebSearchSettingsResult;
@@ -294,6 +296,14 @@ class DefaultSettings implements Settings {
     const resolved = this.resolve();
     if (resolved.status === 'failed') return resolved;
     return { status: 'ok', settings: resolvePermissionSettings(resolved.settings.permissions, parsed.data) };
+  }
+
+  getFileDiagnostics(): { status: 'ok'; unknownKeys: string[] } | SettingsFailureResult {
+    try {
+      return { status: 'ok', unknownKeys: collectUnknownFileKeys(this.readFile()) };
+    } catch {
+      return failure('settings_read_failed', 'Settings diagnostics could not be read.');
+    }
   }
 
   recordSessionPermissionGrant(request: RecordSessionPermissionGrantRequest): AddPermissionRulesResult {

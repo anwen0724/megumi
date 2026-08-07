@@ -91,7 +91,8 @@ describe('Settings contracts', () => {
     expect(jsonSchema).toMatchObject({
       title: 'Megumi settings',
       type: 'object',
-      additionalProperties: false,
+      // The file model tolerates unknown keys, so editors allow them too.
+      additionalProperties: true,
     });
     expect(Object.keys(jsonSchema.properties ?? {})).toEqual(SettingsRawSchema.keyof().options);
     const providerSchema = jsonSchema.properties?.providers?.additionalProperties as {

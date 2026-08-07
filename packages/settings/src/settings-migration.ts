@@ -20,6 +20,22 @@ export function legacyAppSettingsToFileRaw(raw: unknown): SettingsFileRaw {
   return appRawToSettingsFileRaw(AppSettingsRawSchema.parse(raw));
 }
 
+/**
+ * Detects the legacy AppSettings shape by its camelCase keys. Explicit
+ * detection is required because tolerant file parsing no longer fails on
+ * unknown keys, which would otherwise swallow AppSettings files silently.
+ */
+export function isLegacyAppSettings(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  if (!isRecord(value.providers)) return false;
+  return Object.values(value.providers).some((provider) =>
+    isRecord(provider)
+    && (provider.displayName !== undefined
+      || provider.baseUrl !== undefined
+      || provider.apiKey !== undefined
+      || provider.apiKeyEnv !== undefined));
+}
+
 function withoutObsoleteCompaction(value: unknown): unknown {
   if (!isRecord(value)) return value;
   const { compaction: _obsoleteCompaction, ...settings } = value;

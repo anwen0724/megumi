@@ -53,11 +53,16 @@ export function createSettingsHost(
       if (resolved.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(resolved.failure) };
       }
+      const diagnostics = settings.getFileDiagnostics();
       const webSearch = settings.resolveWebSearch();
       if (webSearch.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(webSearch.failure) };
       }
-      return { status: 'ok', settings: toSettingsUiResolved(resolved.settings, webSearch.settings, permissionOptions) };
+      return {
+        status: 'ok',
+        settings: toSettingsUiResolved(resolved.settings, webSearch.settings, permissionOptions),
+        unknownKeys: diagnostics.status === 'ok' ? diagnostics.unknownKeys : [],
+      };
     },
 
     async update(patch) {

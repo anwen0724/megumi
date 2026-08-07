@@ -165,6 +165,33 @@ describe('settings.json store', () => {
     });
   });
 
+  it('tolerates unknown file keys and preserves them on write', async () => {
+    const { settings, settingsPath } = await createFixture();
+    await writeFile(settingsPath, JSON.stringify({
+      theme: 'sage-mist',
+      custom_field: { anything: true },
+      providers: { deepseek: { enabled: true, api: 'openai-completions', extra_field: 'keep-me' } },
+    }), 'utf8');
+    const read = settings.read();
+    expect(read.status).toBe('ok');
+    if (read.status !== 'ok') return;
+    expect(JSON.stringify(read.settings)).toContain('custom_field');
+    expect(JSON.stringify(read.settings)).toContain('extra_field');
+    expect(settings.update({ patch: { language: 'en-US' } })).toMatchObject({ status: 'updated' });
+    expect(JSON.parse(await readFile(settingsPath, 'utf8'))).toMatchObject({
+      language: 'en-US',
+      theme: 'sage-mist',
+      custom_field: { anything: true },
+      providers: { deepseek: { extra_field: 'keep-me' } },
+    });
+  });
+
+  it('keeps the update patch contract strict against unknown keys', async () => {
+    const { settings } = await createFixture();
+    const result = settings.update({ patch: { unknown_key: true } as never });
+    expect(result).toMatchObject({ status: 'failed', failure: { details: { settings_code: 'settings_patch_invalid' } } });
+  });
+
   it('does not overwrite invalid JSON and reports a stable parse error', async () => {
     const { settings, settingsPath, store } = await createFixture();
     await writeFile(settingsPath, '{', 'utf8');

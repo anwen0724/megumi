@@ -17,9 +17,10 @@ export const WebSearchSettingsRawSchema = z.object({
 export type WebSearchSettingsRaw = z.infer<typeof WebSearchSettingsRawSchema>;
 
 // The key remains in settings.json but this schema is not exported publicly.
+// Web Search files may carry user-added fields.
 export const WebSearchSettingsFileRawSchema = WebSearchSettingsRawSchema.extend({
   api_key: z.string().min(1).nullable().optional(),
-}).strict();
+}).passthrough();
 export type WebSearchSettingsFileRaw = z.infer<typeof WebSearchSettingsFileRawSchema>;
 
 export const WebSearchSettingsResolvedSchema = z.object({

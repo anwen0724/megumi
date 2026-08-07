@@ -6,6 +6,7 @@ import {
   type SettingsFileRaw,
 } from './settings-schema';
 import {
+  isLegacyAppSettings,
   legacyAppSettingsToFileRaw,
   normalizeSettingsFile,
 } from './settings-migration';
@@ -43,6 +44,11 @@ function readSettingsFile(settingsPath: string): SettingsFileRaw {
   if (text === undefined || text.trim().length === 0) return {};
   try {
     const parsed = JSON.parse(text) as unknown;
+    // Legacy AppSettings files keep the protocol field and camelCase keys:
+    // detect them before tolerant parsing accepts them as current format.
+    if (isLegacyAppSettings(parsed)) {
+      return SettingsFileRawSchema.parse(legacyAppSettingsToFileRaw(parsed));
+    }
     const normalized = normalizeSettingsFile(parsed);
     const current = SettingsFileRawSchema.safeParse(normalized.value);
     if (current.success) {
@@ -50,9 +56,7 @@ function readSettingsFile(settingsPath: string): SettingsFileRaw {
       if (normalized.changed) writeSettingsFile(settingsPath, current.data);
       return current.data;
     }
-    // Legacy AppSettings files keep the protocol field: normalize the raw
-    // value only after deciding they are not current-format files.
-    return SettingsFileRawSchema.parse(legacyAppSettingsToFileRaw(parsed));
+    return SettingsFileRawSchema.parse(normalized.value);
   } catch {
     throw new SettingsStoreParseError(settingsPath);
   }

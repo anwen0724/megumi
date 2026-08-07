@@ -2,21 +2,31 @@
 import {
   DEFAULT_SETTINGS,
   SettingsFileRawSchema,
-  SettingsRawSchema,
+  SettingsRawReadSchema,
   SettingsResolvedSchema,
   type SettingsFileRaw,
   type SettingsRaw,
   type SettingsResolved,
 } from './settings-schema';
 import {
+  ProviderSettingsFileRawSchema,
   materializeProviderSettings,
   resolveProviderSettings,
+  type ProviderSettingsFileRaw,
 } from './provider-settings';
-import type { WebSearchSettingsFileRaw } from './web-search-settings';
+import {
+  WebSearchSettingsFileRawSchema,
+  type WebSearchSettingsFileRaw,
+} from './web-search-settings';
+
+// Strict variants detect unknown keys while the tolerant file schemas keep reading.
+const STRICT_FILE_SCHEMA = SettingsFileRawSchema.strict();
+const STRICT_PROVIDER_SCHEMA = ProviderSettingsFileRawSchema.strict();
+const STRICT_WEB_SEARCH_SCHEMA = WebSearchSettingsFileRawSchema.strict();
 
 /** Strips the secret-bearing fields, producing the public SettingsRaw view. */
 export function publicRawFromFile(file: SettingsFileRaw): SettingsRaw {
-  return SettingsRawSchema.parse({
+  return SettingsRawReadSchema.parse({
     ...file,
     ...(file.providers ? {
       providers: Object.fromEntries(Object.entries(file.providers).map(([providerId, provider]) => {
@@ -77,9 +87,10 @@ export function materializeFileForWrite(file: SettingsFileRaw): SettingsFileRaw 
     ...(file.providers ? {
       providers: Object.fromEntries(Object.entries(file.providers).map(([providerId, provider]) => {
         const publicProvider = publicRaw.providers?.[providerId] ?? {};
+        // Spread the file entry first so user-added provider fields survive.
         return [providerId, {
+          ...provider,
           ...materializeProviderSettings(providerId, publicProvider),
-          ...(provider.api_key ? { api_key: provider.api_key } : {}),
         }];
       })),
     } : {}),
@@ -94,7 +105,14 @@ export function resolvePublicSettings(raw: SettingsRaw): SettingsResolved {
       resolveProviderSettings(providerId, provider),
     ]),
   );
-  const search = definedObject(raw.web?.search ?? {});
+  // Whitelist the search fields: tolerated unknown keys must not leak into
+  // the strict consumer-facing resolved model.
+  const rawSearch = raw.web?.search ?? {};
+  const search = definedObject({
+    provider: rawSearch.provider,
+    api_key_env: rawSearch.api_key_env,
+    base_url: rawSearch.base_url,
+  });
   if (search.api_key_env === null) delete search.api_key_env;
   if (search.base_url === null) delete search.base_url;
   return SettingsResolvedSchema.parse({
@@ -111,6 +129,29 @@ export function resolvePublicSettings(raw: SettingsRaw): SettingsResolved {
       ? { permissions: { ...DEFAULT_SETTINGS.permissions, ...definedObject(raw.permissions) } }
       : {}),
   });
+}
+
+/** Lists unknown keys in a parsed file model so callers can surface them as diagnostics. */
+export function collectUnknownFileKeys(file: SettingsFileRaw): string[] {
+  const keys: string[] = [];
+  for (const issue of STRICT_FILE_SCHEMA.safeParse(file).error?.issues ?? []) {
+    if (issue.code === 'unrecognized_keys') keys.push(...issue.keys);
+  }
+  for (const [providerId, provider] of Object.entries(file.providers ?? {})) {
+    for (const issue of STRICT_PROVIDER_SCHEMA.safeParse(provider).error?.issues ?? []) {
+      if (issue.code === 'unrecognized_keys') {
+        keys.push(...issue.keys.map((key) => `providers.${providerId}.${key}`));
+      }
+    }
+  }
+  if (file.web?.search) {
+    for (const issue of STRICT_WEB_SEARCH_SCHEMA.safeParse(file.web.search).error?.issues ?? []) {
+      if (issue.code === 'unrecognized_keys') {
+        keys.push(...issue.keys.map((key) => `web.search.${key}`));
+      }
+    }
+  }
+  return keys;
 }
 
 export function definedObject<T extends Record<string, unknown>>(value: T): Partial<T> {

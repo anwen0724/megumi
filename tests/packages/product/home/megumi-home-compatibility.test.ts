@@ -172,7 +172,8 @@ describe('Megumi Home foundation', () => {
         providers: {
           additionalProperties: {
             type: 'object',
-            additionalProperties: false,
+            // Provider files tolerate user-added fields.
+            additionalProperties: true,
             properties: {
               base_url: { type: 'string' },
               models: {

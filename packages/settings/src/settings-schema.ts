@@ -75,13 +75,26 @@ export const SettingsRawSchema = z.object({
 }).strict();
 export type SettingsRaw = z.infer<typeof SettingsRawSchema>;
 
+// Read projection for external files: unknown keys are tolerated at every
+// nesting level so user edits or future versions never break reading. The
+// patch contract above stays strict.
+export const SettingsRawReadSchema = z.object({
+  ...settingsShape,
+  web: z.object({
+    search: WebSearchSettingsRawSchema.passthrough().optional(),
+  }).strict().optional(),
+  providers: z.record(z.string().min(1), ProviderSettingsRawSchema.passthrough()).optional(),
+}).passthrough();
+
 // The internal file model is the only Settings model that can contain
 // plaintext credentials. It is deliberately not re-exported from index.ts.
+// Unknown keys are tolerated because the file is external input: user edits
+// or future versions must not make the whole file unreadable.
 export const SettingsFileRawSchema = z.object({
   ...settingsShape,
   web: z.object({ search: WebSearchSettingsFileRawSchema.optional() }).strict().optional(),
   providers: z.record(z.string().min(1), ProviderSettingsFileRawSchema).optional(),
-}).strict();
+}).passthrough();
 export type SettingsFileRaw = z.infer<typeof SettingsFileRawSchema>;
 
 export const SettingsResolvedSchema = z.object({
