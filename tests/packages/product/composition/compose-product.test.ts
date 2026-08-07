@@ -136,7 +136,8 @@ describe('composeProduct', () => {
       expect(firstContext.systemPrompt).toContain('<name>review</name>');
       const listDirectory = firstContext.tools?.find((tool) => tool.name === 'list_directory');
       expect(listDirectory).toMatchObject({
-        description: 'List files and directories.',
+        description: 'List files and directories. Returns up to 100 entries per page by default; when hasMore is true, continue with nextOffset. Use limit, offset, maxDepth, and includeHidden to control the traversal.',
+        promptSnippet: 'List files and directories.',
         parameters: {
           properties: {
             path: {
