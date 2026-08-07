@@ -26,7 +26,7 @@ export function buildSystemPrompt(sources: SystemPromptSources): string {
   const sections: string[] = [];
   const identity = renderIdentity(sources.systemInstructions);
   if (identity) sections.push(identity);
-  const guidance = renderBehaviorGuidelines(sources.systemInstructions);
+  const guidance = renderBehaviorGuidelines(sources.systemInstructions, sources.tools);
   if (guidance) sections.push(guidance);
   const effective = renderEffectiveInstructions(sources.effectiveInstructions);
   if (effective) sections.push(effective);
@@ -46,11 +46,20 @@ function renderIdentity(instructions: readonly SystemInstruction[]): string {
   return items.join(' ');
 }
 
-/** ② Behavior guidelines: fixed heading + one bullet per item, groups expanded in order. */
-function renderBehaviorGuidelines(instructions: readonly SystemInstruction[]): string {
-  const items = instructions
+/**
+ * ② Behavior guidelines: fixed heading + one bullet per item. Items come from two
+ * sources rendered as one flat list: system instruction guidance items first, then
+ * the promptGuidelines of tools visible in this ModelCall (tool order).
+ */
+function renderBehaviorGuidelines(
+  instructions: readonly SystemInstruction[],
+  tools: readonly ToolDefinition[],
+): string {
+  const systemItems = instructions
     .filter((instruction) => instructionSegment(instruction.instructionId) === 'guidance')
     .flatMap((instruction) => instruction.groups.flatMap((group) => group.items));
+  const toolGuidelines = tools.flatMap((tool) => tool.promptGuidelines ?? []);
+  const items = [...systemItems, ...toolGuidelines];
   if (items.length === 0) return '';
   return ['Behavior guidelines:', ...items.map((item) => `- ${item}`)].join('\n');
 }
@@ -60,10 +69,12 @@ function instructionSegment(instructionId: string): string {
   return instructionId.split('.').at(-1) ?? '';
 }
 
-/** ④ Available tools: a guidance line plus one line per tool with a folded, truncated description snippet. */
+/** ④ Available tools: a guidance line plus one line per tool; the promptSnippet wins over the folded, truncated description. */
 function renderAvailableTools(tools: readonly ToolDefinition[]): string {
   if (tools.length === 0) return '';
-  const lines = tools.map((tool) => `- ${tool.name}: ${snippetFromDescription(tool.description)}`);
+  const lines = tools.map((tool) => (
+    `- ${tool.name}: ${tool.promptSnippet ?? snippetFromDescription(tool.description)}`
+  ));
   return [
     '<available_tools>',
     '  In addition to the tools above, you may have access to other custom tools depending on the project.',

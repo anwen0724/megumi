@@ -38,7 +38,18 @@ function resolveContext(tools: readonly ToolDefinition[]) {
 }
 
 const tools: readonly ToolDefinition[] = [
-  { name: 'read_file', description: 'Read a file', parameters: { type: 'object' } },
+  {
+    name: 'read_file',
+    description: 'Read a file',
+    parameters: { type: 'object' },
+    promptSnippet: 'Read file contents.',
+  },
+  {
+    name: 'run_command',
+    description: 'Run a command and return output previews.',
+    parameters: { type: 'object' },
+    promptGuidelines: ['Command output is redacted; sensitive values are replaced before they reach you.'],
+  },
 ];
 
 describe('PromptBuilder', () => {
@@ -89,6 +100,15 @@ describe('PromptBuilder', () => {
     // Section guidance lines borrowed from pi's system prompt.
     expect(text).toContain('User and project-specific instructions and guidelines:');
     expect(text).toContain('In addition to the tools above, you may have access to other custom tools depending on the project.');
+    // Tool snippets render in the available tools section; missing snippets fall back to the folded description.
+    expect(text).toContain('- read_file: Read file contents.');
+    expect(text).toContain('- run_command: Run a command and return output previews.');
+    // Tool guidelines appear inside the behavior guidelines list after the system items.
+    const behavior = text.indexOf('Behavior guidelines:');
+    const systemItem = text.indexOf('- Be concise in your responses.');
+    const toolGuideline = text.indexOf('Command output is redacted; sensitive values are replaced before they reach you.');
+    expect(systemItem).toBeGreaterThan(behavior);
+    expect(toolGuideline).toBeGreaterThan(systemItem);
   });
 
   it('neither needs a ModelCallContext nor a full Model object', async () => {
