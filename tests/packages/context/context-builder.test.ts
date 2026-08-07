@@ -91,6 +91,10 @@ describe('Context.build', () => {
     expect(systemPrompt).toContain('<available_skills>');
     expect(systemPrompt).toContain('<name>review</name>');
     expect(systemPrompt).toContain('<location>/skills/review/SKILL.md</location>');
+    // The skill section keeps pi's guidance lines with the Megumi tool name.
+    expect(systemPrompt).toContain('The following skills provide specialized instructions for specific tasks.');
+    expect(systemPrompt).toContain('Use the read_file tool to load a skill\'s file when the task matches its description.');
+    expect(systemPrompt).toContain('resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.');
     // Explicit Skill body is never re-read by Context; it lives in the saved UserMessage.
     expect(JSON.stringify(result.prompt.messages)).not.toContain('Selected instructions.');
   });

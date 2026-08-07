@@ -86,6 +86,9 @@ describe('PromptBuilder', () => {
     // The guidance section renders as a bullet list without group markers.
     expect(text).toContain('- Be concise in your responses.');
     expect(text).not.toContain('communication');
+    // Section guidance lines borrowed from pi's system prompt.
+    expect(text).toContain('User and project-specific instructions and guidelines:');
+    expect(text).toContain('In addition to the tools above, you may have access to other custom tools depending on the project.');
   });
 
   it('neither needs a ModelCallContext nor a full Model object', async () => {

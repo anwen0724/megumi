@@ -60,11 +60,16 @@ function instructionSegment(instructionId: string): string {
   return instructionId.split('.').at(-1) ?? '';
 }
 
-/** ④ Available tools: one line per tool with a folded, truncated description snippet. */
+/** ④ Available tools: a guidance line plus one line per tool with a folded, truncated description snippet. */
 function renderAvailableTools(tools: readonly ToolDefinition[]): string {
   if (tools.length === 0) return '';
   const lines = tools.map((tool) => `- ${tool.name}: ${snippetFromDescription(tool.description)}`);
-  return `<available_tools>\n${lines.join('\n')}\n</available_tools>`;
+  return [
+    '<available_tools>',
+    '  In addition to the tools above, you may have access to other custom tools depending on the project.',
+    ...lines,
+    '</available_tools>',
+  ].join('\n');
 }
 
 /** Fold newlines and repeated whitespace, then truncate the description to one line. */
@@ -86,7 +91,12 @@ export function renderEffectiveInstructions(instructions: EffectiveInstructions)
       '  </instruction>',
     ].join('\n')
   ));
-  return `<effective_instructions>\n${entries.join('\n')}\n</effective_instructions>`;
+  return [
+    '<effective_instructions>',
+    '  User and project-specific instructions and guidelines:',
+    ...entries,
+    '</effective_instructions>',
+  ].join('\n');
 }
 
 export function renderSkillCatalog(skills: SkillView): string {
@@ -100,7 +110,13 @@ export function renderSkillCatalog(skills: SkillView): string {
       '  </skill>',
     ].join('\n')
   ));
-  return `<available_skills>\n${entries.join('\n')}\n</available_skills>`;
+  return [
+    'The following skills provide specialized instructions for specific tasks.',
+    'Use the read_file tool to load a skill\'s file when the task matches its description.',
+    'When a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.',
+    '',
+    `<available_skills>\n${entries.join('\n')}\n</available_skills>`,
+  ].join('\n');
 }
 
 export function renderExecutionEnvironment(environment: ExecutionEnvironment): string {
