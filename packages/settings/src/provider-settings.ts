@@ -1,18 +1,48 @@
 /* Defines Provider settings and projects model facts owned by @megumi/ai. */
 import { z } from 'zod';
 import type { SettingsEnvironment } from './settings-environment';
-import {
-  ModelCapabilitiesSchema,
-  ResolvedModelCapabilitiesSchema,
-  UNKNOWN_MODEL_CAPABILITIES,
-  capabilitiesFromModel,
-  type ResolvedModelCapabilities,
-} from './model-capability';
 import { builtinProviders } from '@megumi/ai/providers/all';
+import type { Api, Model } from '@megumi/ai';
 import type {
   ReadApiKeyResult,
   SettingsFailureResult,
 } from './settings-schema';
+
+export const ModelSupportLevelSchema = z.union([z.boolean(), z.literal('unknown')]);
+export type ModelSupportLevel = z.infer<typeof ModelSupportLevelSchema>;
+
+export const ModelCapabilitiesSchema = z.object({
+  streaming: ModelSupportLevelSchema.optional(),
+  toolCalls: ModelSupportLevelSchema.optional(),
+  thinking: ModelSupportLevelSchema.optional(),
+  imageInput: ModelSupportLevelSchema.optional(),
+}).strict();
+export type ModelCapabilities = z.infer<typeof ModelCapabilitiesSchema>;
+
+export const ResolvedModelCapabilitiesSchema = z.object({
+  streaming: ModelSupportLevelSchema,
+  toolCalls: ModelSupportLevelSchema,
+  thinking: ModelSupportLevelSchema,
+  imageInput: ModelSupportLevelSchema,
+}).strict();
+export type ResolvedModelCapabilities = z.infer<typeof ResolvedModelCapabilitiesSchema>;
+
+export const UNKNOWN_MODEL_CAPABILITIES: ResolvedModelCapabilities = Object.freeze({
+  streaming: 'unknown',
+  toolCalls: 'unknown',
+  thinking: 'unknown',
+  imageInput: 'unknown',
+});
+
+/** Product-facing model capabilities derived from provider-neutral Model facts. */
+export function capabilitiesFromModel(model: Model<Api>): ResolvedModelCapabilities {
+  return {
+    streaming: true,
+    toolCalls: true,
+    thinking: model.reasoning,
+    imageInput: model.input.includes('image'),
+  };
+}
 
 export const ProviderIdSchema = z.string().min(1);
 export type ProviderId = z.infer<typeof ProviderIdSchema>;
