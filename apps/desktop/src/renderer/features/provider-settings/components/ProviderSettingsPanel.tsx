@@ -132,12 +132,14 @@ function createNewProviderFormState(): ProviderFormState {
   };
 }
 
-function providerIconClassName(selected: boolean): string {
+function providerIconClassName(selected: boolean, configured = false): string {
   return cx(
     'grid h-8 w-8 shrink-0 place-items-center rounded-md ring-1',
     selected
       ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] ring-[var(--color-accent)]/35'
-      : 'bg-[var(--color-surface-muted)] text-[var(--color-text-muted)] ring-[var(--color-border)]',
+      : configured
+        ? 'bg-[var(--color-accent-soft)]/45 text-[var(--color-accent)] ring-[var(--color-accent)]/25'
+        : 'bg-[var(--color-surface-muted)] text-[var(--color-text-muted)] ring-[var(--color-border)]',
   );
 }
 
@@ -223,7 +225,9 @@ export function ProviderSettingsPanel() {
   useEffect(() => {
     if (selectedProviderId === newProviderId) return;
     if (selectedProviderId && entries.some((entry) => entry.providerId === selectedProviderId)) return;
-    setSelectedProviderId(entries[0]?.providerId ?? null);
+    // Default to the first configured provider; unconfigured catalog entries stay unselected.
+    const firstSaved = entries.find((entry) => entry.source === 'saved');
+    setSelectedProviderId(firstSaved?.providerId ?? null);
   }, [entries, selectedProviderId]);
 
   useEffect(() => {
@@ -406,7 +410,7 @@ export function ProviderSettingsPanel() {
             />
           </label>
 
-          <div className="mt-4 space-y-2">
+          <div className="mt-4 max-h-[min(24rem,45vh)] space-y-2 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">
             {isCreating ? (
               <ProviderListItem
                 entry={{ source: 'draft', providerId: newProviderId, displayName: selectedForm.provider || t('provider.newProvider'), protocol: selectedForm.protocol }}
@@ -442,10 +446,12 @@ export function ProviderSettingsPanel() {
                   <div className={providerIconClassName(true)}><Bot size={19} aria-hidden="true" /></div>
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <h2 className="truncate text-lg font-semibold text-[var(--color-text)]">{selectedForm.provider || t('provider.newProvider')}</h2>
-                    <Badge variant={selectedForm.enabled ? 'success' : 'neutral'}>
-                      <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-current" />
-                      {selectedForm.enabled ? t('provider.enabled') : t('provider.disabled')}
-                    </Badge>
+                    {selectedEntry?.source === 'saved' ? (
+                      <Badge variant={selectedForm.enabled ? 'success' : 'neutral'}>
+                        <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-current" />
+                        {selectedForm.enabled ? t('provider.enabled') : t('provider.disabled')}
+                      </Badge>
+                    ) : null}
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
@@ -683,15 +689,19 @@ const compactFieldClassName = 'h-9 w-full rounded-md border border-[var(--color-
 function ProviderListItem({ entry, modelCount, selected, onClick }: { entry: ProviderListEntry; modelCount: number; selected: boolean; onClick: () => void }) {
   const { t } = useTranslation('settings');
   const enabled = entry.source !== 'saved' || entry.provider.enabled;
+  const configured = entry.source === 'saved';
   return (
     <button type="button" onClick={onClick} className={cx(
       'relative flex w-full items-center gap-3 rounded-md px-3 py-2 text-left transition',
       'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
-      selected ? 'bg-[var(--color-surface-elevated)] text-[var(--color-text)] shadow-sm' : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-elevated)]/70 hover:text-[var(--color-text)]',
-      entry.source === 'quick' ? selected ? 'opacity-75' : 'opacity-55 hover:opacity-80' : undefined,
+      selected
+        ? 'bg-[var(--color-surface-elevated)] text-[var(--color-text)] shadow-sm'
+        : configured
+          ? 'bg-[var(--color-accent-soft)]/50 text-[var(--color-text)]'
+          : 'text-[var(--color-text-muted)] opacity-60 hover:opacity-90 hover:text-[var(--color-text)]',
     )}>
       {selected ? <span className="absolute inset-y-0 left-0 w-0.5 rounded-full bg-[var(--color-accent)]" /> : null}
-      <span className={providerIconClassName(selected)}><Bot size={18} aria-hidden="true" /></span>
+      <span className={providerIconClassName(selected, configured)}><Bot size={18} aria-hidden="true" /></span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold">{entry.displayName}</span>
         {!enabled ? <span className="mt-0.5 block text-xs text-[var(--color-text-subtle)]">{t('provider.disabled')}</span> : null}

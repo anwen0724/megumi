@@ -85,17 +85,96 @@ describe('ProviderSettingsPanel', () => {
     expect(screen.queryByText('Models configured here appear in the chat composer model picker.')).not.toBeInTheDocument();
   });
 
-  it('prefills an unsaved provider from the AI Catalog', () => {
+  it('shows the empty selection state until an unconfigured provider is chosen', async () => {
+    const user = userEvent.setup();
     useProviderStore.setState({ providers: [] });
 
     render(<ProviderSettingsPanel />);
+
+    expect(screen.queryByLabelText('Provider')).not.toBeInTheDocument();
+    expect(screen.getByText('Select or add a provider')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^DeepSeek/ }));
 
     expect(screen.getByLabelText('Provider')).toHaveValue('DeepSeek');
     expect(screen.getByLabelText('Base URL')).toHaveValue('https://api.deepseek.com');
     expect(screen.getByRole('button', { name: 'Edit DeepSeek V4 Flash' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit DeepSeek V4 Pro' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^DeepSeek/ })).toHaveClass('opacity-75');
-    expect(screen.getByRole('button', { name: /^OpenAI/ })).toHaveClass('opacity-55');
+  });
+
+  it('defaults the selection to the first configured provider, skipping unconfigured ones', () => {
+    useProviderStore.setState({
+      providers: [{
+        providerId: 'openai',
+        displayName: 'OpenAI',
+        protocol: 'openai-completions',
+        enabled: true,
+        baseUrl: 'https://api.openai.com/v1',
+        modelIds: ['gpt-5.5'],
+        hasApiKey: true,
+        credentialSource: 'environment',
+        envOverrideActive: true,
+        apiKeyEnv: 'OPENAI_API_KEY',
+        apiKeyEnvCustomized: false,
+      }],
+    });
+
+    render(<ProviderSettingsPanel />);
+
+    // Catalog lists DeepSeek first, but only OpenAI is configured.
+    expect(screen.getByLabelText('Provider')).toHaveValue('openai');
+  });
+
+  it('shows the enabled badge only for configured providers', async () => {
+    const user = userEvent.setup();
+    useProviderStore.setState({
+      catalog: [...useProviderStore.getState().catalog, {
+        providerId: 'Anthropic',
+        displayName: 'Anthropic',
+        protocol: 'anthropic-messages',
+        defaultBaseUrl: 'https://api.anthropic.com',
+        models: [{
+          modelId: 'claude-sonnet-5',
+          displayName: 'Claude Sonnet 5',
+          contextWindowTokens: 1_000_000,
+          capabilities,
+        }],
+      }],
+    });
+
+    render(<ProviderSettingsPanel />);
+
+    // The default selection is configured, so the badge is visible.
+    expect(screen.getByText('Enabled')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^Anthropic/ }));
+
+    expect(screen.queryByText('Enabled')).not.toBeInTheDocument();
+    expect(screen.queryByText('Disabled')).not.toBeInTheDocument();
+  });
+
+  it('highlights configured providers and keeps unconfigured ones muted', () => {
+    useProviderStore.setState({
+      catalog: [...useProviderStore.getState().catalog, {
+        providerId: 'Anthropic',
+        displayName: 'Anthropic',
+        protocol: 'anthropic-messages',
+        defaultBaseUrl: 'https://api.anthropic.com',
+        models: [{
+          modelId: 'claude-sonnet-5',
+          displayName: 'Claude Sonnet 5',
+          contextWindowTokens: 1_000_000,
+          capabilities,
+        }],
+      }],
+    });
+
+    render(<ProviderSettingsPanel />);
+
+    // OpenAI is configured but not selected: it keeps the configured highlight.
+    expect(screen.getByRole('button', { name: /^OpenAI/ })).toHaveClass('bg-[var(--color-accent-soft)]/50');
+    // Anthropic is unconfigured: muted, no highlight.
+    expect(screen.getByRole('button', { name: /^Anthropic/ })).toHaveClass('opacity-60');
   });
 
   it('updates the selected provider settings from the detail pane', async () => {
