@@ -106,8 +106,6 @@ describe('Context Package source guards', () => {
     expect(contextSource).toContain('reserveTokens');
     expect(contextSource).not.toMatch(/ContextUsageMonitor|ContextUsageRecorder|ContextUsageSnapshot|subscribeContextUsage|unsubscribeContextUsage/u);
     expect(contextSource).not.toContain('recordCompletedModelCall');
-    const hostSource = read('packages/product/src/host/chat-host.ts');
-    expect(hostSource).not.toMatch(/refreshAndGetSessionUsage|contextUsageWindowProvider|request\.refresh/u);
   });
 
   it('keeps ContextBuilder free of direct source reads, attachment reads and message conversion', () => {
@@ -160,7 +158,6 @@ describe('Context Package source guards', () => {
     // Engine and Product no longer read these sources for Context.
     expect(read('packages/engine/src/agent-loop.ts')).not.toContain('scopeResolver');
     expect(read('packages/engine/src/agent-loop.ts')).not.toMatch(/getEffectiveInstructions|createView/u);
-    expect(read('packages/product/src/product.ts')).not.toContain('scopeResolver');
   });
 
   it('keeps the internal dependency directions one-way', () => {

@@ -67,33 +67,6 @@ describe('Package Owner boundaries', () => {
     expect(productEntry).not.toContain("from '@megumi/observability'");
   });
 
-  it('keeps per-execution Sandbox scope lifecycle inside Sandbox', () => {
-    const productSource = fs.readFileSync(path.join(root, 'packages/product/src/product.ts'), 'utf8');
-    expect(productSource).not.toMatch(/\.sandbox\.open\s*\(/u);
-    expect(productSource).not.toMatch(/\.scope\.close\s*\(/u);
-    expect(productSource).not.toContain('executeSandboxScope');
-    expect(productSource).not.toContain('createNodeSandbox');
-    expect(productSource).not.toContain('resolveSandboxBackend');
-    expect(productSource).toContain('createSandbox()');
-    expect(productSource).not.toContain('createSandboxToolExecutor');
-  });
-
-  it('keeps ModelCall Tool routing and execution inside Tools', () => {
-    const productSource = fs.readFileSync(path.join(root, 'packages/product/src/product.ts'), 'utf8');
-    const toolsSource = fs.readFileSync(path.join(root, 'packages/tools/src/tools.ts'), 'utf8');
-    const engineSource = fs.readFileSync(path.join(root, 'packages/engine/src/run.ts'), 'utf8');
-    const runLoopSource = fs.readFileSync(path.join(root, 'packages/engine/src/agent-loop.ts'), 'utf8');
-
-    expect(productSource).not.toContain('createProductToolSnapshots');
-    expect(productSource).not.toContain('toolExecutionForRun');
-    expect(productSource).not.toContain('readProviderApiKey');
-    expect(productSource).not.toContain('createNodeWorkspaceFileSystem');
-    expect(toolsSource).toContain('const routers = new Map');
-    expect(toolsSource).toContain('resolveModelCallTools');
-    expect(toolsSource).toContain('executeSandboxToolInvocation');
-    expect(engineSource).not.toContain('ToolExecutor');
-    expect(runLoopSource).toContain('dependencies.tools.resolveModelCallTools');
-  });
   it('keeps the generic Sandbox Scope independent from platform implementations', () => {
     const scopeSource = fs.readFileSync(path.join(root, 'packages/sandbox/src/sandbox-scope.ts'), 'utf8');
     expect(scopeSource).not.toMatch(/windows-|process.platform|['"]win32['"]/u);

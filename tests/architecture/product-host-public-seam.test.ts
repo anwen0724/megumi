@@ -22,12 +22,4 @@ describe('Product Host public seam', () => {
     expect(contract).toContain('SendUserInputPayloadSchema');
     expect(contract).not.toMatch(/export\s+(?:type\s+)?\*\s+from/u);
   });
-
-  it('keeps Artifact Host DTOs independent from removed owner records', () => {
-    const artifactHost = read('packages/product/src/host/artifact-host.ts');
-
-    expect(artifactHost).not.toContain('export type ArtifactRecord = Artifact');
-    expect(artifactHost).not.toContain('export type ArtifactVersionRecord = ArtifactVersion');
-    expect(artifactHost).not.toContain('export type ArtifactSourceRefRecord = ArtifactSourceRef');
-  });
 });

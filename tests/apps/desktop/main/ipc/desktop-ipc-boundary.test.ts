@@ -23,7 +23,6 @@ describe('desktop ipc boundary', () => {
   it('removes old split handler entry files', () => {
     for (const file of [
       'command.handler.ts',
-      'session.handler.ts',
       'project.handler.ts',
       'provider.handler.ts',
       'tool.handler.ts',

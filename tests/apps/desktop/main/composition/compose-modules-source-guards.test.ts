@@ -26,10 +26,9 @@ describe('Desktop Main shell composition', () => {
     expect(desktopComposition).toContain('workspace: { host: productHost }');
     expect(desktopComposition).toContain('directoryPicker: electronDirectoryPickerAdapter');
     expect(desktopComposition).toContain('fileOpen: electronFileOpenAdapter');
-    expect(desktopComposition).toContain('chat: { host: productHost }');
+    expect(desktopComposition).toContain('session: { host: productHost }');
     expect(desktopComposition).toContain('settings: { host: productHost }');
     expect(desktopComposition).toContain('approval: { host: productHost }');
-    expect(desktopComposition).toContain('artifact: productHost.artifacts');
     expect(desktopComposition).not.toContain('composeAgentRuntime');
     expect(desktopComposition).not.toContain('runHandlers:');
     expect(desktopComposition).not.toContain('runContextService:');
