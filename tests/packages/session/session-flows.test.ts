@@ -210,14 +210,12 @@ describe('session service flows', () => {
     const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', display_content: text('m1'), model_content: text('m1'), created_at: '2026-07-04T00:01:00.000Z' });
     const m2 = service.saveAssistantReply({ message_id: 'M2', session_id: 'S1', run_id: 'R1', status: 'completed', reason_code: 'normal_completion', content: text('m2'), completed_at: '2026-07-04T00:02:00.000Z' });
     const firstKeptEntryId = m2.status === 'saved' ? m2.entry.entry_id : undefined;
-    service.saveCompactionSummary({
-      compaction_id: 'C1',
-      session_id: 'S1',
-      summary_text: 'm1 summary',
-      covered_until_entry_id: m1.status === 'saved' ? m1.entry.entry_id : 'missing',
-      first_kept_entry_id: firstKeptEntryId,
-      created_at: '2026-07-04T00:03:00.000Z',
-      append_to_active_path: true,
+    completeCompaction(service, {
+      compactionId: 'C1',
+      summaryText: 'm1 summary',
+      coveredUntilEntryId: m1.status === 'saved' ? m1.entry.entry_id : 'missing',
+      firstKeptEntryId,
+      completedAt: '2026-07-04T00:03:00.000Z',
     });
 
     const activeMessages = service.listMessages({ session_id: 'S1', active_path_only: true });
@@ -240,14 +238,12 @@ describe('session service flows', () => {
     const m2 = service.saveAssistantReply({ message_id: 'M2', session_id: 'S1', run_id: 'R1', status: 'completed', reason_code: 'normal_completion', content: text('m2'), completed_at: '2026-07-04T00:02:00.000Z' });
     const m3 = await service.saveUserMessage({ message_id: 'M3', session_id: 'S1', run_id: 'R2', display_content: text('m3'), model_content: text('m3'), created_at: '2026-07-04T00:03:00.000Z' });
     service.saveAssistantReply({ message_id: 'M4', session_id: 'S1', run_id: 'R2', status: 'completed', reason_code: 'normal_completion', content: text('m4'), completed_at: '2026-07-04T00:04:00.000Z' });
-    service.saveCompactionSummary({
-      compaction_id: 'C1',
-      session_id: 'S1',
-      summary_text: 'm1 and m2 summary',
-      covered_until_entry_id: m2.status === 'saved' ? m2.entry.entry_id : 'missing',
-      first_kept_entry_id: m3.status === 'saved' ? m3.entry.entry_id : undefined,
-      created_at: '2026-07-04T00:05:00.000Z',
-      append_to_active_path: true,
+    completeCompaction(service, {
+      compactionId: 'C1',
+      summaryText: 'm1 and m2 summary',
+      coveredUntilEntryId: m2.status === 'saved' ? m2.entry.entry_id : 'missing',
+      firstKeptEntryId: m3.status === 'saved' ? m3.entry.entry_id : undefined,
+      completedAt: '2026-07-04T00:05:00.000Z',
     });
 
     const conversation = service.getActiveConversationHistory({ session_id: 'S1' });
@@ -270,17 +266,17 @@ describe('session service flows', () => {
     const m4 = service.saveAssistantReply({ message_id: 'M4', session_id: 'S1', run_id: 'R2', status: 'completed', reason_code: 'normal_completion', content: text('m4'), completed_at: '2026-07-04T00:04:00.000Z' });
     const m5 = await service.saveUserMessage({ message_id: 'M5', session_id: 'S1', run_id: 'R3', display_content: text('m5'), model_content: text('m5'), created_at: '2026-07-04T00:05:00.000Z' });
     service.saveAssistantReply({ message_id: 'M6', session_id: 'S1', run_id: 'R3', status: 'completed', reason_code: 'normal_completion', content: text('m6'), completed_at: '2026-07-04T00:06:00.000Z' });
-    service.saveCompactionSummary({
-      compaction_id: 'C1', session_id: 'S1', summary_text: 'first summary',
-      covered_until_entry_id: m2.status === 'saved' ? m2.entry.entry_id : 'missing',
-      first_kept_entry_id: m3.status === 'saved' ? m3.entry.entry_id : undefined,
-      created_at: '2026-07-04T00:07:00.000Z', append_to_active_path: true,
+    completeCompaction(service, {
+      compactionId: 'C1', summaryText: 'first summary',
+      coveredUntilEntryId: m2.status === 'saved' ? m2.entry.entry_id : 'missing',
+      firstKeptEntryId: m3.status === 'saved' ? m3.entry.entry_id : undefined,
+      completedAt: '2026-07-04T00:07:00.000Z',
     });
-    service.saveCompactionSummary({
-      compaction_id: 'C2', session_id: 'S1', summary_text: 'replacement summary',
-      covered_until_entry_id: m4.status === 'saved' ? m4.entry.entry_id : 'missing',
-      first_kept_entry_id: m5.status === 'saved' ? m5.entry.entry_id : undefined,
-      created_at: '2026-07-04T00:08:00.000Z', append_to_active_path: true,
+    completeCompaction(service, {
+      compactionId: 'C2', summaryText: 'replacement summary',
+      coveredUntilEntryId: m4.status === 'saved' ? m4.entry.entry_id : 'missing',
+      firstKeptEntryId: m5.status === 'saved' ? m5.entry.entry_id : undefined,
+      completedAt: '2026-07-04T00:08:00.000Z',
     });
 
     const conversation = service.getActiveConversationHistory({ session_id: 'S1' });
@@ -297,4 +293,28 @@ describe('session service flows', () => {
 
 function text(value: string) {
   return [{ type: 'text' as const, text: value }];
+}
+
+function completeCompaction(
+  service: ReturnType<typeof createService>,
+  request: {
+    readonly compactionId: string;
+    readonly summaryText: string;
+    readonly coveredUntilEntryId: string;
+    readonly firstKeptEntryId?: string;
+    readonly completedAt: string;
+  },
+): void {
+  expect(service.beginCompaction({
+    compactionId: request.compactionId,
+    sessionId: 'S1',
+    anchorEntryId: request.coveredUntilEntryId,
+    trigger: 'manual',
+    startedAt: request.completedAt,
+  }).status).toBe('started');
+  expect(service.completeCompaction({
+    ...request,
+    sessionId: 'S1',
+    appendToActivePath: true,
+  }).status).toBe('completed');
 }

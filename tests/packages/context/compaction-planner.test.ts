@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import type { Message } from '@megumi/ai';
 import {
   planCompaction,
-  validateCompactionReduction,
 } from '../../../packages/context/src/compaction/compaction-planner';
 import type { CompactionMessageSource } from '../../../packages/context/src/prompt/context-message-builder';
 import { DEFAULT_COMPACTION_POLICY } from '../../../packages/context/src/index';
@@ -175,7 +174,7 @@ describe('planCompaction', () => {
     expect(plan).toEqual({ status: 'nothing_to_compact', reason: 'no_older_messages' });
   });
 
-  it('keeps empty and non-reducing outcomes distinct', () => {
+  it('keeps the two pre-execution empty outcomes distinct', () => {
     expect(planCompaction({
       sources: [],
       policy: DEFAULT_COMPACTION_POLICY,
@@ -186,9 +185,5 @@ describe('planCompaction', () => {
       policy: { ...DEFAULT_COMPACTION_POLICY, keepRecentTokens: 1, minimumRecentMessages: 2 },
       estimateMessageTokens: estimateTokens,
     })).toEqual({ status: 'nothing_to_compact', reason: 'no_older_messages' });
-    expect(validateCompactionReduction({
-      usageBeforeInputTokens: 20,
-      usageAfterInputTokens: 20,
-    })).toEqual({ status: 'nothing_to_compact', reason: 'summary_not_reducing' });
   });
 });

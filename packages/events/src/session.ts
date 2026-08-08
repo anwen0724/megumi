@@ -18,16 +18,25 @@ export const CompactionStartedPayloadSchema = z.object({
   compactionId: z.string().min(1),
 }).strict();
 
-export const CompactionEndedPayloadSchema = z.object({
-  /** How the compaction ended — the status is the outcome, like tool_execution.ended. */
-  status: z.enum(['completed', 'failed']),
-  /** Reference to the stored compaction summary. */
-  compactionId: z.string().min(1),
-  error: z.object({
-    message: z.string().min(1),
-    code: z.string().optional(),
-  }).optional(),
+const CompactionErrorSchema = z.object({
+  message: z.string().min(1),
+  code: z.string().optional(),
 }).strict();
+
+export const CompactionEndedPayloadSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('completed'), compactionId: z.string().min(1) }).strict(),
+  z.object({
+    status: z.literal('failed'),
+    compactionId: z.string().min(1),
+    error: CompactionErrorSchema,
+  }).strict(),
+  z.object({ status: z.literal('cancelled'), compactionId: z.string().min(1) }).strict(),
+  z.object({
+    status: z.literal('interrupted'),
+    compactionId: z.string().min(1),
+    error: CompactionErrorSchema,
+  }).strict(),
+]);
 
 export const BranchMarkerCreatedPayloadSchema = z.object({
   /** Reference to the stored branch marker. */

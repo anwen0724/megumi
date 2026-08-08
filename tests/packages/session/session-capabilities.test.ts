@@ -537,14 +537,13 @@ describe('Session capabilities', () => {
     await service.createSession({ workspace_id: workspaceId, title: 'Session' });
     const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', display_content: [{ type: 'text', text: 'm1' }], model_content: [{ type: 'text', text: 'm1' }], created_at: '2026-07-04T00:01:00.000Z' });
     const firstEntryId = m1.status === 'saved' ? m1.entry.entry_id : 'missing';
-    await service.saveUserMessage({ message_id: 'M2', session_id: 'S1', display_content: [{ type: 'text', text: 'm2' }], model_content: [{ type: 'text', text: 'm2' }], created_at: '2026-07-04T00:02:00.000Z' });
-    await service.saveCompactionSummary({
-      compaction_id: 'C1',
-      session_id: 'S1',
-      summary_text: 'Earlier summary',
-      covered_until_entry_id: firstEntryId,
-      created_at: '2026-07-04T00:03:00.000Z',
-      append_to_active_path: true,
+    const m2 = await service.saveUserMessage({ message_id: 'M2', session_id: 'S1', display_content: [{ type: 'text', text: 'm2' }], model_content: [{ type: 'text', text: 'm2' }], created_at: '2026-07-04T00:02:00.000Z' });
+    completeCompaction(service, {
+      compactionId: 'C1',
+      summaryText: 'Earlier summary',
+      coveredUntilEntryId: firstEntryId,
+      firstKeptEntryId: m2.status === 'saved' ? m2.entry.entry_id : undefined,
+      completedAt: '2026-07-04T00:03:00.000Z',
     });
 
     const result = await service.getActiveHistory({ session_id: 'S1' });
@@ -563,16 +562,24 @@ describe('Session capabilities', () => {
     const firstEntryId = first.status === 'saved' ? first.entry.entry_id : 'missing';
     const expectedHead = second.status === 'saved' ? second.entry.entry_id : 'missing';
 
+    expect(service.beginCompaction({
+      compactionId: 'C-stale',
+      sessionId: 'S1',
+      anchorEntryId: firstEntryId,
+      trigger: 'manual',
+      startedAt: '2026-07-04T00:03:30.000Z',
+    }).status).toBe('started');
+
     await service.saveUserMessage({ message_id: 'M3', session_id: 'S1', display_content: [{ type: 'text', text: 'new branch head' }], model_content: [{ type: 'text', text: 'new branch head' }], created_at: '2026-07-04T00:03:00.000Z' });
 
-    expect(service.saveCompactionSummary({
-      compaction_id: 'C-stale',
-      session_id: 'S1',
-      summary_text: 'must not persist',
-      covered_until_entry_id: firstEntryId,
-      expected_active_entry_id: expectedHead,
-      created_at: '2026-07-04T00:04:00.000Z',
-      append_to_active_path: true,
+    expect(service.completeCompaction({
+      compactionId: 'C-stale',
+      sessionId: 'S1',
+      summaryText: 'must not persist',
+      coveredUntilEntryId: firstEntryId,
+      expectedActiveEntryId: expectedHead,
+      completedAt: '2026-07-04T00:04:00.000Z',
+      appendToActivePath: true,
     })).toMatchObject({
       status: 'failed',
       failure: { code: 'active_entry_changed' },
@@ -772,3 +779,27 @@ describe('Session capabilities', () => {
     });
   });
 });
+
+function completeCompaction(
+  service: ReturnType<typeof createService>['service'],
+  request: {
+    readonly compactionId: string;
+    readonly summaryText: string;
+    readonly coveredUntilEntryId: string;
+    readonly firstKeptEntryId?: string;
+    readonly completedAt: string;
+  },
+): void {
+  expect(service.beginCompaction({
+    compactionId: request.compactionId,
+    sessionId: 'S1',
+    anchorEntryId: request.coveredUntilEntryId,
+    trigger: 'manual',
+    startedAt: request.completedAt,
+  }).status).toBe('started');
+  expect(service.completeCompaction({
+    ...request,
+    sessionId: 'S1',
+    appendToActivePath: true,
+  }).status).toBe('completed');
+}

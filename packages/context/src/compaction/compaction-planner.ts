@@ -8,7 +8,6 @@
 
 import type { Message } from '@megumi/ai';
 import type { CompactionPolicy } from '../context-policy';
-import { validateTokenCount } from '../context-policy';
 import type { CompactionMessageSource } from '../prompt/context-message-builder';
 
 export interface CompactionPlan {
@@ -28,7 +27,7 @@ export type PlanCompactionResult =
   | { readonly status: 'planned'; readonly plan: CompactionPlan }
   | {
       readonly status: 'nothing_to_compact';
-      readonly reason: 'no_historical_messages' | 'no_older_messages' | 'summary_not_reducing';
+      readonly reason: 'no_historical_messages' | 'no_older_messages';
     };
 
 export function planCompaction(input: {
@@ -84,20 +83,6 @@ export function planCompaction(input: {
     return { status: 'nothing_to_compact', reason: 'no_older_messages' };
   }
   return { status: 'planned', plan };
-}
-
-export function validateCompactionReduction(input: {
-  readonly usageBeforeInputTokens: number;
-  readonly usageAfterInputTokens: number;
-}): { readonly status: 'valid' } | {
-  readonly status: 'nothing_to_compact';
-  readonly reason: 'summary_not_reducing';
-} {
-  validateTokenCount(input.usageBeforeInputTokens, 'usageBeforeInputTokens');
-  validateTokenCount(input.usageAfterInputTokens, 'usageAfterInputTokens');
-  return input.usageAfterInputTokens < input.usageBeforeInputTokens
-    ? { status: 'valid' }
-    : { status: 'nothing_to_compact', reason: 'summary_not_reducing' };
 }
 
 /**

@@ -309,7 +309,7 @@ function projectRuntimeTimelineEvent(
       ? event.payload.status === 'completed' ? 'completed' : 'failed'
       : 'running';
     item.label = event.type === 'session.compaction.ended'
-      ? event.payload.status === 'completed' ? '已完成压缩' : `上下文压缩失败：${event.payload.error?.message ?? ''}`
+      ? compactionTerminalLabel(event.payload)
       : '正在压缩上下文';
     item.updatedAt = event.createdAt;
     process.updatedAt = event.createdAt;
@@ -363,6 +363,16 @@ function projectRuntimeTimelineEvent(
   }
 
   return nextMessages;
+}
+
+/** Keeps the migration-time Timeline exhaustive over every persisted Compaction terminal state. */
+function compactionTerminalLabel(
+  payload: Extract<AnyEvent, { type: 'session.compaction.ended' }>['payload'],
+): string {
+  if (payload.status === 'completed') return '已完成压缩';
+  if (payload.status === 'cancelled') return '上下文压缩已取消';
+  if (payload.status === 'interrupted') return `上下文压缩已中断：${payload.error.message}`;
+  return `上下文压缩失败：${payload.error.message}`;
 }
 
 function cloneMessages(messages: TimelineMessage[]): TimelineMessage[] {

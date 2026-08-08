@@ -50,7 +50,10 @@ import {
 } from './compaction/context-compactor';
 
 export interface CreateContextOptions {
-  readonly sessionHistory: Pick<SessionHistory, 'getActiveHistory' | 'saveCompactionSummary'>;
+  readonly sessionHistory: Pick<
+    SessionHistory,
+    'getActiveHistory' | 'beginCompaction' | 'completeCompaction' | 'endCompaction'
+  >;
   readonly attachmentReader: Pick<SessionAttachmentReader, 'readAttachmentContent'>;
   /** Workspace seam: Context resolves the Workspace root and execution environment itself. */
   readonly workspaceSource: ContextWorkspaceSource;

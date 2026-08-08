@@ -76,8 +76,6 @@ export type {
   ListUserMessagesByRunIdsResult,
   SaveAssistantReplyRequest,
   SaveAssistantReplyResult,
-  SaveCompactionSummaryRequest,
-  SaveCompactionSummaryResult,
   SaveMessageResult,
   SaveModelResponseRequest,
   SaveModelResponseResult,

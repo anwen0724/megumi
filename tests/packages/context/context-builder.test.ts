@@ -21,7 +21,42 @@ function fixture(tokens = 50): CreateContextOptions {
   return {
     sessionHistory: {
       getActiveHistory: vi.fn(() => ({ status: 'ok' as const, history: history() })),
-      saveCompactionSummary: vi.fn(),
+      beginCompaction: vi.fn((request) => ({
+        status: 'started' as const,
+        compaction: {
+          compactionId: request.compactionId,
+          sessionId: request.sessionId,
+          anchorEntryId: request.anchorEntryId,
+          trigger: request.trigger,
+          status: 'running' as const,
+          startedAt: request.startedAt,
+        },
+      })),
+      completeCompaction: vi.fn((request) => ({
+        status: 'completed' as const,
+        compaction: {
+          compactionId: request.compactionId,
+          sessionId: request.sessionId,
+          anchorEntryId: request.coveredUntilEntryId,
+          trigger: 'threshold' as const,
+          status: 'completed' as const,
+          startedAt: '2026-07-12T00:00:00.000Z',
+          completedAt: request.completedAt,
+        },
+      })),
+      endCompaction: vi.fn((request) => ({
+        status: 'ended' as const,
+        compaction: {
+          compactionId: request.compactionId,
+          sessionId: request.sessionId,
+          anchorEntryId: 'entry:user:1',
+          trigger: 'threshold' as const,
+          status: request.status,
+          ...(request.error ? { error: request.error } : {}),
+          startedAt: '2026-07-12T00:00:00.000Z',
+          completedAt: request.completedAt,
+        },
+      })),
     },
     attachmentReader: {
       readAttachmentContent: vi.fn(async () => ({
@@ -456,17 +491,45 @@ describe('Context.build', () => {
             history: reads === 1 ? fullHistory : compactedHistory,
           };
         }),
-        saveCompactionSummary: vi.fn(() => {
+        beginCompaction: vi.fn((request) => ({
+          status: 'started' as const,
+          compaction: {
+            compactionId: request.compactionId,
+            sessionId: request.sessionId,
+            anchorEntryId: request.anchorEntryId,
+            trigger: request.trigger,
+            status: 'running' as const,
+            startedAt: request.startedAt,
+          },
+        })),
+        completeCompaction: vi.fn((request) => {
           order.push('save');
-          return { status: 'saved' as const, compaction: {
-            compaction_id: 'compaction:1',
-            session_id: 'session:1',
-            summary_text: 'replacement summary',
-            covered_until_entry_id: 'entry:user:2',
-            first_kept_entry_id: 'entry:assistant:2',
-            created_at: 'now',
-          } };
+          return {
+            status: 'completed' as const,
+            compaction: {
+              compactionId: request.compactionId,
+              sessionId: request.sessionId,
+              anchorEntryId: request.coveredUntilEntryId,
+              trigger: 'threshold' as const,
+              status: 'completed' as const,
+              startedAt: '2026-07-12T00:00:00.000Z',
+              completedAt: request.completedAt,
+            },
+          };
         }),
+        endCompaction: vi.fn((request) => ({
+          status: 'ended' as const,
+          compaction: {
+            compactionId: request.compactionId,
+            sessionId: request.sessionId,
+            anchorEntryId: 'entry:user:2',
+            trigger: 'threshold' as const,
+            status: request.status,
+            ...(request.error ? { error: request.error } : {}),
+            startedAt: '2026-07-12T00:00:00.000Z',
+            completedAt: request.completedAt,
+          },
+        })),
       },
       contextTokenEstimator: vi.fn((prompt: Prompt) => {
         order.push('estimate');

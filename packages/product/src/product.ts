@@ -18,7 +18,7 @@ import {
   type ResolveDatabaseMigrationsFolderRequest,
 } from '@megumi/database';
 import { createRuns, type RunPolicy, type Runs } from '@megumi/engine';
-import { createEventBus, type EventSubscription } from '@megumi/events';
+import { createEventBus, type EventBus, type EventSubscription } from '@megumi/events';
 import { createInputProcessor, type InputSourceAccess } from '@megumi/input';
 import { createInstructionReader } from '@megumi/instructions';
 import {
@@ -39,6 +39,7 @@ import {
   createSessionCatalog,
   createSessionHistory,
   type SessionAttachmentFileSystem,
+  type SessionHistory,
 } from '@megumi/session';
 import { createSessionAttachmentFileStore } from '@megumi/session/attachment-store';
 import { createSessionStore } from '@megumi/session/store';
@@ -231,6 +232,11 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     store: sessionStore,
     ...(attachmentContentStore ? { attachmentContentStore } : {}),
   });
+  recoverInterruptedSessionCompactions(
+    history,
+    events,
+    options.home.clock.now().toISOString(),
+  );
   const attachments = createSessionAttachmentReader({
     store: sessionStore,
     ...(attachmentContentStore ? { contentStore: attachmentContentStore } : {}),
@@ -523,6 +529,36 @@ function openDatabase(homePaths: MegumiHomePaths, options: ComposeProductOptions
   } catch (error) {
     database.close();
     throw error;
+  }
+}
+
+/**
+ * Reconciles unfinished Session facts left by a prior process before startup
+ * exposes the Product. Session owns the state transition; Product only invokes
+ * that owner and publishes the matching runtime fact after persistence succeeds.
+ */
+function recoverInterruptedSessionCompactions(
+  history: Pick<SessionHistory, 'interruptRunningCompactions'>,
+  events: Pick<EventBus, 'publish'>,
+  completedAt: string,
+): void {
+  const recovered = history.interruptRunningCompactions({ completedAt });
+  if (recovered.status === 'failed') {
+    throw new Error(`Failed to recover interrupted Context Compactions: ${recovered.failure.message}`);
+  }
+  for (const compaction of recovered.compactions) {
+    if (!compaction.error) {
+      throw new Error(`Interrupted Compaction ${compaction.compactionId} is missing its error fact.`);
+    }
+    events.publish({
+      type: 'session.compaction.ended',
+      sessionId: compaction.sessionId,
+      payload: {
+        status: 'interrupted',
+        compactionId: compaction.compactionId,
+        error: compaction.error,
+      },
+    });
   }
 }
 

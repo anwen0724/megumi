@@ -69,6 +69,8 @@ describe('EventSchema', () => {
       completeEvent({ type: 'session.compaction.started', payload: { trigger: 'manual', compactionId: 'compaction:1' } }),
       completeEvent({ type: 'session.compaction.ended', payload: { status: 'completed', compactionId: 'compaction:1' } }),
       completeEvent({ type: 'session.compaction.ended', payload: { status: 'failed', compactionId: 'compaction:1', error: { message: 'overflow' } } }),
+      completeEvent({ type: 'session.compaction.ended', payload: { status: 'cancelled', compactionId: 'compaction:1' } }),
+      completeEvent({ type: 'session.compaction.ended', payload: { status: 'interrupted', compactionId: 'compaction:1', error: { message: 'runtime stopped' } } }),
     ];
     for (const event of valid) {
       expect(EventSchema.safeParse(event).success, JSON.stringify(event)).toBe(true);

@@ -124,10 +124,17 @@ export interface ContextCompactionProgressFailed {
   readonly message: string;
 }
 
+export interface ContextCompactionProgressCancelled {
+  readonly status: 'cancelled';
+  readonly compactionId: string;
+  readonly tokensBefore: number;
+}
+
 export type ContextCompactionProgress =
   | ContextCompactionProgressStarted
   | ContextCompactionProgressCompleted
-  | ContextCompactionProgressFailed;
+  | ContextCompactionProgressFailed
+  | ContextCompactionProgressCancelled;
 
 export interface CompactContextRequest {
   readonly sessionId: string;

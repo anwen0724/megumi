@@ -66,15 +66,40 @@ function fixture(
           history: reads === 1 ? history : compactedHistory(history),
         };
       }),
-      saveCompactionSummary: vi.fn((request) => ({
-        status: 'saved' as const,
+      beginCompaction: vi.fn((request) => ({
+        status: 'started' as const,
         compaction: {
-          compaction_id: request.compaction_id,
-          session_id: request.session_id,
-          summary_text: request.summary_text,
-          covered_until_entry_id: request.covered_until_entry_id,
-          first_kept_entry_id: request.first_kept_entry_id,
-          created_at: request.created_at,
+          compactionId: request.compactionId,
+          sessionId: request.sessionId,
+          anchorEntryId: request.anchorEntryId,
+          trigger: request.trigger,
+          status: 'running' as const,
+          startedAt: request.startedAt,
+        },
+      })),
+      completeCompaction: vi.fn((request) => ({
+        status: 'completed' as const,
+        compaction: {
+          compactionId: request.compactionId,
+          sessionId: request.sessionId,
+          anchorEntryId: request.coveredUntilEntryId,
+          trigger: 'manual' as const,
+          status: 'completed' as const,
+          startedAt: '2026-07-12T00:00:00.000Z',
+          completedAt: request.completedAt,
+        },
+      })),
+      endCompaction: vi.fn((request) => ({
+        status: 'ended' as const,
+        compaction: {
+          compactionId: request.compactionId,
+          sessionId: request.sessionId,
+          anchorEntryId: 'entry:assistant:3',
+          trigger: 'manual' as const,
+          status: request.status,
+          ...(request.error ? { error: request.error } : {}),
+          startedAt: '2026-07-12T00:00:00.000Z',
+          completedAt: request.completedAt,
         },
       })),
     },
@@ -139,6 +164,36 @@ describe('Context compaction', () => {
     });
   });
 
+  it('persists each lifecycle transition before publishing its matching event', async () => {
+    const order: string[] = [];
+    const events = createEventBus();
+    events.subscribe({}, (event) => { order.push(`event:${event.type}`); });
+    const options = fixture(vi.fn(async () => {
+      throw new Error('summary provider unavailable');
+    }));
+    const begin = options.sessionHistory.beginCompaction;
+    const end = options.sessionHistory.endCompaction;
+    options.sessionHistory.beginCompaction = vi.fn((request) => {
+      order.push('session:running');
+      return begin(request);
+    });
+    options.sessionHistory.endCompaction = vi.fn((request) => {
+      order.push(`session:${request.status}`);
+      return end(request);
+    });
+
+    await expect(createContext({ ...options, events }).compact(manualRequest())).resolves.toMatchObject({
+      status: 'failed',
+      failure: { code: 'compaction_failed' },
+    });
+    expect(order).toEqual([
+      'session:running',
+      'event:session.compaction.started',
+      'session:failed',
+      'event:session.compaction.ended',
+    ]);
+  });
+
   it('automatically compacts above the threshold and rebuilds from the committed Summary', async () => {
     const options = fixture();
     const result = await createContext(options).build({
@@ -149,15 +204,15 @@ describe('Context compaction', () => {
     if (result.status !== 'ready') {
       throw new Error(`Expected ready, got ${result.status}: ${result.status === 'failed' ? result.failure.code : ''}`);
     }
-    if ((options.sessionHistory.saveCompactionSummary as ReturnType<typeof vi.fn>).mock.calls.length === 0) {
-      throw new Error('saveCompactionSummary was not called');
+    if ((options.sessionHistory.completeCompaction as ReturnType<typeof vi.fn>).mock.calls.length === 0) {
+      throw new Error('completeCompaction was not called');
     }
-    expect(options.sessionHistory.saveCompactionSummary).toHaveBeenCalledWith(expect.objectContaining({
-      compaction_id: 'compaction:1',
-      covered_until_entry_id: 'entry:assistant:3',
-      first_kept_entry_id: 'entry:user:4',
-      expected_active_entry_id: 'entry:assistant:5',
-      append_to_active_path: true,
+    expect(options.sessionHistory.completeCompaction).toHaveBeenCalledWith(expect.objectContaining({
+      compactionId: 'compaction:1',
+      coveredUntilEntryId: 'entry:assistant:3',
+      firstKeptEntryId: 'entry:user:4',
+      expectedActiveEntryId: 'entry:assistant:5',
+      appendToActivePath: true,
     }));
     // The rebuilt Prompt comes from a fresh Session read, not a pre-commit projection.
     expect(options.sessionHistory.getActiveHistory).toHaveBeenCalledTimes(2);
@@ -212,24 +267,23 @@ describe('Context compaction', () => {
     await expect(two).resolves.toMatchObject({ status: 'nothing_to_compact' });
   });
 
-  it('does not persist cancelled or non-reducing summaries', async () => {
+  it('does not start pre-cancelled work and accepts a committed Summary regardless of usage delta', async () => {
     const controller = new AbortController();
     controller.abort();
     const cancelledOptions = fixture();
     expect(await createContext(cancelledOptions).compact(manualRequest({
       signal: controller.signal,
     }))).toMatchObject({ status: 'failed', failure: { code: 'cancelled' } });
-    expect(cancelledOptions.sessionHistory.saveCompactionSummary).not.toHaveBeenCalled();
+    expect(cancelledOptions.sessionHistory.beginCompaction).not.toHaveBeenCalled();
 
     const flatOptions: CreateContextOptions = {
       ...fixture(),
       contextTokenEstimator: vi.fn(() => 100),
     };
-    expect(await createContext(flatOptions).compact(manualRequest())).toEqual({
-      status: 'nothing_to_compact',
-      reason: 'summary_not_reducing',
+    expect(await createContext(flatOptions).compact(manualRequest())).toMatchObject({
+      status: 'compacted',
     });
-    expect(flatOptions.sessionHistory.saveCompactionSummary).not.toHaveBeenCalled();
+    expect(flatOptions.sessionHistory.completeCompaction).toHaveBeenCalledOnce();
   });
 
   it('converts unexpected dependency exceptions into a stable compaction failure', async () => {
@@ -274,7 +328,7 @@ describe('Context compaction', () => {
     }));
   });
 
-  it('determines one createdAt for the whole compaction transaction', async () => {
+  it('records distinct lifecycle start and completion times', async () => {
     let tick = 0;
     const now = vi.fn(() => `2026-07-12T00:00:${String(10 + tick++).padStart(2, '0')}.000Z`);
     const options = { ...fixture(), clock: { now } };
@@ -282,19 +336,20 @@ describe('Context compaction', () => {
 
     const result = await context.compact(manualRequest());
     expect(result.status).toBe('compacted');
-    // The clock is read exactly once: Summary request, projection and commit
-    // all share the same createdAt.
-    expect(now).toHaveBeenCalledTimes(1);
-    const createdAt = '2026-07-12T00:00:10.000Z';
+    expect(now).toHaveBeenCalledTimes(2);
+    const startedAt = '2026-07-12T00:00:10.000Z';
+    const completedAt = '2026-07-12T00:00:11.000Z';
 
     // The Summary model request timestamp comes from the same createdAt.
     const completeSimple = options.models.completeSimple as ReturnType<typeof vi.fn>;
     const summaryRequest = completeSimple.mock.calls[0]![1] as { messages: Array<{ timestamp: number }> };
-    expect(summaryRequest.messages[0]!.timestamp).toBe(Date.parse(createdAt));
+    expect(summaryRequest.messages[0]!.timestamp).toBe(Date.parse(startedAt));
 
-    // The commit uses the same createdAt.
-    expect(options.sessionHistory.saveCompactionSummary).toHaveBeenCalledWith(expect.objectContaining({
-      created_at: createdAt,
+    expect(options.sessionHistory.beginCompaction).toHaveBeenCalledWith(expect.objectContaining({
+      startedAt,
+    }));
+    expect(options.sessionHistory.completeCompaction).toHaveBeenCalledWith(expect.objectContaining({
+      completedAt,
     }));
 
     // The projected candidate Prompt carries the Summary with the same timestamp.
@@ -310,7 +365,7 @@ describe('Context compaction', () => {
         ));
     });
     expect(projected).toBeDefined();
-    expect(projected!.messages[0]!.timestamp).toBe(Date.parse(createdAt));
+    expect(projected!.messages[0]!.timestamp).toBe(Date.parse(startedAt));
   });
 
   it('runs Overflow, Threshold and Manual compaction through the same transaction', async () => {
@@ -324,11 +379,11 @@ describe('Context compaction', () => {
           })
         : await createContext(options).compact(manualRequest({ trigger }));
       expect(result.status, trigger).toBe(trigger === 'threshold' ? 'ready' : 'compacted');
-      expect(options.sessionHistory.saveCompactionSummary).toHaveBeenCalledWith(expect.objectContaining({
-        covered_until_entry_id: 'entry:assistant:3',
-        first_kept_entry_id: 'entry:user:4',
-        expected_active_entry_id: 'entry:assistant:5',
-        append_to_active_path: true,
+      expect(options.sessionHistory.completeCompaction).toHaveBeenCalledWith(expect.objectContaining({
+        coveredUntilEntryId: 'entry:assistant:3',
+        firstKeptEntryId: 'entry:user:4',
+        expectedActiveEntryId: 'entry:assistant:5',
+        appendToActivePath: true,
       }));
     }
   });
@@ -381,10 +436,12 @@ describe('Context compaction', () => {
       ...runHistory(4),
     ];
     let reads = 0;
+    const base = fixture();
     const options: CreateContextOptions = {
-      ...fixture(),
+      ...base,
       policy: { enabled: true, reserveTokens: 32, keepRecentTokens: 1, minimumRecentMessages: 2 },
       sessionHistory: {
+        ...base.sessionHistory,
         getActiveHistory: vi.fn(() => {
           reads += 1;
           return {
@@ -392,17 +449,6 @@ describe('Context compaction', () => {
             history: reads === 1 ? historyWithSummary : secondSummary,
           };
         }),
-        saveCompactionSummary: vi.fn((request) => ({
-          status: 'saved' as const,
-          compaction: {
-            compaction_id: request.compaction_id,
-            session_id: request.session_id,
-            summary_text: request.summary_text,
-            covered_until_entry_id: request.covered_until_entry_id,
-            first_kept_entry_id: request.first_kept_entry_id,
-            created_at: request.created_at,
-          },
-        })),
       },
     };
     const result = await createContext(options).build({
@@ -413,9 +459,9 @@ describe('Context compaction', () => {
     // The second compaction replaces the User 2 and User 3 Turns and keeps the
     // User 4 Turn: the Summary entry never shifts the mapping and the last
     // message survives.
-    expect(options.sessionHistory.saveCompactionSummary).toHaveBeenCalledWith(expect.objectContaining({
-      covered_until_entry_id: 'entry:assistant:3',
-      first_kept_entry_id: 'entry:user:4',
+    expect(options.sessionHistory.completeCompaction).toHaveBeenCalledWith(expect.objectContaining({
+      coveredUntilEntryId: 'entry:assistant:3',
+      firstKeptEntryId: 'entry:user:4',
     }));
     expect(result.prompt.messages.map((message) => message.role)).toEqual(['user', 'user', 'assistant']);
     expect(JSON.stringify(result.prompt.messages[2])).toContain('answer 4');
@@ -457,7 +503,7 @@ describe('Context compaction', () => {
 
   it('never overwrites new history when the optimistic entry conflicts', async () => {
     const options = fixture();
-    options.sessionHistory.saveCompactionSummary = vi.fn(() => ({
+    options.sessionHistory.completeCompaction = vi.fn(() => ({
       status: 'failed' as const,
       failure: { code: 'active_entry_conflict', message: 'history changed' },
     }));
@@ -539,8 +585,8 @@ describe('Context compaction', () => {
     // and settles with its own state; no prior Prompt or plan leaks in.
     const result = await context.build({ modelCallContext: modelCall() });
     expect(result.status).toBe('ready');
-    // The only Session write across both operations is the Summary commit.
-    expect(options.sessionHistory.saveCompactionSummary).toHaveBeenCalledTimes(1);
+    // The only successful Session Summary commit across both operations is the first compaction.
+    expect(options.sessionHistory.completeCompaction).toHaveBeenCalledTimes(1);
     const historyReads = (options.sessionHistory.getActiveHistory as ReturnType<typeof vi.fn>).mock.calls;
     expect(historyReads).toHaveLength(2);
   });
