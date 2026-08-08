@@ -18,7 +18,12 @@ import {
   type ResolveDatabaseMigrationsFolderRequest,
 } from '@megumi/database';
 import { createRuns, type RunPolicy, type Runs } from '@megumi/engine';
-import { createEventBus, type EventBus, type EventSubscription } from '@megumi/events';
+import {
+  createEventBus,
+  type EventBus,
+  type EventSubscription,
+  type RecentEventBufferOptions,
+} from '@megumi/events';
 import { createInputProcessor, type InputSourceAccess } from '@megumi/input';
 import { createInstructionReader } from '@megumi/instructions';
 import {
@@ -206,6 +211,7 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
   // The bus is injected into Context once at creation: compaction lifecycle
   // facts publish here without per-request buses.
   const events = createEventBus({
+    recentEvents: PRODUCT_RECENT_EVENT_BUFFER,
     onConsumerError: ({ eventType, sessionId, sequence, error }) => {
       observability.service.recordLog({
         level: 'warn',
@@ -216,7 +222,7 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
           sequence,
           errorMessage: error instanceof Error ? error.message : String(error),
         },
-      });
+});
     },
   });
 
@@ -498,6 +504,11 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     },
   };
 }
+
+const PRODUCT_RECENT_EVENT_BUFFER = {
+  maxSessions: 64,
+  maxEventsPerSession: 2_048,
+} satisfies RecentEventBufferOptions;
 
 const PRODUCT_RUN_POLICY = {
   maxModelCallsPerRun: 80,

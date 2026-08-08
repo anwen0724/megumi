@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type {
   CancelRunResult,
   CreateRunsOptions,
+  GetActiveRunResult,
   ResolveApprovalResult,
   RunApprovalStatus,
   RunPolicy,
@@ -39,6 +40,7 @@ describe('run public contracts', () => {
       'resolveApproval',
       'cancel',
       'get',
+      'getActive',
       'shutdown',
     ];
     const startStatuses: StartRunResult['status'][] = [
@@ -60,6 +62,7 @@ describe('run public contracts', () => {
       'already_terminal',
       'not_found',
     ];
+    const activeStatuses: GetActiveRunResult['status'][] = ['found', 'not_found'];
     const runApprovalStatuses: RunApprovalStatus[] = [
       'pending',
       'approved',
@@ -79,11 +82,12 @@ describe('run public contracts', () => {
       'policy',
     ];
 
-    expect(operationNames).toEqual(['start', 'resolveApproval', 'cancel', 'get', 'shutdown']);
+    expect(operationNames).toEqual(['start', 'resolveApproval', 'cancel', 'get', 'getActive', 'shutdown']);
     expect(startStatuses).not.toContain('completed');
     expect(approvalStatuses).toContain('accepted');
     expect(approvalStatuses).not.toContain('resumed');
     expect(cancelStatuses).not.toContain('cancelled');
+    expect(activeStatuses).toEqual(['found', 'not_found']);
     expect(dependencyNames).toContain('models');
     expect(dependencyNames).not.toContain('settings');
   });

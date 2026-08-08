@@ -129,4 +129,92 @@ describe('EventBus', () => {
     expect(subscribed.map((event) => event.type)).toEqual(['run.started']); // unsubscribed: stops
     expect(late.map((event) => event.type)).toEqual(['run.ended']); // added mid-delivery: next round only
   });
+
+  it('buffers before delivery and returns ordered copies without changing the available range', () => {
+    const bus = createEventBus({
+      id: (() => { let value = 0; return () => `evt:${++value}`; })(),
+      recentEvents: { maxSessions: 2, maxEventsPerSession: 3 },
+    });
+    const seenDuringDelivery: number[] = [];
+    bus.subscribe({ sessionId: 'session:1' }, () => {
+      seenDuringDelivery.push(bus.read({ sessionId: 'session:1' }).events.length);
+    });
+
+    publishStarted(bus, 'session:1', 'run:1');
+    publishStarted(bus, 'session:1', 'run:2');
+    publishStarted(bus, 'session:1', 'run:3');
+
+    expect(seenDuringDelivery).toEqual([1, 2, 3]);
+    const filtered = bus.read({ sessionId: 'session:1', afterSequence: 1 });
+    expect(filtered.events.map((event) => event.sequence)).toEqual([2, 3]);
+    expect(filtered).toMatchObject({ firstSequence: 1, lastSequence: 3, truncated: false });
+
+    const mutable = filtered.events as unknown as Array<{
+      payload: { requestId: string; providerId: string; modelId: string };
+    }>;
+    mutable[0]!.payload = { requestId: 'changed', providerId: 'changed', modelId: 'changed' };
+    expect(bus.read({ sessionId: 'session:1' }).events[1]?.payload).toMatchObject({ requestId: 'request:run:2' });
+  });
+
+  it('bounds each Session payload while preserving sequence metadata for gap detection', () => {
+    const bus = createEventBus({ recentEvents: { maxSessions: 2, maxEventsPerSession: 2 } });
+    publishStarted(bus, 'session:1', 'run:1');
+    publishStarted(bus, 'session:1', 'run:2');
+    publishStarted(bus, 'session:1', 'run:3');
+
+    expect(bus.read({ sessionId: 'session:1' })).toMatchObject({
+      firstSequence: 2,
+      lastSequence: 3,
+      truncated: true,
+      events: [{ sequence: 2 }, { sequence: 3 }],
+    });
+    expect(bus.read({ sessionId: 'session:1', afterSequence: 2 })).toMatchObject({
+      firstSequence: 2,
+      lastSequence: 3,
+      truncated: false,
+      events: [{ sequence: 3 }],
+    });
+  });
+
+  it('evicts least-recently-published Session payloads and read does not refresh that order', () => {
+    const bus = createEventBus({ recentEvents: { maxSessions: 2, maxEventsPerSession: 2 } });
+    publishStarted(bus, 'session:1', 'run:1');
+    publishStarted(bus, 'session:2', 'run:2');
+    bus.read({ sessionId: 'session:1' });
+    publishStarted(bus, 'session:3', 'run:3');
+
+    expect(bus.read({ sessionId: 'session:1' })).toEqual({ events: [], truncated: true });
+    expect(bus.read({ sessionId: 'session:2' }).events).toHaveLength(1);
+    expect(bus.read({ sessionId: 'session:3' }).events).toHaveLength(1);
+    expect(bus.read({ sessionId: 'session:new' })).toEqual({ events: [], truncated: false });
+  });
+
+  it('does not wait for asynchronous subscribers before the event becomes readable', () => {
+    const bus = createEventBus({ recentEvents: { maxSessions: 1, maxEventsPerSession: 1 } });
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    bus.subscribe({}, async () => pending);
+
+    bus.publish({
+      type: 'run.started',
+      payload: { requestId: 'request:1', providerId: 'provider:1', modelId: 'model:1' },
+      sessionId: 'session:1',
+    });
+
+    expect(bus.read({ sessionId: 'session:1' }).events).toHaveLength(1);
+    release();
+  });
 });
+
+function publishStarted(
+  bus: ReturnType<typeof createEventBus>,
+  sessionId: string,
+  runId: string,
+): void {
+  bus.publish({
+    type: 'run.started',
+    payload: { requestId: `request:${runId}`, providerId: 'provider:1', modelId: 'model:1' },
+    sessionId,
+    runId,
+  });
+}

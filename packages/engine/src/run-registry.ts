@@ -286,6 +286,21 @@ export class RunRegistry {
     return terminal ? snapshot(terminal) : undefined;
   }
 
+  /**
+   * Resolves the one non-terminal Run held by the existing Session exclusion
+   * index. This is a read of authoritative registry state, not a projection.
+   */
+  getActive(sessionId: string): Run | undefined {
+    const runId = this.runIdBySession.get(sessionId);
+    if (!runId) return undefined;
+    const run = this.findLiveRun(runId);
+    if (!run || isTerminalRunStatus(run.status)) {
+      this.runIdBySession.delete(sessionId);
+      return undefined;
+    }
+    return snapshot(run);
+  }
+
   private findLiveRun(runId: string): Run | undefined {
     const active = this.activeRuns.get(runId);
     if (active) return active.run;

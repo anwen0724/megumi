@@ -241,6 +241,14 @@ export type GetRunResult =
   | { readonly status: 'found'; readonly run: Run }
   | { readonly status: 'not_found'; readonly runId: string };
 
+export interface GetActiveRunRequest {
+  readonly sessionId: string;
+}
+
+export type GetActiveRunResult =
+  | { readonly status: 'found'; readonly run: Run }
+  | { readonly status: 'not_found'; readonly sessionId: string };
+
 export interface ShutdownRunsRequest {
   readonly timeoutMs: number;
 }
@@ -254,6 +262,8 @@ export interface Runs {
   resolveApproval(request: ResolveApprovalRequest): Promise<ResolveApprovalResult>;
   cancel(request: CancelRunRequest): Promise<CancelRunResult>;
   get(request: GetRunRequest): GetRunResult;
+  /** Reads the one current Run for a Session from Engine-owned registry state. */
+  getActive(request: GetActiveRunRequest): GetActiveRunResult;
   shutdown(request: ShutdownRunsRequest): Promise<ShutdownRunsResult>;
 }
 
@@ -658,6 +668,13 @@ export function createRuns(options: CreateRunsOptions): Runs {
       return run
         ? { status: 'found', run }
         : { status: 'not_found', runId: request.runId };
+    },
+
+    getActive(request): GetActiveRunResult {
+      const run = store.getActive(request.sessionId);
+      return run
+        ? { status: 'found', run }
+        : { status: 'not_found', sessionId: request.sessionId };
     },
 
     async shutdown(request): Promise<ShutdownRunsResult> {

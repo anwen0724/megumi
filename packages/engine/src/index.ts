@@ -10,6 +10,8 @@ export type {
   CancelRunRequest,
   CancelRunResult,
   CreateRunsOptions,
+  GetActiveRunRequest,
+  GetActiveRunResult,
   GetRunRequest,
   GetRunResult,
   ResolveApprovalRequest,

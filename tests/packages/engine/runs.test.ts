@@ -55,6 +55,31 @@ describe('createRuns', () => {
     }
   });
 
+  it('returns only the current non-terminal Run for a Session', async () => {
+    const fixture = createRunsFixture({
+      streams: [neverEndingStream()],
+      policy: { cancellationTimeoutMs: 10 },
+    });
+    const started = await fixture.runs.start(startRequest);
+    expect(started.status).toBe('started');
+    if (started.status !== 'started') return;
+
+    expect(fixture.runs.getActive({ sessionId: started.run.sessionId })).toMatchObject({
+      status: 'found',
+      run: { runId: started.run.runId, status: 'running' },
+    });
+    await fixture.runs.cancel({ runId: started.run.runId });
+    expect(fixture.runs.getActive({ sessionId: started.run.sessionId })).toMatchObject({
+      status: 'found',
+      run: { status: 'cancelling' },
+    });
+    await settleRun(fixture);
+    expect(fixture.runs.getActive({ sessionId: started.run.sessionId })).toEqual({
+      status: 'not_found',
+      sessionId: started.run.sessionId,
+    });
+  });
+
   it('treats requestId reuse with different input as a protocol failure', async () => {
     const fixture = createRunsFixture({
       streams: [assistantStream('done')],

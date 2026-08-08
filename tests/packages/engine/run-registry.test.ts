@@ -168,6 +168,29 @@ describe('RunRegistry', () => {
     }).status).toBe('reserved');
   });
 
+  it('reads the active Run from the existing Session exclusion index until terminal settlement', () => {
+    const clock = createMutableClock('2026-07-31T00:00:00.000Z');
+    const store = new RunRegistry({ clock, terminalRunRetentionMs: 1_000 });
+    const running = createTestRun({
+      runId: 'run:active',
+      requestId: 'request:active',
+      sessionId: 'session:1',
+    });
+    store.reserveStart({ requestId: running.requestId, fingerprint, run: running });
+
+    expect(store.getActive('session:1')).toMatchObject({ runId: 'run:active', status: 'running' });
+    const waiting = transitionRun(running, { status: 'waiting', at: '2026-07-31T00:00:01.000Z' });
+    store.updateRun(waiting);
+    expect(store.getActive('session:1')).toMatchObject({ status: 'waiting' });
+    const cancelling = transitionRun(waiting, { status: 'cancelling', at: '2026-07-31T00:00:02.000Z' });
+    store.updateRun(cancelling);
+    expect(store.getActive('session:1')).toMatchObject({ status: 'cancelling' });
+
+    const cancelled = transitionRun(cancelling, { status: 'cancelled', at: '2026-07-31T00:00:03.000Z' });
+    store.updateRun(cancelled);
+    expect(store.getActive('session:1')).toBeUndefined();
+  });
+
   it('retains terminal summaries for the configured duration and releases the Session', () => {
     const clock = createMutableClock('2026-07-31T00:00:00.000Z');
     const store = new RunRegistry({ clock, terminalRunRetentionMs: 1_000 });

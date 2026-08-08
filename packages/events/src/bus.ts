@@ -47,6 +47,20 @@ export interface EventBus {
   publish(input: PublishEventInput): void;
   /** Subscribe with an optional filter; returns an unsubscribe handle. */
   subscribe(filter: EventFilter, handler: EventHandler): EventSubscription;
+  /** Read the currently retained event range for one Session without affecting delivery order. */
+  read(request: ReadEventsRequest): ReadEventsResult;
+}
+
+export interface ReadEventsRequest {
+  readonly sessionId: string;
+  readonly afterSequence?: number;
+}
+
+export interface ReadEventsResult {
+  readonly events: readonly AnyEvent[];
+  readonly firstSequence?: number;
+  readonly lastSequence?: number;
+  readonly truncated: boolean;
 }
 
 export interface ConsumerFailure {
@@ -63,6 +77,13 @@ export interface CreateEventBusOptions {
   now?: () => string;
   /** Receives each isolated consumer failure for diagnostics. */
   onConsumerError?: (failure: ConsumerFailure) => void | Promise<void>;
+  /** Bounds the in-process replay window without changing immediate delivery. */
+  recentEvents?: RecentEventBufferOptions;
+}
+
+export interface RecentEventBufferOptions {
+  readonly maxSessions: number;
+  readonly maxEventsPerSession: number;
 }
 
 interface RegisteredSubscriber {
@@ -70,12 +91,22 @@ interface RegisteredSubscriber {
   readonly handler: EventHandler;
 }
 
+const DEFAULT_RECENT_EVENT_BUFFER: RecentEventBufferOptions = {
+  maxSessions: 64,
+  maxEventsPerSession: 1_024,
+};
+
 export function createEventBus(options: CreateEventBusOptions = {}): EventBus {
   const id = options.id ?? (() => crypto.randomUUID());
   const now = options.now ?? (() => new Date().toISOString());
   const subscribers = new Set<RegisteredSubscriber>();
   // One counter per session: sequence is session-monotonic, never global.
   const sessionCounters = new Map<string, number>();
+  const recentEventPolicy = validateRecentEventPolicy(
+    options.recentEvents ?? DEFAULT_RECENT_EVENT_BUFFER,
+  );
+  // Map insertion order is the payload LRU. read() intentionally never refreshes it.
+  const recentEventsBySession = new Map<string, RecentEventBuffer>();
 
   return {
     publish(input: PublishEventInput): void {
@@ -90,6 +121,12 @@ export function createEventBus(options: CreateEventBusOptions = {}): EventBus {
         sequence,
         createdAt: input.createdAt ?? now(),
       } as AnyEvent;
+
+      retainRecentEvent(
+        recentEventsBySession,
+        recentEventPolicy,
+        event,
+      );
 
       const report = (error: unknown): void => {
         try {
@@ -125,7 +162,105 @@ export function createEventBus(options: CreateEventBusOptions = {}): EventBus {
       subscribers.add(subscriber);
       return { unsubscribe: () => { subscribers.delete(subscriber); } };
     },
+
+    read(request: ReadEventsRequest): ReadEventsResult {
+      validateReadRequest(request);
+      const buffer = recentEventsBySession.get(request.sessionId);
+      if (!buffer) {
+        return sessionCounters.has(request.sessionId)
+          ? { events: [], truncated: true }
+          : { events: [], truncated: false };
+      }
+      const retained = buffer.values();
+      const firstSequence = retained[0]?.sequence;
+      const lastSequence = retained.at(-1)?.sequence;
+      const requestedFirstSequence = request.afterSequence === undefined
+        ? 1
+        : request.afterSequence + 1;
+      const events = retained.filter((event) => (
+        request.afterSequence === undefined || event.sequence > request.afterSequence
+      ));
+      return {
+        events: structuredClone(events),
+        ...(firstSequence === undefined ? {} : { firstSequence }),
+        ...(lastSequence === undefined ? {} : { lastSequence }),
+        truncated: firstSequence !== undefined && requestedFirstSequence < firstSequence,
+      };
+    },
   };
+}
+
+/** Fixed-capacity ring buffer keeps publish append and oldest-event trimming constant-time. */
+class RecentEventBuffer {
+  private readonly entries: Array<AnyEvent | undefined>;
+  private start = 0;
+  private size = 0;
+
+  constructor(private readonly capacity: number) {
+    this.entries = new Array<AnyEvent | undefined>(capacity);
+  }
+
+  append(event: AnyEvent): void {
+    const stored = structuredClone(event);
+    if (this.size < this.capacity) {
+      this.entries[(this.start + this.size) % this.capacity] = stored;
+      this.size += 1;
+      return;
+    }
+    this.entries[this.start] = stored;
+    this.start = (this.start + 1) % this.capacity;
+  }
+
+  values(): readonly AnyEvent[] {
+    const values: AnyEvent[] = [];
+    for (let index = 0; index < this.size; index += 1) {
+      const event = this.entries[(this.start + index) % this.capacity];
+      if (event) values.push(event);
+    }
+    return values;
+  }
+}
+
+/** Retains payloads by publish recency while sessionCounters keep gap metadata after eviction. */
+function retainRecentEvent(
+  buffers: Map<string, RecentEventBuffer>,
+  policy: RecentEventBufferOptions,
+  event: AnyEvent,
+): void {
+  let buffer = buffers.get(event.sessionId);
+  if (!buffer) {
+    if (buffers.size >= policy.maxSessions) {
+      const oldestSessionId = buffers.keys().next().value as string | undefined;
+      if (oldestSessionId !== undefined) buffers.delete(oldestSessionId);
+    }
+    buffer = new RecentEventBuffer(policy.maxEventsPerSession);
+  } else {
+    buffers.delete(event.sessionId);
+  }
+  buffer.append(event);
+  buffers.set(event.sessionId, buffer);
+}
+
+function validateRecentEventPolicy(policy: RecentEventBufferOptions): RecentEventBufferOptions {
+  if (!Number.isInteger(policy.maxSessions) || policy.maxSessions <= 0) {
+    throw new TypeError('recentEvents.maxSessions must be a positive integer.');
+  }
+  if (!Number.isInteger(policy.maxEventsPerSession) || policy.maxEventsPerSession <= 0) {
+    throw new TypeError('recentEvents.maxEventsPerSession must be a positive integer.');
+  }
+  return { ...policy };
+}
+
+function validateReadRequest(request: ReadEventsRequest): void {
+  if (request.sessionId.trim().length === 0) {
+    throw new TypeError('sessionId must be a non-empty string.');
+  }
+  if (
+    request.afterSequence !== undefined
+    && (!Number.isInteger(request.afterSequence) || request.afterSequence < 0)
+  ) {
+    throw new TypeError('afterSequence must be a non-negative integer.');
+  }
 }
 
 function matches(filter: EventFilter, event: Event): boolean {

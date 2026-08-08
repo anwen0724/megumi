@@ -10,6 +10,9 @@ export type {
   EventHandler,
   EventSubscription,
   PublishEventInput,
+  ReadEventsRequest,
+  ReadEventsResult,
+  RecentEventBufferOptions,
 } from './bus';
 export type {
   AnyEvent,
