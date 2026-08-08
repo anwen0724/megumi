@@ -231,6 +231,7 @@ export const chat = {
     cancel: 'Cancel branch',
     fromReply: 'Branching from this reply',
     fromInput: 'Branching from this input',
+    separator: 'Conversation branch',
   },
   notifications: {
     actionFailed: { title: 'Action failed', message: 'The action could not be completed.' },
@@ -248,6 +249,7 @@ export const chat = {
     running: 'Compacting context',
     completed: 'Context compacted',
     failed: 'Context compaction failed',
-    skipped: 'Context does not need compaction',
+    cancelled: 'Context compaction cancelled',
+    interrupted: 'Context compaction interrupted',
   },
 } as const;

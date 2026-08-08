@@ -2,9 +2,17 @@ import { describe, expect, it } from 'vitest';
 import type { AnyEvent } from '@megumi/events';
 import {
   createRuntimeTimeline,
-  reduceRuntimeTimeline,
-  type TimelineMessage,
-} from '../../../packages/projections/src/index';
+  reduceRuntimeTimeline as reduceDesktopRuntimeTimeline,
+} from '../../../../../../apps/desktop/src/renderer/features/session-timeline/runtime-timeline-reducer';
+import type {
+  TimelineMessage,
+} from '../../../../../../apps/desktop/src/renderer/features/session-timeline/timeline-model';
+
+function reduceRuntimeTimeline(
+  request: Omit<Parameters<typeof reduceDesktopRuntimeTimeline>[0], 'projectId'>,
+) {
+  return reduceDesktopRuntimeTimeline({ ...request, projectId: 'project:1' });
+}
 
 function reduceRuntimeTimelineEvent(
   timeline: TimelineMessage[],
@@ -272,16 +280,33 @@ describe('RuntimeTimeline', () => {
     expect(serialized).toContain('"scope":"once"');
   });
 
-  it('does not project session-scoped compaction into a Run timeline', () => {
+  it('projects session-scoped compaction as one standalone activity', () => {
     const timeline = createRuntimeTimeline({});
     let next = reduceRuntimeTimeline({ timeline, event: event('run.started', {}, 1) });
     next = reduceRuntimeTimeline({
       timeline: next,
-      event: event('session.compaction.started', { trigger: 'manual' }, 2, { runId: undefined }),
+      event: event('session.compaction.started', {
+        trigger: 'manual',
+        compactionId: 'compaction:1',
+      }, 2, { runId: undefined }),
+    });
+    next = reduceRuntimeTimeline({
+      timeline: next,
+      event: event('session.compaction.ended', {
+        status: 'completed',
+        compactionId: 'compaction:1',
+      }, 3, { runId: undefined }),
     });
 
-    const serialized = JSON.stringify(next);
-    expect(serialized).not.toContain('压缩');
+    expect(next.messages.filter((message) => message.role === 'activity')).toEqual([
+      expect.objectContaining({
+        messageId: 'session-compaction:compaction:1',
+        blocks: [expect.objectContaining({
+          kind: 'session_compaction_activity',
+          status: 'completed',
+        })],
+      }),
+    ]);
   });
 
   it('settles the run process status from run.ended', () => {

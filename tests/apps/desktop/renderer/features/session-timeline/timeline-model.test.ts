@@ -8,14 +8,14 @@ import {
   TimelineMessageRoleSchema,
   TimelineUserMessageSchema,
   ToolActivityItemSchema,
-} from '../../../packages/projections/src/timeline/timeline-message';
+} from '../../../../../../apps/desktop/src/renderer/features/session-timeline/timeline-model';
 import {
   ANSWER_TEXT_STATUSES,
   PROCESS_DISCLOSURE_STATUSES,
   TIMELINE_MESSAGE_ROLES,
   type TimelineAssistantMessage,
   type TimelineUserMessage,
-} from '../../../packages/projections/src/timeline/timeline-message';
+} from '../../../../../../apps/desktop/src/renderer/features/session-timeline/timeline-model';
 
 const messageBase = {
   messageId: 'message-1',
@@ -46,7 +46,6 @@ describe('timeline message and block contracts', () => {
         kind: 'branch_separator',
         branchMarkerId: 'branch-marker-1',
         sourceMessageId: 'message-1',
-        label: 'Branch from 07:28',
         createdAt: '2026-06-01T10:00:00.000Z',
       }],
     });
@@ -54,7 +53,7 @@ describe('timeline message and block contracts', () => {
     expect(parsed.role).toBe('separator');
     expect(parsed.blocks[0]).toMatchObject({
       kind: 'branch_separator',
-      label: 'Branch from 07:28',
+      branchMarkerId: 'branch-marker-1',
     });
   });
 

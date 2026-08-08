@@ -235,6 +235,7 @@ export const chat = {
     cancel: '取消分支',
     fromReply: '从此回复创建分支',
     fromInput: '从此输入创建分支',
+    separator: '会话分支',
   },
   notifications: {
     actionFailed: { title: '操作失败', message: '无法完成该操作。' },
@@ -252,6 +253,7 @@ export const chat = {
     running: '正在压缩上下文',
     completed: '已完成压缩',
     failed: '上下文压缩失败',
-    skipped: '无需压缩上下文',
+    cancelled: '上下文压缩已取消',
+    interrupted: '上下文压缩已中断',
   },
 } as const satisfies TranslationShape<typeof source>;
