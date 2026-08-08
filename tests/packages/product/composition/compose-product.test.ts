@@ -83,12 +83,12 @@ describe('composeProduct', () => {
         },
       });
 
-      const session = await product.host.chat.createSession({
+      const session = await product.host.session.createSession({
         projectId: opened.project.projectId,
         title: 'Product-only run',
       });
       if (session.status !== 'created') return;
-      const result = await product.host.chat.sendUserInput({
+      const result = await product.host.session.sendUserInput({
         projectId: opened.project.projectId,
         sessionId: session.session.id,
         text: 'hello',
@@ -103,7 +103,7 @@ describe('composeProduct', () => {
       // until it settles before asserting on the event facts.
       let events: AnyEvent[] = [];
       await vi.waitFor(async () => {
-        const snapshot = await product.host.chat.listRunEvents({ runId: payload.run.runId });
+        const snapshot = await product.host.session.listRunEvents({ runId: payload.run.runId });
         events = snapshot.events;
         expect(snapshot.events.some((event) => event.type === 'run.ended')).toBe(true);
       }, { timeout: 5000 });
@@ -112,7 +112,7 @@ describe('composeProduct', () => {
 
       // Manual /compact runs through Product with the tools-less request and no
       // per-request bus; the command still completes through Context.compact.
-      const compacted = await product.host.chat.sendUserInput({
+      const compacted = await product.host.session.sendUserInput({
         projectId: opened.project.projectId,
         sessionId: session.session.id,
         text: '/compact',

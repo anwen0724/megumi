@@ -4,18 +4,19 @@
  */
 import type { ArtifactHost } from './artifact-host';
 import type { ApprovalHost } from './approval-host';
-import type { ChatHost } from './chat-contract';
+import type { SessionHost } from './session-host';
 import type { SettingsHost } from './settings-host';
-import type { SkillHost } from './skills-host';
+import type { SkillHost } from './skill-host';
 import type { WorkspaceHost } from './workspace-host';
 import type { ObservabilityHost } from './observability-host';
 
 export interface ProductHostInterface {
   workspace: WorkspaceHost;
-  chat: ChatHost;
+  session: SessionHost;
   skill: SkillHost;
   settings: SettingsHost;
   approval: ApprovalHost;
+  /** Transitional placeholder removed with the Desktop IPC migration in Task 6. */
   artifacts: ArtifactHost;
   observability: ObservabilityHost;
 }

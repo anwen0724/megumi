@@ -18,17 +18,37 @@ describe('Product and Desktop final boundaries', () => {
     }
   });
 
-  it('provides the confirmed Product composition, input, and Host locations', () => {
+  it('provides the responsibility-based Product structure', () => {
     for (const relativePath of [
-      'packages/product/src/product.ts',
-      'packages/product/src/approval.ts',
-      'packages/product/src/input-submission.ts',
-      'packages/product/src/host/index.ts',
+      'packages/product/src/composition/product-composer.ts',
+      'packages/product/src/composition/product-runtime.ts',
+      'packages/product/src/composition/product-resource-manager.ts',
+      'packages/product/src/composition/product-policy.ts',
+      'packages/product/src/home/home-paths.ts',
+      'packages/product/src/home/home-initializer.ts',
+      'packages/product/src/home/home-resources.ts',
+      'packages/product/src/operations/session/session-operations.ts',
+      'packages/product/src/operations/session/session-reader.ts',
+      'packages/product/src/host/session-host.ts',
       'packages/product/src/host/product-host.ts',
-      'packages/product/src/host/chat-contract.ts',
-      'packages/product/src/host/chat-host.ts',
     ]) {
       expect(fs.existsSync(path.join(root, relativePath)), relativePath).toBe(true);
+    }
+  });
+
+  it('removes obsolete Product entry and forwarding Host files', () => {
+    for (const relativePath of [
+      'packages/product/src/product.ts',
+      'packages/product/src/chat.ts',
+      'packages/product/src/approval.ts',
+      'packages/product/src/input-submission.ts',
+      'packages/product/src/host/chat-contract.ts',
+      'packages/product/src/host/chat-host.ts',
+      'packages/product/src/host/workspace-contract.ts',
+      'packages/product/src/host/settings-contract.ts',
+      'packages/product/src/host/observability-contract.ts',
+    ]) {
+      expect(fs.existsSync(path.join(root, relativePath)), relativePath).toBe(false);
     }
   });
 
@@ -47,22 +67,23 @@ describe('Product and Desktop final boundaries', () => {
     expect(product).not.toMatch(/packages[\\/][^\\/]+[\\/]src[\\/]/u);
   });
 
-  it('keeps Chat Host as a thin adapter over the composed Product chat entry', () => {
-    const chatHost = fs.readFileSync(path.join(root, 'packages/product/src/host/chat-host.ts'), 'utf8');
+  it('keeps Host files declarative and Operations responsible for implementation', () => {
+    const productHost = read('packages/product/src/host/product-host.ts');
+    const approvalHost = read('packages/product/src/host/approval-host.ts');
+    const approvalOperations = read('packages/product/src/operations/approval-operations.ts');
 
-    expect(chatHost).toContain("from '../chat'");
-    expect(chatHost).not.toMatch(/@megumi\/(?:ai|commands|context|engine|input|session)(?:\/|['"])/u);
-    expect(chatHost).not.toMatch(/create(?:Engine|Context|InputProcessor)\s*\(/u);
-  });
-
-  it('keeps Approval Host as a thin adapter over the Product approval entry', () => {
-    const approvalHost = fs.readFileSync(path.join(root, 'packages/product/src/host/approval-host.ts'), 'utf8');
-
-    expect(approvalHost).toContain("from '../approval'");
+    expect(productHost).toContain('session: SessionHost');
+    expect(productHost).not.toContain('chat:');
     expect(approvalHost).not.toContain("from '@megumi/engine'");
-    expect(approvalHost).not.toContain('resumeRun');
+    expect(approvalHost).not.toContain('createApprovalOperations');
+    expect(approvalOperations).toContain("from '@megumi/engine'");
+    expect(approvalOperations).toContain('createApprovalOperations');
   });
 });
+
+function read(relativePath: string): string {
+  return fs.readFileSync(path.join(root, relativePath), 'utf8');
+}
 
 function readTree(relativeRoot: string): string {
   const directory = path.join(root, relativeRoot);

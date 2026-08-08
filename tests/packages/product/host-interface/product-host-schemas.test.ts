@@ -6,10 +6,10 @@ import {
   ArtifactReferencePayloadSchema,
   ArtifactStatusUpdatePayloadSchema,
   ArtifactVersionCreatePayloadSchema,
-  ChatCancelUserInputUiPayloadSchema,
-  ChatCreateSessionUiResultSchema,
-  ChatListSessionsUiResultSchema,
-  ChatSendUserInputUiPayloadSchema,
+  CancelUserInputPayloadSchema,
+  CreateSessionResultSchema,
+  ListSessionsResultSchema,
+  SendUserInputPayloadSchema,
   ListSkillsUiResponseSchema,
   ProviderListUiResultSchema,
   SessionBranchDraftCancelPayloadSchema,
@@ -49,19 +49,19 @@ describe('Product Host runtime schemas', () => {
   });
 
   it('validates every legal serializable Chat result branch', () => {
-    expect(ChatCreateSessionUiResultSchema.safeParse({
+    expect(CreateSessionResultSchema.safeParse({
       status: 'failed',
       failure: { code: 'session_failed', message: 'failed' },
     }).success).toBe(true);
-    expect(ChatListSessionsUiResultSchema.safeParse({ status: 'ok', sessions: [] }).success).toBe(true);
-    expect(ChatListSessionsUiResultSchema.safeParse({ sessions: [] }).success).toBe(false);
-    expect(ChatSendUserInputUiPayloadSchema.safeParse({
+    expect(ListSessionsResultSchema.safeParse({ status: 'ok', sessions: [] }).success).toBe(true);
+    expect(ListSessionsResultSchema.safeParse({ sessions: [] }).success).toBe(false);
+    expect(SendUserInputPayloadSchema.safeParse({
       type: 'completed', requestId: 'request:1', message: 'done',
     }).success).toBe(true);
-    expect(ChatSendUserInputUiPayloadSchema.safeParse({
+    expect(SendUserInputPayloadSchema.safeParse({
       type: 'error', requestId: 'request:1', message: 'failed', events: [],
     }).success).toBe(false);
-    expect(ChatSendUserInputUiPayloadSchema.safeParse({
+    expect(SendUserInputPayloadSchema.safeParse({
       type: 'host_interaction_request',
       requestId: 'request:1',
       request: { kind: 'context_compaction', callback: () => undefined },
@@ -69,8 +69,8 @@ describe('Product Host runtime schemas', () => {
   });
 
   it('validates structured Chat cancel results', () => {
-    expect(ChatCancelUserInputUiPayloadSchema.safeParse({ cancelled: false }).success).toBe(false);
-    expect(ChatCancelUserInputUiPayloadSchema.safeParse({
+    expect(CancelUserInputPayloadSchema.safeParse({ cancelled: false }).success).toBe(false);
+    expect(CancelUserInputPayloadSchema.safeParse({
       status: 'cancellation_requested',
       run: {
         runId: 'run:1',
@@ -79,8 +79,8 @@ describe('Product Host runtime schemas', () => {
         createdAt: '2026-07-10T00:00:00.000Z',
       },
     }).success).toBe(true);
-    expect(ChatCancelUserInputUiPayloadSchema.safeParse({ status: 'not_found', runId: 'run:1' }).success).toBe(true);
-    expect(ChatCancelUserInputUiPayloadSchema.safeParse({
+    expect(CancelUserInputPayloadSchema.safeParse({ status: 'not_found', runId: 'run:1' }).success).toBe(true);
+    expect(CancelUserInputPayloadSchema.safeParse({
       status: 'not_cancellable',
       reason: 'already_terminal',
       run: {
@@ -91,7 +91,7 @@ describe('Product Host runtime schemas', () => {
         completedAt: '2026-07-10T00:01:00.000Z',
       },
     }).success).toBe(true);
-    expect(ChatCancelUserInputUiPayloadSchema.safeParse({
+    expect(CancelUserInputPayloadSchema.safeParse({
       status: 'failed',
       failure: { code: 'cancel_failed', message: 'cannot cancel', retryable: true },
     }).success).toBe(true);

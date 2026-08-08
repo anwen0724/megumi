@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ApprovalResolvePayload } from '@megumi/desktop/main/ipc/schemas';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/product/host';
-import type { ChatGetContextUsageUiResult } from '@megumi/product/host';
+import type { GetContextUsageResult } from '@megumi/product/host';
 import type { ToolApprovalResolvePayload, ToolApprovalResolveResult } from '../../../entities/approval';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
@@ -59,7 +59,7 @@ export function useChatPageController() {
   const activeRunId = useRunStore((state) => state.activeRunId);
   const runs = useRunStore((state) => state.runs);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
-  const [contextUsage, setContextUsage] = useState<ChatGetContextUsageUiResult | undefined>(undefined);
+  const [contextUsage, setContextUsage] = useState<GetContextUsageResult | undefined>(undefined);
   const activeSession = sessions.find((session) =>
     session.id === activeSessionId && session.projectId === currentProjectId
   ) ?? null;
@@ -163,7 +163,7 @@ export function useChatPageController() {
       if (cancelled) {
         return;
       }
-      const nextContextUsage: ChatGetContextUsageUiResult = result.ok ? result.data : {
+      const nextContextUsage: GetContextUsageResult = result.ok ? result.data : {
         status: 'failed' as const,
         failure: { code: result.data.code, message: result.data.message },
       };

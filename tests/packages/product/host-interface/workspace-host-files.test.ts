@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createWorkspaceHost } from '../../../../packages/product/src/host/workspace-host';
+import { createWorkspaceOperations } from '../../../../packages/product/src/operations/workspace-operations';
 
 describe('WorkspaceHost files', () => {
   it('maps canonical Workspace file results and opens only the resolved absolute path', async () => {
     const openPath = vi.fn(async () => ({ status: 'opened' as const }));
-    const host = createWorkspaceHost({
+    const host = createWorkspaceOperations({
       workspaceService: workspaceServiceStub(),
       workspaceFilesService: {
         listDirectory: vi.fn(async () => ({
@@ -45,7 +45,7 @@ describe('WorkspaceHost files', () => {
   });
 
   it('projects file open adapter failures without using empty-string sentinels', async () => {
-    const host = createWorkspaceHost({
+    const host = createWorkspaceOperations({
       workspaceService: workspaceServiceStub(),
       workspaceFilesService: {
         listDirectory: vi.fn(),
@@ -69,7 +69,7 @@ describe('WorkspaceHost files', () => {
   });
 
   it('returns workspace file owner statuses from listFiles and openFile without throwing', async () => {
-    const host = createWorkspaceHost({
+    const host = createWorkspaceOperations({
       workspaceService: workspaceServiceStub(),
       workspaceFilesService: {
         listDirectory: vi.fn(async () => ({

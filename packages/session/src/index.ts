@@ -113,6 +113,8 @@ export type {
   GetActiveConversationHistoryResult,
   GetCommittedBranchRequest,
   GetCommittedBranchResult,
+  GetCommittedRunMessagesRequest,
+  GetCommittedRunMessagesResult,
   SessionBranchConversationItem,
   SessionCompactionConversationItem,
   SessionConversationItem,

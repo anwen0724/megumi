@@ -1,12 +1,12 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { createSettings, type SettingsStore } from '@megumi/settings';
-import { createSettingsHost } from '../../../../packages/product/src/host/settings-host';
+import { createSettingsOperations } from '../../../../packages/product/src/operations/settings-operations';
 
 describe('SettingsHost semantics', () => {
   it('forwards updates to Settings and projects the resolved Host DTO', async () => {
     const store = memoryStore();
-    const host = createSettingsHost(createSettings({ store }));
+    const host = createSettingsOperations(createSettings({ store }));
 
     const result = await host.update({
       theme: 'midnight-blue',
@@ -34,7 +34,7 @@ describe('SettingsHost semantics', () => {
         },
       },
     });
-    const host = createSettingsHost(createSettings({ store }));
+    const host = createSettingsOperations(createSettings({ store }));
 
     const result = await host.listProviders();
 
@@ -43,7 +43,7 @@ describe('SettingsHost semantics', () => {
   });
 
   it('reports unreadable settings as a structured failure instead of throwing', async () => {
-    const host = createSettingsHost(createSettings({ store: memoryStore({ providers: 'not-an-object' }) }));
+    const host = createSettingsOperations(createSettings({ store: memoryStore({ providers: 'not-an-object' }) }));
 
     const result = await host.get();
 
@@ -54,7 +54,7 @@ describe('SettingsHost semantics', () => {
   });
 
   it('reports unknown file keys as diagnostics on the ok response', async () => {
-    const host = createSettingsHost(createSettings({
+    const host = createSettingsOperations(createSettings({
       store: memoryStore({
         theme: 'sage-mist',
         custom_field: true,

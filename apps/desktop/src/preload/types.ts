@@ -1,10 +1,10 @@
 import type {
-  ChatCancelBranchDraftUiResult,
-  ChatCreateBranchDraftUiResult,
-  ChatGetSessionHydrationUiResult,
-  ChatGetContextUsageUiResult,
-  ChatListTimelineUiResult,
-  ChatSendUserInputUiPayload,
+  CancelBranchDraftResult,
+  CreateBranchDraftResult,
+  GetSessionHydrationResult,
+  GetContextUsageResult,
+  ListSessionTimelineResult,
+  SendUserInputPayload,
   DisableSkillUiResponse,
   DeleteSkillUiResponse,
   EnableSkillUiResponse,
@@ -32,17 +32,17 @@ import type { api } from './api';
 
 export type MegumiAPI = typeof api;
 export type SessionMessageSendPreloadPayload = SessionMessageSendPayload;
-export type SessionMessageSendPreloadData = ChatSendUserInputUiPayload;
+export type SessionMessageSendPreloadData = SendUserInputPayload;
 export type SessionTimelineListPreloadPayload = SessionTimelineListPayload;
-export type SessionTimelineListPreloadData = ChatListTimelineUiResult;
+export type SessionTimelineListPreloadData = ListSessionTimelineResult;
 export type SessionHydrationGetPreloadPayload = SessionHydrationGetPayload;
-export type SessionHydrationGetPreloadData = ChatGetSessionHydrationUiResult;
+export type SessionHydrationGetPreloadData = GetSessionHydrationResult;
 export type SessionContextUsageGetPreloadPayload = SessionContextUsageGetPayload;
-export type SessionContextUsageGetPreloadData = ChatGetContextUsageUiResult;
+export type SessionContextUsageGetPreloadData = GetContextUsageResult;
 export type SessionBranchDraftCreatePreloadPayload = SessionBranchDraftCreatePayload;
-export type SessionBranchDraftCreatePreloadData = ChatCreateBranchDraftUiResult['payload'];
+export type SessionBranchDraftCreatePreloadData = CreateBranchDraftResult['payload'];
 export type SessionBranchDraftCancelPreloadPayload = SessionBranchDraftCancelPayload;
-export type SessionBranchDraftCancelPreloadData = ChatCancelBranchDraftUiResult['payload'];
+export type SessionBranchDraftCancelPreloadData = CancelBranchDraftResult['payload'];
 export type WorkspaceFileOpenPreloadPayload = WorkspaceFileOpenPayload;
 export type WorkspaceFileOpenPreloadData = WorkspaceOpenFileUiResult;
 export type SkillListPreloadPayload = SkillListPayload;

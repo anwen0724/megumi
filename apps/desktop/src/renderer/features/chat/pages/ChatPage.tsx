@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
-import type { ChatInputCapabilitiesUiResult, InputSuggestionQueryResult } from '@megumi/product/host';
+import type { InputCapabilitiesResult, InputSuggestionQueryResult } from '@megumi/product/host';
 import { useTranslation } from 'react-i18next';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import { useProviderStore } from '../../../entities/provider/store';
@@ -28,7 +28,7 @@ export function ChatPage() {
   const composerDraft = useChatUiStore((state) => state.composerDraft);
   const setComposerDraft = useChatUiStore((state) => state.setComposerDraft);
   const [composerHeight, setComposerHeight] = useState(FALLBACK_COMPOSER_SPACER_HEIGHT);
-  const [imageInputCapabilities, setImageInputCapabilities] = useState<ChatInputCapabilitiesUiResult>();
+  const [imageInputCapabilities, setImageInputCapabilities] = useState<InputCapabilitiesResult>();
   const effectiveComposerDockHeight = composerHeight > 0 ? composerHeight : FALLBACK_COMPOSER_SPACER_HEIGHT;
   const bottomSpacerHeight = Math.max(effectiveComposerDockHeight + 24, FALLBACK_COMPOSER_SPACER_HEIGHT);
   const pendingApprovals = useMemo(

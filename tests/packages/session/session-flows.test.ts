@@ -183,6 +183,44 @@ describe('session service flows', () => {
     });
   });
 
+  it('reads only committed messages owned by one Run', async () => {
+    const { service, workspaceId } = createHarness();
+    service.createSession({ workspace_id: workspaceId, title: 'Session' });
+    await service.saveUserMessage({
+      message_id: 'U1',
+      session_id: 'S1',
+      run_id: 'R1',
+      display_content: text('first'),
+      model_content: text('first'),
+      created_at: '2026-07-04T00:01:00.000Z',
+    });
+    service.saveAssistantReply({
+      message_id: 'A1',
+      session_id: 'S1',
+      run_id: 'R1',
+      status: 'completed',
+      reason_code: 'normal_completion',
+      content: text('done'),
+      completed_at: '2026-07-04T00:02:00.000Z',
+    });
+    await service.saveUserMessage({
+      message_id: 'U2',
+      session_id: 'S1',
+      run_id: 'R2',
+      display_content: text('second'),
+      model_content: text('second'),
+      created_at: '2026-07-04T00:03:00.000Z',
+    });
+
+    expect(service.getCommittedRunMessages({ sessionId: 'S1', runId: 'R1' })).toMatchObject({
+      status: 'ok',
+      messages: [
+        { type: 'message', entryId: 'message:U1', message: { message_id: 'U1', run_id: 'R1' } },
+        { type: 'message', entryId: 'message:A1', message: { message_id: 'A1', run_id: 'R1' } },
+      ],
+    });
+  });
+
   it('rejects history through an entry owned by another session', async () => {
     const { repository, service, workspaceId } = createHarness();
     service.createSession({ workspace_id: workspaceId, title: 'Session' });

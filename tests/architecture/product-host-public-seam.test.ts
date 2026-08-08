@@ -15,11 +15,11 @@ describe('Product Host public seam', () => {
     expect(source).not.toMatch(/export\s+(?:type\s+)?\*\s+from\s+['"][^'"]*(?:agent|engine|session|context|projections)[\\/]/u);
   });
 
-  it('defines Chat Host DTOs and runtime Schemas in the Product Host contract', () => {
-    const contract = read('packages/product/src/host/chat-contract.ts');
+  it('defines Session Host DTOs and runtime Schemas in one Product Host contract', () => {
+    const contract = read('packages/product/src/host/session-host.ts');
 
-    expect(contract).toContain('ChatHost');
-    expect(contract).toContain('ChatSendUserInputUiPayloadSchema');
+    expect(contract).toContain('SessionHost');
+    expect(contract).toContain('SendUserInputPayloadSchema');
     expect(contract).not.toMatch(/export\s+(?:type\s+)?\*\s+from/u);
   });
 

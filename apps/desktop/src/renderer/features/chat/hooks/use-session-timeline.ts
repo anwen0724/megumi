@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import type { SessionMessageSendPayload } from '@megumi/desktop/main/ipc/schemas';
-import type { AnyEvent } from '@megumi/product/host';
+import type { AnyEvent, TimelineUserMessage, UserMessageDto } from '@megumi/product/host';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
 import { useRunStore } from '../../../entities/run/store';
@@ -388,7 +388,7 @@ export function useSessionTimeline() {
       target.projectId,
       runSessionId,
       result.data.run.runId,
-      [{ ...result.data.userMessage, clientMessageId }],
+      [{ ...toTimelineUserMessage(target.projectId, result.data.userMessage), clientMessageId }],
     );
 
     if (isSameBranchDraft(branchDraftRef.current, branchDraftForSend)) {
@@ -594,5 +594,45 @@ export function useSessionTimeline() {
     branchDraft,
     createBranchDraft,
     cancelBranchDraft,
+  };
+}
+
+/**
+ * Transitional Desktop mapping while Product returns Session facts and the
+ * dedicated Session Timeline builder is introduced in Task 5.
+ */
+function toTimelineUserMessage(projectId: string, message: UserMessageDto): TimelineUserMessage {
+  return {
+    messageId: message.messageId,
+    role: 'user',
+    projectId,
+    sessionId: message.sessionId,
+    ...(message.runId ? { runId: message.runId } : {}),
+    ...(message.skillSelection ? { skillSelection: message.skillSelection } : {}),
+    createdAt: message.createdAt,
+    ...(message.completedAt ? { updatedAt: message.completedAt } : {}),
+    blocks: [
+      ...message.displayContent.flatMap((content, index) => (
+        content.type === 'text'
+          ? [{
+              blockId: `user-text:${message.messageId}:${index}`,
+              kind: 'user_text' as const,
+              text: content.text,
+              format: 'plain' as const,
+              createdAt: message.createdAt,
+            }]
+          : []
+      )),
+      ...message.attachments.map((attachment) => ({
+        blockId: `user-attachment:${attachment.attachmentId}`,
+        kind: 'user_attachment' as const,
+        attachmentId: attachment.attachmentId,
+        attachmentType: attachment.type,
+        name: attachment.name ?? attachment.attachmentId,
+        ...(attachment.mediaType ? { mediaType: attachment.mediaType } : {}),
+        source: attachment.source === 'localFile' ? 'local_file' as const : 'unknown' as const,
+        createdAt: attachment.createdAt,
+      })),
+    ],
   };
 }

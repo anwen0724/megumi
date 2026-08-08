@@ -1,13 +1,13 @@
 /* Stores canonical Product Host Session projections plus renderer selection state. */
 import { create } from 'zustand';
-import type { ChatSessionUiDto } from '@megumi/product/host';
+import type { SessionDto } from '@megumi/product/host';
 
 interface SessionState {
-  sessions: ChatSessionUiDto[];
+  sessions: SessionDto[];
   activeSessionId: string | null;
   newSessionDraftTargetProjectId: string | null;
-  setSessions: (sessions: ChatSessionUiDto[]) => void;
-  upsertSession: (session: ChatSessionUiDto) => void;
+  setSessions: (sessions: SessionDto[]) => void;
+  upsertSession: (session: SessionDto) => void;
   setActiveSession: (id: string | null) => void;
   startNewSessionDraft: (projectId: string | null) => void;
   setNewSessionDraftTargetProject: (projectId: string | null) => void;

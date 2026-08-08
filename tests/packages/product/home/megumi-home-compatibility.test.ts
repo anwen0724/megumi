@@ -239,7 +239,7 @@ describe('Megumi Home foundation', () => {
 
   it('keeps host resource paths out of the Product Home implementation', () => {
     const source = fs.readFileSync(
-      path.resolve('packages/product/src/home/home.ts'),
+      path.resolve('packages/product/src/home/home-initializer.ts'),
       'utf8',
     );
 

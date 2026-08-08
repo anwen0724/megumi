@@ -1,9 +1,6 @@
 import { z } from 'zod';
-import type { ProductApproval } from '../approval';
 
-/*
- * Adapts the stable Approval Host protocol to the Product approval entry.
- */
+/* Defines the stable, host-neutral Approval operations exposed by Product. */
 
 export interface ApprovalHost {
   resolve(request: ApprovalResolvePayload): Promise<ApprovalHostInvocation>;
@@ -46,26 +43,6 @@ export const ApprovalResolveResultSchema = z.discriminatedUnion('status', [
     status: z.literal('failed'), approvalRequestId: z.string().min(1), failure: RunFailureSchema,
   }).strict(),
 ]);
-
-export function createApprovalHost(
-  approval: Pick<ProductApproval, 'resolve'>,
-): ApprovalHost {
-  return {
-    resolve: (request) => approval.resolve({
-      approvalRequestId: request.approvalRequestId,
-      decision: request.decision === 'approved'
-        ? {
-            decision: 'approved',
-            optionId: request.optionId,
-            ...(request.reason ? { reason: request.reason } : {}),
-          }
-        : {
-            decision: 'denied',
-            ...(request.reason ? { reason: request.reason } : {}),
-          },
-    }),
-  };
-}
 
 /*
  * Approval UI DTOs exposed by the host interface.

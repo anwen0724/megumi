@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createSkillHost } from '../../../../packages/product/src/host/skills-host';
+import { createSkillOperations } from '../../../../packages/product/src/operations/skill-operations';
 import type { Skills } from '../../../../packages/skills/src';
 
 describe('SkillHost semantics', () => {
@@ -21,7 +21,7 @@ describe('SkillHost semantics', () => {
       diagnostics: [],
     }));
     const skills = { list } as unknown as Skills;
-    const host = createSkillHost({ skills });
+    const host = createSkillOperations({ skills });
 
     await expect(host.listSkills({ workspaceId: 'workspace:1' })).resolves.toEqual({
       status: 'ok',
@@ -46,7 +46,7 @@ describe('SkillHost semantics', () => {
       failure: { code: 'skill_not_found' as const, skillPath },
     }));
     const skills = { get } as unknown as Skills;
-    const host = createSkillHost({ skills });
+    const host = createSkillOperations({ skills });
 
     await expect(host.getSkillDetail({ skillPath })).resolves.toEqual({
       status: 'not_found',
@@ -57,7 +57,7 @@ describe('SkillHost semantics', () => {
 
   it('exposes a real refresh operation instead of re-listing', async () => {
     const refresh = vi.fn(async () => ({ status: 'ok' as const, diagnostics: [] }));
-    const host = createSkillHost({ skills: { refresh } as unknown as Skills });
+    const host = createSkillOperations({ skills: { refresh } as unknown as Skills });
     await expect(host.refreshSkills({})).resolves.toEqual({ status: 'ok' });
     expect(refresh).toHaveBeenCalledWith({ workspaceId: undefined });
   });

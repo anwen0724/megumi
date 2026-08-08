@@ -1,4 +1,4 @@
-import type { ChatRunUiDto, ChatSessionUiDto } from '@megumi/product/host';
+import type { RunDto, SessionDto } from '@megumi/product/host';
 import type { AnyEvent } from '@megumi/product/host';
 import type { AnswerTextBlock, TimelineMessage } from '@megumi/product/host';
 
@@ -13,7 +13,7 @@ function isCompletedAnswerTextBlock(block: TimelineMessage['blocks'][number]): b
   return block.kind === 'answer_text' && block.status === 'completed';
 }
 
-export function localSessionFromPersistedSession(session: ChatSessionUiDto): ChatSessionUiDto {
+export function localSessionFromPersistedSession(session: SessionDto): SessionDto {
   return session;
 }
 
@@ -44,7 +44,7 @@ export function chatMessagesFromTimelineMessages(messages: TimelineMessage[]): T
 }
 
 export function hydratedRuntimeEventsForRuns(
-  runs: Array<Pick<ChatRunUiDto, 'runId'>>,
+  runs: Array<Pick<RunDto, 'runId'>>,
   eventsByRun: Record<string, AnyEvent[]>,
 ): AnyEvent[] {
   const runIds = new Set(runs.map((run) => run.runId));

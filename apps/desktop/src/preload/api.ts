@@ -2,24 +2,24 @@ import { ipcRenderer } from 'electron';
 import type { AnyEvent } from '@megumi/product/host';
 import type {
   ApprovalHostResult,
-  ChatCancelBranchDraftUiResult,
-  ChatCancelUserInputUiResult,
-  ChatCreateBranchDraftUiResult,
-  ChatCreateSessionUiResult,
-  ChatGetSessionHydrationUiResult,
-  ChatGetInputSuggestionsUiResult,
-  ChatListMessagesUiResult,
-  ChatGetContextUsageUiResult,
-  ChatListRunEventsUiResult,
-  ChatListRunsUiResult,
-  ChatListSessionsUiResult,
-  ChatListTimelineUiResult,
-  ChatSendUserInputUiPayload,
-  ChatInputCapabilitiesUiResult,
-  ChatSelectImagesUiResult,
-  ChatSelectDocumentsUiResult,
-  ChatReadAttachmentImageUiResult,
-  ChatGetAttachmentFileStatusUiResult,
+  CancelBranchDraftResult,
+  CancelUserInputResult,
+  CreateBranchDraftResult,
+  CreateSessionResult,
+  GetSessionHydrationResult,
+  GetInputSuggestionsResult,
+  ListUserMessagesByRunIdsResult,
+  GetContextUsageResult,
+  ListRunEventsResult,
+  ListRunsResult,
+  ListSessionsResult,
+  ListSessionTimelineResult,
+  SendUserInputPayload,
+  InputCapabilitiesResult,
+  SelectImagesResult,
+  SelectDocumentsResult,
+  ReadAttachmentImageResult,
+  GetAttachmentFileStatusResult,
   EmptyUiResult,
   ProviderListUiResult,
   SettingsData,
@@ -100,9 +100,9 @@ import type {
 type BusinessRequest<TPayload, TChannel extends BusinessIpcChannel> = RuntimeIpcRequest<TPayload, TChannel>;
 type EmptyPayload = Record<string, never>;
 type EmptyData = Record<string, never>;
-type SessionMessageSendData = ChatSendUserInputUiPayload;
-type SessionBranchDraftCreateData = ChatCreateBranchDraftUiResult['payload'];
-type SessionBranchDraftCancelData = ChatCancelBranchDraftUiResult['payload'];
+type SessionMessageSendData = SendUserInputPayload;
+type SessionBranchDraftCreateData = CreateBranchDraftResult['payload'];
+type SessionBranchDraftCancelData = CancelBranchDraftResult['payload'];
 
 async function invokeRuntimeIpc<TPayload, TData extends object, TChannel extends BusinessIpcChannel>(
   channel: TChannel,
@@ -179,7 +179,7 @@ export const api = {
   command: {
     suggestions: (
       request: BusinessRequest<InputSuggestionsPayload, typeof IPC_CHANNELS.chat.inputSuggestions>,
-    ): Promise<RuntimeIpcResult<ChatGetInputSuggestionsUiResult, typeof IPC_CHANNELS.chat.inputSuggestions>> =>
+    ): Promise<RuntimeIpcResult<GetInputSuggestionsResult, typeof IPC_CHANNELS.chat.inputSuggestions>> =>
       invokeRuntimeIpc(IPC_CHANNELS.chat.inputSuggestions, request),
   },
   skill: {
@@ -211,11 +211,11 @@ export const api = {
   session: {
     create: (
       request: BusinessRequest<SessionCreatePayload, typeof IPC_CHANNELS.chat.sessionCreate>,
-    ): Promise<RuntimeIpcResult<ChatCreateSessionUiResult, typeof IPC_CHANNELS.chat.sessionCreate>> =>
+    ): Promise<RuntimeIpcResult<CreateSessionResult, typeof IPC_CHANNELS.chat.sessionCreate>> =>
       invokeRuntimeIpc(IPC_CHANNELS.chat.sessionCreate, request),
     list: (
       request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.chat.sessionList>,
-    ): Promise<RuntimeIpcResult<ChatListSessionsUiResult, typeof IPC_CHANNELS.chat.sessionList>> =>
+    ): Promise<RuntimeIpcResult<ListSessionsResult, typeof IPC_CHANNELS.chat.sessionList>> =>
       invokeRuntimeIpc(IPC_CHANNELS.chat.sessionList, request),
     branchDraft: {
       create: (
@@ -230,7 +230,7 @@ export const api = {
     message: {
       list: (
         request: BusinessRequest<SessionMessageListPayload, typeof IPC_CHANNELS.chat.sessionMessageList>,
-      ): Promise<RuntimeIpcResult<ChatListMessagesUiResult, typeof IPC_CHANNELS.chat.sessionMessageList>> =>
+      ): Promise<RuntimeIpcResult<ListUserMessagesByRunIdsResult, typeof IPC_CHANNELS.chat.sessionMessageList>> =>
         invokeRuntimeIpc(IPC_CHANNELS.chat.sessionMessageList, request),
       send: (
         request: BusinessRequest<SessionMessageSendPayload, typeof IPC_CHANNELS.chat.sessionMessageSend>,
@@ -238,65 +238,65 @@ export const api = {
         invokeRuntimeIpc(IPC_CHANNELS.chat.sessionMessageSend, request),
       cancel: (
         request: BusinessRequest<SessionMessageCancelPayload, typeof IPC_CHANNELS.chat.sessionMessageCancel>,
-      ): Promise<RuntimeIpcResult<ChatCancelUserInputUiResult['payload'], typeof IPC_CHANNELS.chat.sessionMessageCancel>> =>
+      ): Promise<RuntimeIpcResult<CancelUserInputResult['payload'], typeof IPC_CHANNELS.chat.sessionMessageCancel>> =>
         invokeRuntimeIpc(IPC_CHANNELS.chat.sessionMessageCancel, request),
     },
     timeline: {
       list: (
         request: BusinessRequest<SessionTimelineListPayload, typeof IPC_CHANNELS.chat.sessionTimelineList>,
-      ): Promise<RuntimeIpcResult<ChatListTimelineUiResult, typeof IPC_CHANNELS.chat.sessionTimelineList>> =>
+      ): Promise<RuntimeIpcResult<ListSessionTimelineResult, typeof IPC_CHANNELS.chat.sessionTimelineList>> =>
         invokeRuntimeIpc(IPC_CHANNELS.chat.sessionTimelineList, request),
     },
     hydration: {
       get: (
         request: BusinessRequest<SessionHydrationGetPayload, typeof IPC_CHANNELS.chat.sessionHydrationGet>,
-      ): Promise<RuntimeIpcResult<ChatGetSessionHydrationUiResult, typeof IPC_CHANNELS.chat.sessionHydrationGet>> =>
+      ): Promise<RuntimeIpcResult<GetSessionHydrationResult, typeof IPC_CHANNELS.chat.sessionHydrationGet>> =>
         invokeRuntimeIpc(IPC_CHANNELS.chat.sessionHydrationGet, request),
     },
     contextUsage: {
       get: (
         request: BusinessRequest<SessionContextUsageGetPayload, typeof IPC_CHANNELS.chat.sessionContextUsageGet>,
-      ): Promise<RuntimeIpcResult<ChatGetContextUsageUiResult, typeof IPC_CHANNELS.chat.sessionContextUsageGet>> =>
+      ): Promise<RuntimeIpcResult<GetContextUsageResult, typeof IPC_CHANNELS.chat.sessionContextUsageGet>> =>
         invokeRuntimeIpc(IPC_CHANNELS.chat.sessionContextUsageGet, request),
     },
     imageInput: {
       capabilities: (
         request: BusinessRequest<ImageInputCapabilitiesPayload, typeof IPC_CHANNELS.chat.inputCapabilitiesGet>,
-      ): Promise<RuntimeIpcResult<ChatInputCapabilitiesUiResult, typeof IPC_CHANNELS.chat.inputCapabilitiesGet>> =>
+      ): Promise<RuntimeIpcResult<InputCapabilitiesResult, typeof IPC_CHANNELS.chat.inputCapabilitiesGet>> =>
         invokeRuntimeIpc(IPC_CHANNELS.chat.inputCapabilitiesGet, request),
       select: (
         request: BusinessRequest<ImageInputSelectPayload, typeof IPC_CHANNELS.chat.imageInputSelect>,
-      ): Promise<RuntimeIpcResult<ChatSelectImagesUiResult, typeof IPC_CHANNELS.chat.imageInputSelect>> =>
+      ): Promise<RuntimeIpcResult<SelectImagesResult, typeof IPC_CHANNELS.chat.imageInputSelect>> =>
         invokeRuntimeIpc(IPC_CHANNELS.chat.imageInputSelect, request),
       readClipboard: (
         request: BusinessRequest<ImageInputClipboardReadPayload, typeof IPC_CHANNELS.chat.imageInputClipboardRead>,
-      ): Promise<RuntimeIpcResult<ChatSelectImagesUiResult, typeof IPC_CHANNELS.chat.imageInputClipboardRead>> =>
+      ): Promise<RuntimeIpcResult<SelectImagesResult, typeof IPC_CHANNELS.chat.imageInputClipboardRead>> =>
         invokeRuntimeIpc(IPC_CHANNELS.chat.imageInputClipboardRead, request),
       readAttachment: (
         request: BusinessRequest<AttachmentImageReadPayload, typeof IPC_CHANNELS.chat.attachmentImageRead>,
-      ): Promise<RuntimeIpcResult<ChatReadAttachmentImageUiResult, typeof IPC_CHANNELS.chat.attachmentImageRead>> =>
+      ): Promise<RuntimeIpcResult<ReadAttachmentImageResult, typeof IPC_CHANNELS.chat.attachmentImageRead>> =>
         invokeRuntimeIpc(IPC_CHANNELS.chat.attachmentImageRead, request),
     },
     documentInput: {
       select: (
         request: BusinessRequest<DocumentInputSelectPayload, typeof IPC_CHANNELS.chat.documentInputSelect>,
-      ): Promise<RuntimeIpcResult<ChatSelectDocumentsUiResult, typeof IPC_CHANNELS.chat.documentInputSelect>> =>
+      ): Promise<RuntimeIpcResult<SelectDocumentsResult, typeof IPC_CHANNELS.chat.documentInputSelect>> =>
         invokeRuntimeIpc(IPC_CHANNELS.chat.documentInputSelect, request),
       getAttachmentStatus: (
         request: BusinessRequest<AttachmentFileStatusPayload, typeof IPC_CHANNELS.chat.attachmentFileStatus>,
-      ): Promise<RuntimeIpcResult<ChatGetAttachmentFileStatusUiResult, typeof IPC_CHANNELS.chat.attachmentFileStatus>> =>
+      ): Promise<RuntimeIpcResult<GetAttachmentFileStatusResult, typeof IPC_CHANNELS.chat.attachmentFileStatus>> =>
         invokeRuntimeIpc(IPC_CHANNELS.chat.attachmentFileStatus, request),
     },
   },
   run: {
     listBySession: (
       request: BusinessRequest<RunListBySessionPayload, typeof IPC_CHANNELS.chat.runListBySession>,
-    ): Promise<RuntimeIpcResult<ChatListRunsUiResult, typeof IPC_CHANNELS.chat.runListBySession>> =>
+    ): Promise<RuntimeIpcResult<ListRunsResult, typeof IPC_CHANNELS.chat.runListBySession>> =>
       invokeRuntimeIpc(IPC_CHANNELS.chat.runListBySession, request),
     events: {
       list: (
         request: BusinessRequest<RunEventsListPayload, typeof IPC_CHANNELS.chat.runEventsList>,
-      ): Promise<RuntimeIpcResult<ChatListRunEventsUiResult, typeof IPC_CHANNELS.chat.runEventsList>> =>
+      ): Promise<RuntimeIpcResult<ListRunEventsResult, typeof IPC_CHANNELS.chat.runEventsList>> =>
         invokeRuntimeIpc(IPC_CHANNELS.chat.runEventsList, request),
     },
   },

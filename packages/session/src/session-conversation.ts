@@ -54,6 +54,15 @@ export type GetCommittedBranchResult =
   | { readonly status: 'not_found'; readonly targetEntryId: string }
   | { readonly status: 'failed'; readonly failure: SessionFailure };
 
+export interface GetCommittedRunMessagesRequest {
+  readonly sessionId: string;
+  readonly runId: string;
+}
+
+export type GetCommittedRunMessagesResult =
+  | { readonly status: 'ok'; readonly messages: readonly SessionMessageConversationItem[] }
+  | { readonly status: 'failed'; readonly failure: SessionFailure };
+
 export interface SessionConversationReader {
   /** Returns visible facts on the current committed branch in deterministic order. */
   getActiveHistory(
@@ -61,6 +70,8 @@ export interface SessionConversationReader {
   ): GetActiveConversationHistoryResult;
   /** Resolves one committed Branch using the same Entry Graph rule as full history. */
   getCommittedBranch(request: GetCommittedBranchRequest): GetCommittedBranchResult;
+  /** Reads one Run from the same active committed conversation used by full recovery. */
+  getCommittedRunMessages(request: GetCommittedRunMessagesRequest): GetCommittedRunMessagesResult;
 }
 
 /** Creates the reader that owns Entry Graph to conversation ordering rules. */
@@ -93,6 +104,20 @@ export function createSessionConversationReader(input: {
         return branch
           ? { status: 'found', branch }
           : { status: 'not_found', targetEntryId: request.targetEntryId };
+      } catch (error) {
+        return sessionFailure(error);
+      }
+    },
+    getCommittedRunMessages(request) {
+      try {
+        const result = buildConversation(input.store, request.sessionId);
+        if (result.status === 'failed') return result;
+        return {
+          status: 'ok',
+          messages: result.conversation.filter((item): item is SessionMessageConversationItem => (
+            item.type === 'message' && item.message.run_id === request.runId
+          )),
+        };
       } catch (error) {
         return sessionFailure(error);
       }

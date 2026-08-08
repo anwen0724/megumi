@@ -9,19 +9,18 @@ import type {
   Session,
   SessionBranchDrafts,
   SessionCatalog,
-  SessionMessageWithAttachments,
+  SessionHistory,
 } from '@megumi/session';
-import { sessionMessageText } from '@megumi/session';
-import type { TimelineUserMessage } from '@megumi/projections';
 import type {
-  ChatRunUiDto,
-  ChatSendUserInputUiRequest,
-  ChatSendUserInputUiResult,
-  ChatSessionUiDto,
-} from './host/chat-contract';
+  SendUserInputRequest,
+  SendUserInputResult,
+  SessionBranchConversationItemDto,
+} from '../../host/session-host';
+import { toRunDto, toSessionDto, toUserMessageDto } from './session-reader';
 
 export interface InputSubmission {
-  submit(request: ChatSendUserInputUiRequest): Promise<ChatSendUserInputUiResult>;
+  /** Processes one user input and starts at most one idempotent Engine Run. */
+  submit(request: SendUserInputRequest): Promise<SendUserInputResult>;
 }
 
 export type ProductModelResolver = (request: {
@@ -32,10 +31,12 @@ export type ProductModelResolver = (request: {
   | { status: 'failed'; failure: { code: string; message: string; retryable?: boolean } }
 >;
 
+/** Creates the single Product operation that owns the Input-to-Run submission chain. */
 export function createInputSubmission(options: {
   runs: Pick<Runs, 'start'>;
   input: Pick<InputProcessor<CommandTerminalResult>, 'process'>;
   sessions: Pick<SessionCatalog, 'getSession' | 'createSession'>;
+  history: Pick<SessionHistory, 'getCommittedBranch'>;
   branches: Pick<SessionBranchDrafts, 'resolveBranchDraft' | 'commitBranchDraft'>;
   resolveModel: ProductModelResolver;
 }): InputSubmission {
@@ -88,14 +89,34 @@ export function createInputSubmission(options: {
         model: model.model,
         permissionMode: request.permissionMode ?? 'ask',
       });
+      let branchCommit: {
+        readonly branchMarkerId: string;
+        readonly branch: SessionBranchConversationItemDto;
+      } | undefined;
       if (request.branchMarkerId && (started.status === 'started' || started.status === 'already_started')) {
         options.branches.commitBranchDraft({
           request_id: requestId,
           session_id: session.session_id,
           branch_marker_id: request.branchMarkerId,
         });
+        const committed = options.history.getCommittedBranch({
+          sessionId: session.session_id,
+          targetEntryId: started.userEntry.entry_id,
+        });
+        if (committed.status === 'found') {
+          branchCommit = {
+            branchMarkerId: request.branchMarkerId,
+            branch: {
+              type: 'branch',
+              branchId: committed.branch.branchId,
+              sourceMessageId: committed.branch.sourceMessageId,
+              targetMessageId: committed.branch.targetMessageId,
+              createdAt: committed.branch.createdAt,
+            },
+          };
+        }
       }
-      return mapRunStart(started, requestId, session);
+      return mapRunStart(started, requestId, session, branchCommit);
     },
   };
 }
@@ -116,7 +137,7 @@ function resolveExistingSession(
 
 function createAcceptedSession(
   sessions: Pick<SessionCatalog, 'createSession'>,
-  request: ChatSendUserInputUiRequest,
+  request: SendUserInputRequest,
   acceptedText: string,
 ): Session | undefined {
   const result = sessions.createSession({
@@ -154,8 +175,8 @@ function commandResult(
   requestId: string,
   result: CommandTerminalResult,
   session?: Session,
-): ChatSendUserInputUiResult {
-  const sessionDto = session ? { session: toChatSession(session) } : {};
+): SendUserInputResult {
+  const sessionDto = session ? { session: toSessionDto(session) } : {};
   if (result.type === 'host_interaction_request') {
     return { payload: { type: 'host_interaction_request', ...sessionDto, requestId, request: result.request } };
   }
@@ -172,16 +193,31 @@ function commandResult(
   };
 }
 
-function mapRunStart(result: StartRunResult, requestId: string, session: Session): ChatSendUserInputUiResult {
+function mapRunStart(
+  result: StartRunResult,
+  requestId: string,
+  session: Session,
+  branchCommit?: {
+    readonly branchMarkerId: string;
+    readonly branch: SessionBranchConversationItemDto;
+  },
+): SendUserInputResult {
   if (result.status === 'started' || result.status === 'already_started') {
+    if (result.userMessage.message.message_kind !== 'user_message') {
+      throw new Error('Engine returned a non-user message for a started Run.');
+    }
     return {
       payload: {
         type: 'agent_run',
-        session: toChatSession(session),
+        session: toSessionDto(session),
         requestId,
         userMessageId: result.userMessage.message.message_id,
-        userMessage: toTimelineUserMessage(session.workspace_id, result.userMessage),
-        run: toChatRun(result.run),
+        userMessage: toUserMessageDto({
+          message: result.userMessage.message,
+          attachments: result.userMessage.attachments,
+        }),
+        run: toRunDto(result.run),
+        ...(branchCommit ? { branchCommit } : {}),
       },
     };
   }
@@ -192,59 +228,6 @@ function mapRunStart(result: StartRunResult, requestId: string, session: Session
   );
 }
 
-function inputError(requestId: string, message: string, session?: Session): ChatSendUserInputUiResult {
-  return { payload: { type: 'error', ...(session ? { session: toChatSession(session) } : {}), requestId, message } };
-}
-
-function toChatSession(session: Session): ChatSessionUiDto {
-  return {
-    id: session.session_id,
-    projectId: session.workspace_id,
-    title: session.title,
-    status: session.status,
-    createdAt: session.created_at,
-    updatedAt: session.updated_at,
-  };
-}
-
-function toChatRun(run: Run): ChatRunUiDto {
-  return {
-    runId: run.runId,
-    sessionId: run.sessionId,
-    status: run.status,
-    createdAt: run.createdAt,
-    ...(run.completedAt ? { completedAt: run.completedAt } : {}),
-  };
-}
-
-function toTimelineUserMessage(projectId: string, item: SessionMessageWithAttachments): TimelineUserMessage {
-  const message = item.message;
-  return {
-    messageId: message.message_id,
-    role: 'user',
-    projectId,
-    sessionId: message.session_id,
-    ...(message.run_id ? { runId: message.run_id } : {}),
-    ...('skill_selection' in message && message.skill_selection
-      ? { skillSelection: { name: message.skill_selection.name, skillPath: message.skill_selection.skill_path } }
-      : {}),
-    createdAt: message.created_at,
-    ...(message.completed_at ? { updatedAt: message.completed_at } : {}),
-    blocks: [{
-      blockId: `user-text:${message.message_id}`,
-      kind: 'user_text',
-      text: sessionMessageText(message),
-      format: 'plain',
-      createdAt: message.created_at,
-    }, ...item.attachments.map((attachment) => ({
-      blockId: `user-attachment:${attachment.attachment_id}`,
-      kind: 'user_attachment' as const,
-      attachmentId: attachment.attachment_id,
-      attachmentType: attachment.type,
-      name: attachment.name ?? attachment.attachment_id,
-      ...(attachment.mime_type ? { mediaType: attachment.mime_type } : {}),
-      source: attachment.source_type === 'local_file' ? 'local_file' as const : 'unknown' as const,
-      createdAt: attachment.created_at,
-    }))],
-  };
+function inputError(requestId: string, message: string, session?: Session): SendUserInputResult {
+  return { payload: { type: 'error', ...(session ? { session: toSessionDto(session) } : {}), requestId, message } };
 }

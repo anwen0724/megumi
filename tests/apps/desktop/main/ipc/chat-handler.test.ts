@@ -99,7 +99,7 @@ describe('registerChatHandlers', () => {
     });
     const service = {
       host: {
-        chat: {
+        session: {
           getContextUsage,
         },
       },
@@ -138,7 +138,7 @@ describe('registerChatHandlers', () => {
     const { handlers, ipcMain } = createIpcMain();
     const service = {
       host: {
-        chat: {
+        session: {
           getContextUsage: vi.fn().mockResolvedValue({
             status: 'available',
             usage: { usedTokens: 'invalid' },
@@ -172,7 +172,7 @@ describe('registerChatHandlers', () => {
     });
     const service = {
       host: {
-        chat: {
+        session: {
           getSessionHydration,
         },
       },

@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { IconButton } from '../../../shared/ui';
 import type { InputSuggestionQueryItem, InputSuggestionQueryResult } from '@megumi/product/host';
-import type { ChatGetContextUsageUiResult } from '@megumi/product/host';
+import type { GetContextUsageResult } from '@megumi/product/host';
 import {
   COMPOSER_PERMISSION_MODE_OPTIONS,
   type ComposerModel,
@@ -51,7 +51,7 @@ export interface ComposerSurfaceProps {
   selectedInputSuggestionIndex: number;
   onInputSuggestionHover: (index: number) => void;
   selectedCommandCompletion: ComposerCommandCompletionUi | null;
-  contextUsage?: ChatGetContextUsageUiResult;
+  contextUsage?: GetContextUsageResult;
   selectedAttachments: ComposerDraftAttachment[];
   canAttachImages: boolean;
   canAttachDocuments: boolean;
@@ -342,7 +342,7 @@ function CommandCompletionChip({ completion }: { completion: ComposerCommandComp
   );
 }
 
-function ContextUsageIndicator({ contextUsage }: { contextUsage?: ChatGetContextUsageUiResult }) {
+function ContextUsageIndicator({ contextUsage }: { contextUsage?: GetContextUsageResult }) {
   const { t } = useTranslation('chat');
   const usage = contextUsage?.status === 'available' ? contextUsage.usage : null;
   const usagePercent = usage?.usedPercent ?? 0;

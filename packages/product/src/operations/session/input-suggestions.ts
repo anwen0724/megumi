@@ -4,53 +4,13 @@
  */
 
 import type { CommandListItem, Commands } from '@megumi/commands';
-import type { SkillSelection, Skills } from '@megumi/skills';
-
-export interface CommandInputSuggestion {
-  readonly kind: 'command';
-  readonly name: string;
-  readonly aliases?: readonly string[];
-  readonly description: string;
-  readonly argumentHint?: string;
-  readonly match: {
-    readonly field: 'name' | 'alias';
-    readonly value: string;
-    readonly prefix: string;
-  };
-  readonly replacementInput: string;
-}
-
-export interface SkillInputSuggestion {
-  readonly kind: 'skill';
-  readonly name: string;
-  readonly description: string;
-  readonly sourceLabel?: string;
-  readonly match: {
-    readonly field: 'name';
-    readonly value: string;
-    readonly prefix: string;
-  };
-  readonly replacementInput: string;
-  readonly selection: SkillSelection;
-}
-
-export type InputSuggestionItem = CommandInputSuggestion | SkillInputSuggestion;
-export type InputSuggestionQueryItem = InputSuggestionItem;
-
-export interface InputSuggestionGroup {
-  readonly id: 'commands' | 'skills';
-  readonly label: string;
-  readonly items: readonly InputSuggestionItem[];
-}
-
-export type InputSuggestionQueryResult =
-  | { readonly type: 'inactive' }
-  | {
-      readonly type: 'suggestions';
-      readonly draftInput: string;
-      readonly queryPrefix: string;
-      readonly groups: readonly InputSuggestionGroup[];
-    };
+import type { Skills } from '@megumi/skills';
+import type {
+  CommandInputSuggestion,
+  InputSuggestionGroup,
+  InputSuggestionQueryResult,
+  SkillInputSuggestion,
+} from '../../host/session-host';
 
 export interface InputSuggestionQueryRequest {
   readonly draftInput: string;

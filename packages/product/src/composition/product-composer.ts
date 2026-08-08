@@ -17,12 +17,10 @@ import {
   type DatabaseConnection,
   type ResolveDatabaseMigrationsFolderRequest,
 } from '@megumi/database';
-import { createRuns, type RunPolicy, type Runs } from '@megumi/engine';
+import { createRuns } from '@megumi/engine';
 import {
   createEventBus,
   type EventBus,
-  type EventSubscription,
-  type RecentEventBufferOptions,
 } from '@megumi/events';
 import { createInputProcessor, type InputSourceAccess } from '@megumi/input';
 import { createInstructionReader } from '@megumi/instructions';
@@ -51,7 +49,6 @@ import { createSessionStore } from '@megumi/session/store';
 import {
   createSettings,
   createSettingsCredentialStore,
-  type Settings,
   type SettingsEnvironment,
   type SettingsStore,
 } from '@megumi/settings';
@@ -72,33 +69,45 @@ import { createWorkspaceStore } from '@megumi/workspace/store';
 import {
   initializeMegumiHomeSync,
   type InitializeMegumiHomeSyncOptions,
-  type MegumiHomePaths,
-} from './home/home';
-import { createProductChat } from './chat';
-import { createProductApproval } from './approval';
+} from '../home/home-initializer';
+import type { MegumiHomePaths } from '../home/home-paths';
+import { createSessionOperations } from '../operations/session/session-operations';
+import { createApprovalOperations } from '../operations/approval-operations';
+import { createObservabilityOperations } from '../operations/observability-operations';
+import { createSettingsOperations } from '../operations/settings-operations';
+import { createSkillOperations } from '../operations/skill-operations';
+import { createWorkspaceOperations } from '../operations/workspace-operations';
 import { deriveContextUsage } from '@megumi/context';
-import { createInputSuggestionQuery } from './input-suggestions';
-import { createInputSubmission } from './input-submission';
-import { composeModels } from './models';
-import { createApprovalHost } from './host/approval-host';
-import { createUnavailableArtifactHost } from './host/artifact-host';
-import { createChatHost } from './host/chat-host';
+import { createInputSuggestionQuery } from '../operations/session/input-suggestions';
+import { createInputSubmission } from '../operations/session/input-submission';
+import { createSessionReader } from '../operations/session/session-reader';
+import { composeModels } from './model-composer';
+import {
+  PRODUCT_RECENT_EVENT_BUFFER,
+  PRODUCT_RUN_POLICY,
+  resolveAutoCompactPercent,
+  resolveModelVisibleOperatingSystem,
+} from './product-policy';
+import {
+  createProductResourceManager,
+  type ProductResourceManager,
+} from './product-resource-manager';
+import {
+  createProductRuntime,
+  type ProductRuntime,
+} from './product-runtime';
+import { createUnavailableArtifactHost } from '../host/artifact-host';
 import type {
-  InputAttachmentPickerPort,
-  LocalFileAvailabilityPort,
-} from './host/chat-contract';
-import { createObservabilityHost, type DiagnosticBundleSavePort } from './host/observability-host';
-import type { ProductHostInterface } from './host/product-host';
-import { createSettingsHost } from './host/settings-host';
-import { createSkillHost } from './host/skills-host';
-import { createWorkspaceHost } from './host/workspace-host';
-import type {
-  DirectoryPickerPort,
-  FileOpenPort,
-} from './host/workspace-contract';
-import { migrateLegacyPermissionSettingsFile } from './migrations/legacy-permission-settings';
-import { migrateLegacyProviderApiSettingsFile } from './migrations/legacy-provider-api-settings';
-import type { ProductWorkspaceFileSystem } from './workspace-file-system';
+  AttachmentPicker,
+} from '../host/capabilities/attachment-picker';
+import type { LocalFileAvailability } from '../host/capabilities/local-file-availability';
+import type { DiagnosticBundleSaver } from '../host/capabilities/diagnostic-bundle-saver';
+import type { ProductHostInterface } from '../host/product-host';
+import type { DirectoryPicker } from '../host/capabilities/directory-picker';
+import type { FileOpener } from '../host/capabilities/file-opener';
+import { migrateLegacyPermissionSettingsFile } from '../home/migrations/legacy-permission-settings';
+import { migrateLegacyProviderApiSettingsFile } from '../home/migrations/legacy-provider-api-settings';
+import type { ProductWorkspaceFileSystem } from '../host/capabilities/workspace-file-system';
 
 export interface ProductEnvironment {
   readonly appVersion: string;
@@ -113,12 +122,12 @@ export interface ComposeProductOptions {
   migrationEnvironment?: Omit<ResolveDatabaseMigrationsFolderRequest, 'migrationsFolder'>;
   observabilityStorage?: ObservabilityStorage;
   productEnvironment?: ProductEnvironment;
-  diagnosticBundleSave?: DiagnosticBundleSavePort;
-  directoryPicker?: DirectoryPickerPort;
-  fileOpen?: FileOpenPort;
+  diagnosticBundleSave?: DiagnosticBundleSaver;
+  directoryPicker?: DirectoryPicker;
+  fileOpen?: FileOpener;
   workspaceFileSystem: ProductWorkspaceFileSystem;
-  attachmentPicker?: InputAttachmentPickerPort;
-  localFileAvailability?: LocalFileAvailabilityPort;
+  attachmentPicker?: AttachmentPicker;
+  localFileAvailability?: LocalFileAvailability;
   settingsEnvironment?: ProductSettingsEnvironment;
   inputSourceAccess?: InputSourceAccess;
   sessionAttachmentFileSystem?: SessionAttachmentFileSystem;
@@ -131,26 +140,6 @@ export type ProductInputSourceAccess = NonNullable<ComposeProductOptions['inputS
 export type ProductSessionAttachmentFileSystem = NonNullable<ComposeProductOptions['sessionAttachmentFileSystem']>;
 export type ProductObservabilityStorage = NonNullable<ComposeProductOptions['observabilityStorage']>;
 
-export interface ProductRuntimeLogger {
-  info?(event: string, details?: Record<string, unknown>): void;
-  warn(event: string, details?: Record<string, unknown>): void;
-  error?(event: string, details?: Record<string, unknown>): void;
-}
-
-export interface ProductRuntime {
-  host: ProductHostInterface;
-  logger: ProductRuntimeLogger;
-  /**
-   * Subscribes to the runtime event bus. The desktop shell uses this to
-   * forward events to renderer windows over IPC.
-   */
-  subscribeRuntimeEvents(
-    filter: import('@megumi/events').EventFilter,
-    handler: import('@megumi/events').EventHandler,
-  ): import('@megumi/events').EventSubscription;
-  dispose(): Promise<void>;
-}
-
 type ProductModelResolver = (
   request: { provider_id: string; model_id: string },
 ) => Promise<ProductModelResolutionResult>;
@@ -159,17 +148,26 @@ type ProductModelResolutionResult =
   | { status: 'ok'; model: Model<Api> }
   | { status: 'failed'; failure: { code: string; message: string; retryable?: boolean } };
 
+/**
+ * Builds the complete Product in dependency order and rolls back every resource
+ * registered before a synchronous composition failure.
+ */
 export function composeProduct(options: ComposeProductOptions): ProductRuntime {
-  const resources: ProductResources = { eventSubscriptions: [] };
+  const resources = createProductResourceManager({
+    shutdownTimeoutMs: PRODUCT_RUN_POLICY.cancellationTimeoutMs + 2_000,
+  });
   try {
     return composeProductRuntime(options, resources);
   } catch (error) {
-    rollbackProductStartup(resources);
+    resources.rollbackStartup();
     throw error;
   }
 }
 
-function composeProductRuntime(options: ComposeProductOptions, resources: ProductResources): ProductRuntime {
+function composeProductRuntime(
+  options: ComposeProductOptions,
+  resources: ProductResourceManager,
+): ProductRuntime {
   const homePaths = initializeMegumiHomeSync(options.home);
   migrateLegacyPermissionSettingsFile(homePaths.settingsPath);
   migrateLegacyProviderApiSettingsFile(homePaths.settingsPath);
@@ -186,7 +184,7 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     terminalRetentionMs: PRODUCT_RUN_POLICY.terminalRunRetentionMs,
   });
   const database = openDatabase(homePaths, options);
-  resources.database = database;
+  resources.registerDatabase(database);
 
   const settings = createSettings({
     store: options.settingsStorage ?? createSettingsStore({ settingsPath: homePaths.settingsPath }),
@@ -271,7 +269,7 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
             workspaceRoot: workspace.workspace.root_path,
             environment: {
               workingDirectory: workspace.workspace.root_path,
-              operatingSystem: modelVisibleOperatingSystem(sandboxCapabilities.platform),
+              operatingSystem: resolveModelVisibleOperatingSystem(sandboxCapabilities.platform),
               shell: sandboxCapabilities.shellName ?? 'Unavailable',
             },
           }
@@ -393,10 +391,9 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
       ? { builtInToolAvailability: options.builtInToolAvailability }
       : {}),
   });
-  const eventSubscriptions: EventSubscription[] = [
+  resources.registerEventSubscription(
     events.subscribe({}, (event) => runProjection.project(event)),
-  ];
-  resources.eventSubscriptions.push(...eventSubscriptions);
+  );
   // The bus is the second producer's entry point too: branch facts publish here.
   const branches = createSessionBranchDrafts({
     events,
@@ -431,6 +428,7 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     runs,
     input,
     sessions,
+    history,
     branches,
     resolveModel,
   });
@@ -438,8 +436,16 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     commands,
     skills,
   });
-  const chat = createProductChat({
+  const sessionReader = createSessionReader({
+    sessions,
+    history,
+    runs,
+    events,
+    workspaceChanges,
+  });
+  const session = createSessionOperations({
     submission,
+    reader: sessionReader,
     runs,
     suggestions,
     sessions,
@@ -451,7 +457,7 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
     timeline,
     context: {
       deriveUsage: (history, model) => deriveContextUsage({ history, model }),
-      autoCompactPercent: autoCompactPercent(settings),
+      autoCompactPercent: resolveAutoCompactPercent(settings),
     },
     resolveModel: async (selection) => {
       const resolved = await resolveModel(selection);
@@ -462,7 +468,7 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
   });
   // The workspace subscriber needs the engine to resolve run -> workspace;
   // subscribe after engine creation so the closure can reference it.
-  resources.eventSubscriptions.push(
+  resources.registerEventSubscription(
     events.subscribe(
       { eventTypes: ['run.ended'] },
       createWorkspaceChangeEventHandler(workspaceChanges, (runId) => {
@@ -471,62 +477,34 @@ function composeProductRuntime(options: ComposeProductOptions, resources: Produc
       }),
     ),
   );
-  const approval = createProductApproval(runs);
   const host: ProductHostInterface = {
-    chat: createChatHost(chat),
-    skill: createSkillHost({ skills }),
-    workspace: createWorkspaceHost({
+    session,
+    skill: createSkillOperations({ skills }),
+    workspace: createWorkspaceOperations({
       workspaceService: workspaces,
       workspaceFilesService: workspaceFiles,
       ...(options.directoryPicker ? { directoryPicker: options.directoryPicker } : {}),
       ...(options.fileOpen ? { fileOpen: options.fileOpen } : {}),
     }),
-    settings: createSettingsHost(settings, {
+    settings: createSettingsOperations(settings, {
       listAvailableTools: () => [...tools.listAvailableTools().tools],
     }),
-    approval: createApprovalHost(approval),
+    approval: createApprovalOperations(runs),
     artifacts: createUnavailableArtifactHost(),
-    observability: createObservabilityHost({
+    observability: createObservabilityOperations({
       queries: observability.queryService,
       flush: observability.flush,
       ...(options.diagnosticBundleSave ? { save: options.diagnosticBundleSave } : {}),
     }),
   };
 
-  let disposePromise: Promise<void> | undefined;
-  return {
+  return createProductRuntime({
     host,
     logger,
     subscribeRuntimeEvents: (filter, handler) => events.subscribe(filter, handler),
-    dispose: () => {
-      disposePromise ??= disposeProduct({ runs, eventSubscriptions, observability, database });
-      return disposePromise;
-    },
-  };
+    dispose: () => resources.dispose({ runs, observability }),
+  });
 }
-
-const PRODUCT_RECENT_EVENT_BUFFER = {
-  maxSessions: 64,
-  maxEventsPerSession: 2_048,
-} satisfies RecentEventBufferOptions;
-
-const PRODUCT_RUN_POLICY = {
-  maxModelCallsPerRun: 80,
-  maxToolRoundsPerRun: 50,
-  maxToolCallsPerModelCall: 32,
-  maxToolCallsPerRun: 256,
-  maxConcurrentToolExecutions: 4,
-  modelCallTimeoutMs: 120_000,
-  toolExecutionTimeoutMs: 120_000,
-  cancellationTimeoutMs: 10_000,
-  maxModelCallAttempts: 3,
-  modelRetryDelayMs: 1_000,
-  maxToolExecutionsPerCall: 1,
-  maxContextOverflowRecoveries: 1,
-  providerRequestMaxRetries: 2,
-  providerRequestMaxRetryDelayMs: 60_000,
-  terminalRunRetentionMs: 300_000,
-} satisfies RunPolicy;
 
 function openDatabase(homePaths: MegumiHomePaths, options: ComposeProductOptions): DatabaseConnection {
   const database = createDatabase({ filename: path.join(homePaths.sqlitePath, 'megumi.sqlite') });
@@ -573,93 +551,6 @@ function recoverInterruptedSessionCompactions(
   }
 }
 
-function modelVisibleOperatingSystem(platform: NodeJS.Platform): string {
-  if (platform === 'win32') return 'Windows';
-  if (platform === 'darwin') return 'macOS';
-  if (platform === 'linux') return 'Linux';
-  return platform;
-}
-
-/** The UI-facing auto-compact percentage falls back to the default when settings cannot be read. */
-function autoCompactPercent(settings: Settings): number {
-  const resolved = settings.resolve();
-  const ratio = resolved.status === 'ok'
-    ? resolved.settings.context.compaction_threshold_ratio
-    : 0.8;
-  return Math.round((ratio ?? 0.8) * 100);
-}
-
-interface ProductResources {
-  database?: DatabaseConnection;
-  eventSubscriptions: EventSubscription[];
-}
-
-function rollbackProductStartup(resources: ProductResources): void {
-  for (const subscription of [...resources.eventSubscriptions].reverse()) {
-    try {
-      subscription.unsubscribe();
-    } catch {
-      // Startup rollback preserves the original composition failure.
-    }
-  }
-  if (!resources.database) return;
-  try {
-    resources.database.close();
-  } catch {
-    // Startup rollback preserves the original composition failure.
-  }
-}
-
-interface ProductDisposeFailure {
-  readonly resource: 'runs' | 'events' | 'observability' | 'database';
-  readonly error: unknown;
-}
-
-async function disposeProduct(input: {
-  runs: Runs;
-  eventSubscriptions: readonly EventSubscription[];
-  observability: { flush(): Promise<void> };
-  database: DatabaseConnection;
-}): Promise<void> {
-  const failures: ProductDisposeFailure[] = [];
-  try {
-    const result = await input.runs.shutdown({
-      timeoutMs: PRODUCT_RUN_POLICY.cancellationTimeoutMs + 2_000,
-    });
-    if (result.status === 'timed_out') {
-      failures.push({
-        resource: 'runs',
-        error: new Error(`Engine shutdown timed out with ${result.activeRuns.length} active Run(s).`),
-      });
-    }
-  } catch (error) {
-    failures.push({ resource: 'runs', error });
-  }
-
-  for (const subscription of input.eventSubscriptions) {
-    try {
-      subscription.unsubscribe();
-    } catch (error) {
-      failures.push({ resource: 'events', error });
-    }
-  }
-  try {
-    await input.observability.flush();
-  } catch (error) {
-    failures.push({ resource: 'observability', error });
-  }
-  try {
-    input.database.close();
-  } catch (error) {
-    failures.push({ resource: 'database', error });
-  }
-  if (failures.length > 0) {
-    throw new AggregateError(
-      failures.map((failure) => failure.error),
-      `Product disposal failed for: ${failures.map((failure) => failure.resource).join(', ')}.`,
-    );
-  }
-}
 
 const unavailableInputSourceAccess: InputSourceAccess = {
   async readImage() { throw new Error('Host image file reading is unavailable.'); },

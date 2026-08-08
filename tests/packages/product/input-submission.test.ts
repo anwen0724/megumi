@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import type { StartRunRequest, StartRunResult } from '@megumi/engine';
-import { createInputSubmission } from '../../../packages/product/src/input-submission';
+import { createInputSubmission } from '../../../packages/product/src/operations/session/input-submission';
 
 describe('Product InputSubmission', () => {
   it('calls Input exactly once and does not create Session or Run for a completed result', async () => {

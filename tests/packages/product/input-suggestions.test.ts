@@ -1,6 +1,6 @@
 /* Verifies the aggregated `/` suggestion query filters by prefix and stays inactive for non-slash drafts. */
 import { describe, expect, it, vi } from 'vitest';
-import { createInputSuggestionQuery } from '../../../packages/product/src/input-suggestions';
+import { createInputSuggestionQuery } from '../../../packages/product/src/operations/session/input-suggestions';
 
 function createQuery(input: {
   commands?: Array<{ name: string; aliases?: string[]; description: string; hiddenFromSuggestions?: boolean }>;

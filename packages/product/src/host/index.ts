@@ -55,8 +55,6 @@ export function reduceRuntimeTimelineEvent(
 
 export * from './product-host';
 export type {
-  DirectoryPickerPort,
-  FileOpenPort,
   WorkspaceFileEntryUiDto,
   WorkspaceListFilesUiResult,
   WorkspaceListProjectsUiResult,
@@ -65,42 +63,56 @@ export type {
   WorkspaceProjectUiDto,
   WorkspaceRemoveProjectUiResult,
   WorkspaceUseExistingProjectUiResult,
-} from './workspace-contract';
+} from './workspace-host';
 export type { WorkspaceHost } from './workspace-host';
+export type { DirectoryPicker, DirectoryPickerResult } from './capabilities/directory-picker';
+export type { FileOpener, FileOpenResult } from './capabilities/file-opener';
 export type {
-  ChatCancelBranchDraftUiResult,
-  ChatCancelUserInputUiResult,
-  ChatCancelUserInputUiPayload,
-  ChatCreateBranchDraftUiResult,
-  ChatCreateSessionUiResult,
-  ChatGetInputSuggestionsUiResult,
-  ChatGetContextUsageUiResult,
-  ChatGetSessionHydrationUiResult,
-  ChatHost,
-  ChatListMessagesUiResult,
-  ChatListRunEventsUiResult,
-  ChatListRunsUiResult,
-  ChatListSessionsUiResult,
-  ChatListTimelineUiResult,
-  ChatRunUiDto,
-  ChatSendUserInputUiPayload,
-  ChatSendUserInputUiResult,
-  ChatSessionUiDto,
+  CancelBranchDraftResult,
+  CancelUserInputResult,
+  CancelUserInputPayload,
+  CreateBranchDraftResult,
+  CreateSessionResult,
+  GetInputSuggestionsResult,
+  GetContextUsageResult,
+  GetSessionHydrationResult,
+  ReadSessionRequest,
+  ReadSessionResult,
+  ReadCommittedRunRequest,
+  ReadCommittedRunResult,
+  SessionHost,
+  ListUserMessagesByRunIdsResult,
+  ListRunEventsResult,
+  ListRunsResult,
+  ListSessionsResult,
+  ListSessionTimelineResult,
+  RunDto,
+  SendUserInputPayload,
+  SendUserInputResult,
+  SessionDto,
+  SessionConversationItemDto,
+  SessionMessageConversationItemDto,
+  SessionMessageDto,
+  SessionBranchConversationItemDto,
+  UserMessageDto,
+  WorkspaceChangeSummaryDto,
+  SessionReadDiagnosticDto,
+  SessionRuntimeEventRangeDto,
   InputSuggestionQueryItem,
   InputSuggestionQueryResult,
   PermissionMode,
-  InputAttachmentPickerPort,
-  LocalFileAvailabilityPort,
-  SelectedImageUiDto,
-  SelectedDocumentUiDto,
-  ChatInputCapabilitiesUiResult,
-  ChatSelectImagesUiResult,
-  ChatSelectDocumentsUiResult,
-  ChatReadAttachmentImageUiRequest,
-  ChatReadAttachmentImageUiResult,
-  ChatGetAttachmentFileStatusUiRequest,
-  ChatGetAttachmentFileStatusUiResult,
-} from './chat-contract';
+  SelectedImageDto,
+  SelectedDocumentDto,
+  InputCapabilitiesResult,
+  SelectImagesResult,
+  SelectDocumentsResult,
+  ReadAttachmentImageRequest,
+  ReadAttachmentImageResult,
+  GetAttachmentFileStatusRequest,
+  GetAttachmentFileStatusResult,
+} from './session-host';
+export type { AttachmentPicker } from './capabilities/attachment-picker';
+export type { LocalFileAvailability } from './capabilities/local-file-availability';
 export type {
   DisableSkillUiResponse,
   DeleteSkillUiResponse,
@@ -111,7 +123,7 @@ export type {
   SkillDetailUiDto,
   SkillHost,
   SkillListUiItem,
-} from './skills-host';
+} from './skill-host';
 export type {
   AppLanguage,
   AppThemeName,
@@ -134,7 +146,7 @@ export type {
   SettingsUiResolved,
   SettingsUpdatePayload,
   SettingsUpdateUiResult,
-} from './settings-contract';
+} from './settings-host';
 export type { SettingsHost } from './settings-host';
 export type {
   ApprovalHost,
@@ -153,7 +165,8 @@ export type {
   ArtifactVersionCreateData,
   ArtifactVersionGetData,
 } from './artifact-host';
-export type { ObservabilityHost, DiagnosticBundleSavePort } from './observability-host';
+export type { ObservabilityHost } from './observability-host';
+export type { DiagnosticBundleSaver } from './capabilities/diagnostic-bundle-saver';
 export type {
   DiagnosticBundleDto,
   DiagnosticBundleFileDto,
@@ -163,7 +176,7 @@ export type {
   ObservabilityListRunTracesUiResult,
   ObservabilityRunTraceDetailUiDto,
   ObservabilityRunTraceSummaryUiDto,
-} from './observability-contract';
+} from './observability-host';
 export { ObservabilityListPayloadSchema, ObservabilityRunPayloadSchema, ObservabilityQueryResultSchema } from './observability-host';
 export {
   WorkspaceListProjectsPayloadSchema,
@@ -178,12 +191,14 @@ export {
   WorkspaceRemoveProjectUiResultSchema,
   WorkspaceListFilesUiResultSchema,
   WorkspaceOpenFileUiResultSchema,
-} from './workspace-contract';
+} from './workspace-host';
 export {
   InputSuggestionsPayloadSchema,
   SessionCreatePayloadSchema,
   SessionListPayloadSchema,
   SessionMessageListPayloadSchema,
+  SessionReadPayloadSchema,
+  CommittedRunReadPayloadSchema,
   SessionTimelineListPayloadSchema,
   SessionHydrationGetPayloadSchema,
   SessionContextUsageGetPayloadSchema,
@@ -199,25 +214,35 @@ export {
   ImageInputClipboardReadPayloadSchema,
   AttachmentImageReadPayloadSchema,
   AttachmentFileStatusPayloadSchema,
-  ChatInputCapabilitiesUiResultSchema,
-  ChatSelectImagesUiResultSchema,
-  ChatSelectDocumentsUiResultSchema,
-  ChatReadAttachmentImageUiResultSchema,
-  ChatGetAttachmentFileStatusUiResultSchema,
-  ChatSendUserInputUiPayloadSchema,
-  ChatGetInputSuggestionsUiResultSchema,
-  ChatCreateSessionUiResultSchema,
-  ChatListSessionsUiResultSchema,
-  ChatListMessagesUiResultSchema,
-  ChatListTimelineUiResultSchema,
-  ChatGetSessionHydrationUiResultSchema,
-  ChatCancelUserInputUiPayloadSchema,
-  ChatCreateBranchDraftUiPayloadSchema,
-  ChatCancelBranchDraftUiPayloadSchema,
-  ChatListRunsUiResultSchema,
-  ChatListRunEventsUiResultSchema,
-  ChatGetContextUsageUiResultSchema,
-} from './chat-contract';
+  InputCapabilitiesResultSchema,
+  SelectImagesResultSchema,
+  SelectDocumentsResultSchema,
+  ReadAttachmentImageResultSchema,
+  AttachmentFileStatusResultSchema,
+  SendUserInputPayloadSchema,
+  GetInputSuggestionsResultSchema,
+  CreateSessionResultSchema,
+  ListSessionsResultSchema,
+  ListUserMessagesByRunIdsResultSchema,
+  ListSessionTimelineResultSchema,
+  GetSessionHydrationResultSchema,
+  CancelUserInputPayloadSchema,
+  CreateBranchDraftPayloadSchema,
+  CancelBranchDraftPayloadSchema,
+  ListRunsResultSchema,
+  ListRunEventsResultSchema,
+  GetContextUsageResultSchema,
+  ReadSessionResultSchema,
+  ReadCommittedRunResultSchema,
+  SessionDtoSchema,
+  RunDtoSchema,
+  UserMessageDtoSchema,
+  SessionMessageDtoSchema,
+  SessionMessageConversationItemDtoSchema,
+  SessionConversationItemDtoSchema,
+  SessionBranchConversationItemDtoSchema,
+  WorkspaceChangeSummaryDtoSchema,
+} from './session-host';
 export {
   SkillListPayloadSchema,
   SkillGetPayloadSchema,
@@ -231,7 +256,7 @@ export {
   DisableSkillUiResponseSchema,
   DeleteSkillUiResponseSchema,
   RefreshSkillsUiResponseSchema,
-} from './skills-host';
+} from './skill-host';
 export {
   SettingsGetPayloadSchema,
   SettingsUpdatePayloadSchema,
@@ -246,7 +271,7 @@ export {
   SettingsCompleteSetupUiResultSchema,
   ProviderListUiResultSchema,
   EmptyUiResultSchema,
-} from './settings-contract';
+} from './settings-host';
 export { ApprovalResolvePayloadSchema, ApprovalResolveResultSchema } from './approval-host';
 export {
   ArtifactListByRunPayloadSchema,

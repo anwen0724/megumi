@@ -27,6 +27,8 @@ import {
   type GetActiveConversationHistoryResult,
   type GetCommittedBranchRequest,
   type GetCommittedBranchResult,
+  type GetCommittedRunMessagesRequest,
+  type GetCommittedRunMessagesResult,
   type SessionConversationReader,
 } from './session-conversation';
 import type {
@@ -155,6 +157,7 @@ export interface SessionHistory {
     request: GetActiveConversationHistoryRequest,
   ): GetActiveConversationHistoryResult;
   getCommittedBranch(request: GetCommittedBranchRequest): GetCommittedBranchResult;
+  getCommittedRunMessages(request: GetCommittedRunMessagesRequest): GetCommittedRunMessagesResult;
   beginCompaction(request: BeginCompactionRequest): BeginCompactionResult;
   completeCompaction(request: CompleteCompactionRequest): CompleteCompactionResult;
   endCompaction(request: EndCompactionRequest): EndCompactionResult;
@@ -187,6 +190,7 @@ export function createSessionHistory(options: CreateSessionHistoryOptions): Sess
     getActiveHistory: (request) => implementation.getActiveHistory(request),
     getActiveConversationHistory: (request) => implementation.getActiveConversationHistory(request),
     getCommittedBranch: (request) => implementation.getCommittedBranch(request),
+    getCommittedRunMessages: (request) => implementation.getCommittedRunMessages(request),
     beginCompaction: (request) => implementation.beginCompaction(request),
     completeCompaction: (request) => implementation.completeCompaction(request),
     endCompaction: (request) => implementation.endCompaction(request),
@@ -465,6 +469,11 @@ class DefaultSessionHistory implements SessionHistory {
   /** Resolves a committed Branch from the same Entry Graph rule used by full history. */
   getCommittedBranch(request: GetCommittedBranchRequest): GetCommittedBranchResult {
     return this.conversation.getCommittedBranch(request);
+  }
+
+  /** Reads one Run's messages from the current committed conversation branch. */
+  getCommittedRunMessages(request: GetCommittedRunMessagesRequest): GetCommittedRunMessagesResult {
+    return this.conversation.getCommittedRunMessages(request);
   }
 
   /** Persists the running lifecycle fact before Context emits a started event. */

@@ -1,9 +1,8 @@
 /*
- * Verifies Product approval resolution and the thin Host forwarding adapter.
+ * Verifies Product approval operations against the Engine-owned Run state.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { createProductApproval } from '../../../../packages/product/src/approval';
-import { createApprovalHost } from '../../../../packages/product/src/host/approval-host';
+import { createApprovalOperations } from '../../../../packages/product/src/operations/approval-operations';
 
 describe('ApprovalHost', () => {
   it('maps an approved decision to Engine', async () => {
@@ -11,7 +10,7 @@ describe('ApprovalHost', () => {
       status: 'accepted' as const,
       run: runFixture('waiting'),
     }));
-    const host = createApprovalHost(createProductApproval({ resolveApproval } as never));
+    const host = createApprovalOperations({ resolveApproval } as never);
 
     const result = await host.resolve({
       approvalRequestId: 'approval:1',
@@ -47,7 +46,7 @@ describe('ApprovalHost', () => {
       status: 'accepted' as const,
       run: runFixture('waiting'),
     }));
-    const host = createApprovalHost(createProductApproval({ resolveApproval } as never));
+    const host = createApprovalOperations({ resolveApproval } as never);
 
     await host.resolve({
       approvalRequestId: 'approval:1',
@@ -102,9 +101,9 @@ describe('ApprovalHost', () => {
       },
     ],
   ])('projects Engine approval result %s', async (engineResult, expectedPayload) => {
-    const host = createApprovalHost(createProductApproval({
+    const host = createApprovalOperations({
       resolveApproval: vi.fn(async () => engineResult),
-    } as never));
+    } as never);
 
     const result = await host.resolve({
       approvalRequestId: 'approval:1',

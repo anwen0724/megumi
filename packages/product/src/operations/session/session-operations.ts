@@ -1,8 +1,7 @@
 /*
- * Owns Product Chat queries and interactions outside the single submit chain.
+ * Owns Product Session operations outside the single input submission chain.
  * The submit chain itself is delegated to the dedicated InputSubmission owner.
  */
-import type { ContextCapabilities } from '@megumi/context';
 import type { Run, Runs } from '@megumi/engine';
 import { DEFAULT_INPUT_POLICY, DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from '@megumi/input';
 import type { Session, SessionAttachmentReader, SessionBranchDrafts, SessionCatalog, SessionHistory, SessionMessageWithAttachments } from '@megumi/session';
@@ -12,22 +11,23 @@ import type { WorkspaceCatalog } from '@megumi/workspace';
 import type { InputSubmission } from './input-submission';
 
 import type {
-  ChatHost,
-  ChatHostFailure,
-  ChatRunUiDto,
-  ChatSessionMessageUiDto,
-  ChatSessionUiDto,
-  InputAttachmentPickerPort,
-  LocalFileAvailabilityPort,
-} from './host/chat-contract';
+  SessionHost,
+  HostFailure,
+  RunDto,
+  UserMessageSummaryDto,
+} from '../../host/session-host';
+import type { AttachmentPicker } from '../../host/capabilities/attachment-picker';
+import type { LocalFileAvailability } from '../../host/capabilities/local-file-availability';
 import type { InputSuggestionQuery } from './input-suggestions';
+import type { SessionReader } from './session-reader';
+import { toRunDto, toSessionDto } from './session-reader';
 
-export type ProductChat = Omit<ChatHost, 'sendUserInput'> & {
-  submit: InputSubmission['submit'];
-};
+export type SessionOperations = SessionHost;
 
-export function createProductChat(options: {
+/** Creates the concrete Product operations exposed through SessionHost. */
+export function createSessionOperations(options: {
   submission: InputSubmission;
+  reader: SessionReader;
   runs: Pick<Runs, 'cancel'>;
   suggestions: InputSuggestionQuery;
   sessions: SessionCatalog;
@@ -48,15 +48,17 @@ export function createProductChat(options: {
     provider_id: string;
     model_id: string;
   }) => Promise<import('@megumi/ai').Model<import('@megumi/ai').Api> | undefined>;
-  attachmentPicker?: InputAttachmentPickerPort;
-  localFileAvailability?: LocalFileAvailabilityPort;
-}): ProductChat {
+  attachmentPicker?: AttachmentPicker;
+  localFileAvailability?: LocalFileAvailability;
+}): SessionOperations {
   return {
-    submit: (request) => options.submission.submit(request),
+    sendUserInput: (request) => options.submission.submit(request),
+    readSession: (request) => options.reader.readSession(request),
+    readCommittedRun: (request) => options.reader.readCommittedRun(request),
     async createSession(request) {
       const result = options.sessions.createSession({ workspace_id: request.projectId, ...(request.title ? { title: request.title } : {}) });
       return result.status === 'created'
-        ? { status: 'created', session: toChatSession(result.session) }
+        ? { status: 'created', session: toSessionDto(result.session) }
         : { status: 'failed', failure: toFailure(result.failure) };
     },
     async listSessions() {
@@ -67,35 +69,25 @@ export function createProductChat(options: {
         if (result.status === 'failed') return { status: 'failed', failure: toFailure(result.failure) };
         sessions.push(...result.sessions);
       }
-      return { status: 'ok', sessions: sessions.map(toChatSession) };
+      return { status: 'ok', sessions: sessions.map(toSessionDto) };
     },
-    async listMessages(request) {
-      if ('runIds' in request) {
-        const result = options.history.listUserMessagesByRunIds({ run_ids: request.runIds });
-        if (result.status === 'failed') return { status: 'failed', failure: toFailure(result.failure) };
-        return { status: 'ok', messages: result.messages.map((message) => toChatMessage({ message, attachments: [] })) };
-      }
-      const result = options.history.getActiveConversationHistory({ session_id: request.sessionId });
-      return result.status === 'failed'
-        ? { status: 'failed', failure: toFailure(result.failure) }
-        : {
-            status: 'ok',
-            messages: result.conversation.flatMap((item) => (
-              item.type === 'message'
-                ? [toChatMessage({ message: item.message, attachments: [...item.attachments] })]
-                : []
-            )),
-          };
+    async listUserMessagesByRunIds(request) {
+      const result = options.history.listUserMessagesByRunIds({ run_ids: request.runIds });
+      if (result.status === 'failed') return { status: 'failed', failure: toFailure(result.failure) };
+      return {
+        status: 'ok',
+        messages: result.messages.map((message) => toUserMessageSummary({ message, attachments: [] })),
+      };
     },
     async listTimeline(request) {
       return options.timeline.list({ workspaceId: request.projectId, sessionId: request.sessionId, ...(request.runId ? { runId: request.runId } : {}) });
     },
     async cancelUserInput(request) {
       const result = await options.runs.cancel({ runId: request.runId });
-      if (result.status === 'cancellation_requested') return { payload: { status: 'cancellation_requested', run: toChatRun(result.run) } };
-      if (result.status === 'already_cancelling') return { payload: { status: 'cancelling', run: toChatRun(result.run) } };
+      if (result.status === 'cancellation_requested') return { payload: { status: 'cancellation_requested', run: toRunDto(result.run) } };
+      if (result.status === 'already_cancelling') return { payload: { status: 'cancelling', run: toRunDto(result.run) } };
       if (result.status === 'not_found') return { payload: { status: 'not_found', runId: result.runId } };
-      return { payload: { status: 'not_cancellable', run: toChatRun(result.run), reason: 'already_terminal' } };
+      return { payload: { status: 'not_cancellable', run: toRunDto(result.run), reason: 'already_terminal' } };
     },
     createBranchDraft(request) {
       const result = options.branches.createBranchDraft({ request_id: request.requestId, session_id: request.sessionId, source_message_id: request.messageId });
@@ -112,12 +104,12 @@ export function createProductChat(options: {
     async getInputSuggestions(request) {
       return { suggestions: await options.suggestions.getInputSuggestions({ draftInput: request.draftInput, ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}) }) };
     },
-    async listRuns(request) { return { runs: options.runProjection.listRuns({ sessionId: request.sessionId }).map(toChatRun) }; },
+    async listRuns(request) { return { runs: options.runProjection.listRuns({ sessionId: request.sessionId }).map(toLegacyRunDto) }; },
     async listRunEvents(request) { return { events: [...options.runProjection.listEvents({ runId: request.runId })] }; },
     async getSessionHydration(request) {
       const timeline = options.timeline.list({ workspaceId: request.projectId, sessionId: request.sessionId });
       const runs = options.runProjection.listRuns({ sessionId: request.sessionId });
-      return { messages: timeline.messages, diagnostics: timeline.diagnostics, runs: runs.map(toChatRun), runtimeEvents: runs.flatMap((run) => options.runProjection.listEvents({ runId: run.runId })) };
+      return { messages: timeline.messages, diagnostics: timeline.diagnostics, runs: runs.map(toLegacyRunDto), runtimeEvents: runs.flatMap((run) => options.runProjection.listEvents({ runId: run.runId })) };
     },
     async getContextUsage(request) {
       const history = options.history.getActiveHistory({ session_id: request.sessionId });
@@ -168,17 +160,14 @@ export function createProductChat(options: {
   };
 }
 
-function toChatSession(session: Session): ChatSessionUiDto {
-  return { id: session.session_id, projectId: session.workspace_id, title: session.title, status: session.status, createdAt: session.created_at, updatedAt: session.updated_at };
-}
-function toChatMessage(item: SessionMessageWithAttachments): ChatSessionMessageUiDto {
+function toUserMessageSummary(item: SessionMessageWithAttachments): UserMessageSummaryDto {
   const message = item.message;
   return { id: message.message_id, sessionId: message.session_id, ...(message.run_id ? { runId: message.run_id } : {}), role: message.message_kind === 'user_message' ? 'user' : message.message_kind === 'tool_result' ? 'toolResult' : 'assistant', text: sessionMessageText(message), createdAt: message.created_at };
 }
-function toChatRun(run: Run | ProjectedRun): ChatRunUiDto {
+function toLegacyRunDto(run: Run | ProjectedRun): RunDto {
   return { runId: run.runId, sessionId: run.sessionId, status: run.status, createdAt: run.createdAt, ...(run.completedAt ? { completedAt: run.completedAt } : {}) };
 }
 function pickerFailure(code: string, message: string) { return { status: 'failed' as const, failure: { code, message } }; }
-function toFailure(failure: { code: string; message: string; retryable?: boolean }): ChatHostFailure {
+function toFailure(failure: { code: string; message: string; retryable?: boolean }): HostFailure {
   return { code: failure.code, message: failure.message, ...(failure.retryable !== undefined ? { retryable: failure.retryable } : {}) };
 }

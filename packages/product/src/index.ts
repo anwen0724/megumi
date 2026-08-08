@@ -7,36 +7,35 @@ export {
   type ProductEnvironment,
   type ProductInputSourceAccess,
   type ProductObservabilityStorage,
-  type ProductRuntime,
-  type ProductRuntimeLogger,
   type ProductSessionAttachmentFileSystem,
   type ProductSettingsEnvironment,
-} from './product';
+} from './composition/product-composer';
+export type { ProductRuntime, ProductRuntimeLogger } from './composition/product-runtime';
 export type { ProductHostInterface } from './host/product-host';
+export type { DirectoryPicker } from './host/capabilities/directory-picker';
+export type { FileOpener } from './host/capabilities/file-opener';
+export type { ProductWorkspaceFileSystem } from './host/capabilities/workspace-file-system';
 export type {
-  DirectoryPickerPort,
-  FileOpenPort,
-} from './host/workspace-contract';
-export type { ProductWorkspaceFileSystem } from './workspace-file-system';
-export type {
-  InputAttachmentPickerPort,
-  LocalFileAvailabilityPort,
-} from './host/chat-contract';
-export type { DiagnosticBundleSavePort } from './host/observability-host';
-export type { DiagnosticBundleDto } from './host/observability-contract';
+  AttachmentPicker,
+} from './host/capabilities/attachment-picker';
+export type { LocalFileAvailability } from './host/capabilities/local-file-availability';
+export type { DiagnosticBundleSaver } from './host/capabilities/diagnostic-bundle-saver';
+export type { DiagnosticBundleDto } from './host/observability-host';
 export {
-  buildMegumiHomePaths,
   createMegumiHomeReadme,
   createMegumiHomeVersion,
   createMegumiSettingsSchema,
   initializeMegumiHome,
   initializeMegumiHomeSync,
-  resolveMegumiHomePath,
   type InitializeMegumiHomeOptions,
   type InitializeMegumiHomeSyncOptions,
   type MegumiHomeFileSystem,
-  type MegumiHomePaths,
-  type MegumiHomeResourceLocator,
   type MegumiHomeSyncFileSystem,
-} from './home/home';
-export * from './resources';
+} from './home/home-initializer';
+export {
+  buildMegumiHomePaths,
+  resolveMegumiHomePath,
+  type MegumiHomePaths,
+} from './home/home-paths';
+export type { MegumiHomeResourceLocator } from './home/home-resources';
+export * from './packaging/product-resources';

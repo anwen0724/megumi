@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createWorkspaceHost } from '../../../../packages/product/src/host/workspace-host';
+import { createWorkspaceOperations } from '../../../../packages/product/src/operations/workspace-operations';
 
 describe('WorkspaceHost semantics', () => {
   it('projects remove results without collapsing owner statuses into booleans', () => {
-    const host = createWorkspaceHost({
+    const host = createWorkspaceOperations({
       workspaceService: {
         openWorkspace: vi.fn(),
         activateWorkspace: vi.fn(),
@@ -22,7 +22,7 @@ describe('WorkspaceHost semantics', () => {
   });
 
   it('preserves blocked remove results from the Workspace owner', () => {
-    const host = createWorkspaceHost({
+    const host = createWorkspaceOperations({
       workspaceService: {
         openWorkspace: vi.fn(),
         activateWorkspace: vi.fn(),
@@ -46,7 +46,7 @@ describe('WorkspaceHost semantics', () => {
   });
 
   it('returns openWorkspace owner failures from useExistingProject without throwing', async () => {
-    const host = createWorkspaceHost({
+    const host = createWorkspaceOperations({
       workspaceService: {
         openWorkspace: vi.fn(async () => ({
           status: 'failed' as const,
@@ -69,7 +69,7 @@ describe('WorkspaceHost semantics', () => {
   });
 
   it('returns activateWorkspace owner statuses from openProject without throwing', async () => {
-    const notFoundHost = createWorkspaceHost({
+    const notFoundHost = createWorkspaceOperations({
       workspaceService: {
         openWorkspace: vi.fn(),
         activateWorkspace: vi.fn(async () => ({ status: 'not_found' as const, workspace_id: 'workspace:missing' })),
@@ -85,7 +85,7 @@ describe('WorkspaceHost semantics', () => {
       projectId: 'workspace:missing',
     });
 
-    const failedHost = createWorkspaceHost({
+    const failedHost = createWorkspaceOperations({
       workspaceService: {
         openWorkspace: vi.fn(),
         activateWorkspace: vi.fn(async () => ({
@@ -106,7 +106,7 @@ describe('WorkspaceHost semantics', () => {
   });
 
   it('uses truthful project timestamp names in Host DTOs', async () => {
-    const host = createWorkspaceHost({
+    const host = createWorkspaceOperations({
       workspaceService: {
         listWorkspaces: vi.fn(async () => ({
           workspaces: [{

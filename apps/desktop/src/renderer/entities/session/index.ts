@@ -1,2 +1,2 @@
 export { useSessionStore } from './store';
-export type { ChatSessionUiDto as RendererSession } from '@megumi/product/host';
+export type { SessionDto as RendererSession } from '@megumi/product/host';

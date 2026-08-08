@@ -10,7 +10,7 @@ import {
   XCircle,
 } from "lucide-react";
 import type {
-  ChatSessionUiDto,
+  SessionDto,
   ObservabilityRunTraceDetailUiDto,
   ObservabilityRunTraceSummaryUiDto,
   WorkspaceProjectUiDto,
@@ -28,7 +28,7 @@ export function DiagnosticsPanel() {
   const { t } = useTranslation('settings');
   const [traces, setTraces] = useState<ObservabilityRunTraceSummaryUiDto[]>([]);
   const [projects, setProjects] = useState<WorkspaceProjectUiDto[]>([]);
-  const [sessions, setSessions] = useState<ChatSessionUiDto[]>([]);
+  const [sessions, setSessions] = useState<SessionDto[]>([]);
   const [runInputById, setRunInputById] = useState<Record<string, string>>({});
   const [projectFilter, setProjectFilter] = useState(ALL_FILTER);
   const [sessionFilter, setSessionFilter] = useState(ALL_FILTER);
@@ -469,7 +469,7 @@ function formatRunFallback(_trace: ObservabilityRunTraceSummaryUiDto): string {
 function formatRunSource(
   trace: ObservabilityRunTraceSummaryUiDto,
   projectNameById: ReadonlyMap<string, string>,
-  sessionById: ReadonlyMap<string, ChatSessionUiDto>,
+  sessionById: ReadonlyMap<string, SessionDto>,
 ): string {
   const projectName = trace.workspaceId
     ? projectNameById.get(trace.workspaceId) ?? rendererI18n.t('settings:diagnostics.unavailableProject')

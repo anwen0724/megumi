@@ -2,7 +2,7 @@
 import { clipboard, dialog } from 'electron';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
-import type { InputAttachmentPickerPort } from '@megumi/product/host';
+import type { AttachmentPicker } from '@megumi/product/host';
 import type { ProductInputSourceAccess } from '@megumi/product';
 
 type TransientInputSource =
@@ -20,7 +20,7 @@ function registerTransientSource(source: TransientInputSource): string {
   return referenceId;
 }
 
-export const electronInputAttachmentPickerAdapter: InputAttachmentPickerPort = {
+export const electronInputAttachmentPickerAdapter: AttachmentPicker = {
   async selectImages() {
     const result = await dialog.showOpenDialog({
       properties: ['openFile', 'multiSelections'],
