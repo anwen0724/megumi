@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useProjectStore } from '../entities/project/store';
 import { useSessionStore } from '../entities/session/store';
 import { useWorkspaceFilesStore } from '../entities/workspace-files';
-import { useSessionHistoryHydration } from '../features/session-history/use-session-history-hydration';
 import type { SidebarProjectItem } from './LeftSidebar';
 import { formatSessionUpdatedAt } from './shell-display';
 
@@ -16,7 +15,6 @@ export function useAppBodyController() {
   const activeSessionId = useSessionStore((state) => state.activeSessionId);
   const setActiveSession = useSessionStore((state) => state.setActiveSession);
   const startNewSessionDraft = useSessionStore((state) => state.startNewSessionDraft);
-  const { hydrateSessions, hydrateSessionTimeline } = useSessionHistoryHydration();
 
   const currentProject = projects.find((project) => project.id === currentProjectId) ?? null;
   const activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
@@ -25,9 +23,9 @@ export function useAppBodyController() {
   useEffect(() => {
     void (async () => {
       await useProjectStore.getState().loadProjects();
-      await hydrateSessions();
+      await useSessionStore.getState().loadSessions();
     })();
-  }, [hydrateSessions]);
+  }, []);
 
   const sidebarProjects = useMemo<SidebarProjectItem[]>(
     () => {
@@ -77,8 +75,7 @@ export function useAppBodyController() {
     }
     setSettingsOpen(false);
     setActiveSession(sessionId);
-    void hydrateSessionTimeline(sessionId);
-  }, [activeSessionId, currentProjectId, hydrateSessionTimeline, sessions, setActiveSession]);
+  }, [activeSessionId, currentProjectId, sessions, setActiveSession]);
 
   const handleUseExistingProject = useCallback(() => {
     void useProjectStore.getState().useExistingProject();

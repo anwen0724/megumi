@@ -3,7 +3,9 @@
  * The builder is pure: it performs no reads and owns no synchronization state.
  */
 import type {
+  RunDto,
   SessionConversationItemDto,
+  SessionBranchConversationItemDto,
   SessionMessageConversationItemDto,
   SessionMessageDto,
   UserMessageDto,
@@ -23,7 +25,7 @@ export interface BuildSessionTimelineRequest {
   readonly sessionId: string;
   readonly conversation: readonly SessionConversationItemDto[];
   readonly workspaceChanges: readonly WorkspaceChangeSummaryDto[];
-  readonly activeRunId?: string;
+  readonly activeRun?: RunDto;
 }
 
 export interface BuildCommittedRunTimelineRequest {
@@ -43,21 +45,7 @@ export function buildSessionTimeline(request: BuildSessionTimelineRequest): Time
 
   for (const [historyOrder, item] of request.conversation.entries()) {
     if (item.type === 'branch') {
-      timeline.push({
-        messageId: `branch:${item.branchId}`,
-        role: 'separator',
-        projectId: request.projectId,
-        sessionId: request.sessionId,
-        createdAt: item.createdAt,
-        historyOrder,
-        blocks: [{
-          blockId: `branch-separator:${item.branchId}`,
-          kind: 'branch_separator',
-          branchMarkerId: item.branchId,
-          sourceMessageId: item.sourceMessageId,
-          createdAt: item.createdAt,
-        }],
-      });
+      timeline.push(toTimelineBranchSeparator(request.projectId, request.sessionId, item, historyOrder));
       continue;
     }
     if (item.type === 'compaction') {
@@ -74,6 +62,7 @@ export function buildSessionTimeline(request: BuildSessionTimelineRequest): Time
           kind: 'session_compaction_activity',
           activityId: item.compactionId,
           status: item.status,
+          ...(item.error ? { error: { ...item.error } } : {}),
           createdAt: item.startedAt,
           ...(item.completedAt ? { updatedAt: item.completedAt } : {}),
         }],
@@ -83,7 +72,17 @@ export function buildSessionTimeline(request: BuildSessionTimelineRequest): Time
     if (item.message.kind !== 'user') continue;
     timeline.push(toTimelineUserMessage(request.projectId, item.message, historyOrder));
     const runId = item.message.runId;
-    if (!runId || runId === request.activeRunId) continue;
+    if (!runId) continue;
+    if (runId === request.activeRun?.runId) {
+      timeline.push(toActiveTimelineAssistantMessage({
+        projectId: request.projectId,
+        runId,
+        user: item.message,
+        responses: responsesByRun.get(runId) ?? [],
+        historyOrder: historyOrder + 1,
+      }));
+      continue;
+    }
     timeline.push(toTimelineAssistantMessage({
       projectId: request.projectId,
       runId,
@@ -94,6 +93,59 @@ export function buildSessionTimeline(request: BuildSessionTimelineRequest): Time
     }));
   }
   return timeline;
+}
+
+/** Converts one committed Branch fact into its stable Desktop separator identity. */
+export function toTimelineBranchSeparator(
+  projectId: string,
+  sessionId: string,
+  branch: SessionBranchConversationItemDto,
+  historyOrder?: number,
+): TimelineMessage {
+  return {
+    messageId: `branch:${branch.branchId}`,
+    role: 'separator',
+    projectId,
+    sessionId,
+    createdAt: branch.createdAt,
+    ...(historyOrder === undefined ? {} : { historyOrder }),
+    blocks: [{
+      blockId: `branch-separator:${branch.branchId}`,
+      kind: 'branch_separator',
+      branchMarkerId: branch.branchId,
+      sourceMessageId: branch.sourceMessageId,
+      createdAt: branch.createdAt,
+    }],
+  };
+}
+
+/** Builds the recoverable portion of an active Run without inventing lost streaming content. */
+function toActiveTimelineAssistantMessage(input: {
+  readonly projectId: string;
+  readonly runId: string;
+  readonly user: UserMessageDto;
+  readonly responses: readonly SessionMessageDto[];
+  readonly historyOrder: number;
+}): TimelineAssistantMessage {
+  const last = input.responses.at(-1) ?? input.user;
+  return {
+    messageId: `assistant:${input.runId}`,
+    role: 'assistant',
+    projectId: input.projectId,
+    sessionId: input.user.sessionId,
+    runId: input.runId,
+    createdAt: input.responses[0]?.createdAt ?? input.user.createdAt,
+    updatedAt: last.completedAt ?? last.createdAt,
+    historyOrder: input.historyOrder,
+    blocks: [{
+      blockId: `process:${input.runId}`,
+      kind: 'process_disclosure',
+      runId: input.runId,
+      status: 'running',
+      startedAt: input.user.createdAt,
+      items: buildProcessItems(input.runId, input.responses),
+    }],
+  };
 }
 
 /** Builds only one committed Run for terminal reconciliation. */

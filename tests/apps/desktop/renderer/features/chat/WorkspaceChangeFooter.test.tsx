@@ -3,7 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkspaceChangeFooter } from '@megumi/desktop/renderer/features/chat/components/WorkspaceChangeFooter';
-import type { WorkspaceChangeFooterFact } from '@megumi/projections';
+import type { WorkspaceChangeFooterFact } from '@megumi/desktop/renderer/features/session-timeline';
 
 describe('WorkspaceChangeFooter', () => {
   it('renders localized copy from structured workspace change facts', async () => {

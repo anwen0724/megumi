@@ -10,7 +10,7 @@ import { useRunStore } from '@megumi/desktop/renderer/entities/run/store';
 import { useModelSelectionStore } from '@megumi/desktop/renderer/entities/model-selection';
 import { useSessionStore } from '@megumi/desktop/renderer/entities/session/store';
 import { useChatPageController } from '@megumi/desktop/renderer/features/chat/hooks/use-chat-page-controller';
-import { useRuntimeTimelineStore } from '@megumi/desktop/renderer/features/runtime-timeline';
+import { useSessionTimelineStore } from '@megumi/desktop/renderer/features/session-timeline';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import { useToastStore } from '@megumi/desktop/renderer/shared/ui';
 
@@ -19,7 +19,7 @@ const createdAt = '2026-07-09T00:00:00.000Z';
 describe('useChatPageController', () => {
   beforeEach(() => {
     useToastStore.getState().clearToasts();
-    useRuntimeTimelineStore.getState().reset();
+    useSessionTimelineStore.getState().reset();
     useRunStore.getState().resetRuns();
     useModelSelectionStore.setState({
       selection: { providerId: 'provider', modelId: 'model' },
@@ -260,7 +260,7 @@ describe('useChatPageController', () => {
 function contextUsageResponseMeta() {
   return {
     requestId: 'request-1',
-    channel: IPC_CHANNELS.chat.sessionContextUsageGet,
+    channel: IPC_CHANNELS.session.sessionContextUsageGet,
     handledAt: createdAt,
   };
 }

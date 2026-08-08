@@ -1,5 +1,5 @@
 /* Reduces one live Runtime Event into the Desktop-owned Timeline model. */
-import type { AnyEvent } from '@megumi/events';
+import type { AnyEvent } from '@megumi/product/host';
 import type {
   AnswerTextBlock,
   CancelledActivityItem,
@@ -399,6 +399,9 @@ function projectSessionCompactionEvent(
       kind: 'session_compaction_activity',
       activityId: compactionId,
       status,
+      ...(event.type === 'session.compaction.ended' && 'error' in event.payload
+        ? { error: { ...event.payload.error } }
+        : {}),
       createdAt: existing?.createdAt ?? event.createdAt,
       updatedAt: event.createdAt,
     }],

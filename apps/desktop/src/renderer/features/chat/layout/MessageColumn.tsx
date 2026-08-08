@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/product/host';
+import type { TimelineMessage as CanonicalTimelineMessage } from '../../session-timeline';
 import { useTranslation } from 'react-i18next';
 import { TimelineMessage } from '../components/TimelineMessage';
 import { WorkspaceChangeFooter } from '../components/WorkspaceChangeFooter';

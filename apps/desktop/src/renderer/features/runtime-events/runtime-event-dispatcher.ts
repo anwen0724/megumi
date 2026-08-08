@@ -3,10 +3,11 @@ import { useChatUiStore, type RunUiStatus } from '../../entities/chat-ui/store';
 import { useRunStore } from '../../entities/run/store';
 import { useSessionStore } from '../../entities/session/store';
 import { useToolCallStore } from '../../entities/tool-call';
-import { useRuntimeTimelineStore } from '../runtime-timeline';
+import { useSessionTimelineStore } from '../session-timeline/session-timeline-store';
 
-interface DispatchRuntimeEventOptions {
+export interface DispatchRuntimeEventOptions {
   sessionId?: string | null;
+  projectId?: string;
   projectTimeline?: boolean;
 }
 
@@ -98,18 +99,22 @@ function applyToolEvent(event: AnyEvent, targetSessionId: string | null): void {
   }
 }
 
+/**
+ * Routes one Runtime Event to Desktop-owned presentation stores. Timeline
+ * projection happens before Run-only routing so Session activities are kept.
+ */
 export function dispatchRuntimeEvent(event: AnyEvent, options?: DispatchRuntimeEventOptions): void {
   const targetSessionId = resolveEventSessionId(event, options);
 
   const alreadyDispatched = hasRuntimeEventAlreadyBeenDispatched(event);
   useRunStore.getState().applyRuntimeEvent(event);
 
-  if (!event.runId || alreadyDispatched) {
-    return;
+  if (options?.projectTimeline !== false && options?.projectId) {
+    useSessionTimelineStore.getState().applyRuntimeEvent(options.projectId, event);
   }
 
-  if (options?.projectTimeline !== false) {
-    useRuntimeTimelineStore.getState().dispatch(event);
+  if (!event.runId || alreadyDispatched) {
+    return;
   }
   applyToolEvent(event, targetSessionId);
   if (event.type === 'approval.resolved') setAgentStatusForSession(targetSessionId, 'running');

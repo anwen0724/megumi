@@ -143,9 +143,12 @@ export function reconcileTimelineMessages(
       continue;
     }
 
+    if (committedMessage) continue;
+
     if (
       options.preserveRuntimeOnly
       || isLivePresentationMessage(message)
+      || isOptimisticUserMessage(message)
       || options.activeRunIds?.has(messageRunId(message))
     ) {
       byIdentity.set(identity, message);
@@ -153,6 +156,12 @@ export function reconcileTimelineMessages(
   }
 
   return [...byIdentity.values()].sort(compareTimelineMessages);
+}
+
+function isOptimisticUserMessage(message: TimelineMessage): boolean {
+  return message.role === 'user'
+    && Boolean(message.clientMessageId)
+    && (!message.runId || message.messageId === message.clientMessageId);
 }
 
 /** Reconciles only one terminal Run without disturbing other Session UI state. */

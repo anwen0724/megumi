@@ -22,11 +22,10 @@ if (shouldQuitForSquirrelStartup()) {
     registerAllHandlers: () => registerAllHandlers({
       logger: desktopMain.runtimeLogger,
       workspace: desktopMain.workspace,
-      chat: desktopMain.chat,
+      session: desktopMain.session,
       skill: desktopMain.skill,
       settings: desktopMain.settings,
       approval: desktopMain.approval,
-      artifact: desktopMain.artifact,
       observability: desktopMain.observability,
     }),
     createWindow: () => {

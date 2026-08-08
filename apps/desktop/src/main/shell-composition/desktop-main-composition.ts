@@ -52,11 +52,10 @@ export function composeDesktopMain() {
   return {
     runtimeLogger,
     workspace: { host: productHost },
-    chat: { host: productHost },
+    session: { host: productHost },
     skill: { host: productHost },
     settings: { host: productHost },
     approval: { host: productHost },
-    artifact: productHost.artifacts,
     observability: { host: productHost },
     dispose: async () => {
       uiEventSubscription.unsubscribe();

@@ -1,10 +1,5 @@
 /* Defines the stable, host-neutral Session operations exposed by Product. */
-import { EventSchema, type AnyEvent } from '@megumi/events';
-
-import {
-  TimelineMessageSchema,
-  type TimelineMessage,
-} from '@megumi/projections';
+import { EventSchema } from '@megumi/events';
 import { z } from 'zod';
 import { DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from '@megumi/input';
 
@@ -16,16 +11,12 @@ export interface SessionHost {
   readSession(request: ReadSessionRequest): Promise<ReadSessionResult>;
   /** Returns committed facts used to reconcile one Run after its terminal event. */
   readCommittedRun(request: ReadCommittedRunRequest): Promise<ReadCommittedRunResult>;
-  listTimeline(request: ListSessionTimelineRequest): Promise<ListSessionTimelineResult>;
   /** Submits one user input through Input, Session, and Engine in that order. */
   sendUserInput(request: SendUserInputRequest): Promise<SendUserInputResult>;
   cancelUserInput(request: CancelUserInputRequest): Promise<CancelUserInputResult>;
   createBranchDraft(request: CreateBranchDraftRequest): CreateBranchDraftResult;
   cancelBranchDraft(request: CancelBranchDraftRequest): CancelBranchDraftResult;
   getInputSuggestions(request: GetInputSuggestionsRequest): Promise<GetInputSuggestionsResult>;
-  listRuns(request: ListRunsRequest): Promise<ListRunsResult>;
-  listRunEvents(request: ListRunEventsRequest): Promise<ListRunEventsResult>;
-  getSessionHydration(request: GetSessionHydrationRequest): Promise<GetSessionHydrationResult>;
   getContextUsage(request: GetContextUsageRequest): Promise<GetContextUsageResult>;
   getInputCapabilities(): InputCapabilitiesResult;
   selectImages(): Promise<SelectImagesResult>;
@@ -100,12 +91,6 @@ export const CommittedRunReadPayloadSchema = z.object({
   sessionId: z.string().min(1),
   runId: z.string().min(1),
 }).strict();
-export const SessionTimelineListPayloadSchema = z.object({
-  projectId: z.string().min(1), sessionId: z.string().min(1), runId: z.string().min(1).optional(),
-}).strict();
-export const SessionHydrationGetPayloadSchema = z.object({
-  projectId: z.string().min(1), sessionId: z.string().min(1),
-}).strict();
 export const SessionContextUsageGetPayloadSchema = z.object({
   sessionId: z.string().min(1),
   modelSelection: z.object({ provider_id: z.string().min(1), model_id: z.string().min(1) }).strict(),
@@ -143,8 +128,6 @@ export const SessionBranchDraftCreatePayloadSchema = z.object({
 export const SessionBranchDraftCancelPayloadSchema = z.object({
   sessionId: z.string().min(1), branchMarkerId: z.string().min(1),
 }).strict();
-export const RunListBySessionPayloadSchema = z.object({ sessionId: z.string().min(1) }).strict();
-export const RunEventsListPayloadSchema = z.object({ runId: z.string().min(1) }).strict();
 export const InputCapabilitiesPayloadSchema = z.object({}).strict();
 export const ImageInputSelectPayloadSchema = z.object({}).strict();
 export const DocumentInputSelectPayloadSchema = z.object({}).strict();
@@ -486,16 +469,6 @@ export const ListUserMessagesByRunIdsResultSchema = z.discriminatedUnion('status
   }).strict(),
   z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
 ]);
-export const ListSessionTimelineResultSchema = z.object({
-  messages: z.array(TimelineMessageSchema),
-  diagnostics: z.array(z.object({ messageId: z.string(), code: z.string(), message: z.string() }).strict()).optional(),
-}).strict();
-export const GetSessionHydrationResultSchema = z.object({
-  messages: z.array(TimelineMessageSchema),
-  diagnostics: z.array(z.object({ messageId: z.string(), code: z.string(), message: z.string() }).strict()).optional(),
-  runs: z.array(RunDtoSchema),
-  runtimeEvents: z.array(EventSchema),
-}).strict();
 export const CancelUserInputPayloadSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('cancellation_requested'), run: RunDtoSchema }).strict(),
   z.object({ status: z.literal('cancelling'), run: RunDtoSchema }).strict(),
@@ -523,8 +496,6 @@ export const CreateBranchDraftPayloadSchema = z.object({
 export const CancelBranchDraftPayloadSchema = z.object({
   cancelled: z.boolean(), reason: z.string().optional(),
 }).strict();
-export const ListRunsResultSchema = z.object({ runs: z.array(RunDtoSchema) }).strict();
-export const ListRunEventsResultSchema = z.object({ events: z.array(EventSchema) }).strict();
 export const GetContextUsageResultSchema = z.discriminatedUnion('status', [
   z.object({
     status: z.literal('available'),
@@ -591,27 +562,6 @@ export type ReadSessionResult = z.infer<typeof ReadSessionResultSchema>;
 export type ReadCommittedRunRequest = z.infer<typeof CommittedRunReadPayloadSchema>;
 export type ReadCommittedRunResult = z.infer<typeof ReadCommittedRunResultSchema>;
 
-export interface ListSessionTimelineRequest {
-  projectId: string;
-  sessionId: string;
-  runId?: string;
-}
-export interface ListSessionTimelineResult {
-  messages: TimelineMessage[];
-  diagnostics?: Array<{ messageId: string; code: string; message: string }>;
-}
-
-export interface GetSessionHydrationRequest {
-  projectId: string;
-  sessionId: string;
-}
-
-export interface GetSessionHydrationResult {
-  messages: TimelineMessage[];
-  diagnostics?: Array<{ messageId: string; code: string; message: string }>;
-  runs: RunDto[];
-  runtimeEvents: AnyEvent[];
-}
 
 export interface SendUserInputRequest {
   requestId?: string;
@@ -721,20 +671,6 @@ export interface GetInputSuggestionsRequest {
 }
 export interface GetInputSuggestionsResult {
   suggestions: InputSuggestionQueryResult;
-}
-
-export interface ListRunsRequest {
-  sessionId: string;
-}
-export interface ListRunsResult {
-  runs: RunDto[];
-}
-
-export interface ListRunEventsRequest {
-  runId: string;
-}
-export interface ListRunEventsResult {
-  events: AnyEvent[];
 }
 
 export interface GetContextUsageRequest {

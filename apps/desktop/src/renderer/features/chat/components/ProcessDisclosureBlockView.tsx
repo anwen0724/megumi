@@ -13,7 +13,7 @@ import type {
   RetryActivityItem,
   ThinkingItem,
   ToolActivityItem,
-} from '@megumi/product/host';
+} from '../../session-timeline';
 import { rendererI18n } from '../../../shared/i18n';
 import { cx } from '../../../shared/ui';
 import { TimelineMarkdown } from './TimelineMarkdown';

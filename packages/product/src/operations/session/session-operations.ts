@@ -2,18 +2,16 @@
  * Owns Product Session operations outside the single input submission chain.
  * The submit chain itself is delegated to the dedicated InputSubmission owner.
  */
-import type { Run, Runs } from '@megumi/engine';
+import type { Runs } from '@megumi/engine';
 import { DEFAULT_INPUT_POLICY, DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from '@megumi/input';
 import type { Session, SessionAttachmentReader, SessionBranchDrafts, SessionCatalog, SessionHistory, SessionMessageWithAttachments } from '@megumi/session';
 import { sessionMessageText } from '@megumi/session';
-import type { ProjectedRun, RunProjection, SessionTimelineQuery } from '@megumi/projections';
 import type { WorkspaceCatalog } from '@megumi/workspace';
 import type { InputSubmission } from './input-submission';
 
 import type {
   SessionHost,
   HostFailure,
-  RunDto,
   UserMessageSummaryDto,
 } from '../../host/session-host';
 import type { AttachmentPicker } from '../../host/capabilities/attachment-picker';
@@ -35,8 +33,6 @@ export function createSessionOperations(options: {
   attachments: SessionAttachmentReader;
   branches: SessionBranchDrafts;
   workspaces: Pick<WorkspaceCatalog, 'listWorkspaces'>;
-  runProjection: RunProjection;
-  timeline: SessionTimelineQuery;
   context: {
     deriveUsage(
       history: readonly import('@megumi/session').SessionHistoryItem[],
@@ -79,9 +75,6 @@ export function createSessionOperations(options: {
         messages: result.messages.map((message) => toUserMessageSummary({ message, attachments: [] })),
       };
     },
-    async listTimeline(request) {
-      return options.timeline.list({ workspaceId: request.projectId, sessionId: request.sessionId, ...(request.runId ? { runId: request.runId } : {}) });
-    },
     async cancelUserInput(request) {
       const result = await options.runs.cancel({ runId: request.runId });
       if (result.status === 'cancellation_requested') return { payload: { status: 'cancellation_requested', run: toRunDto(result.run) } };
@@ -103,13 +96,6 @@ export function createSessionOperations(options: {
     },
     async getInputSuggestions(request) {
       return { suggestions: await options.suggestions.getInputSuggestions({ draftInput: request.draftInput, ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}) }) };
-    },
-    async listRuns(request) { return { runs: options.runProjection.listRuns({ sessionId: request.sessionId }).map(toLegacyRunDto) }; },
-    async listRunEvents(request) { return { events: [...options.runProjection.listEvents({ runId: request.runId })] }; },
-    async getSessionHydration(request) {
-      const timeline = options.timeline.list({ workspaceId: request.projectId, sessionId: request.sessionId });
-      const runs = options.runProjection.listRuns({ sessionId: request.sessionId });
-      return { messages: timeline.messages, diagnostics: timeline.diagnostics, runs: runs.map(toLegacyRunDto), runtimeEvents: runs.flatMap((run) => options.runProjection.listEvents({ runId: run.runId })) };
     },
     async getContextUsage(request) {
       const history = options.history.getActiveHistory({ session_id: request.sessionId });
@@ -163,9 +149,6 @@ export function createSessionOperations(options: {
 function toUserMessageSummary(item: SessionMessageWithAttachments): UserMessageSummaryDto {
   const message = item.message;
   return { id: message.message_id, sessionId: message.session_id, ...(message.run_id ? { runId: message.run_id } : {}), role: message.message_kind === 'user_message' ? 'user' : message.message_kind === 'tool_result' ? 'toolResult' : 'assistant', text: sessionMessageText(message), createdAt: message.created_at };
-}
-function toLegacyRunDto(run: Run | ProjectedRun): RunDto {
-  return { runId: run.runId, sessionId: run.sessionId, status: run.status, createdAt: run.createdAt, ...(run.completedAt ? { completedAt: run.completedAt } : {}) };
 }
 function pickerFailure(code: string, message: string) { return { status: 'failed' as const, failure: { code, message } }; }
 function toFailure(failure: { code: string; message: string; retryable?: boolean }): HostFailure {

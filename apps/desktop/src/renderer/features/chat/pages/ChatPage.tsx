@@ -44,7 +44,7 @@ export function ChatPage() {
         ...(controller.currentProjectId ? { workspaceId: controller.currentProjectId } : {}),
       };
       const result = await window.megumi.command.suggestions(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.inputSuggestions, payload),
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.session.inputSuggestions, payload),
       );
 
       return result.ok ? result.data.suggestions : { type: 'inactive' };
@@ -54,7 +54,7 @@ export function ChatPage() {
   }, [controller.currentProjectId]);
   const selectImages = useCallback(async (): Promise<ComposerDraftImage[]> => {
     const result = await window.megumi.session.imageInput.select(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.imageInputSelect, {}),
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.session.imageInputSelect, {}),
     );
     if (!result.ok) {
       showToast({ tone: 'error', title: rendererI18n.t('chat:notifications.imageSelectFailed.title'), message: rendererI18n.t('chat:notifications.imageSelectFailed.message') });
@@ -70,7 +70,7 @@ export function ChatPage() {
   }, []);
   const selectDocuments = useCallback(async (): Promise<ComposerDraftDocument[]> => {
     const result = await window.megumi.session.documentInput.select(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.documentInputSelect, {}),
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.session.documentInputSelect, {}),
     );
     if (!result.ok || result.data.status === 'failed') {
       showToast({
@@ -86,7 +86,7 @@ export function ChatPage() {
   }, []);
   const pasteImage = useCallback(async (): Promise<ComposerDraftImage[]> => {
     const result = await window.megumi.session.imageInput.readClipboard(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.imageInputClipboardRead, {}),
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.session.imageInputClipboardRead, {}),
     );
     if (!result.ok) {
       showToast({ tone: 'error', title: rendererI18n.t('chat:notifications.imagePasteFailed.title'), message: rendererI18n.t('chat:notifications.imagePasteFailed.message') });
@@ -101,7 +101,7 @@ export function ChatPage() {
       : [];
   }, []);
   const timelineScroll = useTimelineAutoScroll({
-    sessionKey: controller.activeRuntimeTimelineSessionKey,
+    sessionKey: controller.activeSessionTimelineKey,
     updateKey: `${controller.timelineUpdateKey}:${bottomSpacerHeight}`,
   });
 
@@ -133,7 +133,7 @@ export function ChatPage() {
     const capabilities = window.megumi.session.imageInput?.capabilities;
     if (!capabilities) return undefined;
     void capabilities(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.inputCapabilitiesGet, {}),
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.session.inputCapabilitiesGet, {}),
     ).then((result) => {
       if (!cancelled && result.ok) {
         setImageInputCapabilities(result.data);

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ApprovalResolvePayload } from '@megumi/desktop/main/ipc/schemas';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
-import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/product/host';
 import type { GetContextUsageResult } from '@megumi/product/host';
 import type { ToolApprovalResolvePayload, ToolApprovalResolveResult } from '../../../entities/approval';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
@@ -12,13 +11,18 @@ import { useModelSelectionStore } from '../../../entities/model-selection';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
 import { showToast } from '../../../shared/ui';
 import { rendererI18n } from '../../../shared/i18n';
-import { runtimeTimelineSessionKey, useRuntimeTimelineStore } from '../../runtime-timeline';
-import { useSessionTimeline } from './use-session-timeline';
+import {
+  sessionTimelineKey,
+  sessionTimelineSynchronizer,
+  useSessionTimelineStore,
+  type TimelineMessage,
+} from '../../session-timeline';
+import { useSessionActions } from './use-session-actions';
 import type { ComposerStatus, ComposerSubmitPayload } from '../components/Composer';
 
-const EMPTY_CANONICAL_MESSAGES: CanonicalTimelineMessage[] = [];
+const EMPTY_TIMELINE_MESSAGES: TimelineMessage[] = [];
 
-function isActiveTimelineAssistantMessage(message: CanonicalTimelineMessage): boolean {
+function isActiveTimelineAssistantMessage(message: TimelineMessage): boolean {
   if (message.role !== 'assistant') {
     return false;
   }
@@ -39,7 +43,7 @@ function isActiveTimelineAssistantMessage(message: CanonicalTimelineMessage): bo
 }
 
 function canShowBranchAction(
-  message: CanonicalTimelineMessage,
+  message: TimelineMessage,
   userActionsBlocked: boolean,
 ): boolean {
   if (userActionsBlocked || message.role !== 'assistant' || !message.runId) {
@@ -76,16 +80,15 @@ export function useChatPageController() {
     branchDraft,
     createBranchDraft,
     cancelBranchDraft,
-  } = useSessionTimeline();
-  const activeRuntimeTimelineSessionKey = currentProjectId && effectiveActiveSessionId
-    ? runtimeTimelineSessionKey(currentProjectId, effectiveActiveSessionId)
+  } = useSessionActions();
+  const activeSessionTimelineKey = currentProjectId && effectiveActiveSessionId
+    ? sessionTimelineKey(currentProjectId, effectiveActiveSessionId)
     : null;
-  const canonicalMessages = useRuntimeTimelineStore((state) => (
-    activeRuntimeTimelineSessionKey
-      ? state.sessions[activeRuntimeTimelineSessionKey]?.messages ?? EMPTY_CANONICAL_MESSAGES
-      : EMPTY_CANONICAL_MESSAGES
+  const timelineMessages = useSessionTimelineStore((state) => (
+    activeSessionTimelineKey
+      ? state.sessions[activeSessionTimelineKey]?.messages ?? EMPTY_TIMELINE_MESSAGES
+      : EMPTY_TIMELINE_MESSAGES
   ));
-  const timelineMessages = canonicalMessages;
   const timelineUpdateKey = useMemo(() => JSON.stringify(timelineMessages.map((message) => [
     message.messageId,
     message.updatedAt ?? message.createdAt,
@@ -140,6 +143,19 @@ export function useChatPageController() {
     (isDraftNewSession || activeEmptyNewSession);
 
   useEffect(() => {
+    sessionTimelineSynchronizer.start();
+    if (currentProjectId && effectiveActiveSessionId) {
+      sessionTimelineSynchronizer.setActiveSession(currentProjectId, effectiveActiveSessionId);
+      return () => {
+        sessionTimelineSynchronizer.clearActiveSession(currentProjectId, effectiveActiveSessionId);
+      };
+    }
+
+    sessionTimelineSynchronizer.clearActiveSession();
+    return undefined;
+  }, [currentProjectId, effectiveActiveSessionId]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function loadContextUsage() {
@@ -154,7 +170,7 @@ export function useChatPageController() {
         return;
       }
       const result = await window.megumi.session.contextUsage.get(createRendererRuntimeIpcRequest(
-        IPC_CHANNELS.chat.sessionContextUsageGet,
+        IPC_CHANNELS.session.sessionContextUsageGet,
         {
           sessionId: effectiveActiveSessionId,
           modelSelection: { provider_id: modelSelection.providerId, model_id: modelSelection.modelId },
@@ -263,7 +279,7 @@ export function useChatPageController() {
     currentProject,
     projects,
     activeRun,
-    activeRuntimeTimelineSessionKey,
+    activeSessionTimelineKey,
     timelineMessages,
     timelineUpdateKey,
     projectPickerOpen,
@@ -280,7 +296,7 @@ export function useChatPageController() {
     resolveApproval,
     createBranchDraft,
     cancelBranchDraft,
-    canShowBranchAction: (message: CanonicalTimelineMessage) =>
+    canShowBranchAction: (message: TimelineMessage) =>
       canShowBranchAction(message, userActionsBlocked),
   };
 }

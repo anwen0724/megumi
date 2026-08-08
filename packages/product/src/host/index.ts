@@ -2,56 +2,9 @@
  * Renderer-safe public Product Host Interface exports.
  * Host factory implementations remain internal to Product Composition.
  */
-import type { AnyEvent } from '@megumi/events';
-import { createRuntimeTimeline, reduceRuntimeTimeline } from '@megumi/projections';
-
-export {
-  IPC_ERROR_CODES,
-  IpcErrorCodeSchema,
-  IpcErrorSchema,
-  normalizeIpcError,
-  sanitizeIpcError,
-} from './ipc-error';
-export type {
-  IpcError,
-  IpcErrorCode,
-} from './ipc-error';
 export { EventSchema as RuntimeEventSchema } from '@megumi/events';
 export { redactHostRuntimeValue } from './runtime-redaction';
 export type { AnyEvent } from '@megumi/events';
-export { TimelineMessageSchema } from '@megumi/projections';
-export type {
-  AnswerTextBlock,
-  AssistantTextItem,
-  BranchSeparatorBlock,
-  CancelledActivityItem,
-  CompactionActivityItem,
-  ErrorActivityItem,
-  PlanActivityItem,
-  ProcessDisclosureBlock,
-  ProcessDisclosureItem,
-  RecoveryActivityItem,
-  RetryActivityItem,
-  ThinkingItem,
-  TimelineAssistantMessage,
-  TimelineMessage,
-  TimelineUserMessage,
-  ToolActivityItem,
-  UserTimelineBlock,
-  WorkspaceChangeFooterFile,
-  WorkspaceChangeFooterFact,
-} from '@megumi/projections';
-
-export function reduceRuntimeTimelineEvent(
-  messages: import('@megumi/projections').TimelineMessage[],
-  event: AnyEvent,
-): import('@megumi/projections').TimelineMessage[] {
-  return reduceRuntimeTimeline({
-    timeline: createRuntimeTimeline({ messages }),
-    event,
-  }).messages;
-}
-
 
 export * from './product-host';
 export type {
@@ -75,17 +28,13 @@ export type {
   CreateSessionResult,
   GetInputSuggestionsResult,
   GetContextUsageResult,
-  GetSessionHydrationResult,
   ReadSessionRequest,
   ReadSessionResult,
   ReadCommittedRunRequest,
   ReadCommittedRunResult,
   SessionHost,
   ListUserMessagesByRunIdsResult,
-  ListRunEventsResult,
-  ListRunsResult,
   ListSessionsResult,
-  ListSessionTimelineResult,
   RunDto,
   SendUserInputPayload,
   SendUserInputResult,
@@ -153,18 +102,6 @@ export type {
   ApprovalHostResult,
   ApprovalResolvePayload,
 } from './approval-host';
-export type {
-  ArtifactGetData,
-  ArtifactHost,
-  ArtifactListData,
-  ArtifactCreateVersionPayload,
-  ArtifactReferencePayload,
-  ArtifactReferenceData,
-  ArtifactStatusUpdatePayload,
-  ArtifactStatusUpdateData,
-  ArtifactVersionCreateData,
-  ArtifactVersionGetData,
-} from './artifact-host';
 export type { ObservabilityHost } from './observability-host';
 export type { DiagnosticBundleSaver } from './capabilities/diagnostic-bundle-saver';
 export type {
@@ -199,15 +136,11 @@ export {
   SessionMessageListPayloadSchema,
   SessionReadPayloadSchema,
   CommittedRunReadPayloadSchema,
-  SessionTimelineListPayloadSchema,
-  SessionHydrationGetPayloadSchema,
   SessionContextUsageGetPayloadSchema,
   SessionMessageSendPayloadSchema,
   SessionMessageCancelPayloadSchema,
   SessionBranchDraftCreatePayloadSchema,
   SessionBranchDraftCancelPayloadSchema,
-  RunListBySessionPayloadSchema,
-  RunEventsListPayloadSchema,
   InputCapabilitiesPayloadSchema,
   ImageInputSelectPayloadSchema,
   DocumentInputSelectPayloadSchema,
@@ -224,13 +157,9 @@ export {
   CreateSessionResultSchema,
   ListSessionsResultSchema,
   ListUserMessagesByRunIdsResultSchema,
-  ListSessionTimelineResultSchema,
-  GetSessionHydrationResultSchema,
   CancelUserInputPayloadSchema,
   CreateBranchDraftPayloadSchema,
   CancelBranchDraftPayloadSchema,
-  ListRunsResultSchema,
-  ListRunEventsResultSchema,
   GetContextUsageResultSchema,
   ReadSessionResultSchema,
   ReadCommittedRunResultSchema,
@@ -273,18 +202,3 @@ export {
   EmptyUiResultSchema,
 } from './settings-host';
 export { ApprovalResolvePayloadSchema, ApprovalResolveResultSchema } from './approval-host';
-export {
-  ArtifactListByRunPayloadSchema,
-  ArtifactListBySessionPayloadSchema,
-  ArtifactGetPayloadSchema,
-  ArtifactVersionGetPayloadSchema,
-  ArtifactVersionCreatePayloadSchema,
-  ArtifactStatusUpdatePayloadSchema,
-  ArtifactReferencePayloadSchema,
-  ArtifactListDataSchema,
-  ArtifactGetDataSchema,
-  ArtifactVersionGetDataSchema,
-  ArtifactVersionCreateDataSchema,
-  ArtifactStatusUpdateDataSchema,
-  ArtifactReferenceDataSchema,
-} from './artifact-host';

@@ -2,7 +2,7 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { TimelineAssistantMessage } from '@megumi/projections';
+import type { TimelineAssistantMessage } from '@megumi/desktop/renderer/features/session-timeline';
 import { MessageColumn } from '@megumi/desktop/renderer/features/chat/layout/MessageColumn';
 
 describe('MessageColumn', () => {

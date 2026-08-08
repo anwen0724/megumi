@@ -106,10 +106,24 @@ describe('Session Timeline builder', () => {
       sessionId: 'session:1',
       conversation: [messageItem(user('user:1', 'Hello.'))],
       workspaceChanges: [],
-      activeRunId: 'run:1',
+      activeRun: {
+        runId: 'run:1',
+        sessionId: 'session:1',
+        status: 'running',
+        createdAt: time(1),
+      },
     });
-    expect(timeline).toHaveLength(1);
+    expect(timeline).toHaveLength(2);
     expect(timeline[0]?.role).toBe('user');
+    const assistant = timeline[1] as TimelineAssistantMessage;
+    expect(assistant.blocks).toEqual([
+      expect.objectContaining({
+        kind: 'process_disclosure',
+        status: 'running',
+        items: [],
+      }),
+    ]);
+    expect(assistant.blocks).not.toContainEqual(expect.objectContaining({ kind: 'answer_text' }));
   });
 
   it('restores Branch and every persisted Compaction terminal state without messages', () => {

@@ -23,22 +23,13 @@ const mocks = vi.hoisted(() => {
       create: vi.fn(),
       list: vi.fn(),
       listMessages: vi.fn(),
-      listTimeline: vi.fn(),
-      listRuns: vi.fn(),
+      readSession: vi.fn(),
+      readCommittedRun: vi.fn(),
       createDraft: vi.fn(),
       cancelDraft: vi.fn(),
     },
     permissions: {
       resolve: vi.fn(),
-    },
-    artifacts: {
-      listByRun: vi.fn(),
-      listBySession: vi.fn(),
-      get: vi.fn(),
-      getVersion: vi.fn(),
-      createVersion: vi.fn(),
-      updateStatus: vi.fn(),
-      reference: vi.fn(),
     },
     settings: {
       get: vi.fn(),
@@ -209,11 +200,10 @@ describe('main runtime logger composition', () => {
     expect(mocks.registerAllHandlers).toHaveBeenCalledWith({
       logger: processLogger,
       workspace: { host: mocks.agentHost },
-      chat: { host: mocks.agentHost },
+      session: { host: mocks.agentHost },
       skill: { host: mocks.agentHost },
       settings: { host: mocks.agentHost },
       approval: { host: mocks.agentHost },
-      artifact: mocks.agentHost.artifacts,
       observability: { host: mocks.agentHost },
     });
 

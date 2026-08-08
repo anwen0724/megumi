@@ -2,7 +2,7 @@
  * Protects the complete Engine Event to Desktop approval-control projection.
  */
 import { EventSchema } from '@megumi/events';
-import { createRuntimeTimeline, reduceRuntimeTimeline } from '@megumi/projections';
+import { reduceRuntimeTimelineEvent } from '@megumi/desktop/renderer/features/session-timeline';
 import { describe, expect, it, vi } from 'vitest';
 import { collectPendingApprovalActivities } from '../../../../../../apps/desktop/src/renderer/features/chat/approval-overlay';
 import {
@@ -57,11 +57,11 @@ describe('approval Runtime flow', () => {
     expect(approvalEvent).toBeDefined();
     expect(EventSchema.safeParse(approvalEvent).success).toBe(true);
 
-    const timeline = events.reduce(
-      (current, event) => reduceRuntimeTimeline({ timeline: current, event }),
-      createRuntimeTimeline({}),
+    const messages = events.reduce(
+      (current, event) => reduceRuntimeTimelineEvent(current, event, 'project-1'),
+      [],
     );
-    expect(collectPendingApprovalActivities(timeline.messages)).toEqual([
+    expect(collectPendingApprovalActivities(messages)).toEqual([
       expect.objectContaining({
         toolCallId: 'provider-call:1',
         toolName: tool.registeredToolName,

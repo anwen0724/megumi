@@ -3,11 +3,9 @@
  */
 import type { IpcMainInvokeEvent } from 'electron';
 import type { z } from 'zod';
-import { type IpcError, normalizeIpcError } from '@megumi/product/host';
 import type { ProductRuntimeLogger } from '@megumi/product';
 import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from './contracts';
-import type { RuntimeIpcError } from './errors';
-import { sanitizeZodIssues } from './errors';
+import { normalizeRuntimeIpcError, sanitizeZodIssues, type RuntimeIpcError } from './errors';
 
 export interface CreateIpcRequestHandlerOptions<
   TPayload,
@@ -82,12 +80,12 @@ export function createIpcRequestHandler<
 function failureResult<TChannel extends BusinessIpcChannel>(
   channel: TChannel,
   requestId: string,
-  error: IpcError,
+  error: RuntimeIpcError,
   startedAt: number,
 ): RuntimeIpcResult<never, TChannel> {
   return {
     ok: false,
-    data: normalizeIpcError(error, 'Unexpected IPC failure.'),
+    data: normalizeRuntimeIpcError(error, 'Unexpected IPC failure.'),
     meta: {
       requestId,
       channel,

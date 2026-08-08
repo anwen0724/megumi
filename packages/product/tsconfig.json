@@ -18,7 +18,6 @@
     { "path": "../instructions" },
     { "path": "../observability" },
     { "path": "../permissions" },
-    { "path": "../projections" },
     { "path": "../sandbox" },
     { "path": "../session" },
     { "path": "../settings" },

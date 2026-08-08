@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type {
   WorkspaceChangeFooterFact,
   WorkspaceChangeFooterFile,
-} from '@megumi/product/host';
+} from '../../session-timeline';
 import { Button } from '../../../shared/ui';
 import { rendererI18n } from '../../../shared/i18n';
 

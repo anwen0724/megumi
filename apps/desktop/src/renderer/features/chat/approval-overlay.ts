@@ -1,5 +1,5 @@
 /* Selects pending approval controls from the canonical timeline without duplicating approval state. */
-import type { TimelineMessage, ToolActivityItem } from '@megumi/product/host';
+import type { TimelineMessage, ToolActivityItem } from '../session-timeline';
 
 export function collectPendingApprovalActivities(messages: TimelineMessage[]): ToolActivityItem[] {
   const approvals: ToolActivityItem[] = [];

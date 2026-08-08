@@ -32,11 +32,6 @@ import {
 import { createPermissions } from '@megumi/permissions';
 import { createSandbox } from '@megumi/sandbox';
 import {
-  createRunProjection,
-  createSessionTimelineQuery,
-  createWorkspaceChangeFooterProjector,
-} from '@megumi/projections';
-import {
   createSessionAttachmentReader,
   createSessionBranchDrafts,
   createSessionCatalog,
@@ -96,7 +91,6 @@ import {
   createProductRuntime,
   type ProductRuntime,
 } from './product-runtime';
-import { createUnavailableArtifactHost } from '../host/artifact-host';
 import type {
   AttachmentPicker,
 } from '../host/capabilities/attachment-picker';
@@ -180,9 +174,6 @@ function composeProductRuntime(
   });
   const logger = createObservabilityRuntimeLogger(observability.service);
 
-  const runProjection = createRunProjection({
-    terminalRetentionMs: PRODUCT_RUN_POLICY.terminalRunRetentionMs,
-  });
   const database = openDatabase(homePaths, options);
   resources.registerDatabase(database);
 
@@ -391,19 +382,10 @@ function composeProductRuntime(
       ? { builtInToolAvailability: options.builtInToolAvailability }
       : {}),
   });
-  resources.registerEventSubscription(
-    events.subscribe({}, (event) => runProjection.project(event)),
-  );
   // The bus is the second producer's entry point too: branch facts publish here.
   const branches = createSessionBranchDrafts({
     events,
     entries: { findMessageEntry: (request) => sessionStore.findMessageEntry(request) },
-  });
-  const workspaceChangeFooter = createWorkspaceChangeFooterProjector({ workspaceChanges });
-  const timeline = createSessionTimelineQuery({
-    sessionHistory: history,
-    isRunLive: (runId) => runProjection.isRunLive({ runId }),
-    workspaceChangeFooterProjector: workspaceChangeFooter,
   });
   const runs = createRuns({
     models: modelComposition.models,
@@ -453,8 +435,6 @@ function composeProductRuntime(
     attachments,
     branches,
     workspaces,
-    runProjection: runProjection,
-    timeline,
     context: {
       deriveUsage: (history, model) => deriveContextUsage({ history, model }),
       autoCompactPercent: resolveAutoCompactPercent(settings),
@@ -490,7 +470,6 @@ function composeProductRuntime(
       listAvailableTools: () => [...tools.listAvailableTools().tools],
     }),
     approval: createApprovalOperations(runs),
-    artifacts: createUnavailableArtifactHost(),
     observability: createObservabilityOperations({
       queries: observability.queryService,
       flush: observability.flush,

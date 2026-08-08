@@ -188,6 +188,7 @@ export interface SessionCompactionActivityBlock extends TimelineBlockBase {
   kind: 'session_compaction_activity';
   activityId: string;
   status: SessionCompactionActivityStatus;
+  error?: { code?: string; message: string };
 }
 
 export interface TimelineActivityMessage extends TimelineMessageBase {

@@ -103,9 +103,10 @@ describe('composeProduct', () => {
       // until it settles before asserting on the event facts.
       let events: AnyEvent[] = [];
       await vi.waitFor(async () => {
-        const snapshot = await product.host.session.listRunEvents({ runId: payload.run.runId });
-        events = snapshot.events;
-        expect(snapshot.events.some((event) => event.type === 'run.ended')).toBe(true);
+        const snapshot = await product.host.session.readSession({ sessionId: session.session.id });
+        if (snapshot.status !== 'ok') return;
+        events = snapshot.runtimeEvents.filter((event) => event.runId === payload.run.runId);
+        expect(events.some((event) => event.type === 'run.ended')).toBe(true);
       }, { timeout: 5000 });
       expect(events.filter((event) => event.type === 'tool_execution.ended')).toHaveLength(2);
       expect(events.map((event) => event.type)).toContain('run.ended');

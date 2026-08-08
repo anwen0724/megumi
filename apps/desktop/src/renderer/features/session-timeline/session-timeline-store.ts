@@ -4,6 +4,8 @@
  */
 import { create } from 'zustand';
 import type { AnyEvent } from '@megumi/product/host';
+import type { SessionBranchConversationItemDto } from '@megumi/product/host';
+import { toTimelineBranchSeparator } from './session-timeline-builder';
 import { reduceRuntimeTimelineEvent } from './runtime-timeline-reducer';
 import {
   reconcileCommittedRunMessages,
@@ -33,11 +35,19 @@ export interface SessionTimelineStoreState {
   setActiveSession(projectId: string | null, sessionId: string | null): void;
   applyRuntimeEvent(projectId: string, event: AnyEvent): void;
   addPendingUserMessage(input: PendingUserMessageInput): void;
+  addCommittedBranch(
+    projectId: string,
+    sessionId: string,
+    branch: SessionBranchConversationItemDto,
+  ): void;
+  noteEventSequence(projectId: string, sessionId: string, sequence: number): void;
+  /** Merges a complete durable Session read while retaining only unmatched live presentation state. */
   reconcileSessionHistory(
     projectId: string,
     sessionId: string,
     messages: readonly TimelineMessage[],
   ): void;
+  /** Replaces the committed facts for one terminal Run without touching sibling Timeline entries. */
   reconcileCommittedRun(
     projectId: string,
     sessionId: string,
@@ -114,6 +124,40 @@ export const useSessionTimelineStore = create<SessionTimelineStoreState>((set) =
     });
   },
 
+  addCommittedBranch: (projectId, sessionId, branch) => {
+    set((state) => {
+      const key = sessionTimelineKey(projectId, sessionId);
+      const session = state.sessions[key] ?? emptySessionTimeline(projectId, sessionId);
+      return {
+        sessions: {
+          ...state.sessions,
+          [key]: {
+            ...session,
+            messages: reconcileTimelineMessages(
+              session.messages,
+              [toTimelineBranchSeparator(projectId, sessionId, branch)],
+              { preserveRuntimeOnly: true },
+            ),
+          },
+        },
+      };
+    });
+  },
+
+  noteEventSequence: (projectId, sessionId, sequence) => {
+    set((state) => {
+      const key = sessionTimelineKey(projectId, sessionId);
+      const session = state.sessions[key] ?? emptySessionTimeline(projectId, sessionId);
+      if (sequence <= session.lastSequence) return state;
+      return {
+        sessions: {
+          ...state.sessions,
+          [key]: { ...session, lastSequence: sequence },
+        },
+      };
+    });
+  },
+
   reconcileSessionHistory: (projectId, sessionId, messages) => {
     set((state) => {
       const key = sessionTimelineKey(projectId, sessionId);
@@ -127,7 +171,6 @@ export const useSessionTimelineStore = create<SessionTimelineStoreState>((set) =
             ...session,
             messages: reconcileTimelineMessages(session.messages, messages, {
               activeRunIds,
-              preserveRuntimeOnly: true,
             }),
           },
         },

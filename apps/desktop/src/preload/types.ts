@@ -1,9 +1,9 @@
 import type {
   CancelBranchDraftResult,
   CreateBranchDraftResult,
-  GetSessionHydrationResult,
   GetContextUsageResult,
-  ListSessionTimelineResult,
+  ReadSessionResult,
+  ReadCommittedRunResult,
   SendUserInputPayload,
   DisableSkillUiResponse,
   DeleteSkillUiResponse,
@@ -16,10 +16,10 @@ import type {
 import type {
   SessionBranchDraftCancelPayload,
   SessionBranchDraftCreatePayload,
-  SessionHydrationGetPayload,
+  SessionReadPayload,
+  CommittedRunReadPayload,
   SessionMessageSendPayload,
   SessionContextUsageGetPayload,
-  SessionTimelineListPayload,
   SkillDisablePayload,
   SkillDeletePayload,
   SkillEnablePayload,
@@ -33,10 +33,10 @@ import type { api } from './api';
 export type MegumiAPI = typeof api;
 export type SessionMessageSendPreloadPayload = SessionMessageSendPayload;
 export type SessionMessageSendPreloadData = SendUserInputPayload;
-export type SessionTimelineListPreloadPayload = SessionTimelineListPayload;
-export type SessionTimelineListPreloadData = ListSessionTimelineResult;
-export type SessionHydrationGetPreloadPayload = SessionHydrationGetPayload;
-export type SessionHydrationGetPreloadData = GetSessionHydrationResult;
+export type SessionReadPreloadPayload = SessionReadPayload;
+export type SessionReadPreloadData = ReadSessionResult;
+export type CommittedRunReadPreloadPayload = CommittedRunReadPayload;
+export type CommittedRunReadPreloadData = ReadCommittedRunResult;
 export type SessionContextUsageGetPreloadPayload = SessionContextUsageGetPayload;
 export type SessionContextUsageGetPreloadData = GetContextUsageResult;
 export type SessionBranchDraftCreatePreloadPayload = SessionBranchDraftCreatePayload;

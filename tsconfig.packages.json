@@ -12,7 +12,6 @@
     { "path": "./packages/observability" },
     { "path": "./packages/permissions" },
     { "path": "./packages/product" },
-    { "path": "./packages/projections" },
     { "path": "./packages/sandbox" },
     { "path": "./packages/session" },
     { "path": "./packages/settings" },

@@ -1,8 +1,6 @@
 /* Registers process-level failures against the Product runtime logger. */
-import {
-  normalizeIpcError,
-  redactHostRuntimeValue,
-} from '@megumi/product/host';
+import { redactHostRuntimeValue } from '@megumi/product/host';
+import { normalizeRuntimeIpcError } from '../ipc/errors';
 import type { ProductRuntimeLogger } from '@megumi/product';
 
 const noopRuntimeLogger: ProductRuntimeLogger = {
@@ -36,6 +34,6 @@ export function registerRuntimeProcessErrorHandlers(
 
 function createDetails(error: unknown): Record<string, unknown> {
   return redactHostRuntimeValue({
-    error: normalizeIpcError(error, 'Megumi runtime encountered an unexpected error.'),
+    error: normalizeRuntimeIpcError(error, 'Megumi runtime encountered an unexpected error.'),
   }) as Record<string, unknown>;
 }

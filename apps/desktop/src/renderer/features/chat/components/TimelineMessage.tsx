@@ -1,7 +1,7 @@
 import { memo, type ReactNode } from 'react';
 import { Archive, Check, Copy, GitBranch, LoaderCircle, TriangleAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { TimelineMessage as CanonicalTimelineMessage } from '@megumi/product/host';
+import type { TimelineMessage as CanonicalTimelineMessage } from '../../session-timeline';
 import { IconButton, RecoverableErrorBoundary } from '../../../shared/ui';
 import { TimelineMessageBlocks } from './TimelineMessageBlocks';
 import { formatTime as formatLocalizedTime } from '../../../shared/i18n';
@@ -33,14 +33,15 @@ function TimelineMessageComponent({
   const canShowAssistantActions = hasActionableReply;
 
   if (message.role === 'separator') {
+    const label = t('branches.separator');
     return (
       <div
         role="separator"
-        aria-label={message.blocks[0].label}
+        aria-label={label}
         className="flex items-center gap-3 py-2 text-xs text-[var(--color-text-muted)]"
       >
         <span className="h-px flex-1 bg-[var(--color-border)]" />
-        <span>{message.blocks[0].label}</span>
+        <span>{label}</span>
         <span className="h-px flex-1 bg-[var(--color-border)]" />
       </div>
     );
@@ -48,6 +49,7 @@ function TimelineMessageComponent({
 
   if (message.role === 'activity') {
     const activity = message.blocks[0];
+    const label = t(`compaction.${activity.status}`);
     const Icon = activity.status === 'running'
       ? LoaderCircle
       : activity.status === 'failed'
@@ -58,11 +60,11 @@ function TimelineMessageComponent({
     return (
       <div
         role="status"
-        aria-label={activity.label}
+        aria-label={label}
         className="flex items-center gap-2 py-1 text-sm text-[var(--color-text-muted)]"
       >
         <Icon size={15} aria-hidden="true" className={activity.status === 'running' ? 'animate-spin' : undefined} />
-        <span>{activity.label}</span>
+        <span>{label}{activity.error?.message ? `: ${activity.error.message}` : ''}</span>
       </div>
     );
   }

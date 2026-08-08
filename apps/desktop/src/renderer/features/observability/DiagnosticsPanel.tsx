@@ -49,7 +49,7 @@ export function DiagnosticsPanel() {
         createRendererRuntimeIpcRequest(IPC_CHANNELS.workspace.projectList, {}),
       ),
       window.megumi.session.list(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.sessionList, {}),
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.session.sessionList, {}),
       ),
     ]);
 
@@ -440,7 +440,7 @@ async function loadRunInputLabels(
   try {
     result = await window.megumi.session.message.list(
       createRendererRuntimeIpcRequest(
-        IPC_CHANNELS.chat.sessionMessageList,
+        IPC_CHANNELS.session.sessionMessageList,
         { runIds },
       ),
     );

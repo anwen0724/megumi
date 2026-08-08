@@ -5,7 +5,7 @@ import type {
   ProviderPublicStatusUiDto,
 } from '@megumi/product/host';
 import type { InputSuggestionQueryResult } from '@megumi/product/host';
-import type { ToolActivityItem } from '@megumi/product/host';
+import type { ToolActivityItem } from '../../session-timeline';
 import type { ToolApprovalResolvePayload, ToolApprovalResolveResult } from '../../../entities/approval';
 import { ApprovalStack } from '../components/ApprovalStack';
 import { BranchDraftStack, type ComposerBranchDraftView } from '../components/BranchDraftStack';

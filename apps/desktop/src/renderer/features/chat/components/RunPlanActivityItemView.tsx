@@ -2,7 +2,7 @@
 
 import { CheckCircle2, Circle, CircleDot } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { PlanActivityItem } from '@megumi/product/host';
+import type { PlanActivityItem } from '../../session-timeline';
 
 export function RunPlanActivityItemView({ item }: { item: PlanActivityItem }) {
   const { t } = useTranslation('chat');

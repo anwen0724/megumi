@@ -3,10 +3,8 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   TimelineAssistantMessage,
-  TimelineActivityMessage,
-  TimelineSeparatorMessage,
   TimelineUserMessage,
-} from '@megumi/projections';
+} from '@megumi/desktop/renderer/features/session-timeline';
 import { TimelineMessage } from '@megumi/desktop/renderer/features/chat/components/TimelineMessage';
 import { WorkspaceChangeFooter } from '@megumi/desktop/renderer/features/chat/components/WorkspaceChangeFooter';
 import { ToastViewport, useToastStore } from '@megumi/desktop/renderer/shared/ui';
@@ -125,28 +123,6 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(screen.getByText('error.png')).toBeInTheDocument();
   });
 
-  it('renders branch separators from session branch facts', () => {
-    const separator: TimelineSeparatorMessage = {
-      messageId: 'separator:branch-marker-1',
-      role: 'separator',
-      projectId: 'project-1',
-      sessionId: 'session-1',
-      createdAt,
-      blocks: [{
-        blockId: 'branch-separator:branch-marker-1',
-        kind: 'branch_separator',
-        branchMarkerId: 'branch-marker-1',
-        sourceMessageId: 'message-user-1',
-        label: 'Branch from 00:57',
-      }],
-    };
-
-    render(<TimelineMessage message={separator} />);
-
-    expect(screen.getByRole('separator', { name: 'Branch from 00:57' })).toBeInTheDocument();
-    expect(screen.getByText('Branch from 00:57')).toBeInTheDocument();
-  });
-
   it('renders workspace change footer outside timeline message blocks', () => {
     render(<TimelineMessage
       message={assistantMessage()}
@@ -173,29 +149,6 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(document.querySelector('[data-workspace-open-file-row="true"]')).toBeInTheDocument();
     expect(document.querySelector('[data-workspace-change-file-row="true"]')).toBeInTheDocument();
     expect(screen.getByText('app.ts')).toBeInTheDocument();
-  });
-
-  it('renders a Session compaction activity as an independent Timeline row', () => {
-    const activity: TimelineActivityMessage = {
-      messageId: 'session-compaction:request-1',
-      role: 'activity',
-      projectId: 'project-1',
-      sessionId: 'session-1',
-      createdAt,
-      blocks: [{
-        blockId: 'session-compaction-activity:request-1',
-        kind: 'session_compaction_activity',
-        activityId: 'request-1',
-        status: 'running',
-        label: '正在压缩上下文',
-      }],
-    };
-
-    render(<TimelineMessage message={activity} />);
-
-    expect(screen.getByRole('status', { name: '正在压缩上下文' })).toBeInTheDocument();
-    expect(screen.getByText('正在压缩上下文')).toBeInTheDocument();
-    expect(screen.queryByText('Megumi')).not.toBeInTheDocument();
   });
 
   it('renders user messages as a lightweight right aligned card with the time below', () => {

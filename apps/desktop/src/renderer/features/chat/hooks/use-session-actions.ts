@@ -1,21 +1,19 @@
+/*
+ * Owns user-initiated Session operations without reading or synchronizing Timeline state.
+ */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import type { SessionMessageSendPayload } from '@megumi/desktop/main/ipc/schemas';
-import type { AnyEvent, TimelineUserMessage, UserMessageDto } from '@megumi/product/host';
+import type { SessionDto } from '@megumi/product/host';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
 import { useRunStore } from '../../../entities/run/store';
 import { useSessionStore } from '../../../entities/session/store';
-import { useRuntimeTimelineStore } from '../../runtime-timeline';
-import { dispatchRuntimeEvent } from '../../runtime-events/runtime-event-dispatcher';
+import { useSessionTimelineStore } from '../../session-timeline/session-timeline-store';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
 import { showToast } from '../../../shared/ui';
 import { rendererI18n } from '../../../shared/i18n';
 import type { ComposerSubmitPayload } from '../components/Composer';
-import { localSessionFromPersistedSession } from '../../session-history/session-history-mappers';
-
-// Coordinates chat timeline submission, optimistic user messages, and runtime
-// event routing for the active session. It forwards typed context hints only.
 
 export interface BranchDraftState {
   branchMarkerId: string;
@@ -33,10 +31,6 @@ function createId(prefix: string): string {
   }
 
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function isCompactCommandInput(message: string): boolean {
-  return /^\/compact(?:\s|$)/i.test(message.trim());
 }
 
 interface SessionMessageTarget {
@@ -108,56 +102,6 @@ function createSessionMessageSendPayload(
   };
 }
 
-function shouldProcessRuntimeEvent(
-  event: AnyEvent,
-  activeRunId: string | null,
-  processedEventIdsByRun: Map<string, Set<string>>,
-): boolean {
-  if (!event.runId || event.runId !== activeRunId) {
-    return false;
-  }
-
-  const processedEventIds = processedEventIdsByRun.get(event.runId) ?? new Set<string>();
-  if (processedEventIds.has(event.id)) {
-    return false;
-  }
-
-  processedEventIds.add(event.id);
-  processedEventIdsByRun.set(event.runId, processedEventIds);
-  return true;
-}
-
-function isTerminalRunEvent(event: AnyEvent): boolean {
-  return event.type === 'run.ended';
-}
-
-async function reconcileTerminalRunTimeline(event: AnyEvent, projectId: string, sessionId: string): Promise<void> {
-  if (!isTerminalRunEvent(event) || !event.runId) {
-    return;
-  }
-  try {
-    const result = await window.megumi.session.timeline.list(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.sessionTimelineList, {
-        projectId,
-        sessionId,
-        runId: event.runId,
-      }),
-    );
-    if (!result.ok) {
-      return;
-    }
-    useRuntimeTimelineStore.getState().reconcileCommittedRunMessages(
-      projectId,
-      sessionId,
-      event.runId,
-      result.data.messages,
-    );
-  } catch {
-    // Live Runtime Events already contain the completed answer. A failed
-    // reconciliation must not convert a successful Agent Run into a UI failure.
-  }
-}
-
 function failSessionMessageSend(message: string, sessionId?: string | null) {
   const current = useChatUiStore.getState();
   current.setAgentStatus('error', sessionId);
@@ -169,17 +113,16 @@ function failSessionMessageSend(message: string, sessionId?: string | null) {
   });
 }
 
-function adoptBackendSession(session: Parameters<typeof localSessionFromPersistedSession>[0]): string {
-  const localSession = localSessionFromPersistedSession(session);
+function adoptBackendSession(session: SessionDto): string {
   const sessionState = useSessionStore.getState();
   const projectState = useProjectStore.getState();
 
-  sessionState.upsertSession(localSession);
-  if (projectState.currentProjectId !== localSession.projectId) {
-    projectState.setCurrentProject(localSession.projectId);
+  sessionState.upsertSession(session);
+  if (projectState.currentProjectId !== session.projectId) {
+    projectState.setCurrentProject(session.projectId);
   }
-  sessionState.setActiveSession(localSession.id);
-  return localSession.id;
+  sessionState.setActiveSession(session.id);
+  return session.id;
 }
 
 function isSameBranchDraft(
@@ -195,14 +138,14 @@ function isSameBranchDraft(
   );
 }
 
-export function useSessionTimeline() {
+/** Provides message, cancellation, retry, and branch actions for the active Session. */
+export function useSessionActions() {
   const [branchDraft, setBranchDraft] = useState<BranchDraftState | null>(null);
   const branchDraftRef = useRef<BranchDraftState | null>(null);
   const branchDraftCreateSequenceRef = useRef(0);
-  const activeRunIdRef = useRef<string | null>(null);
-  const runSessionIdRef = useRef<string | null>(null);
+  const submittedRunIdRef = useRef<string | null>(null);
+  const submittedSessionIdRef = useRef<string | null>(null);
   const lastPayloadRef = useRef<ComposerSubmitPayload | null>(null);
-  const processedEventIdsByRunRef = useRef<Map<string, Set<string>>>(new Map());
 
   const updateBranchDraft = useCallback((draft: BranchDraftState | null) => {
     branchDraftRef.current = draft;
@@ -215,7 +158,6 @@ export function useSessionTimeline() {
       const { activeSessionId, sessions } = useSessionStore.getState();
 
       if (!currentProjectId || !activeSessionId) {
-        useRuntimeTimelineStore.getState().setActiveSession(null, null);
         useChatUiStore.getState().setActiveSession(null);
         updateBranchDraft(null);
         return;
@@ -224,13 +166,11 @@ export function useSessionTimeline() {
       const activeSession = sessions.find((session) => session.id === activeSessionId);
 
       if (!activeSession || activeSession.projectId !== currentProjectId) {
-        useRuntimeTimelineStore.getState().setActiveSession(null, null);
         useChatUiStore.getState().setActiveSession(null);
         updateBranchDraft(null);
         return;
       }
 
-      useRuntimeTimelineStore.getState().setActiveSession(activeSession.projectId, activeSession.id);
       useChatUiStore.getState().setActiveSession(activeSession.id);
 
       if (
@@ -256,37 +196,11 @@ export function useSessionTimeline() {
     };
   }, [updateBranchDraft]);
 
-  useEffect(() => {
-    if (!window.megumi?.runtime?.onEvent) {
-      return undefined;
-    }
-
-    return window.megumi.runtime.onEvent((event: AnyEvent) => {
-      if (shouldProcessRuntimeEvent(
-        event,
-        activeRunIdRef.current,
-        processedEventIdsByRunRef.current,
-      )) {
-        dispatchRuntimeEvent(event, { sessionId: runSessionIdRef.current });
-        if (isTerminalRunEvent(event)) {
-          const terminalSessionId = runSessionIdRef.current ?? event.sessionId ?? null;
-          const terminalProjectId = terminalSessionId
-            ? useSessionStore.getState().sessions.find((session) => session.id === terminalSessionId)?.projectId
-            : undefined;
-          if (terminalSessionId && terminalProjectId) {
-            void reconcileTerminalRunTimeline(event, terminalProjectId, terminalSessionId);
-          }
-          activeRunIdRef.current = null;
-          runSessionIdRef.current = null;
-        }
-      }
-    });
-  }, []);
-
+  /** Submits input and reconciles its optimistic identity with Product's committed User Message. */
   const sendSessionMessage = useCallback(async (payload: ComposerSubmitPayload): Promise<boolean> => {
     lastPayloadRef.current = payload;
     const target = resolveSessionMessageTarget();
-    runSessionIdRef.current = target?.sessionId ?? null;
+    submittedSessionIdRef.current = target?.sessionId ?? null;
 
     if (!target) {
       failSessionMessageSend('Select a project before sending a message.');
@@ -306,7 +220,7 @@ export function useSessionTimeline() {
     const createdAt = new Date().toISOString();
     const requestId = `ipc-session-message-${createId('request')}`;
     const request = createRendererRuntimeIpcRequest(
-      IPC_CHANNELS.chat.sessionMessageSend,
+      IPC_CHANNELS.session.sessionMessageSend,
       createSessionMessageSendPayload(
         payload,
         clientMessageId,
@@ -316,31 +230,26 @@ export function useSessionTimeline() {
       ),
       { requestId },
     );
-    activeRunIdRef.current = null;
-    processedEventIdsByRunRef.current.clear();
+    submittedRunIdRef.current = null;
 
     const state = useChatUiStore.getState();
     state.setAgentStatus('sending', target.sessionId ?? null);
     state.setLastError(null, target.sessionId ?? null);
-
-    const isCompactionCommand = isCompactCommandInput(payload.message);
-    const updateCompactionActivity = (status: 'running' | 'completed' | 'failed' | 'skipped') => {
-      if (isCompactionCommand && target.sessionId) {
-        useRuntimeTimelineStore.getState().upsertSessionCompactionActivity(target.projectId, target.sessionId, {
-          activityId: requestId,
-          status,
-          label: 'context_compaction',
-          createdAt,
-        });
-      }
-    };
-    updateCompactionActivity('running');
+    if (target.sessionId) {
+      useSessionTimelineStore.getState().addPendingUserMessage({
+        projectId: target.projectId,
+        sessionId: target.sessionId,
+        clientMessageId,
+        text: payload.message,
+        attachments: payload.attachments,
+        createdAt,
+      });
+    }
 
     let result: Awaited<ReturnType<typeof window.megumi.session.message.send>>;
     try {
       result = await window.megumi.session.message.send(request);
     } catch (error) {
-      updateCompactionActivity('failed');
       failSessionMessageSend(
         error instanceof Error ? error.message : 'The message could not be sent.',
         target.sessionId ?? null,
@@ -349,13 +258,11 @@ export function useSessionTimeline() {
     }
 
     if (!result.ok) {
-      updateCompactionActivity('failed');
       failSessionMessageSend(result.data.message, target.sessionId ?? null);
       return false;
     }
 
     if (result.data.type === 'error') {
-      updateCompactionActivity('failed');
       failSessionMessageSend(result.data.message, result.data.session?.id ?? target.sessionId ?? null);
       return false;
     }
@@ -367,29 +274,35 @@ export function useSessionTimeline() {
       failSessionMessageSend('The product did not return a session for this request.');
       return false;
     }
-    runSessionIdRef.current = runSessionId;
-    useRuntimeTimelineStore.getState().setActiveSession(target.projectId, runSessionId);
+    submittedSessionIdRef.current = runSessionId;
     useChatUiStore.getState().setActiveSession(runSessionId);
     useChatUiStore.getState().setLastError(null, runSessionId);
 
     if (result.data.type !== 'agent_run') {
-      activeRunIdRef.current = null;
+      submittedRunIdRef.current = null;
       useChatUiStore.getState().setAgentStatus('idle', runSessionId);
-      if (isCompactionCommand && result.data.type === 'completed') {
-        const skipped = result.data.message?.startsWith('Context compaction skipped:') ?? false;
-        updateCompactionActivity(skipped ? 'skipped' : 'completed');
-      }
       return true;
     }
 
-    activeRunIdRef.current = result.data.run.runId;
+    submittedRunIdRef.current = result.data.run.runId;
     useChatUiStore.getState().setAgentStatus('sending', runSessionId);
-    useRuntimeTimelineStore.getState().reconcileCommittedRunMessages(
-      target.projectId,
-      runSessionId,
-      result.data.run.runId,
-      [{ ...toTimelineUserMessage(target.projectId, result.data.userMessage), clientMessageId }],
-    );
+    useSessionTimelineStore.getState().addPendingUserMessage({
+      projectId: target.projectId,
+      sessionId: runSessionId,
+      clientMessageId,
+      messageId: result.data.userMessage.messageId,
+      text: payload.message,
+      attachments: payload.attachments,
+      createdAt,
+      runId: result.data.run.runId,
+    });
+    if (result.data.branchCommit) {
+      useSessionTimelineStore.getState().addCommittedBranch(
+        target.projectId,
+        runSessionId,
+        result.data.branchCommit.branch,
+      );
+    }
 
     if (isSameBranchDraft(branchDraftRef.current, branchDraftForSend)) {
       updateBranchDraft(null);
@@ -411,9 +324,7 @@ export function useSessionTimeline() {
 
   const cancelSessionMessage = useCallback(async () => {
     const runState = useRunStore.getState();
-    const runId = activeRunIdRef.current ?? runState.activeRunId;
-    const runSessionId = runSessionIdRef.current ?? (runId ? runState.runs[runId]?.sessionId : null);
-
+    const runId = submittedRunIdRef.current ?? runState.activeRunId;
     if (!runId) {
       showToast({
         tone: 'warning',
@@ -425,7 +336,7 @@ export function useSessionTimeline() {
 
     try {
       const result = await window.megumi.session.message.cancel(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.sessionMessageCancel, {
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.session.sessionMessageCancel, {
           runId,
         }),
       );
@@ -489,7 +400,7 @@ export function useSessionTimeline() {
       : null;
 
     if (branchDraftForReplacement) {
-      const cancelRequest = createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.branchDraftCancel, {
+      const cancelRequest = createRendererRuntimeIpcRequest(IPC_CHANNELS.session.branchDraftCancel, {
         sessionId: branchDraftForReplacement.sessionId,
         branchMarkerId: branchDraftForReplacement.branchMarkerId,
       });
@@ -518,7 +429,7 @@ export function useSessionTimeline() {
     const createSequence = branchDraftCreateSequenceRef.current + 1;
     branchDraftCreateSequenceRef.current = createSequence;
 
-    const request = createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.branchDraftCreate, {
+    const request = createRendererRuntimeIpcRequest(IPC_CHANNELS.session.branchDraftCreate, {
       sessionId,
       messageId: input.messageId,
     });
@@ -537,7 +448,7 @@ export function useSessionTimeline() {
     ) {
       try {
         await window.megumi.session.branchDraft.cancel(
-          createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.branchDraftCancel, {
+          createRendererRuntimeIpcRequest(IPC_CHANNELS.session.branchDraftCancel, {
             sessionId: result.data.branchDraft.sessionId,
             branchMarkerId: result.data.branchDraft.branchMarkerId,
           }),
@@ -563,7 +474,7 @@ export function useSessionTimeline() {
       return;
     }
 
-    const request = createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.branchDraftCancel, {
+    const request = createRendererRuntimeIpcRequest(IPC_CHANNELS.session.branchDraftCancel, {
       sessionId: branchDraftForCancel.sessionId,
       branchMarkerId: branchDraftForCancel.branchMarkerId,
     });
@@ -594,45 +505,5 @@ export function useSessionTimeline() {
     branchDraft,
     createBranchDraft,
     cancelBranchDraft,
-  };
-}
-
-/**
- * Transitional Desktop mapping while Product returns Session facts and the
- * dedicated Session Timeline builder is introduced in Task 5.
- */
-function toTimelineUserMessage(projectId: string, message: UserMessageDto): TimelineUserMessage {
-  return {
-    messageId: message.messageId,
-    role: 'user',
-    projectId,
-    sessionId: message.sessionId,
-    ...(message.runId ? { runId: message.runId } : {}),
-    ...(message.skillSelection ? { skillSelection: message.skillSelection } : {}),
-    createdAt: message.createdAt,
-    ...(message.completedAt ? { updatedAt: message.completedAt } : {}),
-    blocks: [
-      ...message.displayContent.flatMap((content, index) => (
-        content.type === 'text'
-          ? [{
-              blockId: `user-text:${message.messageId}:${index}`,
-              kind: 'user_text' as const,
-              text: content.text,
-              format: 'plain' as const,
-              createdAt: message.createdAt,
-            }]
-          : []
-      )),
-      ...message.attachments.map((attachment) => ({
-        blockId: `user-attachment:${attachment.attachmentId}`,
-        kind: 'user_attachment' as const,
-        attachmentId: attachment.attachmentId,
-        attachmentType: attachment.type,
-        name: attachment.name ?? attachment.attachmentId,
-        ...(attachment.mediaType ? { mediaType: attachment.mediaType } : {}),
-        source: attachment.source === 'localFile' ? 'local_file' as const : 'unknown' as const,
-        createdAt: attachment.createdAt,
-      })),
-    ],
   };
 }

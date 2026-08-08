@@ -3,7 +3,7 @@ import type {
   BranchSeparatorBlock,
   TimelineMessage as CanonicalTimelineMessage,
   UserTimelineBlock,
-} from '@megumi/product/host';
+} from '../../session-timeline';
 import { TimelineMarkdown } from './TimelineMarkdown';
 import { ProcessDisclosureBlockView } from './ProcessDisclosureBlockView';
 import { RecoverableErrorBoundary } from '../../../shared/ui';
@@ -37,7 +37,7 @@ function TimelineDocumentAttachment({
   useEffect(() => {
     let active = true;
     void window.megumi.session.documentInput.getAttachmentStatus(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.attachmentFileStatus, { attachmentId }),
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.session.attachmentFileStatus, { attachmentId }),
     ).then((result) => {
       if (!active) return;
       setAvailability(result.ok && result.data.status === 'available' ? 'available' : 'unavailable');
@@ -76,7 +76,7 @@ function TimelineImageAttachment({ attachmentId, name }: { attachmentId: string;
     const reader = window.megumi?.session?.imageInput?.readAttachment;
     if (!reader) return () => { active = false; };
     void reader(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.chat.attachmentImageRead, { attachmentId }),
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.session.attachmentImageRead, { attachmentId }),
     ).then((result) => {
       if (active && result.ok && result.data.status === 'ok') setDataUrl(result.data.dataUrl);
     }).catch(() => undefined);
@@ -104,10 +104,11 @@ function AnswerTextBlockView({ block }: { block: AnswerTextBlock }) {
   );
 }
 
-function BranchSeparatorBlockView({ block }: { block: BranchSeparatorBlock }) {
+function BranchSeparatorBlockView({ block: _block }: { block: BranchSeparatorBlock }) {
+  const { t } = useTranslation('chat');
   return (
     <div className="border-y border-[var(--color-border)] py-2 text-center text-xs text-[var(--color-text-muted)]">
-      {block.label}
+      {t('branches.separator')}
     </div>
   );
 }
