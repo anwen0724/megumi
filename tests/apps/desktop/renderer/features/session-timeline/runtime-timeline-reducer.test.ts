@@ -50,7 +50,7 @@ describe('RuntimeTimeline', () => {
     expect(twice.messages).toEqual(once.messages);
   });
 
-  it('streams assistant text as full snapshots into the answer block', () => {
+  it('moves an earlier ModelCall text into the process before streaming the final answer', () => {
     const timeline = createRuntimeTimeline({});
     let next = reduceRuntimeTimeline({ timeline, event: event('run.started', {}, 1) });
     next = reduceRuntimeTimeline({
@@ -69,9 +69,23 @@ describe('RuntimeTimeline', () => {
       timeline: next,
       event: event('message.ended', { role: 'assistant', messageId: 'message:1', content: 'hello' }, 5),
     });
+    next = reduceRuntimeTimeline({
+      timeline: next,
+      event: event('turn.started', { messageId: 'message:2' }, 6),
+    });
+    next = reduceRuntimeTimeline({
+      timeline: next,
+      event: event('message.update', { role: 'assistant', messageId: 'message:2', content: 'final' }, 7),
+    });
+    next = reduceRuntimeTimeline({
+      timeline: next,
+      event: event('message.ended', { role: 'assistant', messageId: 'message:2', content: 'final' }, 8),
+    });
 
     const serialized = JSON.stringify(next);
     expect(serialized).toContain('hello');
+    expect(serialized).toContain('"kind":"assistant_text"');
+    expect(serialized).toContain('final');
     expect(serialized).not.toContain('"hel"');
   });
 

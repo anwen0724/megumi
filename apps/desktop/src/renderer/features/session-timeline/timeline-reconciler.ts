@@ -194,7 +194,13 @@ function mergeAssistantMessage(
 ): TimelineAssistantMessage {
   const processBlocks = new Map<string, ProcessDisclosureBlock>();
   for (const block of assistantProcessBlocks(committed)) processBlocks.set(block.blockId, block);
-  for (const block of assistantProcessBlocks(runtime)) processBlocks.set(block.blockId, block);
+  for (const runtimeBlock of assistantProcessBlocks(runtime)) {
+    const committedBlock = processBlocks.get(runtimeBlock.blockId);
+    processBlocks.set(
+      runtimeBlock.blockId,
+      committedBlock ? mergeProcessBlock(committedBlock, runtimeBlock) : runtimeBlock,
+    );
+  }
 
   const committedAnswers = assistantAnswerBlocks(committed);
   const runtimeAnswers = assistantAnswerBlocks(runtime);
@@ -206,6 +212,27 @@ function mergeAssistantMessage(
     blocks: [
       ...processBlocks.values(),
       ...(committedAnswers.length > 0 ? committedAnswers : runtimeAnswers),
+    ],
+  };
+}
+
+/** Keeps durable process facts authoritative while retaining runtime-only diagnostics. */
+function mergeProcessBlock(
+  committed: ProcessDisclosureBlock,
+  runtime: ProcessDisclosureBlock,
+): ProcessDisclosureBlock {
+  const runtimeItems = new Map(runtime.items.map((item) => [item.itemId, item]));
+  const committedItems = committed.items.map((item) => ({
+    ...runtimeItems.get(item.itemId),
+    ...item,
+  }));
+  const committedItemIds = new Set(committed.items.map((item) => item.itemId));
+  return {
+    ...runtime,
+    ...committed,
+    items: [
+      ...committedItems,
+      ...runtime.items.filter((item) => !committedItemIds.has(item.itemId)),
     ],
   };
 }

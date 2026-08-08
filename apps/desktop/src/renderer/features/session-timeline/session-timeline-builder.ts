@@ -162,13 +162,12 @@ export function buildCommittedRunTimeline(
     .filter((item) => item.message.kind !== 'user' && item.message.runId === runId)
     .map((item) => item.message);
   return [
-    toTimelineUserMessage(request.projectId, user.message, 0),
+    toTimelineUserMessage(request.projectId, user.message),
     toTimelineAssistantMessage({
       projectId: request.projectId,
       runId,
       user: user.message,
       responses,
-      historyOrder: 1,
       workspaceChangeFooter: groupWorkspaceChangesByRun(request.workspaceChanges).get(runId),
     }),
   ];
@@ -227,7 +226,7 @@ function toTimelineAssistantMessage(input: {
   readonly runId: string;
   readonly user: UserMessageDto;
   readonly responses: readonly SessionMessageDto[];
-  readonly historyOrder: number;
+  readonly historyOrder?: number;
   readonly workspaceChangeFooter?: WorkspaceChangeFooterFact;
 }): TimelineAssistantMessage {
   const reply = input.responses.find((message) => message.kind === 'assistantReply');
@@ -243,7 +242,7 @@ function toTimelineAssistantMessage(input: {
     runId: input.runId,
     createdAt: input.responses[0]?.createdAt ?? input.user.createdAt,
     updatedAt: last.completedAt ?? last.createdAt,
-    historyOrder: input.historyOrder,
+    ...(input.historyOrder === undefined ? {} : { historyOrder: input.historyOrder }),
     ...(input.workspaceChangeFooter ? { workspaceChangeFooter: input.workspaceChangeFooter } : {}),
     blocks: [{
       blockId: `process:${input.runId}`,

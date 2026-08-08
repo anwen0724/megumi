@@ -2,6 +2,7 @@
 import type { AnyEvent } from '@megumi/product/host';
 import type {
   AnswerTextBlock,
+  AssistantTextItem,
   CancelledActivityItem,
   ErrorActivityItem,
   PlanActivityItem,
@@ -95,10 +96,7 @@ function projectRuntimeTimelineEvent(
   if (event.type === 'message.update') {
     const payload = event.payload;
     const assistant = ensureAssistantMessage(nextMessages, event, projectId);
-    if (hasCompletedAnswerBlock(assistant)) {
-      assistant.updatedAt = event.createdAt;
-      return nextMessages;
-    }
+    movePreviousAnswerToProcess(assistant, event, payload.messageId);
     // Full snapshot: replace, never merge.
     const answer = ensureAnswerBlock(assistant, event, payload.messageId);
     answer.text = payload.content;
@@ -125,11 +123,11 @@ function projectRuntimeTimelineEvent(
 
   if (event.type === 'message.ended' && event.payload.role === 'assistant') {
     const assistant = ensureAssistantMessage(nextMessages, event, projectId);
+    movePreviousAnswerToProcess(assistant, event, event.payload.messageId);
     assistant.messageId = event.payload.messageId;
-    const answer = assistant.blocks.find(
-      (block): block is AnswerTextBlock => block.kind === 'answer_text',
-    );
-    if (answer && answer.status !== 'completed') {
+    const answer = findAnswerBlock(assistant, event.payload.messageId)
+      ?? ensureAnswerBlock(assistant, event, event.payload.messageId);
+    if (answer.status !== 'completed') {
       answer.text = event.payload.content;
       answer.status = 'completed';
       answer.updatedAt = event.createdAt;
@@ -511,10 +509,41 @@ function findAnswerBlock(assistant: TimelineAssistantMessage, textId: string): A
   );
 }
 
-function hasCompletedAnswerBlock(assistant: TimelineAssistantMessage): boolean {
-  return assistant.blocks.some(
-    (block) => block.kind === 'answer_text' && block.status === 'completed',
+/** Moves an earlier ModelCall's visible text into disclosure before the next call starts. */
+function movePreviousAnswerToProcess(
+  assistant: TimelineAssistantMessage,
+  event: AnyEvent,
+  nextMessageId: string,
+): void {
+  const previous = assistant.blocks.find(
+    (block): block is AnswerTextBlock => block.kind === 'answer_text',
   );
+  if (!previous || previous.textId === `text:${nextMessageId}`) return;
+
+  if (previous.text.trim()) {
+    const process = ensureProcessBlock(assistant, event);
+    const item: AssistantTextItem = {
+      itemId: `assistant-text:${previous.textId}`,
+      kind: 'assistant_text',
+      textId: previous.textId,
+      phase: 'prelude',
+      status: previous.status === 'failed'
+        ? 'failed'
+        : previous.status === 'cancelled'
+          ? 'cancelled_partial'
+          : previous.status === 'completed'
+            ? 'completed'
+            : 'streaming',
+      text: previous.text,
+      format: previous.format,
+      ...(previous.createdAt ? { createdAt: previous.createdAt } : {}),
+      ...(previous.updatedAt ? { updatedAt: previous.updatedAt } : {}),
+    };
+    const existingIndex = process.items.findIndex((candidate) => candidate.itemId === item.itemId);
+    if (existingIndex >= 0) process.items[existingIndex] = item;
+    else process.items.push(item);
+  }
+  assistant.blocks = assistant.blocks.filter((block) => block !== previous);
 }
 
 function ensureThinkingItem(process: ProcessDisclosureBlock, thinkingId: string, createdAt: string): ThinkingItem {

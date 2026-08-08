@@ -11,16 +11,30 @@ import type {
 
 describe('Timeline reconciler', () => {
   it('keeps live disclosure while accepting the committed final answer', () => {
+    const committed = assistant('run:1', 'completed', 'Final', false);
+    const committedProcess = committed.blocks.find((block) => block.kind === 'process_disclosure')!;
+    committedProcess.items.push({
+      itemId: 'assistant-text:committed',
+      kind: 'assistant_text',
+      textId: 'text:committed',
+      phase: 'prelude',
+      status: 'completed',
+      text: 'Persisted prelude',
+      format: 'markdown',
+    });
     const reconciled = reconcileTimelineMessages(
       [assistant('run:1', 'streaming', 'Partial', true)],
-      [assistant('run:1', 'completed', 'Final', false)],
+      [committed],
     );
     const message = reconciled[0] as TimelineAssistantMessage;
 
     expect(message.blocks).toEqual([
       expect.objectContaining({
         kind: 'process_disclosure',
-        items: [expect.objectContaining({ kind: 'thinking', text: 'Thinking' })],
+        items: expect.arrayContaining([
+          expect.objectContaining({ kind: 'thinking', text: 'Thinking' }),
+          expect.objectContaining({ kind: 'assistant_text', text: 'Persisted prelude' }),
+        ]),
       }),
       expect.objectContaining({ kind: 'answer_text', status: 'completed', text: 'Final' }),
     ]);

@@ -210,6 +210,8 @@ describe('Session Timeline builder', () => {
       expect.objectContaining({ role: 'user', runId: 'run:1' }),
       expect.objectContaining({ role: 'assistant', runId: 'run:1' }),
     ]);
+    expect(timeline[0]).not.toHaveProperty('historyOrder');
+    expect(timeline[1]).not.toHaveProperty('historyOrder');
   });
 });
 
