@@ -29,6 +29,7 @@ export interface SessionCompactionError {
 export interface SessionCompactionRecord {
   readonly compactionId: string;
   readonly sessionId: string;
+  /** Active Session Entry after which the Compaction activity occurred. */
   readonly anchorEntryId: string;
   readonly trigger: SessionCompactionTrigger;
   readonly status: SessionCompactionStatus;
@@ -41,6 +42,7 @@ export interface SessionCompactionRecord {
 export interface BeginCompactionRequest {
   readonly compactionId: string;
   readonly sessionId: string;
+  /** Current active Entry at lifecycle start; not the Summary coverage boundary. */
   readonly anchorEntryId: string;
   readonly trigger: Exclude<SessionCompactionTrigger, 'legacy'>;
   readonly startedAt: string;

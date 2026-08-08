@@ -288,9 +288,13 @@ describe('session service flows', () => {
 
     expect(conversation.status).toBe('ok');
     if (conversation.status === 'ok') {
-      expect(conversation.conversation.flatMap((item) => (
-        item.type === 'message' ? [item.message.message_id] : []
-      ))).toEqual(['M1', 'M2', 'M3', 'M4']);
+      expect(conversation.conversation.map((item) => (
+        item.type === 'message'
+          ? item.message.message_id
+          : item.type === 'compaction'
+            ? `compaction:${item.compactionId}`
+            : `branch:${item.branchId}`
+      ))).toEqual(['M1', 'M2', 'M3', 'M4', 'compaction:C1']);
     }
     expect(m1.status).toBe('saved');
   });

@@ -207,6 +207,9 @@ describe('Context compaction', () => {
     if ((options.sessionHistory.completeCompaction as ReturnType<typeof vi.fn>).mock.calls.length === 0) {
       throw new Error('completeCompaction was not called');
     }
+    expect(options.sessionHistory.beginCompaction).toHaveBeenCalledWith(expect.objectContaining({
+      anchorEntryId: 'entry:assistant:5',
+    }));
     expect(options.sessionHistory.completeCompaction).toHaveBeenCalledWith(expect.objectContaining({
       compactionId: 'compaction:1',
       coveredUntilEntryId: 'entry:assistant:3',

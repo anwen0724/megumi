@@ -97,7 +97,9 @@ export async function executeContextCompaction(
   const started = input.sessionHistory.beginCompaction({
     compactionId,
     sessionId: input.sessionId,
-    anchorEntryId: plan.plan.coveredUntilEntryId,
+    // The lifecycle record is positioned where Compaction was requested. The
+    // covered history boundary is a different fact persisted with the Summary.
+    anchorEntryId: input.materialized.expectedActiveEntryId,
     trigger: input.trigger,
     startedAt,
   });

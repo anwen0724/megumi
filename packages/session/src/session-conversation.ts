@@ -155,9 +155,10 @@ function buildConversation(
   )));
   const messagesById = new Map(messages.map((message) => [message.message_id, message]));
   const attachments = groupAttachments(store.listAttachmentsByMessageIds([...messagesById.keys()]));
-  const compactionsByAnchor = groupCompactions(compactions.filter((record) => (
-    activeEntryIds.has(record.anchorEntryId)
-  )));
+  const compactionsByAnchor = groupCompactions(
+    compactions.filter((record) => activeEntryIds.has(record.anchorEntryId)),
+    messageEntries,
+  );
   const conversation: SessionConversationItem[] = [];
 
   for (const entry of messageEntries) {
@@ -228,12 +229,14 @@ function groupAttachments(
 
 function groupCompactions(
   records: readonly SessionCompactionRecord[],
+  messageEntries: readonly SessionEntry[],
 ): Map<string, readonly SessionCompactionRecord[]> {
   const grouped = new Map<string, SessionCompactionRecord[]>();
   for (const record of records) {
-    const values = grouped.get(record.anchorEntryId) ?? [];
+    const anchorEntryId = resolveCompactionActivityAnchor(record, messageEntries);
+    const values = grouped.get(anchorEntryId) ?? [];
     values.push(record);
-    grouped.set(record.anchorEntryId, values);
+    grouped.set(anchorEntryId, values);
   }
   for (const values of grouped.values()) {
     values.sort((left, right) => (
@@ -242,6 +245,25 @@ function groupCompactions(
     ));
   }
   return grouped;
+}
+
+/**
+ * Places the activity after the last committed message that existed when it
+ * started. Older records used the Summary coverage boundary as anchorEntryId;
+ * the timestamp fallback keeps those already-persisted activities recoverable
+ * at their actual occurrence position.
+ */
+function resolveCompactionActivityAnchor(
+  record: SessionCompactionRecord,
+  messageEntries: readonly SessionEntry[],
+): string {
+  let anchorEntryId = record.anchorEntryId;
+  for (const entry of messageEntries) {
+    if (entry.created_at.localeCompare(record.startedAt) <= 0) {
+      anchorEntryId = entry.entry_id;
+    }
+  }
+  return anchorEntryId;
 }
 
 export function conversationMessageWithAttachments(
