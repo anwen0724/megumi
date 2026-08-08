@@ -16,6 +16,8 @@ import type {
   SessionCatalog,
   SessionEntryGraph,
   SessionHistory,
+  SessionCompactionRecord,
+  SessionConversationItem,
 } from '../../../packages/session/src/index';
 
 describe('session contracts v2', () => {
@@ -182,5 +184,25 @@ describe('session contracts v2', () => {
     const capabilities = {} as SessionCatalog & SessionHistory & SessionEntryGraph;
 
     expect(capabilities).toBeDefined();
+  });
+
+  it('models recoverable compaction and conversation facts separately from semantic history', () => {
+    const compaction: SessionCompactionRecord = {
+      compactionId: 'compaction:1',
+      sessionId: 'session:1',
+      anchorEntryId: 'entry:1',
+      trigger: 'manual',
+      status: 'failed',
+      error: { code: 'summary_failed', message: 'Summary generation failed.' },
+      startedAt: '2026-07-04T00:00:00.000Z',
+      completedAt: '2026-07-04T00:00:01.000Z',
+    };
+    const item: SessionConversationItem = {
+      type: 'compaction',
+      ...compaction,
+    };
+
+    expect(item.status).toBe('failed');
+    expect(item).not.toHaveProperty('summary');
   });
 });

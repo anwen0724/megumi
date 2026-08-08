@@ -66,9 +66,18 @@ export function createSessionTimelineQuery(
       }
 
       const diagnostics: TimelineDiagnostic[] = [];
+      const conversationMessages = result.conversation.flatMap((item, activePathOrder) => (
+        item.type === 'message'
+          ? [{
+              message: item.message,
+              attachments: [...item.attachments],
+              active_path_order: activePathOrder,
+            }]
+          : []
+      ));
       const projected = projectSessionTimelineMessages({
         projectId: request.workspaceId,
-        messages: result.messages,
+        messages: conversationMessages,
         ...(request.runId ? { requestedRunId: request.runId } : {}),
         ...(input.isRunLive ? { isRunLive: input.isRunLive } : {}),
         workspaceChangeFooterProjector: input.workspaceChangeFooterProjector,

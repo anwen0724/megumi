@@ -88,13 +88,20 @@ export const sessionMessageAttachments = sqliteTable('session_message_attachment
 export const sessionCompactions = sqliteTable('session_compactions', {
   compactionId: text('compaction_id').primaryKey(),
   sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
-  summaryText: text('summary_text').notNull(),
+  anchorEntryId: text('anchor_entry_id').notNull(),
+  trigger: text('trigger').notNull(),
+  status: text('status').notNull(),
+  summaryText: text('summary_text'),
   coveredUntilEntryId: text('covered_until_entry_id'),
   firstKeptEntryId: text('first_kept_entry_id'),
   usage: text('usage'),
-  createdAt: text('created_at').notNull(),
+  errorCode: text('error_code'),
+  errorMessage: text('error_message'),
+  startedAt: text('started_at').notNull(),
+  completedAt: text('completed_at'),
 }, (table) => [
-  index('idx_session_compactions_session_created').on(table.sessionId, table.createdAt),
+  index('idx_session_compactions_session_started').on(table.sessionId, table.startedAt),
+  index('idx_session_compactions_session_status').on(table.sessionId, table.status),
 ]);
 
 export const workspaceChanges = sqliteTable('workspace_changes', {

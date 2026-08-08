@@ -68,8 +68,6 @@ export {
 } from './session-history';
 export type {
   CreateSessionHistoryOptions,
-  GetActiveConversationHistoryRequest,
-  GetActiveConversationHistoryResult,
   GetActiveHistoryRequest,
   GetActiveHistoryResult,
   ListMessagesRequest,
@@ -90,6 +88,39 @@ export type {
   SessionHistory,
   SessionIdFactories,
 } from './session-history';
+export {
+  SESSION_COMPACTION_STATUSES,
+  SESSION_COMPACTION_TRIGGERS,
+  createSessionCompactionLifecycle,
+} from './session-compaction';
+export type {
+  BeginCompactionRequest,
+  BeginCompactionResult,
+  CompleteCompactionRequest,
+  CompleteCompactionResult,
+  CreateSessionCompactionLifecycleOptions,
+  EndCompactionRequest,
+  EndCompactionResult,
+  InterruptRunningCompactionsRequest,
+  InterruptRunningCompactionsResult,
+  SessionCompactionError,
+  SessionCompactionLifecycle,
+  SessionCompactionRecord,
+  SessionCompactionStatus,
+  SessionCompactionTrigger,
+} from './session-compaction';
+export { createSessionConversationReader } from './session-conversation';
+export type {
+  GetActiveConversationHistoryRequest,
+  GetActiveConversationHistoryResult,
+  GetCommittedBranchRequest,
+  GetCommittedBranchResult,
+  SessionBranchConversationItem,
+  SessionCompactionConversationItem,
+  SessionConversationItem,
+  SessionConversationReader,
+  SessionMessageConversationItem,
+} from './session-conversation';
 export {
   createSessionEntryGraph,
 } from './session-entry-graph';

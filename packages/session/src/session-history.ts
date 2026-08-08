@@ -5,12 +5,31 @@ import type {
   SessionMessageAttachment,
 } from './session-attachment';
 import {
-  buildActiveConversationPath,
   readActivePath,
   type SessionCompactionSummary,
   type SessionEntry,
   type SessionHistoryItem,
 } from './session-entry-graph';
+import {
+  createSessionCompactionLifecycle,
+  type BeginCompactionRequest,
+  type BeginCompactionResult,
+  type CompleteCompactionRequest,
+  type CompleteCompactionResult,
+  type EndCompactionRequest,
+  type EndCompactionResult,
+  type InterruptRunningCompactionsRequest,
+  type InterruptRunningCompactionsResult,
+  type SessionCompactionLifecycle,
+} from './session-compaction';
+import {
+  createSessionConversationReader,
+  type GetActiveConversationHistoryRequest,
+  type GetActiveConversationHistoryResult,
+  type GetCommittedBranchRequest,
+  type GetCommittedBranchResult,
+  type SessionConversationReader,
+} from './session-conversation';
 import type {
   AssistantReplyReasonCode,
   AssistantReplyStatus,
@@ -125,15 +144,6 @@ export type GetActiveHistoryResult =
   | { status: 'ok'; history: SessionHistoryItem[] }
   | { status: 'failed'; failure: SessionFailure };
 
-export interface GetActiveConversationHistoryRequest {
-  session_id: string;
-  run_id?: string;
-}
-
-export type GetActiveConversationHistoryResult =
-  | { status: 'ok'; messages: SessionMessageWithAttachments[] }
-  | { status: 'failed'; failure: SessionFailure };
-
 export interface SaveCompactionSummaryRequest {
   compaction_id: string;
   session_id: string;
@@ -162,6 +172,13 @@ export interface SessionHistory {
   getActiveConversationHistory(
     request: GetActiveConversationHistoryRequest,
   ): GetActiveConversationHistoryResult;
+  getCommittedBranch(request: GetCommittedBranchRequest): GetCommittedBranchResult;
+  beginCompaction(request: BeginCompactionRequest): BeginCompactionResult;
+  completeCompaction(request: CompleteCompactionRequest): CompleteCompactionResult;
+  endCompaction(request: EndCompactionRequest): EndCompactionResult;
+  interruptRunningCompactions(
+    request: InterruptRunningCompactionsRequest,
+  ): InterruptRunningCompactionsResult;
   saveCompactionSummary(request: SaveCompactionSummaryRequest): SaveCompactionSummaryResult;
 }
 
@@ -188,12 +205,26 @@ export function createSessionHistory(options: CreateSessionHistoryOptions): Sess
     listUserMessagesByRunIds: (request) => implementation.listUserMessagesByRunIds(request),
     getActiveHistory: (request) => implementation.getActiveHistory(request),
     getActiveConversationHistory: (request) => implementation.getActiveConversationHistory(request),
+    getCommittedBranch: (request) => implementation.getCommittedBranch(request),
+    beginCompaction: (request) => implementation.beginCompaction(request),
+    completeCompaction: (request) => implementation.completeCompaction(request),
+    endCompaction: (request) => implementation.endCompaction(request),
+    interruptRunningCompactions: (request) => implementation.interruptRunningCompactions(request),
     saveCompactionSummary: (request) => implementation.saveCompactionSummary(request),
   };
 }
 
 class DefaultSessionHistory implements SessionHistory {
-  constructor(private readonly options: CreateSessionHistoryOptions) {}
+  private readonly compactions: SessionCompactionLifecycle;
+  private readonly conversation: SessionConversationReader;
+
+  constructor(private readonly options: CreateSessionHistoryOptions) {
+    this.compactions = createSessionCompactionLifecycle({
+      store: options.store,
+      entryId: (input) => this.entryId(input),
+    });
+    this.conversation = createSessionConversationReader({ store: options.store });
+  }
 
   async saveUserMessage(request: SaveUserMessageRequest): Promise<SaveUserMessageResult> {
     const candidate: SessionMessage = {
@@ -448,44 +479,34 @@ class DefaultSessionHistory implements SessionHistory {
   getActiveConversationHistory(
     request: GetActiveConversationHistoryRequest,
   ): GetActiveConversationHistoryResult {
-    try {
-      const session = this.options.store.findSessionById(request.session_id);
-      if (!session) return sessionNotFound(request.session_id);
-      const entries = this.options.store.listEntriesBySessionId(request.session_id);
-      const compactionIds = entries.flatMap((entry) => (
-        entry.compaction_id ? [entry.compaction_id] : []
-      ));
-      const path = buildActiveConversationPath({
-        session_id: request.session_id,
-        active_entry_id: session.active_entry_id,
-        entries,
-        compactions: this.options.store.listCompactionSummariesByIds(compactionIds),
-      });
-      const activePathOrderByMessageId = new Map<string, number>();
-      for (const [activePathOrder, entry] of path.entries()) {
-        if (entry.message_id) activePathOrderByMessageId.set(entry.message_id, activePathOrder);
-      }
-      const messageIds = [...activePathOrderByMessageId.keys()];
-      const persistedMessages = request.run_id
-        ? this.options.store.listMessagesByRunId(request.session_id, request.run_id)
-        : this.options.store.listMessagesByIds(messageIds);
-      const messagesById = new Map(
-        persistedMessages.map((message) => [message.message_id, message]),
-      );
-      const orderedMessages = messageIds.flatMap((messageId) => {
-        const message = messagesById.get(messageId);
-        return message ? [message] : [];
-      });
-      return {
-        status: 'ok',
-        messages: this.attachmentsForMessages(orderedMessages).map((item) => ({
-          ...item,
-          active_path_order: activePathOrderByMessageId.get(item.message.message_id),
-        })),
-      };
-    } catch (error) {
-      return sessionFailure(error);
-    }
+    return this.conversation.getActiveHistory(request);
+  }
+
+  /** Resolves a committed Branch from the same Entry Graph rule used by full history. */
+  getCommittedBranch(request: GetCommittedBranchRequest): GetCommittedBranchResult {
+    return this.conversation.getCommittedBranch(request);
+  }
+
+  /** Persists the running lifecycle fact before Context emits a started event. */
+  beginCompaction(request: BeginCompactionRequest): BeginCompactionResult {
+    return this.compactions.begin(request);
+  }
+
+  /** Commits a successful Summary and the active semantic path atomically. */
+  completeCompaction(request: CompleteCompactionRequest): CompleteCompactionResult {
+    return this.compactions.complete(request);
+  }
+
+  /** Persists a non-success terminal result without changing semantic history. */
+  endCompaction(request: EndCompactionRequest): EndCompactionResult {
+    return this.compactions.end(request);
+  }
+
+  /** Closes running records left behind by an earlier process. */
+  interruptRunningCompactions(
+    request: InterruptRunningCompactionsRequest,
+  ): InterruptRunningCompactionsResult {
+    return this.compactions.interruptRunning(request);
   }
 
   saveCompactionSummary(request: SaveCompactionSummaryRequest): SaveCompactionSummaryResult {

@@ -4,6 +4,7 @@ import type {
   DatabaseRow,
 } from '@megumi/database';
 import type { SessionMessageAttachment } from './session-attachment';
+import type { SessionCompactionRecord } from './session-compaction';
 import type { SessionCompactionSummary, SessionEntry } from './session-entry-graph';
 import {
   SessionAssistantReplyMessageSchema,
@@ -50,6 +51,11 @@ export interface SessionStore {
   findCompactionSummaryById(compactionId: string): SessionCompactionSummary | undefined;
   listCompactionSummariesByIds(compactionIds: string[]): SessionCompactionSummary[];
   listCompactionSummariesBySessionId(sessionId: string): SessionCompactionSummary[];
+  insertCompaction(compaction: SessionCompactionRecord): SessionCompactionRecord;
+  updateCompaction(compaction: SessionCompactionRecord): SessionCompactionRecord | undefined;
+  findCompactionById(compactionId: string): SessionCompactionRecord | undefined;
+  listCompactionsBySessionId(sessionId: string): SessionCompactionRecord[];
+  listRunningCompactions(): SessionCompactionRecord[];
 }
 
 export function createSessionStore(input: { database: DatabaseConnection }): SessionStore {
@@ -271,23 +277,21 @@ class DatabaseSessionStore implements SessionStore {
   }
 
   insertCompactionSummary(compaction: SessionCompactionSummary): SessionCompactionSummary {
-    this.database.prepare({ sql: `
-      INSERT INTO session_compactions (
-        compaction_id, session_id, summary_text, covered_until_entry_id,
-        first_kept_entry_id, usage, created_at
-      ) VALUES (
-        @compaction_id, @session_id, @summary_text, @covered_until_entry_id,
-        @first_kept_entry_id, @usage, @created_at
-      )
-    ` }).run(toCompactionRow(compaction));
+    this.insertCompaction({
+      compactionId: compaction.compaction_id,
+      sessionId: compaction.session_id,
+      anchorEntryId: compaction.covered_until_entry_id,
+      trigger: 'legacy',
+      status: 'completed',
+      summary: compaction,
+      startedAt: compaction.created_at,
+      completedAt: compaction.created_at,
+    });
     return compaction;
   }
 
   findCompactionSummaryById(compactionId: string): SessionCompactionSummary | undefined {
-    const row = this.database.prepare<SessionCompactionRow>({
-      sql: 'SELECT * FROM session_compactions WHERE compaction_id = ?',
-    }).get([compactionId]);
-    return row ? fromCompactionRow(row) : undefined;
+    return this.findCompactionById(compactionId)?.summary;
   }
 
   listCompactionSummariesByIds(compactionIds: string[]): SessionCompactionSummary[] {
@@ -296,15 +300,77 @@ class DatabaseSessionStore implements SessionStore {
     return this.database.prepare<SessionCompactionRow>({ sql: `
       SELECT * FROM session_compactions
       WHERE compaction_id IN (${placeholders})
-    ` }).all(compactionIds).map(fromCompactionRow);
+        AND status = 'completed'
+    ` }).all(compactionIds).flatMap((row) => {
+      const summary = fromCompactionRow(row).summary;
+      return summary ? [summary] : [];
+    });
   }
 
   listCompactionSummariesBySessionId(sessionId: string): SessionCompactionSummary[] {
+    return this.listCompactionsBySessionId(sessionId).flatMap((record) => (
+      record.summary ? [record.summary] : []
+    ));
+  }
+
+  /** Inserts the unique Session-owned lifecycle record. */
+  insertCompaction(compaction: SessionCompactionRecord): SessionCompactionRecord {
+    this.database.prepare({ sql: `
+      INSERT INTO session_compactions (
+        compaction_id, session_id, anchor_entry_id, trigger, status,
+        summary_text, covered_until_entry_id, first_kept_entry_id, usage,
+        error_code, error_message, started_at, completed_at
+      ) VALUES (
+        @compaction_id, @session_id, @anchor_entry_id, @trigger, @status,
+        @summary_text, @covered_until_entry_id, @first_kept_entry_id, @usage,
+        @error_code, @error_message, @started_at, @completed_at
+      )
+    ` }).run(toCompactionRow(compaction));
+    return compaction;
+  }
+
+  /** Replaces only the lifecycle fields of an existing Compaction identity. */
+  updateCompaction(compaction: SessionCompactionRecord): SessionCompactionRecord | undefined {
+    const result = this.database.prepare({ sql: `
+      UPDATE session_compactions
+      SET status = @status,
+          summary_text = @summary_text,
+          covered_until_entry_id = @covered_until_entry_id,
+          first_kept_entry_id = @first_kept_entry_id,
+          usage = @usage,
+          error_code = @error_code,
+          error_message = @error_message,
+          completed_at = @completed_at
+      WHERE compaction_id = @compaction_id
+        AND session_id = @session_id
+        AND anchor_entry_id = @anchor_entry_id
+        AND trigger = @trigger
+        AND started_at = @started_at
+    ` }).run(toCompactionRow(compaction));
+    return result.changes > 0 ? this.findCompactionById(compaction.compactionId) : undefined;
+  }
+
+  findCompactionById(compactionId: string): SessionCompactionRecord | undefined {
+    const row = this.database.prepare<SessionCompactionRow>({
+      sql: 'SELECT * FROM session_compactions WHERE compaction_id = ?',
+    }).get([compactionId]);
+    return row ? fromCompactionRow(row) : undefined;
+  }
+
+  listCompactionsBySessionId(sessionId: string): SessionCompactionRecord[] {
     return this.database.prepare<SessionCompactionRow>({ sql: `
       SELECT * FROM session_compactions
       WHERE session_id = ?
-      ORDER BY created_at ASC, compaction_id ASC
+      ORDER BY started_at ASC, compaction_id ASC
     ` }).all([sessionId]).map(fromCompactionRow);
+  }
+
+  listRunningCompactions(): SessionCompactionRecord[] {
+    return this.database.prepare<SessionCompactionRow>({ sql: `
+      SELECT * FROM session_compactions
+      WHERE status = 'running'
+      ORDER BY started_at ASC, compaction_id ASC
+    ` }).all().map(fromCompactionRow);
   }
 }
 
@@ -356,11 +422,17 @@ type SessionEntryRow = DatabaseRow & {
 type SessionCompactionRow = DatabaseRow & {
   compaction_id: string;
   session_id: string;
-  summary_text: string;
-  covered_until_entry_id: string;
+  anchor_entry_id: string;
+  trigger: SessionCompactionRecord['trigger'];
+  status: SessionCompactionRecord['status'];
+  summary_text: Nullable<string>;
+  covered_until_entry_id: Nullable<string>;
   first_kept_entry_id: Nullable<string>;
   usage: Nullable<string>;
-  created_at: string;
+  error_code: Nullable<string>;
+  error_message: Nullable<string>;
+  started_at: string;
+  completed_at: Nullable<string>;
 };
 
 function toSessionRow(session: Session): SessionRow {
@@ -544,27 +616,51 @@ function fromEntryRow(row: SessionEntryRow): SessionEntry {
   };
 }
 
-function toCompactionRow(compaction: SessionCompactionSummary): SessionCompactionRow {
+function toCompactionRow(compaction: SessionCompactionRecord): SessionCompactionRow {
+  const summary = compaction.summary;
   return {
-    compaction_id: compaction.compaction_id,
-    session_id: compaction.session_id,
-    summary_text: compaction.summary_text,
-    covered_until_entry_id: compaction.covered_until_entry_id,
-    first_kept_entry_id: compaction.first_kept_entry_id ?? null,
-    usage: compaction.usage ? JSON.stringify(compaction.usage) : null,
-    created_at: compaction.created_at,
+    compaction_id: compaction.compactionId,
+    session_id: compaction.sessionId,
+    anchor_entry_id: compaction.anchorEntryId,
+    trigger: compaction.trigger,
+    status: compaction.status,
+    summary_text: summary?.summary_text ?? null,
+    covered_until_entry_id: summary?.covered_until_entry_id ?? null,
+    first_kept_entry_id: summary?.first_kept_entry_id ?? null,
+    usage: summary?.usage ? JSON.stringify(summary.usage) : null,
+    error_code: compaction.error?.code ?? null,
+    error_message: compaction.error?.message ?? null,
+    started_at: compaction.startedAt,
+    completed_at: compaction.completedAt ?? null,
   };
 }
 
-function fromCompactionRow(row: SessionCompactionRow): SessionCompactionSummary {
+function fromCompactionRow(row: SessionCompactionRow): SessionCompactionRecord {
+  const summary = row.status === 'completed'
+    && row.summary_text
+    && row.covered_until_entry_id
+    ? {
+        compaction_id: row.compaction_id,
+        session_id: row.session_id,
+        summary_text: row.summary_text,
+        covered_until_entry_id: row.covered_until_entry_id,
+        ...(row.first_kept_entry_id ? { first_kept_entry_id: row.first_kept_entry_id } : {}),
+        ...(row.usage ? { usage: JSON.parse(row.usage) as unknown } : {}),
+        created_at: row.completed_at ?? row.started_at,
+      }
+    : undefined;
   return {
-    compaction_id: row.compaction_id,
-    session_id: row.session_id,
-    summary_text: row.summary_text,
-    covered_until_entry_id: row.covered_until_entry_id,
-    ...(row.first_kept_entry_id ? { first_kept_entry_id: row.first_kept_entry_id } : {}),
-    ...(row.usage ? { usage: JSON.parse(row.usage) as unknown } : {}),
-    created_at: row.created_at,
+    compactionId: row.compaction_id,
+    sessionId: row.session_id,
+    anchorEntryId: row.anchor_entry_id,
+    trigger: row.trigger,
+    status: row.status,
+    ...(summary ? { summary } : {}),
+    ...(row.error_code && row.error_message
+      ? { error: { code: row.error_code, message: row.error_message } }
+      : {}),
+    startedAt: row.started_at,
+    ...(row.completed_at ? { completedAt: row.completed_at } : {}),
   };
 }
 

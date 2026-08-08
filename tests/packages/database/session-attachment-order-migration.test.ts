@@ -31,8 +31,8 @@ describe('0007 Session attachment order migration', () => {
       seedAttachmentFixture(database);
 
       const result = migrateDatabase({ database, migrationsFolder: migrationsRoot });
-      expect(result.appliedMigrations).toBe(3);
-      expect(result.currentMigration).toBe('0009_session_message_metadata');
+      expect(result.appliedMigrations).toBe(4);
+      expect(result.currentMigration).toBe('0010_session_compaction_lifecycle');
       expect(database.prepare<{ attachment_id: string; ordinal: number }>({ sql: `
         SELECT attachment_id, ordinal FROM session_message_attachments
         WHERE message_id = 'message:1' ORDER BY ordinal

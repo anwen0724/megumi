@@ -62,6 +62,46 @@ function createService(repository: SessionStore, sessionId: string) {
 }
 
 describe('session service flows', () => {
+  it('persists a failed compaction without changing active semantic history', async () => {
+    const { service, workspaceId } = createHarness();
+    service.createSession({ workspace_id: workspaceId, title: 'Session' });
+    const message = await service.saveUserMessage({
+      message_id: 'M1',
+      session_id: 'S1',
+      display_content: text('m1'),
+      model_content: text('m1'),
+      created_at: '2026-07-04T00:01:00.000Z',
+    });
+    const anchorEntryId = message.status === 'saved' ? message.entry.entry_id : 'missing';
+
+    expect(service.beginCompaction({
+      compactionId: 'C1',
+      sessionId: 'S1',
+      anchorEntryId,
+      trigger: 'manual',
+      startedAt: '2026-07-04T00:02:00.000Z',
+    }).status).toBe('started');
+    expect(service.endCompaction({
+      compactionId: 'C1',
+      sessionId: 'S1',
+      status: 'failed',
+      error: { code: 'summary_failed', message: 'Summary generation failed.' },
+      completedAt: '2026-07-04T00:03:00.000Z',
+    }).status).toBe('ended');
+
+    expect(service.getActiveHistory({ session_id: 'S1' })).toMatchObject({
+      status: 'ok',
+      history: [{ type: 'message', message: { message_id: 'M1' } }],
+    });
+    expect(service.getActiveConversationHistory({ session_id: 'S1' })).toMatchObject({
+      status: 'ok',
+      conversation: [
+        { type: 'message', message: { message_id: 'M1' } },
+        { type: 'compaction', compactionId: 'C1', status: 'failed' },
+      ],
+    });
+  });
+
   it('creates a branch by switching active entry and saving a new message', async () => {
     const { service, workspaceId } = createHarness();
     service.createSession({ workspace_id: workspaceId, title: 'Session' });
@@ -117,6 +157,29 @@ describe('session service flows', () => {
     expect(service.getActiveHistory({ session_id: 'S1', through_entry_id: null })).toEqual({
       status: 'ok',
       history: [],
+    });
+
+    const conversation = service.getActiveConversationHistory({ session_id: 'S1' });
+    expect(conversation).toMatchObject({
+      status: 'ok',
+      conversation: [
+        { type: 'message', message: { message_id: 'U1' } },
+        { type: 'message', message: { message_id: 'A1' } },
+        {
+          type: 'branch',
+          branchId: 'message:U3',
+          sourceEntryId: 'message:A1',
+          targetEntryId: 'message:U3',
+        },
+        { type: 'message', message: { message_id: 'U3' } },
+      ],
+    });
+    expect(service.getCommittedBranch({
+      sessionId: 'S1',
+      targetEntryId: 'message:U3',
+    })).toMatchObject({
+      status: 'found',
+      branch: { branchId: 'message:U3', sourceMessageId: 'A1', targetMessageId: 'U3' },
     });
   });
 
@@ -191,7 +254,9 @@ describe('session service flows', () => {
 
     expect(conversation.status).toBe('ok');
     if (conversation.status === 'ok') {
-      expect(conversation.messages.map((item) => item.message.message_id)).toEqual(['M1', 'M2', 'M3', 'M4']);
+      expect(conversation.conversation.flatMap((item) => (
+        item.type === 'message' ? [item.message.message_id] : []
+      ))).toEqual(['M1', 'M2', 'M3', 'M4']);
     }
     expect(m1.status).toBe('saved');
   });
@@ -222,12 +287,9 @@ describe('session service flows', () => {
 
     expect(conversation.status).toBe('ok');
     if (conversation.status === 'ok') {
-      expect(conversation.messages.map((item) => item.message.message_id)).toEqual(['M1', 'M2', 'M3', 'M4', 'M5', 'M6']);
-    }
-    const completedRun = service.getActiveConversationHistory({ session_id: 'S1', run_id: 'R3' });
-    expect(completedRun.status).toBe('ok');
-    if (completedRun.status === 'ok') {
-      expect(completedRun.messages.map((item) => item.message.message_id)).toEqual(['M5', 'M6']);
+      expect(conversation.conversation.flatMap((item) => (
+        item.type === 'message' ? [item.message.message_id] : []
+      ))).toEqual(['M1', 'M2', 'M3', 'M4', 'M5', 'M6']);
     }
     expect(m1.status).toBe('saved');
   });

@@ -78,7 +78,14 @@ export function createProductChat(options: {
       const result = options.history.getActiveConversationHistory({ session_id: request.sessionId });
       return result.status === 'failed'
         ? { status: 'failed', failure: toFailure(result.failure) }
-        : { status: 'ok', messages: result.messages.map(toChatMessage) };
+        : {
+            status: 'ok',
+            messages: result.conversation.flatMap((item) => (
+              item.type === 'message'
+                ? [toChatMessage({ message: item.message, attachments: [...item.attachments] })]
+                : []
+            )),
+          };
     },
     async listTimeline(request) {
       return options.timeline.list({ workspaceId: request.projectId, sessionId: request.sessionId, ...(request.runId ? { runId: request.runId } : {}) });
