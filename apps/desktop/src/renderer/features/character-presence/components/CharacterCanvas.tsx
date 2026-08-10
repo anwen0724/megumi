@@ -2,12 +2,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CharacterState } from '../character-state';
-import { mountCharacterPresentation, type CharacterPresentation } from '../character-presentation';
+import {
+  mountCharacterPresentation,
+  type CharacterPresentation,
+  type CharacterRenderBounds,
+} from '../character-presentation';
 
 export function CharacterCanvas(props: {
   readonly imageUrl: string;
   readonly state: CharacterState;
   readonly mouthLevel: number;
+  readonly onLayout: (bounds: CharacterRenderBounds) => void;
 }) {
   const { t } = useTranslation('character');
   const containerRef = useRef<HTMLDivElement>(null);
@@ -25,6 +30,7 @@ export function CharacterCanvas(props: {
     void mountCharacterPresentation({
       container,
       imageUrl: props.imageUrl,
+      onLayout: props.onLayout,
       onUnavailable: () => setStaticFallback(true),
     }).then((presentation) => {
       if (cancelled) {
@@ -41,13 +47,13 @@ export function CharacterCanvas(props: {
       presentationRef.current = null;
       void presentation?.dispose();
     };
-  }, [props.imageUrl]);
+  }, [props.imageUrl, props.onLayout]);
 
   useEffect(() => { presentationRef.current?.setState(props.state); }, [props.state]);
   useEffect(() => { presentationRef.current?.setMouthLevel(props.mouthLevel); }, [props.mouthLevel]);
 
   if (staticFallback) {
-    return <img src={props.imageUrl} alt="Megumi" draggable={false} className="h-full w-full select-none object-contain" />;
+    return <img src={props.imageUrl} alt="Megumi" draggable={false} className="pointer-events-none h-full w-full select-none object-contain" />;
   }
-  return <div ref={containerRef} className="h-full w-full" aria-label={t('presentationLabel')} />;
+  return <div ref={containerRef} className="pointer-events-none h-full w-full" aria-label={t('presentationLabel')} />;
 }

@@ -8,6 +8,12 @@ export const character = {
   keepOnTop: '保持 Megumi 置顶',
   stopKeepingOnTop: '取消 Megumi 置顶',
   hide: '隐藏 Megumi',
+  settings: '设置',
+  showMainWindow: '显示主界面',
+  managementMenu: 'Megumi 菜单',
+  size: {
+    label: '人物大小',
+  },
   states: {
     idle: '准备好了',
     listening: '正在听',
@@ -19,7 +25,9 @@ export const character = {
     error: '需要处理',
   },
   interaction: {
+    panelTitle: 'Megumi',
     title: '当前交互',
+    toggle: '显示或隐藏当前交互',
     expand: '展开当前交互',
     collapse: '收起当前交互',
     input: '你',
@@ -33,6 +41,7 @@ export const character = {
   },
   voice: {
     start: '开始语音',
+    preparing: '正在准备语音…',
     end: '结束语音',
     mute: '静音',
     unmute: '取消静音',
@@ -41,7 +50,15 @@ export const character = {
     inputLabel: '人物窗口文字输入',
     discard: '撤销当前输入',
     send: '发送输入',
-    preparing: '正在准备本地语音模型，首次使用需要一些时间…',
+    statuses: {
+      idle: '待机',
+      starting: '正在启动',
+      listening: '正在听',
+      recognizing: '正在识别',
+      muted: '已静音',
+      fallback: '手动输入',
+      error: '发生错误',
+    },
   },
   profiles: {
     label: '音色',
@@ -53,7 +70,7 @@ export const character = {
     selectModel: '请先在主窗口选择模型。',
     readSession: '无法读取当前会话。',
     missingSession: '主窗口当前没有可用会话。',
-    prepareModels: '语音模型准备未完成。',
+    modelsNotReady: '请先在主窗口设置中下载语音模型，再开始语音。',
     startSession: '语音会话无法开始。',
     stopSpeech: '无法停止当前语音。',
     cancelRun: '当前运行无法取消。',

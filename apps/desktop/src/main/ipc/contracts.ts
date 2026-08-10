@@ -41,6 +41,7 @@ export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.approval.resolve,
   IPC_CHANNELS.voice.snapshot,
   IPC_CHANNELS.voice.modelStatus,
+  IPC_CHANNELS.voice.modelsCheckUpdates,
   IPC_CHANNELS.voice.modelsPrepare,
   IPC_CHANNELS.voice.modelsCancel,
   IPC_CHANNELS.voice.profilesList,

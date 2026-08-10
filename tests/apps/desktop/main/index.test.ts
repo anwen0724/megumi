@@ -166,6 +166,7 @@ describe('main runtime logger composition', () => {
     mocks.registerAllHandlers.mockClear();
     mocks.registerRuntimeProcessErrorHandlers.mockClear();
     mocks.registerAppLifecycle.mockClear();
+    mocks.registerAppLifecycle.mockReturnValue({ quit: mocks.quit });
     mocks.createMainWindow.mockClear();
     mocks.composeProduct.mockReset();
     mocks.createDesktopWorkspaceFileSystem.mockClear();

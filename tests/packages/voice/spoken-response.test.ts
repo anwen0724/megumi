@@ -5,6 +5,7 @@ describe('spoken response projection', () => {
   it('speaks stable appended phrases before the reply ends and uses the fixed Voice Profile', async () => {
     const synthesized: Array<{ text: string; referenceAudioPath: string }> = [];
     const synthesizer: SpeechSynthesizer = {
+      async prepare() { return { status: 'ready' }; },
       async *synthesize(request) {
         synthesized.push({ text: request.text, referenceAudioPath: request.referenceAudioPath });
         yield {
@@ -71,6 +72,7 @@ describe('spoken response projection', () => {
       },
       recognizer: { async recognize() { return { status: 'empty' }; } },
       synthesizer: {
+        async prepare() { return { status: 'ready' }; },
         async *synthesize() {
           yield { pcm: { samples: new Float32Array([0.1]), sampleRate: 24_000, channels: 1 }, final: true };
         },

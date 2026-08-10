@@ -20,11 +20,15 @@ if (-not $Force -and (Test-Path -LiteralPath $outputPath)) {
 
 New-Item -ItemType Directory -Force -Path $buildRoot | Out-Null
 python -m venv $venvPath
+if ($LASTEXITCODE -ne 0) { throw "Could not create the MOSS sidecar virtual environment (exit $LASTEXITCODE)." }
 $python = Join-Path $venvPath 'Scripts/python.exe'
 & $python -m pip install --disable-pip-version-check -r (Join-Path $sidecarRoot 'requirements.lock')
+if ($LASTEXITCODE -ne 0) { throw "Could not install the MOSS sidecar dependencies (exit $LASTEXITCODE)." }
 & $python -m pip install --disable-pip-version-check --no-deps "git+https://github.com/OpenMOSS/MOSS-TTS-Nano.git@$officialRevision"
+if ($LASTEXITCODE -ne 0) { throw "Could not install the pinned MOSS-TTS-Nano runtime (exit $LASTEXITCODE)." }
 & $python (Join-Path $sidecarRoot 'patch_onnx_runtime.py') `
   (Join-Path $venvPath 'Lib/site-packages/onnx_tts_runtime.py')
+if ($LASTEXITCODE -ne 0) { throw "Could not patch the pinned MOSS ONNX runtime (exit $LASTEXITCODE)." }
 & $python -m PyInstaller `
   --noconfirm `
   --clean `
@@ -36,3 +40,4 @@ $python = Join-Path $venvPath 'Scripts/python.exe'
   --collect-all onnxruntime `
   --collect-all sentencepiece `
   (Join-Path $sidecarRoot 'main.py')
+if ($LASTEXITCODE -ne 0) { throw "Could not package the MOSS sidecar (exit $LASTEXITCODE)." }

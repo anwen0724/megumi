@@ -14,7 +14,16 @@ export interface MossSynthesisRequest {
   readonly signal?: AbortSignal;
 }
 
+export interface MossPreparationRequest {
+  readonly preparationId: string;
+  readonly modelPath: string;
+  readonly cachePath: string;
+  readonly referenceAudioPath: string;
+  readonly signal?: AbortSignal;
+}
+
 export interface MossSidecarClient {
+  prepare(request: MossPreparationRequest): Promise<void>;
   synthesize(request: MossSynthesisRequest): AsyncIterable<SpeechPcm>;
   dispose(): Promise<void>;
 }
@@ -26,6 +35,11 @@ interface PendingSynthesis {
   error?: Error;
 }
 
+interface PendingPreparation {
+  readonly resolve: () => void;
+  readonly reject: (error: Error) => void;
+}
+
 export function createMossSidecarClient(options: {
   readonly executablePath: string;
   readonly startupTimeoutMs?: number;
@@ -35,6 +49,7 @@ export function createMossSidecarClient(options: {
   let resolveReady: (() => void) | undefined;
   let rejectReady: ((error: Error) => void) | undefined;
   const pending = new Map<string, PendingSynthesis>();
+  const pendingPreparations = new Map<string, PendingPreparation>();
 
   const ensureStarted = async () => {
     if (!process) {
@@ -75,6 +90,18 @@ export function createMossSidecarClient(options: {
       rejectReady = undefined;
       return;
     }
+    if (typeof message.preparationId === 'string') {
+      const preparation = pendingPreparations.get(message.preparationId);
+      if (!preparation) return;
+      pendingPreparations.delete(message.preparationId);
+      if (message.type === 'prepared') preparation.resolve();
+      else if (message.type === 'prepare_error') {
+        preparation.reject(new Error(
+          typeof message.message === 'string' ? message.message : 'MOSS preparation failed.',
+        ));
+      }
+      return;
+    }
     if (typeof message.synthesisId !== 'string') return;
     const active = pending.get(message.synthesisId);
     if (!active) return;
@@ -103,9 +130,37 @@ export function createMossSidecarClient(options: {
       active.done = true;
       wake(active);
     }
+    for (const preparation of pendingPreparations.values()) preparation.reject(error);
+    pendingPreparations.clear();
   };
 
   return {
+    async prepare(request) {
+      await ensureStarted();
+      if (!process) throw new Error('MOSS sidecar is unavailable.');
+      if (request.signal?.aborted) throw new Error('MOSS preparation was cancelled.');
+      const preparation = new Promise<void>((resolve, reject) => {
+        pendingPreparations.set(request.preparationId, { resolve, reject });
+      });
+      const onAbort = () => process?.stdin.write(`${JSON.stringify({
+        type: 'cancel',
+        preparationId: request.preparationId,
+      })}\n`);
+      request.signal?.addEventListener('abort', onAbort, { once: true });
+      process.stdin.write(`${JSON.stringify({
+        type: 'prepare',
+        preparationId: request.preparationId,
+        modelPath: request.modelPath,
+        cachePath: request.cachePath,
+        referenceAudioPath: request.referenceAudioPath,
+      })}\n`);
+      try {
+        await preparation;
+      } finally {
+        request.signal?.removeEventListener('abort', onAbort);
+        pendingPreparations.delete(request.preparationId);
+      }
+    },
     async *synthesize(request) {
       await ensureStarted();
       if (!process) throw new Error('MOSS sidecar is unavailable.');

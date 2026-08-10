@@ -28,7 +28,7 @@ const VoiceProfileDtoSchema = z.object({
 export const VoiceSnapshotSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('idle') }).strict(),
   z.object({
-    status: z.enum(['listening', 'recognizing', 'submitting', 'thinking', 'speaking', 'error']),
+    status: z.enum(['preparing', 'listening', 'recognizing', 'submitting', 'thinking', 'speaking', 'error']),
     boundSessionId: z.string().min(1),
     voiceProfileId: z.string().min(1),
     muted: z.boolean(),
@@ -36,10 +36,38 @@ export const VoiceSnapshotSchema = z.discriminatedUnion('status', [
 ]);
 
 export const VoiceModelStatusResultSchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('not_prepared') }).strict(),
-  z.object({ status: z.literal('preparing'), progress: z.number().min(0).max(1) }).strict(),
-  z.object({ status: z.literal('ready') }).strict(),
-  z.object({ status: z.literal('failed'), failure: VoiceFailureSchema }).strict(),
+  z.object({
+    status: z.literal('not_prepared'),
+    bundleVersion: z.string().min(1),
+    downloadedBytes: z.number().int().nonnegative(),
+    totalBytes: z.number().int().nonnegative(),
+  }).strict(),
+  z.object({
+    status: z.literal('preparing'),
+    phase: z.enum(['downloading', 'verifying', 'installing']),
+    bundleVersion: z.string().min(1),
+    downloadedBytes: z.number().int().nonnegative(),
+    totalBytes: z.number().int().nonnegative(),
+    progress: z.number().min(0).max(1),
+    bytesPerSecond: z.number().nonnegative().optional(),
+  }).strict(),
+  z.object({
+    status: z.literal('ready'),
+    bundleVersion: z.string().min(1),
+    availableBundleVersion: z.string().min(1).optional(),
+  }).strict(),
+  z.object({
+    status: z.literal('failed'),
+    bundleVersion: z.string().min(1),
+    downloadedBytes: z.number().int().nonnegative(),
+    totalBytes: z.number().int().nonnegative(),
+    failure: VoiceFailureSchema,
+  }).strict(),
+]);
+
+export const VoiceModelUpdateResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('checked'), bundleVersion: z.string().min(1) }).strict(),
+  z.object({ status: z.literal('unavailable') }).strict(),
 ]);
 
 export const VoiceProfilesListResultSchema = z.object({
@@ -62,6 +90,7 @@ export type VoiceSessionStartPayload = z.infer<typeof VoiceSessionStartPayloadSc
 export type VoiceSessionMutedPayload = z.infer<typeof VoiceSessionMutedPayloadSchema>;
 export type VoiceHostSnapshot = z.infer<typeof VoiceSnapshotSchema>;
 export type VoiceHostModelStatus = z.infer<typeof VoiceModelStatusResultSchema>;
+export type VoiceHostModelUpdateResult = z.infer<typeof VoiceModelUpdateResultSchema>;
 export type VoiceHostProfile = z.infer<typeof VoiceProfileDtoSchema>;
 export type VoiceHostProfilesResult = z.infer<typeof VoiceProfilesListResultSchema>;
 
@@ -70,6 +99,7 @@ export type VoiceHostMutationResult = z.infer<typeof VoiceHostMutationResultSche
 export interface VoiceHost {
   getSnapshot(request?: Record<string, never>): Promise<VoiceHostSnapshot>;
   getModelStatus(request?: Record<string, never>): Promise<VoiceHostModelStatus>;
+  checkModelUpdates(request?: Record<string, never>): Promise<VoiceHostModelUpdateResult>;
   prepareModels(request?: { readonly repair?: boolean }): Promise<VoiceHostMutationResult>;
   cancelModelPreparation(request?: Record<string, never>): Promise<VoiceHostMutationResult>;
   listProfiles(request?: Record<string, never>): Promise<VoiceHostProfilesResult>;

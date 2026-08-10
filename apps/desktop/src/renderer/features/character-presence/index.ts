@@ -7,6 +7,7 @@ export * from './character-state';
 export * from './current-interaction';
 export * from './cancel-and-replace';
 export * from './character-presentation';
+export * from './character-window-shape';
 export * from './components/CharacterCanvas';
 export * from './use-character-interaction';
 export * from './components/CurrentInteractionView';

@@ -10,6 +10,7 @@ import { createIpcRequestHandler } from '../create-request-handler';
 import {
   VoiceModelStatusRequestSchema,
   VoiceModelsCancelRequestSchema,
+  VoiceModelsCheckUpdatesRequestSchema,
   VoiceModelsPrepareRequestSchema,
   VoiceProfileImportRequestSchema,
   VoiceProfileRemoveRequestSchema,
@@ -47,6 +48,13 @@ export function registerVoiceHandlers(
     responseSchema: host.VoiceModelStatusResultSchema,
     logger: options.logger,
     handle: () => voice.getModelStatus(),
+  }));
+  ipcMain.handle(IPC_CHANNELS.voice.modelsCheckUpdates, createIpcRequestHandler({
+    channel: IPC_CHANNELS.voice.modelsCheckUpdates,
+    requestSchema: VoiceModelsCheckUpdatesRequestSchema,
+    responseSchema: host.VoiceModelUpdateResultSchema,
+    logger: options.logger,
+    handle: () => voice.checkModelUpdates(),
   }));
   ipcMain.handle(IPC_CHANNELS.voice.modelsPrepare, createIpcRequestHandler({
     channel: IPC_CHANNELS.voice.modelsPrepare,

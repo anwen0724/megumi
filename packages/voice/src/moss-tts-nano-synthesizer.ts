@@ -4,10 +4,13 @@ import type { SpeechPcm, SpeechSynthesizer } from './speech';
 import { createMossSidecarClient, type MossSidecarClient } from './moss-sidecar';
 
 export interface CreateMossTtsNanoSynthesizerOptions {
-  readonly modelPath: string;
+  readonly modelPath: string | (() => string);
   readonly cachePath: string;
   readonly sidecarExecutablePath: string;
-  readonly ids?: { readonly createSynthesisId: () => string };
+  readonly ids?: {
+    readonly createPreparationId?: () => string;
+    readonly createSynthesisId: () => string;
+  };
   /** @internal Test seam; production creates a managed sidecar client. */
   readonly client?: MossSidecarClient;
 }
@@ -17,13 +20,36 @@ export function createMossTtsNanoSynthesizer(
 ): SpeechSynthesizer & { dispose(): Promise<void> } {
   const client = options.client ?? createMossSidecarClient({ executablePath: options.sidecarExecutablePath });
   const ids = options.ids ?? { createSynthesisId: () => `synthesis:${crypto.randomUUID()}` };
+  const createPreparationId = ids.createPreparationId
+    ?? (() => `preparation:${crypto.randomUUID()}`);
 
   return {
+    async prepare(request, operationOptions) {
+      try {
+        await client.prepare({
+          preparationId: createPreparationId(),
+          modelPath: typeof options.modelPath === 'function' ? options.modelPath() : options.modelPath,
+          cachePath: options.cachePath,
+          referenceAudioPath: request.referenceAudioPath,
+          signal: operationOptions?.signal,
+        });
+        return { status: 'ready' };
+      } catch (error) {
+        return {
+          status: 'failed',
+          failure: {
+            code: 'tts_prepare_failed',
+            message: error instanceof Error ? error.message : 'Could not prepare MOSS TTS.',
+            retryable: true,
+          },
+        };
+      }
+    },
     async *synthesize(request, operationOptions) {
       let previous: SpeechPcm | undefined;
       const chunks = client.synthesize({
         synthesisId: ids.createSynthesisId(),
-        modelPath: options.modelPath,
+        modelPath: typeof options.modelPath === 'function' ? options.modelPath() : options.modelPath,
         cachePath: options.cachePath,
         text: request.text,
         referenceAudioPath: request.referenceAudioPath,

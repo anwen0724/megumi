@@ -17,31 +17,39 @@ interface SherpaRuntime {
 }
 
 export interface CreateSenseVoiceRecognizerOptions {
-  readonly modelPath: string;
-  readonly tokensPath: string;
+  readonly modelPath: string | (() => string);
+  readonly tokensPath: string | (() => string);
   readonly numThreads?: number;
   /** @internal Test seam; production loads sherpa-onnx-node. */
   readonly runtimeLoader?: () => Promise<SherpaRuntime>;
 }
 
 export function createSenseVoiceRecognizer(options: CreateSenseVoiceRecognizerOptions): SpeechRecognizer {
+  const runtimePromise = (options.runtimeLoader ?? loadSherpaRuntime)();
   let recognizerPromise: Promise<SherpaOfflineRecognizer> | undefined;
+  let recognizerKey: string | undefined;
   const loadRecognizer = () => {
-    recognizerPromise ??= (options.runtimeLoader ?? loadSherpaRuntime)().then((runtime) => new runtime.OfflineRecognizer({
+    const modelPath = resolvePath(options.modelPath);
+    const tokensPath = resolvePath(options.tokensPath);
+    const nextKey = `${modelPath}\0${tokensPath}`;
+    if (recognizerKey !== nextKey) {
+      recognizerKey = nextKey;
+      recognizerPromise = runtimePromise.then((runtime) => new runtime.OfflineRecognizer({
       featConfig: { sampleRate: 16_000, featureDim: 80 },
       modelConfig: {
         senseVoice: {
-          model: options.modelPath,
+          model: modelPath,
           language: 'auto',
           useInverseTextNormalization: 1,
         },
-        tokens: options.tokensPath,
+        tokens: tokensPath,
         numThreads: Math.max(1, options.numThreads ?? 4),
         provider: 'cpu',
         debug: 0,
       },
-    }));
-    return recognizerPromise;
+      }));
+    }
+    return recognizerPromise!;
   };
 
   return {
@@ -67,6 +75,10 @@ export function createSenseVoiceRecognizer(options: CreateSenseVoiceRecognizerOp
       }
     },
   };
+}
+
+function resolvePath(value: string | (() => string)): string {
+  return typeof value === 'function' ? value() : value;
 }
 
 async function loadSherpaRuntime(): Promise<SherpaRuntime> {

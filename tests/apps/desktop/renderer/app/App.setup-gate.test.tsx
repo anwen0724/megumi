@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '@megumi/desktop/renderer/app/App';
 import { useSetupWizardStore } from '@megumi/desktop/renderer/features/setup-wizard';
 import { useProviderStore } from '@megumi/desktop/renderer/entities/provider';
+
+let requestSettings: (() => void) | undefined;
 
 function installMegumiMock() {
   Object.defineProperty(window, 'megumi', {
@@ -46,6 +48,10 @@ function installMegumiMock() {
       },
       character: {
         selectSession: vi.fn(),
+        onOpenSettingsRequested: vi.fn((callback: () => void) => {
+          requestSettings = callback;
+          return vi.fn();
+        }),
       },
     },
   });
@@ -56,6 +62,7 @@ describe('App setup gate', () => {
     vi.restoreAllMocks();
     useSetupWizardStore.setState(useSetupWizardStore.getInitialState(), true);
     useProviderStore.setState(useProviderStore.getInitialState(), true);
+    requestSettings = undefined;
   });
 
   it('shows setup wizard before setup is completed', async () => {
@@ -78,5 +85,15 @@ describe('App setup gate', () => {
     expect(screen.getByTestId('app-body')).toBeInTheDocument();
     expect(screen.queryByTestId('setup-wizard')).not.toBeInTheDocument();
     expect(window.megumi.settings.get).not.toHaveBeenCalled();
+  });
+
+  it('opens the main Settings page when requested by the character menu', () => {
+    installMegumiMock();
+    useSetupWizardStore.getState().applyBootstrapSettings({ language: 'en-US', setupCompleted: true });
+    render(<App />);
+
+    act(() => requestSettings?.());
+
+    expect(screen.getByTestId('settings-page')).toBeInTheDocument();
   });
 });

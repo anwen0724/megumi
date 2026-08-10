@@ -31,4 +31,28 @@ describe('SenseVoice recognizer', () => {
     expect(decode).toHaveBeenCalledOnce();
     expect(getResult).toHaveBeenCalledOnce();
   });
+
+  it('rebuilds the recognizer when the active model bundle changes', async () => {
+    let root = 'C:/models/voice-v1';
+    const configurations: Record<string, unknown>[] = [];
+    const recognizer = createSenseVoiceRecognizer({
+      modelPath: () => `${root}/model.int8.onnx`,
+      tokensPath: () => `${root}/tokens.txt`,
+      runtimeLoader: async () => ({
+        OfflineRecognizer: class {
+          constructor(configuration: Record<string, unknown>) { configurations.push(configuration); }
+          createStream() { return { acceptWaveform() {} }; }
+          decode() {}
+          getResult() { return { text: 'ok' }; }
+        },
+      }),
+    });
+    const request = { pcm: { samples: new Float32Array(), sampleRate: 16_000, channels: 1 as const }, language: 'auto' as const };
+
+    await recognizer.recognize(request);
+    root = 'C:/models/voice-v2';
+    await recognizer.recognize(request);
+
+    expect(configurations).toHaveLength(2);
+  });
 });

@@ -1,12 +1,13 @@
 import { useEffect, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Activity, Bot, BrainCircuit, Boxes, CheckCircle2, Globe2, Info, Palette, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Activity, AudioLines, Bot, BrainCircuit, Boxes, CheckCircle2, Globe2, Info, Palette, ShieldCheck } from 'lucide-react';
 import { DiagnosticsPanel } from '../features/observability';
 import { MemorySettingsPanel } from '../features/memory-settings';
 import { ProviderSettingsPanel } from '../features/provider-settings';
 import { WebSettingsPanel } from '../features/web-settings';
 import { PermissionRulesPanel } from '../features/permission-settings';
 import { SkillSettingsPanel } from '../features/skill-settings';
+import { VoiceSettingsPanel } from '../features/voice-settings';
 import { ThemeSelector } from '../shared/theme';
 import { LanguageSelector } from '../shared/i18n';
 import {
@@ -17,7 +18,7 @@ import {
   cx,
 } from '../shared/ui';
 
-type SettingsCategory = 'appearance' | 'models' | 'skills' | 'web' | 'memory' | 'diagnostics' | 'security' | 'about';
+type SettingsCategory = 'appearance' | 'voice' | 'models' | 'skills' | 'web' | 'memory' | 'diagnostics' | 'security' | 'about';
 
 interface SettingsPageProps {
   onDone: () => void;
@@ -35,6 +36,7 @@ const categoryGroups: Array<{ id: 'personal' | 'aiTools' | 'support'; items: Set
     id: 'personal',
     items: [
       { id: 'appearance', icon: Palette },
+      { id: 'voice', icon: AudioLines },
       { id: 'memory', icon: BrainCircuit },
     ],
   },
@@ -188,6 +190,8 @@ export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize 
               ) : null}
 
               {category === 'models' ? <ProviderSettingsPanel /> : null}
+
+              {category === 'voice' ? <VoiceSettingsPanel /> : null}
 
               {category === 'skills' ? <SkillSettingsPanel /> : null}
 

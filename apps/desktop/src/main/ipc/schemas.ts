@@ -38,6 +38,7 @@ export const ProviderDeleteApiKeyRequestSchema = createRuntimeIpcRequestSchema(I
 export const ApprovalResolveRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.approval.resolve, host.ApprovalResolvePayloadSchema);
 export const VoiceSnapshotRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.snapshot, host.VoiceEmptyPayloadSchema);
 export const VoiceModelStatusRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.modelStatus, host.VoiceEmptyPayloadSchema);
+export const VoiceModelsCheckUpdatesRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.modelsCheckUpdates, host.VoiceEmptyPayloadSchema);
 export const VoiceModelsPrepareRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.modelsPrepare, z.object({ repair: z.boolean().optional() }).strict());
 export const VoiceModelsCancelRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.modelsCancel, host.VoiceEmptyPayloadSchema);
 export const VoiceProfilesListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.profilesList, host.VoiceEmptyPayloadSchema);

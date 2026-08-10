@@ -22,6 +22,7 @@ _active_lock = threading.Lock()
 _active_cancel: dict[str, threading.Event] = {}
 _runtime: OnnxTtsRuntime | None = None
 _runtime_model_path: Path | None = None
+_prompt_codes: dict[tuple[str, int, int], Any] = {}
 
 
 class SynthesisCancelled(Exception):
@@ -74,11 +75,66 @@ def get_runtime(model_path: Path, cache_path: Path) -> OnnxTtsRuntime:
             output_dir=cache_path / "moss-output",
         )
         _runtime_model_path = resolved
+        _prompt_codes.clear()
         return _runtime
 
 
+def get_prompt_audio_codes(runtime: OnnxTtsRuntime, reference_audio_path: Path) -> Any:
+    """Resolve the selected voice once and retain it for this sidecar lifetime."""
+    resolved = reference_audio_path.resolve()
+    stat = resolved.stat()
+    key = (str(resolved), stat.st_mtime_ns, stat.st_size)
+    cached = _prompt_codes.get(key)
+    if cached is not None:
+        return cached
+    codes = runtime.resolve_prompt_audio_codes(
+        voice=None,
+        prompt_audio_path=resolved,
+    )
+    _prompt_codes.clear()
+    _prompt_codes[key] = codes
+    return codes
+
+
+def prepare_worker(message: dict[str, Any], cancel: threading.Event) -> None:
+    preparation_id = str(message["preparationId"])
+    try:
+        runtime = get_runtime(
+            Path(str(message["modelPath"])),
+            Path(str(message["cachePath"])),
+        )
+        if cancel.is_set():
+            raise SynthesisCancelled()
+        get_prompt_audio_codes(runtime, Path(str(message["referenceAudioPath"])))
+        if cancel.is_set():
+            raise SynthesisCancelled()
+        with _active_lock:
+            _active_cancel.pop(preparation_id, None)
+        emit({"type": "prepared", "preparationId": preparation_id})
+    except SynthesisCancelled:
+        emit({
+            "type": "prepare_error",
+            "preparationId": preparation_id,
+            "message": "MOSS preparation was cancelled.",
+        })
+    except Exception as error:  # Process boundary: report stable data, not a traceback.
+        emit({"type": "prepare_error", "preparationId": preparation_id, "message": str(error)})
+    finally:
+        with _active_lock:
+            _active_cancel.pop(preparation_id, None)
+
+
 def emit_pcm(synthesis_id: str, waveform: np.ndarray, sample_rate: int) -> None:
-    samples = np.asarray(waveform, dtype="<f4").reshape(-1)
+    audio = np.asarray(waveform, dtype=np.float32)
+    if audio.ndim <= 1:
+        samples = audio.reshape(-1)
+    elif audio.shape[1] == 1:
+        samples = audio[:, 0]
+    else:
+        # The public Voice PCM seam is mono. Averaging channels preserves the
+        # frame count; flattening would double duration and lower pitch.
+        samples = np.mean(audio, axis=1, dtype=np.float32)
+    samples = np.asarray(samples, dtype="<f4")
     if samples.size == 0:
         return
     emit({
@@ -101,9 +157,9 @@ def synthesize_worker(message: dict[str, Any], cancel: threading.Event) -> None:
             enable_wetext=False,
             enable_normalize_tts_text=True,
         )
-        prompt_codes = runtime.resolve_prompt_audio_codes(
-            voice=None,
-            prompt_audio_path=Path(str(message["referenceAudioPath"])),
+        prompt_codes = get_prompt_audio_codes(
+            runtime,
+            Path(str(message["referenceAudioPath"])),
         )
         text_chunks = runtime.split_voice_clone_text(str(prepared["text"]), max_tokens=75)
         sample_rate = int(runtime.codec_meta["codec_config"]["sample_rate"])
@@ -167,9 +223,29 @@ def handle(message: dict[str, Any]) -> bool:
         return False
     if kind == "cancel":
         with _active_lock:
-            cancel = _active_cancel.get(str(message.get("synthesisId", "")))
+            operation_id = str(message.get("synthesisId") or message.get("preparationId") or "")
+            cancel = _active_cancel.get(operation_id)
         if cancel is not None:
             cancel.set()
+        return True
+    if kind == "prepare":
+        preparation_id = str(message.get("preparationId", ""))
+        with _active_lock:
+            if _active_cancel:
+                emit({
+                    "type": "prepare_error",
+                    "preparationId": preparation_id,
+                    "message": "MOSS sidecar is busy.",
+                })
+                return True
+            cancel = threading.Event()
+            _active_cancel[preparation_id] = cancel
+        threading.Thread(
+            target=prepare_worker,
+            args=(message, cancel),
+            name=f"moss-preparation-{preparation_id}",
+            daemon=True,
+        ).start()
         return True
     if kind == "synthesize":
         synthesis_id = str(message.get("synthesisId", ""))

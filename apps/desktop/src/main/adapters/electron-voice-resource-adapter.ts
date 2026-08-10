@@ -20,7 +20,9 @@ import {
   type VoiceModelArchiveExtractor,
 } from '@megumi/voice';
 import type { SpeechPlayer } from '@megumi/voice';
+import { createElectronVoiceModelDownloader } from './electron-voice-model-downloader';
 import { electronVoiceProfileAudioPicker } from './electron-voice-profile-audio-picker';
+import { createGithubVoiceReleaseDiscovery } from './github-voice-release-discovery';
 
 export function createElectronVoiceOptions(
   home: InitializeMegumiHomeSyncOptions,
@@ -30,8 +32,14 @@ export function createElectronVoiceOptions(
   const paths = buildMegumiHomePaths(homePath);
   const manifestPath = resolveVoiceManifestPath();
   const manifest = readVoiceModelManifest(manifestPath);
-  const sttRoot = path.join(paths.voiceModelsPath, 'stt', 'sensevoice-small-int8', '2024-07-17');
-  const ttsRoot = path.join(paths.voiceModelsPath, 'tts', 'moss-tts-nano', 'f52645cb467506d8e18e746ddd59482685b74e58');
+  const models = createFileVoiceModels({
+    modelsPath: paths.voiceModelsPath,
+    downloadsPath: paths.voiceTmpPath,
+    manifest,
+    downloader: createElectronVoiceModelDownloader(),
+    releaseDiscovery: createGithubVoiceReleaseDiscovery(),
+    archiveExtractor: electronVoiceArchiveExtractor,
+  });
 
   return {
     defaultProfile: {
@@ -39,17 +47,13 @@ export function createElectronVoiceOptions(
       name: 'Default',
       referenceAudioPath: resolveDefaultVoicePath(),
     },
-    models: createFileVoiceModels({
-      modelsPath: paths.voiceModelsPath,
-      manifest,
-      archiveExtractor: electronVoiceArchiveExtractor,
-    }),
+    models,
     recognizer: createSenseVoiceRecognizer({
-      modelPath: path.join(sttRoot, 'model.int8.onnx'),
-      tokensPath: path.join(sttRoot, 'tokens.txt'),
+      modelPath: () => path.join(models.getModelPath('stt', 'sensevoice-small-int8'), 'model.int8.onnx'),
+      tokensPath: () => path.join(models.getModelPath('stt', 'sensevoice-small-int8'), 'tokens.txt'),
     }),
     synthesizer: createMossTtsNanoSynthesizer({
-      modelPath: ttsRoot,
+      modelPath: () => models.getModelPath('tts', 'moss-tts-nano'),
       cachePath: paths.voiceCachePath,
       sidecarExecutablePath: resolveMossSidecarPath(),
     }),
@@ -61,9 +65,10 @@ export function createElectronVoiceOptions(
 const electronVoiceArchiveExtractor: VoiceModelArchiveExtractor = {
   extract(request) {
     fs.mkdirSync(request.targetPath, { recursive: true });
+    const extractFlag = request.format === 'tar.bz2' ? '-xjf' : '-xf';
     return new Promise<void>((resolve, reject) => {
       const child = spawn('tar', [
-        '-xjf', request.archivePath,
+        extractFlag, request.archivePath,
         '-C', request.targetPath,
         '--strip-components', String(request.stripComponents),
       ], { windowsHide: true });

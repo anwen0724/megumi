@@ -63,7 +63,12 @@ describe('composeProduct', () => {
     try {
       expect(fs.pathExistsSync(join(homePath, 'settings.schema.json'))).toBe(true);
       expect(await product.host.voice.getSnapshot()).toEqual({ status: 'idle' });
-      expect(await product.host.voice.getModelStatus()).toEqual({ status: 'not_prepared' });
+      expect(await product.host.voice.getModelStatus()).toEqual({
+        status: 'not_prepared',
+        bundleVersion: 'unconfigured',
+        downloadedBytes: 0,
+        totalBytes: 0,
+      });
 
       const opened = await product.host.workspace.useExistingProject();
       if (opened.status !== 'opened') return;

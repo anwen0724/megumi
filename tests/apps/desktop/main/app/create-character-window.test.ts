@@ -26,15 +26,20 @@ describe('createCharacterWindow', () => {
 
     expect(browserWindowConstructor).toHaveBeenCalledWith(expect.objectContaining({
       title: 'Megumi Character',
+      width: 720,
+      minWidth: 540,
       show: false,
       transparent: true,
       frame: false,
       alwaysOnTop: true,
-      resizable: true,
+      minimizable: false,
+      resizable: false,
+      skipTaskbar: true,
       backgroundColor: '#00000000',
       webPreferences: expect.objectContaining({
         contextIsolation: true,
         nodeIntegration: false,
+        backgroundThrottling: false,
       }),
     }));
     expect(loadURL).toHaveBeenCalledWith('http://localhost:5173/?megumiWindowRole=character');

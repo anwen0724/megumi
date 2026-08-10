@@ -9,11 +9,23 @@ export interface CharacterPresentation {
   dispose(): Promise<void>;
 }
 
+export interface CharacterRenderBounds {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 interface MountCharacterPresentationOptions {
   readonly container: HTMLElement;
   readonly imageUrl: string;
+  readonly onLayout?: (bounds: CharacterRenderBounds) => void;
   readonly onUnavailable?: (message: string) => void;
-  readonly createScene?: (container: HTMLElement, imageUrl: string) => Promise<CharacterPresentation>;
+  readonly createScene?: (
+    container: HTMLElement,
+    imageUrl: string,
+    onLayout?: (bounds: CharacterRenderBounds) => void,
+  ) => Promise<CharacterPresentation>;
 }
 
 /** Animation is presentation-only: a failed scene returns null so the caller can keep a static image. */
@@ -21,7 +33,11 @@ export async function mountCharacterPresentation(
   options: MountCharacterPresentationOptions,
 ): Promise<CharacterPresentation | null> {
   try {
-    return await (options.createScene ?? createPixiCharacterScene)(options.container, options.imageUrl);
+    return await (options.createScene ?? createPixiCharacterScene)(
+      options.container,
+      options.imageUrl,
+      options.onLayout,
+    );
   } catch (error) {
     options.onUnavailable?.(error instanceof Error ? error.message : 'Character animation is unavailable.');
     return null;
@@ -57,7 +73,11 @@ const STATE_GLOW: Record<CharacterState, number> = {
   error: 0xed7d7d,
 };
 
-async function createPixiCharacterScene(container: HTMLElement, imageUrl: string): Promise<CharacterPresentation> {
+async function createPixiCharacterScene(
+  container: HTMLElement,
+  imageUrl: string,
+  onLayout?: (bounds: CharacterRenderBounds) => void,
+): Promise<CharacterPresentation> {
   const { Application, Assets, Container, Graphics, Sprite } = await import('pixi.js');
   const app = new Application();
   await app.init({ antialias: true, backgroundAlpha: 0, resizeTo: container, resolution: window.devicePixelRatio || 1 });
@@ -119,6 +139,14 @@ async function createPixiCharacterScene(container: HTMLElement, imageUrl: string
     const fit = Math.min(availableWidth / texture.width, availableHeight / texture.height);
     root.position.set(app.screen.width / 2, app.screen.height + pose.lift);
     root.scale.set(fit);
+    const characterBounds = character.getBounds();
+    const containerBounds = container.getBoundingClientRect();
+    onLayout?.({
+      left: containerBounds.left + characterBounds.x,
+      top: containerBounds.top + characterBounds.y,
+      width: characterBounds.width,
+      height: characterBounds.height,
+    });
     glow.clear()
       .ellipse(app.screen.width / 2, app.screen.height * 0.48, Math.min(app.screen.width * 0.38, 180), app.screen.height * 0.34)
       .fill({ color: STATE_GLOW[state], alpha: pose.glow * 0.28 });

@@ -13,9 +13,9 @@ export interface CreateCharacterWindowOptions {
 
 export function createCharacterWindow(options: CreateCharacterWindowOptions): BrowserWindow {
   const characterWindow = new BrowserWindow({
-    width: 360,
+    width: 720,
     height: 680,
-    minWidth: 280,
+    minWidth: 540,
     minHeight: 460,
     show: false,
     transparent: true,
@@ -23,7 +23,9 @@ export function createCharacterWindow(options: CreateCharacterWindowOptions): Br
     frame: false,
     hasShadow: false,
     alwaysOnTop: true,
-    resizable: true,
+    minimizable: false,
+    resizable: false,
+    skipTaskbar: true,
     autoHideMenuBar: true,
     title: 'Megumi Character',
     webPreferences: {
@@ -31,6 +33,8 @@ export function createCharacterWindow(options: CreateCharacterWindowOptions): Br
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      // Character animation remains live while its shaped always-on-top surface is unfocused.
+      backgroundThrottling: false,
     },
   });
 

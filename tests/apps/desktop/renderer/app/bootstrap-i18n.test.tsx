@@ -44,30 +44,29 @@ describe('renderer bootstrap localization', () => {
 
   it('projects one resolved settings snapshot before the first render', async () => {
     const get = vi.fn().mockResolvedValue(successfulSettings('zh-CN', false));
-    const render = vi.fn(() => {
-      expect(rendererI18n.resolvedLanguage).toBe('zh-CN');
-      expect(document.documentElement.lang).toBe('zh-CN');
-      expect(useThemeStore.getState().theme).toBe('sage-mist');
-      expect(usePermissionModeStore.getState().mode).toBe('ask');
-      expect(useModelSelectionStore.getState().selection).toEqual({
-        providerId: 'deepseek',
-        modelId: 'deepseek-v4-pro',
-      });
-      expect(useSetupWizardStore.getState()).toMatchObject({
-        status: 'ready',
-        language: 'zh-CN',
-        setupCompleted: false,
-      });
-    });
+    const render = vi.fn();
     installSettingsGet(get);
 
     await bootstrapRenderer({ render });
 
     expect(get).toHaveBeenCalledTimes(1);
-    expect(render).toHaveBeenCalledTimes(1);
+    expect(render).toHaveBeenCalledOnce();
+    expect(rendererI18n.resolvedLanguage).toBe('zh-CN');
+    expect(document.documentElement.lang).toBe('zh-CN');
+    expect(useThemeStore.getState().theme).toBe('sage-mist');
+    expect(usePermissionModeStore.getState().mode).toBe('ask');
+    expect(useModelSelectionStore.getState().selection).toEqual({
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-pro',
+    });
+    expect(useSetupWizardStore.getState()).toMatchObject({
+      status: 'ready',
+      language: 'zh-CN',
+      setupCompleted: false,
+    });
   });
 
-  it('does not render while the settings snapshot is unresolved', async () => {
+  it('leaves the static HTML startup shell visible while settings are unresolved', async () => {
     let resolveSettings!: (value: ReturnType<typeof successfulSettings>) => void;
     const get = vi.fn(() => new Promise((resolve) => { resolveSettings = resolve; }));
     const render = vi.fn();
@@ -79,7 +78,7 @@ describe('renderer bootstrap localization', () => {
     resolveSettings(successfulSettings('en-US'));
     await bootstrap;
 
-    expect(render).toHaveBeenCalledTimes(1);
+    expect(render).toHaveBeenCalledOnce();
     expect(rendererI18n.resolvedLanguage).toBe('en-US');
   });
 
@@ -104,6 +103,6 @@ describe('renderer bootstrap localization', () => {
         technicalMessage: 'private transport detail',
       },
     });
-    expect(render).toHaveBeenCalledTimes(1);
+    expect(render).toHaveBeenCalledOnce();
   });
 });

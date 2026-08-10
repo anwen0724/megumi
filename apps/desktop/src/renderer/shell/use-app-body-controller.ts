@@ -102,6 +102,8 @@ export function useAppBodyController() {
     setSettingsOpen(true);
   }, []);
 
+  useEffect(() => window.megumi.character.onOpenSettingsRequested?.(openSettings), [openSettings]);
+
   const closeSettings = useCallback(() => {
     setSettingsOpen(false);
   }, []);

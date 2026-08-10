@@ -6,8 +6,84 @@
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:" />
   <title>Megumi</title>
+  <style>
+    html, body { margin: 0; min-height: 100%; }
+    #megumi-startup-shell {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      color: #25372f;
+      background:
+        radial-gradient(circle at 50% 43%, rgba(121, 157, 137, 0.16), transparent 28rem),
+        #f3f5ef;
+      font-family: Inter, "Segoe UI", system-ui, sans-serif;
+      opacity: 1;
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+    #megumi-startup-shell::before {
+      content: "";
+      position: absolute;
+      width: 28rem;
+      height: 28rem;
+      border: 1px solid rgba(85, 127, 106, 0.08);
+      border-radius: 48% 52% 54% 46%;
+      animation: megumi-startup-drift 7s ease-in-out infinite alternate;
+    }
+    #megumi-startup-shell.is-leaving { opacity: 0; transform: scale(1.008); pointer-events: none; }
+    .megumi-startup-content { display: grid; justify-items: center; gap: 1.15rem; }
+    .megumi-startup-orbit {
+      position: relative;
+      width: 3.75rem;
+      height: 3.75rem;
+      border: 1px solid rgba(58, 103, 80, 0.18);
+      border-radius: 50%;
+    }
+    .megumi-startup-orbit::before,
+    .megumi-startup-orbit::after {
+      content: "";
+      position: absolute;
+      inset: 0.35rem;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      border-top-color: #557f6a;
+      border-right-color: rgba(85, 127, 106, 0.34);
+      animation: megumi-startup-spin 1.4s cubic-bezier(.65,.05,.35,1) infinite;
+    }
+    .megumi-startup-orbit::after {
+      inset: 1.25rem;
+      border-width: 1px;
+      border-top-color: #c19155;
+      border-right-color: transparent;
+      animation-direction: reverse;
+      animation-duration: 1s;
+    }
+    .megumi-startup-wordmark { font-size: 0.78rem; font-weight: 650; letter-spacing: 0.24em; text-transform: uppercase; }
+    .megumi-startup-caption { margin-top: -0.75rem; color: #758279; font-size: 0.7rem; letter-spacing: 0.04em; }
+    @keyframes megumi-startup-spin { to { transform: rotate(360deg); } }
+    @keyframes megumi-startup-drift { to { transform: rotate(12deg) scale(1.04); } }
+    @media (prefers-reduced-motion: reduce) {
+      #megumi-startup-shell::before,
+      .megumi-startup-orbit::before,
+      .megumi-startup-orbit::after { animation: none; }
+      #megumi-startup-shell { transition: opacity 80ms linear; }
+    }
+  </style>
 </head>
-<body class="bg-gray-950 text-gray-100">
+<body>
+  <div
+    id="megumi-startup-shell"
+    role="status"
+    aria-label="Megumi is starting"
+  >
+    <div class="megumi-startup-content">
+      <span class="megumi-startup-orbit" aria-hidden="true"></span>
+      <span class="megumi-startup-wordmark">Megumi</span>
+      <span class="megumi-startup-caption" data-startup-caption>正在准备界面…</span>
+    </div>
+  </div>
   <div id="root"></div>
   <script type="module" src="./app/bootstrap.tsx"></script>
 </body>

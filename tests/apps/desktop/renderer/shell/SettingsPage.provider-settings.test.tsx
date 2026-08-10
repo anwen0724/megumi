@@ -7,6 +7,23 @@ import { SettingsPage } from '@megumi/desktop/renderer/shell/SettingsPage';
 
 describe('SettingsPage provider settings', () => {
   beforeEach(() => {
+    Object.defineProperty(window, 'megumi', {
+      configurable: true,
+      value: {
+        voice: {
+          getModelStatus: vi.fn().mockResolvedValue({
+            ok: true,
+            data: { status: 'not_prepared', bundleVersion: 'voice-v1', downloadedBytes: 0, totalBytes: 1 },
+          }),
+          checkModelUpdates: vi.fn().mockResolvedValue({ ok: true, data: { status: 'unavailable' } }),
+          prepareModels: vi.fn().mockResolvedValue({ ok: true, data: { status: 'ok' } }),
+          cancelModelPreparation: vi.fn().mockResolvedValue({ ok: true, data: { status: 'ok' } }),
+          listProfiles: vi.fn().mockResolvedValue({ ok: true, data: { status: 'ok', profiles: [] } }),
+          selectProfile: vi.fn().mockResolvedValue({ ok: true }),
+          importProfile: vi.fn().mockResolvedValue({ ok: true, data: { status: 'cancelled' } }),
+        },
+      },
+    });
     useProviderStore.setState({
       providers: [
         {
@@ -54,9 +71,20 @@ describe('SettingsPage provider settings', () => {
     expect(screen.getByRole('tab', { name: 'Privacy & Permissions' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Activity & Diagnostics' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'About Megumi' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Voice & Speech' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: 'Privacy & Permissions' }));
     expect(screen.getByRole('heading', { name: 'Privacy & Permissions' })).toBeInTheDocument();
     expect(screen.queryByText(/runtime phase/i)).not.toBeInTheDocument();
+  });
+
+  it('owns voice profile creation in Settings instead of the character window', async () => {
+    const user = userEvent.setup();
+    render(<SettingsPage onDone={vi.fn()} />);
+
+    await user.click(screen.getByRole('tab', { name: 'Voice & Speech' }));
+
+    expect(screen.getByRole('heading', { name: 'Voice & Speech' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add voice' })).toBeInTheDocument();
   });
 });

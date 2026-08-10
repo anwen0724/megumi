@@ -58,4 +58,71 @@ describe('registerAppLifecycle', () => {
     expect(window.focus).toHaveBeenCalledOnce();
     expect(quit).not.toHaveBeenCalled();
   });
+
+  it('restores a minimized main window when an explicit shell action opens it', async () => {
+    const window = {
+      show: vi.fn(),
+      hide: vi.fn(),
+      focus: vi.fn(),
+      restore: vi.fn(),
+      isMinimized: vi.fn(() => true),
+      isDestroyed: vi.fn(() => false),
+      on: vi.fn(),
+    };
+    const { registerAppLifecycle } = await import('@megumi/desktop/main/app/lifecycle');
+    const lifecycle = registerAppLifecycle({ registerAllHandlers: vi.fn(), createWindow: () => window });
+    await whenReady.mock.results[0].value;
+
+    lifecycle.showMainWindow();
+
+    expect(window.restore).toHaveBeenCalledOnce();
+    expect(window.show).toHaveBeenCalledOnce();
+    expect(window.focus).toHaveBeenCalledOnce();
+  });
+
+  it('does not turn application quit into another hide operation', async () => {
+    const listeners = new Map<string, (...args: unknown[]) => void>();
+    const window = {
+      show: vi.fn(),
+      hide: vi.fn(),
+      focus: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      on: vi.fn((event: string, listener: (...args: unknown[]) => void) => listeners.set(event, listener)),
+    };
+    const { registerAppLifecycle } = await import('@megumi/desktop/main/app/lifecycle');
+
+    registerAppLifecycle({ registerAllHandlers: vi.fn(), createWindow: () => window });
+    await whenReady.mock.results[0].value;
+
+    const beforeQuit = on.mock.calls.find(([event]) => event === 'before-quit')?.[1];
+    beforeQuit?.();
+    const closeEvent = { preventDefault: vi.fn() };
+    listeners.get('close')?.(closeEvent);
+
+    expect(closeEvent.preventDefault).not.toHaveBeenCalled();
+    expect(window.hide).not.toHaveBeenCalled();
+  });
+
+  it('starts quitting before app.quit when the tray requests exit with the main window visible', async () => {
+    const listeners = new Map<string, (...args: unknown[]) => void>();
+    const window = {
+      show: vi.fn(),
+      hide: vi.fn(),
+      focus: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      on: vi.fn((event: string, listener: (...args: unknown[]) => void) => listeners.set(event, listener)),
+    };
+    const dispose = vi.fn();
+    const { registerAppLifecycle } = await import('@megumi/desktop/main/app/lifecycle');
+    const lifecycle = registerAppLifecycle({ registerAllHandlers: vi.fn(), createWindow: () => window, dispose });
+    await whenReady.mock.results[0].value;
+
+    lifecycle.quit();
+    const closeEvent = { preventDefault: vi.fn() };
+    listeners.get('close')?.(closeEvent);
+
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(quit).toHaveBeenCalledOnce();
+    expect(closeEvent.preventDefault).not.toHaveBeenCalled();
+  });
 });

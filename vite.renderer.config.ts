@@ -15,18 +15,15 @@ export default defineConfig({
     ],
   },
   root: 'apps/desktop/src/renderer',
+  // Keep the URL injected by Electron Forge on the same address family as
+  // Chromium. On Windows, `localhost` may bind only to ::1 while Electron
+  // attempts IPv4 first, leaving BrowserWindow on its background color.
+  server: { host: '127.0.0.1' },
   build: { outDir: '../../../../.vite/renderer/main_window' },
 });
 
 function vadRuntimeAssets(): Plugin {
-  const assets = new Map<string, string>([
-    ['vad/vad.worklet.bundle.min.js', path.resolve(__dirname, 'node_modules/@ricky0123/vad-web/dist/vad.worklet.bundle.min.js')],
-    ['vad/silero_vad_v5.onnx', path.resolve(__dirname, 'node_modules/@ricky0123/vad-web/dist/silero_vad_v5.onnx')],
-    ['vad/onnx/ort-wasm-simd-threaded.wasm', path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm')],
-    ['vad/onnx/ort-wasm-simd-threaded.asyncify.wasm', path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.wasm')],
-    ['vad/onnx/ort-wasm-simd-threaded.jsep.wasm', path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm')],
-    ['vad/onnx/ort-wasm-simd-threaded.jspi.wasm', path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jspi.wasm')],
-  ]);
+  const assets = vadRuntimeAssetEntries();
 
   return {
     name: 'megumi-vad-runtime-assets',
@@ -45,4 +42,19 @@ function vadRuntimeAssets(): Plugin {
       }
     },
   };
+}
+
+export function vadRuntimeAssetEntries(): ReadonlyMap<string, string> {
+  return new Map<string, string>([
+    ['vad/vad.worklet.bundle.min.js', path.resolve(__dirname, 'node_modules/@ricky0123/vad-web/dist/vad.worklet.bundle.min.js')],
+    ['vad/silero_vad_v5.onnx', path.resolve(__dirname, 'node_modules/@ricky0123/vad-web/dist/silero_vad_v5.onnx')],
+    ['vad/onnx/ort-wasm-simd-threaded.mjs', path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs')],
+    ['vad/onnx/ort-wasm-simd-threaded.wasm', path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm')],
+    ['vad/onnx/ort-wasm-simd-threaded.asyncify.mjs', path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.mjs')],
+    ['vad/onnx/ort-wasm-simd-threaded.asyncify.wasm', path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.wasm')],
+    ['vad/onnx/ort-wasm-simd-threaded.jsep.mjs', path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.mjs')],
+    ['vad/onnx/ort-wasm-simd-threaded.jsep.wasm', path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm')],
+    ['vad/onnx/ort-wasm-simd-threaded.jspi.mjs', path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jspi.mjs')],
+    ['vad/onnx/ort-wasm-simd-threaded.jspi.wasm', path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jspi.wasm')],
+  ]);
 }

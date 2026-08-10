@@ -1,5 +1,6 @@
 ### CUSTOM ###
 node_modules/
+.tmp/
 .vite/
 out/
 dist/

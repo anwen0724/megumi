@@ -106,6 +106,7 @@ export type { ObservabilityHost } from './observability-host';
 export type {
   VoiceHost,
   VoiceHostModelStatus,
+  VoiceHostModelUpdateResult,
   VoiceHostMutationResult,
   VoiceHostProfile,
   VoiceHostProfilesResult,
@@ -119,6 +120,7 @@ export type {
 export {
   VoiceEmptyPayloadSchema,
   VoiceModelStatusResultSchema,
+  VoiceModelUpdateResultSchema,
   VoiceProfileIdPayloadSchema,
   VoiceProfileImportPayloadSchema,
   VoiceProfileRenamePayloadSchema,

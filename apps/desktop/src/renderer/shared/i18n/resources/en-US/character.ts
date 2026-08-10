@@ -5,6 +5,12 @@ export const character = {
   keepOnTop: 'Keep Megumi on top',
   stopKeepingOnTop: 'Stop keeping Megumi on top',
   hide: 'Hide Megumi',
+  settings: 'Settings',
+  showMainWindow: 'Show main window',
+  managementMenu: 'Megumi menu',
+  size: {
+    label: 'Character size',
+  },
   states: {
     idle: 'Ready',
     listening: 'Listening',
@@ -16,7 +22,9 @@ export const character = {
     error: 'Needs attention',
   },
   interaction: {
+    panelTitle: 'Megumi',
     title: 'Current interaction',
+    toggle: 'Show or hide current interaction',
     expand: 'Show current interaction',
     collapse: 'Hide current interaction',
     input: 'You',
@@ -30,6 +38,7 @@ export const character = {
   },
   voice: {
     start: 'Start voice',
+    preparing: 'Preparing voice…',
     end: 'End voice',
     mute: 'Mute',
     unmute: 'Unmute',
@@ -38,7 +47,15 @@ export const character = {
     inputLabel: 'Character window text input',
     discard: 'Discard input',
     send: 'Send input',
-    preparing: 'Preparing local voice models for first use…',
+    statuses: {
+      idle: 'Idle',
+      starting: 'Starting',
+      listening: 'Listening',
+      recognizing: 'Recognizing',
+      muted: 'Muted',
+      fallback: 'Manual',
+      error: 'Error',
+    },
   },
   profiles: {
     label: 'Voice',
@@ -50,7 +67,7 @@ export const character = {
     selectModel: 'Choose a model in the main window first.',
     readSession: 'The current Session could not be read.',
     missingSession: 'No usable Session is selected in the main window.',
-    prepareModels: 'Voice model preparation did not finish.',
+    modelsNotReady: 'Download the voice models from Settings before starting voice.',
     startSession: 'The voice Session could not start.',
     stopSpeech: 'The current speech could not be stopped.',
     cancelRun: 'The current run could not be cancelled.',

@@ -17,6 +17,8 @@ function createWindowDouble() {
     isDestroyed: vi.fn(() => destroyed),
     isAlwaysOnTop: vi.fn(() => alwaysOnTop),
     setAlwaysOnTop: vi.fn((next: boolean) => { alwaysOnTop = next; }),
+    setShape: vi.fn(),
+    setPosition: vi.fn(),
     getBounds: vi.fn(() => ({ x: 10, y: 20, width: 360, height: 680 })),
     setBounds: vi.fn(),
     on: vi.fn((event: string, listener: (...args: unknown[]) => void) => { listeners.set(event, listener); }),
@@ -78,14 +80,14 @@ describe('CharacterWindowController', () => {
       createWindow: () => window,
       endVoiceSession: vi.fn(),
       stateStore: {
-        load: () => ({ bounds: { x: 1, y: 2, width: 420, height: 720 }, alwaysOnTop: false, visible: true }),
+        load: () => ({ bounds: { x: 1, y: 2, width: 420, height: 720 }, alwaysOnTop: false, visible: true, scale: 1 }),
         save,
       },
     });
 
     expect(controller.shouldRestoreVisible()).toBe(true);
     await controller.show();
-    expect(window.setBounds).toHaveBeenCalledWith({ x: 1, y: 2, width: 420, height: 720 });
+    expect(window.setBounds).toHaveBeenCalledWith({ x: 1, y: 2, width: 623, height: 680 });
     expect(window.setAlwaysOnTop).toHaveBeenCalledWith(false);
 
     controller.toggleAlwaysOnTop();
@@ -93,5 +95,79 @@ describe('CharacterWindowController', () => {
 
     await controller.hide();
     expect(save).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false }));
+  });
+
+  it('persists character scale and resizes only the native character envelope', async () => {
+    const window = createWindowDouble();
+    const save = vi.fn();
+    const controller = createCharacterWindowController({
+      createWindow: () => window,
+      endVoiceSession: vi.fn(),
+      stateStore: { load: () => undefined, save },
+    });
+    await controller.show();
+
+    const snapshot = controller.setScale(1.25);
+
+    expect(window.setBounds).toHaveBeenLastCalledWith({ x: 10, y: 20, width: 684, height: 850 });
+    expect(snapshot.scale).toBe(1.25);
+    expect(save).toHaveBeenLastCalledWith(expect.objectContaining({ scale: 1.25 }));
+  });
+
+  it('opens the main window through the shell callback', () => {
+    const showMainWindow = vi.fn();
+    const controller = createCharacterWindowController({
+      createWindow: createWindowDouble,
+      endVoiceSession: vi.fn(),
+      showMainWindow,
+    });
+
+    controller.showMainWindow();
+
+    expect(showMainWindow).toHaveBeenCalledOnce();
+  });
+
+  it('applies the renderer-computed native window shape', async () => {
+    const window = createWindowDouble();
+    const controller = createCharacterWindowController({
+      createWindow: () => window,
+      endVoiceSession: vi.fn(),
+    });
+    await controller.show();
+
+    controller.setShape([{ x: 12, y: 24, width: 80, height: 120 }]);
+
+    expect(window.setShape).toHaveBeenCalledWith([{ x: 12, y: 24, width: 80, height: 120 }]);
+  });
+
+  it('moves the window without turning the character surface click-through', async () => {
+    const window = createWindowDouble();
+    const controller = createCharacterWindowController({
+      createWindow: () => window,
+      endVoiceSession: vi.fn(),
+    });
+    await controller.show();
+
+    controller.moveTo({ x: 120, y: 240 });
+
+    expect(window.setPosition).toHaveBeenCalledWith(120, 240, false);
+  });
+
+  it('publishes moved bounds so the next drag starts from the live window position', async () => {
+    const window = createWindowDouble();
+    window.getBounds.mockReturnValue({ x: 120, y: 240, width: 720, height: 680 });
+    const controller = createCharacterWindowController({
+      createWindow: () => window,
+      endVoiceSession: vi.fn(),
+    });
+    const listener = vi.fn();
+    controller.subscribe(listener);
+    await controller.show();
+
+    window.emit('move');
+
+    expect(listener).toHaveBeenLastCalledWith(expect.objectContaining({
+      bounds: { x: 120, y: 240, width: 720, height: 680 },
+    }));
   });
 });

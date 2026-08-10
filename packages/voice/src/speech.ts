@@ -37,12 +37,25 @@ export interface SynthesizeSpeechRequest {
   readonly language: 'zh' | 'en' | 'auto';
 }
 
+export interface PrepareSpeechRequest {
+  readonly voiceProfileId: string;
+  readonly referenceAudioPath: string;
+}
+
+export type PrepareSpeechResult =
+  | { readonly status: 'ready' }
+  | { readonly status: 'failed'; readonly failure: VoiceSpeechFailure };
+
 export interface SynthesizedAudioChunk {
   readonly pcm: SpeechPcm;
   readonly final: boolean;
 }
 
 export interface SpeechSynthesizer {
+  prepare(
+    request: PrepareSpeechRequest,
+    options?: VoiceOperationOptions,
+  ): Promise<PrepareSpeechResult>;
   synthesize(
     request: SynthesizeSpeechRequest,
     options?: VoiceOperationOptions,

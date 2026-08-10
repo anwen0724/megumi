@@ -568,6 +568,12 @@ const unavailableSpeechRecognizer: SpeechRecognizer = {
 };
 
 const unavailableSpeechSynthesizer: SpeechSynthesizer = {
+  async prepare() {
+    return {
+      status: 'failed',
+      failure: { code: 'voice_synthesizer_unavailable', message: 'Speech synthesis is not configured.' },
+    };
+  },
   async *synthesize() {
     throw new Error('Speech synthesis is not configured.');
   },

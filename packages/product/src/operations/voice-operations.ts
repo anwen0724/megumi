@@ -21,6 +21,10 @@ export function createVoiceOperations(options: CreateVoiceOperationsOptions): Vo
       return voice.models.getStatus();
     },
 
+    async checkModelUpdates() {
+      return voice.models.checkForUpdates();
+    },
+
     async prepareModels(request) {
       const result = await voice.models.prepare(request);
       if (result.status === 'ready') return { status: 'ok' };
@@ -79,6 +83,8 @@ export function createVoiceOperations(options: CreateVoiceOperationsOptions): Vo
     async startSession(request) {
       const result = await voice.sessions.start(request);
       if (result.status === 'started' || result.status === 'already_active') return { status: 'ok' };
+      if (result.status === 'cancelled') return { status: 'cancelled' };
+      if (result.status === 'failed') return { status: 'failed', failure: result.failure };
       return { status: 'blocked', reason: 'voice_profile_unavailable' };
     },
 

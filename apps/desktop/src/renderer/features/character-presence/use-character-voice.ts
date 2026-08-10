@@ -17,6 +17,8 @@ export function useCharacterVoice(selectedSessionId: string | null) {
   const [audioSnapshot, setAudioSnapshot] = useState<VoiceAudioSnapshot>({ status: 'idle', inputLevel: 0 });
   const [draft, setDraftState] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const startGeneration = useRef(0);
   const autoSubmitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const submitRef = useRef<(text: string) => Promise<void>>(async () => undefined);
 
@@ -45,6 +47,7 @@ export function useCharacterVoice(selectedSessionId: string | null) {
     const subscription = audio.subscribe(setAudioSnapshot);
     void refreshVoiceSnapshot();
     return () => {
+      ++startGeneration.current;
       cancelAutoSubmit();
       subscription.unsubscribe();
       void audio.dispose();
@@ -157,30 +160,35 @@ export function useCharacterVoice(selectedSessionId: string | null) {
       return;
     }
     if (modelStatus.data.status !== 'ready') {
-      setError(t('voice.preparing'));
-      const prepared = await window.megumi.voice.prepareModels(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.modelsPrepare, {}),
-      );
-      if (!prepared.ok || prepared.data.status !== 'ok') {
-        setError(prepared.ok && prepared.data.status === 'failed'
-          ? prepared.data.failure.message
-          : t('errors.prepareModels'));
-        return;
-      }
-    }
-    const result = await window.megumi.voice.startSession(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.sessionStart, { boundSessionId: selectedSessionId }),
-    );
-    if (!result.ok || result.data.status !== 'ok') {
-      setError(result.ok && result.data.status === 'failed' ? result.data.failure.message : t('errors.startSession'));
+      setError(t('errors.modelsNotReady'));
       return;
     }
+    const generation = ++startGeneration.current;
+    setPreparing(true);
     setError(null);
-    await audio.start();
-    await refreshVoiceSnapshot();
+    try {
+      const result = await window.megumi.voice.startSession(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.sessionStart, { boundSessionId: selectedSessionId }),
+      );
+      if (generation !== startGeneration.current) return;
+      if (!result.ok || result.data.status !== 'ok') {
+        setError(result.ok && result.data.status === 'failed' ? result.data.failure.message : t('errors.startSession'));
+        return;
+      }
+      await audio.start();
+      if (generation !== startGeneration.current) {
+        await audio.stop();
+        return;
+      }
+      await refreshVoiceSnapshot();
+    } finally {
+      if (generation === startGeneration.current) setPreparing(false);
+    }
   }, [audio, refreshVoiceSnapshot, selectedSessionId, t]);
 
   const end = useCallback(async () => {
+    ++startGeneration.current;
+    setPreparing(false);
     cancelAutoSubmit();
     replacement.clear();
     await audio.stop();
@@ -225,6 +233,7 @@ export function useCharacterVoice(selectedSessionId: string | null) {
     audioSnapshot,
     draft,
     error,
+    preparing,
     start,
     end,
     setMuted,

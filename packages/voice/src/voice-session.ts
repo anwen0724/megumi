@@ -3,10 +3,17 @@
  * Profile selection are fixed from start until the session ends.
  */
 
-import type { SpeechPlayer, SpeechPcm, SpeechRecognizer, SpeechSynthesizer } from './speech';
+import type {
+  SpeechPlayer,
+  SpeechPcm,
+  SpeechRecognizer,
+  SpeechSynthesizer,
+  VoiceSpeechFailure,
+} from './speech';
 import type { VoiceProfiles } from './voice-profiles';
 
 export type VoiceSessionStatus =
+  | 'preparing'
   | 'listening'
   | 'recognizing'
   | 'submitting'
@@ -35,6 +42,8 @@ export interface EndVoiceSessionRequest { readonly reason?: 'user' | 'character_
 export type StartVoiceSessionResult =
   | { readonly status: 'started'; readonly snapshot: VoiceSnapshot }
   | { readonly status: 'already_active'; readonly snapshot: VoiceSnapshot }
+  | { readonly status: 'cancelled'; readonly snapshot: VoiceSnapshot }
+  | { readonly status: 'failed'; readonly failure: VoiceSpeechFailure; readonly snapshot: VoiceSnapshot }
   | { readonly status: 'profile_unavailable' };
 export type SetVoiceSessionMutedResult =
   | { readonly status: 'updated'; readonly snapshot: VoiceSnapshot }
@@ -76,6 +85,9 @@ export function createVoiceSessions(input: {
   readonly player: SpeechPlayer;
 }): VoiceSessions & VoiceSessionRuntimeControl {
   let snapshot: VoiceSnapshot = { status: 'idle' };
+  let startGeneration = 0;
+  let preparationAbort: AbortController | undefined;
+  let startPromise: Promise<StartVoiceSessionResult> | undefined;
   const listeners = new Set<VoiceSnapshotListener>();
 
   const publish = (next: VoiceSnapshot) => {
@@ -98,17 +110,44 @@ export function createVoiceSessions(input: {
       return { unsubscribe: () => listeners.delete(listener) };
     },
     async start(request) {
+      if (snapshot.status === 'preparing' && startPromise) return startPromise;
       if (snapshot.status !== 'idle') return { status: 'already_active', snapshot };
       const selected = input.profiles.getSelected();
       if (selected.status !== 'selected') return { status: 'profile_unavailable' };
-      const next: VoiceSnapshot = {
-        status: 'listening',
+      const preparing: VoiceSnapshot = {
+        status: 'preparing',
         boundSessionId: request.boundSessionId,
         voiceProfileId: selected.profile.profileId,
         muted: false,
       };
-      publish(next);
-      return { status: 'started', snapshot: next };
+      publish(preparing);
+      const generation = ++startGeneration;
+      const abort = new AbortController();
+      preparationAbort = abort;
+      const running = (async (): Promise<StartVoiceSessionResult> => {
+        const result = await input.synthesizer.prepare({
+          voiceProfileId: selected.profile.profileId,
+          referenceAudioPath: selected.profile.referenceAudioPath,
+        }, { signal: abort.signal });
+        if (generation !== startGeneration || snapshot.status === 'idle') {
+          return { status: 'cancelled', snapshot };
+        }
+        if (result.status === 'failed') {
+          const idle: VoiceSnapshot = { status: 'idle' };
+          publish(idle);
+          return { status: 'failed', failure: result.failure, snapshot: idle };
+        }
+        const listening: VoiceSnapshot = { ...preparing, status: 'listening' };
+        publish(listening);
+        return { status: 'started', snapshot: listening };
+      })().finally(() => {
+        if (generation === startGeneration) {
+          preparationAbort = undefined;
+          startPromise = undefined;
+        }
+      });
+      startPromise = running;
+      return running;
     },
     setMuted(request) {
       const active = activeSnapshot();
@@ -142,6 +181,10 @@ export function createVoiceSessions(input: {
     },
     async end() {
       if (snapshot.status === 'idle') return { status: 'already_idle', snapshot };
+      ++startGeneration;
+      preparationAbort?.abort();
+      preparationAbort = undefined;
+      startPromise = undefined;
       await input.player.stop({ reason: 'session_ended' });
       const next: VoiceSnapshot = { status: 'idle' };
       publish(next);

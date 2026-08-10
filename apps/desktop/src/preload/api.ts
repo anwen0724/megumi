@@ -42,6 +42,7 @@ import type {
   ObservabilityGetRunTraceUiResult,
   ObservabilityListRunTracesUiResult,
   VoiceHostModelStatus,
+  VoiceHostModelUpdateResult,
   VoiceHostMutationResult,
   VoiceHostProfilesResult,
   VoiceHostSnapshot,
@@ -88,7 +89,7 @@ import type {
   VoiceSessionMutedPayload,
   VoiceSessionStartPayload,
 } from '../main/ipc/schemas';
-import type { CharacterWindowSnapshot } from '../main/app/character-window-controller';
+import type { CharacterWindowShapeRect, CharacterWindowSnapshot } from '../main/app/character-window-controller';
 import type { SubmitVoiceUtteranceResult } from '@megumi/voice';
 
 type BusinessRequest<TPayload, TChannel extends BusinessIpcChannel> = RuntimeIpcRequest<TPayload, TChannel>;
@@ -323,6 +324,10 @@ export const api = {
       request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.voice.modelStatus>,
     ): Promise<RuntimeIpcResult<VoiceHostModelStatus, typeof IPC_CHANNELS.voice.modelStatus>> =>
       invokeRuntimeIpc(IPC_CHANNELS.voice.modelStatus, request),
+    checkModelUpdates: (
+      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.voice.modelsCheckUpdates>,
+    ): Promise<RuntimeIpcResult<VoiceHostModelUpdateResult, typeof IPC_CHANNELS.voice.modelsCheckUpdates>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.voice.modelsCheckUpdates, request),
     prepareModels: (
       request: BusinessRequest<{ repair?: boolean }, typeof IPC_CHANNELS.voice.modelsPrepare>,
     ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.modelsPrepare>> =>
@@ -374,12 +379,25 @@ export const api = {
     getSnapshot: (): Promise<CharacterWindowSnapshot> => ipcRenderer.invoke(IPC_CHANNELS.character.snapshot),
     toggleAlwaysOnTop: (): Promise<CharacterWindowSnapshot> =>
       ipcRenderer.invoke(IPC_CHANNELS.character.toggleAlwaysOnTop),
+    setScale: (scale: number): Promise<CharacterWindowSnapshot> =>
+      ipcRenderer.invoke(IPC_CHANNELS.character.setScale, { scale }),
+    setShape: (rects: CharacterWindowShapeRect[]): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.character.setShape, { rects }),
+    moveTo: (x: number, y: number): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.character.moveTo, { x, y }),
+    openSettings: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.character.openSettings),
+    showMainWindow: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.character.showMainWindow),
     selectSession: (sessionId: string | null): Promise<CharacterWindowSnapshot> =>
       ipcRenderer.invoke(IPC_CHANNELS.character.selectSession, { sessionId }),
     onSnapshot: (callback: (snapshot: CharacterWindowSnapshot) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, snapshot: CharacterWindowSnapshot) => callback(snapshot);
       ipcRenderer.on(IPC_CHANNELS.character.snapshotChanged, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.character.snapshotChanged, listener);
+    },
+    onOpenSettingsRequested: (callback: () => void): (() => void) => {
+      const listener = () => callback();
+      ipcRenderer.on(IPC_CHANNELS.character.settingsRequested, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.character.settingsRequested, listener);
     },
   },
   project: {

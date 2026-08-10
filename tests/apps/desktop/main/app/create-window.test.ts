@@ -32,6 +32,7 @@ describe('createMainWindow', () => {
         title: 'Megumi',
         frame: false,
         autoHideMenuBar: true,
+        backgroundColor: '#f3f5ef',
         webPreferences: expect.objectContaining({
           contextIsolation: true,
           nodeIntegration: false,

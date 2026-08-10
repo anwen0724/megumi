@@ -29,6 +29,11 @@ if (shouldQuitForSquirrelStartup()) {
   const desktopMain = composeDesktopMain({ speechPlayer });
   let mainWindow: BrowserWindow | undefined;
   let tray: MegumiTray | undefined;
+  let quitApplication = () => app.quit();
+  let showMainWindow = () => {
+    mainWindow?.show();
+    mainWindow?.focus();
+  };
   character = createCharacterWindowController({
     createWindow: () => createCharacterWindow({
       devServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,
@@ -36,6 +41,11 @@ if (shouldQuitForSquirrelStartup()) {
       dirname: __dirname,
     }),
     endVoiceSession: () => desktopMain.voice.host.voice.endSession(),
+    showMainWindow: () => showMainWindow(),
+    openSettings: () => {
+      showMainWindow();
+      mainWindow?.webContents.send(IPC_CHANNELS.character.settingsRequested);
+    },
     stateStore: createFileCharacterWindowStateStore({
       filePath: path.join(desktopMain.homePath, 'desktop', 'character-window.json'),
     }),
@@ -48,7 +58,7 @@ if (shouldQuitForSquirrelStartup()) {
 
   registerRuntimeProcessErrorHandlers({ logger: desktopMain.runtimeLogger });
 
-  registerAppLifecycle({
+  const lifecycle = registerAppLifecycle({
     registerAllHandlers: () => {
       registerAllHandlers({
         logger: desktopMain.runtimeLogger,
@@ -68,10 +78,9 @@ if (shouldQuitForSquirrelStartup()) {
         showCharacter: () => { void character.show(); },
         hideCharacter: () => { void character.hide(); },
         showMainWindow: () => {
-          mainWindow?.show();
-          mainWindow?.focus();
+          showMainWindow();
         },
-        quit: () => app.quit(),
+        quit: () => quitApplication(),
       });
       if (character.shouldRestoreVisible()) void character.show();
     },
@@ -90,4 +99,6 @@ if (shouldQuitForSquirrelStartup()) {
       await desktopMain.dispose();
     },
   });
+  showMainWindow = () => lifecycle.showMainWindow();
+  quitApplication = () => lifecycle.quit();
 }

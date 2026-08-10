@@ -2,6 +2,36 @@ import { describe, expect, it } from 'vitest';
 import { createMossTtsNanoSynthesizer } from '../../../packages/voice/src';
 
 describe('MOSS-TTS-Nano synthesizer', () => {
+  it('prepares the model and selected reference audio without synthesizing dummy speech', async () => {
+    const preparations: unknown[] = [];
+    const synthesizer = createMossTtsNanoSynthesizer({
+      modelPath: 'C:/models/moss',
+      cachePath: 'C:/cache/voice',
+      sidecarExecutablePath: 'C:/resources/moss-sidecar.exe',
+      client: {
+        async prepare(request) { preparations.push(request); },
+        async *synthesize() { throw new Error('Preparation must not synthesize dummy speech.'); },
+        async dispose() {},
+      },
+      ids: {
+        createPreparationId: () => 'preparation:1',
+        createSynthesisId: () => 'synthesis:1',
+      },
+    });
+
+    await expect(synthesizer.prepare({
+      voiceProfileId: 'voice-profile:warm',
+      referenceAudioPath: 'C:/profiles/warm/reference.wav',
+    })).resolves.toEqual({ status: 'ready' });
+    expect(preparations).toEqual([{
+      preparationId: 'preparation:1',
+      modelPath: 'C:/models/moss',
+      cachePath: 'C:/cache/voice',
+      referenceAudioPath: 'C:/profiles/warm/reference.wav',
+      signal: undefined,
+    }]);
+  });
+
   it('streams sidecar PCM chunks using the selected reference audio', async () => {
     const requests: unknown[] = [];
     const synthesizer = createMossTtsNanoSynthesizer({
@@ -9,6 +39,7 @@ describe('MOSS-TTS-Nano synthesizer', () => {
       cachePath: 'C:/cache/voice',
       sidecarExecutablePath: 'C:/resources/moss-sidecar.exe',
       client: {
+        async prepare() {},
         async *synthesize(request) {
           requests.push(request);
           yield { samples: new Float32Array([0.1]), sampleRate: 24_000, channels: 1 as const };
@@ -37,5 +68,26 @@ describe('MOSS-TTS-Nano synthesizer', () => {
       signal: undefined,
     }]);
     expect(chunks.map((chunk) => chunk.final)).toEqual([false, true]);
+  });
+
+  it('resolves the active model path for each synthesis', async () => {
+    let modelPath = 'C:/models/voice-v1';
+    const requests: { modelPath: string }[] = [];
+    const synthesizer = createMossTtsNanoSynthesizer({
+      modelPath: () => modelPath,
+      cachePath: 'C:/cache',
+      sidecarExecutablePath: 'C:/sidecar.exe',
+      client: {
+        async prepare() {},
+        async *synthesize(request) { requests.push({ modelPath: request.modelPath }); },
+        async dispose() {},
+      },
+    });
+
+    for await (const _chunk of synthesizer.synthesize({ text: 'one', voiceProfileId: 'v', referenceAudioPath: 'v.wav', language: 'en' })) {}
+    modelPath = 'C:/models/voice-v2';
+    for await (const _chunk of synthesizer.synthesize({ text: 'two', voiceProfileId: 'v', referenceAudioPath: 'v.wav', language: 'en' })) {}
+
+    expect(requests).toEqual([{ modelPath: 'C:/models/voice-v1' }, { modelPath: 'C:/models/voice-v2' }]);
   });
 });
