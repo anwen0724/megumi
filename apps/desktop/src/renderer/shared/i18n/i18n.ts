@@ -20,7 +20,7 @@ export async function ensureRendererI18n(language: AppLanguage): Promise<void> {
         supportedLngs: SUPPORTED_RENDERER_LANGUAGES,
         fallbackLng: DEFAULT_RENDERER_LANGUAGE,
         defaultNS: 'common',
-        ns: ['common', 'setup', 'shell', 'settings', 'chat', 'errors'],
+        ns: ['common', 'setup', 'shell', 'settings', 'chat', 'character', 'errors'],
         returnNull: false,
         debug: false,
         saveMissing: false,
