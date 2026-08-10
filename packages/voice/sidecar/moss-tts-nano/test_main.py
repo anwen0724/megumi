@@ -3,6 +3,7 @@
 import base64
 import importlib.util
 from pathlib import Path
+import threading
 import unittest
 
 import numpy as np
@@ -65,6 +66,44 @@ class VoiceSourceTests(unittest.TestCase):
 
         self.assertTrue(module.handle({"type": "health"}))
         self.assertEqual(messages, [{"type": "ready", "protocolVersion": 2}])
+
+    def test_synthesis_delegates_to_the_upstream_streaming_implementation(self):
+        module = load_sidecar_module()
+        messages = []
+
+        class Runtime:
+            def __init__(self):
+                self.manifest = {"generation_defaults": {}}
+                self.codec_meta = {"codec_config": {"sample_rate": 48_000}}
+                self.calls = []
+
+            def prepare_synthesis_text(self, **kwargs):
+                return {"text": kwargs["text"]}
+
+            def split_voice_clone_text(self, text, max_tokens):
+                self.calls.append(("split", text, max_tokens))
+                return [text]
+
+            def synthesize_single_chunk(self, **kwargs):
+                self.calls.append(("synthesize", kwargs))
+                return {"waveform": np.asarray([[0.1, 0.3], [0.2, 0.4]], dtype=np.float32)}
+
+        runtime = Runtime()
+        module.get_runtime = lambda *_args: runtime
+        module.get_prompt_audio_codes = lambda *_args, **_kwargs: [[1, 2, 3]]
+        module.emit = messages.append
+
+        module.synthesize_worker({
+            "synthesisId": "test",
+            "modelPath": "model",
+            "cachePath": "cache",
+            "text": "hello",
+            "voice": {"kind": "built_in", "voiceId": "Xiaoyu"},
+        }, threading.Event())
+
+        synthesis_call = next(call for call in runtime.calls if call[0] == "synthesize")
+        self.assertTrue(synthesis_call[1]["streaming"])
+        self.assertEqual([message["type"] for message in messages], ["chunk", "complete"])
 
 
 if __name__ == "__main__":

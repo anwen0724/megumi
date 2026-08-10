@@ -74,4 +74,33 @@ describe('VoiceControls', () => {
     const button = await screen.findByRole('button', { name: 'Preparing voice…' });
     expect(button).toBeDisabled();
   });
+
+  it('shows live microphone input and the current capture phase while voice mode is active', async () => {
+    render(<VoiceControls voice={{
+      voiceSnapshot: {
+        status: 'listening',
+        boundSessionId: 'session-1',
+        voiceProfileId: 'default',
+        muted: false,
+      },
+      audioSnapshot: {
+        status: 'listening',
+        inputLevel: 0.62,
+        speechProbability: 0.81,
+        speechDetected: true,
+        audioFramesReceived: true,
+      },
+      draft: '',
+      error: null,
+      setDraft: vi.fn(),
+      discardDraft: vi.fn(),
+      submitText: vi.fn(),
+      start: vi.fn(),
+      end: vi.fn(),
+      setMuted: vi.fn(),
+    } as never} playing={false} />);
+
+    expect(await screen.findByTestId('voice-input-status')).toHaveTextContent('Speech detected');
+    expect(screen.getByTestId('voice-input-meter')).toHaveStyle({ width: '62%' });
+  });
 });

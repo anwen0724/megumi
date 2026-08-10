@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from onnx_tts_runtime import OnnxTtsRuntime, _merge_audio_channels
+from onnx_tts_runtime import OnnxTtsRuntime
 
 
 _write_lock = threading.Lock()
@@ -178,6 +178,13 @@ def synthesize_worker(message: dict[str, Any], cancel: threading.Event) -> None:
         model_path = Path(str(message["modelPath"]))
         cache_path = Path(str(message["cachePath"]))
         runtime = get_runtime(model_path, cache_path)
+        # The upstream synthesize() entrypoint resets sampling for every request.
+        # This sidecar drives its streaming callbacks directly, so mirror that
+        # behavior or prior previews consume RNG state and later speech may run
+        # to max frames as unintelligible audio.
+        runtime.rng = np.random.default_rng(1234)
+        runtime.manifest["generation_defaults"]["sample_mode"] = "fixed"
+        runtime.manifest["generation_defaults"]["do_sample"] = True
         voice_id, reference_audio_path = parse_voice_source(message)
         prepared = runtime.prepare_synthesis_text(
             text=str(message["text"]),
@@ -196,40 +203,17 @@ def synthesize_worker(message: dict[str, Any], cancel: threading.Event) -> None:
         for text_chunk in text_chunks:
             if cancel.is_set():
                 raise SynthesisCancelled()
-            text_token_ids = runtime.encode_text(text_chunk)
-            request_rows = runtime.build_voice_clone_request_rows(prompt_codes, text_token_ids)
-            pending_frames: list[list[int]] = []
-            runtime.codec_streaming_session.reset()
-
-            def decode_pending(force: bool) -> None:
+            result = runtime.synthesize_single_chunk(
+                text=text_chunk,
+                prompt_audio_codes=prompt_codes,
+                streaming=True,
+            )
+            waveform = np.asarray(result["waveform"], dtype=np.float32)
+            frames_per_chunk = max(1, sample_rate // 4)
+            for start in range(0, waveform.shape[0], frames_per_chunk):
                 if cancel.is_set():
                     raise SynthesisCancelled()
-                if not pending_frames or (not force and len(pending_frames) < 8):
-                    return
-                frame_count = len(pending_frames) if force else min(8, len(pending_frames))
-                frames = pending_frames[:frame_count]
-                del pending_frames[:frame_count]
-                decoded = runtime.codec_streaming_session.run_frames(frames)
-                if decoded is None:
-                    return
-                audio, audio_length = decoded
-                if audio_length <= 0:
-                    return
-                waveform = _merge_audio_channels([
-                    audio[0, channel_index, :audio_length]
-                    for channel_index in range(audio.shape[1])
-                ])
-                emit_pcm(synthesis_id, waveform, sample_rate)
-
-            def on_frame(_frames: list[list[int]], _step: int, frame: list[int]) -> None:
-                pending_frames.append(list(frame))
-                decode_pending(False)
-
-            try:
-                runtime.generate_audio_frames(request_rows, on_frame=on_frame)
-                decode_pending(True)
-            finally:
-                runtime.codec_streaming_session.reset()
+                emit_pcm(synthesis_id, waveform[start:start + frames_per_chunk], sample_rate)
         emit({"type": "complete", "synthesisId": synthesis_id})
     except SynthesisCancelled:
         emit({"type": "complete", "synthesisId": synthesis_id, "cancelled": True})

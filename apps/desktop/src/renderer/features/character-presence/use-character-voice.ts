@@ -153,6 +153,9 @@ export function useCharacterVoice(selectedSessionId: string | null) {
       setError(t('interaction.noSession'));
       return;
     }
+    // Chromium only allows an AudioContext to start reliably while the click's
+    // user activation is still live. Prime it before Settings/sidecar awaits.
+    audio.primeForUserGesture();
     const settings = await window.megumi.settings.get(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {}),
     );

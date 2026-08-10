@@ -48,6 +48,16 @@ export const character = {
     inputLabel: 'Character window text input',
     discard: 'Discard input',
     send: 'Send input',
+    inputLevel: 'Live microphone input level',
+    capture: {
+      connecting: 'Connecting microphone…',
+      listening: 'Microphone audio received',
+      speechDetected: 'Speech detected',
+      recognizing: 'Recognizing speech…',
+      muted: 'Microphone muted',
+      fallback: 'Automatic detection unavailable',
+      error: 'Microphone input failed',
+    },
     statuses: {
       idle: 'Idle',
       starting: 'Starting',

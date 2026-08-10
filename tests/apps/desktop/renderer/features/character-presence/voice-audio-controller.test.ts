@@ -90,6 +90,56 @@ describe('VoiceAudioController', () => {
     expect(configurations).toEqual([{ inputDeviceId: 'usb-mic' }]);
   });
 
+  it('primes the browser audio context during the user gesture before VAD starts later', async () => {
+    const audioContext = {
+      state: 'suspended',
+      resume: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AudioContext;
+    const configurations: unknown[] = [];
+    const controller = createVoiceAudioController({
+      createAudioContext: () => audioContext,
+      createVad: async (_callbacks, configuration) => {
+        configurations.push(configuration);
+        return { start: vi.fn(), pause: vi.fn(), destroy: vi.fn() };
+      },
+      submitAudio: vi.fn(),
+      onTranscript: vi.fn(),
+    });
+
+    controller.primeForUserGesture();
+    expect(audioContext.resume).toHaveBeenCalledOnce();
+    Object.defineProperty(audioContext, 'state', { configurable: true, value: 'running' });
+    await controller.start({ inputDeviceId: 'usb-mic' });
+
+    expect(audioContext.resume).toHaveBeenCalledOnce();
+    expect(configurations).toEqual([{ inputDeviceId: 'usb-mic', audioContext }]);
+  });
+
+  it('publishes real microphone energy separately from VAD speech probability', async () => {
+    let onFrameProcessed:
+      | ((probabilities: { readonly isSpeech: number }, frame: Float32Array) => void)
+      | undefined;
+    const controller = createVoiceAudioController({
+      createVad: async (callbacks) => {
+        onFrameProcessed = callbacks.onFrameProcessed;
+        return { start: vi.fn(), pause: vi.fn(), destroy: vi.fn() };
+      },
+      submitAudio: vi.fn(),
+      onTranscript: vi.fn(),
+    });
+
+    await controller.start();
+    onFrameProcessed?.({ isSpeech: 0.8 }, new Float32Array([0.1, -0.1, 0.1, -0.1]));
+
+    expect(controller.getSnapshot()).toMatchObject({
+      status: 'listening',
+      speechProbability: 0.8,
+      audioFramesReceived: true,
+    });
+    expect(controller.getSnapshot().inputLevel).toBeGreaterThan(0);
+  });
+
   it('reports an empty recognition result instead of silently returning to listening', async () => {
     let onSpeechEnd: ((audio: Float32Array) => Promise<void> | void) | undefined;
     const controller = createVoiceAudioController({

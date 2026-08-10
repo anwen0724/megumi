@@ -9,7 +9,10 @@ export type VoiceAudioStatus = 'idle' | 'starting' | 'listening' | 'recognizing'
 export interface VoiceAudioSnapshot {
   readonly status: VoiceAudioStatus;
   readonly inputLevel: number;
-  readonly issue?: 'empty';
+  readonly speechProbability?: number;
+  readonly speechDetected?: boolean;
+  readonly audioFramesReceived?: boolean;
+  readonly issue?: 'empty' | 'too_short';
   readonly error?: string;
 }
 
@@ -20,7 +23,11 @@ export interface VoiceAudioStartOptions {
 
 interface VadCallbacks {
   readonly onSpeechStart: () => void;
-  readonly onFrameProcessed: (probabilities: { readonly isSpeech: number }) => void;
+  readonly onFrameProcessed: (
+    probabilities: { readonly isSpeech: number },
+    frame: Float32Array,
+  ) => void;
+  readonly onVADMisfire: () => void;
   readonly onSpeechEnd: (audio: Float32Array) => Promise<void>;
 }
 
@@ -35,6 +42,7 @@ interface ManualCapture {
 }
 
 export interface VoiceAudioController {
+  primeForUserGesture(): void;
   start(options?: VoiceAudioStartOptions): Promise<void>;
   stop(): Promise<void>;
   setMuted(muted: boolean): Promise<void>;
@@ -46,7 +54,11 @@ export interface VoiceAudioController {
 }
 
 export function createVoiceAudioController(options: {
-  readonly createVad?: (callbacks: VadCallbacks, configuration?: { readonly inputDeviceId?: string }) => Promise<VadHandle>;
+  readonly createVad?: (callbacks: VadCallbacks, configuration?: {
+    readonly inputDeviceId?: string;
+    readonly audioContext?: AudioContext;
+  }) => Promise<VadHandle>;
+  readonly createAudioContext?: () => AudioContext;
   readonly submitAudio: (payload: {
     samples: ArrayBuffer;
     sampleRate: number;
@@ -63,6 +75,8 @@ export function createVoiceAudioController(options: {
   let manualCapture: ManualCapture | undefined;
   let activeInputDeviceId = 'default';
   let recognitionLanguage = options.language ?? 'auto';
+  let audioContext: AudioContext | undefined;
+  let audioContextActivationError: unknown;
   const listeners = new Set<(snapshot: VoiceAudioSnapshot) => void>();
 
   const publish = (next: VoiceAudioSnapshot) => {
@@ -106,7 +120,17 @@ export function createVoiceAudioController(options: {
 
   const createVad = options.createVad ?? createBrowserVad;
 
+  const primeForUserGesture = () => {
+    if (!audioContext) {
+      audioContext = (options.createAudioContext ?? (() => new AudioContext()))();
+    }
+    if (audioContext.state === 'suspended') {
+      void audioContext.resume().catch((error) => { audioContextActivationError = error; });
+    }
+  };
+
   return {
+    primeForUserGesture,
     async start(startOptions = {}) {
       generation += 1;
       recognitionLanguage = startOptions.language ?? options.language ?? 'auto';
@@ -118,16 +142,47 @@ export function createVoiceAudioController(options: {
       activeInputDeviceId = nextInputDeviceId;
       publish({ status: 'starting', inputLevel: 0 });
       try {
+        if (!options.createVad && !audioContext) primeForUserGesture();
+        if (audioContextActivationError) throw audioContextActivationError;
+        if (audioContext?.state === 'suspended') await audioContext.resume();
+        const vadConfiguration = audioContext
+          ? { inputDeviceId: activeInputDeviceId, audioContext }
+          : { inputDeviceId: activeInputDeviceId };
         vad ??= await createVad({
-          onSpeechStart: () => publish({ status: 'listening', inputLevel: Math.max(0.12, snapshot.inputLevel) }),
-          onFrameProcessed: (probabilities) => {
+          onSpeechStart: () => publish({
+            ...snapshot,
+            status: 'listening',
+            inputLevel: Math.max(0.12, snapshot.inputLevel),
+            speechDetected: true,
+          }),
+          onFrameProcessed: (probabilities, frame) => {
             if (snapshot.status !== 'listening') return;
-            publish({ status: 'listening', inputLevel: Math.max(0, Math.min(1, probabilities.isSpeech)) });
+            publish({
+              ...snapshot,
+              status: 'listening',
+              inputLevel: measureInputLevel(frame),
+              speechProbability: Math.max(0, Math.min(1, probabilities.isSpeech)),
+              audioFramesReceived: true,
+            });
           },
+          onVADMisfire: () => publish({
+            status: 'listening',
+            inputLevel: 0,
+            speechProbability: 0,
+            speechDetected: false,
+            audioFramesReceived: true,
+            issue: 'too_short',
+          }),
           onSpeechEnd: submitEndpoint,
-        }, { inputDeviceId: activeInputDeviceId });
+        }, vadConfiguration);
         await vad.start();
-        publish({ status: 'listening', inputLevel: 0 });
+        publish({
+          status: 'listening',
+          inputLevel: 0,
+          speechProbability: 0,
+          speechDetected: false,
+          audioFramesReceived: false,
+        });
       } catch (error) {
         publish({
           status: 'fallback',
@@ -186,8 +241,10 @@ export function createVoiceAudioController(options: {
       recognizing = false;
       await vad?.destroy();
       if (manualCapture) await manualCapture.stop();
+      await audioContext?.close();
       manualCapture = undefined;
       vad = undefined;
+      audioContext = undefined;
       listeners.clear();
       snapshot = { status: 'idle', inputLevel: 0 };
     },
@@ -196,18 +253,23 @@ export function createVoiceAudioController(options: {
 
 async function createBrowserVad(
   callbacks: VadCallbacks,
-  configuration: { readonly inputDeviceId?: string } = {},
+  configuration: {
+    readonly inputDeviceId?: string;
+    readonly audioContext?: AudioContext;
+  } = {},
 ): Promise<VadHandle> {
   const { MicVAD } = await import('@ricky0123/vad-web');
   const openStream = () => openMicrophoneStream(configuration.inputDeviceId);
   return MicVAD.new({
     model: 'v5',
     processorType: 'AudioWorklet',
+    audioContext: configuration.audioContext,
     startOnLoad: false,
     baseAssetPath: './vad/',
     onnxWASMBasePath: './vad/onnx/',
     onSpeechStart: callbacks.onSpeechStart,
-    onFrameProcessed: (probabilities) => callbacks.onFrameProcessed(probabilities),
+    onFrameProcessed: (probabilities, frame) => callbacks.onFrameProcessed(probabilities, frame),
+    onVADMisfire: callbacks.onVADMisfire,
     onSpeechEnd: callbacks.onSpeechEnd,
     getStream: openStream,
     pauseStream: async (stream) => {
@@ -215,6 +277,13 @@ async function createBrowserVad(
     },
     resumeStream: openStream,
   });
+}
+
+function measureInputLevel(frame: Float32Array): number {
+  if (frame.length === 0) return 0;
+  let squareSum = 0;
+  for (const sample of frame) squareSum += sample * sample;
+  return Math.max(0, Math.min(1, Math.sqrt(squareSum / frame.length) * 6));
 }
 
 async function beginBrowserManualCapture(

@@ -96,6 +96,22 @@ export function VoiceControls(props: {
         </button>
       ) : null}
 
+      {active ? (
+        <div className="mt-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+          <div className="mb-1.5 flex items-center justify-between gap-3 text-[11px] text-white/70">
+            <span data-testid="voice-input-status">{t(audioStatusKey(voice.audioSnapshot))}</span>
+            <span className="tabular-nums">{Math.round(voice.audioSnapshot.inputLevel * 100)}%</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/10" aria-label={t('voice.inputLevel')}>
+            <div
+              data-testid="voice-input-meter"
+              className={`h-full rounded-full transition-[width,background-color] duration-75 ${voice.audioSnapshot.speechDetected ? 'bg-emerald-300' : 'bg-sky-300'}`}
+              style={{ width: `${Math.round(voice.audioSnapshot.inputLevel * 100)}%` }}
+            />
+          </div>
+        </div>
+      ) : null}
+
       <div data-testid="voice-text-row" className="mt-2 flex items-stretch gap-2">
         <textarea
           className="h-10 min-h-10 min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-white/15 bg-black/25 px-3 py-2 text-sm outline-none placeholder:text-white/45"
@@ -113,4 +129,22 @@ export function VoiceControls(props: {
       {voice.error ? <p className="mt-2 text-xs text-rose-200">{voice.error}</p> : null}
     </section>
   );
+}
+
+function audioStatusKey(snapshot: CharacterVoiceController['audioSnapshot']):
+  | 'voice.capture.connecting'
+  | 'voice.capture.listening'
+  | 'voice.capture.speechDetected'
+  | 'voice.capture.recognizing'
+  | 'voice.capture.muted'
+  | 'voice.capture.fallback'
+  | 'voice.capture.error' {
+  if (snapshot.status === 'starting' || (snapshot.status === 'listening' && !snapshot.audioFramesReceived)) {
+    return 'voice.capture.connecting';
+  }
+  if (snapshot.status === 'recognizing') return 'voice.capture.recognizing';
+  if (snapshot.status === 'muted') return 'voice.capture.muted';
+  if (snapshot.status === 'fallback') return 'voice.capture.fallback';
+  if (snapshot.status === 'error') return 'voice.capture.error';
+  return snapshot.speechDetected ? 'voice.capture.speechDetected' : 'voice.capture.listening';
 }

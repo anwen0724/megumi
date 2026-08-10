@@ -51,6 +51,16 @@ export const character = {
     inputLabel: '人物窗口文字输入',
     discard: '撤销当前输入',
     send: '发送输入',
+    inputLevel: '实时麦克风输入音量',
+    capture: {
+      connecting: '正在连接麦克风…',
+      listening: '已收到麦克风音频',
+      speechDetected: '检测到说话',
+      recognizing: '正在识别语音…',
+      muted: '麦克风已静音',
+      fallback: '自动语音检测不可用',
+      error: '麦克风输入失败',
+    },
     statuses: {
       idle: '待机',
       starting: '正在启动',
