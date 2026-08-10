@@ -17,6 +17,7 @@
     { "path": "./packages/settings" },
     { "path": "./packages/skills" },
     { "path": "./packages/tools" },
+    { "path": "./packages/voice" },
     { "path": "./packages/workspace" }
   ]
 }

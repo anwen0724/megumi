@@ -5,6 +5,7 @@
 import type { DatabaseConnection } from '@megumi/database';
 import type { Runs } from '@megumi/engine';
 import type { EventSubscription } from '@megumi/events';
+import type { Voice } from '@megumi/voice';
 
 export interface ProductResourceManager {
   registerDatabase(database: DatabaseConnection): void;
@@ -12,12 +13,13 @@ export interface ProductResourceManager {
   rollbackStartup(): void;
   dispose(input: {
     readonly runs: Runs;
+    readonly voice: Voice;
     readonly observability: { flush(): Promise<void> };
   }): Promise<void>;
 }
 
 interface ProductDisposeFailure {
-  readonly resource: 'runs' | 'events' | 'observability' | 'database';
+  readonly resource: 'runs' | 'voice' | 'events' | 'observability' | 'database';
   readonly error: unknown;
 }
 
@@ -55,7 +57,7 @@ export function createProductResourceManager(input: {
     },
 
     /** Attempts every shutdown step and reports all failures only after cleanup. */
-    async dispose({ runs, observability }) {
+    async dispose({ runs, voice, observability }) {
       const failures: ProductDisposeFailure[] = [];
       try {
         const result = await runs.shutdown({ timeoutMs: input.shutdownTimeoutMs });
@@ -67,6 +69,12 @@ export function createProductResourceManager(input: {
         }
       } catch (error) {
         failures.push({ resource: 'runs', error });
+      }
+
+      try {
+        await voice.dispose();
+      } catch (error) {
+        failures.push({ resource: 'voice', error });
       }
 
       for (const subscription of eventSubscriptions) {

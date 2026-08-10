@@ -56,7 +56,9 @@
       "@megumi/ai": ["packages/ai/src/index.ts"],
       "@megumi/ai/*": ["packages/ai/src/*"],
       "@megumi/observability": ["packages/observability/src/index.ts"],
-      "@megumi/observability/*": ["packages/observability/src/*"]
+      "@megumi/observability/*": ["packages/observability/src/*"],
+      "@megumi/voice": ["packages/voice/src/index.ts"],
+      "@megumi/voice/*": ["packages/voice/src/*"]
     }
   },
   "include": ["apps/**/*", "packages/**/*", "tests/**/*"],

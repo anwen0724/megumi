@@ -4,6 +4,7 @@
 export {
   composeProduct,
   type ComposeProductOptions,
+  type ComposeProductVoiceOptions,
   type ProductEnvironment,
   type ProductInputSourceAccess,
   type ProductObservabilityStorage,
@@ -12,6 +13,7 @@ export {
 } from './composition/product-composer';
 export type { ProductRuntime, ProductRuntimeLogger } from './composition/product-runtime';
 export type { ProductHostInterface } from './host/product-host';
+export type { VoiceHost } from './host/voice-host';
 export type { DirectoryPicker } from './host/capabilities/directory-picker';
 export type { FileOpener } from './host/capabilities/file-opener';
 export type { ProductWorkspaceFileSystem } from './host/capabilities/workspace-file-system';
@@ -20,6 +22,7 @@ export type {
 } from './host/capabilities/attachment-picker';
 export type { LocalFileAvailability } from './host/capabilities/local-file-availability';
 export type { DiagnosticBundleSaver } from './host/capabilities/diagnostic-bundle-saver';
+export type { VoiceProfileAudioPicker } from './host/capabilities/voice-profile-audio-picker';
 export type { DiagnosticBundleDto } from './host/observability-host';
 export {
   createMegumiHomeReadme,

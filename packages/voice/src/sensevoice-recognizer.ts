@@ -1,0 +1,75 @@
+/* Adapts sherpa-onnx SenseVoiceSmall into the provider-neutral SpeechRecognizer seam. */
+
+import type { SpeechRecognizer } from './speech';
+
+interface SherpaStream {
+  acceptWaveform(input: { readonly sampleRate: number; readonly samples: Float32Array }): void;
+}
+
+interface SherpaOfflineRecognizer {
+  createStream(): SherpaStream;
+  decode(stream: SherpaStream): void;
+  getResult(stream: SherpaStream): { readonly text?: string };
+}
+
+interface SherpaRuntime {
+  readonly OfflineRecognizer: new (config: Record<string, unknown>) => SherpaOfflineRecognizer;
+}
+
+export interface CreateSenseVoiceRecognizerOptions {
+  readonly modelPath: string;
+  readonly tokensPath: string;
+  readonly numThreads?: number;
+  /** @internal Test seam; production loads sherpa-onnx-node. */
+  readonly runtimeLoader?: () => Promise<SherpaRuntime>;
+}
+
+export function createSenseVoiceRecognizer(options: CreateSenseVoiceRecognizerOptions): SpeechRecognizer {
+  let recognizerPromise: Promise<SherpaOfflineRecognizer> | undefined;
+  const loadRecognizer = () => {
+    recognizerPromise ??= (options.runtimeLoader ?? loadSherpaRuntime)().then((runtime) => new runtime.OfflineRecognizer({
+      featConfig: { sampleRate: 16_000, featureDim: 80 },
+      modelConfig: {
+        senseVoice: {
+          model: options.modelPath,
+          language: 'auto',
+          useInverseTextNormalization: 1,
+        },
+        tokens: options.tokensPath,
+        numThreads: Math.max(1, options.numThreads ?? 4),
+        provider: 'cpu',
+        debug: 0,
+      },
+    }));
+    return recognizerPromise;
+  };
+
+  return {
+    async recognize(request, operationOptions) {
+      if (operationOptions?.signal?.aborted) {
+        return { status: 'failed', failure: { code: 'voice_recognition_cancelled', message: 'Speech recognition was cancelled.' } };
+      }
+      try {
+        const recognizer = await loadRecognizer();
+        const stream = recognizer.createStream();
+        stream.acceptWaveform({ sampleRate: request.pcm.sampleRate, samples: request.pcm.samples });
+        recognizer.decode(stream);
+        const transcript = recognizer.getResult(stream).text?.trim() ?? '';
+        return transcript ? { status: 'recognized', transcript } : { status: 'empty' };
+      } catch (error) {
+        return {
+          status: 'failed',
+          failure: {
+            code: 'sensevoice_recognition_failed',
+            message: error instanceof Error ? error.message : String(error),
+          },
+        };
+      }
+    },
+  };
+}
+
+async function loadSherpaRuntime(): Promise<SherpaRuntime> {
+  const loaded = await import('sherpa-onnx-node') as unknown as SherpaRuntime & { default?: SherpaRuntime };
+  return loaded.OfflineRecognizer ? loaded : loaded.default as SherpaRuntime;
+}

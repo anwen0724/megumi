@@ -24,6 +24,7 @@
                          "@megumi/skills":  "0.1.0",
                          "@megumi/tools":  "0.1.0",
                          "@megumi/workspace":  "0.1.0",
+                         "@megumi/voice":  "0.1.0",
                          "zod":  "^3.25.76",
                          "@megumi/sandbox":  "0.1.0"
                      }

@@ -100,6 +100,10 @@ describe('Megumi Home foundation', () => {
 
     expect(paths.homePath).toBe(path.resolve('C:/Users/tester', '.megumi'));
     expect(paths.settingsPath).toBe(path.join(paths.homePath, 'settings.json'));
+    expect(paths.voiceModelsPath).toBe(path.join(paths.homePath, 'models', 'voice'));
+    expect(paths.voiceProfilesPath).toBe(path.join(paths.homePath, 'voice', 'profiles'));
+    expect(paths.voiceCachePath).toBe(path.join(paths.homePath, 'cache', 'voice'));
+    expect(paths.voiceTmpPath).toBe(path.join(paths.homePath, 'tmp', 'voice'));
     expect(fileSystem.directories).toEqual(
       new Set([
         paths.homePath,
@@ -110,6 +114,12 @@ describe('Megumi Home foundation', () => {
         paths.logsPath,
         paths.cachePath,
         paths.tmpPath,
+        paths.voicePath,
+        paths.modelsPath,
+        paths.voiceModelsPath,
+        paths.voiceProfilesPath,
+        paths.voiceCachePath,
+        paths.voiceTmpPath,
       ]),
     );
 

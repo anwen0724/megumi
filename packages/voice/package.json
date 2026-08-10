@@ -1,0 +1,10 @@
+{
+  "name": "@megumi/voice",
+  "version": "0.1.0",
+  "description": "Megumi voice sessions, profiles, local speech runtimes, and spoken response projection",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

@@ -112,6 +112,7 @@ export function createMegumiHomeReadme(): string {
     '- `cache/` for regenerable cache data.',
     '- `tmp/` for temporary files.',
     '- `attachments/` for Session-owned managed image copies.',
+    '- `voice/` for local speech models, Voice Profiles, cache, and temporary audio.',
     '',
     'Credential priority:',
     '',
@@ -150,6 +151,12 @@ function homeDirectories(paths: MegumiHomePaths): readonly string[] {
     paths.cachePath,
     paths.tmpPath,
     paths.attachmentsPath,
+    paths.voicePath,
+    paths.modelsPath,
+    paths.voiceModelsPath,
+    paths.voiceProfilesPath,
+    paths.voiceCachePath,
+    paths.voiceTmpPath,
   ];
 }
 

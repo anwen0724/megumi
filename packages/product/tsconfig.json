@@ -23,6 +23,7 @@
     { "path": "../settings" },
     { "path": "../skills" },
     { "path": "../tools" },
+    { "path": "../voice" },
     { "path": "../workspace" }
   ]
 }

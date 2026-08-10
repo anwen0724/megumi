@@ -62,6 +62,15 @@ import {
 } from '@megumi/workspace';
 import { createWorkspaceStore } from '@megumi/workspace/store';
 import {
+  createFileVoiceProfileStorage,
+  createVoice,
+  type SpeechPlayer,
+  type SpeechRecognizer,
+  type SpeechSynthesizer,
+  type VoiceModels,
+  type VoiceProfileSeed,
+} from '@megumi/voice';
+import {
   initializeMegumiHomeSync,
   type InitializeMegumiHomeSyncOptions,
 } from '../home/home-initializer';
@@ -72,6 +81,7 @@ import { createObservabilityOperations } from '../operations/observability-opera
 import { createSettingsOperations } from '../operations/settings-operations';
 import { createSkillOperations } from '../operations/skill-operations';
 import { createWorkspaceOperations } from '../operations/workspace-operations';
+import { createVoiceOperations } from '../operations/voice-operations';
 import { deriveContextUsage } from '@megumi/context';
 import { createInputSuggestionQuery } from '../operations/session/input-suggestions';
 import { createInputSubmission } from '../operations/session/input-submission';
@@ -102,6 +112,7 @@ import type { FileOpener } from '../host/capabilities/file-opener';
 import { migrateLegacyPermissionSettingsFile } from '../home/migrations/legacy-permission-settings';
 import { migrateLegacyProviderApiSettingsFile } from '../home/migrations/legacy-provider-api-settings';
 import type { ProductWorkspaceFileSystem } from '../host/capabilities/workspace-file-system';
+import type { VoiceProfileAudioPicker } from '../host/capabilities/voice-profile-audio-picker';
 
 export interface ProductEnvironment {
   readonly appVersion: string;
@@ -110,6 +121,14 @@ export interface ProductEnvironment {
 }
 
 export type ProductSettingsEnvironment = SettingsEnvironment;
+export interface ComposeProductVoiceOptions {
+  readonly defaultProfile?: VoiceProfileSeed;
+  readonly recognizer?: SpeechRecognizer;
+  readonly synthesizer?: SpeechSynthesizer;
+  readonly player?: SpeechPlayer;
+  readonly models?: VoiceModels;
+  readonly profileAudioPicker?: VoiceProfileAudioPicker;
+}
 export interface ComposeProductOptions {
   home: InitializeMegumiHomeSyncOptions;
   migrationsFolder?: string;
@@ -128,6 +147,7 @@ export interface ComposeProductOptions {
   settingsStorage?: SettingsStore;
   builtInToolAvailability?: BuiltInToolAvailability;
   modelStreams?: Partial<Record<Api, ProviderStreams>>;
+  voice?: ComposeProductVoiceOptions;
 }
 
 export type ProductInputSourceAccess = NonNullable<ComposeProductOptions['inputSourceAccess']>;
@@ -446,6 +466,52 @@ function composeProductRuntime(
     ...(options.attachmentPicker ? { attachmentPicker: options.attachmentPicker } : {}),
     ...(options.localFileAvailability ? { localFileAvailability: options.localFileAvailability } : {}),
   });
+  const voice = createVoice({
+    defaultProfile: options.voice?.defaultProfile ?? {
+      profileId: 'voice-profile:default',
+      name: 'Default',
+      referenceAudioPath: path.join(homePaths.voiceProfilesPath, '_built-in', 'reference.wav'),
+    },
+    recognizer: options.voice?.recognizer ?? unavailableSpeechRecognizer,
+    synthesizer: options.voice?.synthesizer ?? unavailableSpeechSynthesizer,
+    player: options.voice?.player ?? unavailableSpeechPlayer,
+    profileStorage: createFileVoiceProfileStorage({ profilesPath: homePaths.voiceProfilesPath }),
+    ...(options.voice?.models ? { models: options.voice.models } : {}),
+  });
+  resources.registerEventSubscription(
+    events.subscribe(
+      { eventTypes: ['message.update', 'message.ended', 'run.ended'] },
+      (event) => {
+        if (!event.sessionId) return;
+        if (event.type === 'message.update') {
+          voice.acceptRuntimeFact({
+            type: 'assistant_reply_snapshot',
+            sessionId: event.sessionId,
+            messageId: event.payload.messageId,
+            text: event.payload.content,
+          });
+          return;
+        }
+        if (event.type === 'message.ended' && event.payload.role === 'assistant') {
+          voice.acceptRuntimeFact({
+            type: 'assistant_reply_snapshot',
+            sessionId: event.sessionId,
+            messageId: event.payload.messageId,
+            text: event.payload.content,
+          });
+          return;
+        }
+        if (event.type === 'run.ended' && event.runId) {
+          voice.acceptRuntimeFact({
+            type: 'run_ended',
+            sessionId: event.sessionId,
+            runId: event.runId,
+            status: event.payload.status,
+          });
+        }
+      },
+    ),
+  );
   // The workspace subscriber needs the engine to resolve run -> workspace;
   // subscribe after engine creation so the closure can reference it.
   resources.registerEventSubscription(
@@ -475,15 +541,50 @@ function composeProductRuntime(
       flush: observability.flush,
       ...(options.diagnosticBundleSave ? { save: options.diagnosticBundleSave } : {}),
     }),
+    voice: createVoiceOperations({
+      voice,
+      profileAudioPicker: options.voice?.profileAudioPicker ?? cancelledVoiceProfileAudioPicker,
+    }),
   };
 
   return createProductRuntime({
     host,
     logger,
     subscribeRuntimeEvents: (filter, handler) => events.subscribe(filter, handler),
-    dispose: () => resources.dispose({ runs, observability }),
+    dispose: () => resources.dispose({ runs, voice, observability }),
   });
 }
+
+const unavailableSpeechRecognizer: SpeechRecognizer = {
+  async recognize() {
+    return {
+      status: 'failed',
+      failure: { code: 'voice_recognizer_unavailable', message: 'Speech recognition is not configured.' },
+    };
+  },
+};
+
+const unavailableSpeechSynthesizer: SpeechSynthesizer = {
+  async *synthesize() {
+    throw new Error('Speech synthesis is not configured.');
+  },
+};
+
+const unavailableSpeechPlayer: SpeechPlayer = {
+  async play() {
+    return {
+      status: 'failed',
+      failure: { code: 'voice_player_unavailable', message: 'Speech playback is not configured.' },
+    };
+  },
+  async stop() {},
+};
+
+const cancelledVoiceProfileAudioPicker: VoiceProfileAudioPicker = {
+  async chooseReferenceAudio() {
+    return { status: 'cancelled' };
+  },
+};
 
 function openDatabase(homePaths: MegumiHomePaths, options: ComposeProductOptions): DatabaseConnection {
   const database = createDatabase({ filename: path.join(homePaths.sqlitePath, 'megumi.sqlite') });

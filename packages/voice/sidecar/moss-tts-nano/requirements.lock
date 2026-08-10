@@ -1,0 +1,7 @@
+# Build-time dependencies for the pinned official ONNX runtime.
+numpy==2.2.6
+onnxruntime==1.24.3
+scipy==1.15.3
+sentencepiece==0.2.2
+soundfile==0.14.0
+pyinstaller==6.15.0

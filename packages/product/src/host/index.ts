@@ -103,6 +103,30 @@ export type {
   ApprovalResolvePayload,
 } from './approval-host';
 export type { ObservabilityHost } from './observability-host';
+export type {
+  VoiceHost,
+  VoiceHostModelStatus,
+  VoiceHostMutationResult,
+  VoiceHostProfile,
+  VoiceHostProfilesResult,
+  VoiceHostSnapshot,
+  VoiceProfileIdPayload,
+  VoiceProfileImportPayload,
+  VoiceProfileRenamePayload,
+  VoiceSessionMutedPayload,
+  VoiceSessionStartPayload,
+} from './voice-host';
+export {
+  VoiceEmptyPayloadSchema,
+  VoiceModelStatusResultSchema,
+  VoiceProfileIdPayloadSchema,
+  VoiceProfileImportPayloadSchema,
+  VoiceProfileRenamePayloadSchema,
+  VoiceProfilesListResultSchema,
+  VoiceSessionMutedPayloadSchema,
+  VoiceSessionStartPayloadSchema,
+  VoiceSnapshotSchema,
+} from './voice-host';
 export type { DiagnosticBundleSaver } from './capabilities/diagnostic-bundle-saver';
 export type {
   DiagnosticBundleDto,
