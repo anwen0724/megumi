@@ -126,6 +126,12 @@ describe('Megumi Home', () => {
       paths.cachePath,
       paths.tmpPath,
       paths.attachmentsPath,
+      paths.voicePath,
+      paths.modelsPath,
+      paths.voiceModelsPath,
+      paths.voiceProfilesPath,
+      paths.voiceCachePath,
+      paths.voiceTmpPath,
     ]));
     expect(fileSystem.jsonFiles.has(paths.settingsPath)).toBe(false);
     expect(fileSystem.jsonFiles.get(paths.versionPath)).toEqual({

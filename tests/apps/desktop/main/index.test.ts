@@ -129,6 +129,7 @@ vi.mock('@megumi/desktop/main/app/create-window', () => ({
 
 vi.mock('@megumi/product', () => ({
   composeProduct: mocks.composeProduct,
+  resolveMegumiHomePath: vi.fn(() => mocks.homePath),
 }));
 
 vi.mock('@megumi/desktop/main/adapters/desktop-workspace-file-system-adapter', () => ({
@@ -171,6 +172,7 @@ describe('main runtime logger composition', () => {
     mocks.composeProduct.mockImplementation(() => {
       const logger = noopRuntimeLogger;
       return {
+        homePath: mocks.homePath,
         logger,
         host: mocks.agentHost,
         voiceAudio: { submitUtterance: vi.fn() },

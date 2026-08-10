@@ -4,6 +4,7 @@ import path from 'node:path';
 import { DATABASE_MIGRATIONS_RESOURCE_PATH } from '@megumi/database';
 
 export const PRODUCT_SYSTEM_SKILLS_RESOURCE_PATH = 'product/system-skills';
+export const VOICE_RUNTIME_RESOURCE_PATH = 'voice';
 
 export function resolveProductSystemSkillsPath(input: {
   isPackaged: boolean;
@@ -17,6 +18,9 @@ export function resolveProductSystemSkillsPath(input: {
 
 export function getProductPackagingResources(cwd: string): Array<{ source: string; target: string }> {
   const systemSkillsPath = path.resolve(cwd, 'packages/skills/built-in-skills');
+  const voiceManifestPath = path.resolve(cwd, 'packages/voice/resources/model-manifest.json');
+  const defaultVoicePath = path.resolve(cwd, 'packages/voice/resources/default-voice');
+  const mossSidecarPath = path.resolve(cwd, 'packages/voice/sidecar/moss-tts-nano/dist/moss-tts-nano-sidecar.exe');
   return [
     ...(fs.existsSync(systemSkillsPath) ? [{
       source: systemSkillsPath,
@@ -26,5 +30,17 @@ export function getProductPackagingResources(cwd: string): Array<{ source: strin
       source: path.resolve(cwd, 'packages/database/migrations'),
       target: DATABASE_MIGRATIONS_RESOURCE_PATH,
     },
+    {
+      source: voiceManifestPath,
+      target: `${VOICE_RUNTIME_RESOURCE_PATH}/model-manifest.json`,
+    },
+    {
+      source: defaultVoicePath,
+      target: `${VOICE_RUNTIME_RESOURCE_PATH}/default-voice`,
+    },
+    ...(fs.existsSync(mossSidecarPath) ? [{
+      source: mossSidecarPath,
+      target: `${VOICE_RUNTIME_RESOURCE_PATH}/moss-tts-nano-sidecar.exe`,
+    }] : []),
   ];
 }

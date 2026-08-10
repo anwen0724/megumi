@@ -1,6 +1,7 @@
 /* Defines English copy for the compact Character Presence surface. */
 export const character = {
   windowLabel: 'Megumi character',
+  presentationLabel: 'Animated Megumi character',
   keepOnTop: 'Keep Megumi on top',
   stopKeepingOnTop: 'Stop keeping Megumi on top',
   hide: 'Hide Megumi',

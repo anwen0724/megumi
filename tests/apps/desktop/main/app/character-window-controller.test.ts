@@ -78,16 +78,20 @@ describe('CharacterWindowController', () => {
       createWindow: () => window,
       endVoiceSession: vi.fn(),
       stateStore: {
-        load: () => ({ bounds: { x: 1, y: 2, width: 420, height: 720 }, alwaysOnTop: false }),
+        load: () => ({ bounds: { x: 1, y: 2, width: 420, height: 720 }, alwaysOnTop: false, visible: true }),
         save,
       },
     });
 
+    expect(controller.shouldRestoreVisible()).toBe(true);
     await controller.show();
     expect(window.setBounds).toHaveBeenCalledWith({ x: 1, y: 2, width: 420, height: 720 });
     expect(window.setAlwaysOnTop).toHaveBeenCalledWith(false);
 
     controller.toggleAlwaysOnTop();
-    expect(save).toHaveBeenLastCalledWith(expect.objectContaining({ alwaysOnTop: true }));
+    expect(save).toHaveBeenLastCalledWith(expect.objectContaining({ alwaysOnTop: true, visible: true }));
+
+    await controller.hide();
+    expect(save).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false }));
   });
 });

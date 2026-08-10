@@ -1,5 +1,6 @@
 /* Mounts the Pixi character scene and falls back to the same static asset when WebGL is unavailable. */
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { CharacterState } from '../character-state';
 import { mountCharacterPresentation, type CharacterPresentation } from '../character-presentation';
 
@@ -8,6 +9,7 @@ export function CharacterCanvas(props: {
   readonly state: CharacterState;
   readonly mouthLevel: number;
 }) {
+  const { t } = useTranslation('character');
   const containerRef = useRef<HTMLDivElement>(null);
   const presentationRef = useRef<CharacterPresentation | null>(null);
   const stateRef = useRef(props.state);
@@ -47,5 +49,5 @@ export function CharacterCanvas(props: {
   if (staticFallback) {
     return <img src={props.imageUrl} alt="Megumi" draggable={false} className="h-full w-full select-none object-contain" />;
   }
-  return <div ref={containerRef} className="h-full w-full" aria-label="Megumi animated character" />;
+  return <div ref={containerRef} className="h-full w-full" aria-label={t('presentationLabel')} />;
 }

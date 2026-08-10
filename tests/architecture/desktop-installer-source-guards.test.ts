@@ -32,7 +32,9 @@ describe('desktop installer configuration', () => {
     expect(forgeConfig).toContain("'/node_modules/better-sqlite3'");
     expect(forgeConfig).toContain("'/node_modules/bindings'");
     expect(forgeConfig).toContain("'/node_modules/file-uri-to-path'");
-    expect(forgeConfig).toContain("unpack: '**/{.**,**}/**/*.node'");
+    expect(forgeConfig).toContain("'/node_modules/sherpa-onnx-node'");
+    expect(forgeConfig).toContain("'/node_modules/sherpa-onnx-win-x64'");
+    expect(forgeConfig).toContain("unpack: '**/*.{node,dll}'");
     expect(forgeConfig).toContain('ignore: shouldIgnorePackagedFile');
   });
 });

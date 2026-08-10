@@ -13,10 +13,10 @@ export interface CharacterWindowBounds {
 export interface CharacterWindowPersistedState {
   readonly bounds?: CharacterWindowBounds;
   readonly alwaysOnTop: boolean;
+  readonly visible: boolean;
 }
 
 export interface CharacterWindowSnapshot extends CharacterWindowPersistedState {
-  readonly visible: boolean;
   readonly selectedSessionId: string | null;
 }
 
@@ -45,6 +45,7 @@ export interface CharacterWindowController {
   hide(): Promise<CharacterWindowSnapshot>;
   toggleAlwaysOnTop(): CharacterWindowSnapshot;
   selectSession(sessionId: string | null): CharacterWindowSnapshot;
+  shouldRestoreVisible(): boolean;
   getSnapshot(): CharacterWindowSnapshot;
   send(channel: string, payload: unknown): boolean;
   subscribe(listener: (snapshot: CharacterWindowSnapshot) => void): { unsubscribe(): void };
@@ -59,7 +60,7 @@ export function createCharacterWindowController(options: {
   let window: CharacterWindowHandle | undefined;
   let disposing = false;
   let selectedSessionId: string | null = null;
-  let persisted = options.stateStore?.load() ?? { alwaysOnTop: true };
+  let persisted = options.stateStore?.load() ?? { alwaysOnTop: true, visible: false };
   const listeners = new Set<(snapshot: CharacterWindowSnapshot) => void>();
 
   const snapshot = (): CharacterWindowSnapshot => ({
@@ -75,11 +76,12 @@ export function createCharacterWindowController(options: {
     return next;
   };
 
-  const saveWindowState = () => {
+  const saveWindowState = (visible = persisted.visible) => {
     if (!window || window.isDestroyed()) return;
     persisted = {
       bounds: window.getBounds(),
       alwaysOnTop: window.isAlwaysOnTop(),
+      visible,
     };
     options.stateStore?.save(persisted);
   };
@@ -87,8 +89,8 @@ export function createCharacterWindowController(options: {
   const hide = async (): Promise<CharacterWindowSnapshot> => {
     await options.endVoiceSession();
     if (window && !window.isDestroyed()) {
-      saveWindowState();
       window.hide();
+      saveWindowState(false);
     }
     return publish();
   };
@@ -117,18 +119,22 @@ export function createCharacterWindowController(options: {
       const target = ensureWindow();
       target.show();
       target.focus();
+      saveWindowState(true);
       return publish();
     },
     hide,
     toggleAlwaysOnTop() {
       const target = ensureWindow();
       target.setAlwaysOnTop(!target.isAlwaysOnTop());
-      saveWindowState();
+      saveWindowState(target.isVisible());
       return publish();
     },
     selectSession(sessionId) {
       selectedSessionId = sessionId;
       return publish();
+    },
+    shouldRestoreVisible() {
+      return persisted.visible;
     },
     getSnapshot: snapshot,
     send(channel, payload) {
@@ -144,7 +150,7 @@ export function createCharacterWindowController(options: {
       disposing = true;
       await options.endVoiceSession();
       if (window && !window.isDestroyed()) {
-        saveWindowState();
+        saveWindowState(window.isVisible());
         window.destroy();
       }
       window = undefined;

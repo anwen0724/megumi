@@ -34,6 +34,11 @@ export function createElectronVoiceOptions(
   const ttsRoot = path.join(paths.voiceModelsPath, 'tts', 'moss-tts-nano', 'f52645cb467506d8e18e746ddd59482685b74e58');
 
   return {
+    defaultProfile: {
+      profileId: 'voice-profile:default',
+      name: 'Default',
+      referenceAudioPath: resolveDefaultVoicePath(),
+    },
     models: createFileVoiceModels({
       modelsPath: paths.voiceModelsPath,
       manifest,
@@ -83,4 +88,9 @@ function resolveVoiceManifestPath(): string {
 function resolveMossSidecarPath(): string {
   if (app.isPackaged) return path.join(process.resourcesPath, 'voice', 'moss-tts-nano-sidecar.exe');
   return path.resolve(process.cwd(), 'packages/voice/sidecar/moss-tts-nano/dist/moss-tts-nano-sidecar.exe');
+}
+
+function resolveDefaultVoicePath(): string {
+  if (app.isPackaged) return path.join(process.resourcesPath, 'voice', 'default-voice', 'reference.wav');
+  return path.resolve(process.cwd(), 'packages/voice/resources/default-voice/reference.wav');
 }

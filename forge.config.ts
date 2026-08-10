@@ -10,6 +10,13 @@ const nativeRuntimeModuleRoots = [
   '/node_modules/better-sqlite3',
   '/node_modules/bindings',
   '/node_modules/file-uri-to-path',
+  '/node_modules/sherpa-onnx-node',
+  '/node_modules/sherpa-onnx-win-x64',
+  '/node_modules/sherpa-onnx-win-ia32',
+  '/node_modules/sherpa-onnx-linux-x64',
+  '/node_modules/sherpa-onnx-linux-arm64',
+  '/node_modules/sherpa-onnx-darwin-x64',
+  '/node_modules/sherpa-onnx-darwin-arm64',
 ];
 
 function shouldIgnorePackagedFile(file: string): boolean {
@@ -31,7 +38,7 @@ function shouldIgnorePackagedFile(file: string): boolean {
 const config: ForgeConfig = {
   packagerConfig: {
     asar: {
-      unpack: '**/{.**,**}/**/*.node',
+      unpack: '**/*.{node,dll}',
     },
     afterCopy: [
       async (buildPath, _electronVersion, _platform, _arch, done) => {

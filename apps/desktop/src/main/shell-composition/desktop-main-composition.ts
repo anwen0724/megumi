@@ -1,7 +1,7 @@
 // Composes the Electron UI shell and connects it to the Product Host Interface.
 import { BrowserWindow } from 'electron';
 import { createElectronMegumiHomeSyncOptions } from '../adapters/electron-home-adapter';
-import { composeProduct } from '@megumi/product';
+import { composeProduct, resolveMegumiHomePath } from '@megumi/product';
 import { forwardRuntimeEvent } from '../ipc/event-forwarders';
 import { electronDirectoryPickerAdapter } from '../adapters/electron-directory-picker-adapter';
 import { electronFileOpenAdapter } from '../adapters/electron-file-open-adapter';
@@ -54,6 +54,7 @@ export function composeDesktopMain(options: { readonly speechPlayer?: SpeechPlay
   });
 
   return {
+    homePath: resolveMegumiHomePath(home),
     runtimeLogger,
     workspace: { host: productHost },
     session: { host: productHost },

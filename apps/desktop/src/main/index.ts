@@ -13,6 +13,7 @@ import { shouldQuitForSquirrelStartup } from './app/squirrel-startup';
 import { composeDesktopMain } from './shell-composition/desktop-main-composition';
 import { createCharacterSpeechPlayerAdapter } from './adapters/character-speech-player-adapter';
 import type { CharacterWindowController } from './app/character-window-controller';
+import { createFileCharacterWindowStateStore } from './adapters/file-character-window-state-store';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -35,6 +36,9 @@ if (shouldQuitForSquirrelStartup()) {
       dirname: __dirname,
     }),
     endVoiceSession: () => desktopMain.voice.host.voice.endSession(),
+    stateStore: createFileCharacterWindowStateStore({
+      filePath: path.join(desktopMain.homePath, 'desktop', 'character-window.json'),
+    }),
   });
   const characterSubscription = character.subscribe((snapshot) => {
     for (const window of BrowserWindow.getAllWindows()) {
@@ -69,6 +73,7 @@ if (shouldQuitForSquirrelStartup()) {
         },
         quit: () => app.quit(),
       });
+      if (character.shouldRestoreVisible()) void character.show();
     },
     createWindow: () => {
       mainWindow = createMainWindow({

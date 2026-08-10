@@ -44,6 +44,9 @@ function installMegumiMock() {
       runtime: {
         onEvent: vi.fn(() => () => undefined),
       },
+      character: {
+        selectSession: vi.fn(),
+      },
     },
   });
 }

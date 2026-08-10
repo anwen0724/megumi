@@ -3,6 +3,7 @@ node_modules/
 .vite/
 out/
 dist/
+packages/voice/sidecar/moss-tts-nano/.build/
 *.db
 *.db-shm
 *.db-wal

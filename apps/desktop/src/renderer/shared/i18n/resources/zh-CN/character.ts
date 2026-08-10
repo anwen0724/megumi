@@ -4,6 +4,7 @@ import type { character as source } from '../en-US/character';
 
 export const character = {
   windowLabel: 'Megumi 人物窗口',
+  presentationLabel: 'Megumi 动画人物',
   keepOnTop: '保持 Megumi 置顶',
   stopKeepingOnTop: '取消 Megumi 置顶',
   hide: '隐藏 Megumi',

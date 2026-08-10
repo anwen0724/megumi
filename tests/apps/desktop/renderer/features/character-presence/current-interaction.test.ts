@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { projectCurrentInteraction } from '@megumi/desktop/renderer/features/character-presence/current-interaction';
-import type { TimelineMessage } from '@megumi/desktop/renderer/features/session-timeline';
+import type {
+  TimelineAssistantMessage,
+  TimelineMessage,
+} from '@megumi/desktop/renderer/features/session-timeline';
 
 describe('projectCurrentInteraction', () => {
   it('projects only the current turn, reply, tool, approval and error facts', () => {
@@ -69,7 +72,12 @@ function user(messageId: string, text: string, createdAt: string): TimelineMessa
   };
 }
 
-function assistant(runId: string, text: string, status: 'streaming' | 'completed', createdAt: string): TimelineMessage {
+function assistant(
+  runId: string,
+  text: string,
+  status: 'streaming' | 'completed',
+  createdAt: string,
+): TimelineAssistantMessage {
   return {
     messageId: `${runId}:message`,
     role: 'assistant',
