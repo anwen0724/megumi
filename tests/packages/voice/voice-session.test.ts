@@ -16,7 +16,7 @@ describe('Voice sessions', () => {
       defaultProfile: {
         profileId: 'voice-profile:default',
         name: 'Default',
-        referenceAudioPath: 'profiles/default/reference.wav',
+        source: { kind: 'built_in', voiceId: 'Xiaoyu' },
       },
       recognizer: unusedRecognizer,
       synthesizer: { prepare, async *synthesize() {} },
@@ -27,7 +27,7 @@ describe('Voice sessions', () => {
 
     expect(prepare).toHaveBeenCalledWith({
       voiceProfileId: 'voice-profile:default',
-      referenceAudioPath: 'profiles/default/reference.wav',
+      voice: { kind: 'built_in', voiceId: 'Xiaoyu' },
     }, { signal: expect.any(AbortSignal) });
     expect(voice.sessions.getSnapshot()).toMatchObject({
       status: 'preparing',
@@ -47,7 +47,7 @@ describe('Voice sessions', () => {
       defaultProfile: {
         profileId: 'voice-profile:default',
         name: 'Default',
-        referenceAudioPath: 'profiles/default/reference.wav',
+        source: { kind: 'built_in', voiceId: 'Xiaoyu' },
       },
       recognizer: unusedRecognizer,
       synthesizer: {
@@ -72,7 +72,7 @@ describe('Voice sessions', () => {
       defaultProfile: {
         profileId: 'voice-profile:default',
         name: 'Default',
-        referenceAudioPath: 'profiles/default/reference.wav',
+        source: { kind: 'built_in', voiceId: 'Xiaoyu' },
       },
       recognizer: unusedRecognizer,
       synthesizer: {
@@ -97,7 +97,7 @@ describe('Voice sessions', () => {
       defaultProfile: {
         profileId: 'voice-profile:default',
         name: 'Default',
-        referenceAudioPath: 'profiles/default/reference.wav',
+        source: { kind: 'built_in', voiceId: 'Xiaoyu' },
       },
       recognizer: unusedRecognizer,
       synthesizer: unusedSynthesizer,

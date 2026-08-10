@@ -21,13 +21,13 @@ describe('MOSS-TTS-Nano synthesizer', () => {
 
     await expect(synthesizer.prepare({
       voiceProfileId: 'voice-profile:warm',
-      referenceAudioPath: 'C:/profiles/warm/reference.wav',
+      voice: { kind: 'reference_audio', referenceAudioPath: 'C:/profiles/warm/reference.wav' },
     })).resolves.toEqual({ status: 'ready' });
     expect(preparations).toEqual([{
       preparationId: 'preparation:1',
       modelPath: 'C:/models/moss',
       cachePath: 'C:/cache/voice',
-      referenceAudioPath: 'C:/profiles/warm/reference.wav',
+      voice: { kind: 'reference_audio', referenceAudioPath: 'C:/profiles/warm/reference.wav' },
       signal: undefined,
     }]);
   });
@@ -54,8 +54,7 @@ describe('MOSS-TTS-Nano synthesizer', () => {
     for await (const chunk of synthesizer.synthesize({
       text: '你好，Megumi。',
       voiceProfileId: 'voice-profile:warm',
-      referenceAudioPath: 'C:/profiles/warm/reference.wav',
-      language: 'zh',
+      voice: { kind: 'built_in', voiceId: 'Xiaoyu' },
     })) chunks.push(chunk);
 
     expect(requests).toEqual([{
@@ -63,8 +62,7 @@ describe('MOSS-TTS-Nano synthesizer', () => {
       modelPath: 'C:/models/moss',
       cachePath: 'C:/cache/voice',
       text: '你好，Megumi。',
-      referenceAudioPath: 'C:/profiles/warm/reference.wav',
-      language: 'zh',
+      voice: { kind: 'built_in', voiceId: 'Xiaoyu' },
       signal: undefined,
     }]);
     expect(chunks.map((chunk) => chunk.final)).toEqual([false, true]);
@@ -84,9 +82,9 @@ describe('MOSS-TTS-Nano synthesizer', () => {
       },
     });
 
-    for await (const _chunk of synthesizer.synthesize({ text: 'one', voiceProfileId: 'v', referenceAudioPath: 'v.wav', language: 'en' })) {}
+    for await (const _chunk of synthesizer.synthesize({ text: 'one', voiceProfileId: 'v', voice: { kind: 'built_in', voiceId: 'Ava' } })) {}
     modelPath = 'C:/models/voice-v2';
-    for await (const _chunk of synthesizer.synthesize({ text: 'two', voiceProfileId: 'v', referenceAudioPath: 'v.wav', language: 'en' })) {}
+    for await (const _chunk of synthesizer.synthesize({ text: 'two', voiceProfileId: 'v', voice: { kind: 'built_in', voiceId: 'Ava' } })) {}
 
     expect(requests).toEqual([{ modelPath: 'C:/models/voice-v1' }, { modelPath: 'C:/models/voice-v2' }]);
   });

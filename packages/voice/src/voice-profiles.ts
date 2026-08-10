@@ -1,22 +1,27 @@
 /*
- * Owns Voice Profile identity, selection, and reference-audio lifecycle facts.
+ * Owns Voice Profile identity, selection, and built-in/reference-audio source lifecycle facts.
  * Persistent file management will be supplied through the same public seam.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { SpeechVoiceSource } from './speech';
 
 export interface VoiceProfile {
   readonly profileId: string;
   readonly name: string;
-  readonly referenceAudioPath: string;
+  readonly source: SpeechVoiceSource;
+  readonly language?: 'zh' | 'en';
+  readonly gender?: 'female' | 'male';
   readonly builtIn: boolean;
 }
 
 export interface VoiceProfileSeed {
   readonly profileId: string;
   readonly name: string;
-  readonly referenceAudioPath: string;
+  readonly source: SpeechVoiceSource;
+  readonly language?: 'zh' | 'en';
+  readonly gender?: 'female' | 'male';
 }
 
 export interface ImportVoiceProfileRequest {
@@ -106,13 +111,22 @@ export function createVoiceProfiles(
   defaultProfile: VoiceProfileSeed,
   ids: { readonly createVoiceProfileId: () => string },
   storage?: VoiceProfileStorage,
+  additionalBuiltInProfiles: readonly VoiceProfileSeed[] = [],
 ): VoiceProfiles {
   const profiles = new Map<string, VoiceProfile>();
   const builtInProfile: VoiceProfile = { ...defaultProfile, builtIn: true };
   profiles.set(builtInProfile.profileId, builtInProfile);
+  for (const profile of additionalBuiltInProfiles) {
+    profiles.set(profile.profileId, { ...profile, builtIn: true });
+  }
   const stored = storage?.load();
   for (const profile of stored?.profiles ?? []) {
-    profiles.set(profile.profileId, { ...profile, builtIn: false });
+    profiles.set(profile.profileId, {
+      profileId: profile.profileId,
+      name: profile.name,
+      source: { kind: 'reference_audio', referenceAudioPath: profile.referenceAudioPath },
+      builtIn: false,
+    });
   }
   let selectedProfileId = stored?.selectedProfileId && profiles.has(stored.selectedProfileId)
     ? stored.selectedProfileId
@@ -122,7 +136,9 @@ export function createVoiceProfiles(
     selectedProfileId,
     profiles: [...profiles.values()]
       .filter((profile) => !profile.builtIn)
-      .map(({ profileId, name, referenceAudioPath }) => ({ profileId, name, referenceAudioPath })),
+      .flatMap((profile) => profile.source.kind === 'reference_audio'
+        ? [{ profileId: profile.profileId, name: profile.name, referenceAudioPath: profile.source.referenceAudioPath }]
+        : []),
   });
 
   return {
@@ -137,7 +153,7 @@ export function createVoiceProfiles(
       const profile: VoiceProfile = {
         profileId,
         name: request.name,
-        referenceAudioPath,
+        source: { kind: 'reference_audio', referenceAudioPath },
         builtIn: false,
       };
       profiles.set(profile.profileId, profile);

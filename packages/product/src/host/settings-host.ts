@@ -71,6 +71,11 @@ export const SettingsUpdatePayloadSchema = z.object({
   theme: z.enum(['megumi-warm', 'neutral-light', 'graphite-dark', 'sage-mist', 'midnight-blue']).optional(),
   setup: z.object({ completed: z.boolean().optional() }).strict().optional(),
   memory: z.object({ enabled: z.boolean().optional() }).strict().optional(),
+  voice: z.object({
+    inputDeviceId: z.string().min(1).optional(),
+    outputDeviceId: z.string().min(1).optional(),
+    recognitionLanguage: z.enum(['auto', 'zh', 'en']).optional(),
+  }).strict().optional(),
   modelSelection: z.object({
     providerId: z.string().min(1),
     modelId: z.string().min(1),
@@ -140,6 +145,11 @@ const SettingsUiResolvedSchema = z.object({
   theme: z.enum(['megumi-warm', 'neutral-light', 'graphite-dark', 'sage-mist', 'midnight-blue']),
   setup: z.object({ completed: z.boolean(), completedAt: z.string().datetime().optional() }).strict(),
   memory: z.object({ enabled: z.boolean() }).strict(),
+  voice: z.object({
+    inputDeviceId: z.string().min(1),
+    outputDeviceId: z.string().min(1),
+    recognitionLanguage: z.enum(['auto', 'zh', 'en']),
+  }).strict(),
   modelSelection: z.object({
     providerId: z.string().min(1),
     modelId: z.string().min(1),
@@ -259,6 +269,11 @@ export type SettingsUiRaw = {
   memory?: {
     enabled?: boolean;
   };
+  voice?: {
+    inputDeviceId?: string;
+    outputDeviceId?: string;
+    recognitionLanguage?: 'auto' | 'zh' | 'en';
+  };
   modelSelection?: {
     providerId: string;
     modelId: string;
@@ -293,6 +308,11 @@ export type SettingsUiResolved = {
   };
   memory: {
     enabled: boolean;
+  };
+  voice: {
+    inputDeviceId: string;
+    outputDeviceId: string;
+    recognitionLanguage: 'auto' | 'zh' | 'en';
   };
   modelSelection?: {
     providerId: string;
@@ -488,6 +508,13 @@ export function toSettingsRawPatch(patch: SettingsUiRaw): SettingsRaw {
       },
     } : {}),
     ...(patch.memory ? { memory: patch.memory } : {}),
+    ...(patch.voice ? {
+      voice: {
+        ...(patch.voice.inputDeviceId ? { input_device_id: patch.voice.inputDeviceId } : {}),
+        ...(patch.voice.outputDeviceId ? { output_device_id: patch.voice.outputDeviceId } : {}),
+        ...(patch.voice.recognitionLanguage ? { recognition_language: patch.voice.recognitionLanguage } : {}),
+      },
+    } : {}),
     ...(patch.modelSelection ? {
       model_selection: {
         provider_id: patch.modelSelection.providerId,
@@ -536,6 +563,11 @@ export function toSettingsUiResolved(
       ...(settings.setup.completed_at ? { completedAt: settings.setup.completed_at } : {}),
     },
     memory: settings.memory,
+    voice: {
+      inputDeviceId: settings.voice.input_device_id,
+      outputDeviceId: settings.voice.output_device_id,
+      recognitionLanguage: settings.voice.recognition_language,
+    },
     ...(settings.model_selection ? {
       modelSelection: {
         providerId: settings.model_selection.provider_id,

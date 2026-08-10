@@ -20,11 +20,12 @@ describe('VoiceAudioController', () => {
       onTranscript: (transcript) => transcripts.push(transcript),
     });
 
-    await controller.start();
+    await controller.start({ inputDeviceId: 'microphone-2', language: 'zh' });
     const audio = new Float32Array([0.1, 0.2]);
     await Promise.all([onSpeechEnd?.(audio), onSpeechEnd?.(audio)]);
 
     expect(submitAudio).toHaveBeenCalledOnce();
+    expect(submitAudio).toHaveBeenCalledWith(expect.objectContaining({ language: 'zh' }));
     expect(transcripts).toEqual(['你好 Megumi']);
     expect(controller.getSnapshot().status).toBe('listening');
   });
@@ -71,5 +72,41 @@ describe('VoiceAudioController', () => {
     expect(vad.pause).toHaveBeenCalledOnce();
     expect(vad.start).toHaveBeenCalledTimes(2);
     expect(controller.getSnapshot().status).toBe('listening');
+  });
+
+  it('passes the selected device to initial and resumed VAD capture', async () => {
+    const configurations: unknown[] = [];
+    const controller = createVoiceAudioController({
+      createVad: async (_callbacks, configuration) => {
+        configurations.push(configuration);
+        return { start: vi.fn(), pause: vi.fn(), destroy: vi.fn() };
+      },
+      submitAudio: vi.fn(),
+      onTranscript: vi.fn(),
+    });
+
+    await controller.start({ inputDeviceId: 'usb-mic', language: 'en' });
+
+    expect(configurations).toEqual([{ inputDeviceId: 'usb-mic' }]);
+  });
+
+  it('reports an empty recognition result instead of silently returning to listening', async () => {
+    let onSpeechEnd: ((audio: Float32Array) => Promise<void> | void) | undefined;
+    const controller = createVoiceAudioController({
+      createVad: async (callbacks) => {
+        onSpeechEnd = callbacks.onSpeechEnd;
+        return { start: vi.fn(), pause: vi.fn(), destroy: vi.fn() };
+      },
+      submitAudio: vi.fn(async () => ({
+        status: 'empty' as const,
+        snapshot: { status: 'listening' as const, boundSessionId: 'session-1', voiceProfileId: 'default', muted: false },
+      })),
+      onTranscript: vi.fn(),
+    });
+
+    await controller.start();
+    await onSpeechEnd?.(new Float32Array([0.1]));
+
+    expect(controller.getSnapshot()).toMatchObject({ status: 'listening', issue: 'empty' });
   });
 });

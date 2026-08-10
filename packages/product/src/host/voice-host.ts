@@ -9,6 +9,7 @@ export const VoiceProfileRenamePayloadSchema = z.object({
   name: z.string().trim().min(1),
 }).strict();
 export const VoiceProfileIdPayloadSchema = z.object({ profileId: z.string().min(1) }).strict();
+export const VoiceProfilePreviewPayloadSchema = VoiceProfileIdPayloadSchema;
 export const VoiceSessionStartPayloadSchema = z.object({ boundSessionId: z.string().min(1) }).strict();
 export const VoiceSessionMutedPayloadSchema = z.object({ muted: z.boolean() }).strict();
 
@@ -22,6 +23,9 @@ const VoiceProfileDtoSchema = z.object({
   profileId: z.string().min(1),
   name: z.string().min(1),
   builtIn: z.boolean(),
+  source: z.enum(['built_in', 'custom']),
+  language: z.enum(['zh', 'en']).optional(),
+  gender: z.enum(['female', 'male']).optional(),
   selected: z.boolean(),
 }).strict();
 
@@ -83,9 +87,24 @@ export const VoiceHostMutationResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('failed'), failure: VoiceFailureSchema }).strict(),
 ]);
 
+export const VoiceProfilePreviewResultSchema = z.discriminatedUnion('status', [
+  z.object({
+    status: z.literal('ok'),
+    chunks: z.array(z.object({
+      samples: z.instanceof(ArrayBuffer),
+      sampleRate: z.number().positive(),
+      final: z.boolean(),
+    }).strict()).min(1),
+  }).strict(),
+  z.object({ status: z.literal('not_found') }).strict(),
+  z.object({ status: z.literal('failed'), failure: VoiceFailureSchema }).strict(),
+]);
+
 export type VoiceProfileImportPayload = z.infer<typeof VoiceProfileImportPayloadSchema>;
 export type VoiceProfileRenamePayload = z.infer<typeof VoiceProfileRenamePayloadSchema>;
 export type VoiceProfileIdPayload = z.infer<typeof VoiceProfileIdPayloadSchema>;
+export type VoiceProfilePreviewPayload = z.infer<typeof VoiceProfilePreviewPayloadSchema>;
+export type VoiceProfilePreviewResult = z.infer<typeof VoiceProfilePreviewResultSchema>;
 export type VoiceSessionStartPayload = z.infer<typeof VoiceSessionStartPayloadSchema>;
 export type VoiceSessionMutedPayload = z.infer<typeof VoiceSessionMutedPayloadSchema>;
 export type VoiceHostSnapshot = z.infer<typeof VoiceSnapshotSchema>;
@@ -107,6 +126,7 @@ export interface VoiceHost {
   renameProfile(request: VoiceProfileRenamePayload): Promise<VoiceHostMutationResult>;
   removeProfile(request: VoiceProfileIdPayload): Promise<VoiceHostMutationResult>;
   selectProfile(request: VoiceProfileIdPayload): Promise<VoiceHostMutationResult>;
+  previewProfile(request: VoiceProfilePreviewPayload): Promise<VoiceProfilePreviewResult>;
   startSession(request: VoiceSessionStartPayload): Promise<VoiceHostMutationResult>;
   setMuted(request: VoiceSessionMutedPayload): Promise<VoiceHostMutationResult>;
   interrupt(request?: Record<string, never>): Promise<VoiceHostMutationResult>;

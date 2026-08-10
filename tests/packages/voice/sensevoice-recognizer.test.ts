@@ -55,4 +55,26 @@ describe('SenseVoice recognizer', () => {
 
     expect(configurations).toHaveLength(2);
   });
+
+  it('uses the Voice Session recognition language instead of hard-coding auto', async () => {
+    const configurations: any[] = [];
+    const recognizer = createSenseVoiceRecognizer({
+      modelPath: 'C:/models/model.int8.onnx',
+      tokensPath: 'C:/models/tokens.txt',
+      runtimeLoader: async () => ({
+        OfflineRecognizer: class {
+          constructor(configuration: Record<string, unknown>) { configurations.push(configuration); }
+          createStream() { return { acceptWaveform() {} }; }
+          decode() {}
+          getResult() { return { text: 'ok' }; }
+        },
+      }),
+    });
+    const pcm = { samples: new Float32Array(), sampleRate: 16_000, channels: 1 as const };
+
+    await recognizer.recognize({ pcm, language: 'zh' });
+    await recognizer.recognize({ pcm, language: 'en' });
+
+    expect(configurations.map((configuration) => configuration.modelConfig.senseVoice.language)).toEqual(['zh', 'en']);
+  });
 });

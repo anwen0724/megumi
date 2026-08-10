@@ -10,6 +10,7 @@ export interface SpeechPlaybackChunk {
 }
 
 interface SpeechPlaybackBackend {
+  setOutputDevice(deviceId: string): Promise<void> | void;
   play(samples: Float32Array, sampleRate: number, onLevel?: (level: number) => void): Promise<void>;
   stop(): void;
   dispose(): Promise<void> | void;
@@ -23,6 +24,7 @@ export interface SpeechPlaybackController {
 
 export function createSpeechPlaybackController(options: {
   readonly backend?: SpeechPlaybackBackend;
+  readonly outputDeviceId?: string;
   readonly report: (result: { segmentId: string; status: 'played' | 'stopped' | 'failed'; message?: string }) => void;
   readonly onPlayingChanged?: (playing: boolean) => void;
   readonly onLevel?: (level: number) => void;
@@ -31,6 +33,7 @@ export function createSpeechPlaybackController(options: {
   let activeSegmentId: string | undefined;
   let generation = 0;
   let queue = Promise.resolve();
+  let outputRouteReady = false;
 
   return {
     acceptChunk(chunk) {
@@ -44,6 +47,10 @@ export function createSpeechPlaybackController(options: {
       const acceptedGeneration = generation;
       queue = queue.then(async () => {
         if (acceptedGeneration !== generation) return;
+        if (!outputRouteReady) {
+          await backend.setOutputDevice(options.outputDeviceId ?? 'default');
+          outputRouteReady = true;
+        }
         options.onPlayingChanged?.(true);
         await backend.play(new Float32Array(chunk.samples), chunk.sampleRate, options.onLevel);
         if (acceptedGeneration !== generation) return;
@@ -89,6 +96,19 @@ function createWebAudioBackend(): SpeechPlaybackBackend {
   const activeSources = new Set<AudioBufferSourceNode>();
 
   return {
+    async setOutputDevice(deviceId) {
+      const contextWithSink = context as AudioContext & {
+        setSinkId?: (sinkId: string) => Promise<void>;
+      };
+      if (!contextWithSink.setSinkId) return;
+      const sinkId = deviceId === 'default' ? '' : deviceId;
+      try {
+        await contextWithSink.setSinkId(sinkId);
+      } catch (error) {
+        if (!sinkId) throw error;
+        await contextWithSink.setSinkId('');
+      }
+    },
     async play(samples, sampleRate, onLevel) {
       if (context.state === 'suspended') await context.resume();
       const buffer = context.createBuffer(1, samples.length, sampleRate);

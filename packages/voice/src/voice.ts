@@ -20,12 +20,19 @@ export interface Voice {
   readonly models: VoiceModels;
   readonly profiles: VoiceProfiles;
   readonly sessions: VoiceSessions;
+  previewProfile(request: { readonly profileId: string; readonly text: string }): Promise<VoiceProfilePreviewResult>;
   acceptRuntimeFact(fact: VoiceRuntimeFact): void;
   dispose(): Promise<void>;
 }
 
+export type VoiceProfilePreviewResult =
+  | { readonly status: 'previewed'; readonly chunks: readonly { readonly samples: ArrayBuffer; readonly sampleRate: number; readonly final: boolean }[] }
+  | { readonly status: 'not_found' }
+  | { readonly status: 'failed'; readonly failure: { readonly code: string; readonly message: string } };
+
 export interface CreateVoiceOptions {
   readonly defaultProfile: VoiceProfileSeed;
+  readonly builtInProfiles?: readonly VoiceProfileSeed[];
   readonly recognizer: SpeechRecognizer;
   readonly synthesizer: SpeechSynthesizer;
   readonly player: SpeechPlayer;
@@ -40,7 +47,7 @@ export interface CreateVoiceOptions {
 export function createVoice(options: CreateVoiceOptions): Voice {
   const profiles = createVoiceProfiles(options.defaultProfile, options.ids ?? {
     createVoiceProfileId: () => `voice-profile:${crypto.randomUUID()}`,
-  }, options.profileStorage);
+  }, options.profileStorage, options.builtInProfiles);
   const baseSessions = createVoiceSessions({
     profiles,
     recognizer: options.recognizer,
@@ -89,6 +96,37 @@ export function createVoice(options: CreateVoiceOptions): Voice {
     models: options.models ?? createUnconfiguredVoiceModels(),
     profiles,
     sessions,
+    async previewProfile(request) {
+      const profile = profiles.list().profiles.find((candidate) => candidate.profileId === request.profileId);
+      if (!profile) return { status: 'not_found' };
+      const prepared = await options.synthesizer.prepare({
+        voiceProfileId: profile.profileId,
+        voice: profile.source,
+      });
+      if (prepared.status === 'failed') return prepared;
+      try {
+        const chunks = [];
+        for await (const chunk of options.synthesizer.synthesize({
+          text: request.text,
+          voiceProfileId: profile.profileId,
+          voice: profile.source,
+        })) {
+          const samples = chunk.pcm.samples.slice();
+          chunks.push({ samples: samples.buffer, sampleRate: chunk.pcm.sampleRate, final: chunk.final });
+        }
+        return chunks.length > 0
+          ? { status: 'previewed', chunks }
+          : { status: 'failed', failure: { code: 'voice_preview_empty', message: 'Voice preview produced no audio.' } };
+      } catch (error) {
+        return {
+          status: 'failed',
+          failure: {
+            code: 'voice_preview_failed',
+            message: error instanceof Error ? error.message : 'Voice preview failed.',
+          },
+        };
+      }
+    },
     acceptRuntimeFact(fact) {
       const snapshot = sessions.getSnapshot();
       if (snapshot.status === 'idle' || snapshot.boundSessionId !== fact.sessionId) return;

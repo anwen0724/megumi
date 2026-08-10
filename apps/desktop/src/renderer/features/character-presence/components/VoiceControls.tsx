@@ -107,6 +107,9 @@ export function VoiceControls(props: {
         {voice.draft ? <button type="button" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/10" aria-label={t('voice.discard')} onClick={voice.discardDraft}><Undo2 size={15} /></button> : null}
         <button type="button" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-sky-300 text-slate-950 disabled:opacity-40" disabled={!voice.draft.trim()} aria-label={t('voice.send')} onClick={() => { void voice.submitText(voice.draft); }}><Send size={15} /></button>
       </div>
+      {voice.audioSnapshot.issue === 'empty' ? (
+        <p className="mt-2 text-xs text-amber-100">{t('voice.emptyResult')}</p>
+      ) : null}
       {voice.error ? <p className="mt-2 text-xs text-rose-200">{voice.error}</p> : null}
     </section>
   );

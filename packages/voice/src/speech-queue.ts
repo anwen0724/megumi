@@ -39,8 +39,7 @@ export function createSpeechQueue(input: {
         const audio = input.synthesizer.synthesize({
           text: segment.text,
           voiceProfileId: segment.profile.profileId,
-          referenceAudioPath: segment.profile.referenceAudioPath,
-          language: 'auto',
+          voice: segment.profile.source,
         }, { signal: controller.signal });
         try {
           await input.player.play({ segmentId: segment.segmentId, audio }, { signal: controller.signal });

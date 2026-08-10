@@ -16,6 +16,7 @@ import {
   VoiceProfileRemoveRequestSchema,
   VoiceProfileRenameRequestSchema,
   VoiceProfileSelectRequestSchema,
+  VoiceProfilePreviewRequestSchema,
   VoiceProfilesListRequestSchema,
   VoiceSessionEndRequestSchema,
   VoiceSessionInterruptRequestSchema,
@@ -104,6 +105,13 @@ export function registerVoiceHandlers(
     responseSchema: host.VoiceHostMutationResultSchema,
     logger: options.logger,
     handle: (request) => voice.selectProfile(request.payload),
+  }));
+  ipcMain.handle(IPC_CHANNELS.voice.profilePreview, createIpcRequestHandler({
+    channel: IPC_CHANNELS.voice.profilePreview,
+    requestSchema: VoiceProfilePreviewRequestSchema,
+    responseSchema: host.VoiceProfilePreviewResultSchema,
+    logger: options.logger,
+    handle: (request) => voice.previewProfile(request.payload),
   }));
   ipcMain.handle(IPC_CHANNELS.voice.sessionStart, createIpcRequestHandler({
     channel: IPC_CHANNELS.voice.sessionStart,

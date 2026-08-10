@@ -8,7 +8,7 @@ describe('Product Voice operations', () => {
       defaultProfile: {
         profileId: 'voice-profile:default',
         name: 'Default',
-        referenceAudioPath: 'profiles/default/reference.wav',
+        source: { kind: 'built_in', voiceId: 'Xiaoyu' },
       },
       recognizer: unusedRecognizer,
       synthesizer: unusedSynthesizer,
@@ -28,8 +28,8 @@ describe('Product Voice operations', () => {
     expect(await host.listProfiles()).toEqual({
       status: 'ok',
       profiles: [
-        { profileId: 'voice-profile:default', name: 'Default', builtIn: true, selected: true },
-        { profileId: 'voice-profile:imported', name: 'Warm voice', builtIn: false, selected: false },
+        { profileId: 'voice-profile:default', name: 'Default', builtIn: true, source: 'built_in', selected: true },
+        { profileId: 'voice-profile:imported', name: 'Warm voice', builtIn: false, source: 'custom', selected: false },
       ],
     });
   });
@@ -37,7 +37,7 @@ describe('Product Voice operations', () => {
   it('exposes truthful aggregate Voice model status and update discovery', async () => {
     const checkForUpdates = vi.fn(async () => ({ status: 'checked' as const, bundleVersion: 'voice-v2' }));
     const voice = createVoice({
-      defaultProfile: { profileId: 'default', name: 'Default', referenceAudioPath: 'default.wav' },
+      defaultProfile: { profileId: 'default', name: 'Default', source: { kind: 'built_in', voiceId: 'Xiaoyu' } },
       recognizer: unusedRecognizer,
       synthesizer: unusedSynthesizer,
       player: unusedPlayer,
@@ -74,9 +74,43 @@ describe('Product Voice operations', () => {
     expect(await host.checkModelUpdates()).toEqual({ status: 'checked', bundleVersion: 'voice-v2' });
   });
 
+  it('returns a playable built-in voice preview without exposing model or reference paths', async () => {
+    const voice = createVoice({
+      defaultProfile: {
+        profileId: 'default',
+        name: '小宇',
+        source: { kind: 'built_in', voiceId: 'Xiaoyu' },
+        language: 'zh',
+        gender: 'female',
+      },
+      recognizer: unusedRecognizer,
+      synthesizer: {
+        async prepare() { return { status: 'ready' }; },
+        async *synthesize(request) {
+          expect(request.voice).toEqual({ kind: 'built_in', voiceId: 'Xiaoyu' });
+          expect(request.text).toContain('你好');
+          yield { pcm: { samples: new Float32Array([0.1, 0.2]), sampleRate: 24_000, channels: 1 }, final: true };
+        },
+      },
+      player: unusedPlayer,
+    });
+    const host = createVoiceOperations({
+      voice,
+      profileAudioPicker: { async chooseReferenceAudio() { return { status: 'cancelled' }; } },
+    });
+
+    const result = await host.previewProfile({ profileId: 'default' });
+
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('Expected preview audio.');
+    const samples = new Float32Array(result.chunks[0]!.samples);
+    expect(samples[0]).toBeCloseTo(0.1);
+    expect(samples[1]).toBeCloseTo(0.2);
+  });
+
   it('returns the TTS preparation failure instead of reporting voice as started', async () => {
     const voice = createVoice({
-      defaultProfile: { profileId: 'default', name: 'Default', referenceAudioPath: 'default.wav' },
+      defaultProfile: { profileId: 'default', name: 'Default', source: { kind: 'built_in', voiceId: 'Xiaoyu' } },
       recognizer: unusedRecognizer,
       synthesizer: {
         async prepare() {

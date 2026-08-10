@@ -38,5 +38,34 @@ class EmitPcmTests(unittest.TestCase):
         self.assertEqual(samples.size, stereo_frames.shape[0])
 
 
+class VoiceSourceTests(unittest.TestCase):
+    def test_resolves_built_in_voice_without_reference_audio(self):
+        module = load_sidecar_module()
+        module._prompt_codes.clear()
+
+        class Runtime:
+            def __init__(self):
+                self.calls = []
+
+            def resolve_prompt_audio_codes(self, **kwargs):
+                self.calls.append(kwargs)
+                return [1, 2, 3]
+
+        runtime = Runtime()
+        first = module.get_prompt_audio_codes(runtime, voice_id="Xiaoyu")
+        second = module.get_prompt_audio_codes(runtime, voice_id="Xiaoyu")
+
+        self.assertIs(first, second)
+        self.assertEqual(runtime.calls, [{"voice": "Xiaoyu", "prompt_audio_path": None}])
+
+    def test_health_reports_the_protocol_version(self):
+        module = load_sidecar_module()
+        messages = []
+        module.emit = messages.append
+
+        self.assertTrue(module.handle({"type": "health"}))
+        self.assertEqual(messages, [{"type": "ready", "protocolVersion": 2}])
+
+
 if __name__ == "__main__":
     unittest.main()

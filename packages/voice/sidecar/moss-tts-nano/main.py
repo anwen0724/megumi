@@ -22,7 +22,7 @@ _active_lock = threading.Lock()
 _active_cancel: dict[str, threading.Event] = {}
 _runtime: OnnxTtsRuntime | None = None
 _runtime_model_path: Path | None = None
-_prompt_codes: dict[tuple[str, int, int], Any] = {}
+_prompt_codes: dict[tuple[Any, ...], Any] = {}
 
 
 class SynthesisCancelled(Exception):
@@ -79,21 +79,43 @@ def get_runtime(model_path: Path, cache_path: Path) -> OnnxTtsRuntime:
         return _runtime
 
 
-def get_prompt_audio_codes(runtime: OnnxTtsRuntime, reference_audio_path: Path) -> Any:
+def get_prompt_audio_codes(
+    runtime: OnnxTtsRuntime,
+    *,
+    voice_id: str | None = None,
+    reference_audio_path: Path | None = None,
+) -> Any:
     """Resolve the selected voice once and retain it for this sidecar lifetime."""
-    resolved = reference_audio_path.resolve()
-    stat = resolved.stat()
-    key = (str(resolved), stat.st_mtime_ns, stat.st_size)
+    if voice_id:
+        key = ("built_in", voice_id)
+        resolved: Path | None = None
+    elif reference_audio_path is not None:
+        resolved = reference_audio_path.resolve()
+        stat = resolved.stat()
+        key = ("reference_audio", str(resolved), stat.st_mtime_ns, stat.st_size)
+    else:
+        raise ValueError("MOSS voice source is missing.")
     cached = _prompt_codes.get(key)
     if cached is not None:
         return cached
     codes = runtime.resolve_prompt_audio_codes(
-        voice=None,
+        voice=voice_id,
         prompt_audio_path=resolved,
     )
     _prompt_codes.clear()
     _prompt_codes[key] = codes
     return codes
+
+
+def parse_voice_source(message: dict[str, Any]) -> tuple[str | None, Path | None]:
+    voice = message.get("voice")
+    if not isinstance(voice, dict):
+        raise ValueError("MOSS voice source is invalid.")
+    if voice.get("kind") == "built_in" and isinstance(voice.get("voiceId"), str):
+        return str(voice["voiceId"]), None
+    if voice.get("kind") == "reference_audio" and isinstance(voice.get("referenceAudioPath"), str):
+        return None, Path(str(voice["referenceAudioPath"]))
+    raise ValueError("MOSS voice source is invalid.")
 
 
 def prepare_worker(message: dict[str, Any], cancel: threading.Event) -> None:
@@ -105,7 +127,12 @@ def prepare_worker(message: dict[str, Any], cancel: threading.Event) -> None:
         )
         if cancel.is_set():
             raise SynthesisCancelled()
-        get_prompt_audio_codes(runtime, Path(str(message["referenceAudioPath"])))
+        voice_id, reference_audio_path = parse_voice_source(message)
+        get_prompt_audio_codes(
+            runtime,
+            voice_id=voice_id,
+            reference_audio_path=reference_audio_path,
+        )
         if cancel.is_set():
             raise SynthesisCancelled()
         with _active_lock:
@@ -151,15 +178,17 @@ def synthesize_worker(message: dict[str, Any], cancel: threading.Event) -> None:
         model_path = Path(str(message["modelPath"]))
         cache_path = Path(str(message["cachePath"]))
         runtime = get_runtime(model_path, cache_path)
+        voice_id, reference_audio_path = parse_voice_source(message)
         prepared = runtime.prepare_synthesis_text(
             text=str(message["text"]),
-            voice="",
+            voice=voice_id or "",
             enable_wetext=False,
             enable_normalize_tts_text=True,
         )
         prompt_codes = get_prompt_audio_codes(
             runtime,
-            Path(str(message["referenceAudioPath"])),
+            voice_id=voice_id,
+            reference_audio_path=reference_audio_path,
         )
         text_chunks = runtime.split_voice_clone_text(str(prepared["text"]), max_tokens=75)
         sample_rate = int(runtime.codec_meta["codec_config"]["sample_rate"])
@@ -214,7 +243,7 @@ def synthesize_worker(message: dict[str, Any], cancel: threading.Event) -> None:
 def handle(message: dict[str, Any]) -> bool:
     kind = message.get("type")
     if kind == "health":
-        emit({"type": "ready"})
+        emit({"type": "ready", "protocolVersion": 2})
         return True
     if kind == "shutdown":
         with _active_lock:

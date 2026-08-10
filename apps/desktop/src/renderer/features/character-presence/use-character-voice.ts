@@ -18,6 +18,7 @@ export function useCharacterVoice(selectedSessionId: string | null) {
   const [draft, setDraftState] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
+  const [outputDeviceId, setOutputDeviceId] = useState('default');
   const startGeneration = useRef(0);
   const autoSubmitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const submitRef = useRef<(text: string) => Promise<void>>(async () => undefined);
@@ -152,6 +153,15 @@ export function useCharacterVoice(selectedSessionId: string | null) {
       setError(t('interaction.noSession'));
       return;
     }
+    const settings = await window.megumi.settings.get(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {}),
+    );
+    if (!settings.ok || settings.data.status !== 'ok') {
+      setError(t('errors.readSession'));
+      return;
+    }
+    const voiceSettings = settings.data.settings.voice;
+    setOutputDeviceId(voiceSettings.outputDeviceId);
     const modelStatus = await window.megumi.voice.getModelStatus(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.modelStatus, {}),
     );
@@ -172,10 +182,18 @@ export function useCharacterVoice(selectedSessionId: string | null) {
       );
       if (generation !== startGeneration.current) return;
       if (!result.ok || result.data.status !== 'ok') {
-        setError(result.ok && result.data.status === 'failed' ? result.data.failure.message : t('errors.startSession'));
+        const failureMessage = result.ok && result.data.status === 'failed' ? result.data.failure.message : '';
+        setError(/protocol version|referenceAudioPath/i.test(failureMessage)
+          ? t('errors.voiceComponentOutdated')
+          : result.ok && result.data.status === 'failed'
+            ? t('errors.voicePreparationFailed')
+            : t('errors.startSession'));
         return;
       }
-      await audio.start();
+      await audio.start({
+        inputDeviceId: voiceSettings.inputDeviceId,
+        language: voiceSettings.recognitionLanguage,
+      });
       if (generation !== startGeneration.current) {
         await audio.stop();
         return;
@@ -234,6 +252,7 @@ export function useCharacterVoice(selectedSessionId: string | null) {
     draft,
     error,
     preparing,
+    outputDeviceId,
     start,
     end,
     setMuted,

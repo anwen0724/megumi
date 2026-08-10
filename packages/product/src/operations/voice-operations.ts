@@ -46,6 +46,9 @@ export function createVoiceOperations(options: CreateVoiceOperationsOptions): Vo
           profileId: profile.profileId,
           name: profile.name,
           builtIn: profile.builtIn,
+          source: profile.source.kind === 'built_in' ? 'built_in' as const : 'custom' as const,
+          ...(profile.language ? { language: profile.language } : {}),
+          ...(profile.gender ? { gender: profile.gender } : {}),
           selected: profile.profileId === selectedProfileId,
         })),
       };
@@ -78,6 +81,19 @@ export function createVoiceOperations(options: CreateVoiceOperationsOptions): Vo
     async selectProfile(request) {
       const result = voice.profiles.select(request);
       return result.status === 'selected' ? { status: 'ok' } : { status: 'not_found' };
+    },
+
+    async previewProfile(request) {
+      const profile = voice.profiles.list().profiles.find((candidate) => candidate.profileId === request.profileId);
+      if (!profile) return { status: 'not_found' };
+      const result = await voice.previewProfile({
+        profileId: request.profileId,
+        text: profile.language === 'en'
+          ? "Hello, I'm Megumi. It's nice to meet you."
+          : '你好，我是 Megumi，很高兴认识你。',
+      });
+      if (result.status === 'previewed') return { status: 'ok', chunks: [...result.chunks] };
+      return result;
     },
 
     async startSession(request) {

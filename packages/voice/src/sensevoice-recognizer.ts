@@ -26,20 +26,19 @@ export interface CreateSenseVoiceRecognizerOptions {
 
 export function createSenseVoiceRecognizer(options: CreateSenseVoiceRecognizerOptions): SpeechRecognizer {
   const runtimePromise = (options.runtimeLoader ?? loadSherpaRuntime)();
-  let recognizerPromise: Promise<SherpaOfflineRecognizer> | undefined;
-  let recognizerKey: string | undefined;
-  const loadRecognizer = () => {
+  const recognizers = new Map<string, Promise<SherpaOfflineRecognizer>>();
+  const loadRecognizer = (language: 'zh' | 'en' | 'auto') => {
     const modelPath = resolvePath(options.modelPath);
     const tokensPath = resolvePath(options.tokensPath);
-    const nextKey = `${modelPath}\0${tokensPath}`;
-    if (recognizerKey !== nextKey) {
-      recognizerKey = nextKey;
+    const key = `${modelPath}\0${tokensPath}\0${language}`;
+    let recognizerPromise = recognizers.get(key);
+    if (!recognizerPromise) {
       recognizerPromise = runtimePromise.then((runtime) => new runtime.OfflineRecognizer({
       featConfig: { sampleRate: 16_000, featureDim: 80 },
       modelConfig: {
         senseVoice: {
           model: modelPath,
-          language: 'auto',
+          language,
           useInverseTextNormalization: 1,
         },
         tokens: tokensPath,
@@ -48,8 +47,9 @@ export function createSenseVoiceRecognizer(options: CreateSenseVoiceRecognizerOp
         debug: 0,
       },
       }));
+      recognizers.set(key, recognizerPromise);
     }
-    return recognizerPromise!;
+    return recognizerPromise;
   };
 
   return {
@@ -58,7 +58,7 @@ export function createSenseVoiceRecognizer(options: CreateSenseVoiceRecognizerOp
         return { status: 'failed', failure: { code: 'voice_recognition_cancelled', message: 'Speech recognition was cancelled.' } };
       }
       try {
-        const recognizer = await loadRecognizer();
+        const recognizer = await loadRecognizer(request.language);
         const stream = recognizer.createStream();
         stream.acceptWaveform({ sampleRate: request.pcm.sampleRate, samples: request.pcm.samples });
         recognizer.decode(stream);

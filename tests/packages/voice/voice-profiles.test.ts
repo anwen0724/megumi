@@ -27,20 +27,34 @@ describe('Voice Profiles', () => {
     const storage = createFileVoiceProfileStorage({ profilesPath });
     const defaultProfile = {
       profileId: 'voice-profile:default',
-      name: 'Default',
-      referenceAudioPath: path.join(rootPath, 'default.wav'),
+      name: 'Xiaoyu',
+      source: { kind: 'built_in' as const, voiceId: 'Xiaoyu' },
     };
+    const builtInProfiles = [{
+      profileId: 'voice-profile:moss:ava',
+      name: 'Ava',
+      source: { kind: 'built_in' as const, voiceId: 'Ava' },
+    }];
 
     const first = createVoiceProfiles(defaultProfile, {
       createVoiceProfileId: () => 'voice-profile:imported',
-    }, storage);
+    }, storage, builtInProfiles);
     const imported = await first.import({ name: 'Warm voice', sourceAudioPath });
     expect(imported.status).toBe('imported');
     if (imported.status !== 'imported') throw new Error('Expected imported Voice Profile.');
-    expect(imported.profile.referenceAudioPath).toBe(
+    expect(imported.profile.source).toEqual({
+      kind: 'reference_audio',
+      referenceAudioPath: path.join(profilesPath, 'voice-profile_imported', 'reference.wav'),
+    });
+    if (imported.profile.source.kind !== 'reference_audio') throw new Error('Expected a reference profile.');
+    expect(imported.profile.source.referenceAudioPath).toBe(
       path.join(profilesPath, 'voice-profile_imported', 'reference.wav'),
     );
-    expect(fs.readFileSync(imported.profile.referenceAudioPath, 'utf8')).toBe('reference-audio');
+    expect(fs.readFileSync(imported.profile.source.referenceAudioPath, 'utf8')).toBe('reference-audio');
+    expect(first.list().profiles).toEqual(expect.arrayContaining([
+      expect.objectContaining({ profileId: 'voice-profile:default', source: { kind: 'built_in', voiceId: 'Xiaoyu' } }),
+      expect.objectContaining({ profileId: 'voice-profile:moss:ava', source: { kind: 'built_in', voiceId: 'Ava' } }),
+    ]));
     expect(first.select({ profileId: imported.profile.profileId })).toEqual({
       status: 'selected',
       profileId: 'voice-profile:imported',
@@ -48,7 +62,7 @@ describe('Voice Profiles', () => {
 
     const restored = createVoiceProfiles(defaultProfile, {
       createVoiceProfileId: () => 'voice-profile:unused',
-    }, storage);
+    }, storage, builtInProfiles);
     expect(restored.getSelected()).toMatchObject({
       status: 'selected',
       profile: { profileId: 'voice-profile:imported', name: 'Warm voice' },

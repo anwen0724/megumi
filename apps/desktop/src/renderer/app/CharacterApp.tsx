@@ -153,6 +153,7 @@ export default function CharacterApp() {
 
   useEffect(() => {
     const playback = createSpeechPlaybackController({
+      outputDeviceId: voice.outputDeviceId,
       report: (result) => { void window.megumi.voice.reportPlayback(result); },
       onPlayingChanged: setPlaying,
       onLevel: setMouthLevel,
@@ -164,7 +165,7 @@ export default function CharacterApp() {
       removeStop();
       void playback.dispose();
     };
-  }, []);
+  }, [voice.outputDeviceId]);
 
   const characterState = useMemo(() => {
     const voiceStatus = voice.audioSnapshot.status === 'recognizing'

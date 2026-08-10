@@ -58,11 +58,24 @@ export const MemorySettingsResolvedSchema = z.object({
 }).strict();
 export type MemorySettingsResolved = z.infer<typeof MemorySettingsResolvedSchema>;
 
+export const VoiceRecognitionLanguageSchema = z.enum(['auto', 'zh', 'en']);
+export const VoiceSettingsRawSchema = z.object({
+  input_device_id: z.string().min(1).optional(),
+  output_device_id: z.string().min(1).optional(),
+  recognition_language: VoiceRecognitionLanguageSchema.optional(),
+}).strict();
+export const VoiceSettingsResolvedSchema = z.object({
+  input_device_id: z.string().min(1),
+  output_device_id: z.string().min(1),
+  recognition_language: VoiceRecognitionLanguageSchema,
+}).strict();
+
 const settingsShape = {
   language: SettingsLanguageSchema.optional(),
   theme: SettingsThemeNameSchema.optional(),
   setup: SetupSettingsRawSchema.optional(),
   memory: MemorySettingsRawSchema.optional(),
+  voice: VoiceSettingsRawSchema.optional(),
   context: ContextSettingsRawSchema.optional(),
   model_selection: ModelSelectionSettingsSchema.optional(),
   permissions: PermissionRulesRawSchema.optional(),
@@ -102,6 +115,7 @@ export const SettingsResolvedSchema = z.object({
   theme: SettingsThemeNameSchema,
   setup: SetupSettingsResolvedSchema,
   memory: MemorySettingsResolvedSchema,
+  voice: VoiceSettingsResolvedSchema,
   context: ContextSettingsResolvedSchema,
   model_selection: ModelSelectionSettingsSchema.optional(),
   web: z.object({ search: WebSearchSettingsResolvedSchema }).strict(),
@@ -115,6 +129,11 @@ export const DEFAULT_SETTINGS = SettingsResolvedSchema.parse({
   theme: 'midnight-blue',
   setup: { completed: false },
   memory: { enabled: false },
+  voice: {
+    input_device_id: 'default',
+    output_device_id: 'default',
+    recognition_language: 'auto',
+  },
   context: { compaction_threshold_ratio: 0.8 },
   web: { search: {} },
   providers: {},

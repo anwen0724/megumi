@@ -3,11 +3,12 @@ import { createVoice, type SpeechPlayer, type SpeechSynthesizer } from '../../..
 
 describe('spoken response projection', () => {
   it('speaks stable appended phrases before the reply ends and uses the fixed Voice Profile', async () => {
-    const synthesized: Array<{ text: string; referenceAudioPath: string }> = [];
+    const synthesized: Array<{ text: string; voice: { kind: 'built_in'; voiceId: string } }> = [];
     const synthesizer: SpeechSynthesizer = {
       async prepare() { return { status: 'ready' }; },
       async *synthesize(request) {
-        synthesized.push({ text: request.text, referenceAudioPath: request.referenceAudioPath });
+        if (request.voice.kind !== 'built_in') throw new Error('Expected built-in voice.');
+        synthesized.push({ text: request.text, voice: request.voice });
         yield {
           pcm: { samples: new Float32Array([0.1]), sampleRate: 24_000, channels: 1 },
           final: true,
@@ -27,7 +28,7 @@ describe('spoken response projection', () => {
       defaultProfile: {
         profileId: 'voice-profile:default',
         name: 'Default',
-        referenceAudioPath: 'C:/profiles/default/reference.wav',
+        source: { kind: 'built_in', voiceId: 'Xiaoyu' },
       },
       recognizer: { async recognize() { return { status: 'empty' }; } },
       synthesizer,
@@ -48,7 +49,7 @@ describe('spoken response projection', () => {
     await vi.waitFor(() => expect(synthesized).toHaveLength(1));
     expect(synthesized[0]).toEqual({
       text: '我先检查代码，',
-      referenceAudioPath: 'C:/profiles/default/reference.wav',
+      voice: { kind: 'built_in', voiceId: 'Xiaoyu' },
     });
 
     voice.acceptRuntimeFact({
@@ -68,7 +69,7 @@ describe('spoken response projection', () => {
       defaultProfile: {
         profileId: 'voice-profile:default',
         name: 'Default',
-        referenceAudioPath: 'C:/profiles/default/reference.wav',
+        source: { kind: 'built_in', voiceId: 'Xiaoyu' },
       },
       recognizer: { async recognize() { return { status: 'empty' }; } },
       synthesizer: {

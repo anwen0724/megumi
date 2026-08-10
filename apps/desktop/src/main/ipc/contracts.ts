@@ -49,6 +49,7 @@ export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.voice.profileRename,
   IPC_CHANNELS.voice.profileRemove,
   IPC_CHANNELS.voice.profileSelect,
+  IPC_CHANNELS.voice.profilePreview,
   IPC_CHANNELS.voice.sessionStart,
   IPC_CHANNELS.voice.sessionMute,
   IPC_CHANNELS.voice.sessionInterrupt,

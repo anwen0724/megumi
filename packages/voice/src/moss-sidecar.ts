@@ -2,15 +2,24 @@
 
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import readline from 'node:readline';
-import type { SpeechPcm } from './speech';
+import type { SpeechPcm, SpeechVoiceSource } from './speech';
+
+export const MOSS_SIDECAR_PROTOCOL_VERSION = 2;
+
+export function validateMossSidecarReadyMessage(message: Record<string, unknown>): void {
+  if (message.protocolVersion !== MOSS_SIDECAR_PROTOCOL_VERSION) {
+    throw new Error(
+      `MOSS sidecar protocol version mismatch: expected ${MOSS_SIDECAR_PROTOCOL_VERSION}, received ${String(message.protocolVersion ?? 'legacy')}.`,
+    );
+  }
+}
 
 export interface MossSynthesisRequest {
   readonly synthesisId: string;
   readonly modelPath: string;
   readonly cachePath: string;
   readonly text: string;
-  readonly referenceAudioPath: string;
-  readonly language: 'zh' | 'en' | 'auto';
+  readonly voice: SpeechVoiceSource;
   readonly signal?: AbortSignal;
 }
 
@@ -18,7 +27,7 @@ export interface MossPreparationRequest {
   readonly preparationId: string;
   readonly modelPath: string;
   readonly cachePath: string;
-  readonly referenceAudioPath: string;
+  readonly voice: SpeechVoiceSource;
   readonly signal?: AbortSignal;
 }
 
@@ -85,6 +94,15 @@ export function createMossSidecarClient(options: {
       return;
     }
     if (message.type === 'ready') {
+      try {
+        validateMossSidecarReadyMessage(message);
+      } catch (error) {
+        rejectReady?.(error instanceof Error ? error : new Error(String(error)));
+        resolveReady = undefined;
+        rejectReady = undefined;
+        process?.kill();
+        return;
+      }
       resolveReady?.();
       resolveReady = undefined;
       rejectReady = undefined;
@@ -152,7 +170,7 @@ export function createMossSidecarClient(options: {
         preparationId: request.preparationId,
         modelPath: request.modelPath,
         cachePath: request.cachePath,
-        referenceAudioPath: request.referenceAudioPath,
+        voice: request.voice,
       })}\n`);
       try {
         await preparation;
@@ -177,8 +195,7 @@ export function createMossSidecarClient(options: {
         modelPath: request.modelPath,
         cachePath: request.cachePath,
         text: request.text,
-        referenceAudioPath: request.referenceAudioPath,
-        language: request.language,
+        voice: request.voice,
       })}\n`);
       try {
         while (!active.done || active.chunks.length > 0) {

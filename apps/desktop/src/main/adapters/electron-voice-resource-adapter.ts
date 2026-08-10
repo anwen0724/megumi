@@ -44,9 +44,23 @@ export function createElectronVoiceOptions(
   return {
     defaultProfile: {
       profileId: 'voice-profile:default',
-      name: 'Default',
-      referenceAudioPath: resolveDefaultVoicePath(),
+      name: '小宇',
+      source: { kind: 'built_in', voiceId: 'Xiaoyu' },
+      language: 'zh',
+      gender: 'female',
     },
+    builtInProfiles: [
+      { profileId: 'voice-profile:moss:yuewen', name: '悦雯', source: { kind: 'built_in', voiceId: 'Yuewen' }, language: 'zh', gender: 'female' },
+      { profileId: 'voice-profile:moss:lingyu', name: '凌宇', source: { kind: 'built_in', voiceId: 'Lingyu' }, language: 'zh', gender: 'female' },
+      { profileId: 'voice-profile:moss:junhao', name: '俊豪', source: { kind: 'built_in', voiceId: 'Junhao' }, language: 'zh', gender: 'male' },
+      { profileId: 'voice-profile:moss:zhiming', name: '志明', source: { kind: 'built_in', voiceId: 'Zhiming' }, language: 'zh', gender: 'male' },
+      { profileId: 'voice-profile:moss:weiguo', name: '伟国', source: { kind: 'built_in', voiceId: 'Weiguo' }, language: 'zh', gender: 'male' },
+      { profileId: 'voice-profile:moss:ava', name: 'Ava', source: { kind: 'built_in', voiceId: 'Ava' }, language: 'en', gender: 'female' },
+      { profileId: 'voice-profile:moss:bella', name: 'Bella', source: { kind: 'built_in', voiceId: 'Bella' }, language: 'en', gender: 'female' },
+      { profileId: 'voice-profile:moss:adam', name: 'Adam', source: { kind: 'built_in', voiceId: 'Adam' }, language: 'en', gender: 'male' },
+      { profileId: 'voice-profile:moss:nathan', name: 'Nathan', source: { kind: 'built_in', voiceId: 'Nathan' }, language: 'en', gender: 'male' },
+      { profileId: 'voice-profile:moss:trump', name: 'Trump', source: { kind: 'built_in', voiceId: 'Trump' }, language: 'en', gender: 'male' },
+    ],
     models,
     recognizer: createSenseVoiceRecognizer({
       modelPath: () => path.join(models.getModelPath('stt', 'sensevoice-small-int8'), 'model.int8.onnx'),
@@ -93,9 +107,4 @@ function resolveVoiceManifestPath(): string {
 function resolveMossSidecarPath(): string {
   if (app.isPackaged) return path.join(process.resourcesPath, 'voice', 'moss-tts-nano-sidecar.exe');
   return path.resolve(process.cwd(), 'packages/voice/sidecar/moss-tts-nano/dist/moss-tts-nano-sidecar.exe');
-}
-
-function resolveDefaultVoicePath(): string {
-  if (app.isPackaged) return path.join(process.resourcesPath, 'voice', 'default-voice', 'reference.wav');
-  return path.resolve(process.cwd(), 'packages/voice/resources/default-voice/reference.wav');
 }

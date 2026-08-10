@@ -9,7 +9,13 @@ export type VoiceAudioStatus = 'idle' | 'starting' | 'listening' | 'recognizing'
 export interface VoiceAudioSnapshot {
   readonly status: VoiceAudioStatus;
   readonly inputLevel: number;
+  readonly issue?: 'empty';
   readonly error?: string;
+}
+
+export interface VoiceAudioStartOptions {
+  readonly inputDeviceId?: string;
+  readonly language?: 'zh' | 'en' | 'auto';
 }
 
 interface VadCallbacks {
@@ -29,7 +35,7 @@ interface ManualCapture {
 }
 
 export interface VoiceAudioController {
-  start(): Promise<void>;
+  start(options?: VoiceAudioStartOptions): Promise<void>;
   stop(): Promise<void>;
   setMuted(muted: boolean): Promise<void>;
   beginPushToTalk(): Promise<void>;
@@ -40,7 +46,7 @@ export interface VoiceAudioController {
 }
 
 export function createVoiceAudioController(options: {
-  readonly createVad?: (callbacks: VadCallbacks) => Promise<VadHandle>;
+  readonly createVad?: (callbacks: VadCallbacks, configuration?: { readonly inputDeviceId?: string }) => Promise<VadHandle>;
   readonly submitAudio: (payload: {
     samples: ArrayBuffer;
     sampleRate: number;
@@ -48,13 +54,15 @@ export function createVoiceAudioController(options: {
   }) => Promise<SubmitVoiceUtteranceResult>;
   readonly onTranscript: (transcript: string) => void;
   readonly language?: 'zh' | 'en' | 'auto';
-  readonly beginManualCapture?: () => Promise<ManualCapture>;
+  readonly beginManualCapture?: (configuration?: { readonly inputDeviceId?: string }) => Promise<ManualCapture>;
 }): VoiceAudioController {
   let snapshot: VoiceAudioSnapshot = { status: 'idle', inputLevel: 0 };
   let vad: VadHandle | undefined;
   let generation = 0;
   let recognizing = false;
   let manualCapture: ManualCapture | undefined;
+  let activeInputDeviceId = 'default';
+  let recognitionLanguage = options.language ?? 'auto';
   const listeners = new Set<(snapshot: VoiceAudioSnapshot) => void>();
 
   const publish = (next: VoiceAudioSnapshot) => {
@@ -72,7 +80,7 @@ export function createVoiceAudioController(options: {
       const result = await options.submitAudio({
         samples: ownedBuffer,
         sampleRate,
-        language: options.language ?? 'auto',
+        language: recognitionLanguage,
       });
       if (generation !== endpointGeneration) return;
       if (result.status === 'recognized') options.onTranscript(result.transcript);
@@ -80,7 +88,9 @@ export function createVoiceAudioController(options: {
         publish({ status: 'error', inputLevel: 0, error: result.failure.message });
         return;
       }
-      publish({ status: 'listening', inputLevel: 0 });
+      publish(result.status === 'empty'
+        ? { status: 'listening', inputLevel: 0, issue: 'empty' }
+        : { status: 'listening', inputLevel: 0 });
     } catch (error) {
       if (generation === endpointGeneration) {
         publish({
@@ -97,8 +107,15 @@ export function createVoiceAudioController(options: {
   const createVad = options.createVad ?? createBrowserVad;
 
   return {
-    async start() {
+    async start(startOptions = {}) {
       generation += 1;
+      recognitionLanguage = startOptions.language ?? options.language ?? 'auto';
+      const nextInputDeviceId = startOptions.inputDeviceId ?? 'default';
+      if (vad && activeInputDeviceId !== nextInputDeviceId) {
+        await vad.destroy();
+        vad = undefined;
+      }
+      activeInputDeviceId = nextInputDeviceId;
       publish({ status: 'starting', inputLevel: 0 });
       try {
         vad ??= await createVad({
@@ -108,7 +125,7 @@ export function createVoiceAudioController(options: {
             publish({ status: 'listening', inputLevel: Math.max(0, Math.min(1, probabilities.isSpeech)) });
           },
           onSpeechEnd: submitEndpoint,
-        });
+        }, { inputDeviceId: activeInputDeviceId });
         await vad.start();
         publish({ status: 'listening', inputLevel: 0 });
       } catch (error) {
@@ -140,7 +157,9 @@ export function createVoiceAudioController(options: {
     async beginPushToTalk() {
       if (snapshot.status !== 'fallback' || manualCapture) return;
       try {
-        manualCapture = await (options.beginManualCapture ?? beginBrowserManualCapture)();
+        manualCapture = await (options.beginManualCapture ?? beginBrowserManualCapture)({
+          inputDeviceId: activeInputDeviceId,
+        });
         publish({ status: 'listening', inputLevel: 0.2 });
       } catch (error) {
         publish({
@@ -175,8 +194,12 @@ export function createVoiceAudioController(options: {
   };
 }
 
-async function createBrowserVad(callbacks: VadCallbacks): Promise<VadHandle> {
+async function createBrowserVad(
+  callbacks: VadCallbacks,
+  configuration: { readonly inputDeviceId?: string } = {},
+): Promise<VadHandle> {
   const { MicVAD } = await import('@ricky0123/vad-web');
+  const openStream = () => openMicrophoneStream(configuration.inputDeviceId);
   return MicVAD.new({
     model: 'v5',
     processorType: 'AudioWorklet',
@@ -186,13 +209,18 @@ async function createBrowserVad(callbacks: VadCallbacks): Promise<VadHandle> {
     onSpeechStart: callbacks.onSpeechStart,
     onFrameProcessed: (probabilities) => callbacks.onFrameProcessed(probabilities),
     onSpeechEnd: callbacks.onSpeechEnd,
+    getStream: openStream,
+    pauseStream: async (stream) => {
+      for (const track of stream.getTracks()) track.stop();
+    },
+    resumeStream: openStream,
   });
 }
 
-async function beginBrowserManualCapture(): Promise<ManualCapture> {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-  });
+async function beginBrowserManualCapture(
+  configuration: { readonly inputDeviceId?: string } = {},
+): Promise<ManualCapture> {
+  const stream = await openMicrophoneStream(configuration.inputDeviceId);
   const context = new AudioContext();
   const source = context.createMediaStreamSource(stream);
   const processor = context.createScriptProcessor(4096, 1, 1);
@@ -217,4 +245,23 @@ async function beginBrowserManualCapture(): Promise<ManualCapture> {
       return { samples, sampleRate: context.sampleRate };
     },
   };
+}
+
+async function openMicrophoneStream(inputDeviceId = 'default'): Promise<MediaStream> {
+  const commonConstraints = {
+    channelCount: 1,
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+  };
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      audio: inputDeviceId === 'default'
+        ? commonConstraints
+        : { ...commonConstraints, deviceId: { exact: inputDeviceId } },
+    });
+  } catch (error) {
+    if (inputDeviceId === 'default') throw error;
+    return navigator.mediaDevices.getUserMedia({ audio: commonConstraints });
+  }
 }

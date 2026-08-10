@@ -123,6 +123,7 @@ export interface ProductEnvironment {
 export type ProductSettingsEnvironment = SettingsEnvironment;
 export interface ComposeProductVoiceOptions {
   readonly defaultProfile?: VoiceProfileSeed;
+  readonly builtInProfiles?: readonly VoiceProfileSeed[];
   readonly recognizer?: SpeechRecognizer;
   readonly synthesizer?: SpeechSynthesizer;
   readonly player?: SpeechPlayer;
@@ -470,8 +471,9 @@ function composeProductRuntime(
     defaultProfile: options.voice?.defaultProfile ?? {
       profileId: 'voice-profile:default',
       name: 'Default',
-      referenceAudioPath: path.join(homePaths.voiceProfilesPath, '_built-in', 'reference.wav'),
+      source: { kind: 'built_in', voiceId: 'Xiaoyu' },
     },
+    builtInProfiles: options.voice?.builtInProfiles,
     recognizer: options.voice?.recognizer ?? unavailableSpeechRecognizer,
     synthesizer: options.voice?.synthesizer ?? unavailableSpeechSynthesizer,
     player: options.voice?.player ?? unavailableSpeechPlayer,

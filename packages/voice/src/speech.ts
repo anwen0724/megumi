@@ -33,14 +33,17 @@ export interface SpeechRecognizer {
 export interface SynthesizeSpeechRequest {
   readonly text: string;
   readonly voiceProfileId: string;
-  readonly referenceAudioPath: string;
-  readonly language: 'zh' | 'en' | 'auto';
+  readonly voice: SpeechVoiceSource;
 }
 
 export interface PrepareSpeechRequest {
   readonly voiceProfileId: string;
-  readonly referenceAudioPath: string;
+  readonly voice: SpeechVoiceSource;
 }
+
+export type SpeechVoiceSource =
+  | { readonly kind: 'built_in'; readonly voiceId: string }
+  | { readonly kind: 'reference_audio'; readonly referenceAudioPath: string };
 
 export type PrepareSpeechResult =
   | { readonly status: 'ready' }

@@ -45,6 +45,7 @@ import type {
   VoiceHostModelUpdateResult,
   VoiceHostMutationResult,
   VoiceHostProfilesResult,
+  VoiceProfilePreviewResult,
   VoiceHostSnapshot,
 } from '@megumi/product/host';
 import { IPC_CHANNELS } from '../main/ipc/channels';
@@ -84,6 +85,7 @@ import type {
   AttachmentImageReadPayload,
   AttachmentFileStatusPayload,
   VoiceProfileIdPayload,
+  VoiceProfilePreviewPayload,
   VoiceProfileImportPayload,
   VoiceProfileRenamePayload,
   VoiceSessionMutedPayload,
@@ -356,6 +358,10 @@ export const api = {
       request: BusinessRequest<VoiceProfileIdPayload, typeof IPC_CHANNELS.voice.profileSelect>,
     ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.profileSelect>> =>
       invokeRuntimeIpc(IPC_CHANNELS.voice.profileSelect, request),
+    previewProfile: (
+      request: BusinessRequest<VoiceProfilePreviewPayload, typeof IPC_CHANNELS.voice.profilePreview>,
+    ): Promise<RuntimeIpcResult<VoiceProfilePreviewResult, typeof IPC_CHANNELS.voice.profilePreview>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.voice.profilePreview, request),
     startSession: (
       request: BusinessRequest<VoiceSessionStartPayload, typeof IPC_CHANNELS.voice.sessionStart>,
     ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.sessionStart>> =>

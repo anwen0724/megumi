@@ -22,6 +22,30 @@ describe('SettingsHost semantics', () => {
     });
   });
 
+  it('maps renderer audio device settings without leaking Settings file naming', async () => {
+    const store = memoryStore();
+    const host = createSettingsOperations(createSettings({ store }));
+
+    const result = await host.update({
+      voice: {
+        inputDeviceId: 'input-1',
+        outputDeviceId: 'output-2',
+        recognitionLanguage: 'en',
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: 'updated',
+      settings: {
+        voice: {
+          inputDeviceId: 'input-1',
+          outputDeviceId: 'output-2',
+          recognitionLanguage: 'en',
+        },
+      },
+    });
+  });
+
   it('keeps provider credentials out of list responses', async () => {
     const store = memoryStore({
       providers: {

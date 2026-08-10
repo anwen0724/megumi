@@ -85,6 +85,35 @@ describe('Settings', () => {
     expect(resolved.settings).not.toHaveProperty('compaction');
   });
 
+  it('persists audio devices and recognition language while resolving safe defaults for old files', () => {
+    const store = new MemorySettingsStore();
+    const settings = createSettings({ store });
+
+    expect(settings.resolve()).toMatchObject({
+      status: 'ok',
+      settings: {
+        voice: {
+          input_device_id: 'default',
+          output_device_id: 'default',
+          recognition_language: 'auto',
+        },
+      },
+    });
+
+    expect(settings.update({ patch: {
+      voice: {
+        input_device_id: 'microphone-2',
+        output_device_id: 'speaker-3',
+        recognition_language: 'zh',
+      },
+    } })).toMatchObject({ status: 'updated' });
+    expect(store.document.voice).toEqual({
+      input_device_id: 'microphone-2',
+      output_device_id: 'speaker-3',
+      recognition_language: 'zh',
+    });
+  });
+
   it('rejects removed compaction settings and materializes Context defaults', () => {
     const store = new MemorySettingsStore();
     const settings = createSettings({ store });

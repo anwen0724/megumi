@@ -30,7 +30,7 @@ export function createMossTtsNanoSynthesizer(
           preparationId: createPreparationId(),
           modelPath: typeof options.modelPath === 'function' ? options.modelPath() : options.modelPath,
           cachePath: options.cachePath,
-          referenceAudioPath: request.referenceAudioPath,
+          voice: request.voice,
           signal: operationOptions?.signal,
         });
         return { status: 'ready' };
@@ -52,8 +52,7 @@ export function createMossTtsNanoSynthesizer(
         modelPath: typeof options.modelPath === 'function' ? options.modelPath() : options.modelPath,
         cachePath: options.cachePath,
         text: request.text,
-        referenceAudioPath: request.referenceAudioPath,
-        language: request.language,
+        voice: request.voice,
         signal: operationOptions?.signal,
       });
       for await (const pcm of chunks) {

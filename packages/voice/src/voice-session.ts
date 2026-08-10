@@ -127,7 +127,7 @@ export function createVoiceSessions(input: {
       const running = (async (): Promise<StartVoiceSessionResult> => {
         const result = await input.synthesizer.prepare({
           voiceProfileId: selected.profile.profileId,
-          referenceAudioPath: selected.profile.referenceAudioPath,
+          voice: selected.profile.source,
         }, { signal: abort.signal });
         if (generation !== startGeneration || snapshot.status === 'idle') {
           return { status: 'cancelled', snapshot };
