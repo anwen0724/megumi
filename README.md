@@ -1,3 +1,5 @@
+
+
 # Megumi
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
@@ -71,7 +73,7 @@ Local application data is stored under:
 Requirements:
 
 - Windows 10 or Windows 11
-- A current Node.js LTS release and npm
+- Node.js 22.19.0 or later and npm
 - Git
 
 Install dependencies and start the desktop application:
