@@ -550,6 +550,9 @@ function composeProductRuntime(
   return createProductRuntime({
     host,
     logger,
+    voiceAudio: {
+      submitUtterance: (request) => voice.sessions.submitUtterance(request),
+    },
     subscribeRuntimeEvents: (filter, handler) => events.subscribe(filter, handler),
     dispose: () => resources.dispose({ runs, voice, observability }),
   });

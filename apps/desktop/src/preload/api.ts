@@ -89,6 +89,7 @@ import type {
   VoiceSessionStartPayload,
 } from '../main/ipc/schemas';
 import type { CharacterWindowSnapshot } from '../main/app/character-window-controller';
+import type { SubmitVoiceUtteranceResult } from '@megumi/voice';
 
 type BusinessRequest<TPayload, TChannel extends BusinessIpcChannel> = RuntimeIpcRequest<TPayload, TChannel>;
 type EmptyPayload = Record<string, never>;
@@ -284,6 +285,11 @@ export const api = {
       invokeRuntimeIpc(IPC_CHANNELS.approval.resolve, request),
   },
   voice: {
+    submitAudio: (payload: {
+      samples: ArrayBuffer;
+      sampleRate: number;
+      language: 'zh' | 'en' | 'auto';
+    }): Promise<SubmitVoiceUtteranceResult> => ipcRenderer.invoke(IPC_CHANNELS.voice.audioSubmit, payload),
     getSnapshot: (
       request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.voice.snapshot>,
     ): Promise<RuntimeIpcResult<VoiceHostSnapshot, typeof IPC_CHANNELS.voice.snapshot>> =>

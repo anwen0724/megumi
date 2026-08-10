@@ -17,10 +17,12 @@ import {
 } from '../adapters/electron-input-attachment-adapter';
 import { electronSessionAttachmentFileSystem } from '../adapters/electron-session-attachment-file-system';
 import { createDesktopWorkspaceFileSystem } from '../adapters/desktop-workspace-file-system-adapter';
+import { createElectronVoiceOptions } from '../adapters/electron-voice-resource-adapter';
 
 export function composeDesktopMain() {
+  const home = createElectronMegumiHomeSyncOptions();
   const product = composeProduct({
-    home: createElectronMegumiHomeSyncOptions(),
+    home,
     migrationEnvironment: getElectronMigrationEnvironment(),
     observabilityStorage: electronObservabilityStorageAdapter,
     productEnvironment: getElectronProductEnvironment(),
@@ -33,6 +35,7 @@ export function composeDesktopMain() {
     localFileAvailability: electronLocalFileAvailability,
     inputSourceAccess: electronInputSourceAccess,
     sessionAttachmentFileSystem: electronSessionAttachmentFileSystem,
+    voice: createElectronVoiceOptions(home),
   });
   const runtimeLogger = product.logger;
   const productHost = product.host;
@@ -57,6 +60,7 @@ export function composeDesktopMain() {
     settings: { host: productHost },
     approval: { host: productHost },
     voice: { host: productHost },
+    voiceAudio: product.voiceAudio,
     observability: { host: productHost },
     dispose: async () => {
       uiEventSubscription.unsubscribe();

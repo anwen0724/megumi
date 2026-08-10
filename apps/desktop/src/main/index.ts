@@ -48,6 +48,7 @@ if (shouldQuitForSquirrelStartup()) {
         settings: desktopMain.settings,
         approval: desktopMain.approval,
         voice: desktopMain.voice,
+        voiceAudio: desktopMain.voiceAudio,
         character,
         observability: desktopMain.observability,
       });

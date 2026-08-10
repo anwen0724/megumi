@@ -5,6 +5,7 @@
 import { Pin, PinOff, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { CharacterWindowSnapshot } from '../../main/app/character-window-controller';
+import { VoiceControls } from '../features/character-presence';
 
 const characterImageUrl = new URL(
   '../../../assets/character/megumi/megumi-reference-v2.png',
@@ -47,6 +48,9 @@ export default function CharacterApp() {
           draggable={false}
           className="max-h-full max-w-full select-none object-contain drop-shadow-[0_14px_26px_rgba(18,20,28,0.24)]"
         />
+      </div>
+      <div className="absolute inset-x-2 bottom-2 z-20">
+        <VoiceControls selectedSessionId={snapshot?.selectedSessionId ?? null} />
       </div>
     </main>
   );

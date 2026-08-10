@@ -22,7 +22,8 @@ describe('Desktop Main shell composition', () => {
     const desktopComposition = source('apps/desktop/src/main/shell-composition/desktop-main-composition.ts');
 
     expect(desktopComposition).toContain('composeProduct');
-    expect(desktopComposition).toContain('home: createElectronMegumiHomeSyncOptions()');
+    expect(desktopComposition).toContain('const home = createElectronMegumiHomeSyncOptions()');
+    expect(desktopComposition).toContain('home,');
     expect(desktopComposition).toContain('workspace: { host: productHost }');
     expect(desktopComposition).toContain('directoryPicker: electronDirectoryPickerAdapter');
     expect(desktopComposition).toContain('fileOpen: electronFileOpenAdapter');

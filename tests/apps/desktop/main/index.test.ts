@@ -64,9 +64,10 @@ const mocks = vi.hoisted(() => {
     loadEnvFile: vi.fn(),
     createElectronMegumiHomeSyncOptions: vi.fn(() => ({
       env: {},
-      homedir: () => homePath,
+      homeDirectory: homePath,
       resourceLocator: { builtInSkillsPath: `${homePath}/resources/skills` },
     })),
+    createElectronVoiceOptions: vi.fn(() => ({ kind: 'voice-options' })),
     megumiHomePaths: {
       homePath,
       settingsPath: `${homePath}/settings.json`,
@@ -104,6 +105,10 @@ vi.mock('@megumi/desktop/main/config/env', () => ({
 
 vi.mock('@megumi/desktop/main/adapters/electron-home-adapter', () => ({
   createElectronMegumiHomeSyncOptions: mocks.createElectronMegumiHomeSyncOptions,
+}));
+
+vi.mock('@megumi/desktop/main/adapters/electron-voice-resource-adapter', () => ({
+  createElectronVoiceOptions: mocks.createElectronVoiceOptions,
 }));
 
 vi.mock('@megumi/desktop/main/ipc/register-ipc-handlers', () => ({
@@ -168,6 +173,7 @@ describe('main runtime logger composition', () => {
       return {
         logger,
         host: mocks.agentHost,
+        voiceAudio: { submitUtterance: vi.fn() },
         subscribeRuntimeEvents: () => ({ unsubscribe: () => undefined }),
         dispose: mocks.agentHost.dispose,
       };
@@ -229,6 +235,7 @@ describe('main runtime logger composition', () => {
       settings: { host: mocks.agentHost },
       approval: { host: mocks.agentHost },
       voice: { host: mocks.agentHost },
+      voiceAudio: expect.objectContaining({ submitUtterance: expect.any(Function) }),
       character: expect.objectContaining({
         show: expect.any(Function),
         hide: expect.any(Function),

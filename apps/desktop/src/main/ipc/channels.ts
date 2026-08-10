@@ -61,6 +61,7 @@ export const IPC_CHANNELS = {
     sessionMute: 'voice:session:mute',
     sessionInterrupt: 'voice:session:interrupt',
     sessionEnd: 'voice:session:end',
+    audioSubmit: 'voice:audio:submit',
   },
   character: {
     show: 'character:show',
@@ -144,6 +145,7 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.voice.sessionMute,
   IPC_CHANNELS.voice.sessionInterrupt,
   IPC_CHANNELS.voice.sessionEnd,
+  IPC_CHANNELS.voice.audioSubmit,
   IPC_CHANNELS.character.show,
   IPC_CHANNELS.character.hide,
   IPC_CHANNELS.character.snapshot,
