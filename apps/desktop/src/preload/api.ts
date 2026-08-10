@@ -285,6 +285,31 @@ export const api = {
       invokeRuntimeIpc(IPC_CHANNELS.approval.resolve, request),
   },
   voice: {
+    onPlaybackChunk: (callback: (payload: {
+      segmentId: string;
+      samples: ArrayBuffer;
+      sampleRate: number;
+      final: boolean;
+    }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: {
+        segmentId: string;
+        samples: ArrayBuffer;
+        sampleRate: number;
+        final: boolean;
+      }) => callback(payload);
+      ipcRenderer.on(IPC_CHANNELS.voice.playbackChunk, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.voice.playbackChunk, listener);
+    },
+    onPlaybackStop: (callback: (payload: { reason: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: { reason: string }) => callback(payload);
+      ipcRenderer.on(IPC_CHANNELS.voice.playbackStop, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.voice.playbackStop, listener);
+    },
+    reportPlayback: (payload: {
+      segmentId: string;
+      status: 'played' | 'stopped' | 'failed';
+      message?: string;
+    }): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.voice.playbackResult, payload),
     submitAudio: (payload: {
       samples: ArrayBuffer;
       sampleRate: number;

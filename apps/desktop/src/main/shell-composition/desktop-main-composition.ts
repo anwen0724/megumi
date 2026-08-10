@@ -18,8 +18,9 @@ import {
 import { electronSessionAttachmentFileSystem } from '../adapters/electron-session-attachment-file-system';
 import { createDesktopWorkspaceFileSystem } from '../adapters/desktop-workspace-file-system-adapter';
 import { createElectronVoiceOptions } from '../adapters/electron-voice-resource-adapter';
+import type { SpeechPlayer } from '@megumi/voice';
 
-export function composeDesktopMain() {
+export function composeDesktopMain(options: { readonly speechPlayer?: SpeechPlayer } = {}) {
   const home = createElectronMegumiHomeSyncOptions();
   const product = composeProduct({
     home,
@@ -35,7 +36,7 @@ export function composeDesktopMain() {
     localFileAvailability: electronLocalFileAvailability,
     inputSourceAccess: electronInputSourceAccess,
     sessionAttachmentFileSystem: electronSessionAttachmentFileSystem,
-    voice: createElectronVoiceOptions(home),
+    voice: createElectronVoiceOptions(home, options),
   });
   const runtimeLogger = product.logger;
   const productHost = product.host;

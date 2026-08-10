@@ -65,12 +65,16 @@ export interface VoiceSessions {
   end(request?: EndVoiceSessionRequest): Promise<EndVoiceSessionResult>;
 }
 
+interface VoiceSessionRuntimeControl {
+  setRuntimeStatus(status: VoiceSessionStatus): void;
+}
+
 export function createVoiceSessions(input: {
   readonly profiles: VoiceProfiles;
   readonly recognizer: SpeechRecognizer;
   readonly synthesizer: SpeechSynthesizer;
   readonly player: SpeechPlayer;
-}): VoiceSessions {
+}): VoiceSessions & VoiceSessionRuntimeControl {
   let snapshot: VoiceSnapshot = { status: 'idle' };
   const listeners = new Set<VoiceSnapshotListener>();
 
@@ -84,6 +88,11 @@ export function createVoiceSessions(input: {
 
   return {
     getSnapshot: () => snapshot,
+    setRuntimeStatus(status) {
+      const active = activeSnapshot();
+      if (!active) return;
+      publish({ ...active, status });
+    },
     subscribe(listener) {
       listeners.add(listener);
       return { unsubscribe: () => listeners.delete(listener) };

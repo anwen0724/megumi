@@ -60,4 +60,50 @@ describe('spoken response projection', () => {
     expect(synthesized.map((item) => item.text)).toEqual(['我先检查代码，', '然后告诉你结果。']);
     expect(played).toHaveLength(2);
   });
+
+  it('reports thinking and speaking from reply and playback facts without changing the bound Session', async () => {
+    let finishPlayback: (() => void) | undefined;
+    const voice = createVoice({
+      defaultProfile: {
+        profileId: 'voice-profile:default',
+        name: 'Default',
+        referenceAudioPath: 'C:/profiles/default/reference.wav',
+      },
+      recognizer: { async recognize() { return { status: 'empty' }; } },
+      synthesizer: {
+        async *synthesize() {
+          yield { pcm: { samples: new Float32Array([0.1]), sampleRate: 24_000, channels: 1 }, final: true };
+        },
+      },
+      player: {
+        async play(request) {
+          for await (const _chunk of request.audio) {}
+          await new Promise<void>((resolve) => { finishPlayback = resolve; });
+          return { status: 'played' };
+        },
+        async stop() { finishPlayback?.(); },
+      },
+    });
+    await voice.sessions.start({ boundSessionId: 'session:current' });
+
+    voice.acceptRuntimeFact({
+      type: 'assistant_reply_snapshot',
+      sessionId: 'session:current',
+      messageId: 'message:reply',
+      text: '正在回答，',
+    });
+
+    await vi.waitFor(() => expect(voice.sessions.getSnapshot()).toMatchObject({
+      status: 'speaking',
+      boundSessionId: 'session:current',
+    }));
+    voice.acceptRuntimeFact({
+      type: 'run_ended',
+      sessionId: 'session:current',
+      runId: 'run:1',
+      status: 'completed',
+    });
+    finishPlayback?.();
+    await vi.waitFor(() => expect(voice.sessions.getSnapshot()).toMatchObject({ status: 'listening' }));
+  });
 });

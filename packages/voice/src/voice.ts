@@ -47,12 +47,16 @@ export function createVoice(options: CreateVoiceOptions): Voice {
     synthesizer: options.synthesizer,
     player: options.player,
   });
+  let responseActive = false;
   const speechQueue = createSpeechQueue({
     synthesizer: options.synthesizer,
     player: options.player,
     ids: {
       createSpeechSegmentId: options.ids?.createSpeechSegmentId
         ?? (() => `speech-segment:${crypto.randomUUID()}`),
+    },
+    onSpeakingChanged(speaking) {
+      baseSessions.setRuntimeStatus(speaking ? 'speaking' : responseActive ? 'thinking' : 'listening');
     },
   });
   const projector = createSpokenStreamProjector({
@@ -69,11 +73,13 @@ export function createVoice(options: CreateVoiceOptions): Voice {
   const sessions: VoiceSessions = {
     ...baseSessions,
     async interrupt(request) {
+      responseActive = false;
       projector.reset();
       await speechQueue.clear('interrupted');
       return baseSessions.interrupt(request);
     },
     async end(request) {
+      responseActive = false;
       projector.reset();
       await speechQueue.clear('session_ended');
       return baseSessions.end(request);
@@ -87,8 +93,12 @@ export function createVoice(options: CreateVoiceOptions): Voice {
       const snapshot = sessions.getSnapshot();
       if (snapshot.status === 'idle' || snapshot.boundSessionId !== fact.sessionId) return;
       if (fact.type === 'assistant_reply_snapshot') {
+        responseActive = true;
+        baseSessions.setRuntimeStatus('thinking');
         projector.acceptSnapshot({ messageId: fact.messageId, text: fact.text });
       } else {
+        responseActive = false;
+        baseSessions.setRuntimeStatus('listening');
         projector.finish();
       }
     },
@@ -96,6 +106,8 @@ export function createVoice(options: CreateVoiceOptions): Voice {
       projector.reset();
       await speechQueue.clear('disposed');
       await sessions.end({ reason: 'app_dispose' });
+      const disposableSynthesizer = options.synthesizer as SpeechSynthesizer & { dispose?: () => Promise<void> };
+      await disposableSynthesizer.dispose?.();
     },
   };
 }

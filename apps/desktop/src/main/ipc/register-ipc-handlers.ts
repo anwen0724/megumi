@@ -14,6 +14,8 @@ import { registerCharacterHandlers } from './handlers/character.handler';
 import type { CharacterWindowController } from '../app/character-window-controller';
 import { registerVoiceAudioHandler } from './handlers/voice-audio.handler';
 import type { ProductVoiceAudioRuntime } from '@megumi/product';
+import { registerVoicePlaybackHandler } from './handlers/voice-playback.handler';
+import type { CharacterSpeechPlayerAdapter } from '../adapters/character-speech-player-adapter';
 import { electronIpcMain, type DesktopIpcMain } from '../adapters/electron-ipc-main-adapter';
 
 export interface RegisterAllHandlersOptions {
@@ -28,6 +30,7 @@ export interface RegisterAllHandlersOptions {
   voice?: VoiceHandlersService;
   character?: CharacterWindowController;
   voiceAudio?: ProductVoiceAudioRuntime;
+  speechPlayer?: CharacterSpeechPlayerAdapter;
 }
 
 export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): void {
@@ -69,6 +72,10 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
 
   if (options.voiceAudio) {
     registerVoiceAudioHandler(options.voiceAudio, ipcMain);
+  }
+
+  if (options.speechPlayer) {
+    registerVoicePlaybackHandler(options.speechPlayer, ipcMain);
   }
 
 }

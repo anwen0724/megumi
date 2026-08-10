@@ -15,17 +15,23 @@ import {
 import {
   createFileVoiceModels,
   createSenseVoiceRecognizer,
+  createMossTtsNanoSynthesizer,
   readVoiceModelManifest,
   type VoiceModelArchiveExtractor,
 } from '@megumi/voice';
+import type { SpeechPlayer } from '@megumi/voice';
 import { electronVoiceProfileAudioPicker } from './electron-voice-profile-audio-picker';
 
-export function createElectronVoiceOptions(home: InitializeMegumiHomeSyncOptions): ComposeProductVoiceOptions {
+export function createElectronVoiceOptions(
+  home: InitializeMegumiHomeSyncOptions,
+  options: { readonly speechPlayer?: SpeechPlayer } = {},
+): ComposeProductVoiceOptions {
   const homePath = resolveMegumiHomePath({ env: home.env, homeDirectory: home.homeDirectory });
   const paths = buildMegumiHomePaths(homePath);
   const manifestPath = resolveVoiceManifestPath();
   const manifest = readVoiceModelManifest(manifestPath);
   const sttRoot = path.join(paths.voiceModelsPath, 'stt', 'sensevoice-small-int8', '2024-07-17');
+  const ttsRoot = path.join(paths.voiceModelsPath, 'tts', 'moss-tts-nano', 'f52645cb467506d8e18e746ddd59482685b74e58');
 
   return {
     models: createFileVoiceModels({
@@ -37,6 +43,12 @@ export function createElectronVoiceOptions(home: InitializeMegumiHomeSyncOptions
       modelPath: path.join(sttRoot, 'model.int8.onnx'),
       tokensPath: path.join(sttRoot, 'tokens.txt'),
     }),
+    synthesizer: createMossTtsNanoSynthesizer({
+      modelPath: ttsRoot,
+      cachePath: paths.voiceCachePath,
+      sidecarExecutablePath: resolveMossSidecarPath(),
+    }),
+    ...(options.speechPlayer ? { player: options.speechPlayer } : {}),
     profileAudioPicker: electronVoiceProfileAudioPicker,
   };
 }
@@ -66,4 +78,9 @@ function resolveVoiceManifestPath(): string {
   const packaged = path.join(process.resourcesPath, 'voice', 'model-manifest.json');
   if (app.isPackaged && fs.existsSync(packaged)) return packaged;
   return path.resolve(process.cwd(), 'packages/voice/resources/model-manifest.json');
+}
+
+function resolveMossSidecarPath(): string {
+  if (app.isPackaged) return path.join(process.resourcesPath, 'voice', 'moss-tts-nano-sidecar.exe');
+  return path.resolve(process.cwd(), 'packages/voice/sidecar/moss-tts-nano/dist/moss-tts-nano-sidecar.exe');
 }

@@ -5,7 +5,7 @@
 import { Pin, PinOff, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { CharacterWindowSnapshot } from '../../main/app/character-window-controller';
-import { VoiceControls } from '../features/character-presence';
+import { createSpeechPlaybackController, VoiceControls } from '../features/character-presence';
 
 const characterImageUrl = new URL(
   '../../../assets/character/megumi/megumi-reference-v2.png',
@@ -18,6 +18,19 @@ export default function CharacterApp() {
   useEffect(() => {
     void window.megumi.character.getSnapshot().then(setSnapshot);
     return window.megumi.character.onSnapshot(setSnapshot);
+  }, []);
+
+  useEffect(() => {
+    const playback = createSpeechPlaybackController({
+      report: (result) => { void window.megumi.voice.reportPlayback(result); },
+    });
+    const removeChunk = window.megumi.voice.onPlaybackChunk((chunk) => playback.acceptChunk(chunk));
+    const removeStop = window.megumi.voice.onPlaybackStop(() => { void playback.stop(); });
+    return () => {
+      removeChunk();
+      removeStop();
+      void playback.dispose();
+    };
   }, []);
 
   return (

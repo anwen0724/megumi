@@ -26,6 +26,7 @@ export interface CharacterWindowStateStore {
 }
 
 export interface CharacterWindowHandle {
+  readonly webContents: { send(channel: string, payload: unknown): void };
   show(): void;
   hide(): void;
   focus(): void;
@@ -45,6 +46,7 @@ export interface CharacterWindowController {
   toggleAlwaysOnTop(): CharacterWindowSnapshot;
   selectSession(sessionId: string | null): CharacterWindowSnapshot;
   getSnapshot(): CharacterWindowSnapshot;
+  send(channel: string, payload: unknown): boolean;
   subscribe(listener: (snapshot: CharacterWindowSnapshot) => void): { unsubscribe(): void };
   dispose(): Promise<void>;
 }
@@ -129,6 +131,11 @@ export function createCharacterWindowController(options: {
       return publish();
     },
     getSnapshot: snapshot,
+    send(channel, payload) {
+      if (!window || window.isDestroyed()) return false;
+      window.webContents.send(channel, payload);
+      return true;
+    },
     subscribe(listener) {
       listeners.add(listener);
       return { unsubscribe: () => listeners.delete(listener) };

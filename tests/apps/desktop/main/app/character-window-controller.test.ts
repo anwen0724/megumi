@@ -8,6 +8,7 @@ function createWindowDouble() {
   let alwaysOnTop = true;
   let destroyed = false;
   return {
+    webContents: { send: vi.fn() },
     show: vi.fn(() => { visible = true; }),
     hide: vi.fn(() => { visible = false; }),
     focus: vi.fn(),

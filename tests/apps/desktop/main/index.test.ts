@@ -236,10 +236,16 @@ describe('main runtime logger composition', () => {
       approval: { host: mocks.agentHost },
       voice: { host: mocks.agentHost },
       voiceAudio: expect.objectContaining({ submitUtterance: expect.any(Function) }),
+      speechPlayer: expect.objectContaining({
+        play: expect.any(Function),
+        stop: expect.any(Function),
+        handlePlaybackResult: expect.any(Function),
+      }),
       character: expect.objectContaining({
         show: expect.any(Function),
         hide: expect.any(Function),
         selectSession: expect.any(Function),
+        send: expect.any(Function),
       }),
       observability: { host: mocks.agentHost },
     });
