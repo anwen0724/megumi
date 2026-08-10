@@ -123,6 +123,7 @@ export {
   VoiceProfileImportPayloadSchema,
   VoiceProfileRenamePayloadSchema,
   VoiceProfilesListResultSchema,
+  VoiceHostMutationResultSchema,
   VoiceSessionMutedPayloadSchema,
   VoiceSessionStartPayloadSchema,
   VoiceSnapshotSchema,

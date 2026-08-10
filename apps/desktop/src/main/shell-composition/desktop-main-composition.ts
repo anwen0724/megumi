@@ -56,6 +56,7 @@ export function composeDesktopMain() {
     skill: { host: productHost },
     settings: { host: productHost },
     approval: { host: productHost },
+    voice: { host: productHost },
     observability: { host: productHost },
     dispose: async () => {
       uiEventSubscription.unsubscribe();

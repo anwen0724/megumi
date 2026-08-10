@@ -41,6 +41,21 @@ const mocks = vi.hoisted(() => {
         deleteApiKey: vi.fn(),
       },
     },
+    voice: {
+      getSnapshot: vi.fn(),
+      getModelStatus: vi.fn(),
+      prepareModels: vi.fn(),
+      cancelModelPreparation: vi.fn(),
+      listProfiles: vi.fn(),
+      importProfile: vi.fn(),
+      renameProfile: vi.fn(),
+      removeProfile: vi.fn(),
+      selectProfile: vi.fn(),
+      startSession: vi.fn(),
+      setMuted: vi.fn(),
+      interrupt: vi.fn(),
+      endSession: vi.fn(async () => ({ status: 'ok' })),
+    },
     dispose: vi.fn(),
   };
   return {
@@ -79,6 +94,7 @@ const mocks = vi.hoisted(() => {
     showOpenDialog: vi.fn(),
     getAllWindows: vi.fn(() => []),
     quit: vi.fn(),
+    trayDestroy: vi.fn(),
   };
 });
 
@@ -123,6 +139,14 @@ vi.mock('electron', () => ({
   BrowserWindow: {
     getAllWindows: mocks.getAllWindows,
   },
+  Tray: vi.fn(function (this: Record<string, unknown>) {
+    this.setToolTip = vi.fn();
+    this.setContextMenu = vi.fn();
+    this.on = vi.fn();
+    this.destroy = mocks.trayDestroy;
+    return this;
+  }),
+  Menu: { buildFromTemplate: vi.fn(() => ({})) },
   dialog: {
     showOpenDialog: mocks.showOpenDialog,
   },
@@ -204,6 +228,12 @@ describe('main runtime logger composition', () => {
       skill: { host: mocks.agentHost },
       settings: { host: mocks.agentHost },
       approval: { host: mocks.agentHost },
+      voice: { host: mocks.agentHost },
+      character: expect.objectContaining({
+        show: expect.any(Function),
+        hide: expect.any(Function),
+        selectSession: expect.any(Function),
+      }),
       observability: { host: mocks.agentHost },
     });
 

@@ -9,6 +9,9 @@ import { registerSettingsHandlers, type SettingsHandlersService } from './handle
 import { registerApprovalHandlers, type ApprovalHandlersService } from './handlers/approval.handler';
 import type { ProductRuntimeLogger } from '@megumi/product';
 import { registerObservabilityHandlers } from './handlers/observability.handler';
+import { registerVoiceHandlers, type VoiceHandlersService } from './handlers/voice.handler';
+import { registerCharacterHandlers } from './handlers/character.handler';
+import type { CharacterWindowController } from '../app/character-window-controller';
 import { electronIpcMain, type DesktopIpcMain } from '../adapters/electron-ipc-main-adapter';
 
 export interface RegisterAllHandlersOptions {
@@ -20,6 +23,8 @@ export interface RegisterAllHandlersOptions {
   settings?: SettingsHandlersService;
   approval?: ApprovalHandlersService;
   observability?: { host: Pick<import('@megumi/product/host').ProductHostInterface, 'observability'> };
+  voice?: VoiceHandlersService;
+  character?: CharacterWindowController;
 }
 
 export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): void {
@@ -49,6 +54,14 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
 
   if (options.observability) {
     registerObservabilityHandlers(options.observability, { logger: options.logger, ipcMain });
+  }
+
+  if (options.voice) {
+    registerVoiceHandlers(options.voice, { logger: options.logger, ipcMain });
+  }
+
+  if (options.character) {
+    registerCharacterHandlers({ controller: options.character, ipcMain });
   }
 
 }

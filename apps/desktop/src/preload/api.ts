@@ -41,6 +41,10 @@ import type {
   ObservabilityExportResult,
   ObservabilityGetRunTraceUiResult,
   ObservabilityListRunTracesUiResult,
+  VoiceHostModelStatus,
+  VoiceHostMutationResult,
+  VoiceHostProfilesResult,
+  VoiceHostSnapshot,
 } from '@megumi/product/host';
 import { IPC_CHANNELS } from '../main/ipc/channels';
 import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from '../main/ipc/contracts';
@@ -78,7 +82,13 @@ import type {
   ImageInputClipboardReadPayload,
   AttachmentImageReadPayload,
   AttachmentFileStatusPayload,
+  VoiceProfileIdPayload,
+  VoiceProfileImportPayload,
+  VoiceProfileRenamePayload,
+  VoiceSessionMutedPayload,
+  VoiceSessionStartPayload,
 } from '../main/ipc/schemas';
+import type { CharacterWindowSnapshot } from '../main/app/character-window-controller';
 
 type BusinessRequest<TPayload, TChannel extends BusinessIpcChannel> = RuntimeIpcRequest<TPayload, TChannel>;
 type EmptyPayload = Record<string, never>;
@@ -272,6 +282,74 @@ export const api = {
       request: BusinessRequest<ApprovalResolvePayload, typeof IPC_CHANNELS.approval.resolve>,
     ): Promise<RuntimeIpcResult<ApprovalHostResult, typeof IPC_CHANNELS.approval.resolve>> =>
       invokeRuntimeIpc(IPC_CHANNELS.approval.resolve, request),
+  },
+  voice: {
+    getSnapshot: (
+      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.voice.snapshot>,
+    ): Promise<RuntimeIpcResult<VoiceHostSnapshot, typeof IPC_CHANNELS.voice.snapshot>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.voice.snapshot, request),
+    getModelStatus: (
+      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.voice.modelStatus>,
+    ): Promise<RuntimeIpcResult<VoiceHostModelStatus, typeof IPC_CHANNELS.voice.modelStatus>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.voice.modelStatus, request),
+    prepareModels: (
+      request: BusinessRequest<{ repair?: boolean }, typeof IPC_CHANNELS.voice.modelsPrepare>,
+    ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.modelsPrepare>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.voice.modelsPrepare, request),
+    cancelModelPreparation: (
+      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.voice.modelsCancel>,
+    ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.modelsCancel>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.voice.modelsCancel, request),
+    listProfiles: (
+      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.voice.profilesList>,
+    ): Promise<RuntimeIpcResult<VoiceHostProfilesResult, typeof IPC_CHANNELS.voice.profilesList>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.voice.profilesList, request),
+    importProfile: (
+      request: BusinessRequest<VoiceProfileImportPayload, typeof IPC_CHANNELS.voice.profileImport>,
+    ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.profileImport>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.voice.profileImport, request),
+    renameProfile: (
+      request: BusinessRequest<VoiceProfileRenamePayload, typeof IPC_CHANNELS.voice.profileRename>,
+    ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.profileRename>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.voice.profileRename, request),
+    removeProfile: (
+      request: BusinessRequest<VoiceProfileIdPayload, typeof IPC_CHANNELS.voice.profileRemove>,
+    ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.profileRemove>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.voice.profileRemove, request),
+    selectProfile: (
+      request: BusinessRequest<VoiceProfileIdPayload, typeof IPC_CHANNELS.voice.profileSelect>,
+    ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.profileSelect>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.voice.profileSelect, request),
+    startSession: (
+      request: BusinessRequest<VoiceSessionStartPayload, typeof IPC_CHANNELS.voice.sessionStart>,
+    ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.sessionStart>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.voice.sessionStart, request),
+    setMuted: (
+      request: BusinessRequest<VoiceSessionMutedPayload, typeof IPC_CHANNELS.voice.sessionMute>,
+    ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.sessionMute>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.voice.sessionMute, request),
+    interrupt: (
+      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.voice.sessionInterrupt>,
+    ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.sessionInterrupt>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.voice.sessionInterrupt, request),
+    endSession: (
+      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.voice.sessionEnd>,
+    ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.sessionEnd>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.voice.sessionEnd, request),
+  },
+  character: {
+    show: (): Promise<CharacterWindowSnapshot> => ipcRenderer.invoke(IPC_CHANNELS.character.show),
+    hide: (): Promise<CharacterWindowSnapshot> => ipcRenderer.invoke(IPC_CHANNELS.character.hide),
+    getSnapshot: (): Promise<CharacterWindowSnapshot> => ipcRenderer.invoke(IPC_CHANNELS.character.snapshot),
+    toggleAlwaysOnTop: (): Promise<CharacterWindowSnapshot> =>
+      ipcRenderer.invoke(IPC_CHANNELS.character.toggleAlwaysOnTop),
+    selectSession: (sessionId: string | null): Promise<CharacterWindowSnapshot> =>
+      ipcRenderer.invoke(IPC_CHANNELS.character.selectSession, { sessionId }),
+    onSnapshot: (callback: (snapshot: CharacterWindowSnapshot) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, snapshot: CharacterWindowSnapshot) => callback(snapshot);
+      ipcRenderer.on(IPC_CHANNELS.character.snapshotChanged, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.character.snapshotChanged, listener);
+    },
   },
   project: {
     list: (

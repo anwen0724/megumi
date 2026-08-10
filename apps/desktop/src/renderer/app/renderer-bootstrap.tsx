@@ -9,6 +9,7 @@ import { initializeRendererI18n, rendererError } from '../shared/i18n';
 import { useThemeStore } from '../shared/theme';
 import { useSetupWizardStore } from '../features/setup-wizard';
 import App from './App';
+import CharacterApp from './CharacterApp';
 import ErrorBoundary from './error-boundary';
 import { usePermissionModeStore } from '../entities/permission-mode';
 import { useModelSelectionStore } from '../entities/model-selection';
@@ -18,6 +19,9 @@ interface RendererRoot {
 }
 
 export async function bootstrapRenderer(root: RendererRoot): Promise<void> {
+  const isCharacterWindow = new URLSearchParams(window.location.search).get('megumiWindowRole') === 'character';
+  if (isCharacterWindow) document.documentElement.classList.add('megumi-character-window');
+
   try {
     const result = await window.megumi.settings.get(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {}),
@@ -44,7 +48,7 @@ export async function bootstrapRenderer(root: RendererRoot): Promise<void> {
 
   root.render(
     <ErrorBoundary>
-      <App />
+      {isCharacterWindow ? <CharacterApp /> : <App />}
     </ErrorBoundary>,
   );
 }

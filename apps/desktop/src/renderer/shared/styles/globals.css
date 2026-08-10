@@ -47,6 +47,12 @@
     scrollbar-color: var(--color-border-strong) transparent;
   }
 
+  html.megumi-character-window,
+  html.megumi-character-window body,
+  html.megumi-character-window #root {
+    background: transparent;
+  }
+
   * {
     scrollbar-width: thin;
   }

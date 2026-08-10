@@ -47,6 +47,14 @@ export const VoiceProfilesListResultSchema = z.object({
   profiles: z.array(VoiceProfileDtoSchema),
 }).strict();
 
+export const VoiceHostMutationResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('ok') }).strict(),
+  z.object({ status: z.literal('cancelled') }).strict(),
+  z.object({ status: z.literal('not_found') }).strict(),
+  z.object({ status: z.literal('blocked'), reason: z.string().min(1) }).strict(),
+  z.object({ status: z.literal('failed'), failure: VoiceFailureSchema }).strict(),
+]);
+
 export type VoiceProfileImportPayload = z.infer<typeof VoiceProfileImportPayloadSchema>;
 export type VoiceProfileRenamePayload = z.infer<typeof VoiceProfileRenamePayloadSchema>;
 export type VoiceProfileIdPayload = z.infer<typeof VoiceProfileIdPayloadSchema>;
@@ -57,12 +65,7 @@ export type VoiceHostModelStatus = z.infer<typeof VoiceModelStatusResultSchema>;
 export type VoiceHostProfile = z.infer<typeof VoiceProfileDtoSchema>;
 export type VoiceHostProfilesResult = z.infer<typeof VoiceProfilesListResultSchema>;
 
-export type VoiceHostMutationResult =
-  | { readonly status: 'ok' }
-  | { readonly status: 'cancelled' }
-  | { readonly status: 'not_found' }
-  | { readonly status: 'blocked'; readonly reason: string }
-  | { readonly status: 'failed'; readonly failure: { readonly code: string; readonly message: string; readonly retryable?: boolean } };
+export type VoiceHostMutationResult = z.infer<typeof VoiceHostMutationResultSchema>;
 
 export interface VoiceHost {
   getSnapshot(request?: Record<string, never>): Promise<VoiceHostSnapshot>;

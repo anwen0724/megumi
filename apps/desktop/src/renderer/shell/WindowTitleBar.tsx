@@ -1,4 +1,4 @@
-import { Minus, Square, X } from 'lucide-react';
+import { Minus, Sparkles, Square, X } from 'lucide-react';
 import { IconButton, cx } from '../shared/ui';
 import { windowControls } from '../shared/ipc/client';
 
@@ -22,6 +22,15 @@ export function WindowTitleBar({
       </div>
 
       <div data-testid="window-titlebar-controls" className="app-no-drag flex items-center gap-2">
+        <IconButton
+          label="Show Megumi character"
+          onClick={() => { void window.megumi.character.show(); }}
+          size="sm"
+          variant="ghost"
+          className="h-7 w-8 rounded-sm"
+        >
+          <Sparkles size={15} aria-hidden="true" />
+        </IconButton>
         <div className="flex items-center gap-1">
           <IconButton
             label="Minimize window"
