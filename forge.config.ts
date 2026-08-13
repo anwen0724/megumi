@@ -80,6 +80,11 @@ const config: ForgeConfig = {
     new VitePlugin({
       build: [
         { entry: 'apps/desktop/src/main/index.ts', config: 'vite.main.config.ts', target: 'main' },
+        {
+          entry: 'apps/desktop/src/main/adapters/voice-input/voice-input-worker-entry.ts',
+          config: 'vite.worker.config.ts',
+          target: 'main',
+        },
         { entry: 'apps/desktop/src/preload/index.ts', config: 'vite.preload.config.ts', target: 'preload' },
       ],
       renderer: [{ name: 'main_window', config: 'vite.renderer.config.ts' }],

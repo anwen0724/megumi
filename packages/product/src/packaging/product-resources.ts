@@ -20,6 +20,7 @@ export function getProductPackagingResources(cwd: string): Array<{ source: strin
   const systemSkillsPath = path.resolve(cwd, 'packages/skills/built-in-skills');
   const voiceManifestPath = path.resolve(cwd, 'packages/voice/resources/model-manifest.json');
   const defaultVoicePath = path.resolve(cwd, 'packages/voice/resources/default-voice');
+  const vadResourcePath = path.resolve(cwd, 'packages/voice/resources/vad');
   const mossSidecarPath = path.resolve(cwd, 'packages/voice/sidecar/moss-tts-nano/dist/moss-tts-nano-sidecar.exe');
   return [
     ...(fs.existsSync(systemSkillsPath) ? [{
@@ -37,6 +38,10 @@ export function getProductPackagingResources(cwd: string): Array<{ source: strin
     {
       source: defaultVoicePath,
       target: `${VOICE_RUNTIME_RESOURCE_PATH}/default-voice`,
+    },
+    {
+      source: vadResourcePath,
+      target: `${VOICE_RUNTIME_RESOURCE_PATH}/vad`,
     },
     ...(fs.existsSync(mossSidecarPath) ? [{
       source: mossSidecarPath,
