@@ -61,15 +61,6 @@ export const character = {
       manual: 'Automatic boundary unavailable',
       error: 'Voice input failed',
     },
-    statuses: {
-      idle: 'Idle',
-      starting: 'Starting',
-      listening: 'Listening',
-      recognizing: 'Recognizing',
-      muted: 'Muted',
-      fallback: 'Manual',
-      error: 'Error',
-    },
   },
   profiles: {
     label: 'Voice',

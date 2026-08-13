@@ -64,15 +64,6 @@ export const character = {
       manual: '自动断句不可用',
       error: '语音输入失败',
     },
-    statuses: {
-      idle: '待机',
-      starting: '正在启动',
-      listening: '正在听',
-      recognizing: '正在识别',
-      muted: '已静音',
-      fallback: '手动输入',
-      error: '发生错误',
-    },
   },
   profiles: {
     label: '音色',
