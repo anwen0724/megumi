@@ -58,6 +58,19 @@ export const ProjectRemoveRequestSchema = createRuntimeIpcRequestSchema(IPC_CHAN
 export const WorkspaceFilesListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.workspace.filesList, host.WorkspaceFilesListPayloadSchema);
 export const WorkspaceFileOpenRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.workspace.filesOpen, host.WorkspaceFileOpenPayloadSchema);
 export const ObservabilityListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.list, host.ObservabilityListPayloadSchema);
+
+/** Dedicated PCM frame payload; travels on a bounded channel, not the business envelope. */
+export const VoiceInputFramePayloadSchema = z
+  .object({
+    generation: z.number().int().nonnegative(),
+    sequence: z.number().int().nonnegative(),
+    sampleRate: z.literal(16_000),
+    samples: z.custom<ArrayBuffer>((value) => value instanceof ArrayBuffer && value.byteLength === 2048, {
+      message: 'PCM frame must be one 512-sample 16 kHz mono ArrayBuffer.',
+    }),
+  })
+  .strict();
+export type VoiceInputFramePayload = z.infer<typeof VoiceInputFramePayloadSchema>;
 export const ObservabilityGetRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.get, host.ObservabilityRunPayloadSchema);
 export const ObservabilityBundleRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.bundle, host.ObservabilityRunPayloadSchema);
 

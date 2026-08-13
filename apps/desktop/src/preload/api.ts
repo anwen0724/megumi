@@ -92,7 +92,7 @@ import type {
   VoiceSessionStartPayload,
 } from '../main/ipc/schemas';
 import type { CharacterWindowShapeRect, CharacterWindowSnapshot } from '../main/app/character-window-controller';
-import type { SubmitVoiceUtteranceResult } from '@megumi/voice';
+import type { SpeechInputEvent, SubmitVoiceUtteranceResult } from '@megumi/voice';
 
 type BusinessRequest<TPayload, TChannel extends BusinessIpcChannel> = RuntimeIpcRequest<TPayload, TChannel>;
 type EmptyPayload = Record<string, never>;
@@ -286,6 +286,21 @@ export const api = {
       request: BusinessRequest<ApprovalResolvePayload, typeof IPC_CHANNELS.approval.resolve>,
     ): Promise<RuntimeIpcResult<ApprovalHostResult, typeof IPC_CHANNELS.approval.resolve>> =>
       invokeRuntimeIpc(IPC_CHANNELS.approval.resolve, request),
+  },
+  voiceInput: {
+    sendFrame: (payload: {
+      generation: number;
+      sequence: number;
+      sampleRate: 16000;
+      samples: ArrayBuffer;
+    }): void => {
+      ipcRenderer.send(IPC_CHANNELS.voice.inputFrame, payload);
+    },
+    onEvent: (callback: (event: SpeechInputEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, speechEvent: SpeechInputEvent) => callback(speechEvent);
+      ipcRenderer.on(IPC_CHANNELS.voice.inputEvent, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.voice.inputEvent, listener);
+    },
   },
   voice: {
     onPlaybackChunk: (callback: (payload: {

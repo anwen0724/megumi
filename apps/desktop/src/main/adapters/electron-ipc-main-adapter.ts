@@ -2,6 +2,6 @@
 import { ipcMain } from 'electron';
 import type { IpcMain } from 'electron';
 
-export type DesktopIpcMain = Pick<IpcMain, 'handle'>;
+export type DesktopIpcMain = Pick<IpcMain, 'handle' | 'on'>;
 
 export const electronIpcMain: DesktopIpcMain = ipcMain;

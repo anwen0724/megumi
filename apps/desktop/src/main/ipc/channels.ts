@@ -64,6 +64,8 @@ export const IPC_CHANNELS = {
     sessionInterrupt: 'voice:session:interrupt',
     sessionEnd: 'voice:session:end',
     audioSubmit: 'voice:audio:submit',
+    inputFrame: 'voice:input:frame',
+    inputEvent: 'voice:input:event',
     playbackChunk: 'voice:playback:chunk',
     playbackStop: 'voice:playback:stop',
     playbackResult: 'voice:playback:result',
