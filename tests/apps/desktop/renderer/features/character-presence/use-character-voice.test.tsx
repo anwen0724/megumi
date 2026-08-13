@@ -140,4 +140,55 @@ describe('useCharacterVoice window lifecycle', () => {
     });
     await waitFor(() => { expect(capture.close).toHaveBeenCalledTimes(2); });
   });
+
+  it('submits recognized text with a stable optimistic message identity', async () => {
+    const send = vi.fn().mockResolvedValue({
+      ok: true,
+      data: {
+        type: 'agent_run',
+        session: { id: 'session-1', projectId: 'project-1' },
+        userMessage: { messageId: 'message-1' },
+        run: { runId: 'run-1' },
+      },
+    });
+    Object.assign(window.megumi, {
+      settings: {
+        get: vi.fn().mockResolvedValue({
+          ok: true,
+          data: {
+            status: 'ok',
+            settings: {
+              modelSelection: { providerId: 'provider-1', modelId: 'model-1' },
+              permissions: { mode: 'ask' },
+              voice: {
+                inputDeviceId: 'default',
+                outputDeviceId: 'default',
+                recognitionLanguage: 'zh',
+              },
+            },
+          },
+        }),
+      },
+      session: {
+        list: vi.fn().mockResolvedValue({
+          ok: true,
+          data: { status: 'ok', sessions: [{ id: 'session-1', projectId: 'project-1' }] },
+        }),
+        message: { send },
+      },
+    });
+    const { result } = renderHook(() => useCharacterVoice('session-1', {
+      createCapture: () => fakeCapture(),
+    }));
+
+    await act(async () => { await result.current.submitText('语音输入'); });
+
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({
+        text: '语音输入',
+        clientMessageId: expect.any(String),
+        createdAt: expect.any(String),
+      }),
+    }));
+  });
 });

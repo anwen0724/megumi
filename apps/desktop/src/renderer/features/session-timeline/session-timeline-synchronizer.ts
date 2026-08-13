@@ -3,6 +3,7 @@
  * It owns the renderer's only Runtime Event subscription and all read/event ordering rules.
  */
 import type { AnyEvent } from '@megumi/product/host';
+import type { SessionMessagePresentationEvent } from '@megumi/desktop/main/ipc/session-message-presentation';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../shared/ipc/runtime-request';
 import { useChatUiStore } from '../../entities/chat-ui/store';
@@ -26,14 +27,21 @@ class SessionTimelineSynchronizer {
   private readingGeneration: number | null = null;
   private bufferedEvents: BufferedRuntimeEvent[] = [];
   private unsubscribeRuntimeEvents: (() => void) | null = null;
+  private unsubscribeMessageEvents: (() => void) | null = null;
   private readonly terminalReconciliations = new Set<string>();
 
   /** Starts the renderer's single Runtime Event subscription. Calling it repeatedly is safe. */
   start(): void {
-    if (this.unsubscribeRuntimeEvents || !window.megumi?.runtime?.onEvent) return;
-    this.unsubscribeRuntimeEvents = window.megumi.runtime.onEvent((event) => {
-      this.receiveRuntimeEvent(event);
-    });
+    if (!this.unsubscribeRuntimeEvents && window.megumi?.runtime?.onEvent) {
+      this.unsubscribeRuntimeEvents = window.megumi.runtime.onEvent((event) => {
+        this.receiveRuntimeEvent(event);
+      });
+    }
+    if (!this.unsubscribeMessageEvents && window.megumi?.session?.message?.onPresentationEvent) {
+      this.unsubscribeMessageEvents = window.megumi.session.message.onPresentationEvent((event) => {
+        this.receiveMessageEvent(event);
+      });
+    }
   }
 
   /**
@@ -77,8 +85,25 @@ class SessionTimelineSynchronizer {
   stop(): void {
     this.unsubscribeRuntimeEvents?.();
     this.unsubscribeRuntimeEvents = null;
+    this.unsubscribeMessageEvents?.();
+    this.unsubscribeMessageEvents = null;
     this.clearActiveSession();
     this.terminalReconciliations.clear();
+  }
+
+  private receiveMessageEvent(event: SessionMessagePresentationEvent): void {
+    useSessionTimelineStore.getState().addPendingUserMessage({
+      projectId: event.projectId,
+      sessionId: event.sessionId,
+      clientMessageId: event.clientMessageId,
+      ...(event.phase === 'accepted' ? {
+        messageId: event.messageId,
+        runId: event.runId,
+      } : {}),
+      text: event.text,
+      attachments: event.attachments,
+      createdAt: event.createdAt,
+    });
   }
 
   private receiveRuntimeEvent(event: AnyEvent): void {

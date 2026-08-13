@@ -235,17 +235,6 @@ export function useSessionActions() {
     const state = useChatUiStore.getState();
     state.setAgentStatus('sending', target.sessionId ?? null);
     state.setLastError(null, target.sessionId ?? null);
-    if (target.sessionId) {
-      useSessionTimelineStore.getState().addPendingUserMessage({
-        projectId: target.projectId,
-        sessionId: target.sessionId,
-        clientMessageId,
-        text: payload.message,
-        attachments: payload.attachments,
-        createdAt,
-      });
-    }
-
     let result: Awaited<ReturnType<typeof window.megumi.session.message.send>>;
     try {
       result = await window.megumi.session.message.send(request);
@@ -286,16 +275,6 @@ export function useSessionActions() {
 
     submittedRunIdRef.current = result.data.run.runId;
     useChatUiStore.getState().setAgentStatus('sending', runSessionId);
-    useSessionTimelineStore.getState().addPendingUserMessage({
-      projectId: target.projectId,
-      sessionId: runSessionId,
-      clientMessageId,
-      messageId: result.data.userMessage.messageId,
-      text: payload.message,
-      attachments: payload.attachments,
-      createdAt,
-      runId: result.data.run.runId,
-    });
     if (result.data.branchCommit) {
       useSessionTimelineStore.getState().addCommittedBranch(
         target.projectId,

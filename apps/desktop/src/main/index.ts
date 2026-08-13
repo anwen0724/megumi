@@ -64,6 +64,11 @@ if (shouldQuitForSquirrelStartup()) {
         logger: desktopMain.runtimeLogger,
         workspace: desktopMain.workspace,
         session: desktopMain.session,
+        publishSessionMessageEvent: (event) => {
+          for (const window of BrowserWindow.getAllWindows()) {
+            window.webContents.send(IPC_CHANNELS.session.sessionMessagePresentation, event);
+          }
+        },
         skill: desktopMain.skill,
         settings: desktopMain.settings,
         approval: desktopMain.approval,

@@ -93,6 +93,10 @@ import type {
   VoiceSessionStartPayload,
   VoiceModelCapabilityPayload,
 } from '../main/ipc/schemas';
+import {
+  SessionMessagePresentationEventSchema,
+  type SessionMessagePresentationEvent,
+} from '../main/ipc/session-message-presentation';
 import type { CharacterWindowShapeRect, CharacterWindowSnapshot } from '../main/app/character-window-controller';
 import { parseSpeechInputEvent } from '@megumi/voice/speech-input/speech-input-schema';
 import type { SpeechInputEvent } from '@megumi/voice';
@@ -248,6 +252,14 @@ export const api = {
         request: BusinessRequest<SessionMessageSendPayload, typeof IPC_CHANNELS.session.sessionMessageSend>,
       ): Promise<RuntimeIpcResult<SessionMessageSendData, typeof IPC_CHANNELS.session.sessionMessageSend>> =>
         invokeRuntimeIpc(IPC_CHANNELS.session.sessionMessageSend, request),
+      onPresentationEvent: (callback: (event: SessionMessagePresentationEvent) => void): (() => void) => {
+        const listener = (_event: Electron.IpcRendererEvent, rawEvent: unknown) => {
+          const parsed = SessionMessagePresentationEventSchema.safeParse(rawEvent);
+          if (parsed.success) callback(parsed.data);
+        };
+        ipcRenderer.on(IPC_CHANNELS.session.sessionMessagePresentation, listener);
+        return () => ipcRenderer.removeListener(IPC_CHANNELS.session.sessionMessagePresentation, listener);
+      },
       cancel: (
         request: BusinessRequest<SessionMessageCancelPayload, typeof IPC_CHANNELS.session.sessionMessageCancel>,
       ): Promise<RuntimeIpcResult<CancelUserInputResult['payload'], typeof IPC_CHANNELS.session.sessionMessageCancel>> =>

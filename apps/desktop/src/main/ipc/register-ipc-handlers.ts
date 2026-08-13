@@ -17,12 +17,14 @@ import type { ElectronVoiceInputAdapter } from '../adapters/voice-input/electron
 import { registerVoicePlaybackHandler } from './handlers/voice-playback.handler';
 import type { CharacterSpeechPlayerAdapter } from '../adapters/character-speech-player-adapter';
 import { electronIpcMain, type DesktopIpcMain } from '../adapters/electron-ipc-main-adapter';
+import type { SessionMessagePresentationEvent } from './session-message-presentation';
 
 export interface RegisterAllHandlersOptions {
   logger?: ProductRuntimeLogger;
   ipcMain?: DesktopIpcMain;
   workspace?: WorkspaceHandlersService;
   session?: SessionHandlersService;
+  publishSessionMessageEvent?(event: SessionMessagePresentationEvent): void;
   skill?: SkillHandlersService;
   settings?: SettingsHandlersService;
   approval?: ApprovalHandlersService;
@@ -43,7 +45,11 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
   }
 
   if (options.session) {
-    registerSessionHandlers(options.session, { logger: options.logger, ipcMain });
+    registerSessionHandlers(options.session, {
+      logger: options.logger,
+      ipcMain,
+      publishMessageEvent: options.publishSessionMessageEvent,
+    });
   }
 
   if (options.skill) {

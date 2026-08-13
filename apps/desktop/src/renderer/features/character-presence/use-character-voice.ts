@@ -152,6 +152,8 @@ export function useCharacterVoice(
         sessionId: selectedSessionId,
         projectId: session.projectId,
         text: normalized,
+        clientMessageId: createVoiceClientMessageId(),
+        createdAt: new Date().toISOString(),
         modelSelection: { provider_id: selection.providerId, model_id: selection.modelId },
         permissionMode: settings.data.settings.permissions.mode,
       }),
@@ -373,6 +375,13 @@ export function useCharacterVoice(
 }
 
 export type CharacterVoiceController = ReturnType<typeof useCharacterVoice>;
+
+function createVoiceClientMessageId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `message-user-${crypto.randomUUID()}`;
+  }
+  return `message-user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 function findActiveRunId(sessionId: string | null): string | undefined {
   if (!sessionId) return undefined;

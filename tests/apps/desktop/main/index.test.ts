@@ -240,6 +240,7 @@ describe('main runtime logger composition', () => {
       logger: processLogger,
       workspace: { host: mocks.agentHost },
       session: { host: mocks.agentHost },
+      publishSessionMessageEvent: expect.any(Function),
       skill: { host: mocks.agentHost },
       settings: { host: mocks.agentHost },
       approval: { host: mocks.agentHost },

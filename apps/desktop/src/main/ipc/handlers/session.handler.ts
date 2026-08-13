@@ -59,6 +59,7 @@ import {
   type AttachmentFileStatusPayload,
   type DocumentInputSelectPayload,
 } from '../schemas';
+import type { SessionMessagePresentationEvent } from '../session-message-presentation';
 
 export interface SessionHandlersService {
   host: Pick<ProductHostInterface, 'session'>;
@@ -67,6 +68,7 @@ export interface SessionHandlersService {
 export interface RegisterSessionHandlersOptions {
   logger?: ProductRuntimeLogger;
   ipcMain?: DesktopIpcMain;
+  publishMessageEvent?(event: SessionMessagePresentationEvent): void;
 }
 
 export function registerSessionHandlers(
@@ -212,10 +214,27 @@ export function registerSessionHandlers(
       request: RuntimeIpcRequest<SessionMessageSendPayload, typeof IPC_CHANNELS.session.sessionMessageSend>,
       event,
     ) => {
+      const presentation = createMessagePresentation(request.payload);
+      if (presentation && request.payload.sessionId) {
+        options.publishMessageEvent?.({
+          phase: 'pending',
+          ...presentation,
+          sessionId: request.payload.sessionId,
+        });
+      }
       const result = await service.host.session.sendUserInput({
         requestId: request.requestId,
         ...request.payload,
       });
+      if (presentation && result.payload.type === 'agent_run') {
+        options.publishMessageEvent?.({
+          phase: 'accepted',
+          ...presentation,
+          sessionId: result.payload.session.id,
+          messageId: result.payload.userMessage.messageId,
+          runId: result.payload.run.runId,
+        });
+      }
       return result.payload;
     },
     mapError: mapSessionIpcError,
@@ -266,6 +285,26 @@ export function registerSessionHandlers(
     mapError: mapSessionIpcError,
   }));
 
+}
+
+function createMessagePresentation(payload: SessionMessageSendPayload):
+  Omit<Extract<SessionMessagePresentationEvent, { phase: 'pending' }>, 'phase' | 'sessionId'>
+  | undefined {
+  if (!payload.clientMessageId || !payload.createdAt) return undefined;
+  return {
+    projectId: payload.projectId,
+    clientMessageId: payload.clientMessageId,
+    text: payload.text,
+    ...(payload.attachments?.length ? {
+      attachments: payload.attachments.map((attachment) => ({
+        draftAttachmentId: attachment.draftAttachmentId,
+        type: attachment.type,
+        name: attachment.name ?? '',
+        ...(attachment.declaredMimeType ? { declaredMimeType: attachment.declaredMimeType } : {}),
+      })),
+    } : {}),
+    createdAt: payload.createdAt,
+  };
 }
 
 function mapSessionIpcError(): RuntimeIpcError {
