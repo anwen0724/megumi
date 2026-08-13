@@ -315,3 +315,226 @@ describe('Electron voice input adapter', () => {
     expect(worker.posted.filter((entry) => entry.value.type === 'manual-start')).toHaveLength(1);
   });
 });
+
+describe('Electron voice input adapter startup failures', () => {
+  it('converts a synchronous worker spawn failure into a structured start failure', async () => {
+    const adapter = createElectronVoiceInputAdapter({
+      resolveResourcePaths: () => ({
+        vadModelPath: 'C:/resources/vad/silero_vad.onnx',
+        senseVoiceModelPath: 'C:/models/model.int8.onnx',
+        senseVoiceTokensPath: 'C:/models/tokens.txt',
+      }),
+      workerEntryPath: 'C:/repo/.vite/build/voice-input-worker.js',
+      createWorker: () => {
+        throw new Error('Worker entry file is missing.');
+      },
+    });
+
+    await expect(adapter.start({ generation: 1 })).resolves.toEqual({
+      status: 'failed',
+      failure: { code: 'voice_worker_start_failed', message: 'Worker entry file is missing.' },
+    });
+    expect(adapter.getGeneration()).toBeUndefined();
+  });
+
+  it('ends the readiness wait immediately when the worker errors before ready', async () => {
+    const worker = new FakeWorker();
+    const adapter = createElectronVoiceInputAdapter({
+      resolveResourcePaths: () => ({
+        vadModelPath: 'C:/resources/vad/silero_vad.onnx',
+        senseVoiceModelPath: 'C:/models/model.int8.onnx',
+        senseVoiceTokensPath: 'C:/models/tokens.txt',
+      }),
+      workerEntryPath: 'C:/repo/.vite/build/voice-input-worker.js',
+      createWorker: () => worker,
+      startTimeoutMs: 60_000,
+    });
+
+    const starting = adapter.start({ generation: 1 });
+    worker.emit('error', new Error('Native module failed to load.'));
+
+    await expect(starting).resolves.toEqual({
+      status: 'failed',
+      failure: expect.objectContaining({ code: 'voice_worker_exited', message: 'Native module failed to load.' }),
+    });
+    expect(adapter.getGeneration()).toBeUndefined();
+  });
+
+  it('ends the readiness wait immediately when the worker exits before ready', async () => {
+    const worker = new FakeWorker();
+    const adapter = createElectronVoiceInputAdapter({
+      resolveResourcePaths: () => ({
+        vadModelPath: 'C:/resources/vad/silero_vad.onnx',
+        senseVoiceModelPath: 'C:/models/model.int8.onnx',
+        senseVoiceTokensPath: 'C:/models/tokens.txt',
+      }),
+      workerEntryPath: 'C:/repo/.vite/build/voice-input-worker.js',
+      createWorker: () => worker,
+      startTimeoutMs: 60_000,
+    });
+
+    const starting = adapter.start({ generation: 1 });
+    worker.emit('exit', 1);
+
+    await expect(starting).resolves.toEqual({
+      status: 'failed',
+      failure: expect.objectContaining({ code: 'voice_worker_exited' }),
+    });
+  });
+
+  it('allows a fresh start after an async startup failure', async () => {
+    const first = new FakeWorker();
+    const second = new FakeWorker();
+    const workers = [first, second];
+    const adapter = createElectronVoiceInputAdapter({
+      resolveResourcePaths: () => ({
+        vadModelPath: 'C:/resources/vad/silero_vad.onnx',
+        senseVoiceModelPath: 'C:/models/model.int8.onnx',
+        senseVoiceTokensPath: 'C:/models/tokens.txt',
+      }),
+      workerEntryPath: 'C:/repo/.vite/build/voice-input-worker.js',
+      createWorker: () => workers.shift()!,
+    });
+
+    const failed = adapter.start({ generation: 1 });
+    first.emit('exit', 1);
+    await expect(failed).resolves.toMatchObject({ status: 'failed' });
+
+    const restarting = adapter.start({ generation: 2 });
+    second.emitMessage({ type: 'event', event: { type: 'runtime-ready', generation: 2 } });
+    await expect(restarting).resolves.toEqual({ status: 'started', generation: 2 });
+  });
+});
+
+describe('Electron voice input adapter frame backpressure', () => {
+  interface CreditPort {
+    frames: Array<{ generation: number; sequence: number; samples: Float32Array }>;
+    credits: number;
+    closed: boolean;
+    listener?: (frame: { generation: number; sequence: number; sampleRate: 16000; samples: Float32Array }) => void;
+  }
+
+  function creditPort(): CreditPort {
+    return { frames: [], credits: 0, closed: false };
+  }
+
+  function attachPort(adapter: ElectronVoiceInputAdapter, port: CreditPort) {
+    adapter.attachFramePort({
+      onMessage(listener) { port.listener = listener; },
+      postMessage(message) { port.credits += message.count; },
+      close() { port.closed = true; },
+    });
+  }
+
+  it('releases one credit per worker-acked frame and transfers the PCM buffer', async () => {
+    const worker = new FakeWorker();
+    const adapter = createElectronVoiceInputAdapter({
+      resolveResourcePaths: () => ({
+        vadModelPath: 'C:/resources/vad/silero_vad.onnx',
+        senseVoiceModelPath: 'C:/models/model.int8.onnx',
+        senseVoiceTokensPath: 'C:/models/tokens.txt',
+      }),
+      workerEntryPath: 'C:/repo/.vite/build/voice-input-worker.js',
+      createWorker: () => worker,
+    });
+    const starting = adapter.start({ generation: 1 });
+    worker.emitMessage({ type: 'event', event: { type: 'runtime-ready', generation: 1 } });
+    await starting;
+    const port = creditPort();
+    attachPort(adapter, port);
+
+    const first = frame(1, 0);
+    const second = frame(1, 1);
+    port.listener!({ generation: 1, sequence: 0, sampleRate: 16_000, samples: first.samples });
+    port.listener!({ generation: 1, sequence: 1, sampleRate: 16_000, samples: second.samples });
+
+    const sent = worker.posted.filter((entry) => entry.value.type === 'frame');
+    expect(sent).toHaveLength(1); // ack-gated: only one in flight
+    expect(sent[0]!.transfer).toEqual([first.samples.buffer]);
+
+    worker.emitMessage({ type: 'frame-ack', generation: 1, sequence: 0 });
+    expect(port.credits).toBe(1);
+    expect(worker.posted.filter((entry) => entry.value.type === 'frame')).toHaveLength(2);
+    worker.emitMessage({ type: 'frame-ack', generation: 1, sequence: 1 });
+    expect(port.credits).toBe(2);
+  });
+
+  it('returns credits for frames dropped by stale generations or invalid shapes', async () => {
+    const worker = new FakeWorker();
+    const adapter = createElectronVoiceInputAdapter({
+      resolveResourcePaths: () => ({
+        vadModelPath: 'C:/resources/vad/silero_vad.onnx',
+        senseVoiceModelPath: 'C:/models/model.int8.onnx',
+        senseVoiceTokensPath: 'C:/models/tokens.txt',
+      }),
+      workerEntryPath: 'C:/repo/.vite/build/voice-input-worker.js',
+      createWorker: () => worker,
+    });
+    const starting = adapter.start({ generation: 1 });
+    worker.emitMessage({ type: 'event', event: { type: 'runtime-ready', generation: 1 } });
+    await starting;
+    const port = creditPort();
+    attachPort(adapter, port);
+
+    port.listener!({ generation: 99, sequence: 0, sampleRate: 16_000, samples: new Float32Array(512) });
+    port.listener!({ generation: 1, sequence: 1, sampleRate: 16_000, samples: new Float32Array(256) });
+    expect(port.credits).toBe(2);
+    expect(worker.posted.filter((entry) => entry.value.type === 'frame')).toHaveLength(0);
+  });
+
+  it('releases credits for the cleared backlog on overflow and keeps the microphone running', async () => {
+    const worker = new FakeWorker();
+    const adapter = createElectronVoiceInputAdapter({
+      resolveResourcePaths: () => ({
+        vadModelPath: 'C:/resources/vad/silero_vad.onnx',
+        senseVoiceModelPath: 'C:/models/model.int8.onnx',
+        senseVoiceTokensPath: 'C:/models/tokens.txt',
+      }),
+      workerEntryPath: 'C:/repo/.vite/build/voice-input-worker.js',
+      createWorker: () => worker,
+      maxPendingFrames: 8,
+    });
+    const starting = adapter.start({ generation: 1 });
+    worker.emitMessage({ type: 'event', event: { type: 'runtime-ready', generation: 1 } });
+    await starting;
+    const port = creditPort();
+    attachPort(adapter, port);
+
+    // The worker never acks; the queue fills to the cap and overflows.
+    for (let sequence = 0; sequence < 12; sequence += 1) {
+      port.listener!({ generation: 1, sequence, sampleRate: 16_000, samples: new Float32Array(512) });
+    }
+
+    const overflow = worker.posted.find((entry) => entry.value.type === 'overflow');
+    expect(overflow?.value).toEqual({ type: 'overflow', generation: 1 });
+    // One frame in flight plus the 8-frame cap never exceeded.
+    expect(worker.posted.filter((entry) => entry.value.type === 'frame')).toHaveLength(1);
+    // Dropped backlog frames returned their credits so the Renderer proceeds.
+    expect(port.credits).toBeGreaterThan(0);
+    // The worker is still alive: no stop/dispose happened.
+    expect(worker.terminated).toBe(false);
+  });
+
+  it('closes the frame port on stop and dispose', async () => {
+    const worker = new FakeWorker();
+    const adapter = createElectronVoiceInputAdapter({
+      resolveResourcePaths: () => ({
+        vadModelPath: 'C:/resources/vad/silero_vad.onnx',
+        senseVoiceModelPath: 'C:/models/model.int8.onnx',
+        senseVoiceTokensPath: 'C:/models/tokens.txt',
+      }),
+      workerEntryPath: 'C:/repo/.vite/build/voice-input-worker.js',
+      createWorker: () => worker,
+    });
+    const starting = adapter.start({ generation: 1 });
+    worker.emitMessage({ type: 'event', event: { type: 'runtime-ready', generation: 1 } });
+    await starting;
+    const port = creditPort();
+    attachPort(adapter, port);
+
+    const stopping = adapter.stop({ generation: 1, reason: 'user' });
+    worker.emitMessage({ type: 'event', event: { type: 'stopped', generation: 1 } });
+    await stopping;
+    expect(port.closed).toBe(true);
+  });
+});

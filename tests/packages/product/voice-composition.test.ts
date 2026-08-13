@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import fs from 'fs-extra';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { composeProduct, type ProductRuntime } from '@megumi/product';
+import type { VoiceModels } from '@megumi/voice';
 import { createNodeWorkspaceFileSystem } from '@megumi/workspace/node';
 import type { SpeechInputEvent, SpeechInputRuntime } from '@megumi/voice';
 
@@ -133,5 +134,55 @@ describe('Product voice composition', () => {
     await product.host.voice.startSession({ boundSessionId: 'session:one', language: 'zh' });
 
     expect(speechInput.start).toHaveBeenCalledWith({ language: 'zh' });
+  });
+
+  it('starts STT when the TTS model capability is unavailable', async () => {
+    const speechInput = noopSpeechInput();
+    const root = mkdtempSync(join(tmpdir(), 'megumi-voice-tts-decouple-'));
+    tempDirectories.push(root);
+    const models: VoiceModels = {
+      getStatus: () => ({ status: 'ready', bundleVersion: 'voice-v1' }),
+      checkForUpdates: async () => ({ status: 'unavailable' }),
+      prepare: async () => ({ status: 'ready' }),
+      cancelPreparation: async () => ({ status: 'idle' }),
+      getModelPath: () => 'C:/models',
+      getCapabilityStatus: (capability) => capability === 'stt'
+        ? { status: 'ready' }
+        : { status: 'not_ready', reason: 'missing_files', message: 'TTS files missing.' },
+    };
+    const product = composeProduct({
+      home: {
+        env: { MEGUMI_HOME: join(root, 'home') },
+        homeDirectory: root,
+        fileSystem: {
+          ensureDirSync: fs.ensureDirSync,
+          pathExistsSync: fs.pathExistsSync,
+          writeJsonSync: fs.writeJsonSync,
+          writeFileSync: fs.writeFileSync,
+          copyDirectorySync: fs.copySync,
+        },
+        clock: { now: () => new Date('2026-07-10T00:00:00.000Z') },
+      },
+      workspaceFileSystem: createNodeWorkspaceFileSystem(),
+      voice: {
+        speechInput,
+        models,
+        synthesizer: {
+          async prepare() { return { status: 'failed', failure: { code: 'tts_prepare_failed', message: 'TTS down.' } }; },
+          async *synthesize() {},
+        },
+      },
+    });
+    composedProducts.push(product);
+
+    expect(await product.host.voice.getModelCapabilityStatus({ capability: 'stt' }))
+      .toEqual({ status: 'ready' });
+    expect(await product.host.voice.getModelCapabilityStatus({ capability: 'tts' }))
+      .toMatchObject({ status: 'not_ready' });
+    // The Voice Session (microphone + VAD + STT) starts anyway.
+    await expect(product.host.voice.startSession({ boundSessionId: 'session:one' })).resolves.toEqual({
+      status: 'ok',
+      generation: 1,
+    });
   });
 });

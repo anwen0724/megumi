@@ -2,9 +2,24 @@
  * Coordinates the VAD, the Utterance Recorder, and SenseVoice into the single
  * Speech Input Runtime. Owns the state machine, event projection, cancellation,
  * and generation invalidation rules; runs wherever the host places it.
+ *
+ * Event order at start: the runtime resolves the VAD initialization FIRST and
+ * only then emits runtime-ready, followed by listening (automatic) or
+ * automatic-boundary-unavailable (manual fallback). STT preparation follows on
+ * its own lane with stt-preparing / stt-ready / stt-failed so the first
+ * utterance never silently carries the model load.
+ *
+ * Recognition cancellation is token-based: mute, stop, restart, and dispose
+ * invalidate the current operation token; a decode that settles later is
+ * discarded without emitting final-transcript, empty-utterance, or
+ * recognition-failed. New recognition never overlaps a settling decode.
  */
 
-import type { SpeechRecognizer } from '../speech';
+import type {
+  PrepareSpeechRecognitionResult,
+  PreparableSpeechRecognizer,
+  SpeechRecognizer,
+} from '../speech';
 import {
   SPEECH_BOUNDARY_CONFIG,
   type SpeechBoundaryConfig,
@@ -44,13 +59,19 @@ export function createSpeechInputRuntime(
   options: CreateSpeechInputRuntimeOptions,
 ): SpeechInputRuntime & SpeechInputRuntimeInternal {
   const listeners = new Set<(event: SpeechInputEvent) => void>();
+  const preparableRecognizer: PreparableSpeechRecognizer | undefined =
+    typeof (options.recognizer as unknown as Partial<PreparableSpeechRecognizer>).prepare === 'function'
+      ? options.recognizer as unknown as PreparableSpeechRecognizer
+      : undefined;
   let generation = 0;
   let status: SpeechInputRuntimeStatus = 'stopped';
   let mode: 'automatic' | 'manual' = 'automatic';
   let muted = false;
   let recognizing = false;
+  let activeRecognitions = 0;
+  let recognitionToken = 0;
   let recognitionAbort: AbortController | undefined;
-  let recognitionGeneration = 0;
+  let recognizerPreparation: Promise<PrepareSpeechRecognitionResult> | undefined;
   let vad: SpeechVad | undefined;
   let language: 'zh' | 'en' | 'auto' = 'auto';
   let nextGeneration = 0;
@@ -126,26 +147,85 @@ export function createSpeechInputRuntime(
     resumeListening();
   };
 
+  const prepareRecognizer = (): Promise<PrepareSpeechRecognitionResult> | undefined => {
+    if (!preparableRecognizer || status === 'stopped') return undefined;
+    const prepareGeneration = generation;
+    emit({ type: 'stt-preparing', generation });
+    const preparation = Promise.resolve()
+      .then(() => preparableRecognizer.prepare({ language }))
+      .catch((error: unknown): PrepareSpeechRecognitionResult => ({
+        status: 'failed',
+        failure: {
+          code: 'sensevoice_preparation_failed',
+          message: error instanceof Error ? error.message : 'Speech recognition preparation failed.',
+        },
+      }));
+    recognizerPreparation = preparation;
+    void preparation.then((result) => {
+      // Late preparations of older runs are silent.
+      if (hasStopped() || prepareGeneration !== generation) return;
+      if (result.status === 'ready') {
+        emit({ type: 'stt-ready', generation });
+      } else {
+        emit({ type: 'stt-failed', generation, failure: result.failure });
+      }
+    });
+    return preparation;
+  };
+
   const recognize = async (utterance: {
     readonly generation: number;
     readonly samples: Float32Array;
     readonly startedAt: number;
     readonly endedAt: number;
   }) => {
+    // Each recognition owns its operation token; later decode settlements for
+    // invalidated tokens are discarded entirely.
+    const token = ++recognitionToken;
     recognizing = true;
-    recognitionGeneration = generation;
-    recognitionAbort = new AbortController();
+    activeRecognitions += 1;
+    const operationAbort = new AbortController();
+    recognitionAbort = operationAbort;
     status = 'recognizing';
     emit({ type: 'recognizing', generation });
-    const result = await options.recognizer.recognize({
-      pcm: { samples: utterance.samples, sampleRate: 16_000, channels: 1 },
-      language,
-    }, { signal: recognitionAbort.signal });
-    // A cancelled recognition from stop or a generation change must not leak
-    // into the current run.
-    if (recognitionGeneration !== generation || hasStopped()) return;
-    recognizing = false;
-    recognitionAbort = undefined;
+    let result: Awaited<ReturnType<SpeechRecognizer['recognize']>>;
+    try {
+      const preparation = recognizerPreparation;
+      const preparationResult = preparation ? await preparation : undefined;
+      if (operationAbort.signal.aborted || token !== recognitionToken || hasStopped()) {
+        result = cancelledRecognition();
+      } else if (preparationResult?.status === 'failed') {
+        result = preparationResult;
+      } else {
+        result = await options.recognizer.recognize({
+          pcm: { samples: utterance.samples, sampleRate: 16_000, channels: 1 },
+          language,
+        }, { signal: operationAbort.signal });
+      }
+    } catch (error: unknown) {
+      result = operationAbort.signal.aborted
+        ? cancelledRecognition()
+        : {
+            status: 'failed',
+            failure: {
+              code: 'voice_recognition_failed',
+              message: error instanceof Error ? error.message : 'Speech recognition failed.',
+            },
+          };
+    } finally {
+      activeRecognitions -= 1;
+      if (activeRecognitions === 0) {
+        recognizing = false;
+        recognitionAbort = undefined;
+      }
+    }
+    // A cancelled or superseded recognition must not leak any result event,
+    // but it still ends the recognition phase: return to listening so a new
+    // utterance can start.
+    if (token !== recognitionToken || hasStopped()) {
+      if (!hasStopped() && status === 'recognizing') resumeListening();
+      return;
+    }
     if (result.status === 'recognized') {
       emit({
         type: 'final-transcript',
@@ -161,10 +241,17 @@ export function createSpeechInputRuntime(
       });
     } else if (result.status === 'empty') {
       emit({ type: 'empty-utterance', generation, source: 'recognition' });
-    } else {
+    } else if (result.failure.code !== 'voice_recognition_cancelled') {
       emit({ type: 'recognition-failed', generation, failure: result.failure });
     }
     resumeListening();
+  };
+
+  /** Invalidates every outstanding recognition; used by mute/stop/restart/dispose. */
+  const invalidateRecognitions = () => {
+    recognitionToken += 1;
+    recognitionAbort?.abort();
+    recognitionAbort = undefined;
   };
 
   return {
@@ -174,34 +261,49 @@ export function createSpeechInputRuntime(
           return { status: 'started', generation };
         }
         // Restarting with a new generation ends the previous run first.
-        recognitionAbort?.abort();
+        invalidateRecognitions();
         emit({ type: 'stopped', generation });
       }
       generation = request.generation ?? ++nextGeneration;
       language = request.language ?? 'auto';
+      recognizerPreparation = undefined;
       muted = false;
       recognizing = false;
       mode = 'automatic';
       resetRecorder();
       expectedSequence = undefined;
       status = 'starting';
-      emit({ type: 'runtime-ready', generation });
+      // The VAD decision is part of the start contract: runtime-ready is only
+      // emitted once the runtime knows whether automatic boundaries exist, so
+      // listeners never miss a fast automatic-boundary-unavailable.
       try {
         vad = options.vad ? await options.vad() : undefined;
       } catch {
         vad = undefined;
       }
+      emit({ type: 'runtime-ready', generation });
       if (!vad) {
         degradeToManual();
       } else {
         resumeListening();
       }
+      prepareRecognizer();
       return { status: 'started', generation };
     },
     acceptFrame(frame) {
-      if (status === 'stopped' || muted || recognizing) return;
+      if (status === 'stopped' || status === 'starting') return;
       if (frame.generation !== generation) return;
       if (!isValidFrame(frame)) return;
+      if (muted) return;
+      if (recognizing) {
+        // Frames ignored while a recognition drains are deliberate drops, not
+        // transport losses: advance the expected sequence so the first frame
+        // after recognition is never mistaken for an overflow gap.
+        if (expectedSequence === undefined || frame.sequence > expectedSequence) {
+          expectedSequence = frame.sequence;
+        }
+        return;
+      }
       // Track sequence continuity across the whole run: a jump means frames
       // were dropped by the host queue, which fails the current utterance
       // even while the pre-roll is still accumulating.
@@ -242,10 +344,9 @@ export function createSpeechInputRuntime(
       muted = request.muted;
       if (muted) {
         // Drop the in-progress utterance and pre-roll; the host also stops
-        // delivering frames while muted.
-        recognizing = false;
-        recognitionAbort?.abort();
-        recognitionAbort = undefined;
+        // delivering frames while muted. Outstanding recognitions are
+        // invalidated so their late results never surface.
+        invalidateRecognitions();
         resetRecorder();
         expectedSequence = undefined;
       }
@@ -270,11 +371,11 @@ export function createSpeechInputRuntime(
     async stop(request: StopSpeechInputRequest) {
       if (status === 'stopped') return;
       if (request.generation !== undefined && request.generation !== generation) return;
-      recognitionAbort?.abort();
-      recognitionAbort = undefined;
+      invalidateRecognitions();
       recognizing = false;
       muted = false;
       status = 'stopped';
+      recognizerPreparation = undefined;
       resetRecorder();
       emit({ type: 'stopped', generation });
     },
@@ -285,12 +386,19 @@ export function createSpeechInputRuntime(
     handleOverflow,
     getStatus: () => status,
     dispose() {
-      recognitionAbort?.abort();
-      recognitionAbort = undefined;
+      invalidateRecognitions();
       recognizing = false;
       status = 'stopped';
+      recognizerPreparation = undefined;
       recorder.reset(generation);
       listeners.clear();
     },
+  };
+}
+
+function cancelledRecognition(): Awaited<ReturnType<SpeechRecognizer['recognize']>> {
+  return {
+    status: 'failed',
+    failure: { code: 'voice_recognition_cancelled', message: 'Speech recognition was cancelled.' },
   };
 }

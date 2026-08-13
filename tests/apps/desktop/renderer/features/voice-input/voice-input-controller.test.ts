@@ -207,4 +207,32 @@ describe('Voice input controller', () => {
     expect(events.unsubscribe).toHaveBeenCalled();
     expect(capture.close).toHaveBeenCalledTimes(2);
   });
+
+  it('adopts the generation from runtime-ready so fast VAD degradations are not lost', async () => {
+    const { controller, events } = createController();
+
+    // The Voice Session start emits events BEFORE beginCapture runs; a fast
+    // automatic-boundary-unavailable must still reach the UI.
+    events.emit({ type: 'runtime-ready', generation: 5 });
+    events.emit({ type: 'automatic-boundary-unavailable', generation: 5 });
+
+    expect(controller.getSnapshot().speech).toBe('automatic-boundary-unavailable');
+
+    // beginCapture then confirms the same generation and keeps the state.
+    await controller.beginCapture({ inputDeviceId: 'mic:1', generation: 5 });
+    expect(controller.getSnapshot().speech).toBe('automatic-boundary-unavailable');
+  });
+
+  it('surfaces stt-failed without touching the microphone state', async () => {
+    const { controller, events, capture } = createController();
+    await controller.beginCapture({ inputDeviceId: 'mic:1', generation: 1 });
+
+    events.emit({ type: 'stt-failed', generation: 1, failure: { code: 'sensevoice_preparation_failed', message: 'Model missing.' } });
+
+    expect(controller.getSnapshot()).toMatchObject({
+      speech: 'starting',
+      speechError: 'Model missing.',
+    });
+    expect(capture.close).not.toHaveBeenCalled();
+  });
 });

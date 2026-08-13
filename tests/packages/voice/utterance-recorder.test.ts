@@ -179,6 +179,46 @@ describe('Utterance recorder', () => {
     expect(recorder.finishManual()).toEqual({ type: 'empty' });
   });
 
+  it('rejects a purely silent manual recording without calling STT', () => {
+    const recorder = createUtteranceRecorder({});
+    recorder.beginManual();
+    for (let sequence = 0; sequence < 20; sequence += 1) {
+      recorder.accept({ ...input(sequence, false), samples: new Float32Array(512).fill(0) }, false);
+    }
+    expect(recorder.finishManual()).toEqual({ type: 'empty' });
+  });
+
+  it('rejects a below-threshold noise-only manual recording', () => {
+    const recorder = createUtteranceRecorder({});
+    recorder.beginManual();
+    // RMS of 0.001 stays below MIN_VALID_UTTERANCE_RMS (0.005).
+    for (let sequence = 0; sequence < 20; sequence += 1) {
+      recorder.accept({ ...input(sequence, false), samples: new Float32Array(512).fill(0.001) }, false);
+    }
+    expect(recorder.finishManual()).toEqual({ type: 'empty' });
+  });
+
+  it('accepts quiet but valid low-volume speech in manual recordings', () => {
+    const recorder = createUtteranceRecorder({});
+    recorder.beginManual();
+    // RMS of 0.008 clears the threshold: quiet speech must not be killed.
+    for (let sequence = 0; sequence < 20; sequence += 1) {
+      recorder.accept({ ...input(sequence, false), samples: new Float32Array(512).fill(0.008) }, false);
+    }
+    const result = recorder.finishManual();
+    expect(result.type).toBe('complete');
+  });
+
+  it('accepts normal speech levels in manual recordings', () => {
+    const recorder = createUtteranceRecorder({});
+    recorder.beginManual();
+    for (let sequence = 0; sequence < 20; sequence += 1) {
+      recorder.accept(input(sequence, true), false);
+    }
+    const result = recorder.finishManual();
+    expect(result.type).toBe('complete');
+  });
+
   it('records start and end timestamps from the injected clock', () => {
     let now = 1_000;
     const recorder = createUtteranceRecorder({ now: () => now });

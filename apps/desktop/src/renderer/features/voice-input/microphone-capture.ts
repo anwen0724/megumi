@@ -13,6 +13,7 @@ export type MicrophoneFailureCode =
   | 'microphone_device_missing'
   | 'microphone_device_failed'
   | 'microphone_sample_rate_mismatch'
+  | 'microphone_resume_failed'
   | 'microphone_worklet_failed';
 
 export interface MicrophoneSnapshot {
@@ -60,8 +61,9 @@ export function measureFrameLevels(samples: Float32Array): FrameLevels {
 }
 
 interface WorkletNodeLike {
+  /** The real browser AudioNode that may be connected into the Web Audio graph. */
+  readonly audioNode: AudioNode;
   readonly port: { onmessage: ((event: { data: unknown }) => void) | null };
-  connect(destination: unknown): void;
   disconnect(): void;
 }
 
@@ -85,10 +87,11 @@ export function createMicrophoneCapture(options: CreateMicrophoneCaptureOptions 
     ?? ((audioOptions) => new AudioContext(audioOptions));
   const createWorkletNode = options.createWorkletNode ?? ((context) => {
     const created = new AudioWorkletNode(context, 'voice-input-frame-worklet');
-    // Narrow the DOM port to the shape the capture consumes.
+    // Keep the real AudioNode separate from the narrowed testable facade.
+    // Web Audio rejects plain wrapper objects passed to AudioNode.connect().
     return {
+      audioNode: created,
       port: created.port as unknown as { onmessage: ((event: { data: unknown }) => void) | null },
-      connect: (destination: AudioNode) => created.connect(destination),
       disconnect: () => created.disconnect(),
     };
   });
@@ -173,6 +176,18 @@ export function createMicrophoneCapture(options: CreateMicrophoneCaptureOptions 
         if (context.sampleRate !== 16_000) {
           return fail('microphone_sample_rate_mismatch', `AudioContext sample rate is ${context.sampleRate}, expected 16000.`);
         }
+        // Autoplay policy may create a suspended context; resume it inside this
+        // user-gesture chain exactly once. The graph never reaches
+        // context.destination, so the microphone is never audible.
+        if (context.state === 'suspended') {
+          try {
+            await context.resume();
+          } catch (error) {
+            return fail('microphone_resume_failed', error instanceof Error
+              ? error.message
+              : 'The AudioContext could not be resumed.');
+          }
+        }
         await context.audioWorklet.addModule(workletUrl);
         const createdNode = createWorkletNode(context);
         node = createdNode;
@@ -194,7 +209,7 @@ export function createMicrophoneCapture(options: CreateMicrophoneCaptureOptions 
           frameHandler?.(samples);
         };
         source = context.createMediaStreamSource(stream);
-        source.connect(node as unknown as AudioNode);
+        source.connect(createdNode.audioNode);
         publish({ fallbackToDefault: opened.fallbackToDefault });
         return { status: 'opened', sampleRate: 16_000, fallbackToDefault: opened.fallbackToDefault };
       } catch (error) {

@@ -9,6 +9,7 @@ describe('registerVoiceHandlers', () => {
     const voice = {
       getSnapshot: vi.fn(),
       getModelStatus: vi.fn(),
+      getModelCapabilityStatus: vi.fn(),
       checkModelUpdates: vi.fn(),
       prepareModels: vi.fn(),
       cancelModelPreparation: vi.fn(),
@@ -31,6 +32,7 @@ describe('registerVoiceHandlers', () => {
     expect(handle.mock.calls.map(([channel]) => channel)).toEqual([
       IPC_CHANNELS.voice.snapshot,
       IPC_CHANNELS.voice.modelStatus,
+      IPC_CHANNELS.voice.modelCapability,
       IPC_CHANNELS.voice.modelsCheckUpdates,
       IPC_CHANNELS.voice.modelsPrepare,
       IPC_CHANNELS.voice.modelsCancel,

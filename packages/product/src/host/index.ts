@@ -118,10 +118,14 @@ export type {
   VoiceProfileRenamePayload,
   VoiceSessionMutedPayload,
   VoiceSessionStartPayload,
+  VoiceModelCapabilityPayload,
+  VoiceHostModelCapabilityStatus,
 } from './voice-host';
 export {
   VoiceEmptyPayloadSchema,
   VoiceModelStatusResultSchema,
+  VoiceModelCapabilityPayloadSchema,
+  VoiceModelCapabilityStatusSchema,
   VoiceModelUpdateResultSchema,
   VoiceProfileIdPayloadSchema,
   VoiceProfilePreviewPayloadSchema,

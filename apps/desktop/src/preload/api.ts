@@ -41,6 +41,7 @@ import type {
   ObservabilityExportResult,
   ObservabilityGetRunTraceUiResult,
   ObservabilityListRunTracesUiResult,
+  VoiceHostModelCapabilityStatus,
   VoiceHostModelStatus,
   VoiceHostModelUpdateResult,
   VoiceHostMutationResult,
@@ -90,8 +91,10 @@ import type {
   VoiceProfileRenamePayload,
   VoiceSessionMutedPayload,
   VoiceSessionStartPayload,
+  VoiceModelCapabilityPayload,
 } from '../main/ipc/schemas';
 import type { CharacterWindowShapeRect, CharacterWindowSnapshot } from '../main/app/character-window-controller';
+import { parseSpeechInputEvent } from '@megumi/voice/speech-input/speech-input-schema';
 import type { SpeechInputEvent } from '@megumi/voice';
 
 type BusinessRequest<TPayload, TChannel extends BusinessIpcChannel> = RuntimeIpcRequest<TPayload, TChannel>;
@@ -100,6 +103,18 @@ type EmptyData = Record<string, never>;
 type SessionMessageSendData = SendUserInputPayload;
 type SessionBranchDraftCreateData = CreateBranchDraftResult['payload'];
 type SessionBranchDraftCancelData = CancelBranchDraftResult['payload'];
+
+// MessagePort cannot be passed as an argument of a contextBridge-exposed
+// function. The main world transfers it to this isolated world through the
+// shared DOM window first; Preload then forwards the real port to Electron Main.
+window.addEventListener('message', (event: MessageEvent<unknown>) => {
+  if (event.source !== window) return;
+  const message = event.data as { readonly type?: unknown } | null;
+  if (!message || message.type !== IPC_CHANNELS.voice.inputPort) return;
+  const [port] = event.ports;
+  if (!port) return;
+  ipcRenderer.postMessage(IPC_CHANNELS.voice.inputPort, null, [port]);
+});
 
 async function invokeRuntimeIpc<TPayload, TData extends object, TChannel extends BusinessIpcChannel>(
   channel: TChannel,
@@ -288,16 +303,12 @@ export const api = {
       invokeRuntimeIpc(IPC_CHANNELS.approval.resolve, request),
   },
   voiceInput: {
-    sendFrame: (payload: {
-      generation: number;
-      sequence: number;
-      sampleRate: 16000;
-      samples: ArrayBuffer;
-    }): void => {
-      ipcRenderer.send(IPC_CHANNELS.voice.inputFrame, payload);
-    },
     onEvent: (callback: (event: SpeechInputEvent) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, speechEvent: SpeechInputEvent) => callback(speechEvent);
+      const listener = (_event: Electron.IpcRendererEvent, rawEvent: unknown) => {
+        // Trust boundary: never deliver an unvalidated event to the app.
+        const speechEvent = parseSpeechInputEvent(rawEvent);
+        if (speechEvent) callback(speechEvent);
+      };
       ipcRenderer.on(IPC_CHANNELS.voice.inputEvent, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.voice.inputEvent, listener);
     },
@@ -336,6 +347,10 @@ export const api = {
       request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.voice.modelStatus>,
     ): Promise<RuntimeIpcResult<VoiceHostModelStatus, typeof IPC_CHANNELS.voice.modelStatus>> =>
       invokeRuntimeIpc(IPC_CHANNELS.voice.modelStatus, request),
+    getModelCapabilityStatus: (
+      request: BusinessRequest<VoiceModelCapabilityPayload, typeof IPC_CHANNELS.voice.modelCapability>,
+    ): Promise<RuntimeIpcResult<VoiceHostModelCapabilityStatus, typeof IPC_CHANNELS.voice.modelCapability>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.voice.modelCapability, request),
     checkModelUpdates: (
       request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.voice.modelsCheckUpdates>,
     ): Promise<RuntimeIpcResult<VoiceHostModelUpdateResult, typeof IPC_CHANNELS.voice.modelsCheckUpdates>> =>

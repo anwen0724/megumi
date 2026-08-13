@@ -4,6 +4,11 @@
  * Voice Input Feature owns the microphone and forwards frames; this hook only
  * drives Voice Session controls and fills the editable transcript, which is
  * submitted through the normal input path.
+ *
+ * Lifecycle: the frame sender opens right before capture begins and closes
+ * with it. Hiding, closing, or quitting the character window ends the Voice
+ * Session in Main; the Renderer reacts to the pushed window snapshot and
+ * releases the microphone even though the window itself stays mounted.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,10 +20,20 @@ import {
   createVoiceInputController,
   type VoiceInputSnapshot,
 } from '../voice-input/voice-input-controller';
-import { createMicrophoneCapture } from '../voice-input/microphone-capture';
+import {
+  createMicrophoneCapture,
+  type MicrophoneCapture,
+} from '../voice-input/microphone-capture';
+import {
+  openVoiceInputFrameSender,
+  type VoiceInputFrameSender,
+} from '../voice-input/frame-channel';
 import { createCancelAndReplaceCoordinator } from './cancel-and-replace';
 
-export function useCharacterVoice(selectedSessionId: string | null) {
+export function useCharacterVoice(
+  selectedSessionId: string | null,
+  options: { readonly createCapture?: () => MicrophoneCapture } = {},
+) {
   const { t } = useTranslation('character');
   const [voiceSnapshot, setVoiceSnapshot] = useState<VoiceHostSnapshot>({ status: 'idle' });
   const [audioSnapshot, setAudioSnapshot] = useState<VoiceInputSnapshot>({
@@ -36,26 +51,27 @@ export function useCharacterVoice(selectedSessionId: string | null) {
   const startGeneration = useRef(0);
   const autoSubmitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const submitRef = useRef<(text: string) => Promise<void>>(async () => undefined);
+  const frameSenderRef = useRef<VoiceInputFrameSender | undefined>(undefined);
 
   const cancelAutoSubmit = () => {
     if (autoSubmitTimer.current) clearTimeout(autoSubmitTimer.current);
     autoSubmitTimer.current = undefined;
   };
 
+  // The capture factory is pinned once per mount; recreating the controller
+  // on every render would tear down and reopen the microphone lifecycle.
+  const createCaptureRef = useRef(options.createCapture);
   const audio = useMemo(() => createVoiceInputController({
-    capture: createMicrophoneCapture(),
-    sendFrame: (frame) => window.megumi.voiceInput.sendFrame({
-      generation: frame.generation,
-      sequence: frame.sequence,
-      sampleRate: 16_000,
-      samples: frame.samples.buffer as ArrayBuffer,
-    }),
+    capture: createCaptureRef.current ? createCaptureRef.current() : createMicrophoneCapture(),
+    sendFrame: (frame) => frameSenderRef.current?.sendFrame(frame),
     subscribeEvents: (listener) => window.megumi.voiceInput.onEvent(listener),
     onTranscript: (transcript) => {
       cancelAutoSubmit();
       setDraftState(transcript.text);
       autoSubmitTimer.current = setTimeout(() => { void submitRef.current(transcript.text); }, 3_000);
     },
+    // The frame sender is replaced per capture run; see start below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }), []);
 
   const refreshVoiceSnapshot = useCallback(async () => {
@@ -65,16 +81,43 @@ export function useCharacterVoice(selectedSessionId: string | null) {
     if (result.ok) setVoiceSnapshot(result.data);
   }, []);
 
+  const releaseFrameSender = useCallback(() => {
+    frameSenderRef.current?.close();
+    frameSenderRef.current = undefined;
+  }, []);
+
+  const stopInput = useCallback(async () => {
+    cancelAutoSubmit();
+    releaseFrameSender();
+    await audio.endCapture();
+    await refreshVoiceSnapshot();
+  }, [audio, refreshVoiceSnapshot, releaseFrameSender]);
+
   useEffect(() => {
     const subscription = audio.subscribe(setAudioSnapshot);
     void refreshVoiceSnapshot();
+    // Hiding (or closing) the character window ends the Voice Session in Main
+    // and pushes a snapshot; the window stays mounted, so the microphone must
+    // be released here. Idempotent: endCapture on an idle capture is a no-op.
+    const removeWindowSnapshot = window.megumi.character.onSnapshot((snapshot) => {
+      if (!snapshot.visible) {
+        // Invalidate an async start before closing capture. If getSettings,
+        // Worker startup, or getUserMedia settles later, start() observes the
+        // changed generation and closes the newly opened microphone again.
+        ++startGeneration.current;
+        setPreparing(false);
+        void stopInput();
+      }
+    });
     return () => {
       ++startGeneration.current;
       cancelAutoSubmit();
       subscription.unsubscribe();
+      removeWindowSnapshot();
+      releaseFrameSender();
       void audio.dispose();
     };
-  }, [audio, refreshVoiceSnapshot]);
+  }, [audio, refreshVoiceSnapshot, stopInput, releaseFrameSender]);
 
   const sendNormalText = useCallback(async (text: string) => {
     const normalized = text.trim();
@@ -183,14 +226,12 @@ export function useCharacterVoice(selectedSessionId: string | null) {
     }
     const voiceSettings = settings.data.settings.voice;
     setOutputDeviceId(voiceSettings.outputDeviceId);
-    const modelStatus = await window.megumi.voice.getModelStatus(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.modelStatus, {}),
+    // DECOUPLE: only the speech input capability (SenseVoice + tokens) gates
+    // the microphone and STT. TTS state only affects reply reading.
+    const sttStatus = await window.megumi.voice.getModelCapabilityStatus(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.modelCapability, { capability: 'stt' }),
     );
-    if (!modelStatus.ok) {
-      setError(modelStatus.data.message);
-      return;
-    }
-    if (modelStatus.data.status !== 'ready') {
+    if (!sttStatus.ok || sttStatus.data.status !== 'ready') {
       setError(t('errors.modelsNotReady'));
       return;
     }
@@ -219,6 +260,19 @@ export function useCharacterVoice(selectedSessionId: string | null) {
         setError(t('errors.voiceComponentOutdated'));
         return;
       }
+      // Open the bounded frame channel BEFORE the microphone starts: frames
+      // arrive through a bounded, credit-based channel before capture begins.
+      releaseFrameSender();
+      frameSenderRef.current = openVoiceInputFrameSender({
+        // A MessagePort is not a supported contextBridge argument. Transfer it
+        // to the isolated Preload world through the DOM, where Preload forwards
+        // the same port to Electron Main.
+        postFramePort: (port) => window.postMessage(
+          { type: IPC_CHANNELS.voice.inputPort },
+          '*',
+          [port],
+        ),
+      });
       // Only after the Voice Session (and the Speech Worker) is running does
       // the microphone open; frames are tagged with the worker's generation.
       await audio.beginCapture({
@@ -226,26 +280,36 @@ export function useCharacterVoice(selectedSessionId: string | null) {
         generation: runtimeGeneration,
       });
       if (generation !== startGeneration.current) {
-        await audio.endCapture();
+        await stopInput();
         return;
       }
       await refreshVoiceSnapshot();
+    } catch {
+      // Transport or microphone failures must never leave an apparently inert
+      // active Voice Session behind. Roll the partially opened input run back
+      // and surface the normal start failure in the panel.
+      releaseFrameSender();
+      await audio.endCapture();
+      await window.megumi.voice.endSession(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.sessionEnd, {}),
+      );
+      await refreshVoiceSnapshot();
+      setError(t('errors.startSession'));
     } finally {
       if (generation === startGeneration.current) setPreparing(false);
     }
-  }, [audio, refreshVoiceSnapshot, selectedSessionId, t]);
+  }, [audio, refreshVoiceSnapshot, releaseFrameSender, selectedSessionId, stopInput, t]);
 
   const end = useCallback(async () => {
     ++startGeneration.current;
     setPreparing(false);
-    cancelAutoSubmit();
     replacement.clear();
-    await audio.endCapture();
+    await stopInput();
     await window.megumi.voice.endSession(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.sessionEnd, {}),
     );
     await refreshVoiceSnapshot();
-  }, [audio, refreshVoiceSnapshot, replacement]);
+  }, [refreshVoiceSnapshot, replacement, stopInput]);
 
   const setMuted = useCallback(async (muted: boolean) => {
     const result = await window.megumi.voice.setMuted(

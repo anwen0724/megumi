@@ -6,6 +6,7 @@
  */
 
 import {
+  MIN_VALID_UTTERANCE_RMS,
   SPEECH_BOUNDARY_CONFIG,
   type SpeechBoundaryConfig,
   type SpeechInputFrame,
@@ -48,6 +49,18 @@ export interface UtteranceRecorder {
 export interface CreateUtteranceRecorderOptions {
   readonly boundary?: SpeechBoundaryConfig;
   readonly now?: () => number;
+}
+
+/**
+ * Signal-presence check shared by automatic and manual utterances: real RMS
+ * energy above the fixed threshold. Pure silence never reaches STT, while
+ * quiet speech (~-40 dBFS) still passes.
+ */
+export function hasAudioSignal(samples: Float32Array): boolean {
+  if (samples.length === 0) return false;
+  let squareSum = 0;
+  for (const sample of samples) squareSum += sample * sample;
+  return Math.sqrt(squareSum / samples.length) >= MIN_VALID_UTTERANCE_RMS;
 }
 
 export function createUtteranceRecorder(options: CreateUtteranceRecorderOptions = {}): UtteranceRecorder {
@@ -120,7 +133,7 @@ export function createUtteranceRecorder(options: CreateUtteranceRecorderOptions 
   };
 
   /** Manual boundaries skip the minimum-speech rule; the user decides when a
-   *  recording ends. */
+   *  recording ends. Every submission still needs a real audio signal. */
   const completeUtterance = (requireMinimumSpeech: boolean): UtteranceRecorderResult => {
     const endedAt = now();
     const length = utterance.reduce((total, frame) => total + frame.length, 0);
@@ -130,7 +143,9 @@ export function createUtteranceRecorder(options: CreateUtteranceRecorderOptions 
       samples.set(chunk, offset);
       offset += chunk.length;
     }
-    const result = !requireMinimumSpeech || speechFrames >= minSpeechFrames
+    const hasValidSpeech = (!requireMinimumSpeech || speechFrames >= minSpeechFrames)
+      && hasAudioSignal(samples);
+    const result = hasValidSpeech
       ? {
           type: 'complete' as const,
           // Utterances only form from accepted frames, which binds the generation.

@@ -58,7 +58,17 @@ export interface VoiceModels {
   prepare(request?: PrepareVoiceModelsRequest): Promise<PrepareVoiceModelsResult>;
   cancelPreparation(): Promise<CancelVoiceModelPreparationResult>;
   getModelPath(kind: 'stt' | 'tts', modelId?: string, revision?: string): string;
+  /**
+   * Per-capability readiness: STT (SenseVoice + tokens) must be able to gate
+   * speech input independently of TTS; a missing or corrupt TTS bundle must
+   * never block the microphone and recognition.
+   */
+  getCapabilityStatus(capability: 'stt' | 'tts'): VoiceModelCapabilityStatus;
 }
+
+export type VoiceModelCapabilityStatus =
+  | { readonly status: 'ready' }
+  | { readonly status: 'not_ready'; readonly reason: 'not_prepared' | 'missing_files'; readonly message: string };
 
 export interface VoiceModelManifestFile {
   readonly path: string;
@@ -144,7 +154,10 @@ export function createFileVoiceModels(options: CreateFileVoiceModelsOptions): Vo
   const downloadsPath = path.resolve(options.downloadsPath);
   const runtimeVersion = options.manifest.runtimeVersion;
   let activeManifest = readActiveManifest(rootPath);
-  if (activeManifest && (!validateBundleQuick(rootPath, activeManifest) || activeManifest.runtimeVersion !== runtimeVersion)) {
+  // Keep the installed manifest identity when only one capability is damaged:
+  // capability checks can then validate STT and TTS independently. A runtime
+  // version mismatch is the only reason the installed manifest is unusable.
+  if (activeManifest && activeManifest.runtimeVersion !== runtimeVersion) {
     activeManifest = undefined;
   }
   let selectedManifest = activeManifest ?? options.manifest;
@@ -176,7 +189,10 @@ export function createFileVoiceModels(options: CreateFileVoiceModelsOptions): Vo
     prepare(request) {
       const updateAvailable = !activeManifest
         || compareBundleVersions(selectedManifest.bundleVersion, activeManifest.bundleVersion) > 0;
-      if (activeManifest && !updateAvailable && !request?.repair) return Promise.resolve({ status: 'ready' });
+      const activeBundleReady = activeManifest ? validateBundleQuick(rootPath, activeManifest) : false;
+      if (activeManifest && activeBundleReady && !updateAvailable && !request?.repair) {
+        return Promise.resolve({ status: 'ready' });
+      }
       if (preparation) return preparation;
       controller = new AbortController();
       const activeController = controller;
@@ -242,6 +258,48 @@ export function createFileVoiceModels(options: CreateFileVoiceModelsOptions): Vo
       if (!model) throw new Error(`Voice model ${kind} is unavailable in ${manifest.bundleVersion}.`);
       return modelDirectoryPath(bundlePath(rootPath, manifest.bundleVersion), model);
     },
+
+    getCapabilityStatus(capability) {
+      if (!activeManifest) {
+        return {
+          status: 'not_ready',
+          reason: 'not_prepared',
+          message: `The voice bundle (${selectedManifest.bundleVersion}) is not installed.`,
+        };
+      }
+      const models = activeManifest.models.filter((model) => model.kind === capability);
+      if (models.length === 0) {
+        return {
+          status: 'not_ready',
+          reason: 'missing_files',
+          message: `No ${capability} model exists in ${activeManifest.bundleVersion}.`,
+        };
+      }
+      for (const model of models) {
+        for (const file of model.files) {
+          const filePath = resolveManagedPath(
+            modelDirectoryPath(bundlePath(rootPath, activeManifest.bundleVersion), model),
+            file.path,
+          );
+          try {
+            if (!fs.existsSync(filePath) || fs.statSync(filePath).size !== file.size) {
+              return {
+                status: 'not_ready',
+                reason: 'missing_files',
+                message: `The ${capability} model file ${file.path} is missing or corrupt.`,
+              };
+            }
+          } catch {
+            return {
+              status: 'not_ready',
+              reason: 'missing_files',
+              message: `The ${capability} model file ${file.path} is missing or corrupt.`,
+            };
+          }
+        }
+      }
+      return { status: 'ready' };
+    },
   };
 }
 
@@ -263,6 +321,13 @@ export function createUnconfiguredVoiceModels(): VoiceModels {
     },
     async cancelPreparation() { return { status: 'idle' }; },
     getModelPath() { throw new Error('Voice model resources are not configured.'); },
+    getCapabilityStatus() {
+      return {
+        status: 'not_ready',
+        reason: 'not_prepared',
+        message: 'Voice model resources are not configured.',
+      };
+    },
   };
 }
 

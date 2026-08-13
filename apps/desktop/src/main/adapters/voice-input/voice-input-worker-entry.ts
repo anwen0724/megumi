@@ -12,10 +12,11 @@ import {
   createSherpaVad,
   createSpeechInputRuntime,
 } from '@megumi/voice';
-import type {
-  VoiceInputWorkerData,
-  VoiceInputWorkerRequest,
-  VoiceInputWorkerResponse,
+import {
+  parseVoiceInputWorkerRequest,
+  type VoiceInputWorkerData,
+  type VoiceInputWorkerRequest,
+  type VoiceInputWorkerResponse,
 } from './voice-input-worker-protocol';
 
 const data = workerData as VoiceInputWorkerData;
@@ -36,21 +37,25 @@ const post = (response: VoiceInputWorkerResponse) => port.postMessage(response);
 
 runtime.subscribe((event) => post({ type: 'event', event }));
 
-port.on('message', (request: VoiceInputWorkerRequest) => {
+port.on('message', (rawRequest: unknown) => {
+  // Messages come from the host process; never trust them at runtime.
+  const request: VoiceInputWorkerRequest | undefined = parseVoiceInputWorkerRequest(rawRequest);
+  if (!request) return;
   switch (request.type) {
     case 'start':
       void runtime.start({ generation: request.generation, language: request.language });
       return;
     case 'frame':
-      // Ack first so the Adapter unblocks the next frame without waiting for
-      // classification work.
-      post({ type: 'frame-ack', generation: request.generation, sequence: request.sequence });
+      // The ack fires after the runtime has consumed the frame: credit is only
+      // released once the consumer actually took it over, so the in-flight
+      // window can never silently grow on the MessagePort.
       runtime.acceptFrame({
         generation: request.generation,
         sequence: request.sequence,
         sampleRate: 16_000,
         samples: request.samples,
       });
+      post({ type: 'frame-ack', generation: request.generation, sequence: request.sequence });
       return;
     case 'mute':
       runtime.setMuted({ muted: request.muted });

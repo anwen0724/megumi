@@ -37,7 +37,7 @@ export const VoiceSnapshotSchema = z.discriminatedUnion('status', [
   z.object({
     status: z.enum(['preparing', 'listening', 'recognizing', 'submitting', 'thinking', 'speaking', 'error']),
     boundSessionId: z.string().min(1),
-    voiceProfileId: z.string().min(1),
+    voiceProfileId: z.string().min(1).optional(),
     muted: z.boolean(),
   }).strict(),
 ]);
@@ -77,6 +77,19 @@ export const VoiceModelUpdateResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('unavailable') }).strict(),
 ]);
 
+export const VoiceModelCapabilityPayloadSchema = z.object({
+  capability: z.enum(['stt', 'tts']),
+}).strict();
+
+export const VoiceModelCapabilityStatusSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('ready') }).strict(),
+  z.object({
+    status: z.literal('not_ready'),
+    reason: z.enum(['not_prepared', 'missing_files']),
+    message: z.string().min(1),
+  }).strict(),
+]);
+
 export const VoiceProfilesListResultSchema = z.object({
   status: z.literal('ok'),
   profiles: z.array(VoiceProfileDtoSchema),
@@ -114,6 +127,8 @@ export type VoiceSessionMutedPayload = z.infer<typeof VoiceSessionMutedPayloadSc
 export type VoiceHostSnapshot = z.infer<typeof VoiceSnapshotSchema>;
 export type VoiceHostModelStatus = z.infer<typeof VoiceModelStatusResultSchema>;
 export type VoiceHostModelUpdateResult = z.infer<typeof VoiceModelUpdateResultSchema>;
+export type VoiceModelCapabilityPayload = z.infer<typeof VoiceModelCapabilityPayloadSchema>;
+export type VoiceHostModelCapabilityStatus = z.infer<typeof VoiceModelCapabilityStatusSchema>;
 export type VoiceHostProfile = z.infer<typeof VoiceProfileDtoSchema>;
 export type VoiceHostProfilesResult = z.infer<typeof VoiceProfilesListResultSchema>;
 
@@ -122,6 +137,7 @@ export type VoiceHostMutationResult = z.infer<typeof VoiceHostMutationResultSche
 export interface VoiceHost {
   getSnapshot(request?: Record<string, never>): Promise<VoiceHostSnapshot>;
   getModelStatus(request?: Record<string, never>): Promise<VoiceHostModelStatus>;
+  getModelCapabilityStatus(request: VoiceModelCapabilityPayload): Promise<VoiceHostModelCapabilityStatus>;
   checkModelUpdates(request?: Record<string, never>): Promise<VoiceHostModelUpdateResult>;
   prepareModels(request?: { readonly repair?: boolean }): Promise<VoiceHostMutationResult>;
   cancelModelPreparation(request?: Record<string, never>): Promise<VoiceHostMutationResult>;

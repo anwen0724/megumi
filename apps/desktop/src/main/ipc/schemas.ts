@@ -38,6 +38,7 @@ export const ProviderDeleteApiKeyRequestSchema = createRuntimeIpcRequestSchema(I
 export const ApprovalResolveRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.approval.resolve, host.ApprovalResolvePayloadSchema);
 export const VoiceSnapshotRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.snapshot, host.VoiceEmptyPayloadSchema);
 export const VoiceModelStatusRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.modelStatus, host.VoiceEmptyPayloadSchema);
+export const VoiceModelCapabilityRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.modelCapability, host.VoiceModelCapabilityPayloadSchema);
 export const VoiceModelsCheckUpdatesRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.modelsCheckUpdates, host.VoiceEmptyPayloadSchema);
 export const VoiceModelsPrepareRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.modelsPrepare, z.object({ repair: z.boolean().optional() }).strict());
 export const VoiceModelsCancelRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.modelsCancel, host.VoiceEmptyPayloadSchema);
@@ -61,14 +62,16 @@ export const WorkspaceFilesListRequestSchema = createRuntimeIpcRequestSchema(IPC
 export const WorkspaceFileOpenRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.workspace.filesOpen, host.WorkspaceFileOpenPayloadSchema);
 export const ObservabilityListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.list, host.ObservabilityListPayloadSchema);
 
-/** Dedicated PCM frame payload; travels on a bounded channel, not the business envelope. */
+/** Dedicated PCM frame payload on the Renderer MessagePort; travels on a bounded
+ *  channel, not the business envelope. The Float32Array arrives via structured
+ *  clone with its ArrayBuffer transferred. */
 export const VoiceInputFramePayloadSchema = z
   .object({
     generation: z.number().int().nonnegative(),
     sequence: z.number().int().nonnegative(),
     sampleRate: z.literal(16_000),
-    samples: z.custom<ArrayBuffer>((value) => value instanceof ArrayBuffer && value.byteLength === 2048, {
-      message: 'PCM frame must be one 512-sample 16 kHz mono ArrayBuffer.',
+    samples: z.instanceof(Float32Array).refine((samples) => samples.length === 512, {
+      message: 'PCM frame must be one 512-sample 16 kHz mono frame.',
     }),
   })
   .strict();
@@ -110,6 +113,7 @@ export type VoiceProfileRenamePayload = z.infer<typeof host.VoiceProfileRenamePa
 export type VoiceProfileIdPayload = z.infer<typeof host.VoiceProfileIdPayloadSchema>;
 export type VoiceProfilePreviewPayload = z.infer<typeof host.VoiceProfilePreviewPayloadSchema>;
 export type VoiceSessionStartPayload = z.infer<typeof host.VoiceSessionStartPayloadSchema>;
+export type VoiceModelCapabilityPayload = z.infer<typeof host.VoiceModelCapabilityPayloadSchema>;
 export type VoiceSessionMutedPayload = z.infer<typeof host.VoiceSessionMutedPayloadSchema>;
 export type ProjectOpenPayload = z.infer<typeof host.ProjectOpenPayloadSchema>;
 export type ProjectRemovePayload = z.infer<typeof host.ProjectRemovePayloadSchema>;

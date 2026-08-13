@@ -40,7 +40,7 @@ export interface BeginCaptureRequest {
 
 export interface CreateVoiceInputControllerOptions {
   readonly capture: MicrophoneCapture;
-  readonly sendFrame: (frame: { readonly generation: number; readonly sequence: number; readonly samples: Float32Array }) => void;
+  readonly sendFrame: (frame: { readonly generation: number; readonly sequence: number; readonly sampleRate: 16000; readonly samples: Float32Array }) => void;
   readonly subscribeEvents: (listener: (event: SpeechInputEvent) => void) => () => void;
   readonly onTranscript: (transcript: FinalTranscript) => void;
 }
@@ -84,6 +84,12 @@ export function createVoiceInputController(options: CreateVoiceInputControllerOp
   });
 
   const unsubscribeEvents = options.subscribeEvents((event) => {
+    // Adopt the generation from the first runtime-ready: events emitted during
+    // the Voice Session start (before beginCapture ran) are not stale and must
+    // not be lost — especially a fast automatic-boundary-unavailable.
+    if (generation === undefined && event.type === 'runtime-ready') {
+      generation = event.generation;
+    }
     if (event.generation !== generation) return; // stale runs never leak in
     switch (event.type) {
       case 'runtime-ready':
@@ -125,17 +131,27 @@ export function createVoiceInputController(options: CreateVoiceInputControllerOp
         return;
       case 'speech-ended':
         return;
+      case 'stt-preparing':
+        return;
+      case 'stt-ready':
+        return;
+      case 'stt-failed':
+        // Recognition is unavailable but the microphone and VAD stay usable.
+        publish({ speechError: event.failure.message });
+        return;
     }
   });
 
   return {
     async beginCapture(request) {
+      // Events may already have arrived for this generation (e.g. a fast
+      // automatic-boundary-unavailable emitted while the Voice Session was
+      // starting); keep that state instead of clobbering it back to starting.
+      const isNewRun = generation !== request.generation;
       generation = request.generation;
       sequence = -1;
       publish({
-        speech: 'starting',
-        issue: undefined,
-        speechError: undefined,
+        ...(isNewRun ? { speech: 'starting' as const, issue: undefined, speechError: undefined } : {}),
         level: 0,
         peak: 0,
         framesReceived: false,
@@ -144,7 +160,7 @@ export function createVoiceInputController(options: CreateVoiceInputControllerOp
       options.capture.setFrameHandler((samples) => {
         if (generation === undefined) return;
         sequence += 1;
-        options.sendFrame({ generation, sequence, samples });
+        options.sendFrame({ generation, sequence, sampleRate: 16_000, samples });
       });
       await options.capture.open({ inputDeviceId: request.inputDeviceId });
     },

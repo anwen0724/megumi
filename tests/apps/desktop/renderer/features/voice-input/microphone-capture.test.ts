@@ -5,11 +5,11 @@ import {
 } from '@megumi/desktop/renderer/features/voice-input/microphone-capture';
 
 interface FakeWorkletNode {
+  readonly audioNode: AudioNode;
   readonly port: {
     onmessage: ((event: { data: unknown }) => void) | null;
     postMessage: ReturnType<typeof vi.fn>;
   };
-  connect: ReturnType<typeof vi.fn>;
   disconnect: ReturnType<typeof vi.fn>;
 }
 
@@ -31,8 +31,8 @@ function captureWithMocks() {
   const addModule = vi.fn(async () => undefined);
   const createWorkletNode = vi.fn(() => {
     const node: FakeWorkletNode = {
+      audioNode: { kind: 'audio-worklet-node' } as unknown as AudioNode,
       port: { onmessage: null, postMessage: vi.fn() },
-      connect: vi.fn(),
       disconnect: vi.fn(),
     };
     workletNodes.push(node);
@@ -67,7 +67,7 @@ function captureWithMocks() {
 
 describe('Microphone capture', () => {
   it('opens the selected device with 16 kHz constraints and verifies the context sample rate', async () => {
-    const { capture, getUserMedia, addModule, workletNodes } = captureWithMocks();
+    const { capture, getUserMedia, addModule, workletNodes, source } = captureWithMocks();
 
     await expect(capture.open({ inputDeviceId: 'mic:42' })).resolves.toEqual({
       status: 'opened',
@@ -85,6 +85,7 @@ describe('Microphone capture', () => {
     });
     expect(addModule).toHaveBeenCalledWith('file:///worklet.js');
     expect(workletNodes).toHaveLength(1);
+    expect(source.connect).toHaveBeenCalledWith(workletNodes[0]!.audioNode);
     expect(capture.getSnapshot()).toMatchObject({ status: 'opening' });
   });
 
@@ -196,5 +197,72 @@ describe('Microphone capture', () => {
     expect(close).toHaveBeenCalled();
     expect(source.disconnect).toHaveBeenCalled();
     expect(capture.getSnapshot()).toMatchObject({ status: 'closed', level: 0 });
+  });
+
+  it('resumes a suspended AudioContext inside the open chain and captures normally', async () => {
+    const { capture, createAudioContext, emitWorkletFrame, frames } = captureWithMocks();
+    const resume = vi.fn(async () => undefined);
+    const suspendedContext = {
+      sampleRate: 16_000,
+      state: 'suspended' as const,
+      close: vi.fn(),
+      audioWorklet: { addModule: vi.fn(async () => undefined) },
+      createMediaStreamSource: vi.fn(() => ({ connect: vi.fn(), disconnect: vi.fn() })),
+      resume,
+    };
+    const injectedWorkletNode = vi.fn(() => ({
+      audioNode: { kind: 'audio-worklet-node' } as unknown as AudioNode,
+      port: { onmessage: null },
+      disconnect: vi.fn(),
+    }));
+    const capture2 = createMicrophoneCapture({
+      getUserMedia: captureWithMocks().getUserMedia,
+      createAudioContext: () => suspendedContext as unknown as AudioContext,
+      createWorkletNode: injectedWorkletNode,
+      workletUrl: 'file:///worklet.js',
+    });
+    capture2.setFrameHandler((frame) => frames.push(frame));
+
+    await expect(capture2.open({})).resolves.toEqual({
+      status: 'opened',
+      sampleRate: 16_000,
+      fallbackToDefault: false,
+    });
+    expect(resume).toHaveBeenCalledTimes(1);
+    // Frames flow normally after the resume; the worklet node was wired.
+    expect(injectedWorkletNode).toHaveBeenCalled();
+    expect(frames).toHaveLength(0); // no frames before the first PCM arrives
+  });
+
+  it('reports a structured failure when resuming a suspended context fails', async () => {
+    const { capture, createAudioContext, streams } = captureWithMocks();
+    createAudioContext.mockReturnValueOnce({
+      sampleRate: 16_000,
+      state: 'suspended' as const,
+      close: vi.fn(),
+      audioWorklet: { addModule: vi.fn(async () => undefined) },
+      createMediaStreamSource: vi.fn(),
+      resume: vi.fn(async () => {
+        throw new Error('Resume blocked by autoplay policy.');
+      }),
+    } as unknown as AudioContext);
+
+    await expect(capture.open({})).resolves.toEqual({
+      status: 'failed',
+      failure: {
+        code: 'microphone_resume_failed',
+        message: 'Resume blocked by autoplay policy.',
+      },
+    });
+    expect(streams[0]!.stop).toHaveBeenCalled();
+  });
+
+  it('never connects the microphone into the audible destination', async () => {
+    const { capture, source, workletNodes } = captureWithMocks();
+    await capture.open({});
+    // The MediaStreamSource only reaches the worklet node; nothing is wired
+    // to context.destination, so the microphone is never audible.
+    expect(source.connect).toHaveBeenCalledWith(workletNodes[0]!.audioNode);
+    expect(source.connect).toHaveBeenCalledTimes(1);
   });
 });

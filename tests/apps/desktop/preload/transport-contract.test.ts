@@ -21,18 +21,28 @@ describe('Desktop preload transport contract', () => {
 
   it('pairs the dedicated voice input frame and event channels with one-way transports', () => {
     const preload = fs.readFileSync(path.resolve('apps/desktop/src/preload/api.ts'), 'utf8');
+    const characterVoice = fs.readFileSync(
+      path.resolve('apps/desktop/src/renderer/features/character-presence/use-character-voice.ts'),
+      'utf8',
+    );
     const handlers = fs.readdirSync(path.resolve('apps/desktop/src/main/ipc/handlers'))
       .filter((file) => file.endsWith('.handler.ts'))
       .map((file) => fs.readFileSync(path.resolve('apps/desktop/src/main/ipc/handlers', file), 'utf8'))
       .join('\n');
 
-    // Frames are fire-and-forget sends; events are subscription-based.
-    expect(preload).toMatch(/ipcRenderer\.send\(IPC_CHANNELS\.voice\.inputFrame/);
+    // A MessagePort cannot cross a contextBridge function argument. The Renderer
+    // transfers it to the isolated Preload with window.postMessage first; only
+    // then may Preload forward the received port to Main.
+    expect(characterVoice).toMatch(/window\.postMessage\([\s\S]*IPC_CHANNELS\.voice\.inputPort/);
+    expect(preload).toMatch(/window\.addEventListener\(['"]message['"]/);
+    expect(preload).toMatch(/event\.ports/);
+    expect(preload).toMatch(/ipcRenderer\.postMessage\(IPC_CHANNELS\.voice\.inputPort/);
+    expect(preload).not.toMatch(/postFramePort:\s*\(port:\s*MessagePort\)/);
     expect(preload).toMatch(/ipcRenderer\.on\(IPC_CHANNELS\.voice\.inputEvent/);
     expect(preload).toMatch(/removeListener\(IPC_CHANNELS\.voice\.inputEvent/);
-    // The frame channel has a real one-way handler; no invoke handler exists.
-    expect(handlers).toMatch(/ipcMain\.on\(\s*IPC_CHANNELS\.voice\.inputFrame/);
-    expect(handlers).not.toMatch(/ipcMain\.handle\(\s*IPC_CHANNELS\.voice\.inputFrame/);
+    // The port channel has a real one-way handler; no invoke handler exists.
+    expect(handlers).toMatch(/ipcMain\.on\(\s*IPC_CHANNELS\.voice\.inputPort/);
+    expect(handlers).not.toMatch(/ipcMain\.handle\(\s*IPC_CHANNELS\.voice\.inputPort/);
   });
 });
 

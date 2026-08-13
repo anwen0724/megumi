@@ -21,6 +21,10 @@ export function createVoiceOperations(options: CreateVoiceOperationsOptions): Vo
       return voice.models.getStatus();
     },
 
+    async getModelCapabilityStatus(request) {
+      return voice.models.getCapabilityStatus(request.capability);
+    },
+
     async checkModelUpdates() {
       return voice.models.checkForUpdates();
     },

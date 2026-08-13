@@ -28,6 +28,13 @@ export const SPEECH_BOUNDARY_CONFIG: SpeechBoundaryConfig = Object.freeze({
   maxUtteranceMs: 60_000,
 });
 
+/**
+ * Minimum RMS a submitted utterance must reach before STT is called. Manual
+ * recordings have no VAD to prove speech, so a real energy check protects
+ * SenseVoice from pure silence while still accepting quiet speech (~-40 dBFS).
+ */
+export const MIN_VALID_UTTERANCE_RMS = 0.005;
+
 /** One 512-sample mono 16 kHz PCM frame entering the runtime. */
 export interface SpeechInputFrame {
   readonly generation: number;
@@ -66,7 +73,10 @@ export type SpeechInputEvent =
   | { readonly type: 'automatic-boundary-unavailable'; readonly generation: number }
   | { readonly type: 'audio-overflow'; readonly generation: number }
   | { readonly type: 'runtime-failed'; readonly generation: number; readonly failure: VoiceSpeechFailure }
-  | { readonly type: 'stopped'; readonly generation: number };
+  | { readonly type: 'stopped'; readonly generation: number }
+  | { readonly type: 'stt-preparing'; readonly generation: number }
+  | { readonly type: 'stt-ready'; readonly generation: number }
+  | { readonly type: 'stt-failed'; readonly generation: number; readonly failure: VoiceSpeechFailure };
 
 export interface StartSpeechInputRequest {
   /** Hosts that own the runtime lifecycle allocate it when absent. */

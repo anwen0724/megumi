@@ -30,6 +30,19 @@ export interface SpeechRecognizer {
   ): Promise<RecognizeSpeechResult>;
 }
 
+/** Loads and warms up the recognizer so the first utterance carries no hidden wait. */
+export interface PrepareSpeechRecognitionRequest {
+  readonly language: 'zh' | 'en' | 'auto';
+}
+
+export type PrepareSpeechRecognitionResult =
+  | { readonly status: 'ready' }
+  | { readonly status: 'failed'; readonly failure: VoiceSpeechFailure };
+
+export interface PreparableSpeechRecognizer {
+  prepare(request: PrepareSpeechRecognitionRequest): Promise<PrepareSpeechRecognitionResult>;
+}
+
 export interface SynthesizeSpeechRequest {
   readonly text: string;
   readonly voiceProfileId: string;

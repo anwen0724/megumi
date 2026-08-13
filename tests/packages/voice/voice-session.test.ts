@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createVoice,
+  createVoiceSessions,
   type SpeechInputEvent,
   type SpeechInputRuntime,
   type SpeechPlayer,
   type SpeechSynthesizer,
+  type VoiceProfiles,
 } from '../../../packages/voice/src/index';
 
 function createNoopSpeechInput(): SpeechInputRuntime & { start: ReturnType<typeof vi.fn> } {
@@ -99,6 +101,28 @@ describe('Voice sessions', () => {
     });
   });
 
+  it('starts STT without a selected TTS profile', async () => {
+    const speechInput = createNoopSpeechInput();
+    const prepare = vi.fn(async () => ({ status: 'ready' as const }));
+    const profiles = {
+      getSelected: () => ({ status: 'unavailable' as const }),
+    } as VoiceProfiles;
+    const sessions = createVoiceSessions({
+      profiles,
+      synthesizer: { prepare, async *synthesize() {} },
+      player: unusedPlayer,
+      speechInput,
+    });
+
+    await expect(sessions.start({ boundSessionId: 'session:stt-only', language: 'zh' })).resolves.toMatchObject({
+      status: 'started',
+      snapshot: { status: 'listening', boundSessionId: 'session:stt-only' },
+    });
+    expect(sessions.getSnapshot()).not.toHaveProperty('voiceProfileId');
+    expect(speechInput.start).toHaveBeenCalledWith({ language: 'zh' });
+    expect(prepare).not.toHaveBeenCalled();
+  });
+
   it('returns failed only when the speech input runtime itself cannot start', async () => {
     const speechInput = createNoopSpeechInput();
     speechInput.start.mockResolvedValue({
@@ -122,6 +146,38 @@ describe('Voice sessions', () => {
       snapshot: { status: 'idle' },
     });
     expect(voice.sessions.getSnapshot()).toEqual({ status: 'idle' });
+  });
+
+  it('recovers to idle after a speech input start failure and allows restarting', async () => {
+    const speechInput = createNoopSpeechInput();
+    speechInput.start
+      .mockResolvedValueOnce({
+        status: 'failed',
+        failure: { code: 'voice_worker_start_failed', message: 'Worker entry missing.' },
+      })
+      .mockResolvedValueOnce({ status: 'started', generation: 2 });
+    const voice = createVoice({
+      defaultProfile: {
+        profileId: 'voice-profile:default',
+        name: 'Default',
+        source: { kind: 'built_in', voiceId: 'Xiaoyu' },
+      },
+      synthesizer: unusedSynthesizer,
+      player: unusedPlayer,
+      speechInput,
+    });
+
+    await expect(voice.sessions.start({ boundSessionId: 'session:one' })).resolves.toMatchObject({
+      status: 'failed',
+    });
+    // The failed start left the session idle — never stuck in preparing.
+    expect(voice.sessions.getSnapshot()).toEqual({ status: 'idle' });
+
+    await expect(voice.sessions.start({ boundSessionId: 'session:one' })).resolves.toMatchObject({
+      status: 'started',
+      snapshot: { status: 'listening' },
+    });
+    expect(voice.sessions.getSnapshot()).toMatchObject({ status: 'listening' });
   });
 
   it('does not reopen speech input when the session ends during a slow start', async () => {
@@ -248,6 +304,36 @@ describe('Voice sessions', () => {
     await voice.sessions.end({ reason: 'user' });
     speechInput.emit({ type: 'recognizing', generation: 1 });
     expect(voice.sessions.getSnapshot()).toEqual({ status: 'idle' });
+  });
+
+  it('allows a new speech input generation after the Worker crashes', async () => {
+    const speechInput = createNoopSpeechInput();
+    speechInput.start
+      .mockResolvedValueOnce({ status: 'started', generation: 1 })
+      .mockResolvedValueOnce({ status: 'started', generation: 2 });
+    const voice = createVoice({
+      defaultProfile: {
+        profileId: 'voice-profile:default',
+        name: 'Default',
+        source: { kind: 'built_in', voiceId: 'Xiaoyu' },
+      },
+      synthesizer: unusedSynthesizer,
+      player: unusedPlayer,
+      speechInput,
+    });
+    await voice.sessions.start({ boundSessionId: 'session:one' });
+    speechInput.emit({
+      type: 'runtime-failed',
+      generation: 1,
+      failure: { code: 'voice_worker_exited', message: 'gone' },
+    });
+
+    await expect(voice.sessions.start({ boundSessionId: 'session:one' })).resolves.toMatchObject({
+      status: 'started',
+      generation: 2,
+      snapshot: { status: 'listening' },
+    });
+    expect(speechInput.start).toHaveBeenCalledTimes(2);
   });
 
   it('fixes the bound Session and selected Voice Profile until the Voice Session ends', async () => {

@@ -12,6 +12,12 @@ export * from './voice-profiles';
 export * from './voice-session';
 export * from './speech-input/speech-input';
 export {
+  SpeechInputEventSchema,
+  FinalTranscriptSchema,
+  parseSpeechInputEvent,
+  type ParsedFinalTranscript,
+} from './speech-input/speech-input-schema';
+export {
   createSpeechInputRuntime,
   type CreateSpeechInputRuntimeOptions,
   type SpeechInputRuntimeInternal,

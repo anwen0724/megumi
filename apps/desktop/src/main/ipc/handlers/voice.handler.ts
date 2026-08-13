@@ -8,6 +8,7 @@ import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ip
 import { IPC_CHANNELS } from '../channels';
 import { createIpcRequestHandler } from '../create-request-handler';
 import {
+  VoiceModelCapabilityRequestSchema,
   VoiceModelStatusRequestSchema,
   VoiceModelsCancelRequestSchema,
   VoiceModelsCheckUpdatesRequestSchema,
@@ -51,6 +52,13 @@ export function registerVoiceHandlers(
     responseSchema: host.VoiceModelStatusResultSchema,
     logger: options.logger,
     handle: () => voice.getModelStatus(),
+  }));
+  ipcMain.handle(IPC_CHANNELS.voice.modelCapability, createIpcRequestHandler({
+    channel: IPC_CHANNELS.voice.modelCapability,
+    requestSchema: VoiceModelCapabilityRequestSchema,
+    responseSchema: host.VoiceModelCapabilityStatusSchema,
+    logger: options.logger,
+    handle: (request) => voice.getModelCapabilityStatus(request.payload),
   }));
   ipcMain.handle(IPC_CHANNELS.voice.modelsCheckUpdates, createIpcRequestHandler({
     channel: IPC_CHANNELS.voice.modelsCheckUpdates,

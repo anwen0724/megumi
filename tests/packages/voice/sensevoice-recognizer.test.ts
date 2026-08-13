@@ -196,3 +196,89 @@ describe('SenseVoice recognizer', () => {
     expect(configurations.map((configuration) => configuration.modelConfig.senseVoice.language)).toEqual(['zh', 'en']);
   });
 });
+
+describe('SenseVoice recognizer preparation', () => {
+  it('initializes the recognizer once across prepare, warm-up, and the first utterance', async () => {
+    const configurations: Record<string, unknown>[] = [];
+    const decodeAsync = vi.fn(async () => ({ text: 'hello' }));
+    const recognizer = createSenseVoiceRecognizer({
+      modelPath: 'C:/models/model.int8.onnx',
+      tokensPath: 'C:/models/tokens.txt',
+      runtimeLoader: async () => ({
+        OfflineRecognizer: class {
+          constructor(configuration: Record<string, unknown>) { configurations.push(configuration); }
+          createStream() { return { acceptWaveform: vi.fn() }; }
+          decode() {}
+          decodeAsync = decodeAsync;
+          getResult() { return { text: 'hello' }; }
+        },
+      }),
+    });
+
+    await expect(recognizer.prepare({ language: 'auto' })).resolves.toEqual({ status: 'ready' });
+    // The warm-up ran one decode of 100 ms silence through the same instance.
+    expect(decodeAsync).toHaveBeenCalledTimes(1);
+    expect(configurations).toHaveLength(1);
+
+    // The first real utterance reuses the prepared instance.
+    const pcm = { samples: new Float32Array([0.1]), sampleRate: 16_000, channels: 1 as const };
+    await expect(recognizer.recognize({ pcm, language: 'auto' })).resolves.toMatchObject({ status: 'recognized' });
+    expect(configurations).toHaveLength(1);
+  });
+
+  it('returns a structured failure when preparation cannot load the model and retries afterwards', async () => {
+    let attempts = 0;
+    const recognizer = createSenseVoiceRecognizer({
+      modelPath: 'C:/models/model.int8.onnx',
+      tokensPath: 'C:/models/tokens.txt',
+      runtimeLoader: async () => ({
+        OfflineRecognizer: class {
+          constructor() {
+            attempts += 1;
+            if (attempts === 1) throw new Error('Model file missing.');
+          }
+          createStream() { return { acceptWaveform() {} }; }
+          decode() {}
+          decodeAsync = vi.fn(async () => ({ text: 'ok' }));
+          getResult() { return { text: 'ok' }; }
+        },
+      }),
+    });
+
+    await expect(recognizer.prepare({ language: 'auto' })).resolves.toEqual({
+      status: 'failed',
+      failure: expect.objectContaining({ code: 'sensevoice_preparation_failed' }),
+    });
+    // A restart path (fresh prepare) retries the load instead of reusing a
+    // poisoned cache entry.
+    await expect(recognizer.prepare({ language: 'auto' })).resolves.toEqual({ status: 'ready' });
+    expect(attempts).toBe(2);
+  });
+
+  it('re-checks cancellation after decodeAsync settles and never returns stale text', async () => {
+    const decodeAsync = vi.fn(async () => {
+      controller.abort();
+      return { text: 'late text' };
+    });
+    const controller = new AbortController();
+    const recognizer = createSenseVoiceRecognizer({
+      modelPath: 'C:/models/model.int8.onnx',
+      tokensPath: 'C:/models/tokens.txt',
+      runtimeLoader: async () => ({
+        OfflineRecognizer: class {
+          createStream() { return { acceptWaveform() {} }; }
+          decode() {}
+          decodeAsync = decodeAsync;
+          getResult() { return {}; }
+        },
+      }),
+    });
+    const pcm = { samples: new Float32Array([0.1]), sampleRate: 16_000, channels: 1 as const };
+
+    await expect(recognizer.recognize({ pcm, language: 'auto' }, { signal: controller.signal }))
+      .resolves.toEqual({
+        status: 'failed',
+        failure: { code: 'voice_recognition_cancelled', message: 'Speech recognition was cancelled.' },
+      });
+  });
+});

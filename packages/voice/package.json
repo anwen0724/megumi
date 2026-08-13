@@ -5,6 +5,11 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./speech-input/speech-input-schema": "./src/speech-input/speech-input-schema.ts",
+    "./speech-input/voice-input-capacity": "./src/speech-input/voice-input-capacity.ts"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
   }
 }

@@ -27,7 +27,7 @@ export type VoiceSnapshot =
   | {
       readonly status: VoiceSessionStatus;
       readonly boundSessionId: string;
-      readonly voiceProfileId: string;
+      readonly voiceProfileId?: string;
       readonly muted: boolean;
     };
 
@@ -146,15 +146,32 @@ export function createVoiceSessions(input: {
     },
     async start(request) {
       if (snapshot.status === 'preparing' && startPromise) return startPromise;
+      if (snapshot.status === 'error') {
+        // A crashed Speech Worker is terminal for the old run, not for the
+        // Voice Session API. Clear its ownership so a user retry starts a new
+        // generation instead of receiving already_active forever.
+        ++startGeneration;
+        preparationAbort?.abort();
+        preparationAbort = undefined;
+        startPromise = undefined;
+        const failedSpeechGeneration = activeSpeechGeneration;
+        activeSpeechGeneration = undefined;
+        await input.player.stop({ reason: 'interrupted' });
+        await input.speechInput?.stop({ generation: failedSpeechGeneration, reason: 'user' });
+        publish({ status: 'idle' });
+      }
       if (snapshot.status !== 'idle') {
         return { status: 'already_active', snapshot, ...(activeSpeechGeneration !== undefined ? { generation: activeSpeechGeneration } : {}) };
       }
       const selected = input.profiles.getSelected();
-      if (selected.status !== 'selected') return { status: 'profile_unavailable' };
+      const selectedProfile = selected.status === 'selected' ? selected.profile : undefined;
+      // A Voice Session without speech input is TTS-only and therefore still
+      // needs a profile. STT-capable sessions must remain usable without one.
+      if (!selectedProfile && !input.speechInput) return { status: 'profile_unavailable' };
       const preparing: VoiceSnapshot = {
         status: 'preparing',
         boundSessionId: request.boundSessionId,
-        voiceProfileId: selected.profile.profileId,
+        ...(selectedProfile ? { voiceProfileId: selectedProfile.profileId } : {}),
         muted: false,
       };
       publish(preparing);
@@ -177,7 +194,7 @@ export function createVoiceSessions(input: {
         }
         activeSpeechGeneration = speechStart?.generation;
         // TTS prepares on its own path; speech input is already usable.
-        prepareTtsInBackground(generation, selected.profile);
+        if (selectedProfile) prepareTtsInBackground(generation, selectedProfile);
         const listening: VoiceSnapshot = { ...preparing, status: 'listening' };
         publish(listening);
         return {

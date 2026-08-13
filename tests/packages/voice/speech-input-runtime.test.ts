@@ -86,8 +86,12 @@ function createTestRuntime(input: {
 /** Feeds one utterance; the speech/silence pattern comes from the
  *  classification array given to createTestRuntime. */
 function speakUtterance(runtime: SpeechInputRuntime, classification: boolean[]) {
+  speakUtteranceFrom(runtime, classification, 0);
+}
+
+function speakUtteranceFrom(runtime: SpeechInputRuntime, classification: boolean[], startSequence: number) {
   for (let index = 0; index < classification.length; index += 1) {
-    runtime.acceptFrame(frame(1, index, classification[index]!));
+    runtime.acceptFrame(frame(1, startSequence + index, classification[index]!));
   }
 }
 
@@ -417,3 +421,295 @@ describe('Speech Input runtime', () => {
     expect(events.filter((event) => event.type === 'stopped')).toHaveLength(1);
   });
 });
+
+describe('Speech Input runtime regressions', () => {
+  it('emits runtime-ready only after the VAD initialization has been decided', async () => {
+    const load = deferred<void>();
+    const { runtime, events } = createTestRuntimeWithVadGate(load.promise);
+    const starting = runtime.start({ generation: 1 });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(events).toEqual([]);
+
+    load.resolve();
+    await starting;
+
+    expect(events[0]).toEqual({ type: 'runtime-ready', generation: 1 });
+    expect(events[1]).toEqual({ type: 'listening', generation: 1 });
+  });
+
+  it('orders runtime-ready before automatic-boundary-unavailable when the VAD fails', async () => {
+    const { runtime, events } = createTestRuntime({ vadFailures: { load: new Error('no model') } });
+    await runtime.start({ generation: 1 });
+
+    expect(events.map((event) => event.type)).toEqual([
+      'runtime-ready',
+      'automatic-boundary-unavailable',
+    ]);
+    expect(events.filter((event) => event.type === 'listening')).toHaveLength(0);
+  });
+
+  it('ignores frames while the runtime is still starting', async () => {
+    const load = deferred<void>();
+    const { runtime, events, acceptFrames } = createTestRuntimeWithVadGate(load.promise);
+    const starting = runtime.start({ generation: 1 });
+
+    runtime.acceptFrame(frame(1, 0, true));
+    runtime.acceptFrame(frame(1, 1, true));
+    expect(acceptFrames).toHaveLength(0); // frames never reached the VAD
+    expect(events).toEqual([]);
+
+    load.resolve();
+    await starting;
+  });
+
+  it('discards a decode that settles after mute and emits no result events', async () => {
+    const recognition = deferred<Awaited<ReturnType<SpeechRecognizer['recognize']>>>();
+    const recognizer: SpeechRecognizer = {
+      async recognize() { return recognition.promise; },
+    };
+    const classification = [
+      ...Array<boolean>(MIN_SPEECH_FRAMES).fill(true),
+      ...Array<boolean>(END_SILENCE_FRAMES).fill(false),
+    ];
+    const { runtime, events } = createTestRuntime({ recognizer, classification });
+    await runtime.start({ generation: 1 });
+
+    speakUtterance(runtime, classification);
+    await vi.waitFor(() => {
+      expect(events.some((event) => event.type === 'recognizing')).toBe(true);
+    });
+
+    runtime.setMuted({ muted: true });
+    runtime.setMuted({ muted: false });
+
+    // The old decode finishes with text AFTER unmute; it must not surface.
+    recognition.resolve({ status: 'recognized', transcript: 'old text' });
+    await vi.waitFor(() => {
+      expect(events.some((event) => event.type === 'listening')).toBe(true);
+    });
+    expect(events.filter((event) => event.type === 'final-transcript')).toHaveLength(0);
+    expect(events.filter((event) => event.type === 'empty-utterance')).toHaveLength(0);
+    expect(events.filter((event) => event.type === 'recognition-failed')).toHaveLength(0);
+  });
+
+  it('never runs a new recognition in parallel with a settling stale decode', async () => {
+    const pending: Array<ReturnType<typeof deferred<Awaited<ReturnType<SpeechRecognizer['recognize']>>>>> = [];
+    const recognizer: SpeechRecognizer = {
+      async recognize() {
+        const recognition = deferred<Awaited<ReturnType<SpeechRecognizer['recognize']>>>();
+        pending.push(recognition);
+        return recognition.promise;
+      },
+    };
+    const utterance = [
+      ...Array<boolean>(MIN_SPEECH_FRAMES).fill(true),
+      ...Array<boolean>(END_SILENCE_FRAMES).fill(false),
+    ];
+    // The middle utterance is dropped before the VAD, so only the first and
+    // third batches consume classifications.
+    const classification = [...utterance, ...utterance];
+    const { runtime, events } = createTestRuntime({ recognizer, classification });
+    await runtime.start({ generation: 1 });
+
+    // First utterance starts a recognition; mute invalidates it mid-decode.
+    speakUtterance(runtime, utterance);
+    await vi.waitFor(() => { expect(pending).toHaveLength(1); });
+    runtime.setMuted({ muted: true });
+    runtime.setMuted({ muted: false });
+
+    // A second utterance completes while the old decode still runs: no
+    // parallel recognition is started.
+    speakUtteranceFrom(runtime, utterance, utterance.length);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(pending).toHaveLength(1);
+
+    // The stale decode settles with text; it is discarded, which returns the
+    // runtime to listening (the second listening event in this run).
+    pending[0]!.resolve({ status: 'recognized', transcript: 'old text' });
+    await vi.waitFor(() => {
+      expect(events.filter((event) => event.type === 'listening')).toHaveLength(2);
+    });
+
+    // The next utterance recognizes normally through the same runtime.
+    speakUtteranceFrom(runtime, utterance, utterance.length * 2);
+    await vi.waitFor(() => { expect(pending).toHaveLength(2); });
+    pending[1]!.resolve({ status: 'recognized', transcript: 'new text' });
+    await vi.waitFor(() => {
+      expect(events.filter((event) => event.type === 'final-transcript')).toHaveLength(1);
+    });
+    const finalEvent = events.find((event) => event.type === 'final-transcript');
+    expect(finalEvent).toMatchObject({ transcript: { text: 'new text' } });
+  });
+
+  it('does not emit a false audio-overflow after frames dropped during recognition', async () => {
+    const recognitions: Array<{ pcm: Float32Array }> = [];
+    const recognition = deferred<Awaited<ReturnType<SpeechRecognizer['recognize']>>>();
+    const recognizer: SpeechRecognizer = {
+      async recognize(request) {
+        recognitions.push({ pcm: request.pcm.samples });
+        return recognition.promise;
+      },
+    };
+    const utterance = [
+      ...Array<boolean>(MIN_SPEECH_FRAMES).fill(true),
+      ...Array<boolean>(END_SILENCE_FRAMES).fill(false),
+    ];
+    // One classification entry per processed utterance; frames ignored during
+    // recognition never reach the VAD.
+    const classification = [...utterance, ...utterance];
+    const { runtime, events } = createTestRuntime({ recognizer, classification });
+    await runtime.start({ generation: 1 });
+
+    speakUtterance(runtime, utterance);
+    await vi.waitFor(() => {
+      expect(events.some((event) => event.type === 'recognizing')).toBe(true);
+    });
+
+    // The Renderer keeps producing frames while recognition runs; they are
+    // deliberately ignored, not lost.
+    for (let sequence = utterance.length; sequence < utterance.length + 33; sequence += 1) {
+      runtime.acceptFrame(frame(1, sequence, false));
+    }
+
+    recognition.resolve({ status: 'empty' });
+    await vi.waitFor(() => {
+      expect(events.some((event) => event.type === 'empty-utterance')).toBe(true);
+    });
+    expect(events.filter((event) => event.type === 'audio-overflow')).toHaveLength(0);
+
+    // A fresh utterance starting at a continuing sequence works normally.
+    speakUtteranceFrom(runtime, utterance, utterance.length + 33);
+    await vi.waitFor(() => { expect(recognitions).toHaveLength(2); });
+    await vi.waitFor(() => {
+      expect(events.filter((event) => event.type === 'empty-utterance')).toHaveLength(2);
+    });
+    expect(events.filter((event) => event.type === 'audio-overflow')).toHaveLength(0);
+  });
+
+  it('prepares the recognizer once and reports stt events around runtime-ready', async () => {
+    const prepares: Array<{ language: string }> = [];
+    const recognizer: SpeechRecognizer = {
+      async recognize() { return { status: 'recognized', transcript: 'ok' }; },
+      async prepare(request: { language: string }) {
+        prepares.push({ language: request.language });
+        return { status: 'ready' };
+      },
+    };
+    const classification = [
+      ...Array<boolean>(MIN_SPEECH_FRAMES).fill(true),
+      ...Array<boolean>(END_SILENCE_FRAMES).fill(false),
+    ];
+    const { runtime, events } = createTestRuntime({ recognizer, classification });
+    await runtime.start({ generation: 1, language: 'zh' });
+
+    await vi.waitFor(() => {
+      expect(events.some((event) => event.type === 'stt-ready')).toBe(true);
+    });
+    const eventTypes = events.map((event) => event.type);
+    expect(eventTypes.indexOf('runtime-ready')).toBeLessThan(eventTypes.indexOf('stt-preparing'));
+    expect(eventTypes.indexOf('stt-preparing')).toBeLessThan(eventTypes.indexOf('stt-ready'));
+    expect(prepares).toEqual([{ language: 'zh' }]);
+  });
+
+  it('reports stt-failed and allows a fresh start to retry preparation', async () => {
+    let attempts = 0;
+    const recognizer: SpeechRecognizer = {
+      async recognize() { return { status: 'empty' }; },
+      async prepare() {
+        attempts += 1;
+        if (attempts === 1) {
+          return {
+            status: 'failed',
+            failure: { code: 'sensevoice_preparation_failed', message: 'Model missing.' },
+          };
+        }
+        return { status: 'ready' };
+      },
+    };
+    const { runtime, events } = createTestRuntime({ recognizer });
+    await runtime.start({ generation: 1 });
+
+    await vi.waitFor(() => {
+      expect(events.some((event) => event.type === 'stt-failed')).toBe(true);
+    });
+    const failedEvent = events.find((event) => event.type === 'stt-failed');
+    expect(failedEvent).toMatchObject({ failure: { code: 'sensevoice_preparation_failed' } });
+    // The runtime stays usable for the microphone and VAD.
+    expect(runtime.getStatus()).toBe('listening');
+
+    await runtime.stop({ generation: 1, reason: 'user' });
+    await runtime.start({ generation: 2 });
+    await vi.waitFor(() => {
+      expect(events.some((event) => event.type === 'stt-ready' && event.generation === 2)).toBe(true);
+    });
+    expect(attempts).toBe(2);
+  });
+
+  it('waits for recognizer preparation before decoding the first utterance', async () => {
+    const preparation = deferred<{ status: 'ready' }>();
+    const recognize = vi.fn(async () => ({ status: 'recognized' as const, transcript: '首句' }));
+    const recognizer: SpeechRecognizer = {
+      recognize,
+      prepare: vi.fn(() => preparation.promise),
+    };
+    const classification = [
+      ...Array<boolean>(MIN_SPEECH_FRAMES).fill(true),
+      ...Array<boolean>(END_SILENCE_FRAMES).fill(false),
+    ];
+    const { runtime, events } = createTestRuntime({ recognizer, classification });
+    await runtime.start({ generation: 1, language: 'zh' });
+
+    speakUtterance(runtime, classification);
+    await vi.waitFor(() => {
+      expect(events.some((event) => event.type === 'recognizing')).toBe(true);
+    });
+    expect(recognize).not.toHaveBeenCalled();
+
+    preparation.resolve({ status: 'ready' });
+    await vi.waitFor(() => {
+      expect(events.some((event) => event.type === 'final-transcript')).toBe(true);
+    });
+    expect(recognize).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a thrown recognizer error instead of rewriting it as cancellation', async () => {
+    const recognizer: SpeechRecognizer = {
+      async recognize() { throw new Error('decoder exploded'); },
+    };
+    const classification = [
+      ...Array<boolean>(MIN_SPEECH_FRAMES).fill(true),
+      ...Array<boolean>(END_SILENCE_FRAMES).fill(false),
+    ];
+    const { runtime, events } = createTestRuntime({ recognizer, classification });
+    await runtime.start({ generation: 1 });
+    speakUtterance(runtime, classification);
+
+    await vi.waitFor(() => {
+      expect(events.some((event) => event.type === 'recognition-failed')).toBe(true);
+    });
+    expect(events.find((event) => event.type === 'recognition-failed')).toMatchObject({
+      failure: { code: 'voice_recognition_failed', message: 'decoder exploded' },
+    });
+  });
+});
+
+function createTestRuntimeWithVadGate(load: Promise<void>) {
+  const events: SpeechInputEvent[] = [];
+  const acceptFrames: Float32Array[] = [];
+  const vad: SpeechVad = {
+    accept(samplesValue) { acceptFrames.push(samplesValue); },
+    isSpeech() { return true; },
+    reset() {},
+  };
+  const runtime = createSpeechInputRuntime({
+    vad: async () => {
+      await load;
+      return vad;
+    },
+    recognizer: { async recognize() { return { status: 'empty' }; } },
+    ids: { createUtteranceId: () => 'utterance:1' },
+  });
+  runtime.subscribe((event) => events.push(event));
+  return { runtime, events, acceptFrames };
+}

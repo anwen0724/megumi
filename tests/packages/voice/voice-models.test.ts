@@ -164,6 +164,117 @@ describe('Voice Models', () => {
   }
 });
 
+
+describe('Voice model capability readiness', () => {
+  const capabilityDirectories: string[] = [];
+
+  afterEach(() => {
+    for (const directoryPath of capabilityDirectories.splice(0)) {
+      fs.rmSync(directoryPath, { recursive: true, force: true });
+    }
+  });
+
+  function capabilityRoot(): string {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-voice-capability-'));
+    capabilityDirectories.push(root);
+    return root;
+  }
+
+  it('reports per-capability readiness so a corrupt TTS bundle never blocks STT', async () => {
+    const root = capabilityRoot();
+    const archiveBytes = Buffer.from('verified-archive');
+    const installedBytes = Buffer.from('verified-model');
+    const manifest: VoiceModelManifest = {
+      version: 2,
+      bundleVersion: 'voice-v1',
+      runtimeVersion: 1,
+      models: [
+        {
+          modelId: 'stt-model',
+          kind: 'stt',
+          revision: 'revision-1',
+          license: 'test-only',
+          source: 'https://example.test/stt',
+          archive: { url: 'https://example.test/stt.tar', size: archiveBytes.length, sha256: sha256(archiveBytes), format: 'tar', stripComponents: 0 },
+          files: [{ path: 'model.int8.onnx', size: installedBytes.length, sha256: sha256(installedBytes) }],
+        },
+        {
+          modelId: 'tts-model',
+          kind: 'tts',
+          revision: 'revision-1',
+          license: 'test-only',
+          source: 'https://example.test/tts',
+          archive: { url: 'https://example.test/tts.tar', size: archiveBytes.length, sha256: sha256(archiveBytes), format: 'tar', stripComponents: 0 },
+          files: [{ path: 'tts.bin', size: installedBytes.length, sha256: sha256(installedBytes) }],
+        },
+      ],
+    };
+    const extractor = {
+      async extract(request: { targetPath: string }) {
+        for (const file of request.targetPath.includes('stt-model')
+          ? [{ path: 'model.int8.onnx' }]
+          : [{ path: 'tts.bin' }]) {
+          const target = path.join(request.targetPath, file.path);
+          fs.mkdirSync(path.dirname(target), { recursive: true });
+          fs.writeFileSync(target, installedBytes);
+        }
+      },
+    };
+    const downloader: VoiceModelDownloader = {
+      async download(request) {
+        fs.mkdirSync(path.dirname(request.targetPath), { recursive: true });
+        fs.writeFileSync(request.targetPath, archiveBytes);
+        return { status: 'downloaded' };
+      },
+    };
+    const models = createFileVoiceModels({
+      modelsPath: path.join(root, 'models'),
+      downloadsPath: path.join(root, 'tmp'),
+      manifest,
+      downloader,
+      archiveExtractor: extractor,
+    });
+    expect(await models.prepare()).toEqual({ status: 'ready' });
+    expect(models.getCapabilityStatus('stt')).toEqual({ status: 'ready' });
+    expect(models.getCapabilityStatus('tts')).toEqual({ status: 'ready' });
+
+    // Corrupt the TTS file; STT readiness must survive.
+    const ttsFile = path.join(models.getModelPath('tts', 'tts-model', 'revision-1'), 'tts.bin');
+    fs.writeFileSync(ttsFile, 'truncated');
+    expect(models.getCapabilityStatus('stt')).toEqual({ status: 'ready' });
+    expect(models.getCapabilityStatus('tts')).toMatchObject({
+      status: 'not_ready',
+      reason: 'missing_files',
+    });
+
+    const restartedModels = createFileVoiceModels({
+      modelsPath: path.join(root, 'models'),
+      downloadsPath: path.join(root, 'tmp'),
+      manifest,
+      downloader,
+      archiveExtractor: extractor,
+    });
+    expect(restartedModels.getCapabilityStatus('stt')).toEqual({ status: 'ready' });
+    expect(restartedModels.getCapabilityStatus('tts')).toMatchObject({
+      status: 'not_ready',
+      reason: 'missing_files',
+    });
+    expect(restartedModels.getStatus()).toMatchObject({ status: 'not_prepared' });
+  });
+
+  it('reports not_prepared before any bundle is installed', () => {
+    const root = capabilityRoot();
+    const archiveBytes = Buffer.from('a');
+    const models = createFileVoiceModels({
+      modelsPath: path.join(root, 'models'),
+      downloadsPath: path.join(root, 'tmp'),
+      manifest: testManifest('voice-v1', 1, archiveBytes, archiveBytes),
+      downloader: { async download() { return { status: 'downloaded' }; } },
+    });
+    expect(models.getCapabilityStatus('stt')).toMatchObject({ status: 'not_ready', reason: 'not_prepared' });
+  });
+});
+
 function testManifest(
   bundleVersion: string,
   runtimeVersion: number,
