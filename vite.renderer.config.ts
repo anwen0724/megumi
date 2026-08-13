@@ -32,7 +32,7 @@ function vadRuntimeAssets(): Plugin {
         const key = request.url?.replace(/^\//, '').split('?')[0];
         const source = key ? assets.get(key) : undefined;
         if (!source) return next();
-        response.setHeader('Content-Type', key?.endsWith('.wasm') ? 'application/wasm' : 'application/octet-stream');
+        response.setHeader('Content-Type', contentTypeForVadRuntimeAsset(key));
         fs.createReadStream(source).pipe(response);
       });
     },
@@ -42,6 +42,12 @@ function vadRuntimeAssets(): Plugin {
       }
     },
   };
+}
+
+export function contentTypeForVadRuntimeAsset(fileName: string): string {
+  if (fileName.endsWith('.wasm')) return 'application/wasm';
+  if (fileName.endsWith('.mjs') || fileName.endsWith('.js')) return 'text/javascript';
+  return 'application/octet-stream';
 }
 
 export function vadRuntimeAssetEntries(): ReadonlyMap<string, string> {

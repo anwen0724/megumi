@@ -1,7 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createVoiceAudioController } from '@megumi/desktop/renderer/features/character-presence/voice-audio-controller';
+import {
+  createVoiceAudioController,
+  resolveVadRuntimeAssetUrls,
+} from '@megumi/desktop/renderer/features/character-presence/voice-audio-controller';
 
 describe('VoiceAudioController', () => {
+  it('resolves VAD runtime assets from the renderer page instead of the Vite dependency bundle', () => {
+    expect(resolveVadRuntimeAssetUrls('http://127.0.0.1:5173/character.html')).toEqual({
+      baseAssetPath: 'http://127.0.0.1:5173/vad/',
+      onnxWASMBasePath: 'http://127.0.0.1:5173/vad/onnx/',
+    });
+    expect(resolveVadRuntimeAssetUrls('file:///C:/Megumi/resources/app/.vite/renderer/main_window/character.html')).toEqual({
+      baseAssetPath: 'file:///C:/Megumi/resources/app/.vite/renderer/main_window/vad/',
+      onnxWASMBasePath: 'file:///C:/Megumi/resources/app/.vite/renderer/main_window/vad/onnx/',
+    });
+  });
+
   it('submits one Final Transcript for a VAD endpoint and ignores a duplicate while recognizing', async () => {
     let onSpeechEnd: ((audio: Float32Array) => Promise<void> | void) | undefined;
     const vad = { start: vi.fn(), pause: vi.fn(), destroy: vi.fn() };

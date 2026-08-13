@@ -260,13 +260,14 @@ async function createBrowserVad(
 ): Promise<VadHandle> {
   const { MicVAD } = await import('@ricky0123/vad-web');
   const openStream = () => openMicrophoneStream(configuration.inputDeviceId);
+  const runtimeAssets = resolveVadRuntimeAssetUrls(window.location.href);
   return MicVAD.new({
     model: 'v5',
     processorType: 'AudioWorklet',
     audioContext: configuration.audioContext,
     startOnLoad: false,
-    baseAssetPath: './vad/',
-    onnxWASMBasePath: './vad/onnx/',
+    baseAssetPath: runtimeAssets.baseAssetPath,
+    onnxWASMBasePath: runtimeAssets.onnxWASMBasePath,
     onSpeechStart: callbacks.onSpeechStart,
     onFrameProcessed: (probabilities, frame) => callbacks.onFrameProcessed(probabilities, frame),
     onVADMisfire: callbacks.onVADMisfire,
@@ -277,6 +278,17 @@ async function createBrowserVad(
     },
     resumeStream: openStream,
   });
+}
+
+export function resolveVadRuntimeAssetUrls(pageUrl: string): {
+  readonly baseAssetPath: string;
+  readonly onnxWASMBasePath: string;
+} {
+  const baseAssetPath = new URL('./vad/', pageUrl).href;
+  return {
+    baseAssetPath,
+    onnxWASMBasePath: new URL('./onnx/', baseAssetPath).href,
+  };
 }
 
 function measureInputLevel(frame: Float32Array): number {
