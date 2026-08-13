@@ -4,7 +4,6 @@ import {
   type SpeechInputEvent,
   type SpeechInputRuntime,
   type SpeechPlayer,
-  type SpeechRecognizer,
   type SpeechSynthesizer,
 } from '../../../packages/voice/src/index';
 
@@ -44,7 +43,6 @@ describe('Voice sessions', () => {
         name: 'Default',
         source: { kind: 'built_in', voiceId: 'Xiaoyu' },
       },
-      recognizer: unusedRecognizer,
       synthesizer: { prepare, async *synthesize() {} },
       player: unusedPlayer,
       speechInput,
@@ -81,7 +79,6 @@ describe('Voice sessions', () => {
         name: 'Default',
         source: { kind: 'built_in', voiceId: 'Xiaoyu' },
       },
-      recognizer: unusedRecognizer,
       synthesizer: {
         async prepare() {
           return { status: 'failed' as const, failure: { code: 'tts_prepare_failed', message: 'Could not load TTS.' } };
@@ -114,7 +111,6 @@ describe('Voice sessions', () => {
         name: 'Default',
         source: { kind: 'built_in', voiceId: 'Xiaoyu' },
       },
-      recognizer: unusedRecognizer,
       synthesizer: unusedSynthesizer,
       player: unusedPlayer,
       speechInput,
@@ -140,7 +136,6 @@ describe('Voice sessions', () => {
         name: 'Default',
         source: { kind: 'built_in', voiceId: 'Xiaoyu' },
       },
-      recognizer: unusedRecognizer,
       synthesizer: unusedSynthesizer,
       player: unusedPlayer,
       speechInput,
@@ -162,7 +157,6 @@ describe('Voice sessions', () => {
         name: 'Default',
         source: { kind: 'built_in', voiceId: 'Xiaoyu' },
       },
-      recognizer: unusedRecognizer,
       synthesizer: unusedSynthesizer,
       player: unusedPlayer,
       speechInput,
@@ -181,7 +175,6 @@ describe('Voice sessions', () => {
         name: 'Default',
         source: { kind: 'built_in', voiceId: 'Xiaoyu' },
       },
-      recognizer: unusedRecognizer,
       synthesizer: unusedSynthesizer,
       player: unusedPlayer,
       speechInput,
@@ -204,7 +197,6 @@ describe('Voice sessions', () => {
         name: 'Default',
         source: { kind: 'built_in', voiceId: 'Xiaoyu' },
       },
-      recognizer: unusedRecognizer,
       synthesizer: unusedSynthesizer,
       player: unusedPlayer,
       speechInput,
@@ -227,7 +219,6 @@ describe('Voice sessions', () => {
         name: 'Default',
         source: { kind: 'built_in', voiceId: 'Xiaoyu' },
       },
-      recognizer: unusedRecognizer,
       synthesizer: unusedSynthesizer,
       player: unusedPlayer,
       speechInput,
@@ -266,7 +257,6 @@ describe('Voice sessions', () => {
         name: 'Default',
         source: { kind: 'built_in', voiceId: 'Xiaoyu' },
       },
-      recognizer: unusedRecognizer,
       synthesizer: unusedSynthesizer,
       player: unusedPlayer,
       ids: { createVoiceProfileId: () => 'voice-profile:alternate' },
@@ -315,12 +305,6 @@ describe('Voice sessions', () => {
     });
   });
 });
-
-const unusedRecognizer: SpeechRecognizer = {
-  async recognize() {
-    throw new Error('Recognizer should not be called in this test.');
-  },
-};
 
 const unusedSynthesizer: SpeechSynthesizer = {
   async prepare() { return { status: 'ready' }; },

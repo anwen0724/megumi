@@ -1,5 +1,5 @@
 // Composes the Electron UI shell and connects it to the Product Host Interface.
-import { BrowserWindow } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import { createElectronMegumiHomeSyncOptions } from '../adapters/electron-home-adapter';
 import { composeProduct, resolveMegumiHomePath } from '@megumi/product';
 import { forwardRuntimeEvent } from '../ipc/event-forwarders';
@@ -18,10 +18,27 @@ import {
 import { electronSessionAttachmentFileSystem } from '../adapters/electron-session-attachment-file-system';
 import { createDesktopWorkspaceFileSystem } from '../adapters/desktop-workspace-file-system-adapter';
 import { createElectronVoiceOptions } from '../adapters/electron-voice-resource-adapter';
+import {
+  createElectronVoiceInputAdapter,
+  resolveVoiceInputWorkerEntryPath,
+  type ElectronVoiceInputAdapter,
+} from '../adapters/voice-input/electron-voice-input-adapter';
+import { IPC_CHANNELS } from '../ipc/channels';
 import type { SpeechPlayer } from '@megumi/voice';
 
 export function composeDesktopMain(options: { readonly speechPlayer?: SpeechPlayer } = {}) {
   const home = createElectronMegumiHomeSyncOptions();
+  const voiceResources = createElectronVoiceOptions(home, options);
+  // The single Voice Input Adapter: injected into Product/Voice composition
+  // AND connected to the dedicated PCM IPC; there is no second runtime.
+  const voiceInputAdapter: ElectronVoiceInputAdapter = createElectronVoiceInputAdapter({
+    resolveResourcePaths: voiceResources.speechInputPaths,
+    workerEntryPath: resolveVoiceInputWorkerEntryPath({
+      isPackaged: app.isPackaged,
+      cwd: process.cwd(),
+      mainBuildDirectory: __dirname,
+    }),
+  });
   const product = composeProduct({
     home,
     migrationEnvironment: getElectronMigrationEnvironment(),
@@ -36,7 +53,7 @@ export function composeDesktopMain(options: { readonly speechPlayer?: SpeechPlay
     localFileAvailability: electronLocalFileAvailability,
     inputSourceAccess: electronInputSourceAccess,
     sessionAttachmentFileSystem: electronSessionAttachmentFileSystem,
-    voice: createElectronVoiceOptions(home, options),
+    voice: { ...voiceResources.voiceOptions, speechInput: voiceInputAdapter },
   });
   const runtimeLogger = product.logger;
   const productHost = product.host;
@@ -53,6 +70,14 @@ export function composeDesktopMain(options: { readonly speechPlayer?: SpeechPlay
     }
   });
 
+  // Speech Input Events are projected straight from the Worker runtime to the
+  // windows; the Voice package stays the owner of their type and semantics.
+  const voiceInputEventSubscription = voiceInputAdapter.subscribe((event) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send(IPC_CHANNELS.voice.inputEvent, event);
+    }
+  });
+
   return {
     homePath: resolveMegumiHomePath(home),
     runtimeLogger,
@@ -62,11 +87,15 @@ export function composeDesktopMain(options: { readonly speechPlayer?: SpeechPlay
     settings: { host: productHost },
     approval: { host: productHost },
     voice: { host: productHost },
-    voiceAudio: product.voiceAudio,
+    voiceInput: { adapter: voiceInputAdapter },
     observability: { host: productHost },
     dispose: async () => {
       uiEventSubscription.unsubscribe();
+      voiceInputEventSubscription();
+      // Product ends the Voice Session (stopping speech input) before the
+      // Adapter releases the Worker.
       await product.dispose();
+      await voiceInputAdapter.dispose();
     },
   };
 }

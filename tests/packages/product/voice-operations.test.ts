@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createVoice, type SpeechPlayer, type SpeechRecognizer, type SpeechSynthesizer } from '../../../packages/voice/src';
+import { createVoice, type SpeechPlayer, type SpeechSynthesizer } from '../../../packages/voice/src';
 import { createVoiceOperations } from '../../../packages/product/src/operations/voice-operations';
 
 describe('Product Voice operations', () => {
@@ -10,7 +10,6 @@ describe('Product Voice operations', () => {
         name: 'Default',
         source: { kind: 'built_in', voiceId: 'Xiaoyu' },
       },
-      recognizer: unusedRecognizer,
       synthesizer: unusedSynthesizer,
       player: unusedPlayer,
       ids: { createVoiceProfileId: () => 'voice-profile:imported' },
@@ -38,7 +37,6 @@ describe('Product Voice operations', () => {
     const checkForUpdates = vi.fn(async () => ({ status: 'checked' as const, bundleVersion: 'voice-v2' }));
     const voice = createVoice({
       defaultProfile: { profileId: 'default', name: 'Default', source: { kind: 'built_in', voiceId: 'Xiaoyu' } },
-      recognizer: unusedRecognizer,
       synthesizer: unusedSynthesizer,
       player: unusedPlayer,
       models: {
@@ -83,7 +81,6 @@ describe('Product Voice operations', () => {
         language: 'zh',
         gender: 'female',
       },
-      recognizer: unusedRecognizer,
       synthesizer: {
         async prepare() { return { status: 'ready' }; },
         async *synthesize(request) {
@@ -111,7 +108,6 @@ describe('Product Voice operations', () => {
   it('starts the Voice Session even when TTS preparation fails', async () => {
     const voice = createVoice({
       defaultProfile: { profileId: 'default', name: 'Default', source: { kind: 'built_in', voiceId: 'Xiaoyu' } },
-      recognizer: unusedRecognizer,
       synthesizer: {
         async prepare() {
           return { status: 'failed', failure: { code: 'tts_prepare_failed', message: 'Model load failed.' } };
@@ -131,9 +127,37 @@ describe('Product Voice operations', () => {
     });
     expect((await host.getSnapshot()).status).toBe('listening');
   });
+
+  it('delegates manual utterance boundaries to the injected Speech Input runtime', async () => {
+    const startManualUtterance = vi.fn();
+    const finishManualUtterance = vi.fn();
+    const voice = createVoice({
+      defaultProfile: { profileId: 'default', name: 'Default', source: { kind: 'built_in', voiceId: 'Xiaoyu' } },
+      synthesizer: unusedSynthesizer,
+      player: unusedPlayer,
+      speechInput: {
+        async start() { return { status: 'started', generation: 4 }; },
+        acceptFrame() {},
+        setMuted() {},
+        startManualUtterance,
+        finishManualUtterance,
+        async stop() {},
+        subscribe() { return () => undefined; },
+      },
+    });
+    const host = createVoiceOperations({
+      voice,
+      profileAudioPicker: { async chooseReferenceAudio() { return { status: 'cancelled' }; } },
+    });
+    await host.startSession({ boundSessionId: 'session:one' });
+
+    expect(await host.startManualUtterance()).toEqual({ status: 'ok' });
+    expect(startManualUtterance).toHaveBeenCalledWith({ generation: 4 });
+    expect(await host.finishManualUtterance()).toEqual({ status: 'ok' });
+    expect(finishManualUtterance).toHaveBeenCalledWith({ generation: 4 });
+  });
 });
 
-const unusedRecognizer: SpeechRecognizer = { async recognize() { return { status: 'empty' }; } };
 const unusedSynthesizer: SpeechSynthesizer = {
   async prepare() { return { status: 'ready' }; },
   async *synthesize() {},

@@ -64,8 +64,8 @@ import { createWorkspaceStore } from '@megumi/workspace/store';
 import {
   createFileVoiceProfileStorage,
   createVoice,
+  type SpeechInputRuntime,
   type SpeechPlayer,
-  type SpeechRecognizer,
   type SpeechSynthesizer,
   type VoiceModels,
   type VoiceProfileSeed,
@@ -124,9 +124,10 @@ export type ProductSettingsEnvironment = SettingsEnvironment;
 export interface ComposeProductVoiceOptions {
   readonly defaultProfile?: VoiceProfileSeed;
   readonly builtInProfiles?: readonly VoiceProfileSeed[];
-  readonly recognizer?: SpeechRecognizer;
   readonly synthesizer?: SpeechSynthesizer;
   readonly player?: SpeechPlayer;
+  /** Desktop injects the single Voice Input Adapter that owns the Speech Worker. */
+  readonly speechInput?: SpeechInputRuntime;
   readonly models?: VoiceModels;
   readonly profileAudioPicker?: VoiceProfileAudioPicker;
 }
@@ -474,9 +475,9 @@ function composeProductRuntime(
       source: { kind: 'built_in', voiceId: 'Xiaoyu' },
     },
     builtInProfiles: options.voice?.builtInProfiles,
-    recognizer: options.voice?.recognizer ?? unavailableSpeechRecognizer,
     synthesizer: options.voice?.synthesizer ?? unavailableSpeechSynthesizer,
     player: options.voice?.player ?? unavailableSpeechPlayer,
+    ...(options.voice?.speechInput ? { speechInput: options.voice.speechInput } : {}),
     profileStorage: createFileVoiceProfileStorage({ profilesPath: homePaths.voiceProfilesPath }),
     ...(options.voice?.models ? { models: options.voice.models } : {}),
   });
@@ -552,22 +553,10 @@ function composeProductRuntime(
   return createProductRuntime({
     host,
     logger,
-    voiceAudio: {
-      submitUtterance: (request) => voice.sessions.submitUtterance(request),
-    },
     subscribeRuntimeEvents: (filter, handler) => events.subscribe(filter, handler),
     dispose: () => resources.dispose({ runs, voice, observability }),
   });
 }
-
-const unavailableSpeechRecognizer: SpeechRecognizer = {
-  async recognize() {
-    return {
-      status: 'failed',
-      failure: { code: 'voice_recognizer_unavailable', message: 'Speech recognition is not configured.' },
-    };
-  },
-};
 
 const unavailableSpeechSynthesizer: SpeechSynthesizer = {
   async prepare() {

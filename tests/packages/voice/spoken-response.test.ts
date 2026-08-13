@@ -30,7 +30,6 @@ describe('spoken response projection', () => {
         name: 'Default',
         source: { kind: 'built_in', voiceId: 'Xiaoyu' },
       },
-      recognizer: { async recognize() { return { status: 'empty' }; } },
       synthesizer,
       player,
       ids: {
@@ -71,7 +70,6 @@ describe('spoken response projection', () => {
         name: 'Default',
         source: { kind: 'built_in', voiceId: 'Xiaoyu' },
       },
-      recognizer: { async recognize() { return { status: 'empty' }; } },
       synthesizer: {
         async prepare() { return { status: 'ready' }; },
         async *synthesize() {

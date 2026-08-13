@@ -7,8 +7,6 @@
 
 import type {
   SpeechPlayer,
-  SpeechPcm,
-  SpeechRecognizer,
   SpeechSynthesizer,
   VoiceSpeechFailure,
 } from './speech';
@@ -38,28 +36,18 @@ export interface StartVoiceSessionRequest {
   readonly language?: 'zh' | 'en' | 'auto';
 }
 export interface SetVoiceSessionMutedRequest { readonly muted: boolean }
-export interface SubmitVoiceUtteranceRequest {
-  readonly pcm: SpeechPcm;
-  readonly language?: 'zh' | 'en' | 'auto';
-}
 export interface InterruptVoiceSessionRequest { readonly cancelRun?: boolean }
 export interface EndVoiceSessionRequest { readonly reason?: 'user' | 'character_hidden' | 'app_dispose' }
 
 export type StartVoiceSessionResult =
-  | { readonly status: 'started'; readonly snapshot: VoiceSnapshot }
-  | { readonly status: 'already_active'; readonly snapshot: VoiceSnapshot }
+  | { readonly status: 'started'; readonly snapshot: VoiceSnapshot; readonly generation?: number }
+  | { readonly status: 'already_active'; readonly snapshot: VoiceSnapshot; readonly generation?: number }
   | { readonly status: 'cancelled'; readonly snapshot: VoiceSnapshot }
   | { readonly status: 'failed'; readonly failure: VoiceSpeechFailure; readonly snapshot: VoiceSnapshot }
   | { readonly status: 'profile_unavailable' };
 export type SetVoiceSessionMutedResult =
   | { readonly status: 'updated'; readonly snapshot: VoiceSnapshot }
   | { readonly status: 'not_active' };
-export type SubmitVoiceUtteranceResult =
-  | { readonly status: 'recognized'; readonly transcript: string; readonly snapshot: VoiceSnapshot }
-  | { readonly status: 'empty'; readonly snapshot: VoiceSnapshot }
-  | { readonly status: 'not_active' }
-  | { readonly status: 'muted'; readonly snapshot: VoiceSnapshot }
-  | { readonly status: 'failed'; readonly failure: { readonly code: string; readonly message: string }; readonly snapshot: VoiceSnapshot };
 export type InterruptVoiceSessionResult =
   | { readonly status: 'interrupted'; readonly snapshot: VoiceSnapshot }
   | { readonly status: 'not_active' };
@@ -79,7 +67,6 @@ export interface VoiceSessions {
   subscribe(listener: VoiceSnapshotListener): VoiceSubscription;
   start(request: StartVoiceSessionRequest): Promise<StartVoiceSessionResult>;
   setMuted(request: SetVoiceSessionMutedRequest): SetVoiceSessionMutedResult;
-  submitUtterance(request: SubmitVoiceUtteranceRequest): Promise<SubmitVoiceUtteranceResult>;
   startManualUtterance(): ManualVoiceUtteranceResult;
   finishManualUtterance(): ManualVoiceUtteranceResult;
   interrupt(request?: InterruptVoiceSessionRequest): Promise<InterruptVoiceSessionResult>;
@@ -93,7 +80,6 @@ interface VoiceSessionRuntimeControl {
 
 export function createVoiceSessions(input: {
   readonly profiles: VoiceProfiles;
-  readonly recognizer: SpeechRecognizer;
   readonly synthesizer: SpeechSynthesizer;
   readonly player: SpeechPlayer;
   readonly speechInput?: SpeechInputRuntime;
@@ -160,7 +146,9 @@ export function createVoiceSessions(input: {
     },
     async start(request) {
       if (snapshot.status === 'preparing' && startPromise) return startPromise;
-      if (snapshot.status !== 'idle') return { status: 'already_active', snapshot };
+      if (snapshot.status !== 'idle') {
+        return { status: 'already_active', snapshot, ...(activeSpeechGeneration !== undefined ? { generation: activeSpeechGeneration } : {}) };
+      }
       const selected = input.profiles.getSelected();
       if (selected.status !== 'selected') return { status: 'profile_unavailable' };
       const preparing: VoiceSnapshot = {
@@ -192,7 +180,11 @@ export function createVoiceSessions(input: {
         prepareTtsInBackground(generation, selected.profile);
         const listening: VoiceSnapshot = { ...preparing, status: 'listening' };
         publish(listening);
-        return { status: 'started', snapshot: listening };
+        return {
+          status: 'started',
+          snapshot: listening,
+          ...(activeSpeechGeneration !== undefined ? { generation: activeSpeechGeneration } : {}),
+        };
       })().finally(() => {
         if (generation === startGeneration) {
           startPromise = undefined;
@@ -208,21 +200,6 @@ export function createVoiceSessions(input: {
       const next = { ...active, muted: request.muted };
       publish(next);
       return { status: 'updated', snapshot: next };
-    },
-    async submitUtterance(request) {
-      const active = activeSnapshot();
-      if (!active) return { status: 'not_active' };
-      if (active.muted) return { status: 'muted', snapshot: active };
-      publish({ ...active, status: 'recognizing' });
-      const result = await input.recognizer.recognize({
-        pcm: request.pcm,
-        language: request.language ?? 'auto',
-      });
-      const listening: VoiceSnapshot = { ...active, status: 'listening' };
-      publish(listening);
-      if (result.status === 'recognized') return { status: 'recognized', transcript: result.transcript, snapshot: listening };
-      if (result.status === 'empty') return { status: 'empty', snapshot: listening };
-      return { status: 'failed', failure: result.failure, snapshot: listening };
     },
     startManualUtterance() {
       if (activeSpeechGeneration === undefined || snapshot.status === 'idle') return { status: 'not_active' };

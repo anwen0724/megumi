@@ -67,7 +67,14 @@ const mocks = vi.hoisted(() => {
       homeDirectory: homePath,
       resourceLocator: { builtInSkillsPath: `${homePath}/resources/skills` },
     })),
-    createElectronVoiceOptions: vi.fn(() => ({ kind: 'voice-options' })),
+    createElectronVoiceOptions: vi.fn(() => ({
+      voiceOptions: {},
+      speechInputPaths: () => ({
+        vadModelPath: 'C:/resources/vad/silero_vad.onnx',
+        senseVoiceModelPath: 'C:/models/model.int8.onnx',
+        senseVoiceTokensPath: 'C:/models/tokens.txt',
+      }),
+    })),
     megumiHomePaths: {
       homePath,
       settingsPath: `${homePath}/settings.json`,
@@ -176,7 +183,6 @@ describe('main runtime logger composition', () => {
         homePath: mocks.homePath,
         logger,
         host: mocks.agentHost,
-        voiceAudio: { submitUtterance: vi.fn() },
         subscribeRuntimeEvents: () => ({ unsubscribe: () => undefined }),
         dispose: mocks.agentHost.dispose,
       };
@@ -238,7 +244,10 @@ describe('main runtime logger composition', () => {
       settings: { host: mocks.agentHost },
       approval: { host: mocks.agentHost },
       voice: { host: mocks.agentHost },
-      voiceAudio: expect.objectContaining({ submitUtterance: expect.any(Function) }),
+      voiceInput: expect.objectContaining({ adapter: expect.objectContaining({
+        acceptFrame: expect.any(Function),
+        getGeneration: expect.any(Function),
+      }) }),
       speechPlayer: expect.objectContaining({
         play: expect.any(Function),
         stop: expect.any(Function),
@@ -254,5 +263,22 @@ describe('main runtime logger composition', () => {
     });
 
     expect(existsSync(join(mocks.logsPath, 'runtime.jsonl'))).toBe(false);
+  });
+
+  it('uses one Voice Input Adapter for both Product composition and the dedicated IPC handler', async () => {
+    const { composeDesktopMain } = await import('@megumi/desktop/main/shell-composition/desktop-main-composition');
+
+    const desktopMain = composeDesktopMain({});
+
+    // AC-26: the exact adapter instance is injected into Product/Voice
+    // composition and exposed for the dedicated frame handler registration.
+    const voiceOptions = mocks.composeProduct.mock.calls.at(-1)![0].voice;
+    expect(voiceOptions.speechInput).toBe(desktopMain.voiceInput.adapter);
+    expect(voiceOptions.speechInput).toHaveProperty('acceptFrame');
+
+    // Disposal ends the Product first (which stops the Voice Session) and then
+    // releases the adapter-owned Worker.
+    await desktopMain.dispose();
+    expect(mocks.agentHost.dispose).toHaveBeenCalled();
   });
 });

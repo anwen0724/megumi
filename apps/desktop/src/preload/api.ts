@@ -92,7 +92,7 @@ import type {
   VoiceSessionStartPayload,
 } from '../main/ipc/schemas';
 import type { CharacterWindowShapeRect, CharacterWindowSnapshot } from '../main/app/character-window-controller';
-import type { SpeechInputEvent, SubmitVoiceUtteranceResult } from '@megumi/voice';
+import type { SpeechInputEvent } from '@megumi/voice';
 
 type BusinessRequest<TPayload, TChannel extends BusinessIpcChannel> = RuntimeIpcRequest<TPayload, TChannel>;
 type EmptyPayload = Record<string, never>;
@@ -328,11 +328,6 @@ export const api = {
       status: 'played' | 'stopped' | 'failed';
       message?: string;
     }): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.voice.playbackResult, payload),
-    submitAudio: (payload: {
-      samples: ArrayBuffer;
-      sampleRate: number;
-      language: 'zh' | 'en' | 'auto';
-    }): Promise<SubmitVoiceUtteranceResult> => ipcRenderer.invoke(IPC_CHANNELS.voice.audioSubmit, payload),
     getSnapshot: (
       request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.voice.snapshot>,
     ): Promise<RuntimeIpcResult<VoiceHostSnapshot, typeof IPC_CHANNELS.voice.snapshot>> =>
@@ -381,6 +376,14 @@ export const api = {
       request: BusinessRequest<VoiceSessionStartPayload, typeof IPC_CHANNELS.voice.sessionStart>,
     ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.sessionStart>> =>
       invokeRuntimeIpc(IPC_CHANNELS.voice.sessionStart, request),
+    startManualUtterance: (
+      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.voice.sessionManualStart>,
+    ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.sessionManualStart>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.voice.sessionManualStart, request),
+    finishManualUtterance: (
+      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.voice.sessionManualFinish>,
+    ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.sessionManualFinish>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.voice.sessionManualFinish, request),
     setMuted: (
       request: BusinessRequest<VoiceSessionMutedPayload, typeof IPC_CHANNELS.voice.sessionMute>,
     ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.sessionMute>> =>

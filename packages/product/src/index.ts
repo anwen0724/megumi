@@ -11,7 +11,7 @@ export {
   type ProductSessionAttachmentFileSystem,
   type ProductSettingsEnvironment,
 } from './composition/product-composer';
-export type { ProductRuntime, ProductRuntimeLogger, ProductVoiceAudioRuntime } from './composition/product-runtime';
+export type { ProductRuntime, ProductRuntimeLogger } from './composition/product-runtime';
 export type { ProductHostInterface } from './host/product-host';
 export type { VoiceHost } from './host/voice-host';
 export type { DirectoryPicker } from './host/capabilities/directory-picker';

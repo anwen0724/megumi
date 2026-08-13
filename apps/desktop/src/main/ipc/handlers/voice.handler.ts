@@ -20,6 +20,8 @@ import {
   VoiceProfilesListRequestSchema,
   VoiceSessionEndRequestSchema,
   VoiceSessionInterruptRequestSchema,
+  VoiceSessionManualFinishRequestSchema,
+  VoiceSessionManualStartRequestSchema,
   VoiceSessionMuteRequestSchema,
   VoiceSessionStartRequestSchema,
   VoiceSnapshotRequestSchema,
@@ -119,6 +121,20 @@ export function registerVoiceHandlers(
     responseSchema: host.VoiceHostMutationResultSchema,
     logger: options.logger,
     handle: (request) => voice.startSession(request.payload),
+  }));
+  ipcMain.handle(IPC_CHANNELS.voice.sessionManualStart, createIpcRequestHandler({
+    channel: IPC_CHANNELS.voice.sessionManualStart,
+    requestSchema: VoiceSessionManualStartRequestSchema,
+    responseSchema: host.VoiceHostMutationResultSchema,
+    logger: options.logger,
+    handle: () => voice.startManualUtterance(),
+  }));
+  ipcMain.handle(IPC_CHANNELS.voice.sessionManualFinish, createIpcRequestHandler({
+    channel: IPC_CHANNELS.voice.sessionManualFinish,
+    requestSchema: VoiceSessionManualFinishRequestSchema,
+    responseSchema: host.VoiceHostMutationResultSchema,
+    logger: options.logger,
+    handle: () => voice.finishManualUtterance(),
   }));
   ipcMain.handle(IPC_CHANNELS.voice.sessionMute, createIpcRequestHandler({
     channel: IPC_CHANNELS.voice.sessionMute,

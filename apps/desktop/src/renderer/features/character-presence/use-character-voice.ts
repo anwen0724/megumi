@@ -1,6 +1,9 @@
 /*
- * Coordinates Character voice controls with Product VoiceHost and the existing Session input IPC.
- * Final transcripts remain editable briefly and are submitted through the normal input path.
+ * Coordinates Character voice controls with the Product VoiceHost, the
+ * dedicated frame bridge, and the existing Session input IPC. The Renderer
+ * Voice Input Feature owns the microphone and forwards frames; this hook only
+ * drives Voice Session controls and fills the editable transcript, which is
+ * submitted through the normal input path.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,13 +11,24 @@ import type { VoiceHostSnapshot } from '@megumi/product/host';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../shared/ipc';
 import { useRunStore } from '../../entities/run';
-import { createVoiceAudioController, type VoiceAudioSnapshot } from './voice-audio-controller';
+import {
+  createVoiceInputController,
+  type VoiceInputSnapshot,
+} from '../voice-input/voice-input-controller';
+import { createMicrophoneCapture } from '../voice-input/microphone-capture';
 import { createCancelAndReplaceCoordinator } from './cancel-and-replace';
 
 export function useCharacterVoice(selectedSessionId: string | null) {
   const { t } = useTranslation('character');
   const [voiceSnapshot, setVoiceSnapshot] = useState<VoiceHostSnapshot>({ status: 'idle' });
-  const [audioSnapshot, setAudioSnapshot] = useState<VoiceAudioSnapshot>({ status: 'idle', inputLevel: 0 });
+  const [audioSnapshot, setAudioSnapshot] = useState<VoiceInputSnapshot>({
+    microphone: 'closed',
+    speech: 'stopped',
+    level: 0,
+    peak: 0,
+    framesReceived: false,
+    fallbackToDefault: false,
+  });
   const [draft, setDraftState] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
@@ -28,12 +42,19 @@ export function useCharacterVoice(selectedSessionId: string | null) {
     autoSubmitTimer.current = undefined;
   };
 
-  const audio = useMemo(() => createVoiceAudioController({
-    submitAudio: (payload) => window.megumi.voice.submitAudio(payload),
+  const audio = useMemo(() => createVoiceInputController({
+    capture: createMicrophoneCapture(),
+    sendFrame: (frame) => window.megumi.voiceInput.sendFrame({
+      generation: frame.generation,
+      sequence: frame.sequence,
+      sampleRate: 16_000,
+      samples: frame.samples.buffer as ArrayBuffer,
+    }),
+    subscribeEvents: (listener) => window.megumi.voiceInput.onEvent(listener),
     onTranscript: (transcript) => {
       cancelAutoSubmit();
-      setDraftState(transcript);
-      autoSubmitTimer.current = setTimeout(() => { void submitRef.current(transcript); }, 3_000);
+      setDraftState(transcript.text);
+      autoSubmitTimer.current = setTimeout(() => { void submitRef.current(transcript.text); }, 3_000);
     },
   }), []);
 
@@ -153,9 +174,6 @@ export function useCharacterVoice(selectedSessionId: string | null) {
       setError(t('interaction.noSession'));
       return;
     }
-    // Chromium only allows an AudioContext to start reliably while the click's
-    // user activation is still live. Prime it before Settings/sidecar awaits.
-    audio.primeForUserGesture();
     const settings = await window.megumi.settings.get(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {}),
     );
@@ -181,7 +199,10 @@ export function useCharacterVoice(selectedSessionId: string | null) {
     setError(null);
     try {
       const result = await window.megumi.voice.startSession(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.sessionStart, { boundSessionId: selectedSessionId }),
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.sessionStart, {
+          boundSessionId: selectedSessionId,
+          language: voiceSettings.recognitionLanguage,
+        }),
       );
       if (generation !== startGeneration.current) return;
       if (!result.ok || result.data.status !== 'ok') {
@@ -193,12 +214,19 @@ export function useCharacterVoice(selectedSessionId: string | null) {
             : t('errors.startSession'));
         return;
       }
-      await audio.start({
+      const runtimeGeneration = result.data.generation;
+      if (runtimeGeneration === undefined) {
+        setError(t('errors.voiceComponentOutdated'));
+        return;
+      }
+      // Only after the Voice Session (and the Speech Worker) is running does
+      // the microphone open; frames are tagged with the worker's generation.
+      await audio.beginCapture({
         inputDeviceId: voiceSettings.inputDeviceId,
-        language: voiceSettings.recognitionLanguage,
+        generation: runtimeGeneration,
       });
       if (generation !== startGeneration.current) {
-        await audio.stop();
+        await audio.endCapture();
         return;
       }
       await refreshVoiceSnapshot();
@@ -212,7 +240,7 @@ export function useCharacterVoice(selectedSessionId: string | null) {
     setPreparing(false);
     cancelAutoSubmit();
     replacement.clear();
-    await audio.stop();
+    await audio.endCapture();
     await window.megumi.voice.endSession(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.sessionEnd, {}),
     );
@@ -224,9 +252,22 @@ export function useCharacterVoice(selectedSessionId: string | null) {
       createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.sessionMute, { muted }),
     );
     if (!result.ok || result.data.status !== 'ok') return;
-    await audio.setMuted(muted);
+    // The stream stays open; the Feature stops forwarding frames while muted.
+    audio.setMuted(muted);
     await refreshVoiceSnapshot();
   }, [audio, refreshVoiceSnapshot]);
+
+  const beginManual = useCallback(async () => {
+    await window.megumi.voice.startManualUtterance(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.sessionManualStart, {}),
+    );
+  }, []);
+
+  const finishManual = useCallback(async () => {
+    await window.megumi.voice.finishManualUtterance(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.sessionManualFinish, {}),
+    );
+  }, []);
 
   const setDraft = (value: string) => {
     cancelAutoSubmit();
@@ -244,10 +285,9 @@ export function useCharacterVoice(selectedSessionId: string | null) {
       setError(interruptError instanceof Error ? interruptError.message : t('errors.stopSpeech'));
       return;
     }
-    if (audio.getSnapshot().status === 'fallback') await audio.beginPushToTalk();
     setError(null);
     await refreshVoiceSnapshot();
-  }, [audio, refreshVoiceSnapshot, replacement, t]);
+  }, [refreshVoiceSnapshot, replacement, t]);
 
   return {
     voiceSnapshot,
@@ -262,9 +302,9 @@ export function useCharacterVoice(selectedSessionId: string | null) {
     setDraft,
     submitText,
     interruptAndListen,
+    beginManual,
+    finishManual,
     discardDraft: () => { cancelAutoSubmit(); setDraftState(''); },
-    beginPushToTalk: audio.beginPushToTalk,
-    endPushToTalk: audio.endPushToTalk,
   };
 }
 

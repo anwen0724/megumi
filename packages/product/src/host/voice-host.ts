@@ -10,7 +10,10 @@ export const VoiceProfileRenamePayloadSchema = z.object({
 }).strict();
 export const VoiceProfileIdPayloadSchema = z.object({ profileId: z.string().min(1) }).strict();
 export const VoiceProfilePreviewPayloadSchema = VoiceProfileIdPayloadSchema;
-export const VoiceSessionStartPayloadSchema = z.object({ boundSessionId: z.string().min(1) }).strict();
+export const VoiceSessionStartPayloadSchema = z.object({
+  boundSessionId: z.string().min(1),
+  language: z.enum(['zh', 'en', 'auto']).optional(),
+}).strict();
 export const VoiceSessionMutedPayloadSchema = z.object({ muted: z.boolean() }).strict();
 
 const VoiceFailureSchema = z.object({
@@ -80,7 +83,8 @@ export const VoiceProfilesListResultSchema = z.object({
 }).strict();
 
 export const VoiceHostMutationResultSchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('ok') }).strict(),
+  // The Speech Input generation is returned for the host to tag ephemeral frames.
+  z.object({ status: z.literal('ok'), generation: z.number().int().nonnegative().optional() }).strict(),
   z.object({ status: z.literal('cancelled') }).strict(),
   z.object({ status: z.literal('not_found') }).strict(),
   z.object({ status: z.literal('blocked'), reason: z.string().min(1) }).strict(),
@@ -129,6 +133,8 @@ export interface VoiceHost {
   previewProfile(request: VoiceProfilePreviewPayload): Promise<VoiceProfilePreviewResult>;
   startSession(request: VoiceSessionStartPayload): Promise<VoiceHostMutationResult>;
   setMuted(request: VoiceSessionMutedPayload): Promise<VoiceHostMutationResult>;
+  startManualUtterance(request?: Record<string, never>): Promise<VoiceHostMutationResult>;
+  finishManualUtterance(request?: Record<string, never>): Promise<VoiceHostMutationResult>;
   interrupt(request?: Record<string, never>): Promise<VoiceHostMutationResult>;
   endSession(request?: Record<string, never>): Promise<VoiceHostMutationResult>;
 }

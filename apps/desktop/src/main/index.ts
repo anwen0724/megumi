@@ -68,7 +68,7 @@ if (shouldQuitForSquirrelStartup()) {
         settings: desktopMain.settings,
         approval: desktopMain.approval,
         voice: desktopMain.voice,
-        voiceAudio: desktopMain.voiceAudio,
+        voiceInput: desktopMain.voiceInput,
         speechPlayer,
         character,
         observability: desktopMain.observability,

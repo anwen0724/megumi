@@ -168,7 +168,7 @@ export default function CharacterApp() {
   }, [voice.outputDeviceId]);
 
   const characterState = useMemo(() => {
-    const voiceStatus = voice.audioSnapshot.status === 'recognizing'
+    const voiceStatus = voice.audioSnapshot.speech === 'recognizing'
       ? 'recognizing'
       : session.interaction?.status === 'running'
         ? 'thinking'
@@ -178,9 +178,9 @@ export default function CharacterApp() {
       playing,
       pendingApproval: Boolean(session.interaction?.approval),
       activeTool: Boolean(session.interaction?.activeTool),
-      error: Boolean(session.interaction?.error || voice.error || voice.audioSnapshot.status === 'error'),
+      error: Boolean(session.interaction?.error || voice.error || voice.audioSnapshot.speech === 'failed' || voice.audioSnapshot.microphone === 'failed'),
     });
-  }, [playing, session.interaction, voice.audioSnapshot.status, voice.error, voice.voiceSnapshot.status]);
+  }, [playing, session.interaction, voice.audioSnapshot.speech, voice.audioSnapshot.microphone, voice.error, voice.voiceSnapshot.status]);
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;

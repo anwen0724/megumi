@@ -4,11 +4,6 @@
  */
 import type { EventFilter, EventHandler, EventSubscription } from '@megumi/events';
 import type { ProductHostInterface } from '../host/product-host';
-import type { SubmitVoiceUtteranceRequest, SubmitVoiceUtteranceResult } from '@megumi/voice';
-
-export interface ProductVoiceAudioRuntime {
-  submitUtterance(request: SubmitVoiceUtteranceRequest): Promise<SubmitVoiceUtteranceResult>;
-}
 
 export interface ProductRuntimeLogger {
   info?(event: string, details?: Record<string, unknown>): void;
@@ -19,7 +14,6 @@ export interface ProductRuntimeLogger {
 export interface ProductRuntime {
   readonly host: ProductHostInterface;
   readonly logger: ProductRuntimeLogger;
-  readonly voiceAudio: ProductVoiceAudioRuntime;
   subscribeRuntimeEvents(filter: EventFilter, handler: EventHandler): EventSubscription;
   dispose(): Promise<void>;
 }
@@ -28,7 +22,6 @@ export interface ProductRuntime {
 export function createProductRuntime(input: {
   readonly host: ProductHostInterface;
   readonly logger: ProductRuntimeLogger;
-  readonly voiceAudio: ProductVoiceAudioRuntime;
   readonly subscribeRuntimeEvents: ProductRuntime['subscribeRuntimeEvents'];
   readonly dispose: () => Promise<void>;
 }): ProductRuntime {
@@ -36,7 +29,6 @@ export function createProductRuntime(input: {
   return {
     host: input.host,
     logger: input.logger,
-    voiceAudio: input.voiceAudio,
     subscribeRuntimeEvents: input.subscribeRuntimeEvents,
     dispose() {
       disposePromise ??= input.dispose();

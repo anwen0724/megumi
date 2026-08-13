@@ -1,6 +1,6 @@
 /* Composes the public Voice interfaces while keeping runtime implementations private. */
 
-import type { SpeechPlayer, SpeechRecognizer, SpeechSynthesizer } from './speech';
+import type { SpeechPlayer, SpeechSynthesizer } from './speech';
 import { createUnconfiguredVoiceModels, type VoiceModels } from './voice-models';
 import {
   createVoiceProfiles,
@@ -34,7 +34,6 @@ export type VoiceProfilePreviewResult =
 export interface CreateVoiceOptions {
   readonly defaultProfile: VoiceProfileSeed;
   readonly builtInProfiles?: readonly VoiceProfileSeed[];
-  readonly recognizer: SpeechRecognizer;
   readonly synthesizer: SpeechSynthesizer;
   readonly player: SpeechPlayer;
   readonly speechInput?: SpeechInputRuntime;
@@ -52,7 +51,6 @@ export function createVoice(options: CreateVoiceOptions): Voice {
   }, options.profileStorage, options.builtInProfiles);
   const baseSessions = createVoiceSessions({
     profiles,
-    recognizer: options.recognizer,
     synthesizer: options.synthesizer,
     player: options.player,
     ...(options.speechInput ? { speechInput: options.speechInput } : {}),
