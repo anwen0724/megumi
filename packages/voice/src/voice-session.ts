@@ -1,6 +1,8 @@
 /*
  * Owns the single active Voice Session state machine. Bound Session and Voice
- * Profile selection are fixed from start until the session ends.
+ * Profile selection are fixed from start until the session ends. Speech input
+ * starts independently: TTS preparation runs in the background and its failure
+ * never blocks the microphone, VAD, STT, or text input.
  */
 
 import type {
@@ -11,6 +13,7 @@ import type {
   VoiceSpeechFailure,
 } from './speech';
 import type { VoiceProfiles } from './voice-profiles';
+import type { SpeechInputRuntime } from './speech-input/speech-input';
 
 export type VoiceSessionStatus =
   | 'preparing'
@@ -30,7 +33,10 @@ export type VoiceSnapshot =
       readonly muted: boolean;
     };
 
-export interface StartVoiceSessionRequest { readonly boundSessionId: string }
+export interface StartVoiceSessionRequest {
+  readonly boundSessionId: string;
+  readonly language?: 'zh' | 'en' | 'auto';
+}
 export interface SetVoiceSessionMutedRequest { readonly muted: boolean }
 export interface SubmitVoiceUtteranceRequest {
   readonly pcm: SpeechPcm;
@@ -60,6 +66,10 @@ export type InterruptVoiceSessionResult =
 export type EndVoiceSessionResult =
   | { readonly status: 'ended'; readonly snapshot: VoiceSnapshot }
   | { readonly status: 'already_idle'; readonly snapshot: VoiceSnapshot };
+export type ManualVoiceUtteranceResult =
+  | { readonly status: 'started' }
+  | { readonly status: 'finished' }
+  | { readonly status: 'not_active' };
 
 export interface VoiceSubscription { unsubscribe(): void }
 export type VoiceSnapshotListener = (snapshot: VoiceSnapshot) => void;
@@ -70,12 +80,15 @@ export interface VoiceSessions {
   start(request: StartVoiceSessionRequest): Promise<StartVoiceSessionResult>;
   setMuted(request: SetVoiceSessionMutedRequest): SetVoiceSessionMutedResult;
   submitUtterance(request: SubmitVoiceUtteranceRequest): Promise<SubmitVoiceUtteranceResult>;
+  startManualUtterance(): ManualVoiceUtteranceResult;
+  finishManualUtterance(): ManualVoiceUtteranceResult;
   interrupt(request?: InterruptVoiceSessionRequest): Promise<InterruptVoiceSessionResult>;
   end(request?: EndVoiceSessionRequest): Promise<EndVoiceSessionResult>;
 }
 
 interface VoiceSessionRuntimeControl {
   setRuntimeStatus(status: VoiceSessionStatus): void;
+  dispose(): void;
 }
 
 export function createVoiceSessions(input: {
@@ -83,11 +96,13 @@ export function createVoiceSessions(input: {
   readonly recognizer: SpeechRecognizer;
   readonly synthesizer: SpeechSynthesizer;
   readonly player: SpeechPlayer;
+  readonly speechInput?: SpeechInputRuntime;
 }): VoiceSessions & VoiceSessionRuntimeControl {
   let snapshot: VoiceSnapshot = { status: 'idle' };
   let startGeneration = 0;
   let preparationAbort: AbortController | undefined;
   let startPromise: Promise<StartVoiceSessionResult> | undefined;
+  let activeSpeechGeneration: number | undefined;
   const listeners = new Set<VoiceSnapshotListener>();
 
   const publish = (next: VoiceSnapshot) => {
@@ -98,12 +113,46 @@ export function createVoiceSessions(input: {
   const activeSnapshot = (): Exclude<VoiceSnapshot, { status: 'idle' }> | undefined =>
     snapshot.status === 'idle' ? undefined : snapshot;
 
+  const unsubscribeSpeechInput = input.speechInput?.subscribe((event) => {
+    if (event.generation !== activeSpeechGeneration) return;
+    if (event.type === 'recognizing') {
+      setRuntimeStatus('recognizing');
+      return;
+    }
+    if (event.type === 'final-transcript' || event.type === 'empty-utterance' || event.type === 'recognition-failed') {
+      // Resume listening only when recognition owned the session status.
+      if (snapshot.status === 'recognizing') setRuntimeStatus('listening');
+      return;
+    }
+    if (event.type === 'runtime-failed') {
+      setRuntimeStatus('error');
+    }
+  });
+
+  const setRuntimeStatus = (status: VoiceSessionStatus) => {
+    const active = activeSnapshot();
+    if (!active) return;
+    publish({ ...active, status });
+  };
+
+  const prepareTtsInBackground = (generation: number, profile: { profileId: string; source: Parameters<SpeechSynthesizer['prepare']>[0]['voice'] }) => {
+    const abort = new AbortController();
+    preparationAbort = abort;
+    void input.synthesizer.prepare({
+      voiceProfileId: profile.profileId,
+      voice: profile.source,
+    }, { signal: abort.signal }).then((result) => {
+      // DECOUPLE-03: a TTS failure only affects reply reading.
+      if (generation !== startGeneration || result.status === 'ready') return;
+      if (generation === startGeneration) preparationAbort = undefined;
+    });
+  };
+
   return {
     getSnapshot: () => snapshot,
-    setRuntimeStatus(status) {
-      const active = activeSnapshot();
-      if (!active) return;
-      publish({ ...active, status });
+    setRuntimeStatus,
+    dispose() {
+      unsubscribeSpeechInput?.();
     },
     subscribe(listener) {
       listeners.add(listener);
@@ -122,27 +171,30 @@ export function createVoiceSessions(input: {
       };
       publish(preparing);
       const generation = ++startGeneration;
-      const abort = new AbortController();
-      preparationAbort = abort;
       const running = (async (): Promise<StartVoiceSessionResult> => {
-        const result = await input.synthesizer.prepare({
-          voiceProfileId: selected.profile.profileId,
-          voice: selected.profile.source,
-        }, { signal: abort.signal });
+        const speechStart = input.speechInput
+          ? await input.speechInput.start({ language: request.language })
+          : undefined;
         if (generation !== startGeneration || snapshot.status === 'idle') {
+          void input.speechInput?.stop({
+            generation: speechStart?.status === 'started' ? speechStart.generation : undefined,
+            reason: 'session_ended',
+          });
           return { status: 'cancelled', snapshot };
         }
-        if (result.status === 'failed') {
+        if (speechStart?.status === 'failed') {
           const idle: VoiceSnapshot = { status: 'idle' };
           publish(idle);
-          return { status: 'failed', failure: result.failure, snapshot: idle };
+          return { status: 'failed', failure: speechStart.failure, snapshot: idle };
         }
+        activeSpeechGeneration = speechStart?.generation;
+        // TTS prepares on its own path; speech input is already usable.
+        prepareTtsInBackground(generation, selected.profile);
         const listening: VoiceSnapshot = { ...preparing, status: 'listening' };
         publish(listening);
         return { status: 'started', snapshot: listening };
       })().finally(() => {
         if (generation === startGeneration) {
-          preparationAbort = undefined;
           startPromise = undefined;
         }
       });
@@ -152,6 +204,7 @@ export function createVoiceSessions(input: {
     setMuted(request) {
       const active = activeSnapshot();
       if (!active) return { status: 'not_active' };
+      input.speechInput?.setMuted({ muted: request.muted });
       const next = { ...active, muted: request.muted };
       publish(next);
       return { status: 'updated', snapshot: next };
@@ -171,6 +224,16 @@ export function createVoiceSessions(input: {
       if (result.status === 'empty') return { status: 'empty', snapshot: listening };
       return { status: 'failed', failure: result.failure, snapshot: listening };
     },
+    startManualUtterance() {
+      if (activeSpeechGeneration === undefined || snapshot.status === 'idle') return { status: 'not_active' };
+      input.speechInput?.startManualUtterance({ generation: activeSpeechGeneration });
+      return { status: 'started' };
+    },
+    finishManualUtterance() {
+      if (activeSpeechGeneration === undefined || snapshot.status === 'idle') return { status: 'not_active' };
+      input.speechInput?.finishManualUtterance({ generation: activeSpeechGeneration });
+      return { status: 'finished' };
+    },
     async interrupt() {
       const active = activeSnapshot();
       if (!active) return { status: 'not_active' };
@@ -185,7 +248,10 @@ export function createVoiceSessions(input: {
       preparationAbort?.abort();
       preparationAbort = undefined;
       startPromise = undefined;
+      const speechGeneration = activeSpeechGeneration;
+      activeSpeechGeneration = undefined;
       await input.player.stop({ reason: 'session_ended' });
+      await input.speechInput?.stop({ generation: speechGeneration, reason: 'session_ended' });
       const next: VoiceSnapshot = { status: 'idle' };
       publish(next);
       return { status: 'ended', snapshot: next };

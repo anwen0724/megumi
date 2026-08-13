@@ -19,7 +19,7 @@ export interface RecognizeSpeechRequest {
 }
 
 export type RecognizeSpeechResult =
-  | { readonly status: 'recognized'; readonly transcript: string }
+  | { readonly status: 'recognized'; readonly transcript: string; readonly language?: 'zh' | 'en' }
   | { readonly status: 'empty' }
   | { readonly status: 'failed'; readonly failure: VoiceSpeechFailure };
 

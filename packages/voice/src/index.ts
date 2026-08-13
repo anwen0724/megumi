@@ -10,3 +10,14 @@ export * from './voice';
 export * from './voice-models';
 export * from './voice-profiles';
 export * from './voice-session';
+export * from './speech-input/speech-input';
+export {
+  createSpeechInputRuntime,
+  type CreateSpeechInputRuntimeOptions,
+  type SpeechInputRuntimeInternal,
+} from './speech-input/speech-input-runtime';
+export {
+  createSherpaVad,
+  type SpeechVad,
+  type CreateSherpaVadOptions,
+} from './speech-input/sherpa-vad';

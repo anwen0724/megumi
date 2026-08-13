@@ -108,7 +108,7 @@ describe('Product Voice operations', () => {
     expect(samples[1]).toBeCloseTo(0.2);
   });
 
-  it('returns the TTS preparation failure instead of reporting voice as started', async () => {
+  it('starts the Voice Session even when TTS preparation fails', async () => {
     const voice = createVoice({
       defaultProfile: { profileId: 'default', name: 'Default', source: { kind: 'built_in', voiceId: 'Xiaoyu' } },
       recognizer: unusedRecognizer,
@@ -125,10 +125,11 @@ describe('Product Voice operations', () => {
       profileAudioPicker: { async chooseReferenceAudio() { return { status: 'cancelled' }; } },
     });
 
+    // TTS failure only affects reply reading; speech input stays usable.
     await expect(host.startSession({ boundSessionId: 'session:one' })).resolves.toEqual({
-      status: 'failed',
-      failure: { code: 'tts_prepare_failed', message: 'Model load failed.' },
+      status: 'ok',
     });
+    expect((await host.getSnapshot()).status).toBe('listening');
   });
 });
 

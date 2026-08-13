@@ -9,6 +9,7 @@ import {
   type VoiceProfileStorage,
 } from './voice-profiles';
 import { createVoiceSessions, type VoiceSessions } from './voice-session';
+import type { SpeechInputRuntime } from './speech-input/speech-input';
 import { createSpeechQueue } from './speech-queue';
 import { createSpokenStreamProjector } from './spoken-stream-projector';
 
@@ -36,6 +37,7 @@ export interface CreateVoiceOptions {
   readonly recognizer: SpeechRecognizer;
   readonly synthesizer: SpeechSynthesizer;
   readonly player: SpeechPlayer;
+  readonly speechInput?: SpeechInputRuntime;
   readonly models?: VoiceModels;
   readonly profileStorage?: VoiceProfileStorage;
   readonly ids?: {
@@ -53,6 +55,7 @@ export function createVoice(options: CreateVoiceOptions): Voice {
     recognizer: options.recognizer,
     synthesizer: options.synthesizer,
     player: options.player,
+    ...(options.speechInput ? { speechInput: options.speechInput } : {}),
   });
   let responseActive = false;
   const speechQueue = createSpeechQueue({
@@ -144,6 +147,7 @@ export function createVoice(options: CreateVoiceOptions): Voice {
       projector.reset();
       await speechQueue.clear('disposed');
       await sessions.end({ reason: 'app_dispose' });
+      baseSessions.dispose();
       const disposableSynthesizer = options.synthesizer as SpeechSynthesizer & { dispose?: () => Promise<void> };
       await disposableSynthesizer.dispose?.();
     },

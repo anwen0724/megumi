@@ -9,6 +9,7 @@ interface SherpaStream {
 interface SherpaOfflineRecognizer {
   createStream(): SherpaStream;
   decode(stream: SherpaStream): void;
+  decodeAsync(stream: SherpaStream): Promise<{ readonly text?: string }>;
   getResult(stream: SherpaStream): { readonly text?: string };
 }
 
@@ -59,11 +60,22 @@ export function createSenseVoiceRecognizer(options: CreateSenseVoiceRecognizerOp
       }
       try {
         const recognizer = await loadRecognizer(request.language);
+        if (operationOptions?.signal?.aborted) {
+          return { status: 'failed', failure: { code: 'voice_recognition_cancelled', message: 'Speech recognition was cancelled.' } };
+        }
+        // One independent stream per utterance; decoding stays off the caller's
+        // thread via decodeAsync and the result is only read from that decode.
         const stream = recognizer.createStream();
         stream.acceptWaveform({ sampleRate: request.pcm.sampleRate, samples: request.pcm.samples });
-        recognizer.decode(stream);
-        const transcript = recognizer.getResult(stream).text?.trim() ?? '';
-        return transcript ? { status: 'recognized', transcript } : { status: 'empty' };
+        const result = await recognizer.decodeAsync(stream);
+        const cleaned = cleanSenseVoiceTranscript(result.text ?? '');
+        return cleaned.text
+          ? {
+              status: 'recognized',
+              transcript: cleaned.text,
+              ...(cleaned.language ? { language: cleaned.language } : {}),
+            }
+          : { status: 'empty' };
       } catch (error) {
         return {
           status: 'failed',
@@ -75,6 +87,26 @@ export function createSenseVoiceRecognizer(options: CreateSenseVoiceRecognizerOp
       }
     },
   };
+}
+
+/**
+ * SenseVoice prefixes results with control marks like `<|zh|><|NEUTRAL|>` and
+ * appends `<|withitn|>` for inverse text normalization. Strip all marks and
+ * recover the detected language from the explicit language mark.
+ */
+export function cleanSenseVoiceTranscript(raw: string): {
+  readonly text: string;
+  readonly language?: 'zh' | 'en';
+} {
+  let language: 'zh' | 'en' | undefined;
+  const text = raw
+    .replace(/<\|(zh|en)\|>/g, (_match, detected: string) => {
+      language = detected === 'zh' || detected === 'en' ? detected : language;
+      return '';
+    })
+    .replace(/<\|[^|>]*\|>/g, '')
+    .trim();
+  return { text, ...(language ? { language } : {}) };
 }
 
 function resolvePath(value: string | (() => string)): string {
