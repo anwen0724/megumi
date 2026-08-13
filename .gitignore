@@ -13,6 +13,7 @@ data/
 .env.*
 !.env.example
 .superpowers/
+skills-lock.json
 worktrees/
 .claude/worktrees/
 .claude/settings.local.json
