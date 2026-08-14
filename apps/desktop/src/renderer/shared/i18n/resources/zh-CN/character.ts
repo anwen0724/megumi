@@ -36,7 +36,6 @@ export const character = {
     noActivity: '当前没有进行中的交互。',
     cancel: '取消运行',
     retry: '重试这次输入',
-    interrupt: '打断并说话',
   },
   voice: {
     start: '开始语音',
@@ -79,10 +78,6 @@ export const character = {
     startSession: '语音会话无法开始。',
     voicePreparationFailed: '语音输入准备失败，请到设置中确认语音模型状态。',
     voiceComponentOutdated: '本地语音组件版本不匹配，请完全退出并重新启动 Megumi。',
-    cancelRun: '当前运行无法取消。',
-    runActive: '当前运行尚未结束，请先使用“打断并说话”。',
-    replacementFailed: '替换输入未能提交。',
-    replacementNotCancelled: '原运行没有以取消状态结束，替换输入未提交。',
-    replacementTimeout: '等待原运行取消超时，替换输入未提交。',
+    runActive: '当前回复尚未结束，请等待回复完成。',
   },
 } as const satisfies TranslationShape<typeof source>;

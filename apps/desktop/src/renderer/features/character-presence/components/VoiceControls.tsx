@@ -7,7 +7,6 @@ import type { SpeechOutputViewSnapshot } from '../speech-output/speech-output-co
 
 export function VoiceControls(props: {
   readonly voice: CharacterVoiceController;
-  readonly activeRunId?: string;
   readonly speechOutput?: SpeechOutputViewSnapshot;
 }) {
   const { t } = useTranslation('character');
@@ -43,16 +42,6 @@ export function VoiceControls(props: {
           </>
         )}
       </div>
-
-      {active && props.activeRunId ? (
-        <button
-          type="button"
-          className="mt-2 w-full rounded-xl bg-sky-200 px-3 py-2 text-sm font-semibold text-sky-950"
-          onClick={() => { void voice.interruptAndListen(props.activeRunId); }}
-        >
-          {t('interaction.interrupt')}
-        </button>
-      ) : null}
 
       {active && manualMode ? (
         <div className="mt-2 flex gap-2">

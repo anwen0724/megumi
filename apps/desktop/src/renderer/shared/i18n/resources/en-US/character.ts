@@ -33,7 +33,6 @@ export const character = {
     noActivity: 'No active interaction.',
     cancel: 'Cancel run',
     retry: 'Retry input',
-    interrupt: 'Interrupt and speak',
   },
   voice: {
     start: 'Start voice',
@@ -76,10 +75,6 @@ export const character = {
     startSession: 'The voice Session could not start.',
     voicePreparationFailed: 'The voice input could not be prepared. Check the voice model status in Settings.',
     voiceComponentOutdated: 'The local voice component version does not match. Fully quit and restart Megumi.',
-    cancelRun: 'The current run could not be cancelled.',
-    runActive: 'The current run has not ended. Use “Interrupt and speak” first.',
-    replacementFailed: 'The replacement input could not be submitted.',
-    replacementNotCancelled: 'The previous run did not end as cancelled, so the replacement was not submitted.',
-    replacementTimeout: 'Timed out waiting for the previous run to cancel. The replacement was not submitted.',
+    runActive: 'The current run has not ended. Please wait for it to finish.',
   },
 } as const;

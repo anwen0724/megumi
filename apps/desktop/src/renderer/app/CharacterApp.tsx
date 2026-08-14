@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Hosts the shaped Character Presence surface for the selected normal Session.
  * Character gestures control only presentation; Agent operations stay on existing Product contracts.
  */
@@ -265,7 +265,7 @@ export default function CharacterApp() {
               onCancel={session.cancelRun}
               onRetry={voice.submitText}
             />
-            <VoiceControls voice={voice} activeRunId={session.activeRunId} speechOutput={speechOutput} />
+            <VoiceControls voice={voice} speechOutput={speechOutput} />
           </div>
         </div>
       ) : null}
