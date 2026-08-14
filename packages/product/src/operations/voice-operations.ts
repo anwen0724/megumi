@@ -1,14 +1,15 @@
 /* Implements the host-neutral Voice operations exposed by Product. */
 
-import type { Voice } from '@megumi/voice';
+import type { SpeechOutputRuntime, Voice } from '@megumi/voice';
 import type { VoiceHost } from '../host/voice-host';
 
 export interface CreateVoiceOperationsOptions {
   readonly voice: Voice;
+  readonly speechOutput: SpeechOutputRuntime;
 }
 
 export function createVoiceOperations(options: CreateVoiceOperationsOptions): VoiceHost {
-  const { voice } = options;
+  const { voice, speechOutput } = options;
 
   return {
     async getSnapshot() {
@@ -71,6 +72,12 @@ export function createVoiceOperations(options: CreateVoiceOperationsOptions): Vo
 
     async endSession() {
       await voice.sessions.end({ reason: 'user' });
+      return { status: 'ok' };
+    },
+
+    async stopSpeechOutput() {
+      // v1's only external stop reason is the character window hiding (D20).
+      speechOutput.stop('character_hidden');
       return { status: 'ok' };
     },
   };

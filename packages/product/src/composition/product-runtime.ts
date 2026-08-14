@@ -3,6 +3,10 @@
  * Request-oriented product operations remain on ProductHostInterface.
  */
 import type { EventFilter, EventHandler, EventSubscription } from '@megumi/events';
+import type {
+  SpeechOutputEventListener,
+  SpeechOutputSubscription,
+} from '@megumi/voice';
 import type { ProductHostInterface } from '../host/product-host';
 
 export interface ProductRuntimeLogger {
@@ -15,6 +19,7 @@ export interface ProductRuntime {
   readonly host: ProductHostInterface;
   readonly logger: ProductRuntimeLogger;
   subscribeRuntimeEvents(filter: EventFilter, handler: EventHandler): EventSubscription;
+  subscribeSpeechOutputEvents(handler: SpeechOutputEventListener): SpeechOutputSubscription;
   dispose(): Promise<void>;
 }
 
@@ -23,6 +28,7 @@ export function createProductRuntime(input: {
   readonly host: ProductHostInterface;
   readonly logger: ProductRuntimeLogger;
   readonly subscribeRuntimeEvents: ProductRuntime['subscribeRuntimeEvents'];
+  readonly subscribeSpeechOutputEvents: ProductRuntime['subscribeSpeechOutputEvents'];
   readonly dispose: () => Promise<void>;
 }): ProductRuntime {
   let disposePromise: Promise<void> | undefined;
@@ -30,6 +36,7 @@ export function createProductRuntime(input: {
     host: input.host,
     logger: input.logger,
     subscribeRuntimeEvents: input.subscribeRuntimeEvents,
+    subscribeSpeechOutputEvents: input.subscribeSpeechOutputEvents,
     dispose() {
       disposePromise ??= input.dispose();
       return disposePromise;

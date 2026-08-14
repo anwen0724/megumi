@@ -103,4 +103,5 @@ export interface VoiceHost {
   startManualUtterance(request?: Record<string, never>): Promise<VoiceHostMutationResult>;
   finishManualUtterance(request?: Record<string, never>): Promise<VoiceHostMutationResult>;
   endSession(request?: Record<string, never>): Promise<VoiceHostMutationResult>;
+  stopSpeechOutput(request?: Record<string, never>): Promise<VoiceHostMutationResult>;
 }

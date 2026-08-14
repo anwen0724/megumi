@@ -62,8 +62,10 @@ import {
 } from '@megumi/workspace';
 import { createWorkspaceStore } from '@megumi/workspace/store';
 import {
+  createSpeechOutputRuntime,
   createVoice,
   type SpeechInputRuntime,
+  type SpeechSynthesizer,
   type VoiceModels,
 } from '@megumi/voice';
 import {
@@ -97,6 +99,7 @@ import {
   createProductRuntime,
   type ProductRuntime,
 } from './product-runtime';
+import { onRunEndedForSpeechOutput } from './speech-output-wiring';
 import type {
   AttachmentPicker,
 } from '../host/capabilities/attachment-picker';
@@ -119,6 +122,8 @@ export type ProductSettingsEnvironment = SettingsEnvironment;
 export interface ComposeProductVoiceOptions {
   /** Desktop injects the single Voice Input Adapter that owns the Speech Worker. */
   readonly speechInput?: SpeechInputRuntime;
+  /** Desktop injects the speech synthesizer; the speech-output chain stays provider-neutral. */
+  readonly speechOutputSynthesizer?: SpeechSynthesizer;
   readonly models?: VoiceModels;
 }
 export interface ComposeProductOptions {
@@ -462,6 +467,9 @@ function composeProductRuntime(
     speechInput: options.voice?.speechInput ?? unavailableSpeechInput,
     ...(options.voice?.models ? { models: options.voice.models } : {}),
   });
+  const speechOutput = createSpeechOutputRuntime({
+    synthesizer: options.voice?.speechOutputSynthesizer ?? unavailableSpeechSynthesizer,
+  });
   // The workspace subscriber needs the engine to resolve run -> workspace;
   // subscribe after engine creation so the closure can reference it.
   resources.registerEventSubscription(
@@ -472,6 +480,34 @@ function composeProductRuntime(
         return result.status === 'found' ? result.run.workspaceId : undefined;
       }),
     ),
+  );
+  // The speech-output chain is a separate subscriber of the same fact: it
+  // never enters the run lifecycle, and its failures stay inside the chain.
+  resources.registerEventSubscription(
+    events.subscribe({ eventTypes: ['run.ended'] }, (event) => {
+      if (event.type !== 'run.ended') return;
+      try {
+        onRunEndedForSpeechOutput(
+          {
+            settings,
+            findAssistantReplyByRunId: (sessionId, runId) =>
+              sessionStore.findAssistantReplyByRunId(sessionId, runId),
+            speechOutput,
+          },
+          event,
+        );
+      } catch (error) {
+        observability.service.recordLog({
+          level: 'warn',
+          event: 'speech_output_read_failed',
+          attributes: {
+            runId: event.runId,
+            sessionId: event.sessionId,
+            errorMessage: error instanceof Error ? error.message : String(error),
+          },
+        });
+      }
+    }),
   );
   const host: ProductHostInterface = {
     session,
@@ -491,14 +527,15 @@ function composeProductRuntime(
       flush: observability.flush,
       ...(options.diagnosticBundleSave ? { save: options.diagnosticBundleSave } : {}),
     }),
-    voice: createVoiceOperations({ voice }),
+    voice: createVoiceOperations({ voice, speechOutput }),
   };
 
   return createProductRuntime({
     host,
     logger,
     subscribeRuntimeEvents: (filter, handler) => events.subscribe(filter, handler),
-    dispose: () => resources.dispose({ runs, voice, observability }),
+    subscribeSpeechOutputEvents: (handler) => speechOutput.subscribe(handler),
+    dispose: () => resources.dispose({ runs, voice, speechOutput, observability }),
   });
 }
 
@@ -516,6 +553,16 @@ const unavailableSpeechInput: SpeechInputRuntime = {
   finishManualUtterance() {},
   async stop() {},
   subscribe() { return () => {}; },
+};
+
+/** Hosts that do not inject a Speech Synthesizer still expose an honest failure. */
+const unavailableSpeechSynthesizer: SpeechSynthesizer = {
+  async synthesize() {
+    return {
+      status: 'failed',
+      failure: { code: 'voice_tts_unavailable', message: 'Speech synthesis is not configured.' },
+    };
+  },
 };
 
 function openDatabase(homePaths: MegumiHomePaths, options: ComposeProductOptions): DatabaseConnection {

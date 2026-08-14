@@ -14,12 +14,13 @@ export interface ProductResourceManager {
   dispose(input: {
     readonly runs: Runs;
     readonly voice: Voice;
+    readonly speechOutput: { dispose(): void };
     readonly observability: { flush(): Promise<void> };
   }): Promise<void>;
 }
 
 interface ProductDisposeFailure {
-  readonly resource: 'runs' | 'voice' | 'events' | 'observability' | 'database';
+  readonly resource: 'runs' | 'voice' | 'speech-output' | 'events' | 'observability' | 'database';
   readonly error: unknown;
 }
 
@@ -57,7 +58,7 @@ export function createProductResourceManager(input: {
     },
 
     /** Attempts every shutdown step and reports all failures only after cleanup. */
-    async dispose({ runs, voice, observability }) {
+    async dispose({ runs, voice, speechOutput, observability }) {
       const failures: ProductDisposeFailure[] = [];
       try {
         const result = await runs.shutdown({ timeoutMs: input.shutdownTimeoutMs });
@@ -75,6 +76,12 @@ export function createProductResourceManager(input: {
         await voice.dispose();
       } catch (error) {
         failures.push({ resource: 'voice', error });
+      }
+
+      try {
+        speechOutput.dispose();
+      } catch (error) {
+        failures.push({ resource: 'speech-output', error });
       }
 
       for (const subscription of eventSubscriptions) {

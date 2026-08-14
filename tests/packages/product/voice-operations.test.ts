@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createVoice, type SpeechInputRuntime } from '../../../packages/voice/src';
+import { createVoice, type SpeechInputRuntime, type SpeechOutputRuntime } from '../../../packages/voice/src';
 import { createVoiceOperations } from '../../../packages/product/src/operations/voice-operations';
 
 function noopSpeechInput(): SpeechInputRuntime {
@@ -11,6 +11,14 @@ function noopSpeechInput(): SpeechInputRuntime {
     finishManualUtterance() {},
     async stop() {},
     subscribe() { return () => undefined; },
+  };
+}
+
+function noopSpeechOutput(): SpeechOutputRuntime {
+  return {
+    read() {},
+    stop() {},
+    subscribe() { return { unsubscribe() {} }; },
   };
 }
 
@@ -36,7 +44,7 @@ describe('Product Voice operations', () => {
         getCapabilityStatus: () => ({ status: 'ready' as const }),
       },
     });
-    const host = createVoiceOperations({ voice });
+    const host = createVoiceOperations({ voice, speechOutput: noopSpeechOutput() });
 
     expect(await host.getModelStatus()).toEqual({
       status: 'preparing',
@@ -63,7 +71,7 @@ describe('Product Voice operations', () => {
         subscribe() { return () => undefined; },
       },
     });
-    const host = createVoiceOperations({ voice });
+    const host = createVoiceOperations({ voice, speechOutput: noopSpeechOutput() });
 
     await expect(host.startSession({ boundSessionId: 'session:one' })).resolves.toEqual({
       status: 'ok',
@@ -87,7 +95,7 @@ describe('Product Voice operations', () => {
         getCapabilityStatus: () => ({ status: 'ready' }),
       },
     });
-    const host = createVoiceOperations({ voice });
+    const host = createVoiceOperations({ voice, speechOutput: noopSpeechOutput() });
 
     expect(await host.getModelCapabilityStatus({ capability: 'stt' })).toEqual({ status: 'ready' });
   });
@@ -106,12 +114,23 @@ describe('Product Voice operations', () => {
         subscribe() { return () => undefined; },
       },
     });
-    const host = createVoiceOperations({ voice });
+    const host = createVoiceOperations({ voice, speechOutput: noopSpeechOutput() });
     await host.startSession({ boundSessionId: 'session:one' });
 
     expect(await host.startManualUtterance()).toEqual({ status: 'ok' });
     expect(startManualUtterance).toHaveBeenCalledWith({ generation: 4 });
     expect(await host.finishManualUtterance()).toEqual({ status: 'ok' });
     expect(finishManualUtterance).toHaveBeenCalledWith({ generation: 4 });
+  });
+
+  it('stops speech output for the character-hidden reason', async () => {
+    const stop = vi.fn();
+    const host = createVoiceOperations({
+      voice: createVoice({ speechInput: noopSpeechInput() }),
+      speechOutput: { read() {}, stop, subscribe() { return { unsubscribe() {} }; } },
+    });
+
+    expect(await host.stopSpeechOutput()).toEqual({ status: 'ok' });
+    expect(stop).toHaveBeenCalledWith('character_hidden');
   });
 });
