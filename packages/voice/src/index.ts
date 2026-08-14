@@ -36,3 +36,7 @@ export {
   parseSpeechOutputEvent,
 } from './speech-output/speech-output-schema';
 export { filterReplyTextForSpeech } from './speech-output/reply-text-filter';
+export {
+  createMinimaxSynthesizer,
+  type CreateMinimaxSynthesizerOptions,
+} from './speech-output/synthesizers/minimax-synthesizer';
