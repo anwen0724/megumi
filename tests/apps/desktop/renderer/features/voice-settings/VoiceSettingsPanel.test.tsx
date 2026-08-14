@@ -65,6 +65,15 @@ describe('VoiceSettingsPanel', () => {
     expect(screen.getByText('USB Headphones')).toBeInTheDocument();
   });
 
+  it('shows the voice replies switch outside the audio devices section', async () => {
+    render(<VoiceSettingsPanel />);
+
+    const toggle = await screen.findByRole('switch', { name: /Voice replies/i });
+    expect(toggle).toBeInTheDocument();
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(screen.queryByRole('checkbox', { name: /Voice replies/i })).not.toBeInTheDocument();
+  });
+
   it('shows one user-facing Voice model resource and starts download only after an explicit click', async () => {
     const user = userEvent.setup();
     render(<VoiceSettingsPanel />);

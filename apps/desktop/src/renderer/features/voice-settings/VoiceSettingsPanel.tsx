@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../shared/ipc';
-import { Button, SettingsPageHeader, SettingsSection } from '../../shared/ui';
+import { Button, SettingsPageHeader, SettingsRow, SettingsSection, cx } from '../../shared/ui';
 import {
   enumerateAudioDevices,
   testMicrophoneLevel,
@@ -261,17 +261,6 @@ export function VoiceSettingsPanel() {
               <option value="en">{t('voice.languageEnglish')}</option>
             </select>
           </label>
-          <label className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-app-bg)] p-4">
-            <span className="flex items-center gap-2 text-sm font-medium text-[var(--color-text)]">
-              <Speaker size={17} className="text-[var(--color-accent)]" aria-hidden="true" />
-              {t('voice.readAloud')}
-            </span>
-            <input
-              type="checkbox"
-              checked={voiceSettings.readAloudEnabled}
-              onChange={(event) => { void updateVoiceSettings({ readAloudEnabled: event.target.checked }); }}
-            />
-          </label>
           <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-app-bg)] p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <span className="flex items-center gap-2 text-sm font-medium text-[var(--color-text)]">
@@ -354,6 +343,38 @@ export function VoiceSettingsPanel() {
         </div>
       </SettingsSection>
       <SettingsSection title={t('voice.ttsTitle')} description={t('voice.ttsDescription')}>
+        <SettingsRow
+          title={t('voice.readAloud')}
+          description={t('voice.readAloudDescription')}
+        >
+          <div className="flex items-center justify-end gap-3">
+            <span className="text-sm text-[var(--color-text-muted)]">
+              {voiceSettings.readAloudEnabled ? t('voice.readAloudOn') : t('voice.readAloudOff')}
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-label={t('voice.readAloud')}
+              aria-checked={voiceSettings.readAloudEnabled}
+              onClick={() => { void updateVoiceSettings({ readAloudEnabled: !voiceSettings.readAloudEnabled }); }}
+              className={cx(
+                'relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border transition-colors duration-150',
+                'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
+                voiceSettings.readAloudEnabled
+                  ? 'border-[var(--color-accent)] bg-[var(--color-accent)]'
+                  : 'border-[var(--color-border-strong)] bg-[var(--color-surface-muted)]',
+              )}
+            >
+              <span
+                aria-hidden="true"
+                className={cx(
+                  'h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-150',
+                  voiceSettings.readAloudEnabled ? 'translate-x-6' : 'translate-x-1',
+                )}
+              />
+            </button>
+          </div>
+        </SettingsRow>
         <div className="grid gap-4 p-5 lg:grid-cols-2">
           <label className="rounded-xl border border-[var(--color-border)] bg-[var(--color-app-bg)] p-4">
             <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
