@@ -2,6 +2,7 @@ import type {
   SettingsRaw,
   SettingsResolved,
   SettingsThemeName,
+  ResolvedVoiceTtsSettings,
   ResolvedWebSearchSettings as WebSearchPublicSettings,
 } from '@megumi/settings';
 import {
@@ -23,6 +24,8 @@ export interface SettingsHost {
   deleteProvider(request: ProviderDeleteUiRequest): Promise<EmptyUiResult>;
   setProviderApiKey(request: ProviderSetApiKeyUiRequest): Promise<EmptyUiResult>;
   deleteProviderApiKey(request: ProviderDeleteApiKeyUiRequest): Promise<EmptyUiResult>;
+  setVoiceTtsApiKey(request: VoiceTtsApiKeyUiRequest): Promise<VoiceTtsKeyUiResult>;
+  deleteVoiceTtsApiKey(request?: Record<string, never>): Promise<VoiceTtsKeyUiResult>;
 }
 
 export interface SettingsPermissionOptions {
@@ -73,7 +76,14 @@ export const SettingsUpdatePayloadSchema = z.object({
   memory: z.object({ enabled: z.boolean().optional() }).strict().optional(),
   voice: z.object({
     inputDeviceId: z.string().min(1).optional(),
+    outputDeviceId: z.string().min(1).optional(),
     recognitionLanguage: z.enum(['auto', 'zh', 'en']).optional(),
+    readAloudEnabled: z.boolean().optional(),
+    tts: z.object({
+      provider: z.enum(['minimax']).optional(),
+      voiceId: z.string().min(1).optional(),
+      apiKeyEnv: z.string().min(1).nullable().optional(),
+    }).strict().optional(),
   }).strict().optional(),
   modelSelection: z.object({
     providerId: z.string().min(1),
@@ -146,7 +156,15 @@ const SettingsUiResolvedSchema = z.object({
   memory: z.object({ enabled: z.boolean() }).strict(),
   voice: z.object({
     inputDeviceId: z.string().min(1),
+    outputDeviceId: z.string().min(1),
     recognitionLanguage: z.enum(['auto', 'zh', 'en']),
+    readAloudEnabled: z.boolean(),
+    tts: z.object({
+      provider: z.enum(['minimax']),
+      voiceId: z.string().min(1),
+      hasApiKey: z.boolean(),
+      credentialSource: z.enum(['settings', 'environment', 'missing']),
+    }).strict(),
   }).strict(),
   modelSelection: z.object({
     providerId: z.string().min(1),
@@ -269,7 +287,14 @@ export type SettingsUiRaw = {
   };
   voice?: {
     inputDeviceId?: string;
+    outputDeviceId?: string;
     recognitionLanguage?: 'auto' | 'zh' | 'en';
+    readAloudEnabled?: boolean;
+    tts?: {
+      provider?: 'minimax';
+      voiceId?: string;
+      apiKeyEnv?: string | null;
+    };
   };
   modelSelection?: {
     providerId: string;
@@ -308,7 +333,15 @@ export type SettingsUiResolved = {
   };
   voice: {
     inputDeviceId: string;
+    outputDeviceId: string;
     recognitionLanguage: 'auto' | 'zh' | 'en';
+    readAloudEnabled: boolean;
+    tts: {
+      provider: 'minimax';
+      voiceId: string;
+      hasApiKey: boolean;
+      credentialSource: 'settings' | 'environment' | 'missing';
+    };
   };
   modelSelection?: {
     providerId: string;
@@ -476,6 +509,27 @@ export interface ProviderDeleteUiRequest {
   providerId: string;
 }
 
+export interface VoiceTtsApiKeyUiRequest {
+  apiKey: string;
+}
+
+export const VoiceTtsApiKeyPayloadSchema = z.object({
+  apiKey: z.string().min(1),
+}).strict();
+export type VoiceTtsApiKeyPayload = z.infer<typeof VoiceTtsApiKeyPayloadSchema>;
+
+const VoiceTtsPublicUiDtoSchema = z.object({
+  provider: z.enum(['minimax']),
+  voiceId: z.string().min(1),
+  hasApiKey: z.boolean(),
+  credentialSource: z.enum(['settings', 'environment', 'missing']),
+}).strict();
+export type VoiceTtsPublicUiDto = z.infer<typeof VoiceTtsPublicUiDtoSchema>;
+
+export type VoiceTtsKeyUiResult =
+  | { status: 'updated' | 'deleted'; tts: VoiceTtsPublicUiDto }
+  | { status: 'failed'; failure: HostFailure };
+
 export type EmptyUiResult =
   | { status: 'updated'; provider: ProviderSettingsUiDto }
   | { status: 'deleted'; providerId: string }
@@ -493,6 +547,15 @@ export type SettingsCompleteSetupUiResult =
  * Maps Settings module facts into host-facing settings UI DTOs.
  */
 
+export function toVoiceTtsPublicUiDto(tts: ResolvedVoiceTtsSettings): VoiceTtsPublicUiDto {
+  return {
+    provider: tts.provider,
+    voiceId: tts.voice_id,
+    hasApiKey: tts.has_api_key,
+    credentialSource: tts.credential_source,
+  };
+}
+
 
 export function toSettingsRawPatch(patch: SettingsUiRaw): SettingsRaw {
   return {
@@ -507,7 +570,16 @@ export function toSettingsRawPatch(patch: SettingsUiRaw): SettingsRaw {
     ...(patch.voice ? {
       voice: {
         ...(patch.voice.inputDeviceId ? { input_device_id: patch.voice.inputDeviceId } : {}),
+        ...(patch.voice.outputDeviceId ? { output_device_id: patch.voice.outputDeviceId } : {}),
         ...(patch.voice.recognitionLanguage ? { recognition_language: patch.voice.recognitionLanguage } : {}),
+        ...(patch.voice.readAloudEnabled !== undefined ? { read_aloud_enabled: patch.voice.readAloudEnabled } : {}),
+        ...(patch.voice.tts ? {
+          tts: {
+            ...(patch.voice.tts.provider ? { provider: patch.voice.tts.provider } : {}),
+            ...(patch.voice.tts.voiceId ? { voice_id: patch.voice.tts.voiceId } : {}),
+            ...(patch.voice.tts.apiKeyEnv !== undefined ? { api_key_env: patch.voice.tts.apiKeyEnv } : {}),
+          },
+        } : {}),
       },
     } : {}),
     ...(patch.modelSelection ? {
@@ -548,6 +620,12 @@ export function toSettingsRawPatch(patch: SettingsUiRaw): SettingsRaw {
 export function toSettingsUiResolved(
   settings: SettingsResolved,
   webSearch: WebSearchPublicSettings = { has_api_key: false, credential_source: 'missing' },
+  voiceTts: ResolvedVoiceTtsSettings = {
+    provider: 'minimax',
+    voice_id: 'female-shaonv',
+    has_api_key: false,
+    credential_source: 'missing',
+  },
   permissionOptions: SettingsPermissionOptions = {},
 ): SettingsUiResolved {
   return {
@@ -560,7 +638,15 @@ export function toSettingsUiResolved(
     memory: settings.memory,
     voice: {
       inputDeviceId: settings.voice.input_device_id,
+      outputDeviceId: settings.voice.output_device_id,
       recognitionLanguage: settings.voice.recognition_language,
+      readAloudEnabled: settings.voice.read_aloud_enabled,
+      tts: {
+        provider: voiceTts.provider,
+        voiceId: voiceTts.voice_id,
+        hasApiKey: voiceTts.has_api_key,
+        credentialSource: voiceTts.credential_source,
+      },
     },
     ...(settings.model_selection ? {
       modelSelection: {

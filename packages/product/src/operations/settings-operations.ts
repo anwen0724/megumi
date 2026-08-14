@@ -15,6 +15,7 @@ import {
   toProviderSettingsUiDto,
   toSettingsRawPatch,
   toSettingsUiResolved,
+  toVoiceTtsPublicUiDto,
   type EmptyUiResult,
   type ProviderDeleteApiKeyUiRequest,
   type ProviderDeleteUiRequest,
@@ -30,6 +31,8 @@ import {
   type SettingsUpdateUiRequest,
   type SettingsUpdateUiResult,
   type SettingsHost,
+  type VoiceTtsApiKeyUiRequest,
+  type VoiceTtsKeyUiResult,
 } from '../host/settings-host';
 
 /** Creates the Product operations exposed through SettingsHost. */
@@ -48,9 +51,13 @@ export function createSettingsOperations(
       if (webSearch.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(webSearch.failure) };
       }
+      const voiceTts = settings.resolveVoiceTts();
+      if (voiceTts.status === 'failed') {
+        return { status: 'failed', failure: toHostFailure(voiceTts.failure) };
+      }
       return {
         status: 'ok',
-        settings: toSettingsUiResolved(resolved.settings, webSearch.settings, permissionOptions),
+        settings: toSettingsUiResolved(resolved.settings, webSearch.settings, voiceTts.settings, permissionOptions),
         unknownKeys: diagnostics.status === 'ok' ? diagnostics.unknownKeys : [],
       };
     },
@@ -84,9 +91,13 @@ export function createSettingsOperations(
       if (webSearch.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(webSearch.failure) };
       }
+      const voiceTts = settings.resolveVoiceTts();
+      if (voiceTts.status === 'failed') {
+        return { status: 'failed', failure: toHostFailure(voiceTts.failure) };
+      }
       return {
         status: 'updated',
-        settings: toSettingsUiResolved(result.settings, webSearch.settings, permissionOptions),
+        settings: toSettingsUiResolved(result.settings, webSearch.settings, voiceTts.settings, permissionOptions),
       };
     },
 
@@ -115,9 +126,13 @@ export function createSettingsOperations(
       if (webSearch.status === 'failed') {
         return { status: 'failed', failure: toHostFailure(webSearch.failure) };
       }
+      const voiceTts = settings.resolveVoiceTts();
+      if (voiceTts.status === 'failed') {
+        return { status: 'failed', failure: toHostFailure(voiceTts.failure) };
+      }
       return {
         status: 'completed',
-        settings: toSettingsUiResolved(result.settings, webSearch.settings, permissionOptions),
+        settings: toSettingsUiResolved(result.settings, webSearch.settings, voiceTts.settings, permissionOptions),
       };
     },
 
@@ -188,7 +203,30 @@ export function createSettingsOperations(
       }
       return readUpdatedProvider(settings, request.providerId);
     },
+
+    async setVoiceTtsApiKey(request: VoiceTtsApiKeyUiRequest): Promise<VoiceTtsKeyUiResult> {
+      const result = settings.writeVoiceTtsApiKey({ api_key: request.apiKey });
+      if (result.status === 'failed') {
+        return { status: 'failed', failure: toHostFailure(result.failure) };
+      }
+      return readUpdatedVoiceTts(settings, 'updated');
+    },
+
+    async deleteVoiceTtsApiKey(): Promise<VoiceTtsKeyUiResult> {
+      const result = settings.deleteVoiceTtsApiKey({});
+      if (result.status === 'failed') {
+        return { status: 'failed', failure: toHostFailure(result.failure) };
+      }
+      return readUpdatedVoiceTts(settings, 'deleted');
+    },
   };
+}
+
+function readUpdatedVoiceTts(settings: Settings, status: 'updated' | 'deleted'): VoiceTtsKeyUiResult {
+  const resolved = settings.resolveVoiceTts();
+  return resolved.status === 'ok'
+    ? { status, tts: toVoiceTtsPublicUiDto(resolved.settings) }
+    : { status: 'failed', failure: toHostFailure(resolved.failure) };
 }
 
 function resolveUpdatedSettings(

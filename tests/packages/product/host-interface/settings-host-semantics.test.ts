@@ -44,6 +44,60 @@ describe('SettingsHost semantics', () => {
     });
   });
 
+  it('round-trips output device, read-aloud and tts voice settings', async () => {
+    const store = memoryStore();
+    const host = createSettingsOperations(createSettings({ store }));
+
+    const result = await host.update({
+      voice: {
+        outputDeviceId: 'speaker-1',
+        readAloudEnabled: true,
+        tts: { provider: 'minimax', voiceId: 'qiaopi_mengmei' },
+      },
+    });
+
+    expect(result).toMatchObject({
+      status: 'updated',
+      settings: {
+        voice: {
+          outputDeviceId: 'speaker-1',
+          readAloudEnabled: true,
+          tts: {
+            provider: 'minimax',
+            voiceId: 'qiaopi_mengmei',
+            hasApiKey: false,
+            credentialSource: 'missing',
+          },
+        },
+      },
+    });
+  });
+
+  it('manages the voice tts api key through dedicated host operations', async () => {
+    const store = memoryStore();
+    const host = createSettingsOperations(createSettings({ store }));
+
+    expect(await host.setVoiceTtsApiKey({ apiKey: 'tts-secret' })).toMatchObject({
+      status: 'updated',
+      tts: { provider: 'minimax', voiceId: 'female-shaonv', hasApiKey: true, credentialSource: 'settings' },
+    });
+
+    const result = await host.get();
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
+    expect(result.settings.voice.tts).toMatchObject({ hasApiKey: true, credentialSource: 'settings' });
+    expect(JSON.stringify(result)).not.toContain('tts-secret');
+
+    expect(await host.deleteVoiceTtsApiKey()).toMatchObject({
+      status: 'deleted',
+      tts: { hasApiKey: false, credentialSource: 'missing' },
+    });
+    const after = await host.get();
+    expect(after.status).toBe('ok');
+    if (after.status !== 'ok') return;
+    expect(after.settings.voice.tts).toMatchObject({ hasApiKey: false, credentialSource: 'missing' });
+  });
+
   it('keeps provider credentials out of list responses', async () => {
     const store = memoryStore({
       providers: {
