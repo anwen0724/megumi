@@ -182,6 +182,7 @@ describe('main runtime logger composition', () => {
         logger,
         host: mocks.agentHost,
         subscribeRuntimeEvents: () => ({ unsubscribe: () => undefined }),
+        subscribeSpeechOutputEvents: () => ({ unsubscribe: () => undefined }),
         dispose: mocks.agentHost.dispose,
       };
     });

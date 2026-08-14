@@ -95,6 +95,9 @@ export type {
   SettingsUiResolved,
   SettingsUpdatePayload,
   SettingsUpdateUiResult,
+  VoiceTtsApiKeyUiRequest,
+  VoiceTtsKeyUiResult,
+  VoiceTtsPublicUiDto,
 } from './settings-host';
 export type { SettingsHost } from './settings-host';
 export type {
@@ -217,6 +220,9 @@ export {
   ProviderDeletePayloadSchema,
   ProviderApiKeyPayloadSchema,
   ProviderDeleteApiKeyPayloadSchema,
+  VoiceTtsApiKeyPayloadSchema,
+  VoiceTtsPublicUiDtoSchema,
+  VoiceTtsKeyUiResultSchema,
   SettingsGetUiResultSchema,
   SettingsUpdateUiResultSchema,
   SettingsCompleteSetupUiResultSchema,

@@ -18,6 +18,7 @@ describe('registerVoiceHandlers', () => {
       finishManualUtterance: vi.fn(),
       setMuted: vi.fn(),
       endSession: vi.fn(),
+      stopSpeechOutput: vi.fn(),
     };
 
     registerVoiceHandlers({ host: { voice } as never }, { ipcMain: { handle } });
@@ -34,6 +35,7 @@ describe('registerVoiceHandlers', () => {
       IPC_CHANNELS.voice.sessionManualFinish,
       IPC_CHANNELS.voice.sessionMute,
       IPC_CHANNELS.voice.sessionEnd,
+      IPC_CHANNELS.voice.speechOutputStop,
     ]);
   });
 });

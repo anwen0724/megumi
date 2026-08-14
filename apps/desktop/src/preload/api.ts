@@ -46,6 +46,8 @@ import type {
   VoiceHostModelUpdateResult,
   VoiceHostMutationResult,
   VoiceHostSnapshot,
+  VoiceTtsApiKeyUiRequest,
+  VoiceTtsKeyUiResult,
 } from '@megumi/product/host';
 import { IPC_CHANNELS } from '../main/ipc/channels';
 import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from '../main/ipc/contracts';
@@ -93,7 +95,8 @@ import {
 } from '../main/ipc/session-message-presentation';
 import type { CharacterWindowShapeRect, CharacterWindowSnapshot } from '../main/app/character-window-controller';
 import { parseSpeechInputEvent } from '@megumi/voice/speech-input/speech-input-schema';
-import type { SpeechInputEvent } from '@megumi/voice';
+import { parseSpeechOutputEvent } from '@megumi/voice/speech-output/speech-output-schema';
+import type { SpeechInputEvent, SpeechOutputEvent } from '@megumi/voice';
 
 type BusinessRequest<TPayload, TChannel extends BusinessIpcChannel> = RuntimeIpcRequest<TPayload, TChannel>;
 type EmptyPayload = Record<string, never>;
@@ -185,6 +188,14 @@ export const api = {
       request: BusinessRequest<SettingsCompleteSetupPayload, typeof IPC_CHANNELS.settings.completeSetup>,
     ): Promise<RuntimeIpcResult<SettingsCompleteSetupUiResult, typeof IPC_CHANNELS.settings.completeSetup>> =>
       invokeRuntimeIpc(IPC_CHANNELS.settings.completeSetup, request),
+    setVoiceTtsApiKey: (
+      request: BusinessRequest<VoiceTtsApiKeyUiRequest, typeof IPC_CHANNELS.settings.voiceTtsSetApiKey>,
+    ): Promise<RuntimeIpcResult<VoiceTtsKeyUiResult, typeof IPC_CHANNELS.settings.voiceTtsSetApiKey>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.settings.voiceTtsSetApiKey, request),
+    deleteVoiceTtsApiKey: (
+      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.settings.voiceTtsDeleteApiKey>,
+    ): Promise<RuntimeIpcResult<VoiceTtsKeyUiResult, typeof IPC_CHANNELS.settings.voiceTtsDeleteApiKey>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.settings.voiceTtsDeleteApiKey, request),
   },
   command: {
     suggestions: (
@@ -364,6 +375,19 @@ export const api = {
       request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.voice.sessionEnd>,
     ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.sessionEnd>> =>
       invokeRuntimeIpc(IPC_CHANNELS.voice.sessionEnd, request),
+    stopSpeechOutput: (
+      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.voice.speechOutputStop>,
+    ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.speechOutputStop>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.voice.speechOutputStop, request),
+    onSpeechOutputEvent: (callback: (event: SpeechOutputEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, rawEvent: unknown) => {
+        // Trust boundary: never deliver an unvalidated event to the app.
+        const speechEvent = parseSpeechOutputEvent(rawEvent);
+        if (speechEvent) callback(speechEvent);
+      };
+      ipcRenderer.on(IPC_CHANNELS.voice.speechOutputEvent, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.voice.speechOutputEvent, listener);
+    },
   },
   character: {
     show: (): Promise<CharacterWindowSnapshot> => ipcRenderer.invoke(IPC_CHANNELS.character.show),

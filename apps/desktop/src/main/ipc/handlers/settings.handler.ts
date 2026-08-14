@@ -7,6 +7,7 @@ import {
   SettingsCompleteSetupUiResultSchema,
   SettingsGetUiResultSchema,
   SettingsUpdateUiResultSchema,
+  VoiceTtsKeyUiResultSchema,
   type ProductHostInterface,
 } from '@megumi/product/host';
 import type { ProductRuntimeLogger } from '@megumi/product';
@@ -23,6 +24,8 @@ import {
   SettingsGetRequestSchema,
   SettingsCompleteSetupRequestSchema,
   SettingsUpdateRequestSchema,
+  VoiceTtsApiKeyRequestSchema,
+  VoiceTtsDeleteApiKeyRequestSchema,
 } from '../schemas';
 
 export interface SettingsHandlersService {
@@ -109,6 +112,24 @@ export function registerSettingsHandlers(
     responseSchema: EmptyUiResultSchema,
     logger: options.logger,
     handle: (request) => service.host.settings.deleteProviderApiKey(request.payload),
+    mapError: mapSettingsIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.settings.voiceTtsSetApiKey, createIpcRequestHandler({
+    channel: IPC_CHANNELS.settings.voiceTtsSetApiKey,
+    requestSchema: VoiceTtsApiKeyRequestSchema,
+    responseSchema: VoiceTtsKeyUiResultSchema,
+    logger: options.logger,
+    handle: (request) => service.host.settings.setVoiceTtsApiKey(request.payload),
+    mapError: mapSettingsIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.settings.voiceTtsDeleteApiKey, createIpcRequestHandler({
+    channel: IPC_CHANNELS.settings.voiceTtsDeleteApiKey,
+    requestSchema: VoiceTtsDeleteApiKeyRequestSchema,
+    responseSchema: VoiceTtsKeyUiResultSchema,
+    logger: options.logger,
+    handle: () => service.host.settings.deleteVoiceTtsApiKey(),
     mapError: mapSettingsIpcError,
   }));
 }

@@ -1,8 +1,9 @@
 /*
  * Resolves packaged/development Voice resources and supplies Desktop-native archive extraction.
  * Product and Voice packages receive paths and capabilities without importing Electron.
- * Speech synthesis, playback, and voice profiles were removed together with the
- * MOSS TTS implementation; this adapter only supplies the STT model resources.
+ * The speech-output synthesizer is the MiniMax cloud adapter: no local model
+ * resources, no sidecar. Voice profiles and playback were removed with the
+ * MOSS TTS implementation.
  */
 import { app } from 'electron';
 import { spawn } from 'node:child_process';
@@ -16,6 +17,7 @@ import {
 } from '@megumi/product';
 import {
   createFileVoiceModels,
+  createMinimaxSynthesizer,
   readVoiceModelManifest,
   type VoiceModelArchiveExtractor,
 } from '@megumi/voice';
@@ -54,7 +56,12 @@ export function createElectronVoiceOptions(
       senseVoiceModelPath: path.join(models.getModelPath('stt', 'sensevoice-small-int8'), 'model.int8.onnx'),
       senseVoiceTokensPath: path.join(models.getModelPath('stt', 'sensevoice-small-int8'), 'tokens.txt'),
     }),
-    voiceOptions: { models },
+    voiceOptions: {
+      models,
+      // The v1 synthesizer is fixed to MiniMax; switching providers later
+      // replaces this injection point and the settings provider list only.
+      speechOutputSynthesizer: createMinimaxSynthesizer(),
+    },
   };
 }
 

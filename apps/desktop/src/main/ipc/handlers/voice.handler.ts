@@ -19,6 +19,7 @@ import {
   VoiceSessionMuteRequestSchema,
   VoiceSessionStartRequestSchema,
   VoiceSnapshotRequestSchema,
+  VoiceSpeechOutputStopRequestSchema,
 } from '../schemas';
 
 export interface VoiceHandlersService {
@@ -108,5 +109,12 @@ export function registerVoiceHandlers(
     responseSchema: host.VoiceHostMutationResultSchema,
     logger: options.logger,
     handle: () => voice.endSession(),
+  }));
+  ipcMain.handle(IPC_CHANNELS.voice.speechOutputStop, createIpcRequestHandler({
+    channel: IPC_CHANNELS.voice.speechOutputStop,
+    requestSchema: VoiceSpeechOutputStopRequestSchema,
+    responseSchema: host.VoiceHostMutationResultSchema,
+    logger: options.logger,
+    handle: () => voice.stopSpeechOutput(),
   }));
 }

@@ -518,7 +518,7 @@ export const VoiceTtsApiKeyPayloadSchema = z.object({
 }).strict();
 export type VoiceTtsApiKeyPayload = z.infer<typeof VoiceTtsApiKeyPayloadSchema>;
 
-const VoiceTtsPublicUiDtoSchema = z.object({
+export const VoiceTtsPublicUiDtoSchema = z.object({
   provider: z.enum(['minimax']),
   voiceId: z.string().min(1),
   hasApiKey: z.boolean(),
@@ -529,6 +529,12 @@ export type VoiceTtsPublicUiDto = z.infer<typeof VoiceTtsPublicUiDtoSchema>;
 export type VoiceTtsKeyUiResult =
   | { status: 'updated' | 'deleted'; tts: VoiceTtsPublicUiDto }
   | { status: 'failed'; failure: HostFailure };
+
+export const VoiceTtsKeyUiResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('updated'), tts: VoiceTtsPublicUiDtoSchema }).strict(),
+  z.object({ status: z.literal('deleted'), tts: VoiceTtsPublicUiDtoSchema }).strict(),
+  z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
+]);
 
 export type EmptyUiResult =
   | { status: 'updated'; provider: ProviderSettingsUiDto }
