@@ -157,9 +157,9 @@ export function createFileVoiceModels(options: CreateFileVoiceModelsOptions): Vo
   const downloadsPath = path.resolve(options.downloadsPath);
   const runtimeVersion = options.manifest.runtimeVersion;
   let activeManifest = readActiveManifest(rootPath);
-  // Keep the installed manifest identity when only one capability is damaged:
-  // capability checks can then validate STT and TTS independently. A runtime
-  // version mismatch is the only reason the installed manifest is unusable.
+  // Keep the installed manifest identity when only one model is damaged so
+  // capability checks can still validate STT independently. A runtime version
+  // mismatch is the only reason the installed manifest is unusable.
   if (activeManifest && activeManifest.runtimeVersion !== runtimeVersion) {
     activeManifest = undefined;
   }
