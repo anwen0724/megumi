@@ -180,7 +180,7 @@ describe('Voice model capability readiness', () => {
     return root;
   }
 
-  it('reports per-capability readiness so a corrupt TTS bundle never blocks STT', async () => {
+  it('tolerates legacy tts manifest entries without exposing a tts capability', async () => {
     const root = capabilityRoot();
     const archiveBytes = Buffer.from('verified-archive');
     const installedBytes = Buffer.from('verified-model');
@@ -236,30 +236,12 @@ describe('Voice model capability readiness', () => {
     });
     expect(await models.prepare()).toEqual({ status: 'ready' });
     expect(models.getCapabilityStatus('stt')).toEqual({ status: 'ready' });
-    expect(models.getCapabilityStatus('tts')).toEqual({ status: 'ready' });
+    expect(models.getModelPath('stt', 'stt-model', 'revision-1')).toContain('stt-model');
 
-    // Corrupt the TTS file; STT readiness must survive.
-    const ttsFile = path.join(models.getModelPath('tts', 'tts-model', 'revision-1'), 'tts.bin');
-    fs.writeFileSync(ttsFile, 'truncated');
+    // A missing legacy tts file must not affect the stt capability check.
+    const ttsFile = path.join(models.getModelPath('stt', 'stt-model', 'revision-1'), '..', '..', 'tts', 'tts-model', 'revision-1', 'tts.bin');
+    fs.rmSync(path.resolve(ttsFile), { force: true });
     expect(models.getCapabilityStatus('stt')).toEqual({ status: 'ready' });
-    expect(models.getCapabilityStatus('tts')).toMatchObject({
-      status: 'not_ready',
-      reason: 'missing_files',
-    });
-
-    const restartedModels = createFileVoiceModels({
-      modelsPath: path.join(root, 'models'),
-      downloadsPath: path.join(root, 'tmp'),
-      manifest,
-      downloader,
-      archiveExtractor: extractor,
-    });
-    expect(restartedModels.getCapabilityStatus('stt')).toEqual({ status: 'ready' });
-    expect(restartedModels.getCapabilityStatus('tts')).toMatchObject({
-      status: 'not_ready',
-      reason: 'missing_files',
-    });
-    expect(restartedModels.getStatus()).toMatchObject({ status: 'not_prepared' });
   });
 
   it('reports not_prepared before any bundle is installed', () => {

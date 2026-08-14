@@ -57,13 +57,13 @@ export interface VoiceModels {
   checkForUpdates(): Promise<CheckVoiceModelUpdatesResult>;
   prepare(request?: PrepareVoiceModelsRequest): Promise<PrepareVoiceModelsResult>;
   cancelPreparation(): Promise<CancelVoiceModelPreparationResult>;
-  getModelPath(kind: 'stt' | 'tts', modelId?: string, revision?: string): string;
+  getModelPath(kind: 'stt', modelId?: string, revision?: string): string;
   /**
-   * Per-capability readiness: STT (SenseVoice + tokens) must be able to gate
-   * speech input independently of TTS; a missing or corrupt TTS bundle must
-   * never block the microphone and recognition.
+   * Readiness of the speech input capability (SenseVoice + tokens). TTS was
+   * removed together with the MOSS implementation and no longer has a
+   * capability surface; a future TTS design must add its own.
    */
-  getCapabilityStatus(capability: 'stt' | 'tts'): VoiceModelCapabilityStatus;
+  getCapabilityStatus(capability: 'stt'): VoiceModelCapabilityStatus;
 }
 
 export type VoiceModelCapabilityStatus =
@@ -80,6 +80,9 @@ export type VoiceModelArchiveFormat = 'tar' | 'tar.bz2';
 
 export interface VoiceModelManifestEntry {
   readonly modelId: string;
+  // 'tts' is tolerated as legacy manifest data so bundle discovery keeps
+  // working with release manifests published before the TTS removal. The
+  // public VoiceModels API no longer exposes a tts capability.
   readonly kind: 'stt' | 'tts';
   readonly revision: string;
   readonly license: string;
