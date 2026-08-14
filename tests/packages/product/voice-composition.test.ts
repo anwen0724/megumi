@@ -3,7 +3,8 @@
  * Guards the composition boundary: Product receives exactly one injected
  * Speech Input Runtime for the Voice Session, and the Product Runtime exposes
  * no full-audio bypass anymore. Frames and recognition stay outside the
- * business envelope.
+ * business envelope. Speech synthesis and playback were removed together with
+ * the MOSS TTS implementation.
  */
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,7 +12,6 @@ import { join } from 'node:path';
 import fs from 'fs-extra';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { composeProduct, type ProductRuntime } from '@megumi/product';
-import type { VoiceModels } from '@megumi/voice';
 import { createNodeWorkspaceFileSystem } from '@megumi/workspace/node';
 import type { SpeechInputEvent, SpeechInputRuntime } from '@megumi/voice';
 
@@ -66,13 +66,7 @@ function composeWithVoice(speechInput: SpeechInputRuntime): ProductRuntime {
       clock: { now: () => new Date('2026-07-10T00:00:00.000Z') },
     },
     workspaceFileSystem: createNodeWorkspaceFileSystem(),
-    voice: {
-      speechInput,
-      synthesizer: {
-        async prepare() { return { status: 'ready' }; },
-        async *synthesize() {},
-      },
-    },
+    voice: { speechInput },
   });
   composedProducts.push(product);
   return product;
@@ -136,20 +130,9 @@ describe('Product voice composition', () => {
     expect(speechInput.start).toHaveBeenCalledWith({ language: 'zh' });
   });
 
-  it('starts STT when the TTS model capability is unavailable', async () => {
-    const speechInput = noopSpeechInput();
-    const root = mkdtempSync(join(tmpdir(), 'megumi-voice-tts-decouple-'));
+  it('fails the Voice Session honestly when no Speech Input Adapter is injected', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'megumi-voice-unconfigured-'));
     tempDirectories.push(root);
-    const models: VoiceModels = {
-      getStatus: () => ({ status: 'ready', bundleVersion: 'voice-v1' }),
-      checkForUpdates: async () => ({ status: 'unavailable' }),
-      prepare: async () => ({ status: 'ready' }),
-      cancelPreparation: async () => ({ status: 'idle' }),
-      getModelPath: () => 'C:/models',
-      getCapabilityStatus: (capability) => capability === 'stt'
-        ? { status: 'ready' }
-        : { status: 'not_ready', reason: 'missing_files', message: 'TTS files missing.' },
-    };
     const product = composeProduct({
       home: {
         env: { MEGUMI_HOME: join(root, 'home') },
@@ -164,25 +147,13 @@ describe('Product voice composition', () => {
         clock: { now: () => new Date('2026-07-10T00:00:00.000Z') },
       },
       workspaceFileSystem: createNodeWorkspaceFileSystem(),
-      voice: {
-        speechInput,
-        models,
-        synthesizer: {
-          async prepare() { return { status: 'failed', failure: { code: 'tts_prepare_failed', message: 'TTS down.' } }; },
-          async *synthesize() {},
-        },
-      },
     });
     composedProducts.push(product);
 
-    expect(await product.host.voice.getModelCapabilityStatus({ capability: 'stt' }))
-      .toEqual({ status: 'ready' });
-    expect(await product.host.voice.getModelCapabilityStatus({ capability: 'tts' }))
-      .toMatchObject({ status: 'not_ready' });
-    // The Voice Session (microphone + VAD + STT) starts anyway.
-    await expect(product.host.voice.startSession({ boundSessionId: 'session:one' })).resolves.toEqual({
-      status: 'ok',
-      generation: 1,
+    const result = await product.host.voice.startSession({ boundSessionId: 'session:one' });
+    expect(result).toMatchObject({
+      status: 'failed',
+      failure: { code: 'voice_speech_input_unavailable' },
     });
   });
 });

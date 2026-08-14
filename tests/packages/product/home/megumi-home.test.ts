@@ -129,7 +129,6 @@ describe('Megumi Home', () => {
       paths.voicePath,
       paths.modelsPath,
       paths.voiceModelsPath,
-      paths.voiceProfilesPath,
       paths.voiceCachePath,
       paths.voiceTmpPath,
     ]));

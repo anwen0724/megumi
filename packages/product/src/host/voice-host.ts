@@ -3,13 +3,6 @@
 import { z } from 'zod';
 
 export const VoiceEmptyPayloadSchema = z.object({}).strict();
-export const VoiceProfileImportPayloadSchema = z.object({ name: z.string().trim().min(1) }).strict();
-export const VoiceProfileRenamePayloadSchema = z.object({
-  profileId: z.string().min(1),
-  name: z.string().trim().min(1),
-}).strict();
-export const VoiceProfileIdPayloadSchema = z.object({ profileId: z.string().min(1) }).strict();
-export const VoiceProfilePreviewPayloadSchema = VoiceProfileIdPayloadSchema;
 export const VoiceSessionStartPayloadSchema = z.object({
   boundSessionId: z.string().min(1),
   language: z.enum(['zh', 'en', 'auto']).optional(),
@@ -22,22 +15,11 @@ const VoiceFailureSchema = z.object({
   retryable: z.boolean().optional(),
 }).strict();
 
-const VoiceProfileDtoSchema = z.object({
-  profileId: z.string().min(1),
-  name: z.string().min(1),
-  builtIn: z.boolean(),
-  source: z.enum(['built_in', 'custom']),
-  language: z.enum(['zh', 'en']).optional(),
-  gender: z.enum(['female', 'male']).optional(),
-  selected: z.boolean(),
-}).strict();
-
 export const VoiceSnapshotSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('idle') }).strict(),
   z.object({
-    status: z.enum(['preparing', 'listening', 'recognizing', 'submitting', 'thinking', 'speaking', 'error']),
+    status: z.enum(['preparing', 'listening', 'recognizing', 'error']),
     boundSessionId: z.string().min(1),
-    voiceProfileId: z.string().min(1).optional(),
     muted: z.boolean(),
   }).strict(),
 ]);
@@ -78,7 +60,7 @@ export const VoiceModelUpdateResultSchema = z.discriminatedUnion('status', [
 ]);
 
 export const VoiceModelCapabilityPayloadSchema = z.object({
-  capability: z.enum(['stt', 'tts']),
+  capability: z.enum(['stt']),
 }).strict();
 
 export const VoiceModelCapabilityStatusSchema = z.discriminatedUnion('status', [
@@ -90,11 +72,6 @@ export const VoiceModelCapabilityStatusSchema = z.discriminatedUnion('status', [
   }).strict(),
 ]);
 
-export const VoiceProfilesListResultSchema = z.object({
-  status: z.literal('ok'),
-  profiles: z.array(VoiceProfileDtoSchema),
-}).strict();
-
 export const VoiceHostMutationResultSchema = z.discriminatedUnion('status', [
   // The Speech Input generation is returned for the host to tag ephemeral frames.
   z.object({ status: z.literal('ok'), generation: z.number().int().nonnegative().optional() }).strict(),
@@ -104,24 +81,6 @@ export const VoiceHostMutationResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('failed'), failure: VoiceFailureSchema }).strict(),
 ]);
 
-export const VoiceProfilePreviewResultSchema = z.discriminatedUnion('status', [
-  z.object({
-    status: z.literal('ok'),
-    chunks: z.array(z.object({
-      samples: z.instanceof(ArrayBuffer),
-      sampleRate: z.number().positive(),
-      final: z.boolean(),
-    }).strict()).min(1),
-  }).strict(),
-  z.object({ status: z.literal('not_found') }).strict(),
-  z.object({ status: z.literal('failed'), failure: VoiceFailureSchema }).strict(),
-]);
-
-export type VoiceProfileImportPayload = z.infer<typeof VoiceProfileImportPayloadSchema>;
-export type VoiceProfileRenamePayload = z.infer<typeof VoiceProfileRenamePayloadSchema>;
-export type VoiceProfileIdPayload = z.infer<typeof VoiceProfileIdPayloadSchema>;
-export type VoiceProfilePreviewPayload = z.infer<typeof VoiceProfilePreviewPayloadSchema>;
-export type VoiceProfilePreviewResult = z.infer<typeof VoiceProfilePreviewResultSchema>;
 export type VoiceSessionStartPayload = z.infer<typeof VoiceSessionStartPayloadSchema>;
 export type VoiceSessionMutedPayload = z.infer<typeof VoiceSessionMutedPayloadSchema>;
 export type VoiceHostSnapshot = z.infer<typeof VoiceSnapshotSchema>;
@@ -129,8 +88,6 @@ export type VoiceHostModelStatus = z.infer<typeof VoiceModelStatusResultSchema>;
 export type VoiceHostModelUpdateResult = z.infer<typeof VoiceModelUpdateResultSchema>;
 export type VoiceModelCapabilityPayload = z.infer<typeof VoiceModelCapabilityPayloadSchema>;
 export type VoiceHostModelCapabilityStatus = z.infer<typeof VoiceModelCapabilityStatusSchema>;
-export type VoiceHostProfile = z.infer<typeof VoiceProfileDtoSchema>;
-export type VoiceHostProfilesResult = z.infer<typeof VoiceProfilesListResultSchema>;
 
 export type VoiceHostMutationResult = z.infer<typeof VoiceHostMutationResultSchema>;
 
@@ -141,16 +98,9 @@ export interface VoiceHost {
   checkModelUpdates(request?: Record<string, never>): Promise<VoiceHostModelUpdateResult>;
   prepareModels(request?: { readonly repair?: boolean }): Promise<VoiceHostMutationResult>;
   cancelModelPreparation(request?: Record<string, never>): Promise<VoiceHostMutationResult>;
-  listProfiles(request?: Record<string, never>): Promise<VoiceHostProfilesResult>;
-  importProfile(request: VoiceProfileImportPayload): Promise<VoiceHostMutationResult>;
-  renameProfile(request: VoiceProfileRenamePayload): Promise<VoiceHostMutationResult>;
-  removeProfile(request: VoiceProfileIdPayload): Promise<VoiceHostMutationResult>;
-  selectProfile(request: VoiceProfileIdPayload): Promise<VoiceHostMutationResult>;
-  previewProfile(request: VoiceProfilePreviewPayload): Promise<VoiceProfilePreviewResult>;
   startSession(request: VoiceSessionStartPayload): Promise<VoiceHostMutationResult>;
   setMuted(request: VoiceSessionMutedPayload): Promise<VoiceHostMutationResult>;
   startManualUtterance(request?: Record<string, never>): Promise<VoiceHostMutationResult>;
   finishManualUtterance(request?: Record<string, never>): Promise<VoiceHostMutationResult>;
-  interrupt(request?: Record<string, never>): Promise<VoiceHostMutationResult>;
   endSession(request?: Record<string, never>): Promise<VoiceHostMutationResult>;
 }

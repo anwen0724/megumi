@@ -1,23 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   VoiceHostMutationResultSchema,
-  VoiceProfileImportPayloadSchema,
   VoiceSessionStartPayloadSchema,
   type ProductHostInterface,
   type VoiceHost,
 } from '../../../../packages/product/src/host';
 
 describe('VoiceHost contract', () => {
-  it('accepts product intent without exposing a caller-provided reference-audio path', () => {
-    expect(VoiceProfileImportPayloadSchema.parse({ name: 'Warm voice' })).toEqual({
-      name: 'Warm voice',
-    });
-    expect(VoiceProfileImportPayloadSchema.safeParse({
-      name: 'Warm voice',
-      sourceAudioPath: 'C:/arbitrary/reference.wav',
-    }).success).toBe(false);
-  });
-
   it('starts against one explicit Bound Session and an optional recognition language', () => {
     expect(VoiceSessionStartPayloadSchema.parse({ boundSessionId: 'session:one' })).toEqual({
       boundSessionId: 'session:one',

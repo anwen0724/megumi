@@ -85,6 +85,7 @@ export function materializeFileForWrite(file: SettingsFileRaw): SettingsFileRaw 
   return SettingsFileRawSchema.parse({
     ...file,
     context: resolved.context,
+    ...(file.voice ? { voice: withoutLegacyVoiceKeys(file.voice) } : {}),
     ...(file.providers ? {
       providers: Object.fromEntries(Object.entries(file.providers).map(([providerId, provider]) => {
         const publicProvider = publicRaw.providers?.[providerId] ?? {};
@@ -116,13 +117,20 @@ export function resolvePublicSettings(raw: SettingsRaw): SettingsResolved {
   });
   if (search.api_key_env === null) delete search.api_key_env;
   if (search.base_url === null) delete search.base_url;
+  // Whitelist the voice fields: the legacy output device key is tolerated in
+  // the file model but must not leak into the strict resolved model.
+  const rawVoice = raw.voice ?? {};
+  const voice = definedObject({
+    input_device_id: rawVoice.input_device_id,
+    recognition_language: rawVoice.recognition_language,
+  });
   return SettingsResolvedSchema.parse({
     ...DEFAULT_SETTINGS,
     ...(raw.language ? { language: raw.language } : {}),
     ...(raw.theme ? { theme: raw.theme } : {}),
     ...(raw.setup ? { setup: { ...DEFAULT_SETTINGS.setup, ...definedObject(raw.setup) } } : {}),
     ...(raw.memory ? { memory: { ...DEFAULT_SETTINGS.memory, ...definedObject(raw.memory) } } : {}),
-    ...(raw.voice ? { voice: { ...DEFAULT_SETTINGS.voice, ...definedObject(raw.voice) } } : {}),
+    ...(raw.voice ? { voice: { ...DEFAULT_SETTINGS.voice, ...voice } } : {}),
     ...(raw.context ? { context: { ...DEFAULT_SETTINGS.context, ...definedObject(raw.context) } } : {}),
     ...(raw.model_selection ? { model_selection: raw.model_selection } : {}),
     web: { search },
@@ -165,4 +173,10 @@ export function definedObject<T extends Record<string, unknown>>(value: T): Part
 function withoutWebSearchSecret(search: WebSearchSettingsFileRaw) {
   const { api_key: _secret, ...publicSearch } = search;
   return publicSearch;
+}
+
+/** Drops the output device key removed with the TTS implementation before persisting. */
+function withoutLegacyVoiceKeys(voice: NonNullable<SettingsFileRaw['voice']>) {
+  const { output_device_id: _legacy, ...current } = voice;
+  return current;
 }

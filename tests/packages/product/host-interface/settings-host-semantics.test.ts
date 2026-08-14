@@ -29,7 +29,6 @@ describe('SettingsHost semantics', () => {
     const result = await host.update({
       voice: {
         inputDeviceId: 'input-1',
-        outputDeviceId: 'output-2',
         recognitionLanguage: 'en',
       },
     });
@@ -39,7 +38,6 @@ describe('SettingsHost semantics', () => {
       settings: {
         voice: {
           inputDeviceId: 'input-1',
-          outputDeviceId: 'output-2',
           recognitionLanguage: 'en',
         },
       },

@@ -21,7 +21,6 @@ export interface MegumiHomePaths {
   readonly voicePath: string;
   readonly modelsPath: string;
   readonly voiceModelsPath: string;
-  readonly voiceProfilesPath: string;
   readonly voiceCachePath: string;
   readonly voiceTmpPath: string;
 }
@@ -56,7 +55,6 @@ export function buildMegumiHomePaths(homePath: string): MegumiHomePaths {
     voicePath: path.join(resolvedHomePath, 'voice'),
     modelsPath: path.join(resolvedHomePath, 'models'),
     voiceModelsPath: path.join(resolvedHomePath, 'models', 'voice'),
-    voiceProfilesPath: path.join(resolvedHomePath, 'voice', 'profiles'),
     voiceCachePath: path.join(resolvedHomePath, 'cache', 'voice'),
     voiceTmpPath: path.join(resolvedHomePath, 'tmp', 'voice'),
   };

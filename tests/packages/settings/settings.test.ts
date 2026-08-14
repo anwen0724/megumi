@@ -85,7 +85,7 @@ describe('Settings', () => {
     expect(resolved.settings).not.toHaveProperty('compaction');
   });
 
-  it('persists audio devices and recognition language while resolving safe defaults for old files', () => {
+  it('persists the audio input device and recognition language while resolving safe defaults for old files', () => {
     const store = new MemorySettingsStore();
     const settings = createSettings({ store });
 
@@ -94,7 +94,6 @@ describe('Settings', () => {
       settings: {
         voice: {
           input_device_id: 'default',
-          output_device_id: 'default',
           recognition_language: 'auto',
         },
       },
@@ -103,14 +102,34 @@ describe('Settings', () => {
     expect(settings.update({ patch: {
       voice: {
         input_device_id: 'microphone-2',
-        output_device_id: 'speaker-3',
         recognition_language: 'zh',
       },
     } })).toMatchObject({ status: 'updated' });
     expect(store.document.voice).toEqual({
       input_device_id: 'microphone-2',
-      output_device_id: 'speaker-3',
       recognition_language: 'zh',
+    });
+  });
+
+  it('keeps reading settings files that still carry the removed output device field', () => {
+    const store = new MemorySettingsStore();
+    store.document = {
+      voice: {
+        input_device_id: 'microphone-1',
+        output_device_id: 'speaker-1',
+        recognition_language: 'auto',
+      },
+    } as never;
+    const settings = createSettings({ store });
+
+    expect(settings.resolve()).toMatchObject({
+      status: 'ok',
+      settings: {
+        voice: {
+          input_device_id: 'microphone-1',
+          recognition_language: 'auto',
+        },
+      },
     });
   });
 

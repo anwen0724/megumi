@@ -61,12 +61,13 @@ export type MemorySettingsResolved = z.infer<typeof MemorySettingsResolvedSchema
 export const VoiceRecognitionLanguageSchema = z.enum(['auto', 'zh', 'en']);
 export const VoiceSettingsRawSchema = z.object({
   input_device_id: z.string().min(1).optional(),
+  // Tolerated only so settings files written before the TTS removal keep
+  // parsing; the resolved settings no longer expose an output device.
   output_device_id: z.string().min(1).optional(),
   recognition_language: VoiceRecognitionLanguageSchema.optional(),
 }).strict();
 export const VoiceSettingsResolvedSchema = z.object({
   input_device_id: z.string().min(1),
-  output_device_id: z.string().min(1),
   recognition_language: VoiceRecognitionLanguageSchema,
 }).strict();
 
@@ -131,7 +132,6 @@ export const DEFAULT_SETTINGS = SettingsResolvedSchema.parse({
   memory: { enabled: false },
   voice: {
     input_device_id: 'default',
-    output_device_id: 'default',
     recognition_language: 'auto',
   },
   context: { compaction_threshold_ratio: 0.8 },

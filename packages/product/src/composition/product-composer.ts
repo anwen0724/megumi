@@ -62,13 +62,9 @@ import {
 } from '@megumi/workspace';
 import { createWorkspaceStore } from '@megumi/workspace/store';
 import {
-  createFileVoiceProfileStorage,
   createVoice,
   type SpeechInputRuntime,
-  type SpeechPlayer,
-  type SpeechSynthesizer,
   type VoiceModels,
-  type VoiceProfileSeed,
 } from '@megumi/voice';
 import {
   initializeMegumiHomeSync,
@@ -112,7 +108,6 @@ import type { FileOpener } from '../host/capabilities/file-opener';
 import { migrateLegacyPermissionSettingsFile } from '../home/migrations/legacy-permission-settings';
 import { migrateLegacyProviderApiSettingsFile } from '../home/migrations/legacy-provider-api-settings';
 import type { ProductWorkspaceFileSystem } from '../host/capabilities/workspace-file-system';
-import type { VoiceProfileAudioPicker } from '../host/capabilities/voice-profile-audio-picker';
 
 export interface ProductEnvironment {
   readonly appVersion: string;
@@ -122,14 +117,9 @@ export interface ProductEnvironment {
 
 export type ProductSettingsEnvironment = SettingsEnvironment;
 export interface ComposeProductVoiceOptions {
-  readonly defaultProfile?: VoiceProfileSeed;
-  readonly builtInProfiles?: readonly VoiceProfileSeed[];
-  readonly synthesizer?: SpeechSynthesizer;
-  readonly player?: SpeechPlayer;
   /** Desktop injects the single Voice Input Adapter that owns the Speech Worker. */
   readonly speechInput?: SpeechInputRuntime;
   readonly models?: VoiceModels;
-  readonly profileAudioPicker?: VoiceProfileAudioPicker;
 }
 export interface ComposeProductOptions {
   home: InitializeMegumiHomeSyncOptions;
@@ -469,52 +459,9 @@ function composeProductRuntime(
     ...(options.localFileAvailability ? { localFileAvailability: options.localFileAvailability } : {}),
   });
   const voice = createVoice({
-    defaultProfile: options.voice?.defaultProfile ?? {
-      profileId: 'voice-profile:default',
-      name: 'Default',
-      source: { kind: 'built_in', voiceId: 'Xiaoyu' },
-    },
-    builtInProfiles: options.voice?.builtInProfiles,
-    synthesizer: options.voice?.synthesizer ?? unavailableSpeechSynthesizer,
-    player: options.voice?.player ?? unavailableSpeechPlayer,
-    ...(options.voice?.speechInput ? { speechInput: options.voice.speechInput } : {}),
-    profileStorage: createFileVoiceProfileStorage({ profilesPath: homePaths.voiceProfilesPath }),
+    speechInput: options.voice?.speechInput ?? unavailableSpeechInput,
     ...(options.voice?.models ? { models: options.voice.models } : {}),
   });
-  resources.registerEventSubscription(
-    events.subscribe(
-      { eventTypes: ['message.update', 'message.ended', 'run.ended'] },
-      (event) => {
-        if (!event.sessionId) return;
-        if (event.type === 'message.update') {
-          voice.acceptRuntimeFact({
-            type: 'assistant_reply_snapshot',
-            sessionId: event.sessionId,
-            messageId: event.payload.messageId,
-            text: event.payload.content,
-          });
-          return;
-        }
-        if (event.type === 'message.ended' && event.payload.role === 'assistant') {
-          voice.acceptRuntimeFact({
-            type: 'assistant_reply_snapshot',
-            sessionId: event.sessionId,
-            messageId: event.payload.messageId,
-            text: event.payload.content,
-          });
-          return;
-        }
-        if (event.type === 'run.ended' && event.runId) {
-          voice.acceptRuntimeFact({
-            type: 'run_ended',
-            sessionId: event.sessionId,
-            runId: event.runId,
-            status: event.payload.status,
-          });
-        }
-      },
-    ),
-  );
   // The workspace subscriber needs the engine to resolve run -> workspace;
   // subscribe after engine creation so the closure can reference it.
   resources.registerEventSubscription(
@@ -544,10 +491,7 @@ function composeProductRuntime(
       flush: observability.flush,
       ...(options.diagnosticBundleSave ? { save: options.diagnosticBundleSave } : {}),
     }),
-    voice: createVoiceOperations({
-      voice,
-      profileAudioPicker: options.voice?.profileAudioPicker ?? cancelledVoiceProfileAudioPicker,
-    }),
+    voice: createVoiceOperations({ voice }),
   };
 
   return createProductRuntime({
@@ -558,32 +502,20 @@ function composeProductRuntime(
   });
 }
 
-const unavailableSpeechSynthesizer: SpeechSynthesizer = {
-  async prepare() {
+/** Hosts that do not inject a Speech Input Adapter still expose an honest failure. */
+const unavailableSpeechInput: SpeechInputRuntime = {
+  async start() {
     return {
       status: 'failed',
-      failure: { code: 'voice_synthesizer_unavailable', message: 'Speech synthesis is not configured.' },
+      failure: { code: 'voice_speech_input_unavailable', message: 'Speech input is not configured.' },
     };
   },
-  async *synthesize() {
-    throw new Error('Speech synthesis is not configured.');
-  },
-};
-
-const unavailableSpeechPlayer: SpeechPlayer = {
-  async play() {
-    return {
-      status: 'failed',
-      failure: { code: 'voice_player_unavailable', message: 'Speech playback is not configured.' },
-    };
-  },
+  acceptFrame() {},
+  setMuted() {},
+  startManualUtterance() {},
+  finishManualUtterance() {},
   async stop() {},
-};
-
-const cancelledVoiceProfileAudioPicker: VoiceProfileAudioPicker = {
-  async chooseReferenceAudio() {
-    return { status: 'cancelled' };
-  },
+  subscribe() { return () => {}; },
 };
 
 function openDatabase(homePaths: MegumiHomePaths, options: ComposeProductOptions): DatabaseConnection {
