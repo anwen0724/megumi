@@ -1,6 +1,9 @@
 /*
- * Defines provider-neutral speech seams used by the Voice runtime and Desktop
- * playback adapter. Concrete sherpa, MOSS, and Electron types stay internal.
+ * Defines the provider-neutral speech recognition seam used by the Voice
+ * runtime and Desktop speech input adapter. Concrete sherpa and Electron
+ * types stay internal. Speech synthesis and playback seams were removed
+ * together with the MOSS TTS implementation and will be re-designed
+ * separately from speech input.
  */
 
 export interface VoiceOperationOptions {
@@ -41,60 +44,6 @@ export type PrepareSpeechRecognitionResult =
 
 export interface PreparableSpeechRecognizer {
   prepare(request: PrepareSpeechRecognitionRequest): Promise<PrepareSpeechRecognitionResult>;
-}
-
-export interface SynthesizeSpeechRequest {
-  readonly text: string;
-  readonly voiceProfileId: string;
-  readonly voice: SpeechVoiceSource;
-}
-
-export interface PrepareSpeechRequest {
-  readonly voiceProfileId: string;
-  readonly voice: SpeechVoiceSource;
-}
-
-export type SpeechVoiceSource =
-  | { readonly kind: 'built_in'; readonly voiceId: string }
-  | { readonly kind: 'reference_audio'; readonly referenceAudioPath: string };
-
-export type PrepareSpeechResult =
-  | { readonly status: 'ready' }
-  | { readonly status: 'failed'; readonly failure: VoiceSpeechFailure };
-
-export interface SynthesizedAudioChunk {
-  readonly pcm: SpeechPcm;
-  readonly final: boolean;
-}
-
-export interface SpeechSynthesizer {
-  prepare(
-    request: PrepareSpeechRequest,
-    options?: VoiceOperationOptions,
-  ): Promise<PrepareSpeechResult>;
-  synthesize(
-    request: SynthesizeSpeechRequest,
-    options?: VoiceOperationOptions,
-  ): AsyncIterable<SynthesizedAudioChunk>;
-}
-
-export interface PlaySpeechRequest {
-  readonly segmentId: string;
-  readonly audio: AsyncIterable<SynthesizedAudioChunk>;
-}
-
-export type PlaySpeechResult =
-  | { readonly status: 'played' }
-  | { readonly status: 'stopped' }
-  | { readonly status: 'failed'; readonly failure: VoiceSpeechFailure };
-
-export interface StopSpeechRequest {
-  readonly reason: 'interrupted' | 'session_ended' | 'segment_invalidated' | 'disposed';
-}
-
-export interface SpeechPlayer {
-  play(request: PlaySpeechRequest, options?: VoiceOperationOptions): Promise<PlaySpeechResult>;
-  stop(request: StopSpeechRequest): Promise<void>;
 }
 
 export interface VoiceSpeechFailure {
