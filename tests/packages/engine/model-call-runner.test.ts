@@ -61,13 +61,15 @@ function createHarness(input: {
   buildPrompt?: () => Promise<RebuildPromptResult>;
   policy?: Partial<typeof policy>;
   runnerModel?: Model<Api>;
+  captureStreamOptions?: (options: { signal?: AbortSignal; reasoning?: string }) => void;
 } = {}) {
   const events: AnyEvent[] = [];
   const logs: Array<{ level: string; event: string }> = [];
   const measurements: Array<{ name: string; value: number }> = [];
   const streams = [...(input.streams ?? [assistantStream('done')])];
   const models = {
-    streamSimple: ((_runnerModel: unknown, _prompt: unknown, streamOptions: { signal?: AbortSignal }) => {
+    streamSimple: ((_runnerModel: unknown, _prompt: unknown, streamOptions: { signal?: AbortSignal; reasoning?: string }) => {
+      input.captureStreamOptions?.(streamOptions);
       const stream = streams.shift();
       if (!stream) throw new Error('No model stream configured.');
       const settleAborted = () => {
@@ -141,6 +143,31 @@ function createHarness(input: {
 }
 
 describe('ModelCall Runner', () => {
+  it('requests the default reasoning level for reasoning models', async () => {
+    const captured: Array<{ signal?: AbortSignal; reasoning?: string }> = [];
+    const harness = createHarness({
+      runnerModel: { ...model, reasoning: true },
+      captureStreamOptions: (options) => { captured.push(options); },
+    });
+    const outcome = await harness.run();
+
+    expect(outcome.status).toBe('completed');
+    expect(captured).toHaveLength(1);
+    expect(captured[0]).toMatchObject({ reasoning: 'high' });
+  });
+
+  it('does not request reasoning for non-reasoning models', async () => {
+    const captured: Array<{ signal?: AbortSignal; reasoning?: string }> = [];
+    const harness = createHarness({
+      captureStreamOptions: (options) => { captured.push(options); },
+    });
+    const outcome = await harness.run();
+
+    expect(outcome.status).toBe('completed');
+    expect(captured).toHaveLength(1);
+    expect(captured[0]).not.toHaveProperty('reasoning');
+  });
+
   it('streams full-snapshot updates under one Message identity and returns the settled message', async () => {
     const harness = createHarness({ streams: [assistantStream('final answer')] });
     const outcome = await harness.run();

@@ -357,6 +357,10 @@ async function runStreamAttempt(
     messages: [...prompt.messages],
     tools: [...prompt.tools],
   }, {
+    // Explicitly request the default reasoning level so reasoning-capable
+    // models stream thinking content instead of being disabled by adapter
+    // defaults. Non-reasoning models keep an untouched options surface.
+    ...(request.model.reasoning ? { reasoning: 'high' } : {}),
     signal: request.signal,
     sessionId: request.sessionId,
     timeoutMs: request.policy.modelCallTimeoutMs,
