@@ -1,9 +1,8 @@
 /*
- * Defines the provider-neutral speech recognition seam used by the Voice
- * runtime and Desktop speech input adapter. Concrete sherpa and Electron
- * types stay internal. Speech synthesis and playback seams were removed
- * together with the MOSS TTS implementation and will be re-designed
- * separately from speech input.
+ * Defines the provider-neutral speech recognition and speech synthesis
+ * seams used by the Voice runtime. Concrete sherpa and provider types stay
+ * internal. The synthesis seam was re-designed for TTS v1: whole-reply
+ * synthesis with streaming audio chunks; playback stays outside this seam.
  */
 
 export interface VoiceOperationOptions {
@@ -44,6 +43,46 @@ export type PrepareSpeechRecognitionResult =
 
 export interface PreparableSpeechRecognizer {
   prepare(request: PrepareSpeechRecognitionRequest): Promise<PrepareSpeechRecognitionResult>;
+}
+
+/** One encoded audio chunk produced by a speech synthesizer. */
+export interface SpeechAudioChunk {
+  readonly bytes: Uint8Array;
+  readonly format: 'mp3' | 'pcm';
+  readonly sampleRate: number;
+  readonly channels: 1 | 2;
+  /** Increments from 1 within one synthesis run. */
+  readonly sequence: number;
+  /** Marks the final chunk of the run. */
+  readonly final: boolean;
+}
+
+/** Provider-neutral synthesis configuration for the v1 cloud synthesizers. */
+export interface SynthesizerConfig {
+  readonly provider: 'minimax';
+  readonly apiKey: string;
+  readonly voiceId: string;
+}
+
+export interface SynthesizeSpeechRequest {
+  readonly text: string;
+  readonly config: SynthesizerConfig;
+}
+
+export type SynthesizeSpeechResult =
+  | { readonly status: 'ready'; readonly chunks: AsyncIterable<SpeechAudioChunk> }
+  | { readonly status: 'failed'; readonly failure: VoiceSpeechFailure };
+
+/**
+ * Streams speech synthesis. Cancellation rides the AbortSignal in
+ * VoiceOperationOptions; adapters hold no process resources, so there is
+ * deliberately no cancel()/dispose() on this seam.
+ */
+export interface SpeechSynthesizer {
+  synthesize(
+    request: SynthesizeSpeechRequest,
+    options?: VoiceOperationOptions,
+  ): Promise<SynthesizeSpeechResult>;
 }
 
 export interface VoiceSpeechFailure {
