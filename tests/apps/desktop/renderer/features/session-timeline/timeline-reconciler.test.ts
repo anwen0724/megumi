@@ -4,10 +4,15 @@ import {
   reconcileTimelineMessages,
   upsertPendingUserMessage,
 } from '../../../../../../apps/desktop/src/renderer/features/session-timeline/timeline-reconciler';
+import { buildCommittedRunTimeline } from '../../../../../../apps/desktop/src/renderer/features/session-timeline/session-timeline-builder';
 import type {
   TimelineAssistantMessage,
   TimelineMessage,
 } from '../../../../../../apps/desktop/src/renderer/features/session-timeline/timeline-model';
+import type {
+  SessionMessageDto,
+  UserMessageDto,
+} from '@megumi/product/host';
 
 describe('Timeline reconciler', () => {
   it('keeps live disclosure while accepting the committed final answer', () => {
@@ -55,6 +60,41 @@ describe('Timeline reconciler', () => {
 
     expect(reconciled.find((message) => message.runId === 'run:2')).toBe(current[2]);
     expect(JSON.stringify(reconciled.filter((message) => message.runId === 'run:1'))).toContain('Final');
+  });
+
+  it('deduplicates the live thinking item against the committed reconstruction', () => {
+    const committed = buildCommittedRunTimeline({
+      projectId: 'project:1',
+      messages: [
+        messageItem(userDto('user:1', 'Inspect README.')),
+        messageItem(modelResponseDto('model:1', [
+          { type: 'thinking', thinking: 'I should read the file.' },
+          { type: 'text', text: 'I will inspect it.' },
+        ], 'toolUse')),
+        messageItem(replyDto('assistant:1', 'completed', 'Done.')),
+      ],
+      workspaceChanges: [],
+    });
+
+    const live = assistant('run:1', 'streaming', 'Partial', true);
+    const process = live.blocks.find((block) => block.kind === 'process_disclosure')!;
+    process.items = [{
+      itemId: 'thinking:model:1',
+      kind: 'thinking',
+      thinkingId: 'model:1',
+      status: 'streaming',
+      text: 'I should read the file.',
+      format: 'markdown',
+    }];
+
+    const reconciled = reconcileCommittedRunMessages([live], 'run:1', committed);
+    const assistantMessage = reconciled.find((message) => message.role === 'assistant') as TimelineAssistantMessage;
+    const thinkingItems = assistantMessage.blocks
+      .find((block) => block.kind === 'process_disclosure')!
+      .items.filter((item) => item.kind === 'thinking');
+
+    expect(thinkingItems).toHaveLength(1);
+    expect(thinkingItems[0]).toMatchObject({ text: 'I should read the file.' });
   });
 
   it('replaces an optimistic user identity instead of duplicating the turn', () => {
@@ -141,4 +181,59 @@ function assistant(
 
 function time(second: number): string {
   return `2026-07-19T00:00:${second.toString().padStart(2, '0')}.000Z`;
+}
+
+function messageBase(messageId: string) {
+  return {
+    messageId,
+    sessionId: 'session:1',
+    runId: 'run:1',
+    createdAt: time(1),
+    completedAt: time(2),
+  };
+}
+
+function userDto(messageId: string, text: string): UserMessageDto {
+  return {
+    ...messageBase(messageId),
+    kind: 'user',
+    displayContent: [{ type: 'text', text }],
+    attachments: [],
+  };
+}
+
+function replyDto(
+  messageId: string,
+  status: 'completed' | 'failed' | 'cancelled',
+  text: string,
+): Extract<SessionMessageDto, { kind: 'assistantReply' }> {
+  return {
+    ...messageBase(messageId),
+    kind: 'assistantReply',
+    status,
+    reasonCode: status === 'completed' ? 'normal_completion' : status,
+    content: text ? [{ type: 'text', text }] : [],
+  };
+}
+
+function modelResponseDto(
+  messageId: string,
+  content: Extract<SessionMessageDto, { kind: 'modelResponse' }>['content'],
+  stopReason: string,
+): Extract<SessionMessageDto, { kind: 'modelResponse' }> {
+  return {
+    ...messageBase(messageId),
+    kind: 'modelResponse',
+    outcomeStatus: 'completed',
+    stopReason,
+    content,
+  };
+}
+
+function messageItem(message: SessionMessageDto) {
+  return {
+    type: 'message' as const,
+    entryId: `entry:${message.messageId}`,
+    message,
+  };
 }

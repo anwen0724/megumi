@@ -275,14 +275,17 @@ function buildProcessItems(
   const toolResults = new Map(messages.flatMap((message) =>
     message.kind === 'toolResult' ? [[message.toolCallId, message] as const] : []));
   const items: ProcessDisclosureItem[] = [];
-  for (const [messageIndex, message] of messages.entries()) {
+  for (const message of messages) {
     if (message.kind !== 'modelResponse' && message.kind !== 'assistantReply') continue;
-    for (const [blockIndex, block] of message.content.entries()) {
+    for (const block of message.content) {
       if (block.type === 'thinking') {
         items.push({
-          itemId: `thinking:${message.messageId}:${blockIndex}`,
+          // The live reducer keys thinking items by the model-call message id;
+          // the committed reconstruction must use the same identity so
+          // reconciliation merges instead of duplicating the block.
+          itemId: `thinking:${message.messageId}`,
           kind: 'thinking',
-          thinkingId: `thinking:${runId}:${messageIndex}:${blockIndex}`,
+          thinkingId: message.messageId,
           status: 'completed',
           text: block.thinking,
           format: 'markdown',
@@ -290,9 +293,9 @@ function buildProcessItems(
         });
       } else if (block.type === 'text' && message.messageId !== answerMessageId) {
         items.push({
-          itemId: `assistant-text:${message.messageId}:${blockIndex}`,
+          itemId: `assistant-text:text:${message.messageId}`,
           kind: 'assistant_text',
-          textId: `text:${message.messageId}:${blockIndex}`,
+          textId: `text:${message.messageId}`,
           phase: 'prelude',
           status: 'completed',
           text: block.text,
