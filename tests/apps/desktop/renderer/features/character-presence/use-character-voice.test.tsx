@@ -66,7 +66,6 @@ describe('useCharacterVoice window lifecycle', () => {
               settings: {
                 voice: {
                   inputDeviceId: 'default',
-                  outputDeviceId: 'default',
                   recognitionLanguage: 'zh',
                 },
               },
@@ -162,7 +161,6 @@ describe('useCharacterVoice window lifecycle', () => {
               permissions: { mode: 'ask' },
               voice: {
                 inputDeviceId: 'default',
-                outputDeviceId: 'default',
                 recognitionLanguage: 'zh',
               },
             },

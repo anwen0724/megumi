@@ -5,7 +5,6 @@ import type { CharacterState } from './character-state';
 
 export interface CharacterPresentation {
   setState(state: CharacterState): void;
-  setMouthLevel(level: number): void;
   dispose(): Promise<void>;
 }
 
@@ -58,7 +57,6 @@ const STATE_POSES: Record<CharacterState, Pose> = {
   thinking: { lift: -3, lean: -0.018, energy: 0.35, glow: 0.12 },
   acting: { lift: -5, lean: 0.016, energy: 0.65, glow: 0.2 },
   approval: { lift: -4, lean: 0, energy: 0.4, glow: 0.3 },
-  speaking: { lift: -5, lean: 0.008, energy: 0.75, glow: 0.22 },
   error: { lift: 0, lean: -0.01, energy: 0.15, glow: 0.28 },
 };
 
@@ -69,7 +67,6 @@ const STATE_GLOW: Record<CharacterState, number> = {
   thinking: 0xb3a5de,
   acting: 0x7ecfa8,
   approval: 0xf5c86b,
-  speaking: 0xf2a6c5,
   error: 0xed7d7d,
 };
 
@@ -89,18 +86,16 @@ async function createPixiCharacterScene(
   const character = new Sprite(texture);
   const face = new Container();
   const eyelids = new Graphics();
-  const mouth = new Graphics();
   const tweens = new TweenGroup();
   const pose: Pose = { ...STATE_POSES.idle };
   let state: CharacterState = 'idle';
-  let mouthLevel = 0;
   let elapsed = 0;
   let nextBlinkAt = 2_600;
   let blinkUntil = 0;
   let disposed = false;
 
   character.anchor.set(0.5, 1);
-  face.addChild(eyelids, mouth);
+  face.addChild(eyelids);
   root.addChild(character, face);
   app.stage.addChild(glow, root);
 
@@ -122,14 +117,6 @@ async function createPixiCharacterScene(
           )
           .stroke({ color: 0x4b3434, width: Math.max(1, width * 0.0025), alpha: 0.9 });
       }
-    }
-
-    mouth.clear();
-    if (mouthLevel > 0.025) {
-      const openness = mouthLevel < 0.22 ? 0.004 : mouthLevel < 0.52 ? 0.008 : 0.013;
-      mouth
-        .ellipse(0, -0.849 * height, width * 0.012, height * openness)
-        .fill({ color: 0x6f3441, alpha: 0.92 });
     }
   };
 
@@ -180,9 +167,6 @@ async function createPixiCharacterScene(
         .easing(Easing.Quadratic.Out)
         .start(performance.now());
       layout();
-    },
-    setMouthLevel(level) {
-      mouthLevel = Math.max(0, Math.min(1, level));
     },
     async dispose() {
       if (disposed) return;

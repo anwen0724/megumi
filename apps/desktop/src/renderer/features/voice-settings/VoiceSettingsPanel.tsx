@@ -1,12 +1,11 @@
-/* Owns Voice model resources and voice-profile configuration in the main Settings surface. */
-import type { VoiceHostModelStatus, VoiceHostProfile } from '@megumi/product/host';
-import { Activity, Check, CircleCheck, Download, Headphones, LoaderCircle, Mic2, Play, Plus, RefreshCw, Volume2, X } from 'lucide-react';
+/* Owns Voice model resources and input device configuration in the main Settings surface. */
+import type { VoiceHostModelStatus } from '@megumi/product/host';
+import { Activity, CircleCheck, Download, LoaderCircle, Mic2, RefreshCw, X } from 'lucide-react';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../shared/ipc';
 import { Button, SettingsPageHeader, SettingsSection } from '../../shared/ui';
-import { createSpeechPlaybackController } from '../character-presence/speech-playback-controller';
 import {
   enumerateAudioDevices,
   testMicrophoneLevel,
@@ -16,36 +15,32 @@ import {
 
 type VoiceSettings = {
   readonly inputDeviceId: string;
-  readonly outputDeviceId: string;
   readonly recognitionLanguage: 'auto' | 'zh' | 'en';
 };
 
 export function VoiceSettingsPanel() {
   const { t } = useTranslation('settings');
-  const [profiles, setProfiles] = useState<VoiceHostProfile[]>([]);
   const [modelStatus, setModelStatus] = useState<VoiceHostModelStatus>();
-  const [profileName, setProfileName] = useState('');
-  const [busy, setBusy] = useState(false);
   const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>({
     inputDeviceId: 'default',
-    outputDeviceId: 'default',
     recognitionLanguage: 'auto',
   });
   const [devices, setDevices] = useState<AudioDeviceCatalog>({
     inputs: [{ deviceId: 'default', label: 'System default' }],
-    outputs: [{ deviceId: 'default', label: 'System default' }],
   });
   const [devicesBusy, setDevicesBusy] = useState(false);
   const [deviceError, setDeviceError] = useState<string | null>(null);
   const [microphoneLevel, setMicrophoneLevel] = useState(0);
   const [testingMicrophone, setTestingMicrophone] = useState(false);
-  const [previewingProfileId, setPreviewingProfileId] = useState<string | null>(null);
 
   const refreshVoiceSettings = useCallback(async () => {
     const result = await window.megumi.settings.get(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {}),
     );
-    if (result.ok && result.data.status === 'ok') setVoiceSettings(result.data.settings.voice);
+    if (result.ok && result.data.status === 'ok') {
+      const { inputDeviceId, recognitionLanguage } = result.data.settings.voice;
+      setVoiceSettings({ inputDeviceId, recognitionLanguage });
+    }
   }, []);
 
   const refreshDevices = useCallback(async (requestPermission = false) => {
@@ -65,19 +60,13 @@ export function VoiceSettingsPanel() {
       createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.update, { voice: patch }),
     );
     if (result.ok && result.data.status === 'updated') {
-      setVoiceSettings(result.data.settings.voice);
+      const { inputDeviceId, recognitionLanguage } = result.data.settings.voice;
+      setVoiceSettings({ inputDeviceId, recognitionLanguage });
       setDeviceError(null);
       return;
     }
     setDeviceError(t('voice.devicesSaveError'));
   };
-
-  const refreshProfiles = useCallback(async () => {
-    const result = await window.megumi.voice.listProfiles(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.profilesList, {}),
-    );
-    if (result.ok && result.data.status === 'ok') setProfiles(result.data.profiles);
-  }, []);
 
   const refreshModelStatus = useCallback(async () => {
     const result = await window.megumi.voice.getModelStatus(
@@ -86,7 +75,6 @@ export function VoiceSettingsPanel() {
     if (result.ok) setModelStatus(result.data);
   }, []);
 
-  useEffect(() => { void refreshProfiles(); }, [refreshProfiles]);
   useEffect(() => { void refreshVoiceSettings(); }, [refreshVoiceSettings]);
   useEffect(() => { void refreshDevices(false); }, [refreshDevices]);
   useEffect(() => {
@@ -120,62 +108,6 @@ export function VoiceSettingsPanel() {
       createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.modelsCancel, {}),
     );
     await refreshModelStatus();
-  };
-
-  const selectProfile = async (profileId: string) => {
-    await window.megumi.voice.selectProfile(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.profileSelect, { profileId }),
-    );
-    await refreshProfiles();
-  };
-
-  const previewProfile = async (profile: VoiceHostProfile) => {
-    if (previewingProfileId) return;
-    if (modelStatus?.status !== 'ready') {
-      setDeviceError(t('voice.previewModelsRequired'));
-      return;
-    }
-    setPreviewingProfileId(profile.profileId);
-    setDeviceError(null);
-    const result = await window.megumi.voice.previewProfile(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.profilePreview, { profileId: profile.profileId }),
-    );
-    if (!result.ok || result.data.status !== 'ok') {
-      const message = result.ok && result.data.status === 'failed' ? result.data.failure.message : '';
-      setDeviceError(isSidecarVersionFailure(message)
-        ? t('voice.componentOutdated')
-        : t('voice.previewFailed'));
-      setPreviewingProfileId(null);
-      return;
-    }
-    const playback = createSpeechPlaybackController({
-      outputDeviceId: voiceSettings.outputDeviceId,
-      report: (playbackResult) => {
-        if (playbackResult.status === 'failed') setDeviceError(t('voice.previewPlaybackFailed'));
-        setPreviewingProfileId(null);
-        queueMicrotask(() => { void playback.dispose(); });
-      },
-    });
-    for (const chunk of result.data.chunks) {
-      playback.acceptChunk({ segmentId: `voice-preview:${profile.profileId}`, ...chunk });
-    }
-  };
-
-  const importProfile = async () => {
-    const name = profileName.trim();
-    if (!name || busy) return;
-    setBusy(true);
-    try {
-      const result = await window.megumi.voice.importProfile(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.profileImport, { name }),
-      );
-      if (result.ok && result.data.status === 'ok') {
-        setProfileName('');
-        await refreshProfiles();
-      }
-    } finally {
-      setBusy(false);
-    }
   };
 
   const runMicrophoneTest = async () => {
@@ -212,14 +144,6 @@ export function VoiceSettingsPanel() {
             options={ensureSelectedDevice(devices.inputs, voiceSettings.inputDeviceId, t('voice.deviceUnavailable'))}
             defaultLabel={t('voice.systemDefault')}
             onChange={(inputDeviceId) => { void updateVoiceSettings({ inputDeviceId }); }}
-          />
-          <DeviceSelect
-            icon={<Headphones size={18} aria-hidden="true" />}
-            label={t('voice.outputDevice')}
-            value={voiceSettings.outputDeviceId}
-            options={ensureSelectedDevice(devices.outputs, voiceSettings.outputDeviceId, t('voice.deviceUnavailable'))}
-            defaultLabel={t('voice.systemDefault')}
-            onChange={(outputDeviceId) => { void updateVoiceSettings({ outputDeviceId }); }}
           />
           <label className="rounded-xl border border-[var(--color-border)] bg-[var(--color-app-bg)] p-4">
             <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
@@ -316,71 +240,6 @@ export function VoiceSettingsPanel() {
           ) : null}
         </div>
       </SettingsSection>
-
-      <SettingsSection title={t('voice.savedTitle')} description={t('voice.savedDescription')}>
-        <div
-          data-testid="voice-profile-scroll"
-          className="max-h-[22rem] divide-y divide-[var(--color-border)] overflow-y-auto overscroll-contain"
-          style={{ scrollbarGutter: 'stable' }}
-        >
-          {profiles.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-[var(--color-text-muted)]">{t('voice.empty')}</p>
-          ) : profiles.map((profile) => (
-            <div
-              key={profile.profileId}
-              className="flex items-center gap-2 px-4 py-3 transition-colors hover:bg-[var(--color-surface-muted)]"
-            >
-              <button
-                type="button"
-                className="flex min-w-0 flex-1 items-center gap-3 rounded-lg p-1 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]"
-                onClick={() => { void selectProfile(profile.profileId); }}
-              >
-                <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
-                  <Volume2 size={17} aria-hidden="true" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-[var(--color-text)]">{profile.name}</span>
-                  <span className="mt-0.5 block text-xs text-[var(--color-text-muted)]">{profileDescription(profile, t)}</span>
-                </span>
-                {profile.selected ? (
-                  <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-[var(--color-success)]">
-                    <Check size={14} aria-hidden="true" />{t('voice.selected')}
-                  </span>
-                ) : null}
-              </button>
-              <Button
-                type="button"
-                disabled={Boolean(previewingProfileId)}
-                aria-label={t('voice.previewNamed', { name: profile.name })}
-                onClick={() => { void previewProfile(profile); }}
-              >
-                {previewingProfileId === profile.profileId
-                  ? <LoaderCircle className="animate-spin" size={15} aria-hidden="true" />
-                  : <Play size={15} aria-hidden="true" />}
-                {t(previewingProfileId === profile.profileId ? 'voice.previewing' : 'voice.preview')}
-              </Button>
-            </div>
-          ))}
-        </div>
-      </SettingsSection>
-
-      <SettingsSection title={t('voice.addTitle')} description={t('voice.addDescription')}>
-        <div className="flex items-end gap-3 p-5">
-          <label className="min-w-0 flex-1 text-sm font-medium text-[var(--color-text)]">
-            {t('voice.name')}
-            <input
-              className="mt-2 h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-app-bg)] px-3 text-sm font-normal outline-none focus:border-[var(--color-focus)]"
-              value={profileName}
-              placeholder={t('voice.namePlaceholder')}
-              onChange={(event) => setProfileName(event.target.value)}
-            />
-          </label>
-          <Button type="button" className="h-10" disabled={!profileName.trim() || busy} onClick={() => { void importProfile(); }}>
-            <Plus size={15} aria-hidden="true" />
-            {busy ? t('voice.adding') : t('voice.add')}
-          </Button>
-        </div>
-      </SettingsSection>
     </div>
   );
 }
@@ -453,20 +312,4 @@ function formatBytes(bytes: number): string {
     unit = units[index];
   }
   return `${value.toFixed(1)} ${unit}`;
-}
-
-function profileDescription(
-  profile: VoiceHostProfile,
-  t: ReturnType<typeof useTranslation<'settings'>>['t'],
-): string {
-  if (profile.source === 'custom') return t('voice.profileCustom');
-  if (profile.language === 'zh' && profile.gender === 'female') return t('voice.profileChineseFemale');
-  if (profile.language === 'zh' && profile.gender === 'male') return t('voice.profileChineseMale');
-  if (profile.language === 'en' && profile.gender === 'female') return t('voice.profileEnglishFemale');
-  if (profile.language === 'en' && profile.gender === 'male') return t('voice.profileEnglishMale');
-  return t('voice.profileBuiltIn');
-}
-
-function isSidecarVersionFailure(message: string): boolean {
-  return /protocol version|referenceAudioPath/i.test(message);
 }

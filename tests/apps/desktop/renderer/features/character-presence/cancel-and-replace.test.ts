@@ -2,12 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { createCancelAndReplaceCoordinator } from '@megumi/desktop/renderer/features/character-presence/cancel-and-replace';
 
 describe('CancelAndReplaceCoordinator', () => {
-  it('stops speech, cancels an active run, and submits only after cancelled terminal confirmation', async () => {
+  it('cancels an active run and submits only after cancelled terminal confirmation', async () => {
     let confirmCancelled!: () => void;
     const waitForCancelled = vi.fn(() => new Promise<void>((resolve) => { confirmCancelled = resolve; }));
     const submit = vi.fn(async () => undefined);
     const coordinator = createCancelAndReplaceCoordinator({
-      interruptSpeech: vi.fn(async () => undefined),
       cancelRun: vi.fn(async () => true),
       waitForCancelled,
       submit,
@@ -23,11 +22,10 @@ describe('CancelAndReplaceCoordinator', () => {
     expect(submit).toHaveBeenCalledWith('New request');
   });
 
-  it('keeps at most one pending replacement and does not cancel a terminal run for TTS-only interruption', async () => {
+  it('keeps at most one pending replacement and does not cancel a run when none is active', async () => {
     const cancelRun = vi.fn(async () => true);
     const submit = vi.fn(async () => undefined);
     const coordinator = createCancelAndReplaceCoordinator({
-      interruptSpeech: vi.fn(async () => undefined),
       cancelRun,
       waitForCancelled: vi.fn(async () => undefined),
       submit,

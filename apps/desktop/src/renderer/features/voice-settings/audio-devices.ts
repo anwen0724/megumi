@@ -10,7 +10,6 @@ export interface AudioDeviceOption {
 
 export interface AudioDeviceCatalog {
   readonly inputs: readonly AudioDeviceOption[];
-  readonly outputs: readonly AudioDeviceOption[];
 }
 
 export function createInputConstraints(deviceId: string): MediaTrackConstraints {
@@ -38,7 +37,6 @@ export async function enumerateAudioDevices(options: {
     const devices = await mediaDevices.enumerateDevices();
     return {
       inputs: withDefault(devices.filter((device) => device.kind === 'audioinput'), 'Microphone'),
-      outputs: withDefault(devices.filter((device) => device.kind === 'audiooutput'), 'Speaker'),
     };
   } finally {
     for (const track of permissionStream?.getTracks() ?? []) track.stop();

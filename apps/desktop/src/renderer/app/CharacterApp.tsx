@@ -21,7 +21,6 @@ import {
   createCharacterWindowShape,
   loadCharacterAlphaMask,
   CurrentInteractionView,
-  createSpeechPlaybackController,
   resolveCharacterState,
   useCharacterInteraction,
   useCharacterVoice,
@@ -50,8 +49,6 @@ interface DragGesture {
 export default function CharacterApp() {
   const { t } = useTranslation('character');
   const [snapshot, setSnapshot] = useState<CharacterWindowSnapshot | null>(null);
-  const [playing, setPlaying] = useState(false);
-  const [mouthLevel, setMouthLevel] = useState(0);
   const [interactionOpen, setInteractionOpen] = useState(false);
   const [managementOpen, setManagementOpen] = useState(false);
   const [characterRenderBounds, setCharacterRenderBounds] = useState<CharacterRenderBounds | null>(null);
@@ -151,22 +148,6 @@ export default function CharacterApp() {
     };
   }, []);
 
-  useEffect(() => {
-    const playback = createSpeechPlaybackController({
-      outputDeviceId: voice.outputDeviceId,
-      report: (result) => { void window.megumi.voice.reportPlayback(result); },
-      onPlayingChanged: setPlaying,
-      onLevel: setMouthLevel,
-    });
-    const removeChunk = window.megumi.voice.onPlaybackChunk((chunk) => playback.acceptChunk(chunk));
-    const removeStop = window.megumi.voice.onPlaybackStop(() => { void playback.stop(); });
-    return () => {
-      removeChunk();
-      removeStop();
-      void playback.dispose();
-    };
-  }, [voice.outputDeviceId]);
-
   const characterState = useMemo(() => {
     const voiceStatus = voice.audioSnapshot.speech === 'recognizing'
       ? 'recognizing'
@@ -175,12 +156,11 @@ export default function CharacterApp() {
         : voice.voiceSnapshot.status;
     return resolveCharacterState({
       voiceStatus,
-      playing,
       pendingApproval: Boolean(session.interaction?.approval),
       activeTool: Boolean(session.interaction?.activeTool),
       error: Boolean(session.interaction?.error || voice.error || voice.audioSnapshot.speech === 'failed' || voice.audioSnapshot.microphone === 'failed'),
     });
-  }, [playing, session.interaction, voice.audioSnapshot.speech, voice.audioSnapshot.microphone, voice.error, voice.voiceSnapshot.status]);
+  }, [session.interaction, voice.audioSnapshot.speech, voice.audioSnapshot.microphone, voice.error, voice.voiceSnapshot.status]);
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
@@ -256,7 +236,6 @@ export default function CharacterApp() {
           <CharacterCanvas
             imageUrl={characterImageUrl}
             state={characterState}
-            mouthLevel={mouthLevel}
             onLayout={acceptCharacterLayout}
           />
         ) : null}
@@ -284,7 +263,7 @@ export default function CharacterApp() {
               onCancel={session.cancelRun}
               onRetry={voice.submitText}
             />
-            <VoiceControls voice={voice} activeRunId={session.activeRunId} playing={playing} />
+            <VoiceControls voice={voice} activeRunId={session.activeRunId} />
           </div>
         </div>
       ) : null}

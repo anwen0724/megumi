@@ -41,11 +41,6 @@ vi.mock('@megumi/desktop/renderer/features/character-presence', () => ({
   createCharacterWindowShape,
   CurrentInteractionView: () => <div data-testid="current-interaction" />,
   VoiceControls: () => <div data-testid="voice-controls" />,
-  createSpeechPlaybackController: () => ({
-    acceptChunk: vi.fn(),
-    stop: vi.fn(),
-    dispose: vi.fn(),
-  }),
   resolveCharacterState: () => 'idle',
   useCharacterInteraction: () => ({
     interaction: null,
@@ -55,7 +50,14 @@ vi.mock('@megumi/desktop/renderer/features/character-presence', () => ({
   }),
   useCharacterVoice: () => ({
     voiceSnapshot: { status: 'idle' },
-    audioSnapshot: { status: 'idle', inputLevel: 0 },
+    audioSnapshot: {
+      microphone: 'closed',
+      speech: 'stopped',
+      level: 0,
+      peak: 0,
+      framesReceived: false,
+      fallbackToDefault: false,
+    },
     error: undefined,
     submitText: vi.fn(),
   }),
@@ -121,11 +123,6 @@ describe('CharacterApp', () => {
           openSettings,
           setScale,
           showMainWindow,
-        },
-        voice: {
-          onPlaybackChunk: vi.fn().mockReturnValue(vi.fn()),
-          onPlaybackStop: vi.fn().mockReturnValue(vi.fn()),
-          reportPlayback: vi.fn(),
         },
       },
     });

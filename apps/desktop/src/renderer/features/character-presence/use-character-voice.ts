@@ -47,7 +47,6 @@ export function useCharacterVoice(
   const [draft, setDraftState] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
-  const [outputDeviceId, setOutputDeviceId] = useState('default');
   const startGeneration = useRef(0);
   const autoSubmitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const submitRef = useRef<(text: string) => Promise<void>>(async () => undefined);
@@ -171,16 +170,6 @@ export function useCharacterVoice(
   }, [selectedSessionId, t]);
 
   const replacement = useMemo(() => createCancelAndReplaceCoordinator({
-    interruptSpeech: async () => {
-      const result = await window.megumi.voice.interrupt(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.sessionInterrupt, {}),
-      );
-      if (!result.ok || result.data.status === 'failed') {
-        throw new Error(result.ok && result.data.status === 'failed'
-          ? result.data.failure.message
-          : t('errors.stopSpeech'));
-      }
-    },
     cancelRun: async (runId) => {
       const result = await window.megumi.session.message.cancel(
         createRendererRuntimeIpcRequest(IPC_CHANNELS.session.sessionMessageCancel, { runId }),
@@ -227,9 +216,8 @@ export function useCharacterVoice(
       return;
     }
     const voiceSettings = settings.data.settings.voice;
-    setOutputDeviceId(voiceSettings.outputDeviceId);
-    // DECOUPLE: only the speech input capability (SenseVoice + tokens) gates
-    // the microphone and STT. TTS state only affects reply reading.
+    // Only the speech input capability (SenseVoice + tokens) gates the
+    // microphone and STT.
     const sttStatus = await window.megumi.voice.getModelCapabilityStatus(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.modelCapability, { capability: 'stt' }),
     );
@@ -249,12 +237,9 @@ export function useCharacterVoice(
       );
       if (generation !== startGeneration.current) return;
       if (!result.ok || result.data.status !== 'ok') {
-        const failureMessage = result.ok && result.data.status === 'failed' ? result.data.failure.message : '';
-        setError(/protocol version|referenceAudioPath/i.test(failureMessage)
-          ? t('errors.voiceComponentOutdated')
-          : result.ok && result.data.status === 'failed'
-            ? t('errors.voicePreparationFailed')
-            : t('errors.startSession'));
+        setError(result.ok && result.data.status === 'failed'
+          ? t('errors.voicePreparationFailed')
+          : t('errors.startSession'));
         return;
       }
       const runtimeGeneration = result.data.generation;
@@ -348,7 +333,7 @@ export function useCharacterVoice(
         return;
       }
     } catch (interruptError) {
-      setError(interruptError instanceof Error ? interruptError.message : t('errors.stopSpeech'));
+      setError(interruptError instanceof Error ? interruptError.message : t('errors.cancelRun'));
       return;
     }
     setError(null);
@@ -361,7 +346,6 @@ export function useCharacterVoice(
     draft,
     error,
     preparing,
-    outputDeviceId,
     start,
     end,
     setMuted,

@@ -5,7 +5,7 @@ import {
 } from '../../../../../../apps/desktop/src/renderer/features/voice-settings/audio-devices';
 
 describe('audio device settings', () => {
-  it('keeps system default and separates input from output devices', async () => {
+  it('keeps system default and lists only input devices', async () => {
     const result = await enumerateAudioDevices({
       mediaDevices: {
         getUserMedia: vi.fn(),
@@ -20,10 +20,6 @@ describe('audio device settings', () => {
       inputs: [
         { deviceId: 'default', label: 'System default' },
         { deviceId: 'mic-1', label: 'USB Mic' },
-      ],
-      outputs: [
-        { deviceId: 'default', label: 'System default' },
-        { deviceId: 'speaker-1', label: 'Headphones' },
       ],
     });
   });

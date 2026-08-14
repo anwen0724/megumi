@@ -7,7 +7,6 @@ export interface CancelAndReplaceCoordinator {
 }
 
 export function createCancelAndReplaceCoordinator(input: {
-  readonly interruptSpeech: () => Promise<void>;
   readonly cancelRun: (runId: string) => Promise<boolean>;
   readonly waitForCancelled: (runId: string) => Promise<void>;
   readonly submit: (text: string) => Promise<void>;
@@ -22,7 +21,6 @@ export function createCancelAndReplaceCoordinator(input: {
       if (started) return false;
       started = true;
       try {
-        await input.interruptSpeech();
         if (activeRunId) {
           const cancellationRequested = await input.cancelRun(activeRunId);
           if (!cancellationRequested) {

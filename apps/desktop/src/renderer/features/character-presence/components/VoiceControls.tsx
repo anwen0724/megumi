@@ -1,17 +1,12 @@
-/* Renders compact voice, profile, transcript-review, and manual interruption controls. */
-import type { VoiceHostProfile } from '@megumi/product/host';
-import { LoaderCircle, Mic, MicOff, Pause, Play, Send, Square, Undo2, Volume2 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+/* Renders compact voice, transcript-review, and manual interruption controls. */
+import { LoaderCircle, Mic, MicOff, Pause, Play, Send, Square, Undo2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { IPC_CHANNELS } from '../../../shared/ipc/channels';
-import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
 import type { CharacterVoiceController } from '../use-character-voice';
 import type { VoiceInputSnapshot } from '../../voice-input/voice-input-controller';
 
 export function VoiceControls(props: {
   readonly voice: CharacterVoiceController;
   readonly activeRunId?: string;
-  readonly playing: boolean;
 }) {
   const { t } = useTranslation('character');
   const { voice } = props;
@@ -19,48 +14,20 @@ export function VoiceControls(props: {
   const active = voice.voiceSnapshot.status !== 'idle';
   const muted = voice.voiceSnapshot.status === 'idle' ? false : voice.voiceSnapshot.muted;
   const manualMode = voice.audioSnapshot.speech === 'automatic-boundary-unavailable';
-  const [profiles, setProfiles] = useState<VoiceHostProfile[]>([]);
 
-  const refreshProfiles = useCallback(async () => {
-    const result = await window.megumi.voice.listProfiles(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.profilesList, {}),
-    );
-    if (result.ok && result.data.status === 'ok') setProfiles(result.data.profiles);
-  }, []);
-  useEffect(() => { void refreshProfiles(); }, [refreshProfiles]);
-
-  const selectProfile = async (profileId: string) => {
-    await window.megumi.voice.selectProfile(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.profileSelect, { profileId }),
-    );
-    await refreshProfiles();
-  };
   return (
     <section className="app-no-drag w-full rounded-2xl border border-white/35 bg-slate-950/58 p-2.5 text-white shadow-xl backdrop-blur-xl">
       <div data-testid="voice-primary-row" className="flex items-center gap-2">
-        <label className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-white/65">
-          <Volume2 size={14} />
-          <span className="sr-only">{t('profiles.label')}</span>
-          <select
-            className="h-10 min-w-0 flex-1 rounded-xl border border-white/10 bg-white/10 px-2.5 outline-none"
-            value={profiles.find((profile) => profile.selected)?.profileId ?? ''}
-            disabled={preparing}
-            onChange={(event) => { void selectProfile(event.target.value); }}
-            aria-label={t('profiles.label')}
-          >
-            {profiles.map((profile) => <option className="text-slate-950" key={profile.profileId} value={profile.profileId}>{profile.name}</option>)}
-          </select>
-        </label>
         {preparing ? (
           <button
             type="button"
-            className="flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-white/70 px-3 text-sm font-medium text-slate-900 disabled:cursor-wait"
+            className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-white/70 px-3 text-sm font-medium text-slate-900 disabled:cursor-wait"
             disabled
           >
             <LoaderCircle className="animate-spin" size={16} />{t('voice.preparing')}
           </button>
         ) : !active ? (
-          <button type="button" className="flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-white/90 px-3 text-sm font-medium text-slate-900" onClick={() => { void voice.start(); }}>
+          <button type="button" className="flex h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-white/90 px-3 text-sm font-medium text-slate-900" onClick={() => { void voice.start(); }}>
             <Mic size={16} />{t('voice.start')}
           </button>
         ) : (
@@ -68,14 +35,14 @@ export function VoiceControls(props: {
             <button type="button" className="grid size-10 shrink-0 place-items-center rounded-xl bg-white/15 hover:bg-white/25" aria-label={t(muted ? 'voice.unmute' : 'voice.mute')} onClick={() => { void voice.setMuted(!muted); }}>
               {muted ? <MicOff size={17} /> : <Mic size={17} />}
             </button>
-            <button type="button" className="flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-rose-400/90 px-3 text-sm font-medium text-slate-950" onClick={() => { void voice.end(); }}>
+            <button type="button" className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-rose-400/90 px-3 text-sm font-medium text-slate-950" onClick={() => { void voice.end(); }}>
               <Square size={14} />{t('voice.end')}
             </button>
           </>
         )}
       </div>
 
-      {active && (props.activeRunId || props.playing) ? (
+      {active && props.activeRunId ? (
         <button
           type="button"
           className="mt-2 w-full rounded-xl bg-sky-200 px-3 py-2 text-sm font-semibold text-sky-950"

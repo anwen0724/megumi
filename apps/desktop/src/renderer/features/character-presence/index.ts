@@ -1,7 +1,6 @@
-/* Public renderer entry for Character Presence state and audio controllers. */
+/* Public renderer entry for Character Presence state and voice controllers. */
 export * from './use-character-voice';
 export * from './components/VoiceControls';
-export * from './speech-playback-controller';
 export * from './character-state';
 export * from './current-interaction';
 export * from './cancel-and-replace';

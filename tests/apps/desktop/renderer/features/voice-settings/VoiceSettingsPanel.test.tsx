@@ -10,8 +10,6 @@ describe('VoiceSettingsPanel', () => {
   const checkModelUpdates = vi.fn();
   const prepareModels = vi.fn();
   const cancelModelPreparation = vi.fn();
-  const listProfiles = vi.fn();
-  const previewProfile = vi.fn();
   const getSettings = vi.fn();
   const updateSettings = vi.fn();
 
@@ -22,12 +20,8 @@ describe('VoiceSettingsPanel', () => {
     checkModelUpdates.mockReset().mockResolvedValue(success({ status: 'unavailable' }));
     prepareModels.mockReset().mockResolvedValue(success({ status: 'ok' }));
     cancelModelPreparation.mockReset().mockResolvedValue(success({ status: 'ok' }));
-    listProfiles.mockReset().mockResolvedValue(success({ status: 'ok', profiles: [] }));
-    previewProfile.mockReset().mockResolvedValue(success({
-      status: 'failed', failure: { code: 'preview_failed', message: 'failed' },
-    }));
     const resolvedVoice = {
-      inputDeviceId: 'mic-1', outputDeviceId: 'speaker-1', recognitionLanguage: 'auto' as const,
+      inputDeviceId: 'mic-1', recognitionLanguage: 'auto' as const,
     };
     getSettings.mockReset().mockResolvedValue(success({ status: 'ok', settings: { voice: resolvedVoice } }));
     updateSettings.mockReset().mockResolvedValue(success({ status: 'updated', settings: { voice: resolvedVoice } }));
@@ -49,23 +43,18 @@ describe('VoiceSettingsPanel', () => {
           checkModelUpdates,
           prepareModels,
           cancelModelPreparation,
-          listProfiles,
-          previewProfile,
-          importProfile: vi.fn(),
-          selectProfile: vi.fn(),
         },
         settings: { get: getSettings, update: updateSettings },
       },
     });
   });
 
-  it('shows both the saved microphone and speaker in the main Settings page', async () => {
+  it('shows the saved microphone without an output device control', async () => {
     render(<VoiceSettingsPanel />);
 
     expect(await screen.findByRole('combobox', { name: /Input device/i })).toHaveValue('mic-1');
-    expect(screen.getByRole('combobox', { name: /Output device/i })).toHaveValue('speaker-1');
     expect(screen.getByText('USB Microphone')).toBeInTheDocument();
-    expect(screen.getByText('USB Headphones')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: /Output device/i })).not.toBeInTheDocument();
   });
 
   it('shows one user-facing Voice model resource and starts download only after an explicit click', async () => {
@@ -97,23 +86,12 @@ describe('VoiceSettingsPanel', () => {
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
   });
 
-  it('keeps a long voice catalog inside its own scroll area and exposes preview', async () => {
+  it('reports a ready Voice model without exposing voice profile management', async () => {
     getModelStatus.mockResolvedValue(success({ status: 'ready', bundleVersion: 'voice-v1' }));
-    listProfiles.mockResolvedValue(success({
-      status: 'ok',
-      profiles: [{
-        profileId: 'voice-profile:default', name: 'Xiaoyu', builtIn: true,
-        source: 'built_in', language: 'zh', gender: 'female', selected: true,
-      }],
-    }));
-    const user = userEvent.setup();
     render(<VoiceSettingsPanel />);
 
-    const catalog = await screen.findByTestId('voice-profile-scroll');
-    expect(catalog).toHaveClass('overflow-y-auto');
-    expect(screen.getByText('Chinese female voice')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Preview Xiaoyu' }));
-    await waitFor(() => expect(previewProfile).toHaveBeenCalledOnce());
+    expect(await screen.findByText('Ready')).toBeInTheDocument();
+    expect(screen.queryByTestId('voice-profile-scroll')).not.toBeInTheDocument();
   });
 });
 
