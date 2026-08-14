@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+﻿// @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -25,7 +25,7 @@ describe('SettingsPage provider settings', () => {
             data: {
               status: 'ok',
               settings: {
-                voice: { inputDeviceId: 'default', recognitionLanguage: 'auto' },
+                voice: { inputDeviceId: 'default', outputDeviceId: 'default', recognitionLanguage: 'auto', readAloudEnabled: false, tts: { provider: 'minimax', voiceId: 'female-shaonv', hasApiKey: false, credentialSource: 'missing' } },
                 permissions: { mode: 'ask', rules: [], catalog: { operations: [], tools: [] } },
               },
             },
@@ -34,7 +34,7 @@ describe('SettingsPage provider settings', () => {
             ok: true,
             data: {
               status: 'updated',
-              settings: { voice: { inputDeviceId: 'default', recognitionLanguage: 'auto' } },
+              settings: { voice: { inputDeviceId: 'default', outputDeviceId: 'default', recognitionLanguage: 'auto', readAloudEnabled: false, tts: { provider: 'minimax', voiceId: 'female-shaonv', hasApiKey: false, credentialSource: 'missing' } } },
             },
           }),
         },
@@ -87,7 +87,7 @@ describe('SettingsPage provider settings', () => {
     expect(screen.getByRole('tab', { name: 'Privacy & Permissions' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Activity & Diagnostics' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'About Megumi' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Voice Input' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Voice' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: 'Privacy & Permissions' }));
     expect(screen.getByRole('heading', { name: 'Privacy & Permissions' })).toBeInTheDocument();
@@ -98,9 +98,9 @@ describe('SettingsPage provider settings', () => {
     const user = userEvent.setup();
     render(<SettingsPage onDone={vi.fn()} />);
 
-    await user.click(screen.getByRole('tab', { name: 'Voice Input' }));
+    await user.click(screen.getByRole('tab', { name: 'Voice' }));
 
-    expect(screen.getByRole('heading', { name: 'Voice Input' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Voice' })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Input device' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add voice' })).not.toBeInTheDocument();
   });

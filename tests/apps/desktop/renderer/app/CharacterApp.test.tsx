@@ -61,6 +61,7 @@ vi.mock('@megumi/desktop/renderer/features/character-presence', () => ({
     error: undefined,
     submitText: vi.fn(),
   }),
+  useSpeechOutput: () => ({ status: 'idle' as const }),
 }));
 
 describe('CharacterApp', () => {

@@ -63,6 +63,10 @@ export const character = {
       manual: '自动断句不可用',
       error: '语音输入失败',
     },
+    speechOutput: {
+      playing: '正在朗读回复…',
+      error: '朗读失败',
+    },
   },
   errors: {
     selectModel: '请先在主窗口选择模型。',

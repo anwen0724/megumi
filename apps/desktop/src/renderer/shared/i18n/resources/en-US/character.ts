@@ -60,6 +60,10 @@ export const character = {
       manual: 'Automatic boundary unavailable',
       error: 'Voice input failed',
     },
+    speechOutput: {
+      playing: 'Reading the reply…',
+      error: 'Reading failed',
+    },
   },
   errors: {
     selectModel: 'Choose a model in the main window first.',

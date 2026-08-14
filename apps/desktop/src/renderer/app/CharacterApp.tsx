@@ -24,6 +24,7 @@ import {
   resolveCharacterState,
   useCharacterInteraction,
   useCharacterVoice,
+  useSpeechOutput,
   VoiceControls,
 } from '../features/character-presence';
 
@@ -65,6 +66,7 @@ export default function CharacterApp() {
   ) + SURFACE_GAP;
   const voice = useCharacterVoice(selectedSessionId);
   const session = useCharacterInteraction(selectedSessionId);
+  const speechOutput = useSpeechOutput();
 
   const acceptCharacterLayout = useCallback((bounds: CharacterRenderBounds) => {
     setCharacterRenderBounds((current) => (
@@ -263,7 +265,7 @@ export default function CharacterApp() {
               onCancel={session.cancelRun}
               onRetry={voice.submitText}
             />
-            <VoiceControls voice={voice} activeRunId={session.activeRunId} />
+            <VoiceControls voice={voice} activeRunId={session.activeRunId} speechOutput={speechOutput} />
           </div>
         </div>
       ) : null}

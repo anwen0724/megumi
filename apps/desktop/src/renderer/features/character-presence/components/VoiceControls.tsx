@@ -3,10 +3,12 @@ import { LoaderCircle, Mic, MicOff, Pause, Play, Send, Square, Undo2 } from 'luc
 import { useTranslation } from 'react-i18next';
 import type { CharacterVoiceController } from '../use-character-voice';
 import type { VoiceInputSnapshot } from '../../voice-input/voice-input-controller';
+import type { SpeechOutputViewSnapshot } from '../speech-output/speech-output-controller';
 
 export function VoiceControls(props: {
   readonly voice: CharacterVoiceController;
   readonly activeRunId?: string;
+  readonly speechOutput?: SpeechOutputViewSnapshot;
 }) {
   const { t } = useTranslation('character');
   const { voice } = props;
@@ -86,6 +88,19 @@ export function VoiceControls(props: {
               style={{ width: `${Math.round(voice.audioSnapshot.level * 100)}%` }}
             />
           </div>
+        </div>
+      ) : null}
+
+      {props.speechOutput && props.speechOutput.status !== 'idle' ? (
+        <div className="mt-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+          <div className="flex items-center justify-between gap-3 text-[11px] text-white/70">
+            <span data-testid="speech-output-status">
+              {t(props.speechOutput.status === 'error' ? 'voice.speechOutput.error' : 'voice.speechOutput.playing')}
+            </span>
+          </div>
+          {props.speechOutput.status === 'error' && props.speechOutput.errorMessage ? (
+            <p className="mt-1 text-xs text-rose-200">{props.speechOutput.errorMessage}</p>
+          ) : null}
         </div>
       ) : null}
 

@@ -21,7 +21,9 @@ describe('VoiceSettingsPanel', () => {
     prepareModels.mockReset().mockResolvedValue(success({ status: 'ok' }));
     cancelModelPreparation.mockReset().mockResolvedValue(success({ status: 'ok' }));
     const resolvedVoice = {
-      inputDeviceId: 'mic-1', recognitionLanguage: 'auto' as const,
+      inputDeviceId: 'mic-1', outputDeviceId: 'speaker-1', recognitionLanguage: 'auto' as const,
+      readAloudEnabled: false,
+      tts: { provider: 'minimax', voiceId: 'female-shaonv', hasApiKey: false, credentialSource: 'missing' },
     };
     getSettings.mockReset().mockResolvedValue(success({ status: 'ok', settings: { voice: resolvedVoice } }));
     updateSettings.mockReset().mockResolvedValue(success({ status: 'updated', settings: { voice: resolvedVoice } }));
@@ -44,17 +46,23 @@ describe('VoiceSettingsPanel', () => {
           prepareModels,
           cancelModelPreparation,
         },
-        settings: { get: getSettings, update: updateSettings },
+        settings: {
+          get: getSettings,
+          update: updateSettings,
+          setVoiceTtsApiKey: vi.fn().mockResolvedValue(success({ status: 'updated', tts: resolvedVoice.tts })),
+          deleteVoiceTtsApiKey: vi.fn().mockResolvedValue(success({ status: 'deleted', tts: resolvedVoice.tts })),
+        },
       },
     });
   });
 
-  it('shows the saved microphone without an output device control', async () => {
+  it('shows the saved microphone and the saved output device', async () => {
     render(<VoiceSettingsPanel />);
 
     expect(await screen.findByRole('combobox', { name: /Input device/i })).toHaveValue('mic-1');
     expect(screen.getByText('USB Microphone')).toBeInTheDocument();
-    expect(screen.queryByRole('combobox', { name: /Output device/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: /Output device/i })).toHaveValue('speaker-1');
+    expect(screen.getByText('USB Headphones')).toBeInTheDocument();
   });
 
   it('shows one user-facing Voice model resource and starts download only after an explicit click', async () => {

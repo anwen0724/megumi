@@ -1,6 +1,6 @@
-/* Owns Voice model resources and input device configuration in the main Settings surface. */
+/* Owns Voice model resources, audio devices, and speech output configuration in the main Settings surface. */
 import type { VoiceHostModelStatus } from '@megumi/product/host';
-import { Activity, CircleCheck, Download, LoaderCircle, Mic2, RefreshCw, X } from 'lucide-react';
+import { Activity, CircleCheck, Download, LoaderCircle, Mic2, RefreshCw, Speaker, X } from 'lucide-react';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
@@ -15,31 +15,71 @@ import {
 
 type VoiceSettings = {
   readonly inputDeviceId: string;
+  readonly outputDeviceId: string;
   readonly recognitionLanguage: 'auto' | 'zh' | 'en';
+  readonly readAloudEnabled: boolean;
+  readonly tts: {
+    provider: 'minimax';
+    voiceId: string;
+    hasApiKey: boolean;
+    credentialSource: 'settings' | 'environment' | 'missing';
+  };
 };
+
+type VoiceSettingsPatch = {
+  inputDeviceId?: string;
+  outputDeviceId?: string;
+  recognitionLanguage?: VoiceSettings['recognitionLanguage'];
+  readAloudEnabled?: boolean;
+  tts?: { provider?: 'minimax'; voiceId?: string };
+};
+
+const TTS_VOICE_OPTIONS = [
+  { value: 'female-shaonv', labelKey: 'voice.ttsVoiceShaonv' },
+  { value: 'female-shaonv-jingpin', labelKey: 'voice.ttsVoiceShaonvJingpin' },
+  { value: 'qiaopi_mengmei', labelKey: 'voice.ttsVoiceQiaopi' },
+  { value: 'female-tianmei', labelKey: 'voice.ttsVoiceTianmei' },
+] as const;
 
 export function VoiceSettingsPanel() {
   const { t } = useTranslation('settings');
   const [modelStatus, setModelStatus] = useState<VoiceHostModelStatus>();
   const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>({
     inputDeviceId: 'default',
+    outputDeviceId: 'default',
     recognitionLanguage: 'auto',
+    readAloudEnabled: false,
+    tts: { provider: 'minimax', voiceId: 'female-shaonv', hasApiKey: false, credentialSource: 'missing' },
   });
   const [devices, setDevices] = useState<AudioDeviceCatalog>({
     inputs: [{ deviceId: 'default', label: 'System default' }],
+    outputs: [{ deviceId: 'default', label: 'System default' }],
   });
   const [devicesBusy, setDevicesBusy] = useState(false);
   const [deviceError, setDeviceError] = useState<string | null>(null);
   const [microphoneLevel, setMicrophoneLevel] = useState(0);
   const [testingMicrophone, setTestingMicrophone] = useState(false);
+  const [ttsApiKey, setTtsApiKey] = useState('');
+  const [ttsSaving, setTtsSaving] = useState(false);
 
   const refreshVoiceSettings = useCallback(async () => {
     const result = await window.megumi.settings.get(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {}),
     );
     if (result.ok && result.data.status === 'ok') {
-      const { inputDeviceId, recognitionLanguage } = result.data.settings.voice;
-      setVoiceSettings({ inputDeviceId, recognitionLanguage });
+      const { inputDeviceId, outputDeviceId, recognitionLanguage, readAloudEnabled, tts } = result.data.settings.voice;
+      setVoiceSettings({
+        inputDeviceId,
+        outputDeviceId,
+        recognitionLanguage,
+        readAloudEnabled,
+        tts: {
+          provider: tts.provider,
+          voiceId: tts.voiceId,
+          hasApiKey: tts.hasApiKey,
+          credentialSource: tts.credentialSource,
+        },
+      });
     }
   }, []);
 
@@ -55,17 +95,71 @@ export function VoiceSettingsPanel() {
     }
   }, [t]);
 
-  const updateVoiceSettings = async (patch: Partial<VoiceSettings>) => {
+  const updateVoiceSettings = async (patch: VoiceSettingsPatch) => {
     const result = await window.megumi.settings.update(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.update, { voice: patch }),
     );
     if (result.ok && result.data.status === 'updated') {
-      const { inputDeviceId, recognitionLanguage } = result.data.settings.voice;
-      setVoiceSettings({ inputDeviceId, recognitionLanguage });
+      const { inputDeviceId, outputDeviceId, recognitionLanguage, readAloudEnabled, tts } = result.data.settings.voice;
+      setVoiceSettings({
+        inputDeviceId,
+        outputDeviceId,
+        recognitionLanguage,
+        readAloudEnabled,
+        tts: {
+          provider: tts.provider,
+          voiceId: tts.voiceId,
+          hasApiKey: tts.hasApiKey,
+          credentialSource: tts.credentialSource,
+        },
+      });
       setDeviceError(null);
       return;
     }
     setDeviceError(t('voice.devicesSaveError'));
+  };
+
+  const saveTtsApiKey = async () => {
+    if (!ttsApiKey.trim() || ttsSaving) return;
+    setTtsSaving(true);
+    setDeviceError(null);
+    try {
+      const result = await window.megumi.settings.setVoiceTtsApiKey(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.voiceTtsSetApiKey, { apiKey: ttsApiKey.trim() }),
+      );
+      if (!result.ok || result.data.status === 'failed') {
+        setDeviceError(t('voice.ttsApiKeySaveError'));
+        return;
+      }
+      const { tts } = result.data;
+      setVoiceSettings((current) => ({ ...current, tts: { ...current.tts, ...tts } }));
+      setTtsApiKey('');
+    } catch {
+      setDeviceError(t('voice.ttsApiKeySaveError'));
+    } finally {
+      setTtsSaving(false);
+    }
+  };
+
+  const clearTtsApiKey = async () => {
+    if (ttsSaving) return;
+    setTtsSaving(true);
+    setDeviceError(null);
+    try {
+      const result = await window.megumi.settings.deleteVoiceTtsApiKey(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.voiceTtsDeleteApiKey, {}),
+      );
+      if (!result.ok || result.data.status === 'failed') {
+        setDeviceError(t('voice.ttsApiKeyClearError'));
+        return;
+      }
+      const { tts } = result.data;
+      setVoiceSettings((current) => ({ ...current, tts: { ...current.tts, ...tts } }));
+    } catch {
+      setDeviceError(t('voice.ttsApiKeyClearError'));
+    } finally {
+      setTtsSaving(false);
+    }
   };
 
   const refreshModelStatus = useCallback(async () => {
@@ -145,6 +239,14 @@ export function VoiceSettingsPanel() {
             defaultLabel={t('voice.systemDefault')}
             onChange={(inputDeviceId) => { void updateVoiceSettings({ inputDeviceId }); }}
           />
+          <DeviceSelect
+            icon={<Speaker size={18} aria-hidden="true" />}
+            label={t('voice.outputDevice')}
+            value={voiceSettings.outputDeviceId}
+            options={ensureSelectedDevice(devices.outputs, voiceSettings.outputDeviceId, t('voice.deviceUnavailable'))}
+            defaultLabel={t('voice.systemDefault')}
+            onChange={(outputDeviceId) => { void updateVoiceSettings({ outputDeviceId }); }}
+          />
           <label className="rounded-xl border border-[var(--color-border)] bg-[var(--color-app-bg)] p-4">
             <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
               {t('voice.recognitionLanguage')}
@@ -158,6 +260,17 @@ export function VoiceSettingsPanel() {
               <option value="zh">{t('voice.languageChinese')}</option>
               <option value="en">{t('voice.languageEnglish')}</option>
             </select>
+          </label>
+          <label className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-app-bg)] p-4">
+            <span className="flex items-center gap-2 text-sm font-medium text-[var(--color-text)]">
+              <Speaker size={17} className="text-[var(--color-accent)]" aria-hidden="true" />
+              {t('voice.readAloud')}
+            </span>
+            <input
+              type="checkbox"
+              checked={voiceSettings.readAloudEnabled}
+              onChange={(event) => { void updateVoiceSettings({ readAloudEnabled: event.target.checked }); }}
+            />
           </label>
           <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-app-bg)] p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
@@ -240,6 +353,63 @@ export function VoiceSettingsPanel() {
           ) : null}
         </div>
       </SettingsSection>
+      <SettingsSection title={t('voice.ttsTitle')} description={t('voice.ttsDescription')}>
+        <div className="grid gap-4 p-5 lg:grid-cols-2">
+          <label className="rounded-xl border border-[var(--color-border)] bg-[var(--color-app-bg)] p-4">
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+              {t('voice.ttsProvider')}
+            </span>
+            <select
+              className="h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-focus)]"
+              value={voiceSettings.tts.provider}
+              onChange={(event) => { void updateVoiceSettings({ tts: { provider: event.target.value as VoiceSettings['tts']['provider'] } }); }}
+            >
+              <option value="minimax">MiniMax</option>
+            </select>
+          </label>
+          <label className="rounded-xl border border-[var(--color-border)] bg-[var(--color-app-bg)] p-4">
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
+              {t('voice.ttsVoice')}
+            </span>
+            <select
+              className="h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-focus)]"
+              value={voiceSettings.tts.voiceId}
+              onChange={(event) => { void updateVoiceSettings({ tts: { voiceId: event.target.value } }); }}
+            >
+              {TTS_VOICE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{t(option.labelKey)}</option>
+              ))}
+            </select>
+          </label>
+          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-app-bg)] p-4 lg:col-span-2">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2 text-sm font-medium text-[var(--color-text)]">
+                <Speaker size={17} className="text-[var(--color-accent)]" aria-hidden="true" />
+                {t('voice.ttsApiKey')}
+              </span>
+              <span className="text-xs text-[var(--color-text-muted)]">{t(ttsCredentialKey(voiceSettings.tts))}</span>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                className="h-10 min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-focus)]"
+                value={ttsApiKey}
+                placeholder={t('voice.ttsApiKeyPlaceholder')}
+                onChange={(event) => setTtsApiKey(event.target.value)}
+                aria-label={t('voice.ttsApiKey')}
+              />
+              <Button type="button" disabled={!ttsApiKey.trim() || ttsSaving} onClick={() => { void saveTtsApiKey(); }}>
+                {t('voice.ttsApiKeySave')}
+              </Button>
+              {voiceSettings.tts.hasApiKey ? (
+                <Button type="button" disabled={ttsSaving} onClick={() => { void clearTtsApiKey(); }}>
+                  {t('voice.ttsApiKeyClear')}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </SettingsSection>
     </div>
   );
 }
@@ -281,6 +451,12 @@ function ensureSelectedDevice(
   return options.some((option) => option.deviceId === selectedDeviceId)
     ? options
     : [...options, { deviceId: selectedDeviceId, label: unavailableLabel }];
+}
+
+function ttsCredentialKey(tts: VoiceSettings['tts']): 'voice.ttsCredentialSaved' | 'voice.ttsCredentialEnvironment' | 'voice.ttsCredentialMissing' {
+  if (tts.credentialSource === 'settings') return 'voice.ttsCredentialSaved';
+  if (tts.credentialSource === 'environment') return 'voice.ttsCredentialEnvironment';
+  return 'voice.ttsCredentialMissing';
 }
 
 function modelStatusKey(status: VoiceHostModelStatus | undefined):
