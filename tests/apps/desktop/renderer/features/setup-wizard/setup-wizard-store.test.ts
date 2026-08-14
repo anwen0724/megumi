@@ -1,11 +1,14 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSetupWizardStore } from '@megumi/desktop/renderer/features/setup-wizard';
+import { useProviderStore } from '@megumi/desktop/renderer/entities/provider';
+import { useModelSelectionStore } from '@megumi/desktop/renderer/entities/model-selection';
 
 const settingsUpdate = vi.fn();
 const settingsCompleteSetup = vi.fn();
 const providerUpdate = vi.fn();
 const providerSetApiKey = vi.fn();
+const providerList = vi.fn();
 
 function installMegumiMock() {
   Object.defineProperty(window, 'megumi', {
@@ -18,6 +21,7 @@ function installMegumiMock() {
       provider: {
         update: providerUpdate,
         setApiKey: providerSetApiKey,
+        list: providerList,
       },
     },
   });
@@ -30,7 +34,10 @@ describe('setup wizard store', () => {
     settingsCompleteSetup.mockReset();
     providerUpdate.mockReset();
     providerSetApiKey.mockReset();
+    providerList.mockReset();
     useSetupWizardStore.setState(useSetupWizardStore.getInitialState(), true);
+    useProviderStore.setState({ providers: [], catalog: [], status: 'idle', error: null });
+    useModelSelectionStore.setState({ selection: undefined });
   });
 
   it('accepts the bootstrap language and setup projection synchronously', () => {
@@ -86,6 +93,57 @@ describe('setup wizard store', () => {
     expect(settingsCompleteSetup).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(useSetupWizardStore.getState())).not.toContain('TEST_API_KEY_VALUE');
     expect(useSetupWizardStore.getState().setupCompleted).toBe(true);
+  });
+
+  it('refreshes provider and model projections after setup completes', async () => {
+    providerList.mockResolvedValue({
+      ok: true,
+      data: {
+        status: 'ok',
+        providers: [{
+          providerId: 'deepseek',
+          displayName: 'DeepSeek',
+          enabled: true,
+          protocol: 'openai-completions',
+          modelIds: ['deepseek-v4-flash'],
+          hasApiKey: true,
+          credentialSource: 'settings',
+        }],
+        catalog: [],
+      },
+    });
+    settingsCompleteSetup.mockResolvedValue({
+      ok: true,
+      data: {
+        status: 'completed',
+        settings: {
+          language: 'zh-CN',
+          theme: 'midnight-blue',
+          setup: { completed: true, completedAt: '2026-06-29T12:00:00.000Z' },
+          memory: { enabled: false },
+          modelSelection: { providerId: 'deepseek', modelId: 'deepseek-v4-flash' },
+          providers: {},
+          permissions: {},
+        },
+      },
+    });
+
+    await useSetupWizardStore.getState().completeSetup({
+      language: 'zh-CN',
+      theme: 'midnight-blue',
+      providerId: 'deepseek',
+      modelIds: ['deepseek-v4-flash'],
+      apiKey: 'TEST_API_KEY_VALUE',
+    });
+
+    expect(providerList).toHaveBeenCalledTimes(1);
+    expect(useProviderStore.getState().providers).toEqual([
+      expect.objectContaining({ providerId: 'deepseek' }),
+    ]);
+    expect(useModelSelectionStore.getState().selection).toEqual({
+      providerId: 'deepseek',
+      modelId: 'deepseek-v4-flash',
+    });
   });
 
   it('writes setup completion to settings when provider configuration is skipped', async () => {

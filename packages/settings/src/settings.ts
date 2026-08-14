@@ -189,6 +189,14 @@ class DefaultSettings implements Settings {
         ...(parsed.data.language ? { language: parsed.data.language } : {}),
         ...(parsed.data.theme ? { theme: parsed.data.theme } : {}),
         setup: { completed: true, completed_at: this.now() },
+        // Setup completion is the only writer of the default model selection:
+        // the wizard submits exactly one model, the user's chosen default.
+        ...(provider && provider.models && provider.models.length > 0 ? {
+          model_selection: {
+            provider_id: provider.provider_id,
+            model_id: provider.models[0],
+          },
+        } : {}),
         ...(provider ? {
           providers: {
             [provider.provider_id]: {

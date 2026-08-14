@@ -217,6 +217,30 @@ describe('Settings', () => {
     expect(JSON.stringify(settings.listProviders())).not.toContain('TEST_SETUP_API_KEY');
   });
 
+  it('records the wizard-selected default model when setup includes a provider', () => {
+    const store = new MemorySettingsStore();
+    const settings = createSettings({ store });
+    const result = settings.completeSetup({
+      language: 'zh-CN',
+      theme: 'midnight-blue',
+      provider: {
+        provider_id: 'deepseek',
+        enabled: true,
+        models: ['deepseek-v4-flash'],
+        api_key: 'TEST_SETUP_API_KEY',
+      },
+    });
+    expect(result).toMatchObject({ status: 'completed' });
+    expect(store.document.model_selection).toEqual({
+      provider_id: 'deepseek',
+      model_id: 'deepseek-v4-flash',
+    });
+    expect(result.status === 'completed' ? result.settings.model_selection : undefined).toEqual({
+      provider_id: 'deepseek',
+      model_id: 'deepseek-v4-flash',
+    });
+  });
+
   it('materializes catalog provider defaults when only an API key is written', () => {
     const store = new MemorySettingsStore();
     const settings = createSettings({ store });

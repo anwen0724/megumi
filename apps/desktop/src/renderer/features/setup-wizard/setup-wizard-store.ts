@@ -4,6 +4,8 @@ import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import type { AppLanguage, AppThemeName } from '@megumi/product/host';
 import { createRendererRuntimeIpcRequest } from '../../shared/ipc';
 import { rendererError, type RendererErrorDescriptor } from '../../shared/i18n';
+import { useProviderStore } from '../../entities/provider';
+import { useModelSelectionStore } from '../../entities/model-selection';
 
 export type SetupWizardStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';
 
@@ -82,10 +84,18 @@ export const useSetupWizardStore = create<SetupWizardState>((set) => ({
       return;
     }
 
+    // Refresh the projections the Composer reads so the freshly configured
+    // provider and default model are usable without restarting the app.
+    const completed = settingsResult.data.settings;
+    if (completed.modelSelection) {
+      useModelSelectionStore.getState().applyBootstrapSelection(completed.modelSelection);
+    }
+    await useProviderStore.getState().loadProviders().catch(() => undefined);
+
     set({
       status: 'ready',
-      language: settingsResult.data.settings.language,
-      setupCompleted: settingsResult.data.settings.setup.completed,
+      language: completed.language,
+      setupCompleted: completed.setup.completed,
       error: null,
     });
   },
