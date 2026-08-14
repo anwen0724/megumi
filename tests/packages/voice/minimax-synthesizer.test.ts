@@ -97,24 +97,28 @@ describe('createMinimaxSynthesizer', () => {
     expect(chunks[1]).toMatchObject({ sequence: 2, final: true });
   });
 
-  it('maps documented error codes into speech failures', async () => {
+  it('maps documented error codes into neutral seam failures', async () => {
     const cases: Array<[number, string]> = [
-      [1004, 'auth'],
-      [1008, 'balance'],
-      [2013, 'params'],
-      [20132, 'voice'],
+      [1004, 'voice_tts_auth_failed'],
+      [1008, 'voice_tts_quota_exhausted'],
+      [1002, 'voice_tts_rate_limited'],
+      [2013, 'voice_tts_invalid_configuration'],
+      [20132, 'voice_tts_invalid_configuration'],
     ];
-    for (const [statusCode, label] of cases) {
+    for (const [statusCode, code] of cases) {
       const synthesizer = createMinimaxSynthesizer({
         fetchImpl: (async () => sseResponse({
           data: { audio: '', status: 2 },
-          base_resp: { status_code: statusCode, status_msg: `failed-${label}` },
+          base_resp: { status_code: statusCode, status_msg: `supplier-${statusCode}` },
         })) as typeof fetch,
       });
       const result = await synthesizer.synthesize(request());
       expect(result.status).toBe('ready');
       if (result.status !== 'ready') return;
-      await expect(drain(result.chunks)).rejects.toThrow(`failed-${label}`);
+      await expect(drain(result.chunks)).rejects.toMatchObject({
+        name: 'VoiceSpeechFailureError',
+        failure: { code },
+      });
     }
   });
 

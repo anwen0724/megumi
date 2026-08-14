@@ -6,11 +6,12 @@
  * and never touch Voice Sessions, runs, or speech input (D13/D15/D19).
  */
 
-import type {
-  SpeechAudioChunk,
-  SpeechSynthesizer,
-  SynthesizerConfig,
-  VoiceSpeechFailure,
+import {
+  isVoiceSpeechFailureError,
+  type SpeechAudioChunk,
+  type SpeechSynthesizer,
+  type SynthesizerConfig,
+  type VoiceSpeechFailure,
 } from '../speech';
 import { filterReplyTextForSpeech } from './reply-text-filter';
 
@@ -153,7 +154,11 @@ export function createSpeechOutputRuntime(input: {
             type: 'error',
             runId: request.runId,
             sessionId: request.sessionId,
-            failure: { code: 'voice_tts_synthesis_failed', message: messageOf(error) },
+            // A supplier-neutral failure thrown mid-stream keeps its code;
+            // supplier details stay in the message (logs only).
+            failure: isVoiceSpeechFailureError(error)
+              ? error.failure
+              : { code: 'voice_tts_synthesis_failed', message: messageOf(error) },
           });
         }
       })();

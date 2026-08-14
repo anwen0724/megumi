@@ -90,3 +90,36 @@ export interface VoiceSpeechFailure {
   readonly message: string;
   readonly retryable?: boolean;
 }
+
+/** Neutral speech-output failure codes; supplier specifics stay in messages, for logs only. */
+export type VoiceTtsFailureCode =
+  | 'voice_tts_unavailable'
+  | 'voice_tts_key_missing'
+  | 'voice_tts_request_failed'
+  | 'voice_tts_cancelled'
+  | 'voice_tts_http_failed'
+  | 'voice_tts_auth_failed'
+  | 'voice_tts_quota_exhausted'
+  | 'voice_tts_rate_limited'
+  | 'voice_tts_invalid_configuration'
+  | 'voice_tts_synthesis_failed'
+  | 'voice_tts_decode_failed';
+
+/**
+ * Carries a VoiceSpeechFailure through a mid-stream throw. The speech-output
+ * runtime preserves the original failure so supplier-neutral codes reach the
+ * renderer instead of a generic wrap.
+ */
+export class VoiceSpeechFailureError extends Error {
+  readonly failure: VoiceSpeechFailure;
+
+  constructor(failure: VoiceSpeechFailure) {
+    super(failure.message);
+    this.name = 'VoiceSpeechFailureError';
+    this.failure = failure;
+  }
+}
+
+export function isVoiceSpeechFailureError(error: unknown): error is VoiceSpeechFailureError {
+  return error instanceof VoiceSpeechFailureError;
+}

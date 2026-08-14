@@ -1,10 +1,11 @@
 /* Verifies the speech-output runtime: filtering, replacement, stop, and failure isolation. */
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import type {
-  SpeechAudioChunk,
-  SpeechSynthesizer,
-  SynthesizeSpeechRequest,
+import {
+  VoiceSpeechFailureError,
+  type SpeechAudioChunk,
+  type SpeechSynthesizer,
+  type SynthesizeSpeechRequest,
 } from '../../../packages/voice/src/speech';
 import {
   createSpeechOutputRuntime,
@@ -174,6 +175,37 @@ describe('SpeechOutputRuntime', () => {
       expect(parseSpeechOutputEvent(event)).toBeDefined();
       expect(SpeechOutputEventSchema.safeParse(event).success).toBe(true);
     }
+  });
+
+  it('preserves neutral failure codes thrown mid-stream by the synthesizer', async () => {
+    const synthesizer: SpeechSynthesizer = {
+      async synthesize() {
+        return {
+          status: 'ready',
+          chunks: (async function* () {
+            yield chunk(1, false);
+            throw new VoiceSpeechFailureError({
+              code: 'voice_tts_quota_exhausted',
+              message: 'MiniMax TTS failed: supplier detail (code 1008).',
+            });
+          })(),
+        };
+      },
+    };
+    const runtime = createSpeechOutputRuntime({ synthesizer });
+    const events = collect(runtime);
+
+    runtime.read({ runId: 'run-1', sessionId: 'session-1', text: '你好', config: config() });
+
+    const received = await events;
+    const failure = received.find((event) => event.type === 'error');
+    expect(failure).toMatchObject({
+      type: 'error',
+      failure: {
+        code: 'voice_tts_quota_exhausted',
+        message: 'MiniMax TTS failed: supplier detail (code 1008).',
+      },
+    });
   });
 });
 

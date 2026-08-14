@@ -5,11 +5,14 @@
  * provider-neutral. Pure Node HTTP: no Electron imports, no sidecar.
  */
 
-import type {
-  SpeechAudioChunk,
-  SpeechSynthesizer,
-  SynthesizeSpeechRequest,
-  VoiceOperationOptions,
+import {
+  VoiceSpeechFailureError,
+  type SpeechAudioChunk,
+  type SpeechSynthesizer,
+  type SynthesizeSpeechRequest,
+  type VoiceOperationOptions,
+  type VoiceSpeechFailure,
+  type VoiceTtsFailureCode,
 } from '../../speech';
 
 export interface CreateMinimaxSynthesizerOptions {
@@ -137,9 +140,9 @@ function toSpeechAudioChunk(payload: unknown, sequence: number): SpeechAudioChun
   };
   const baseResp = envelope.base_resp;
   if (baseResp && baseResp.status_code !== 0 && baseResp.status_code !== undefined) {
-    throw new Error(typeof baseResp.status_msg === 'string' && baseResp.status_msg
-      ? baseResp.status_msg
-      : `MiniMax TTS failed with status code ${String(baseResp.status_code)}.`);
+    // Supplier details stay in the message (logs only); the code is
+    // provider-neutral so the renderer maps it to user-facing copy.
+    throw new VoiceSpeechFailureError(mapBaseRespFailure(Number(baseResp.status_code), baseResp.status_msg));
   }
   const data = envelope.data;
   if (!data || typeof data.audio !== 'string' || !data.audio) return undefined;
@@ -150,6 +153,21 @@ function toSpeechAudioChunk(payload: unknown, sequence: number): SpeechAudioChun
     channels: 1,
     sequence,
     final: data.status === 2,
+  };
+}
+
+/** Maps the official MiniMax error codes onto neutral seam failure codes. */
+function mapBaseRespFailure(statusCode: number, statusMsg: unknown): VoiceSpeechFailure {
+  const detail = typeof statusMsg === 'string' && statusMsg ? statusMsg : `status code ${statusCode}`;
+  const code: VoiceTtsFailureCode =
+    statusCode === 1004 ? 'voice_tts_auth_failed'
+    : statusCode === 1008 ? 'voice_tts_quota_exhausted'
+    : statusCode === 1002 ? 'voice_tts_rate_limited'
+    : 'voice_tts_invalid_configuration';
+  return {
+    code,
+    message: `MiniMax TTS failed: ${detail} (code ${statusCode}).`,
+    ...(statusCode === 1002 ? { retryable: true } : {}),
   };
 }
 
