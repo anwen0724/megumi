@@ -22,3 +22,17 @@ export {
   type SpeechVad,
   type CreateSherpaVadOptions,
 } from './speech-input/sherpa-vad';
+export {
+  createSpeechOutputRuntime,
+  type ReadSpeechOutputRequest,
+  type SpeechOutputEvent,
+  type SpeechOutputEventListener,
+  type SpeechOutputRuntime,
+  type SpeechOutputStopReason,
+  type SpeechOutputSubscription,
+} from './speech-output/speech-output-runtime';
+export {
+  SpeechOutputEventSchema,
+  parseSpeechOutputEvent,
+} from './speech-output/speech-output-schema';
+export { filterReplyTextForSpeech } from './speech-output/reply-text-filter';

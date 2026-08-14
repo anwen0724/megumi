@@ -7,7 +7,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./speech-input/speech-input-schema": "./src/speech-input/speech-input-schema.ts",
-    "./speech-input/voice-input-capacity": "./src/speech-input/voice-input-capacity.ts"
+    "./speech-input/voice-input-capacity": "./src/speech-input/voice-input-capacity.ts",
+    "./speech-output/speech-output-schema": "./src/speech-output/speech-output-schema.ts"
   },
   "dependencies": {
     "zod": "^3.25.76"
