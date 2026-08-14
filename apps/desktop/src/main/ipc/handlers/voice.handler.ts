@@ -13,14 +13,7 @@ import {
   VoiceModelsCancelRequestSchema,
   VoiceModelsCheckUpdatesRequestSchema,
   VoiceModelsPrepareRequestSchema,
-  VoiceProfileImportRequestSchema,
-  VoiceProfileRemoveRequestSchema,
-  VoiceProfileRenameRequestSchema,
-  VoiceProfileSelectRequestSchema,
-  VoiceProfilePreviewRequestSchema,
-  VoiceProfilesListRequestSchema,
   VoiceSessionEndRequestSchema,
-  VoiceSessionInterruptRequestSchema,
   VoiceSessionManualFinishRequestSchema,
   VoiceSessionManualStartRequestSchema,
   VoiceSessionMuteRequestSchema,
@@ -81,48 +74,6 @@ export function registerVoiceHandlers(
     logger: options.logger,
     handle: () => voice.cancelModelPreparation(),
   }));
-  ipcMain.handle(IPC_CHANNELS.voice.profilesList, createIpcRequestHandler({
-    channel: IPC_CHANNELS.voice.profilesList,
-    requestSchema: VoiceProfilesListRequestSchema,
-    responseSchema: host.VoiceProfilesListResultSchema,
-    logger: options.logger,
-    handle: () => voice.listProfiles(),
-  }));
-  ipcMain.handle(IPC_CHANNELS.voice.profileImport, createIpcRequestHandler({
-    channel: IPC_CHANNELS.voice.profileImport,
-    requestSchema: VoiceProfileImportRequestSchema,
-    responseSchema: host.VoiceHostMutationResultSchema,
-    logger: options.logger,
-    handle: (request) => voice.importProfile(request.payload),
-  }));
-  ipcMain.handle(IPC_CHANNELS.voice.profileRename, createIpcRequestHandler({
-    channel: IPC_CHANNELS.voice.profileRename,
-    requestSchema: VoiceProfileRenameRequestSchema,
-    responseSchema: host.VoiceHostMutationResultSchema,
-    logger: options.logger,
-    handle: (request) => voice.renameProfile(request.payload),
-  }));
-  ipcMain.handle(IPC_CHANNELS.voice.profileRemove, createIpcRequestHandler({
-    channel: IPC_CHANNELS.voice.profileRemove,
-    requestSchema: VoiceProfileRemoveRequestSchema,
-    responseSchema: host.VoiceHostMutationResultSchema,
-    logger: options.logger,
-    handle: (request) => voice.removeProfile(request.payload),
-  }));
-  ipcMain.handle(IPC_CHANNELS.voice.profileSelect, createIpcRequestHandler({
-    channel: IPC_CHANNELS.voice.profileSelect,
-    requestSchema: VoiceProfileSelectRequestSchema,
-    responseSchema: host.VoiceHostMutationResultSchema,
-    logger: options.logger,
-    handle: (request) => voice.selectProfile(request.payload),
-  }));
-  ipcMain.handle(IPC_CHANNELS.voice.profilePreview, createIpcRequestHandler({
-    channel: IPC_CHANNELS.voice.profilePreview,
-    requestSchema: VoiceProfilePreviewRequestSchema,
-    responseSchema: host.VoiceProfilePreviewResultSchema,
-    logger: options.logger,
-    handle: (request) => voice.previewProfile(request.payload),
-  }));
   ipcMain.handle(IPC_CHANNELS.voice.sessionStart, createIpcRequestHandler({
     channel: IPC_CHANNELS.voice.sessionStart,
     requestSchema: VoiceSessionStartRequestSchema,
@@ -150,13 +101,6 @@ export function registerVoiceHandlers(
     responseSchema: host.VoiceHostMutationResultSchema,
     logger: options.logger,
     handle: (request) => voice.setMuted(request.payload),
-  }));
-  ipcMain.handle(IPC_CHANNELS.voice.sessionInterrupt, createIpcRequestHandler({
-    channel: IPC_CHANNELS.voice.sessionInterrupt,
-    requestSchema: VoiceSessionInterruptRequestSchema,
-    responseSchema: host.VoiceHostMutationResultSchema,
-    logger: options.logger,
-    handle: () => voice.interrupt(),
   }));
   ipcMain.handle(IPC_CHANNELS.voice.sessionEnd, createIpcRequestHandler({
     channel: IPC_CHANNELS.voice.sessionEnd,

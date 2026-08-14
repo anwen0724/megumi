@@ -10,16 +10,15 @@
   "main": ".vite/build/index.js",
   "scripts": {
     "start": "npm run rebuild:native:electron && electron-forge start",
-    "package": "npm run build:voice-sidecar && npm run rebuild:native:electron && electron-forge package",
-    "make": "npm run build:voice-sidecar && npm run rebuild:native:electron && electron-forge make",
+    "package": "npm run rebuild:native:electron && electron-forge package",
+    "make": "npm run rebuild:native:electron && electron-forge make",
     "test": "npm run rebuild:native:node && vitest run",
     "eval:agent": "npm run rebuild:native:node && tsx --tsconfig evals/agent/tsconfig.json evals/agent/cli.ts",
     "typecheck:evals": "tsc --project evals/agent/tsconfig.json --noEmit",
     "typecheck:packages": "tsc --build tsconfig.packages.json",
     "typecheck:product": "tsc --project tsconfig.product.json --noEmit",
     "rebuild:native:electron": "electron-rebuild -f -w better-sqlite3",
-    "rebuild:native:node": "npm rebuild better-sqlite3",
-    "build:voice-sidecar": "powershell -NoProfile -ExecutionPolicy Bypass -File packages/voice/sidecar/moss-tts-nano/build.ps1"
+    "rebuild:native:node": "npm rebuild better-sqlite3"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.0",

@@ -24,11 +24,10 @@ import {
   type ElectronVoiceInputAdapter,
 } from '../adapters/voice-input/electron-voice-input-adapter';
 import { IPC_CHANNELS } from '../ipc/channels';
-import type { SpeechPlayer } from '@megumi/voice';
 
-export function composeDesktopMain(options: { readonly speechPlayer?: SpeechPlayer } = {}) {
+export function composeDesktopMain() {
   const home = createElectronMegumiHomeSyncOptions();
-  const voiceResources = createElectronVoiceOptions(home, options);
+  const voiceResources = createElectronVoiceOptions(home);
   // The single Voice Input Adapter: injected into Product/Voice composition
   // AND connected to the dedicated PCM IPC; there is no second runtime.
   const voiceInputAdapter: ElectronVoiceInputAdapter = createElectronVoiceInputAdapter({

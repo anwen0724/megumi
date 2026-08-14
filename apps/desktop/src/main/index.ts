@@ -11,7 +11,6 @@ import { registerAppLifecycle } from './app/lifecycle';
 import { registerRuntimeProcessErrorHandlers } from './app/runtime-process-errors';
 import { shouldQuitForSquirrelStartup } from './app/squirrel-startup';
 import { composeDesktopMain } from './shell-composition/desktop-main-composition';
-import { createCharacterSpeechPlayerAdapter } from './adapters/character-speech-player-adapter';
 import type { CharacterWindowController } from './app/character-window-controller';
 import { createFileCharacterWindowStateStore } from './adapters/file-character-window-state-store';
 
@@ -23,10 +22,7 @@ if (shouldQuitForSquirrelStartup()) {
 } else {
   loadEnvFile();
   let character: CharacterWindowController | undefined;
-  const speechPlayer = createCharacterSpeechPlayerAdapter({
-    send: (channel, payload) => character?.send(channel, payload) ?? false,
-  });
-  const desktopMain = composeDesktopMain({ speechPlayer });
+  const desktopMain = composeDesktopMain();
   let mainWindow: BrowserWindow | undefined;
   let tray: MegumiTray | undefined;
   let quitApplication = () => app.quit();
@@ -74,7 +70,6 @@ if (shouldQuitForSquirrelStartup()) {
         approval: desktopMain.approval,
         voice: desktopMain.voice,
         voiceInput: desktopMain.voiceInput,
-        speechPlayer,
         character,
         observability: desktopMain.observability,
       });

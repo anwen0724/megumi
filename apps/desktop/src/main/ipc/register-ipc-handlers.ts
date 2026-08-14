@@ -14,8 +14,6 @@ import { registerCharacterHandlers } from './handlers/character.handler';
 import type { CharacterWindowController } from '../app/character-window-controller';
 import { registerVoiceInputHandler } from './handlers/voice-input.handler';
 import type { ElectronVoiceInputAdapter } from '../adapters/voice-input/electron-voice-input-adapter';
-import { registerVoicePlaybackHandler } from './handlers/voice-playback.handler';
-import type { CharacterSpeechPlayerAdapter } from '../adapters/character-speech-player-adapter';
 import { electronIpcMain, type DesktopIpcMain } from '../adapters/electron-ipc-main-adapter';
 import type { SessionMessagePresentationEvent } from './session-message-presentation';
 
@@ -31,7 +29,6 @@ export interface RegisterAllHandlersOptions {
   observability?: { host: Pick<import('@megumi/product/host').ProductHostInterface, 'observability'> };
   voice?: VoiceHandlersService;
   character?: CharacterWindowController;
-  speechPlayer?: CharacterSpeechPlayerAdapter;
   voiceInput?: { adapter: ElectronVoiceInputAdapter };
 }
 
@@ -74,10 +71,6 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
 
   if (options.character) {
     registerCharacterHandlers({ controller: options.character, ipcMain });
-  }
-
-  if (options.speechPlayer) {
-    registerVoicePlaybackHandler(options.speechPlayer, ipcMain);
   }
 
   if (options.voiceInput) {

@@ -12,26 +12,24 @@ afterEach(() => {
 });
 
 describe('Product packaging resources', () => {
-  it('copies the manifest, default voice and built sidecar into one packaged voice root', () => {
+  it('copies the manifest and VAD resources into one packaged voice root', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-product-resources-'));
     roots.push(root);
     for (const relativePath of [
       'packages/database/migrations',
-      'packages/voice/resources/default-voice',
       'packages/voice/resources/vad',
-      'packages/voice/sidecar/moss-tts-nano/dist',
     ]) fs.mkdirSync(path.join(root, relativePath), { recursive: true });
     fs.writeFileSync(path.join(root, 'packages/voice/resources/model-manifest.json'), '{}');
     fs.writeFileSync(path.join(root, 'packages/voice/resources/vad/silero_vad.onnx'), 'vad-model');
     fs.writeFileSync(path.join(root, 'packages/voice/resources/vad/ATTRIBUTION.md'), 'attribution');
-    fs.writeFileSync(path.join(root, 'packages/voice/sidecar/moss-tts-nano/dist/moss-tts-nano-sidecar.exe'), 'sidecar');
 
     expect(getProductPackagingResources(root)).toEqual(expect.arrayContaining([
       expect.objectContaining({ target: 'voice/model-manifest.json' }),
-      expect.objectContaining({ target: 'voice/default-voice' }),
-      expect.objectContaining({ target: 'voice/moss-tts-nano-sidecar.exe' }),
       expect.objectContaining({ target: 'voice/vad' }),
     ]));
+    const resources = getProductPackagingResources(root);
+    expect(resources.some((resource) => resource.target.includes('sidecar'))).toBe(false);
+    expect(resources.some((resource) => resource.target.includes('default-voice'))).toBe(false);
   });
 
   it('ships the pinned Silero VAD model with an attribution whose checksum matches the file', () => {
