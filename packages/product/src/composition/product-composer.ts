@@ -487,7 +487,7 @@ function composeProductRuntime(
     events.subscribe({ eventTypes: ['run.ended'] }, (event) => {
       if (event.type !== 'run.ended') return;
       try {
-        onRunEndedForSpeechOutput(
+        const result = onRunEndedForSpeechOutput(
           {
             settings,
             findAssistantReplyByRunId: (sessionId, runId) =>
@@ -496,6 +496,18 @@ function composeProductRuntime(
           },
           event,
         );
+        if (result.status === 'ignored') return;
+        observability.service.recordLog({
+          level: 'info',
+          event: 'speech_output.read',
+          attributes: {
+            runId: event.runId,
+            sessionId: event.sessionId,
+            ...(result.status === 'read' ? { outcome: 'read' } : {}),
+            ...(result.status === 'stopped' ? { outcome: 'stopped', reason: result.reason } : {}),
+            ...(result.status === 'skipped' ? { outcome: 'skipped', reason: result.reason } : {}),
+          },
+        });
       } catch (error) {
         observability.service.recordLog({
           level: 'warn',
@@ -507,6 +519,61 @@ function composeProductRuntime(
           },
         });
       }
+    }),
+  );
+  // Lifecycle observability: synthesis, first audio (first-audio latency
+  // against the read record above), completion, stops, and failures all
+  // leave a trace in runtime.jsonl for offline diagnosis.
+  resources.registerEventSubscription(
+    speechOutput.subscribe((event) => {
+      if (event.type === 'synthesis-started') {
+        observability.service.recordLog({
+          level: 'info',
+          event: 'speech_output.synthesis_started',
+          attributes: { runId: event.runId, sessionId: event.sessionId },
+        });
+        return;
+      }
+      if (event.type === 'audio-chunk') {
+        if (event.sequence !== 1) return;
+        observability.service.recordLog({
+          level: 'info',
+          event: 'speech_output.first_chunk',
+          attributes: {
+            runId: event.runId,
+            sessionId: event.sessionId,
+            format: event.format,
+            sampleRate: event.sampleRate,
+          },
+        });
+        return;
+      }
+      if (event.type === 'completed') {
+        observability.service.recordLog({
+          level: 'info',
+          event: 'speech_output.completed',
+          attributes: { runId: event.runId, sessionId: event.sessionId },
+        });
+        return;
+      }
+      if (event.type === 'stopped') {
+        observability.service.recordLog({
+          level: 'info',
+          event: 'speech_output.stopped',
+          attributes: { runId: event.runId, sessionId: event.sessionId, reason: event.reason },
+        });
+        return;
+      }
+      observability.service.recordLog({
+        level: 'warn',
+        event: 'speech_output.failed',
+        attributes: {
+          runId: event.runId,
+          sessionId: event.sessionId,
+          code: event.failure.code,
+          message: event.failure.message,
+        },
+      });
     }),
   );
   const host: ProductHostInterface = {
