@@ -18,9 +18,25 @@ describe('SettingsPage provider settings', () => {
           checkModelUpdates: vi.fn().mockResolvedValue({ ok: true, data: { status: 'unavailable' } }),
           prepareModels: vi.fn().mockResolvedValue({ ok: true, data: { status: 'ok' } }),
           cancelModelPreparation: vi.fn().mockResolvedValue({ ok: true, data: { status: 'ok' } }),
-          listProfiles: vi.fn().mockResolvedValue({ ok: true, data: { status: 'ok', profiles: [] } }),
-          selectProfile: vi.fn().mockResolvedValue({ ok: true }),
-          importProfile: vi.fn().mockResolvedValue({ ok: true, data: { status: 'cancelled' } }),
+        },
+        settings: {
+          get: vi.fn().mockResolvedValue({
+            ok: true,
+            data: {
+              status: 'ok',
+              settings: {
+                voice: { inputDeviceId: 'default', recognitionLanguage: 'auto' },
+                permissions: { mode: 'ask', rules: [], catalog: { operations: [], tools: [] } },
+              },
+            },
+          }),
+          update: vi.fn().mockResolvedValue({
+            ok: true,
+            data: {
+              status: 'updated',
+              settings: { voice: { inputDeviceId: 'default', recognitionLanguage: 'auto' } },
+            },
+          }),
         },
       },
     });
@@ -71,20 +87,21 @@ describe('SettingsPage provider settings', () => {
     expect(screen.getByRole('tab', { name: 'Privacy & Permissions' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Activity & Diagnostics' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'About Megumi' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Voice & Speech' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Voice Input' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: 'Privacy & Permissions' }));
     expect(screen.getByRole('heading', { name: 'Privacy & Permissions' })).toBeInTheDocument();
     expect(screen.queryByText(/runtime phase/i)).not.toBeInTheDocument();
   });
 
-  it('owns voice profile creation in Settings instead of the character window', async () => {
+  it('keeps voice configuration in Settings without voice profile creation', async () => {
     const user = userEvent.setup();
     render(<SettingsPage onDone={vi.fn()} />);
 
-    await user.click(screen.getByRole('tab', { name: 'Voice & Speech' }));
+    await user.click(screen.getByRole('tab', { name: 'Voice Input' }));
 
-    expect(screen.getByRole('heading', { name: 'Voice & Speech' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add voice' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Voice Input' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Input device' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add voice' })).not.toBeInTheDocument();
   });
 });
