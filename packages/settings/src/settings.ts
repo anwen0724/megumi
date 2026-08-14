@@ -184,8 +184,8 @@ class DefaultSettings implements Settings {
     const parsed = CompleteSetupRequestSchema.safeParse(request);
     if (!parsed.success) return failure('setup_completion_invalid', 'Setup completion request is invalid.');
     const provider = parsed.data.provider;
-    const result = this.update({
-      patch: {
+    try {
+      const patch: SettingsRaw = {
         ...(parsed.data.language ? { language: parsed.data.language } : {}),
         ...(parsed.data.theme ? { theme: parsed.data.theme } : {}),
         setup: { completed: true, completed_at: this.now() },
@@ -203,11 +203,27 @@ class DefaultSettings implements Settings {
             },
           },
         } : {}),
-      },
-    });
-    return result.status === 'failed'
-      ? result
-      : { status: 'completed', settings: result.settings };
+      };
+      const merged = mergeFileWithPublicPatch(this.readFile(), patch);
+      const next = materializeFileForWrite(provider?.api_key
+        ? {
+            ...merged,
+            providers: {
+              ...(merged.providers ?? {}),
+              [provider.provider_id]: {
+                ...(merged.providers?.[provider.provider_id] ?? {}),
+                // Secret-bearing field: written only into the internal file
+                // model, then stripped again by publicRawFromFile below.
+                api_key: provider.api_key,
+              },
+            },
+          }
+        : merged);
+      this.request.store.write(next);
+      return { status: 'completed', settings: resolvePublicSettings(publicRawFromFile(next)) };
+    } catch {
+      return writeFailure('settings_write_failed', 'Settings could not be saved.');
+    }
   }
 
   listProviders(): ListProviderSettingsResult {

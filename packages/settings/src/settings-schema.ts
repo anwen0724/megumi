@@ -176,6 +176,9 @@ export const CompleteSetupProviderRequestSchema = z.object({
   base_url: z.string().url().optional(),
   models: z.array(z.string().min(1)).optional(),
   api_key_env: z.string().min(1).nullable().optional(),
+  // Plaintext keys never enter public Settings models; completeSetup routes
+  // this value into the secret-bearing file model through the credential path.
+  api_key: z.string().min(1).optional(),
 }).strict();
 export const CompleteSetupRequestSchema = z.object({
   language: SettingsLanguageSchema.optional(),

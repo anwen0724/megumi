@@ -193,6 +193,30 @@ describe('Settings', () => {
     });
   });
 
+  it('persists a provider API key supplied during setup through the credential path', () => {
+    const store = new MemorySettingsStore();
+    const settings = createSettings({ store });
+    const result = settings.completeSetup({
+      language: 'zh-CN',
+      theme: 'midnight-blue',
+      provider: {
+        provider_id: 'deepseek',
+        enabled: true,
+        api_key: 'TEST_SETUP_API_KEY',
+      },
+    });
+    expect(result).toMatchObject({ status: 'completed' });
+    expect(JSON.stringify(result)).not.toContain('TEST_SETUP_API_KEY');
+    expect(store.document.providers.deepseek).toMatchObject({
+      api_key: 'TEST_SETUP_API_KEY',
+    });
+    expect(settings.listProviders()).toMatchObject({
+      status: 'ok',
+      providers: [{ provider_id: 'deepseek', has_api_key: true, credential_source: 'settings' }],
+    });
+    expect(JSON.stringify(settings.listProviders())).not.toContain('TEST_SETUP_API_KEY');
+  });
+
   it('materializes catalog provider defaults when only an API key is written', () => {
     const store = new MemorySettingsStore();
     const settings = createSettings({ store });
