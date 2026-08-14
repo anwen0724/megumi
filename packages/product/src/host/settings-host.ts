@@ -527,7 +527,8 @@ export const VoiceTtsPublicUiDtoSchema = z.object({
 export type VoiceTtsPublicUiDto = z.infer<typeof VoiceTtsPublicUiDtoSchema>;
 
 export type VoiceTtsKeyUiResult =
-  | { status: 'updated' | 'deleted'; tts: VoiceTtsPublicUiDto }
+  | { status: 'updated'; tts: VoiceTtsPublicUiDto }
+  | { status: 'deleted'; tts: VoiceTtsPublicUiDto }
   | { status: 'failed'; failure: HostFailure };
 
 export const VoiceTtsKeyUiResultSchema = z.discriminatedUnion('status', [
