@@ -108,7 +108,11 @@ describe('createSpeechOutputController', () => {
     emit(started());
     emit(chunk(1));
     emit(error());
-    expect(controller.getSnapshot()).toEqual({ status: 'error', errorMessage: 'synthesis exploded' });
+    expect(controller.getSnapshot()).toEqual({
+      status: 'error',
+      errorCode: 'x',
+      errorMessage: 'synthesis exploded',
+    });
   });
 
   it('stops on the stopped event', () => {
@@ -151,5 +155,59 @@ describe('createSpeechOutputController', () => {
     controller.dispose();
     emit(error()); // no subscriber left; must not throw
     expect(controller.getSnapshot().status).toBe('idle');
+  });
+
+  it('schedules each chunk exactly once even when decodes resolve out of order', async () => {
+    const pendingDecodes: Array<{
+      bytes: number[];
+      resolve: () => void;
+    }> = [];
+    const sources: FakeSource[] = [];
+    const context = {
+      currentTime: 10,
+      destination: {},
+      sinkId: undefined as string | undefined,
+      async resume(): Promise<void> {},
+      async close(): Promise<void> {},
+      async setSinkId(sinkId: string): Promise<void> { this.sinkId = sinkId; },
+      decodeAudioData(data: ArrayBuffer): Promise<SpeechOutputAudioBuffer> {
+        const bytes = Array.from(new Uint8Array(data));
+        return new Promise<SpeechOutputAudioBuffer>((resolve) => {
+          pendingDecodes.push({ bytes, resolve: () => resolve({ duration: 1 }) });
+        });
+      },
+      createBufferSource(): SpeechOutputBufferSource {
+        const source = new FakeSource();
+        sources.push(source);
+        return source;
+      },
+    };
+    let subscriber: ((event: SpeechOutputEvent) => void) | undefined;
+    const controller = createSpeechOutputController({
+      onEvent: (next) => { subscriber = next; return () => { subscriber = undefined; }; },
+      resolveOutputDeviceId: async () => 'default',
+      createAudioContext: () => context,
+    });
+    const emit = (event: SpeechOutputEvent) => subscriber?.(event);
+
+    emit(started());
+    emit(chunk(1));
+    emit(chunk(2, true));
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    // Chunks are processed strictly in order: only chunk 1's decode is in
+    // flight while chunk 2 waits, so no decode ever sees shared bytes.
+    expect(pendingDecodes).toHaveLength(1);
+    expect(pendingDecodes[0]!.bytes).toEqual([1]);
+    pendingDecodes[0]!.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(pendingDecodes).toHaveLength(2);
+    expect(pendingDecodes[1]!.bytes).toEqual([2]);
+    pendingDecodes[1]!.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    // Each chunk must be decoded from its own bytes and scheduled exactly once.
+    expect(pendingDecodes.map((entry) => entry.bytes)).toEqual([[1], [2]]);
+    expect(sources).toHaveLength(2);
   });
 });

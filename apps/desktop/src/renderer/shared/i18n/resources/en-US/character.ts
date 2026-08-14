@@ -63,6 +63,9 @@ export const character = {
     speechOutput: {
       playing: 'Reading the reply…',
       error: 'Reading failed',
+      errorQuota: 'The speech service quota is exhausted. Check the account balance.',
+      errorAuth: 'The speech service rejected the API key. Check the Voice settings.',
+      errorDecode: 'The speech audio could not be decoded.',
     },
   },
   errors: {

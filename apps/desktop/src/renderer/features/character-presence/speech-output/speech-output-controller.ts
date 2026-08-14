@@ -12,6 +12,9 @@ export type SpeechOutputViewStatus = 'idle' | 'playing' | 'error';
 
 export interface SpeechOutputViewSnapshot {
   readonly status: SpeechOutputViewStatus;
+  /** Neutral failure code for i18n mapping; raw supplier text stays out of the UI. */
+  readonly errorCode?: string;
+  /** Diagnostic detail for logs only; never rendered directly. */
   readonly errorMessage?: string;
 }
 
@@ -65,6 +68,8 @@ export function createSpeechOutputController(
   let scheduledEnd = 0;
   let decodedAny = false;
   let completed = false;
+  let runToken = 0;
+  let chunkChain: Promise<void> = Promise.resolve();
   const activeSources = new Set<SpeechOutputBufferSource>();
 
   const publish = (next: SpeechOutputViewSnapshot) => {
@@ -100,6 +105,7 @@ export function createSpeechOutputController(
   };
 
   const stopSources = () => {
+    ++runToken; // invalidates in-flight decodes and queued chunk work
     for (const source of activeSources) {
       try {
         source.onended = null;
@@ -129,13 +135,21 @@ export function createSpeechOutputController(
     scheduledEnd = when + buffer.duration;
   };
 
-  const handleChunk = async (bytes: Uint8Array) => {
+  const handleChunk = (bytes: Uint8Array, token: number) => {
+    // Serialize chunk processing: concurrent async decodes raced on the
+    // shared pending buffer and scheduled overlapping audio twice.
+    chunkChain = chunkChain.then(() => processChunk(bytes, token)).catch(() => undefined);
+  };
+
+  const processChunk = async (bytes: Uint8Array, token: number) => {
+    if (token !== runToken) return;
     const target = await ensureContext();
-    if (!target) return;
+    if (!target || token !== runToken) return;
     pending = pending ? concatBytes(pending, bytes) : bytes;
     try {
       const copy = pending.slice();
       const buffer = await target.decodeAudioData(copy.buffer as ArrayBuffer);
+      if (token !== runToken) return; // stale decode after a stop or replacement
       pending = undefined;
       decodedAny = true;
       schedule(buffer, target);
@@ -152,7 +166,7 @@ export function createSpeechOutputController(
       return;
     }
     if (event.type === 'audio-chunk') {
-      void handleChunk(event.bytes);
+      void handleChunk(event.bytes, runToken);
       return;
     }
     if (event.type === 'completed') {
@@ -160,7 +174,7 @@ export function createSpeechOutputController(
       if (pending && !decodedAny) {
         // Nothing decoded for the whole run: surface an honest failure.
         stopSources();
-        publish({ status: 'error', errorMessage: 'Audio could not be decoded.' });
+        publish({ status: 'error', errorCode: 'voice_tts_decode_failed', errorMessage: 'Audio could not be decoded.' });
         return;
       }
       pending = undefined;
@@ -173,7 +187,7 @@ export function createSpeechOutputController(
       return;
     }
     stopSources();
-    publish({ status: 'error', errorMessage: event.failure.message });
+    publish({ status: 'error', errorCode: event.failure.code, errorMessage: event.failure.message });
   };
 
   const unsubscribeEvents = options.onEvent(handleEvent);

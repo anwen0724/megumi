@@ -95,12 +95,11 @@ export function VoiceControls(props: {
         <div className="mt-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
           <div className="flex items-center justify-between gap-3 text-[11px] text-white/70">
             <span data-testid="speech-output-status">
-              {t(props.speechOutput.status === 'error' ? 'voice.speechOutput.error' : 'voice.speechOutput.playing')}
+              {props.speechOutput.status === 'error'
+                ? t(speechOutputErrorKey(props.speechOutput.errorCode))
+                : t('voice.speechOutput.playing')}
             </span>
           </div>
-          {props.speechOutput.status === 'error' && props.speechOutput.errorMessage ? (
-            <p className="mt-1 text-xs text-rose-200">{props.speechOutput.errorMessage}</p>
-          ) : null}
         </div>
       ) : null}
 
@@ -133,6 +132,17 @@ export function VoiceControls(props: {
       {voice.error ? <p className="mt-2 text-xs text-rose-200">{voice.error}</p> : null}
     </section>
   );
+}
+
+function speechOutputErrorKey(code: string | undefined):
+  | 'voice.speechOutput.errorQuota'
+  | 'voice.speechOutput.errorAuth'
+  | 'voice.speechOutput.errorDecode'
+  | 'voice.speechOutput.error' {
+  if (code === 'voice_tts_quota_exhausted') return 'voice.speechOutput.errorQuota';
+  if (code === 'voice_tts_auth_failed') return 'voice.speechOutput.errorAuth';
+  if (code === 'voice_tts_decode_failed') return 'voice.speechOutput.errorDecode';
+  return 'voice.speechOutput.error';
 }
 
 function audioStatusKey(snapshot: VoiceInputSnapshot, muted: boolean):

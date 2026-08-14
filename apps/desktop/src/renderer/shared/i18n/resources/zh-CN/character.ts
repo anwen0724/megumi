@@ -66,6 +66,9 @@ export const character = {
     speechOutput: {
       playing: '正在朗读回复…',
       error: '朗读失败',
+      errorQuota: '语音服务额度不足，请检查账户余额。',
+      errorAuth: '语音服务的密钥无效，请检查语音设置。',
+      errorDecode: '语音内容解码失败。',
     },
   },
   errors: {

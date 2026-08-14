@@ -150,4 +150,25 @@ describe('VoiceControls', () => {
 
     expect(screen.getByText('Audio processing fell behind. Please say that again.')).toBeInTheDocument();
   });
+
+  it('shows the speech output playing status in the panel only', () => {
+    render(<VoiceControls voice={voiceProps()} speechOutput={{ status: 'playing' }} />);
+
+    expect(screen.getByTestId('speech-output-status')).toHaveTextContent('Reading the reply…');
+  });
+
+  it('maps neutral speech output failure codes to user-facing copy', () => {
+    render(<VoiceControls
+      voice={voiceProps()}
+      speechOutput={{
+        status: 'error',
+        errorCode: 'voice_tts_quota_exhausted',
+        errorMessage: 'supplier detail stays out of the UI',
+      }}
+    />);
+
+    expect(screen.getByTestId('speech-output-status'))
+      .toHaveTextContent('The speech service quota is exhausted. Check the account balance.');
+    expect(screen.queryByText(/supplier detail/)).not.toBeInTheDocument();
+  });
 });
