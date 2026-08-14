@@ -40,7 +40,7 @@ export const SpeechOutputEventSchema = z.discriminatedUnion('type', [
     type: z.literal('stopped'),
     runId: z.string().min(1),
     sessionId: z.string().min(1),
-    reason: z.enum(['replaced', 'character_hidden', 'user']),
+    reason: z.enum(['replaced', 'character_hidden', 'user', 'run_cancelled']),
   }).strict(),
   z.object({
     type: z.literal('error'),

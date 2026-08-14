@@ -15,7 +15,7 @@ import {
 } from '../speech';
 import { filterReplyTextForSpeech } from './reply-text-filter';
 
-export type SpeechOutputStopReason = 'replaced' | 'character_hidden' | 'user';
+export type SpeechOutputStopReason = 'replaced' | 'character_hidden' | 'user' | 'run_cancelled';
 
 export type SpeechOutputEvent =
   | { readonly type: 'synthesis-started'; readonly runId: string; readonly sessionId: string }

@@ -53,10 +53,11 @@ function completedEvent() {
 }
 
 describe('onRunEndedForSpeechOutput', () => {
-  it('reads the filtered reply into the speech output runtime', () => {
+  it('reads the reply into the speech output runtime and reports the read', () => {
     const wiring = deps();
-    onRunEndedForSpeechOutput(wiring, completedEvent());
+    const result = onRunEndedForSpeechOutput(wiring, completedEvent());
 
+    expect(result).toEqual({ status: 'read' });
     expect(wiring.speechOutput.reads).toEqual([{
       runId: 'run-1',
       sessionId: 'session-1',
@@ -65,29 +66,42 @@ describe('onRunEndedForSpeechOutput', () => {
     }]);
   });
 
-  it('ignores non-completed runs', () => {
+  it('ignores non-completed runs without touching the reply lookup', () => {
     const wiring = deps();
-    onRunEndedForSpeechOutput(wiring, { ...completedEvent(), payload: { status: 'failed' } });
-    onRunEndedForSpeechOutput(wiring, { ...completedEvent(), payload: { status: 'cancelled' } });
+    const failed = onRunEndedForSpeechOutput(wiring, { ...completedEvent(), payload: { status: 'failed' } });
+
+    expect(failed).toEqual({ status: 'ignored' });
     expect(wiring.speechOutput.reads).toHaveLength(0);
     expect(wiring.findAssistantReplyByRunId).not.toHaveBeenCalled();
   });
 
-  it('stays silent when the read-aloud toggle is off', () => {
+  it('stops the read-aloud when the run is cancelled', () => {
+    const wiring = deps();
+    const result = onRunEndedForSpeechOutput(wiring, { ...completedEvent(), payload: { status: 'cancelled' } });
+
+    expect(result).toEqual({ status: 'stopped', reason: 'run_cancelled' });
+    expect(wiring.speechOutput.stop).toHaveBeenCalledWith('run_cancelled');
+    expect(wiring.speechOutput.reads).toHaveLength(0);
+  });
+
+  it('skips with a reason when the read-aloud toggle is off', () => {
     const wiring = deps();
     wiring.settings.resolve = vi.fn(() => ({
       status: 'ok' as const,
       settings: { voice: { read_aloud_enabled: false } },
     }));
-    onRunEndedForSpeechOutput(wiring, completedEvent());
+    const result = onRunEndedForSpeechOutput(wiring, completedEvent());
+
+    expect(result).toEqual({ status: 'skipped', reason: 'read_aloud_disabled' });
     expect(wiring.speechOutput.reads).toHaveLength(0);
   });
 
   it('passes an empty api key when no credential is configured', () => {
     const wiring = deps();
     wiring.settings.readVoiceTtsApiKey = vi.fn(() => ({ status: 'missing' as const }));
-    onRunEndedForSpeechOutput(wiring, completedEvent());
+    const result = onRunEndedForSpeechOutput(wiring, completedEvent());
 
+    expect(result).toEqual({ status: 'read' });
     expect(wiring.speechOutput.reads).toEqual([{
       runId: 'run-1',
       sessionId: 'session-1',
@@ -99,18 +113,39 @@ describe('onRunEndedForSpeechOutput', () => {
   it('skips runs without an assistant reply', () => {
     const wiring = deps();
     wiring.findAssistantReplyByRunId.mockReturnValueOnce(undefined);
-    onRunEndedForSpeechOutput(wiring, completedEvent());
+    const result = onRunEndedForSpeechOutput(wiring, completedEvent());
 
+    expect(result).toEqual({ status: 'skipped', reason: 'no_reply' });
     // Text filtering stays in the runtime: the wiring hands over raw reply text.
-    onRunEndedForSpeechOutput(wiring, completedEvent());
+    expect(onRunEndedForSpeechOutput(wiring, completedEvent())).toEqual({ status: 'read' });
     expect(wiring.speechOutput.reads).toHaveLength(1);
     expect(wiring.speechOutput.reads[0]!.text).toBe('# 你好，世界。');
   });
 
-  it('throws nothing when settings resolution fails', () => {
+  it('skips replies with nothing readable', () => {
+    const wiring = deps();
+    wiring.findAssistantReplyByRunId.mockReturnValueOnce({
+      message_kind: 'assistant_reply' as const,
+      message_id: 'reply-2',
+      session_id: 'session-1',
+      run_id: 'run-1',
+      created_at: '2026-08-14T00:00:00.000Z',
+      completed_at: '2026-08-14T00:00:01.000Z',
+      status: 'completed' as const,
+      content: [{ type: 'text' as const, text: '   ' }],
+    });
+    const result = onRunEndedForSpeechOutput(wiring, completedEvent());
+
+    expect(result).toEqual({ status: 'skipped', reason: 'empty_text' });
+    expect(wiring.speechOutput.reads).toHaveLength(0);
+  });
+
+  it('skips with a reason when settings resolution fails', () => {
     const wiring = deps();
     wiring.settings.resolve = vi.fn(() => ({ status: 'failed' as const, failure: { code: 'x', message: 'y' } }));
-    expect(() => onRunEndedForSpeechOutput(wiring, completedEvent())).not.toThrow();
+    const result = onRunEndedForSpeechOutput(wiring, completedEvent());
+
+    expect(result).toEqual({ status: 'skipped', reason: 'settings_failed' });
     expect(wiring.speechOutput.reads).toHaveLength(0);
   });
 });
