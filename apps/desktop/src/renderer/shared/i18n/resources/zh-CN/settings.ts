@@ -53,6 +53,7 @@ export const settings = {
     ttsTitle: '语音朗读',
     ttsDescription: '选择朗读 Megumi 回复所用的供应商和音色。',
     ttsProvider: '供应商',
+    ttsProviderMinimax: 'MiniMax',
     ttsVoice: '音色',
     ttsVoiceShaonv: '少女（默认）',
     ttsVoiceShaonvJingpin: '少女 · 精品',

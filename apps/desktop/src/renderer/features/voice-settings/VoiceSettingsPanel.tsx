@@ -364,7 +364,7 @@ export function VoiceSettingsPanel() {
               value={voiceSettings.tts.provider}
               onChange={(event) => { void updateVoiceSettings({ tts: { provider: event.target.value as VoiceSettings['tts']['provider'] } }); }}
             >
-              <option value="minimax">MiniMax</option>
+              <option value="minimax">{t('voice.ttsProviderMinimax')}</option>
             </select>
           </label>
           <label className="rounded-xl border border-[var(--color-border)] bg-[var(--color-app-bg)] p-4">

@@ -50,6 +50,7 @@ export const settings = {
     ttsTitle: 'Speech output',
     ttsDescription: 'Choose the provider and voice used to read Megumi replies aloud.',
     ttsProvider: 'Provider',
+    ttsProviderMinimax: 'MiniMax',
     ttsVoice: 'Voice',
     ttsVoiceShaonv: '少女 (default)',
     ttsVoiceShaonvJingpin: '少女 · refined',
