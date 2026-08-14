@@ -11,7 +11,9 @@ export type CharacterState =
   | 'error';
 
 export interface CharacterStateFacts {
-  readonly voiceStatus: VoiceHostSnapshot['status'];
+  // 'thinking' is derived from the active Agent Run in the renderer; the
+  // Voice Session itself only produces the snapshot statuses below.
+  readonly voiceStatus: VoiceHostSnapshot['status'] | 'thinking';
   readonly activeTool?: boolean;
   readonly pendingApproval?: boolean;
   readonly error?: boolean;
@@ -23,6 +25,7 @@ export function resolveCharacterState(facts: CharacterStateFacts): CharacterStat
   if (facts.pendingApproval) return 'approval';
   if (facts.activeTool) return 'acting';
   if (facts.voiceStatus === 'recognizing') return 'recognizing';
+  if (facts.voiceStatus === 'thinking') return 'thinking';
   if (facts.voiceStatus === 'listening') return 'listening';
   if (facts.voiceStatus === 'error') return 'error';
   return 'idle';

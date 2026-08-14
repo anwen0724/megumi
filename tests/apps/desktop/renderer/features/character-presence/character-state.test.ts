@@ -4,6 +4,7 @@ import { resolveCharacterState } from '@megumi/desktop/renderer/features/charact
 describe('resolveCharacterState', () => {
   it('maps real voice, run, and approval facts by presentation priority', () => {
     expect(resolveCharacterState({ voiceStatus: 'listening' })).toBe('listening');
+    expect(resolveCharacterState({ voiceStatus: 'thinking' })).toBe('thinking');
     expect(resolveCharacterState({ voiceStatus: 'listening', activeTool: true })).toBe('acting');
     expect(resolveCharacterState({ voiceStatus: 'listening', pendingApproval: true })).toBe('approval');
     expect(resolveCharacterState({ voiceStatus: 'listening', error: true })).toBe('error');
