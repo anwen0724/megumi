@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../shared/ipc';
-import { Button, SettingsPageHeader, SettingsRow, SettingsSection, cx } from '../../shared/ui';
+import { Button, SettingsPageHeader, SettingsSection, cx } from '../../shared/ui';
 import {
   enumerateAudioDevices,
   testMicrophoneLevel,
@@ -342,12 +342,11 @@ export function VoiceSettingsPanel() {
           ) : null}
         </div>
       </SettingsSection>
-      <SettingsSection title={t('voice.ttsTitle')} description={t('voice.ttsDescription')}>
-        <SettingsRow
-          title={t('voice.readAloud')}
-          description={t('voice.readAloudDescription')}
-        >
-          <div className="flex items-center justify-end gap-3">
+      <SettingsSection
+        title={t('voice.ttsTitle')}
+        description={t('voice.ttsDescription')}
+        headerAction={(
+          <div className="flex items-center gap-3">
             <span className="text-sm text-[var(--color-text-muted)]">
               {voiceSettings.readAloudEnabled ? t('voice.readAloudOn') : t('voice.readAloudOff')}
             </span>
@@ -374,7 +373,8 @@ export function VoiceSettingsPanel() {
               />
             </button>
           </div>
-        </SettingsRow>
+        )}
+      >
         <div className="grid gap-4 p-5 lg:grid-cols-2">
           <label className="rounded-xl border border-[var(--color-border)] bg-[var(--color-app-bg)] p-4">
             <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">

@@ -29,11 +29,13 @@ export function SettingsPageHeader({
 export function SettingsSection({
   title,
   description,
+  headerAction,
   children,
   className,
 }: {
   title?: string;
   description?: string;
+  headerAction?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
@@ -44,18 +46,21 @@ export function SettingsSection({
         className,
       )}
     >
-      {title || description ? (
-        <div className="border-b border-[var(--color-border)] px-5 py-4">
-          {title ? (
-            <h2 className="text-sm font-semibold text-[var(--color-text)]">
-              {title}
-            </h2>
-          ) : null}
-          {description ? (
-            <p className="mt-1 max-w-2xl text-sm leading-5 text-[var(--color-text-muted)]">
-              {description}
-            </p>
-          ) : null}
+      {title || description || headerAction ? (
+        <div className="flex items-center justify-between gap-4 border-b border-[var(--color-border)] px-5 py-4">
+          <div className="min-w-0">
+            {title ? (
+              <h2 className="text-sm font-semibold text-[var(--color-text)]">
+                {title}
+              </h2>
+            ) : null}
+            {description ? (
+              <p className="mt-1 max-w-2xl text-sm leading-5 text-[var(--color-text-muted)]">
+                {description}
+              </p>
+            ) : null}
+          </div>
+          {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
         </div>
       ) : null}
       {children}

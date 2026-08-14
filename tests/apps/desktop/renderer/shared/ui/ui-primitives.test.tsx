@@ -9,6 +9,7 @@ import {
   Panel,
   PanelHeader,
   PanelTitle,
+  SettingsSection,
   Tabs,
   TextField,
 } from '@megumi/desktop/renderer/shared/ui';
@@ -18,6 +19,17 @@ describe('shared UI primitives', () => {
     render(<Button variant="primary">Send</Button>);
 
     expect(screen.getByRole('button', { name: 'Send' }).className).toContain('bg-[var(--color-accent)]');
+  });
+
+  it('renders a settings section header action on the title row', () => {
+    render(
+      <SettingsSection title="Voice replies" headerAction={<button type="button">Toggle</button>}>
+        <p>Body</p>
+      </SettingsSection>,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Voice replies' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Toggle' })).toBeInTheDocument();
   });
 
   it('renders an icon button with an accessible label', () => {
