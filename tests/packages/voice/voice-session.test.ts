@@ -1,15 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createVoice,
-  createVoiceSessions,
   type SpeechInputEvent,
   type SpeechInputRuntime,
-  type SpeechPlayer,
-  type SpeechSynthesizer,
-  type VoiceProfiles,
 } from '../../../packages/voice/src/index';
 
-function createNoopSpeechInput(): SpeechInputRuntime & { start: ReturnType<typeof vi.fn> } {
+function createNoopSpeechInput(): SpeechInputRuntime & { start: ReturnType<typeof vi.fn>; emit(event: SpeechInputEvent): void } {
   const listeners = new Set<(event: SpeechInputEvent) => void>();
   const runtime = {
     start: vi.fn(async ({ generation }: { readonly generation?: number }) => ({
@@ -32,95 +28,23 @@ function createNoopSpeechInput(): SpeechInputRuntime & { start: ReturnType<typeo
   return runtime;
 }
 
+function createVoiceWithSpeechInput(speechInput = createNoopSpeechInput()) {
+  return { voice: createVoice({ speechInput }), speechInput };
+}
+
 describe('Voice sessions', () => {
-  it('starts speech input and listening without waiting for TTS preparation', async () => {
-    let finishPreparation!: () => void;
-    const prepare = vi.fn(() => new Promise<{ status: 'ready' }>((resolve) => {
-      finishPreparation = () => resolve({ status: 'ready' });
-    }));
-    const speechInput = createNoopSpeechInput();
-    const voice = createVoice({
-      defaultProfile: {
-        profileId: 'voice-profile:default',
-        name: 'Default',
-        source: { kind: 'built_in', voiceId: 'Xiaoyu' },
-      },
-      synthesizer: { prepare, async *synthesize() {} },
-      player: unusedPlayer,
-      speechInput,
-    });
-
-    const starting = voice.sessions.start({ boundSessionId: 'session:one' });
-
-    // TTS preparation is still pending, yet the session must reach listening.
-    await expect(starting).resolves.toMatchObject({
-      status: 'started',
-      snapshot: { status: 'listening' },
-    });
-    expect(prepare).toHaveBeenCalledWith({
-      voiceProfileId: 'voice-profile:default',
-      voice: { kind: 'built_in', voiceId: 'Xiaoyu' },
-    }, { signal: expect.any(AbortSignal) });
-    expect(speechInput.start).toHaveBeenCalledWith({ language: undefined });
-    expect(voice.sessions.getSnapshot()).toMatchObject({
-      status: 'listening',
-      boundSessionId: 'session:one',
-    });
-
-    // TTS finishing later must not disturb the listening state.
-    finishPreparation();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(voice.sessions.getSnapshot().status).toBe('listening');
-  });
-
-  it('keeps the session usable when TTS preparation fails', async () => {
-    const speechInput = createNoopSpeechInput();
-    const voice = createVoice({
-      defaultProfile: {
-        profileId: 'voice-profile:default',
-        name: 'Default',
-        source: { kind: 'built_in', voiceId: 'Xiaoyu' },
-      },
-      synthesizer: {
-        async prepare() {
-          return { status: 'failed' as const, failure: { code: 'tts_prepare_failed', message: 'Could not load TTS.' } };
-        },
-        async *synthesize() {},
-      },
-      player: unusedPlayer,
-      speechInput,
-    });
+  it('starts speech input and reaches listening', async () => {
+    const { voice, speechInput } = createVoiceWithSpeechInput();
 
     await expect(voice.sessions.start({ boundSessionId: 'session:one' })).resolves.toMatchObject({
       status: 'started',
       snapshot: { status: 'listening' },
     });
+    expect(speechInput.start).toHaveBeenCalledWith({ language: undefined });
     expect(voice.sessions.getSnapshot()).toMatchObject({
       status: 'listening',
       boundSessionId: 'session:one',
     });
-  });
-
-  it('starts STT without a selected TTS profile', async () => {
-    const speechInput = createNoopSpeechInput();
-    const prepare = vi.fn(async () => ({ status: 'ready' as const }));
-    const profiles = {
-      getSelected: () => ({ status: 'unavailable' as const }),
-    } as VoiceProfiles;
-    const sessions = createVoiceSessions({
-      profiles,
-      synthesizer: { prepare, async *synthesize() {} },
-      player: unusedPlayer,
-      speechInput,
-    });
-
-    await expect(sessions.start({ boundSessionId: 'session:stt-only', language: 'zh' })).resolves.toMatchObject({
-      status: 'started',
-      snapshot: { status: 'listening', boundSessionId: 'session:stt-only' },
-    });
-    expect(sessions.getSnapshot()).not.toHaveProperty('voiceProfileId');
-    expect(speechInput.start).toHaveBeenCalledWith({ language: 'zh' });
-    expect(prepare).not.toHaveBeenCalled();
   });
 
   it('returns failed only when the speech input runtime itself cannot start', async () => {
@@ -129,16 +53,7 @@ describe('Voice sessions', () => {
       status: 'failed',
       failure: { code: 'voice_worker_unavailable', message: 'Worker could not start.' },
     });
-    const voice = createVoice({
-      defaultProfile: {
-        profileId: 'voice-profile:default',
-        name: 'Default',
-        source: { kind: 'built_in', voiceId: 'Xiaoyu' },
-      },
-      synthesizer: unusedSynthesizer,
-      player: unusedPlayer,
-      speechInput,
-    });
+    const { voice } = createVoiceWithSpeechInput(speechInput);
 
     await expect(voice.sessions.start({ boundSessionId: 'session:one' })).resolves.toEqual({
       status: 'failed',
@@ -156,16 +71,7 @@ describe('Voice sessions', () => {
         failure: { code: 'voice_worker_start_failed', message: 'Worker entry missing.' },
       })
       .mockResolvedValueOnce({ status: 'started', generation: 2 });
-    const voice = createVoice({
-      defaultProfile: {
-        profileId: 'voice-profile:default',
-        name: 'Default',
-        source: { kind: 'built_in', voiceId: 'Xiaoyu' },
-      },
-      synthesizer: unusedSynthesizer,
-      player: unusedPlayer,
-      speechInput,
-    });
+    const { voice } = createVoiceWithSpeechInput(speechInput);
 
     await expect(voice.sessions.start({ boundSessionId: 'session:one' })).resolves.toMatchObject({
       status: 'failed',
@@ -186,16 +92,7 @@ describe('Voice sessions', () => {
     speechInput.start.mockImplementation(() => new Promise((resolve) => {
       finishStart = () => resolve({ status: 'started' as const, generation: 1 });
     }));
-    const voice = createVoice({
-      defaultProfile: {
-        profileId: 'voice-profile:default',
-        name: 'Default',
-        source: { kind: 'built_in', voiceId: 'Xiaoyu' },
-      },
-      synthesizer: unusedSynthesizer,
-      player: unusedPlayer,
-      speechInput,
-    });
+    const { voice } = createVoiceWithSpeechInput(speechInput);
 
     const starting = voice.sessions.start({ boundSessionId: 'session:one' });
     await voice.sessions.end({ reason: 'character_hidden' });
@@ -206,17 +103,7 @@ describe('Voice sessions', () => {
   });
 
   it('passes the session language to the speech input start request', async () => {
-    const speechInput = createNoopSpeechInput();
-    const voice = createVoice({
-      defaultProfile: {
-        profileId: 'voice-profile:default',
-        name: 'Default',
-        source: { kind: 'built_in', voiceId: 'Xiaoyu' },
-      },
-      synthesizer: unusedSynthesizer,
-      player: unusedPlayer,
-      speechInput,
-    });
+    const { voice, speechInput } = createVoiceWithSpeechInput();
 
     await voice.sessions.start({ boundSessionId: 'session:one', language: 'zh' });
 
@@ -224,17 +111,7 @@ describe('Voice sessions', () => {
   });
 
   it('propagates mute and end to the injected speech input runtime', async () => {
-    const speechInput = createNoopSpeechInput();
-    const voice = createVoice({
-      defaultProfile: {
-        profileId: 'voice-profile:default',
-        name: 'Default',
-        source: { kind: 'built_in', voiceId: 'Xiaoyu' },
-      },
-      synthesizer: unusedSynthesizer,
-      player: unusedPlayer,
-      speechInput,
-    });
+    const { voice, speechInput } = createVoiceWithSpeechInput();
     await voice.sessions.start({ boundSessionId: 'session:one' });
 
     voice.sessions.setMuted({ muted: true });
@@ -246,17 +123,7 @@ describe('Voice sessions', () => {
   });
 
   it('delegates manual utterance boundaries with the active generation', async () => {
-    const speechInput = createNoopSpeechInput();
-    const voice = createVoice({
-      defaultProfile: {
-        profileId: 'voice-profile:default',
-        name: 'Default',
-        source: { kind: 'built_in', voiceId: 'Xiaoyu' },
-      },
-      synthesizer: unusedSynthesizer,
-      player: unusedPlayer,
-      speechInput,
-    });
+    const { voice, speechInput } = createVoiceWithSpeechInput();
 
     expect(voice.sessions.startManualUtterance()).toEqual({ status: 'not_active' });
     await voice.sessions.start({ boundSessionId: 'session:one' });
@@ -269,16 +136,7 @@ describe('Voice sessions', () => {
 
   it('maps speech input events to session runtime status while staying idle-safe', async () => {
     const speechInput = createNoopSpeechInput();
-    const voice = createVoice({
-      defaultProfile: {
-        profileId: 'voice-profile:default',
-        name: 'Default',
-        source: { kind: 'built_in', voiceId: 'Xiaoyu' },
-      },
-      synthesizer: unusedSynthesizer,
-      player: unusedPlayer,
-      speechInput,
-    });
+    const { voice } = createVoiceWithSpeechInput(speechInput);
     await voice.sessions.start({ boundSessionId: 'session:one' });
 
     speechInput.emit({ type: 'recognizing', generation: 1 });
@@ -311,16 +169,7 @@ describe('Voice sessions', () => {
     speechInput.start
       .mockResolvedValueOnce({ status: 'started', generation: 1 })
       .mockResolvedValueOnce({ status: 'started', generation: 2 });
-    const voice = createVoice({
-      defaultProfile: {
-        profileId: 'voice-profile:default',
-        name: 'Default',
-        source: { kind: 'built_in', voiceId: 'Xiaoyu' },
-      },
-      synthesizer: unusedSynthesizer,
-      player: unusedPlayer,
-      speechInput,
-    });
+    const { voice } = createVoiceWithSpeechInput(speechInput);
     await voice.sessions.start({ boundSessionId: 'session:one' });
     speechInput.emit({
       type: 'runtime-failed',
@@ -336,17 +185,8 @@ describe('Voice sessions', () => {
     expect(speechInput.start).toHaveBeenCalledTimes(2);
   });
 
-  it('fixes the bound Session and selected Voice Profile until the Voice Session ends', async () => {
-    const voice = createVoice({
-      defaultProfile: {
-        profileId: 'voice-profile:default',
-        name: 'Default',
-        source: { kind: 'built_in', voiceId: 'Xiaoyu' },
-      },
-      synthesizer: unusedSynthesizer,
-      player: unusedPlayer,
-      ids: { createVoiceProfileId: () => 'voice-profile:alternate' },
-    });
+  it('fixes the bound Session until the Voice Session ends', async () => {
+    const { voice } = createVoiceWithSpeechInput();
 
     expect(voice.sessions.getSnapshot()).toMatchObject({ status: 'idle' });
 
@@ -355,23 +195,10 @@ describe('Voice sessions', () => {
       snapshot: {
         status: 'listening',
         boundSessionId: 'session:one',
-        voiceProfileId: 'voice-profile:default',
         muted: false,
       },
     });
-
-    await voice.profiles.import({
-      name: 'Alternate',
-      sourceAudioPath: 'C:/voices/alternate.wav',
-    });
-    expect(voice.profiles.select({ profileId: 'voice-profile:alternate' })).toEqual({
-      status: 'selected',
-      profileId: 'voice-profile:alternate',
-    });
-    expect(voice.sessions.getSnapshot()).toMatchObject({
-      boundSessionId: 'session:one',
-      voiceProfileId: 'voice-profile:default',
-    });
+    expect(voice.sessions.getSnapshot()).not.toHaveProperty('voiceProfileId');
 
     expect(voice.sessions.setMuted({ muted: true })).toMatchObject({
       status: 'updated',
@@ -384,24 +211,7 @@ describe('Voice sessions', () => {
 
     expect(await voice.sessions.start({ boundSessionId: 'session:two' })).toMatchObject({
       status: 'started',
-      snapshot: {
-        boundSessionId: 'session:two',
-        voiceProfileId: 'voice-profile:alternate',
-      },
+      snapshot: { boundSessionId: 'session:two' },
     });
   });
 });
-
-const unusedSynthesizer: SpeechSynthesizer = {
-  async prepare() { return { status: 'ready' }; },
-  async *synthesize() {
-    throw new Error('Synthesizer should not be called in this test.');
-  },
-};
-
-const unusedPlayer: SpeechPlayer = {
-  async play() {
-    throw new Error('Player should not be called in this test.');
-  },
-  async stop() {},
-};
