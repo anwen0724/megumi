@@ -22,6 +22,11 @@ import {
   WebSearchSettingsRawSchema,
   WebSearchSettingsResolvedSchema,
 } from './web-search-settings';
+import {
+  VoiceTtsSettingsFileRawSchema,
+  VoiceTtsSettingsRawSchema,
+  VoiceTtsSettingsResolvedSchema,
+} from './voice-tts-settings';
 
 export const SettingsThemeNameSchema = z.enum([
   'megumi-warm',
@@ -61,14 +66,20 @@ export type MemorySettingsResolved = z.infer<typeof MemorySettingsResolvedSchema
 export const VoiceRecognitionLanguageSchema = z.enum(['auto', 'zh', 'en']);
 export const VoiceSettingsRawSchema = z.object({
   input_device_id: z.string().min(1).optional(),
-  // Tolerated only so settings files written before the TTS removal keep
-  // parsing; the resolved settings no longer expose an output device.
   output_device_id: z.string().min(1).optional(),
   recognition_language: VoiceRecognitionLanguageSchema.optional(),
+  read_aloud_enabled: z.boolean().optional(),
+  tts: VoiceTtsSettingsRawSchema.optional(),
 }).strict();
+export const VoiceSettingsFileRawSchema = VoiceSettingsRawSchema.extend({
+  tts: VoiceTtsSettingsFileRawSchema.optional(),
+}).passthrough();
 export const VoiceSettingsResolvedSchema = z.object({
   input_device_id: z.string().min(1),
+  output_device_id: z.string().min(1),
   recognition_language: VoiceRecognitionLanguageSchema,
+  read_aloud_enabled: z.boolean(),
+  tts: VoiceTtsSettingsResolvedSchema,
 }).strict();
 
 const settingsShape = {
@@ -106,6 +117,7 @@ export const SettingsRawReadSchema = z.object({
 // or future versions must not make the whole file unreadable.
 export const SettingsFileRawSchema = z.object({
   ...settingsShape,
+  voice: VoiceSettingsFileRawSchema.optional(),
   web: z.object({ search: WebSearchSettingsFileRawSchema.optional() }).strict().optional(),
   providers: z.record(z.string().min(1), ProviderSettingsFileRawSchema).optional(),
 }).passthrough();
@@ -132,7 +144,15 @@ export const DEFAULT_SETTINGS = SettingsResolvedSchema.parse({
   memory: { enabled: false },
   voice: {
     input_device_id: 'default',
+    output_device_id: 'default',
     recognition_language: 'auto',
+    read_aloud_enabled: false,
+    tts: {
+      provider: 'minimax',
+      voice_id: 'female-shaonv',
+      has_api_key: false,
+      credential_source: 'missing',
+    },
   },
   context: { compaction_threshold_ratio: 0.8 },
   web: { search: {} },

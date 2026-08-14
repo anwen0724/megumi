@@ -18,11 +18,16 @@ import {
   WebSearchSettingsFileRawSchema,
   type WebSearchSettingsFileRaw,
 } from './web-search-settings';
+import {
+  VoiceTtsSettingsFileRawSchema,
+  type VoiceTtsSettingsFileRaw,
+} from './voice-tts-settings';
 
 // Strict variants detect unknown keys while the tolerant file schemas keep reading.
 const STRICT_FILE_SCHEMA = SettingsFileRawSchema.strict();
 const STRICT_PROVIDER_SCHEMA = ProviderSettingsFileRawSchema.strict();
 const STRICT_WEB_SEARCH_SCHEMA = WebSearchSettingsFileRawSchema.strict();
+const STRICT_VOICE_TTS_SCHEMA = VoiceTtsSettingsFileRawSchema.strict();
 
 /** Strips the secret-bearing fields, producing the public SettingsRaw view. */
 export function publicRawFromFile(file: SettingsFileRaw): SettingsRaw {
@@ -38,6 +43,12 @@ export function publicRawFromFile(file: SettingsFileRaw): SettingsRaw {
       web: {
         ...file.web,
         search: withoutWebSearchSecret(file.web.search),
+      },
+    } : {}),
+    ...(file.voice?.tts ? {
+      voice: {
+        ...file.voice,
+        tts: withoutVoiceTtsSecret(file.voice.tts),
       },
     } : {}),
   });
@@ -59,6 +70,29 @@ export function mergeFileWithPublicPatch(file: SettingsFileRaw, patch: SettingsR
     : file.web?.search;
   if (search && searchPatch?.api_key_env === null) delete search.api_key_env;
   if (search && searchPatch?.base_url === null) delete search.base_url;
+  const voicePatch = patch.voice;
+  const voice = voicePatch
+    ? {
+        ...(file.voice ?? {}),
+        ...definedObject({
+          input_device_id: voicePatch.input_device_id,
+          output_device_id: voicePatch.output_device_id,
+          recognition_language: voicePatch.recognition_language,
+          read_aloud_enabled: voicePatch.read_aloud_enabled,
+        }),
+        ...(voicePatch.tts ? {
+          tts: {
+            ...(file.voice?.tts ?? {}),
+            ...definedObject({
+              provider: voicePatch.tts.provider,
+              voice_id: voicePatch.tts.voice_id,
+              api_key_env: voicePatch.tts.api_key_env,
+            }),
+          },
+        } : {}),
+      }
+    : undefined;
+  if (voice?.tts && voicePatch?.tts?.api_key_env === null) delete voice.tts.api_key_env;
   return SettingsFileRawSchema.parse({
     ...file,
     ...definedObject({
@@ -66,7 +100,7 @@ export function mergeFileWithPublicPatch(file: SettingsFileRaw, patch: SettingsR
       theme: patch.theme,
       setup: patch.setup ? { ...(file.setup ?? {}), ...definedObject(patch.setup) } : undefined,
       memory: patch.memory ? { ...(file.memory ?? {}), ...definedObject(patch.memory) } : undefined,
-      voice: patch.voice ? { ...(file.voice ?? {}), ...definedObject(patch.voice) } : undefined,
+      voice,
       context: patch.context ? { ...(file.context ?? {}), ...definedObject(patch.context) } : undefined,
       model_selection: patch.model_selection,
       web: patch.web ? { ...(file.web ?? {}), ...(search ? { search } : {}) } : undefined,
@@ -85,7 +119,6 @@ export function materializeFileForWrite(file: SettingsFileRaw): SettingsFileRaw 
   return SettingsFileRawSchema.parse({
     ...file,
     context: resolved.context,
-    ...(file.voice ? { voice: withoutLegacyVoiceKeys(file.voice) } : {}),
     ...(file.providers ? {
       providers: Object.fromEntries(Object.entries(file.providers).map(([providerId, provider]) => {
         const publicProvider = publicRaw.providers?.[providerId] ?? {};
@@ -117,12 +150,25 @@ export function resolvePublicSettings(raw: SettingsRaw): SettingsResolved {
   });
   if (search.api_key_env === null) delete search.api_key_env;
   if (search.base_url === null) delete search.base_url;
-  // Whitelist the voice fields: the legacy output device key is tolerated in
-  // the file model but must not leak into the strict resolved model.
+  // Whitelist the voice fields: tolerated unknown file keys must not leak
+  // into the strict consumer-facing resolved model. The tts credential state
+  // starts from defaults; the authoritative values come from resolveVoiceTts().
   const rawVoice = raw.voice ?? {};
+  const rawTts = rawVoice.tts ?? {};
   const voice = definedObject({
     input_device_id: rawVoice.input_device_id,
+    output_device_id: rawVoice.output_device_id,
     recognition_language: rawVoice.recognition_language,
+    read_aloud_enabled: rawVoice.read_aloud_enabled,
+    ...(rawVoice.tts ? {
+      tts: {
+        ...DEFAULT_SETTINGS.voice.tts,
+        ...definedObject({
+          provider: rawTts.provider,
+          voice_id: rawTts.voice_id,
+        }),
+      },
+    } : {}),
   });
   return SettingsResolvedSchema.parse({
     ...DEFAULT_SETTINGS,
@@ -161,6 +207,13 @@ export function collectUnknownFileKeys(file: SettingsFileRaw): string[] {
       }
     }
   }
+  if (file.voice?.tts) {
+    for (const issue of STRICT_VOICE_TTS_SCHEMA.safeParse(file.voice.tts).error?.issues ?? []) {
+      if (issue.code === 'unrecognized_keys') {
+        keys.push(...issue.keys.map((key) => `voice.tts.${key}`));
+      }
+    }
+  }
   return keys;
 }
 
@@ -175,8 +228,7 @@ function withoutWebSearchSecret(search: WebSearchSettingsFileRaw) {
   return publicSearch;
 }
 
-/** Drops the output device key removed with the TTS implementation before persisting. */
-function withoutLegacyVoiceKeys(voice: NonNullable<SettingsFileRaw['voice']>) {
-  const { output_device_id: _legacy, ...current } = voice;
-  return current;
+function withoutVoiceTtsSecret(tts: VoiceTtsSettingsFileRaw) {
+  const { api_key: _secret, ...publicTts } = tts;
+  return publicTts;
 }

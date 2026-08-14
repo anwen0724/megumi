@@ -88,6 +88,17 @@ import {
   type ResolveWebSearchSettingsResult,
   type WriteWebSearchApiKeyRequest,
 } from './web-search-settings';
+import {
+  DeleteVoiceTtsApiKeyRequestSchema,
+  ReadVoiceTtsApiKeyRequestSchema,
+  WriteVoiceTtsApiKeyRequestSchema,
+  readVoiceTtsApiKey as readVoiceTtsCredential,
+  resolveVoiceTtsSettings,
+  type DeleteVoiceTtsApiKeyRequest,
+  type ReadVoiceTtsApiKeyRequest,
+  type ResolveVoiceTtsSettingsResult,
+  type WriteVoiceTtsApiKeyRequest,
+} from './voice-tts-settings';
 
 export interface CreateSettingsRequest {
   readonly store: SettingsStore;
@@ -124,6 +135,10 @@ export interface Settings {
   readWebSearchApiKey(request: ReadWebSearchApiKeyRequest): ReadApiKeyResult;
   writeWebSearchApiKey(request: WriteWebSearchApiKeyRequest): WriteApiKeyResult;
   deleteWebSearchApiKey(request: DeleteWebSearchApiKeyRequest): DeleteApiKeyResult;
+  resolveVoiceTts(): ResolveVoiceTtsSettingsResult;
+  readVoiceTtsApiKey(request: ReadVoiceTtsApiKeyRequest): ReadApiKeyResult;
+  writeVoiceTtsApiKey(request: WriteVoiceTtsApiKeyRequest): WriteApiKeyResult;
+  deleteVoiceTtsApiKey(request: DeleteVoiceTtsApiKeyRequest): DeleteApiKeyResult;
 }
 
 export function createSettings(request: CreateSettingsRequest): Settings {
@@ -443,6 +458,72 @@ class DefaultSettings implements Settings {
       return { status: 'deleted' };
     } catch {
       return writeFailure('settings_write_failed', 'Web Search API key could not be deleted.');
+    }
+  }
+
+  resolveVoiceTts(): ResolveVoiceTtsSettingsResult {
+    try {
+      const file = this.readFile();
+      const resolvedVoice = resolvePublicSettings(publicRawFromFile(file)).voice;
+      return {
+        status: 'ok',
+        settings: resolveVoiceTtsSettings(
+          resolvedVoice.tts,
+          file.voice?.tts ?? {},
+          this.environment,
+        ),
+      };
+    } catch {
+      return failure('settings_read_failed', 'Voice TTS settings could not be resolved.');
+    }
+  }
+
+  readVoiceTtsApiKey(request: ReadVoiceTtsApiKeyRequest): ReadApiKeyResult {
+    if (!ReadVoiceTtsApiKeyRequestSchema.safeParse(request).success) {
+      return failure('voice_tts_api_key_request_invalid', 'Voice TTS API key request is invalid.');
+    }
+    try {
+      return readVoiceTtsCredential(this.readFile().voice?.tts ?? {}, this.environment);
+    } catch {
+      return failure('settings_read_failed', 'Voice TTS API key could not be read.');
+    }
+  }
+
+  writeVoiceTtsApiKey(request: WriteVoiceTtsApiKeyRequest): WriteApiKeyResult {
+    const parsed = WriteVoiceTtsApiKeyRequestSchema.safeParse(request);
+    if (!parsed.success) return failure('voice_tts_api_key_invalid', 'Voice TTS API key request is invalid.');
+    try {
+      const file = this.readFile();
+      this.request.store.write(SettingsFileRawSchema.parse({
+        ...file,
+        voice: {
+          ...(file.voice ?? {}),
+          tts: { ...(file.voice?.tts ?? {}), api_key: parsed.data.api_key },
+        },
+      }));
+      return { status: 'updated' };
+    } catch {
+      return writeFailure('settings_write_failed', 'Voice TTS API key could not be saved.');
+    }
+  }
+
+  deleteVoiceTtsApiKey(request: DeleteVoiceTtsApiKeyRequest): DeleteApiKeyResult {
+    if (!DeleteVoiceTtsApiKeyRequestSchema.safeParse(request).success) {
+      return failure('voice_tts_api_key_delete_invalid', 'Voice TTS API key delete request is invalid.');
+    }
+    try {
+      const file = this.readFile();
+      if (file.voice?.tts) {
+        const tts = { ...file.voice.tts };
+        delete tts.api_key;
+        this.request.store.write(SettingsFileRawSchema.parse({
+          ...file,
+          voice: { ...file.voice, tts },
+        }));
+      }
+      return { status: 'deleted' };
+    } catch {
+      return writeFailure('settings_write_failed', 'Voice TTS API key could not be deleted.');
     }
   }
 

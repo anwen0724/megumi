@@ -151,6 +151,26 @@ export type {
   WebSearchSettingsResolved,
   WriteWebSearchApiKeyRequest,
 } from './web-search-settings';
+export {
+  DEFAULT_VOICE_TTS_API_KEY_ENV,
+  DeleteVoiceTtsApiKeyRequestSchema,
+  ReadVoiceTtsApiKeyRequestSchema,
+  VoiceTtsProviderSchema,
+  VoiceTtsSettingsRawSchema,
+  VoiceTtsSettingsResolvedSchema,
+  WriteVoiceTtsApiKeyRequestSchema,
+} from './voice-tts-settings';
+export type {
+  DeleteVoiceTtsApiKeyRequest,
+  ReadVoiceTtsApiKeyRequest,
+  ResolvedVoiceTtsSettings,
+  ResolveVoiceTtsSettingsResult,
+  VoiceTtsCredentialSource,
+  VoiceTtsProvider,
+  VoiceTtsSettingsRaw,
+  VoiceTtsSettingsResolved,
+  WriteVoiceTtsApiKeyRequest,
+} from './voice-tts-settings';
 export type {
   SettingsStore,
 } from './settings-store';

@@ -111,13 +111,15 @@ describe('Settings', () => {
     });
   });
 
-  it('keeps reading settings files that still carry the removed output device field', () => {
+  it('resolves output device, read-aloud and tts preferences as current voice fields', () => {
     const store = new MemorySettingsStore();
     store.document = {
       voice: {
         input_device_id: 'microphone-1',
         output_device_id: 'speaker-1',
         recognition_language: 'auto',
+        read_aloud_enabled: true,
+        tts: { provider: 'minimax', voice_id: 'qiaopi_mengmei' },
       },
     } as never;
     const settings = createSettings({ store });
@@ -127,9 +129,35 @@ describe('Settings', () => {
       settings: {
         voice: {
           input_device_id: 'microphone-1',
+          output_device_id: 'speaker-1',
           recognition_language: 'auto',
+          read_aloud_enabled: true,
+          tts: {
+            provider: 'minimax',
+            voice_id: 'qiaopi_mengmei',
+            has_api_key: false,
+            credential_source: 'missing',
+          },
         },
       },
+    });
+  });
+
+  it('persists output device, read-aloud toggle and tts preferences through the public patch', () => {
+    const store = new MemorySettingsStore();
+    const settings = createSettings({ store });
+
+    expect(settings.update({ patch: {
+      voice: {
+        output_device_id: 'speaker-2',
+        read_aloud_enabled: true,
+        tts: { provider: 'minimax', voice_id: 'female-tianmei' },
+      },
+    } })).toMatchObject({ status: 'updated' });
+    expect(store.document.voice).toMatchObject({
+      output_device_id: 'speaker-2',
+      read_aloud_enabled: true,
+      tts: { provider: 'minimax', voice_id: 'female-tianmei' },
     });
   });
 
