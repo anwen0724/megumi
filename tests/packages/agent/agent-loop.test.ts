@@ -81,7 +81,7 @@ function completedStream(message: AssistantMessage): AssistantMessageEventStream
 }
 
 function configuration(tools: readonly AgentTool[] = []): AgentConfiguration {
-  return { systemPrompt: 'Be concise.', model, thinkingLevel: 'off', tools };
+  return { systemPrompt: 'Be concise.', model, thinkingLevel: 'high', tools };
 }
 
 describe('Agent Loop', () => {

@@ -30,6 +30,7 @@ export default defineConfig({
       '@megumi/settings': path.resolve(__dirname, 'packages/settings/src'),
       '@megumi/projections': path.resolve(__dirname, 'packages/projections/src'),
       '@megumi/skills': path.resolve(__dirname, 'packages/skills/src'),
+      '@megumi/agent': path.resolve(__dirname, 'packages/agent/src'),
       '@megumi/ai': path.resolve(__dirname, 'packages/ai/src'),
       '@megumi/observability': path.resolve(__dirname, 'packages/observability/src'),
       '@megumi/voice': path.resolve(__dirname, 'packages/voice/src'),

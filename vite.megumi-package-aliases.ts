@@ -11,6 +11,7 @@ export const megumiPackageAliases: AliasOptions = [
   { find: '@megumi/settings/store', replacement: path.resolve(__dirname, 'packages/settings/src/settings-store.ts') },
   { find: '@megumi/workspace/node', replacement: path.resolve(__dirname, 'packages/workspace/src/node-workspace-file-system.ts') },
   { find: '@megumi/workspace/store', replacement: path.resolve(__dirname, 'packages/workspace/src/workspace-store.ts') },
+  { find: '@megumi/agent', replacement: path.resolve(__dirname, 'packages/agent/src') },
   { find: '@megumi/ai', replacement: path.resolve(__dirname, 'packages/ai/src') },
   { find: '@megumi/commands', replacement: path.resolve(__dirname, 'packages/commands/src') },
   { find: '@megumi/context', replacement: path.resolve(__dirname, 'packages/context/src') },
