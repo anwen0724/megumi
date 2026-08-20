@@ -33,7 +33,7 @@ export type ModelCallResult =
       readonly toolCalls: readonly AgentToolCall[];
       readonly context: AgentContext;
     }
-  | { readonly status: 'failed'; readonly error: AgentError }
+  | { readonly status: 'failed'; readonly error: AgentError; readonly partial?: AssistantMessage }
   | { readonly status: 'cancelled'; readonly partial?: AssistantMessage };
 
 type AttemptResult =
@@ -45,10 +45,27 @@ export async function runModelCall(input: RunModelCallInput): Promise<ModelCallR
   let context = input.context;
   let attempt = 1;
   let overflowRecoveries = 0;
+  let lifecycleStarted = false;
+  let latestPartial: AssistantMessage | undefined;
+  const projectMessage = async (message: AssistantMessage) => {
+    latestPartial = message;
+    if (!lifecycleStarted) {
+      lifecycleStarted = true;
+      await input.emit({ type: 'message_start', message });
+      return;
+    }
+    await input.emit({ type: 'message_update', message });
+  };
 
   while (!input.signal.aborted) {
-    const result = await runAttempt(input, context);
-    if (result.status === 'cancelled') return result;
+    const result = await runAttempt(input, context, projectMessage);
+    if (result.status === 'cancelled') {
+      const partial = result.partial ?? latestPartial;
+      return {
+        status: 'cancelled',
+        ...(partial ? { partial } : {}),
+      };
+    }
 
     if (result.message && isContextOverflow(result.message, input.model.contextWindow)) {
       if (
@@ -58,6 +75,7 @@ export async function runModelCall(input: RunModelCallInput): Promise<ModelCallR
         return {
           status: 'failed',
           error: agentError('context_failed', 'Model context overflow could not be recovered.', false, result.message),
+          ...(latestPartial ? { partial: latestPartial } : {}),
         };
       }
       const recovered = await input.contextProvider.recoverOverflow({
@@ -69,7 +87,13 @@ export async function runModelCall(input: RunModelCallInput): Promise<ModelCallR
       if (recovered.status === 'cancelled' || input.signal.aborted) {
         return { status: 'cancelled', ...(result.message ? { partial: result.message } : {}) };
       }
-      if (recovered.status === 'failed') return { status: 'failed', error: recovered.error };
+      if (recovered.status === 'failed') {
+        return {
+          status: 'failed',
+          error: recovered.error,
+          ...(latestPartial ? { partial: latestPartial } : {}),
+        };
+      }
       context = recovered.context;
       overflowRecoveries += 1;
       attempt += 1;
@@ -94,6 +118,7 @@ export async function runModelCall(input: RunModelCallInput): Promise<ModelCallR
       return {
         status: 'failed',
         error: agentError('model_call_failed', validated.message, validated.retryable, result.message),
+        ...(latestPartial ? { partial: latestPartial } : {}),
       };
     }
 
@@ -102,7 +127,11 @@ export async function runModelCall(input: RunModelCallInput): Promise<ModelCallR
       attempt += 1;
       continue;
     }
-    return { status: 'failed', error: result.error };
+    return {
+      status: 'failed',
+      error: result.error,
+      ...(latestPartial ? { partial: latestPartial } : {}),
+    };
   }
 
   return { status: 'cancelled' };
@@ -111,6 +140,7 @@ export async function runModelCall(input: RunModelCallInput): Promise<ModelCallR
 async function runAttempt(
   input: RunModelCallInput,
   context: AgentContext,
+  projectMessage: (message: AssistantMessage) => Promise<void>,
 ): Promise<AttemptResult> {
   const timeoutController = new AbortController();
   const signal = AbortSignal.any([input.signal, timeoutController.signal]);
@@ -133,7 +163,7 @@ async function runAttempt(
     );
     terminal = await consumeStream(stream, async (message) => {
       partial = message;
-      await input.emit({ type: 'message_update', message });
+      await projectMessage(message);
     }, signal);
   } catch (error) {
     if (signal.aborted) return { status: 'cancelled', ...(partial ? { partial } : {}) };
@@ -185,7 +215,7 @@ async function runAttempt(
 
 async function consumeStream(
   stream: AssistantMessageEventStream,
-  onUpdate: (message: AssistantMessage) => Promise<void>,
+  onProjection: (message: AssistantMessage) => Promise<void>,
   signal: AbortSignal,
 ): Promise<AssistantMessage | undefined> {
   const iterator = stream[Symbol.asyncIterator]();
@@ -197,7 +227,7 @@ async function consumeStream(
       const event = next.value;
       if (event.type === 'done') terminal = event.message;
       else if (event.type === 'error') terminal = event.error;
-      else if (event.type !== 'start') await onUpdate(event.partial);
+      else await onProjection(event.partial);
     }
   } finally {
     const returned = iterator.return?.();

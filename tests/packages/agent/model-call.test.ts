@@ -105,7 +105,10 @@ describe('Agent ModelCall', () => {
       { systemPrompt: 'Be concise.', messages: [...context.messages], tools: [] },
       expect.objectContaining({ reasoning: 'high', signal: expect.any(AbortSignal), timeoutMs: 1_000 }),
     );
-    expect(events).toContainEqual({ type: 'message_update', message });
+    expect(events).toEqual([
+      { type: 'message_start', message: expect.objectContaining({ role: 'assistant', content: [] }) },
+      { type: 'message_update', message },
+    ]);
   });
 
   it('returns model-ordered ToolCalls only from a valid tool-use response', async () => {
