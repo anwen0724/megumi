@@ -97,7 +97,7 @@ export type EngineAgentRunResult =
 interface ToolScope {
   readonly modelCallId: string;
   readonly definitions: readonly ToolDefinition[];
-  readonly tools: readonly AgentTool[];
+  tools: AgentTool[];
   released: boolean;
 }
 
@@ -321,7 +321,7 @@ function createContextProvider(
         tools: [],
         released: false,
       };
-      (scope as { tools: readonly AgentTool[] }).tools = resolution.definitions.map((definition) => (
+      scope.tools = resolution.definitions.map((definition) => (
         createAgentTool(definition, scope, input, dependencies, runtime)
       ));
       runtime.activeScope = scope;
@@ -380,8 +380,9 @@ function createAgentTool(
   runtime: AdapterRuntime,
 ): AgentTool {
   return {
-    name: definition.name,
-    description: definition.description,
+    // Preserve Context-facing Tool guidance metadata on the runtime object;
+    // Agent Core and provider adapters consume only the AgentTool contract.
+    ...definition,
     parameters: definition.parameters as AgentTool['parameters'],
     executionMode: definition.executionMode === 'serial' ? 'sequential' : 'parallel',
     execute: async ({ toolCallId, arguments: argumentsValue, signal, onUpdate }) => {
