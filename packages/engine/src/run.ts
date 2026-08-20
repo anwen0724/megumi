@@ -2,9 +2,9 @@
  * Defines the public Run snapshot, the single RunStatus lifecycle transition
  * invariant, and the Runs operation entry: start idempotency, per-Session
  * exclusion, the User Message commit, the root AbortController, the unique
- * runAgentLoop() launch, approval settlement, cancel/get/shutdown, the single
- * terminal settlement from AgentLoopResult and the run.* lifecycle events.
- * Agent Loop execution details never live here.
+ * executeAgentRun() launch, approval settlement, cancel/get/shutdown, the single
+ * terminal settlement from EngineAgentRunResult and the run.* lifecycle events.
+ * Agent execution details never live here.
  */
 import type { Api, Model, Models } from '@megumi/ai';
 import type { UserInput } from '@megumi/input';
@@ -27,7 +27,11 @@ import type { ObservabilityService } from '@megumi/observability';
 import type { RunPolicy } from './run-policy';
 import { validateRunPolicy } from './run-policy';
 import { RunRegistry } from './run-registry';
-import { runAgentLoop, type AgentLoopDependencies, type AgentLoopResult } from './agent-loop';
+import {
+  executeAgentRun,
+  type EngineAgentRunDependencies,
+  type EngineAgentRunResult,
+} from './agent-adapter';
 
 // ---------------------------------------------------------------------------
 // Run model
@@ -335,13 +339,13 @@ export function createRuns(options: CreateRunsOptions): Runs {
     clock: options.clock,
     terminalRunRetentionMs: policy.terminalRunRetentionMs,
   });
-  const dependencies: AgentLoopDependencies = {
+  const dependencies: EngineAgentRunDependencies = {
     ...options,
     policy,
   };
   let accepting = true;
 
-  const settleLoopResult = (runId: string, result: AgentLoopResult): void => {
+  const settleAgentResult = (runId: string, result: EngineAgentRunResult): void => {
     const active = store.getActiveRun(runId);
     if (!active || isTerminalRunStatus(active.run.status)) return;
     const at = options.clock.now();
@@ -544,7 +548,7 @@ export function createRuns(options: CreateRunsOptions): Runs {
         modelId: run.model.id,
       });
 
-      const loopTask = runAgentLoop({
+      const agentTask = executeAgentRun({
         run,
         userInput: request.input,
         userEntry: saved.entry,
@@ -563,7 +567,7 @@ export function createRuns(options: CreateRunsOptions): Runs {
           approval: request.approval,
         }),
       }, dependencies);
-      // The unique Agent Loop settles the ActiveRun completion on every path:
+      // The unique Agent execution settles the ActiveRun completion on every path:
       // normal return, unexpected throw, or a settlement step that fails again.
       // Each settlement attempt is guarded so a second failure never forms an
       // unhandled rejection and never overwrites already recorded terminal
@@ -575,15 +579,15 @@ export function createRuns(options: CreateRunsOptions): Runs {
           recordSettlementFailure(options, error);
         }
       };
-      void loopTask.then(
+      void agentTask.then(
         (result) => {
-          settleSafely(() => settleLoopResult(runId, result));
+          settleSafely(() => settleAgentResult(runId, result));
         },
         () => {
           settleSafely(() => {
             const current = store.getActiveRun(runId);
             if (!current || isTerminalRunStatus(current.run.status)) return;
-            settleLoopResult(runId, {
+            settleAgentResult(runId, {
               status: 'failed',
               failure: {
                 code: 'internal_error',
@@ -653,7 +657,7 @@ export function createRuns(options: CreateRunsOptions): Runs {
         reason: 'user_cancelled',
         scope: 'run',
       });
-      // A pending approval wait must settle as cancelled so the Agent Loop
+      // A pending approval wait must settle as cancelled so the Agent execution
       // wakes and converges in place.
       store.cancelPendingApproval(run.runId);
       active.abortController.abort();

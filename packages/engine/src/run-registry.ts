@@ -1,6 +1,6 @@
 /*
  * Owns the only mutable per-Run runtime record: the ActiveRun. It keeps the
- * Run snapshot, the root AbortController, the single Agent Loop completion
+ * Run snapshot, the root AbortController, the single Agent execution completion
  * and at most one pending approval wait. Request-id idempotency, per-Session
  * exclusion, and bounded terminal results live here too; no router, resume
  * state, stream buffer or loop position ever does.
@@ -72,12 +72,12 @@ export interface PendingApproval {
 /**
  * The only mutable per-Run runtime record. It never holds a Tool Router,
  * resume state for pending calls, stream output, attempt state
- * or any Agent Loop execution position.
+ * or any Agent execution position.
  */
 export interface ActiveRun {
   run: Run;
   readonly abortController: AbortController;
-  /** Settled exactly once when the single Agent Loop call converges. */
+  /** Settled exactly once when the single Agent execution converges. */
   readonly completion: Promise<void>;
   pendingApproval?: PendingApproval;
 }
@@ -342,7 +342,7 @@ export class RunRegistry {
 
   /**
    * Registers the one pending approval wait of an ActiveRun and returns its
-   * promise. The Agent Loop awaits it in place; the Run operation entry settles it.
+   * promise. The Agent Adapter awaits it in place; the Run operation entry settles it.
    */
   beginApprovalWait(input: {
     readonly runId: string;

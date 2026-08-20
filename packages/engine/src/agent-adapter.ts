@@ -109,7 +109,10 @@ interface TurnState {
   attemptNumber: number;
   previousTerminal?: AssistantMessage;
   retryAttempts: number[];
+  readonly attemptStartedAt: Map<number, string>;
   modelSpans: Array<ReturnType<LoopObserver['startSpan']>>;
+  messageEnded: boolean;
+  lastThinking: string;
 }
 
 type EngineToolUpdateDetails =
@@ -151,6 +154,7 @@ interface AdapterRuntime {
   activeTurn?: TurnState;
   pendingFinalTurn?: TurnState;
   readonly toolRequests: Map<string, ToolRequestState>;
+  readonly toolSystemFailures: Map<string, AgentError>;
   readonly committer: SessionMessageCommitter;
   readonly observer: LoopObserver;
 }
@@ -161,6 +165,7 @@ export async function executeAgentRun(
 ): Promise<EngineAgentRunResult> {
   const runtime: AdapterRuntime = {
     toolRequests: new Map(),
+    toolSystemFailures: new Map(),
     committer: createSessionMessageCommitter({
       userEntry: input.userEntry,
       session: dependencies.session,
@@ -435,11 +440,23 @@ async function executeRoutedTool(
         evaluatedAt: dependencies.clock.now(),
       });
     } catch {
-      return systemToolFailure('Permission evaluation failed.', 'permissions', 'permission_evaluation_threw');
+      return systemToolFailure(
+        runtime,
+        invocation.toolCallId,
+        'Permission evaluation failed.',
+        'permissions',
+        'permission_evaluation_threw',
+      );
     }
     if (signal.aborted) return completedToolOutcome(cancelledToolResult(dependencies.clock.now()));
     if (permission.status === 'failed') {
-      return systemToolFailure(permission.failure.message, 'permissions', permission.failure.code);
+      return systemToolFailure(
+        runtime,
+        invocation.toolCallId,
+        permission.failure.message,
+        'permissions',
+        permission.failure.code,
+      );
     }
     if (permission.decision.type === 'deny') {
       return completedToolOutcome(settledToolResult({
@@ -471,7 +488,13 @@ async function executeRoutedTool(
         dependencies,
       );
       if (applied.status === 'failed') {
-        return systemToolFailure('Approval decision could not be applied.', 'permissions', 'approval_apply_failed');
+        return systemToolFailure(
+          runtime,
+          invocation.toolCallId,
+          'Approval decision could not be applied.',
+          'permissions',
+          'approval_apply_failed',
+        );
       }
       if (resolution.status === 'denied') {
         return completedToolOutcome(settledToolResult({
@@ -485,6 +508,8 @@ async function executeRoutedTool(
     } else {
       if (!permission.executionAccess) {
         return systemToolFailure(
+          runtime,
+          invocation.toolCallId,
           'Permission allow decision did not provide Tool execution access.',
           'permissions',
           'execution_access_missing',
@@ -664,6 +689,13 @@ function createStreamAdapter(
     if (!turn) throw new Error('Model stream started outside an active Turn.');
     turn.attemptNumber += 1;
     const attemptNumber = turn.attemptNumber;
+    turn.attemptStartedAt.set(attemptNumber, dependencies.clock.now());
+    runtime.observer.recordMeasurement({
+      name: 'model.call.attempt',
+      value: attemptNumber,
+      unit: 'count',
+      attributes: { modelCallId: turn.modelCallId },
+    });
     const previous = turn.previousTerminal;
     const overflowRecovery = previous
       ? isContextOverflow(previous, model.contextWindow)
@@ -743,18 +775,49 @@ function recordAttemptTerminal(
   const turn = runtime.activeTurn;
   if (!turn || turn.attemptNumber !== attemptNumber) return;
   turn.previousTerminal = terminal;
+  const startedAt = turn.attemptStartedAt.get(attemptNumber) ?? dependencies.clock.now();
+  const durationMs = Math.max(0, Date.parse(dependencies.clock.now()) - Date.parse(startedAt));
+  runtime.observer.recordLog({
+    level: 'info',
+    event: 'model.call.attempt.finished',
+    attributes: {
+      modelCallId: turn.modelCallId,
+      attemptNumber,
+      stopReason: terminal.stopReason,
+      inputTokens: terminal.usage.input,
+      outputTokens: terminal.usage.output,
+      durationMs,
+    },
+  });
+  runtime.observer.recordMeasurement({
+    name: 'model.call.usage',
+    value: terminal.usage.input + terminal.usage.output,
+    unit: 'token',
+    attributes: {
+      modelCallId: turn.modelCallId,
+      attemptNumber,
+      inputTokens: terminal.usage.input,
+      outputTokens: terminal.usage.output,
+    },
+  });
+  runtime.observer.recordMeasurement({
+    name: 'model.call.duration_ms',
+    value: durationMs,
+    unit: 'ms',
+    attributes: { modelCallId: turn.modelCallId, attemptNumber },
+  });
   if (turn.retryAttempts.length === 0) return;
   const succeeded = terminal.stopReason === 'stop'
     || terminal.stopReason === 'toolUse'
     || terminal.stopReason === 'deferred';
   if (succeeded) {
-    publishRetryCompleted(turn, input, dependencies);
+    publishRetryCompleted(turn, input, dependencies, runtime);
     return;
   }
   const retryable = terminal.stopReason === 'length'
     || (terminal.stopReason === 'error' && isRetryableAssistantError(terminal));
   if (!retryable || attemptNumber >= dependencies.policy.maxModelCallAttempts) {
-    publishRetryFailed(turn, terminal.errorMessage ?? 'Model call failed.', input, dependencies);
+    publishRetryFailed(turn, terminal.errorMessage ?? 'Model call failed.', input, dependencies, runtime);
   }
 }
 
@@ -774,7 +837,10 @@ async function handleAgentEvent(
         messageStarted: false,
         attemptNumber: 0,
         retryAttempts: [],
+        attemptStartedAt: new Map(),
         modelSpans: [],
+        messageEnded: false,
+        lastThinking: '',
       };
       runtime.activeTurn = turn;
       emitRuntime(dependencies, input, 'turn.started', { messageId: turn.messageId });
@@ -795,6 +861,15 @@ async function handleAgentEvent(
     case 'message_end':
       if (event.message.role === 'assistant' && runtime.activeTurn) {
         runtime.activeTurn.assistant = event.message;
+        if (toolCallIds(event.message).length > 0) {
+          publishMessageEnded(
+            event.message,
+            runtime.activeTurn.messageId,
+            input,
+            dependencies,
+          );
+          runtime.activeTurn.messageEnded = true;
+        }
       }
       break;
     case 'tool_execution_start': {
@@ -818,7 +893,7 @@ async function handleAgentEvent(
       publishToolUpdate(event.toolCallId, event.update, input, dependencies);
       break;
     case 'tool_execution_end':
-      publishToolEnd(event.toolCallId, event.result, input, dependencies);
+      publishToolEnd(event.toolCallId, event.result, input, dependencies, runtime);
       break;
     case 'turn_end':
       await settleTurn(event.message, event.toolResults, input, dependencies, runtime);
@@ -842,8 +917,17 @@ async function settleTurn(
   if (!turn) throw new Error('Turn ended without an active Turn.');
   turn.assistant = message;
   try {
-    if (toolResults.length === 0) {
+    if (toolResults.length === 0 && toolCallIds(message).length === 0) {
       runtime.pendingFinalTurn = turn;
+      runtime.activeTurn = undefined;
+      return;
+    }
+    if (toolResults.length === 0) {
+      emitRuntime(dependencies, input, 'turn.ended', {
+        stopReason: 'error',
+        messageId: turn.messageId,
+        toolCallIds: toolCallIds(message),
+      });
       runtime.activeTurn = undefined;
       return;
     }
@@ -857,13 +941,14 @@ async function settleTurn(
       completedAt: dependencies.clock.now(),
     });
     if (response.status === 'failed') throw new SessionCommitError(response.failure.message);
-    publishMessageEnded(message, response.messageId, input, dependencies);
+    if (!turn.messageEnded) publishMessageEnded(message, response.messageId, input, dependencies);
 
     const commits = toolResults.map((result, callOrder) => toToolResultCommit(
       result,
       callOrder,
       input.signal.aborted,
       dependencies.clock.now(),
+      runtime,
     ));
     const committed = await runtime.committer.commitToolResults({
       sessionId: input.run.sessionId,
@@ -890,6 +975,18 @@ async function settleTurn(
       toolCallIds: toolResults.map((result) => result.toolCallId),
     });
     runtime.activeTurn = undefined;
+  } catch (error) {
+    if (!turn.messageEnded) {
+      publishMessageEnded(message, turn.messageId, input, dependencies);
+      turn.messageEnded = true;
+    }
+    emitRuntime(dependencies, input, 'turn.ended', {
+      stopReason: 'error',
+      messageId: turn.messageId,
+      toolCallIds: toolCallIds(message),
+    });
+    runtime.activeTurn = undefined;
+    throw error;
   } finally {
     releaseActiveScope(dependencies, runtime);
   }
@@ -929,7 +1026,14 @@ async function settleAgentResult(
     return reply.status === 'failed' ? reply : { status: 'cancelled' };
   }
   const failure = agentFailure(result.error);
-  return settleFailedReply(failure, input, dependencies, runtime, lastAssistant(result.newMessages));
+  const partial = lastAssistant(result.newMessages);
+  return settleFailedReply(
+    failure,
+    input,
+    dependencies,
+    runtime,
+    partial?.stopReason === 'toolUse' ? undefined : partial,
+  );
 }
 
 async function settleFailedReply(
@@ -939,12 +1043,28 @@ async function settleFailedReply(
   runtime: AdapterRuntime,
   partial?: AssistantMessage,
 ): Promise<EngineAgentRunResult> {
+  const turn = runtime.activeTurn ?? runtime.pendingFinalTurn;
+  if (turn) {
+    const lifecycleMessage = turn.assistant ?? partial;
+    if (turn.messageStarted && !turn.messageEnded && lifecycleMessage) {
+      publishMessageEnded(lifecycleMessage, turn.messageId, input, dependencies);
+      turn.messageEnded = true;
+    }
+    emitRuntime(dependencies, input, 'turn.ended', {
+      stopReason: 'error',
+      messageId: turn.messageId,
+      toolCallIds: lifecycleMessage ? toolCallIds(lifecycleMessage) : [],
+    });
+    runtime.activeTurn = undefined;
+    runtime.pendingFinalTurn = undefined;
+    releaseActiveScope(dependencies, runtime);
+  }
   if (failure.code === 'session_failed') return { status: 'failed', failure };
   const reply = await commitFinalReply(
     'failed',
-    partial ? toAssistantContent(partial) : [],
+    [],
     failureReason(failure),
-    partial,
+    undefined,
     input,
     dependencies,
     runtime,
@@ -976,6 +1096,17 @@ async function commitFinalReply(
     completedAt: dependencies.clock.now(),
   });
   if (reply.status === 'failed') {
+    if (turn?.messageStarted && !turn.messageEnded && turn.assistant) {
+      publishMessageEnded(turn.assistant, turn.messageId, input, dependencies);
+      turn.messageEnded = true;
+    }
+    if (turn) {
+      emitRuntime(dependencies, input, 'turn.ended', {
+        stopReason: 'error',
+        messageId: turn.messageId,
+        toolCallIds: turn.assistant ? toolCallIds(turn.assistant) : [],
+      });
+    }
     return { status: 'failed', failure: sessionFailure(reply.failure.message) };
   }
   if (!turn?.messageStarted) {
@@ -1010,18 +1141,22 @@ function publishAssistantProjection(
   const turn = runtime.activeTurn;
   if (!turn) return;
   const content = toAssistantContent(message);
+  const thinking = content
+    .filter((block) => block.type === 'thinking')
+    .map((block) => block.thinking)
+    .join('');
   emitRuntime(dependencies, input, 'message.update', {
     role: 'assistant',
     messageId: turn.messageId,
     content: assistantText(content),
   });
-  emitRuntime(dependencies, input, 'message.thinking.update', {
-    messageId: turn.messageId,
-    thinking: content
-      .filter((block) => block.type === 'thinking')
-      .map((block) => block.thinking)
-      .join(''),
-  });
+  if (thinking && thinking !== turn.lastThinking) {
+    turn.lastThinking = thinking;
+    emitRuntime(dependencies, input, 'message.thinking.update', {
+      messageId: turn.messageId,
+      thinking,
+    });
+  }
 }
 
 function publishToolUpdate(
@@ -1060,13 +1195,20 @@ function publishToolEnd(
   result: AgentToolResult,
   input: EngineAgentRunInput,
   dependencies: EngineAgentRunDependencies,
+  runtime: AdapterRuntime,
 ): void {
   const details = result.details as EngineToolResultDetails | undefined;
   if (!details) {
+    const systemFailure = runtime.toolSystemFailures.get(toolCallId);
     emitRuntime(dependencies, input, 'tool_execution.ended', {
       toolCallId,
       status: input.signal.aborted ? 'cancelled' : 'failed',
-      ...(input.signal.aborted ? {} : { error: { message: toolResultText(result), code: 'tool_execution_failed' } }),
+      ...(input.signal.aborted ? {} : {
+        error: {
+          message: systemFailure?.message ?? toolResultText(result),
+          code: systemFailure ? 'run_failed_before_tool_result' : 'tool_execution_failed',
+        },
+      }),
     });
     return;
   }
@@ -1111,15 +1253,24 @@ function toToolResultCommit(
   callOrder: number,
   aborted: boolean,
   fallbackCompletedAt: string,
+  runtime: AdapterRuntime,
 ): SessionToolResultCommit {
   const details = result.details as EngineToolResultDetails | undefined;
+  const systemFailure = runtime.toolSystemFailures.get(result.toolCallId);
   return {
     toolCallId: result.toolCallId,
     toolName: result.toolName,
     callOrder,
     status: details?.status ?? (aborted ? 'cancelled' : 'failure'),
     ...(details?.error ? { error: details.error } : result.isError
-      ? { error: { code: aborted ? 'tool_cancelled' : 'tool_execution_failed', message: toolResultText(result) } }
+      ? {
+          error: {
+            code: aborted ? 'tool_cancelled'
+              : systemFailure ? 'run_failed_before_tool_result'
+              : 'tool_execution_failed',
+            message: systemFailure?.message ?? toolResultText(result),
+          },
+        }
       : {}),
     content: details?.content ?? toolResultText(result),
     completedAt: details?.completedAt ?? fallbackCompletedAt,
@@ -1154,15 +1305,23 @@ function cancelledToolResult(
   });
 }
 
-function systemToolFailure(message: string, owner: 'permissions' | 'tools', code: string) {
+function systemToolFailure(
+  runtime: AdapterRuntime,
+  toolCallId: string,
+  message: string,
+  owner: 'permissions' | 'tools',
+  code: string,
+) {
+  const error = {
+    code: 'tool_system_failed' as const,
+    message,
+    retryable: false,
+    cause: { owner, code },
+  };
+  runtime.toolSystemFailures.set(toolCallId, error);
   return {
     status: 'system_failed' as const,
-    error: {
-      code: 'tool_system_failed' as const,
-      message,
-      retryable: false,
-      cause: { owner, code },
-    },
+    error,
   };
 }
 
@@ -1289,13 +1448,14 @@ function finishRetryProjection(
 ): void {
   const turn = runtime.activeTurn ?? runtime.pendingFinalTurn;
   if (!turn || turn.retryAttempts.length === 0) return;
-  if (result.status === 'completed') publishRetryCompleted(turn, input, dependencies);
+  if (result.status === 'completed') publishRetryCompleted(turn, input, dependencies, runtime);
   else {
     publishRetryFailed(
       turn,
       result.status === 'failed' ? result.error.message : 'Model call was cancelled.',
       input,
       dependencies,
+      runtime,
     );
   }
 }
@@ -1304,10 +1464,16 @@ function publishRetryCompleted(
   turn: TurnState,
   input: EngineAgentRunInput | undefined,
   dependencies: EngineAgentRunDependencies,
+  runtime: AdapterRuntime,
 ): void {
   if (input) {
     for (const attemptNumber of turn.retryAttempts) {
       emitRuntime(dependencies, input, 'turn.retry.completed', { attemptNumber });
+      runtime.observer.recordLog({
+        level: 'info',
+        event: 'model.call.retry.completed',
+        attributes: { retryAttemptNumber: attemptNumber },
+      });
     }
   }
   turn.retryAttempts = [];
@@ -1318,12 +1484,18 @@ function publishRetryFailed(
   message: string,
   input: EngineAgentRunInput | undefined,
   dependencies: EngineAgentRunDependencies,
+  runtime: AdapterRuntime,
 ): void {
   if (input) {
     for (const attemptNumber of turn.retryAttempts) {
       emitRuntime(dependencies, input, 'turn.retry.failed', {
         attemptNumber,
-        error: { message },
+        error: { message, code: 'model_call_failed' },
+      });
+      runtime.observer.recordLog({
+        level: 'warn',
+        event: 'model.call.retry.failed',
+        attributes: { retryAttemptNumber: attemptNumber },
       });
     }
   }

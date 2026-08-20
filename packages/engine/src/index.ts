@@ -1,8 +1,8 @@
 /*
  * Stable public entrypoint for the Engine package: the Runs operation
  * interface, its request/result contracts, the Run read-only results, the
- * creation entry and the caller-facing RunPolicy type. The Agent Loop, Run
- * Registry, internal runners, the committer and the loop observer are never
+ * creation entry and the caller-facing RunPolicy type. The Agent Adapter, Run
+ * Registry, internal committers and observers are never
  * exported.
  */
 export { createRuns } from './run';

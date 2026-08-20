@@ -22,6 +22,7 @@ import {
   errorOverflowStream,
   model,
   neverEndingStream,
+  retryableFailedStream,
   runPolicy,
   startRequest,
 } from './runs-test-fixtures';
@@ -262,6 +263,69 @@ describe('Engine Agent Adapter', () => {
     expect(result.status).toBe('completed');
     expect(fixture.writes).toEqual(['assistant:completed']);
   });
+
+  it('maps Tool definitions into AgentTools including execution mode', async () => {
+    const fixture = createRunsFixture({
+      streams: [assistantStream('done')],
+      tools: [registeredTool('parallel-lookup', { executionMode: 'parallel' })],
+    });
+    const contexts: Array<{ tools?: Array<Record<string, unknown>> }> = [];
+
+    const result = await executeAgentRun(runInput(), dependenciesFrom(fixture, {
+      models: captureModelContexts(fixture.options.models, contexts),
+    }));
+
+    expect(result.status).toBe('completed');
+    expect(contexts[0]?.tools).toEqual([
+      expect.objectContaining({
+        name: 'parallel-lookup',
+        description: 'parallel-lookup',
+        executionMode: 'parallel',
+        parameters: expect.objectContaining({ type: 'object' }),
+      }),
+    ]);
+  });
+
+  it('projects real model retries and records every finished Attempt', async () => {
+    const recordLog = vi.fn();
+    const recordMeasurement = vi.fn();
+    const observability = {
+      startTrace: vi.fn(() => ({ traceId: 'trace:1' })),
+      endTrace: vi.fn(),
+      startSpan: vi.fn(() => ({ spanId: 'span:1' })),
+      endSpan: vi.fn(),
+      runInTraceContext: vi.fn((_trace: unknown, operation: () => unknown) => operation()),
+      runInSpanContext: vi.fn((_span: unknown, operation: () => unknown) => operation()),
+      getCurrentTrace: vi.fn(),
+      getCurrentSpan: vi.fn(),
+      recordLog,
+      recordMeasurement,
+      flush: vi.fn(async () => undefined),
+    } as never;
+    const fixture = createRunsFixture({
+      streams: [retryableFailedStream('retry me'), assistantStream('done')],
+      policy: { maxModelCallAttempts: 2 },
+      observability,
+    });
+
+    const result = await executeAgentRun(runInput(), dependenciesFrom(fixture));
+
+    expect(result.status).toBe('completed');
+    expect(fixture.published.map((event) => event.type)).toEqual(expect.arrayContaining([
+      'turn.retry.started',
+      'turn.retry.completed',
+    ]));
+    expect(recordLog.mock.calls.filter((call) => (
+      (call[0] as { event: string }).event === 'model.call.attempt.finished'
+    ))).toHaveLength(2);
+    const measurements = recordMeasurement.mock.calls.map((call) => call[0] as { name: string });
+    expect(measurements.filter((item) => item.name === 'model.call.attempt')).toHaveLength(2);
+    expect(measurements.map((item) => item.name)).toEqual(expect.arrayContaining([
+      'model.call.usage',
+      'model.call.duration_ms',
+      'model.call.retry',
+    ]));
+  });
 });
 
 function runInput(signal: AbortSignal = new AbortController().signal): EngineAgentRunInput {
@@ -306,6 +370,7 @@ function dependenciesFrom(
     permissions: fixture.options.permissions,
     session: fixture.options.session,
     events: fixture.options.events,
+    ...(fixture.options.observability ? { observability: fixture.options.observability } : {}),
     ids: fixture.options.ids,
     clock,
     policy: fixture.options.policy ?? runPolicy,
@@ -330,7 +395,7 @@ function captureModelContexts(models: Models, captured: unknown[]): Models {
   return {
     ...models,
     streamSimple(modelInput, context, options) {
-      captured.push(structuredClone(context));
+      captured.push(context);
       return models.streamSimple(modelInput, context, options);
     },
   } as Models;
