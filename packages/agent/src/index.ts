@@ -1,0 +1,21 @@
+/* Exposes the stable Agent package contract; behavior is added after the core loop is complete. */
+export type {
+  AgentConfiguration,
+  AgentConfigurationPatch,
+  AgentContext,
+  AgentContextProvider,
+  AgentError,
+  AgentEvent,
+  AgentEventListener,
+  AgentExecutionResult,
+  AgentMessage,
+  AgentOperationErrorCode,
+  AgentOptions,
+  AgentPolicy,
+  AgentState,
+  AgentStreamFunction,
+  AgentTool,
+  AgentToolCall,
+  AgentToolExecutionOutcome,
+  AgentToolResult,
+} from './types';

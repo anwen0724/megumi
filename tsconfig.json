@@ -28,6 +28,12 @@
       "@megumi/product/*": [
         "packages/product/src/*"
       ],
+      "@megumi/agent": [
+        "packages/agent/src/index.ts"
+      ],
+      "@megumi/agent/*": [
+        "packages/agent/src/*"
+      ],
       "@megumi/engine": [
         "packages/engine/src/index.ts"
       ],
