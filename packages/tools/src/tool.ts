@@ -20,6 +20,8 @@ export interface ToolDefinition {
   readonly name: string;
   readonly description: string;
   readonly parameters: JsonSchemaObject;
+  /** Engine scheduling hint retained with the ModelCall Tool view; providers ignore it. */
+  readonly executionMode?: ToolExecutionMode;
   /** One-line description for the Available tools section in the system prompt; falls back to a folded, truncated description. */
   readonly promptSnippet?: string;
   /** Human-readable UI label; the UI uses name when absent. */

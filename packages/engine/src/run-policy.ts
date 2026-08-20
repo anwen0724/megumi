@@ -68,3 +68,19 @@ export function validateRunPolicy(policy: RunPolicy): RunPolicy {
 
   return policy;
 }
+
+/** Maps the stable Engine policy into the provider-neutral Agent execution limits. */
+export function toAgentPolicy(policy: RunPolicy): import('@megumi/agent').AgentPolicy {
+  return {
+    maxModelCalls: policy.maxModelCallsPerRun,
+    maxModelCallAttempts: policy.maxModelCallAttempts,
+    maxToolRounds: policy.maxToolRoundsPerRun,
+    maxToolCalls: policy.maxToolCallsPerRun,
+    maxToolCallsPerModelCall: policy.maxToolCallsPerModelCall,
+    maxConcurrentToolCalls: policy.maxConcurrentToolExecutions,
+    modelCallTimeoutMs: policy.modelCallTimeoutMs,
+    toolCallTimeoutMs: policy.toolExecutionTimeoutMs,
+    modelRetryDelayMs: policy.modelRetryDelayMs,
+    maxContextOverflowRecoveries: policy.maxContextOverflowRecoveries,
+  };
+}

@@ -1,9 +1,9 @@
 /*
- * Owns the Agent Loop's Observability access: the Run trace and root span,
+ * Owns the Engine Agent Adapter's Observability access: the Run trace and root span,
  * ModelCall/ToolCall/Approval spans, attempt/usage/duration/retry/limit
  * measurements, logs and the run/session/call correlation fields. Every
- * operation is best-effort: observation failures never change the Agent Loop
- * or Run outcome, and the observer never holds business state the loop needs
+ * operation is best-effort: observation failures never change the Agent
+ * execution or Run outcome, and the observer never holds business state needed
  * to continue.
  */
 import type {

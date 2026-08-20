@@ -1,8 +1,8 @@
 /*
- * Owns the single Session Entry chain inside an Agent Loop: model responses,
+ * Owns the single Session Entry chain inside an Engine Agent execution: model responses,
  * ordered tool results and completed/failed/cancelled assistant replies all
  * commit through this committer, and the one lastCommittedEntryId advances
- * only after Session reports the save as successful. The Agent Loop decides
+ * only after Session reports the save as successful. The Engine Agent Adapter decides
  * what to commit and when; the committer never publishes Runtime Events and
  * never decides whether the loop continues or the Run ends.
  */
@@ -20,7 +20,7 @@ export interface AssistantReplyMetadata {
   readonly error_message?: string;
 }
 
-/** The ToolCall result facts the Agent Loop decides to persist. */
+/** The ToolCall result facts the Engine Agent Adapter decides to persist. */
 export interface SessionToolResultCommit {
   readonly toolCallId: string;
   readonly toolName: string;

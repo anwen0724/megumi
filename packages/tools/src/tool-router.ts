@@ -34,7 +34,10 @@ export function createToolRouter<TContext>(request: {
   }>();
   return {
     scope: { ...request.scope },
-    definitions: () => [...selected.values()].map((tool) => tool.definition),
+    definitions: () => [...selected.values()].map((tool) => ({
+      ...tool.definition,
+      executionMode: tool.executionMode,
+    })),
     route(call) {
       const registered = selected.get(call.toolName);
       if (!registered) return failed('unknown_tool', `Tool not found in this ModelCall: ${call.toolName}`);
