@@ -188,3 +188,8 @@ export type ModelCallPolicy = Pick<
   | 'modelRetryDelayMs'
   | 'maxContextOverflowRecoveries'
 >;
+
+export type ToolCallPolicy = Pick<
+  AgentPolicy,
+  'maxConcurrentToolCalls' | 'toolCallTimeoutMs'
+>;
