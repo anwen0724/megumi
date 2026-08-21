@@ -52,7 +52,7 @@ describe("Commands", () => {
     })).resolves.toMatchObject({ type: "not_command" });
   });
 
-  it("uses the explicitly composed Context compactor and does not start Engine", async () => {
+  it("uses the explicitly composed Context compactor and does not start an Agent execution", async () => {
     const compact = vi.fn(async () => ({ status: "compacted" as const }));
     const commands = createCommands({ compact });
     const result = await commands.handle({

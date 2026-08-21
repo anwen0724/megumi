@@ -1,6 +1,6 @@
 /*
  * Guards the Input and Commands package boundaries: Input never depends on
- * Desktop, Product, Engine, Session, Context or Commands implementations, and
+ * Desktop, Product, Discovery Agent, Session, Context or Commands implementations, and
  * Commands never depends on Skills again.
  */
 import fs from 'node:fs';
@@ -10,9 +10,9 @@ import { describe, expect, it } from 'vitest';
 const root = process.cwd();
 
 describe('Input package boundary', () => {
-  it('does not import Desktop, Product, Engine, Session, Context or Commands implementations', () => {
+  it('does not import Desktop, Product, Discovery Agent, Session, Context or Commands implementations', () => {
     const source = readTypeScriptTree('packages/input/src');
-    expect(source).not.toMatch(/@megumi\/(?:desktop|product|engine|session|context|commands)(?:\/|['"])/u);
+    expect(source).not.toMatch(/@megumi\/(?:desktop|product|discovery-agent|session|context|commands)(?:\/|['"])/u);
     expect(source).not.toMatch(/apps[\\/]desktop/);
   });
 

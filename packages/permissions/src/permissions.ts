@@ -1,5 +1,5 @@
 /*
- * Provides the single Permissions capability entry without owning Engine lifecycle or Tool execution.
+ * Provides the single Permissions capability entry without owning Agent execution lifecycle or Tool execution.
  */
 import { z } from 'zod';
 import {

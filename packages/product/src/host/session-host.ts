@@ -11,7 +11,7 @@ export interface SessionHost {
   readSession(request: ReadSessionRequest): Promise<ReadSessionResult>;
   /** Returns committed facts used to reconcile one Run after its terminal event. */
   readCommittedRun(request: ReadCommittedRunRequest): Promise<ReadCommittedRunResult>;
-  /** Submits one user input through Input, Session, and Engine in that order. */
+  /** Submits one user input through Input, Session, and the Discovery Agent in that order. */
   sendUserInput(request: SendUserInputRequest): Promise<SendUserInputResult>;
   cancelUserInput(request: CancelUserInputRequest): Promise<CancelUserInputResult>;
   createBranchDraft(request: CreateBranchDraftRequest): CreateBranchDraftResult;

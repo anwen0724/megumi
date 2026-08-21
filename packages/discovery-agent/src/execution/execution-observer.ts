@@ -24,7 +24,7 @@ import type {
   SessionToolResultCommit,
 } from './session-settlement';
 import { SessionCommitError } from './session-settlement';
-import type { EngineToolResultDetails, EngineToolUpdateDetails } from './tool-adapter';
+import type { DiscoveryAgentToolResultDetails, DiscoveryAgentToolUpdateDetails } from './tool-adapter';
 import type { ToolScope } from './context-adapter';
 
 // ---------------------------------------------------------------------------
@@ -546,7 +546,7 @@ function publishToolUpdate(
   update: { readonly details?: unknown },
   options: CreateAgentEventListenerOptions,
 ): void {
-  const details = update.details as EngineToolUpdateDetails | undefined;
+  const details = update.details as DiscoveryAgentToolUpdateDetails | undefined;
   if (!details) return;
   if (details.kind === 'execution_started') {
     emitRuntime(options, 'tool_execution.started', {
@@ -576,7 +576,7 @@ function publishToolEnd(
   result: { readonly details?: unknown; readonly isError: boolean; readonly content: readonly { type: string; text?: string }[] },
   options: CreateAgentEventListenerOptions,
 ): void {
-  const details = result.details as EngineToolResultDetails | undefined;
+  const details = result.details as DiscoveryAgentToolResultDetails | undefined;
   if (!details) {
     const systemFailure = options.runtime.toolSystemFailures.get(toolCallId);
     emitRuntime(options, 'tool_execution.ended', {
@@ -631,7 +631,7 @@ export function toToolResultCommit(
   fallbackCompletedAt: string,
   runtime: ExecutionProjectionRuntime,
 ): SessionToolResultCommit {
-  const details = result.details as EngineToolResultDetails | undefined;
+  const details = result.details as DiscoveryAgentToolResultDetails | undefined;
   const systemFailure = runtime.toolSystemFailures.get(result.toolCallId);
   return {
     toolCallId: result.toolCallId,

@@ -3,7 +3,7 @@
  * Guards the private worker protocol: it carries only control requests, PCM
  * frames, frame acks, and Speech Input Events. The worker entry runs the
  * packages/voice runtime and must never write Sessions, submit Input, or
- * advance the Engine.
+ * advance the Discovery Agent.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -42,8 +42,8 @@ describe('Voice input worker protocol', () => {
       'utf8',
     );
     expect(source).toContain('createSpeechInputRuntime');
-    // The worker must not touch Session, Input, Engine, or Product internals.
-    expect(source).not.toMatch(/@megumi\/(session|engine|product)/);
+    // The worker must not touch Session, Discovery Agent, or Product internals.
+    expect(source).not.toMatch(/@megumi\/(session|discovery-agent|product)/);
     expect(source).not.toMatch(/from\s+['"]electron['"]/);
     expect(source).not.toMatch(/ipcRenderer|webContents/);
   });

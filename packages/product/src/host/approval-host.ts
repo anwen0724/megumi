@@ -16,7 +16,7 @@ export const ApprovalResolvePayloadSchema = z.discriminatedUnion('decision', [
 const JsonValueSchema: z.ZodType<unknown> = z.lazy(() => z.union([
   z.string(), z.number(), z.boolean(), z.null(), z.array(JsonValueSchema), z.record(z.string(), JsonValueSchema),
 ]));
-const RunFailureSchema = z.object({
+const ExecutionFailureSchema = z.object({
   code: z.enum([
     'session_failed', 'context_failed', 'model_call_failed', 'permission_failed',
     'tool_system_failed', 'loop_limit_exceeded', 'runtime_protocol_violation',
@@ -40,7 +40,7 @@ export const ApprovalResolveResultSchema = z.discriminatedUnion('status', [
     status: z.literal('not_waiting'), approvalRequestId: z.string().min(1), run: ApprovalRunUiDtoSchema,
   }).strict(),
   z.object({
-    status: z.literal('failed'), approvalRequestId: z.string().min(1), failure: RunFailureSchema,
+    status: z.literal('failed'), approvalRequestId: z.string().min(1), failure: ExecutionFailureSchema,
   }).strict(),
 ]);
 
@@ -79,7 +79,7 @@ export interface ApprovalHostNotWaitingResult {
 export interface ApprovalHostFailedResult {
   status: 'failed';
   approvalRequestId: string;
-  failure: z.infer<typeof RunFailureSchema>;
+  failure: z.infer<typeof ExecutionFailureSchema>;
 }
 
 export type ApprovalHostResult =

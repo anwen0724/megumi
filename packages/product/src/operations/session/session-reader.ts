@@ -104,7 +104,7 @@ export function createSessionReader(options: CreateSessionReaderOptions): Sessio
 
     /**
      * Reads only the committed messages and Workspace Changes for one Run.
-     * Engine state and recent Events are deliberately excluded from this
+     * Discovery Agent state and recent Events are deliberately excluded from this
      * terminal reconciliation query.
      */
     async readCommittedRun(request) {

@@ -1,58 +1,48 @@
 /*
- * Protects the complete Engine Event to Desktop approval-control projection.
+ * Protects the complete Discovery Agent Event to Desktop approval-control projection.
  */
 import { EventSchema } from '@megumi/events';
+import type { PermissionDecision } from '@megumi/permissions';
+import type { ApprovalResolution } from '@megumi/discovery-agent';
 import { reduceRuntimeTimelineEvent } from '@megumi/desktop/renderer/features/session-timeline';
 import { describe, expect, it, vi } from 'vitest';
 import { collectPendingApprovalActivities } from '../../../../../../apps/desktop/src/renderer/features/chat/approval-overlay';
 import {
-  approvalDecisionFor,
   assistantStream,
   collectEvents,
-  createRunsFixture,
-  startRequest,
-} from '../../../../../packages/engine/runs-test-fixtures';
+  createExecutionFixture,
+  launchedExecution,
+} from '../../../../../packages/discovery-agent/execution-test-fixtures';
 import {
-  approvalSubjectFor,
+  permissionService,
   registeredTool,
-} from '../../../../../packages/engine/tool-call-test-fixtures';
+} from '../../../../../packages/discovery-agent/tool-call-test-fixtures';
 
 describe('approval Runtime flow', () => {
-  it('projects an Engine approval event into a resolvable Desktop approval activity', async () => {
+  it('projects a Discovery Agent approval event into a resolvable Desktop approval activity', async () => {
     const tool = registeredTool('approval-tool');
-    const fixture = createRunsFixture({
+    const fixture = createExecutionFixture({
       tools: [tool],
-      streams: [assistantStream('needs approval', {
-        id: 'provider-call:1',
-        name: tool.registeredToolName,
-        arguments: { value: 'x' },
-      })],
-      permissions: {
-        evaluateToolCall: async (request) => {
-          const decision = approvalDecisionFor(request);
-          return {
-            status: 'ok',
-            operations: decision.operations,
-            decision,
-            approvalSubject: approvalSubjectFor(request, decision),
-          };
-        },
-        applyApprovalDecision: async () => ({
-          status: 'applied',
-          effect: { type: 'none' },
+      streams: [
+        assistantStream('needs approval', {
+          id: 'provider-call:1',
+          name: tool.registeredToolName,
+          arguments: { value: 'x' },
         }),
-      },
+        assistantStream('done'),
+      ],
+      permissions: permissionService(approvalDecisionFor),
     });
+    let resolveApproval!: (resolution: ApprovalResolution) => void;
+    const approval = new Promise<ApprovalResolution>((resolve) => { resolveApproval = resolve; });
+    const launched = await launchedExecution(fixture, { awaitApproval: async () => approval });
+    const completion = launched.execute();
 
-    const started = await fixture.runs.start(startRequest);
-    if (started.status !== 'started') throw new Error('Expected started Run.');
-
-    // The engine emits asynchronously; wait until the approval fact settles.
     await vi.waitFor(() => {
       expect(fixture.published.some((event) => event.type === 'approval.requested')).toBe(true);
     });
 
-    const events = collectEvents(fixture, started.run.executionId);
+    const events = collectEvents(fixture, 'execution:1');
     const approvalEvent = events.find((event) => event.type === 'approval.requested');
     expect(approvalEvent).toBeDefined();
     expect(EventSchema.safeParse(approvalEvent).success).toBe(true);
@@ -72,5 +62,31 @@ describe('approval Runtime flow', () => {
         }),
       }),
     ]);
+
+    resolveApproval({ status: 'cancelled' });
+    await completion;
   });
 });
+
+function approvalDecisionFor(
+  request: import('@megumi/permissions').EvaluateToolCallRequest,
+): Extract<PermissionDecision, { type: 'requires_approval' }> {
+  const identity = request.operations[0]?.context.toolIdentity ?? {
+    sourceId: 'built_in', namespace: 'megumi', sourceToolName: 'internal', registeredToolName: 'internal',
+  };
+  return {
+    type: 'requires_approval',
+    operations: [...request.operations],
+    safetyAssessment: 'safe',
+    safetySummary: 'Safe in test.',
+    reason: 'Approval required.',
+    options: [{
+      optionId: `once:${request.toolCallId}`,
+      scope: 'once',
+      display: { label: 'Once', description: 'Allow once.' },
+      effect: { type: 'current_tool_call' },
+    }],
+    defaultOptionId: `once:${request.toolCallId}`,
+    subjectFingerprint: `test-subject:${request.toolCallId}:${identity.registeredToolName}`,
+  };
+}

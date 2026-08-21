@@ -70,7 +70,7 @@ export function registeredTool(
 export function allowDecision(request: EvaluateToolCallRequest): Extract<PermissionDecision, { type: 'allow' }> {
   return {
     type: 'allow', operations: [...request.operations], safetyAssessment: 'safe',
-    safetySummary: 'Safe in Engine test.', reason: 'Allowed in test.',
+    safetySummary: 'Safe in Discovery Agent test.', reason: 'Allowed in test.',
   };
 }
 

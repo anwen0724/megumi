@@ -36,7 +36,7 @@ export const ApprovalRequestedPayloadSchema = z.object({
   args: z.record(z.string(), z.unknown()),
   /** The operations being approved. */
   operations: z.array(z.record(z.string(), z.unknown())),
-  /** Engine-side approval identity, used to resolve the approval later. */
+  /** Discovery Agent approval identity, used to resolve the approval later. */
   approvalRequestId: z.string().min(1),
   /** The permission scopes the user may grant; the UI renders them as choices. */
   options: z.array(ApprovalOptionSchema),
@@ -55,7 +55,7 @@ export const ApprovalRequestedPayloadSchema = z.object({
 export type ApprovalOption = z.infer<typeof ApprovalOptionSchema>;
 
 export const ApprovalResolvedPayloadSchema = z.object({
-  /** Engine-side approval identity, matching approval.requested. */
+  /** Discovery Agent approval identity, matching approval.requested. */
   approvalRequestId: z.string().min(1),
   toolCallId: z.string().min(1),
   /** How the approval was settled: expired covers a timed-out approval; cancelled

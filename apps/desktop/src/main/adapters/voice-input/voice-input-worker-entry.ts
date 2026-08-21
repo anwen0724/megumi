@@ -3,7 +3,7 @@
  * Runtime and bridges the private Adapter protocol to it. The worker is only
  * an execution location: every VAD, utterance, STT, and cancellation rule
  * stays inside packages/voice, and nothing here touches Sessions, Input, or
- * the Engine.
+ * the Discovery Agent.
  */
 
 import { parentPort, workerData } from 'node:worker_threads';

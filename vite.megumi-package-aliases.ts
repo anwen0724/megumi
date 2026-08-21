@@ -16,7 +16,7 @@ export const megumiPackageAliases: AliasOptions = [
   { find: '@megumi/commands', replacement: path.resolve(__dirname, 'packages/commands/src') },
   { find: '@megumi/context', replacement: path.resolve(__dirname, 'packages/context/src') },
   { find: '@megumi/database', replacement: path.resolve(__dirname, 'packages/database/src') },
-  { find: '@megumi/engine', replacement: path.resolve(__dirname, 'packages/engine/src') },
+  { find: '@megumi/discovery-agent', replacement: path.resolve(__dirname, 'packages/discovery-agent/src') },
   { find: '@megumi/events', replacement: path.resolve(__dirname, 'packages/events/src') },
   { find: '@megumi/input', replacement: path.resolve(__dirname, 'packages/input/src') },
   { find: '@megumi/instructions', replacement: path.resolve(__dirname, 'packages/instructions/src') },

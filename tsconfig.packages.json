@@ -7,7 +7,6 @@
     { "path": "./packages/context" },
     { "path": "./packages/database" },
     { "path": "./packages/discovery-agent" },
-    { "path": "./packages/engine" },
     { "path": "./packages/events" },
     { "path": "./packages/input" },
     { "path": "./packages/instructions" },
