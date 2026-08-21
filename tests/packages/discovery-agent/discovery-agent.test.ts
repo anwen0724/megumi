@@ -1,14 +1,18 @@
 /* Verifies the public Discovery Agent operations: start, approval, cancel, read, shutdown. */
 import { describe, expect, it, vi } from 'vitest';
 import { Agent } from '@megumi/agent';
-import { AssistantMessageEventStream, Type, type Api, type AssistantMessage, type Model } from '@megumi/ai';
+import { AssistantMessageEventStream, Type, type Api, type AssistantMessage, type Model, type Models } from '@megumi/ai';
+import type { ContextCapabilities } from '@megumi/context';
 import { createEventBus, type AnyEvent } from '@megumi/events';
-import type { SessionEntry, SessionMessageWithAttachments } from '@megumi/session';
+import type { Permissions } from '@megumi/permissions';
+import type { SessionEntry, SessionHistory, SessionMessageWithAttachments } from '@megumi/session';
+import type { Tools } from '@megumi/tools';
 import {
   createDiscoveryAgent,
   type ApprovalRequest,
   type CreateDiscoveryAgentOptions,
   type DiscoveryAgent,
+  type DiscoveryAgentPolicy,
   type ExecutionOutcome,
   type LaunchedAgentExecution,
   type LaunchAgentExecutionInput,
@@ -75,6 +79,21 @@ interface TestLaunch {
   readonly handles: LaunchHandle[];
 }
 
+const testPolicy: DiscoveryAgentPolicy = {
+  maxModelCallsPerExecution: 4,
+  maxToolRoundsPerExecution: 3,
+  maxToolCallsPerModelCall: 4,
+  maxToolCallsPerExecution: 8,
+  maxConcurrentToolExecutions: 2,
+  modelCallTimeoutMs: 1_000,
+  toolExecutionTimeoutMs: 1_000,
+  maxModelCallAttempts: 1,
+  modelRetryDelayMs: 0,
+  maxContextOverflowRecoveries: 1,
+  providerRequestMaxRetries: 0,
+  providerRequestMaxRetryDelayMs: 0,
+};
+
 function createTestLaunch(): TestLaunch {
   const handles: LaunchHandle[] = [];
   const launch = async (input: LaunchAgentExecutionInput): Promise<LaunchedAgentExecution> => {
@@ -119,9 +138,9 @@ function createTestLaunch(): TestLaunch {
     handles.push(handle);
     return {
       agent,
-      outcome,
       userMessage: stubUserMessage(input),
       userEntry: stubUserEntry(input),
+      execute: () => outcome,
     };
   };
   return { launch, handles };
@@ -144,12 +163,21 @@ function fixture(overrides: Partial<CreateDiscoveryAgentOptions> = {}): {
     ids: {
       createExecutionId: () => `execution:${++executionNumber}`,
       createSessionMessageId: () => `message:${++messageNumber}`,
+      createModelCallId: () => `model-call:${++executionNumber}`,
+      createToolExecutionId: () => `tool-execution:${++executionNumber}`,
       createApprovalId: () => `approval:${++approvalNumber}`,
     },
     clock,
     terminalRetentionMs: 60_000,
     events: eventsBus,
     launch: testLaunch.launch,
+    // Capability stubs: the injected launch override never reads them.
+    models: {} as Models,
+    context: {} as ContextCapabilities,
+    tools: {} as Pick<Tools, 'resolveModelCallTools' | 'routeToolCall' | 'executeToolInvocation' | 'releaseModelCallTools'>,
+    permissions: {} as Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>,
+    session: {} as Pick<SessionHistory, 'saveUserMessage' | 'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'>,
+    policy: testPolicy,
     ...overrides,
   };
   return {

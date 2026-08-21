@@ -2,18 +2,27 @@
  * Implements the public Discovery Agent operations: start with request-id
  * idempotency and per-Session exclusion, approval resolution, cancellation,
  * reads, and shutdown. It owns the Execution Registry and the run.* lifecycle
- * events, but never a second Agent Loop: the Agent drives the execution, and
- * the injected launch seam constructs and starts it.
+ * events, but never a second Agent Loop: the Execute Agent adapter constructs
+ * the Agent, and the single Agent Execution starts only after run.started.
  */
 import type { Agent } from '@megumi/agent';
-import type { Api, Model } from '@megumi/ai';
+import type { Api, Model, Models } from '@megumi/ai';
+import type { ContextCapabilities } from '@megumi/context';
 import type { EventBus, EventPayloadByType, EventType } from '@megumi/events';
 import type { UserInput } from '@megumi/input';
+import type { ObservabilityService } from '@megumi/observability';
 import type {
   ApprovalDecision,
   PermissionMode,
+  Permissions,
 } from '@megumi/permissions';
-import type { SessionEntry, SessionMessageWithAttachments } from '@megumi/session';
+import type { SessionEntry, SessionHistory, SessionMessageWithAttachments } from '@megumi/session';
+import type { Tools } from '@megumi/tools';
+import {
+  LaunchExecutionError,
+  launchAgentExecution,
+  type DiscoveryAgentPolicy,
+} from './execution/execute-agent';
 import {
   ExecutionRegistry,
   type ApprovalRequest,
@@ -133,10 +142,9 @@ export type ShutdownResult =
 // ---------------------------------------------------------------------------
 
 /**
- * The launch seam constructs one Agent for an accepted execution, starts the
- * single Agent Execution and returns the control handle together with the
- * Session facts the start operation already requires. The concrete wiring
- * lives in execution/execute-agent.ts.
+ * The launch seam establishes one execution: the User Message commit, the Agent
+ * construction and its adapters. `execute()` then starts the single Agent
+ * Execution after the Discovery Agent published run.started.
  */
 export interface LaunchAgentExecutionInput {
   readonly metadata: ExecutionMetadata;
@@ -146,9 +154,10 @@ export interface LaunchAgentExecutionInput {
 
 export interface LaunchedAgentExecution {
   readonly agent: Agent;
-  readonly outcome: Promise<ExecutionOutcome>;
   readonly userMessage: SessionMessageWithAttachments;
   readonly userEntry: SessionEntry;
+  /** Starts the single Agent Execution; resolves with the settled ExecutionOutcome. */
+  readonly execute: () => Promise<ExecutionOutcome>;
 }
 
 export type LaunchAgentExecution = (input: LaunchAgentExecutionInput) => Promise<LaunchedAgentExecution>;
@@ -158,19 +167,37 @@ export interface CreateDiscoveryAgentOptions {
   readonly ids: {
     createExecutionId(): string;
     createSessionMessageId(): string;
+    createModelCallId(): string;
+    createToolExecutionId(): string;
     createApprovalId(): string;
   };
   readonly clock: ExecutionClock;
   readonly terminalRetentionMs: number;
   readonly events: EventBus;
-  readonly launch: LaunchAgentExecution;
+  readonly models: Models;
+  readonly context: ContextCapabilities;
+  readonly tools: Pick<
+    Tools,
+    'resolveModelCallTools' | 'routeToolCall' | 'executeToolInvocation' | 'releaseModelCallTools'
+  >;
+  readonly permissions: Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>;
+  readonly session: Pick<
+    SessionHistory,
+    'saveUserMessage' | 'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'
+  >;
+  readonly observability?: ObservabilityService;
+  readonly policy: DiscoveryAgentPolicy;
+  /** Optional launch override for focused multi-execution tests; production uses the Execute Agent adapter. */
+  readonly launch?: LaunchAgentExecution;
 }
 
 export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): DiscoveryAgent {
+  validateDiscoveryAgentPolicy(options.policy);
   const store = new ExecutionRegistry({
     clock: options.clock,
     terminalRetentionMs: options.terminalRetentionMs,
   });
+  const launch = options.launch ?? ((input) => launchAgentExecution(input, options));
   let accepting = true;
 
   const settleCompletion = (executionId: string, outcome: ExecutionOutcome): void => {
@@ -315,11 +342,11 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
         return { status: 'session_busy', activeExecution: reserved.activeExecution };
       }
 
-      // The launch seam constructs the Agent, saves the User Message into the
-      // Session, and starts the single Agent Execution with the same executionId.
+      // The launch establishes the execution: the User Message commits and the
+      // Agent is constructed with its adapters, without starting the Loop yet.
       let launched: LaunchedAgentExecution;
       try {
-        launched = await options.launch({
+        launched = await launch({
           metadata,
           input: request.input,
           awaitApproval: (approvalRequest) => store.beginApprovalWait({
@@ -328,36 +355,30 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
           }),
         });
       } catch (error) {
-        const failure: ExecutionFailure = {
-          code: 'internal_error',
-          message: error instanceof Error ? error.message : 'Execution launch failed.',
-          retryable: false,
-          cause: { owner: 'discovery-agent', code: 'launch_failed' },
-        };
+        const failure: ExecutionFailure = error instanceof LaunchExecutionError
+          ? error.failure
+          : {
+              code: 'internal_error',
+              message: error instanceof Error ? error.message : 'Execution launch failed.',
+              retryable: false,
+              cause: { owner: 'discovery-agent', code: 'launch_failed' },
+            };
         store.failStart({ requestId: request.requestId, failure });
         return { status: 'failed', failure };
       }
 
+      let resolveCompletion!: (outcome: ExecutionOutcome) => void;
+      const completion = new Promise<ExecutionOutcome>((resolve) => {
+        resolveCompletion = resolve;
+      });
       store.attachActiveExecution({
         metadata,
         agent: launched.agent,
-        completion: launched.outcome,
+        completion,
         pendingApproval: undefined,
       });
-      // The unique Agent Execution settles the active record on every path;
-      // a rejected completion converges as a failed internal outcome.
-      void launched.outcome.then(
-        (outcome) => settleCompletion(executionId, outcome),
-        () => settleCompletion(executionId, {
-          status: 'failed',
-          failure: {
-            code: 'internal_error',
-            message: 'Execution failed unexpectedly.',
-            retryable: false,
-            cause: { owner: 'discovery-agent', code: 'unexpected_exception' },
-          },
-        }),
-      );
+      // The unique Agent Execution settles the active record on every path.
+      void completion.then((outcome) => settleCompletion(executionId, outcome));
       store.completeStart({
         requestId: request.requestId,
         executionId,
@@ -382,6 +403,20 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
         providerId: String(execution.model.provider),
         modelId: execution.model.id,
       });
+
+      // The single Agent Execution starts only after run.started was published.
+      void launched.execute().then(
+        resolveCompletion,
+        () => resolveCompletion({
+          status: 'failed',
+          failure: {
+            code: 'internal_error',
+            message: 'Execution failed unexpectedly.',
+            retryable: false,
+            cause: { owner: 'discovery-agent', code: 'unexpected_exception' },
+          },
+        }),
+      );
 
       return {
         status: 'started',
@@ -433,6 +468,15 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
         : { status: 'timed_out', activeExecutions: store.listActiveExecutions() };
     },
   };
+}
+
+/** The Discovery Agent validates the policy facts it owns; the Agent validates its own limits. */
+function validateDiscoveryAgentPolicy(policy: DiscoveryAgentPolicy): void {
+  for (const field of ['providerRequestMaxRetries', 'providerRequestMaxRetryDelayMs'] as const) {
+    if (!Number.isInteger(policy[field]) || policy[field] < 0) {
+      throw new TypeError(`Invalid DiscoveryAgentPolicy.${field}: expected a non-negative integer.`);
+    }
+  }
 }
 
 function toApprovalDecision(

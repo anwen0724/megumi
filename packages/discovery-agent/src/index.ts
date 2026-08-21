@@ -31,3 +31,4 @@ export type {
   ExecutionSnapshot,
   ExecutionStatus,
 } from './execution/execution-registry';
+export type { DiscoveryAgentPolicy } from './execution/execute-agent';

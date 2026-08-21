@@ -20,7 +20,12 @@ describe('@megumi/discovery-agent public contract', () => {
       'index.ts',
     ]);
     expect(readdirSync(join(packageRoot, 'src/execution')).sort()).toEqual([
+      'context-adapter.ts',
+      'execute-agent.ts',
+      'execution-observer.ts',
       'execution-registry.ts',
+      'session-settlement.ts',
+      'tool-adapter.ts',
     ]);
     const businessDirectories = [
       'discovery', 'recommendation', 'feedback', 'scheduling', 'delivery',
@@ -43,8 +48,10 @@ describe('@megumi/discovery-agent public contract', () => {
     expect(Object.keys(manifest.dependencies ?? {}).sort()).toEqual([
       '@megumi/agent',
       '@megumi/ai',
+      '@megumi/context',
       '@megumi/events',
       '@megumi/input',
+      '@megumi/observability',
       '@megumi/permissions',
       '@megumi/session',
       '@megumi/tools',
@@ -54,7 +61,7 @@ describe('@megumi/discovery-agent public contract', () => {
       readFileSync(join(packageRoot, 'src/discovery-agent.ts'), 'utf8'),
       readFileSync(join(packageRoot, 'src/execution/execution-registry.ts'), 'utf8'),
     ].join('\n');
-    for (const forbidden of ['@megumi/engine', '@megumi/product', '@megumi/context', '@megumi/workspace', '@megumi/observability']) {
+    for (const forbidden of ['@megumi/engine', '@megumi/product', '@megumi/workspace']) {
       expect(sources).not.toContain(`from '${forbidden}`);
     }
   });
