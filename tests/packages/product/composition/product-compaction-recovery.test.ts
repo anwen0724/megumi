@@ -6,10 +6,11 @@ import { join } from 'node:path';
 import fs from 'fs-extra';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDatabase } from '@megumi/database';
-import { composeProduct, type ComposeProductOptions } from '@megumi/product';
+import type { ProductCapabilitiesOptions } from '@megumi/product';
 import { createSessionCatalog, createSessionHistory } from '@megumi/session';
 import { createSessionStore } from '@megumi/session/store';
 import { createNodeWorkspaceFileSystem } from '@megumi/workspace/node';
+import { composeTestProduct } from './compose-test-product';
 
 const tempDirectories: string[] = [];
 
@@ -28,7 +29,7 @@ describe('Product Compaction startup recovery', () => {
     mkdirSync(workspaceRoot);
     const options = productOptions(root, homePath, workspaceRoot);
 
-    const initialProduct = composeProduct(options);
+    const initialProduct = composeTestProduct(options);
     await initialProduct.dispose();
 
     const database = createDatabase({ filename: join(homePath, 'sqlite', 'megumi.sqlite') });
@@ -71,7 +72,7 @@ describe('Product Compaction startup recovery', () => {
     }).status).toBe('started');
     database.close();
 
-    const recoveredProduct = composeProduct(options);
+    const recoveredProduct = composeTestProduct(options);
     await recoveredProduct.dispose();
 
     const recoveredDatabase = createDatabase({ filename: join(homePath, 'sqlite', 'megumi.sqlite') });
@@ -97,7 +98,7 @@ describe('Product Compaction startup recovery', () => {
   });
 });
 
-function productOptions(root: string, homePath: string, workspaceRoot: string): ComposeProductOptions {
+function productOptions(root: string, homePath: string, workspaceRoot: string): ProductCapabilitiesOptions {
   let settings: Record<string, unknown> = {};
   return {
     home: {
@@ -111,9 +112,6 @@ function productOptions(root: string, homePath: string, workspaceRoot: string): 
         copyDirectorySync: fs.copySync,
       },
       clock: { now: () => new Date('2026-08-08T00:00:00.000Z') },
-    },
-    directoryPicker: {
-      chooseDirectory: async () => ({ canceled: false, filePaths: [workspaceRoot] }),
     },
     workspaceFileSystem: createNodeWorkspaceFileSystem(),
     settingsStorage: {

@@ -1,5 +1,6 @@
 /* Creates the production Evaluation runtime exclusively through Product Composition and Host. */
-import { composeProduct, type ComposeProductOptions, type ProductRuntime } from '@megumi/product';
+import { createDiscoveryAgent } from '@megumi/discovery-agent';
+import { composeProduct, composeProductCapabilities, type ProductCapabilitiesOptions, type ProductRuntime } from '@megumi/product';
 import type { AnyEvent as RuntimeEvent } from '@megumi/product/host';
 import type { BuiltInToolAvailability } from '@megumi/tools';
 import {
@@ -25,7 +26,7 @@ export interface ComposeProductEvaluationFactoryOptions {
     baseUrl?: string;
   };
   productOverrides?: Partial<Omit<
-    ComposeProductOptions,
+    ProductCapabilitiesOptions,
     'home' | 'directoryPicker' | 'workspaceFileSystem' | 'builtInToolAvailability' | 'observabilityStorage' | 'settingsEnvironment' | 'productEnvironment'
   >>;
 }
@@ -41,12 +42,11 @@ export function createComposeProductEvaluationFactory(
       const builtInToolAvailability: BuiltInToolAvailability = {
         isAvailable: ({ toolName }) => input.isBuiltInToolAvailable(toolName),
       };
-      const product = composeProduct({
+      // The capability instances are composed once, the Discovery Agent is
+      // constructed from them, and both are injected into Product.
+      const capabilities = composeProductCapabilities({
         ...options.productOverrides,
         home: createEvaluationHomeOptions(input.homeRoot),
-        directoryPicker: {
-          chooseDirectory: async () => ({ canceled: false, filePaths: [input.workspaceRoot] }),
-        },
         observabilityStorage: nodeObservabilityStorage,
         inputSourceAccess: createEvaluationInputSourceAccess(input.workspaceRoot),
         workspaceFileSystem: input.workspaceFileSystem,
@@ -54,6 +54,14 @@ export function createComposeProductEvaluationFactory(
         builtInToolAvailability,
         settingsEnvironment: createNodeSettingsEnvironment(),
         productEnvironment: getNodeProductEnvironment(),
+      });
+      const discoveryAgent = createDiscoveryAgent(capabilities.discoveryAgentOptions);
+      const product = composeProduct({
+        capabilities,
+        discoveryAgent,
+        directoryPicker: {
+          chooseDirectory: async () => ({ canceled: false, filePaths: [input.workspaceRoot] }),
+        },
       });
       const runtimeEvents = createRuntimeEventStream(product);
 

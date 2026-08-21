@@ -11,9 +11,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import fs from 'fs-extra';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { composeProduct, type ProductRuntime } from '@megumi/product';
+import type { ProductCapabilitiesOptions, ProductRuntime } from '@megumi/product';
 import { createNodeWorkspaceFileSystem } from '@megumi/workspace/node';
 import type { SpeechInputEvent, SpeechInputRuntime } from '@megumi/voice';
+import { composeTestProduct } from './composition/compose-test-product';
 
 const tempDirectories: string[] = [];
 const composedProducts: ProductRuntime[] = [];
@@ -52,7 +53,13 @@ function noopSpeechInput(): SpeechInputRuntime & { started: ReturnType<typeof vi
 function composeWithVoice(speechInput: SpeechInputRuntime): ProductRuntime {
   const root = mkdtempSync(join(tmpdir(), 'megumi-voice-composition-'));
   tempDirectories.push(root);
-  const product = composeProduct({
+  const product = composeTestProduct(capabilitiesOptions(root), { voice: { speechInput } });
+  composedProducts.push(product);
+  return product;
+}
+
+function capabilitiesOptions(root: string): ProductCapabilitiesOptions {
+  return {
     home: {
       env: { MEGUMI_HOME: join(root, 'home') },
       homeDirectory: root,
@@ -66,10 +73,7 @@ function composeWithVoice(speechInput: SpeechInputRuntime): ProductRuntime {
       clock: { now: () => new Date('2026-07-10T00:00:00.000Z') },
     },
     workspaceFileSystem: createNodeWorkspaceFileSystem(),
-    voice: { speechInput },
-  });
-  composedProducts.push(product);
-  return product;
+  };
 }
 
 describe('Product voice composition', () => {
@@ -133,21 +137,7 @@ describe('Product voice composition', () => {
   it('fails the Voice Session honestly when no Speech Input Adapter is injected', async () => {
     const root = mkdtempSync(join(tmpdir(), 'megumi-voice-unconfigured-'));
     tempDirectories.push(root);
-    const product = composeProduct({
-      home: {
-        env: { MEGUMI_HOME: join(root, 'home') },
-        homeDirectory: root,
-        fileSystem: {
-          ensureDirSync: fs.ensureDirSync,
-          pathExistsSync: fs.pathExistsSync,
-          writeJsonSync: fs.writeJsonSync,
-          writeFileSync: fs.writeFileSync,
-          copyDirectorySync: fs.copySync,
-        },
-        clock: { now: () => new Date('2026-07-10T00:00:00.000Z') },
-      },
-      workspaceFileSystem: createNodeWorkspaceFileSystem(),
-    });
+    const product = composeTestProduct(capabilitiesOptions(root));
     composedProducts.push(product);
 
     const result = await product.host.voice.startSession({ boundSessionId: 'session:one' });

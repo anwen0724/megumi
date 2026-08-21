@@ -76,7 +76,8 @@ describe('Product and Desktop final boundaries', () => {
     expect(productHost).not.toContain('chat:');
     expect(approvalHost).not.toContain("from '@megumi/engine'");
     expect(approvalHost).not.toContain('createApprovalOperations');
-    expect(approvalOperations).toContain("from '@megumi/engine'");
+    expect(approvalOperations).toContain("from '@megumi/discovery-agent'");
+    expect(approvalOperations).not.toContain("from '@megumi/engine'");
     expect(approvalOperations).toContain('createApprovalOperations');
   });
 });

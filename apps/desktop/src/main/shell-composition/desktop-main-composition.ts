@@ -1,7 +1,8 @@
 // Composes the Electron UI shell and connects it to the Product Host Interface.
 import { app, BrowserWindow } from 'electron';
+import { createDiscoveryAgent } from '@megumi/discovery-agent';
+import { composeProduct, composeProductCapabilities, resolveMegumiHomePath } from '@megumi/product';
 import { createElectronMegumiHomeSyncOptions } from '../adapters/electron-home-adapter';
-import { composeProduct, resolveMegumiHomePath } from '@megumi/product';
 import { forwardRuntimeEvent } from '../ipc/event-forwarders';
 import { electronDirectoryPickerAdapter } from '../adapters/electron-directory-picker-adapter';
 import { electronFileOpenAdapter } from '../adapters/electron-file-open-adapter';
@@ -38,20 +39,27 @@ export function composeDesktopMain() {
       mainBuildDirectory: __dirname,
     }),
   });
-  const product = composeProduct({
+  // The capability instances are composed once, the Discovery Agent is
+  // constructed from them, and both are injected into Product.
+  const capabilities = composeProductCapabilities({
     home,
     migrationEnvironment: getElectronMigrationEnvironment(),
     observabilityStorage: electronObservabilityStorageAdapter,
     productEnvironment: getElectronProductEnvironment(),
-    diagnosticBundleSave: { save: saveDiagnosticBundle },
     workspaceFileSystem: createDesktopWorkspaceFileSystem(),
     settingsEnvironment: createDesktopSettingsEnvironment(),
+    inputSourceAccess: electronInputSourceAccess,
+    sessionAttachmentFileSystem: electronSessionAttachmentFileSystem,
+  });
+  const discoveryAgent = createDiscoveryAgent(capabilities.discoveryAgentOptions);
+  const product = composeProduct({
+    capabilities,
+    discoveryAgent,
+    diagnosticBundleSave: { save: saveDiagnosticBundle },
     directoryPicker: electronDirectoryPickerAdapter,
     fileOpen: electronFileOpenAdapter,
     attachmentPicker: electronInputAttachmentPickerAdapter,
     localFileAvailability: electronLocalFileAvailability,
-    inputSourceAccess: electronInputSourceAccess,
-    sessionAttachmentFileSystem: electronSessionAttachmentFileSystem,
     voice: { ...voiceResources.voiceOptions, speechInput: voiceInputAdapter },
   });
   const runtimeLogger = product.logger;

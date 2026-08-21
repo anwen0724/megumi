@@ -2,8 +2,8 @@
  * Owns Product-wide startup rollback and ordered shutdown. It records only
  * resources created by Composition and never decides module business state.
  */
+import type { DiscoveryAgent } from '@megumi/discovery-agent';
 import type { DatabaseConnection } from '@megumi/database';
-import type { Runs } from '@megumi/engine';
 import type { EventSubscription } from '@megumi/events';
 import type { Voice } from '@megumi/voice';
 
@@ -12,7 +12,7 @@ export interface ProductResourceManager {
   registerEventSubscription(subscription: EventSubscription): void;
   rollbackStartup(): void;
   dispose(input: {
-    readonly runs: Runs;
+    readonly discoveryAgent: DiscoveryAgent;
     readonly voice: Voice;
     readonly speechOutput: { dispose(): void };
     readonly observability: { flush(): Promise<void> };
@@ -20,7 +20,7 @@ export interface ProductResourceManager {
 }
 
 interface ProductDisposeFailure {
-  readonly resource: 'runs' | 'voice' | 'speech-output' | 'events' | 'observability' | 'database';
+  readonly resource: 'discovery-agent' | 'voice' | 'speech-output' | 'events' | 'observability' | 'database';
   readonly error: unknown;
 }
 
@@ -58,18 +58,18 @@ export function createProductResourceManager(input: {
     },
 
     /** Attempts every shutdown step and reports all failures only after cleanup. */
-    async dispose({ runs, voice, speechOutput, observability }) {
+    async dispose({ discoveryAgent, voice, speechOutput, observability }) {
       const failures: ProductDisposeFailure[] = [];
       try {
-        const result = await runs.shutdown({ timeoutMs: input.shutdownTimeoutMs });
+        const result = await discoveryAgent.shutdown({ timeoutMs: input.shutdownTimeoutMs });
         if (result.status === 'timed_out') {
           failures.push({
-            resource: 'runs',
-            error: new Error(`Engine shutdown timed out with ${result.activeRuns.length} active Run(s).`),
+            resource: 'discovery-agent',
+            error: new Error(`Discovery Agent shutdown timed out with ${result.activeExecutions.length} active execution(s).`),
           });
         }
       } catch (error) {
-        failures.push({ resource: 'runs', error });
+        failures.push({ resource: 'discovery-agent', error });
       }
 
       try {

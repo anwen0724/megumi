@@ -13,7 +13,7 @@ const session = {
 const userMessage = {
   message_id: 'message:1',
   session_id: session.session_id,
-  execution_id: 'run:1',
+  execution_id: 'execution:1',
   message_kind: 'user_message' as const,
   display_content: [{ type: 'text' as const, text: 'hello' }],
   model_content: [{ type: 'text' as const, text: '<skill>private</skill>\nhello' }],
@@ -49,11 +49,11 @@ describe('Product Session reader', () => {
         }),
         getCommittedRunMessages: () => ({ status: 'ok', messages: [messageItem] }),
       },
-      runs: {
+      discoveryAgent: {
         getActive: () => ({
           status: 'found',
-          run: {
-            executionId: 'run:1', requestId: 'request:1', workspaceId: 'workspace:1',
+          execution: {
+            executionId: 'execution:1', requestId: 'request:1', workspaceId: 'workspace:1',
             sessionId: 'session:1', userMessageId: 'message:1',
             model: {} as never, permissionMode: 'ask', status: 'waiting',
             createdAt: '2026-07-04T00:00:02.000Z', startedAt: '2026-07-04T00:00:02.000Z',
@@ -75,9 +75,9 @@ describe('Product Session reader', () => {
     expect(result).toMatchObject({
       status: 'ok',
       session: { id: session.session_id, projectId: session.workspace_id },
-      activeRun: { executionId: 'run:1', status: 'waiting' },
+      activeRun: { executionId: 'execution:1', status: 'waiting' },
       eventRange: { firstSequence: 3, lastSequence: 4, truncated: true },
-      diagnostics: [{ code: 'workspace_changes_unavailable', executionId: 'run:1' }],
+      diagnostics: [{ code: 'workspace_changes_unavailable', executionId: 'execution:1' }],
       conversation: [
         { type: 'message', entryId: 'entry:1', message: { kind: 'user', displayContent: [{ text: 'hello' }] } },
         { type: 'compaction', compactionId: 'compaction:1', status: 'failed' },
@@ -88,8 +88,8 @@ describe('Product Session reader', () => {
     }
   });
 
-  it('reads one committed Run without consulting Engine or Events', async () => {
-    let engineReads = 0;
+  it('reads one committed execution without consulting the Discovery Agent or Events', async () => {
+    let discoveryReads = 0;
     let eventReads = 0;
     const reader = createSessionReader({
       sessions: { getSession: () => ({ status: 'found', session }) },
@@ -97,14 +97,14 @@ describe('Product Session reader', () => {
         getActiveConversationHistory: () => ({ status: 'ok', conversation: [] }),
         getCommittedRunMessages: () => ({ status: 'ok', messages: [messageItem] }),
       },
-      runs: { getActive: () => { engineReads += 1; return { status: 'not_found', sessionId: session.session_id }; } },
+      discoveryAgent: { getActive: () => { discoveryReads += 1; return { status: 'not_found', sessionId: session.session_id }; } },
       events: { read: () => { eventReads += 1; return { events: [], truncated: false }; } },
       workspaceChanges: { listChangeSummaries: () => ({ summaries: [] }) },
     });
 
-    const result = await reader.readCommittedRun({ sessionId: session.session_id, executionId: 'run:1' });
+    const result = await reader.readCommittedRun({ sessionId: session.session_id, executionId: 'execution:1' });
 
     expect(result).toMatchObject({ status: 'ok', messages: [{ entryId: 'entry:1' }] });
-    expect({ engineReads, eventReads }).toEqual({ engineReads: 0, eventReads: 0 });
+    expect({ discoveryReads, eventReads }).toEqual({ discoveryReads: 0, eventReads: 0 });
   });
 });

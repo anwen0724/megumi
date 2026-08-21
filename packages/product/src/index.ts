@@ -3,14 +3,22 @@
  */
 export {
   composeProduct,
+  composeProductCapabilities,
   type ComposeProductOptions,
   type ComposeProductVoiceOptions,
+  type ProductCapabilitiesInput,
   type ProductEnvironment,
   type ProductInputSourceAccess,
   type ProductObservabilityStorage,
   type ProductSessionAttachmentFileSystem,
   type ProductSettingsEnvironment,
 } from './composition/product-composer';
+export type {
+  ProductCapabilities,
+  ProductCapabilitiesOptions,
+  ProductModelResolutionResult,
+  ProductModelResolver,
+} from './composition/product-capabilities';
 export type { ProductRuntime, ProductRuntimeLogger } from './composition/product-runtime';
 export type { ProductHostInterface } from './host/product-host';
 export type { VoiceHost } from './host/voice-host';

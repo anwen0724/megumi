@@ -1,66 +1,12 @@
 /*
- * Composes Package contracts into the Product entry point and owns the
- * Product-wide startup, shutdown, and resource rollback sequence.
+ * Composes the Product entry point from the already-composed capability
+ * instances and the already-constructed Discovery Agent public Interface, and
+ * owns the Product-wide startup, shutdown, and resource rollback sequence.
+ * Product only wires Host requests, DTO conversions and UI event forwarding.
  */
-import path from 'node:path';
-import type { Api, Model, ProviderStreams } from '@megumi/ai';
-import {
-  createCommands,
-  createCommandInputInterpreter,
-  type CommandTerminalResult,
-  type Commands,
-} from '@megumi/commands';
-import { createContext, type ContextWorkspaceSource } from '@megumi/context';
-import {
-  createDatabase,
-  migrateDatabase,
-  type DatabaseConnection,
-  type ResolveDatabaseMigrationsFolderRequest,
-} from '@megumi/database';
-import { createRuns } from '@megumi/engine';
-import {
-  createEventBus,
-  type EventBus,
-} from '@megumi/events';
-import { createInputProcessor, type InputSourceAccess } from '@megumi/input';
-import { createInstructionReader } from '@megumi/instructions';
-import {
-  composeObservability,
-  createObservabilityRuntimeLogger,
-  type ObservabilityStorage,
-} from '@megumi/observability';
-import { createPermissions } from '@megumi/permissions';
-import { createSandbox } from '@megumi/sandbox';
-import {
-  createSessionAttachmentReader,
-  createSessionBranchDrafts,
-  createSessionCatalog,
-  createSessionHistory,
-  type SessionAttachmentFileSystem,
-  type SessionHistory,
-} from '@megumi/session';
-import { createSessionAttachmentFileStore } from '@megumi/session/attachment-store';
-import { createSessionStore } from '@megumi/session/store';
-import {
-  createSettings,
-  createSettingsCredentialStore,
-  type SettingsEnvironment,
-  type SettingsStore,
-} from '@megumi/settings';
-import { createSettingsStore } from '@megumi/settings/store';
-import { createSkills, type Skills } from '@megumi/skills';
-import {
-  createTools,
-  type BuiltInToolAvailability,
-} from '@megumi/tools';
-import {
-  createWorkspaceCatalog,
-  createWorkspaceChangeEventHandler,
-  createWorkspaceChanges,
-  createWorkspaceFiles,
-  createWorkspacePathPolicy,
-} from '@megumi/workspace';
-import { createWorkspaceStore } from '@megumi/workspace/store';
+import type { DiscoveryAgent } from '@megumi/discovery-agent';
+import { deriveContextUsage } from '@megumi/context';
+import { createWorkspaceChangeEventHandler } from '@megumi/workspace';
 import {
   createSpeechOutputRuntime,
   createVoice,
@@ -68,28 +14,32 @@ import {
   type SpeechSynthesizer,
   type VoiceModels,
 } from '@megumi/voice';
-import {
-  initializeMegumiHomeSync,
-  type InitializeMegumiHomeSyncOptions,
-} from '../home/home-initializer';
-import type { MegumiHomePaths } from '../home/home-paths';
-import { createSessionOperations } from '../operations/session/session-operations';
+import type { AttachmentPicker } from '../host/capabilities/attachment-picker';
+import type { LocalFileAvailability } from '../host/capabilities/local-file-availability';
+import type { DiagnosticBundleSaver } from '../host/capabilities/diagnostic-bundle-saver';
+import type { ProductHostInterface } from '../host/product-host';
+import type { DirectoryPicker } from '../host/capabilities/directory-picker';
+import type { FileOpener } from '../host/capabilities/file-opener';
+import { migrateLegacyPermissionSettingsFile } from '../home/migrations/legacy-permission-settings';
+import { migrateLegacyProviderApiSettingsFile } from '../home/migrations/legacy-provider-api-settings';
 import { createApprovalOperations } from '../operations/approval-operations';
 import { createObservabilityOperations } from '../operations/observability-operations';
 import { createSettingsOperations } from '../operations/settings-operations';
 import { createSkillOperations } from '../operations/skill-operations';
 import { createWorkspaceOperations } from '../operations/workspace-operations';
 import { createVoiceOperations } from '../operations/voice-operations';
-import { deriveContextUsage } from '@megumi/context';
 import { createInputSuggestionQuery } from '../operations/session/input-suggestions';
 import { createInputSubmission } from '../operations/session/input-submission';
+import { createSessionOperations } from '../operations/session/session-operations';
 import { createSessionReader } from '../operations/session/session-reader';
-import { composeModels } from './model-composer';
 import {
-  PRODUCT_RECENT_EVENT_BUFFER,
-  PRODUCT_RUN_POLICY,
+  composeProductCapabilities,
+  type ProductCapabilities,
+  type ProductCapabilitiesOptions,
+} from './product-capabilities';
+import {
+  PRODUCT_SHUTDOWN_TIMEOUT_MS,
   resolveAutoCompactPercent,
-  resolveModelVisibleOperatingSystem,
 } from './product-policy';
 import {
   createProductResourceManager,
@@ -100,25 +50,7 @@ import {
   type ProductRuntime,
 } from './product-runtime';
 import { onRunEndedForSpeechOutput } from './speech-output-wiring';
-import type {
-  AttachmentPicker,
-} from '../host/capabilities/attachment-picker';
-import type { LocalFileAvailability } from '../host/capabilities/local-file-availability';
-import type { DiagnosticBundleSaver } from '../host/capabilities/diagnostic-bundle-saver';
-import type { ProductHostInterface } from '../host/product-host';
-import type { DirectoryPicker } from '../host/capabilities/directory-picker';
-import type { FileOpener } from '../host/capabilities/file-opener';
-import { migrateLegacyPermissionSettingsFile } from '../home/migrations/legacy-permission-settings';
-import { migrateLegacyProviderApiSettingsFile } from '../home/migrations/legacy-provider-api-settings';
-import type { ProductWorkspaceFileSystem } from '../host/capabilities/workspace-file-system';
 
-export interface ProductEnvironment {
-  readonly appVersion: string;
-  readonly platform: string;
-  readonly arch: string;
-}
-
-export type ProductSettingsEnvironment = SettingsEnvironment;
 export interface ComposeProductVoiceOptions {
   /** Desktop injects the single Voice Input Adapter that owns the Speech Worker. */
   readonly speechInput?: SpeechInputRuntime;
@@ -126,38 +58,26 @@ export interface ComposeProductVoiceOptions {
   readonly speechOutputSynthesizer?: SpeechSynthesizer;
   readonly models?: VoiceModels;
 }
+
 export interface ComposeProductOptions {
-  home: InitializeMegumiHomeSyncOptions;
-  migrationsFolder?: string;
-  migrationEnvironment?: Omit<ResolveDatabaseMigrationsFolderRequest, 'migrationsFolder'>;
-  observabilityStorage?: ObservabilityStorage;
-  productEnvironment?: ProductEnvironment;
-  diagnosticBundleSave?: DiagnosticBundleSaver;
-  directoryPicker?: DirectoryPicker;
-  fileOpen?: FileOpener;
-  workspaceFileSystem: ProductWorkspaceFileSystem;
-  attachmentPicker?: AttachmentPicker;
-  localFileAvailability?: LocalFileAvailability;
-  settingsEnvironment?: ProductSettingsEnvironment;
-  inputSourceAccess?: InputSourceAccess;
-  sessionAttachmentFileSystem?: SessionAttachmentFileSystem;
-  settingsStorage?: SettingsStore;
-  builtInToolAvailability?: BuiltInToolAvailability;
-  modelStreams?: Partial<Record<Api, ProviderStreams>>;
-  voice?: ComposeProductVoiceOptions;
+  /** The once-composed capability instances shared with the Discovery Agent construction. */
+  readonly capabilities: ProductCapabilities;
+  /** The already-constructed Discovery Agent public Interface; Product never constructs it. */
+  readonly discoveryAgent: DiscoveryAgent;
+  readonly diagnosticBundleSave?: DiagnosticBundleSaver;
+  readonly directoryPicker?: DirectoryPicker;
+  readonly fileOpen?: FileOpener;
+  readonly attachmentPicker?: AttachmentPicker;
+  readonly localFileAvailability?: LocalFileAvailability;
+  readonly voice?: ComposeProductVoiceOptions;
 }
 
-export type ProductInputSourceAccess = NonNullable<ComposeProductOptions['inputSourceAccess']>;
-export type ProductSessionAttachmentFileSystem = NonNullable<ComposeProductOptions['sessionAttachmentFileSystem']>;
-export type ProductObservabilityStorage = NonNullable<ComposeProductOptions['observabilityStorage']>;
-
-type ProductModelResolver = (
-  request: { provider_id: string; model_id: string },
-) => Promise<ProductModelResolutionResult>;
-
-type ProductModelResolutionResult =
-  | { status: 'ok'; model: Model<Api> }
-  | { status: 'failed'; failure: { code: string; message: string; retryable?: boolean } };
+export type ProductCapabilitiesInput = ProductCapabilitiesOptions;
+export type ProductInputSourceAccess = NonNullable<ProductCapabilitiesOptions['inputSourceAccess']>;
+export type ProductSessionAttachmentFileSystem = NonNullable<ProductCapabilitiesOptions['sessionAttachmentFileSystem']>;
+export type ProductObservabilityStorage = NonNullable<ProductCapabilitiesOptions['observabilityStorage']>;
+export type ProductEnvironment = NonNullable<ProductCapabilitiesOptions['productEnvironment']>;
+export type ProductSettingsEnvironment = NonNullable<ProductCapabilitiesOptions['settingsEnvironment']>;
 
 /**
  * Builds the complete Product in dependency order and rolls back every resource
@@ -165,7 +85,7 @@ type ProductModelResolutionResult =
  */
 export function composeProduct(options: ComposeProductOptions): ProductRuntime {
   const resources = createProductResourceManager({
-    shutdownTimeoutMs: PRODUCT_RUN_POLICY.cancellationTimeoutMs + 2_000,
+    shutdownTimeoutMs: PRODUCT_SHUTDOWN_TIMEOUT_MS + 2_000,
   });
   try {
     return composeProductRuntime(options, resources);
@@ -175,261 +95,43 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
   }
 }
 
+export { composeProductCapabilities };
+
 function composeProductRuntime(
   options: ComposeProductOptions,
   resources: ProductResourceManager,
 ): ProductRuntime {
-  const homePaths = initializeMegumiHomeSync(options.home);
+  const capabilities = options.capabilities;
+  const discoveryAgent = options.discoveryAgent;
+  const {
+    homePaths,
+    observability,
+    logger,
+    settings,
+    sessions,
+    history,
+    sessionStore,
+    attachments,
+    workspaces,
+    events,
+    workspaceChanges,
+    tools,
+    branches,
+    skills,
+    commands,
+  } = capabilities;
+
   migrateLegacyPermissionSettingsFile(homePaths.settingsPath);
   migrateLegacyProviderApiSettingsFile(homePaths.settingsPath);
-  const observability = composeObservability({
-    directoryPath: `${homePaths.logsPath}/observability`,
-    storage: options.observabilityStorage ?? noopObservabilityStorage,
-    appVersion: options.productEnvironment?.appVersion ?? 'unknown',
-    platform: options.productEnvironment?.platform ?? 'unknown',
-    arch: options.productEnvironment?.arch ?? 'unknown',
-  });
-  const logger = createObservabilityRuntimeLogger(observability.service);
-
-  const database = openDatabase(homePaths, options);
-  resources.registerDatabase(database);
-
-  const settings = createSettings({
-    store: options.settingsStorage ?? createSettingsStore({ settingsPath: homePaths.settingsPath }),
-    ...(options.settingsEnvironment ? { environment: options.settingsEnvironment } : {}),
-  });
-  const modelComposition = composeModels({
-    credentials: createSettingsCredentialStore(settings),
-    ...(options.modelStreams ? { apiImplementations: options.modelStreams } : {}),
-  });
-  const workspaceStore = createWorkspaceStore({ database });
-  const workspaceFileSystem = options.workspaceFileSystem;
-  const workspacePathPolicy = createWorkspacePathPolicy();
-  const sandbox = createSandbox();
-  const workspaces = createWorkspaceCatalog({ store: workspaceStore, file_system: workspaceFileSystem });
-  const workspaceFiles = createWorkspaceFiles({
-    catalog: workspaces,
-    path_policy: workspacePathPolicy,
-    file_system: workspaceFileSystem,
-  });
-  const workspaceChanges = createWorkspaceChanges({ store: workspaceStore });
-
-  // The bus is injected into Context once at creation: compaction lifecycle
-  // facts publish here without per-request buses.
-  const events = createEventBus({
-    recentEvents: PRODUCT_RECENT_EVENT_BUFFER,
-    onConsumerError: ({ eventType, sessionId, sequence, error }) => {
-      observability.service.recordLog({
-        level: 'warn',
-        event: 'runtime_event_consumer_failed',
-        attributes: {
-          eventType,
-          sessionId,
-          sequence,
-          errorMessage: error instanceof Error ? error.message : String(error),
-        },
-});
-    },
-  });
-
-  const sessionStore = createSessionStore({ database });
-  const attachmentContentStore = options.sessionAttachmentFileSystem
-    ? createSessionAttachmentFileStore({
-        attachmentsPath: homePaths.attachmentsPath,
-        fileSystem: options.sessionAttachmentFileSystem,
-      })
-    : undefined;
-  const sessions = createSessionCatalog({ store: sessionStore });
-  const history = createSessionHistory({
-    store: sessionStore,
-    ...(attachmentContentStore ? { attachmentContentStore } : {}),
-  });
-  recoverInterruptedSessionCompactions(
-    history,
-    events,
-    options.home.clock.now().toISOString(),
-  );
-  const attachments = createSessionAttachmentReader({
-    store: sessionStore,
-    ...(attachmentContentStore ? { contentStore: attachmentContentStore } : {}),
-  });
-  const skills = createSkills({
-    database,
-    homePath: homePaths.homePath,
-    workspaceRootResolver: {
-      async resolveWorkspaceRoot(request) {
-        const workspace = workspaces.getWorkspace({ workspace_id: request.workspaceId });
-        return workspace.status === 'found'
-          ? path.join(workspace.workspace.root_path, '.megumi', 'skills')
-          : undefined;
-      },
-    },
-  });
-  const instructions = createInstructionReader({ megumiHomePath: homePaths.homePath });
-  const sandboxCapabilities = sandbox.capabilities();
-  // Context resolves its own prompt sources; Product only wires the seams.
-  const workspaceSource: ContextWorkspaceSource = {
-    async readWorkspace({ workspaceId }) {
-      const workspace = workspaces.getWorkspace({ workspace_id: workspaceId });
-      return workspace.status === 'found'
-        ? {
-            status: 'ok',
-            workspaceRoot: workspace.workspace.root_path,
-            environment: {
-              workingDirectory: workspace.workspace.root_path,
-              operatingSystem: resolveModelVisibleOperatingSystem(sandboxCapabilities.platform),
-              shell: sandboxCapabilities.shellName ?? 'Unavailable',
-            },
-          }
-        : {
-            status: 'failed',
-            failure: { code: 'workspace_not_found', message: `Workspace ${workspaceId} was not found.` },
-          };
-    },
-  };
-  const context = createContext({
-    sessionHistory: history,
-    attachmentReader: attachments,
-    workspaceSource,
-    instructionReader: instructions,
-    skills,
-    models: modelComposition.models,
-    observability: observability.service,
-    events,
-  });
-  const permissions = createPermissions({
-    ruleReader: {
-      resolvePermissionRules(request) {
-        const resolved = settings.resolvePermissions({
-          workspace_id: request.workspaceId,
-          session_id: request.sessionId,
-        });
-        return resolved.status === 'ok'
-          ? { status: 'resolved', permissionSettings: resolved.settings }
-          : { status: 'failed', failure: resolved.failure };
-      },
-    },
-    ruleWriter: {
-      recordSessionPermissionGrant(request) {
-        const result = settings.recordSessionPermissionGrant({
-          session_id: request.sessionId,
-          rules: [...request.rules],
-          applied_at: request.appliedAt,
-        });
-        return result.status === 'saved'
-          ? { status: 'saved' }
-          : { status: 'failed', failure: result.failure };
-      },
-    },
-    workspacePathClassifier: {
-      async classifyWorkspacePath(request) {
-        const workspace = workspaces.getWorkspace({ workspace_id: request.workspaceId });
-        if (workspace.status !== 'found') {
-          return { status: 'failed', failure: { code: 'workspace_not_found', message: 'Workspace was not found.' } };
-        }
-        const canonical = await workspacePathPolicy.classifyCanonicalPath({
-          workspace_root: workspace.workspace.root_path,
-          target_path: request.targetPath,
-          file_system: workspaceFileSystem,
-        });
-        return { status: 'classified', workspacePath: {
-          absolutePath: canonical.absolute_path,
-          workspacePath: canonical.workspace_path,
-          insideWorkspace: canonical.inside_workspace,
-          protected: canonical.protected,
-          sensitive: canonical.sensitive,
-        } };
-      },
-    },
-  });
-
-  const commands: Commands = createCommands({
-    compact: async (request, operationOptions) => {
-      // Manual /compact delegates all source resolution to Context and always
-      // compacts the tools-less Prompt; the bus was injected at creation.
-      return context.compact({
-        sessionId: request.sessionId,
-        workspaceId: request.workspaceId,
-        model: request.model,
-        trigger: 'manual',
-        tools: [],
-        ...(operationOptions?.signal ? { signal: operationOptions.signal } : {}),
-      });
-    },
-  });
-  const input = createInputProcessor<CommandTerminalResult>({
-    sourceAccess: options.inputSourceAccess ?? unavailableInputSourceAccess,
-    interpreters: [createCommandInputInterpreter(commands)],
-    skillSelectionResolver: {
-      resolveSelection(request, operationOptions) {
-        return skills.resolveSelection({
-          ...request,
-          ...(operationOptions?.signal ? { signal: operationOptions.signal } : {}),
-        });
-      },
-    },
-  });
-  const resolveModel: ProductModelResolver = async (request) => {
-    const resolved = settings.resolveProvider(request);
-    if (resolved.status === 'failed') return { status: 'failed', failure: resolved.failure };
-    try {
-      return {
-        status: 'ok',
-        model: await modelComposition.resolveModel(resolved.config),
-      };
-    } catch {
-      return {
-        status: 'failed',
-        failure: { code: 'model_resolution_failed', message: 'The selected model could not be prepared.' },
-      };
-    }
-  };
-
-  const tools = createTools({
-    settings,
-    workspaces,
-    workspaceChanges,
-    sandbox,
-    executionPolicy: {
-      maxExecutionTimeMs: PRODUCT_RUN_POLICY.toolExecutionTimeoutMs,
-      maxOutputBytes: 20_000,
-      maxProcessCount: 16,
-    },
-    ...(options.builtInToolAvailability
-      ? { builtInToolAvailability: options.builtInToolAvailability }
-      : {}),
-  });
-  // The bus is the second producer's entry point too: branch facts publish here.
-  const branches = createSessionBranchDrafts({
-    events,
-    entries: { findMessageEntry: (request) => sessionStore.findMessageEntry(request) },
-  });
-  const runs = createRuns({
-    models: modelComposition.models,
-    context,
-    session: history,
-    tools,
-    permissions,
-    events,
-    observability: observability.service,
-    ids: {
-      createExecutionId: () => `execution:${crypto.randomUUID()}`,
-      createModelCallId: () => `model-call:${crypto.randomUUID()}`,
-      createToolExecutionId: () => `tool-execution:${crypto.randomUUID()}`,
-      createRunApprovalId: () => `run-approval:${crypto.randomUUID()}`,
-      createSessionMessageId: () => `message:${crypto.randomUUID()}`,
-    },
-    clock: { now: () => new Date().toISOString() },
-    policy: PRODUCT_RUN_POLICY,
-  });
+  resources.registerDatabase(capabilities.database);
 
   const submission = createInputSubmission({
-    runs,
-    input,
+    discoveryAgent,
+    input: capabilities.input,
     sessions,
     history,
     branches,
-    resolveModel,
+    resolveModel: capabilities.resolveModel,
   });
   const suggestions = createInputSuggestionQuery({
     commands,
@@ -438,14 +140,14 @@ function composeProductRuntime(
   const sessionReader = createSessionReader({
     sessions,
     history,
-    runs,
+    discoveryAgent,
     events,
     workspaceChanges,
   });
   const session = createSessionOperations({
     submission,
     reader: sessionReader,
-    runs,
+    discoveryAgent,
     suggestions,
     sessions,
     history,
@@ -453,11 +155,11 @@ function composeProductRuntime(
     branches,
     workspaces,
     context: {
-      deriveUsage: (history, model) => deriveContextUsage({ history, model }),
+      deriveUsage: (historyItems, model) => deriveContextUsage({ history: historyItems, model }),
       autoCompactPercent: resolveAutoCompactPercent(settings),
     },
     resolveModel: async (selection) => {
-      const resolved = await resolveModel(selection);
+      const resolved = await capabilities.resolveModel(selection);
       return resolved.status === 'ok' ? resolved.model : undefined;
     },
     ...(options.attachmentPicker ? { attachmentPicker: options.attachmentPicker } : {}),
@@ -470,19 +172,19 @@ function composeProductRuntime(
   const speechOutput = createSpeechOutputRuntime({
     synthesizer: options.voice?.speechOutputSynthesizer ?? unavailableSpeechSynthesizer,
   });
-  // The workspace subscriber needs the engine to resolve run -> workspace;
-  // subscribe after engine creation so the closure can reference it.
+  // The workspace subscriber resolves execution -> workspace through the
+  // Discovery Agent registry; subscribe after its injection.
   resources.registerEventSubscription(
     events.subscribe(
       { eventTypes: ['run.ended'] },
       createWorkspaceChangeEventHandler(workspaceChanges, (executionId) => {
-        const result = runs.get({ executionId });
-        return result.status === 'found' ? result.run.workspaceId : undefined;
+        const result = discoveryAgent.get({ executionId });
+        return result.status === 'found' ? result.execution.workspaceId : undefined;
       }),
     ),
   );
   // The speech-output chain is a separate subscriber of the same fact: it
-  // never enters the run lifecycle, and its failures stay inside the chain.
+  // never enters the execution lifecycle, and its failures stay inside the chain.
   resources.registerEventSubscription(
     events.subscribe({ eventTypes: ['run.ended'] }, (event) => {
       if (event.type !== 'run.ended') return;
@@ -581,14 +283,14 @@ function composeProductRuntime(
     skill: createSkillOperations({ skills }),
     workspace: createWorkspaceOperations({
       workspaceService: workspaces,
-      workspaceFilesService: workspaceFiles,
+      workspaceFilesService: capabilities.workspaceFiles,
       ...(options.directoryPicker ? { directoryPicker: options.directoryPicker } : {}),
       ...(options.fileOpen ? { fileOpen: options.fileOpen } : {}),
     }),
     settings: createSettingsOperations(settings, {
       listAvailableTools: () => [...tools.listAvailableTools().tools],
     }),
-    approval: createApprovalOperations(runs),
+    approval: createApprovalOperations(discoveryAgent),
     observability: createObservabilityOperations({
       queries: observability.queryService,
       flush: observability.flush,
@@ -602,7 +304,7 @@ function composeProductRuntime(
     logger,
     subscribeRuntimeEvents: (filter, handler) => events.subscribe(filter, handler),
     subscribeSpeechOutputEvents: (handler) => speechOutput.subscribe(handler),
-    dispose: () => resources.dispose({ runs, voice, speechOutput, observability }),
+    dispose: () => resources.dispose({ discoveryAgent, voice, speechOutput, observability }),
   });
 }
 
@@ -630,65 +332,4 @@ const unavailableSpeechSynthesizer: SpeechSynthesizer = {
       failure: { code: 'voice_tts_unavailable', message: 'Speech synthesis is not configured.' },
     };
   },
-};
-
-function openDatabase(homePaths: MegumiHomePaths, options: ComposeProductOptions): DatabaseConnection {
-  const database = createDatabase({ filename: path.join(homePaths.sqlitePath, 'megumi.sqlite') });
-  try {
-    migrateDatabase({
-      database,
-      ...(options.migrationsFolder ? { migrationsFolder: options.migrationsFolder } : {}),
-      ...(options.migrationEnvironment ? { migrationEnvironment: options.migrationEnvironment } : {}),
-    });
-    return database;
-  } catch (error) {
-    database.close();
-    throw error;
-  }
-}
-
-/**
- * Reconciles unfinished Session facts left by a prior process before startup
- * exposes the Product. Session owns the state transition; Product only invokes
- * that owner and publishes the matching runtime fact after persistence succeeds.
- */
-function recoverInterruptedSessionCompactions(
-  history: Pick<SessionHistory, 'interruptRunningCompactions'>,
-  events: Pick<EventBus, 'publish'>,
-  completedAt: string,
-): void {
-  const recovered = history.interruptRunningCompactions({ completedAt });
-  if (recovered.status === 'failed') {
-    throw new Error(`Failed to recover interrupted Context Compactions: ${recovered.failure.message}`);
-  }
-  for (const compaction of recovered.compactions) {
-    if (!compaction.error) {
-      throw new Error(`Interrupted Compaction ${compaction.compactionId} is missing its error fact.`);
-    }
-    events.publish({
-      type: 'session.compaction.ended',
-      sessionId: compaction.sessionId,
-      payload: {
-        status: 'interrupted',
-        compactionId: compaction.compactionId,
-        error: compaction.error,
-      },
-    });
-  }
-}
-
-
-const unavailableInputSourceAccess: InputSourceAccess = {
-  async readImage() { throw new Error('Host image file reading is unavailable.'); },
-  async resolveDocument() { throw new Error('Host document file resolution is unavailable.'); },
-};
-
-const noopObservabilityStorage: ObservabilityStorage = {
-  ensureDirectory: async () => undefined,
-  appendText: async () => undefined,
-  readText: async () => '',
-  listFiles: async () => [],
-  stat: async () => undefined,
-  move: async () => undefined,
-  remove: async () => undefined,
 };

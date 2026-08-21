@@ -1,18 +1,18 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import type { StartRunRequest, StartRunResult } from '@megumi/engine';
+import type { StartExecutionRequest, StartExecutionResult } from '@megumi/discovery-agent';
 import { createInputSubmission } from '../../../packages/product/src/operations/session/input-submission';
 
 describe('Product InputSubmission', () => {
-  it('calls Input exactly once and does not create Session or Run for a completed result', async () => {
+  it('calls Input exactly once and does not create Session or start an Execution for a completed result', async () => {
     const process = vi.fn(async () => ({ status: 'completed' as const, result: { type: 'completed' as const, message: 'done' } }));
     const createSession = vi.fn();
-    const startRun = vi.fn();
+    const startExecution = vi.fn();
     const submission = createInputSubmission({
       input: { process },
       sessions: { getSession: vi.fn(), createSession },
       branches: { resolveBranchDraft: vi.fn(), commitBranchDraft: vi.fn() },
-      runs: { start: startRun },
+      discoveryAgent: { start: startExecution },
       resolveModel: vi.fn(async () => ({ status: 'ok' as const, model: model() })),
     });
 
@@ -21,7 +21,7 @@ describe('Product InputSubmission', () => {
     expect(result.payload).toMatchObject({ type: 'completed', message: 'done' });
     expect(process).toHaveBeenCalledTimes(1);
     expect(createSession).not.toHaveBeenCalled();
-    expect(startRun).not.toHaveBeenCalled();
+    expect(startExecution).not.toHaveBeenCalled();
   });
 
   it('resolves Model before Input and creates a new Session only after accepted', async () => {
@@ -42,21 +42,21 @@ describe('Product InputSubmission', () => {
       order.push('session');
       return { status: 'created' as const, session: session() };
     });
-    const startRun = vi.fn(async (): Promise<StartRunResult> => {
-      order.push('runs');
+    const startExecution = vi.fn(async (): Promise<StartExecutionResult> => {
+      order.push('discovery-agent');
       return { status: 'failed', failure: { code: 'internal_error', message: 'stop after boundary check', retryable: false } };
     });
     const submission = createInputSubmission({
       input: { process },
       sessions: { getSession: vi.fn(), createSession },
       branches: { resolveBranchDraft: vi.fn(), commitBranchDraft: vi.fn() },
-      runs: { start: startRun },
+      discoveryAgent: { start: startExecution },
       resolveModel,
     });
 
     await submission.submit(request());
 
-    expect(order).toEqual(['model', 'input', 'session', 'runs']);
+    expect(order).toEqual(['model', 'input', 'session', 'discovery-agent']);
     expect(process).toHaveBeenCalledTimes(1);
   });
 
@@ -71,10 +71,10 @@ describe('Product InputSubmission', () => {
         skillSelection,
       },
     }));
-    const startRun = vi.fn(async (request: StartRunRequest): Promise<StartRunResult> => ({
+    const startExecution = vi.fn(async (request: StartExecutionRequest): Promise<StartExecutionResult> => ({
       status: 'started',
-      run: {
-        executionId: 'run:1',
+      execution: {
+        executionId: 'execution:1',
         requestId: request.requestId,
         workspaceId: request.workspaceId,
         sessionId: request.sessionId,
@@ -89,7 +89,7 @@ describe('Product InputSubmission', () => {
         message: {
           message_id: 'm:1',
           session_id: 'session:1',
-          execution_id: 'run:1',
+          execution_id: 'execution:1',
           message_kind: 'user_message',
           display_content: [{ type: 'text', text: 'task' }],
           model_content: [{ type: 'text', text: 'expanded task' }],
@@ -111,7 +111,7 @@ describe('Product InputSubmission', () => {
       input: { process },
       sessions: { getSession: vi.fn(), createSession: vi.fn(() => ({ status: 'created' as const, session: session() })) },
       branches: { resolveBranchDraft: vi.fn(() => ({ status: 'resolved' as const, branch_draft: { branch_marker_id: 'branch:1', session_id: 'session:1', source_message_id: 'message:0', source_entry_id: 'entry:0', created_at: 'now' } })), commitBranchDraft: vi.fn() },
-      runs: { start: startRun },
+      discoveryAgent: { start: startExecution },
       resolveModel: vi.fn(async () => ({ status: 'ok' as const, model: model() })),
     });
 
@@ -123,10 +123,10 @@ describe('Product InputSubmission', () => {
         context: expect.not.objectContaining({ selectedSkill: expect.anything() }),
       }),
     );
-    expect(startRun).toHaveBeenCalledWith(expect.objectContaining({
+    expect(startExecution).toHaveBeenCalledWith(expect.objectContaining({
       input: expect.objectContaining({ skillSelection, modelContent: [{ type: 'text', text: 'expanded task' }] }),
     }));
-    expect(startRun.mock.calls[0]?.[0]).not.toHaveProperty('selectedSkill');
+    expect(startExecution.mock.calls[0]?.[0]).not.toHaveProperty('selectedSkill');
 
     // The immediate submit response carries the structured selection so the
     // freshly saved message shows the Skill badge without a Timeline re-query.

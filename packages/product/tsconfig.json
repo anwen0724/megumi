@@ -12,7 +12,7 @@
     { "path": "../commands" },
     { "path": "../context" },
     { "path": "../database" },
-    { "path": "../engine" },
+    { "path": "../discovery-agent" },
     { "path": "../events" },
     { "path": "../input" },
     { "path": "../instructions" },

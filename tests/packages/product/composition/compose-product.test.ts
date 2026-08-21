@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import fs from 'fs-extra';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { composeProduct } from '@megumi/product';
 import type { AnyEvent } from '@megumi/events';
 import { createNodeWorkspaceFileSystem } from '@megumi/workspace/node';
+import { composeTestProduct } from './compose-test-product';
 import { AssistantMessageEventStream } from '../../../../packages/ai/src/utils/event-stream';
 import {
   type Api,
@@ -37,7 +37,7 @@ describe('composeProduct', () => {
     );
     const skillPath = join(workspaceRoot, '.megumi', 'skills', 'review', 'SKILL.md');
     const modelScript = toolThenReplyStreams(skillPath);
-    const product = composeProduct({
+    const product = composeTestProduct({
       home: {
         env: { MEGUMI_HOME: homePath },
         homeDirectory: root,
@@ -50,14 +50,15 @@ describe('composeProduct', () => {
         },
         clock: { now: () => new Date('2026-07-10T00:00:00.000Z') },
       },
-      directoryPicker: {
-        chooseDirectory: async () => ({ canceled: false, filePaths: [workspaceRoot] }),
-      },
       workspaceFileSystem: createNodeWorkspaceFileSystem(),
       modelStreams: {
         'openai-completions': modelScript.streams,
       },
       settingsStorage: settingsStorage(),
+    }, {
+      directoryPicker: {
+        chooseDirectory: async () => ({ canceled: false, filePaths: [workspaceRoot] }),
+      },
     });
 
     try {

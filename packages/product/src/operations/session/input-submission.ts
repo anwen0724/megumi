@@ -1,9 +1,13 @@
 /*
- * Owns exactly one user submission path from Input processing to Engine start.
- * It creates no Session until Input accepts the submission for an Agent Run.
+ * Owns exactly one user submission path from Input processing to the Discovery
+ * Agent start. It creates no Session until Input accepts the submission.
  */
 import type { CommandTerminalResult } from '@megumi/commands';
-import type { Run, Runs, StartRunResult } from '@megumi/engine';
+import type {
+  DiscoveryAgent,
+  ExecutionSnapshot,
+  StartExecutionResult,
+} from '@megumi/discovery-agent';
 import type { InputProcessor } from '@megumi/input';
 import type {
   Session,
@@ -19,7 +23,7 @@ import type {
 import { toRunDto, toSessionDto, toUserMessageDto } from './session-reader';
 
 export interface InputSubmission {
-  /** Processes one user input and starts at most one idempotent Engine Run. */
+  /** Processes one user input and starts at most one idempotent Agent Execution. */
   submit(request: SendUserInputRequest): Promise<SendUserInputResult>;
 }
 
@@ -27,13 +31,13 @@ export type ProductModelResolver = (request: {
   provider_id: string;
   model_id: string;
 }) => Promise<
-  | { status: 'ok'; model: Run['model'] }
+  | { status: 'ok'; model: ExecutionSnapshot['model'] }
   | { status: 'failed'; failure: { code: string; message: string; retryable?: boolean } }
 >;
 
-/** Creates the single Product operation that owns the Input-to-Run submission chain. */
+/** Creates the single Product operation that owns the Input-to-Execution submission chain. */
 export function createInputSubmission(options: {
-  runs: Pick<Runs, 'start'>;
+  discoveryAgent: Pick<DiscoveryAgent, 'start'>;
   input: Pick<InputProcessor<CommandTerminalResult>, 'process'>;
   sessions: Pick<SessionCatalog, 'getSession' | 'createSession'>;
   history: Pick<SessionHistory, 'getCommittedBranch'>;
@@ -80,7 +84,7 @@ export function createInputSubmission(options: {
       if (!session) return inputError(requestId, 'Session could not be created.');
       const branch = resolveBranch(options.branches, session, request.branchMarkerId, requestId);
       if (branch.status === 'failed') return inputError(requestId, branch.message, session);
-      const started = await options.runs.start({
+      const started = await options.discoveryAgent.start({
         requestId,
         workspaceId: request.projectId,
         sessionId: session.session_id,
@@ -116,7 +120,7 @@ export function createInputSubmission(options: {
           };
         }
       }
-      return mapRunStart(started, requestId, session, branchCommit);
+      return mapExecutionStart(started, requestId, session, branchCommit);
     },
   };
 }
@@ -193,8 +197,8 @@ function commandResult(
   };
 }
 
-function mapRunStart(
-  result: StartRunResult,
+function mapExecutionStart(
+  result: StartExecutionResult,
   requestId: string,
   session: Session,
   branchCommit?: {
@@ -204,7 +208,7 @@ function mapRunStart(
 ): SendUserInputResult {
   if (result.status === 'started' || result.status === 'already_started') {
     if (result.userMessage.message.message_kind !== 'user_message') {
-      throw new Error('Engine returned a non-user message for a started Run.');
+      throw new Error('Discovery Agent returned a non-user message for a started execution.');
     }
     return {
       payload: {
@@ -216,14 +220,14 @@ function mapRunStart(
           message: result.userMessage.message,
           attachments: result.userMessage.attachments,
         }),
-        run: toRunDto(result.run),
+        run: toRunDto(result.execution),
         ...(branchCommit ? { branchCommit } : {}),
       },
     };
   }
   return inputError(
     requestId,
-    result.status === 'session_busy' ? 'The session already has an active Run.' : result.failure.message,
+    result.status === 'session_busy' ? 'The session already has an active execution.' : result.failure.message,
     session,
   );
 }

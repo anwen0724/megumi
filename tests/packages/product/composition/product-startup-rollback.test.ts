@@ -20,8 +20,8 @@ vi.mock('@megumi/database', async (importOriginal) => ({
 }));
 
 import {
-  composeProduct,
-  type ComposeProductOptions,
+  composeProductCapabilities,
+  type ProductCapabilitiesOptions,
 } from '@megumi/product';
 import { createNodeWorkspaceFileSystem } from '@megumi/workspace/node';
 
@@ -57,14 +57,14 @@ describe('Product startup rollback', () => {
         clock: { now: () => new Date('2026-08-02T00:00:00.000Z') },
       },
       workspaceFileSystem: createNodeWorkspaceFileSystem(),
-    } satisfies Omit<ComposeProductOptions, 'modelStreams'>;
+    } satisfies Omit<ProductCapabilitiesOptions, 'modelStreams'>;
     Object.defineProperty(options, 'modelStreams', {
       get: () => {
         throw startupFailure;
       },
     });
 
-    expect(() => composeProduct(options as ComposeProductOptions)).toThrow(startupFailure);
+    expect(() => composeProductCapabilities(options as ProductCapabilitiesOptions)).toThrow(startupFailure);
     expect(database.close).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,16 +1,16 @@
-/* Implements Product approval submission using Engine-owned Run state. */
-import type { Run, Runs, RunApprovalDecision } from '@megumi/engine';
+/* Implements Product approval submission using Discovery Agent-owned execution state. */
+import type { DiscoveryAgent, ExecutionSnapshot } from '@megumi/discovery-agent';
 import type { ApprovalHost, ApprovalResolvePayload, ApprovalRunUiDto } from '../host/approval-host';
 
 /** Creates the Product operations exposed through ApprovalHost. */
 export function createApprovalOperations(
-  runs: Pick<Runs, 'resolveApproval'>,
+  discoveryAgent: Pick<DiscoveryAgent, 'resolveApproval'>,
 ): ApprovalHost {
   return {
     async resolve(request) {
-      const result = await runs.resolveApproval({
+      const result = await discoveryAgent.resolveApproval({
         approvalId: request.approvalRequestId,
-        decision: toRunApprovalDecision(request),
+        decision: toApprovalDecision(request),
       });
       if (result.status === 'failed') {
         return {
@@ -34,7 +34,7 @@ export function createApprovalOperations(
           payload: {
             status: 'not_waiting',
             approvalRequestId: request.approvalRequestId,
-            run: toApprovalRunDto(result.run),
+            run: toApprovalRunDto(result.execution),
           },
         };
       }
@@ -42,14 +42,14 @@ export function createApprovalOperations(
         payload: {
           status: 'resumed',
           approvalRequestId: request.approvalRequestId,
-          run: toApprovalRunDto(result.run),
+          run: toApprovalRunDto(result.execution),
         },
       };
     },
   };
 }
 
-function toRunApprovalDecision(decision: ApprovalResolvePayload): RunApprovalDecision {
+function toApprovalDecision(decision: ApprovalResolvePayload): import('@megumi/discovery-agent').ApprovalDecisionRequest {
   return decision.decision === 'approved'
     ? {
         decision: 'approved',
@@ -62,12 +62,12 @@ function toRunApprovalDecision(decision: ApprovalResolvePayload): RunApprovalDec
       };
 }
 
-function toApprovalRunDto(run: Run): ApprovalRunUiDto {
+function toApprovalRunDto(execution: ExecutionSnapshot): ApprovalRunUiDto {
   return {
-    executionId: run.executionId,
-    sessionId: run.sessionId,
-    status: run.status,
-    createdAt: run.createdAt,
-    ...(run.completedAt ? { completedAt: run.completedAt } : {}),
+    executionId: execution.executionId,
+    sessionId: execution.sessionId,
+    status: execution.status,
+    createdAt: execution.createdAt,
+    ...(execution.completedAt ? { completedAt: execution.completedAt } : {}),
   };
 }

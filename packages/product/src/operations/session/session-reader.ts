@@ -2,7 +2,7 @@
  * Composes Session page facts from their owning modules and maps them to
  * host-safe DTOs without constructing Desktop Timeline presentation state.
  */
-import type { Runs } from '@megumi/engine';
+import type { DiscoveryAgent, ExecutionSnapshot } from '@megumi/discovery-agent';
 import type { EventBus } from '@megumi/events';
 import type {
   Session,
@@ -45,7 +45,7 @@ export interface CreateSessionReaderOptions {
     SessionHistory,
     'getActiveConversationHistory' | 'getCommittedRunMessages'
   >;
-  readonly runs: Pick<Runs, 'getActive'>;
+  readonly discoveryAgent: Pick<DiscoveryAgent, 'getActive'>;
   readonly events: Pick<EventBus, 'read'>;
   readonly workspaceChanges: Pick<WorkspaceChanges, 'listChangeSummaries'>;
 }
@@ -75,11 +75,11 @@ export function createSessionReader(options: CreateSessionReaderOptions): Sessio
           return { status: 'failed', failure: toHostFailure(conversationResult.failure) };
         }
 
-        const activeRunResult = options.runs.getActive({ sessionId: request.sessionId });
+        const activeRunResult = options.discoveryAgent.getActive({ sessionId: request.sessionId });
         const eventResult = options.events.read({ sessionId: request.sessionId });
         const executionIds = collectExecutionIds(
           conversationResult.conversation,
-          activeRunResult.status === 'found' ? activeRunResult.run.executionId : undefined,
+          activeRunResult.status === 'found' ? activeRunResult.execution.executionId : undefined,
         );
         const workspace = readWorkspaceChanges(options.workspaceChanges, executionIds);
 
@@ -87,7 +87,7 @@ export function createSessionReader(options: CreateSessionReaderOptions): Sessio
           status: 'ok',
           session: toSessionDto(sessionResult.session),
           conversation: conversationResult.conversation.map(toConversationItemDto),
-          ...(activeRunResult.status === 'found' ? { activeRun: toRunDto(activeRunResult.run) } : {}),
+          ...(activeRunResult.status === 'found' ? { activeRun: toRunDto(activeRunResult.execution) } : {}),
           runtimeEvents: [...eventResult.events],
           eventRange: {
             ...(eventResult.firstSequence === undefined ? {} : { firstSequence: eventResult.firstSequence }),
@@ -141,13 +141,13 @@ export function toSessionDto(session: Session): SessionDto {
   };
 }
 
-export function toRunDto(run: import('@megumi/engine').Run): RunDto {
+export function toRunDto(execution: ExecutionSnapshot): RunDto {
   return {
-    executionId: run.executionId,
-    sessionId: run.sessionId,
-    status: run.status,
-    createdAt: run.createdAt,
-    ...(run.completedAt ? { completedAt: run.completedAt } : {}),
+    executionId: execution.executionId,
+    sessionId: execution.sessionId,
+    status: execution.status,
+    createdAt: execution.createdAt,
+    ...(execution.completedAt ? { completedAt: execution.completedAt } : {}),
   };
 }
 

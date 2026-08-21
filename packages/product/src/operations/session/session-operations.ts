@@ -2,7 +2,7 @@
  * Owns Product Session operations outside the single input submission chain.
  * The submit chain itself is delegated to the dedicated InputSubmission owner.
  */
-import type { Runs } from '@megumi/engine';
+import type { DiscoveryAgent } from '@megumi/discovery-agent';
 import { DEFAULT_INPUT_POLICY, DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from '@megumi/input';
 import type { Session, SessionAttachmentReader, SessionBranchDrafts, SessionCatalog, SessionHistory, SessionMessageWithAttachments } from '@megumi/session';
 import { sessionMessageText } from '@megumi/session';
@@ -26,7 +26,7 @@ export type SessionOperations = SessionHost;
 export function createSessionOperations(options: {
   submission: InputSubmission;
   reader: SessionReader;
-  runs: Pick<Runs, 'cancel'>;
+  discoveryAgent: Pick<DiscoveryAgent, 'cancel'>;
   suggestions: InputSuggestionQuery;
   sessions: SessionCatalog;
   history: SessionHistory;
@@ -76,11 +76,11 @@ export function createSessionOperations(options: {
       };
     },
     async cancelUserInput(request) {
-      const result = await options.runs.cancel({ executionId: request.executionId });
-      if (result.status === 'cancellation_requested') return { payload: { status: 'cancellation_requested', run: toRunDto(result.run) } };
-      if (result.status === 'already_cancelling') return { payload: { status: 'cancelling', run: toRunDto(result.run) } };
+      const result = await options.discoveryAgent.cancel({ executionId: request.executionId });
+      if (result.status === 'cancellation_requested') return { payload: { status: 'cancellation_requested', run: toRunDto(result.execution) } };
+      if (result.status === 'already_cancelling') return { payload: { status: 'cancelling', run: toRunDto(result.execution) } };
       if (result.status === 'not_found') return { payload: { status: 'not_found', executionId: result.executionId } };
-      return { payload: { status: 'not_cancellable', run: toRunDto(result.run), reason: 'already_terminal' } };
+      return { payload: { status: 'not_cancellable', run: toRunDto(result.execution), reason: 'already_terminal' } };
     },
     createBranchDraft(request) {
       const result = options.branches.createBranchDraft({ request_id: request.requestId, session_id: request.sessionId, source_message_id: request.messageId });

@@ -1,14 +1,14 @@
 /*
- * Verifies Product approval operations against the Engine-owned Run state.
+ * Verifies Product approval operations against the Discovery Agent-owned execution state.
  */
 import { describe, expect, it, vi } from 'vitest';
 import { createApprovalOperations } from '../../../../packages/product/src/operations/approval-operations';
 
 describe('ApprovalHost', () => {
-  it('maps an approved decision to Engine', async () => {
+  it('maps an approved decision to the Discovery Agent', async () => {
     const resolveApproval = vi.fn(async () => ({
       status: 'accepted' as const,
-      run: runFixture('waiting'),
+      execution: executionFixture('waiting'),
     }));
     const host = createApprovalOperations({ resolveApproval } as never);
 
@@ -28,12 +28,12 @@ describe('ApprovalHost', () => {
       },
     });
     // Desktop keeps the previous success behavior: an accepted decision reads
-    // as 'resumed' with the run facts.
+    // as 'resumed' with the execution facts.
     expect(result.payload).toEqual({
       status: 'resumed',
       approvalRequestId: 'approval:1',
       run: {
-        executionId: 'run:1',
+        executionId: 'execution:1',
         sessionId: 'session:1',
         status: 'waiting',
         createdAt: '2026-07-10T00:00:00.000Z',
@@ -44,7 +44,7 @@ describe('ApprovalHost', () => {
   it('maps a denied decision without inventing decision metadata', async () => {
     const resolveApproval = vi.fn(async () => ({
       status: 'accepted' as const,
-      run: runFixture('waiting'),
+      execution: executionFixture('waiting'),
     }));
     const host = createApprovalOperations({ resolveApproval } as never);
 
@@ -66,7 +66,7 @@ describe('ApprovalHost', () => {
       { status: 'not_found', approvalRequestId: 'approval:missing' },
     ],
     [
-      { status: 'not_waiting' as const, approvalId: 'approval:1', run: runFixture('completed') },
+      { status: 'not_waiting' as const, approvalId: 'approval:1', execution: executionFixture('completed') },
       {
         status: 'not_waiting',
         approvalRequestId: 'approval:1',
@@ -74,7 +74,7 @@ describe('ApprovalHost', () => {
       },
     ],
     [
-      { status: 'already_resolved' as const, approvalId: 'approval:1', run: runFixture('completed') },
+      { status: 'already_resolved' as const, approvalId: 'approval:1', execution: executionFixture('completed') },
       {
         status: 'not_waiting',
         approvalRequestId: 'approval:1',
@@ -100,9 +100,9 @@ describe('ApprovalHost', () => {
         },
       },
     ],
-  ])('projects Engine approval result %s', async (engineResult, expectedPayload) => {
+  ])('projects Discovery Agent approval result %s', async (agentResult, expectedPayload) => {
     const host = createApprovalOperations({
-      resolveApproval: vi.fn(async () => engineResult),
+      resolveApproval: vi.fn(async () => agentResult),
     } as never);
 
     const result = await host.resolve({
@@ -114,9 +114,9 @@ describe('ApprovalHost', () => {
   });
 });
 
-function runFixture(status: 'waiting' | 'completed') {
+function executionFixture(status: 'waiting' | 'completed') {
   return {
-    executionId: 'run:1',
+    executionId: 'execution:1',
     requestId: 'request:1',
     workspaceId: 'workspace:1',
     sessionId: 'session:1',

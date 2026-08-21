@@ -95,6 +95,10 @@ const mocks = vi.hoisted(() => {
     createDatabase: vi.fn(() => ({ databaseId: 'agent-database' })),
     migrateDatabase: vi.fn(),
     agentHost,
+    capabilities: { discoveryAgentOptions: { kind: 'discovery-agent-options' } },
+    discoveryAgent: { kind: 'discovery-agent' },
+    composeProductCapabilities: vi.fn(),
+    createDiscoveryAgent: vi.fn(),
     composeProduct: vi.fn(),
     createDesktopWorkspaceFileSystem: vi.fn(() => ({ kind: 'node-workspace-file-system' })),
     showOpenDialog: vi.fn(),
@@ -134,7 +138,12 @@ vi.mock('@megumi/desktop/main/app/create-window', () => ({
 
 vi.mock('@megumi/product', () => ({
   composeProduct: mocks.composeProduct,
+  composeProductCapabilities: mocks.composeProductCapabilities,
   resolveMegumiHomePath: vi.fn(() => mocks.homePath),
+}));
+
+vi.mock('@megumi/discovery-agent', () => ({
+  createDiscoveryAgent: mocks.createDiscoveryAgent,
 }));
 
 vi.mock('@megumi/desktop/main/adapters/desktop-workspace-file-system-adapter', () => ({
@@ -173,6 +182,10 @@ describe('main runtime logger composition', () => {
     mocks.registerAppLifecycle.mockClear();
     mocks.registerAppLifecycle.mockReturnValue({ quit: mocks.quit });
     mocks.createMainWindow.mockClear();
+    mocks.composeProductCapabilities.mockReset();
+    mocks.composeProductCapabilities.mockReturnValue(mocks.capabilities);
+    mocks.createDiscoveryAgent.mockReset();
+    mocks.createDiscoveryAgent.mockReturnValue(mocks.discoveryAgent);
     mocks.composeProduct.mockReset();
     mocks.createDesktopWorkspaceFileSystem.mockClear();
     mocks.composeProduct.mockImplementation(() => {
@@ -215,15 +228,20 @@ describe('main runtime logger composition', () => {
     const lifecycleOptions = mocks.registerAppLifecycle.mock.calls[0]?.[0];
     lifecycleOptions.registerAllHandlers();
 
-    expect(mocks.composeProduct).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mocks.composeProductCapabilities).toHaveBeenCalledWith(expect.objectContaining({
       home: expect.objectContaining({
         resourceLocator: expect.any(Object),
       }),
       observabilityStorage: expect.objectContaining({ appendText: expect.any(Function), readText: expect.any(Function) }),
-      diagnosticBundleSave: expect.objectContaining({ save: expect.any(Function) }),
       productEnvironment: expect.objectContaining({ platform: expect.any(String), arch: expect.any(String) }),
       settingsEnvironment: expect.objectContaining({ readVariable: expect.any(Function) }),
       workspaceFileSystem: expect.objectContaining({ kind: 'node-workspace-file-system' }),
+    }));
+    expect(mocks.createDiscoveryAgent).toHaveBeenCalledWith(mocks.capabilities.discoveryAgentOptions);
+    expect(mocks.composeProduct).toHaveBeenCalledWith(expect.objectContaining({
+      capabilities: mocks.capabilities,
+      discoveryAgent: mocks.discoveryAgent,
+      diagnosticBundleSave: expect.objectContaining({ save: expect.any(Function) }),
       directoryPicker: expect.objectContaining({
         chooseDirectory: expect.any(Function),
       }),
