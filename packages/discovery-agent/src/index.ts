@@ -1,0 +1,33 @@
+/* Exposes only the Discovery Agent public interface, construction entry and operation contracts. */
+export { createDiscoveryAgent } from './discovery-agent';
+export type {
+  ApprovalDecisionRequest,
+  CancelExecutionRequest,
+  CancelExecutionResult,
+  CreateDiscoveryAgentOptions,
+  DiscoveryAgent,
+  GetActiveExecutionRequest,
+  GetActiveExecutionResult,
+  GetExecutionRequest,
+  GetExecutionResult,
+  LaunchedAgentExecution,
+  LaunchAgentExecution,
+  LaunchAgentExecutionInput,
+  ResolveApprovalRequest,
+  ResolveApprovalResult,
+  ShutdownRequest,
+  ShutdownResult,
+  StartExecutionRequest,
+  StartExecutionResult,
+} from './discovery-agent';
+export type {
+  ApprovalRequest,
+  ApprovalResolution,
+  ExecutionClock,
+  ExecutionFailure,
+  ExecutionFailureCode,
+  ExecutionMetadata,
+  ExecutionOutcome,
+  ExecutionSnapshot,
+  ExecutionStatus,
+} from './execution/execution-registry';

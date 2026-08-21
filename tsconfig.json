@@ -34,6 +34,12 @@
       "@megumi/agent/*": [
         "packages/agent/src/*"
       ],
+      "@megumi/discovery-agent": [
+        "packages/discovery-agent/src/index.ts"
+      ],
+      "@megumi/discovery-agent/*": [
+        "packages/discovery-agent/src/*"
+      ],
       "@megumi/engine": [
         "packages/engine/src/index.ts"
       ],
