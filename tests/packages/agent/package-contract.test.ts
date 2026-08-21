@@ -9,11 +9,16 @@ import type {
   AgentError,
   AgentEvent,
   AgentEventListener,
+  AgentExecutionEvent,
+  AgentExecutionOptions,
+  AgentExecutionPhase,
   AgentExecutionResult,
+  AgentExecutionState,
   AgentMessage,
   AgentOperationErrorCode,
   AgentOptions,
   AgentPolicy,
+  AgentSettlement,
   AgentState,
   AgentStreamFunction,
   AgentTool,
@@ -30,11 +35,16 @@ type PublicTypes =
   | AgentError
   | AgentEvent
   | AgentEventListener
+  | AgentExecutionEvent
+  | AgentExecutionOptions
+  | AgentExecutionPhase
   | AgentExecutionResult
+  | AgentExecutionState
   | AgentMessage
   | AgentOperationErrorCode
   | AgentOptions
   | AgentPolicy
+  | AgentSettlement
   | AgentState
   | AgentStreamFunction
   | AgentTool

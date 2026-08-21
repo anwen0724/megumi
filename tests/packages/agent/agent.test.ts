@@ -74,17 +74,21 @@ function options(overrides: Partial<AgentOptions> = {}): AgentOptions {
   };
 }
 
+function lookupTool(): AgentTool {
+  return {
+    name: 'lookup',
+    description: 'Lookup.',
+    parameters: Type.Object({}),
+    execute: async () => ({
+      status: 'completed',
+      result: { content: [{ type: 'text', text: 'found' }], isError: false },
+    }),
+  };
+}
+
 describe('Agent', () => {
   it('copies constructor inputs and returns isolated state snapshots', () => {
-    const tools: AgentTool[] = [{
-      name: 'lookup',
-      description: 'Lookup.',
-      parameters: Type.Object({}),
-      execute: async () => ({
-        status: 'completed',
-        result: { content: [{ type: 'text', text: 'done' }], isError: false },
-      }),
-    }];
+    const tools: AgentTool[] = [lookupTool()];
     const messages: UserMessage[] = [{ role: 'user', content: 'seed', timestamp: 1 }];
     const agent = new Agent(options({
       initialState: {
@@ -96,6 +100,7 @@ describe('Agent', () => {
     messages.length = 0;
 
     const snapshot = agent.state;
+    expect(snapshot.execution).toEqual({ status: 'idle' });
     expect(snapshot.configuration.tools).toHaveLength(1);
     expect(snapshot.messages).toHaveLength(1);
     (snapshot.configuration.tools as AgentTool[]).length = 0;
@@ -118,7 +123,7 @@ describe('Agent', () => {
     agent.reset();
     expect(agent.state.messages).toEqual([]);
     expect(agent.state.configuration.systemPrompt).toBe('Changed.');
-    expect(agent.state.status).toBe('idle');
+    expect(agent.state.execution).toEqual({ status: 'idle' });
     expect(agent.state.lastError).toBeUndefined();
   });
 
@@ -135,12 +140,17 @@ describe('Agent', () => {
 
     const result = await agent.prompt([first, second]);
     expect(result.status).toBe('completed');
+    expect(result.executionId).toMatch(/^execution:/u);
     expect(agent.state.messages.map((message) => message.role)).toEqual(['user', 'user', 'assistant']);
     expect(contexts[0]).toEqual(['user', 'user']);
+    expect(agent.state.execution).toEqual({ status: 'idle' });
+    expect(agent.state.streamingMessage).toBeUndefined();
+    expect(agent.state.pendingToolCallIds.size).toBe(0);
     await expect(agent.continue()).rejects.toMatchObject({ code: 'invalid_state' });
 
     agent.replaceMessages([first]);
-    await agent.continue();
+    const secondResult = await agent.continue();
+    expect(secondResult.status).toBe('completed');
     expect(contexts[1]).toEqual(['user']);
     expect(agent.state.messages.map((message) => message.role)).toEqual(['user', 'assistant']);
   });
@@ -161,6 +171,7 @@ describe('Agent', () => {
     const active = agent.prompt({ role: 'user', content: 'first', timestamp: 1 });
     await streamStarted.promise;
     const stateBefore = agent.state;
+    expect(stateBefore.execution.status).toBe('executing');
     await expect(agent.prompt({ role: 'user', content: 'second', timestamp: 2 }))
       .rejects.toEqual(expect.objectContaining({ code: 'agent_busy' }));
     await expect(agent.continue()).rejects.toEqual(expect.objectContaining({ code: 'agent_busy' }));
@@ -172,6 +183,7 @@ describe('Agent', () => {
     releaseStream.resolve();
     await active;
     expect(events.filter((event) => event.type === 'agent_start')).toHaveLength(1);
+    expect(events.filter((event) => event.type === 'agent_end')).toHaveLength(1);
   });
 
   it('projects state before ordered awaited listeners and unsubscribe affects only later events', async () => {
@@ -193,7 +205,8 @@ describe('Agent', () => {
 
     const execution = agent.prompt({ role: 'user', content: 'hello', timestamp: 1 });
     await vi.waitFor(() => expect(observations).toEqual(['first:1']));
-    expect(agent.state.status).toBe('executing');
+    expect(agent.state.execution.status).toBe('executing');
+    expect(agent.state.execution.phase).toBe('calling_model');
     listenerGate.resolve();
     await execution;
     expect(observations).toEqual(['first:1', 'second', 'ended:assistant']);
@@ -217,7 +230,10 @@ describe('Agent', () => {
       error: { code: 'event_listener_failed' },
     });
     expect(stream).not.toHaveBeenCalled();
-    expect(agent.state).toMatchObject({ status: 'idle', lastError: { code: 'event_listener_failed' } });
+    expect(agent.state).toMatchObject({
+      execution: { status: 'idle' },
+      lastError: { code: 'event_listener_failed' },
+    });
   });
 
   it('projects pending ToolCall state before Tool lifecycle listeners', async () => {
@@ -234,15 +250,7 @@ describe('Agent', () => {
           systemPrompt: 'Be concise.',
           model,
           thinkingLevel: 'high',
-          tools: [{
-            name: 'lookup',
-            description: 'Lookup.',
-            parameters: Type.Object({}),
-            execute: async () => ({
-              status: 'completed',
-              result: { content: [{ type: 'text', text: 'found' }], isError: false },
-            }),
-          }],
+          tools: [lookupTool()],
         },
       },
       stream: () => streams.shift()!,
@@ -291,23 +299,264 @@ describe('Agent', () => {
     await streamStarted.promise;
     const idle = agent.waitForIdle();
     agent.abort();
+    expect(agent.state.execution).toMatchObject({ status: 'cancelling', phase: 'calling_model' });
     agent.abort();
+    expect(agent.state.execution.status).toBe('cancelling');
     let idleSettled = false;
     void idle.then(() => { idleSettled = true; });
     await vi.waitFor(() => expect(agent.state.streamingMessage).toBeUndefined());
     expect(idleSettled).toBe(false);
     agentEndGate.resolve();
 
-    await expect(execution).resolves.toMatchObject({ status: 'cancelled' });
+    const result = await execution;
+    expect(result).toMatchObject({ status: 'cancelled' });
+    expect(result.executionId).toMatch(/^execution:/u);
     await idle;
-    expect(agent.state.status).toBe('idle');
+    expect(agent.state.execution).toEqual({ status: 'idle' });
     expect(agent.state.streamingMessage).toBeUndefined();
     expect(agent.state.pendingToolCallIds.size).toBe(0);
     expect(idleSettled).toBe(true);
   });
 
+  it('does nothing when abort is called while idle', () => {
+    const agent = new Agent(options());
+    agent.abort();
+    expect(agent.state.execution).toEqual({ status: 'idle' });
+  });
+
   it('rejects invalid policy before any execution can start', () => {
     expect(() => new Agent(options({ policy: { maxModelCalls: 0 } }))).toThrow(TypeError);
     expect(() => new Agent(options({ policy: { modelRetryDelayMs: -1 } }))).toThrow(TypeError);
+  });
+
+  it('rejects a caller-provided executionId that is not a non-empty string', async () => {
+    const agent = new Agent(options());
+    await expect(agent.prompt(
+      { role: 'user', content: 'hello', timestamp: 1 },
+      { executionId: '' },
+    )).rejects.toMatchObject({ code: 'invalid_state' });
+    expect(agent.state.execution).toEqual({ status: 'idle' });
+  });
+
+  it('uses one caller-provided executionId across state, every event, and the result', async () => {
+    const events: AgentEvent[] = [];
+    const agent = new Agent(options());
+    agent.subscribe((event) => { events.push(event); });
+
+    const result = await agent.prompt(
+      { role: 'user', content: 'hello', timestamp: 1 },
+      { executionId: 'execution:caller-1' },
+    );
+    expect(result.executionId).toBe('execution:caller-1');
+    expect(events.length).toBeGreaterThan(0);
+    for (const event of events) {
+      if (event.type === 'execution_state_changed') {
+        if (event.previous.status !== 'idle') {
+          expect(event.previous).toMatchObject({ executionId: 'execution:caller-1' });
+        }
+        if (event.current.status !== 'idle') {
+          expect(event.current).toMatchObject({ executionId: 'execution:caller-1' });
+        }
+      } else {
+        expect(event).toMatchObject({ executionId: 'execution:caller-1' });
+      }
+    }
+    const agentEnd = events.filter((event) => event.type === 'agent_end');
+    expect(agentEnd).toHaveLength(1);
+    expect(agentEnd[0]).toMatchObject({ executionId: 'execution:caller-1', result });
+    expect(agent.state.execution).toEqual({ status: 'idle' });
+  });
+
+  it('walks the full phase sequence through one tool round and back to idle', async () => {
+    const toolMessage: AssistantMessage = {
+      ...assistant('', 2),
+      content: [{ type: 'toolCall', id: 'call-1', name: 'lookup', arguments: {} }],
+      stopReason: 'toolUse',
+    };
+    const streams = [completedStream(toolMessage), completedStream(assistant('done', 4))];
+    const transitions: Array<{ previous: string; current: string; turn: number }> = [];
+    const agent = new Agent(options({
+      initialState: {
+        configuration: {
+          systemPrompt: 'Be concise.',
+          model,
+          thinkingLevel: 'high',
+          tools: [lookupTool()],
+        },
+      },
+      stream: () => streams.shift()!,
+    }));
+    agent.subscribe((event) => {
+      if (event.type !== 'execution_state_changed') return;
+      const previous = event.previous.status === 'idle'
+        ? 'idle'
+        : `${event.previous.status}.${event.previous.phase}`;
+      const current = event.current.status === 'idle'
+        ? 'idle'
+        : `${event.current.status}.${event.current.phase}`;
+      transitions.push({
+        previous,
+        current,
+        turn: event.current.status === 'idle' ? 0 : event.current.turn,
+      });
+    });
+
+    const result = await agent.prompt({ role: 'user', content: 'lookup', timestamp: 1 });
+    expect(result.status).toBe('completed');
+    expect(transitions.map((item) => `${item.previous}->${item.current}`)).toEqual([
+      'idle->executing.preparing_context',
+      'executing.preparing_context->executing.calling_model',
+      'executing.calling_model->executing.calling_model',
+      'executing.calling_model->executing.executing_tools',
+      'executing.executing_tools->executing.preparing_context',
+      'executing.preparing_context->executing.calling_model',
+      'executing.calling_model->executing.settling',
+      'executing.settling->idle',
+    ]);
+    expect(transitions.filter((item) => item.current !== 'idle').map((item) => item.turn))
+      .toEqual([1, 1, 1, 1, 2, 2, 2]);
+  });
+
+  it('publishes ModelCall attempt facts with a stable executionId and per-turn attempts', async () => {
+    const attempts: Array<{
+      type: 'model_call_attempt_started' | 'model_call_attempt_ended';
+      executionId: string;
+      turn: number;
+      attempt: number;
+    }> = [];
+    const agent = new Agent(options());
+    agent.subscribe((event) => {
+      if (event.type === 'model_call_attempt_started' || event.type === 'model_call_attempt_ended') {
+        attempts.push(event);
+      }
+    });
+
+    await agent.prompt({ role: 'user', content: 'hello', timestamp: 1 });
+    expect(attempts.map((item) => item.type)).toEqual([
+      'model_call_attempt_started',
+      'model_call_attempt_ended',
+    ]);
+    expect(attempts[0]).toMatchObject({
+      type: 'model_call_attempt_started',
+      turn: 1,
+      attempt: 1,
+    });
+    expect(attempts[1]).toMatchObject({
+      type: 'model_call_attempt_ended',
+      turn: 1,
+      attempt: 1,
+      outcome: 'succeeded',
+    });
+    for (const item of attempts) {
+      expect(item.executionId).toBe(attempts[0].executionId);
+      expect(item.executionId).toMatch(/^execution:/u);
+    }
+  });
+
+  it('aborts synchronously into the same phase cancelling from every executing phase', async () => {
+    const streamStarted = Promise.withResolvers<void>();
+    const agent = new Agent(options({
+      stream: async (_model, _context, streamOptions) => {
+        streamStarted.resolve();
+        await new Promise<void>((resolve) => {
+          streamOptions.signal?.addEventListener('abort', () => resolve(), { once: true });
+        });
+        return new AssistantMessageEventStream();
+      },
+    }));
+    const execution = agent.prompt({ role: 'user', content: 'hello', timestamp: 1 });
+    await streamStarted.promise;
+    expect(agent.state.execution).toMatchObject({ status: 'executing', phase: 'calling_model' });
+
+    agent.abort();
+    const cancelling = agent.state.execution;
+    expect(cancelling).toMatchObject({
+      status: 'cancelling',
+      phase: 'calling_model',
+    });
+    expect(cancelling).toHaveProperty('executionId');
+    const abortedExecutionId = cancelling.status === 'idle' ? undefined : cancelling.executionId;
+    agent.abort();
+    expect(agent.state.execution.status).toBe('cancelling');
+
+    const result = await execution;
+    expect(result.status).toBe('cancelled');
+    expect(result.executionId).toBe(abortedExecutionId);
+    expect(agent.state.execution).toEqual({ status: 'idle' });
+  });
+
+  it('runs the awaited settlement seam inside settling and returns the fixed result', async () => {
+    const seamPhases: string[] = [];
+    let settledResult: unknown;
+    const agent = new Agent(options({
+      settlement: async (result) => {
+        const execution = agent.state.execution;
+        seamPhases.push(execution.status === 'idle' ? 'idle' : `${execution.status}.${execution.phase}`);
+        settledResult = result;
+      },
+    }));
+
+    const result = await agent.prompt({ role: 'user', content: 'hello', timestamp: 1 });
+    expect(seamPhases).toEqual(['executing.settling']);
+    expect(settledResult).toEqual(result);
+    expect(agent.state.execution).toEqual({ status: 'idle' });
+  });
+
+  it('turns a settlement failure into one fixed failed result for agent_end and the promise', async () => {
+    const agentEndResults: unknown[] = [];
+    let settlementCalls = 0;
+    const agent = new Agent(options({
+      settlement: async () => {
+        settlementCalls += 1;
+        throw new Error('session unavailable');
+      },
+    }));
+    agent.subscribe((event) => {
+      if (event.type === 'agent_end') agentEndResults.push(event.result);
+    });
+
+    const result = await agent.prompt({ role: 'user', content: 'hello', timestamp: 1 });
+    expect(result.status).toBe('failed');
+    expect(result).toMatchObject({ error: { code: 'event_listener_failed' } });
+    expect(settlementCalls).toBe(1);
+    expect(agentEndResults).toEqual([result]);
+    expect(agent.state).toMatchObject({
+      execution: { status: 'idle' },
+      lastError: { code: 'event_listener_failed' },
+    });
+  });
+
+  it('isolates agent_end observer failures from the already fixed result', async () => {
+    const agent = new Agent(options());
+    agent.subscribe((event) => {
+      if (event.type === 'agent_end') throw new Error('observer exploded');
+    });
+
+    const result = await agent.prompt({ role: 'user', content: 'hello', timestamp: 1 });
+    expect(result.status).toBe('completed');
+    expect(agent.state.execution).toEqual({ status: 'idle' });
+    expect(agent.state.lastError).toBeUndefined();
+  });
+
+  it('fixes one cancelled result when abort arrives during settlement', async () => {
+    const settlementStarted = Promise.withResolvers<void>();
+    const agent = new Agent(options({
+      settlement: async (_result, signal) => {
+        settlementStarted.resolve();
+        await new Promise<void>((resolve) => {
+          signal.addEventListener('abort', () => resolve(), { once: true });
+        });
+      },
+    }));
+
+    const execution = agent.prompt({ role: 'user', content: 'hello', timestamp: 1 });
+    await settlementStarted.promise;
+    expect(agent.state.execution).toMatchObject({ status: 'executing', phase: 'settling' });
+    agent.abort();
+    expect(agent.state.execution).toMatchObject({ status: 'cancelling', phase: 'settling' });
+
+    const result = await execution;
+    expect(result.status).toBe('cancelled');
+    expect(agent.state.execution).toEqual({ status: 'idle' });
   });
 });

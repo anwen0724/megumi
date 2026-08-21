@@ -8,6 +8,7 @@ import type {
   AgentError,
   AgentEvent,
   AgentEventSink,
+  AgentExecutionReporter,
   AgentExecutionResult,
   AgentMessage,
   AgentPolicy,
@@ -23,6 +24,9 @@ export interface RunAgentLoopInput {
   readonly contextProvider?: AgentContextProvider;
   readonly signal: AbortSignal;
   readonly policy: AgentPolicy;
+  readonly executionId: string;
+  /** The Agent's progress channel; the Loop reports phase, turn and attempt facts only. */
+  readonly report: AgentExecutionReporter;
   readonly emit: AgentEventSink;
 }
 
@@ -32,7 +36,7 @@ interface LoopCounters {
   toolCalls: number;
 }
 
-class EventSinkFailure extends Error {
+export class EventSinkFailure extends Error {
   readonly cause: unknown;
 
   constructor(cause: unknown) {
@@ -54,28 +58,21 @@ export async function runAgentLoop(input: RunAgentLoopInput): Promise<AgentExecu
     }
   };
 
+  // The Agent publishes agent_end only after settlement; the Loop returns the
+  // candidate result and never owns a terminal event.
   let result: AgentExecutionResult;
   try {
-    await publish({ type: 'agent_start' });
+    await publish({ type: 'agent_start', executionId: input.executionId });
     for (const message of input.input) {
-      await publish({ type: 'message_start', message });
+      await publish({ type: 'message_start', executionId: input.executionId, message });
       appendMessage(message, workingMessages, newMessages);
-      await publish({ type: 'message_end', message });
+      await publish({ type: 'message_end', executionId: input.executionId, message });
     }
     result = await executeTurns(input, workingMessages, newMessages, counters, publish);
   } catch (error) {
     result = {
       status: 'failed',
-      newMessages: [...newMessages],
-      error: normalizeLoopError(error),
-    };
-  }
-
-  try {
-    await publish({ type: 'agent_end', result });
-  } catch (error) {
-    result = {
-      status: 'failed',
+      executionId: input.executionId,
       newMessages: [...newMessages],
       error: normalizeLoopError(error),
     };
@@ -90,12 +87,14 @@ async function executeTurns(
   counters: LoopCounters,
   publish: AgentEventSink,
 ): Promise<AgentExecutionResult> {
+  let turn = 1;
   while (true) {
-    if (input.signal.aborted) return cancelled(newMessages);
+    if (input.signal.aborted) return cancelled(input.executionId, newMessages);
     if (counters.modelCalls >= input.policy.maxModelCalls) {
-      return failed(newMessages, limitError('ModelCall limit reached.'));
+      return failed(input.executionId, newMessages, limitError('ModelCall limit reached.'));
     }
 
+    await input.report({ phase: 'preparing_context', turn });
     const baseContext: AgentContext = {
       systemPrompt: input.configuration.systemPrompt,
       messages: [...workingMessages],
@@ -108,10 +107,15 @@ async function executeTurns(
         signal: input.signal,
       })
       : { status: 'ready' as const, context: baseContext };
-    if (prepared.status === 'cancelled' || input.signal.aborted) return cancelled(newMessages);
-    if (prepared.status === 'failed') return failed(newMessages, prepared.error);
+    if (prepared.status === 'cancelled' || input.signal.aborted) {
+      return cancelled(input.executionId, newMessages);
+    }
+    if (prepared.status === 'failed') {
+      return failed(input.executionId, newMessages, prepared.error);
+    }
 
-    await publish({ type: 'turn_start' });
+    await input.report({ phase: 'calling_model' });
+    await publish({ type: 'turn_start', executionId: input.executionId });
     counters.modelCalls += 1;
     const modelCall = await runModelCall({
       model: input.configuration.model,
@@ -121,25 +125,38 @@ async function executeTurns(
       contextProvider: input.contextProvider,
       signal: input.signal,
       policy: input.policy,
+      executionId: input.executionId,
+      turn,
+      report: input.report,
       emit: publish,
     });
 
     if (modelCall.status !== 'completed') {
       if (modelCall.partial) {
         appendMessage(modelCall.partial, workingMessages, newMessages);
-        await publish({ type: 'message_end', message: modelCall.partial });
+        await publish({
+          type: 'message_end',
+          executionId: input.executionId,
+          message: modelCall.partial,
+        });
       }
       return modelCall.status === 'cancelled'
-        ? cancelled(newMessages)
-        : failed(newMessages, modelCall.error);
+        ? cancelled(input.executionId, newMessages)
+        : failed(input.executionId, newMessages, modelCall.error);
     }
 
     appendMessage(modelCall.message, workingMessages, newMessages);
-    await publish({ type: 'message_end', message: modelCall.message });
+    await publish({ type: 'message_end', executionId: input.executionId, message: modelCall.message });
     if (modelCall.toolCalls.length === 0) {
-      await publish({ type: 'turn_end', message: modelCall.message, toolResults: [] });
+      await publish({
+        type: 'turn_end',
+        executionId: input.executionId,
+        message: modelCall.message,
+        toolResults: [],
+      });
       return {
         status: 'completed',
+        executionId: input.executionId,
         newMessages: [...newMessages],
         finalMessage: modelCall.message,
       };
@@ -147,11 +164,17 @@ async function executeTurns(
 
     const limit = toolLimitError(modelCall.toolCalls.length, counters, input.policy);
     if (limit) {
-      await publish({ type: 'turn_end', message: modelCall.message, toolResults: [] });
-      return failed(newMessages, limit);
+      await publish({
+        type: 'turn_end',
+        executionId: input.executionId,
+        message: modelCall.message,
+        toolResults: [],
+      });
+      return failed(input.executionId, newMessages, limit);
     }
-    if (input.signal.aborted) return cancelled(newMessages);
+    if (input.signal.aborted) return cancelled(input.executionId, newMessages);
 
+    await input.report({ phase: 'executing_tools' });
     counters.toolRounds += 1;
     counters.toolCalls += modelCall.toolCalls.length;
     const toolBatch = await runToolCallBatch({
@@ -159,17 +182,24 @@ async function executeTurns(
       tools: modelCall.context.tools,
       signal: input.signal,
       policy: input.policy,
+      executionId: input.executionId,
       emit: publish,
     });
-    await appendToolResults(toolBatch.results, workingMessages, newMessages, publish);
+    await appendToolResults(toolBatch.results, workingMessages, newMessages, publish, input.executionId);
     await publish({
       type: 'turn_end',
+      executionId: input.executionId,
       message: modelCall.message,
       toolResults: toolBatch.results,
     });
 
-    if (toolBatch.status === 'failed') return failed(newMessages, toolBatch.error);
-    if (toolBatch.status === 'cancelled' || input.signal.aborted) return cancelled(newMessages);
+    if (toolBatch.status === 'failed') {
+      return failed(input.executionId, newMessages, toolBatch.error);
+    }
+    if (toolBatch.status === 'cancelled' || input.signal.aborted) {
+      return cancelled(input.executionId, newMessages);
+    }
+    turn += 1;
   }
 }
 
@@ -178,11 +208,12 @@ async function appendToolResults(
   workingMessages: AgentMessage[],
   newMessages: AgentMessage[],
   publish: AgentEventSink,
+  executionId: string,
 ): Promise<void> {
   for (const message of results) {
-    await publish({ type: 'message_start', message });
+    await publish({ type: 'message_start', executionId, message });
     appendMessage(message, workingMessages, newMessages);
-    await publish({ type: 'message_end', message });
+    await publish({ type: 'message_end', executionId, message });
   }
 }
 
@@ -217,14 +248,15 @@ function limitError(message: string): AgentError {
 }
 
 function failed(
+  executionId: string,
   newMessages: readonly AgentMessage[],
   error: AgentError,
 ): AgentExecutionResult {
-  return { status: 'failed', newMessages: [...newMessages], error };
+  return { status: 'failed', executionId, newMessages: [...newMessages], error };
 }
 
-function cancelled(newMessages: readonly AgentMessage[]): AgentExecutionResult {
-  return { status: 'cancelled', newMessages: [...newMessages] };
+function cancelled(executionId: string, newMessages: readonly AgentMessage[]): AgentExecutionResult {
+  return { status: 'cancelled', executionId, newMessages: [...newMessages] };
 }
 
 function normalizeLoopError(error: unknown): AgentError {

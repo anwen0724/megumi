@@ -10,6 +10,7 @@ import type {
   AgentContextProvider,
   AgentError,
   AgentEventSink,
+  AgentExecutionReporter,
   AgentStreamFunction,
   AgentToolCall,
   ModelCallPolicy,
@@ -23,6 +24,9 @@ export interface RunModelCallInput {
   readonly contextProvider?: AgentContextProvider;
   readonly signal: AbortSignal;
   readonly policy: ModelCallPolicy;
+  readonly executionId: string;
+  readonly turn: number;
+  readonly report: AgentExecutionReporter;
   readonly emit: AgentEventSink;
 }
 
@@ -51,15 +55,39 @@ export async function runModelCall(input: RunModelCallInput): Promise<ModelCallR
     latestPartial = message;
     if (!lifecycleStarted) {
       lifecycleStarted = true;
-      await input.emit({ type: 'message_start', message });
+      await input.emit({ type: 'message_start', executionId: input.executionId, message });
       return;
     }
-    await input.emit({ type: 'message_update', message });
+    await input.emit({ type: 'message_update', executionId: input.executionId, message });
+  };
+
+  const emitAttemptEnded = async (
+    outcome: 'succeeded' | 'retrying' | 'failed' | 'cancelled',
+    error?: AgentError,
+  ): Promise<void> => {
+    await input.emit({
+      type: 'model_call_attempt_ended',
+      executionId: input.executionId,
+      turn: input.turn,
+      attempt,
+      outcome,
+      ...(error ? { error } : {}),
+    });
   };
 
   while (!input.signal.aborted) {
+    // The Agent projects the attempt into its state before the attempt fact
+    // publishes, so listeners always read a consistent snapshot.
+    await input.report({ attempt });
+    await input.emit({
+      type: 'model_call_attempt_started',
+      executionId: input.executionId,
+      turn: input.turn,
+      attempt,
+    });
     const result = await runAttempt(input, context, projectMessage);
     if (result.status === 'cancelled') {
+      await emitAttemptEnded('cancelled');
       const partial = result.partial ?? latestPartial;
       return {
         status: 'cancelled',
@@ -72,12 +100,23 @@ export async function runModelCall(input: RunModelCallInput): Promise<ModelCallR
         overflowRecoveries >= input.policy.maxContextOverflowRecoveries
         || !input.contextProvider?.recoverOverflow
       ) {
+        const error = agentError(
+          'context_failed',
+          'Model context overflow could not be recovered.',
+          false,
+          result.message,
+        );
+        await emitAttemptEnded('failed', error);
         return {
           status: 'failed',
-          error: agentError('context_failed', 'Model context overflow could not be recovered.', false, result.message),
+          error,
           ...(latestPartial ? { partial: latestPartial } : {}),
         };
       }
+      // Context Overflow recovery is one logical ModelCall moving through
+      // preparing_context before the next real attempt starts.
+      await emitAttemptEnded('retrying');
+      await input.report({ phase: 'preparing_context' });
       const recovered = await input.contextProvider.recoverOverflow({
         model: input.model,
         context,
@@ -96,6 +135,7 @@ export async function runModelCall(input: RunModelCallInput): Promise<ModelCallR
       }
       context = recovered.context;
       overflowRecoveries += 1;
+      await input.report({ phase: 'calling_model' });
       attempt += 1;
       continue;
     }
@@ -103,6 +143,7 @@ export async function runModelCall(input: RunModelCallInput): Promise<ModelCallR
     if (result.status === 'completed') {
       const validated = validateMessage(result.message);
       if (validated.status === 'valid') {
+        await emitAttemptEnded('succeeded');
         return {
           status: 'completed',
           message: result.message,
@@ -110,23 +151,28 @@ export async function runModelCall(input: RunModelCallInput): Promise<ModelCallR
           context,
         };
       }
+      const error = agentError('model_call_failed', validated.message, validated.retryable, result.message);
       if (validated.retryable && attempt < input.policy.maxModelCallAttempts) {
+        await emitAttemptEnded('retrying', error);
         await waitForRetry(input.policy.modelRetryDelayMs, input.signal);
         attempt += 1;
         continue;
       }
+      await emitAttemptEnded('failed', error);
       return {
         status: 'failed',
-        error: agentError('model_call_failed', validated.message, validated.retryable, result.message),
+        error,
         ...(latestPartial ? { partial: latestPartial } : {}),
       };
     }
 
     if (result.error.retryable && attempt < input.policy.maxModelCallAttempts) {
+      await emitAttemptEnded('retrying', result.error);
       await waitForRetry(input.policy.modelRetryDelayMs, input.signal);
       attempt += 1;
       continue;
     }
+    await emitAttemptEnded('failed', result.error);
     return {
       status: 'failed',
       error: result.error,

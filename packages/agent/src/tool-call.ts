@@ -17,6 +17,7 @@ export interface RunToolCallBatchInput {
   readonly tools: readonly AgentTool[];
   readonly signal: AbortSignal;
   readonly policy: ToolCallPolicy;
+  readonly executionId: string;
   readonly emit: AgentEventSink;
 }
 
@@ -165,6 +166,7 @@ async function executePrepared(
   const signal = AbortSignal.any([input.signal, batchSignal, timeoutController.signal]);
   await input.emit({
     type: 'tool_execution_start',
+    executionId: input.executionId,
     toolCallId: call.id,
     toolName: call.name,
     arguments: argumentsValue,
@@ -178,6 +180,7 @@ async function executePrepared(
     onUpdate: (update) => {
       updateChain = updateChain.then(() => input.emit({
         type: 'tool_execution_update',
+        executionId: input.executionId,
         toolCallId: call.id,
         update,
       }));
@@ -201,24 +204,24 @@ async function executePrepared(
 
   if (input.signal.aborted || batchSignal.aborted) {
     const result = cancellationResult();
-    await input.emit({ type: 'tool_execution_end', toolCallId: call.id, result });
+    await input.emit({ type: 'tool_execution_end', executionId: input.executionId, toolCallId: call.id, result });
     return { status: 'cancelled', message: resultMessage(call, result) };
   }
   if (timeoutController.signal.aborted && outcome === undefined) {
     const result = errorResult('Tool call timed out.');
-    await input.emit({ type: 'tool_execution_end', toolCallId: call.id, result });
+    await input.emit({ type: 'tool_execution_end', executionId: input.executionId, toolCallId: call.id, result });
     return { status: 'completed', message: resultMessage(call, result) };
   }
   if (thrown !== undefined || outcome === undefined) {
     const result = errorResult(
       thrown instanceof Error ? thrown.message : 'Tool execution failed.',
     );
-    await input.emit({ type: 'tool_execution_end', toolCallId: call.id, result });
+    await input.emit({ type: 'tool_execution_end', executionId: input.executionId, toolCallId: call.id, result });
     return { status: 'completed', message: resultMessage(call, result) };
   }
   if (outcome.status === 'system_failed') {
     const result = errorResult(outcome.error.message);
-    await input.emit({ type: 'tool_execution_end', toolCallId: call.id, result });
+    await input.emit({ type: 'tool_execution_end', executionId: input.executionId, toolCallId: call.id, result });
     return {
       status: 'failed',
       message: resultMessage(call, result),
@@ -228,6 +231,7 @@ async function executePrepared(
 
   await input.emit({
     type: 'tool_execution_end',
+    executionId: input.executionId,
     toolCallId: call.id,
     result: outcome.result,
   });

@@ -47,6 +47,7 @@ describe('Agent ToolCall Batch', () => {
       ],
       tools: [tool('known', execute)],
       signal: new AbortController().signal,
+      executionId: 'execution:tool-1',
       policy: { maxConcurrentToolCalls: 2, toolCallTimeoutMs: 1_000 },
       emit: async (event) => { events.push(event); },
     });
@@ -77,6 +78,7 @@ describe('Agent ToolCall Batch', () => {
       calls: [call('call-1', 'known', { value: 7 })],
       tools: [tool('known', execute)],
       signal: new AbortController().signal,
+      executionId: 'execution:tool-1',
       policy: { maxConcurrentToolCalls: 2, toolCallTimeoutMs: 1_000 },
       emit: async (event) => { events.push(event); },
     });
@@ -128,6 +130,7 @@ describe('Agent ToolCall Batch', () => {
       ],
       tools: [parallel, sequential],
       signal: new AbortController().signal,
+      executionId: 'execution:tool-1',
       policy: { maxConcurrentToolCalls: 2, toolCallTimeoutMs: 1_000 },
       emit: async () => undefined,
     });
@@ -155,6 +158,7 @@ describe('Agent ToolCall Batch', () => {
       calls: [call('call-1', 'broken')],
       tools: [tool('broken', async () => { throw new Error('domain failure'); })],
       signal: new AbortController().signal,
+      executionId: 'execution:tool-1',
       policy: { maxConcurrentToolCalls: 1, toolCallTimeoutMs: 1_000 },
       emit: async () => undefined,
     });
@@ -193,6 +197,7 @@ describe('Agent ToolCall Batch', () => {
       calls: [call('p1', 'parallel'), call('p2', 'parallel'), call('p3', 'parallel')],
       tools: [tool('parallel', execute, 'parallel')],
       signal: new AbortController().signal,
+      executionId: 'execution:tool-1',
       policy: { maxConcurrentToolCalls: 2, toolCallTimeoutMs: 1_000 },
       emit: async (event) => { events.push(event); },
     });
@@ -218,6 +223,7 @@ describe('Agent ToolCall Batch', () => {
       calls: [call('call-1', 'hanging')],
       tools: [tool('hanging', async () => new Promise(() => undefined))],
       signal: new AbortController().signal,
+      executionId: 'execution:tool-1',
       policy: { maxConcurrentToolCalls: 1, toolCallTimeoutMs: 10 },
       emit: async (event) => { events.push(event); },
     });
@@ -247,6 +253,7 @@ describe('Agent ToolCall Batch', () => {
       calls: [call('s1', 'sequential'), call('s2', 'sequential')],
       tools: [tool('sequential', execute)],
       signal: controller.signal,
+      executionId: 'execution:tool-1',
       policy: { maxConcurrentToolCalls: 1, toolCallTimeoutMs: 10_000 },
       emit: async (event) => { events.push(event); },
     });

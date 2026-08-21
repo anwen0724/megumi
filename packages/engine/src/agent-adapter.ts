@@ -208,7 +208,7 @@ export async function executeAgentRun(
   } catch (error) {
     if (input.signal.aborted) {
       final = await settleAgentResult(
-        { status: 'cancelled', newMessages: [] },
+        { status: 'cancelled', executionId: input.run.runId, newMessages: [] },
         input,
         dependencies,
         runtime,

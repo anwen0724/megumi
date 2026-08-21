@@ -59,10 +59,46 @@ export interface AgentConfiguration {
 
 export type AgentConfigurationPatch = Partial<AgentConfiguration>;
 
+/**
+ * The one explicit execution state machine of one Agent Execution. `idle` is the
+ * only state without an executionId; every execution-scoped fact carries the
+ * same stable executionId, and phase/turn/attempt are reported by the Loop.
+ */
+export type AgentExecutionPhase =
+  | 'preparing_context'
+  | 'calling_model'
+  | 'executing_tools'
+  | 'settling';
+
+export type AgentExecutionState =
+  | {
+      readonly status: 'idle';
+    }
+  | {
+      readonly status: 'executing';
+      readonly executionId: string;
+      readonly phase: AgentExecutionPhase;
+      readonly turn: number;
+      readonly attempt: number;
+    }
+  | {
+      readonly status: 'cancelling';
+      readonly executionId: string;
+      readonly phase: AgentExecutionPhase;
+      readonly turn: number;
+      readonly attempt: number;
+    };
+
+/** Optional identity for one accepted Agent Execution. */
+export interface AgentExecutionOptions {
+  readonly executionId?: string;
+}
+
 export interface AgentState {
   readonly configuration: AgentConfiguration;
   readonly messages: readonly AgentMessage[];
-  readonly status: 'idle' | 'executing';
+  /** The only authoritative execution state; idle, executing or cancelling. */
+  readonly execution: AgentExecutionState;
   readonly streamingMessage?: AssistantMessage;
   readonly pendingToolCallIds: ReadonlySet<string>;
   readonly lastError?: AgentError;
@@ -76,7 +112,17 @@ export interface AgentOptions {
   readonly stream: AgentStreamFunction;
   readonly context?: AgentContextProvider;
   readonly policy?: Partial<AgentPolicy>;
+  /**
+   * Provider-neutral settlement seam awaited inside the `settling` phase before
+   * the final result is fixed. A throw forms one `event_listener_failed` result.
+   */
+  readonly settlement?: AgentSettlement;
 }
+
+export type AgentSettlement = (
+  result: AgentExecutionResult,
+  signal: AbortSignal,
+) => void | Promise<void>;
 
 export type AgentStreamFunction = (
   model: Model<Api>,
@@ -106,16 +152,22 @@ export interface AgentContextProvider {
 
 export type AgentExecutionResult =
   | {
+      readonly executionId: string;
       readonly status: 'completed';
       readonly newMessages: readonly AgentMessage[];
       readonly finalMessage: AssistantMessage;
     }
   | {
+      readonly executionId: string;
       readonly status: 'failed';
       readonly newMessages: readonly AgentMessage[];
       readonly error: AgentError;
     }
-  | { readonly status: 'cancelled'; readonly newMessages: readonly AgentMessage[] };
+  | {
+      readonly executionId: string;
+      readonly status: 'cancelled';
+      readonly newMessages: readonly AgentMessage[];
+    };
 
 export interface AgentError {
   readonly code:
@@ -132,31 +184,62 @@ export interface AgentError {
 
 export type AgentOperationErrorCode = 'agent_busy' | 'invalid_state';
 
+/**
+ * Provider-neutral observable facts of one Agent Execution. The Agent completes
+ * the state transition before publishing `execution_state_changed`; ModelCall
+ * retries are only `retrying` plus the next `started`, never a second lifecycle.
+ */
+export type AgentExecutionEvent =
+  | {
+      readonly type: 'execution_state_changed';
+      readonly previous: AgentExecutionState;
+      readonly current: AgentExecutionState;
+    }
+  | {
+      readonly type: 'model_call_attempt_started';
+      readonly executionId: string;
+      readonly turn: number;
+      readonly attempt: number;
+    }
+  | {
+      readonly type: 'model_call_attempt_ended';
+      readonly executionId: string;
+      readonly turn: number;
+      readonly attempt: number;
+      readonly outcome: 'succeeded' | 'retrying' | 'failed' | 'cancelled';
+      readonly error?: AgentError;
+    };
+
 export type AgentEvent =
-  | { readonly type: 'agent_start' }
-  | { readonly type: 'agent_end'; readonly result: AgentExecutionResult }
-  | { readonly type: 'turn_start' }
+  | AgentExecutionEvent
+  | { readonly type: 'agent_start'; readonly executionId: string }
+  | { readonly type: 'agent_end'; readonly executionId: string; readonly result: AgentExecutionResult }
+  | { readonly type: 'turn_start'; readonly executionId: string }
   | {
       readonly type: 'turn_end';
+      readonly executionId: string;
       readonly message: AssistantMessage;
       readonly toolResults: readonly ToolResultMessage[];
     }
-  | { readonly type: 'message_start'; readonly message: AgentMessage }
-  | { readonly type: 'message_update'; readonly message: AssistantMessage }
-  | { readonly type: 'message_end'; readonly message: AgentMessage }
+  | { readonly type: 'message_start'; readonly executionId: string; readonly message: AgentMessage }
+  | { readonly type: 'message_update'; readonly executionId: string; readonly message: AssistantMessage }
+  | { readonly type: 'message_end'; readonly executionId: string; readonly message: AgentMessage }
   | {
       readonly type: 'tool_execution_start';
+      readonly executionId: string;
       readonly toolCallId: string;
       readonly toolName: string;
       readonly arguments: unknown;
     }
   | {
       readonly type: 'tool_execution_update';
+      readonly executionId: string;
       readonly toolCallId: string;
       readonly update: AgentToolResult;
     }
   | {
       readonly type: 'tool_execution_end';
+      readonly executionId: string;
       readonly toolCallId: string;
       readonly result: AgentToolResult;
     };
@@ -193,3 +276,16 @@ export type ToolCallPolicy = Pick<
   AgentPolicy,
   'maxConcurrentToolCalls' | 'toolCallTimeoutMs'
 >;
+
+/**
+ * Internal progress facts the Agent Loop reports back to the Agent. The Agent
+ * validates every transition and publishes `execution_state_changed`; this type
+ * is the Loop's only feedback channel and never a second public state machine.
+ */
+export interface AgentExecutionProgress {
+  readonly phase?: AgentExecutionPhase;
+  readonly turn?: number;
+  readonly attempt?: number;
+}
+
+export type AgentExecutionReporter = (progress: AgentExecutionProgress) => Promise<void>;

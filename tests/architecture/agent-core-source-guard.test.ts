@@ -51,6 +51,7 @@ describe('Agent Core architecture boundaries', () => {
       '@megumi/observability',
       '@megumi/product',
       '@megumi/database',
+      '@megumi/discovery-agent',
       'electron',
     ];
     expect(forbiddenImports.filter((term) => source.includes(`from '${term}`))).toEqual([]);

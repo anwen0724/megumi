@@ -12,6 +12,7 @@ import { runAgentLoop } from '../../../packages/agent/src/agent-loop';
 import type {
   AgentConfiguration,
   AgentEvent,
+  AgentExecutionProgress,
   AgentPolicy,
   AgentTool,
 } from '../../../packages/agent/src/types';
@@ -41,6 +42,8 @@ const policy: AgentPolicy = {
   modelRetryDelayMs: 0,
   maxContextOverflowRecoveries: 0,
 };
+
+const executionId = 'execution:loop-1';
 
 function assistant(
   content: AssistantMessage['content'],
@@ -84,24 +87,46 @@ function configuration(tools: readonly AgentTool[] = []): AgentConfiguration {
   return { systemPrompt: 'Be concise.', model, thinkingLevel: 'high', tools };
 }
 
+interface LoopInputOverrides {
+  readonly messages?: readonly UserMessage[];
+  readonly input?: readonly UserMessage[];
+  readonly stream: (model: Model<Api>, context: import('@megumi/ai').Context) => AssistantMessageEventStream;
+  readonly policy?: AgentPolicy;
+  readonly emit?: (event: AgentEvent) => Promise<void>;
+  readonly report?: (progress: AgentExecutionProgress) => Promise<void>;
+}
+
+function runLoop(overrides: LoopInputOverrides): Promise<ReturnType<typeof runAgentLoop>> {
+  return runAgentLoop({
+    configuration: configuration(),
+    messages: overrides.messages ?? [],
+    input: overrides.input ?? [],
+    stream: overrides.stream,
+    signal: new AbortController().signal,
+    policy: overrides.policy ?? policy,
+    executionId,
+    report: overrides.report ?? (async () => undefined),
+    emit: overrides.emit ?? (async () => undefined),
+  });
+}
+
 describe('Agent Loop', () => {
   it('completes one turn without ToolCalls and emits a complete ordered lifecycle', async () => {
     const input: UserMessage = { role: 'user', content: 'Hello', timestamp: 1 };
     const finalMessage = assistant([{ type: 'text', text: 'Hi' }], 'stop', 2);
     const events: AgentEvent[] = [];
+    const progress: AgentExecutionProgress[] = [];
 
-    const result = await runAgentLoop({
-      configuration: configuration(),
-      messages: [],
+    const result = await runLoop({
       input: [input],
       stream: () => completedStream(finalMessage),
-      signal: new AbortController().signal,
-      policy,
       emit: async (event) => { events.push(event); },
+      report: async (item) => { progress.push(item); },
     });
 
     expect(result).toEqual({
       status: 'completed',
+      executionId,
       newMessages: [input, finalMessage],
       finalMessage,
     });
@@ -110,13 +135,21 @@ describe('Agent Loop', () => {
       'message_start',
       'message_end',
       'turn_start',
+      'model_call_attempt_started',
       'message_start',
       'message_update',
+      'model_call_attempt_ended',
       'message_end',
       'turn_end',
-      'agent_end',
     ]);
-    expect(events.at(-1)).toEqual({ type: 'agent_end', result });
+    for (const event of events) {
+      expect(event).toMatchObject({ executionId });
+    }
+    expect(progress).toEqual([
+      { phase: 'preparing_context', turn: 1 },
+      { phase: 'calling_model' },
+      { attempt: 1 },
+    ]);
   });
 
   it('feeds ordered ToolResults into the next ModelCall and returns the two-turn message closure', async () => {
@@ -128,6 +161,7 @@ describe('Agent Loop', () => {
     const finalMessage = assistant([{ type: 'text', text: 'Finished' }], 'stop', 5);
     const contexts: Array<readonly unknown[]> = [];
     const streams = [completedStream(toolMessage), completedStream(finalMessage)];
+    const progress: AgentExecutionProgress[] = [];
     const lookup: AgentTool = {
       name: 'lookup',
       description: 'Lookup a value.',
@@ -152,6 +186,8 @@ describe('Agent Loop', () => {
       },
       signal: new AbortController().signal,
       policy,
+      executionId,
+      report: async (item) => { progress.push(item); },
       emit: async () => undefined,
     });
 
@@ -166,6 +202,15 @@ describe('Agent Loop', () => {
     expect(result.newMessages
       .filter((message) => message.role === 'toolResult')
       .map((message) => message.toolCallId)).toEqual(['call-1', 'call-2']);
+    expect(progress).toEqual([
+      { phase: 'preparing_context', turn: 1 },
+      { phase: 'calling_model' },
+      { attempt: 1 },
+      { phase: 'executing_tools' },
+      { phase: 'preparing_context', turn: 2 },
+      { phase: 'calling_model' },
+      { attempt: 1 },
+    ]);
   });
 
   it.each([
@@ -193,11 +238,14 @@ describe('Agent Loop', () => {
       stream: () => completedStream(toolMessage),
       signal: new AbortController().signal,
       policy: { ...policy, ...patch },
+      executionId,
+      report: async () => undefined,
       emit: async () => undefined,
     });
 
     expect(result).toMatchObject({
       status: 'failed',
+      executionId,
       error: { code: 'execution_limit_reached' },
     });
     expect(execute).not.toHaveBeenCalled();
@@ -224,11 +272,14 @@ describe('Agent Loop', () => {
       stream,
       signal: new AbortController().signal,
       policy: { ...policy, maxModelCalls: 1 },
+      executionId,
+      report: async () => undefined,
       emit: async () => undefined,
     });
 
     expect(result).toMatchObject({
       status: 'failed',
+      executionId,
       error: { code: 'execution_limit_reached', message: 'ModelCall limit reached.' },
     });
     expect(stream).toHaveBeenCalledTimes(1);
@@ -259,11 +310,14 @@ describe('Agent Loop', () => {
       stream: () => streams.shift()!,
       signal: new AbortController().signal,
       policy: { ...policy, maxToolRounds: 1 },
+      executionId,
+      report: async () => undefined,
       emit: async () => undefined,
     });
 
     expect(result).toMatchObject({
       status: 'failed',
+      executionId,
       error: { code: 'execution_limit_reached', message: 'Tool round limit reached.' },
     });
     expect(execute).toHaveBeenCalledTimes(1);
@@ -294,11 +348,14 @@ describe('Agent Loop', () => {
       stream,
       signal: new AbortController().signal,
       policy,
+      executionId,
+      report: async () => undefined,
       emit: async () => undefined,
     });
 
     expect(result).toMatchObject({
       status: 'failed',
+      executionId,
       error: { code: 'tool_system_failed' },
     });
     expect(stream).toHaveBeenCalledTimes(1);
@@ -326,17 +383,22 @@ describe('Agent Loop', () => {
       stream,
       signal: controller.signal,
       policy,
+      executionId,
+      report: async () => undefined,
       emit: async () => undefined,
     });
 
-    expect(result.status).toBe('cancelled');
+    expect(result).toMatchObject({
+      status: 'cancelled',
+      executionId,
+    });
     expect(stream).toHaveBeenCalledTimes(1);
     expect(result.newMessages.map((message) => message.role)).toEqual([
       'assistant', 'toolResult',
     ]);
   });
 
-  it('converts an Event sink failure into one failed execution and still ends last', async () => {
+  it('converts an Event sink failure into one failed execution without publishing agent_end', async () => {
     const events: AgentEvent[] = [];
     let failedOnce = false;
     const result = await runAgentLoop({
@@ -346,6 +408,8 @@ describe('Agent Loop', () => {
       stream: () => completedStream(assistant([{ type: 'text', text: 'unused' }], 'stop', 2)),
       signal: new AbortController().signal,
       policy,
+      executionId,
+      report: async () => undefined,
       emit: async (event) => {
         events.push(event);
         if (event.type === 'turn_start' && !failedOnce) {
@@ -357,9 +421,14 @@ describe('Agent Loop', () => {
 
     expect(result).toMatchObject({
       status: 'failed',
+      executionId,
       error: { code: 'event_listener_failed' },
     });
-    expect(events.at(-1)?.type).toBe('agent_end');
-    expect(events.filter((event) => event.type === 'agent_end')).toHaveLength(1);
+    // The Agent publishes agent_end only after settlement; the Loop owns no terminal event.
+    expect(events.map((event) => event.type)).not.toContain('agent_end');
+    expect(events.map((event) => event.type)).toEqual([
+      'agent_start',
+      'turn_start',
+    ]);
   });
 });
